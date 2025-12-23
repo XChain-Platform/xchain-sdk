@@ -1,0 +1,155 @@
+/*********************************************************************
+ * 
+ * Copyright © 2025 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * Licensed under the Dankest Community License (Apache License 2.0 + Additional Terms).
+ * You may not use this file except in compliance with that License.
+ * 
+ * A copy of the License is available at:
+ *     https://dankest.llc/license
+ *
+ * This software is provided “AS IS”, without warranties or conditions of any kind.
+ * 
+ **********************************************************************
+ *
+ * XChain SDK - ACTION Formats
+ * 
+ * This file defines all the various formats for ACTION commands
+ * 
+ ********************************************************************/
+
+class Formats {
+
+
+    constructor(){
+
+        this.formats = {
+            ADDRESS: {
+                0: 'VERSION|FEE_PREFERENCE|REQUIRE_MEMO|MEMO'
+            },
+            AIRDROP: {
+                0: 'VERSION|TICK|AMOUNT|LIST_ACTION_INDEX|MEMO',
+                1: 'VERSION|LIST_ACTION_INDEX|TICK|AMOUNT|TICK|AMOUNT|MEMO',
+                2: 'VERSION|TICK|AMOUNT|LIST_ACTION_INDEX|TICK|AMOUNT|LIST_ACTION_INDEX|MEMO',
+                3: 'VERSION|TICK|AMOUNT|LIST_ACTION_INDEX|MEMO|TICK|AMOUNT|LIST_ACTION_INDEX|MEMO'
+            },
+            BATCH: {
+                0: 'VERSION|COMMAND'
+            },
+            BROADCAST: {
+                0: 'VERSION|MESSAGE|VALUE',
+                1: 'VERSION|MESSAGE|VALUE|FEE|MEMO',
+                2: 'VERSION|MESSAGE|FEE|MEMO',
+                3: 'VERSION|BROADCAST_ACTION_INDEX|VALUE|MEMO'
+            },
+            CALLBACK: {
+                0: 'VERSION|TICK|MEMO'
+            },
+            DESTROY: {
+                0: 'VERSION|TICK|AMOUNT|MEMO',
+                1: 'VERSION|TICK|AMOUNT|TICK|AMOUNT|MEMO',
+                2: 'VERSION|TICK|AMOUNT|MEMO|TICK|AMOUNT|MEMO'
+            },
+            DISPENSER: {
+                0: 'VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_ESCROW|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|FIAT_CODE|FIAT_AMOUNT|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO',
+                1: 'VERSION|DISPENSER_ACTION_INDEX|MEMO',
+                2: 'VERSION|DISPENSER_ACTION_INDEX|GIVE_ESCROW|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO'
+            },
+            DIVIDEND: {
+                0: 'VERSION|TICK|DIVIDEND_TICK|AMOUNT|MEMO'
+            },
+            FILE: {
+                0: 'VERSION|NAME|TYPE|TITLE|MEMO'
+            },
+            ISSUE: {
+                0: 'VERSION|TICK|MAX_SUPPLY|MAX_MINT|DECIMALS|DESCRIPTION|MINT_SUPPLY|TRANSFER|TRANSFER_SUPPLY|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_SLEEP|LOCK_CALLBACK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT|ALLOW_LIST|BLOCK_LIST|MINT_ADDRESS_MAX|MINT_START_BLOCK|MINT_STOP_BLOCK|LOCK_MINT|LOCK_MINT_SUPPLY|MEMO',
+                1: 'VERSION|TICK|DESCRIPTION|MEMO',
+                2: 'VERSION|TICK|MAX_MINT|MINT_SUPPLY|TRANSFER_SUPPLY|MINT_ADDRESS_MAX|MINT_START_BLOCK|MINT_STOP_BLOCK|MEMO',
+                3: 'VERSION|TICK|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_SLEEP|LOCK_CALLBACK|LOCK_MINT|LOCK_MINT_SUPPLY|MEMO',
+                4: 'VERSION|TICK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT|MEMO',
+                5: 'VERSION|TICK|ALLOW_LIST|BLOCK_LIST|MEMO'
+            },
+            LINK: {
+                0: 'VERSION|COIN1|COIN1_ACTION_INDEX|COIN2|COIN2_ACTION_INDEX|MEMO'
+            },
+            LIST: {
+                0: 'VERSION|TYPE|ITEM',
+                1: 'VERSION|EDIT|LIST_ACTION_INDEX|ITEM'
+            },
+            MESSAGE: {
+                0: 'VERSION|DESTINATION|ENCRYPTION_METHOD|ENCRYPTION_KEY',
+                1: 'VERSION|DESTINATION|ENCRYPTION_METHOD|ENCRYPTION_KEY',
+                2: 'VERSION|DESTINATION|ENCRYPTED_MESSAGE',
+                3: 'VERSION|DESTINATION|PLAINTEXT_MESSAGE'
+            },
+            MINT: {
+                0: 'VERSION|TICK|AMOUNT|DESTINATION|MEMO'
+            },
+            ORDER: {
+                0: 'VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO',
+                1: 'VERSION|ORDER_ACTION_INDEX|MEMO',
+                2: 'VERSION|ORDER_ACTION_INDEX|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO'
+            },
+            SEND: {
+                0: 'VERSION|TICK|AMOUNT|DESTINATION|MEMO',
+                1: 'VERSION|TICK|AMOUNT|DESTINATION|AMOUNT|DESTINATION|MEMO',
+                2: 'VERSION|TICK|AMOUNT|DESTINATION|TICK|AMOUNT|DESTINATION|MEMO',
+                3: 'VERSION|TICK|AMOUNT|DESTINATION|MEMO|TICK|AMOUNT|DESTINATION|MEMO'
+            },
+            SLEEP: {
+                0: 'VERSION|RESUME_BLOCK|MEMO',
+                1: 'VERSION|RESUME_BLOCK|TICK|MEMO'
+            },
+            SWAP: {
+                0: 'VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO',
+                1: 'VERSION|SWAP_ACTION_INDEX|MEMO',
+                2: 'VERSION|SWAP_ACTION_INDEX|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO'
+            },
+            SWEEP: {
+                0: 'VERSION|DESTINATION|BALANCES|OWNERSHIPS|ESCROWS|MEMO'
+            }
+        }
+    }
+
+    // Handle returning integer format version
+    getFormatVersion(format){
+        let type = typeof format;
+        if(type=='number' && this.isInteger(format) && format <= 255)
+            return format;
+        // Default to format 0 if none is given
+        if(type=='undefined' || (type=='string' && format==''))
+            return 0;
+        // Strip out any quotes and double-quotes
+        if(type=='string')
+            format = format.replace(/\"|\'/g,'');
+        // Convert any numeric strings to integers
+        if(this.isNumeric(format) && !this.isFloat(format) && format <= 255)
+            return parseInt(format);
+        // Return NULL if not able to identify format version
+        return null;
+    }
+
+    // Handle getting a list of all possible fields from the formats object
+    getFormatFieldList(formats){
+        let list = [];
+        for(let format in formats){
+            let fields = String(formats[format]).split('|');
+            for(let field in fields){
+                let name = fields[field];
+                if(!list.includes(name))
+                    list.push(name);
+            }
+        }
+        return list;
+    }
+    getAction(){
+        console.log('getActions ACTION=',)
+
+    }
+
+
+
+}
+
+module.exports = Formats;

@@ -1,0 +1,19 @@
+version: '3'
+
+services:
+  xchain_sdk:
+    build: .
+    networks:
+      - network1
+    ports:
+      - "3005:3005"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "30m"
+        max-file: "10"
+
+networks:
+  network1:
+    name: xchain_network
+    external: true
