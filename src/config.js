@@ -17,10 +17,7 @@
  * 
  ********************************************************************/
 
-// Load required libraries
-// const fs = require('fs');
-
-module.exports = {
+Config = {
 
     // Handle returning the current sdk configuration
     getConfig: function(){
@@ -90,3 +87,5 @@ module.exports = {
     },
 
 }
+
+module.exports = Config;

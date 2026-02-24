@@ -20,8 +20,9 @@
  ********************************************************************/
 
 // Load required libraries
-const config = require('./config.js');
-const mathjs = require('mathjs');
+const config  = require('./config.js');
+const formats = require('./formats.js');
+const mathjs  = require('mathjs');
 
 // Support BigInt in JSON stringify()
 BigInt.prototype.toJSON = function(){
@@ -348,6 +349,40 @@ class Utility {
         }, {});
         return sortedObj;
     }
+
+    // Handle getting a list of actions from 
+    getActions(){
+        let actions = [];
+        for(let action in formats)
+            actions.push(action);
+        return actions;
+    }
+
+    // Handle returning integer format version
+    getActionFormats(action){
+        let arr  = null,
+            name = String(action).toUpperCase();
+        if(!this.isNull(formats[name]))
+            arr = formats[name];
+        return arr;
+    }
+
+    // Handle getting a list of all possible fields from the formats object
+    getActionFormatFieldList(action, format){
+        let list = [],
+            arr  = this.getActionFormats(action);
+        if(!this.isNull(arr[format])){
+            let fields = String(arr[format]).split('|');
+            for(let field in fields){
+                let name = fields[field];
+                if(!list.includes(name))
+                    list.push(name);
+            }
+        }
+        return list;
+    }
+
+
 }
 
 module.exports = Utility;
