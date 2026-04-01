@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-03-31
+
+### Changed
+
+- Center badge layout in README
+- Replace blockchain-specific references with "XChain Platform" in README description
+- Update documentation links to point to full GitHub URLs for xchain-documentation repo
+
 ## [1.1.0] - 2026-03-31
 
 ### Added
