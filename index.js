@@ -13,7 +13,7 @@
  *
  **********************************************************************
  *
- * XChain SDK - Module Entry Point
+ * XChain Platform SDK - Module Entry Point
  *
  * Usage:
  *   const { XChainSDK, BatchBuilder } = require('xchain-sdk');

@@ -1,4 +1,4 @@
-# XChain Software Developer Kit (SDK)
+# XChain Platform - Software Developer Kit (SDK)
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-1.1.1-blue" alt="Version">
@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/license-Dankest%20Community-orange" alt="License">
 </p>
 
-Developer-facing SDK for generating XChain platform transactions and querying blockchain data on the XChain Platform.
+Developer-facing SDK for generating XChain platform transactions and querying blockchain data.
 
 ## Features
 

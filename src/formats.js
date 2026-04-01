@@ -13,7 +13,7 @@
  * 
  **********************************************************************
  *
- * XChain SDK - ACTION Formats
+ * XChain Platform SDK - ACTION Formats
  * 
  * This file defines all the various formats for ACTION commands
  * 

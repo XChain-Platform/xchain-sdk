@@ -13,7 +13,7 @@
  *
  **********************************************************************
  *
- * XChain SDK - API
+ * XChain Platform SDK - API
  *
  * This file starts the JSON-RPC server exposing all SDK methods
  *

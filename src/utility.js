@@ -13,7 +13,7 @@
  * 
  **********************************************************************
  *
- * XChain SDK - Utility Class
+ * XChain Platform SDK - Utility Class
  * 
  * This file provides utility functions used throughout the SDK
  *

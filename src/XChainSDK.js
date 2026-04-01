@@ -13,9 +13,9 @@
  *
  **********************************************************************
  *
- * XChain SDK - XChainSDK (Software Development Kit)
+ * XChain Platform SDK - XChainSDK (Software Development Kit)
  *
- * This file handles parsing XChain SDK requests
+ * This file handles parsing XChain Platform SDK requests
  *
  ********************************************************************/
 
@@ -36,7 +36,7 @@ class XChainSDK {
     // Hub discovery requires calling init() (async) after construction.
     constructor(options = {}) {
 
-        // XChain SDK Version
+        // XChain Platform SDK Version
         this.version = process.env.npm_package_version;
         this.name    = process.env.npm_package_name;
 

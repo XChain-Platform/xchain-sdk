@@ -13,7 +13,7 @@
  *
  **********************************************************************
  *
- * XChain SDK - Encoder Client
+ * XChain Platform SDK - Encoder Client
  *
  * JSON-RPC client wrapping the xchain-encoder create_tx method
  *

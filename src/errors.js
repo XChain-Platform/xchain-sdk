@@ -13,7 +13,7 @@
  *
  **********************************************************************
  *
- * XChain SDK - Error Classes
+ * XChain Platform SDK - Error Classes
  *
  * This file defines typed errors for the SDK
  *

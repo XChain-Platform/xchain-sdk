@@ -1,6 +1,6 @@
 /*********************************************************************
  *
- * XChain SDK - FormatSelector Tests
+ * XChain Platform SDK - FormatSelector Tests
  *
  * Comprehensive Mocha + Chai test suite for the FormatSelector class.
  *

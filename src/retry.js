@@ -13,7 +13,7 @@
  *
  **********************************************************************
  *
- * XChain SDK - Retry with Exponential Backoff
+ * XChain Platform SDK - Retry with Exponential Backoff
  *
  * Configurable retry logic for transient network errors
  *

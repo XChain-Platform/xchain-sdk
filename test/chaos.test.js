@@ -2,7 +2,7 @@
 
 /*********************************************************************
  *
- * XChain SDK - Network Chaos Tests
+ * XChain Platform SDK - Network Chaos Tests
  *
  * Verifies that all network clients (ExplorerClient, EncoderClient,
  * HubConnector) wrap every failure mode as a typed SDK error and

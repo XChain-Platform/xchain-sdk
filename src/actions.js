@@ -13,7 +13,7 @@
  *
  **********************************************************************
  *
- * XChain SDK - Actions Class
+ * XChain Platform SDK - Actions Class
  *
  * This file handles generating action strings from user input
  *

@@ -13,7 +13,7 @@
  *
  **********************************************************************
  *
- * XChain SDK - Batch Builder
+ * XChain Platform SDK - Batch Builder
  *
  * Fluent API for building BATCH actions with validation
  *

@@ -1,6 +1,6 @@
 /*********************************************************************
  *
- * XChain SDK - Fuzz Tests
+ * XChain Platform SDK - Fuzz Tests
  *
  * Core principle: NO test should cause an unhandled exception.
  * Every test must either succeed or throw a clean SDKError subclass.

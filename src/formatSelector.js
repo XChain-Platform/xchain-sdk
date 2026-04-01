@@ -13,7 +13,7 @@
  *
  **********************************************************************
  *
- * XChain SDK - Format Selector
+ * XChain Platform SDK - Format Selector
  *
  * Selects the optimal (smallest) format version for a given ACTION
  * and set of populated fields

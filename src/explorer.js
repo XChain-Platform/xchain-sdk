@@ -13,7 +13,7 @@
  *
  **********************************************************************
  *
- * XChain SDK - Explorer Client
+ * XChain Platform SDK - Explorer Client
  *
  * HTTP client wrapping the xchain-explorer REST API endpoints
  *

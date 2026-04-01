@@ -13,7 +13,7 @@
  *
  **********************************************************************
  *
- * XChain SDK - TypeScript Type Definitions
+ * XChain Platform SDK - TypeScript Type Definitions
  *
  ********************************************************************/
 

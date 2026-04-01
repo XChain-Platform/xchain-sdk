@@ -13,7 +13,7 @@
  *
  **********************************************************************
  *
- * XChain SDK - Actions Class Tests
+ * XChain Platform SDK - Actions Class Tests
  *
  * Comprehensive unit tests for the Actions class covering all 19 ACTION
  * types, format version selection, result structure, error cases,

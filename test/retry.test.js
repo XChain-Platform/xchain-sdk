@@ -13,7 +13,7 @@
  *
  **********************************************************************
  *
- * XChain SDK - Retry Logic & Request Hooks Tests
+ * XChain Platform SDK - Retry Logic & Request Hooks Tests
  *
  ********************************************************************/
 

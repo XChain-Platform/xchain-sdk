@@ -13,7 +13,7 @@
  *
  **********************************************************************
  *
- * XChain SDK - Hub Connector
+ * XChain Platform SDK - Hub Connector
  *
  * Connects to xchain-hub for service discovery and config resolution
  *

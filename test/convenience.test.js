@@ -1,6 +1,6 @@
 /*********************************************************************
  *
- * XChain SDK - Convenience Methods & BatchBuilder Tests
+ * XChain Platform SDK - Convenience Methods & BatchBuilder Tests
  *
  * Tests for:
  *   - Module entry point exports

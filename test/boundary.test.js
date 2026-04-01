@@ -1,6 +1,6 @@
 /*********************************************************************
  *
- * XChain SDK - Boundary Condition Tests
+ * XChain Platform SDK - Boundary Condition Tests
  *
  * Tests exact limit values for OP_RETURN encoding, field lengths,
  * numeric ranges, and format constraints.
