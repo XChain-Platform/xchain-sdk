@@ -1,0 +1,474 @@
+/*********************************************************************
+ *
+ * Copyright © 2025 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * Licensed under the Dankest Community License (Apache License 2.0 + Additional Terms).
+ * You may not use this file except in compliance with that License.
+ *
+ * A copy of the License is available at:
+ *     https://dankest.llc/license
+ *
+ * This software is provided "AS IS", without warranties or conditions of any kind.
+ *
+ **********************************************************************
+ *
+ * XChain SDK - Validator
+ *
+ * Per-action input validation rules for all 19 ACTION types
+ *
+ ********************************************************************/
+
+const formats = require('./formats.js');
+const config  = require('./config.js');
+const { SDKValidationError } = require('./errors.js');
+
+// Maximum values
+const MAX_SUPPLY_CEILING = 1000000000000000000000; // 1 sextillion
+const MAX_DECIMALS       = 18;
+const MAX_TICK_LENGTH    = 250;
+const MAX_DESC_LENGTH    = 250;
+const MAX_MESSAGE_LENGTH = 1048576; // 1MB
+
+// Allowed TICK characters: a-zA-Z0-9 and ~!@#$%^&*()_+-={}[]\:<>.?
+// Forbidden: | ; . / and ^ as first char
+const TICK_REGEX = /^[a-zA-Z0-9~!@#$%^&*()_+\-={}[\]\\:<>.?]+$/;
+const TICK_FORBIDDEN_FIRST_CHAR = '^';
+
+// Characters forbidden in text fields (pipe = field separator, semicolon = command separator)
+const FORBIDDEN_TEXT_CHARS = ['|', ';'];
+
+// Valid FIAT currency codes
+const VALID_FIAT_CODES = ['USD', 'CAD', 'AUD', 'MXN', 'GBP', 'JPY', 'CNY', 'CHF', 'BRL', 'INR'];
+
+// Valid coin identifiers
+const VALID_COINS = ['BTC', 'LTC', 'DOGE'];
+
+// Required fields per action (minimum fields that must be present regardless of version)
+const ACTION_REQUIRED_FIELDS = {
+    ADDRESS:   [],
+    AIRDROP:   ['TICK', 'AMOUNT', 'LIST_ACTION_INDEX'],
+    BATCH:     ['COMMAND'],
+    BROADCAST: [],
+    CALLBACK:  ['TICK'],
+    DESTROY:   ['TICK', 'AMOUNT'],
+    DISPENSER: [],
+    DIVIDEND:  ['TICK', 'DIVIDEND_TICK', 'AMOUNT'],
+    FILE:      ['NAME', 'TYPE'],
+    ISSUE:     ['TICK'],
+    LINK:      ['COIN1', 'COIN1_ACTION_INDEX', 'COIN2', 'COIN2_ACTION_INDEX'],
+    LIST:      ['ITEM'],
+    MESSAGE:   ['DESTINATION'],
+    MINT:      ['TICK', 'AMOUNT'],
+    ORDER:     [],
+    SEND:      ['TICK', 'AMOUNT', 'DESTINATION'],
+    SLEEP:     ['RESUME_BLOCK'],
+    SWAP:      [],
+    SWEEP:     ['DESTINATION']
+};
+
+// Actions that have cancel/close/edit sub-operations via ACTION_INDEX reference
+// For these, the base required fields don't apply when an action index field is present
+const ACTION_INDEX_FIELDS = {
+    BROADCAST: 'BROADCAST_ACTION_INDEX',
+    DISPENSER: 'DISPENSER_ACTION_INDEX',
+    ORDER:     'ORDER_ACTION_INDEX',
+    SWAP:      'SWAP_ACTION_INDEX'
+};
+
+
+class Validator {
+
+    constructor(util) {
+        this.util   = util;
+        this.config = config.getConfig();
+    }
+
+    // Validate all fields for a given action
+    // Returns array of error objects. Empty array = valid.
+    validate(action, fields) {
+        let errors = [];
+
+        // Guard against null/undefined fields
+        if (!fields || typeof fields !== 'object') fields = {};
+
+        // Check action exists
+        if (!formats[action]) {
+            errors.push(this._error('UNKNOWN_ACTION', 'Unknown ACTION type: ' + action, { action }));
+            return errors;
+        }
+
+        // Check required fields (skip if this is a cancel/edit operation via action index)
+        let actionIndexField = ACTION_INDEX_FIELDS[action];
+        let isIndexOperation = actionIndexField && !this._isEmpty(fields[actionIndexField]);
+
+        if (!isIndexOperation) {
+            let required = ACTION_REQUIRED_FIELDS[action] || [];
+            for (let field of required) {
+                if (this._isEmpty(fields[field])) {
+                    errors.push(this._error('MISSING_REQUIRED_FIELD',
+                        action + ' requires field: ' + field,
+                        { action, field }));
+                }
+            }
+        }
+
+        // Validate individual field values
+        for (let field in fields) {
+            let value = fields[field];
+            if (this._isEmpty(value)) continue;
+
+            let fieldErrors = this._validateField(action, field, value, fields);
+            errors.push(...fieldErrors);
+        }
+
+        // Action-specific cross-field validation
+        let actionErrors = this._validateAction(action, fields);
+        errors.push(...actionErrors);
+
+        return errors;
+    }
+
+    // Validate a single field value
+    _validateField(action, field, value, allFields) {
+        let errors = [];
+
+        // TICK validation
+        if (field === 'TICK' || field === 'GIVE_TICK' || field === 'GET_TICK' ||
+            field === 'DIVIDEND_TICK' || field === 'CALLBACK_TICK') {
+            if (action === 'ISSUE' && field === 'TICK') {
+                // Full TICK name validation on ISSUE (includes ^ first char check)
+                errors.push(...this._validateTickName(value));
+            } else if (String(value).startsWith('^')) {
+                // TICK_ID reference (^123) — only valid outside of ISSUE
+                let id = String(value).substring(1);
+                if (!this.util.isNumeric(id))
+                    errors.push(this._error('INVALID_TICK_ID', field + ' ID reference must be numeric: ' + value, { field, value }));
+            }
+        }
+
+        // MEMO validation
+        if (field === 'MEMO') {
+            errors.push(...this._validateTextContent(field, value));
+        }
+
+        // DESCRIPTION validation
+        if (field === 'DESCRIPTION') {
+            errors.push(...this._validateTextContent(field, value));
+            if (String(value).length > MAX_DESC_LENGTH)
+                errors.push(this._error('INVALID_FIELD_VALUE', 'DESCRIPTION must be ' + MAX_DESC_LENGTH + ' characters or less', { field, value: String(value).length, constraint: { max: MAX_DESC_LENGTH } }));
+        }
+
+        // DECIMALS validation
+        if (field === 'DECIMALS') {
+            if (!Number.isInteger(Number(value)) || Number(value) < 0 || Number(value) > MAX_DECIMALS)
+                errors.push(this._error('INVALID_FIELD_VALUE', 'DECIMALS must be an integer between 0 and ' + MAX_DECIMALS, { field, value, constraint: { min: 0, max: MAX_DECIMALS, type: 'integer' } }));
+        }
+
+        // MAX_SUPPLY validation (use BigInt to avoid precision loss with large numbers)
+        if (field === 'MAX_SUPPLY') {
+            try {
+                let bigVal = BigInt(String(value).split('.')[0]);
+                if (bigVal < 0n || bigVal > BigInt('1000000000000000000000'))
+                    errors.push(this._error('INVALID_FIELD_VALUE', 'MAX_SUPPLY must be between 0 and ' + MAX_SUPPLY_CEILING, { field, value, constraint: { min: 0, max: MAX_SUPPLY_CEILING } }));
+            } catch (e) {
+                errors.push(this._error('INVALID_FIELD_VALUE', 'MAX_SUPPLY must be numeric', { field, value }));
+            }
+        }
+
+        // Lock field validation
+        if (this.config['LOCK_FIELDS'].includes(field)) {
+            if (!this.util.isValidLockValue(value))
+                errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be 0 or 1', { field, value, constraint: { valid: [0, 1] } }));
+        }
+
+        // FIAT_CODE validation
+        if (field === 'FIAT_CODE') {
+            if (!VALID_FIAT_CODES.includes(String(value).toUpperCase()))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'FIAT_CODE must be one of: ' + VALID_FIAT_CODES.join(', '), { field, value, constraint: { valid: VALID_FIAT_CODES } }));
+        }
+
+        // FIAT_AMOUNT format validation (X.XX)
+        if (field === 'FIAT_AMOUNT') {
+            if (!this.util.isNumeric(value) || !/^\d+\.\d{2}$/.test(String(value)))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'FIAT_AMOUNT must be in X.XX format', { field, value }));
+        }
+
+        // COIN field validation
+        if (field === 'GIVE_COIN' || field === 'GET_COIN' || field === 'COIN1' || field === 'COIN2') {
+            if (!VALID_COINS.includes(String(value).toUpperCase()))
+                errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be one of: ' + VALID_COINS.join(', '), { field, value, constraint: { valid: VALID_COINS } }));
+        }
+
+        // DESTINATION / GET_ADDRESS validation
+        if (field === 'DESTINATION' || field === 'GET_ADDRESS' || field === 'TRANSFER') {
+            if (!this.util.isCryptoAddress(value))
+                errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be a valid crypto address', { field, value }));
+        }
+
+        // ENCRYPTION_METHOD validation
+        if (field === 'ENCRYPTION_METHOD') {
+            if (!this.util.isValidValue(value, [1, 2]))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'ENCRYPTION_METHOD must be 1 (ECDH) or 2 (AES)', { field, value, constraint: { valid: [1, 2] } }));
+        }
+
+        // MESSAGE content length validation
+        if (field === 'PLAINTEXT_MESSAGE' || field === 'ENCRYPTED_MESSAGE' || field === 'ENCRYPTION_KEY') {
+            if (String(value).length > MAX_MESSAGE_LENGTH)
+                errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be ' + MAX_MESSAGE_LENGTH + ' characters or less', { field, value: String(value).length, constraint: { max: MAX_MESSAGE_LENGTH } }));
+            errors.push(...this._validateTextContent(field, value));
+        }
+
+        // FEE_PREFERENCE validation (ADDRESS action)
+        if (field === 'FEE_PREFERENCE') {
+            if (!this.util.isValidValue(value, [1, 2, 3]))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'FEE_PREFERENCE must be 1 (destroy), 2 (protocol), or 3 (community)', { field, value, constraint: { valid: [1, 2, 3] } }));
+        }
+
+        // LIST TYPE validation
+        if (field === 'TYPE' && action === 'LIST') {
+            if (!this.util.isValidValue(value, [1, 2]))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'LIST TYPE must be 1 (TICK list) or 2 (ADDRESS list)', { field, value, constraint: { valid: [1, 2] } }));
+        }
+
+        // LIST EDIT validation
+        if (field === 'EDIT') {
+            if (!this.util.isValidValue(value, [1, 2]))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'EDIT must be 1 (ADD) or 2 (REMOVE)', { field, value, constraint: { valid: [1, 2] } }));
+        }
+
+        // BALANCES / OWNERSHIPS / ESCROWS validation (SWEEP)
+        if (field === 'BALANCES' || field === 'OWNERSHIPS' || field === 'ESCROWS') {
+            if (!this.util.isValidLockValue(value))
+                errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be 0 or 1', { field, value, constraint: { valid: [0, 1] } }));
+        }
+
+        // AMOUNT validation (must be numeric and positive)
+        if (field === 'AMOUNT' || field === 'GIVE_AMOUNT' || field === 'GET_AMOUNT' ||
+            field === 'GIVE_ESCROW' || field === 'CALLBACK_AMOUNT' || field === 'TRANSFER_SUPPLY' ||
+            field === 'MINT_SUPPLY' || field === 'MAX_MINT' || field === 'MINT_ADDRESS_MAX') {
+            if (!this.util.isNumeric(value))
+                errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be numeric', { field, value }));
+        }
+
+        // FEE validation (BROADCAST — percentage format)
+        if (field === 'FEE' && action === 'BROADCAST') {
+            if (!this.util.isNumeric(value))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'FEE must be numeric (percentage)', { field, value }));
+        }
+
+        // Block number validation
+        if (field === 'RESUME_BLOCK' || field === 'CALLBACK_BLOCK' ||
+            field === 'MINT_START_BLOCK' || field === 'MINT_STOP_BLOCK') {
+            if (!this.util.isNumeric(value))
+                errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be numeric', { field, value }));
+        }
+
+        // ACTION_INDEX fields must be numeric
+        if (field === 'BROADCAST_ACTION_INDEX' || field === 'DISPENSER_ACTION_INDEX' ||
+            field === 'ORDER_ACTION_INDEX' || field === 'SWAP_ACTION_INDEX' ||
+            field === 'LIST_ACTION_INDEX' || field === 'COIN1_ACTION_INDEX' ||
+            field === 'COIN2_ACTION_INDEX') {
+            if (!this.util.isNumeric(value))
+                errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be numeric', { field, value }));
+        }
+
+        // VALUE validation (BROADCAST)
+        if (field === 'VALUE') {
+            if (!this.util.isNumeric(value))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'VALUE must be numeric', { field, value }));
+        }
+
+        // MESSAGE field validation (BROADCAST)
+        if (field === 'MESSAGE' && action === 'BROADCAST') {
+            errors.push(...this._validateTextContent(field, value));
+        }
+
+        return errors;
+    }
+
+    // Action-specific cross-field validation
+    _validateAction(action, fields) {
+        let errors = [];
+
+        switch (action) {
+            case 'BATCH':
+                errors.push(...this._validateBatch(fields));
+                break;
+            case 'BROADCAST':
+                errors.push(...this._validateBroadcast(fields));
+                break;
+            case 'DISPENSER':
+                errors.push(...this._validateDispenser(fields));
+                break;
+            case 'LIST':
+                errors.push(...this._validateList(fields));
+                break;
+            case 'ORDER':
+                errors.push(...this._validateOrder(fields));
+                break;
+            case 'SWAP':
+                errors.push(...this._validateSwap(fields));
+                break;
+        }
+
+        return errors;
+    }
+
+    // BATCH-specific validation
+    _validateBatch(fields) {
+        let errors = [];
+        if (this._isEmpty(fields.COMMAND)) return errors;
+
+        let commands = String(fields.COMMAND).split(';');
+        let mintCount = 0;
+        let issueCount = 0;
+
+        for (let cmd of commands) {
+            let parts = cmd.split('|');
+            let cmdAction = parts[0];
+
+            if (cmdAction === 'BATCH')
+                errors.push(this._error('BATCH_CONSTRAINT', 'BATCH cannot contain nested BATCH actions'));
+            if (cmdAction === 'FILE')
+                errors.push(this._error('BATCH_CONSTRAINT', 'BATCH cannot contain FILE actions'));
+            if (cmdAction === 'MINT') mintCount++;
+            if (cmdAction === 'ISSUE') issueCount++;
+        }
+
+        if (mintCount > 1)
+            errors.push(this._error('BATCH_CONSTRAINT', 'BATCH can contain at most 1 MINT action', { count: mintCount }));
+        if (issueCount > 1)
+            errors.push(this._error('BATCH_CONSTRAINT', 'BATCH can contain at most 1 ISSUE action', { count: issueCount }));
+
+        return errors;
+    }
+
+    // BROADCAST-specific validation
+    _validateBroadcast(fields) {
+        let errors = [];
+        // Must have either MESSAGE or BROADCAST_ACTION_INDEX
+        if (this._isEmpty(fields.MESSAGE) && this._isEmpty(fields.BROADCAST_ACTION_INDEX))
+            errors.push(this._error('MISSING_REQUIRED_FIELD', 'BROADCAST requires MESSAGE or BROADCAST_ACTION_INDEX'));
+        return errors;
+    }
+
+    // DISPENSER-specific validation
+    _validateDispenser(fields) {
+        let errors = [];
+        // If not a cancel/edit (no DISPENSER_ACTION_INDEX), full create requires give/get fields
+        if (this._isEmpty(fields.DISPENSER_ACTION_INDEX)) {
+            let required = ['GIVE_TICK', 'GIVE_AMOUNT', 'GET_TICK', 'GET_AMOUNT'];
+            for (let field of required) {
+                if (this._isEmpty(fields[field]))
+                    errors.push(this._error('MISSING_REQUIRED_FIELD', 'DISPENSER create requires field: ' + field, { field }));
+            }
+        }
+        return errors;
+    }
+
+    // ORDER-specific validation
+    _validateOrder(fields) {
+        let errors = [];
+        if (this._isEmpty(fields.ORDER_ACTION_INDEX)) {
+            let required = ['GIVE_TICK', 'GIVE_AMOUNT', 'GET_TICK', 'GET_AMOUNT'];
+            for (let field of required) {
+                if (this._isEmpty(fields[field]))
+                    errors.push(this._error('MISSING_REQUIRED_FIELD', 'ORDER create requires field: ' + field, { field }));
+            }
+        }
+        return errors;
+    }
+
+    // SWAP-specific validation
+    _validateSwap(fields) {
+        let errors = [];
+        if (this._isEmpty(fields.SWAP_ACTION_INDEX)) {
+            let required = ['GIVE_TICK', 'GIVE_AMOUNT', 'GET_TICK', 'GET_AMOUNT'];
+            for (let field of required) {
+                if (this._isEmpty(fields[field]))
+                    errors.push(this._error('MISSING_REQUIRED_FIELD', 'SWAP create requires field: ' + field, { field }));
+            }
+        }
+        return errors;
+    }
+
+    // LIST-specific validation
+    _validateList(fields) {
+        let errors = [];
+        // LIST v0 (create) requires TYPE; LIST v1 (edit) requires EDIT + LIST_ACTION_INDEX
+        if (this._isEmpty(fields.LIST_ACTION_INDEX) && this._isEmpty(fields.EDIT)) {
+            // Create mode — TYPE is required
+            if (this._isEmpty(fields.TYPE))
+                errors.push(this._error('MISSING_REQUIRED_FIELD', 'LIST create requires field: TYPE', { field: 'TYPE' }));
+        }
+        return errors;
+    }
+
+    // Validate TICK name
+    _validateTickName(value) {
+        let errors = [];
+        let name = String(value);
+
+        if (name.length === 0 || name.length > MAX_TICK_LENGTH)
+            errors.push(this._error('INVALID_TICK_NAME', 'TICK name must be 1-' + MAX_TICK_LENGTH + ' characters', { value, length: name.length }));
+
+        if (name.startsWith(TICK_FORBIDDEN_FIRST_CHAR))
+            errors.push(this._error('INVALID_TICK_NAME', 'TICK name cannot start with ^', { value }));
+
+        if (!TICK_REGEX.test(name))
+            errors.push(this._error('INVALID_TICK_NAME', 'TICK name contains invalid characters', { value, allowed: 'a-zA-Z0-9~!@#$%^&*()_+-={}[]\\:<>.?' }));
+
+        // Check for forbidden characters
+        for (let ch of FORBIDDEN_TEXT_CHARS) {
+            if (name.includes(ch))
+                errors.push(this._error('INVALID_TICK_NAME', 'TICK name cannot contain ' + (ch === '|' ? 'pipe (|)' : 'semicolon (;)'), { value }));
+        }
+
+        // Check for dot (parent/child separator) and slash (directory separator)
+        if (name.includes('.'))
+            errors.push(this._error('INVALID_TICK_NAME', 'TICK name cannot contain dot (.)', { value }));
+        if (name.includes('/'))
+            errors.push(this._error('INVALID_TICK_NAME', 'TICK name cannot contain slash (/)', { value }));
+
+        return errors;
+    }
+
+    // Validate text content (no pipe or semicolon)
+    _validateTextContent(field, value) {
+        let errors = [];
+        let text = String(value);
+        for (let ch of FORBIDDEN_TEXT_CHARS) {
+            if (text.includes(ch))
+                errors.push(this._error('FORBIDDEN_CHARACTER', field + ' cannot contain ' + (ch === '|' ? 'pipe (|)' : 'semicolon (;)'), { field, value }));
+        }
+        return errors;
+    }
+
+    // Check if a value is null/undefined/empty
+    _isEmpty(value) {
+        return value === null || value === undefined || value === '';
+    }
+
+    // Create a structured error object
+    _error(code, message, details = {}) {
+        return { code, message, details };
+    }
+
+    // Convenience: validate and throw if errors found
+    validateOrThrow(action, fields) {
+        let errors = this.validate(action, fields);
+        if (errors.length > 0) {
+            throw new SDKValidationError(
+                errors[0].code,
+                errors.length === 1
+                    ? errors[0].message
+                    : errors.length + ' validation errors: ' + errors.map(e => e.message).join('; '),
+                { action, errors }
+            );
+        }
+    }
+
+}
+
+module.exports = Validator;
