@@ -1,0 +1,119 @@
+/*********************************************************************
+ *
+ * Copyright © 2025 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * Licensed under the Dankest Community License (Apache License 2.0 + Additional Terms).
+ * You may not use this file except in compliance with that License.
+ *
+ * A copy of the License is available at:
+ *     https://dankest.llc/license
+ *
+ * This software is provided "AS IS", without warranties or conditions of any kind.
+ *
+ **********************************************************************
+ *
+ * XChain SDK - Batch Builder
+ *
+ * Fluent API for building BATCH actions with validation
+ *
+ ********************************************************************/
+
+const { SDKValidationError } = require('./errors.js');
+
+
+class BatchBuilder {
+
+    constructor(sdk) {
+        this.sdk      = sdk;
+        this._actions = [];
+    }
+
+    // Add a raw action by name + params
+    add(action, params) {
+        this._actions.push({ action: String(action).toUpperCase(), params: params || {} });
+        return this;
+    }
+
+    // Convenience methods for each action type
+    send(params)      { return this.add('SEND', params); }
+    issue(params)     { return this.add('ISSUE', params); }
+    mint(params)      { return this.add('MINT', params); }
+    destroy(params)   { return this.add('DESTROY', params); }
+    order(params)     { return this.add('ORDER', params); }
+    broadcast(params) { return this.add('BROADCAST', params); }
+    dispenser(params) { return this.add('DISPENSER', params); }
+    dividend(params)  { return this.add('DIVIDEND', params); }
+    sweep(params)     { return this.add('SWEEP', params); }
+    swap(params)      { return this.add('SWAP', params); }
+    callback(params)  { return this.add('CALLBACK', params); }
+    sleep(params)     { return this.add('SLEEP', params); }
+    airdrop(params)   { return this.add('AIRDROP', params); }
+    message(params)   { return this.add('MESSAGE', params); }
+    list(params)      { return this.add('LIST', params); }
+    link(params)      { return this.add('LINK', params); }
+    address(params)   { return this.add('ADDRESS', params); }
+
+    // Validate BATCH constraints before building
+    _validate() {
+        if (this._actions.length === 0)
+            throw new SDKValidationError('BATCH_EMPTY', 'BATCH must contain at least one action');
+
+        let mintCount = 0;
+        let issueCount = 0;
+
+        for (let entry of this._actions) {
+            if (entry.action === 'BATCH')
+                throw new SDKValidationError('BATCH_CONSTRAINT', 'BATCH cannot contain nested BATCH actions');
+            if (entry.action === 'FILE')
+                throw new SDKValidationError('BATCH_CONSTRAINT', 'BATCH cannot contain FILE actions');
+            if (entry.action === 'MINT') mintCount++;
+            if (entry.action === 'ISSUE') issueCount++;
+        }
+
+        if (mintCount > 1)
+            throw new SDKValidationError('BATCH_CONSTRAINT', 'BATCH can contain at most 1 MINT action', { count: mintCount });
+        if (issueCount > 1)
+            throw new SDKValidationError('BATCH_CONSTRAINT', 'BATCH can contain at most 1 ISSUE action', { count: issueCount });
+    }
+
+    // Build the BATCH action — validates each sub-action, enforces constraints,
+    // produces the semicolon-joined command string
+    build(encoderOpts) {
+        this._validate();
+
+        // Build each sub-action through the full pipeline (validate + format select + serialize)
+        let commandParts = [];
+        for (let entry of this._actions) {
+            let result = this.sdk.actions.createAction({
+                action: entry.action,
+                params: entry.params
+            });
+            commandParts.push(result.actionString);
+        }
+
+        // Join with semicolons
+        let command = commandParts.join(';');
+
+        // Now create the BATCH action itself
+        return this.sdk.createAction({
+            action: 'BATCH',
+            params: { command },
+            encoder: encoderOpts
+        });
+    }
+
+    // Reset the builder for reuse
+    reset() {
+        this._actions = [];
+        return this;
+    }
+
+    // Get count of queued actions
+    get length() {
+        return this._actions.length;
+    }
+
+}
+
+module.exports = BatchBuilder;

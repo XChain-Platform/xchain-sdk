@@ -1,87 +1,506 @@
 /*********************************************************************
- * 
+ *
  * Copyright © 2025 Dankest, LLC
  * Based on XChain Platform by Dankest, LLC – https://dankest.llc
  *
  * Licensed under the Dankest Community License (Apache License 2.0 + Additional Terms).
  * You may not use this file except in compliance with that License.
- * 
+ *
  * A copy of the License is available at:
  *     https://dankest.llc/license
  *
- * This software is provided “AS IS”, without warranties or conditions of any kind.
- * 
+ * This software is provided "AS IS", without warranties or conditions of any kind.
+ *
  **********************************************************************
  *
  * XChain SDK - XChainSDK (Software Development Kit)
- * 
+ *
  * This file handles parsing XChain SDK requests
- * 
+ *
  ********************************************************************/
 
 // Load required libraries
-const config  = require('./config.js');
-const actions = require('./actions.js');
-const utility = require('./utility.js');
+const config         = require('./config.js');
+const Actions        = require('./actions.js');
+const Utility        = require('./utility.js');
+const ExplorerClient = require('./explorer.js');
+const EncoderClient  = require('./encoder.js');
+const HubConnector   = require('./hub.js');
+const BatchBuilder   = require('./batchBuilder.js');
+const { SDKConfigError } = require('./errors.js');
 
 class XChainSDK {
 
     // Handle constructing a class instance
-    constructor(){
+    // Options are applied immediately for core + explicit URLs.
+    // Hub discovery requires calling init() (async) after construction.
+    constructor(options = {}) {
 
         // XChain SDK Version
         this.version = process.env.npm_package_version;
         this.name    = process.env.npm_package_name;
 
+        // Store options
+        this.options = options;
+
+        // Initialize core (no network required)
+        this.config  = config.getConfig();
+        this.util    = new Utility();
+        this.actions = new Actions(this);
+
+        // Service clients (initialized by _initClients or init)
+        this.explorer = null;
+        this.encoder  = null;
+        this.hub      = null;
+
+        // Initialize hub connector if hub URL provided
+        if (options.hubUrl) {
+            this.hub = new HubConnector(options);
+        }
+
+        // Initialize clients from explicit options / env vars
+        this._initClients(options);
     }
 
-    // Handle starting up the SDK
-    async start(){
+    // Initialize explorer + encoder from resolved options
+    // Config resolution: constructor options > env vars > defaults
+    _initClients(resolved) {
+        let network = resolved.network || process.env.NETWORK;
+        let hooks   = this.options.hooks || {};
+        let retry   = this.options.retry !== undefined ? this.options.retry : {};
+        let pool    = this.options.pool || {};
+
+        // Explorer
+        let explorerUrl  = resolved.explorerUrl  || process.env.EXPLORER_URL;
+        let explorerPort = resolved.explorerPort || process.env.EXPLORER_PORT;
+        if (network && (explorerUrl || explorerPort)) {
+            this.explorer = new ExplorerClient({
+                network:      network,
+                explorerUrl:  explorerUrl,
+                explorerPort: explorerPort ? parseInt(explorerPort) : undefined,
+                timeout:      resolved.timeout,
+                hooks:        hooks,
+                retry:        retry,
+                pool:         pool
+            });
+        } else if (network) {
+            this.explorer = new ExplorerClient({ network, timeout: resolved.timeout, hooks, retry, pool });
+        }
+
+        // Encoder
+        let encoderUrl  = resolved.encoderUrl  || process.env.ENCODER_URL;
+        let encoderPort = resolved.encoderPort || process.env.ENCODER_PORT;
+        if (encoderUrl || encoderPort) {
+            this.encoder = new EncoderClient({
+                encoderUrl:  encoderUrl,
+                encoderPort: encoderPort ? parseInt(encoderPort) : undefined,
+                timeout:     resolved.timeout,
+                hooks:       hooks,
+                retry:       retry,
+                pool:        pool
+            });
+        }
+    }
+
+    // Async initialization: fetch config from hub and resolve service endpoints
+    // Call this after construction when using hub-based discovery.
+    // Safe to call multiple times (re-fetches config).
+    async init() {
+        if (!this.hub) return;
+
+        try {
+            await this.hub.getAllConfig();
+        } catch (err) {
+            // Hub failure is non-fatal if explicit URLs were provided
+            if (this.explorer && this.encoder) {
+                console.warn('Hub unavailable, using explicit config:', err.message);
+                return;
+            }
+            throw err;
+        }
+
+        // Extract service endpoints for our network
+        let network   = this.options.network || process.env.NETWORK;
+        let endpoints = this.hub.extractServiceEndpoints(network);
+
+        // Apply hub-discovered endpoints where explicit options weren't provided
+        // Resolution: constructor options > hub-discovered > env vars
+        let resolved = {
+            network:      network,
+            explorerUrl:  this.options.explorerUrl  || endpoints.explorerUrl  || process.env.EXPLORER_URL,
+            explorerPort: this.options.explorerPort || endpoints.explorerPort || process.env.EXPLORER_PORT,
+            encoderUrl:   this.options.encoderUrl   || endpoints.encoderUrl   || process.env.ENCODER_URL,
+            encoderPort:  this.options.encoderPort  || endpoints.encoderPort  || process.env.ENCODER_PORT,
+            timeout:      this.options.timeout
+        };
+
+        // Re-initialize clients with resolved config
+        this._initClients(resolved);
+
+        // Start polling for config updates
+        this.hub.startPolling((configs) => {
+            let newEndpoints = this.hub.extractServiceEndpoints(network);
+            let newResolved = {
+                network:      network,
+                explorerUrl:  this.options.explorerUrl  || newEndpoints.explorerUrl  || process.env.EXPLORER_URL,
+                explorerPort: this.options.explorerPort || newEndpoints.explorerPort || process.env.EXPLORER_PORT,
+                encoderUrl:   this.options.encoderUrl   || newEndpoints.encoderUrl   || process.env.ENCODER_URL,
+                encoderPort:  this.options.encoderPort  || newEndpoints.encoderPort  || process.env.ENCODER_PORT,
+                timeout:      this.options.timeout
+            };
+            this._initClients(newResolved);
+        });
+    }
+
+    // Handle starting up the SDK (server mode with polling loop)
+    async start() {
         console.log('Starting up ' + this.name + ' v' + this.version + '...');
 
-        // Get SDK configuration
-        this.config = config.getConfig();
+        // Auto-init from hub if configured
+        if (this.hub) await this.init();
 
-        // Create some class instances
-        this.util    = new utility();
-        this.actions = new actions(this);
-
-        let request = {
-            action: 'broadcast',
-            params: {
-                message: 'test message',
-                value: '1234678.12345678',
-                memo: 'memo goes here'
-            },
-            // encoder specific params
-            encoder: {
-                fee: 1000,              // Fixed fee in satoshis
-                encoding: 'op_return',  // Encoding Type
-                dust: 1000,             // Dust amount to use
-                unconfirmed: true,      // Use Unconfirmed UTXOs
-                rbf: true               // Enable Replace-By-Fee
-
-            }
-        }
-
-        let tx = this.actions.createAction(request);
-
-        console.log('tx=',tx);
-        // let fields  = this.util.getActionFormatFieldList('issue',0);
-        // console.log('fields=',fields);
-
-        while (true){
-
-            // Bail out if stop is requested
-            if(this.stopFlag)
-                break;
-
-            // Sleep for a few seconds between STOP checks
+        while (true) {
+            if (this.stopFlag) break;
             await this.util.sleep(this.config['STOP_CHECK_INTERVAL']);
+        }
+    }
 
+    // Stop the SDK (stop hub polling, set stop flag)
+    stop() {
+        this.stopFlag = true;
+        if (this.hub) this.hub.stopPolling();
+    }
+
+    // Ensure explorer is initialized before calling explorer methods
+    _requireExplorer() {
+        if (!this.explorer)
+            throw new SDKConfigError('EXPLORER_NOT_CONFIGURED', 'Explorer not configured. Provide network + explorerUrl, or use hub discovery via init().');
+        return this.explorer;
+    }
+
+    // Ensure encoder is initialized before calling encoder methods
+    _requireEncoder() {
+        if (!this.encoder)
+            throw new SDKConfigError('ENCODER_NOT_CONFIGURED', 'Encoder not configured. Provide encoderUrl, or use hub discovery via init().');
+        return this.encoder;
+    }
+
+
+    /*
+     *  ACTION Methods (Phase 1)
+     */
+
+    // Create an action string and optionally encode it into a PSBT
+    // If data.encoder contains pubkey, this calls the encoder and returns the PSBT
+    async createAction(data) {
+        let result = this.actions.createAction(data);
+
+        // If encoder options with pubkey provided, encode the action into a PSBT
+        if (data.encoder && data.encoder.pubkey) {
+            let encoder = this._requireEncoder();
+            let txResult = await encoder.createTx({
+                data:             result.actionString,
+                pubkey:           data.encoder.pubkey,
+                change:           data.encoder.change,
+                utxos:            data.encoder.utxos,
+                rawData:          data.encoder.rawData,
+                encoding:         data.encoder.encoding,
+                fee:              data.encoder.fee,
+                feePerKb:         data.encoder.feePerKb,
+                rbf:              data.encoder.rbf,
+                dust:             data.encoder.dust,
+                unconfirmed:      data.encoder.unconfirmed,
+                compressedPubKey: data.encoder.compressedPubKey,
+                customOutputs:    data.encoder.customOutputs
+            });
+            result.psbt     = txResult.psbt;
+            result.encoding = txResult.encoding;
         }
 
+        return result;
     }
+
+    // Dry-run validation without building the string
+    validateAction(action, params) {
+        return this.actions.validateAction(action, params);
+    }
+
+    // Introspection: list all supported actions
+    getActions() {
+        return this.actions.getActions();
+    }
+
+    // Introspection: get format versions for an action
+    getActionFormats(action) {
+        return this.actions.getActionFormats(action);
+    }
+
+    // Introspection: get fields for an action + optional version
+    getActionFields(action, version) {
+        return this.actions.getActionFields(action, version);
+    }
+
+
+    /*
+     *  Convenience Action Methods
+     *  Each wraps createAction with a fixed action name.
+     *  sdk.send(params, encoderOpts?) is shorthand for
+     *  sdk.createAction({ action: 'SEND', params, encoder: encoderOpts })
+     */
+
+    async send(params, encoder)      { return this.createAction({ action: 'SEND', params, encoder }); }
+    async issue(params, encoder)     { return this.createAction({ action: 'ISSUE', params, encoder }); }
+    async mint(params, encoder)      { return this.createAction({ action: 'MINT', params, encoder }); }
+    async destroy(params, encoder)   { return this.createAction({ action: 'DESTROY', params, encoder }); }
+    async order(params, encoder)     { return this.createAction({ action: 'ORDER', params, encoder }); }
+    async transfer(params, encoder)  { return this.createAction({ action: 'SEND', params, encoder }); }
+    async broadcast(params, encoder) { return this.createAction({ action: 'BROADCAST', params, encoder }); }
+    async dispenser(params, encoder) { return this.createAction({ action: 'DISPENSER', params, encoder }); }
+    async dividend(params, encoder)  { return this.createAction({ action: 'DIVIDEND', params, encoder }); }
+    async sweep(params, encoder)     { return this.createAction({ action: 'SWEEP', params, encoder }); }
+    async swap(params, encoder)      { return this.createAction({ action: 'SWAP', params, encoder }); }
+    async callback(params, encoder)  { return this.createAction({ action: 'CALLBACK', params, encoder }); }
+    async sleep(params, encoder)     { return this.createAction({ action: 'SLEEP', params, encoder }); }
+    async airdrop(params, encoder)   { return this.createAction({ action: 'AIRDROP', params, encoder }); }
+    async message(params, encoder)   { return this.createAction({ action: 'MESSAGE', params, encoder }); }
+    async list(params, encoder)      { return this.createAction({ action: 'LIST', params, encoder }); }
+    async link(params, encoder)      { return this.createAction({ action: 'LINK', params, encoder }); }
+    async file(params, encoder)      { return this.createAction({ action: 'FILE', params, encoder }); }
+    async address(params, encoder)   { return this.createAction({ action: 'ADDRESS', params, encoder }); }
+
+    // Create a new BatchBuilder for fluent BATCH construction
+    // Usage: sdk.batch().send({...}).mint({...}).build(encoderOpts?)
+    batch() {
+        return new BatchBuilder(this);
+    }
+
+
+    /*
+     *  Encoder Methods (Phase 3)
+     */
+
+    // Direct access to encoder createTx (for advanced use / custom data)
+    async encodeTx(params) {
+        return this._requireEncoder().createTx(params);
+    }
+
+    // P2SH/P2WSH phase 2: spend a previously created P2SH/P2WSH output
+    async spendP2sh(params) {
+        return this._requireEncoder().spendP2sh(params);
+    }
+
+    // Ping the encoder
+    async pingEncoder() {
+        return this._requireEncoder().ping();
+    }
+
+
+    /*
+     *  Hub Methods (Phase 4)
+     */
+
+    // Ping the hub
+    async pingHub() {
+        if (!this.hub) throw new SDKConfigError('HUB_NOT_CONFIGURED', 'Hub not configured. Provide hubUrl in SDK options.');
+        return this.hub.ping();
+    }
+
+    // Get raw hub config (for debugging / advanced use)
+    getHubConfig() {
+        if (!this.hub) return null;
+        return this.hub.configs;
+    }
+
+
+    /*
+     *  Explorer: Balance & Address Methods
+     */
+
+    async getBalances(address, opts) {
+        return this._requireExplorer().getBalances(address, opts);
+    }
+
+    async getAddress(address) {
+        return this._requireExplorer().getAddress(address);
+    }
+
+    async getHolders(tick, opts) {
+        return this._requireExplorer().getHolders(tick, opts);
+    }
+
+    async getCredits(query, type, opts) {
+        return this._requireExplorer().getCredits(query, type, opts);
+    }
+
+    async getDebits(query, type, opts) {
+        return this._requireExplorer().getDebits(query, type, opts);
+    }
+
+    async getEscrows(query, type, opts) {
+        return this._requireExplorer().getEscrows(query, type, opts);
+    }
+
+
+    /*
+     *  Explorer: Token Methods
+     */
+
+    async getToken(tick) {
+        return this._requireExplorer().getToken(tick);
+    }
+
+    async getTokens(query, type, opts) {
+        return this._requireExplorer().getTokens(query, type, opts);
+    }
+
+    async getIssues(query, type, opts) {
+        return this._requireExplorer().getIssues(query, type, opts);
+    }
+
+
+    /*
+     *  Explorer: Transaction & History Methods
+     */
+
+    async getTransaction(query, type) {
+        return this._requireExplorer().getTransaction(query, type);
+    }
+
+    async getAction(actionIndex) {
+        return this._requireExplorer().getAction(actionIndex);
+    }
+
+    async getBlock(blockIndex) {
+        return this._requireExplorer().getBlock(blockIndex);
+    }
+
+    async getHistory(query, type, opts) {
+        return this._requireExplorer().getHistory(query, type, opts);
+    }
+
+
+    /*
+     *  Explorer: ACTION-Specific Query Methods
+     */
+
+    async getAddresses(query, type, opts) {
+        return this._requireExplorer().getAddresses(query, type, opts);
+    }
+
+    async getAirdrops(query, type, opts) {
+        return this._requireExplorer().getAirdrops(query, type, opts);
+    }
+
+    async getBatches(query, type, opts) {
+        return this._requireExplorer().getBatches(query, type, opts);
+    }
+
+    async getBroadcasts(query, type, opts) {
+        return this._requireExplorer().getBroadcasts(query, type, opts);
+    }
+
+    async getCallbacks(query, type, opts) {
+        return this._requireExplorer().getCallbacks(query, type, opts);
+    }
+
+    async getDestroys(query, type, opts) {
+        return this._requireExplorer().getDestroys(query, type, opts);
+    }
+
+    async getDispensers(query, type, opts) {
+        return this._requireExplorer().getDispensers(query, type, opts);
+    }
+
+    async getDispenses(query, type, opts) {
+        return this._requireExplorer().getDispenses(query, type, opts);
+    }
+
+    async getDividends(query, type, opts) {
+        return this._requireExplorer().getDividends(query, type, opts);
+    }
+
+    async getFees(query, type, opts) {
+        return this._requireExplorer().getFees(query, type, opts);
+    }
+
+    async getFiles(query, type, opts) {
+        return this._requireExplorer().getFiles(query, type, opts);
+    }
+
+    async getLinks(query, type, opts) {
+        return this._requireExplorer().getLinks(query, type, opts);
+    }
+
+    async getLists(query, type, opts) {
+        return this._requireExplorer().getLists(query, type, opts);
+    }
+
+    async getMessages(query, type, opts) {
+        return this._requireExplorer().getMessages(query, type, opts);
+    }
+
+    async getMints(query, type, opts) {
+        return this._requireExplorer().getMints(query, type, opts);
+    }
+
+    async getOrders(query, type, opts) {
+        return this._requireExplorer().getOrders(query, type, opts);
+    }
+
+    async getSends(query, type, opts) {
+        return this._requireExplorer().getSends(query, type, opts);
+    }
+
+    async getSleeps(query, type, opts) {
+        return this._requireExplorer().getSleeps(query, type, opts);
+    }
+
+    async getSwaps(query, type, opts) {
+        return this._requireExplorer().getSwaps(query, type, opts);
+    }
+
+    async getSweeps(query, type, opts) {
+        return this._requireExplorer().getSweeps(query, type, opts);
+    }
+
+
+    /*
+     *  Explorer: Market Methods
+     */
+
+    async getMarkets(tick) {
+        return this._requireExplorer().getMarkets(tick);
+    }
+
+    async getMarket(tick1, tick2) {
+        return this._requireExplorer().getMarket(tick1, tick2);
+    }
+
+    async getMarketHistory(tick1, tick2, address, opts) {
+        return this._requireExplorer().getMarketHistory(tick1, tick2, address, opts);
+    }
+
+    async getMarketOrders(tick1, tick2, address, opts) {
+        return this._requireExplorer().getMarketOrders(tick1, tick2, address, opts);
+    }
+
+    async getOrderbook(tick1, tick2) {
+        return this._requireExplorer().getOrderbook(tick1, tick2);
+    }
+
+
+    /*
+     *  Explorer: Utility Methods
+     */
+
+    async getStatus() {
+        return this._requireExplorer().getStatus();
+    }
+
+    async search(query, type) {
+        return this._requireExplorer().search(query, type);
+    }
+
 }
 
 module.exports = XChainSDK;

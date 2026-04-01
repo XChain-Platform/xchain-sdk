@@ -350,7 +350,22 @@ class Utility {
         return sortedObj;
     }
 
-    // Handle getting a list of actions from 
+    // Convert camelCase to UPPER_SNAKE_CASE (e.g. maxSupply -> MAX_SUPPLY)
+    camelToUpperSnake(str) {
+        return str.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase();
+    }
+
+    // Normalize field names from camelCase input to UPPER_SNAKE_CASE internal format
+    normalizeFields(data) {
+        let normalized = {};
+        for (let key in data) {
+            let upperKey = this.camelToUpperSnake(key);
+            normalized[upperKey] = data[key];
+        }
+        return normalized;
+    }
+
+    // Handle getting a list of actions from
     getActions(){
         let actions = [];
         for(let action in formats)
