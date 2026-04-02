@@ -24,6 +24,22 @@ Developer-facing SDK for generating XChain platform transactions and querying bl
 - **Browser bundle** — Browserify build for client-side use
 - **551 tests** — unit, boundary, fuzz, chaos, round-trip, and smoke
 
+## Documentation
+
+Full SDK developer guide is available in the [xchain-documentation](https://github.com/XChain-platform/xchain-documentation/tree/master/sdk) repository:
+
+| Document | Description |
+|---|---|
+| [README](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/README.md) | Overview, installation, usage modes |
+| [Configuration](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/CONFIGURATION.md) | Constructor options, env vars, hub discovery, retry, pooling, hooks |
+| [Actions](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/ACTIONS.md) | All 19 ACTION types — params, validation rules, format versions, examples |
+| [Explorer](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/EXPLORER.md) | All 40 query methods — balances, tokens, transactions, markets |
+| [Encoder](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/ENCODER.md) | PSBT generation — encoding types, options, pre-flight validation, P2SH two-phase |
+| [Batch Builder](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/BATCH.md) | Fluent API for multi-action transactions |
+| [Format Selection](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/FORMAT_SELECTION.md) | How the SDK picks the optimal format version |
+| [Errors](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/ERRORS.md) | All error classes, codes, and troubleshooting |
+| [Examples](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/EXAMPLES.md) | 29 end-to-end code examples |
+
 ## Quick Start
 
 ```js
@@ -65,22 +81,6 @@ const token = await sdk.getToken('MYTOKEN');
 | `npm test` | Run all 551 tests |
 | `npm run build` | Production browser bundle → `dist/xchain_sdk.min.js` |
 | `npm run build:dev` | Development browser bundle → `dist/xchain_sdk.js` |
-
-## Documentation
-
-Full SDK developer guide is available in the [xchain-documentation](https://github.com/XChain-platform/xchain-documentation/tree/master/sdk) repository:
-
-| Document | Description |
-|---|---|
-| [README](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/README.md) | Overview, installation, usage modes |
-| [Configuration](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/CONFIGURATION.md) | Constructor options, env vars, hub discovery, retry, pooling, hooks |
-| [Actions](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/ACTIONS.md) | All 19 ACTION types — params, validation rules, format versions, examples |
-| [Explorer](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/EXPLORER.md) | All 40 query methods — balances, tokens, transactions, markets |
-| [Encoder](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/ENCODER.md) | PSBT generation — encoding types, options, pre-flight validation, P2SH two-phase |
-| [Batch Builder](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/BATCH.md) | Fluent API for multi-action transactions |
-| [Format Selection](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/FORMAT_SELECTION.md) | How the SDK picks the optimal format version |
-| [Errors](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/ERRORS.md) | All error classes, codes, and troubleshooting |
-| [Examples](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/EXAMPLES.md) | 29 end-to-end code examples |
 
 ## Test Suite
 
