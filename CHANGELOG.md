@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-04-02
+
+### Added
+- COINPAY action: format definition, validation, and `sdk.coinpay()` convenience method for native coin DEX payment settlement
+- COINPAY round-trip test
+
+### Changed
+- ORDER validation: allow null/empty GIVE_TICK or GET_TICK for native coin pairs (at least one TICK still required)
+- Action count updated from 19 to 20 across tests
+
 ## [1.1.1] - 2026-03-31
 
 ### Changed

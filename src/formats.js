@@ -43,6 +43,10 @@ Formats = {
         3: 'VERSION|BROADCAST_ACTION_INDEX|VALUE|MEMO'
     },
 
+    COINPAY: {
+        0: 'VERSION|ORDER_MATCH_ACTION_INDEX'
+    },
+
     CALLBACK: {
         0: 'VERSION|TICK|MEMO'
     },

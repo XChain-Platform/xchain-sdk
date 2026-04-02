@@ -51,6 +51,7 @@ const ACTION_REQUIRED_FIELDS = {
     BATCH:     ['COMMAND'],
     BROADCAST: [],
     CALLBACK:  ['TICK'],
+    COINPAY:   ['ORDER_MATCH_ACTION_INDEX'],
     DESTROY:   ['TICK', 'AMOUNT'],
     DISPENSER: [],
     DIVIDEND:  ['TICK', 'DIVIDEND_TICK', 'AMOUNT'],
@@ -371,8 +372,11 @@ class Validator {
     _validateOrder(fields) {
         let errors = [];
         if (this._isEmpty(fields.ORDER_ACTION_INDEX)) {
-            let required = ['GIVE_TICK', 'GIVE_AMOUNT', 'GET_TICK', 'GET_AMOUNT'];
-            for (let field of required) {
+            // At least one side must have a TICK (can't trade coin for coin)
+            if (this._isEmpty(fields.GIVE_TICK) && this._isEmpty(fields.GET_TICK))
+                errors.push(this._error('MISSING_REQUIRED_FIELD', 'ORDER create requires at least one of GIVE_TICK or GET_TICK'));
+            // Both amounts are always required
+            for (let field of ['GIVE_AMOUNT', 'GET_AMOUNT']) {
                 if (this._isEmpty(fields[field]))
                     errors.push(this._error('MISSING_REQUIRED_FIELD', 'ORDER create requires field: ' + field, { field }));
             }

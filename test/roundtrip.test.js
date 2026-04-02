@@ -189,6 +189,13 @@ describe('Round-trip — serialize then parse back', function () {
             check: { ORDER_ACTION_INDEX: '9999' }
         },
         {
+            name: 'COINPAY v0',
+            action: 'coinpay',
+            params: { orderMatchActionIndex: 12345 },
+            expectedVersion: 0,
+            check: { ORDER_MATCH_ACTION_INDEX: '12345' }
+        },
+        {
             name: 'SEND v0',
             action: 'send',
             params: { tick: 'TOKEN', amount: '100', destination: ADDR, memo: 'payment' },

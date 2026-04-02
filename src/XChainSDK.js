@@ -260,6 +260,7 @@ class XChainSDK {
     async sweep(params, encoder)     { return this.createAction({ action: 'SWEEP', params, encoder }); }
     async swap(params, encoder)      { return this.createAction({ action: 'SWAP', params, encoder }); }
     async callback(params, encoder)  { return this.createAction({ action: 'CALLBACK', params, encoder }); }
+    async coinpay(params, encoder)   { return this.createAction({ action: 'COINPAY', params, encoder }); }
     async sleep(params, encoder)     { return this.createAction({ action: 'SLEEP', params, encoder }); }
     async airdrop(params, encoder)   { return this.createAction({ action: 'AIRDROP', params, encoder }); }
     async message(params, encoder)   { return this.createAction({ action: 'MESSAGE', params, encoder }); }

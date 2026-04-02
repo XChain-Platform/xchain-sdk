@@ -130,9 +130,9 @@ describe('Smoke — API server end-to-end', function () {
      *  Introspection via RPC
      */
 
-    it('get_actions returns 19 actions', async function () {
+    it('get_actions returns 20 actions', async function () {
         let res = await rpc('get_actions');
-        expect(res.result).to.be.an('array').with.length(19);
+        expect(res.result).to.be.an('array').with.length(20);
         expect(res.result).to.include('SEND');
         expect(res.result).to.include('ISSUE');
     });
