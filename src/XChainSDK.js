@@ -29,6 +29,7 @@ const HubConnector   = require('./hub.js');
 const BatchBuilder   = require('./batchBuilder.js');
 const ContractUtils  = require('./contracts.js');
 const ContractClient = require('./contractClient.js');
+const WebSocketClient = require('./websocket.js');
 const { SDKConfigError } = require('./errors.js');
 
 class XChainSDK {
@@ -55,6 +56,7 @@ class XChainSDK {
         this.explorer = null;
         this.encoder  = null;
         this.hub      = null;
+        this.ws       = null;
 
         // Initialize hub connector if hub URL provided
         if (options.hubUrl) {
@@ -102,6 +104,26 @@ class XChainSDK {
                 retry:       retry,
                 pool:        pool
             });
+        }
+
+        // WebSocket (uses explorer URL/port by default unless explicit websocketUrl given)
+        let websocketUrl  = resolved.websocketUrl  || this.options.websocketUrl  || process.env.WEBSOCKET_URL;
+        let websocketPort = resolved.websocketPort || this.options.websocketPort || process.env.WEBSOCKET_PORT;
+        if (network && (websocketUrl || websocketPort || explorerUrl || explorerPort)) {
+            // Only create if not already created, or if URL changed
+            let wsUrl  = websocketUrl  || explorerUrl;
+            let wsPort = websocketPort ? parseInt(websocketPort) : (explorerPort ? parseInt(explorerPort) : undefined);
+            if (!this.ws || this.ws.baseUrl !== wsUrl || this.ws.port !== wsPort) {
+                // Disconnect old client if it exists
+                if (this.ws) this.ws.disconnect();
+                this.ws = new WebSocketClient({
+                    network:       network,
+                    websocketUrl:  wsUrl,
+                    websocketPort: wsPort,
+                    hooks:         hooks,
+                    retry:         retry
+                });
+            }
         }
     }
 
@@ -168,10 +190,11 @@ class XChainSDK {
         }
     }
 
-    // Stop the SDK (stop hub polling, set stop flag)
+    // Stop the SDK (stop hub polling, disconnect WebSocket, set stop flag)
     stop() {
         this.stopFlag = true;
         if (this.hub) this.hub.stopPolling();
+        if (this.ws) this.ws.disconnect();
     }
 
     // Ensure explorer is initialized before calling explorer methods
@@ -553,6 +576,162 @@ class XChainSDK {
         return this._requireExplorer().search(query, type);
     }
 
+
+    /*
+     *  WebSocket: Real-Time Event Methods
+     */
+
+    // Ensure WebSocket client is initialized
+    _requireWs() {
+        if (!this.ws)
+            throw new SDKConfigError('WEBSOCKET_NOT_CONFIGURED', 'WebSocket not configured. Provide network + websocketUrl or explorerUrl, or use hub discovery via init().');
+        return this.ws;
+    }
+
+    // Connect the WebSocket client (auto-called by init() if configured)
+    async connectWs() {
+        return this._requireWs().connect();
+    }
+
+    // Disconnect the WebSocket client
+    disconnectWs() {
+        if (this.ws) this.ws.disconnect();
+    }
+
+    // Listen for new blocks
+    // Returns an unsubscribe function
+    onBlock(callback) {
+        const ws = this._requireWs();
+        ws.on('NEW_BLOCK', callback);
+        ws.subscribe(['blocks']);
+        return () => {
+            ws.off('NEW_BLOCK', callback);
+            ws.unsubscribe(['blocks']);
+        };
+    }
+
+    // Listen for new actions with optional type/status filters
+    // Returns an unsubscribe function
+    onAction(callback, opts) {
+        const ws = this._requireWs();
+        ws.on('NEW_ACTION', callback);
+        let params = {};
+        if (opts && opts.types)    params.types    = opts.types;
+        if (opts && opts.statuses) params.statuses = opts.statuses;
+        if (opts && opts.ticks)    params.ticks    = opts.ticks;
+        ws.subscribe(['actions'], Object.keys(params).length > 0 ? params : undefined);
+        return () => {
+            ws.off('NEW_ACTION', callback);
+            ws.unsubscribe(['actions']);
+        };
+    }
+
+    // Listen for events on a specific address
+    // Returns an unsubscribe function
+    onAddress(address, callback, opts) {
+        const ws = this._requireWs();
+        // Register handlers for all address-relevant event types
+        const types = [
+            'NEW_ACTION', 'ADDRESS_UPDATE',
+            'ORDER_MATCH', 'COINPAY_REQUIRED', 'COINPAY_FULFILLED', 'COINPAY_EXPIRED',
+            'SWAP_MATCH', 'DISPENSE'
+        ];
+        for (const t of types) ws.on(t, callback);
+
+        let params = { address };
+        if (opts && opts.types)    params.types    = opts.types;
+        if (opts && opts.statuses) params.statuses = opts.statuses;
+        if (opts && opts.snapshot) params.snapshot  = true;
+        ws.subscribe(['address'], params);
+
+        return () => {
+            for (const t of types) ws.off(t, callback);
+            ws.unsubscribe(['address'], { address });
+        };
+    }
+
+    // Listen for token updates
+    // Returns an unsubscribe function
+    onToken(tick, callback) {
+        const ws = this._requireWs();
+        ws.on('TOKEN_UPDATE', callback);
+        ws.subscribe(['token'], { tick, snapshot: true });
+        return () => {
+            ws.off('TOKEN_UPDATE', callback);
+            ws.unsubscribe(['token'], { tick });
+        };
+    }
+
+    // Listen for market updates
+    // Returns an unsubscribe function
+    onMarket(tick1, tick2, callback) {
+        const ws = this._requireWs();
+        ws.on('MARKET_UPDATE', callback);
+        ws.subscribe(['market'], { tick1, tick2, snapshot: true });
+        return () => {
+            ws.off('MARKET_UPDATE', callback);
+            ws.unsubscribe(['market'], { tick1, tick2 });
+        };
+    }
+
+    // Listen for dispenser updates
+    // Returns an unsubscribe function
+    onDispenser(actionIndex, callback) {
+        const ws = this._requireWs();
+        ws.on('DISPENSER_UPDATE', callback);
+        ws.on('DISPENSE', callback);
+        ws.on('DISPENSER_CLOSED', callback);
+        ws.on('DISPENSER_EXPIRED', callback);
+        ws.subscribe(['dispenser'], { action_index: actionIndex, snapshot: true });
+        return () => {
+            ws.off('DISPENSER_UPDATE', callback);
+            ws.off('DISPENSE', callback);
+            ws.off('DISPENSER_CLOSED', callback);
+            ws.off('DISPENSER_EXPIRED', callback);
+            ws.unsubscribe(['dispenser'], { action_index: actionIndex });
+        };
+    }
+
+    // Shortcut: listen for COINPAY_REQUIRED events on an address
+    // Returns an unsubscribe function
+    onCoinpayRequired(address, callback) {
+        const ws = this._requireWs();
+        ws.on('COINPAY_REQUIRED', callback);
+        ws.subscribe(['address'], { address, types: ['COINPAY_REQUIRED'] });
+        return () => {
+            ws.off('COINPAY_REQUIRED', callback);
+            ws.unsubscribe(['address'], { address });
+        };
+    }
+
+    // Shortcut: listen for ORDER_MATCH events on an address
+    // Returns an unsubscribe function
+    onOrderMatch(address, callback, opts) {
+        const ws = this._requireWs();
+        ws.on('ORDER_MATCH', callback);
+        let params = { address, types: ['ORDER_MATCH'] };
+        if (opts && opts.statuses) params.statuses = opts.statuses;
+        ws.subscribe(['address'], params);
+        return () => {
+            ws.off('ORDER_MATCH', callback);
+            ws.unsubscribe(['address'], { address });
+        };
+    }
+
+    // Listen for network stats updates
+    // Returns an unsubscribe function
+    onNetworkStats(callback) {
+        const ws = this._requireWs();
+        ws.on('NETWORK_STATS', callback);
+        ws.subscribe(['network']);
+        return () => {
+            ws.off('NETWORK_STATS', callback);
+            ws.unsubscribe(['network']);
+        };
+    }
+
 }
+
+module.exports = XChainSDK;
 
 module.exports = XChainSDK;

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-04-03
+
+### Added
+- Real-time WebSocket client module (`src/websocket.js`) for streaming events from xchain-explorer
+- WebSocket connection management: connect, disconnect, isConnected, automatic reconnection with exponential backoff
+- Subscribe/unsubscribe with Promise-based request-response correlation via request IDs
+- Event dispatch system: on, off, once handlers with wildcard support
+- Automatic catch-up on reconnect via `since_action_index`
+- WebSocket lifecycle hooks: onWsConnect, onWsDisconnect, onWsMessage, onWsReconnect
+- Convenience methods on XChainSDK: onBlock, onAction, onAddress, onToken, onMarket, onDispenser, onCoinpayRequired, onOrderMatch, onNetworkStats
+- All convenience methods return unsubscribe functions for clean teardown
+- `connectWs()` and `disconnectWs()` methods on XChainSDK
+- `websocketUrl` and `websocketPort` constructor options (falls back to explorerUrl/explorerPort)
+- WebSocket client auto-initialized when explorer URL is configured
+- `sdk.stop()` automatically disconnects WebSocket
+- 36 new tests: WebSocket client (19) and convenience methods (17) using in-process mock server
+
 ## [1.3.0] - 2026-04-03
 
 ### Added
