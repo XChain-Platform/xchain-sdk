@@ -292,6 +292,51 @@ class ExplorerClient {
 
 
     /*
+     *  Contract / VM Methods
+     */
+
+    async getContract(contractActionIndex) {
+        return this._get('/contract/' + contractActionIndex);
+    }
+
+    async getContracts(query, type, opts = {}) {
+        if (query)
+            return this._get('/contracts/' + query + '/' + type, opts);
+        return this._get('/contracts', opts);
+    }
+
+    async getContractState(contractActionIndex, key) {
+        if (key)
+            return this._get('/contract/' + contractActionIndex + '/state/' + key);
+        return this._get('/contract/' + contractActionIndex + '/state');
+    }
+
+    async getContractBalance(contractActionIndex, tick) {
+        if (tick)
+            return this._get('/contract/' + contractActionIndex + '/balance/' + tick);
+        return this._get('/contract/' + contractActionIndex + '/balance');
+    }
+
+    async getExecution(executionActionIndex) {
+        return this._get('/execution/' + executionActionIndex);
+    }
+
+    async getExecutions(contractActionIndex, opts = {}) {
+        if (contractActionIndex)
+            return this._get('/executions/' + contractActionIndex, opts);
+        return this._get('/executions', opts);
+    }
+
+    async getDeposits(query, type, opts = {}) {
+        return this._get('/deposits/' + query + '/' + type, opts);
+    }
+
+    async getWithdrawals(query, type, opts = {}) {
+        return this._get('/withdrawals/' + query + '/' + type, opts);
+    }
+
+
+    /*
      *  Market Methods
      */
 

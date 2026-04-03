@@ -51,6 +51,14 @@ Formats = {
         0: 'VERSION|TICK|MEMO'
     },
 
+    DEPLOY: {
+        0: 'VERSION|CODE_ENCODING|GAS_LIMIT|...CONSTRUCTOR_PARAMS'
+    },
+
+    DEPOSIT: {
+        0: 'VERSION|CONTRACT_ACTION_INDEX|TICK|QUANTITY'
+    },
+
     DESTROY: {
         0: 'VERSION|TICK|AMOUNT|MEMO',
         1: 'VERSION|TICK|AMOUNT|TICK|AMOUNT|MEMO',
@@ -65,6 +73,10 @@ Formats = {
 
     DIVIDEND: {
         0: 'VERSION|TICK|DIVIDEND_TICK|AMOUNT|MEMO'
+    },
+
+    EXECUTE: {
+        0: 'VERSION|CONTRACT_ACTION_INDEX|METHOD|...PARAMS'
     },
 
     FILE: {
@@ -126,6 +138,10 @@ Formats = {
 
     SWEEP: {
         0: 'VERSION|DESTINATION|BALANCES|OWNERSHIPS|ESCROWS|MEMO'
+    },
+
+    WITHDRAW: {
+        0: 'VERSION|CONTRACT_ACTION_INDEX|TICK|QUANTITY'
     }
 
 }

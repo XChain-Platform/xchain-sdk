@@ -426,6 +426,93 @@ export interface AddressParams extends ActionParams {
     address: string;
 }
 
+export interface DeployParams extends ActionParams {
+    /** Raw JavaScript source code (SDK hex-encodes it into CODE_ENCODING) */
+    code?: string;
+    /** Pre-encoded hex of contract source (alternative to `code`) */
+    codeEncoding?: string;
+    /** Maximum gas units allowed for deployment */
+    gasLimit: number;
+    /** Optional constructor arguments passed to the contract */
+    constructorParams?: string[];
+}
+
+export interface ExecuteParams extends ActionParams {
+    /** ACTION_INDEX of the deployed contract */
+    contractActionIndex: number | string;
+    /** Method name to call on the contract */
+    method: string;
+    /** Method arguments (each element becomes a pipe-delimited segment) */
+    params?: string[];
+}
+
+export interface DepositParams extends ActionParams {
+    /** ACTION_INDEX of the target contract */
+    contractActionIndex: number | string;
+    /** Token ticker or ticker ID (^N) */
+    tick: string;
+    /** Amount to deposit */
+    quantity: number | string;
+}
+
+export interface WithdrawParams extends ActionParams {
+    /** ACTION_INDEX of the target contract */
+    contractActionIndex: number | string;
+    /** Token ticker or ticker ID (^N) */
+    tick: string;
+    /** Amount to withdraw */
+    quantity: number | string;
+}
+
+export interface ContractInfo {
+    actionIndex: number;
+    address: string;
+    owner: string;
+    codeHash?: string;
+    status?: string;
+    deployBlock?: number;
+    gasLimit?: number;
+    [key: string]: any;
+}
+
+export interface ContractStateEntry {
+    key: string;
+    value: any;
+}
+
+export interface ContractBalanceEntry {
+    tick: string;
+    balance: string;
+}
+
+export interface ExecutionInfo {
+    actionIndex: number;
+    contractActionIndex: number;
+    method: string;
+    params?: string[];
+    success: boolean;
+    gasUsed: number;
+    returnValue?: string;
+    [key: string]: any;
+}
+
+export interface CodeSizeResult {
+    bytes: number;
+    withinLimit: boolean;
+    limit: number;
+}
+
+export interface SyntaxValidationResult {
+    valid: boolean;
+    error?: string;
+    warnings?: string[];
+}
+
+export interface GasEstimate {
+    suggested: number;
+    rationale: string;
+}
+
 /** Input shape for createAction */
 export interface CreateActionData {
     /** ACTION name, e.g. `'SEND'` */
@@ -455,6 +542,7 @@ export declare class SDKEncoderError extends SDKError {}
 export declare class SDKExplorerError extends SDKError {}
 export declare class SDKHubError extends SDKError {}
 export declare class SDKConfigError extends SDKError {}
+export declare class SDKContractError extends SDKError {}
 
 
 /*
@@ -486,6 +574,11 @@ export declare class BatchBuilder {
     link(params: LinkParams | ActionParams): this;
     address(params: AddressParams | ActionParams): this;
 
+    // VM action convenience methods (DEPLOY excluded from BATCH)
+    execute(params: ExecuteParams | ActionParams): this;
+    deposit(params: DepositParams | ActionParams): this;
+    withdraw(params: WithdrawParams | ActionParams): this;
+
     /**
      * Validate all queued actions, build the semicolon-joined BATCH command string,
      * and optionally encode it into a PSBT.
@@ -500,6 +593,54 @@ export declare class BatchBuilder {
 
     /** Number of actions currently queued */
     readonly length: number;
+}
+
+
+/*
+ *  Contract utilities (sdk.contracts namespace)
+ */
+
+export declare class ContractUtils {
+    /** Hex-encode contract source code for DEPLOY payloads */
+    encode(sourceCode: string): string;
+    /** Hex-decode back to UTF-8 source */
+    decode(hexString: string): string;
+    /** Lightweight syntax pre-validation (acorn-based, no V8 required) */
+    validate(sourceCode: string): SyntaxValidationResult;
+    /** Detect float literal usage in contract source */
+    checkFloatUsage(sourceCode: string): string[];
+    /** Check if contract source is within the 64KB size limit */
+    checkCodeSize(sourceCode: string): CodeSizeResult;
+    /** Heuristic gas limit suggestion based on code complexity */
+    suggestGasLimit(sourceCode: string): GasEstimate;
+}
+
+
+/*
+ *  Contract client (bound to a specific deployed contract)
+ */
+
+export declare class ContractClient {
+    /** ACTION_INDEX of the bound contract */
+    readonly contractActionIndex: number;
+
+    constructor(sdk: XChainSDK, contractActionIndex: number);
+
+    /** Execute a method on the contract (creates EXECUTE action) */
+    call(method: string, params?: string[], encoder?: EncoderOptions): Promise<ActionResult>;
+    /** Deposit tokens into the contract (creates DEPOSIT action) */
+    deposit(tick: string, quantity: number | string, encoder?: EncoderOptions): Promise<ActionResult>;
+    /** Withdraw tokens from the contract (creates WITHDRAW action) */
+    withdraw(tick: string, quantity: number | string, encoder?: EncoderOptions): Promise<ActionResult>;
+
+    /** Get contract metadata from explorer */
+    getInfo(): Promise<ContractInfo>;
+    /** Get contract state (all keys or a specific key) */
+    getState(key?: string): Promise<ContractStateEntry | ContractStateEntry[]>;
+    /** Get contract execution history */
+    getExecutions(opts?: QueryOptions): Promise<ExecutionInfo[]>;
+    /** Get contract token balances */
+    getBalance(tick?: string): Promise<ContractBalanceEntry | ContractBalanceEntry[]>;
 }
 
 
@@ -583,8 +724,20 @@ export declare class XChainSDK {
     file(params: FileParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     address(params: AddressParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
 
+    // VM action convenience methods
+    deploy(params: DeployParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
+    execute(params: ExecuteParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
+    deposit(params: DepositParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
+    withdraw(params: WithdrawParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
+
     /** Create a new `BatchBuilder` for fluent BATCH construction. */
     batch(): BatchBuilder;
+
+    /** Contract authoring utilities (hex encoding, validation, gas estimation) */
+    readonly contracts: ContractUtils;
+
+    /** Create a bound contract client for repeated interactions with a deployed contract */
+    contract(contractActionIndex: number): ContractClient;
 
 
     /*
@@ -702,6 +855,35 @@ export declare class XChainSDK {
 
 
     /*
+     *  Explorer: Contract / VM methods
+     */
+
+    /** Get contract metadata by its deploy ACTION_INDEX */
+    getContract(contractActionIndex: number | string): Promise<ContractInfo>;
+
+    /** Get a list of contracts, optionally filtered by owner address */
+    getContracts(query?: string, type?: string, opts?: QueryOptions): Promise<ContractInfo[]>;
+
+    /** Get contract state entries (all keys or a specific key) */
+    getContractState(contractActionIndex: number | string, key?: string): Promise<ContractStateEntry | ContractStateEntry[]>;
+
+    /** Get contract token balances */
+    getContractBalance(contractActionIndex: number | string, tick?: string): Promise<ContractBalanceEntry | ContractBalanceEntry[]>;
+
+    /** Get a single execution result by its ACTION_INDEX */
+    getExecution(executionActionIndex: number | string): Promise<ExecutionInfo>;
+
+    /** Get execution history for a contract */
+    getExecutions(contractActionIndex?: number | string, opts?: QueryOptions): Promise<ExecutionInfo[]>;
+
+    /** Get deposits for a contract */
+    getDeposits(query: string, type: string, opts?: QueryOptions): Promise<any>;
+
+    /** Get withdrawals for a contract */
+    getWithdrawals(query: string, type: string, opts?: QueryOptions): Promise<any>;
+
+
+    /*
      *  Explorer: Market methods
      */
 
@@ -737,5 +919,5 @@ export declare class XChainSDK {
  *  Module exports (CommonJS interop)
  */
 
-export { XChainSDK, BatchBuilder, SDKError, SDKValidationError, SDKFormatError, SDKEncoderError, SDKExplorerError, SDKHubError, SDKConfigError };
+export { XChainSDK, BatchBuilder, ContractClient, ContractUtils, SDKError, SDKValidationError, SDKFormatError, SDKEncoderError, SDKExplorerError, SDKHubError, SDKConfigError, SDKContractError };
 export default XChainSDK;

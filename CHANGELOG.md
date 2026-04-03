@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-04-03
+
+### Added
+- VM smart contract support: DEPLOY, EXECUTE, DEPOSIT, WITHDRAW actions with full format definitions, validation, and convenience methods
+- Rest-field (`...PARAMS`) support in FormatSelector for variable-length pipe-delimited parameters (EXECUTE params, DEPLOY constructor params)
+- DEPLOY auto hex-encodes raw `code` parameter into CODE_ENCODING field
+- `SDKContractError` error class for contract-specific errors
+- `ContractUtils` module (`sdk.contracts`): hex encode/decode, syntax validation (acorn), float detection, code size checks, gas estimation
+- `ContractClient` module (`sdk.contract(actionIndex)`): bound client with `call()`, `deposit()`, `withdraw()`, and explorer query methods
+- 8 explorer contract query methods: getContract, getContracts, getContractState, getContractBalance, getExecution, getExecutions, getDeposits, getWithdrawals
+- BatchBuilder support for EXECUTE, DEPOSIT, WITHDRAW (DEPLOY excluded from BATCH)
+- TypeScript definitions for all new interfaces, classes, and methods
+- 106 new tests across 14 test sections in `test/vm.test.js` (657 total)
+
+### Changed
+- Action count updated from 20 to 24 across tests
+- Explorer public method count updated from 40 to 48
+- Validator updated to reject DEPLOY in BATCH actions
+
 ## [1.2.0] - 2026-04-02
 
 ### Added

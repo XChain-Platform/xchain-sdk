@@ -54,6 +54,11 @@ class BatchBuilder {
     link(params)      { return this.add('LINK', params); }
     address(params)   { return this.add('ADDRESS', params); }
 
+    // VM action convenience methods (DEPLOY excluded — too large for BATCH)
+    execute(params)   { return this.add('EXECUTE', params); }
+    deposit(params)   { return this.add('DEPOSIT', params); }
+    withdraw(params)  { return this.add('WITHDRAW', params); }
+
     // Validate BATCH constraints before building
     _validate() {
         if (this._actions.length === 0)
@@ -67,6 +72,8 @@ class BatchBuilder {
                 throw new SDKValidationError('BATCH_CONSTRAINT', 'BATCH cannot contain nested BATCH actions');
             if (entry.action === 'FILE')
                 throw new SDKValidationError('BATCH_CONSTRAINT', 'BATCH cannot contain FILE actions');
+            if (entry.action === 'DEPLOY')
+                throw new SDKValidationError('BATCH_CONSTRAINT', 'BATCH cannot contain DEPLOY actions');
             if (entry.action === 'MINT') mintCount++;
             if (entry.action === 'ISSUE') issueCount++;
         }

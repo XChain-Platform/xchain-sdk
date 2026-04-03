@@ -27,6 +27,8 @@ const ExplorerClient = require('./explorer.js');
 const EncoderClient  = require('./encoder.js');
 const HubConnector   = require('./hub.js');
 const BatchBuilder   = require('./batchBuilder.js');
+const ContractUtils  = require('./contracts.js');
+const ContractClient = require('./contractClient.js');
 const { SDKConfigError } = require('./errors.js');
 
 class XChainSDK {
@@ -44,9 +46,10 @@ class XChainSDK {
         this.options = options;
 
         // Initialize core (no network required)
-        this.config  = config.getConfig();
-        this.util    = new Utility();
-        this.actions = new Actions(this);
+        this.config    = config.getConfig();
+        this.util      = new Utility();
+        this.actions   = new Actions(this);
+        this.contracts = new ContractUtils();
 
         // Service clients (initialized by _initClients or init)
         this.explorer = null;
@@ -269,6 +272,17 @@ class XChainSDK {
     async file(params, encoder)      { return this.createAction({ action: 'FILE', params, encoder }); }
     async address(params, encoder)   { return this.createAction({ action: 'ADDRESS', params, encoder }); }
 
+    // VM action convenience methods
+    async deploy(params, encoder)    { return this.createAction({ action: 'DEPLOY', params, encoder }); }
+    async execute(params, encoder)   { return this.createAction({ action: 'EXECUTE', params, encoder }); }
+    async deposit(params, encoder)   { return this.createAction({ action: 'DEPOSIT', params, encoder }); }
+    async withdraw(params, encoder)  { return this.createAction({ action: 'WITHDRAW', params, encoder }); }
+
+    // Create a bound contract client for repeated interactions with a deployed contract
+    contract(contractActionIndex) {
+        return new ContractClient(this, contractActionIndex);
+    }
+
     // Create a new BatchBuilder for fluent BATCH construction
     // Usage: sdk.batch().send({...}).mint({...}).build(encoderOpts?)
     batch() {
@@ -462,6 +476,43 @@ class XChainSDK {
 
     async getSweeps(query, type, opts) {
         return this._requireExplorer().getSweeps(query, type, opts);
+    }
+
+
+    /*
+     *  Explorer: Contract / VM Methods
+     */
+
+    async getContract(contractActionIndex) {
+        return this._requireExplorer().getContract(contractActionIndex);
+    }
+
+    async getContracts(query, type, opts) {
+        return this._requireExplorer().getContracts(query, type, opts);
+    }
+
+    async getContractState(contractActionIndex, key) {
+        return this._requireExplorer().getContractState(contractActionIndex, key);
+    }
+
+    async getContractBalance(contractActionIndex, tick) {
+        return this._requireExplorer().getContractBalance(contractActionIndex, tick);
+    }
+
+    async getExecution(executionActionIndex) {
+        return this._requireExplorer().getExecution(executionActionIndex);
+    }
+
+    async getExecutions(contractActionIndex, opts) {
+        return this._requireExplorer().getExecutions(contractActionIndex, opts);
+    }
+
+    async getDeposits(query, type, opts) {
+        return this._requireExplorer().getDeposits(query, type, opts);
+    }
+
+    async getWithdrawals(query, type, opts) {
+        return this._requireExplorer().getWithdrawals(query, type, opts);
     }
 
 

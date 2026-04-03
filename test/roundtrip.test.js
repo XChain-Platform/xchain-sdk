@@ -236,6 +236,20 @@ describe('Round-trip — serialize then parse back', function () {
             params: { destination: ADDR, balances: 1, ownerships: 1, escrows: 0, memo: 'moving' },
             expectedVersion: 0,
             check: { DESTINATION: ADDR, BALANCES: '1', OWNERSHIPS: '1', ESCROWS: '0', MEMO: 'moving' }
+        },
+        {
+            name: 'DEPOSIT v0',
+            action: 'deposit',
+            params: { contractActionIndex: 12345, tick: 'TOKEN', quantity: '1000' },
+            expectedVersion: 0,
+            check: { CONTRACT_ACTION_INDEX: '12345', TICK: 'TOKEN', QUANTITY: '1000' }
+        },
+        {
+            name: 'WITHDRAW v0',
+            action: 'withdraw',
+            params: { contractActionIndex: 42, tick: '^99', quantity: '500' },
+            expectedVersion: 0,
+            check: { CONTRACT_ACTION_INDEX: '42', TICK: '^99', QUANTITY: '500' }
         }
     ];
 
@@ -267,9 +281,11 @@ describe('Round-trip — serialize then parse back', function () {
         let testedActions = new Set(testCases.map(tc => tc.action.toUpperCase()));
         let allActions = Object.keys(formats);
         // BATCH is excluded (its COMMAND field contains nested action strings)
-        let expected = allActions.filter(a => a !== 'BATCH');
+        // DEPLOY and EXECUTE are excluded (rest-fields require custom parsing)
+        let excluded = ['BATCH', 'DEPLOY', 'EXECUTE'];
+        let expected = allActions.filter(a => !excluded.includes(a));
         for (let action of expected) {
-            expect(testedActions.has(action)).to.be.true;
+            expect(testedActions.has(action), 'missing round-trip for ' + action).to.be.true;
         }
     });
 

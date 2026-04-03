@@ -71,6 +71,13 @@ class SDKConfigError extends SDKError {
     }
 }
 
+class SDKContractError extends SDKError {
+    constructor(code, message, details = {}) {
+        super(code, message, details);
+        this.name = 'SDKContractError';
+    }
+}
+
 module.exports = {
     SDKError,
     SDKValidationError,
@@ -78,5 +85,6 @@ module.exports = {
     SDKEncoderError,
     SDKExplorerError,
     SDKHubError,
-    SDKConfigError
+    SDKConfigError,
+    SDKContractError
 };

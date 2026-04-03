@@ -26,13 +26,27 @@ const { SDKFormatError } = require('./errors.js');
 // VERSION is always auto-set by the SDK, never user-provided
 const AUTO_FIELDS = ['VERSION'];
 
+// Rest-field prefix: fields starting with '...' absorb variable-length array values
+const REST_PREFIX = '...';
+
 
 class FormatSelector {
 
     // Get the ordered field list for a given action + version
+    // Rest-fields (prefixed with '...') are returned as-is; callers handle expansion
     static getFormatFields(action, version) {
         let formatStr = formats[action][version];
         return formatStr.split('|');
+    }
+
+    // Check if a field name is a rest-field (variable-length array)
+    static isRestField(fieldName) {
+        return fieldName.startsWith(REST_PREFIX);
+    }
+
+    // Get the base name of a field (strips '...' prefix if present)
+    static baseFieldName(fieldName) {
+        return fieldName.startsWith(REST_PREFIX) ? fieldName.substring(REST_PREFIX.length) : fieldName;
     }
 
     // Determine which user-provided fields are "populated" (non-null, non-empty)
@@ -55,6 +69,20 @@ class FormatSelector {
         let length = action.length + 1;
         for (let i = 0; i < formatFields.length; i++) {
             let fieldName = formatFields[i];
+
+            // Handle rest-fields (variable-length arrays)
+            if (this.isRestField(fieldName)) {
+                let baseName = this.baseFieldName(fieldName);
+                let arr = fields[baseName];
+                if (Array.isArray(arr) && arr.length > 0) {
+                    for (let j = 0; j < arr.length; j++) {
+                        length += String(arr[j]).length;
+                        if (j < arr.length - 1) length += 1; // pipe between params
+                    }
+                }
+                continue;
+            }
+
             let value = '';
             if (fieldName === 'VERSION') {
                 value = String(version);
@@ -84,8 +112,10 @@ class FormatSelector {
             version = parseInt(version);
             let formatFields = this.getFormatFields(action, version);
 
-            // Strip auto-fields for comparison
-            let userSlots = formatFields.filter(f => !AUTO_FIELDS.includes(f));
+            // Strip auto-fields for comparison; normalize rest-field names
+            let userSlots = formatFields
+                .filter(f => !AUTO_FIELDS.includes(f))
+                .map(f => this.baseFieldName(f));
 
             // Deduplicate format field names (multi-item formats repeat TICK, AMOUNT, etc.)
             let uniqueSlots = [...new Set(userSlots)];
@@ -144,6 +174,15 @@ class FormatSelector {
         for (let fieldName of formatFields) {
             if (fieldName === 'VERSION') {
                 parts.push(String(version));
+            } else if (this.isRestField(fieldName)) {
+                // Rest-field: expand array values as individual pipe-delimited segments
+                let baseName = this.baseFieldName(fieldName);
+                let arr = fields[baseName];
+                if (Array.isArray(arr) && arr.length > 0) {
+                    for (let item of arr) {
+                        parts.push(item !== null && item !== undefined ? String(item) : '');
+                    }
+                }
             } else {
                 let value = fields[fieldName];
                 parts.push(value !== null && value !== undefined ? String(value) : '');

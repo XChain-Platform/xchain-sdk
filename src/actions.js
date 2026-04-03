@@ -21,7 +21,7 @@
 
 const FormatSelector    = require('./formatSelector.js');
 const Validator         = require('./validator.js');
-const { SDKValidationError } = require('./errors.js');
+const { SDKValidationError, SDKContractError } = require('./errors.js');
 
 // Encoding byte limits for pre-flight validation
 const ENCODING_LIMITS = {
@@ -58,6 +58,27 @@ class Actions {
 
         // [3] Normalize field names (camelCase -> UPPER_SNAKE_CASE)
         let fields = this.util.normalizeFields(params);
+
+        // [3b] DEPLOY pre-processing: hex-encode raw 'code' into CODE_ENCODING
+        if (actionName === 'DEPLOY' && fields.CODE !== undefined && fields.CODE !== null && fields.CODE_ENCODING === undefined) {
+            let code = String(fields.CODE);
+            fields.CODE_ENCODING = Buffer.from(code, 'utf8').toString('hex');
+            delete fields.CODE;
+        }
+
+        // [3c] EXECUTE/DEPLOY: ensure PARAMS/CONSTRUCTOR_PARAMS stay as arrays (skip number casting)
+        if (actionName === 'EXECUTE' && fields.PARAMS !== undefined) {
+            if (!Array.isArray(fields.PARAMS))
+                fields.PARAMS = [String(fields.PARAMS)];
+            else
+                fields.PARAMS = fields.PARAMS.map(p => String(p));
+        }
+        if (actionName === 'DEPLOY' && fields.CONSTRUCTOR_PARAMS !== undefined) {
+            if (!Array.isArray(fields.CONSTRUCTOR_PARAMS))
+                fields.CONSTRUCTOR_PARAMS = [String(fields.CONSTRUCTOR_PARAMS)];
+            else
+                fields.CONSTRUCTOR_PARAMS = fields.CONSTRUCTOR_PARAMS.map(p => String(p));
+        }
 
         // [4] Cast numeric fields
         fields = this.util.setNumberFormats(fields);

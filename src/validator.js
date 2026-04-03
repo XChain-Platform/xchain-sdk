@@ -15,13 +15,13 @@
  *
  * XChain Platform SDK - Validator
  *
- * Per-action input validation rules for all 19 ACTION types
+ * Per-action input validation rules for all 23 ACTION types
  *
  ********************************************************************/
 
 const formats = require('./formats.js');
 const config  = require('./config.js');
-const { SDKValidationError } = require('./errors.js');
+const { SDKValidationError, SDKContractError } = require('./errors.js');
 
 // Maximum values
 const MAX_SUPPLY_CEILING = 1000000000000000000000; // 1 sextillion
@@ -29,6 +29,7 @@ const MAX_DECIMALS       = 18;
 const MAX_TICK_LENGTH    = 250;
 const MAX_DESC_LENGTH    = 250;
 const MAX_MESSAGE_LENGTH = 1048576; // 1MB
+const MAX_CODE_SIZE      = 65536;   // 64KB contract source code limit
 
 // Allowed TICK characters: a-zA-Z0-9 and ~!@#$%^&*()_+-={}[]\:<>.?
 // Forbidden: | ; . / and ^ as first char
@@ -52,9 +53,12 @@ const ACTION_REQUIRED_FIELDS = {
     BROADCAST: [],
     CALLBACK:  ['TICK'],
     COINPAY:   ['ORDER_MATCH_ACTION_INDEX'],
+    DEPLOY:    ['CODE_ENCODING', 'GAS_LIMIT'],
+    DEPOSIT:   ['CONTRACT_ACTION_INDEX', 'TICK', 'QUANTITY'],
     DESTROY:   ['TICK', 'AMOUNT'],
     DISPENSER: [],
     DIVIDEND:  ['TICK', 'DIVIDEND_TICK', 'AMOUNT'],
+    EXECUTE:   ['CONTRACT_ACTION_INDEX', 'METHOD'],
     FILE:      ['NAME', 'TYPE'],
     ISSUE:     ['TICK'],
     LINK:      ['COIN1', 'COIN1_ACTION_INDEX', 'COIN2', 'COIN2_ACTION_INDEX'],
@@ -65,7 +69,8 @@ const ACTION_REQUIRED_FIELDS = {
     SEND:      ['TICK', 'AMOUNT', 'DESTINATION'],
     SLEEP:     ['RESUME_BLOCK'],
     SWAP:      [],
-    SWEEP:     ['DESTINATION']
+    SWEEP:     ['DESTINATION'],
+    WITHDRAW:  ['CONTRACT_ACTION_INDEX', 'TICK', 'QUANTITY']
 };
 
 // Actions that have cancel/close/edit sub-operations via ACTION_INDEX reference
@@ -269,9 +274,51 @@ class Validator {
         if (field === 'BROADCAST_ACTION_INDEX' || field === 'DISPENSER_ACTION_INDEX' ||
             field === 'ORDER_ACTION_INDEX' || field === 'SWAP_ACTION_INDEX' ||
             field === 'LIST_ACTION_INDEX' || field === 'COIN1_ACTION_INDEX' ||
-            field === 'COIN2_ACTION_INDEX') {
+            field === 'COIN2_ACTION_INDEX' || field === 'CONTRACT_ACTION_INDEX') {
             if (!this.util.isNumeric(value))
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be numeric', { field, value }));
+        }
+
+        // GAS_LIMIT validation (must be positive integer)
+        if (field === 'GAS_LIMIT') {
+            if (!this.util.isNumeric(value) || Number(value) <= 0 || !Number.isInteger(Number(value)))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'GAS_LIMIT must be a positive integer', { field, value }));
+        }
+
+        // QUANTITY validation (must be numeric and positive)
+        if (field === 'QUANTITY') {
+            if (!this.util.isNumeric(value) || Number(value) <= 0)
+                errors.push(this._error('INVALID_FIELD_VALUE', 'QUANTITY must be a positive number', { field, value }));
+        }
+
+        // METHOD validation (non-empty, no forbidden chars)
+        if (field === 'METHOD') {
+            if (typeof value !== 'string' || value.length === 0)
+                errors.push(this._error('INVALID_FIELD_VALUE', 'METHOD must be a non-empty string', { field, value }));
+            else
+                errors.push(...this._validateTextContent(field, value));
+        }
+
+        // CODE_ENCODING validation (hex string, size limit)
+        if (field === 'CODE_ENCODING') {
+            let hex = String(value);
+            if (!/^[0-9a-fA-F]*$/.test(hex))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'CODE_ENCODING must be a valid hex string', { field }));
+            else if (hex.length / 2 > MAX_CODE_SIZE)
+                errors.push(this._error('CODE_TOO_LARGE', 'Contract code exceeds ' + MAX_CODE_SIZE + ' byte limit (' + Math.ceil(hex.length / 2) + ' bytes)', { field, bytes: Math.ceil(hex.length / 2), limit: MAX_CODE_SIZE }));
+        }
+
+        // CONSTRUCTOR_PARAMS / PARAMS validation (array items must not contain separators)
+        if (field === 'CONSTRUCTOR_PARAMS' || field === 'PARAMS') {
+            if (Array.isArray(value)) {
+                for (let i = 0; i < value.length; i++) {
+                    let param = String(value[i]);
+                    for (let ch of FORBIDDEN_TEXT_CHARS) {
+                        if (param.includes(ch))
+                            errors.push(this._error('INVALID_PARAM_VALUE', field + '[' + i + '] cannot contain ' + (ch === '|' ? 'pipe (|)' : 'semicolon (;)'), { field, index: i, value: param }));
+                    }
+                }
+            }
         }
 
         // VALUE validation (BROADCAST)
@@ -333,6 +380,8 @@ class Validator {
                 errors.push(this._error('BATCH_CONSTRAINT', 'BATCH cannot contain nested BATCH actions'));
             if (cmdAction === 'FILE')
                 errors.push(this._error('BATCH_CONSTRAINT', 'BATCH cannot contain FILE actions'));
+            if (cmdAction === 'DEPLOY')
+                errors.push(this._error('BATCH_CONSTRAINT', 'BATCH cannot contain DEPLOY actions'));
             if (cmdAction === 'MINT') mintCount++;
             if (cmdAction === 'ISSUE') issueCount++;
         }
