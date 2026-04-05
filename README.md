@@ -4,7 +4,7 @@
 # XChain Platform - Software Developer Kit (SDK)
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.1.1-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.4.1-blue" alt="Version">
   <img src="https://img.shields.io/badge/tests-551%20passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/coverage-unit%20%7C%20fuzz%20%7C%20chaos%20%7C%20boundary%20%7C%20smoke-brightgreen" alt="Coverage">
   <img src="https://img.shields.io/badge/node-%3E%3D18-green" alt="Node">
@@ -29,19 +29,19 @@ Developer-facing SDK for generating XChain platform transactions and querying bl
 
 ## Documentation
 
-Full SDK developer guide is available in the [xchain-documentation](https://github.com/XChain-platform/xchain-documentation/tree/master/sdk) repository:
+Full SDK developer guide is available in the [xchain-documentation](https://github.com/XChain-platform/xchain-documentation/tree/master/components/sdk) repository:
 
 | Document | Description |
 |---|---|
-| [README](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/README.md) | Overview, installation, usage modes |
-| [Configuration](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/CONFIGURATION.md) | Constructor options, env vars, hub discovery, retry, pooling, hooks |
-| [Actions](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/ACTIONS.md) | All 19 ACTION types — params, validation rules, format versions, examples |
-| [Explorer](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/EXPLORER.md) | All 40 query methods — balances, tokens, transactions, markets |
-| [Encoder](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/ENCODER.md) | PSBT generation — encoding types, options, pre-flight validation, P2SH two-phase |
-| [Batch Builder](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/BATCH.md) | Fluent API for multi-action transactions |
-| [Format Selection](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/FORMAT_SELECTION.md) | How the SDK picks the optimal format version |
-| [Errors](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/ERRORS.md) | All error classes, codes, and troubleshooting |
-| [Examples](https://github.com/XChain-platform/xchain-documentation/blob/master/sdk/EXAMPLES.md) | 29 end-to-end code examples |
+| [README](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/README.md) | Overview, installation, usage modes |
+| [Configuration](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/CONFIGURATION.md) | Constructor options, env vars, hub discovery, retry, pooling, hooks |
+| [Actions](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/ACTIONS.md) | All 19 ACTION types — params, validation rules, format versions, examples |
+| [Explorer](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/EXPLORER.md) | All 40 query methods — balances, tokens, transactions, markets |
+| [Encoder](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/ENCODER.md) | PSBT generation — encoding types, options, pre-flight validation, P2SH two-phase |
+| [Batch Builder](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/BATCH.md) | Fluent API for multi-action transactions |
+| [Format Selection](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/FORMAT_SELECTION.md) | How the SDK picks the optimal format version |
+| [Errors](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/ERRORS.md) | All error classes, codes, and troubleshooting |
+| [Examples](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/EXAMPLES.md) | 29 end-to-end code examples |
 
 ## Quick Start
 
