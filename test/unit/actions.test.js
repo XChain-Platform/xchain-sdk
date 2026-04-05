@@ -25,10 +25,10 @@
 'use strict';
 
 const { expect }  = require('chai');
-const config      = require('../src/config.js');
-const Utility     = require('../src/utility.js');
-const Actions     = require('../src/actions.js');
-const { SDKValidationError } = require('../src/errors.js');
+const config      = require('../../src/config.js');
+const Utility     = require('../../src/utility.js');
+const Actions     = require('../../src/actions.js');
+const { SDKValidationError } = require('../../src/errors.js');
 
 // Reusable valid segwit address (42 chars)
 const ADDR = 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh';

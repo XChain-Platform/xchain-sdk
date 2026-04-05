@@ -12,14 +12,14 @@
 
 const { expect }      = require('chai');
 const nock            = require('nock');
-const ExplorerClient  = require('../src/explorer.js');
-const EncoderClient   = require('../src/encoder.js');
-const HubConnector    = require('../src/hub.js');
+const ExplorerClient  = require('../../src/explorer.js');
+const EncoderClient   = require('../../src/encoder.js');
+const HubConnector    = require('../../src/hub.js');
 const {
     SDKExplorerError,
     SDKEncoderError,
     SDKHubError
-} = require('../src/errors.js');
+} = require('../../src/errors.js');
 
 // Note: nock.disableNetConnect is set inside each describe block, not globally,
 // to avoid interfering with other test files (e.g. smoke tests using real HTTP).

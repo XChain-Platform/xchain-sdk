@@ -1,7 +1,7 @@
 {
     "name": "xchain-sdk",
     "description": "xchain-sdk generates XChain Platform ACTION commands and encodes them into unsigned blockchain transactions as well as pulls data from the XChain APIs such as balances and transaction history.",
-    "version": "1.4.1",
+    "version": "1.4.2",
     "main": "index.js",
     "types": "index.d.ts",
     "license": "SEE LICENSE IN LICENSE.md",
@@ -32,7 +32,13 @@
     },
     "scripts": {
         "api": "node ./src/api.js",
-        "test": "mocha --timeout 0 --recursive test/",
+        "test": "mocha --timeout 5000 --recursive 'test/unit/**/*.test.js'",
+        "test:smoke": "mocha --timeout 15000 --recursive 'test/smoke/**/*.test.js'",
+        "test:integration": "mocha --timeout 30000 --recursive 'test/integration/**/*.test.js'",
+        "test:boundary": "mocha --timeout 5000 --recursive 'test/boundary/**/*.test.js'",
+        "test:fuzz": "mocha --timeout 0 --recursive 'test/fuzz/**/*.test.js'",
+        "test:chaos": "mocha --timeout 10000 --recursive 'test/chaos/**/*.test.js'",
+        "test:all": "mocha --timeout 0 --recursive test/",
         "build": "npx browserify index.js -s XChainSDK -t [ babelify --presets [ @babel/preset-env ] --global ] | npx uglify-js --compress --mangle -o dist/xchain_sdk.min.js",
         "build:dev": "npx browserify index.js -s XChainSDK -t [ babelify --presets [ @babel/preset-env ] --global ] -o dist/xchain_sdk.js"
     }

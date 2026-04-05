@@ -11,14 +11,14 @@
 'use strict';
 
 const { expect } = require('chai');
-const config     = require('../src/config.js');
-const Utility    = require('../src/utility.js');
-const Actions    = require('../src/actions.js');
-const FormatSelector   = require('../src/formatSelector.js');
-const Validator        = require('../src/validator.js');
-const ContractUtils    = require('../src/contracts.js');
-const ContractClient   = require('../src/contractClient.js');
-const { SDKValidationError, SDKContractError } = require('../src/errors.js');
+const config     = require('../../src/config.js');
+const Utility    = require('../../src/utility.js');
+const Actions    = require('../../src/actions.js');
+const FormatSelector   = require('../../src/formatSelector.js');
+const Validator        = require('../../src/validator.js');
+const ContractUtils    = require('../../src/contracts.js');
+const ContractClient   = require('../../src/contractClient.js');
+const { SDKValidationError, SDKContractError } = require('../../src/errors.js');
 
 const ADDR = 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh';
 
@@ -774,35 +774,35 @@ describe('ContractClient', function () {
 describe('VM module exports', function () {
 
     it('exports SDKContractError', function () {
-        const mod = require('../index.js');
+        const mod = require('../../index.js');
         expect(mod).to.have.property('SDKContractError');
         expect(mod.SDKContractError).to.be.a('function');
     });
 
     it('exports ContractClient', function () {
-        const mod = require('../index.js');
+        const mod = require('../../index.js');
         expect(mod).to.have.property('ContractClient');
         expect(mod.ContractClient).to.be.a('function');
     });
 
     it('exports ContractUtils', function () {
-        const mod = require('../index.js');
+        const mod = require('../../index.js');
         expect(mod).to.have.property('ContractUtils');
         expect(mod.ContractUtils).to.be.a('function');
     });
 
     it('XChainSDK has contracts namespace', function () {
-        const { XChainSDK } = require('../index.js');
+        const { XChainSDK } = require('../../index.js');
         let sdk = new XChainSDK({ network: 'bitcoin-regtest' });
-        expect(sdk.contracts).to.be.an.instanceOf(require('../src/contracts.js'));
+        expect(sdk.contracts).to.be.an.instanceOf(require('../../src/contracts.js'));
     });
 
     it('XChainSDK has contract() factory', function () {
-        const { XChainSDK } = require('../index.js');
+        const { XChainSDK } = require('../../index.js');
         let sdk = new XChainSDK({ network: 'bitcoin-regtest' });
         expect(sdk.contract).to.be.a('function');
         let client = sdk.contract(123);
-        expect(client).to.be.an.instanceOf(require('../src/contractClient.js'));
+        expect(client).to.be.an.instanceOf(require('../../src/contractClient.js'));
         expect(client.contractActionIndex).to.equal(123);
     });
 });
@@ -814,7 +814,7 @@ describe('VM module exports', function () {
 
 describe('XChainSDK – VM convenience methods', function () {
 
-    const { XChainSDK } = require('../index.js');
+    const { XChainSDK } = require('../../index.js');
     let sdk;
     beforeEach(function () { sdk = new XChainSDK({ network: 'bitcoin-regtest' }); });
 
@@ -866,7 +866,7 @@ describe('XChainSDK – VM convenience methods', function () {
 
 describe('BatchBuilder – VM actions', function () {
 
-    const { XChainSDK } = require('../index.js');
+    const { XChainSDK } = require('../../index.js');
     let sdk;
     beforeEach(function () { sdk = new XChainSDK({ network: 'bitcoin-regtest' }); });
 

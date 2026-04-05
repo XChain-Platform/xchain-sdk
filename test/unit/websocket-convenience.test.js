@@ -9,8 +9,8 @@
 const { expect }  = require('chai');
 const sinon       = require('sinon');
 const WebSocket   = require('ws');
-const { XChainSDK } = require('../index.js');
-const { SDKConfigError } = require('../src/errors.js');
+const { XChainSDK } = require('../../index.js');
+const { SDKConfigError } = require('../../src/errors.js');
 
 // ---------------------------------------------------------------------------
 // Mock Server

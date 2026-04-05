@@ -19,9 +19,9 @@
 
 const { expect } = require('chai');
 const nock = require('nock');
-const ExplorerClient = require('../src/explorer.js');
-const EncoderClient  = require('../src/encoder.js');
-const { withRetry, isRetryable, getDelay, DEFAULTS } = require('../src/retry.js');
+const ExplorerClient = require('../../src/explorer.js');
+const EncoderClient  = require('../../src/encoder.js');
+const { withRetry, isRetryable, getDelay, DEFAULTS } = require('../../src/retry.js');
 
 
 // ---------------------------------------------------------------------------

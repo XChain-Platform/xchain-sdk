@@ -9,8 +9,8 @@
 'use strict';
 
 const { expect } = require('chai');
-const FormatSelector = require('../src/formatSelector.js');
-const { SDKFormatError } = require('../src/errors.js');
+const FormatSelector = require('../../src/formatSelector.js');
+const { SDKFormatError } = require('../../src/errors.js');
 
 // ---------------------------------------------------------------------------
 // Helpers

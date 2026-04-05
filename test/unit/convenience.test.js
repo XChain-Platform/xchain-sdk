@@ -22,19 +22,19 @@ const ADDR = 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh';
 describe('Module entry point', () => {
 
     it('exports XChainSDK', () => {
-        const mod = require('../index.js');
+        const mod = require('../../index.js');
         expect(mod).to.have.property('XChainSDK');
         expect(mod.XChainSDK).to.be.a('function');
     });
 
     it('exports BatchBuilder', () => {
-        const mod = require('../index.js');
+        const mod = require('../../index.js');
         expect(mod).to.have.property('BatchBuilder');
         expect(mod.BatchBuilder).to.be.a('function');
     });
 
     it('exports all error classes', () => {
-        const mod = require('../index.js');
+        const mod = require('../../index.js');
         const errorClasses = [
             'SDKError',
             'SDKValidationError',
@@ -51,13 +51,13 @@ describe('Module entry point', () => {
     });
 
     it('new XChainSDK() constructs successfully from the entry point', () => {
-        const { XChainSDK } = require('../index.js');
+        const { XChainSDK } = require('../../index.js');
         const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
         expect(sdk).to.be.an.instanceOf(XChainSDK);
     });
 
     it('default export equals XChainSDK', () => {
-        const mod = require('../index.js');
+        const mod = require('../../index.js');
         expect(mod.default).to.equal(mod.XChainSDK);
     });
 
@@ -69,7 +69,7 @@ describe('Module entry point', () => {
 
 describe('Convenience action methods', () => {
 
-    const { XChainSDK } = require('../index.js');
+    const { XChainSDK } = require('../../index.js');
     const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
 
     // Helper: assert result has correct action name and a non-empty actionString
@@ -185,7 +185,7 @@ describe('Convenience action methods', () => {
 
 describe('BatchBuilder', () => {
 
-    const { XChainSDK, BatchBuilder, SDKValidationError } = require('../index.js');
+    const { XChainSDK, BatchBuilder, SDKValidationError } = require('../../index.js');
     const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
 
     // --- Basic building ---

@@ -1,9 +1,9 @@
 const { expect } = require('chai');
-const config = require('../src/config.js');
-const Utility = require('../src/utility.js');
-const Actions = require('../src/actions.js');
-const FormatSelector = require('../src/formatSelector.js');
-const formats = require('../src/formats.js');
+const config = require('../../src/config.js');
+const Utility = require('../../src/utility.js');
+const Actions = require('../../src/actions.js');
+const FormatSelector = require('../../src/formatSelector.js');
+const formats = require('../../src/formats.js');
 
 function createActions() {
     let sdk = { config: config.getConfig(), util: new Utility() };

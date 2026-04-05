@@ -9,12 +9,12 @@
  ********************************************************************/
 
 const { expect }    = require('chai');
-const config        = require('../src/config.js');
-const Utility       = require('../src/utility.js');
-const Actions       = require('../src/actions.js');
-const Validator     = require('../src/validator.js');
-const FormatSelector = require('../src/formatSelector.js');
-const { SDKError, SDKValidationError, SDKFormatError } = require('../src/errors.js');
+const config        = require('../../src/config.js');
+const Utility       = require('../../src/utility.js');
+const Actions       = require('../../src/actions.js');
+const Validator     = require('../../src/validator.js');
+const FormatSelector = require('../../src/formatSelector.js');
+const { SDKError, SDKValidationError, SDKFormatError } = require('../../src/errors.js');
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 

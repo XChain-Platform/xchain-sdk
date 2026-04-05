@@ -14,7 +14,7 @@ describe('Smoke — API server end-to-end', function () {
         const helmet     = require('helmet');
         const cors       = require('cors');
         const jsonRouter = require('express-json-rpc-router');
-        const XChainSDK  = require('../src/XChainSDK');
+        const XChainSDK  = require('../../src/XChainSDK');
 
         const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
 

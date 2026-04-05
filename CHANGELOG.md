@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-04-05
+
+### Changed
+- Reorganized flat `test/` directory into subdirectories by test type: `unit/`, `smoke/`, `integration/`, `boundary/`, `fuzz/`, `chaos/`
+- Added dedicated npm scripts: `test:smoke`, `test:integration`, `test:boundary`, `test:fuzz`, `test:chaos`, `test:all`
+- Default `npm test` now runs only unit tests with a 5s timeout (previously ran all tests with no timeout)
+
 ## [1.4.1] - 2026-04-05
 
 ### Fixed

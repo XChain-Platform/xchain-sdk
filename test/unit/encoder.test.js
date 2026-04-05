@@ -1,6 +1,6 @@
 const { expect } = require('chai');
 const nock = require('nock');
-const EncoderClient = require('../src/encoder.js');
+const EncoderClient = require('../../src/encoder.js');
 
 describe('EncoderClient', function () {
 

@@ -10,8 +10,8 @@
 const { expect }  = require('chai');
 const sinon       = require('sinon');
 const WebSocket   = require('ws');
-const WebSocketClient = require('../src/websocket.js');
-const { SDKExplorerError } = require('../src/errors.js');
+const WebSocketClient = require('../../src/websocket.js');
+const { SDKExplorerError } = require('../../src/errors.js');
 
 // ---------------------------------------------------------------------------
 // Mock WebSocket Server

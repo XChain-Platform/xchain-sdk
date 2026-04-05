@@ -20,9 +20,9 @@
 'use strict';
 
 const { expect } = require('chai');
-const Utility    = require('../src/utility.js');
-const Validator  = require('../src/validator.js');
-const { SDKValidationError } = require('../src/errors.js');
+const Utility    = require('../../src/utility.js');
+const Validator  = require('../../src/validator.js');
+const { SDKValidationError } = require('../../src/errors.js');
 
 function createValidator() {
     return new Validator(new Utility());
