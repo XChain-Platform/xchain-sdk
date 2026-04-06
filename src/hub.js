@@ -39,10 +39,19 @@ const NETWORK_MAP = {
 class HubConnector {
 
     constructor(options = {}) {
-        this.hubUrl  = options.hubUrl || 'localhost';
-        this.hubPort = options.hubPort || 8001;
         this.timeout = options.timeout || 5000;
-        this.url     = 'http://' + this.hubUrl + ':' + this.hubPort;
+
+        // Multi-endpoint support: hubValidators takes priority over hubUrl:hubPort
+        if(options.hubValidators && Array.isArray(options.hubValidators) && options.hubValidators.length > 0){
+            this.urls = options.hubValidators.map(e => e.startsWith('http') ? e : 'http://' + e);
+        } else {
+            let hubUrl  = options.hubUrl || 'localhost';
+            let hubPort = options.hubPort || 8001;
+            this.urls = ['http://' + hubUrl + ':' + hubPort];
+        }
+
+        // Backward compat: this.url points to the first endpoint
+        this.url = this.urls[0];
 
         // Parsed config cache
         this.configs    = null;
@@ -53,7 +62,7 @@ class HubConnector {
         this._pollTimer   = null;
     }
 
-    // Fetch all configs from the hub via JSON-RPC
+    // Fetch all configs from the hub via JSON-RPC (tries each endpoint in order)
     async getAllConfig() {
         let payload = {
             jsonrpc: '2.0',
@@ -62,24 +71,28 @@ class HubConnector {
             id:      1
         };
 
-        try {
-            let response = await axios.post(this.url, payload, { timeout: this.timeout });
-            if (response.data && response.data.result) {
-                this.configs   = response.data.result;
-                this.lastFetch = Date.now();
-                return this.configs;
+        let lastError = null;
+        for(let url of this.urls){
+            try {
+                let response = await axios.post(url, payload, { timeout: this.timeout });
+                if (response.data && response.data.result) {
+                    this.configs   = response.data.result;
+                    this.lastFetch = Date.now();
+                    return this.configs;
+                }
+            } catch (err) {
+                lastError = err;
             }
-            return null;
-        } catch (err) {
-            throw new SDKHubError(
-                'HUB_UNAVAILABLE',
-                'Failed to fetch config from hub at ' + this.url + ': ' + err.message,
-                { url: this.url, error: err.message }
-            );
         }
+
+        throw new SDKHubError(
+            'HUB_UNAVAILABLE',
+            'Failed to fetch config from hub (tried ' + this.urls.length + ' endpoint(s)): ' + (lastError ? lastError.message : 'no result'),
+            { urls: this.urls, error: lastError ? lastError.message : 'no result' }
+        );
     }
 
-    // Ping the hub
+    // Ping the hub (tries each endpoint in order)
     async ping() {
         let payload = {
             jsonrpc: '2.0',
@@ -87,12 +100,15 @@ class HubConnector {
             id:      1
         };
 
-        try {
-            let response = await axios.post(this.url, payload, { timeout: this.timeout });
-            return !!(response.data && response.data.result);
-        } catch (err) {
-            return false;
+        for(let url of this.urls){
+            try {
+                let response = await axios.post(url, payload, { timeout: this.timeout });
+                if(response.data && response.data.result) return true;
+            } catch (err) {
+                // Try next endpoint
+            }
         }
+        return false;
     }
 
     // Extract service endpoints for a given network from the hub config
