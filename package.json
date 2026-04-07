@@ -1,7 +1,7 @@
 {
     "name": "xchain-sdk",
     "description": "xchain-sdk generates XChain Platform ACTION commands and encodes them into unsigned blockchain transactions as well as pulls data from the XChain APIs such as balances and transaction history.",
-    "version": "1.4.3",
+    "version": "1.5.0",
     "main": "index.js",
     "types": "index.d.ts",
     "license": "SEE LICENSE IN LICENSE.md",
@@ -10,9 +10,13 @@
         "url": "https://github.com/XChain-platform/xchain-sdk.git"
     },
     "dependencies": {
+        "@bitcoinerlab/secp256k1": "^1.2.0",
         "axios": "^1.14.0",
+        "bitcoinjs-lib": "^6.1.7",
+        "bitcoinjs-message": "^2.2.0",
         "cors": "^2.8.5",
         "dotenv": "^16.4.5",
+        "ecpair": "^2.1.0",
         "express": "^4.18.3",
         "express-json-rpc-router": "^1.4.0",
         "helmet": "^7.1.0",

@@ -78,6 +78,20 @@ class SDKContractError extends SDKError {
     }
 }
 
+class SDKWalletError extends SDKError {
+    constructor(code, message, details = {}) {
+        super(code, message, details);
+        this.name = 'SDKWalletError';
+    }
+}
+
+class SDKAuthError extends SDKError {
+    constructor(code, message, details = {}) {
+        super(code, message, details);
+        this.name = 'SDKAuthError';
+    }
+}
+
 module.exports = {
     SDKError,
     SDKValidationError,
@@ -86,5 +100,7 @@ module.exports = {
     SDKExplorerError,
     SDKHubError,
     SDKConfigError,
-    SDKContractError
+    SDKContractError,
+    SDKWalletError,
+    SDKAuthError
 };

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-04-07
+
+### Added
+- `src/networks.js` — network parameter registry for all 9 supported BTC/LTC/DOGE networks (ported from xchain-encoder CryptoNetworks)
+- `src/auth.js` — `AuthUtils` class: challenge-response wallet ownership verification (`generateChallenge`, `signMessage`, `verifyOwnership`, `verifyMessage`), supports custom messages for SDK-independent verification
+- `src/wallet.js` — `WalletUtils` class: key management (`importWIF`, `generateKeyPair`), address derivation (`deriveAddress` with P2PKH/P2WPKH/P2SH-P2WPKH), address validation (`validateAddress`), PSBT signing (`signPsbt`), transaction broadcasting (`broadcastTx`), UTXO queries (`getUTXOs`)
+- `SDKWalletError` and `SDKAuthError` error classes in `src/errors.js`
+- `broadcastTx()` and `getUTXOs()` RPC methods on `EncoderClient` in `src/encoder.js`
+- `sdk.wallet` and `sdk.auth` sub-objects on `XChainSDK` with 11 top-level convenience pass-throughs
+- `WalletUtils`, `AuthUtils`, `SDKWalletError`, `SDKAuthError` exported from `index.js`
+- TypeScript definitions for all new types, interfaces, and class methods in `index.d.ts`
+- New runtime dependencies: `bitcoinjs-lib`, `bitcoinjs-message`, `ecpair`, `@bitcoinerlab/secp256k1`
+- Unit tests: `test/unit/networks.test.js`, `test/unit/auth.test.js`, `test/unit/wallet.test.js` (69 new tests, 520 total passing)
+
 ## [1.4.3] - 2026-04-06
 
 ### Changed

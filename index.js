@@ -25,6 +25,8 @@ const XChainSDK      = require('./src/XChainSDK.js');
 const BatchBuilder   = require('./src/batchBuilder.js');
 const ContractClient = require('./src/contractClient.js');
 const ContractUtils  = require('./src/contracts.js');
+const WalletUtils    = require('./src/wallet.js');
+const AuthUtils      = require('./src/auth.js');
 const {
     SDKError,
     SDKValidationError,
@@ -33,7 +35,9 @@ const {
     SDKExplorerError,
     SDKHubError,
     SDKConfigError,
-    SDKContractError
+    SDKContractError,
+    SDKWalletError,
+    SDKAuthError
 } = require('./src/errors.js');
 
 module.exports = {
@@ -41,6 +45,8 @@ module.exports = {
     BatchBuilder,
     ContractClient,
     ContractUtils,
+    WalletUtils,
+    AuthUtils,
     SDKError,
     SDKValidationError,
     SDKFormatError,
@@ -49,6 +55,8 @@ module.exports = {
     SDKHubError,
     SDKConfigError,
     SDKContractError,
+    SDKWalletError,
+    SDKAuthError,
     // Default export for convenience
     default: XChainSDK
 };

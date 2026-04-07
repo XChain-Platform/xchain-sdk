@@ -30,6 +30,8 @@ const BatchBuilder   = require('./batchBuilder.js');
 const ContractUtils  = require('./contracts.js');
 const ContractClient = require('./contractClient.js');
 const WebSocketClient = require('./websocket.js');
+const WalletUtils    = require('./wallet.js');
+const AuthUtils      = require('./auth.js');
 const { SDKConfigError } = require('./errors.js');
 
 class XChainSDK {
@@ -51,6 +53,11 @@ class XChainSDK {
         this.util      = new Utility();
         this.actions   = new Actions(this);
         this.contracts = new ContractUtils();
+
+        // Wallet and auth modules (network-aware but don't require services)
+        let network = options.network || process.env.NETWORK || null;
+        this.wallet = new WalletUtils(network);
+        this.auth   = new AuthUtils(network);
 
         // Service clients (initialized by _initClients or init)
         this.explorer = null;
@@ -348,6 +355,29 @@ class XChainSDK {
         if (!this.hub) return null;
         return this.hub.configs;
     }
+
+
+    /*
+     *  Wallet Convenience Methods
+     */
+
+    signPsbt(psbtHex, wif)              { return this.wallet.signPsbt(psbtHex, wif); }
+    async broadcastTx(txHex)            { return this.wallet.broadcastTx(txHex, this._requireEncoder()); }
+    async getUTXOs(address)             { return this.wallet.getUTXOs(address, this._requireEncoder()); }
+    validateAddress(address, network)   { return this.wallet.validateAddress(address, network); }
+    importWIF(wif)                      { return this.wallet.importWIF(wif); }
+    generateKeyPair(opts)               { return this.wallet.generateKeyPair(opts); }
+    deriveAddress(publicKey, opts)      { return this.wallet.deriveAddress(publicKey, opts); }
+
+
+    /*
+     *  Auth Convenience Methods
+     */
+
+    generateChallenge(address, opts)                      { return this.auth.generateChallenge(address, opts); }
+    signMessage(message, wif, opts)                       { return this.auth.signMessage(message, wif, opts); }
+    verifyOwnership(address, message, signature, network) { return this.auth.verifyOwnership(address, message, signature, network); }
+    verifyMessage(address, message, signature, network)   { return this.auth.verifyMessage(address, message, signature, network); }
 
 
     /*

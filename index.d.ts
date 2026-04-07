@@ -912,12 +912,180 @@ export declare class XChainSDK {
 
     /** Search the explorer for a query string of a given type. */
     search(query: string, type: string): Promise<any>;
+
+
+    /*
+     *  Wallet convenience methods
+     */
+
+    /** Sign an unsigned PSBT hex with a WIF private key */
+    signPsbt(psbtHex: string, wif: string): SignPsbtResult;
+
+    /** Broadcast a signed transaction hex via the encoder */
+    broadcastTx(txHex: string): Promise<BroadcastResult>;
+
+    /** Fetch UTXOs for an address via the encoder */
+    getUTXOs(address: string): Promise<UTXOEntry[]>;
+
+    /** Validate a coin address */
+    validateAddress(address: string, network?: XChainNetwork): AddressValidationResult;
+
+    /** Import a WIF-encoded private key */
+    importWIF(wif: string): KeyPairResult;
+
+    /** Generate a new random keypair */
+    generateKeyPair(opts?: { compressed?: boolean }): KeyPairResult;
+
+    /** Derive an address from a public key */
+    deriveAddress(publicKey: Buffer | string, opts?: { type?: AddressType }): string;
+
+
+    /*
+     *  Auth convenience methods
+     */
+
+    /** Generate a challenge for wallet ownership verification */
+    generateChallenge(address: string, opts?: ChallengeOptions): ChallengeResult;
+
+    /** Sign a message with a WIF private key */
+    signMessage(message: string, wif: string, opts?: SignMessageOptions): SignMessageResult;
+
+    /** Verify wallet ownership via a signed message */
+    verifyOwnership(address: string, message: string, signature: string, network?: XChainNetwork): VerifyResult;
+
+    /** Verify any signed message */
+    verifyMessage(address: string, message: string, signature: string, network?: XChainNetwork): VerifyResult;
 }
+
+
+/*
+ *  Network types
+ */
+
+export type XChainNetwork =
+    | 'bitcoin-mainnet' | 'bitcoin-testnet' | 'bitcoin-regtest'
+    | 'litecoin-mainnet' | 'litecoin-testnet' | 'litecoin-regtest'
+    | 'dogecoin-mainnet' | 'dogecoin-testnet' | 'dogecoin-regtest';
+
+export type AddressType = 'p2pkh' | 'p2wpkh' | 'p2sh-p2wpkh' | 'p2sh' | 'p2wsh' | 'bech32';
+
+
+/*
+ *  Wallet types
+ */
+
+export interface KeyPairResult {
+    wif: string;
+    privateKey: Buffer;
+    publicKey: Buffer;
+    publicKeyHex: string;
+    compressed: boolean;
+}
+
+export interface AddressValidationResult {
+    valid: boolean;
+    type: AddressType | null;
+    network: XChainNetwork | null;
+    error: string | null;
+}
+
+export interface SignPsbtResult {
+    txHex: string;
+    txid: string;
+    psbtHex: string;
+}
+
+export interface BroadcastResult {
+    txid: string;
+}
+
+export interface UTXOEntry {
+    txid: string;
+    vout: number;
+    value: number;
+}
+
+
+/*
+ *  Auth types
+ */
+
+export interface ChallengeOptions {
+    appId?: string;
+    nonce?: string;
+    message?: string;
+    expiresInMs?: number;
+}
+
+export interface ChallengeResult {
+    challenge: string;
+    nonce: string;
+    timestamp: string;
+    expiresAt: string;
+}
+
+export interface SignMessageOptions {
+    segwitRedeemScript?: boolean;
+    segwitNative?: boolean;
+    network?: XChainNetwork;
+}
+
+export interface SignMessageResult {
+    signature: string;
+    address: string;
+}
+
+export interface VerifyResult {
+    valid: boolean;
+    address?: string;
+    error: string | null;
+}
+
+
+/*
+ *  WalletUtils class
+ */
+
+export declare class WalletUtils {
+    readonly network: XChainNetwork | null;
+    constructor(network?: XChainNetwork | null);
+
+    importWIF(wif: string): KeyPairResult;
+    generateKeyPair(opts?: { compressed?: boolean }): KeyPairResult;
+    deriveAddress(publicKey: Buffer | string, opts?: { type?: AddressType }): string;
+    validateAddress(address: string, network?: XChainNetwork): AddressValidationResult;
+    signPsbt(psbtHex: string, wif: string): SignPsbtResult;
+    broadcastTx(txHex: string, encoder: any): Promise<BroadcastResult>;
+    getUTXOs(address: string, encoder: any): Promise<UTXOEntry[]>;
+}
+
+
+/*
+ *  AuthUtils class
+ */
+
+export declare class AuthUtils {
+    readonly network: XChainNetwork | null;
+    constructor(network?: XChainNetwork | null);
+
+    generateChallenge(address: string, opts?: ChallengeOptions): ChallengeResult;
+    signMessage(message: string, wif: string, opts?: SignMessageOptions): SignMessageResult;
+    verifyOwnership(address: string, message: string, signature: string, network?: XChainNetwork): VerifyResult;
+    verifyMessage(address: string, message: string, signature: string, network?: XChainNetwork): VerifyResult;
+}
+
+
+/*
+ *  Wallet / Auth error classes
+ */
+
+export declare class SDKWalletError extends SDKError {}
+export declare class SDKAuthError extends SDKError {}
 
 
 /*
  *  Module exports (CommonJS interop)
  */
 
-export { XChainSDK, BatchBuilder, ContractClient, ContractUtils, SDKError, SDKValidationError, SDKFormatError, SDKEncoderError, SDKExplorerError, SDKHubError, SDKConfigError, SDKContractError };
+export { XChainSDK, BatchBuilder, ContractClient, ContractUtils, WalletUtils, AuthUtils, SDKError, SDKValidationError, SDKFormatError, SDKEncoderError, SDKExplorerError, SDKHubError, SDKConfigError, SDKContractError, SDKWalletError, SDKAuthError };
 export default XChainSDK;

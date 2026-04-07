@@ -216,6 +216,32 @@ class EncoderClient {
         return this._rpc('create_tx', rpcParams);
     }
 
+    // Broadcast a signed raw transaction hex to the coin node
+    //
+    // Required:
+    //   txHex - signed raw transaction hex (from wallet.signPsbt)
+    //
+    // Returns: { txid: <string> }
+    async broadcastTx(txHex) {
+        if (!txHex)
+            throw new SDKEncoderError('MISSING_TX_HEX', 'broadcastTx requires txHex (signed transaction hex)');
+
+        return this._rpc('broadcast_tx', { tx_hex: txHex });
+    }
+
+    // Fetch UTXOs for an address from the UTXO tracker (via encoder proxy)
+    //
+    // Required:
+    //   address - coin address to query
+    //
+    // Returns: { utxos: [ { txid, vout, value }, ... ] }
+    async getUTXOs(address) {
+        if (!address)
+            throw new SDKEncoderError('MISSING_ADDRESS', 'getUTXOs requires address');
+
+        return this._rpc('get_utxos', { address: address });
+    }
+
 }
 
 module.exports = EncoderClient;
