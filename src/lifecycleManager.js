@@ -1,0 +1,163 @@
+/*********************************************************************
+ *
+ * Copyright © 2025 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * Licensed under the Dankest Community License (Apache License 2.0 + Additional Terms).
+ * You may not use this file except in compliance with that License.
+ *
+ * A copy of the License is available at:
+ *     https://dankest.llc/license
+ *
+ * This software is provided "AS IS", without warranties or conditions of any kind.
+ *
+ **********************************************************************
+ *
+ * XChain Platform SDK - Transaction Lifecycle Manager
+ *
+ * Orchestrates the full transaction pipeline:
+ * create → encode → sign → broadcast → (P2SH phase 2) → wait for indexer
+ *
+ ********************************************************************/
+
+const ActionWaiter = require('./actionWaiter.js');
+const { SDKActionError, SDKConfigError } = require('./errors.js');
+
+
+class LifecycleManager {
+
+    constructor(sdk) {
+        this.sdk = sdk;
+    }
+
+    // Submit an action through the full lifecycle.
+    //
+    // actionData   - { action, params } (same shape as createAction input, without encoder)
+    // encoderOpts  - { pubkey, change, utxos, encoding, fee, feePerKb, ... }
+    // opts:
+    //   wif             - WIF private key for signing (required)
+    //   waitForIndexer  - wait for indexer confirmation (default true)
+    //   timeout         - ms to wait for indexer (default 120000)
+    //   pollInterval    - ms between indexer polls (default 2000)
+    //   requireValid    - reject if action status is 'invalid' (default true)
+    //   onProgress      - callback(step, data) for lifecycle step notifications
+    //
+    // Returns: {
+    //   txid, actionString, encoding, action (from indexer if waited),
+    //   signed { txHex, txid, psbtHex }, spentInputs [{ txid, vout }]
+    // }
+    async submitAction(actionData, encoderOpts = {}, opts = {}) {
+        let { wif, waitForIndexer, timeout, pollInterval, requireValid, onProgress } = opts;
+        if (!wif) throw new SDKConfigError('MISSING_WIF', 'submitAction requires opts.wif (WIF private key)');
+        if (waitForIndexer === undefined) waitForIndexer = true;
+
+        let encoder = this.sdk._requireEncoder();
+        let progress = onProgress || (() => {});
+
+        // Step 1: Create and validate action string
+        progress('creating', { action: actionData.action });
+        let createResult = this.sdk.actions.createAction(actionData);
+
+        // Step 2: Encode to PSBT
+        progress('encoding', { actionString: createResult.actionString });
+        let txParams = {
+            data:   createResult.actionString,
+            pubkey: encoderOpts.pubkey
+        };
+        // Map optional encoder fields
+        if (encoderOpts.change !== undefined)           txParams.change = encoderOpts.change;
+        if (encoderOpts.utxos !== undefined)            txParams.utxos = encoderOpts.utxos;
+        if (encoderOpts.rawData !== undefined)          txParams.rawData = encoderOpts.rawData;
+        if (encoderOpts.encoding !== undefined)         txParams.encoding = encoderOpts.encoding;
+        if (encoderOpts.fee !== undefined)              txParams.fee = encoderOpts.fee;
+        if (encoderOpts.feePerKb !== undefined)         txParams.feePerKb = encoderOpts.feePerKb;
+        if (encoderOpts.rbf !== undefined)              txParams.rbf = encoderOpts.rbf;
+        if (encoderOpts.dust !== undefined)             txParams.dust = encoderOpts.dust;
+        if (encoderOpts.unconfirmed !== undefined)      txParams.unconfirmed = encoderOpts.unconfirmed;
+        if (encoderOpts.compressedPubKey !== undefined) txParams.compressedPubKey = encoderOpts.compressedPubKey;
+        if (encoderOpts.customOutputs !== undefined)    txParams.customOutputs = encoderOpts.customOutputs;
+
+        let encoded = await encoder.createTx(txParams);
+
+        // Step 3: Sign the PSBT
+        progress('signing', { encoding: encoded.encoding });
+        let signed = this.sdk.wallet.signPsbt(encoded.psbt, wif);
+
+        // Step 4: Broadcast
+        progress('broadcasting', { txid: signed.txid });
+        await encoder.broadcastTx(signed.txHex);
+
+        // Extract spent inputs from the signed PSBT for UTXO cache tracking
+        let spentInputs = this._extractSpentInputs(encoded.psbt);
+
+        // Step 4b: Handle P2SH/P2WSH two-phase encoding
+        // If the encoder chose P2SH or P2WSH, we need a second transaction to spend the output
+        let finalTxid = signed.txid;
+        if (encoded.encoding === 'P2SH' || encoded.encoding === 'P2WSH') {
+            progress('p2sh_spending', { phase1Txid: signed.txid });
+
+            let spendResult = await encoder.spendP2sh({
+                pubkey:   encoderOpts.pubkey,
+                p2shHash: encoded.p2shHash || encoded.hash,
+                p2shHex:  signed.txHex,
+                change:   encoderOpts.change,
+                fee:      encoderOpts.fee,
+                feePerKb: encoderOpts.feePerKb
+            });
+
+            let spendSigned = this.sdk.wallet.signPsbt(spendResult.psbt, wif);
+            await encoder.broadcastTx(spendSigned.txHex);
+
+            // Track phase 2 spent inputs
+            let phase2Inputs = this._extractSpentInputs(spendResult.psbt);
+            spentInputs = spentInputs.concat(phase2Inputs);
+
+            // The indexer looks for the phase 2 transaction
+            finalTxid = spendSigned.txid;
+            signed = spendSigned;
+        }
+
+        let result = {
+            txid:         finalTxid,
+            actionString: createResult.actionString,
+            action:       createResult.action,
+            version:      createResult.version,
+            encoding:     encoded.encoding,
+            signed:       signed,
+            spentInputs:  spentInputs,
+            indexed:      null
+        };
+
+        // Step 5: Wait for indexer confirmation
+        if (waitForIndexer) {
+            progress('waiting', { txid: finalTxid });
+            let waiter = new ActionWaiter(this.sdk);
+            let indexed = await waiter.waitForTxid(finalTxid, {
+                timeout:      timeout || 120000,
+                pollInterval: pollInterval || 2000,
+                requireValid: requireValid !== false
+            });
+            result.indexed = indexed;
+            progress('confirmed', { txid: finalTxid, action: indexed });
+        }
+
+        return result;
+    }
+
+    // Extract input references from an unsigned PSBT hex for UTXO cache tracking
+    _extractSpentInputs(psbtHex) {
+        try {
+            const bitcoin = require('bitcoinjs-lib');
+            let psbt = bitcoin.Psbt.fromHex(psbtHex);
+            return psbt.txInputs.map(input => ({
+                txid: Buffer.from(input.hash).reverse().toString('hex'),
+                vout: input.index
+            }));
+        } catch (e) {
+            return [];
+        }
+    }
+
+}
+
+module.exports = LifecycleManager;

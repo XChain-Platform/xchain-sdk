@@ -686,6 +686,12 @@ export declare class XChainSDK {
      */
     createAction(data: CreateActionData): Promise<ActionResult>;
 
+    /**
+     * Submit an action through the full lifecycle: create → encode → sign → broadcast → wait.
+     * Handles P2SH two-phase encoding automatically.
+     */
+    submitAction(actionData: { action: string; params: ActionParams }, encoderOpts: Partial<EncoderOptions>, opts: SubmitActionOpts): Promise<SubmitActionResult>;
+
     /** Validate action params without building the string. */
     validateAction(action: string, params: ActionParams): ValidationResult;
 
@@ -724,11 +730,21 @@ export declare class XChainSDK {
     file(params: FileParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     address(params: AddressParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
 
+    // Staking action convenience methods (BTC-only)
+    stake(params: StakeParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
+    unstake(params: UnstakeParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
+    delegate(params: DelegateParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
+    revokeDelegation(params: RevokeDelegationParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
+    claimRewards(params?: ClaimRewardsParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
+
     // VM action convenience methods
     deploy(params: DeployParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     execute(params: ExecuteParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     deposit(params: DepositParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     withdraw(params: WithdrawParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
+
+    /** Create a bound wallet session for repeated actions from one address */
+    session(wif: string, opts?: WalletSessionOpts): WalletSession;
 
     /** Create a new `BatchBuilder` for fluent BATCH construction. */
     batch(): BatchBuilder;
@@ -755,6 +771,9 @@ export declare class XChainSDK {
      * previously funded P2SH/P2WSH output to reveal the embedded data.
      */
     spendP2sh(params: SpendP2shParams): Promise<EncoderResult>;
+
+    /** Estimate fees for an action without signing or broadcasting */
+    estimateFees(actionData: { action: string; params: ActionParams }, encoderOpts?: Partial<EncoderOptions>): Promise<EstimateFeeResult>;
 
     /** Ping the encoder service. Returns the RPC result. */
     pingEncoder(): Promise<any>;
@@ -912,6 +931,46 @@ export declare class XChainSDK {
 
     /** Search the explorer for a query string of a given type. */
     search(query: string, type: string): Promise<any>;
+
+
+    /*
+     *  WebSocket: Wait-for-Action methods
+     */
+
+    /** Wait for a transaction to be indexed by the explorer */
+    waitForAction(txid: string, opts?: WaitForActionOpts): Promise<any>;
+
+    /** Wait for a specific action_index to appear in the explorer */
+    waitForActionIndex(actionIndex: number | string, opts?: WaitForActionOpts): Promise<any>;
+
+
+    /*
+     *  Workflow recipes
+     */
+
+    /** Issue a token and distribute to recipients in one flow */
+    issueAndDistribute(wif: string, issueParams: IssueParams | ActionParams, distributions: Array<{ destination: string; amount: string | number; memo?: string }>, opts?: Partial<SubmitActionOpts>): Promise<{ issue: SubmitActionResult; sends: SubmitActionResult[] }>;
+
+    /** Issue a token and mint initial supply */
+    issueAndMint(wif: string, issueParams: IssueParams | ActionParams, mintParams: Partial<MintParams> | ActionParams, opts?: Partial<SubmitActionOpts>): Promise<{ issue: SubmitActionResult; mint: SubmitActionResult }>;
+
+    /** Create a dispenser */
+    createDispenser(wif: string, dispenserParams: DispenserParams | ActionParams, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+
+    /** Create a limit order on the DEX */
+    createOrder(wif: string, orderParams: OrderParams | ActionParams, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+
+    /** Cancel an existing order */
+    cancelOrder(wif: string, orderActionIndex: number, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+
+    /** Stake and optionally delegate a signing key */
+    stakeAndDelegate(wif: string, stakeParams: StakeParams | ActionParams, delegateParams?: DelegateParams | ActionParams, opts?: Partial<SubmitActionOpts>): Promise<{ stake: SubmitActionResult; delegate: SubmitActionResult | null }>;
+
+    /** Deploy a contract and optionally deposit initial tokens */
+    deployAndFund(wif: string, deployParams: DeployParams | ActionParams, deposits?: Array<{ tick: string; quantity: string | number }>, opts?: Partial<SubmitActionOpts>): Promise<{ deploy: SubmitActionResult; deposits: SubmitActionResult[] }>;
+
+    /** Distribute a dividend to all holders of a token */
+    distributeDividend(wif: string, dividendParams: DividendParams | ActionParams, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
 
 
     /*
@@ -1081,11 +1140,289 @@ export declare class AuthUtils {
 
 export declare class SDKWalletError extends SDKError {}
 export declare class SDKAuthError extends SDKError {}
+export declare class SDKMessagingError extends SDKError {}
+export declare class SDKActionError extends SDKError {}
+
+
+/*
+ *  Staking action parameter interfaces (BTC-only)
+ */
+
+export interface StakeParams extends ActionParams {
+    /** Validation tier: 1 (oracle) or 2 (cross-chain) */
+    tier: 1 | 2;
+    /** Ed25519 signing public key (64 hex characters) */
+    signingPubkey: string;
+    /** Comma-separated chain identifiers (required for tier 2, empty for tier 1) */
+    chains?: string;
+}
+
+export interface UnstakeParams extends ActionParams {
+    /** Tier to unstake from: 1 (oracle) or 2 (cross-chain) */
+    tier: 1 | 2;
+}
+
+export interface DelegateParams extends ActionParams {
+    /** New Ed25519 signing public key (64 hex characters) */
+    newSigningPubkey: string;
+}
+
+export interface RevokeDelegationParams extends ActionParams {
+    /** Ed25519 signing public key to revoke (64 hex characters) */
+    signingPubkey: string;
+}
+
+export interface ClaimRewardsParams extends ActionParams {}
+
+
+/*
+ *  Transaction Lifecycle types
+ */
+
+export interface SubmitActionOpts {
+    /** WIF private key for signing (required) */
+    wif: string;
+    /** Wait for indexer confirmation (default: true) */
+    waitForIndexer?: boolean;
+    /** Timeout in ms for indexer confirmation (default: 120000) */
+    timeout?: number;
+    /** Polling interval in ms (default: 2000) */
+    pollInterval?: number;
+    /** Reject if action status is 'invalid' (default: true) */
+    requireValid?: boolean;
+    /** Progress callback: called at each lifecycle step */
+    onProgress?: (step: string, data: any) => void;
+}
+
+export interface SubmitActionResult {
+    /** Final transaction ID (phase 2 txid for P2SH) */
+    txid: string;
+    /** Serialized ACTION string */
+    actionString: string;
+    /** ACTION name */
+    action: string;
+    /** Protocol version used */
+    version: number;
+    /** Encoding type used */
+    encoding: EncodingType;
+    /** Signed transaction details */
+    signed: SignPsbtResult;
+    /** UTXOs consumed by this transaction */
+    spentInputs: Array<{ txid: string; vout: number }>;
+    /** Indexed action data (null if waitForIndexer was false) */
+    indexed: any | null;
+}
+
+export interface WaitForActionOpts {
+    /** Timeout in ms (default: 120000) */
+    timeout?: number;
+    /** Polling interval in ms (default: 2000) */
+    pollInterval?: number;
+    /** Reject if action status is 'invalid' (default: true) */
+    requireValid?: boolean;
+}
+
+export interface EstimateFeeResult {
+    /** Unsigned PSBT hex (can be signed directly to skip re-encoding) */
+    psbt: string;
+    /** Encoding type used */
+    encoding: EncodingType;
+    /** Transaction fee in satoshis */
+    fee: number | null;
+    /** Total input value in satoshis */
+    inputTotal?: number;
+    /** Total output value in satoshis */
+    outputTotal?: number;
+    /** Serialized ACTION string */
+    actionString: string;
+    /** ACTION name */
+    action: string;
+    /** Protocol version used */
+    version: number;
+}
+
+
+/*
+ *  WalletSession class
+ */
+
+export interface WalletSessionOpts {
+    /** Address derivation type (default: 'p2pkh') */
+    addressType?: AddressType;
+    /** Default waitForIndexer setting (default: true) */
+    waitForIndexer?: boolean;
+    /** Default timeout in ms (default: 120000) */
+    timeout?: number;
+    /** Default poll interval in ms (default: 2000) */
+    pollInterval?: number;
+    /** Default requireValid setting (default: true) */
+    requireValid?: boolean;
+}
+
+export declare class WalletSession {
+    /** The SDK instance this session is bound to */
+    readonly sdk: XChainSDK;
+    /** WIF private key */
+    readonly wif: string;
+    /** Hex-encoded public key */
+    readonly pubkey: string;
+    /** Derived address */
+    readonly address: string;
+
+    constructor(sdk: XChainSDK, wif: string, opts?: WalletSessionOpts);
+
+    /** Refresh UTXOs from the UTXO tracker */
+    refreshUTXOs(): Promise<any[]>;
+
+    /** Submit any action using this session's credentials and UTXO cache */
+    submit(actionData: { action: string; params: ActionParams }, encoderOpts?: Partial<EncoderOptions>, submitOpts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+
+    // Action convenience methods
+    send(params: SendParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    issue(params: IssueParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    mint(params: MintParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    destroy(params: DestroyParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    order(params: OrderParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    swap(params: SwapParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    dispenser(params: DispenserParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    dividend(params: DividendParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    broadcast(params: BroadcastParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    message(params: MessageParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    airdrop(params: AirdropParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    sweep(params: SweepParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    file(params: FileParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    list(params: ListParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    link(params: LinkParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    callback(params: CallbackParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    sleep(params: SleepParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    address(params: AddressParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    coinpay(params: ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    stake(params: StakeParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    unstake(params: UnstakeParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    delegate(params: DelegateParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    revokeDelegation(params: RevokeDelegationParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    claimRewards(params?: ClaimRewardsParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    deploy(params: DeployParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    execute(params: ExecuteParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    deposit(params: DepositParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    withdraw(params: WithdrawParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+
+    // Explorer convenience methods (scoped to session address)
+    getBalances(opts?: QueryOptions): Promise<any>;
+    getHistory(opts?: QueryOptions): Promise<any>;
+    getCredits(type?: string, opts?: QueryOptions): Promise<any>;
+    getDebits(type?: string, opts?: QueryOptions): Promise<any>;
+    getSends(opts?: QueryOptions): Promise<any>;
+    getOrders(opts?: QueryOptions): Promise<any>;
+    getSwaps(opts?: QueryOptions): Promise<any>;
+    getDispensers(opts?: QueryOptions): Promise<any>;
+
+    /** Estimate fees for an action using this session's credentials */
+    estimateFees(actionData: { action: string; params: ActionParams }, encoderOpts?: Partial<EncoderOptions>): Promise<EstimateFeeResult>;
+}
+
+
+/*
+ *  CrossChainHelper class
+ */
+
+export interface CrossChainSwapParams {
+    giveCoin: string;
+    giveTick: string;
+    giveAmount: string | number;
+    getCoin: string;
+    getTick: string;
+    getAmount: string | number;
+    wif: string;
+    getAddress?: string;
+    expiration?: number;
+    allowList?: number;
+    blockList?: number;
+    memo?: string;
+}
+
+export interface CrossChainLinkParams {
+    coin1: string;
+    coin1ActionIndex: number;
+    coin2: string;
+    coin2ActionIndex: number;
+    wif: string;
+    submitOn?: string;
+    memo?: string;
+}
+
+export interface CrossChainAction {
+    chain: string;
+    wif: string;
+    actionData: { action: string; params: ActionParams };
+    encoderOpts?: Partial<EncoderOptions>;
+    submitOpts?: Partial<SubmitActionOpts>;
+}
+
+export declare class CrossChainHelper {
+    constructor(sdkMap: Record<string, XChainSDK>);
+
+    /** Create a swap offer on the give chain */
+    createSwap(params: CrossChainSwapParams, opts?: Partial<SubmitActionOpts>): Promise<{ swap: SubmitActionResult }>;
+
+    /** Create a LINK between actions on two chains */
+    link(params: CrossChainLinkParams, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+
+    /** Execute actions on multiple chains in parallel */
+    parallel(actions: CrossChainAction[]): Promise<SubmitActionResult[]>;
+
+    /** Wait for actions on multiple chains simultaneously */
+    waitForAll(waits: Array<{ chain: string; txid: string }>, opts?: WaitForActionOpts): Promise<any[]>;
+
+    /** Get balances across all configured chains */
+    getAllBalances(address: string, opts?: QueryOptions): Promise<Record<string, any>>;
+}
+
+
+/*
+ *  UTXOCache class
+ */
+
+export declare class UTXOCache {
+    constructor();
+
+    /** Load/refresh UTXOs from the encoder's UTXO tracker */
+    refresh(address: string, encoder: any): Promise<any[]>;
+
+    /** Get available UTXOs (confirmed + speculative, minus spent) */
+    getAvailable(): UTXO[];
+
+    /** Mark UTXOs as spent */
+    markSpent(inputs: Array<{ txid: string; vout: number }>): void;
+
+    /** Add a speculative change UTXO */
+    addSpeculative(utxo: UTXO): void;
+
+    /** Check if cache has been loaded */
+    isLoaded(): boolean;
+
+    /** Check if there are available UTXOs */
+    hasAvailable(): boolean;
+
+    /** Full invalidation */
+    invalidate(): void;
+
+    /** The address this cache is tracking */
+    readonly address: string | null;
+}
+
+
+/*
+ *  REPL
+ */
+
+/** Start an interactive REPL with a pre-configured SDK instance */
+export function startREPL(options?: SDKOptions): Promise<any>;
 
 
 /*
  *  Module exports (CommonJS interop)
  */
 
-export { XChainSDK, BatchBuilder, ContractClient, ContractUtils, WalletUtils, AuthUtils, SDKError, SDKValidationError, SDKFormatError, SDKEncoderError, SDKExplorerError, SDKHubError, SDKConfigError, SDKContractError, SDKWalletError, SDKAuthError };
+export { XChainSDK, BatchBuilder, ContractClient, ContractUtils, WalletUtils, WalletSession, AuthUtils, CrossChainHelper, UTXOCache, SDKError, SDKValidationError, SDKFormatError, SDKEncoderError, SDKExplorerError, SDKHubError, SDKConfigError, SDKContractError, SDKWalletError, SDKAuthError, SDKMessagingError, SDKActionError };
 export default XChainSDK;

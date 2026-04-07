@@ -250,6 +250,41 @@ describe('Round-trip — serialize then parse back', function () {
             params: { contractActionIndex: 42, tick: '^99', quantity: '500' },
             expectedVersion: 0,
             check: { CONTRACT_ACTION_INDEX: '42', TICK: '^99', QUANTITY: '500' }
+        },
+        {
+            name: 'STAKE v0',
+            action: 'stake',
+            params: { tier: 2, chains: 'BTC,LTC', signingPubkey: 'a'.repeat(64) },
+            expectedVersion: 0,
+            check: { TIER: '2', CHAINS: 'BTC,LTC', SIGNING_PUBKEY: 'a'.repeat(64) }
+        },
+        {
+            name: 'UNSTAKE v0',
+            action: 'unstake',
+            params: { tier: 1 },
+            expectedVersion: 0,
+            check: { TIER: '1' }
+        },
+        {
+            name: 'DELEGATE v0',
+            action: 'delegate',
+            params: { newSigningPubkey: 'b'.repeat(64) },
+            expectedVersion: 0,
+            check: { NEW_SIGNING_PUBKEY: 'b'.repeat(64) }
+        },
+        {
+            name: 'REVOKE_DELEGATION v0',
+            action: 'revoke_delegation',
+            params: { signingPubkey: 'c'.repeat(64) },
+            expectedVersion: 0,
+            check: { SIGNING_PUBKEY: 'c'.repeat(64) }
+        },
+        {
+            name: 'CLAIM_REWARDS v0',
+            action: 'claim_rewards',
+            params: {},
+            expectedVersion: 0,
+            check: {}
         }
     ];
 

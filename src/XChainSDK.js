@@ -33,6 +33,10 @@ const WebSocketClient = require('./websocket.js');
 const WalletUtils    = require('./wallet.js');
 const AuthUtils      = require('./auth.js');
 const MessagingUtils = require('./messaging.js');
+const ActionWaiter      = require('./actionWaiter.js');
+const LifecycleManager  = require('./lifecycleManager.js');
+const WalletSession     = require('./walletSession.js');
+const Workflows         = require('./workflows.js');
 const { SDKConfigError } = require('./errors.js');
 
 class XChainSDK {
@@ -54,6 +58,9 @@ class XChainSDK {
         this.util      = new Utility();
         this.actions   = new Actions(this);
         this.contracts = new ContractUtils();
+
+        // Workflow recipes
+        this.workflows = new Workflows(this);
 
         // Wallet and auth modules (network-aware but don't require services)
         let network = options.network || process.env.NETWORK || null;
@@ -255,6 +262,15 @@ class XChainSDK {
         return result;
     }
 
+    // Submit an action through the full lifecycle: create → encode → sign → broadcast → wait
+    // actionData  = { action, params } (same as createAction, without encoder)
+    // encoderOpts = { pubkey, change, utxos, encoding, fee, ... }
+    // opts        = { wif, waitForIndexer, timeout, pollInterval, requireValid, onProgress }
+    async submitAction(actionData, encoderOpts, opts) {
+        let mgr = new LifecycleManager(this);
+        return mgr.submitAction(actionData, encoderOpts, opts);
+    }
+
     // Dry-run validation without building the string
     validateAction(action, params) {
         return this.actions.validateAction(action, params);
@@ -304,6 +320,13 @@ class XChainSDK {
     async file(params, encoder)      { return this.createAction({ action: 'FILE', params, encoder }); }
     async address(params, encoder)   { return this.createAction({ action: 'ADDRESS', params, encoder }); }
 
+    // Staking action convenience methods (BTC-only)
+    async stake(params, encoder)            { return this.createAction({ action: 'STAKE', params, encoder }); }
+    async unstake(params, encoder)          { return this.createAction({ action: 'UNSTAKE', params, encoder }); }
+    async delegate(params, encoder)         { return this.createAction({ action: 'DELEGATE', params, encoder }); }
+    async revokeDelegation(params, encoder) { return this.createAction({ action: 'REVOKE_DELEGATION', params, encoder }); }
+    async claimRewards(params, encoder)     { return this.createAction({ action: 'CLAIM_REWARDS', params, encoder }); }
+
     // VM action convenience methods
     async deploy(params, encoder)    { return this.createAction({ action: 'DEPLOY', params, encoder }); }
     async execute(params, encoder)   { return this.createAction({ action: 'EXECUTE', params, encoder }); }
@@ -313,6 +336,38 @@ class XChainSDK {
     // Create a bound contract client for repeated interactions with a deployed contract
     contract(contractActionIndex) {
         return new ContractClient(this, contractActionIndex);
+    }
+
+    // Create a bound wallet session for repeated actions from one address
+    // Usage: let w = sdk.session(wif); await w.send({...}); await w.issue({...});
+    session(wif, opts) {
+        return new WalletSession(this, wif, opts);
+    }
+
+    // Workflow recipes: high-level multi-step helpers
+    async issueAndDistribute(wif, issueParams, distributions, opts) {
+        return this.workflows.issueAndDistribute(wif, issueParams, distributions, opts);
+    }
+    async issueAndMint(wif, issueParams, mintParams, opts) {
+        return this.workflows.issueAndMint(wif, issueParams, mintParams, opts);
+    }
+    async createDispenser(wif, dispenserParams, opts) {
+        return this.workflows.createDispenser(wif, dispenserParams, opts);
+    }
+    async createOrder(wif, orderParams, opts) {
+        return this.workflows.createOrder(wif, orderParams, opts);
+    }
+    async cancelOrder(wif, orderActionIndex, opts) {
+        return this.workflows.cancelOrder(wif, orderActionIndex, opts);
+    }
+    async stakeAndDelegate(wif, stakeParams, delegateParams, opts) {
+        return this.workflows.stakeAndDelegate(wif, stakeParams, delegateParams, opts);
+    }
+    async deployAndFund(wif, deployParams, deposits, opts) {
+        return this.workflows.deployAndFund(wif, deployParams, deposits, opts);
+    }
+    async distributeDividend(wif, dividendParams, opts) {
+        return this.workflows.distributeDividend(wif, dividendParams, opts);
     }
 
     // Create a new BatchBuilder for fluent BATCH construction
@@ -334,6 +389,32 @@ class XChainSDK {
     // P2SH/P2WSH phase 2: spend a previously created P2SH/P2WSH output
     async spendP2sh(params) {
         return this._requireEncoder().spendP2sh(params);
+    }
+
+    // Estimate fees for an action without signing or broadcasting.
+    // Returns { fee, inputTotal, outputTotal, encoding, psbt, actionString }
+    // The returned PSBT can be signed directly to skip a second encode call.
+    async estimateFees(actionData, encoderOpts = {}) {
+        let result = this.actions.createAction(actionData);
+        let encoder = this._requireEncoder();
+        let feeResult = await encoder.estimateFee({
+            data:             result.actionString,
+            pubkey:           encoderOpts.pubkey,
+            change:           encoderOpts.change,
+            utxos:            encoderOpts.utxos,
+            encoding:         encoderOpts.encoding,
+            fee:              encoderOpts.fee,
+            feePerKb:         encoderOpts.feePerKb,
+            rbf:              encoderOpts.rbf,
+            dust:             encoderOpts.dust,
+            unconfirmed:      encoderOpts.unconfirmed,
+            compressedPubKey: encoderOpts.compressedPubKey,
+            customOutputs:    encoderOpts.customOutputs
+        });
+        feeResult.actionString = result.actionString;
+        feeResult.action       = result.action;
+        feeResult.version      = result.version;
+        return feeResult;
     }
 
     // Ping the encoder
@@ -793,6 +874,20 @@ class XChainSDK {
         };
     }
 
+    // Wait for a transaction to be indexed by the explorer
+    // Returns the action object when found, or rejects on timeout
+    // opts: { timeout, pollInterval, requireValid }
+    async waitForAction(txid, opts) {
+        let waiter = new ActionWaiter(this);
+        return waiter.waitForTxid(txid, opts);
+    }
+
+    // Wait for a specific action_index to appear in the explorer
+    async waitForActionIndex(actionIndex, opts) {
+        let waiter = new ActionWaiter(this);
+        return waiter.waitForActionIndex(actionIndex, opts);
+    }
+
     // Listen for network stats updates
     // Returns an unsubscribe function
     onNetworkStats(callback) {
@@ -806,7 +901,5 @@ class XChainSDK {
     }
 
 }
-
-module.exports = XChainSDK;
 
 module.exports = XChainSDK;

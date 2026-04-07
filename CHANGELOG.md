@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-04-07
+
+### Added
+- **Staking actions**: STAKE, UNSTAKE, DELEGATE, REVOKE_DELEGATION, CLAIM_REWARDS — format definitions, validation (TIER, SIGNING_PUBKEY, CHAINS), convenience methods, round-trip tests (BTC-only)
+- **Transaction Lifecycle Manager** (`sdk.submitAction()`): full encode → sign → broadcast → wait pipeline in a single call, with automatic P2SH two-phase handling and progress callbacks
+- **Wallet Session** (`sdk.session(wif)`): bound wallet object that bundles address/key/UTXO state with action convenience methods — eliminates passing WIF/pubkey into every call
+- **Fee Estimation** (`sdk.estimateFees()`): dry-run fee calculation via encoder, returns fee in satoshis plus reusable PSBT to avoid double-encoding
+- **UTXO Cache** (`UTXOCache`): in-memory UTXO tracker with speculative change outputs, prevents double-spend on rapid sequential transactions from the same address
+- **Event-Driven Confirmation** (`sdk.waitForAction(txid)`): WebSocket + polling hybrid that resolves when the indexer processes a transaction, with configurable timeout and validity checks
+- **Workflow Recipes** (`sdk.workflows`): high-level multi-step helpers — `issueAndDistribute`, `issueAndMint`, `createDispenser`, `createOrder`, `cancelOrder`, `stakeAndDelegate`, `deployAndFund`, `distributeDividend`
+- **Cross-Chain Helper** (`CrossChainHelper`): coordinate actions across multiple SDK instances — `createSwap`, `link`, `parallel`, `waitForAll`, `getAllBalances`
+- **Interactive REPL** (`npm run repl`): drops into a Node.js REPL with pre-configured SDK, custom `.actions`, `.status`, `.fields` commands
+- **SDKActionError** error class for lifecycle failures (confirmation timeout, action rejected by indexer)
+- Enriched encoder error context: `details.context` now carries structured indexer rejection data from `body.error.data`
+- 5 new round-trip tests for staking actions (520 total passing)
+- TypeScript definitions for all new types, classes, and methods
+- New exports: `WalletSession`, `CrossChainHelper`, `UTXOCache`, `startREPL`, `SDKActionError`, `SDKMessagingError`
+
 ## [1.7.0] - 2026-04-07
 
 ### Added

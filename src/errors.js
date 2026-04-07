@@ -99,6 +99,13 @@ class SDKMessagingError extends SDKError {
     }
 }
 
+class SDKActionError extends SDKError {
+    constructor(code, message, details = {}) {
+        super(code, message, details);
+        this.name = 'SDKActionError';
+    }
+}
+
 module.exports = {
     SDKError,
     SDKValidationError,
@@ -110,5 +117,6 @@ module.exports = {
     SDKContractError,
     SDKWalletError,
     SDKAuthError,
-    SDKMessagingError
+    SDKMessagingError,
+    SDKActionError
 };

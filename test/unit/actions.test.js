@@ -646,10 +646,10 @@ describe('Actions – introspection', function () {
     beforeEach(function () { actions = createActions(); });
 
     // getActions()
-    it('getActions() returns an array of exactly 24 action names', function () {
+    it('getActions() returns an array of exactly 29 action names', function () {
         let list = actions.getActions();
         expect(list).to.be.an('array');
-        expect(list).to.have.length(24);
+        expect(list).to.have.length(29);
     });
 
     it('getActions() contains all expected action names', function () {

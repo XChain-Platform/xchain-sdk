@@ -47,30 +47,35 @@ const VALID_COINS = ['BTC', 'LTC', 'DOGE'];
 
 // Required fields per action (minimum fields that must be present regardless of version)
 const ACTION_REQUIRED_FIELDS = {
-    ADDRESS:   [],
-    AIRDROP:   ['TICK', 'AMOUNT', 'LIST_ACTION_INDEX'],
-    BATCH:     ['COMMAND'],
-    BROADCAST: [],
-    CALLBACK:  ['TICK'],
-    COINPAY:   ['ORDER_MATCH_ACTION_INDEX'],
-    DEPLOY:    ['CODE_ENCODING', 'GAS_LIMIT'],
-    DEPOSIT:   ['CONTRACT_ACTION_INDEX', 'TICK', 'QUANTITY'],
-    DESTROY:   ['TICK', 'AMOUNT'],
-    DISPENSER: [],
-    DIVIDEND:  ['TICK', 'DIVIDEND_TICK', 'AMOUNT'],
-    EXECUTE:   ['CONTRACT_ACTION_INDEX', 'METHOD'],
-    FILE:      ['NAME', 'TYPE'],
-    ISSUE:     ['TICK'],
-    LINK:      ['COIN1', 'COIN1_ACTION_INDEX', 'COIN2', 'COIN2_ACTION_INDEX'],
-    LIST:      ['ITEM'],
-    MESSAGE:   ['COIN', 'DESTINATION'],
-    MINT:      ['TICK', 'AMOUNT'],
-    ORDER:     [],
-    SEND:      ['TICK', 'AMOUNT', 'DESTINATION'],
-    SLEEP:     ['RESUME_BLOCK'],
-    SWAP:      [],
-    SWEEP:     ['DESTINATION'],
-    WITHDRAW:  ['CONTRACT_ACTION_INDEX', 'TICK', 'QUANTITY']
+    ADDRESS:            [],
+    AIRDROP:            ['TICK', 'AMOUNT', 'LIST_ACTION_INDEX'],
+    BATCH:              ['COMMAND'],
+    BROADCAST:          [],
+    CALLBACK:           ['TICK'],
+    CLAIM_REWARDS:      [],
+    COINPAY:            ['ORDER_MATCH_ACTION_INDEX'],
+    DELEGATE:           ['NEW_SIGNING_PUBKEY'],
+    DEPLOY:             ['CODE_ENCODING', 'GAS_LIMIT'],
+    DEPOSIT:            ['CONTRACT_ACTION_INDEX', 'TICK', 'QUANTITY'],
+    DESTROY:            ['TICK', 'AMOUNT'],
+    DISPENSER:          [],
+    DIVIDEND:           ['TICK', 'DIVIDEND_TICK', 'AMOUNT'],
+    EXECUTE:            ['CONTRACT_ACTION_INDEX', 'METHOD'],
+    FILE:               ['NAME', 'TYPE'],
+    ISSUE:              ['TICK'],
+    LINK:               ['COIN1', 'COIN1_ACTION_INDEX', 'COIN2', 'COIN2_ACTION_INDEX'],
+    LIST:               ['ITEM'],
+    MESSAGE:            ['COIN', 'DESTINATION'],
+    MINT:               ['TICK', 'AMOUNT'],
+    ORDER:              [],
+    REVOKE_DELEGATION:  ['SIGNING_PUBKEY'],
+    SEND:               ['TICK', 'AMOUNT', 'DESTINATION'],
+    SLEEP:              ['RESUME_BLOCK'],
+    STAKE:              ['TIER', 'SIGNING_PUBKEY'],
+    SWAP:               [],
+    SWEEP:              ['DESTINATION'],
+    UNSTAKE:            ['TIER'],
+    WITHDRAW:           ['CONTRACT_ACTION_INDEX', 'TICK', 'QUANTITY']
 };
 
 // Actions that have cancel/close/edit sub-operations via ACTION_INDEX reference
@@ -321,6 +326,29 @@ class Validator {
             }
         }
 
+        // TIER validation (STAKE/UNSTAKE)
+        if (field === 'TIER') {
+            if (!this.util.isValidValue(value, [1, 2]))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'TIER must be 1 (oracle) or 2 (cross-chain)', { field, value, constraint: { valid: [1, 2] } }));
+        }
+
+        // SIGNING_PUBKEY / NEW_SIGNING_PUBKEY validation (64 hex chars, Ed25519)
+        if (field === 'SIGNING_PUBKEY' || field === 'NEW_SIGNING_PUBKEY') {
+            if (typeof value !== 'string' || !/^[0-9a-fA-F]{64}$/.test(value))
+                errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be a 64-character hex string (Ed25519 public key)', { field, value }));
+        }
+
+        // CHAINS validation (STAKE — comma-separated coin identifiers)
+        if (field === 'CHAINS') {
+            if (value !== '' && value !== undefined) {
+                let chains = String(value).split(',');
+                for (let chain of chains) {
+                    if (!VALID_COINS.includes(chain.toUpperCase()))
+                        errors.push(this._error('INVALID_FIELD_VALUE', 'CHAINS contains invalid coin: ' + chain + '. Valid: ' + VALID_COINS.join(', '), { field, value, constraint: { valid: VALID_COINS } }));
+                }
+            }
+        }
+
         // VALUE validation (BROADCAST)
         if (field === 'VALUE') {
             if (!this.util.isNumeric(value))
@@ -354,6 +382,9 @@ class Validator {
                 break;
             case 'ORDER':
                 errors.push(...this._validateOrder(fields));
+                break;
+            case 'STAKE':
+                errors.push(...this._validateStake(fields));
                 break;
             case 'SWAP':
                 errors.push(...this._validateSwap(fields));
@@ -455,6 +486,17 @@ class Validator {
             if (this._isEmpty(fields.TYPE))
                 errors.push(this._error('MISSING_REQUIRED_FIELD', 'LIST create requires field: TYPE', { field: 'TYPE' }));
         }
+        return errors;
+    }
+
+    // STAKE-specific validation
+    _validateStake(fields) {
+        let errors = [];
+        let tier = Number(fields.TIER);
+        if (tier === 1 && !this._isEmpty(fields.CHAINS) && String(fields.CHAINS) !== '')
+            errors.push(this._error('STAKE_CONSTRAINT', 'CHAINS must be empty for Tier 1 (oracle) staking', { tier, chains: fields.CHAINS }));
+        if (tier === 2 && (this._isEmpty(fields.CHAINS) || String(fields.CHAINS) === ''))
+            errors.push(this._error('STAKE_CONSTRAINT', 'CHAINS is required for Tier 2 (cross-chain) staking', { tier }));
         return errors;
     }
 

@@ -60,8 +60,9 @@ Config = {
             'QUANTITY',
             'RESUME_BLOCK',
             'SWAP_ACTION_INDEX',
-            'TRANSFER_SUPPLY', 
-            'TYPE', 
+            'TIER',
+            'TRANSFER_SUPPLY',
+            'TYPE',
             'VALUE',
         ];
 

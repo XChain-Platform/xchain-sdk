@@ -84,7 +84,7 @@ class EncoderClient {
                         let err = new SDKEncoderError(
                             'ENCODER_RPC_ERROR',
                             'Encoder RPC error: ' + (body.error.message || JSON.stringify(body.error)),
-                            { method, rpcError: body.error }
+                            { method, rpcError: body.error, context: body.error.data || null }
                         );
                         if (self.hooks.onError)
                             self.hooks.onError({ service: 'encoder', method, error: err.message });
@@ -227,6 +227,51 @@ class EncoderClient {
             throw new SDKEncoderError('MISSING_TX_HEX', 'broadcastTx requires txHex (signed transaction hex)');
 
         return this._rpc('broadcast_tx', { tx_hex: txHex });
+    }
+
+    // Estimate fee for a transaction without signing or broadcasting.
+    // Calls create_tx and returns the PSBT along with fee information.
+    // The returned PSBT can optionally be signed directly to avoid a second encode call.
+    //
+    // Required: same as createTx (data, pubkey)
+    // Returns: { psbt, encoding, fee, inputTotal, outputTotal }
+    async estimateFee(params) {
+        let result = await this.createTx(params);
+
+        // Parse PSBT to compute fee from inputs vs outputs
+        let feeInfo = { psbt: result.psbt, encoding: result.encoding };
+        try {
+            const bitcoin = require('bitcoinjs-lib');
+            let psbt = bitcoin.Psbt.fromHex(result.psbt);
+
+            let inputTotal = 0;
+            for (let i = 0; i < psbt.data.inputs.length; i++) {
+                let input = psbt.data.inputs[i];
+                if (input.witnessUtxo) {
+                    inputTotal += input.witnessUtxo.value;
+                } else if (input.nonWitnessUtxo) {
+                    let tx = bitcoin.Transaction.fromBuffer(input.nonWitnessUtxo);
+                    let prevIndex = psbt.txInputs[i].index;
+                    inputTotal += tx.outs[prevIndex].value;
+                }
+            }
+
+            let outputTotal = 0;
+            let txOutputs = psbt.txOutputs;
+            for (let out of txOutputs) {
+                outputTotal += out.value;
+            }
+
+            feeInfo.inputTotal  = inputTotal;
+            feeInfo.outputTotal = outputTotal;
+            feeInfo.fee         = inputTotal - outputTotal;
+        } catch (e) {
+            // If PSBT parsing fails, still return the raw result
+            feeInfo.fee = null;
+            feeInfo.parseError = e.message;
+        }
+
+        return feeInfo;
     }
 
     // Fetch UTXOs for an address from the UTXO tracker (via encoder proxy)

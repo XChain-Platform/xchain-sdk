@@ -21,12 +21,16 @@
  *
  ********************************************************************/
 
-const XChainSDK      = require('./src/XChainSDK.js');
-const BatchBuilder   = require('./src/batchBuilder.js');
-const ContractClient = require('./src/contractClient.js');
-const ContractUtils  = require('./src/contracts.js');
-const WalletUtils    = require('./src/wallet.js');
-const AuthUtils      = require('./src/auth.js');
+const XChainSDK        = require('./src/XChainSDK.js');
+const BatchBuilder     = require('./src/batchBuilder.js');
+const ContractClient   = require('./src/contractClient.js');
+const ContractUtils    = require('./src/contracts.js');
+const WalletUtils      = require('./src/wallet.js');
+const WalletSession    = require('./src/walletSession.js');
+const AuthUtils        = require('./src/auth.js');
+const CrossChainHelper = require('./src/crossChain.js');
+const UTXOCache        = require('./src/utxoCache.js');
+const { startREPL }   = require('./src/repl.js');
 const {
     SDKError,
     SDKValidationError,
@@ -37,7 +41,9 @@ const {
     SDKConfigError,
     SDKContractError,
     SDKWalletError,
-    SDKAuthError
+    SDKAuthError,
+    SDKMessagingError,
+    SDKActionError
 } = require('./src/errors.js');
 
 module.exports = {
@@ -46,7 +52,11 @@ module.exports = {
     ContractClient,
     ContractUtils,
     WalletUtils,
+    WalletSession,
     AuthUtils,
+    CrossChainHelper,
+    UTXOCache,
+    startREPL,
     SDKError,
     SDKValidationError,
     SDKFormatError,
@@ -57,6 +67,8 @@ module.exports = {
     SDKContractError,
     SDKWalletError,
     SDKAuthError,
+    SDKMessagingError,
+    SDKActionError,
     // Default export for convenience
     default: XChainSDK
 };
