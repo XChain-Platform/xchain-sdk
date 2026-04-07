@@ -390,6 +390,40 @@ class XChainSDK {
     async getPublicKey(address) { return this.messaging.getPublicKey(address, this._requireExplorer()); }
     async getMessagesForAddress(address, opts) { return this.messaging.getMessages(address, opts, this._requireExplorer()); }
 
+    /**
+     * Fetch messages for an address across all chains (BTC, LTC, DOGE).
+     * Creates explorer clients for each chain using the same server URL
+     * and queries them in parallel.
+     */
+    async getAllMessagesForAddress(address, opts) {
+        let explorer = this._requireExplorer();
+        let network = this.options.network || process.env.NETWORK;
+        if (!network) throw new SDKConfigError('NETWORK_NOT_CONFIGURED', 'Network is required for cross-chain message queries.');
+
+        // Determine network tier (mainnet/testnet/regtest)
+        let tier = network.split('-')[1]; // 'mainnet', 'testnet', or 'regtest'
+        let chains = [
+            { network: 'bitcoin-' + tier,  chain: 'BTC' },
+            { network: 'litecoin-' + tier,  chain: 'LTC' },
+            { network: 'dogecoin-' + tier,  chain: 'DOGE' }
+        ];
+
+        // Create explorer clients for each chain reusing the same server
+        let explorers = chains.map(({ network: net, chain }) => {
+            let client = new ExplorerClient({
+                network:      net,
+                explorerUrl:  explorer.baseUrl,
+                explorerPort: explorer.port,
+                timeout:      explorer.timeout,
+                retry:        explorer.retry,
+                hooks:        explorer.hooks
+            });
+            return { explorer: client, chain };
+        });
+
+        return this.messaging.getAllMessages(address, opts, explorers);
+    }
+
 
     /*
      *  Explorer: Balance & Address Methods

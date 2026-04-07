@@ -292,6 +292,7 @@ class MessagingUtils {
      *
      * @param {Object} params
      * @param {string} params.wif - Sender's WIF private key
+     * @param {string} params.coin - Destination coin network (BTC, LTC, DOGE)
      * @param {string} params.destination - Recipient address
      * @param {string} params.message - Message content
      * @param {number} [params.method=1] - Encryption method (1=ECIES, 2=ECDH, 3=AES, null=plaintext)
@@ -304,6 +305,8 @@ class MessagingUtils {
     async send(params, sdk) {
         if (!params.wif || typeof params.wif !== 'string')
             throw new SDKMessagingError('INVALID_WIF', 'WIF private key is required.');
+        if (!params.coin || typeof params.coin !== 'string')
+            throw new SDKMessagingError('INVALID_COIN', 'Destination coin is required (BTC, LTC, DOGE).');
         if (!params.destination || typeof params.destination !== 'string')
             throw new SDKMessagingError('INVALID_DESTINATION', 'Destination address is required.');
         if (!params.message || typeof params.message !== 'string')
@@ -314,7 +317,7 @@ class MessagingUtils {
             throw new SDKMessagingError('SDK_REQUIRED', 'SDK instance is required. Use sdk.sendMessage() instead.');
 
         let method = params.method !== undefined ? params.method : METHOD_ECIES;
-        let actionParams = { destination: params.destination };
+        let actionParams = { coin: params.coin.toUpperCase(), destination: params.destination };
         let encryptedMessage;
 
         if (method === null) {
@@ -418,6 +421,8 @@ class MessagingUtils {
             let entry = {
                 from:      msg.source || null,
                 to:        msg.destination || null,
+                coin:      msg.coin || null,
+                chain:     opts._chain || null,
                 text:      null,
                 encrypted: false,
                 method:    msg.encryption_method ? Number(msg.encryption_method) : null,
@@ -449,6 +454,37 @@ class MessagingUtils {
         }
 
         return results;
+    }
+
+    /**
+     * Fetch messages for an address across all chains.
+     * Queries each provided explorer and merges results.
+     *
+     * @param {string} address - Address to query messages for
+     * @param {Object} [opts={}] - Same options as getMessages (wif, type, limit, page, sortorder)
+     * @param {Object[]} explorers - Array of { explorer: ExplorerClient, chain: string } objects
+     * @returns {Promise<Array>} - Merged and sorted messages from all chains
+     */
+    async getAllMessages(address, opts = {}, explorers) {
+        if (!address || typeof address !== 'string')
+            throw new SDKMessagingError('INVALID_ADDRESS', 'Address is required.');
+        if (!explorers || !Array.isArray(explorers) || explorers.length === 0)
+            throw new SDKMessagingError('EXPLORER_REQUIRED', 'At least one explorer is required.');
+
+        let allMessages = [];
+
+        let queries = explorers.map(({ explorer, chain }) => {
+            return this.getMessages(address, { ...opts, _chain: chain }, explorer)
+                .then(messages => { allMessages.push(...messages); })
+                .catch(() => { /* Explorer unavailable — skip */ });
+        });
+
+        await Promise.all(queries);
+
+        // Sort by block descending (newest first)
+        allMessages.sort((a, b) => (b.block || 0) - (a.block || 0));
+
+        return allMessages;
     }
 
     // -------------------------------------------------------------------------

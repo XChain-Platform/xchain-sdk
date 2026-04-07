@@ -63,7 +63,7 @@ const ACTION_REQUIRED_FIELDS = {
     ISSUE:     ['TICK'],
     LINK:      ['COIN1', 'COIN1_ACTION_INDEX', 'COIN2', 'COIN2_ACTION_INDEX'],
     LIST:      ['ITEM'],
-    MESSAGE:   ['DESTINATION'],
+    MESSAGE:   ['COIN', 'DESTINATION'],
     MINT:      ['TICK', 'AMOUNT'],
     ORDER:     [],
     SEND:      ['TICK', 'AMOUNT', 'DESTINATION'],
@@ -201,7 +201,7 @@ class Validator {
         }
 
         // COIN field validation
-        if (field === 'GIVE_COIN' || field === 'GET_COIN' || field === 'COIN1' || field === 'COIN2') {
+        if (field === 'COIN' || field === 'GIVE_COIN' || field === 'GET_COIN' || field === 'COIN1' || field === 'COIN2') {
             if (!VALID_COINS.includes(String(value).toUpperCase()))
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be one of: ' + VALID_COINS.join(', '), { field, value, constraint: { valid: VALID_COINS } }));
         }

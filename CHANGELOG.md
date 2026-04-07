@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-04-07
+
+### Added
+- Cross-chain messaging: `COIN` field (BTC, LTC, DOGE) in all MESSAGE formats enables sending messages to any address on any chain
+- `getAllMessages()` in `MessagingUtils` — queries multiple explorers in parallel and merges results
+- `getAllMessagesForAddress()` convenience method on `XChainSDK` — automatically queries all chains (BTC, LTC, DOGE) on the configured network tier
+- `COIN` field validation in `Validator` (must be BTC, LTC, or DOGE)
+- `coin` and `chain` fields on message objects returned by `getMessages()` / `getAllMessages()`
+
+### Changed
+- MESSAGE format strings updated to `VERSION|COIN|DESTINATION|...`
+- `send()` in `MessagingUtils` now requires `coin` parameter
+- `COIN` added to MESSAGE required fields in validator
+
 ## [1.6.0] - 2026-04-07
 
 ### Added
