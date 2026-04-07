@@ -151,6 +151,10 @@ class ExplorerClient {
         return this._get('/address/' + address);
     }
 
+    async getPublicKey(address) {
+        return this._get('/pubkey/' + address);
+    }
+
     async getHolders(tick, opts = {}) {
         return this._get('/holders/' + tick, opts);
     }

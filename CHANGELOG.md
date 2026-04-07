@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-04-07
+
+### Added
+- `src/messaging.js` — `MessagingUtils` class: ECIES encrypt/decrypt (ephemeral keypair per message, AES-256-GCM), ECDH session key exchange and shared secret derivation, AES pre-shared key encrypt/decrypt, public key lookup via explorer, high-level `send()` and `getMessages()` with automatic encryption and decryption
+- `SDKMessagingError` error class in `src/errors.js`
+- `getPublicKey()` method on `ExplorerClient` for address-to-pubkey resolution
+- `sdk.messaging` sub-object on `XChainSDK` with 3 top-level convenience methods: `sendMessage()`, `getPublicKey()`, `getMessagesForAddress()`
+
+### Changed
+- `src/validator.js` — `ENCRYPTION_METHOD` validation updated to accept `[1, 2, 3]` (1=ECIES, 2=ECDH, 3=AES)
+
 ## [1.5.0] - 2026-04-07
 
 ### Added

@@ -214,8 +214,8 @@ class Validator {
 
         // ENCRYPTION_METHOD validation
         if (field === 'ENCRYPTION_METHOD') {
-            if (!this.util.isValidValue(value, [1, 2]))
-                errors.push(this._error('INVALID_FIELD_VALUE', 'ENCRYPTION_METHOD must be 1 (ECDH) or 2 (AES)', { field, value, constraint: { valid: [1, 2] } }));
+            if (!this.util.isValidValue(value, [1, 2, 3]))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'ENCRYPTION_METHOD must be 1 (ECIES), 2 (ECDH), or 3 (AES)', { field, value, constraint: { valid: [1, 2, 3] } }));
         }
 
         // MESSAGE content length validation

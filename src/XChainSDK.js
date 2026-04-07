@@ -32,6 +32,7 @@ const ContractClient = require('./contractClient.js');
 const WebSocketClient = require('./websocket.js');
 const WalletUtils    = require('./wallet.js');
 const AuthUtils      = require('./auth.js');
+const MessagingUtils = require('./messaging.js');
 const { SDKConfigError } = require('./errors.js');
 
 class XChainSDK {
@@ -56,8 +57,9 @@ class XChainSDK {
 
         // Wallet and auth modules (network-aware but don't require services)
         let network = options.network || process.env.NETWORK || null;
-        this.wallet = new WalletUtils(network);
-        this.auth   = new AuthUtils(network);
+        this.wallet    = new WalletUtils(network);
+        this.auth      = new AuthUtils(network);
+        this.messaging = new MessagingUtils(network);
 
         // Service clients (initialized by _initClients or init)
         this.explorer = null;
@@ -378,6 +380,15 @@ class XChainSDK {
     signMessage(message, wif, opts)                       { return this.auth.signMessage(message, wif, opts); }
     verifyOwnership(address, message, signature, network) { return this.auth.verifyOwnership(address, message, signature, network); }
     verifyMessage(address, message, signature, network)   { return this.auth.verifyMessage(address, message, signature, network); }
+
+
+    /*
+     *  Messaging Convenience Methods
+     */
+
+    async sendMessage(params) { return this.messaging.send(params, this); }
+    async getPublicKey(address) { return this.messaging.getPublicKey(address, this._requireExplorer()); }
+    async getMessagesForAddress(address, opts) { return this.messaging.getMessages(address, opts, this._requireExplorer()); }
 
 
     /*
