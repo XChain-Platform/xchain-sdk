@@ -4,11 +4,14 @@
 # XChain Platform - Software Developer Kit (SDK)
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.4.1-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.4.3-blue" alt="Version">
   <img src="https://img.shields.io/badge/tests-551%20passing-brightgreen" alt="Tests">
-  <img src="https://img.shields.io/badge/coverage-unit%20%7C%20fuzz%20%7C%20chaos%20%7C%20boundary%20%7C%20smoke-brightgreen" alt="Coverage">
   <img src="https://img.shields.io/badge/node-%3E%3D18-green" alt="Node">
   <img src="https://img.shields.io/badge/license-Dankest%20Community-orange" alt="License">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/coverage-unit%20%7C%20fuzz%20%7C%20chaos%20%7C%20boundary%20%7C%20smoke-brightgreen" alt="Coverage">
 </p>
 
 Developer-facing SDK for generating XChain platform transactions and querying blockchain data.
