@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-04-23
+
+### Fixed
+- `Validator._validateDispenser` — coin-paid dispenser creates (the primary `DISPENSER.md` §40.7.1 lane, where the buyer pays in the native coin and `GET_TICK` is empty) were incorrectly rejected with `MISSING_REQUIRED_FIELD: GET_TICK`. Required-fields set narrowed to `['GIVE_TICK', 'GIVE_AMOUNT', 'GET_AMOUNT']`; a new cross-field check requires either `GET_TICK` (token-paid) or `GET_COIN` (coin-paid) to be set. Matches the protocol example `DISPENSER|0|BTC|JDOG|1|10|BTC||0.01|...` and unblocks `xchain-wallet`'s DispenserForm authoring surface.
+
+### Added
+- 4 new tests in `test/unit/validator.test.js` under `Validator — DISPENSER create required fields`: coin-paid accept, token-paid accept, reject when neither GET_TICK nor GET_COIN is set, and verification that GIVE_TICK / GIVE_AMOUNT / GET_AMOUNT remain required.
+
 ## [1.8.0] - 2026-04-07
 
 ### Added

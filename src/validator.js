@@ -437,13 +437,20 @@ class Validator {
     // DISPENSER-specific validation
     _validateDispenser(fields) {
         let errors = [];
-        // If not a cancel/edit (no DISPENSER_ACTION_INDEX), full create requires give/get fields
+        // If not a cancel/edit (no DISPENSER_ACTION_INDEX), full create requires
+        // give-side fields + GET_AMOUNT, plus either GET_TICK (token-paid) or
+        // GET_COIN (coin-paid — the primary §40.7.1 lane where a buyer pays in
+        // the native coin; GET_TICK is empty in that mode per DISPENSER.md).
         if (this._isEmpty(fields.DISPENSER_ACTION_INDEX)) {
-            let required = ['GIVE_TICK', 'GIVE_AMOUNT', 'GET_TICK', 'GET_AMOUNT'];
+            let required = ['GIVE_TICK', 'GIVE_AMOUNT', 'GET_AMOUNT'];
             for (let field of required) {
                 if (this._isEmpty(fields[field]))
                     errors.push(this._error('MISSING_REQUIRED_FIELD', 'DISPENSER create requires field: ' + field, { field }));
             }
+            if (this._isEmpty(fields.GET_TICK) && this._isEmpty(fields.GET_COIN))
+                errors.push(this._error('MISSING_REQUIRED_FIELD',
+                    'DISPENSER create requires GET_TICK (token-paid) or GET_COIN (coin-paid)',
+                    { field: 'GET_COIN' }));
         }
         return errors;
     }

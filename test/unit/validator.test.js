@@ -575,6 +575,65 @@ describe('Validator — required field enforcement', function () {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// DISPENSER create-mode required fields
+//
+// Covers both dispenser lanes per DISPENSER.md §Formats v0:
+//   - token-paid: GET_TICK names the token the buyer sends.
+//   - coin-paid:  GET_COIN names the native coin the buyer sends; GET_TICK
+//                 is empty (the primary §40.7.1 lane). The validator
+//                 previously required GET_TICK unconditionally, which made
+//                 the coin-paid lane unreachable through createAction.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Validator — DISPENSER create required fields', function () {
+
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    it('accepts a coin-paid dispenser (GET_COIN set, GET_TICK empty)', function () {
+        const errors = v.validate('DISPENSER', {
+            GIVE_COIN:   'BTC',
+            GIVE_TICK:   'JDOG',
+            GIVE_AMOUNT: '1',
+            GIVE_ESCROW: '10',
+            GET_COIN:    'BTC',
+            GET_TICK:    '',
+            GET_AMOUNT:  '0.01',
+        });
+        expect(hasNoErrorCode(errors, 'MISSING_REQUIRED_FIELD')).to.be.true;
+    });
+
+    it('accepts a token-paid dispenser (GET_TICK set, GET_COIN empty)', function () {
+        const errors = v.validate('DISPENSER', {
+            GIVE_TICK:   'JDOG',
+            GIVE_AMOUNT: '1',
+            GIVE_ESCROW: '10',
+            GET_TICK:    'XCP',
+            GET_AMOUNT:  '0.5',
+        });
+        expect(hasNoErrorCode(errors, 'MISSING_REQUIRED_FIELD')).to.be.true;
+    });
+
+    it('rejects a create that has neither GET_TICK nor GET_COIN', function () {
+        const errors = v.validate('DISPENSER', {
+            GIVE_TICK:   'JDOG',
+            GIVE_AMOUNT: '1',
+            GIVE_ESCROW: '10',
+            GET_AMOUNT:  '0.01',
+        });
+        expect(hasErrorCode(errors, 'MISSING_REQUIRED_FIELD')).to.be.true;
+    });
+
+    it('still enforces GIVE_TICK, GIVE_AMOUNT, GET_AMOUNT on create', function () {
+        const errors = v.validate('DISPENSER', { GET_COIN: 'BTC' });
+        const missing = errors.filter(e => e.code === 'MISSING_REQUIRED_FIELD').map(e => e.details.field);
+        expect(missing).to.include('GIVE_TICK');
+        expect(missing).to.include('GIVE_AMOUNT');
+        expect(missing).to.include('GET_AMOUNT');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // BATCH CONSTRAINTS
 // ─────────────────────────────────────────────────────────────────────────────
 
