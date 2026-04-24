@@ -445,6 +445,8 @@ class XChainSDK {
      */
 
     signPsbt(psbtHex, wif)              { return this.wallet.signPsbt(psbtHex, wif); }
+    decomposePsbt(psbtHex)              { return this.wallet.decomposePsbt(psbtHex); }
+    txidOf(txHex)                       { return this.wallet.txidOf(txHex); }
     async broadcastTx(txHex)            { return this.wallet.broadcastTx(txHex, this._requireEncoder()); }
     async getUTXOs(address)             { return this.wallet.getUTXOs(address, this._requireEncoder()); }
     validateAddress(address, network)   { return this.wallet.validateAddress(address, network); }

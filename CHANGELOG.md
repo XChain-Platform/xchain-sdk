@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-04-23
+
+### Added
+- `WalletUtils.decomposePsbt(psbtHex)` — vendor-agnostic PSBT introspection for hardware-signer format converters. Returns a normalized `{ txVersion, locktime, network, inputs[], outputs[] }` shape with per-input `prevTxHash`, `prevTxIndex`, `sequence`, `value`, `scriptPubKeyHex`, `scriptType` (`'p2wpkh' | 'p2wsh' | 'p2pkh' | 'p2sh-p2wpkh' | 'p2sh-p2wsh' | 'p2sh' | 'p2tr' | 'unknown'`), `sighashType`, `nonWitnessUtxoHex`, `witnessUtxoScriptHex`, `redeemScriptHex`, `witnessScriptHex`, `address`, and `prevTxInfo` (a parsed Trezor-`refTxs`-shaped object populated when `nonWitnessUtxo` is present, so wallets can build Trezor `refTxs` / Ledger prev-tx args without bitcoinjs-lib themselves). BIP32 derivation info is deliberately omitted — the wallet tracks signing paths on its own Address records and pairs them with inputs by index via the `signingPaths` argument passed to each signer's `signPsbt`.
+- `WalletUtils.txidOf(txHex)` — compute the display-order txid of a signed raw transaction. Used by the hardware-signer path, which receives a `serializedTx` from the device and still needs a txid for broadcast wiring. Handles both legacy and segwit serializations (bitcoinjs-lib's `Transaction.fromHex` auto-detects the marker and `getId()` hashes over the non-witness portion correctly).
+- Internal `classifyScript(scriptBuf, redeemScriptBuf?)` helper that inspects raw opcode bytes (rather than round-tripping through `bitcoin.payments`) so nested-segwit disambiguation (`p2sh-p2wpkh` vs bare `p2sh`) stays local to the classifier.
+- Internal `serializePrevTx(tx)` helper that converts a bitcoinjs-lib `Transaction` into Trezor Connect's `RefTransaction` shape — `hash` as display-order txid, `bin_outputs[].amount` as decimal strings, `inputs[]` with `prev_hash` / `prev_index` / `script_sig` / `sequence`.
+- `XChainSDK.decomposePsbt(psbtHex)` + `XChainSDK.txidOf(txHex)` convenience passthroughs.
+- 7 new tests in `test/unit/wallet.test.js` under `decomposePsbt()`: argument validation, P2WPKH on bitcoin-regtest (with `bcrt1q` address round-trip), P2PKH on dogecoin-regtest (nonWitnessUtxo lane, with `prevTxInfo` assertions), P2SH-P2WPKH nested-segwit classification, multi-input/multi-output litecoin-regtest, and version/locktime/sequence exposure.
+
+### Developer notes
+- `decomposePsbt` + `txidOf` are net-new — pre-existing `signPsbt` behavior, input-validation error codes, and return shape are unchanged. Minor-version bump because the public surface area grows.
+- The hardware-signer integration landing in `xchain-wallet` consumes these methods through the existing `SDKRegistry` DI pattern: `TrezorSigner.signPsbt` / `LedgerSigner.signPsbt` call `sdk.wallet.decomposePsbt` on the active chain's SDK instance, translate the normalized shape to the vendor's envelope via per-vendor pure converters in `@xchain-wallet/core`, and route the device's returned `serializedTx` through `sdk.wallet.txidOf` for the broadcast step. Keeps `bitcoinjs-lib` out of the wallet's `@xchain-wallet/core` dependency graph (see `xchain-wallet/packages/core/src/sdk/SDKRegistry.js` for the rationale).
+- Full SDK unit test count is now 531 passing (+7 decomposePsbt cases). The 5 pre-existing unrelated failures (`Actions`, `Convenience`, `ExplorerClient`, `Round-trip`, `Validator — ENCRYPTION_METHOD`) are untouched.
+
 ## [1.8.1] - 2026-04-23
 
 ### Fixed
