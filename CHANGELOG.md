@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-04-24
+
+### Added
+- `ExplorerClient.getCoinpays(query, type, opts)` — passthrough to `/{COIN}/api/coinpays/{QUERY}/{TYPE}` (query by `block` or `address`). Returns the COINPAY action history recorded against matches that settled a native-coin obligation.
+- `ExplorerClient.getCoinpayExpires(query, type, opts)` — passthrough to `/{COIN}/api/coinpay_expires/{QUERY}/{TYPE}`. Expirations for coinpay obligations that were not fulfilled in time.
+- `ExplorerClient.getCoinpayObligations(query, type, opts)` — passthrough to `/{COIN}/api/coinpay_obligations/{QUERY}/{TYPE}`. The primary lookup for "does this address owe (or is owed) a native-coin settlement" — returns obligations joined with their current status (`pending_coinpay`, `fulfilled`, `expired`, `invalid`) and the `payer_address` / `payee_address` / `coin_amount` / `expiration` fields the payer needs to compose a COINPAY transaction.
+- `XChainSDK.getCoinpays`, `getCoinpayExpires`, `getCoinpayObligations` convenience passthroughs.
+
+### Developer notes
+- Purely additive. No existing method signatures change; no DB or encoder behavior changes. Patch version bump.
+- These endpoints have been present in `xchain-explorer` since the original COINPAY rollout — this release only fills in the matching SDK client methods. Motivated by the XChain Wallet §41.4 "BTCPay queue + sign" surface (Phase 3 Step 9): the wallet uses `getCoinpayObligations('<address>', 'address')` to detect pending obligations per wallet address and render the Home resume card.
+
 ## [1.9.0] - 2026-04-23
 
 ### Added

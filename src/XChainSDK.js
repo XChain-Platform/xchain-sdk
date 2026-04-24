@@ -603,6 +603,18 @@ class XChainSDK {
         return this._requireExplorer().getDestroys(query, type, opts);
     }
 
+    async getCoinpays(query, type, opts) {
+        return this._requireExplorer().getCoinpays(query, type, opts);
+    }
+
+    async getCoinpayExpires(query, type, opts) {
+        return this._requireExplorer().getCoinpayExpires(query, type, opts);
+    }
+
+    async getCoinpayObligations(query, type, opts) {
+        return this._requireExplorer().getCoinpayObligations(query, type, opts);
+    }
+
     async getDispensers(query, type, opts) {
         return this._requireExplorer().getDispensers(query, type, opts);
     }

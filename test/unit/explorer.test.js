@@ -174,6 +174,7 @@ describe('ExplorerClient', function () {
             'getToken', 'getTokens', 'getIssues',
             'getTransaction', 'getAction', 'getBlock', 'getHistory',
             'getAddresses', 'getAirdrops', 'getBatches', 'getBroadcasts', 'getCallbacks',
+            'getCoinpays', 'getCoinpayExpires', 'getCoinpayObligations',
             'getDestroys', 'getDispensers', 'getDispenses', 'getDividends', 'getFees',
             'getFiles', 'getLinks', 'getLists', 'getMessages', 'getMints', 'getOrders',
             'getSends', 'getSleeps', 'getSwaps', 'getSweeps',
@@ -186,10 +187,10 @@ describe('ExplorerClient', function () {
             });
         }
 
-        it('has 48 public methods', function () {
+        it('has 52 public methods', function () {
             let publicMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(publicMethods).to.have.length(48);
+            expect(publicMethods).to.have.length(52);
         });
     });
 

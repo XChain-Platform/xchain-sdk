@@ -238,6 +238,18 @@ class ExplorerClient {
         return this._get('/destroys/' + query + '/' + type, opts);
     }
 
+    async getCoinpays(query, type, opts = {}) {
+        return this._get('/coinpays/' + query + '/' + type, opts);
+    }
+
+    async getCoinpayExpires(query, type, opts = {}) {
+        return this._get('/coinpay_expires/' + query + '/' + type, opts);
+    }
+
+    async getCoinpayObligations(query, type, opts = {}) {
+        return this._get('/coinpay_obligations/' + query + '/' + type, opts);
+    }
+
     async getDispensers(query, type, opts = {}) {
         return this._get('/dispensers/' + query + '/' + type, opts);
     }
