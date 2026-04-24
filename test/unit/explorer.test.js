@@ -99,6 +99,36 @@ describe('ExplorerClient', function () {
             let result = await client.search('test', 'token');
             expect(result).to.have.property('data');
         });
+
+        it('getStakes hits /{COIN}/api/stakes/{query}/{type}', async function () {
+            nock(BASE).get('/BTC/api/stakes/addr1/address').reply(200, { total: 1, data: [{ tier: 2 }] });
+            let result = await client.getStakes('addr1', 'address');
+            expect(result.data[0].tier).to.equal(2);
+        });
+
+        it('getStakes without args hits /{COIN}/api/stakes', async function () {
+            nock(BASE).get('/BTC/api/stakes').reply(200, { total: 0, data: [] });
+            let result = await client.getStakes();
+            expect(result).to.have.property('data');
+        });
+
+        it('getDelegations hits /{COIN}/api/delegations/{query}/{type}', async function () {
+            nock(BASE).get('/BTC/api/delegations/addr1/address').reply(200, { data: [{ pubkey: 'abc' }] });
+            let result = await client.getDelegations('addr1', 'address');
+            expect(result.data[0].pubkey).to.equal('abc');
+        });
+
+        it('getValidators hits /{COIN}/api/validators', async function () {
+            nock(BASE).get('/BTC/api/validators').reply(200, { data: [{ pubkey: 'v1' }] });
+            let result = await client.getValidators();
+            expect(result.data[0].pubkey).to.equal('v1');
+        });
+
+        it('getValidatorRewards hits /{COIN}/api/rewards/{query}/{type}', async function () {
+            nock(BASE).get('/BTC/api/rewards/addr1/address').reply(200, { total: 2, data: [] });
+            let result = await client.getValidatorRewards('addr1', 'address');
+            expect(result.total).to.equal(2);
+        });
     });
 
     /*
@@ -178,6 +208,7 @@ describe('ExplorerClient', function () {
             'getDestroys', 'getDispensers', 'getDispenses', 'getDividends', 'getFees',
             'getFiles', 'getLinks', 'getLists', 'getMessages', 'getMints', 'getOrders',
             'getSends', 'getSleeps', 'getSwaps', 'getSweeps',
+            'getStakes', 'getDelegations', 'getValidators', 'getValidatorRewards',
             'getMarkets', 'getMarket', 'getMarketHistory', 'getMarketOrders', 'getOrderbook',
             'getStatus', 'search'
         ];
@@ -187,10 +218,10 @@ describe('ExplorerClient', function () {
             });
         }
 
-        it('has 52 public methods', function () {
+        it('has 56 public methods', function () {
             let publicMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(publicMethods).to.have.length(52);
+            expect(publicMethods).to.have.length(56);
         });
     });
 

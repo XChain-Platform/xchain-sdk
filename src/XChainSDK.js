@@ -33,6 +33,7 @@ const WebSocketClient = require('./websocket.js');
 const WalletUtils    = require('./wallet.js');
 const AuthUtils      = require('./auth.js');
 const MessagingUtils = require('./messaging.js');
+const MuSig2            = require('./musig2.js');
 const ActionWaiter      = require('./actionWaiter.js');
 const LifecycleManager  = require('./lifecycleManager.js');
 const WalletSession     = require('./walletSession.js');
@@ -58,6 +59,7 @@ class XChainSDK {
         this.util      = new Utility();
         this.actions   = new Actions(this);
         this.contracts = new ContractUtils();
+        this.musig2    = new MuSig2();
 
         // Workflow recipes
         this.workflows = new Workflows(this);
@@ -706,6 +708,27 @@ class XChainSDK {
 
     async getWithdrawals(query, type, opts) {
         return this._requireExplorer().getWithdrawals(query, type, opts);
+    }
+
+
+    /*
+     *  Explorer: Staking Methods
+     */
+
+    async getStakes(query, type, opts) {
+        return this._requireExplorer().getStakes(query, type, opts);
+    }
+
+    async getDelegations(query, type, opts) {
+        return this._requireExplorer().getDelegations(query, type, opts);
+    }
+
+    async getValidators(opts) {
+        return this._requireExplorer().getValidators(opts);
+    }
+
+    async getValidatorRewards(query, type, opts) {
+        return this._requireExplorer().getValidatorRewards(query, type, opts);
     }
 
 

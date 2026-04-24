@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-04-24
+
+### Added
+- `MuSig2` — BIP327 MuSig2 primitives wrapped from `@brandonblack/musig` (BitGo's production MuSig2 dependency, exercised on Bitcoin mainnet via `@bitgo/secp256k1`). Exposes `aggregateKeys(publicKeys, tweaks?)`, `sortKeys(publicKeys)`, `generateNonce({ publicKey, secretKey?, sessionId?, xOnlyPublicKey?, msg?, extraInput? })`, `aggregateNonces(publicNonces)`, `startSession(aggNonce, msg, publicKeys, tweaks?)`, `partialSign({ secretKey, publicNonce, sessionKey, verify? })`, `verifyPartial({ sig, publicKey, publicNonce, sessionKey })`, `aggregateSignatures(sigs, sessionKey)`. `aggregateKeys` returns `{ aggPublicKey, xOnlyPubkey, gacc, tacc }` — `xOnlyPubkey` is the 32-byte Taproot spending key. Aggregated signatures verify as single BIP340 Schnorr signatures under the aggregated x-only pubkey, so on-chain they are indistinguishable from single-sig Taproot spends (the VM / decoder / indexer / explorer / hub need no changes).
+- `sdk.musig2` — every `XChainSDK` instance now has a `MuSig2` instance available at construction time (no network required). The shared instance is intentional: `@brandonblack/musig` caches secret nonces internally keyed by `publicNonce`, so `generateNonce` and `partialSign` must run on the same instance. Cross-process signing is the multisig-coordinator case and routes through PSBT-QR transport (Phase 4 Step 20), not through this accessor.
+- `ExplorerClient.getStakes(query, type, opts)` — passthrough to `/{COIN}/api/stakes/{QUERY}/{TYPE}` (or `/{COIN}/api/stakes` with no args), backing the wallet's Staking dashboard (§42.7.4).
+- `ExplorerClient.getDelegations(query, type, opts)` — passthrough to `/{COIN}/api/delegations/{QUERY}/{TYPE}`, backing the delegated-key display on the dashboard and the DELEGATE / REVOKE_DELEGATION authoring surfaces (§42.7.2).
+- `ExplorerClient.getValidators(opts)` — passthrough to `/{COIN}/api/validators`, backing the Operator / validator dashboard (§42.7.5).
+- `ExplorerClient.getValidatorRewards(query, type, opts)` — passthrough to `/{COIN}/api/rewards/{QUERY}/{TYPE}`, backing pending / lifetime rewards and the rewards-trajectory chart.
+- `XChainSDK.getStakes`, `getDelegations`, `getValidators`, `getValidatorRewards` convenience passthroughs.
+- `SDKMuSigError` — typed error class wrapping MuSig2 failures (`INVALID_INPUT`, `KEY_AGG_FAILED`, `NONCE_GEN_FAILED`, `NONCE_AGG_FAILED`, `SESSION_START_FAILED`, `PARTIAL_SIGN_FAILED`, `PARTIAL_VERIFY_FAILED`, `SIG_AGG_FAILED`).
+- 13 new tests in `test/unit/musig2.test.js`: input validation (8 cases), 2-of-2 and 3-of-3 end-to-end roundtrips that verify the aggregated signature under BIP340 Schnorr, `verifyPartial` accept + tamper-reject cases, lexicographic `sortKeys`, and message-binding (different messages under the same key-agg produce different aggregated signatures).
+- 9 new tests in `test/unit/explorer.test.js` covering the four staking endpoints (URL construction + "has method" assertions, plus the no-args fallback on `getStakes`).
+
+### Developer notes
+- Purely additive. No existing method signatures change; no decoder / indexer / explorer / hub behavior changes. Minor version bump because the public surface area grows and a new module (`MuSig2`) is exported.
+- Dependencies added (all pinned exactly): `@brandonblack/musig@0.0.1-alpha.1` (MIT; alpha tag is cosmetic — code has three years of mainnet exercise through BitGo's custody stack), `@noble/curves@1.9.1` (MIT; secp256k1 point ops), `@noble/hashes@1.8.0` (MIT; sha256 for the Crypto adapter). The adapter in `src/musig2.js` implements the 20-method `Crypto` interface expected by `@brandonblack/musig` on top of these libraries — scalar ops + misc predicates come from `@brandonblack/musig/base_crypto` (pure BigInt); curve operations and tagged hashing come from `@noble/curves/secp256k1`.
+- Phase 4 of `xchain-wallet` is the motivating consumer. §42.9 ships all three multisig schemes (P2SH, P2WSH, Taproot-MuSig2) in one pass; Taproot-MuSig2 needs these primitives for key aggregation, nonce coordination, and partial signing across cosigners. The PSBT-QR round-trip in Step 20 differs between single-round (P2SH / P2WSH) and two-round (MuSig2: nonce commit → partial sig) transports — `MuSig2.generateNonce` produces the 66-byte `publicNonce` that travels in round 1; `aggregateNonces` + `startSession` on each cosigner seed round 2; `partialSign` produces the 32-byte partial that travels back; the coordinator aggregates with `aggregateSignatures` and finalizes the PSBT with a single 64-byte Schnorr signature.
+- Staking getters also land now because the wallet's §42.7 Staking dashboard and §42.7.5 Operator dashboard need them at the start of Phase 4 (Steps 7 + 11). The hub's validator / operator metrics surface is still internal — the `RewardTracker.getUnclaimedRewards / getRewardHistory / getTotalDistributed` methods and `ValidatorIdentity` / `SlashDetector` / `PeerManager` internals exist in `xchain-hub@2.1.0` but are not yet exposed via HTTP API. The hub bump for §42.7.5 is deferred to just before wallet Step 11 (Phase 3 Step 9 pattern — ship platform-side bumps against the concrete consumer, not speculatively).
+- Full SDK unit test count is now 559 passing (+18 from this release). The 4 pre-existing unrelated failures (`MESSAGE` validation cases that expect the pre-v1.7 no-`COIN` envelope, and one `ENCRYPTION_METHOD` boundary) are untouched.
+
 ## [1.9.1] - 2026-04-24
 
 ### Added

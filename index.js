@@ -30,6 +30,7 @@ const WalletSession    = require('./src/walletSession.js');
 const AuthUtils        = require('./src/auth.js');
 const CrossChainHelper = require('./src/crossChain.js');
 const UTXOCache        = require('./src/utxoCache.js');
+const MuSig2           = require('./src/musig2.js');
 const { startREPL }   = require('./src/repl.js');
 const {
     SDKError,
@@ -43,7 +44,8 @@ const {
     SDKWalletError,
     SDKAuthError,
     SDKMessagingError,
-    SDKActionError
+    SDKActionError,
+    SDKMuSigError
 } = require('./src/errors.js');
 
 module.exports = {
@@ -56,6 +58,7 @@ module.exports = {
     AuthUtils,
     CrossChainHelper,
     UTXOCache,
+    MuSig2,
     startREPL,
     SDKError,
     SDKValidationError,
@@ -69,6 +72,7 @@ module.exports = {
     SDKAuthError,
     SDKMessagingError,
     SDKActionError,
+    SDKMuSigError,
     // Default export for convenience
     default: XChainSDK
 };

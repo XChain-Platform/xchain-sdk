@@ -353,6 +353,29 @@ class ExplorerClient {
 
 
     /*
+     *  Staking Methods
+     */
+
+    async getStakes(query, type, opts = {}) {
+        if (query)
+            return this._get('/stakes/' + query + '/' + type, opts);
+        return this._get('/stakes', opts);
+    }
+
+    async getDelegations(query, type, opts = {}) {
+        return this._get('/delegations/' + query + '/' + type, opts);
+    }
+
+    async getValidators(opts = {}) {
+        return this._get('/validators', opts);
+    }
+
+    async getValidatorRewards(query, type, opts = {}) {
+        return this._get('/rewards/' + query + '/' + type, opts);
+    }
+
+
+    /*
      *  Market Methods
      */
 

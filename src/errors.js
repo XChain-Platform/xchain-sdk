@@ -106,6 +106,13 @@ class SDKActionError extends SDKError {
     }
 }
 
+class SDKMuSigError extends SDKError {
+    constructor(code, message, details = {}) {
+        super(code, message, details);
+        this.name = 'SDKMuSigError';
+    }
+}
+
 module.exports = {
     SDKError,
     SDKValidationError,
@@ -118,5 +125,6 @@ module.exports = {
     SDKWalletError,
     SDKAuthError,
     SDKMessagingError,
-    SDKActionError
+    SDKActionError,
+    SDKMuSigError
 };
