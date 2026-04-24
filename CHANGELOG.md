@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-04-24
+
+### Added
+- `XChainWallet.deriveMultisigAddress({ scriptTemplate, scheme, network? })` — derive a multisig output address from a wallet-side `scriptTemplate` (the field xchain-wallet persists on `MultisigConfig.scriptTemplate` per §22.4 / §11.3.6). Three schemes:
+  - `'p2sh-multisig'` — scriptTemplate `"multi:<T>:<pk1>:<pk2>:..."`. Produces a P2SH address wrapping the standard N-of-M `OP_CHECKMULTISIG` redeem script. Returns `redeemScript` (hex) for downstream PSBT construction.
+  - `'p2wsh-multisig'` — same template; native-segwit witness program. Returns `witnessScript` (hex).
+  - `'taproot-musig2'` — scriptTemplate `"musig2:<aggregatedXOnly>"`. The 32-byte aggregated x-only pubkey (computed by the wallet at MultisigConfig creation time via `sdk.musig2.aggregateKeys`) becomes the final P2TR output pubkey directly (key-path-only, no script tree). Returns the bech32m address; on-chain indistinguishable from single-sig P2TR.
+- `XChainSDK.deriveMultisigAddress(params)` convenience passthrough.
+
+### Developer notes
+- Purely additive. The signing / encoder / explorer surface is unchanged; this method is render-only and pure (no network).
+- `scriptTemplate` is the source of truth — the wallet computes it once at MultisigConfig creation and persists it. This SDK method only renders, so the wallet can call it from any chain context (the network parameter selects bech32 prefix and address-version bytes for testnet/regtest; pubkeys themselves are network-agnostic).
+- The `pubkey` field on `bitcoin.payments.p2tr` (rather than `internalPubkey`) is intentional: MuSig2 produces an aggregated pubkey that is the final output key, with no further BIP341 tweaking. Spends use `sdk.musig2.partialSign` + `aggregateSignatures` to produce a single BIP340 Schnorr signature, which the SDK's existing PSBT path can finalize against the P2TR output.
+
 ## [1.10.0] - 2026-04-24
 
 ### Added

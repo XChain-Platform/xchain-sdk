@@ -240,6 +240,123 @@ class WalletUtils {
     }
 
     /**
+     * Derive a multisig output address from a wallet-side scriptTemplate.
+     *
+     * Three schemes are supported, matching the MultisigConfig schema
+     * in xchain-wallet (§22.4 / §11.3.6):
+     *
+     *   - 'p2sh-multisig'  — scriptTemplate is "multi:<T>:<pk1>:<pk2>:..."
+     *                        Redeem script is the standard N-of-M
+     *                        OP_CHECKMULTISIG, wrapped in P2SH.
+     *   - 'p2wsh-multisig' — same template; native segwit witness program.
+     *   - 'taproot-musig2' — scriptTemplate is "musig2:<aggregatedXOnly>".
+     *                        The 32-byte aggregated x-only pubkey is the
+     *                        final output pubkey (key-path only, no
+     *                        script tree); produces a P2TR bech32m
+     *                        address.
+     *
+     * The scriptTemplate is the source of truth. The wallet computes it
+     * once at MultisigConfig creation time (via sdk.musig2.aggregateKeys
+     * for taproot-musig2) and persists it; this function only renders.
+     *
+     * @param {object} params
+     * @param {string} params.scriptTemplate
+     * @param {'p2sh-multisig' | 'p2wsh-multisig' | 'taproot-musig2'} params.scheme
+     * @param {string} [params.network]   override the SDK instance's network
+     * @returns {{ address: string, scheme: string, redeemScript: string | null, witnessScript: string | null, outputPubkey: string | null }}
+     */
+    deriveMultisigAddress(params) {
+        if (!params || typeof params !== 'object')
+            throw new SDKWalletError('INVALID_INPUT', 'deriveMultisigAddress params required');
+        if (typeof params.scriptTemplate !== 'string' || params.scriptTemplate.length === 0)
+            throw new SDKWalletError('INVALID_INPUT', 'scriptTemplate must be a non-empty string');
+
+        const net = this._resolveNet(params.network);
+        const scheme = params.scheme;
+
+        if (scheme === 'taproot-musig2') {
+            const m = /^musig2:([0-9a-fA-F]+)$/.exec(params.scriptTemplate);
+            if (!m) {
+                throw new SDKWalletError('INVALID_SCRIPT_TEMPLATE',
+                    'taproot-musig2 scriptTemplate must look like "musig2:<aggregatedXOnly hex>"');
+            }
+            const aggXOnly = Buffer.from(m[1], 'hex');
+            if (aggXOnly.length !== 32) {
+                throw new SDKWalletError('INVALID_SCRIPT_TEMPLATE',
+                    'aggregated x-only pubkey must be 32 bytes (got ' + aggXOnly.length + ')');
+            }
+            try {
+                const p2tr = bitcoin.payments.p2tr({ pubkey: aggXOnly, network: net });
+                return {
+                    address:       p2tr.address,
+                    scheme:        'taproot-musig2',
+                    redeemScript:  null,
+                    witnessScript: null,
+                    outputPubkey:  m[1].toLowerCase(),
+                };
+            } catch (e) {
+                throw new SDKWalletError('P2TR_FAILED',
+                    'Failed to derive P2TR address: ' + e.message);
+            }
+        }
+
+        if (scheme !== 'p2sh-multisig' && scheme !== 'p2wsh-multisig') {
+            throw new SDKWalletError('INVALID_SCHEME',
+                'scheme must be one of p2sh-multisig, p2wsh-multisig, taproot-musig2');
+        }
+
+        const parts = params.scriptTemplate.split(':');
+        if (parts.length < 4 || parts[0] !== 'multi') {
+            throw new SDKWalletError('INVALID_SCRIPT_TEMPLATE',
+                'p2sh/p2wsh scriptTemplate must look like "multi:<T>:<pk1>:<pk2>:..."');
+        }
+        const m = Number(parts[1]);
+        if (!Number.isInteger(m) || m <= 0) {
+            throw new SDKWalletError('INVALID_SCRIPT_TEMPLATE',
+                'threshold (the "<T>" part) must be a positive integer');
+        }
+        const pubkeyHexes = parts.slice(2);
+        if (pubkeyHexes.length < m) {
+            throw new SDKWalletError('INVALID_SCRIPT_TEMPLATE',
+                'threshold ' + m + ' exceeds cosigner count ' + pubkeyHexes.length);
+        }
+        const pubkeys = pubkeyHexes.map((h, i) => {
+            const b = Buffer.from(h, 'hex');
+            if (b.length !== 33) {
+                throw new SDKWalletError('INVALID_SCRIPT_TEMPLATE',
+                    'pubkey[' + i + '] must be 33 bytes compressed (got ' + b.length + ')');
+            }
+            return b;
+        });
+
+        try {
+            const redeem = bitcoin.payments.p2ms({ m, pubkeys, network: net });
+            if (scheme === 'p2sh-multisig') {
+                const p2sh = bitcoin.payments.p2sh({ redeem, network: net });
+                return {
+                    address:       p2sh.address,
+                    scheme:        'p2sh-multisig',
+                    redeemScript:  redeem.output ? redeem.output.toString('hex') : null,
+                    witnessScript: null,
+                    outputPubkey:  null,
+                };
+            }
+            // p2wsh-multisig
+            const p2wsh = bitcoin.payments.p2wsh({ redeem, network: net });
+            return {
+                address:       p2wsh.address,
+                scheme:        'p2wsh-multisig',
+                redeemScript:  null,
+                witnessScript: redeem.output ? redeem.output.toString('hex') : null,
+                outputPubkey:  null,
+            };
+        } catch (e) {
+            throw new SDKWalletError('MULTISIG_DERIVE_FAILED',
+                'Failed to derive ' + scheme + ' address: ' + e.message);
+        }
+    }
+
+    /**
      * Validate a coin address for the configured (or specified) network.
      *
      * @param {string} address

@@ -455,6 +455,7 @@ class XChainSDK {
     importWIF(wif)                      { return this.wallet.importWIF(wif); }
     generateKeyPair(opts)               { return this.wallet.generateKeyPair(opts); }
     deriveAddress(publicKey, opts)      { return this.wallet.deriveAddress(publicKey, opts); }
+    deriveMultisigAddress(params)       { return this.wallet.deriveMultisigAddress(params); }
 
 
     /*
