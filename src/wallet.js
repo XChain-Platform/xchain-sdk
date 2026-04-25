@@ -445,6 +445,86 @@ class WalletUtils {
     }
 
     // -------------------------------------------------------------------------
+    //  PSBT signing — multisig variants (xchain-wallet §22.3)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Sign every input of a PSBT with a WIF, BUT do NOT finalize. Used
+     * by xchain-wallet's classical (P2SH / P2WSH) multisig flow: each
+     * cosigner's wallet calls this independently, then the coordinator
+     * merges the resulting signed-but-unfinalized PSBTs together (the
+     * signatures stack under each input's `partialSig` field) and runs
+     * `finalizeMultisigPsbt` once threshold is met.
+     *
+     * For inputs that carry a `redeemScript` (P2SH) or `witnessScript`
+     * (P2WSH), bitcoinjs-lib's `signAllInputs` correctly emits a partial
+     * signature against the script's matching pubkey rather than trying
+     * to assemble a single-sig witness.
+     *
+     * @param {string} psbtHex
+     * @param {string} wif
+     * @returns {{ psbtHex: string }}    PSBT with this WIF's partial sigs added
+     */
+    signMultisigPsbt(psbtHex, wif) {
+        if (!psbtHex || typeof psbtHex !== 'string') {
+            throw new SDKWalletError('INVALID_PSBT', 'signMultisigPsbt: PSBT hex is required');
+        }
+        if (!wif || typeof wif !== 'string') {
+            throw new SDKWalletError('INVALID_WIF', 'signMultisigPsbt: WIF is required');
+        }
+        const net = this._resolveNet();
+        let keyPair;
+        try {
+            keyPair = ECPair.fromWIF(wif, net);
+        } catch (err) {
+            throw new SDKWalletError('INVALID_WIF', `Failed to import WIF: ${err.message}`);
+        }
+        let psbt;
+        try {
+            psbt = bitcoin.Psbt.fromHex(psbtHex, { network: net });
+        } catch (err) {
+            throw new SDKWalletError('INVALID_PSBT', `Failed to parse PSBT: ${err.message}`);
+        }
+        try {
+            psbt.signAllInputs(keyPair);
+        } catch (err) {
+            throw new SDKWalletError('SIGN_FAILED', `signMultisigPsbt: ${err.message}`);
+        }
+        return { psbtHex: psbt.toHex() };
+    }
+
+    /**
+     * Finalize a PSBT that already has every input's signature
+     * threshold met. Returns the broadcastable tx hex + txid.
+     *
+     * @param {string} psbtHex
+     * @returns {{ txHex: string, txid: string, psbtHex: string }}
+     */
+    finalizeMultisigPsbt(psbtHex) {
+        if (!psbtHex || typeof psbtHex !== 'string') {
+            throw new SDKWalletError('INVALID_PSBT', 'finalizeMultisigPsbt: PSBT hex is required');
+        }
+        const net = this._resolveNet();
+        let psbt;
+        try {
+            psbt = bitcoin.Psbt.fromHex(psbtHex, { network: net });
+        } catch (err) {
+            throw new SDKWalletError('INVALID_PSBT', `Failed to parse PSBT: ${err.message}`);
+        }
+        try {
+            psbt.finalizeAllInputs();
+        } catch (err) {
+            throw new SDKWalletError('FINALIZE_FAILED', `finalizeMultisigPsbt: ${err.message}`);
+        }
+        const tx = psbt.extractTransaction();
+        return {
+            psbtHex: psbt.toHex(),
+            txHex: tx.toHex(),
+            txid: tx.getId(),
+        };
+    }
+
+    // -------------------------------------------------------------------------
     //  PSBT signing
     // -------------------------------------------------------------------------
 

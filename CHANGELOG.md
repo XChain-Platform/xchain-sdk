@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-04-24
+
+### Added
+
+- `WalletUtils.signMultisigPsbt(psbtHex, wif)` — sign every input of a PSBT with a WIF without finalizing. Used by xchain-wallet's §22.3 classical (P2SH / P2WSH) multisig flow: each cosigner signs independently and the resulting partial-sig-laden PSBTs merge naturally because bitcoinjs-lib's PSBT format stacks `partialSig` entries under each input. The merged PSBT can then be finalized once threshold is met.
+- `WalletUtils.finalizeMultisigPsbt(psbtHex)` — finalize a PSBT whose inputs have already accumulated their signature threshold. Returns the broadcastable tx hex + txid + the finalized PSBT.
+
+### Developer notes
+
+- Both methods are thin wrappers around bitcoinjs-lib's `Psbt.signAllInputs` / `Psbt.finalizeAllInputs`. The split lets callers do "sign without finalizing → merge → finalize" — the natural workflow for N-of-M multisig where T ≥ 2 cosigner partial sigs accumulate before broadcast.
+- For Taproot-MuSig2 the path stays through `WalletUtils.signEcdsa` + `sdk.musig2.*` aggregation; on chain a MuSig2-aggregated signature looks like a single Schnorr sig under a P2TR output, no PSBT-level partial-sig stacking needed.
+- Purely additive; existing `signPsbt` (single-key, finalize=true) is unchanged.
+
 ## [1.12.0] - 2026-04-24
 
 ### Added
