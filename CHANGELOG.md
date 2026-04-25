@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-04-24
+
+### Added
+
+- `WalletUtils.signEcdsa(msgHash, secretKey)` — produce a DER-encoded ECDSA signature over a 32-byte sighash with a 32-byte secret key. Used by xchain-wallet's `SoftwareSigner.signMultisigClassical` (§22.3 P2SH / P2WSH single-round multisig contributions). Compact (r||s) → DER conversion follows BIP-66 (leading-zero pad when the high bit would otherwise indicate a negative integer; trim leading zero bytes that don't affect sign). No sighash flag byte is appended — callers append SIGHASH_ALL (or whatever flag the input requires) themselves so this stays a thin ECDSA primitive.
+
+### Developer notes
+
+- Purely additive; existing signing paths (PSBT signing via WIF, Schnorr message signing, MuSig2 round 1 / 2) are unchanged.
+- Uses `@bitcoinerlab/secp256k1` (already a SDK dependency for taproot ECC support); no new package added.
+- The compact-to-DER converter is a tiny inline implementation (≈25 lines) that avoids pulling a full PSBT/transaction library in for what is conceptually a one-call primitive. The output is byte-for-byte equivalent to bitcoinjs-lib's `script.signature.encode` for the standard SIGHASH_ALL case.
+
 ## [1.11.0] - 2026-04-24
 
 ### Added

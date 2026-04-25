@@ -408,6 +408,43 @@ class WalletUtils {
     }
 
     // -------------------------------------------------------------------------
+    //  Raw ECDSA signing (multisig cosigner contributions)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Produce a DER-encoded ECDSA signature over the given 32-byte
+     * sighash using the given 32-byte secret key. Used by §22.3
+     * P2SH / P2WSH classical multisig signing — each cosigner emits
+     * one of these against the input's sighash; the coordinator's
+     * PSBT finalizer assembles the threshold-of-N signatures into
+     * the witness / redeem-script-input.
+     *
+     * No sighash flag byte is appended; callers that need one (PSBT
+     * v0 inputs typically use SIGHASH_ALL = 0x01) append it
+     * themselves so this method stays a thin ECDSA primitive.
+     *
+     * @param {Uint8Array} msgHash      32 bytes
+     * @param {Uint8Array} secretKey    32 bytes
+     * @returns {Uint8Array}            DER-encoded signature
+     */
+    signEcdsa(msgHash, secretKey) {
+        if (!(msgHash instanceof Uint8Array) || msgHash.length !== 32) {
+            throw new SDKWalletError('INVALID_INPUT', 'signEcdsa: msgHash must be a 32-byte Uint8Array');
+        }
+        if (!(secretKey instanceof Uint8Array) || secretKey.length !== 32) {
+            throw new SDKWalletError('INVALID_INPUT', 'signEcdsa: secretKey must be a 32-byte Uint8Array');
+        }
+        if (!ecc.isPrivate(secretKey)) {
+            throw new SDKWalletError('INVALID_INPUT', 'signEcdsa: secretKey is not a valid secp256k1 scalar');
+        }
+        const compactSig = ecc.sign(msgHash, secretKey);
+        // ecc.sign returns the 64-byte compact (r || s) form. Convert
+        // to DER for PSBT-finalizer compatibility — bitcoinjs-lib's
+        // PSBT input slot expects DER-encoded signatures.
+        return compactToDer(compactSig);
+    }
+
+    // -------------------------------------------------------------------------
     //  PSBT signing
     // -------------------------------------------------------------------------
 
@@ -708,6 +745,47 @@ class WalletUtils {
             throw new SDKWalletError('UTXO_FETCH_FAILED', `UTXO fetch failed: ${err.message}`);
         }
     }
+}
+
+/**
+ * Convert a 64-byte (r||s) compact ECDSA signature to DER. Used by
+ * `WalletUtils.signEcdsa` so callers get the form bitcoinjs-lib's
+ * PSBT-input slot expects.
+ *
+ * @param {Uint8Array} compact   64 bytes
+ * @returns {Uint8Array}
+ */
+function compactToDer(compact) {
+    const r = trimLeading(compact.subarray(0, 32));
+    const s = trimLeading(compact.subarray(32, 64));
+    const inner = new Uint8Array(2 + r.length + 2 + s.length);
+    let off = 0;
+    inner[off++] = 0x02;
+    inner[off++] = r.length;
+    inner.set(r, off); off += r.length;
+    inner[off++] = 0x02;
+    inner[off++] = s.length;
+    inner.set(s, off);
+    const out = new Uint8Array(2 + inner.length);
+    out[0] = 0x30;
+    out[1] = inner.length;
+    out.set(inner, 2);
+    return out;
+}
+
+function trimLeading(bytes) {
+    let i = 0;
+    while (i < bytes.length - 1 && bytes[i] === 0x00 && (bytes[i + 1] & 0x80) === 0) i++;
+    const trimmed = bytes.subarray(i);
+    // BIP-66 requires the high bit of the first byte to be 0; if it
+    // would be 1, prepend a 0x00 so the integer stays positive in DER.
+    if (trimmed[0] & 0x80) {
+        const padded = new Uint8Array(trimmed.length + 1);
+        padded[0] = 0x00;
+        padded.set(trimmed, 1);
+        return padded;
+    }
+    return trimmed;
 }
 
 module.exports = WalletUtils;
