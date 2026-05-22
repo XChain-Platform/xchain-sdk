@@ -88,7 +88,7 @@ Formats = {
     },
 
     FILE: {
-        0: 'VERSION|NAME|TYPE|TITLE|MEMO'
+        0: 'VERSION|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH'
     },
 
     ISSUE: {

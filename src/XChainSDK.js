@@ -33,6 +33,7 @@ const WebSocketClient = require('./websocket.js');
 const WalletUtils    = require('./wallet.js');
 const AuthUtils      = require('./auth.js');
 const MessagingUtils = require('./messaging.js');
+const GatedFileUtils = require('./gatedFile.js');
 const MuSig2            = require('./musig2.js');
 const ActionWaiter      = require('./actionWaiter.js');
 const LifecycleManager  = require('./lifecycleManager.js');
@@ -66,9 +67,10 @@ class XChainSDK {
 
         // Wallet and auth modules (network-aware but don't require services)
         let network = options.network || process.env.NETWORK || null;
-        this.wallet    = new WalletUtils(network);
-        this.auth      = new AuthUtils(network);
-        this.messaging = new MessagingUtils(network);
+        this.wallet     = new WalletUtils(network);
+        this.auth       = new AuthUtils(network);
+        this.messaging  = new MessagingUtils(network);
+        this.gatedFile  = new GatedFileUtils();
 
         // Service clients (initialized by _initClients or init)
         this.explorer = null;
@@ -475,6 +477,14 @@ class XChainSDK {
     async sendMessage(params) { return this.messaging.send(params, this); }
     async getPublicKey(address) { return this.messaging.getPublicKey(address, this._requireExplorer()); }
     async getMessagesForAddress(address, opts) { return this.messaging.getMessages(address, opts, this._requireExplorer()); }
+
+    /*
+     *  Token-gated content (FILE with GATE_TICKER set).
+     *  See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
+     */
+
+    // Fetch the raw ciphertext bytes for a gated FILE by ACTION_INDEX.
+    async getGatedFileRaw(actionIndex) { return this._requireExplorer().getGatedFileRaw(actionIndex); }
 
     /**
      * Fetch messages for an address across all chains (BTC, LTC, DOGE).

@@ -270,6 +270,28 @@ class ExplorerClient {
         return this._get('/files/' + query + '/' + type, opts);
     }
 
+    // Fetch the raw ciphertext bytes for a token-gated FILE action by
+    // ACTION_INDEX. Returns a Buffer of the encrypted file bytes
+    // ([12-byte nonce][ct][16-byte GCM tag]) ready for decryption with
+    // the symmetric key from the corresponding MESSAGE handoff.
+    // See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
+    async getGatedFileRaw(actionIndex) {
+        let url = '/' + this.coin + '/api/file/' + actionIndex + '/raw';
+        let self = this;
+        try {
+            if (self.hooks.onRequest)
+                self.hooks.onRequest({ service: 'explorer', method: 'GET', url });
+            let response = await self.client.get(url, { responseType: 'arraybuffer' });
+            if (self.hooks.onResponse)
+                self.hooks.onResponse({ service: 'explorer', method: 'GET', url, status: response.status });
+            return Buffer.from(response.data);
+        } catch (err) {
+            if (self.hooks.onError)
+                self.hooks.onError({ service: 'explorer', method: 'GET', url, error: err.message });
+            self._handleError(err, url);
+        }
+    }
+
     async getLinks(query, type, opts = {}) {
         return this._get('/links/' + query + '/' + type, opts);
     }

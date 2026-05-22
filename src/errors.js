@@ -113,6 +113,13 @@ class SDKMuSigError extends SDKError {
     }
 }
 
+class SDKGatedFileError extends SDKError {
+    constructor(code, message, details = {}) {
+        super(code, message, details);
+        this.name = 'SDKGatedFileError';
+    }
+}
+
 module.exports = {
     SDKError,
     SDKValidationError,
@@ -126,5 +133,6 @@ module.exports = {
     SDKAuthError,
     SDKMessagingError,
     SDKActionError,
-    SDKMuSigError
+    SDKMuSigError,
+    SDKGatedFileError
 };

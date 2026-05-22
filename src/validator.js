@@ -217,10 +217,33 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be a valid crypto address', { field, value }));
         }
 
-        // ENCRYPTION_METHOD validation
+        // ENCRYPTION_METHOD validation (numeric in all contexts)
+        // - MESSAGE: 1=ECIES, 2=ECDH, 3=AES (symmetric-with-pre-shared-key)
+        // - FILE v1 (gated): 1=AES-256-GCM. Other values reserved for future v1 algorithms.
         if (field === 'ENCRYPTION_METHOD') {
-            if (!this.util.isValidValue(value, [1, 2, 3]))
+            if (action === 'FILE') {
+                if (!this.util.isValidValue(value, [1]))
+                    errors.push(this._error('INVALID_FIELD_VALUE',
+                        'FILE ENCRYPTION_METHOD must be 1 (AES-256-GCM)',
+                        { field, value, constraint: { valid: [1] } }));
+            } else if (!this.util.isValidValue(value, [1, 2, 3])) {
                 errors.push(this._error('INVALID_FIELD_VALUE', 'ENCRYPTION_METHOD must be 1 (ECIES), 2 (ECDH), or 3 (AES)', { field, value, constraint: { valid: [1, 2, 3] } }));
+            }
+        }
+
+        // FILE v1 gated-content fields
+        if (action === 'FILE' && field === 'KEY_HASH') {
+            if (value !== '' && !/^[0-9a-f]{64}$/i.test(String(value)))
+                errors.push(this._error('INVALID_FIELD_VALUE',
+                    'KEY_HASH must be a 64-character lowercase hex string (sha256(K))',
+                    { field, value }));
+        }
+        if (action === 'FILE' && field === 'GATE_TICKER') {
+            // Empty is allowed (= public file); when set, basic TICK constraints apply.
+            if (value !== '' && /[|;./]/.test(String(value)))
+                errors.push(this._error('INVALID_FIELD_VALUE',
+                    'GATE_TICKER cannot contain |, ;, ., or /',
+                    { field, value }));
         }
 
         // MESSAGE content length validation
@@ -402,6 +425,7 @@ class Validator {
         let commands = String(fields.COMMAND).split(';');
         let mintCount = 0;
         let issueCount = 0;
+        let fileCount = 0;
 
         for (let cmd of commands) {
             let parts = cmd.split('|');
@@ -409,18 +433,19 @@ class Validator {
 
             if (cmdAction === 'BATCH')
                 errors.push(this._error('BATCH_CONSTRAINT', 'BATCH cannot contain nested BATCH actions'));
-            if (cmdAction === 'FILE')
-                errors.push(this._error('BATCH_CONSTRAINT', 'BATCH cannot contain FILE actions'));
             if (cmdAction === 'DEPLOY')
                 errors.push(this._error('BATCH_CONSTRAINT', 'BATCH cannot contain DEPLOY actions'));
             if (cmdAction === 'MINT') mintCount++;
             if (cmdAction === 'ISSUE') issueCount++;
+            if (cmdAction === 'FILE') fileCount++;
         }
 
         if (mintCount > 1)
             errors.push(this._error('BATCH_CONSTRAINT', 'BATCH can contain at most 1 MINT action', { count: mintCount }));
         if (issueCount > 1)
             errors.push(this._error('BATCH_CONSTRAINT', 'BATCH can contain at most 1 ISSUE action', { count: issueCount }));
+        if (fileCount > 1)
+            errors.push(this._error('BATCH_CONSTRAINT', 'BATCH can contain at most 1 FILE action (one rawData per transaction)', { count: fileCount }));
 
         return errors;
     }

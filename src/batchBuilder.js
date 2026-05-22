@@ -59,6 +59,12 @@ class BatchBuilder {
     deposit(params)   { return this.add('DEPOSIT', params); }
     withdraw(params)  { return this.add('WITHDRAW', params); }
 
+    // FILE may appear at most once per BATCH (a transaction carries one rawData
+    // payload). Most common composition: BATCH(FILE, MESSAGE-to-self) when an
+    // issuer publishes token-gated content and records the recoverable key
+    // atomically.
+    file(params)      { return this.add('FILE', params); }
+
     // Validate BATCH constraints before building
     _validate() {
         if (this._actions.length === 0)
@@ -66,35 +72,51 @@ class BatchBuilder {
 
         let mintCount = 0;
         let issueCount = 0;
+        let fileCount = 0;
 
         for (let entry of this._actions) {
             if (entry.action === 'BATCH')
                 throw new SDKValidationError('BATCH_CONSTRAINT', 'BATCH cannot contain nested BATCH actions');
-            if (entry.action === 'FILE')
-                throw new SDKValidationError('BATCH_CONSTRAINT', 'BATCH cannot contain FILE actions');
             if (entry.action === 'DEPLOY')
                 throw new SDKValidationError('BATCH_CONSTRAINT', 'BATCH cannot contain DEPLOY actions');
             if (entry.action === 'MINT') mintCount++;
             if (entry.action === 'ISSUE') issueCount++;
+            if (entry.action === 'FILE') fileCount++;
         }
 
         if (mintCount > 1)
             throw new SDKValidationError('BATCH_CONSTRAINT', 'BATCH can contain at most 1 MINT action', { count: mintCount });
         if (issueCount > 1)
             throw new SDKValidationError('BATCH_CONSTRAINT', 'BATCH can contain at most 1 ISSUE action', { count: issueCount });
+        if (fileCount > 1)
+            throw new SDKValidationError('BATCH_CONSTRAINT',
+                'BATCH can contain at most 1 FILE action (one rawData per transaction)',
+                { count: fileCount });
     }
 
     // Build the BATCH action — validates each sub-action, enforces constraints,
-    // produces the semicolon-joined command string
+    // produces the semicolon-joined command string. If a FILE sub-action carries
+    // `rawData` in its params (gated-content publishing), that rawData is
+    // promoted to BATCH-level encoder options so the encoder attaches it to the
+    // transaction.
     build(encoderOpts) {
         this._validate();
 
         // Build each sub-action through the full pipeline (validate + format select + serialize)
         let commandParts = [];
+        let extractedRawData = null;
         for (let entry of this._actions) {
+            // FILE's rawData is encoder-level, not part of the action string —
+            // strip it from params before serializing and hoist it to encoder opts.
+            let subParams = entry.params;
+            if (entry.action === 'FILE' && subParams && subParams.rawData !== undefined) {
+                let { rawData, ...rest } = subParams;
+                subParams = rest;
+                extractedRawData = rawData;
+            }
             let result = this.sdk.actions.createAction({
                 action: entry.action,
-                params: entry.params
+                params: subParams
             });
             commandParts.push(result.actionString);
         }
@@ -102,11 +124,17 @@ class BatchBuilder {
         // Join with semicolons
         let command = commandParts.join(';');
 
+        // Merge extracted rawData into encoder opts (caller-supplied takes precedence)
+        let mergedEncoder = encoderOpts || {};
+        if (extractedRawData !== null && mergedEncoder.rawData === undefined) {
+            mergedEncoder = { ...mergedEncoder, rawData: extractedRawData };
+        }
+
         // Now create the BATCH action itself
         return this.sdk.createAction({
             action: 'BATCH',
             params: { command },
-            encoder: encoderOpts
+            encoder: mergedEncoder
         });
     }
 
