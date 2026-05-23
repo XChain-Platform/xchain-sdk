@@ -18,9 +18,12 @@
  * AES-256-GCM symmetric encryption for FILE v1 gated content,
  * key-handoff payload (de)serialization, and pack helpers.
  *
- * The handoff is keyed by KEY_HASH so a pack of files sharing one
- * symmetric key collapses to a single JSON entry. See
- * xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
+ * The handoff payload is a compact binary blob:
+ *   [1 byte version=0x01] [32-byte K] [32-byte K] ...
+ * Recipients hash each 32-byte candidate to identify which gated FILE
+ * (by KEY_HASH) it unlocks; no KEY_HASH is sent on the wire. Pack
+ * membership is implicit — files sharing one K share one entry.
+ * See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
  *
  ********************************************************************/
 
@@ -36,7 +39,8 @@ const IV_LEN = 12;
 const AUTH_TAG_LEN = 16;
 const GCM_OVERHEAD = IV_LEN + AUTH_TAG_LEN;
 
-const HANDOFF_TYPE = 'xchain.gated_keys.v1';
+// Key-handoff payload version byte. Bump if the binary layout ever changes.
+const HANDOFF_VERSION = 0x01;
 
 
 class GatedFileUtils {
@@ -159,72 +163,101 @@ class GatedFileUtils {
     }
 
     /**
-     * Serialize a key map into the `xchain.gated_keys.v1` JSON payload
-     * that gets ECIES-encrypted into a MESSAGE v2.
+     * Serialize one or more symmetric keys into the binary handoff
+     * payload that gets ECIES-encrypted into a MESSAGE v2.
      *
-     * @param {Object} keysByHash - { '<keyHash hex>': Buffer key, ... }
-     * @returns {string} JSON string.
+     * Wire layout:
+     *   [1 byte version=0x01] [32-byte K1] [32-byte K2] ...
+     *
+     * No KEY_HASH is sent — the recipient hashes each 32-byte candidate
+     * to identify which gated FILE it unlocks. Pack support is implicit
+     * (files sharing one K share one entry).
+     *
+     * @param {Buffer[] | Record<string, Buffer>} keys - Either an array
+     *   of 32-byte key Buffers, or a `{ keyHash hex: Buffer }` map (the
+     *   hash keys are sanity-checked against sha256(K) but not put on
+     *   the wire).
+     * @returns {Buffer} Binary payload ready for ECIES encryption.
      */
-    serializeKeyPayload(keysByHash) {
-        if (!keysByHash || typeof keysByHash !== 'object')
+    serializeKeyPayload(keys) {
+        let list;
+        if (Array.isArray(keys)) {
+            list = keys;
+        } else if (keys && typeof keys === 'object') {
+            list = [];
+            for (let hash of Object.keys(keys)) {
+                let k = keys[hash];
+                if (!Buffer.isBuffer(k) || k.length !== KEY_LEN)
+                    throw new SDKGatedFileError('INVALID_KEY',
+                        `Key for ${hash} must be a ${KEY_LEN}-byte Buffer.`);
+                if (!this.verifyKey(k, hash))
+                    throw new SDKGatedFileError('INVALID_KEY',
+                        `Key for ${hash} does not hash to that KEY_HASH.`);
+                list.push(k);
+            }
+        } else {
             throw new SDKGatedFileError('INVALID_PAYLOAD',
-                'keysByHash must be an object.');
-
-        let keys = {};
-        for (let hash of Object.keys(keysByHash)) {
-            let k = keysByHash[hash];
-            if (!Buffer.isBuffer(k) || k.length !== KEY_LEN)
-                throw new SDKGatedFileError('INVALID_KEY',
-                    `Key for ${hash} must be a ${KEY_LEN}-byte Buffer.`);
-            keys[hash.toLowerCase()] = k.toString('base64');
+                'keys must be an array of Buffer or an object map of hash → Buffer.');
         }
 
-        return JSON.stringify({ type: HANDOFF_TYPE, keys });
+        if (list.length === 0)
+            throw new SDKGatedFileError('INVALID_PAYLOAD',
+                'At least one key is required.');
+        for (let k of list) {
+            if (!Buffer.isBuffer(k) || k.length !== KEY_LEN)
+                throw new SDKGatedFileError('INVALID_KEY',
+                    `Each key must be a ${KEY_LEN}-byte Buffer.`);
+        }
+
+        return Buffer.concat([Buffer.from([HANDOFF_VERSION]), ...list]);
     }
 
     /**
-     * Parse and validate an `xchain.gated_keys.v1` JSON payload after
-     * the wallet has ECIES-decrypted a key-handoff MESSAGE.
+     * Parse and validate a binary handoff payload after the wallet has
+     * ECIES-decrypted a key-handoff MESSAGE. Returns the candidate
+     * keys as an array; the caller hashes each to match against the
+     * KEY_HASH of the gated FILE it cares about.
      *
-     * @param {string} plaintext - Decrypted MESSAGE plaintext.
-     * @returns {Object} { '<keyHash hex>': Buffer key, ... }
-     * @throws SDKGatedFileError if the payload is malformed or wrong type.
+     * @param {Buffer | string} payload - Decrypted MESSAGE plaintext
+     *   bytes. A hex string is accepted for convenience.
+     * @returns {Buffer[]} Array of 32-byte symmetric keys.
+     * @throws SDKGatedFileError if the payload is malformed or uses an
+     *   unsupported version byte.
      */
-    parseKeyPayload(plaintext) {
-        if (typeof plaintext !== 'string' || plaintext.length === 0)
-            throw new SDKGatedFileError('INVALID_PAYLOAD', 'Plaintext payload required.');
-
-        let parsed;
-        try { parsed = JSON.parse(plaintext); }
-        catch (e) {
-            throw new SDKGatedFileError('INVALID_PAYLOAD',
-                'Payload is not valid JSON.', { cause: e.message });
-        }
-
-        if (!parsed || parsed.type !== HANDOFF_TYPE)
-            throw new SDKGatedFileError('INVALID_PAYLOAD',
-                `Payload type must be "${HANDOFF_TYPE}".`,
-                { actualType: parsed && parsed.type });
-        if (!parsed.keys || typeof parsed.keys !== 'object')
-            throw new SDKGatedFileError('INVALID_PAYLOAD',
-                'Payload "keys" must be an object.');
-
-        let out = {};
-        for (let hash of Object.keys(parsed.keys)) {
-            let b64 = parsed.keys[hash];
-            if (typeof b64 !== 'string')
-                throw new SDKGatedFileError('INVALID_PAYLOAD',
-                    `Key for ${hash} must be a base64 string.`);
-            let key;
-            try { key = Buffer.from(b64, 'base64'); }
+    parseKeyPayload(payload) {
+        let buf;
+        if (Buffer.isBuffer(payload)) {
+            buf = payload;
+        } else if (typeof payload === 'string') {
+            try { buf = Buffer.from(payload, 'hex'); }
             catch (e) {
                 throw new SDKGatedFileError('INVALID_PAYLOAD',
-                    `Key for ${hash} is not valid base64.`, { cause: e.message });
+                    'Payload is not a Buffer or hex string.', { cause: e.message });
             }
-            if (key.length !== KEY_LEN)
-                throw new SDKGatedFileError('INVALID_PAYLOAD',
-                    `Decoded key for ${hash} must be ${KEY_LEN} bytes, got ${key.length}.`);
-            out[hash.toLowerCase()] = key;
+        } else {
+            throw new SDKGatedFileError('INVALID_PAYLOAD',
+                'Payload must be a Buffer or hex string.');
+        }
+
+        if (buf.length < 1 + KEY_LEN)
+            throw new SDKGatedFileError('INVALID_PAYLOAD',
+                `Payload too short (got ${buf.length} bytes, need at least ${1 + KEY_LEN}).`);
+
+        let version = buf[0];
+        if (version !== HANDOFF_VERSION)
+            throw new SDKGatedFileError('INVALID_PAYLOAD',
+                `Unsupported handoff version: 0x${version.toString(16).padStart(2, '0')}.`);
+
+        let body = buf.subarray(1);
+        if (body.length % KEY_LEN !== 0)
+            throw new SDKGatedFileError('INVALID_PAYLOAD',
+                `Payload body length ${body.length} is not a multiple of ${KEY_LEN}.`);
+
+        let out = [];
+        for (let i = 0; i < body.length; i += KEY_LEN) {
+            // Copy the subarray so callers can't accidentally mutate the
+            // shared parent Buffer when handling individual keys.
+            out.push(Buffer.from(body.subarray(i, i + KEY_LEN)));
         }
         return out;
     }
@@ -232,7 +265,7 @@ class GatedFileUtils {
 
 
 module.exports = GatedFileUtils;
-module.exports.HANDOFF_TYPE = HANDOFF_TYPE;
+module.exports.HANDOFF_VERSION = HANDOFF_VERSION;
 module.exports.KEY_LEN = KEY_LEN;
 module.exports.IV_LEN = IV_LEN;
 module.exports.AUTH_TAG_LEN = AUTH_TAG_LEN;

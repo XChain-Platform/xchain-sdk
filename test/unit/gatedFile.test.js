@@ -1,6 +1,7 @@
 const { expect } = require('chai');
+const crypto = require('crypto');
 const GatedFileUtils = require('../../src/gatedFile.js');
-const { HANDOFF_TYPE, KEY_LEN, IV_LEN, AUTH_TAG_LEN } = require('../../src/gatedFile.js');
+const { HANDOFF_VERSION, KEY_LEN, IV_LEN, AUTH_TAG_LEN } = require('../../src/gatedFile.js');
 const { SDKGatedFileError } = require('../../src/errors.js');
 
 describe('GatedFileUtils', function () {
@@ -143,57 +144,90 @@ describe('GatedFileUtils', function () {
     });
 
     describe('serializeKeyPayload / parseKeyPayload', function () {
-        it('round-trips a single-key payload', function () {
+        it('round-trips a single-key payload from a hash → key map', function () {
             let { key, keyHash } = g.generateKey();
-            let json = g.serializeKeyPayload({ [keyHash]: key });
-            let parsed = g.parseKeyPayload(json);
-            expect(Object.keys(parsed)).to.deep.equal([keyHash]);
-            expect(parsed[keyHash].equals(key)).to.equal(true);
+            let buf = g.serializeKeyPayload({ [keyHash]: key });
+            expect(Buffer.isBuffer(buf)).to.equal(true);
+            expect(buf.length).to.equal(1 + KEY_LEN);
+            let parsed = g.parseKeyPayload(buf);
+            expect(parsed).to.be.an('array').with.lengthOf(1);
+            expect(parsed[0].equals(key)).to.equal(true);
+        });
+
+        it('round-trips a single-key payload from an array', function () {
+            let { key } = g.generateKey();
+            let buf = g.serializeKeyPayload([key]);
+            let parsed = g.parseKeyPayload(buf);
+            expect(parsed[0].equals(key)).to.equal(true);
         });
 
         it('round-trips a multi-key payload (multiple gated files/packs)', function () {
             let a = g.generateKey();
             let b = g.generateKey();
-            let json = g.serializeKeyPayload({
+            let buf = g.serializeKeyPayload({
                 [a.keyHash]: a.key,
                 [b.keyHash]: b.key
             });
-            let parsed = g.parseKeyPayload(json);
-            expect(Object.keys(parsed).sort()).to.deep.equal([a.keyHash, b.keyHash].sort());
-            expect(parsed[a.keyHash].equals(a.key)).to.equal(true);
-            expect(parsed[b.keyHash].equals(b.key)).to.equal(true);
+            expect(buf.length).to.equal(1 + 2 * KEY_LEN);
+            let parsed = g.parseKeyPayload(buf);
+            expect(parsed).to.be.an('array').with.lengthOf(2);
+            // Caller hashes candidates to identify which key is which.
+            let parsedByHash = {};
+            for (let k of parsed) {
+                parsedByHash[crypto.createHash('sha256').update(k).digest('hex')] = k;
+            }
+            expect(parsedByHash[a.keyHash].equals(a.key)).to.equal(true);
+            expect(parsedByHash[b.keyHash].equals(b.key)).to.equal(true);
         });
 
-        it('produces canonical JSON shape with HANDOFF_TYPE', function () {
-            let { key, keyHash } = g.generateKey();
-            let json = g.serializeKeyPayload({ [keyHash]: key });
-            let parsed = JSON.parse(json);
-            expect(parsed.type).to.equal(HANDOFF_TYPE);
-            expect(parsed.keys).to.be.an('object');
-            expect(parsed.keys[keyHash]).to.be.a('string');
+        it('produces a binary payload with the v1 version byte', function () {
+            let { key } = g.generateKey();
+            let buf = g.serializeKeyPayload([key]);
+            expect(buf[0]).to.equal(HANDOFF_VERSION);
+            expect(buf[0]).to.equal(0x01);
+            expect(buf.subarray(1).equals(key)).to.equal(true);
         });
 
-        it('throws when payload has wrong type', function () {
-            let bogus = JSON.stringify({ type: 'something.else', keys: {} });
+        it('rejects a hash → key map where the hash does not match the key', function () {
+            let { key } = g.generateKey();
+            let wrongHash = 'a'.repeat(64);
+            expect(() => g.serializeKeyPayload({ [wrongHash]: key }))
+                .to.throw(SDKGatedFileError)
+                .with.property('code', 'INVALID_KEY');
+        });
+
+        it('throws when payload has an unsupported version byte', function () {
+            let bogus = Buffer.concat([Buffer.from([0x99]), Buffer.alloc(KEY_LEN)]);
             expect(() => g.parseKeyPayload(bogus))
                 .to.throw(SDKGatedFileError)
                 .with.property('code', 'INVALID_PAYLOAD');
         });
 
-        it('throws when payload is not valid JSON', function () {
-            expect(() => g.parseKeyPayload('{not json'))
+        it('throws when payload is shorter than version + one key', function () {
+            let bogus = Buffer.from([HANDOFF_VERSION, 0x00, 0x01]);
+            expect(() => g.parseKeyPayload(bogus))
                 .to.throw(SDKGatedFileError)
                 .with.property('code', 'INVALID_PAYLOAD');
         });
 
-        it('throws when keys map contains a wrong-length key', function () {
-            let bogus = JSON.stringify({
-                type: HANDOFF_TYPE,
-                keys: { 'abcd': Buffer.alloc(8).toString('base64') }
-            });
+        it('throws when payload body length is not a multiple of KEY_LEN', function () {
+            let bogus = Buffer.concat([Buffer.from([HANDOFF_VERSION]), Buffer.alloc(KEY_LEN + 5)]);
             expect(() => g.parseKeyPayload(bogus))
                 .to.throw(SDKGatedFileError)
                 .with.property('code', 'INVALID_PAYLOAD');
+        });
+
+        it('throws when payload is neither Buffer nor string', function () {
+            expect(() => g.parseKeyPayload(42))
+                .to.throw(SDKGatedFileError)
+                .with.property('code', 'INVALID_PAYLOAD');
+        });
+
+        it('accepts a hex string payload for convenience', function () {
+            let { key } = g.generateKey();
+            let buf = g.serializeKeyPayload([key]);
+            let parsed = g.parseKeyPayload(buf.toString('hex'));
+            expect(parsed[0].equals(key)).to.equal(true);
         });
     });
 
@@ -206,14 +240,16 @@ describe('GatedFileUtils', function () {
                 Buffer.from('file-3 plaintext')
             ];
             let { ciphertexts, key, keyHash } = g.encryptPack(plaintexts);
-            let json = g.serializeKeyPayload({ [keyHash]: key });
+            let payload = g.serializeKeyPayload({ [keyHash]: key });
 
-            // (Wire would ECIES-encrypt json into a MESSAGE)
+            // (Wire would ECIES-encrypt payload bytes into a MESSAGE)
 
-            // Holder side — receives MESSAGE, decrypts, parses payload
-            let parsed = g.parseKeyPayload(json);
-            let recoveredKey = parsed[keyHash];
-            expect(g.verifyKey(recoveredKey, keyHash)).to.equal(true);
+            // Holder side — receives MESSAGE, decrypts, parses payload.
+            // Identify the right key by hashing each candidate against the
+            // gated FILE's KEY_HASH (the same check verifyKey performs).
+            let parsed = g.parseKeyPayload(payload);
+            let recoveredKey = parsed.find((k) => g.verifyKey(k, keyHash));
+            expect(recoveredKey, 'no candidate key matched KEY_HASH').to.not.equal(undefined);
 
             // Holder unlocks every pack member with the single recovered key
             for (let i = 0; i < plaintexts.length; i++) {
