@@ -163,9 +163,9 @@ describe('Round-trip — serialize then parse back', function () {
         {
             name: 'MESSAGE v3 (plaintext)',
             action: 'message',
-            params: { destination: ADDR, plaintextMessage: 'hello there' },
+            params: { coin: 'BTC', destination: ADDR, plaintextMessage: 'hello there' },
             expectedVersion: 3,
-            check: { DESTINATION: ADDR, PLAINTEXT_MESSAGE: 'hello there' }
+            check: { COIN: 'BTC', DESTINATION: ADDR, PLAINTEXT_MESSAGE: 'hello there' }
         },
         {
             name: 'MINT v0',

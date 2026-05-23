@@ -148,7 +148,7 @@ describe('Convenience action methods', () => {
     });
 
     it('message() returns action MESSAGE with valid actionString', async () => {
-        const result = await sdk.message({ destination: ADDR, plaintextMessage: 'hi' });
+        const result = await sdk.message({ coin: 'BTC', destination: ADDR, plaintextMessage: 'hi' });
         assertAction(result, 'MESSAGE');
     });
 
@@ -287,14 +287,15 @@ describe('BatchBuilder', () => {
         }
     });
 
-    it('batch with FILE throws SDKValidationError with code BATCH_CONSTRAINT', async () => {
-        try {
-            await sdk.batch().add('FILE', { name: 'f', type: 1, title: 't' }).build();
-            expect.fail('Expected SDKValidationError to be thrown');
-        } catch (err) {
-            expect(err).to.be.instanceOf(SDKValidationError);
-            expect(err.code).to.equal('BATCH_CONSTRAINT');
-        }
+    it('batch with FILE succeeds (FILE-in-BATCH is supported)', async () => {
+        // FILE in BATCH is supported as of the gated-content publishing
+        // flow: BATCH(FILE, MESSAGE-to-self) atomically publishes a
+        // gated FILE alongside its key-handoff MESSAGE.
+        const result = await sdk.batch()
+            .add('FILE', { name: 'f', type: 1, title: 't' })
+            .build();
+        expect(result.action).to.equal('BATCH');
+        expect(result.actionString).to.match(/^BATCH\|/);
     });
 
     it('batch with 2 MINT throws SDKValidationError with code BATCH_CONSTRAINT', async () => {

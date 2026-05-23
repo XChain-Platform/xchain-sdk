@@ -188,7 +188,7 @@ describe('Actions – all 19 ACTION types', function () {
     it('MESSAGE produces correct actionString', function () {
         let result = actions.createAction({
             action: 'MESSAGE',
-            params: { destination: ADDR, plaintextMessage: 'hello' }
+            params: { coin: 'BTC', destination: ADDR, plaintextMessage: 'hello' }
         });
         expect(result.actionString).to.match(/^MESSAGE\|/);
         expect(result.actionString).to.include(ADDR);

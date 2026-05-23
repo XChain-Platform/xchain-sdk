@@ -525,12 +525,14 @@ describe('Validator — ENCRYPTION_METHOD validation', function () {
         expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
     });
 
-    it('rejects ENCRYPTION_METHOD = 3', function () {
+    it('accepts ENCRYPTION_METHOD = 3 (AES)', function () {
+        // Method 3 (AES with pre-shared key) is a documented valid
+        // encryption method per protocol/actions/MESSAGE.md.
         const errors = v.validate('MESSAGE', {
             DESTINATION:       'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
             ENCRYPTION_METHOD: 3
         });
-        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
     });
 });
 
@@ -649,11 +651,12 @@ describe('Validator — BATCH constraints', function () {
         expect(err.message).to.include('nested BATCH');
     });
 
-    it('rejects a COMMAND that includes a FILE action', function () {
+    it('accepts a COMMAND that includes a FILE action (gated-content publish)', function () {
+        // FILE in BATCH is supported: gated-content publishing uses
+        // BATCH(FILE, MESSAGE-to-self) to atomically publish a gated
+        // FILE alongside its key-handoff MESSAGE.
         const errors = v.validate('BATCH', { COMMAND: 'FILE|myfile.txt|text/plain' });
-        expect(hasErrorCode(errors, 'BATCH_CONSTRAINT')).to.be.true;
-        const err = errors.find(e => e.code === 'BATCH_CONSTRAINT');
-        expect(err.message).to.include('FILE');
+        expect(hasNoErrorCode(errors, 'BATCH_CONSTRAINT')).to.be.true;
     });
 
     it('rejects a COMMAND with 2 MINT actions', function () {
