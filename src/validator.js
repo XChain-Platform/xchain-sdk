@@ -271,8 +271,12 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', 'EDIT must be 1 (ADD) or 2 (REMOVE)', { field, value, constraint: { valid: [1, 2] } }));
         }
 
-        // BALANCES / OWNERSHIPS / ESCROWS validation (SWEEP)
-        if (field === 'BALANCES' || field === 'OWNERSHIPS' || field === 'ESCROWS') {
+        // Binary 0/1 flag fields
+        // - SWEEP:               BALANCES / OWNERSHIPS / ORDERS / SWAPS / DISPENSERS
+        // - ORDER / SWAP / DISPENSER: GIVE_OWNERSHIP / GET_OWNERSHIP
+        if (field === 'BALANCES' || field === 'OWNERSHIPS' ||
+            field === 'ORDERS'   || field === 'SWAPS'      || field === 'DISPENSERS' ||
+            field === 'GIVE_OWNERSHIP' || field === 'GET_OWNERSHIP') {
             if (!this.util.isValidLockValue(value))
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be 0 or 1', { field, value, constraint: { valid: [0, 1] } }));
         }
@@ -466,11 +470,21 @@ class Validator {
         // give-side fields + GET_AMOUNT, plus either GET_TICK (token-paid) or
         // GET_COIN (coin-paid — the primary §40.7.1 lane where a buyer pays in
         // the native coin; GET_TICK is empty in that mode per DISPENSER.md).
+        // Ownership dispensers (GIVE_OWNERSHIP=1) are single-shot — GIVE_AMOUNT
+        // and GIVE_ESCROW must be EMPTY in that mode, and GET_AMOUNT is the price.
         if (this._isEmpty(fields.DISPENSER_ACTION_INDEX)) {
-            let required = ['GIVE_TICK', 'GIVE_AMOUNT', 'GET_AMOUNT'];
+            let isOwnershipGive = (Number(fields.GIVE_OWNERSHIP || 0) === 1);
+            let required = ['GIVE_TICK', 'GET_AMOUNT'];
+            if (!isOwnershipGive) required.push('GIVE_AMOUNT');
             for (let field of required) {
                 if (this._isEmpty(fields[field]))
                     errors.push(this._error('MISSING_REQUIRED_FIELD', 'DISPENSER create requires field: ' + field, { field }));
+            }
+            if (isOwnershipGive) {
+                if (!this._isEmpty(fields.GIVE_AMOUNT))
+                    errors.push(this._error('INVALID_FIELD_VALUE', 'GIVE_AMOUNT must be empty when GIVE_OWNERSHIP=1', { field: 'GIVE_AMOUNT' }));
+                if (!this._isEmpty(fields.GIVE_ESCROW))
+                    errors.push(this._error('INVALID_FIELD_VALUE', 'GIVE_ESCROW must be empty when GIVE_OWNERSHIP=1', { field: 'GIVE_ESCROW' }));
             }
             if (this._isEmpty(fields.GET_TICK) && this._isEmpty(fields.GET_COIN))
                 errors.push(this._error('MISSING_REQUIRED_FIELD',
@@ -487,11 +501,21 @@ class Validator {
             // At least one side must have a TICK (can't trade coin for coin)
             if (this._isEmpty(fields.GIVE_TICK) && this._isEmpty(fields.GET_TICK))
                 errors.push(this._error('MISSING_REQUIRED_FIELD', 'ORDER create requires at least one of GIVE_TICK or GET_TICK'));
-            // Both amounts are always required
-            for (let field of ['GIVE_AMOUNT', 'GET_AMOUNT']) {
-                if (this._isEmpty(fields[field]))
-                    errors.push(this._error('MISSING_REQUIRED_FIELD', 'ORDER create requires field: ' + field, { field }));
-            }
+            // Amounts required unless the corresponding side is an ownership offer/bid
+            let isOwnershipGive = (Number(fields.GIVE_OWNERSHIP || 0) === 1);
+            let isOwnershipGet  = (Number(fields.GET_OWNERSHIP  || 0) === 1);
+            if (!isOwnershipGive && this._isEmpty(fields.GIVE_AMOUNT))
+                errors.push(this._error('MISSING_REQUIRED_FIELD', 'ORDER create requires field: GIVE_AMOUNT', { field: 'GIVE_AMOUNT' }));
+            if (!isOwnershipGet  && this._isEmpty(fields.GET_AMOUNT))
+                errors.push(this._error('MISSING_REQUIRED_FIELD', 'ORDER create requires field: GET_AMOUNT', { field: 'GET_AMOUNT' }));
+            if (isOwnershipGive && !this._isEmpty(fields.GIVE_AMOUNT))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'GIVE_AMOUNT must be empty when GIVE_OWNERSHIP=1', { field: 'GIVE_AMOUNT' }));
+            if (isOwnershipGet  && !this._isEmpty(fields.GET_AMOUNT))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'GET_AMOUNT must be empty when GET_OWNERSHIP=1', { field: 'GET_AMOUNT' }));
+            if (isOwnershipGive && this._isEmpty(fields.GIVE_TICK))
+                errors.push(this._error('MISSING_REQUIRED_FIELD', 'ORDER with GIVE_OWNERSHIP=1 requires GIVE_TICK', { field: 'GIVE_TICK' }));
+            if (isOwnershipGet  && this._isEmpty(fields.GET_TICK))
+                errors.push(this._error('MISSING_REQUIRED_FIELD', 'ORDER with GET_OWNERSHIP=1 requires GET_TICK', { field: 'GET_TICK' }));
         }
         return errors;
     }
@@ -500,11 +524,19 @@ class Validator {
     _validateSwap(fields) {
         let errors = [];
         if (this._isEmpty(fields.SWAP_ACTION_INDEX)) {
-            let required = ['GIVE_TICK', 'GIVE_AMOUNT', 'GET_TICK', 'GET_AMOUNT'];
+            let isOwnershipGive = (Number(fields.GIVE_OWNERSHIP || 0) === 1);
+            let isOwnershipGet  = (Number(fields.GET_OWNERSHIP  || 0) === 1);
+            let required = ['GIVE_TICK', 'GET_TICK'];
+            if (!isOwnershipGive) required.push('GIVE_AMOUNT');
+            if (!isOwnershipGet)  required.push('GET_AMOUNT');
             for (let field of required) {
                 if (this._isEmpty(fields[field]))
                     errors.push(this._error('MISSING_REQUIRED_FIELD', 'SWAP create requires field: ' + field, { field }));
             }
+            if (isOwnershipGive && !this._isEmpty(fields.GIVE_AMOUNT))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'GIVE_AMOUNT must be empty when GIVE_OWNERSHIP=1', { field: 'GIVE_AMOUNT' }));
+            if (isOwnershipGet  && !this._isEmpty(fields.GET_AMOUNT))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'GET_AMOUNT must be empty when GET_OWNERSHIP=1', { field: 'GET_AMOUNT' }));
         }
         return errors;
     }
