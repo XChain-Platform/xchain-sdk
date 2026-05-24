@@ -380,8 +380,8 @@ describe('FormatSelector.serialize() — trailing empty fields are trimmed', fun
     });
 
     it('SWEEP v0 with only DESTINATION trims trailing empty fields', function () {
-        // v0: VERSION|DESTINATION|BALANCES|OWNERSHIPS|ESCROWS|MEMO
-        // BALANCES, OWNERSHIPS, ESCROWS, MEMO are all empty → trimmed
+        // v0: VERSION|DESTINATION|BALANCES|OWNERSHIPS|ORDERS|SWAPS|DISPENSERS|MEMO
+        // All flags and MEMO are empty → trimmed
         const result = FormatSelector.serialize('SWEEP', 0, { DESTINATION: 'myaddr' });
         expect(result).to.equal('SWEEP|0|myaddr');
         expect(result.endsWith('|')).to.be.false;
@@ -446,19 +446,19 @@ describe('FormatSelector.serialize() — VERSION is auto-populated', function ()
 describe('FormatSelector.serialize() — empty / missing fields become empty strings', function () {
 
     it('ORDER v0 with GIVE_TICK and GET_TICK but no GIVE_COIN produces empty segment for GIVE_COIN', function () {
-        // v0: VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
-        // Position: ORDER|0||GIVE_TICK_VAL|||GET_TICK_VAL|...
+        // v0: VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_OWNERSHIP|GET_COIN|GET_TICK|GET_AMOUNT|GET_OWNERSHIP|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
         const result = FormatSelector.serialize('ORDER', 0, {
             GIVE_TICK: 'TOK1',
             GET_TICK: 'TOK2'
         });
         const parts = result.split('|');
-        // parts[0]=ORDER, parts[1]=0, parts[2]=GIVE_COIN(empty), parts[3]=GIVE_TICK, parts[4]=GIVE_AMOUNT(empty), parts[5]=GET_COIN(empty), parts[6]=GET_TICK
+        // parts[0]=ORDER, parts[1]=0, parts[2]=GIVE_COIN, parts[3]=GIVE_TICK, parts[4]=GIVE_AMOUNT, parts[5]=GIVE_OWNERSHIP, parts[6]=GET_COIN, parts[7]=GET_TICK
         expect(parts[2]).to.equal('');      // GIVE_COIN is empty
         expect(parts[3]).to.equal('TOK1'); // GIVE_TICK is present
         expect(parts[4]).to.equal('');      // GIVE_AMOUNT is empty
-        expect(parts[5]).to.equal('');      // GET_COIN is empty
-        expect(parts[6]).to.equal('TOK2'); // GET_TICK is present
+        expect(parts[5]).to.equal('');      // GIVE_OWNERSHIP is empty
+        expect(parts[6]).to.equal('');      // GET_COIN is empty
+        expect(parts[7]).to.equal('TOK2'); // GET_TICK is present
     });
 
     it('undefined field becomes empty string', function () {

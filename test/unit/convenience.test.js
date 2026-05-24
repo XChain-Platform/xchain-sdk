@@ -123,7 +123,7 @@ describe('Convenience action methods', () => {
     });
 
     it('sweep() returns action SWEEP with valid actionString', async () => {
-        const result = await sdk.sweep({ destination: ADDR, balances: 1, ownerships: 1, escrows: 0 });
+        const result = await sdk.sweep({ destination: ADDR, balances: 1, ownerships: 1, orders: 0, swaps: 0, dispensers: 0 });
         assertAction(result, 'SWEEP');
     });
 

@@ -233,9 +233,9 @@ describe('Round-trip — serialize then parse back', function () {
         {
             name: 'SWEEP v0',
             action: 'sweep',
-            params: { destination: ADDR, balances: 1, ownerships: 1, escrows: 0, memo: 'moving' },
+            params: { destination: ADDR, balances: 1, ownerships: 1, orders: 0, swaps: 0, dispensers: 0, memo: 'moving' },
             expectedVersion: 0,
-            check: { DESTINATION: ADDR, BALANCES: '1', OWNERSHIPS: '1', ESCROWS: '0', MEMO: 'moving' }
+            check: { DESTINATION: ADDR, BALANCES: '1', OWNERSHIPS: '1', ORDERS: '0', SWAPS: '0', DISPENSERS: '0', MEMO: 'moving' }
         },
         {
             name: 'DEPOSIT v0',

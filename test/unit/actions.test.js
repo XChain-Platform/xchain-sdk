@@ -255,7 +255,7 @@ describe('Actions – all 19 ACTION types', function () {
     it('SWEEP produces correct actionString', function () {
         let result = actions.createAction({
             action: 'SWEEP',
-            params: { destination: ADDR, balances: 1, ownerships: 1, escrows: 0 }
+            params: { destination: ADDR, balances: 1, ownerships: 1, orders: 0, swaps: 0, dispensers: 0 }
         });
         expect(result.actionString).to.match(/^SWEEP\|/);
         expect(result.actionString).to.include(ADDR);
@@ -818,12 +818,12 @@ describe('Actions – edge cases', function () {
         expect(result.actionString).to.equal('DESTROY|0|TOKEN|500');
     });
 
-    it('SWEEP actionString includes destination, balances, ownerships, escrows', function () {
+    it('SWEEP actionString includes destination + per-primitive flags (balances, ownerships, orders, swaps, dispensers)', function () {
         let result = actions.createAction({
             action: 'SWEEP',
-            params: { destination: ADDR, balances: 1, ownerships: 1, escrows: 0 }
+            params: { destination: ADDR, balances: 1, ownerships: 1, orders: 0, swaps: 0, dispensers: 0 }
         });
-        expect(result.actionString).to.equal('SWEEP|0|' + ADDR + '|1|1|0');
+        expect(result.actionString).to.equal('SWEEP|0|' + ADDR + '|1|1|0|0|0');
     });
 
 });
