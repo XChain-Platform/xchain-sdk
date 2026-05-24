@@ -47,7 +47,7 @@ class HubConnector {
         } else {
             let hubUrl  = options.hubUrl || 'localhost';
             let hubPort = options.hubPort || 8001;
-            this.urls = ['http://' + hubUrl + ':' + hubPort];
+            this.urls = [hubUrl.startsWith('http') ? hubUrl : 'http://' + hubUrl + ':' + hubPort];
         }
 
         // Backward compat: this.url points to the first endpoint

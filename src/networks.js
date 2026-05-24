@@ -103,9 +103,12 @@ const NETWORKS = {
     'dogecoin-regtest': {
         messagePrefix: '\x19Dogecoin Signed Message:\n',
         bip32: { public: 0x0432a9a8, private: 0x0432a243 },
-        pubKeyHash: 0x71,
+        // Dogecoin Core in regtest mode uses Bitcoin-testnet base58 prefixes,
+        // not Dogecoin-testnet's. Matches the same fix in xchain-utxo-tracker,
+        // xchain-decoder, xchain-encoder, xchain-e2e-test CryptoNetworks.
+        pubKeyHash: 0x6f,
         scriptHash: 0xc4,
-        wif: 0xf1,
+        wif: 0xef,
         dustThreshold: 546,
         supportsSegwit: false
     }

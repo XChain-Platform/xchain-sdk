@@ -87,7 +87,16 @@ class WebSocketClient {
 
         this.intentionalClose = false;
 
-        const url = this.protocol + '://' + this.baseUrl + ':' + this.port + '/' + this.coin + '/api/websocket';
+        // Tolerate baseUrl already being a full http(s) URL (e.g. derived from
+        // explorerUrl when websocketUrl wasn't set). In that case strip any
+        // trailing slash and swap http→ws / https→wss for the WebSocket scheme.
+        let url;
+        if (this.baseUrl.startsWith('http://') || this.baseUrl.startsWith('https://')) {
+            let wsBase = this.baseUrl.replace(/^http/, 'ws').replace(/\/+$/, '');
+            url = wsBase + '/' + this.coin + '/api/websocket';
+        } else {
+            url = this.protocol + '://' + this.baseUrl + ':' + this.port + '/' + this.coin + '/api/websocket';
+        }
 
         return new Promise((resolve, reject) => {
             try {

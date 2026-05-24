@@ -41,7 +41,7 @@ class EncoderClient {
         });
 
         this.client = axios.create({
-            baseURL: 'http://' + this.baseUrl + ':' + this.port,
+            baseURL: this.baseUrl.startsWith('http') ? this.baseUrl : 'http://' + this.baseUrl + ':' + this.port,
             timeout: this.timeout,
             headers: { 'Content-Type': 'application/json' },
             httpAgent: this._agent
