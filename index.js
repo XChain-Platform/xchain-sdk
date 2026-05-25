@@ -28,7 +28,8 @@ const ContractUtils    = require('./src/contracts.js');
 const WalletUtils      = require('./src/wallet.js');
 const WalletSession    = require('./src/walletSession.js');
 const AuthUtils        = require('./src/auth.js');
-const CrossChainHelper = require('./src/crossChain.js');
+const CrossChainHelper   = require('./src/crossChain.js');
+const AttestationHelpers = require('./src/attestation.js');
 const UTXOCache        = require('./src/utxoCache.js');
 const MuSig2           = require('./src/musig2.js');
 const { startREPL }   = require('./src/repl.js');
@@ -57,6 +58,7 @@ module.exports = {
     WalletSession,
     AuthUtils,
     CrossChainHelper,
+    AttestationHelpers,
     UTXOCache,
     MuSig2,
     startREPL,
