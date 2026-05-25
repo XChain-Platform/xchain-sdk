@@ -61,14 +61,18 @@ function buildHttpGetPayload(opts){
 }
 
 // Resolve a callback options object to the shape the VM gateway expects
-// (`{ redundancy, deadlineBlocks, maxResponseBytes }`). Trivial today —
-// kept here so the helper layer is the single place defaults can change.
+// (`{ redundancy, deadlineBlocks }`). Trivial today — kept here so the
+// helper layer is the single place defaults can change.
+//
+// Note: per-provider `max_response_bytes` is governance state on the
+// provider registry, not a per-request override. The VM gateway ignores
+// any extra keys, so this helper deliberately only surfaces the two
+// fields the gateway actually reads.
 function buildRequestOptions(opts){
     opts = opts || {};
     let out = {};
-    if (opts.redundancy       !== undefined) out.redundancy       = Number(opts.redundancy);
-    if (opts.deadlineBlocks   !== undefined) out.deadlineBlocks   = Number(opts.deadlineBlocks);
-    if (opts.maxResponseBytes !== undefined) out.maxResponseBytes = Number(opts.maxResponseBytes);
+    if (opts.redundancy     !== undefined) out.redundancy     = Number(opts.redundancy);
+    if (opts.deadlineBlocks !== undefined) out.deadlineBlocks = Number(opts.deadlineBlocks);
     return out;
 }
 
