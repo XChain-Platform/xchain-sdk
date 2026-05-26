@@ -32,8 +32,10 @@ Developer-facing SDK for generating XChain platform transactions and querying bl
 - **40+ explorer endpoints** — balances, tokens, transactions, markets, history, contracts
 - **Batch builder** — fluent API: `sdk.batch().send({...}).mint({...}).build()`
 - **Real-time events** — WebSocket streaming with `onBlock()`, `onAction()`, `onAddress()`, and more
-- **Encrypted messaging** — ECIES, ECDH, and AES encryption for MESSAGE actions
+- **Encrypted messaging** — ECIES, ECDH, and AES encryption for MESSAGE actions; `messaging.send()` accepts a `Buffer` payload and `getMessages()` exposes `msg.bytes` for binary ECIES
 - **Token-gated file publishing** — `sdk.gatedFile.encryptFileBytes()` and `sdk.gatedFile.encryptPack()` produce AES-256-GCM ciphertext + key for FILE v1 gated content; key handoff as a compact 33-byte binary payload via `serializeKeyPayload()` / `parseKeyPayload()` (sent through ECIES in binary mode). See [Token-Gated Content](https://github.com/XChain-platform/xchain-documentation/blob/master/protocol/TOKEN_GATED_CONTENT.md)
+- **Attestation envelope helpers** — `AttestationHelpers.llm({...})` builds the JSON envelope a VM contract passes to `xchain.attestation.request(...)` with provider_id `'llm'`; `AttestationHelpers.httpGet({url})` validates the URL and returns the payload string for `'http_get'`; `AttestationHelpers.requestOptions({redundancy, deadlineBlocks})` builds the gateway options object
+- **Token-ownership trading helpers** — `ORDER`/`SWAP`/`DISPENSER` v0 carry `GIVE_OWNERSHIP` / `GET_OWNERSHIP` flags; `SWEEP` carries independent `ORDERS` / `SWAPS` / `DISPENSERS` flags (was a single `ESCROWS` flag)
 - **Wallet & auth** — key management, PSBT signing, challenge-response verification
 - **Smart contracts** — deploy, execute, deposit, withdraw via xchain-vm integration
 - **Hub discovery** — auto-resolves service endpoints from xchain-hub
