@@ -266,6 +266,13 @@ describe('Round-trip — serialize then parse back', function () {
             check: { AMOUNT: '500', SIGNING_PUBKEY: 'a'.repeat(64) }
         },
         {
+            name: 'STAKE v3 (contract-targeted)',
+            action: 'stake',
+            params: { version: 3, amount: '250', signingPubkey: 'a'.repeat(64), targetContractIndex: 42, tick: 'MYTOKEN' },
+            expectedVersion: 3,
+            check: { AMOUNT: '250', SIGNING_PUBKEY: 'a'.repeat(64), TARGET_CONTRACT_INDEX: '42', TICK: 'MYTOKEN' }
+        },
+        {
             name: 'UNSTAKE v0',
             action: 'unstake',
             params: { signingPubkey: 'a'.repeat(64) },
@@ -273,11 +280,25 @@ describe('Round-trip — serialize then parse back', function () {
             check: { SIGNING_PUBKEY: 'a'.repeat(64) }
         },
         {
+            name: 'UNSTAKE v1 (contract-targeted)',
+            action: 'unstake',
+            params: { version: 1, signingPubkey: 'a'.repeat(64), targetContractIndex: 42, tick: 'MYTOKEN' },
+            expectedVersion: 1,
+            check: { SIGNING_PUBKEY: 'a'.repeat(64), TARGET_CONTRACT_INDEX: '42', TICK: 'MYTOKEN' }
+        },
+        {
             name: 'DELEGATE v0',
             action: 'delegate',
             params: { newSigningPubkey: 'b'.repeat(64) },
             expectedVersion: 0,
             check: { NEW_SIGNING_PUBKEY: 'b'.repeat(64) }
+        },
+        {
+            name: 'DELEGATE v1 (contract-targeted)',
+            action: 'delegate',
+            params: { version: 1, newSigningPubkey: 'b'.repeat(64), targetContractIndex: 42, tick: 'MYTOKEN' },
+            expectedVersion: 1,
+            check: { NEW_SIGNING_PUBKEY: 'b'.repeat(64), TARGET_CONTRACT_INDEX: '42', TICK: 'MYTOKEN' }
         },
         {
             name: 'REVOKE_DELEGATION v0',

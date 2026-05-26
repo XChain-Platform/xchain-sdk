@@ -359,6 +359,25 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be a 64-character hex string (Ed25519 public key)', { field, value }));
         }
 
+        // TARGET_CONTRACT_INDEX validation (STAKE v3 / UNSTAKE v1 / DELEGATE v1 — positive integer)
+        if (field === 'TARGET_CONTRACT_INDEX') {
+            if (!/^[0-9]+$/.test(String(value)) || Number(value) <= 0)
+                errors.push(this._error('INVALID_FIELD_VALUE', 'TARGET_CONTRACT_INDEX must be a positive integer', { field, value }));
+        }
+
+        // COOLDOWN_BLOCKS validation (DEPLOY v1 — integer in [1, 100000])
+        if (field === 'COOLDOWN_BLOCKS') {
+            if (value !== '' && value !== null && value !== undefined) {
+                if (!this.util.isNumeric(value)) {
+                    errors.push(this._error('INVALID_FIELD_VALUE', 'COOLDOWN_BLOCKS must be numeric', { field, value }));
+                } else {
+                    let cb = Number(value);
+                    if (cb < 1 || cb > 100000)
+                        errors.push(this._error('INVALID_FIELD_VALUE', 'COOLDOWN_BLOCKS must be in [1, 100000]', { field, value, constraint: { min: 1, max: 100000 } }));
+                }
+            }
+        }
+
         // VALUE validation (BROADCAST)
         if (field === 'VALUE') {
             if (!this.util.isNumeric(value))
@@ -383,6 +402,9 @@ class Validator {
                 break;
             case 'BROADCAST':
                 errors.push(...this._validateBroadcast(fields));
+                break;
+            case 'DEPLOY':
+                errors.push(...this._validateDeploy(fields));
                 break;
             case 'DISPENSER':
                 errors.push(...this._validateDispenser(fields));
@@ -440,6 +462,20 @@ class Validator {
         // Must have either MESSAGE or BROADCAST_ACTION_INDEX
         if (this._isEmpty(fields.MESSAGE) && this._isEmpty(fields.BROADCAST_ACTION_INDEX))
             errors.push(this._error('MISSING_REQUIRED_FIELD', 'BROADCAST requires MESSAGE or BROADCAST_ACTION_INDEX'));
+        return errors;
+    }
+
+    // DEPLOY-specific validation
+    _validateDeploy(fields) {
+        let errors = [];
+        // v1 stakeable-contract config: SLASH_DESTINATION without COOLDOWN_BLOCKS is meaningless.
+        // (The indexer applies the same rule and additionally defaults SLASH_DESTINATION→BURN
+        // when COOLDOWN_BLOCKS is set without a destination, so we don't enforce SLASH_DESTINATION
+        // as required when COOLDOWN_BLOCKS is present.)
+        let hasCooldown = !this._isEmpty(fields.COOLDOWN_BLOCKS);
+        let hasDest     = !this._isEmpty(fields.SLASH_DESTINATION);
+        if (hasDest && !hasCooldown)
+            errors.push(this._error('DEPLOY_CONSTRAINT', 'SLASH_DESTINATION requires COOLDOWN_BLOCKS', { cooldown: fields.COOLDOWN_BLOCKS, destination: fields.SLASH_DESTINATION }));
         return errors;
     }
 

@@ -136,6 +136,42 @@ class Workflows {
         return { stake: stakeResult, delegate: delegateResult };
     }
 
+    // Stake to a contract and optionally delegate the signing key in one flow.
+    //
+    // wif            - WIF private key
+    // stakeParams    - { AMOUNT, SIGNING_PUBKEY, TARGET_CONTRACT_INDEX, TICK }
+    // delegateParams - { SIGNING_PUBKEY, TARGET_CONTRACT_INDEX, TICK } — optional
+    // opts           - submit options
+    //
+    // Returns: { stake: <submitResult>, delegate: <submitResult>|null }
+    async stakeToContractAndDelegate(wif, stakeParams, delegateParams, opts = {}) {
+        let session = this.sdk.session(wif, opts);
+        let stakeResult = await session.stakeToContract(stakeParams, {}, opts);
+        let delegateResult = null;
+        if (delegateParams) {
+            delegateResult = await session.delegateForContract(delegateParams, {}, opts);
+        }
+        return { stake: stakeResult, delegate: delegateResult };
+    }
+
+    // Deploy a stakeable smart contract — enforces presence of COOLDOWN_BLOCKS + SLASH_DESTINATION
+    // metadata so the resulting contract can accept STAKE v3 actions.
+    //
+    // wif           - WIF private key
+    // deployParams  - DEPLOY action params; MUST include COOLDOWN_BLOCKS (1..100000) and
+    //                 SLASH_DESTINATION (address or 'BURN' sentinel). VERSION is forced to 1.
+    // deposits      - [{ tick, quantity }, ...] — optional initial token deposits
+    // opts          - submit options
+    //
+    // Returns: { deploy: <submitResult>, deposits: [<submitResult>, ...] }
+    async deployStakeableContract(wif, deployParams, deposits, opts = {}) {
+        if (!deployParams || deployParams.COOLDOWN_BLOCKS === undefined || deployParams.COOLDOWN_BLOCKS === null || deployParams.COOLDOWN_BLOCKS === '')
+            throw new Error('deployStakeableContract: COOLDOWN_BLOCKS is required');
+        if (!deployParams.SLASH_DESTINATION)
+            throw new Error('deployStakeableContract: SLASH_DESTINATION is required');
+        return this.deployAndFund(wif, { VERSION: '1', ...deployParams }, deposits, opts);
+    }
+
     // Deploy a smart contract and optionally deposit initial tokens.
     //
     // wif           - WIF private key

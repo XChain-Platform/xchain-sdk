@@ -146,6 +146,14 @@ class WalletSession {
     async revokeDelegation(params, enc, opts) { return this.submit({ action: 'REVOKE_DELEGATION', params }, enc, opts); }
     async claimRewards(params, enc, opts)     { return this.submit({ action: 'CLAIM_REWARDS', params }, enc, opts); }
 
+    // Contract-targeted staking (any token, BTC-only). VERSION is forced by the helper
+    // so callers can't accidentally route to capability staking. Pass
+    // { AMOUNT, SIGNING_PUBKEY, TARGET_CONTRACT_INDEX, TICK } for stake;
+    // { SIGNING_PUBKEY, TARGET_CONTRACT_INDEX, TICK } for unstake / delegate.
+    async stakeToContract(params, enc, opts)     { return this.submit({ action: 'STAKE',    params: { VERSION: '3', ...params } }, enc, opts); }
+    async unstakeFromContract(params, enc, opts) { return this.submit({ action: 'UNSTAKE',  params: { VERSION: '1', ...params } }, enc, opts); }
+    async delegateForContract(params, enc, opts) { return this.submit({ action: 'DELEGATE', params: { VERSION: '1', ...params } }, enc, opts); }
+
     // VM / Smart Contracts
     async deploy(params, enc, opts)    { return this.submit({ action: 'DEPLOY', params }, enc, opts); }
     async execute(params, enc, opts)   { return this.submit({ action: 'EXECUTE', params }, enc, opts); }
