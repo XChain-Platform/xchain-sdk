@@ -252,18 +252,25 @@ describe('Round-trip — serialize then parse back', function () {
             check: { CONTRACT_ACTION_INDEX: '42', TICK: '^99', QUANTITY: '500' }
         },
         {
-            name: 'STAKE v0',
+            name: 'STAKE v1 (new stake — capability model)',
             action: 'stake',
-            params: { tier: 2, chains: 'BTC,LTC', signingPubkey: 'a'.repeat(64) },
-            expectedVersion: 0,
-            check: { TIER: '2', CHAINS: 'BTC,LTC', SIGNING_PUBKEY: 'a'.repeat(64) }
+            params: { version: 1, amount: '1000', signingPubkey: 'a'.repeat(64) },
+            expectedVersion: 1,
+            check: { AMOUNT: '1000', SIGNING_PUBKEY: 'a'.repeat(64) }
+        },
+        {
+            name: 'STAKE v2 (top-up of existing pubkey)',
+            action: 'stake',
+            params: { version: 2, amount: '500', signingPubkey: 'a'.repeat(64) },
+            expectedVersion: 2,
+            check: { AMOUNT: '500', SIGNING_PUBKEY: 'a'.repeat(64) }
         },
         {
             name: 'UNSTAKE v0',
             action: 'unstake',
-            params: { tier: 1 },
+            params: { signingPubkey: 'a'.repeat(64) },
             expectedVersion: 0,
-            check: { TIER: '1' }
+            check: { SIGNING_PUBKEY: 'a'.repeat(64) }
         },
         {
             name: 'DELEGATE v0',

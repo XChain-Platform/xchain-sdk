@@ -124,9 +124,9 @@ describe('AttestationHelpers.requestOptions', function () {
         expect(Attestation.requestOptions({})).to.deep.equal({});
     });
 
-    it('passes through redundancy + deadlineBlocks + maxResponseBytes as numbers', function () {
+    it('passes through redundancy + deadlineBlocks as numbers; ignores maxResponseBytes (governance state, not per-request)', function () {
         const out = Attestation.requestOptions({ redundancy: '3', deadlineBlocks: '10', maxResponseBytes: '1024' });
-        expect(out).to.deep.equal({ redundancy: 3, deadlineBlocks: 10, maxResponseBytes: 1024 });
+        expect(out).to.deep.equal({ redundancy: 3, deadlineBlocks: 10 });
     });
 
     it('ignores unrecognized keys', function () {

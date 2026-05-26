@@ -87,7 +87,14 @@ class Actions {
         this.validator.validateOrThrow(actionName, fields);
 
         // [6] Select optimal format version
-        let selected = FormatSelector.select(actionName, fields);
+        // Callers may force a specific version by passing `version` in params (e.g. STAKE v1 vs v2).
+        // VERSION is otherwise an auto-field set by the selector from the format key.
+        let explicitVersion = undefined;
+        if (fields.VERSION !== undefined && fields.VERSION !== null && fields.VERSION !== '') {
+            explicitVersion = fields.VERSION;
+            delete fields.VERSION;
+        }
+        let selected = FormatSelector.select(actionName, fields, explicitVersion);
 
         // [7] Serialize to pipe-delimited string
         let actionString = FormatSelector.serialize(actionName, selected.version, fields);

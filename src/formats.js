@@ -143,7 +143,8 @@ Formats = {
     },
 
     STAKE: {
-        0: 'VERSION|TIER|CHAINS|SIGNING_PUBKEY'
+        1: 'VERSION|AMOUNT|SIGNING_PUBKEY',
+        2: 'VERSION|AMOUNT|SIGNING_PUBKEY'
     },
 
     SWAP: {
@@ -157,7 +158,7 @@ Formats = {
     },
 
     UNSTAKE: {
-        0: 'VERSION|TIER'
+        0: 'VERSION|SIGNING_PUBKEY'
     },
 
     WITHDRAW: {

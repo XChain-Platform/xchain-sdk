@@ -117,7 +117,8 @@ class Workflows {
     // Stake and optionally delegate a signing key in one flow.
     //
     // wif            - WIF private key
-    // stakeParams    - STAKE action params (tier, signingPubkey, chains)
+    // stakeParams    - STAKE action params (version, amount, signingPubkey)
+    //                  version=1 for a new stake, version=2 to top up an existing pubkey
     // delegateParams - DELEGATE action params (newSigningPubkey) — optional, omit to skip
     // opts           - submit options
     //
