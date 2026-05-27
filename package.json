@@ -23,7 +23,7 @@
         "express": "^4.18.3",
         "express-json-rpc-router": "^1.4.0",
         "helmet": "^7.1.0",
-        "mathjs": "^13.2.0",
+        "mathjs": "^15.2.0",
         "ws": "^8.20.0"
     },
     "devDependencies": {
