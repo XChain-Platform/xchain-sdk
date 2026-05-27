@@ -396,6 +396,28 @@ class ExplorerClient {
         return this._get('/rewards/' + query + '/' + type, opts);
     }
 
+    // Contract-targeted stakes (STAKE v3) — type ∈ {address, block, contract}.
+    async getContractStakes(query, type, opts = {}) {
+        if (query)
+            return this._get('/contract_stakes/' + query + '/' + type, opts);
+        return this._get('/contract_stakes', opts);
+    }
+
+    // Contract-targeted unstakes (UNSTAKE v1) — type ∈ {address, block, contract}.
+    async getContractUnstakes(query, type, opts = {}) {
+        if (query)
+            return this._get('/contract_unstakes/' + query + '/' + type, opts);
+        return this._get('/contract_unstakes', opts);
+    }
+
+    // Slash events emitted by contracts via xchain.contract.slash —
+    // type ∈ {address, block, contract}.
+    async getSlashEvents(query, type, opts = {}) {
+        if (query)
+            return this._get('/slash_events/' + query + '/' + type, opts);
+        return this._get('/slash_events', opts);
+    }
+
 
     /*
      *  Market Methods

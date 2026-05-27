@@ -129,6 +129,30 @@ describe('ExplorerClient', function () {
             let result = await client.getValidatorRewards('addr1', 'address');
             expect(result.total).to.equal(2);
         });
+
+        it('getContractStakes hits /{COIN}/api/contract_stakes/{query}/{type}', async function () {
+            nock(BASE).get('/BTC/api/contract_stakes/addr1/address').reply(200, { total: 1, data: [{ amount: '100' }] });
+            let result = await client.getContractStakes('addr1', 'address');
+            expect(result.data[0].amount).to.equal('100');
+        });
+
+        it('getContractStakes without args hits /{COIN}/api/contract_stakes', async function () {
+            nock(BASE).get('/BTC/api/contract_stakes').reply(200, { total: 0, data: [] });
+            let result = await client.getContractStakes();
+            expect(result).to.have.property('data');
+        });
+
+        it('getContractUnstakes hits /{COIN}/api/contract_unstakes/{query}/{type}', async function () {
+            nock(BASE).get('/BTC/api/contract_unstakes/42/contract').reply(200, { total: 1, data: [{ action_index: 99 }] });
+            let result = await client.getContractUnstakes('42', 'contract');
+            expect(result.data[0].action_index).to.equal(99);
+        });
+
+        it('getSlashEvents hits /{COIN}/api/slash_events/{query}/{type}', async function () {
+            nock(BASE).get('/BTC/api/slash_events/42/contract').reply(200, { total: 1, data: [{ slashed_amount: '50' }] });
+            let result = await client.getSlashEvents('42', 'contract');
+            expect(result.data[0].slashed_amount).to.equal('50');
+        });
     });
 
     /*
@@ -209,6 +233,7 @@ describe('ExplorerClient', function () {
             'getFiles', 'getLinks', 'getLists', 'getMessages', 'getMints', 'getOrders',
             'getSends', 'getSleeps', 'getSwaps', 'getSweeps',
             'getStakes', 'getDelegations', 'getValidators', 'getValidatorRewards',
+            'getContractStakes', 'getContractUnstakes', 'getSlashEvents',
             'getMarkets', 'getMarket', 'getMarketHistory', 'getMarketOrders', 'getOrderbook',
             'getStatus', 'search'
         ];
@@ -218,10 +243,10 @@ describe('ExplorerClient', function () {
             });
         }
 
-        it('has 57 public methods', function () {
+        it('has 60 public methods', function () {
             let publicMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(publicMethods).to.have.length(57);
+            expect(publicMethods).to.have.length(60);
         });
     });
 
