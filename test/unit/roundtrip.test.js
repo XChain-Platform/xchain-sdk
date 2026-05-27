@@ -301,15 +301,22 @@ describe('Round-trip — serialize then parse back', function () {
             check: { NEW_SIGNING_PUBKEY: 'b'.repeat(64), TARGET_CONTRACT_INDEX: '42', TICK: 'MYTOKEN' }
         },
         {
-            name: 'REVOKE_DELEGATION v0',
-            action: 'revoke_delegation',
-            params: { signingPubkey: 'c'.repeat(64) },
-            expectedVersion: 0,
+            name: 'DELEGATE v2 (capability revoke)',
+            action: 'delegate',
+            params: { version: 2, signingPubkey: 'c'.repeat(64) },
+            expectedVersion: 2,
             check: { SIGNING_PUBKEY: 'c'.repeat(64) }
         },
         {
-            name: 'CLAIM_REWARDS v0',
-            action: 'claim_rewards',
+            name: 'DELEGATE v3 (contract revoke)',
+            action: 'delegate',
+            params: { version: 3, signingPubkey: 'd'.repeat(64), targetContractIndex: 42, tick: 'MYTOKEN' },
+            expectedVersion: 3,
+            check: { SIGNING_PUBKEY: 'd'.repeat(64), TARGET_CONTRACT_INDEX: '42', TICK: 'MYTOKEN' }
+        },
+        {
+            name: 'COLLECT v0',
+            action: 'collect',
             params: {},
             expectedVersion: 0,
             check: {}

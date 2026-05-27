@@ -328,8 +328,7 @@ class XChainSDK {
     async stake(params, encoder)            { return this.createAction({ action: 'STAKE', params, encoder }); }
     async unstake(params, encoder)          { return this.createAction({ action: 'UNSTAKE', params, encoder }); }
     async delegate(params, encoder)         { return this.createAction({ action: 'DELEGATE', params, encoder }); }
-    async revokeDelegation(params, encoder) { return this.createAction({ action: 'REVOKE_DELEGATION', params, encoder }); }
-    async claimRewards(params, encoder)     { return this.createAction({ action: 'CLAIM_REWARDS', params, encoder }); }
+    async collect(params, encoder)          { return this.createAction({ action: 'COLLECT', params, encoder }); }
 
     // VM action convenience methods
     async deploy(params, encoder)    { return this.createAction({ action: 'DEPLOY', params, encoder }); }

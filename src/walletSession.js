@@ -143,8 +143,7 @@ class WalletSession {
     async stake(params, enc, opts)            { return this.submit({ action: 'STAKE', params }, enc, opts); }
     async unstake(params, enc, opts)          { return this.submit({ action: 'UNSTAKE', params }, enc, opts); }
     async delegate(params, enc, opts)         { return this.submit({ action: 'DELEGATE', params }, enc, opts); }
-    async revokeDelegation(params, enc, opts) { return this.submit({ action: 'REVOKE_DELEGATION', params }, enc, opts); }
-    async claimRewards(params, enc, opts)     { return this.submit({ action: 'CLAIM_REWARDS', params }, enc, opts); }
+    async collect(params, enc, opts)          { return this.submit({ action: 'COLLECT', params }, enc, opts); }
 
     // Contract-targeted staking (any token, BTC-only). VERSION is forced by the helper
     // so callers can't accidentally route to capability staking. Pass

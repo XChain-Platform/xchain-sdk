@@ -45,7 +45,7 @@ function buildLlmEnvelope(opts){
 // Validate + normalize an http_get URL. The provider only accepts
 // https:// URLs and a per-provider max_request_bytes (default 2048).
 // This helper does the validation up-front so the developer gets a clear
-// error before the on-chain ATTESTATION_REQUEST is emitted.
+// error before the on-chain ATTEST v0 (request) is emitted.
 function buildHttpGetPayload(opts){
     let url = (typeof opts === 'string') ? opts : (opts && opts.url);
     if (!url || typeof url !== 'string'){
