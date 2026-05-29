@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.2] - 2026-05-28
+
+### Security
+- Pin `serialize-javascript` to `^7.0.5` via an `overrides` entry, remediating GHSA-5c6j-r48x-rmvq (high-severity RCE via `RegExp.flags` / `Date.prototype.toISOString()`) and GHSA-qj8w-gfj5-8c6v (moderate CPU-exhaustion DoS via crafted array-like objects). The package is present only as a transitive dev dependency of `mocha`, which pins an older range; the override forces the patched version across all transitive paths so `npm audit --audit-level=high` no longer flags it.
+
 ## [1.13.1] - 2026-05-28
 
 ### Security
