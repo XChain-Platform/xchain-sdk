@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- `src/utility.js` — removed the unused wall-clock `getCurrentTime()` helper (it returned `Date.now()`-derived seconds). Nothing in the SDK called it; time-sensitive XChain values such as EXPIRATION derive from a block timestamp passed in explicitly via `getDefaultExpiration(block_time)`, which is unchanged. Dropping it from the public SDK surface keeps consumers from reaching for non-deterministic wall-clock time where a block timestamp is the correct input.
+
 ## [1.13.2] - 2026-05-28
 
 ### Security
