@@ -61,7 +61,7 @@ async function startApi() {
             await sdk.init();
             console.log('Hub config loaded successfully');
         } catch (err) {
-            console.warn('Hub init failed, continuing with explicit config:', err.message);
+            console.warn('Hub init failed, continuing with explicit config:', err);
         }
     }
 

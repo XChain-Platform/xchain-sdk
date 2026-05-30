@@ -50,7 +50,7 @@ async function startREPL(options = {}) {
             await sdk.init();
             console.log('Hub connected and config loaded.');
         } catch (e) {
-            console.log('Hub connection failed: ' + e.message);
+            console.log('Hub connection failed:', e);
         }
     }
 
@@ -127,7 +127,7 @@ async function startREPL(options = {}) {
                     console.log('');
                 }
             } catch (e) {
-                console.log('  Error: ' + e.message);
+                console.log('  Error:', e);
             }
             this.displayPrompt();
         }

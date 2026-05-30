@@ -158,7 +158,7 @@ class XChainSDK {
         } catch (err) {
             // Hub failure is non-fatal if explicit URLs were provided
             if (this.explorer && this.encoder) {
-                console.warn('Hub unavailable, using explicit config:', err.message);
+                console.warn('Hub unavailable, using explicit config:', err);
                 return;
             }
             throw err;

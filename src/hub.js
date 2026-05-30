@@ -168,7 +168,7 @@ class HubConnector {
                 if (callback) callback(this.configs);
             } catch (err) {
                 // Silently continue — hub unavailability during polling is non-fatal
-                console.warn('Hub poll failed:', err.message);
+                console.warn('Hub poll failed:', err);
             }
         }, this.pollInterval);
         // Don't prevent process exit
