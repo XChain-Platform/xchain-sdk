@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Dependency installs are now reproducible: `package-lock.json` is committed to the repo (previously git-ignored) and the Docker image is built with `npm ci` instead of `npm install`. `npm ci` installs the exact dependency tree recorded in the lockfile and fails the build if the lockfile is missing or out of sync with `package.json`, so a build can no longer silently pick up newer transitive dependency versions than were tested. This matters most for the SDK, which ships to external developers.
+
 ### Removed
 - `src/utility.js` — removed the unused wall-clock `getCurrentTime()` helper (it returned `Date.now()`-derived seconds). Nothing in the SDK called it; time-sensitive XChain values such as EXPIRATION derive from a block timestamp passed in explicitly via `getDefaultExpiration(block_time)`, which is unchanged. Dropping it from the public SDK surface keeps consumers from reaching for non-deterministic wall-clock time where a block timestamp is the correct input.
 
