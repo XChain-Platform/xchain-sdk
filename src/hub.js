@@ -53,9 +53,17 @@ class HubConnector {
         // Backward compat: this.url points to the first endpoint
         this.url = this.urls[0];
 
+        // Sticky-last-good endpoint: start each call at the last endpoint that
+        // answered, so a degraded first endpoint isn't retried first every call
+        // (which would cost the full timeout per call before falling back).
+        this._lastGoodIdx = 0;
+
         // Parsed config cache
         this.configs    = null;
         this.lastFetch  = null;
+        // Last committed hub config sequence (from getallconfigs { configs, seq });
+        // 0 against an older hub that returns the bare map.
+        this.lastSeq    = 0;
 
         // Polling
         this.pollInterval = options.hubPollInterval || 60000; // 60 seconds
@@ -72,11 +80,27 @@ class HubConnector {
         };
 
         let lastError = null;
-        for(let url of this.urls){
+        for(let i = 0; i < this.urls.length; i++){
+            let idx = (this._lastGoodIdx + i) % this.urls.length;
+            let url = this.urls[idx];
             try {
                 let response = await axios.post(url, payload, { timeout: this.timeout });
                 if (response.data && response.data.result) {
-                    this.configs   = response.data.result;
+                    this._lastGoodIdx = idx;
+                    // Newer hubs wrap the config map as { configs, seq } so consumers
+                    // can detect a config change committed between polls; older hubs
+                    // return the bare nested map. Record the committed sequence on
+                    // this.lastSeq and keep this.configs as the bare map so callers
+                    // (extractServiceEndpoints) are unaffected by hub version. seq is
+                    // 0 against an old hub.
+                    let result = response.data.result;
+                    if (result && typeof result === 'object' && result.configs && typeof result.configs === 'object' && ('seq' in result)) {
+                        this.configs = result.configs;
+                        this.lastSeq = Number(result.seq) || 0;
+                    } else {
+                        this.configs = result;
+                        this.lastSeq = 0;
+                    }
                     this.lastFetch = Date.now();
                     return this.configs;
                 }
@@ -100,10 +124,15 @@ class HubConnector {
             id:      1
         };
 
-        for(let url of this.urls){
+        for(let i = 0; i < this.urls.length; i++){
+            let idx = (this._lastGoodIdx + i) % this.urls.length;
+            let url = this.urls[idx];
             try {
                 let response = await axios.post(url, payload, { timeout: this.timeout });
-                if(response.data && response.data.result) return true;
+                if(response.data && response.data.result){
+                    this._lastGoodIdx = idx;
+                    return true;
+                }
             } catch (err) {
                 // Try next endpoint
             }

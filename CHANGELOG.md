@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `src/hub.js` — the hub connector now remembers the last endpoint that answered and starts each call there (wrapping through the remaining endpoints), instead of always trying the configured endpoints in fixed order. Previously, when the first endpoint was degraded enough to hit the request timeout, every `getAllConfig()` and `ping()` call paid the full timeout penalty before falling back — and then retried that same endpoint first on the next call. Both methods now share a sticky-last-good index, so the connector sticks to a known-good endpoint until it too fails, then rotates to the next responder.
+
 ### Added
 - `.env.example` — added a configuration template listing the environment variables the SDK reads (default network and service endpoints for explorer/encoder/hub/websocket), with safe regtest defaults and inline comments.
 
