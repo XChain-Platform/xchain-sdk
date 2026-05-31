@@ -29,7 +29,10 @@ const MAX_DECIMALS       = 18;
 const MAX_TICK_LENGTH    = 250;
 const MAX_DESC_LENGTH    = 250;
 const MAX_MESSAGE_LENGTH = 1048576; // 1MB
-const MAX_CODE_SIZE      = 65536;   // 64KB contract source code limit
+// 64KB contract source code limit. Must match the indexer (DEPLOY) and the VM
+// isolate limit. Canonical source of truth: xchain-documentation/protocol/constants.js
+// (MAX_CODE_SIZE); kept equal by the cross-service regression suite.
+const MAX_CODE_SIZE      = 65536;
 
 // Allowed TICK characters: a-zA-Z0-9 and ~!@#$%^&*()_+-={}[]\:<>.?
 // Forbidden: | ; . / and ^ as first char
@@ -635,3 +638,6 @@ class Validator {
 }
 
 module.exports = Validator;
+// Exported for the cross-service regression suite, which asserts this equals the
+// canonical protocol MAX_CODE_SIZE shared by the indexer and the VM.
+module.exports.MAX_CODE_SIZE = MAX_CODE_SIZE;

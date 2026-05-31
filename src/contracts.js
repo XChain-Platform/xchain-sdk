@@ -26,7 +26,10 @@
 
 const { SDKContractError } = require('./errors.js');
 
-const MAX_CODE_SIZE = 65536; // 64KB
+// 64KB contract source code limit — canonical value in
+// xchain-documentation/protocol/constants.js (MAX_CODE_SIZE), also enforced by
+// the SDK validator, the indexer (DEPLOY) and the VM isolate limit.
+const MAX_CODE_SIZE = 65536;
 
 // Lazy-loaded optional dependencies
 let acorn = null;

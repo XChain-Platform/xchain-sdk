@@ -79,11 +79,14 @@ class ExplorerClient {
     // Build query params string from options
     _buildParams(opts = {}) {
         let params = {};
-        if (opts.page !== undefined)      params.page = opts.page;
-        if (opts.limit !== undefined)     params.limit = opts.limit;
-        if (opts.sortorder !== undefined) params.sortorder = opts.sortorder;
-        if (opts.start !== undefined)     params.start = opts.start;
-        if (opts.length !== undefined)    params.length = opts.length;
+        if (opts.page !== undefined)        params.page = opts.page;
+        if (opts.limit !== undefined)       params.limit = opts.limit;
+        if (opts.sortorder !== undefined)   params.sortorder = opts.sortorder;
+        if (opts.start !== undefined)       params.start = opts.start;
+        if (opts.length !== undefined)      params.length = opts.length;
+        if (opts.tick !== undefined)        params.tick = opts.tick;
+        if (opts.txid !== undefined)        params.txid = opts.txid;
+        if (opts.blockIndex !== undefined)  params.blockIndex = opts.blockIndex;
         return params;
     }
 
@@ -199,6 +202,10 @@ class ExplorerClient {
 
     async getAction(actionIndex) {
         return this._get('/action/' + actionIndex);
+    }
+
+    async getActions(params = {}) {
+        return this._get('/actions', params);
     }
 
     async getBlock(blockIndex) {
