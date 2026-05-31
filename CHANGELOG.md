@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.env.example` — added a configuration template listing the environment variables the SDK reads (default network and service endpoints for explorer/encoder/hub/websocket), with safe regtest defaults and inline comments.
 
 ### Changed
+- `index.d.ts` — expanded the `getStatus()` type doc to describe its actual response shape. The explorer status endpoint now returns `supported`/`available` coin maps plus per-coin `last_block` and `last_block_time` maps (highest indexed block and its block_time); the doc notes these can be compared against the chain tip to detect indexer lag. Previously the doc said only "Get explorer service status," giving no hint that sync-position data was available.
 - Dependency installs are now reproducible: `package-lock.json` is committed to the repo (previously git-ignored) and the Docker image is built with `npm ci` instead of `npm install`. `npm ci` installs the exact dependency tree recorded in the lockfile and fails the build if the lockfile is missing or out of sync with `package.json`, so a build can no longer silently pick up newer transitive dependency versions than were tested. This matters most for the SDK, which ships to external developers.
 
 ### Removed

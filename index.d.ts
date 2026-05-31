@@ -926,7 +926,14 @@ export declare class XChainSDK {
      *  Explorer: Utility methods
      */
 
-    /** Get explorer service status. */
+    /**
+     * Get explorer service status and indexer sync position.
+     *
+     * Resolves to an object with `supported` and `available` coin maps plus
+     * `last_block` and `last_block_time` — per-coin maps (keyed by ticker) of
+     * the highest block index processed by the indexer and its block_time.
+     * Compare these against the chain tip to detect indexer lag.
+     */
     getStatus(): Promise<any>;
 
     /** Search the explorer for a query string of a given type. */
