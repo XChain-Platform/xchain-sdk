@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `.env.example` — added a configuration template listing the environment variables the SDK reads (default network and service endpoints for explorer/encoder/hub/websocket), with safe regtest defaults and inline comments.
+
 ### Changed
 - Dependency installs are now reproducible: `package-lock.json` is committed to the repo (previously git-ignored) and the Docker image is built with `npm ci` instead of `npm install`. `npm ci` installs the exact dependency tree recorded in the lockfile and fails the build if the lockfile is missing or out of sync with `package.json`, so a build can no longer silently pick up newer transitive dependency versions than were tested. This matters most for the SDK, which ships to external developers.
 
