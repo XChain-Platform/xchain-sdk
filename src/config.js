@@ -17,6 +17,14 @@
  * 
  ********************************************************************/
 
+// Parse a non-negative integer from an env var, falling back to defaultVal when
+// the value is absent, empty, or non-numeric. Preserves 0 as a valid value.
+const parseIntMin0 = (val, defaultVal) => {
+    if(val === undefined || val === null || val === '') return defaultVal;
+    let parsed = parseInt(val, 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : defaultVal;
+};
+
 Config = {
 
     // Handle returning the current sdk configuration
@@ -83,8 +91,8 @@ Config = {
             'BLOCK_LIST'
         ];
 
-        // Define stop check interval (5 seconds)
-        config['STOP_CHECK_INTERVAL'] = 5000;
+        // Define stop check interval (default 5 seconds; override via STOP_CHECK_INTERVAL)
+        config['STOP_CHECK_INTERVAL'] = parseIntMin0(process.env.STOP_CHECK_INTERVAL, 5000);
 
         // TODO: coming soon...
         return config;
