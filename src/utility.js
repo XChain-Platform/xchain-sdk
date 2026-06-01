@@ -315,7 +315,12 @@ class Utility {
     setNumberFormats(data){
         for(let name of this.config['NUMBER_FIELDS']){
             let value = data[name];
-            if(!this.isNull(value))
+            // Only cast values that are actually numeric. Some field NAMES are
+            // numeric for one action but string-valued for another (e.g. TYPE is
+            // a 0/1 selector for LIST but a MIME string for FILE). Casting a
+            // non-numeric string (e.g. "text/plain") with bcnum yields NaN and
+            // corrupts the action. Mirrors the indexer's setNumberFormats guard.
+            if(!this.isNull(value) && this.isNumeric(value))
                 data[name] = this.bcnum(value);
         }
         return data;
