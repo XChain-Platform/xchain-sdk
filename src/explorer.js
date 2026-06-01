@@ -273,6 +273,24 @@ class ExplorerClient {
         return this._get('/fees/' + query + '/' + type, opts);
     }
 
+    // Native-coin fee pre-flight for one action. Proxies to the indexer's read-only `feequote`.
+    // `params` is the wire param array (without the ACTION name) or a pre-joined pipe string.
+    // Returns { supported, valid, error, requiredFeeNative, requiredFeeSats, feeDestination,
+    //           expectedNative, minAcceptable, maxAcceptable, oracleRound, ... }.
+    async getFeeQuote({ action, params, source, feeOutputSats } = {}) {
+        let q = new URLSearchParams();
+        if (action !== undefined && action !== null)        q.set('action', String(action));
+        if (params !== undefined && params !== null)        q.set('params', Array.isArray(params) ? params.join('|') : String(params));
+        if (source !== undefined && source !== null)        q.set('source', String(source));
+        if (feeOutputSats !== undefined && feeOutputSats !== null) q.set('feeOutputSats', String(feeOutputSats));
+        return this._get('/feequote?' + q.toString());
+    }
+
+    // Native-coin fee schedule + current oracle prices. Proxies to the indexer's `feeschedule`.
+    async getFeeSchedule() {
+        return this._get('/feeschedule');
+    }
+
     async getFiles(query, type, opts = {}) {
         return this._get('/files/' + query + '/' + type, opts);
     }

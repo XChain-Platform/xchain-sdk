@@ -397,9 +397,29 @@ class XChainSDK {
     // Estimate fees for an action without signing or broadcasting.
     // Returns { fee, inputTotal, outputTotal, encoding, psbt, actionString }
     // The returned PSBT can be signed directly to skip a second encode call.
+    //
+    // Native-coin protocol fee (opt-in via encoderOpts.payFeeInNativeCoin): pay the XCHAIN
+    // protocol fee in BTC/LTC/DOGE at the USD-equivalent by adding a FEE_DESTINATION output.
+    // This runs the indexer pre-flight (quoteNativeFee) to size that output exactly and REFUSES
+    // to build a doomed tx (unsupported action / stale-or-missing oracle price) — a failed
+    // native-fee action forfeits the fee on-chain, so we never produce one that can't be priced.
+    // The quote is attached as feeResult.nativeFeeQuote.
     async estimateFees(actionData, encoderOpts = {}) {
         let result = this.actions.createAction(actionData);
         let encoder = this._requireEncoder();
+
+        let customOutputs  = Array.isArray(encoderOpts.customOutputs) ? encoderOpts.customOutputs.slice() : [];
+        let nativeFeeQuote = null;
+        if (encoderOpts.payFeeInNativeCoin) {
+            nativeFeeQuote = await this.quoteNativeFee(actionData, { source: encoderOpts.source || encoderOpts.change });
+            if (!nativeFeeQuote || nativeFeeQuote.supported === false)
+                throw new SDKConfigError('NATIVE_FEE_UNSUPPORTED', 'Native-coin fee not available for this action: ' + ((nativeFeeQuote && nativeFeeQuote.error) || 'unsupported'), { quote: nativeFeeQuote });
+            if (nativeFeeQuote.valid === false)
+                throw new SDKConfigError('NATIVE_FEE_INVALID', 'Native-coin fee cannot be priced: ' + (nativeFeeQuote.error || 'invalid'), { quote: nativeFeeQuote });
+            if (Number(nativeFeeQuote.requiredFeeSats) > 0)
+                customOutputs.push({ address: nativeFeeQuote.feeDestination, value: Number(nativeFeeQuote.requiredFeeSats) });
+        }
+
         let feeResult = await encoder.estimateFee({
             data:             result.actionString,
             pubkey:           encoderOpts.pubkey,
@@ -412,12 +432,37 @@ class XChainSDK {
             dust:             encoderOpts.dust,
             unconfirmed:      encoderOpts.unconfirmed,
             compressedPubKey: encoderOpts.compressedPubKey,
-            customOutputs:    encoderOpts.customOutputs
+            customOutputs:    customOutputs
         });
         feeResult.actionString = result.actionString;
         feeResult.action       = result.action;
         feeResult.version      = result.version;
+        if (nativeFeeQuote) feeResult.nativeFeeQuote = nativeFeeQuote;
         return feeResult;
+    }
+
+    // Native-coin fee pre-flight for an action (without signing/broadcasting). Builds the action
+    // string, splits off the ACTION + wire params, and asks the indexer (via the explorer proxy)
+    // for the authoritative native fee + accept/reject verdict. A client should size the
+    // FEE_DESTINATION output to `requiredFeeSats` and refuse to broadcast when
+    // `supported === false` or `valid === false`. See xchain-documentation/concepts/GAS.md.
+    async quoteNativeFee(actionData, opts = {}) {
+        let result = this.actions.createAction(actionData);
+        let parts  = String(result.actionString).split('|');
+        let action = parts.shift();
+        let quote  = await this._requireExplorer().getFeeQuote({
+            action:        action,
+            params:        parts,
+            source:        opts.source,
+            feeOutputSats: opts.feeOutputSats
+        });
+        if (quote && typeof quote === 'object') quote.actionString = result.actionString;
+        return quote;
+    }
+
+    // Fetch the native-coin fee schedule + current oracle prices (for display / rough estimates).
+    async getFeeSchedule() {
+        return this._requireExplorer().getFeeSchedule();
     }
 
     // Ping the encoder
