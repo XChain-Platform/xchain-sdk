@@ -199,19 +199,25 @@ class EncoderClient {
         if (!params.p2shHex)
             throw new SDKEncoderError('MISSING_P2SH_HEX', 'spendP2sh requires p2shHex');
 
+        // Phase 2 must be built with the SAME action data + encoding as phase 1 —
+        // the encoder re-derives the reveal script chunks from them. Sending empty
+        // data makes the encoder fail to build the reveal outputs.
         let rpcParams = {
             pubkey:  params.pubkey,
             p2shHash: params.p2shHash,
             p2shHex:  params.p2shHex,
-            data:     ''  // empty data for spend phase
+            data:     params.data !== undefined && params.data !== null ? params.data : ''
         };
 
-        if (params.change !== undefined)      rpcParams.change = params.change;
-        if (params.fee !== undefined)         rpcParams.fee = params.fee;
-        if (params.feePerKb !== undefined)    rpcParams.feePerKb = params.feePerKb;
-        if (params.rbf !== undefined)         rpcParams.rbf = params.rbf;
-        if (params.dust !== undefined)        rpcParams.dust = params.dust;
-        if (params.unconfirmed !== undefined) rpcParams.unconfirmed = params.unconfirmed;
+        if (params.encoding !== undefined)         rpcParams.encoding = String(params.encoding).toUpperCase();
+        if (params.rawData !== undefined)          rpcParams.rawData = params.rawData;
+        if (params.compressedPubKey !== undefined) rpcParams.compressedPubKey = params.compressedPubKey;
+        if (params.change !== undefined)           rpcParams.change = params.change;
+        if (params.fee !== undefined)              rpcParams.fee = params.fee;
+        if (params.feePerKb !== undefined)         rpcParams.feePerKb = params.feePerKb;
+        if (params.rbf !== undefined)              rpcParams.rbf = params.rbf;
+        if (params.dust !== undefined)             rpcParams.dust = params.dust;
+        if (params.unconfirmed !== undefined)      rpcParams.unconfirmed = params.unconfirmed;
 
         return this._rpc('create_tx', rpcParams);
     }

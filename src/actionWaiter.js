@@ -68,10 +68,12 @@ class ActionWaiter {
             if (this.sdk.ws && this.sdk.ws.isConnected()) {
                 let handler = (msg) => {
                     if (msg && msg.data && msg.data.tx_hash === txid) {
-                        if (requireValid && msg.data.status === 'invalid') {
+                        // Indexer status strings are prefixed, e.g. "invalid: insufficient funds (FEE)".
+                        let invalid = typeof msg.data.status === 'string' && /^invalid/i.test(msg.data.status);
+                        if (requireValid && invalid) {
                             settle(new SDKActionError('ACTION_REJECTED',
-                                'Action was indexed but marked invalid',
-                                { txid, action: msg.data }));
+                                'Action was indexed but marked invalid: ' + msg.data.status,
+                                { txid, action: msg.data, reason: msg.data.status }));
                         } else {
                             settle(null, msg.data);
                         }
@@ -86,12 +88,19 @@ class ActionWaiter {
                 if (settled) return;
                 try {
                     let explorer = this.sdk._requireExplorer();
-                    let result = await explorer.getTransaction(txid, 'hash');
+                    // The explorer transaction endpoint keys on type 'tx_hash' (not 'hash')
+                    // and returns { tx_hash, block_index, actions: [{ action, status, ... }], ... }.
+                    // Per-action status is prefixed, e.g. "valid" / "invalid: insufficient funds (FEE)".
+                    let result = await explorer.getTransaction(txid, 'tx_hash');
                     if (result && result.tx_hash) {
-                        if (requireValid && result.status === 'invalid') {
+                        let actions = Array.isArray(result.actions) ? result.actions : [];
+                        let invalid = actions.find(a => typeof a.status === 'string' && /^invalid/i.test(a.status));
+                        // Surface a normalized top-level status for callers/tests.
+                        result.status = invalid ? invalid.status : 'valid';
+                        if (requireValid && invalid) {
                             settle(new SDKActionError('ACTION_REJECTED',
-                                'Action was indexed but marked invalid',
-                                { txid, action: result, reason: result.status_description || null }));
+                                'Action was indexed but marked invalid: ' + invalid.status,
+                                { txid, action: result, reason: invalid.status }));
                         } else {
                             settle(null, result);
                         }

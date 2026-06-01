@@ -20,6 +20,7 @@
  ********************************************************************/
 
 const bitcoin = require('bitcoinjs-lib');
+const psbtutils = require('bitcoinjs-lib/src/psbt/psbtutils');
 const { ECPairFactory } = require('ecpair');
 const ecc = require('@bitcoinerlab/secp256k1');
 const { getNetwork, getSupportedNetworks, NETWORKS } = require('./networks.js');
@@ -580,6 +581,105 @@ class WalletUtils {
             txHex: tx.toHex(),
             txid: tx.getId(),
             psbtHex: psbt.toHex()
+        };
+    }
+
+    /**
+     * Build a finalizer for XChain P2SH / P2WSH "reveal" inputs — the phase-2
+     * transaction of the two-step large-action encoding. Each such input
+     * spends a data-carrying P2SH/P2WSH output created by phase 1, so its
+     * redeem/witness script is the non-standard XChain payload script and
+     * bitcoinjs-lib's default finalizer cannot assemble it. We compile the
+     * scriptSig / witness from the single partial signature + pubkey, wrapped
+     * in the matching p2sh/p2wsh payment. Mirrors xchain-e2e-test's
+     * transactionHelper.xchainP2shFinalizer, but network-aware.
+     *
+     * @param {object} net  bitcoinjs network params
+     */
+    _xchainRevealFinalizer(net) {
+        return (inputIndex, input, script, isSegwit, isP2SH, isP2WSH) => {
+            if (!input.partialSig || !input.partialSig[0]) {
+                throw new SDKWalletError('FINALIZE_FAILED',
+                    'reveal finalizer: input #' + inputIndex + ' has no partial signature');
+            }
+            const sig = bitcoin.script.compile([
+                input.partialSig[0].signature,
+                input.partialSig[0].pubkey,
+            ]);
+            if (isP2SH) {
+                const payment = bitcoin.payments.p2sh({
+                    network: net,
+                    redeem: { network: net, input: sig, output: script },
+                });
+                return { finalScriptSig: payment.input, finalScriptWitness: undefined };
+            }
+            if (isP2WSH) {
+                const payment = bitcoin.payments.p2wsh({
+                    network: net,
+                    redeem: { network: net, input: sig, output: script },
+                });
+                return {
+                    finalScriptSig: undefined,
+                    finalScriptWitness: psbtutils.witnessStackToScriptWitness(payment.witness),
+                };
+            }
+            throw new SDKWalletError('FINALIZE_FAILED',
+                'reveal finalizer: input #' + inputIndex + ' is neither P2SH nor P2WSH');
+        };
+    }
+
+    /**
+     * Sign + finalize a P2SH/P2WSH reveal PSBT (phase 2 of large-action
+     * encoding). Every input is a data-carrying reveal input, so each is
+     * finalized with the custom XChain finalizer rather than the default.
+     *
+     * @param {string} psbtHex - phase-2 PSBT hex from encoder.spendP2sh
+     * @param {string} wif
+     * @returns {{ txHex: string, txid: string, psbtHex: string }}
+     */
+    signRevealPsbt(psbtHex, wif) {
+        if (!psbtHex || typeof psbtHex !== 'string') {
+            throw new SDKWalletError('INVALID_PSBT', 'PSBT hex string is required.');
+        }
+        if (!wif || typeof wif !== 'string') {
+            throw new SDKWalletError('INVALID_WIF', 'WIF private key is required.');
+        }
+
+        const net = this._resolveNet();
+        let keyPair;
+        try {
+            keyPair = ECPair.fromWIF(wif, net);
+        } catch (err) {
+            throw new SDKWalletError('INVALID_WIF', `Failed to import WIF: ${err.message}`);
+        }
+
+        let psbt;
+        try {
+            psbt = bitcoin.Psbt.fromHex(psbtHex, { network: net });
+        } catch (err) {
+            throw new SDKWalletError('INVALID_PSBT', `Failed to parse PSBT: ${err.message}`);
+        }
+
+        try {
+            psbt.signAllInputs(keyPair);
+        } catch (err) {
+            throw new SDKWalletError('SIGN_FAILED', `PSBT signing failed: ${err.message}`);
+        }
+
+        const finalizer = this._xchainRevealFinalizer(net);
+        try {
+            for (let i = 0; i < psbt.data.inputs.length; i += 1) {
+                psbt.finalizeInput(i, finalizer);
+            }
+        } catch (err) {
+            throw new SDKWalletError('FINALIZE_FAILED', `Reveal PSBT finalization failed: ${err.message}`);
+        }
+
+        const tx = psbt.extractTransaction();
+        return {
+            txHex: tx.toHex(),
+            txid: tx.getId(),
+            psbtHex: psbt.toHex(),
         };
     }
 
