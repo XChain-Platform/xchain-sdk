@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `src/hub.js` — `getAllConfig()` now polls the hub incrementally: it echoes the hub's `watermark` back as `since_updated_at` and merges the returned delta into a cached config map, so a quiet poll transfers near-nothing instead of re-fetching the full config tree every 60s. The merge is exact because the hub's config table is upsert-only (rows are never deleted), so applying successive deltas reconstructs exactly what a full fetch would have returned; callers (`extractServiceEndpoints`) still receive the same full nested map. Falls back to a full fetch on the first call, after a restart, or against an older hub that reports no watermark, so the change is backward-compatible.
+
 ### Fixed
 - `src/hub.js` — the hub connector now remembers the last endpoint that answered and starts each call there (wrapping through the remaining endpoints), instead of always trying the configured endpoints in fixed order. Previously, when the first endpoint was degraded enough to hit the request timeout, every `getAllConfig()` and `ping()` call paid the full timeout penalty before falling back — and then retried that same endpoint first on the next call. Both methods now share a sticky-last-good index, so the connector sticks to a known-good endpoint until it too fails, then rotates to the next responder.
 
