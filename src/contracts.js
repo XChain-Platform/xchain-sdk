@@ -143,6 +143,29 @@ class ContractUtils {
         };
     }
 
+    // Count C-style `for (init; test; update)` statements — the loops the VM
+    // double-charges per iteration (body + update expression). for-in / for-of /
+    // while / do-while have no update slot and are excluded. Prefers an AST walk;
+    // degrades to a header-shape regex when acorn is unavailable.
+    _countForStatements(sourceCode) {
+        let code = String(sourceCode);
+        let parser = loadAcorn();
+        let walker = loadAcornWalk();
+        if (parser && walker) {
+            try {
+                let ast = parser.parse(code, { ecmaVersion: 2020, sourceType: 'script', locations: false });
+                let count = 0;
+                walker.simple(ast, { ForStatement() { count++; } });
+                return count;
+            } catch (e) {
+                // Unparseable source — fall through to the regex approximation.
+            }
+        }
+        // Fallback: a C-style `for` header contains semicolons; for-in / for-of
+        // headers do not. Match `for (` up to the first `;` in the header.
+        return (code.match(/\bfor\s*\([^;{)]*;/g) || []).length;
+    }
+
     // Heuristic gas limit suggestion based on code size and complexity
     suggestGasLimit(sourceCode) {
         let code = String(sourceCode);
@@ -160,7 +183,15 @@ class ContractUtils {
         let emits = (code.match(/xchain\.emit\./g) || []).length;
         let stateOps = (code.match(/xchain\.state\./g) || []).length;
 
-        let complexity = (loops * 20000) + (functions * 5000) + (emits * 5000) + (stateOps * 2000);
+        // Indexed `for` loops cost ~2x per iteration vs while / do-while / for-in /
+        // for-of. The VM's gas-metering transform injects a charge for BOTH the loop
+        // body AND the update expression — `for (...; i++)` is metered as
+        // `for (...; (__gas(1), i++))` — so each iteration is charged twice. Loops
+        // without an update slot are charged once. Count each C-style `for` an extra
+        // time so its estimated budget reflects the doubled charge.
+        let forLoops = this._countForStatements(code);
+
+        let complexity = ((loops + forLoops) * 20000) + (functions * 5000) + (emits * 5000) + (stateOps * 2000);
 
         let suggested = base + perByte + complexity;
 
@@ -170,7 +201,8 @@ class ContractUtils {
         // Cap at reasonable ceiling
         if (suggested > 1000000) suggested = 1000000;
 
-        let rationale = bytes + ' bytes, ' + functions + ' functions, ' + loops + ' loops, ' +
+        let rationale = bytes + ' bytes, ' + functions + ' functions, ' + loops + ' loops (' +
+            forLoops + ' indexed for, charged 2x/iteration), ' +
             emits + ' emit calls, ' + stateOps + ' state ops';
 
         return { suggested, rationale };
