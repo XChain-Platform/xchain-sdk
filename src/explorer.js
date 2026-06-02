@@ -566,6 +566,15 @@ class ExplorerClient {
      *  Utility Methods
      */
 
+    // Indexer status. Returns per-coin maps:
+    //   supported / available — configured and currently-served coins
+    //   last_block[coin]       — highest block the indexer has processed
+    //   last_block_time[coin]  — block_time of that block
+    //   node_tip[coin]         — chain tip (decoder's highest seen block), or null
+    //                            if unavailable for that coin
+    //   lag_blocks[coin]       — node_tip - last_block (>= 0), or null when node_tip
+    //                            is null. Lets a caller detect a stalled indexer from
+    //                            this single call rather than a separate tip query.
     async getStatus() {
         return this._get('/status');
     }

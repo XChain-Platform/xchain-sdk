@@ -954,7 +954,11 @@ export declare class XChainSDK {
      * Resolves to an object with `supported` and `available` coin maps plus
      * `last_block` and `last_block_time` — per-coin maps (keyed by ticker) of
      * the highest block index processed by the indexer and its block_time.
-     * Compare these against the chain tip to detect indexer lag.
+     *
+     * Also includes `node_tip` and `lag_blocks` per-coin maps: `node_tip` is the
+     * chain tip (the decoder's highest seen block) and `lag_blocks` is
+     * `node_tip - last_block` (>= 0), so a stalled indexer is detectable from
+     * this single call. Both are `null` for a coin when the tip is unavailable.
      */
     getStatus(): Promise<any>;
 
