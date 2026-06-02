@@ -349,6 +349,14 @@ class ExplorerClient {
         return this._get('/swaps/' + query + '/' + type, opts);
     }
 
+    // Completed swap matches (two auto-matched counter-swaps). The explorer
+    // route keys matches by block, so type is 'block'.
+    async getSwapMatches(query, type = 'block', opts = {}) {
+        if (query)
+            return this._get('/swap_matches/' + query + '/' + type, opts);
+        return this._get('/swap_matches', opts);
+    }
+
     async getSweeps(query, type, opts = {}) {
         return this._get('/sweeps/' + query + '/' + type, opts);
     }
@@ -433,6 +441,14 @@ class ExplorerClient {
         if (query)
             return this._get('/contract_unstakes/' + query + '/' + type, opts);
         return this._get('/contract_unstakes', opts);
+    }
+
+    // External Attestation Framework rows (ATTEST v0 requests + v1/v2
+    // responses from the `attests` table) — type ∈ {address, block, contract}.
+    async getAttestations(query, type, opts = {}) {
+        if (query)
+            return this._get('/attestations/' + query + '/' + type, opts);
+        return this._get('/attestations', opts);
     }
 
     // Slash events emitted by contracts via xchain.contract.slash —

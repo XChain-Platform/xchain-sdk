@@ -34,6 +34,7 @@ const WalletUtils    = require('./wallet.js');
 const AuthUtils      = require('./auth.js');
 const MessagingUtils = require('./messaging.js');
 const GatedFileUtils = require('./gatedFile.js');
+const AttestationHelpers = require('./attestation.js');
 const MuSig2            = require('./musig2.js');
 const ActionWaiter      = require('./actionWaiter.js');
 const LifecycleManager  = require('./lifecycleManager.js');
@@ -71,6 +72,11 @@ class XChainSDK {
         this.auth       = new AuthUtils(network);
         this.messaging  = new MessagingUtils(network);
         this.gatedFile  = new GatedFileUtils();
+        // Attestation request/payload builders (http_get URL validation, LLM
+        // envelope, request options). Exposed on the instance for parity with
+        // messaging/gatedFile so dapps can `sdk.attestation.httpGet(url)` before
+        // passing a URL into an EXECUTE that emits xchain.attestation.request().
+        this.attestation = AttestationHelpers;
 
         // Service clients (initialized by _initClients or init)
         this.explorer = null;
@@ -724,6 +730,11 @@ class XChainSDK {
         return this._requireExplorer().getSwaps(query, type, opts);
     }
 
+    // Completed swap matches (type 'block' — the explorer keys matches by block).
+    async getSwapMatches(query, type, opts) {
+        return this._requireExplorer().getSwapMatches(query, type, opts);
+    }
+
     async getSweeps(query, type, opts) {
         return this._requireExplorer().getSweeps(query, type, opts);
     }
@@ -747,6 +758,13 @@ class XChainSDK {
 
     async getContractBalance(contractActionIndex, tick) {
         return this._requireExplorer().getContractBalance(contractActionIndex, tick);
+    }
+
+    // Read External Attestation Framework rows (ATTEST v0 requests + v1/v2
+    // responses from the `attests` table). type ∈ {block, address, contract}.
+    // A dapp polls this to learn its attestation request's status/result.
+    async getAttestations(query, type, opts) {
+        return this._requireExplorer().getAttestations(query, type, opts);
     }
 
     async getExecution(executionActionIndex) {
