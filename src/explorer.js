@@ -575,7 +575,10 @@ class ExplorerClient {
         return this._get('/mempool/' + query + '/' + type, opts);
     }
 
-    // Network-wide summary (chain heights, indexer status, peer counts).
+    // Network-wide summary (chain heights, indexer status, peer counts). Also
+    // includes a `finality` map ({ BTC, LTC, DOGE }) — the recommended number of
+    // confirmations to wait before treating a same-chain receipt as final
+    // (display/UX guidance; the indexer itself processes actions at the tip).
     async getNetwork(opts = {}) {
         return this._get('/network', opts);
     }
