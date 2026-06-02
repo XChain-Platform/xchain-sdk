@@ -150,6 +150,7 @@ class EncoderClient {
     //   unconfirmed      - include unconfirmed UTXOs (default true)
     //   compressedPubKey - required for MULTISIGN encoding
     //   customOutputs    - additional transaction outputs
+    //   feeQuote         - protocol fee { address, amount } from hub
     //
     // Returns: { psbt: <hex>, encoding: <string> }
     async createTx(params) {
@@ -175,6 +176,7 @@ class EncoderClient {
         if (params.unconfirmed !== undefined)      rpcParams.unconfirmed = params.unconfirmed;
         if (params.compressedPubKey !== undefined) rpcParams.compressedPubKey = params.compressedPubKey;
         if (params.customOutputs !== undefined)    rpcParams.customOutputs = params.customOutputs;
+        if (params.feeQuote !== undefined)         rpcParams.feeQuote = params.feeQuote;
 
         return this._rpc('create_tx', rpcParams);
     }
