@@ -20,6 +20,12 @@
  * `xchain.attestation.request(providerId, payload, callbackMethod, callbackParams, options)`
  * inside their contract code.
  *
+ * NOTE on `callbackParams`: every element is delivered to the callback as a
+ * string by the VM, regardless of the type you pass (the parameter bus is
+ * string-typed). Passing `[42, true, null]` yields `['42', 'true', 'null']`
+ * at the callback. Re-parse numeric/boolean context inside the callback with
+ * parseInt / parseFloat / JSON.parse. See the ATTEST spec §Effects.
+ *
  * Spec: claude/reports/specs/2026-05-24_external-attestation-framework.md
  * LLM:  claude/reports/specs/2026-05-24_llm-attestation-provider.md
  *
