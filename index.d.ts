@@ -859,6 +859,10 @@ export declare class XChainSDK {
     getDestroys(query: string, type: string, opts?: QueryOptions): Promise<any>;
     getDispensers(query: string, type: string, opts?: QueryOptions): Promise<any>;
     getDispenses(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    getDispenserCancels(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    getDispenserCloses(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    getDispenserExpires(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    getDispenserEdits(query: string, type: string, opts?: QueryOptions): Promise<any>;
     getDividends(query: string, type: string, opts?: QueryOptions): Promise<any>;
     getFees(query: string, type: string, opts?: QueryOptions): Promise<any>;
     getFiles(query: string, type: string, opts?: QueryOptions): Promise<any>;
@@ -867,9 +871,16 @@ export declare class XChainSDK {
     getMessages(query: string, type: string, opts?: QueryOptions): Promise<any>;
     getMints(query: string, type: string, opts?: QueryOptions): Promise<any>;
     getOrders(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    getOrderCancels(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    getOrderEdits(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    getOrderExpires(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    getOrderMatches(query?: string, type?: string, opts?: QueryOptions): Promise<any>;
     getSends(query: string, type: string, opts?: QueryOptions): Promise<any>;
     getSleeps(query: string, type: string, opts?: QueryOptions): Promise<any>;
     getSwaps(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    getSwapCancels(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    getSwapEdits(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    getSwapExpires(query: string, type: string, opts?: QueryOptions): Promise<any>;
     getSweeps(query: string, type: string, opts?: QueryOptions): Promise<any>;
 
 
@@ -923,6 +934,17 @@ export declare class XChainSDK {
 
 
     /*
+     *  Explorer: Price methods
+     */
+
+    /** Get price records (PRICE v0 COIN/FIAT snapshots + v1 TOKEN/FIAT oracle). */
+    getPrices(query?: string, type?: string, opts?: QueryOptions): Promise<any>;
+
+    /** Get oracle price-snapshot rounds. */
+    getPriceSnapshots(query?: string, type?: string, opts?: QueryOptions): Promise<any>;
+
+
+    /*
      *  Explorer: Utility methods
      */
 
@@ -935,6 +957,12 @@ export declare class XChainSDK {
      * Compare these against the chain tip to detect indexer lag.
      */
     getStatus(): Promise<any>;
+
+    /** Get unconfirmed mempool actions filtered by query and type (address | token). */
+    getMempool(query: string, type: string, opts?: QueryOptions): Promise<any>;
+
+    /** Get a network-wide summary (chain heights, indexer status, peer counts). */
+    getNetwork(opts?: QueryOptions): Promise<any>;
 
     /** Search the explorer for a query string of a given type. */
     search(query: string, type: string): Promise<any>;

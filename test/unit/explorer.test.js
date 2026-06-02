@@ -229,13 +229,18 @@ describe('ExplorerClient', function () {
             'getTransaction', 'getAction', 'getBlock', 'getHistory',
             'getAddresses', 'getAirdrops', 'getBatches', 'getBroadcasts', 'getCallbacks',
             'getCoinpays', 'getCoinpayExpires', 'getCoinpayObligations',
-            'getDestroys', 'getDispensers', 'getDispenses', 'getDividends', 'getFees',
+            'getDestroys', 'getDispensers', 'getDispenses',
+            'getDispenserCancels', 'getDispenserCloses', 'getDispenserExpires', 'getDispenserEdits',
+            'getDividends', 'getFees',
             'getFiles', 'getLinks', 'getLists', 'getMessages', 'getMints', 'getOrders',
-            'getSends', 'getSleeps', 'getSwaps', 'getSweeps',
+            'getOrderCancels', 'getOrderEdits', 'getOrderExpires', 'getOrderMatches',
+            'getSends', 'getSleeps', 'getSwaps',
+            'getSwapCancels', 'getSwapEdits', 'getSwapExpires', 'getSweeps',
+            'getPrices', 'getPriceSnapshots',
             'getStakes', 'getDelegations', 'getValidators', 'getValidatorRewards',
             'getContractStakes', 'getContractUnstakes', 'getSlashEvents',
             'getMarkets', 'getMarket', 'getMarketHistory', 'getMarketOrders', 'getOrderbook',
-            'getStatus', 'search'
+            'getStatus', 'getMempool', 'getNetwork', 'search'
         ];
         for (let method of methods) {
             it('has ' + method + '()', function () {
@@ -243,10 +248,10 @@ describe('ExplorerClient', function () {
             });
         }
 
-        it('has 63 public methods', function () {
+        it('has 80 public methods', function () {
             let publicMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(publicMethods).to.have.length(63);
+            expect(publicMethods).to.have.length(80);
         });
     });
 

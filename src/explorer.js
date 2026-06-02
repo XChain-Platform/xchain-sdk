@@ -265,6 +265,23 @@ class ExplorerClient {
         return this._get('/dispenses/' + query + '/' + type, opts);
     }
 
+    // Dispenser lifecycle events — type ∈ {block, address}.
+    async getDispenserCancels(query, type, opts = {}) {
+        return this._get('/dispenser_cancels/' + query + '/' + type, opts);
+    }
+
+    async getDispenserCloses(query, type, opts = {}) {
+        return this._get('/dispenser_closes/' + query + '/' + type, opts);
+    }
+
+    async getDispenserExpires(query, type, opts = {}) {
+        return this._get('/dispenser_expires/' + query + '/' + type, opts);
+    }
+
+    async getDispenserEdits(query, type, opts = {}) {
+        return this._get('/dispenser_edits/' + query + '/' + type, opts);
+    }
+
     async getDividends(query, type, opts = {}) {
         return this._get('/dividends/' + query + '/' + type, opts);
     }
@@ -337,6 +354,27 @@ class ExplorerClient {
         return this._get('/orders/' + query + '/' + type, opts);
     }
 
+    // Order lifecycle events — type ∈ {block, address}.
+    async getOrderCancels(query, type, opts = {}) {
+        return this._get('/order_cancels/' + query + '/' + type, opts);
+    }
+
+    async getOrderEdits(query, type, opts = {}) {
+        return this._get('/order_edits/' + query + '/' + type, opts);
+    }
+
+    async getOrderExpires(query, type, opts = {}) {
+        return this._get('/order_expires/' + query + '/' + type, opts);
+    }
+
+    // Completed order matches (auto-matched counter-orders). The explorer
+    // route keys matches by block, so type is 'block'.
+    async getOrderMatches(query, type = 'block', opts = {}) {
+        if (query)
+            return this._get('/order_matches/' + query + '/' + type, opts);
+        return this._get('/order_matches', opts);
+    }
+
     async getSends(query, type, opts = {}) {
         return this._get('/sends/' + query + '/' + type, opts);
     }
@@ -349,6 +387,19 @@ class ExplorerClient {
         return this._get('/swaps/' + query + '/' + type, opts);
     }
 
+    // Swap lifecycle events — type ∈ {block, address}.
+    async getSwapCancels(query, type, opts = {}) {
+        return this._get('/swap_cancels/' + query + '/' + type, opts);
+    }
+
+    async getSwapEdits(query, type, opts = {}) {
+        return this._get('/swap_edits/' + query + '/' + type, opts);
+    }
+
+    async getSwapExpires(query, type, opts = {}) {
+        return this._get('/swap_expires/' + query + '/' + type, opts);
+    }
+
     // Completed swap matches (two auto-matched counter-swaps). The explorer
     // route keys matches by block, so type is 'block'.
     async getSwapMatches(query, type = 'block', opts = {}) {
@@ -359,6 +410,26 @@ class ExplorerClient {
 
     async getSweeps(query, type, opts = {}) {
         return this._get('/sweeps/' + query + '/' + type, opts);
+    }
+
+
+    /*
+     *  Price Methods
+     */
+
+    // PRICE v0 validator COIN/FIAT snapshots + v1 user TOKEN/FIAT oracle —
+    // type ∈ {block, address, source, token}.
+    async getPrices(query, type, opts = {}) {
+        if (query)
+            return this._get('/prices/' + query + '/' + type, opts);
+        return this._get('/prices', opts);
+    }
+
+    // Oracle price-snapshot rounds — type ∈ {pair, round, status}.
+    async getPriceSnapshots(query, type, opts = {}) {
+        if (query)
+            return this._get('/price_snapshots/' + query + '/' + type, opts);
+        return this._get('/price_snapshots', opts);
     }
 
 
@@ -497,6 +568,16 @@ class ExplorerClient {
 
     async getStatus() {
         return this._get('/status');
+    }
+
+    // Unconfirmed mempool actions — type ∈ {address, token}.
+    async getMempool(query, type, opts = {}) {
+        return this._get('/mempool/' + query + '/' + type, opts);
+    }
+
+    // Network-wide summary (chain heights, indexer status, peer counts).
+    async getNetwork(opts = {}) {
+        return this._get('/network', opts);
     }
 
     async search(query, type) {
