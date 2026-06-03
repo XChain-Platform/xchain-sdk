@@ -30,7 +30,7 @@ Developer-facing SDK for generating XChain platform transactions and querying bl
 - **Automatic format selection** — picks the smallest encoding format for every action
 - **PSBT generation** — integrates with xchain-encoder to produce unsigned transactions
 - **40+ explorer endpoints** — balances, tokens, transactions, markets, history, contracts
-- **Batch builder** — fluent API: `sdk.batch().send({...}).mint({...}).build()`
+- **Batch builder** — fluent API: `await sdk.batch().send({...}).mint({...}).build()` (`build()` is async)
 - **Real-time events** — WebSocket streaming with `onBlock()`, `onAction()`, `onAddress()`, and more
 - **Encrypted messaging** — ECIES, ECDH, and AES encryption for MESSAGE actions; `messaging.send()` accepts a `Buffer` payload and `getMessages()` exposes `msg.bytes` for binary ECIES
 - **Token-gated file publishing** — `sdk.gatedFile.encryptFileBytes()` and `sdk.gatedFile.encryptPack()` produce AES-256-GCM ciphertext + key for FILE v1 gated content; key handoff as a compact 33-byte binary payload via `serializeKeyPayload()` / `parseKeyPayload()` (sent through ECIES in binary mode). See [Token-Gated Content](https://github.com/XChain-platform/xchain-documentation/blob/master/protocol/TOKEN_GATED_CONTENT.md)

@@ -99,6 +99,10 @@ class BatchBuilder {
     // `rawData` in its params (gated-content publishing), that rawData is
     // promoted to BATCH-level encoder options so the encoder attaches it to the
     // transaction.
+    //
+    // NOTE: returns a Promise — it wraps the SDK's async createAction (which may
+    // build a PSBT when encoder.pubkey is supplied). Callers MUST await:
+    //   const batchAction = await sdk.batch().send(...).mint(...).build();
     build(encoderOpts) {
         this._validate();
 

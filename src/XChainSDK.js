@@ -380,7 +380,9 @@ class XChainSDK {
     }
 
     // Create a new BatchBuilder for fluent BATCH construction
-    // Usage: sdk.batch().send({...}).mint({...}).build(encoderOpts?)
+    // Usage: await sdk.batch().send({...}).mint({...}).build(encoderOpts?)
+    // NOTE: build() is async (it wraps the async createAction) — you must await
+    // it; passing the un-awaited Promise to submitAction will not work.
     batch() {
         return new BatchBuilder(this);
     }
