@@ -352,9 +352,11 @@ describe('EncoderClient retry integration', () => {
     });
 
     it('network error (ECONNRESET) then success — succeeds', async () => {
-        // Pass an object so nock preserves the error code (plain string sets only message)
+        // Pass a real Error instance carrying the code so the network error
+        // propagates to the HTTP client as a socket error (object literals are
+        // not surfaced as connection errors by the interceptor)
         nock(ENCODER_BASE)
-            .post('/').replyWithError({ code: 'ECONNRESET', message: 'connection reset' })
+            .post('/').replyWithError(Object.assign(new Error('connection reset'), { code: 'ECONNRESET' }))
             .post('/').reply(200, { jsonrpc: '2.0', id: 2, result: 'pong' });
 
         let result = await client.ping();
