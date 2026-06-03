@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - `src/utility.js` — removed the unused wall-clock `getCurrentTime()` helper (it returned `Date.now()`-derived seconds). Nothing in the SDK called it; time-sensitive XChain values such as EXPIRATION derive from a block timestamp passed in explicitly via `getDefaultExpiration(block_time)`, which is unchanged. Dropping it from the public SDK surface keeps consumers from reaching for non-deterministic wall-clock time where a block timestamp is the correct input.
 
+### Security
+- Pin `diff` to `^8.0.4` via an `overrides` entry, remediating GHSA-73rr-hh4g-fpgx (low-severity DoS in jsdiff's `parsePatch` / `applyPatch`). The package is present only as a transitive dev dependency of `mocha`, which pins `^7.0.0` (a vulnerable range — the advisory covers `6.0.0 - 8.0.2`, so the fix requires `>= 8.0.3`); the override forces the patched `8.0.4` across all transitive paths so `npm audit` no longer flags it, without the breaking `mocha` downgrade that `npm audit fix --force` would otherwise apply. `8.0.4` is the version `sinon` already resolves, so `mocha`'s diff-reporter API usage (`createPatch` / `diffWordsWithSpace`) is unaffected.
+
 ## [1.13.2] - 2026-05-28
 
 ### Security
