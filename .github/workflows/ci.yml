@@ -1,0 +1,13 @@
+# Slim per-repo CI: delegates to the shared reusable workflow.
+# Pinned @master so a push to the reusable definition propagates on the next run.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  ci:
+    uses: XChain-Platform/.github/.github/workflows/ci-reusable.yml@master
