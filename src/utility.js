@@ -320,8 +320,15 @@ class Utility {
             // a 0/1 selector for LIST but a MIME string for FILE). Casting a
             // non-numeric string (e.g. "text/plain") with bcnum yields NaN and
             // corrupts the action. Mirrors the indexer's setNumberFormats guard.
+            //
+            // Use a full-precision bignumber + fixed notation rather than bcnum's
+            // parseFloat/parseInt: amounts can be DIVISIBLE to 18 decimals
+            // (MAX_DECIMALS) and supplies can exceed 2^53, both of which JS doubles
+            // truncate — and parseFloat also emits scientific notation (e.g.
+            // "1e-18"), corrupting the on-chain ACTION string. fixed notation keeps
+            // the exact wire value, matching how the indexer reads it back.
             if(!this.isNull(value) && this.isNumeric(value))
-                data[name] = this.bcnum(value);
+                data[name] = mathjs.format(mathjs.bignumber(String(value).trim()), { notation: 'fixed' });
         }
         return data;
     }
