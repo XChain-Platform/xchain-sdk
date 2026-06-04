@@ -837,10 +837,13 @@ class XChainSDK {
      */
 
     // Indexer status: per-coin last_block / last_block_time (indexer position),
-    // plus node_tip (chain tip, from the decoder's highest block) and lag_blocks
-    // (node_tip - last_block, >= 0) so a stalled indexer is detectable from this
-    // single call. node_tip/lag_blocks are null for a coin when the tip is
-    // unavailable. See ExplorerClient.getStatus for the full field list.
+    // plus decoder_tip (the decoder's highest *processed* block) and
+    // decoder_lag_blocks (decoder_tip - last_block, >= 0) so a stalled indexer is
+    // detectable from this single call. This covers the indexer->decoder slice only,
+    // NOT whole-pipeline lag: the coin node's chain tip is not exposed here (use the
+    // decoder's health() RPC for the chain->decoder gap). decoder_tip /
+    // decoder_lag_blocks are null for a coin when the decoder tip is unavailable. See
+    // ExplorerClient.getStatus for the full field list.
     async getStatus() {
         return this._requireExplorer().getStatus();
     }
