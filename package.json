@@ -5,7 +5,7 @@
     "private": true,
     "main": "index.js",
     "types": "index.d.ts",
-    "license": "SEE LICENSE IN LICENSE.md",
+    "license": "AGPL-3.0-or-later",
     "repository": {
         "type": "git",
         "url": "https://github.com/XChain-platform/xchain-sdk.git"
