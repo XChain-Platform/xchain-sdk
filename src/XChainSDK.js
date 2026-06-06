@@ -39,6 +39,7 @@ const ActionWaiter      = require('./actionWaiter.js');
 const LifecycleManager  = require('./lifecycleManager.js');
 const WalletSession     = require('./walletSession.js');
 const Workflows         = require('./workflows.js');
+const { publicDefaults } = require('./endpoints.js');
 const { SDKConfigError } = require('./errors.js');
 
 class XChainSDK {
@@ -83,12 +84,25 @@ class XChainSDK {
         this.hub      = null;
         this.ws       = null;
 
-        // Initialize hub connector if hub URL provided
-        if (options.hubUrl) {
-            this.hub = new HubConnector(options);
+        // Lazy hub-discovery state (see _ensureReady). Discovery runs once,
+        // transparently, before the first service call; it overlays
+        // hub-discovered endpoints onto the (already usable) default clients.
+        this._readyPromise = null;
+        this._polling      = false;
+
+        // Initialize the hub connector. Precedence for the hub URL is
+        // options > env (HUB_API_HOST/HUB_PORT) > public default. For
+        // non-regtest networks this defaults to https://hub.xchain.io so a
+        // network-only construction discovers endpoints with zero config;
+        // regtest gets no hub unless one is explicitly supplied.
+        let pub     = publicDefaults(network);
+        let hubUrl  = options.hubUrl  || process.env.HUB_API_HOST || pub.hubUrl;
+        let hubPort = options.hubPort || (process.env.HUB_PORT ? parseInt(process.env.HUB_PORT) : undefined);
+        if (options.hubValidators || hubUrl) {
+            this.hub = new HubConnector(Object.assign({}, options, { hubUrl, hubPort }));
         }
 
-        // Initialize clients from explicit options / env vars
+        // Initialize clients from explicit options / env vars / public defaults
         this._initClients(options);
     }
 
@@ -99,9 +113,14 @@ class XChainSDK {
         let hooks   = this.options.hooks || {};
         let retry   = this.options.retry !== undefined ? this.options.retry : {};
         let pool    = this.options.pool || {};
+        // Network-derived public defaults (empty for regtest, so those clients
+        // keep their localhost fallback). Resolution order per endpoint:
+        // constructor options > env vars > public default > localhost.
+        let pub       = publicDefaults(network);
+        let readyHook = () => this._ensureReady();
 
         // Explorer
-        let explorerUrl  = resolved.explorerUrl  || process.env.EXPLORER_URL;
+        let explorerUrl  = resolved.explorerUrl  || process.env.EXPLORER_URL || pub.explorerUrl;
         let explorerPort = resolved.explorerPort || process.env.EXPLORER_PORT;
         if (network && (explorerUrl || explorerPort)) {
             this.explorer = new ExplorerClient({
@@ -111,14 +130,15 @@ class XChainSDK {
                 timeout:      resolved.timeout,
                 hooks:        hooks,
                 retry:        retry,
-                pool:         pool
+                pool:         pool,
+                readyHook:    readyHook
             });
         } else if (network) {
-            this.explorer = new ExplorerClient({ network, timeout: resolved.timeout, hooks, retry, pool });
+            this.explorer = new ExplorerClient({ network, timeout: resolved.timeout, hooks, retry, pool, readyHook });
         }
 
         // Encoder
-        let encoderUrl  = resolved.encoderUrl  || process.env.ENCODER_URL;
+        let encoderUrl  = resolved.encoderUrl  || process.env.ENCODER_URL || pub.encoderUrl;
         let encoderPort = resolved.encoderPort || process.env.ENCODER_PORT;
         if (encoderUrl || encoderPort) {
             this.encoder = new EncoderClient({
@@ -127,7 +147,8 @@ class XChainSDK {
                 timeout:     resolved.timeout,
                 hooks:       hooks,
                 retry:       retry,
-                pool:        pool
+                pool:        pool,
+                readyHook:   readyHook
             });
         }
 
@@ -146,60 +167,94 @@ class XChainSDK {
                     websocketUrl:  wsUrl,
                     websocketPort: wsPort,
                     hooks:         hooks,
-                    retry:         retry
+                    retry:         retry,
+                    readyHook:     readyHook
                 });
             }
         }
     }
 
-    // Async initialization: fetch config from hub and resolve service endpoints
-    // Call this after construction when using hub-based discovery.
-    // Safe to call multiple times (re-fetches config).
+    // Async initialization: fetch config from hub and resolve service endpoints.
+    // Optional — service clients are already usable after construction (explicit
+    // URLs, env vars, or public defaults). Call this to force hub discovery up
+    // front; otherwise it happens lazily on the first service call (_ensureReady).
+    // Unlike the lazy path, init() surfaces a hub error when there is no fallback
+    // explorer/encoder client to fall back to. Safe to call multiple times.
     async init() {
         if (!this.hub) return;
-
+        // Satisfy the lazy gate with the same in-flight discovery.
+        if (!this._readyPromise) this._readyPromise = this._discover().catch(() => {});
         try {
-            await this.hub.getAllConfig();
+            await this._discover();
         } catch (err) {
-            // Hub failure is non-fatal if explicit URLs were provided
+            // Non-fatal when we already have usable clients (explicit/default).
             if (this.explorer && this.encoder) {
-                console.warn('Hub unavailable, using explicit config:', err);
+                console.warn('Hub unavailable, using explicit/default config:', err.message || err);
                 return;
             }
             throw err;
         }
+    }
 
-        // Extract service endpoints for our network
+    // Lazy-readiness gate. Awaited once (via each client's readyHook) before the
+    // first request, so hub-discovered endpoints overlay the default clients.
+    // Never throws — on hub failure the hardcoded/explicit config stands.
+    _ensureReady() {
+        if (!this.hub) return Promise.resolve();
+        if (!this._readyPromise) this._readyPromise = this._discover().catch(() => {});
+        return this._readyPromise;
+    }
+
+    // One-shot hub discovery + endpoint overlay (+ start polling). Guarded so
+    // init() and the lazy gate share a single in-flight fetch. May throw (init()
+    // inspects the error; _ensureReady() swallows it).
+    _discover() {
+        if (this._discovering) return this._discovering;
+        this._discovering = (async () => {
+            await this.hub.getAllConfig();
+            this._applyEndpoints();
+            this._startPollingOnce();
+        })();
+        return this._discovering;
+    }
+
+    // Overlay hub-discovered endpoints onto the live clients (mutating, not
+    // rebuilding, so in-flight callers see the new target). Skips any endpoint
+    // the caller pinned via constructor options. Creates a client if one does
+    // not yet exist (e.g. hub-only configuration).
+    _applyEndpoints() {
+        if (!this.hub) return;
         let network   = this.options.network || process.env.NETWORK;
         let endpoints = this.hub.extractServiceEndpoints(network);
+        let hooks     = this.options.hooks || {};
+        let retry     = this.options.retry !== undefined ? this.options.retry : {};
+        let pool      = this.options.pool || {};
+        let readyHook = () => this._ensureReady();
 
-        // Apply hub-discovered endpoints where explicit options weren't provided
-        // Resolution: constructor options > hub-discovered > env vars
-        let resolved = {
-            network:      network,
-            explorerUrl:  this.options.explorerUrl  || endpoints.explorerUrl  || process.env.EXPLORER_URL,
-            explorerPort: this.options.explorerPort || endpoints.explorerPort || process.env.EXPLORER_PORT,
-            encoderUrl:   this.options.encoderUrl   || endpoints.encoderUrl   || process.env.ENCODER_URL,
-            encoderPort:  this.options.encoderPort  || endpoints.encoderPort  || process.env.ENCODER_PORT,
-            timeout:      this.options.timeout
-        };
+        // Explorer
+        if (!this.options.explorerUrl && endpoints.explorerUrl) {
+            if (this.explorer) this.explorer.setBase(endpoints.explorerUrl, endpoints.explorerPort);
+            else if (network)  this.explorer = new ExplorerClient({ network, explorerUrl: endpoints.explorerUrl, explorerPort: endpoints.explorerPort, timeout: this.options.timeout, hooks, retry, pool, readyHook });
+        }
 
-        // Re-initialize clients with resolved config
-        this._initClients(resolved);
+        // Encoder
+        if (!this.options.encoderUrl && endpoints.encoderUrl) {
+            if (this.encoder) this.encoder.setBase(endpoints.encoderUrl, endpoints.encoderPort);
+            else              this.encoder = new EncoderClient({ encoderUrl: endpoints.encoderUrl, encoderPort: endpoints.encoderPort, timeout: this.options.timeout, hooks, retry, pool, readyHook });
+        }
 
-        // Start polling for config updates
-        this.hub.startPolling((configs) => {
-            let newEndpoints = this.hub.extractServiceEndpoints(network);
-            let newResolved = {
-                network:      network,
-                explorerUrl:  this.options.explorerUrl  || newEndpoints.explorerUrl  || process.env.EXPLORER_URL,
-                explorerPort: this.options.explorerPort || newEndpoints.explorerPort || process.env.EXPLORER_PORT,
-                encoderUrl:   this.options.encoderUrl   || newEndpoints.encoderUrl   || process.env.ENCODER_URL,
-                encoderPort:  this.options.encoderPort  || newEndpoints.encoderPort  || process.env.ENCODER_PORT,
-                timeout:      this.options.timeout
-            };
-            this._initClients(newResolved);
-        });
+        // WebSocket follows the explorer endpoint unless a websocket/explorer URL was pinned
+        if (!this.options.websocketUrl && !this.options.explorerUrl && endpoints.explorerUrl) {
+            if (this.ws)      this.ws.setBase(endpoints.explorerUrl, endpoints.explorerPort);
+            else if (network) this.ws = new WebSocketClient({ network, websocketUrl: endpoints.explorerUrl, websocketPort: endpoints.explorerPort, hooks, retry, readyHook });
+        }
+    }
+
+    // Start hub config polling exactly once; re-applies endpoints on each update.
+    _startPollingOnce() {
+        if (this._polling) return;
+        this._polling = true;
+        this.hub.startPolling(() => this._applyEndpoints());
     }
 
     // Handle starting up the SDK (server mode with polling loop)

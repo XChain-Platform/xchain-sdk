@@ -74,11 +74,19 @@ Full SDK developer guide is available in the [xchain-documentation](https://gith
 ```js
 const { XChainSDK } = require('xchain-sdk');
 
-const sdk = new XChainSDK({
-    network: 'bitcoin-mainnet',
-    explorerUrl: 'explorer.xchain.io',
-    encoderUrl: 'encoder.xchain.io'
-});
+// Zero-config: a network alone targets the public XChain Platform.
+// Mainnet/testnet default to the public hosts (hub.xchain.io discovers
+// explorer/encoder, falling back to explorer.xchain.io / encoder.xchain.io);
+// any *-regtest network defaults to localhost.
+const sdk = new XChainSDK({ network: 'bitcoin-mainnet' });
+
+// To point at your own services, pass full URLs (include the scheme — a
+// bare host is treated as http://host:<dev-port>):
+// const sdk = new XChainSDK({
+//     network: 'bitcoin-mainnet',
+//     explorerUrl: 'https://explorer.example.com',
+//     encoderUrl:  'https://encoder.example.com'
+// });
 
 // Generate an action string
 const result = await sdk.send({

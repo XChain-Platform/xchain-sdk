@@ -247,16 +247,17 @@ describe('EncoderClient', function () {
      */
 
     describe('public methods', function () {
-        it('has 6 public methods', function () {
+        it('has 7 public methods', function () {
             let methods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(methods).to.have.length(6);
+            expect(methods).to.have.length(7);
             expect(methods).to.include('ping');
             expect(methods).to.include('createTx');
             expect(methods).to.include('spendP2sh');
             expect(methods).to.include('broadcastTx');
             expect(methods).to.include('getUTXOs');
             expect(methods).to.include('estimateFee');
+            expect(methods).to.include('setBase');
         });
     });
 

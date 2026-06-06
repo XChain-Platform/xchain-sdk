@@ -75,14 +75,22 @@ class WebSocketClient {
         // Ping timer
         this._pingTimer         = null;
         this._pingIntervalMs    = options.pingInterval || 25000;
+
+        // Lazy-readiness hook (awaited once before connecting so the SDK can
+        // overlay hub-discovered endpoints). No-op when not supplied.
+        this._readyHook         = options.readyHook || null;
     }
 
     // Connect to the WebSocket server
     // Returns a Promise that resolves when the WELCOME message is received
-    connect() {
+    async connect() {
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
-            return Promise.resolve(this.serverInfo);
+            return this.serverInfo;
         }
+
+        // Await lazy readiness (hub-discovery overlay) before deriving the URL,
+        // so a hub-refined explorer host is reflected here on first connect.
+        if (this._readyHook) await this._readyHook();
 
         this.intentionalClose = false;
 
@@ -169,6 +177,22 @@ class WebSocketClient {
             this.ws = null;
         }
         this.connected = false;
+    }
+
+    // Repoint at a new host/port (used by hub-discovery overlay). The URL is
+    // re-derived on the next connect(); if currently connected, reconnect so
+    // the new endpoint takes effect.
+    setBase(url, port) {
+        if (!url && !port) return;
+        let newUrl  = url  || this.baseUrl;
+        let newPort = port || this.port;
+        if (newUrl === this.baseUrl && newPort === this.port) return;
+        this.baseUrl = newUrl;
+        this.port    = newPort;
+        if (this.isConnected()) {
+            this.disconnect();
+            this.connect().catch(() => {});
+        }
     }
 
     // Check if connected

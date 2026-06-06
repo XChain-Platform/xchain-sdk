@@ -29,22 +29,14 @@ class EncoderClient {
         this.baseUrl = options.encoderUrl || 'localhost';
         this.port    = options.encoderPort || 3000;
         this.timeout = options.timeout || 30000;
+        this._pool   = options.pool || {};
 
-        // Connection pooling configuration
-        let pool = options.pool || {};
-        this._agent = new (require('http').Agent)({
-            keepAlive:      pool.keepAlive !== undefined ? pool.keepAlive : true,
-            keepAliveMsecs: pool.keepAliveMsecs || 1000,
-            maxSockets:     pool.maxSockets || 10,
-            maxFreeSockets: pool.maxFreeSockets || 5
-        });
+        // Lazy-readiness hook (awaited once before the first request so the SDK
+        // can overlay hub-discovered endpoints). No-op when not supplied.
+        this._readyHook = options.readyHook || null;
 
-        this.client = axios.create({
-            baseURL: this.baseUrl.startsWith('http') ? this.baseUrl : 'http://' + this.baseUrl + ':' + this.port,
-            timeout: this.timeout,
-            headers: { 'Content-Type': 'application/json' },
-            httpAgent: this._agent
-        });
+        // Build the pooled axios client for the current baseUrl/port.
+        this._buildClient();
 
         this._rpcId = 0;
 
@@ -54,8 +46,44 @@ class EncoderClient {
         this.hooks = options.hooks || {};
     }
 
+    // (Re)build the axios client + keep-alive agent for the current target.
+    // Picks an https agent for https bases (axios ignores httpAgent on https),
+    // so connection pooling applies to public hosts too.
+    _buildClient() {
+        let pool    = this._pool;
+        let baseURL = this.baseUrl.startsWith('http') ? this.baseUrl : 'http://' + this.baseUrl + ':' + this.port;
+        let isHttps = baseURL.startsWith('https');
+        let Agent   = isHttps ? require('https').Agent : require('http').Agent;
+        this._agent = new Agent({
+            keepAlive:      pool.keepAlive !== undefined ? pool.keepAlive : true,
+            keepAliveMsecs: pool.keepAliveMsecs || 1000,
+            maxSockets:     pool.maxSockets || 10,
+            maxFreeSockets: pool.maxFreeSockets || 5
+        });
+        this.client = axios.create({
+            baseURL: baseURL,
+            timeout: this.timeout,
+            headers: { 'Content-Type': 'application/json' },
+            httpAgent:  isHttps ? undefined : this._agent,
+            httpsAgent: isHttps ? this._agent : undefined
+        });
+    }
+
+    // Repoint this client at a new host/port (used by hub-discovery overlay).
+    // No-ops if nothing changed so in-flight callers keep a stable client.
+    setBase(url, port) {
+        if (!url && !port) return;
+        let newUrl  = url  || this.baseUrl;
+        let newPort = port || this.port;
+        if (newUrl === this.baseUrl && newPort === this.port) return;
+        this.baseUrl = newUrl;
+        this.port    = newPort;
+        this._buildClient();
+    }
+
     // Make a JSON-RPC 2.0 call with retry and hooks
     async _rpc(method, params = {}) {
+        if (this._readyHook) await this._readyHook();
         let self = this;
         let retryConfig = this.retry === false ? { maxRetries: 0 } : this.retry;
 

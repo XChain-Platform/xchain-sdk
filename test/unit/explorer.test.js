@@ -258,10 +258,10 @@ describe('ExplorerClient', function () {
             });
         }
 
-        it('has 80 public methods', function () {
+        it('has 81 public methods', function () {
             let publicMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(publicMethods).to.have.length(80);
+            expect(publicMethods).to.have.length(81);
         });
     });
 
