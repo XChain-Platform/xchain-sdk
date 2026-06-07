@@ -233,21 +233,55 @@ class XChainSDK {
 
         // Explorer
         if (!this.options.explorerUrl && endpoints.explorerUrl) {
-            if (this.explorer) this.explorer.setBase(endpoints.explorerUrl, endpoints.explorerPort);
-            else if (network)  this.explorer = new ExplorerClient({ network, explorerUrl: endpoints.explorerUrl, explorerPort: endpoints.explorerPort, timeout: this.options.timeout, hooks, retry, pool, readyHook });
+            if (this.explorer) {
+                if (!this._isDowngrade('explorer', this.explorer, endpoints.explorerUrl))
+                    this.explorer.setBase(endpoints.explorerUrl, endpoints.explorerPort);
+            } else if (network) {
+                this.explorer = new ExplorerClient({ network, explorerUrl: endpoints.explorerUrl, explorerPort: endpoints.explorerPort, timeout: this.options.timeout, hooks, retry, pool, readyHook });
+            }
         }
 
         // Encoder
         if (!this.options.encoderUrl && endpoints.encoderUrl) {
-            if (this.encoder) this.encoder.setBase(endpoints.encoderUrl, endpoints.encoderPort);
-            else              this.encoder = new EncoderClient({ encoderUrl: endpoints.encoderUrl, encoderPort: endpoints.encoderPort, timeout: this.options.timeout, hooks, retry, pool, readyHook });
+            if (this.encoder) {
+                if (!this._isDowngrade('encoder', this.encoder, endpoints.encoderUrl))
+                    this.encoder.setBase(endpoints.encoderUrl, endpoints.encoderPort);
+            } else {
+                this.encoder = new EncoderClient({ encoderUrl: endpoints.encoderUrl, encoderPort: endpoints.encoderPort, timeout: this.options.timeout, hooks, retry, pool, readyHook });
+            }
         }
 
         // WebSocket follows the explorer endpoint unless a websocket/explorer URL was pinned
         if (!this.options.websocketUrl && !this.options.explorerUrl && endpoints.explorerUrl) {
-            if (this.ws)      this.ws.setBase(endpoints.explorerUrl, endpoints.explorerPort);
-            else if (network) this.ws = new WebSocketClient({ network, websocketUrl: endpoints.explorerUrl, websocketPort: endpoints.explorerPort, hooks, retry, readyHook });
+            if (this.ws) {
+                if (!this._isDowngrade('websocket', this.ws, endpoints.explorerUrl))
+                    this.ws.setBase(endpoints.explorerUrl, endpoints.explorerPort);
+            } else if (network) {
+                this.ws = new WebSocketClient({ network, websocketUrl: endpoints.explorerUrl, websocketPort: endpoints.explorerPort, hooks, retry, readyHook });
+            }
         }
+    }
+
+    // Guard against hub discovery downgrading a secure default. Hub service
+    // config commonly stores a bare internal host + port; overlaying that onto
+    // a client whose current base is https (the public default) would replace
+    // https://explorer.xchain.io with a broken http://host:port. When the
+    // current base is secure and the incoming endpoint is not, keep the secure
+    // base and warn once. (No effect on http/localhost bases — dev is unchanged.
+    // Set option `allowInsecureEndpoints: true` to opt out.)
+    _isDowngrade(service, client, incomingUrl) {
+        if (this.options.allowInsecureEndpoints) return false;
+        let currentSecure  = String(client.baseUrl || '').startsWith('https');
+        let incomingSecure = String(incomingUrl || '').startsWith('https');
+        if (currentSecure && !incomingSecure) {
+            if (!this._downgradeWarned) this._downgradeWarned = {};
+            if (!this._downgradeWarned[service]) {
+                this._downgradeWarned[service] = true;
+                console.warn('Ignoring hub ' + service + ' endpoint (' + incomingUrl + '): would downgrade the https default to an insecure transport. Publish a full https:// URL in the hub config, or set allowInsecureEndpoints:true.');
+            }
+            return true;
+        }
+        return false;
     }
 
     // Start hub config polling exactly once; re-applies endpoints on each update.
