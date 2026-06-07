@@ -38,15 +38,35 @@ function isRegtest(network) {
     return typeof network === 'string' && network.endsWith('-regtest');
 }
 
+// Coin path prefix used by the platform to route a shared service host to the
+// right per-network backend: e.g. bitcoin-mainnet -> BTC, bitcoin-testnet ->
+// TBTC, dogecoin-regtest -> RDOGE. Matches explorer.js COIN_PREFIX_MAP and the
+// wallet chain descriptors. Returns null for an unknown network.
+function coinPrefix(network) {
+    let [chain, net] = String(network || '').split('-');
+    let coin = { bitcoin: 'BTC', litecoin: 'LTC', dogecoin: 'DOGE' }[chain];
+    if (!coin) return null;
+    let pre = { mainnet: '', testnet: 'T', regtest: 'R' }[net] || '';
+    return pre + coin;
+}
+
 // Network-derived public defaults. Returns {} for regtest (or a missing
 // network), so the caller's `options || env || publicDefaults().X` chain
 // resolves to undefined there and each client keeps its localhost fallback.
+//
+// The platform routes every shared service host by coin path (/{COIN}); see the
+// wallet chain descriptors. The encoder and hub clients send to that URL
+// verbatim, so their defaults must carry the /{COIN} segment. The explorer
+// client builds its own /{COIN}/api/... path, so its default stays bare (adding
+// the coin here would double it).
 function publicDefaults(network) {
     if (!network || isRegtest(network)) return {};
+    let coin = coinPrefix(network);
+    if (!coin) return {};
     return {
-        hubUrl:      PUBLIC_HUB,
+        hubUrl:      PUBLIC_HUB + '/' + coin,
         explorerUrl: PUBLIC_EXPLORER,
-        encoderUrl:  PUBLIC_ENCODER
+        encoderUrl:  PUBLIC_ENCODER + '/' + coin
     };
 }
 
@@ -55,5 +75,6 @@ module.exports = {
     PUBLIC_EXPLORER,
     PUBLIC_ENCODER,
     isRegtest,
+    coinPrefix,
     publicDefaults
 };
