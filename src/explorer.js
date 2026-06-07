@@ -21,20 +21,11 @@
 const axios = require('axios');
 const { SDKExplorerError } = require('./errors.js');
 const { withRetry, isRetryable } = require('./retry.js');
+const { coinPrefix } = require('./endpoints.js');
+const { getSupportedNetworks } = require('./networks.js');
 
-// Network string → explorer coin prefix mapping
-const COIN_PREFIX_MAP = {
-    'bitcoin-mainnet':   'BTC',
-    'bitcoin-testnet':   'TBTC',
-    'bitcoin-regtest':   'RBTC',
-    'litecoin-mainnet':  'LTC',
-    'litecoin-testnet':  'TLTC',
-    'litecoin-regtest':  'RLTC',
-    'dogecoin-mainnet':  'DOGE',
-    'dogecoin-testnet':  'TDOGE',
-    'dogecoin-regtest':  'RDOGE'
-};
-
+// (Coin prefix mapping lives in endpoints.coinPrefix — single source of truth,
+//  shared with the public-default resolution.)
 
 class ExplorerClient {
 
@@ -96,9 +87,9 @@ class ExplorerClient {
     // Derive coin prefix from network string
     _deriveCoinPrefix(network) {
         if (!network) return 'BTC';
-        let prefix = COIN_PREFIX_MAP[network];
+        let prefix = coinPrefix(network);
         if (!prefix)
-            throw new SDKExplorerError('INVALID_NETWORK', 'Unknown network: ' + network + '. Valid: ' + Object.keys(COIN_PREFIX_MAP).join(', '), { network });
+            throw new SDKExplorerError('INVALID_NETWORK', 'Unknown network: ' + network + '. Valid: ' + getSupportedNetworks().join(', '), { network });
         return prefix;
     }
 

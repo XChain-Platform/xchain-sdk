@@ -45,8 +45,9 @@ function isRegtest(network) {
 function coinPrefix(network) {
     let [chain, net] = String(network || '').split('-');
     let coin = { bitcoin: 'BTC', litecoin: 'LTC', dogecoin: 'DOGE' }[chain];
-    if (!coin) return null;
-    let pre = { mainnet: '', testnet: 'T', regtest: 'R' }[net] || '';
+    let pre  = { mainnet: '', testnet: 'T', regtest: 'R' }[net];
+    // Strict: reject unknown chain or network part (e.g. "bitcoin-foo").
+    if (!coin || pre === undefined) return null;
     return pre + coin;
 }
 
