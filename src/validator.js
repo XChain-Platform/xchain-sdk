@@ -104,8 +104,13 @@ class Validator {
         // Guard against null/undefined fields
         if (!fields || typeof fields !== 'object') fields = {};
 
-        // Check action exists
-        if (!formats[action]) {
+        // Check action exists. Use hasOwnProperty so a crafted action name that
+        // matches an Object.prototype property (__proto__, constructor, toString,
+        // hasOwnProperty, valueOf, …) resolves to UNKNOWN_ACTION instead of the
+        // truthy inherited value — which otherwise slipped past this guard and
+        // then threw "required is not iterable" on the ACTION_REQUIRED_FIELDS
+        // lookup below (prototype-pollution-shaped crash in the validation path).
+        if (!Object.prototype.hasOwnProperty.call(formats, action)) {
             errors.push(this._error('UNKNOWN_ACTION', 'Unknown ACTION type: ' + action, { action }));
             return errors;
         }

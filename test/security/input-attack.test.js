@@ -61,17 +61,14 @@ describe('Security: Validator.validate — hostile actions', function () {
     }
   });
 
-  // KNOWN BUG (documented, not fixed here — test-only discipline). validate()
-  // looks the action up as `formats[action]` and `ACTION_REQUIRED_FIELDS[action]`
-  // with bracket access, so any Object.prototype property name (__proto__,
-  // constructor, toString, hasOwnProperty, valueOf, …) resolves up the prototype
-  // chain: the truthy inherited value slips past the UNKNOWN_ACTION guard, then
-  // `for (let field of required)` throws "required is not iterable". Result: a
-  // crafted action name crashes the core validation path instead of returning
-  // UNKNOWN_ACTION. The fix is a one-liner — hasOwnProperty guards (or a Map /
-  // null-prototype object) on those two lookups. Un-skip once fixed; it asserts
-  // the SECURE behaviour the guard above expects of every other action.
-  it.skip('SECURITY: prototype-chain action names must return UNKNOWN_ACTION, not crash', function () {
+  // FIXED: validate() previously looked the action up as `formats[action]` with
+  // bracket access, so any Object.prototype property name (__proto__, constructor,
+  // toString, hasOwnProperty, valueOf, …) resolved up the prototype chain — the
+  // truthy inherited value slipped past the UNKNOWN_ACTION guard and then threw
+  // "required is not iterable" on the ACTION_REQUIRED_FIELDS lookup. The guard now
+  // uses Object.prototype.hasOwnProperty.call(formats, action), so these return
+  // UNKNOWN_ACTION like any other unknown action. This test pins that fix.
+  it('SECURITY: prototype-chain action names return UNKNOWN_ACTION, not a crash', function () {
     for (const a of ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf']) {
       let res;
       expect(() => { res = v().validate(a, {}); }, `validate threw on ${a}`).to.not.throw();
