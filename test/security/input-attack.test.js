@@ -140,11 +140,12 @@ describe('Security: _isDowngrade endpoint transport guard', function () {
     expect(sdk._isDowngrade('explorer', { baseUrl: 'https://a' }, 'javascript:alert(1)')).to.equal(true);
   });
 
-  // KNOWN WEAKNESS (documented): the secure-scheme check is `startsWith('https')`,
-  // which a scheme-less host like "httpsevil.example" satisfies — so such a value
-  // is treated as secure and NOT blocked. It would fail to connect downstream, so
-  // impact is low, but a strict `https://` prefix (or URL parse) would be tighter.
-  it.skip('SECURITY: scheme check should require https:// (not just startsWith https)', function () {
+  // The secure-scheme check requires a strict `https://` prefix, so a scheme-less
+  // host like "httpsevil.example" is NOT treated as secure and IS blocked as a
+  // downgrade. (Previously `startsWith('https')` let such a value masquerade as
+  // secure; impact was low since it would fail to connect downstream, but the
+  // strict prefix is tighter.)
+  it('SECURITY: scheme check requires https:// (not just startsWith https)', function () {
     expect(sdk._isDowngrade('explorer', { baseUrl: 'https://a' }, 'httpsevil.example')).to.equal(true);
   });
 });

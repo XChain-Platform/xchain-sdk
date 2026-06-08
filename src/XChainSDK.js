@@ -271,8 +271,8 @@ class XChainSDK {
     // Set option `allowInsecureEndpoints: true` to opt out.)
     _isDowngrade(service, client, incomingUrl) {
         if (this.options.allowInsecureEndpoints) return false;
-        let currentSecure  = String(client.baseUrl || '').startsWith('https');
-        let incomingSecure = String(incomingUrl || '').startsWith('https');
+        let currentSecure  = String(client.baseUrl || '').startsWith('https://');
+        let incomingSecure = String(incomingUrl || '').startsWith('https://');
         if (currentSecure && !incomingSecure) {
             if (!this._downgradeWarned) this._downgradeWarned = {};
             if (!this._downgradeWarned[service]) {
