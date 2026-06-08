@@ -43,7 +43,7 @@ describe('Performance: SDK hot-path throughput', function () {
     }
     const ms = Number(process.hrtime.bigint() - start) / 1e6;
     const opsPerSec = Math.round((ITERATIONS / ms) * 1000);
-    // eslint-disable-next-line no-console
+    // eslint-disable-next-line no-console -- performance test intentionally reports throughput to stdout
     console.log(`        validate: ${ITERATIONS} ops in ${ms.toFixed(1)}ms (${opsPerSec.toLocaleString()} ops/s)`);
 
     // Ceiling: 5s for 10k validations is ~50× slower than observed — a true
@@ -62,7 +62,7 @@ describe('Performance: SDK hot-path throughput', function () {
     }
     const ms = Number(process.hrtime.bigint() - start) / 1e6;
     const opsPerSec = Math.round((ITERATIONS / ms) * 1000);
-    // eslint-disable-next-line no-console
+    // eslint-disable-next-line no-console -- performance test intentionally reports throughput to stdout
     console.log(`        setNumberFormats: ${ITERATIONS} ops in ${ms.toFixed(1)}ms (${opsPerSec.toLocaleString()} ops/s)`);
 
     expect(ms, `setNumberFormats too slow: ${ms.toFixed(1)}ms for ${ITERATIONS}`).to.be.below(8000 * (ITERATIONS / 10000));
