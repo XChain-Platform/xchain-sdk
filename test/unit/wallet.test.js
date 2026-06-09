@@ -10,7 +10,9 @@
 
 const { expect } = require('chai');
 const nock = require('nock');
+const sinon = require('sinon');
 const bitcoin = require('bitcoinjs-lib');
+const ecc = require('@bitcoinerlab/secp256k1');
 const WalletUtils = require('../../src/wallet.js');
 const { getNetwork } = require('../../src/networks.js');
 
@@ -420,6 +422,8 @@ describe('WalletUtils', function() {
     });
 
     describe('getUTXOs()', function() {
+        afterEach(() => sinon.restore());
+
         it('should throw without encoder', async function() {
             const wallet = new WalletUtils('bitcoin-regtest');
             try {
@@ -438,6 +442,527 @@ describe('WalletUtils', function() {
             } catch (err) {
                 expect(err.code).to.equal('INVALID_ADDRESS');
             }
+        });
+
+        it('should return utxos array from encoder.getUTXOs({utxos:[...]})', async function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const encoder = { getUTXOs: async () => ({ utxos: [{ txid: 'abc', vout: 0, value: 1000 }] }) };
+            const result = await wallet.getUTXOs('mTestAddr', encoder);
+            expect(result).to.be.an('array').with.lengthOf(1);
+            expect(result[0].txid).to.equal('abc');
+        });
+
+        it('should return raw array when encoder.getUTXOs returns array directly', async function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const encoder = { getUTXOs: async () => [{ txid: 'xyz', vout: 1, value: 500 }] };
+            const result = await wallet.getUTXOs('mTestAddr', encoder);
+            expect(result).to.be.an('array').with.lengthOf(1);
+            expect(result[0].txid).to.equal('xyz');
+        });
+
+        it('should wrap non-SDK errors as UTXO_FETCH_FAILED', async function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const encoder = { getUTXOs: async () => { throw new Error('network error'); } };
+            try {
+                await wallet.getUTXOs('mTestAddr', encoder);
+                expect.fail('should have thrown');
+            } catch (err) {
+                expect(err.code).to.equal('UTXO_FETCH_FAILED');
+            }
+        });
+
+        it('should re-throw SDK errors from encoder.getUTXOs', async function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const { SDKWalletError } = require('../../src/errors.js');
+            const sdkErr = new SDKWalletError('SOME_CODE', 'sdk error');
+            const encoder = { getUTXOs: async () => { throw sdkErr; } };
+            try {
+                await wallet.getUTXOs('mTestAddr', encoder);
+                expect.fail('should have thrown');
+            } catch (err) {
+                expect(err.code).to.equal('SOME_CODE');
+            }
+        });
+    });
+
+    describe('broadcastTx() — success and error paths', function() {
+        afterEach(() => sinon.restore());
+
+        it('should return txid from encoder.broadcastTx', async function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const encoder = { broadcastTx: async (hex) => ({ txid: 'deadbeef1234' }) };
+            const result = await wallet.broadcastTx('aabbcc', encoder);
+            expect(result.txid).to.equal('deadbeef1234');
+        });
+
+        it('should wrap non-SDK errors as BROADCAST_FAILED', async function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const encoder = { broadcastTx: async () => { throw new Error('mempool full'); } };
+            try {
+                await wallet.broadcastTx('aabbcc', encoder);
+                expect.fail('should have thrown');
+            } catch (err) {
+                expect(err.code).to.equal('BROADCAST_FAILED');
+            }
+        });
+
+        it('should re-throw SDK errors from encoder.broadcastTx', async function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const { SDKWalletError } = require('../../src/errors.js');
+            const sdkErr = new SDKWalletError('SOME_BROADCAST_ERR', 'sdk-level error');
+            const encoder = { broadcastTx: async () => { throw sdkErr; } };
+            try {
+                await wallet.broadcastTx('aabbcc', encoder);
+                expect.fail('should have thrown');
+            } catch (err) {
+                expect(err.code).to.equal('SOME_BROADCAST_ERR');
+            }
+        });
+    });
+
+    describe('signEcdsa()', function() {
+        it('should return a DER-encoded signature for valid inputs', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const kp = wallet.generateKeyPair();
+            // secretKey is kp.privateKey (Buffer → Uint8Array view)
+            const secretKey = new Uint8Array(kp.privateKey);
+            const msgHash = new Uint8Array(32).fill(0xab);
+            const sig = wallet.signEcdsa(msgHash, secretKey);
+            expect(sig).to.be.instanceof(Uint8Array);
+            // DER signature starts with 0x30
+            expect(sig[0]).to.equal(0x30);
+            // Length byte at sig[1] should cover the rest
+            expect(sig.length).to.equal(sig[1] + 2);
+        });
+
+        it('should throw INVALID_INPUT for wrong msgHash type (string)', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            // Pass a plain string (not a Uint8Array) — the instanceof check fires
+            expect(() => wallet.signEcdsa('notauint8array', new Uint8Array(32))).to.throw(/msgHash must be a 32-byte Uint8Array/);
+        });
+
+        it('should throw INVALID_INPUT for wrong msgHash length', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const secretKey = new Uint8Array(32).fill(1);
+            expect(() => wallet.signEcdsa(new Uint8Array(16), secretKey)).to.throw(/msgHash must be a 32-byte Uint8Array/);
+        });
+
+        it('should throw INVALID_INPUT for wrong secretKey type (string)', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            // Valid msgHash (Uint8Array, 32 bytes), but secretKey is a plain string
+            expect(() => wallet.signEcdsa(new Uint8Array(32), 'notauint8array')).to.throw(/secretKey must be a 32-byte Uint8Array/);
+        });
+
+        it('should throw INVALID_INPUT for wrong secretKey length', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            expect(() => wallet.signEcdsa(new Uint8Array(32), new Uint8Array(16))).to.throw(/secretKey must be a 32-byte Uint8Array/);
+        });
+
+        it('should throw INVALID_INPUT for invalid secp256k1 scalar (zero key)', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const badKey = new Uint8Array(32); // all zeros — invalid scalar
+            expect(() => wallet.signEcdsa(new Uint8Array(32), badKey)).to.throw(/not a valid secp256k1 scalar/);
+        });
+
+        it('should produce consistent DER structure across varying r/s magnitudes', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            // Use a known-valid key
+            const kp = wallet.generateKeyPair();
+            const secretKey = new Uint8Array(kp.privateKey);
+            // Sign 10 different messages; all should parse as valid DER
+            for (let i = 0; i < 10; i++) {
+                const msgHash = new Uint8Array(32).fill(i + 1);
+                const sig = wallet.signEcdsa(msgHash, secretKey);
+                expect(sig[0]).to.equal(0x30); // SEQUENCE
+                expect(sig[2]).to.equal(0x02); // INTEGER for r
+                const rLen = sig[3];
+                expect(sig[4 + rLen]).to.equal(0x02); // INTEGER for s
+            }
+        });
+    });
+
+    describe('deriveMultisigAddress()', function() {
+        it('should throw without params', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            expect(() => wallet.deriveMultisigAddress(null)).to.throw(/params required/);
+        });
+
+        it('should throw with empty scriptTemplate', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            expect(() => wallet.deriveMultisigAddress({ scriptTemplate: '', scheme: 'p2sh-multisig' })).to.throw(/scriptTemplate must be a non-empty string/);
+        });
+
+        it('should throw for unknown scheme', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            expect(() => wallet.deriveMultisigAddress({ scriptTemplate: 'multi:1:03abc', scheme: 'unknown' })).to.throw(/scheme must be one of/);
+        });
+
+        it('should derive p2sh-multisig address for 2-of-3', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const kp1 = wallet.generateKeyPair();
+            const kp2 = wallet.generateKeyPair();
+            const kp3 = wallet.generateKeyPair();
+            const template = `multi:2:${kp1.publicKeyHex}:${kp2.publicKeyHex}:${kp3.publicKeyHex}`;
+            const result = wallet.deriveMultisigAddress({ scriptTemplate: template, scheme: 'p2sh-multisig' });
+            expect(result.address).to.be.a('string');
+            expect(result.scheme).to.equal('p2sh-multisig');
+            expect(result.redeemScript).to.be.a('string');
+            expect(result.witnessScript).to.be.null;
+            expect(result.outputPubkey).to.be.null;
+        });
+
+        it('should derive p2wsh-multisig address for 1-of-2', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const kp1 = wallet.generateKeyPair();
+            const kp2 = wallet.generateKeyPair();
+            const template = `multi:1:${kp1.publicKeyHex}:${kp2.publicKeyHex}`;
+            const result = wallet.deriveMultisigAddress({ scriptTemplate: template, scheme: 'p2wsh-multisig' });
+            expect(result.address).to.be.a('string').that.matches(/^bcrt1q/);
+            expect(result.scheme).to.equal('p2wsh-multisig');
+            expect(result.witnessScript).to.be.a('string');
+            expect(result.redeemScript).to.be.null;
+        });
+
+        it('should throw INVALID_SCRIPT_TEMPLATE for bad multi: format', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            expect(() => wallet.deriveMultisigAddress({
+                scriptTemplate: 'bad:format', scheme: 'p2sh-multisig'
+            })).to.throw(/scriptTemplate must look like/);
+        });
+
+        it('should throw INVALID_SCRIPT_TEMPLATE when threshold > cosigner count', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const kp = wallet.generateKeyPair();
+            expect(() => wallet.deriveMultisigAddress({
+                scriptTemplate: `multi:3:${kp.publicKeyHex}:${kp.publicKeyHex}`,
+                scheme: 'p2sh-multisig'
+            })).to.throw(/threshold .* exceeds cosigner/);
+        });
+
+        it('should throw INVALID_SCRIPT_TEMPLATE for non-integer threshold', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const kp = wallet.generateKeyPair();
+            // Need 4+ parts: multi:<threshold>:<pk1>:<pk2>
+            expect(() => wallet.deriveMultisigAddress({
+                scriptTemplate: `multi:abc:${kp.publicKeyHex}:${kp.publicKeyHex}`,
+                scheme: 'p2sh-multisig'
+            })).to.throw(/threshold .* must be a positive integer/);
+        });
+
+        it('should throw INVALID_SCRIPT_TEMPLATE for uncompressed pubkey in multisig template', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            // 65-byte (130 hex chars) uncompressed pubkey — need at least 4 parts
+            const validKp = wallet.generateKeyPair();
+            const badPubkey = '04' + 'ab'.repeat(64);
+            expect(() => wallet.deriveMultisigAddress({
+                scriptTemplate: `multi:1:${badPubkey}:${validKp.publicKeyHex}`,
+                scheme: 'p2sh-multisig'
+            })).to.throw(/must be 33 bytes compressed/);
+        });
+
+        it('should derive taproot-musig2 address', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            // Derive a valid x-only pubkey by stripping the prefix byte from a
+            // compressed secp256k1 public key. This guarantees the x-coordinate
+            // is on the curve and P2TR derivation succeeds.
+            const kp = wallet.generateKeyPair();
+            // compressed pubkey = 33 bytes: [02|03] + x (32 bytes)
+            const xonly = kp.publicKey.slice(1).toString('hex'); // 32 bytes → 64 hex chars
+            const result = wallet.deriveMultisigAddress({
+                scriptTemplate: `musig2:${xonly}`,
+                scheme: 'taproot-musig2'
+            });
+            expect(result.address).to.be.a('string');
+            expect(result.scheme).to.equal('taproot-musig2');
+            expect(result.outputPubkey).to.equal(xonly.toLowerCase());
+            expect(result.redeemScript).to.be.null;
+            expect(result.witnessScript).to.be.null;
+        });
+
+        it('should throw INVALID_SCRIPT_TEMPLATE for bad musig2 template format', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            expect(() => wallet.deriveMultisigAddress({
+                scriptTemplate: 'musig2:notvalidhex!!!',
+                scheme: 'taproot-musig2'
+            })).to.throw(/taproot-musig2 scriptTemplate must look like/);
+        });
+
+        it('should throw INVALID_SCRIPT_TEMPLATE for musig2 with wrong pubkey length', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            // 16 bytes — too short
+            const shortXOnly = 'deadbeef'.repeat(4);
+            expect(() => wallet.deriveMultisigAddress({
+                scriptTemplate: `musig2:${shortXOnly}`,
+                scheme: 'taproot-musig2'
+            })).to.throw(/aggregated x-only pubkey must be 32 bytes/);
+        });
+
+        it('should support network override via params.network', function() {
+            // No instance network, but pass network via params
+            const wallet = new WalletUtils();
+            const kp1 = new WalletUtils('bitcoin-regtest').generateKeyPair();
+            const kp2 = new WalletUtils('bitcoin-regtest').generateKeyPair();
+            const template = `multi:1:${kp1.publicKeyHex}:${kp2.publicKeyHex}`;
+            const result = wallet.deriveMultisigAddress({
+                scriptTemplate: template,
+                scheme: 'p2sh-multisig',
+                network: 'bitcoin-regtest'
+            });
+            expect(result.address).to.be.a('string');
+        });
+    });
+
+    describe('txidOf()', function() {
+        it('should throw on empty input', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            expect(() => wallet.txidOf('')).to.throw(/Transaction hex string is required/);
+            expect(() => wallet.txidOf(null)).to.throw(/Transaction hex string is required/);
+        });
+
+        it('should throw on invalid hex', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            expect(() => wallet.txidOf('not-hex-at-all')).to.throw(/Failed to parse transaction/);
+        });
+
+        it('should return a 64-char txid for a valid signed transaction', function() {
+            // Build and sign a minimal P2WPKH transaction via signPsbt
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const net = getNetwork('bitcoin-regtest');
+            const kp = wallet.generateKeyPair();
+            const recipient = wallet.generateKeyPair();
+            const inputScript = bitcoin.payments.p2wpkh({ pubkey: kp.publicKey, network: net }).output;
+            const outputScript = bitcoin.payments.p2wpkh({ pubkey: recipient.publicKey, network: net }).output;
+
+            const psbt = new bitcoin.Psbt({ network: net });
+            const prevTx = new bitcoin.Transaction();
+            prevTx.version = 2;
+            prevTx.addInput(Buffer.alloc(32), 0xffffffff, 0xffffffff, Buffer.from([0x51]));
+            prevTx.addOutput(inputScript, 100_000);
+            const prevTxId = prevTx.getId();
+
+            psbt.addInput({
+                hash: prevTxId,
+                index: 0,
+                sequence: 0xfffffffd,
+                witnessUtxo: { script: inputScript, value: 100_000 }
+            });
+            psbt.addOutput({ script: outputScript, value: 90_000 });
+            const psbtHex = psbt.toHex();
+            const signed = wallet.signPsbt(psbtHex, kp.wif);
+
+            const txid = wallet.txidOf(signed.txHex);
+            expect(txid).to.be.a('string').of.length(64);
+            expect(txid).to.equal(signed.txid);
+        });
+    });
+
+    describe('signMultisigPsbt() and finalizeMultisigPsbt()', function() {
+        it('should throw on missing PSBT or WIF in signMultisigPsbt', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            expect(() => wallet.signMultisigPsbt('', 'wif')).to.throw(/PSBT hex is required/);
+            expect(() => wallet.signMultisigPsbt('abc', '')).to.throw(/WIF is required/);
+        });
+
+        it('should throw on invalid PSBT in signMultisigPsbt', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const kp = wallet.generateKeyPair();
+            expect(() => wallet.signMultisigPsbt('deadbeef', kp.wif)).to.throw(/Failed to parse PSBT/);
+        });
+
+        it('should throw on bad WIF in signMultisigPsbt', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const net = getNetwork('bitcoin-regtest');
+            const kp = wallet.generateKeyPair();
+            const inputScript = bitcoin.payments.p2wpkh({ pubkey: kp.publicKey, network: net }).output;
+            const psbt = new bitcoin.Psbt({ network: net });
+            const prevTx = new bitcoin.Transaction();
+            prevTx.addInput(Buffer.alloc(32), 0xffffffff, 0xffffffff, Buffer.from([0x51]));
+            prevTx.addOutput(inputScript, 1000);
+            psbt.addInput({ hash: prevTx.getId(), index: 0, sequence: 0xfffffffd, witnessUtxo: { script: inputScript, value: 1000 } });
+            psbt.addOutput({ script: inputScript, value: 900 });
+            expect(() => wallet.signMultisigPsbt(psbt.toHex(), 'not-a-wif')).to.throw(/Failed to import WIF/);
+        });
+
+        it('should throw on missing PSBT in finalizeMultisigPsbt', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            expect(() => wallet.finalizeMultisigPsbt('')).to.throw(/PSBT hex is required/);
+        });
+
+        it('should throw on invalid PSBT in finalizeMultisigPsbt', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            expect(() => wallet.finalizeMultisigPsbt('deadbeef')).to.throw(/Failed to parse PSBT/);
+        });
+
+        it('sign + finalize completes a 1-of-1 p2wpkh PSBT', function() {
+            // Build a single-key P2WPKH PSBT, sign with signPsbt — exercise finalize path
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const net = getNetwork('bitcoin-regtest');
+            const kp = wallet.generateKeyPair();
+            const inputScript = bitcoin.payments.p2wpkh({ pubkey: kp.publicKey, network: net }).output;
+            const psbt = new bitcoin.Psbt({ network: net });
+            const prevTx = new bitcoin.Transaction();
+            prevTx.addInput(Buffer.alloc(32), 0xffffffff, 0xffffffff, Buffer.from([0x51]));
+            prevTx.addOutput(inputScript, 50_000);
+            psbt.addInput({ hash: prevTx.getId(), index: 0, sequence: 0xfffffffd, witnessUtxo: { script: inputScript, value: 50_000 } });
+            psbt.addOutput({ script: inputScript, value: 49_000 });
+            const psbtHex = psbt.toHex();
+            // signMultisigPsbt adds partial sig but doesn't finalize
+            const partial = wallet.signMultisigPsbt(psbtHex, kp.wif);
+            expect(partial.psbtHex).to.be.a('string');
+            // finalizeMultisigPsbt finalizes it
+            const finalized = wallet.finalizeMultisigPsbt(partial.psbtHex);
+            expect(finalized.txHex).to.be.a('string');
+            expect(finalized.txid).to.be.a('string').of.length(64);
+            expect(finalized.psbtHex).to.be.a('string');
+        });
+    });
+
+    describe('validateAddress() — extended', function() {
+        it('should validate a P2SH address on bitcoin-regtest', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const net = getNetwork('bitcoin-regtest');
+            const kp = wallet.generateKeyPair();
+            const p2sh = wallet.deriveAddress(kp.publicKey, { type: 'p2sh-p2wpkh' });
+            const result = wallet.validateAddress(p2sh);
+            expect(result.valid).to.be.true;
+            expect(result.type).to.equal('p2sh');
+        });
+
+        it('should return unknown type for p2wsh address (32 byte data)', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const net = getNetwork('bitcoin-regtest');
+            const kp1 = wallet.generateKeyPair();
+            const kp2 = wallet.generateKeyPair();
+            // Build a P2WSH address from 1-of-2 multisig
+            const result = wallet.deriveMultisigAddress({
+                scriptTemplate: `multi:1:${kp1.publicKeyHex}:${kp2.publicKeyHex}`,
+                scheme: 'p2wsh-multisig'
+            });
+            // validateAddress should recognize the bech32 / p2wsh
+            const validation = wallet.validateAddress(result.address);
+            expect(validation.valid).to.be.true;
+            // type will be 'p2wsh' (32-byte bech32 data)
+            expect(['p2wsh', 'bech32']).to.include(validation.type);
+        });
+    });
+
+    describe('deriveAddress() — extended', function() {
+        it('should throw INVALID_ADDRESS_TYPE for unknown type', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const kp = wallet.generateKeyPair();
+            expect(() => wallet.deriveAddress(kp.publicKey, { type: 'p2tr' })).to.throw(/Unknown address type/);
+        });
+    });
+
+    describe('signRevealPsbt()', function() {
+        it('should throw on missing PSBT', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            expect(() => wallet.signRevealPsbt('', 'wif')).to.throw(/PSBT hex string is required/);
+            expect(() => wallet.signRevealPsbt(null, 'wif')).to.throw(/PSBT hex string is required/);
+        });
+
+        it('should throw on missing WIF', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            expect(() => wallet.signRevealPsbt('deadbeef', '')).to.throw(/WIF private key is required/);
+        });
+
+        it('should throw INVALID_WIF on bad WIF', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            // Build a minimal valid PSBT so it parses, but the WIF is bad
+            const net = getNetwork('bitcoin-regtest');
+            const kp = wallet.generateKeyPair();
+            const inputScript = bitcoin.payments.p2wpkh({ pubkey: kp.publicKey, network: net }).output;
+            const psbt = new bitcoin.Psbt({ network: net });
+            const prevTx = new bitcoin.Transaction();
+            prevTx.addInput(Buffer.alloc(32), 0xffffffff, 0xffffffff, Buffer.from([0x51]));
+            prevTx.addOutput(inputScript, 1000);
+            psbt.addInput({ hash: prevTx.getId(), index: 0, sequence: 0xfffffffd, witnessUtxo: { script: inputScript, value: 1000 } });
+            psbt.addOutput({ script: inputScript, value: 900 });
+            expect(() => wallet.signRevealPsbt(psbt.toHex(), 'not-a-wif')).to.throw(/Failed to import WIF/);
+        });
+
+        it('should throw INVALID_PSBT on non-PSBT hex', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const kp = wallet.generateKeyPair();
+            expect(() => wallet.signRevealPsbt('deadbeef01020304', kp.wif)).to.throw(/Failed to parse PSBT/);
+        });
+
+        it('should sign and finalize a P2SH reveal PSBT', function() {
+            // Build a PSBT that simulates the XChain P2SH "reveal" pattern:
+            // the redeem script is a simple non-standard 1-push script (OP_TRUE),
+            // and bitcoinjs-lib's custom finalizer assembles the scriptSig.
+            // To be signable, we use a P2PKH-style script that ECPair can sign.
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const net = getNetwork('bitcoin-regtest');
+            const kp = wallet.generateKeyPair();
+
+            // Build a minimal P2SH input whose redeem script is a simple
+            // pay-to-pubkey so signAllInputs can produce a partialSig.
+            const redeemScript = bitcoin.script.compile([
+                kp.publicKey,
+                bitcoin.opcodes.OP_CHECKSIG,
+            ]);
+            const p2sh = bitcoin.payments.p2sh({
+                redeem: { output: redeemScript, network: net },
+                network: net,
+            });
+            const inputScript = p2sh.output;
+
+            // Create the prev-tx
+            const prevTx = new bitcoin.Transaction();
+            prevTx.addInput(Buffer.alloc(32), 0xffffffff, 0xffffffff, Buffer.from([0x51]));
+            prevTx.addOutput(inputScript, 50_000);
+
+            const psbt = new bitcoin.Psbt({ network: net });
+            psbt.addInput({
+                hash:           prevTx.getId(),
+                index:          0,
+                sequence:       0xfffffffd,
+                nonWitnessUtxo: prevTx.toBuffer(),
+                redeemScript:   redeemScript,
+            });
+            psbt.addOutput({ script: inputScript, value: 49_000 });
+
+            const result = wallet.signRevealPsbt(psbt.toHex(), kp.wif);
+            expect(result.txHex).to.be.a('string');
+            expect(result.txid).to.be.a('string').of.length(64);
+            expect(result.psbtHex).to.be.a('string');
+        });
+    });
+
+    describe('decomposePsbt() — OP_RETURN and missing UTXO paths', function() {
+        it('should set address null for OP_RETURN output', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const net = getNetwork('bitcoin-regtest');
+            const kp = wallet.generateKeyPair();
+            const inputScript = bitcoin.payments.p2wpkh({ pubkey: kp.publicKey, network: net }).output;
+            // OP_RETURN output — cannot be converted to an address
+            const opReturnScript = bitcoin.script.compile([
+                bitcoin.opcodes.OP_RETURN,
+                Buffer.from('58434841494e', 'hex'), // "XCHAIN" in hex
+            ]);
+
+            const prevTx = new bitcoin.Transaction();
+            prevTx.addInput(Buffer.alloc(32), 0xffffffff, 0xffffffff, Buffer.from([0x51]));
+            prevTx.addOutput(inputScript, 100_000);
+
+            const psbt = new bitcoin.Psbt({ network: net });
+            psbt.addInput({
+                hash:         prevTx.getId(),
+                index:        0,
+                sequence:     0xfffffffd,
+                witnessUtxo:  { script: inputScript, value: 100_000 },
+            });
+            // Add a real P2WPKH output + an OP_RETURN output
+            psbt.addOutput({ script: inputScript, value: 90_000 });
+            psbt.addOutput({ script: opReturnScript, value: 0 });
+
+            const decomposed = wallet.decomposePsbt(psbt.toHex());
+            expect(decomposed.outputs).to.have.lengthOf(2);
+            // OP_RETURN output should have address=null
+            const opReturnOut = decomposed.outputs[1];
+            expect(opReturnOut.address).to.be.null;
+            expect(opReturnOut.scriptType).to.equal('unknown');
         });
     });
 });

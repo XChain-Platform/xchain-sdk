@@ -815,3 +815,71 @@ describe('Validator — unknown action', function () {
         expect(hasErrorCode(errors, 'UNKNOWN_ACTION')).to.be.true;
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIELD-LEVEL VALIDATION — COOLDOWN_BLOCKS / VALUE / DEPLOY / DISPENSER ownership
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Validator — field + cross-field constraints', function () {
+
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    // COOLDOWN_BLOCKS (DEPLOY v1)
+    it('rejects a non-numeric COOLDOWN_BLOCKS', function () {
+        const errors = v.validate('DEPLOY', { COOLDOWN_BLOCKS: 'abc' });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+        expect(errors.some(e => /COOLDOWN_BLOCKS must be numeric/.test(e.message))).to.be.true;
+    });
+
+    it('rejects a COOLDOWN_BLOCKS below the minimum (1)', function () {
+        const errors = v.validate('DEPLOY', { COOLDOWN_BLOCKS: '0' });
+        expect(errors.some(e => /COOLDOWN_BLOCKS must be in \[1, 100000\]/.test(e.message))).to.be.true;
+    });
+
+    it('rejects a COOLDOWN_BLOCKS above the maximum (100000)', function () {
+        const errors = v.validate('DEPLOY', { COOLDOWN_BLOCKS: '100001' });
+        expect(errors.some(e => /COOLDOWN_BLOCKS must be in \[1, 100000\]/.test(e.message))).to.be.true;
+    });
+
+    it('accepts a COOLDOWN_BLOCKS within range', function () {
+        const errors = v.validate('DEPLOY', { COOLDOWN_BLOCKS: '500' });
+        expect(errors.some(e => /COOLDOWN_BLOCKS/.test(e.message))).to.be.false;
+    });
+
+    // VALUE (BROADCAST)
+    it('rejects a non-numeric VALUE', function () {
+        const errors = v.validate('BROADCAST', { VALUE: 'not-a-number' });
+        expect(errors.some(e => /VALUE must be numeric/.test(e.message))).to.be.true;
+    });
+
+    // DEPLOY cross-field: SLASH_DESTINATION requires COOLDOWN_BLOCKS
+    it('rejects DEPLOY with SLASH_DESTINATION but no COOLDOWN_BLOCKS', function () {
+        const errors = v.validate('DEPLOY', { SLASH_DESTINATION: '1BurnAddrXXXXXXXXXXXXXXXXXXXXXXX' });
+        expect(hasErrorCode(errors, 'DEPLOY_CONSTRAINT')).to.be.true;
+    });
+
+    it('accepts DEPLOY with both SLASH_DESTINATION and COOLDOWN_BLOCKS', function () {
+        const errors = v.validate('DEPLOY', {
+            SLASH_DESTINATION: '1BurnAddrXXXXXXXXXXXXXXXXXXXXXXX', COOLDOWN_BLOCKS: '100',
+        });
+        expect(hasErrorCode(errors, 'DEPLOY_CONSTRAINT')).to.be.false;
+    });
+
+    // DISPENSER ownership create-path: GIVE_AMOUNT / GIVE_ESCROW must be empty
+    it('rejects an ownership DISPENSER carrying a GIVE_AMOUNT', function () {
+        const errors = v.validate('DISPENSER', {
+            GIVE_OWNERSHIP: '1', GIVE_TICK: 'TOK', GET_AMOUNT: '5', GET_COIN: 'BTC',
+            GIVE_AMOUNT: '10',
+        });
+        expect(errors.some(e => /GIVE_AMOUNT must be empty when GIVE_OWNERSHIP=1/.test(e.message))).to.be.true;
+    });
+
+    it('rejects an ownership DISPENSER carrying a GIVE_ESCROW', function () {
+        const errors = v.validate('DISPENSER', {
+            GIVE_OWNERSHIP: '1', GIVE_TICK: 'TOK', GET_AMOUNT: '5', GET_COIN: 'BTC',
+            GIVE_ESCROW: '3',
+        });
+        expect(errors.some(e => /GIVE_ESCROW must be empty when GIVE_OWNERSHIP=1/.test(e.message))).to.be.true;
+    });
+});

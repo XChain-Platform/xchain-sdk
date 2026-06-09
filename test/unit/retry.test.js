@@ -611,10 +611,13 @@ describe('retry helpers (pure)', function () {
             expect(d).to.be.lessThan(1001);
         });
 
-        it('caps exponential backoff at maxDelay', function () {
+        it('caps exponential backoff at maxDelay (jitter is applied after the cap)', function () {
             const cfg = { baseDelay: 1000, backoffFactor: 10, maxDelay: 2000 };
-            const d = getDelay(5, cfg, new Error('net')); // huge → capped, then ±25% jitter
-            expect(d).to.be.lessThan(2001);
+            const d = getDelay(5, cfg, new Error('net')); // huge → capped to 2000, then ±25% jitter
+            // The cap is applied BEFORE the ±25% jitter, so the final value lands in
+            // [maxDelay*0.75, maxDelay*1.25] = [1500, 2500] — never the un-capped huge value.
+            expect(d).to.be.at.least(1500);
+            expect(d).to.be.at.most(2500);
         });
     });
 });

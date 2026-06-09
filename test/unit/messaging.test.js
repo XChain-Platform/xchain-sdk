@@ -268,5 +268,318 @@ describe('MessagingUtils @crypto @regression', function () {
             expect(out).to.have.length(1);
             expect(out[0].text).to.equal('ok');
         });
+
+        it('throws EXPLORER_REQUIRED when explorers is empty array', async function () {
+            await msg.getAllMessages('B', {}, []).then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('EXPLORER_REQUIRED'));
+        });
+
+        it('throws EXPLORER_REQUIRED when explorers is not an array', async function () {
+            await msg.getAllMessages('B', {}, null).then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('EXPLORER_REQUIRED'));
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    //  ECIES binary — error paths
+    // -----------------------------------------------------------------------
+    describe('ECIES bytes — additional error paths', function () {
+
+        it('throws INVALID_WIF on bad WIF in eciesDecryptBytes', function () {
+            const { ciphertext } = msg.eciesEncryptBytes(Buffer.from('hello'), keypair().publicKeyHex);
+            expectCode(() => msg.eciesDecryptBytes(ciphertext, 'bad-wif'), 'INVALID_WIF');
+        });
+
+        it('accepts Buffer ciphertext in eciesDecryptBytes', function () {
+            const bob = keypair();
+            const payload = Buffer.from([1, 2, 3, 4]);
+            const { ciphertext } = msg.eciesEncryptBytes(payload, bob.publicKeyHex);
+            const buf = Buffer.from(ciphertext, 'hex');
+            const { plaintext } = msg.eciesDecryptBytes(buf, bob.wif);
+            expect(plaintext.equals(payload)).to.equal(true);
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    //  deriveSharedSecret() — error paths
+    // -----------------------------------------------------------------------
+    describe('deriveSharedSecret() — error paths', function () {
+
+        it('throws INVALID_WIF on bad WIF', function () {
+            const alice = keypair();
+            expectCode(() => msg.deriveSharedSecret('bad-wif', alice.publicKeyHex), 'INVALID_WIF');
+        });
+
+        it('accepts Buffer for theirPublicKey', function () {
+            const alice = keypair(), bob = keypair();
+            const s = msg.deriveSharedSecret(alice.wif, bob.publicKey);
+            expect(Buffer.from(s.sharedSecret, 'hex').length).to.equal(32);
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    //  getPublicKey()
+    // -----------------------------------------------------------------------
+    describe('getPublicKey()', function () {
+
+        it('throws INVALID_ADDRESS for missing address', async function () {
+            const explorer = { getPublicKey: async () => ({ pubkey: '03abc' }) };
+            await msg.getPublicKey('', explorer).then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('INVALID_ADDRESS'));
+            await msg.getPublicKey(null, explorer).then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('INVALID_ADDRESS'));
+        });
+
+        it('throws EXPLORER_REQUIRED when explorer is missing', async function () {
+            await msg.getPublicKey('addr1', null).then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('EXPLORER_REQUIRED'));
+        });
+
+        it('returns the pubkey when explorer resolves {pubkey}', async function () {
+            const explorer = { getPublicKey: async (addr) => ({ pubkey: '03deadbeef' }) };
+            const result = await msg.getPublicKey('addr1', explorer);
+            expect(result).to.equal('03deadbeef');
+        });
+
+        it('returns null when explorer resolves without pubkey', async function () {
+            const explorer = { getPublicKey: async () => ({}) };
+            const result = await msg.getPublicKey('addr1', explorer);
+            expect(result).to.be.null;
+        });
+
+        it('returns null when explorer resolves null', async function () {
+            const explorer = { getPublicKey: async () => null };
+            const result = await msg.getPublicKey('addr1', explorer);
+            expect(result).to.be.null;
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    //  getMessages() — encrypted_message without wif (sets encrypted=true)
+    // -----------------------------------------------------------------------
+    describe('getMessages() — encrypted without wif', function () {
+
+        it('marks entry encrypted=true and leaves text=null when encrypted_message present but no wif', async function () {
+            const explorer = { getMessages: async () => ([
+                { source: 'A', destination: 'B', encryption_method: 1, encrypted_message: 'aabbcc', tx_hash: 'tx', block_index: 5 }
+            ]) };
+            // No wif in opts — should hit the `else if (msg.encrypted_message)` branch
+            const out = await msg.getMessages('B', {}, explorer);
+            expect(out).to.have.length(1);
+            expect(out[0].encrypted).to.equal(true);
+            expect(out[0].text).to.be.null;
+            expect(out[0].bytes).to.be.null;
+        });
+
+        it('exposes coin/chain/block/txid fields from raw message', async function () {
+            const explorer = { getMessages: async () => ([
+                { source: 'S', destination: 'D', coin: 'BTC', plaintext_message: 'hi', tx_hash: 'txabc', block_index: 10, block_time: 1700000000 }
+            ]) };
+            const out = await msg.getMessages('D', {}, explorer);
+            expect(out[0].coin).to.equal('BTC');
+            expect(out[0].txid).to.equal('txabc');
+            expect(out[0].block).to.equal(10);
+            expect(out[0].timestamp).to.equal(1700000000);
+        });
+
+        it('passes limit/page/sortorder options to explorer.getMessages', async function () {
+            const captured = {};
+            const explorer = { getMessages: async (addr, qtype, opts) => { Object.assign(captured, opts); return []; } };
+            await msg.getMessages('B', { limit: 10, page: 2, sortorder: 'asc' }, explorer);
+            expect(captured.limit).to.equal(10);
+            expect(captured.page).to.equal(2);
+            expect(captured.sortorder).to.equal('asc');
+        });
+
+        it('maps absent fields to null (from/to/coin/txid/block/timestamp)', async function () {
+            // Message with no source/destination/coin/tx_hash/block_index/block_time
+            const explorer = { getMessages: async () => ([
+                { plaintext_message: 'sparse' }
+            ]) };
+            const out = await msg.getMessages('B', {}, explorer);
+            expect(out[0].from).to.be.null;
+            expect(out[0].to).to.be.null;
+            expect(out[0].coin).to.be.null;
+            expect(out[0].txid).to.be.null;
+            expect(out[0].block).to.be.null;
+            expect(out[0].timestamp).to.be.null;
+            expect(out[0].method).to.be.null;
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    //  send() — validation guards (does not need real network calls)
+    // -----------------------------------------------------------------------
+    describe('send() — validation guards', function () {
+
+        it('throws INVALID_WIF when wif is missing', async function () {
+            await msg.send({ coin: 'BTC', destination: 'addr', message: 'hi', encoder: {} }, {})
+                .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('INVALID_WIF'));
+        });
+
+        it('throws INVALID_COIN when coin is missing', async function () {
+            await msg.send({ wif: 'wif', destination: 'addr', message: 'hi', encoder: {} }, {})
+                .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('INVALID_COIN'));
+        });
+
+        it('throws INVALID_DESTINATION when destination is missing', async function () {
+            await msg.send({ wif: 'wif', coin: 'BTC', message: 'hi', encoder: {} }, {})
+                .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('INVALID_DESTINATION'));
+        });
+
+        it('throws INVALID_MESSAGE for empty string message', async function () {
+            await msg.send({ wif: 'wif', coin: 'BTC', destination: 'addr', message: '', encoder: {} }, {})
+                .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('INVALID_MESSAGE'));
+        });
+
+        it('throws INVALID_MESSAGE for null message', async function () {
+            await msg.send({ wif: 'wif', coin: 'BTC', destination: 'addr', message: null, encoder: {} }, {})
+                .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('INVALID_MESSAGE'));
+        });
+
+        it('throws INVALID_MESSAGE for empty Buffer message', async function () {
+            await msg.send({ wif: 'wif', coin: 'BTC', destination: 'addr', message: Buffer.alloc(0), encoder: {} }, {})
+                .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('INVALID_MESSAGE'));
+        });
+
+        it('throws ENCODER_REQUIRED when encoder is missing', async function () {
+            await msg.send({ wif: 'wif', coin: 'BTC', destination: 'addr', message: 'hi' }, {})
+                .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('ENCODER_REQUIRED'));
+        });
+
+        it('throws SDK_REQUIRED when sdk is missing', async function () {
+            await msg.send({ wif: 'wif', coin: 'BTC', destination: 'addr', message: 'hi', encoder: {} })
+                .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('SDK_REQUIRED'));
+        });
+
+        it('throws INVALID_METHOD for unknown method number', async function () {
+            const fakeSdk = { _requireExplorer: () => ({ getPublicKey: async () => null }) };
+            await msg.send({ wif: 'wif', coin: 'BTC', destination: 'addr', message: 'hi', encoder: {}, method: 99 }, fakeSdk)
+                .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('INVALID_METHOD'));
+        });
+
+        it('throws INVALID_MESSAGE for binary payload with plaintext method (null)', async function () {
+            await msg.send({ wif: 'wif', coin: 'BTC', destination: 'addr', message: Buffer.from('x'), encoder: {}, method: null }, {})
+                .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('INVALID_MESSAGE'));
+        });
+
+        it('throws INVALID_MESSAGE for binary payload with ECDH method', async function () {
+            const fakeSdk = {};
+            await msg.send({ wif: 'wif', coin: 'BTC', destination: 'addr', message: Buffer.from('x'), encoder: {}, method: 2, sharedSecret: 'aabb' }, fakeSdk)
+                .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('INVALID_MESSAGE'));
+        });
+
+        it('throws INVALID_MESSAGE for binary payload with AES method', async function () {
+            await msg.send({ wif: 'wif', coin: 'BTC', destination: 'addr', message: Buffer.from('x'), encoder: {}, method: 3, sharedKey: 'aabb' }, {})
+                .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('INVALID_MESSAGE'));
+        });
+
+        it('throws SHARED_SECRET_REQUIRED for ECDH without sharedSecret', async function () {
+            await msg.send({ wif: 'wif', coin: 'BTC', destination: 'addr', message: 'hi', encoder: {}, method: 2 }, {})
+                .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('SHARED_SECRET_REQUIRED'));
+        });
+
+        it('throws SHARED_KEY_REQUIRED for AES without sharedKey', async function () {
+            await msg.send({ wif: 'wif', coin: 'BTC', destination: 'addr', message: 'hi', encoder: {}, method: 3 }, {})
+                .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('SHARED_KEY_REQUIRED'));
+        });
+
+        it('throws PUBKEY_NOT_FOUND when ECIES and explorer finds no pubkey', async function () {
+            const fakeSdk = {
+                _requireExplorer: () => ({ getPublicKey: async () => null })
+            };
+            await msg.send({ wif: 'wif', coin: 'BTC', destination: 'addr', message: 'hi', encoder: {}, method: 1 }, fakeSdk)
+                .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('PUBKEY_NOT_FOUND'));
+        });
+
+        // Happy-path for send() — uses method=null (plaintext) so we can avoid
+        // encoding and signing (stub createAction + wallet.signPsbt + broadcastTx).
+        it('returns txid and actionString on a successful plaintext send', async function () {
+            const fakeSdk = {
+                createAction: async () => ({ psbt: 'psbtHex', actionString: 'XC|MSG' }),
+                wallet: {
+                    signPsbt:    () => ({ txHex: 'txhex', txid: 'txabc' }),
+                    broadcastTx: async () => ({})
+                },
+                _requireEncoder: () => ({}),
+            };
+            const result = await msg.send(
+                { wif: 'wif', coin: 'BTC', destination: 'addr', message: 'hello', encoder: {}, method: null },
+                fakeSdk
+            );
+            expect(result.txid).to.equal('txabc');
+            expect(result.actionString).to.equal('XC|MSG');
+        });
+
+        // Happy-path for ECDH (method=2) send
+        it('returns txid on a successful ECDH send', async function () {
+            const crypto = require('crypto');
+            const secret = crypto.randomBytes(32).toString('hex');
+            const fakeSdk = {
+                createAction: async () => ({ psbt: 'psbtHex', actionString: 'XC|MSG' }),
+                wallet: {
+                    signPsbt:    () => ({ txHex: 'txhex', txid: 'txecdh' }),
+                    broadcastTx: async () => ({})
+                },
+                _requireEncoder: () => ({}),
+            };
+            const result = await msg.send(
+                { wif: 'wif', coin: 'BTC', destination: 'addr', message: 'hi', encoder: {}, method: 2, sharedSecret: secret },
+                fakeSdk
+            );
+            expect(result.txid).to.equal('txecdh');
+        });
+
+        // Happy-path for AES (method=3) send
+        it('returns txid on a successful AES send', async function () {
+            const crypto = require('crypto');
+            const key = crypto.randomBytes(32).toString('hex');
+            const fakeSdk = {
+                createAction: async () => ({ psbt: 'psbtHex', actionString: 'XC|MSG' }),
+                wallet: {
+                    signPsbt:    () => ({ txHex: 'txhex', txid: 'txaes' }),
+                    broadcastTx: async () => ({})
+                },
+                _requireEncoder: () => ({}),
+            };
+            const result = await msg.send(
+                { wif: 'wif', coin: 'BTC', destination: 'addr', message: 'secret', encoder: {}, method: 3, sharedKey: key },
+                fakeSdk
+            );
+            expect(result.txid).to.equal('txaes');
+        });
+
+        // Happy-path for ECIES (method=1) send — requires a found pubkey
+        it('returns txid on a successful ECIES send', async function () {
+            const bob = keypair();
+            const fakeSdk = {
+                _requireExplorer: () => ({ getPublicKey: async () => ({ pubkey: bob.publicKeyHex }) }),
+                createAction:     async () => ({ psbt: 'psbtHex', actionString: 'XC|MSG' }),
+                wallet: {
+                    signPsbt:    () => ({ txHex: 'txhex', txid: 'txecies' }),
+                    broadcastTx: async () => ({})
+                },
+                _requireEncoder: () => ({}),
+            };
+            const result = await msg.send(
+                { wif: 'wif', coin: 'BTC', destination: 'addr', message: 'hello', encoder: {}, method: 1 },
+                fakeSdk
+            );
+            expect(result.txid).to.equal('txecies');
+        });
+
+        // Binary ECIES (method=1) send
+        it('returns txid for binary ECIES send (Buffer message)', async function () {
+            const bob = keypair();
+            const fakeSdk = {
+                _requireExplorer: () => ({ getPublicKey: async () => ({ pubkey: bob.publicKeyHex }) }),
+                createAction:     async () => ({ psbt: 'psbtHex', actionString: 'XC|MSG' }),
+                wallet: {
+                    signPsbt:    () => ({ txHex: 'txhex', txid: 'txbinary' }),
+                    broadcastTx: async () => ({})
+                },
+                _requireEncoder: () => ({}),
+            };
+            const result = await msg.send(
+                { wif: 'wif', coin: 'BTC', destination: 'addr', message: Buffer.from('key_bytes'), encoder: {}, method: 1 },
+                fakeSdk
+            );
+            expect(result.txid).to.equal('txbinary');
+        });
     });
 });
