@@ -193,6 +193,34 @@ class HubConnector {
         return false;
     }
 
+    // Fetch per-capability MIN_STAKE thresholds from the hub (tries each
+    // endpoint in order). Returns the array of { capability, min_stake,
+    // disabled } rows, or null when no endpoint answered. Capabilities are
+    // global governance config, so this is not chain-scoped.
+    async getCapabilityThresholds() {
+        let payload = {
+            jsonrpc: '2.0',
+            method:  'getcapabilitythresholds',
+            id:      1
+        };
+
+        for(let i = 0; i < this.urls.length; i++){
+            let idx = (this._lastGoodIdx + i) % this.urls.length;
+            let url = this.urls[idx];
+            try {
+                let response = await axios.post(url, payload, { timeout: this.timeout });
+                let result = response.data && response.data.result;
+                if(result && Array.isArray(result.thresholds)){
+                    this._lastGoodIdx = idx;
+                    return result.thresholds;
+                }
+            } catch (err) {
+                // Try next endpoint
+            }
+        }
+        return null;
+    }
+
     // Extract service endpoints for a given network from the hub config
     // Returns { encoderUrl, encoderPort, explorerUrl, explorerPort } or null fields
     extractServiceEndpoints(network) {

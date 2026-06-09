@@ -583,6 +583,15 @@ class XChainSDK {
         return this.hub.configs;
     }
 
+    // Per-capability MIN_STAKE thresholds for capability staking, read live
+    // from the hub. Returns an array of { capability, min_stake, disabled }
+    // rows, or null when no hub is configured (e.g. regtest) or unreachable.
+    // Capabilities are global governance config, so this is not chain-scoped.
+    async getCapabilityThresholds() {
+        if (!this.hub) return null;
+        return this.hub.getCapabilityThresholds();
+    }
+
 
     /*
      *  Wallet Convenience Methods

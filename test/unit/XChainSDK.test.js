@@ -556,6 +556,20 @@ describe('XChainSDK', function () {
             const result = sdk.getHubConfig();
             expect(result).to.deep.equal({ foo: 'bar' });
         });
+
+        it('getCapabilityThresholds returns null when no hub', async function () {
+            const sdk = makeSDK();
+            expect(sdk.hub).to.equal(null);
+            expect(await sdk.getCapabilityThresholds()).to.equal(null);
+        });
+
+        it('getCapabilityThresholds delegates to hub when configured', async function () {
+            const sdk = makeSDK();
+            const rows = [{ capability: 'price', min_stake: '1000', disabled: false }];
+            sdk.hub = { getCapabilityThresholds: sinon.stub().resolves(rows) };
+            const result = await sdk.getCapabilityThresholds();
+            expect(result).to.deep.equal(rows);
+        });
     });
 
     // -----------------------------------------------------------------------

@@ -310,6 +310,57 @@ describe('HubConnector', function () {
     });
 
     /*
+     *  getCapabilityThresholds()
+     */
+
+    describe('getCapabilityThresholds()', function () {
+        const THRESHOLDS = [
+            { capability: 'price', min_stake: '1000', disabled: false },
+            { capability: 'cross_chain', min_stake: '5000', disabled: false }
+        ];
+
+        it('returns the thresholds array when the hub responds', async function () {
+            nock(HUB_BASE)
+                .post('/', body => body.method === 'getcapabilitythresholds')
+                .reply(200, { jsonrpc: '2.0', result: { thresholds: THRESHOLDS }, id: 1 });
+
+            let hub = new HubConnector();
+            let rows = await hub.getCapabilityThresholds();
+            assert.deepStrictEqual(rows, THRESHOLDS);
+        });
+
+        it('returns null when all endpoints fail', async function () {
+            nock(HUB_BASE).post('/').replyWithError('connection refused');
+
+            let hub = new HubConnector();
+            let rows = await hub.getCapabilityThresholds();
+            assert.strictEqual(rows, null);
+        });
+
+        it('returns null when result lacks a thresholds array', async function () {
+            nock(HUB_BASE).post('/').reply(200, { jsonrpc: '2.0', result: { error: 'nope' }, id: 1 });
+
+            let hub = new HubConnector();
+            let rows = await hub.getCapabilityThresholds();
+            assert.strictEqual(rows, null);
+        });
+
+        it('tries next endpoint on failure (multi-endpoint)', async function () {
+            nock(HUB_BASE).post('/').replyWithError('timeout');
+            nock(HUB2_BASE)
+                .post('/')
+                .reply(200, { jsonrpc: '2.0', result: { thresholds: THRESHOLDS }, id: 1 });
+
+            let hub = new HubConnector({
+                hubValidators: ['http://localhost:8001', 'http://hub2.test:8001']
+            });
+            let rows = await hub.getCapabilityThresholds();
+            assert.deepStrictEqual(rows, THRESHOLDS);
+            assert.strictEqual(hub._lastGoodIdx, 1);
+        });
+    });
+
+    /*
      *  extractServiceEndpoints()
      */
 
