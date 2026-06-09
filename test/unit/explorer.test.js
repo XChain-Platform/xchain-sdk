@@ -10,6 +10,7 @@
 
 const { expect } = require('chai');
 const nock = require('nock');
+const sinon = require('sinon');
 const ExplorerClient = require('../../src/explorer.js');
 
 describe('ExplorerClient', function () {
@@ -225,6 +226,720 @@ describe('ExplorerClient', function () {
                 expect(e.name).to.equal('SDKExplorerError');
                 expect(e.code).to.equal('EXPLORER_NETWORK');
             }
+        });
+    });
+
+    /*
+     *  setBase
+     */
+
+    describe('setBase', function () {
+        it('no-ops when both url and port are falsy', function () {
+            const origClient = client.client;
+            client.setBase(null, null);
+            expect(client.client).to.equal(origClient);
+        });
+
+        it('no-ops when url/port unchanged', function () {
+            const origClient = client.client;
+            client.setBase('explorer.test', 8080);
+            expect(client.client).to.equal(origClient);
+        });
+
+        it('rebuilds client when url changes', function () {
+            const origClient = client.client;
+            client.setBase('new-explorer.test', 8080);
+            expect(client.client).to.not.equal(origClient);
+            expect(client.baseUrl).to.equal('new-explorer.test');
+        });
+
+        it('rebuilds client when port changes', function () {
+            const origClient = client.client;
+            client.setBase('explorer.test', 9090);
+            expect(client.client).to.not.equal(origClient);
+            expect(client.port).to.equal(9090);
+        });
+    });
+
+    /*
+     *  readyHook
+     */
+
+    describe('readyHook', function () {
+        afterEach(function () {
+            sinon.restore();
+        });
+
+        it('awaits readyHook before each GET request', async function () {
+            let hookCalled = false;
+            const hooked = new ExplorerClient({
+                network: 'bitcoin-mainnet',
+                explorerUrl: 'explorer.test',
+                explorerPort: 8080,
+                retry: false,
+                readyHook: async () => { hookCalled = true; }
+            });
+            nock(BASE).get('/BTC/api/status').reply(200, { status: 'ok' });
+            await hooked.getStatus();
+            expect(hookCalled).to.be.true;
+        });
+    });
+
+    /*
+     *  hooks
+     */
+
+    describe('hooks', function () {
+        afterEach(function () {
+            sinon.restore();
+        });
+
+        it('fires onRequest and onResponse hooks on success', async function () {
+            const onRequest = sinon.spy();
+            const onResponse = sinon.spy();
+            const hooked = new ExplorerClient({
+                network: 'bitcoin-mainnet',
+                explorerUrl: 'explorer.test',
+                explorerPort: 8080,
+                retry: false,
+                hooks: { onRequest, onResponse }
+            });
+            nock(BASE).get('/BTC/api/status').reply(200, { status: 'ok' });
+            await hooked.getStatus();
+            expect(onRequest.calledOnce).to.be.true;
+            expect(onRequest.firstCall.args[0].service).to.equal('explorer');
+            expect(onResponse.calledOnce).to.be.true;
+        });
+
+        it('fires onError hook on failure', async function () {
+            const onError = sinon.spy();
+            const hooked = new ExplorerClient({
+                network: 'bitcoin-mainnet',
+                explorerUrl: 'explorer.test',
+                explorerPort: 8080,
+                retry: false,
+                hooks: { onError }
+            });
+            nock(BASE).get('/BTC/api/status').replyWithError('network down');
+            try { await hooked.getStatus(); } catch (e) { /* expected */ }
+            expect(onError.calledOnce).to.be.true;
+        });
+
+        it('fires onRetry hook on retryable failure', async function () {
+            const onRetry = sinon.spy();
+            const hooked = new ExplorerClient({
+                network: 'bitcoin-mainnet',
+                explorerUrl: 'explorer.test',
+                explorerPort: 8080,
+                retry: { maxRetries: 1, baseDelay: 0, maxDelay: 0, backoffFactor: 1 },
+                hooks: { onRetry }
+            });
+            nock(BASE).get('/BTC/api/status').reply(503, 'unavailable');
+            nock(BASE).get('/BTC/api/status').reply(200, { status: 'ok' });
+            await hooked.getStatus();
+            expect(onRetry.calledOnce).to.be.true;
+        });
+    });
+
+    /*
+     *  Timeout error
+     */
+
+    describe('timeout errors', function () {
+        afterEach(function () {
+            sinon.restore();
+        });
+
+        it('wraps ECONNABORTED as EXPLORER_TIMEOUT', async function () {
+            const noRetry = new ExplorerClient({
+                network: 'bitcoin-mainnet',
+                explorerUrl: 'explorer.test',
+                explorerPort: 8080,
+                retry: false
+            });
+            const err = new Error('timeout exceeded');
+            err.code = 'ECONNABORTED';
+            sinon.stub(noRetry.client, 'get').rejects(err);
+            try {
+                await noRetry.getStatus();
+                expect.fail('should have thrown');
+            } catch (e) {
+                expect(e.name).to.equal('SDKExplorerError');
+                expect(e.code).to.equal('EXPLORER_TIMEOUT');
+            }
+        });
+    });
+
+    /*
+     *  HTTPS base URL
+     */
+
+    describe('HTTPS base URL', function () {
+        it('builds client with https agent when url starts with https', function () {
+            const c = new ExplorerClient({
+                network: 'bitcoin-mainnet',
+                explorerUrl: 'https://explorer.xchain.io'
+            });
+            expect(c.client.defaults.baseURL).to.equal('https://explorer.xchain.io');
+        });
+    });
+
+    /*
+     *  Balance & Address Methods — direct calls
+     */
+
+    describe('balance & address methods', function () {
+        it('getAddress returns result', async function () {
+            nock(BASE).get('/BTC/api/address/addr1').reply(200, { address: 'addr1', total_received: '100' });
+            const r = await client.getAddress('addr1');
+            expect(r.address).to.equal('addr1');
+        });
+
+        it('getPublicKey returns result', async function () {
+            nock(BASE).get('/BTC/api/pubkey/addr1').reply(200, { pubkey: '02abc' });
+            const r = await client.getPublicKey('addr1');
+            expect(r.pubkey).to.equal('02abc');
+        });
+
+        it('getHolders returns result', async function () {
+            nock(BASE).get('/BTC/api/holders/TOKEN').reply(200, { total: 5, data: [] });
+            const r = await client.getHolders('TOKEN');
+            expect(r.total).to.equal(5);
+        });
+
+        it('getCredits returns result', async function () {
+            nock(BASE).get('/BTC/api/credits/addr1/address').reply(200, { total: 1, data: [] });
+            const r = await client.getCredits('addr1', 'address');
+            expect(r.total).to.equal(1);
+        });
+
+        it('getDebits returns result', async function () {
+            nock(BASE).get('/BTC/api/debits/addr1/address').reply(200, { total: 2, data: [] });
+            const r = await client.getDebits('addr1', 'address');
+            expect(r.total).to.equal(2);
+        });
+
+        it('getEscrows returns result', async function () {
+            nock(BASE).get('/BTC/api/escrows/addr1/address').reply(200, { data: [] });
+            const r = await client.getEscrows('addr1', 'address');
+            expect(r).to.have.property('data');
+        });
+    });
+
+    /*
+     *  Token methods — direct calls
+     */
+
+    describe('token methods', function () {
+        it('getTokens returns result', async function () {
+            nock(BASE).get('/BTC/api/tokens/addr1/address').reply(200, { total: 3, data: [] });
+            const r = await client.getTokens('addr1', 'address');
+            expect(r.total).to.equal(3);
+        });
+
+        it('getIssues returns result', async function () {
+            nock(BASE).get('/BTC/api/issues/TOKEN/token').reply(200, { total: 1, data: [] });
+            const r = await client.getIssues('TOKEN', 'token');
+            expect(r.total).to.equal(1);
+        });
+    });
+
+    /*
+     *  Transaction & History methods — direct calls
+     */
+
+    describe('transaction & history methods', function () {
+        it('getAction returns result', async function () {
+            nock(BASE).get('/BTC/api/action/42').reply(200, { action_index: 42 });
+            const r = await client.getAction(42);
+            expect(r.action_index).to.equal(42);
+        });
+
+        it('getActions returns result', async function () {
+            nock(BASE).get('/BTC/api/actions').reply(200, { total: 10, data: [] });
+            const r = await client.getActions();
+            expect(r.total).to.equal(10);
+        });
+
+        it('getBlock returns result', async function () {
+            nock(BASE).get('/BTC/api/block/100').reply(200, { block_index: 100 });
+            const r = await client.getBlock(100);
+            expect(r.block_index).to.equal(100);
+        });
+
+        it('getHistory returns result', async function () {
+            nock(BASE).get('/BTC/api/history/addr1/address').reply(200, { total: 5, data: [] });
+            const r = await client.getHistory('addr1', 'address');
+            expect(r.total).to.equal(5);
+        });
+    });
+
+    /*
+     *  ACTION-specific methods — direct calls (a representative sample)
+     */
+
+    describe('action-specific methods', function () {
+        const pairs = [
+            ['getAddresses', 'addresses'],
+            ['getAirdrops', 'airdrops'],
+            ['getBatches', 'batches'],
+            ['getBroadcasts', 'broadcasts'],
+            ['getCallbacks', 'callbacks'],
+            ['getDestroys', 'destroys'],
+            ['getCoinpays', 'coinpays'],
+            ['getCoinpayExpires', 'coinpay_expires'],
+            ['getCoinpayObligations', 'coinpay_obligations'],
+            ['getDispensers', 'dispensers'],
+            ['getDispenses', 'dispenses'],
+            ['getDispenserCancels', 'dispenser_cancels'],
+            ['getDispenserCloses', 'dispenser_closes'],
+            ['getDispenserExpires', 'dispenser_expires'],
+            ['getDispenserEdits', 'dispenser_edits'],
+            ['getDividends', 'dividends'],
+            ['getFees', 'fees'],
+            ['getFiles', 'files'],
+            ['getLinks', 'links'],
+            ['getLists', 'lists'],
+            ['getMessages', 'messages'],
+            ['getMints', 'mints'],
+            ['getOrders', 'orders'],
+            ['getOrderCancels', 'order_cancels'],
+            ['getOrderEdits', 'order_edits'],
+            ['getOrderExpires', 'order_expires'],
+            ['getSleeps', 'sleeps'],
+            ['getSwaps', 'swaps'],
+            ['getSwapCancels', 'swap_cancels'],
+            ['getSwapEdits', 'swap_edits'],
+            ['getSwapExpires', 'swap_expires'],
+            ['getSweeps', 'sweeps']
+        ];
+
+        for (const [method, path] of pairs) {
+            it(method + ' returns result', async function () {
+                nock(BASE).get('/BTC/api/' + path + '/addr1/address').reply(200, { total: 1, data: [] });
+                const r = await client[method]('addr1', 'address');
+                expect(r.total).to.equal(1);
+            });
+        }
+
+        it('getOrderMatches with query returns result', async function () {
+            nock(BASE).get('/BTC/api/order_matches/100/block').reply(200, { total: 1, data: [] });
+            const r = await client.getOrderMatches(100, 'block');
+            expect(r.total).to.equal(1);
+        });
+
+        it('getOrderMatches without query returns result', async function () {
+            nock(BASE).get('/BTC/api/order_matches').reply(200, { total: 0, data: [] });
+            const r = await client.getOrderMatches(null);
+            expect(r.total).to.equal(0);
+        });
+
+        it('getSwapMatches with query returns result', async function () {
+            nock(BASE).get('/BTC/api/swap_matches/100/block').reply(200, { total: 1, data: [] });
+            const r = await client.getSwapMatches(100, 'block');
+            expect(r.total).to.equal(1);
+        });
+
+        it('getSwapMatches without query returns result', async function () {
+            nock(BASE).get('/BTC/api/swap_matches').reply(200, { total: 0, data: [] });
+            const r = await client.getSwapMatches(null);
+            expect(r.total).to.equal(0);
+        });
+    });
+
+    /*
+     *  Fee methods — direct calls
+     */
+
+    describe('fee methods', function () {
+        it('getFeeQuote returns result', async function () {
+            nock(BASE)
+                .get('/BTC/api/feequote')
+                .query({ action: 'SEND', params: '0|TOKEN|100|addr1', source: 'addr1' })
+                .reply(200, { supported: true, valid: true, requiredFeeSats: 1000 });
+            const r = await client.getFeeQuote({ action: 'SEND', params: ['0', 'TOKEN', '100', 'addr1'], source: 'addr1' });
+            expect(r.supported).to.be.true;
+        });
+
+        it('getFeeQuote with string params', async function () {
+            nock(BASE)
+                .get('/BTC/api/feequote')
+                .query({ action: 'SEND', params: '0|TOKEN|100' })
+                .reply(200, { supported: true });
+            const r = await client.getFeeQuote({ action: 'SEND', params: '0|TOKEN|100' });
+            expect(r.supported).to.be.true;
+        });
+
+        it('getFeeQuote with feeOutputSats', async function () {
+            nock(BASE)
+                .get('/BTC/api/feequote')
+                .query({ action: 'SEND', feeOutputSats: '5000' })
+                .reply(200, { supported: true });
+            const r = await client.getFeeQuote({ action: 'SEND', feeOutputSats: 5000 });
+            expect(r.supported).to.be.true;
+        });
+
+        it('getFeeSchedule returns result', async function () {
+            nock(BASE).get('/BTC/api/feeschedule').reply(200, { actions: [] });
+            const r = await client.getFeeSchedule();
+            expect(r).to.have.property('actions');
+        });
+    });
+
+    /*
+     *  Price methods — direct calls
+     */
+
+    describe('price methods', function () {
+        it('getPrices with query returns result', async function () {
+            nock(BASE).get('/BTC/api/prices/addr1/address').reply(200, { total: 1, data: [] });
+            const r = await client.getPrices('addr1', 'address');
+            expect(r.total).to.equal(1);
+        });
+
+        it('getPrices without query returns result', async function () {
+            nock(BASE).get('/BTC/api/prices').reply(200, { total: 0, data: [] });
+            const r = await client.getPrices(null, 'address');
+            expect(r.total).to.equal(0);
+        });
+
+        it('getPriceSnapshots with query returns result', async function () {
+            nock(BASE).get('/BTC/api/price_snapshots/BTC-USD/pair').reply(200, { data: [] });
+            const r = await client.getPriceSnapshots('BTC-USD', 'pair');
+            expect(r).to.have.property('data');
+        });
+
+        it('getPriceSnapshots without query returns result', async function () {
+            nock(BASE).get('/BTC/api/price_snapshots').reply(200, { data: [] });
+            const r = await client.getPriceSnapshots(null, 'pair');
+            expect(r).to.have.property('data');
+        });
+    });
+
+    /*
+     *  Contract / VM methods — direct calls
+     */
+
+    describe('contract/VM methods', function () {
+        it('getContract returns result', async function () {
+            nock(BASE).get('/BTC/api/contract/42').reply(200, { action_index: 42 });
+            const r = await client.getContract(42);
+            expect(r.action_index).to.equal(42);
+        });
+
+        it('getContracts with query returns result', async function () {
+            nock(BASE).get('/BTC/api/contracts/addr1/address').reply(200, { total: 1, data: [] });
+            const r = await client.getContracts('addr1', 'address');
+            expect(r.total).to.equal(1);
+        });
+
+        it('getContracts without query returns result', async function () {
+            nock(BASE).get('/BTC/api/contracts').reply(200, { total: 0, data: [] });
+            const r = await client.getContracts(null, 'address');
+            expect(r.total).to.equal(0);
+        });
+
+        it('getContractState with key returns result', async function () {
+            nock(BASE).get('/BTC/api/contract/42/state/mykey').reply(200, { value: 'hello' });
+            const r = await client.getContractState(42, 'mykey');
+            expect(r.value).to.equal('hello');
+        });
+
+        it('getContractState without key returns result', async function () {
+            nock(BASE).get('/BTC/api/contract/42/state').reply(200, { state: {} });
+            const r = await client.getContractState(42);
+            expect(r).to.have.property('state');
+        });
+
+        it('getContractBalance with tick returns result', async function () {
+            nock(BASE).get('/BTC/api/contract/42/balance/TOKEN').reply(200, { balance: '1000' });
+            const r = await client.getContractBalance(42, 'TOKEN');
+            expect(r.balance).to.equal('1000');
+        });
+
+        it('getContractBalance without tick returns result', async function () {
+            nock(BASE).get('/BTC/api/contract/42/balance').reply(200, { balances: [] });
+            const r = await client.getContractBalance(42);
+            expect(r).to.have.property('balances');
+        });
+
+        it('getExecution returns result', async function () {
+            nock(BASE).get('/BTC/api/execution/99').reply(200, { action_index: 99 });
+            const r = await client.getExecution(99);
+            expect(r.action_index).to.equal(99);
+        });
+
+        it('getExecutions with contractActionIndex returns result', async function () {
+            nock(BASE).get('/BTC/api/executions/42').reply(200, { total: 5, data: [] });
+            const r = await client.getExecutions(42);
+            expect(r.total).to.equal(5);
+        });
+
+        it('getExecutions without contractActionIndex returns result', async function () {
+            nock(BASE).get('/BTC/api/executions').reply(200, { total: 0, data: [] });
+            const r = await client.getExecutions(null);
+            expect(r.total).to.equal(0);
+        });
+
+        it('getDeposits returns result', async function () {
+            nock(BASE).get('/BTC/api/deposits/addr1/address').reply(200, { total: 1, data: [] });
+            const r = await client.getDeposits('addr1', 'address');
+            expect(r.total).to.equal(1);
+        });
+
+        it('getWithdrawals returns result', async function () {
+            nock(BASE).get('/BTC/api/withdrawals/addr1/address').reply(200, { total: 1, data: [] });
+            const r = await client.getWithdrawals('addr1', 'address');
+            expect(r.total).to.equal(1);
+        });
+    });
+
+    /*
+     *  Attestation methods — direct calls
+     */
+
+    describe('attestation methods', function () {
+        it('getAttestations with query returns result', async function () {
+            nock(BASE).get('/BTC/api/attestations/addr1/address').reply(200, { total: 1, data: [] });
+            const r = await client.getAttestations('addr1', 'address');
+            expect(r.total).to.equal(1);
+        });
+
+        it('getAttestations without query returns result', async function () {
+            nock(BASE).get('/BTC/api/attestations').reply(200, { total: 0, data: [] });
+            const r = await client.getAttestations(null, 'address');
+            expect(r.total).to.equal(0);
+        });
+    });
+
+    /*
+     *  Market methods — additional coverage
+     */
+
+    describe('market methods', function () {
+        it('getMarkets with tick returns result', async function () {
+            nock(BASE).get('/BTC/api/markets/TOKEN').reply(200, { data: [] });
+            const r = await client.getMarkets('TOKEN');
+            expect(r).to.have.property('data');
+        });
+
+        it('getMarkets without tick returns result', async function () {
+            nock(BASE).get('/BTC/api/markets').reply(200, { data: [] });
+            const r = await client.getMarkets();
+            expect(r).to.have.property('data');
+        });
+
+        it('getMarketOrders with address returns result', async function () {
+            nock(BASE).get('/BTC/api/market/A/B/orders/addr1').reply(200, { data: [] });
+            const r = await client.getMarketOrders('A', 'B', 'addr1');
+            expect(r).to.have.property('data');
+        });
+
+        it('getMarketOrders without address returns result', async function () {
+            nock(BASE).get('/BTC/api/market/A/B/orders').reply(200, { data: [] });
+            const r = await client.getMarketOrders('A', 'B', null);
+            expect(r).to.have.property('data');
+        });
+
+        it('getOrderbook returns result', async function () {
+            nock(BASE).get('/BTC/api/market/A/B/orderbook').reply(200, { asks: [], bids: [] });
+            const r = await client.getOrderbook('A', 'B');
+            expect(r).to.have.property('asks');
+        });
+    });
+
+    /*
+     *  Staking methods — additional
+     */
+
+    describe('staking methods', function () {
+        it('getContractUnstakes without query returns result', async function () {
+            nock(BASE).get('/BTC/api/contract_unstakes').reply(200, { total: 0, data: [] });
+            const r = await client.getContractUnstakes(null, 'address');
+            expect(r.total).to.equal(0);
+        });
+
+        it('getSlashEvents without query returns result', async function () {
+            nock(BASE).get('/BTC/api/slash_events').reply(200, { total: 0, data: [] });
+            const r = await client.getSlashEvents(null, 'contract');
+            expect(r.total).to.equal(0);
+        });
+
+        it('getAttestations slash_events with query (type cover)', async function () {
+            nock(BASE).get('/BTC/api/slash_events/42/contract').reply(200, { total: 1, data: [] });
+            const r = await client.getSlashEvents(42, 'contract');
+            expect(r.total).to.equal(1);
+        });
+    });
+
+    /*
+     *  Utility methods — additional
+     */
+
+    describe('utility methods', function () {
+        it('getStatus returns result', async function () {
+            nock(BASE).get('/BTC/api/status').reply(200, { status: 'ok' });
+            const r = await client.getStatus();
+            expect(r.status).to.equal('ok');
+        });
+
+        it('getMempool returns result', async function () {
+            nock(BASE).get('/BTC/api/mempool/addr1/address').reply(200, { total: 1, data: [] });
+            const r = await client.getMempool('addr1', 'address');
+            expect(r.total).to.equal(1);
+        });
+
+        it('getNetwork returns result', async function () {
+            nock(BASE).get('/BTC/api/network').reply(200, { height: 100 });
+            const r = await client.getNetwork();
+            expect(r.height).to.equal(100);
+        });
+    });
+
+    /*
+     *  gatedFile — getGatedFileRaw
+     */
+
+    describe('getGatedFileRaw', function () {
+        it('returns Buffer from arraybuffer response', async function () {
+            const fakeBytes = Buffer.from([0x01, 0x02, 0x03]);
+            nock(BASE)
+                .get('/BTC/api/file/42/raw')
+                .reply(200, fakeBytes, { 'content-type': 'application/octet-stream' });
+
+            const result = await client.getGatedFileRaw(42);
+            expect(result).to.be.instanceof(Buffer);
+        });
+
+        it('fires onRequest/onResponse hooks for gatedFile', async function () {
+            const onRequest = sinon.spy();
+            const onResponse = sinon.spy();
+            const hooked = new ExplorerClient({
+                network: 'bitcoin-mainnet',
+                explorerUrl: 'explorer.test',
+                explorerPort: 8080,
+                retry: false,
+                hooks: { onRequest, onResponse }
+            });
+            const fakeBytes = Buffer.from([0xaa]);
+            nock(BASE)
+                .get('/BTC/api/file/99/raw')
+                .reply(200, fakeBytes, { 'content-type': 'application/octet-stream' });
+
+            await hooked.getGatedFileRaw(99);
+            expect(onRequest.calledOnce).to.be.true;
+            expect(onResponse.calledOnce).to.be.true;
+        });
+
+        it('fires onError hook for gatedFile error', async function () {
+            const onError = sinon.spy();
+            const hooked = new ExplorerClient({
+                network: 'bitcoin-mainnet',
+                explorerUrl: 'explorer.test',
+                explorerPort: 8080,
+                retry: false,
+                hooks: { onError }
+            });
+            nock(BASE).get('/BTC/api/file/99/raw').reply(404, 'not found');
+            try { await hooked.getGatedFileRaw(99); } catch (e) { /* expected */ }
+            expect(onError.calledOnce).to.be.true;
+        });
+    });
+
+    /*
+     *  search — error handling path
+     */
+
+    describe('search error handling', function () {
+        it('wraps HTTP error in search path', async function () {
+            nock(BASE).get('/BTC/explorer/search/foo/token').reply(404, { error: 'not found' });
+            try {
+                await client.search('foo', 'token');
+                expect.fail('should have thrown');
+            } catch (e) {
+                expect(e.name).to.equal('SDKExplorerError');
+                expect(e.code).to.equal('EXPLORER_HTTP_404');
+            }
+        });
+
+        it('wraps network error in search path', async function () {
+            nock(BASE).get('/BTC/explorer/search/foo/token').replyWithError('connection reset');
+            try {
+                await client.search('foo', 'token');
+                expect.fail('should have thrown');
+            } catch (e) {
+                expect(e.name).to.equal('SDKExplorerError');
+                expect(e.code).to.equal('EXPLORER_NETWORK');
+            }
+        });
+
+        it('fires onRequest/onResponse hooks in search', async function () {
+            const onRequest = sinon.spy();
+            const onResponse = sinon.spy();
+            const hooked = new ExplorerClient({
+                network: 'bitcoin-mainnet',
+                explorerUrl: 'explorer.test',
+                explorerPort: 8080,
+                retry: false,
+                hooks: { onRequest, onResponse }
+            });
+            nock(BASE).get('/BTC/explorer/search/foo/token').reply(200, { data: [] });
+            await hooked.search('foo', 'token');
+            expect(onRequest.calledOnce).to.be.true;
+            expect(onResponse.calledOnce).to.be.true;
+        });
+
+        it('fires onError hook in search on failure', async function () {
+            const onError = sinon.spy();
+            const hooked = new ExplorerClient({
+                network: 'bitcoin-mainnet',
+                explorerUrl: 'explorer.test',
+                explorerPort: 8080,
+                retry: false,
+                hooks: { onError }
+            });
+            nock(BASE).get('/BTC/explorer/search/foo/token').replyWithError('down');
+            try { await hooked.search('foo', 'token'); } catch(e) {}
+            expect(onError.calledOnce).to.be.true;
+        });
+
+        it('outer catch wraps retryable error that exhausted retries', async function () {
+            // Use sinon to inject an ECONNRESET error so isRetryable=true but
+            // retry:false means maxRetries=0, so it exhausts immediately and
+            // reaches the outer catch -> _handleError
+            const noRetry = new ExplorerClient({
+                network: 'bitcoin-mainnet',
+                explorerUrl: 'explorer.test',
+                explorerPort: 8080,
+                retry: false
+            });
+            const err = new Error('connection reset');
+            err.code = 'ECONNRESET';
+            sinon.stub(noRetry.client, 'get').rejects(err);
+            try {
+                await noRetry.search('foo', 'token');
+                expect.fail('should have thrown');
+            } catch (e) {
+                expect(e.name).to.equal('SDKExplorerError');
+                expect(e.code).to.equal('EXPLORER_NETWORK');
+            }
+        });
+    });
+
+    /*
+     *  _buildParams — additional params coverage
+     */
+
+    describe('_buildParams additional params', function () {
+        it('passes start, length, tick, txid, blockIndex params', async function () {
+            nock(BASE)
+                .get('/BTC/api/balances/addr1')
+                .query({ start: '0', length: '100', tick: 'TOKEN', txid: 'abc', blockIndex: '500' })
+                .reply(200, { data: [] });
+            const r = await client.getBalances('addr1', {
+                start: 0, length: 100, tick: 'TOKEN', txid: 'abc', blockIndex: 500
+            });
+            expect(r).to.have.property('data');
         });
     });
 

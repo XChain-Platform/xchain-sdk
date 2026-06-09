@@ -395,4 +395,532 @@ describe('WebSocketClient', function () {
             expect(client.catchingUp).to.be.false;
         });
     });
+
+    // -----------------------------------------------------------------
+    // connect() when already connected (short-circuit)
+    // -----------------------------------------------------------------
+
+    describe('connect when already connected', function () {
+
+        it('returns serverInfo immediately when already connected (OPEN)', async function () {
+            client = createClient(port);
+            await client.connect();
+            expect(client.isConnected()).to.be.true;
+
+            // Second connect() call should resolve immediately with serverInfo
+            const info = await client.connect();
+            expect(info).to.equal(client.serverInfo);
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // readyHook
+    // -----------------------------------------------------------------
+
+    describe('readyHook in connect', function () {
+
+        it('awaits readyHook before connecting', async function () {
+            let hookCalled = false;
+            client = new WebSocketClient({
+                network: 'bitcoin-regtest',
+                websocketUrl: '127.0.0.1',
+                websocketPort: port,
+                retry: { maxRetries: 0 },
+                pingInterval: 60000,
+                readyHook: async () => { hookCalled = true; }
+            });
+            await client.connect();
+            expect(hookCalled).to.be.true;
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // HTTP base URL → ws scheme conversion
+    // -----------------------------------------------------------------
+
+    describe('http(s) base URL scheme conversion', function () {
+
+        it('converts http://host URL to ws://host/COIN/api/websocket', async function () {
+            client = new WebSocketClient({
+                network: 'bitcoin-regtest',
+                websocketUrl: 'http://127.0.0.1:' + port,
+                retry: { maxRetries: 0 },
+                pingInterval: 60000
+            });
+            await client.connect();
+            expect(client.isConnected()).to.be.true;
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // Invalid JSON message (silent skip)
+    // -----------------------------------------------------------------
+
+    describe('invalid JSON message', function () {
+
+        it('does not throw on invalid JSON from server', async function () {
+            client = createClient(port);
+            await client.connect();
+
+            // Send garbage data — should be silently ignored
+            server._lastClient.send('not valid json!!');
+            await new Promise(r => setTimeout(r, 50));
+            // Client should still be connected
+            expect(client.isConnected()).to.be.true;
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // onWsDisconnect hook
+    // -----------------------------------------------------------------
+
+    describe('onWsDisconnect hook', function () {
+
+        it('fires onWsDisconnect when connection closes', async function () {
+            const disconnectSpy = sinon.spy();
+            client = new WebSocketClient({
+                network: 'bitcoin-regtest',
+                websocketUrl: '127.0.0.1',
+                websocketPort: port,
+                hooks: { onWsDisconnect: disconnectSpy },
+                retry: { maxRetries: 0, baseDelay: 0 },
+                pingInterval: 60000
+            });
+            await client.connect();
+            client.disconnect();
+            // Give close event time to propagate
+            await new Promise(r => setTimeout(r, 100));
+            expect(disconnectSpy.called).to.be.true;
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // setBase
+    // -----------------------------------------------------------------
+
+    describe('setBase', function () {
+
+        it('no-ops when both url and port are falsy', async function () {
+            client = createClient(port);
+            await client.connect();
+            const origUrl = client.baseUrl;
+            client.setBase(null, null);
+            expect(client.baseUrl).to.equal(origUrl);
+        });
+
+        it('no-ops when url/port unchanged', async function () {
+            client = createClient(port);
+            await client.connect();
+            const origUrl = client.baseUrl;
+            client.setBase('127.0.0.1', port);
+            expect(client.baseUrl).to.equal(origUrl);
+        });
+
+        it('updates baseUrl/port when values change (not connected)', function () {
+            client = new WebSocketClient({
+                network: 'bitcoin-regtest',
+                websocketUrl: '127.0.0.1',
+                websocketPort: port,
+                retry: { maxRetries: 0 },
+                pingInterval: 60000
+            });
+            client.setBase('new-host.test', 9999);
+            expect(client.baseUrl).to.equal('new-host.test');
+            expect(client.port).to.equal(9999);
+        });
+
+        it('disconnects and reconnects when base changes while connected', async function () {
+            client = createClient(port);
+            await client.connect();
+            expect(client.isConnected()).to.be.true;
+
+            // Create another mock server on a different port
+            const s2 = await (new Promise((resolve) => {
+                const wss2 = new WebSocket.Server({ port: 0 }, () => {
+                    const p2 = wss2.address().port;
+                    wss2.on('connection', (ws) => {
+                        ws.send(JSON.stringify({
+                            type: 'WELCOME',
+                            data: { version: '2.0.0', latest_block_index: 200, latest_action_index: 600, limits: {}, channels: [], types: [], features: [] }
+                        }));
+                        wss2._lastClient = ws;
+                    });
+                    resolve({ wss: wss2, port: p2 });
+                });
+            }));
+
+            // setBase while connected should trigger disconnect + reconnect
+            client.setBase('127.0.0.1', s2.port);
+            // Give reconnect time
+            await new Promise(r => setTimeout(r, 300));
+            s2.wss.close();
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // _sendWithResponse timeout
+    // -----------------------------------------------------------------
+
+    describe('_sendWithResponse timeout', function () {
+
+        it('rejects with WS_TIMEOUT when server does not respond', async function () {
+            client = createClient(port);
+            await client.connect();
+
+            // Send a message that the server won't respond to (use a short timeout)
+            try {
+                await client._sendWithResponse('test-id-999', { action: 'unknown' }, 100);
+                expect.fail('should have thrown');
+            } catch (e) {
+                expect(e).to.be.instanceOf(SDKExplorerError);
+                expect(e.code).to.equal('WS_TIMEOUT');
+            }
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // _rejectAllPending — rejects pending on disconnect
+    // -----------------------------------------------------------------
+
+    describe('_rejectAllPending', function () {
+
+        it('rejects pending request-responses when disconnect() is called', async function () {
+            client = createClient(port);
+            await client.connect();
+
+            // Start a long request that won't complete
+            let rejected = false;
+            const p = client._sendWithResponse('pending-id', { action: 'noreply' }, 10000)
+                .catch((e) => { rejected = true; });
+
+            // Disconnect while request is pending
+            client.disconnect();
+            await new Promise(r => setTimeout(r, 50));
+            await p;
+            expect(rejected).to.be.true;
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // Pending response error type
+    // -----------------------------------------------------------------
+
+    describe('pending response with error type', function () {
+
+        it('rejects pending request when server responds with error type', async function () {
+            client = createClient(port);
+            await client.connect();
+
+            const id = 'myreq-1';
+            const p = client._sendWithResponse(id, { action: 'test', id }, 5000);
+
+            // Server sends an error response with the same id
+            await new Promise(r => setTimeout(r, 30));
+            server._lastClient.send(JSON.stringify({
+                type: 'error',
+                id,
+                data: { code: 'SOME_ERROR', message: 'test error' }
+            }));
+
+            try {
+                await p;
+                expect.fail('should have thrown');
+            } catch (e) {
+                expect(e).to.be.instanceOf(SDKExplorerError);
+                expect(e.code).to.equal('SOME_ERROR');
+            }
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // _onMessage WELCOME when lastActionIndex = 0
+    // -----------------------------------------------------------------
+
+    describe('WELCOME with lastActionIndex=0', function () {
+
+        it('seeds lastActionIndex from WELCOME latest_action_index when starting at 0', async function () {
+            const s = await createMockServer({ actionIndex: 777 });
+            const c = new WebSocketClient({
+                network: 'bitcoin-regtest',
+                websocketUrl: '127.0.0.1',
+                websocketPort: s.port,
+                retry: { maxRetries: 0 },
+                pingInterval: 60000
+            });
+            await c.connect();
+            expect(c.lastActionIndex).to.equal(777);
+            c.disconnect();
+            await new Promise(r => s.wss.close(r));
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // _emit and connection_lost event
+    // -----------------------------------------------------------------
+
+    describe('_emit and connection_lost', function () {
+
+        it('emits connection_lost when reconnect attempts exhausted', async function () {
+            client = createClient(port);
+            await client.connect();
+
+            let lostFired = false;
+            client.on('connection_lost', () => { lostFired = true; });
+
+            // Exhaust all reconnect attempts by pre-setting the counter
+            client.reconnectAttempts = client.maxReconnectAttempts;
+
+            // Force close from server (not intentional from client) — triggers _reconnect
+            // which immediately sees reconnectAttempts >= maxReconnectAttempts and emits connection_lost
+            server._lastClient.close();
+            await new Promise(r => setTimeout(r, 200));
+            expect(lostFired).to.be.true;
+        });
+
+        it('_emit dispatches to registered handlers', function () {
+            const spy = sinon.spy();
+            const c = new WebSocketClient({ network: 'bitcoin-regtest' });
+            c.on('test_event', spy);
+            c._emit('test_event', { value: 42 });
+            expect(spy.calledOnce).to.be.true;
+            expect(spy.firstCall.args[0].data.value).to.equal(42);
+            expect(spy.firstCall.args[0].type).to.equal('test_event');
+        });
+
+        it('_emit is a no-op when no handlers registered', function () {
+            const c = new WebSocketClient({ network: 'bitcoin-regtest' });
+            expect(() => c._emit('no_handler', {})).to.not.throw();
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // _startPing fires
+    // -----------------------------------------------------------------
+
+    describe('_startPing', function () {
+
+        it('sends ping messages on interval', async function () {
+            const c = new WebSocketClient({
+                network: 'bitcoin-regtest',
+                websocketUrl: '127.0.0.1',
+                websocketPort: port,
+                retry: { maxRetries: 0 },
+                pingInterval: 50 // very short for test
+            });
+            await c.connect();
+
+            // Wait for at least one ping to be sent
+            await new Promise(r => setTimeout(r, 150));
+            c.disconnect();
+            // If no error thrown, ping was sent successfully
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // onWsReconnect hook + _resubscribe
+    // -----------------------------------------------------------------
+
+    describe('reconnect and resubscribe', function () {
+
+        it('fires onWsReconnect hook and resubscribes after disconnect', async function () {
+            const reconnectSpy = sinon.spy();
+
+            // Create a second server to reconnect to
+            const s2 = await (new Promise((resolve) => {
+                const wss2 = new WebSocket.Server({ port: 0 }, () => {
+                    const p2 = wss2.address().port;
+                    wss2.on('connection', (ws) => {
+                        ws.send(JSON.stringify({
+                            type: 'WELCOME',
+                            data: { version: '1.0.0', latest_block_index: 100, latest_action_index: 500, limits: {}, channels: [], types: [], features: [] }
+                        }));
+                        ws.on('message', (data) => {
+                            const msg = JSON.parse(data.toString());
+                            if (msg.action === 'subscribe') {
+                                ws.send(JSON.stringify({ type: 'SUBSCRIBED', id: msg.id, data: { channel: msg.channels[0] } }));
+                            }
+                        });
+                        wss2._lastClient = ws;
+                    });
+                    resolve({ wss: wss2, port: p2 });
+                });
+            }));
+
+            client = new WebSocketClient({
+                network: 'bitcoin-regtest',
+                websocketUrl: '127.0.0.1',
+                websocketPort: port,
+                retry: { maxRetries: 2, baseDelay: 50, maxDelay: 200 },
+                pingInterval: 60000,
+                hooks: { onWsReconnect: reconnectSpy }
+            });
+
+            await client.connect();
+            await client.subscribe(['blocks']);
+
+            // Change to second server BEFORE forcing disconnect
+            client.baseUrl = '127.0.0.1';
+            client.port = s2.port;
+
+            // Force close from server (triggers reconnect)
+            server._lastClient.close();
+
+            await new Promise(r => setTimeout(r, 500));
+            expect(reconnectSpy.called).to.be.true;
+
+            client.disconnect();
+            await new Promise(r => s2.wss.close(r));
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // subscribe with params
+    // -----------------------------------------------------------------
+
+    describe('subscribe with params', function () {
+
+        it('sends subscribe with params when provided', async function () {
+            client = createClient(port);
+            await client.connect();
+
+            const result = await client.subscribe(['actions'], { types: ['SEND'] });
+            expect(result.type).to.equal('SUBSCRIBED');
+            expect(client._subscriptions[0].params).to.deep.equal({ types: ['SEND'] });
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // unsubscribe with params filtering
+    // -----------------------------------------------------------------
+
+    describe('unsubscribe with params', function () {
+
+        it('removes only matching subscription by channels+params', async function () {
+            client = createClient(port);
+            await client.connect();
+
+            await client.subscribe(['actions'], { types: ['SEND'] });
+            await client.subscribe(['blocks']);
+            expect(client._subscriptions).to.have.lengthOf(2);
+
+            client.unsubscribe(['blocks']);
+            expect(client._subscriptions).to.have.lengthOf(1);
+            expect(client._subscriptions[0].channels).to.deep.equal(['actions']);
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // latest_action_index from message data
+    // -----------------------------------------------------------------
+
+    describe('latest_action_index tracking', function () {
+
+        it('updates lastActionIndex from latest_action_index field in message data', async function () {
+            client = createClient(port);
+            await client.connect();
+
+            server._lastClient.send(JSON.stringify({
+                type: 'CATCH_UP_COMPLETE',
+                data: { latest_action_index: 999, events_replayed: 5 }
+            }));
+            await new Promise(r => setTimeout(r, 50));
+            expect(client.lastActionIndex).to.equal(999);
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // _send when not connected (no-op)
+    // -----------------------------------------------------------------
+
+    describe('_send when not connected', function () {
+
+        it('does not throw when send called on disconnected ws', function () {
+            client = new WebSocketClient({
+                network: 'bitcoin-regtest',
+                websocketUrl: '127.0.0.1',
+                websocketPort: port,
+                retry: { maxRetries: 0 },
+                pingInterval: 60000
+            });
+            // ws is null — should not throw
+            expect(() => client._send({ action: 'ping' })).to.not.throw();
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // WebSocket constructor throw (sync URL error)
+    // -----------------------------------------------------------------
+
+    describe('WebSocket constructor sync throw', function () {
+
+        it('rejects connect() with WS_CONNECTION_FAILED when URL is invalid', async function () {
+            // Force an invalid URL by directly setting baseUrl after construction
+            // so the ws library's constructor throws synchronously
+            client = new WebSocketClient({
+                network: 'bitcoin-regtest',
+                websocketUrl: '127.0.0.1',
+                websocketPort: port,
+                retry: { maxRetries: 0 },
+                pingInterval: 60000
+            });
+            // Override baseUrl to an empty string so url = 'ws://:port/...' which is invalid
+            client.baseUrl = '';
+            try {
+                await client.connect();
+                expect.fail('should have thrown');
+            } catch (e) {
+                expect(e).to.be.instanceOf(SDKExplorerError);
+                expect(e.code).to.equal('WS_CONNECTION_FAILED');
+            }
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // _resubscribe — direct unit test
+    // -----------------------------------------------------------------
+
+    describe('_resubscribe', function () {
+
+        it('sends subscribe messages for all tracked subscriptions', async function () {
+            client = createClient(port);
+            await client.connect();
+            await client.subscribe(['blocks']);
+            await client.subscribe(['actions'], { types: ['SEND'] });
+
+            // Track what the server receives
+            const received = [];
+            server._lastClient.on('message', (data) => {
+                const msg = JSON.parse(data.toString());
+                received.push(msg);
+            });
+
+            // Call _resubscribe directly
+            client._resubscribe();
+            await new Promise(r => setTimeout(r, 100));
+
+            const subscribeMsgs = received.filter(m => m.action === 'subscribe');
+            expect(subscribeMsgs.length).to.be.greaterThanOrEqual(2);
+        });
+
+        it('includes since_action_index when lastActionIndex > 0', async function () {
+            client = createClient(port);
+            await client.connect();
+            await client.subscribe(['blocks']);
+
+            // Set lastActionIndex
+            client.lastActionIndex = 500;
+
+            const received = [];
+            server._lastClient.on('message', (data) => {
+                const msg = JSON.parse(data.toString());
+                received.push(msg);
+            });
+
+            client._resubscribe();
+            await new Promise(r => setTimeout(r, 100));
+
+            const subscribeMsgs = received.filter(m => m.action === 'subscribe');
+            expect(subscribeMsgs[0].params.since_action_index).to.equal(500);
+        });
+    });
 });

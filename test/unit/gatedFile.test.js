@@ -268,4 +268,44 @@ describe('GatedFileUtils', function () {
             }
         });
     });
+
+    // ─── serializeKeyPayload — object-map input + guards ──────────────────
+    describe('serializeKeyPayload (object-map + guards)', function () {
+
+        it('accepts an object map of { keyHash: key } and round-trips', function () {
+            const a = g.generateKey();
+            const b = g.generateKey();
+            const payload = g.serializeKeyPayload({ [a.keyHash]: a.key, [b.keyHash]: b.key });
+            const parsed = g.parseKeyPayload(payload);
+            expect(parsed.length).to.equal(2);
+            expect(parsed.some(k => k.equals(a.key))).to.equal(true);
+            expect(parsed.some(k => k.equals(b.key))).to.equal(true);
+        });
+
+        it('rejects an object-map key that is not a 32-byte Buffer', function () {
+            const a = g.generateKey();
+            expect(() => g.serializeKeyPayload({ [a.keyHash]: Buffer.alloc(8) }))
+                .to.throw(SDKGatedFileError).that.has.property('code', 'INVALID_KEY');
+        });
+
+        it('rejects an object-map key that does not hash to its declared KEY_HASH', function () {
+            const a = g.generateKey();
+            const b = g.generateKey();
+            // a.key stored under b's hash → verifyKey fails.
+            expect(() => g.serializeKeyPayload({ [b.keyHash]: a.key }))
+                .to.throw(SDKGatedFileError).that.has.property('code', 'INVALID_KEY');
+        });
+
+        it('rejects a non-array, non-object payload', function () {
+            expect(() => g.serializeKeyPayload(42))
+                .to.throw(SDKGatedFileError).that.has.property('code', 'INVALID_PAYLOAD');
+            expect(() => g.serializeKeyPayload(null))
+                .to.throw(SDKGatedFileError).that.has.property('code', 'INVALID_PAYLOAD');
+        });
+
+        it('rejects an empty key set', function () {
+            expect(() => g.serializeKeyPayload([]))
+                .to.throw(SDKGatedFileError).that.has.property('code', 'INVALID_PAYLOAD');
+        });
+    });
 });
