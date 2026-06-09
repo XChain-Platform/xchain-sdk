@@ -547,3 +547,74 @@ describe('request hooks — EncoderClient', () => {
     });
 
 });
+
+// ─── Pure retry helpers (parseRetryAfter / getRetryAfterDelay / getDelay) ──
+// getDelay / DEFAULTS are already imported at the top of this file; only pull in
+// the helpers not already bound here.
+const { parseRetryAfter, getRetryAfterDelay } = require('../../src/retry.js');
+
+describe('retry helpers (pure)', function () {
+
+    describe('parseRetryAfter', function () {
+        it('returns null for falsy input', function () {
+            expect(parseRetryAfter(null)).to.equal(null);
+            expect(parseRetryAfter('')).to.equal(null);
+            expect(parseRetryAfter(undefined)).to.equal(null);
+        });
+
+        it('parses integer seconds to milliseconds', function () {
+            expect(parseRetryAfter('120')).to.equal(120000);
+            expect(parseRetryAfter('0')).to.equal(0);
+        });
+
+        it('parses an HTTP-date to a non-negative delay', function () {
+            const ms = parseRetryAfter('Fri, 01 Jan 2100 00:00:00 GMT');
+            expect(ms).to.be.a('number');
+            expect(ms).to.be.greaterThan(0);
+        });
+
+        it('clamps a past HTTP-date to 0', function () {
+            const ms = parseRetryAfter('Wed, 21 Oct 2015 07:28:00 GMT');
+            expect(ms).to.equal(0);
+        });
+
+        it('returns null for an unparseable value', function () {
+            expect(parseRetryAfter('not-a-date-or-number')).to.equal(null);
+        });
+    });
+
+    describe('getRetryAfterDelay', function () {
+        it('returns null when the error has no response/headers', function () {
+            expect(getRetryAfterDelay(null)).to.equal(null);
+            expect(getRetryAfterDelay({})).to.equal(null);
+            expect(getRetryAfterDelay({ response: {} })).to.equal(null);
+        });
+
+        it('extracts the Retry-After header from an axios-style error', function () {
+            const err = { response: { headers: { 'retry-after': '30' } } };
+            expect(getRetryAfterDelay(err)).to.equal(30000);
+        });
+    });
+
+    describe('getDelay', function () {
+        it('honours a Retry-After header, capped at maxDelay', function () {
+            const cfg = { ...DEFAULTS, maxDelay: 5000 };
+            const err = { response: { headers: { 'retry-after': '30' } } }; // 30000 > cap
+            expect(getDelay(0, cfg, err)).to.equal(5000);
+        });
+
+        it('falls back to exponential backoff (+/- jitter) without a Retry-After', function () {
+            const cfg = { baseDelay: 100, backoffFactor: 2, maxDelay: 100000 };
+            // attempt 3 → base*2^3 = 800, ±25% jitter → within [600, 1000]
+            const d = getDelay(3, cfg, new Error('net'));
+            expect(d).to.be.greaterThan(599);
+            expect(d).to.be.lessThan(1001);
+        });
+
+        it('caps exponential backoff at maxDelay', function () {
+            const cfg = { baseDelay: 1000, backoffFactor: 10, maxDelay: 2000 };
+            const d = getDelay(5, cfg, new Error('net')); // huge → capped, then ±25% jitter
+            expect(d).to.be.lessThan(2001);
+        });
+    });
+});
