@@ -34,6 +34,7 @@ const AuthUtils      = require('./auth.js');
 const MessagingUtils = require('./messaging.js');
 const GatedFileUtils = require('./gatedFile.js');
 const AttestationHelpers = require('./attestation.js');
+const CheckpointVerifier = require('./checkpoint.js');
 const MuSig2            = require('./musig2.js');
 const ActionWaiter      = require('./actionWaiter.js');
 const LifecycleManager  = require('./lifecycleManager.js');
@@ -77,6 +78,11 @@ class XChainSDK {
         // messaging/gatedFile so dapps can `sdk.attestation.httpGet(url)` before
         // passing a URL into an EXECUTE that emits xchain.attestation.request().
         this.attestation = AttestationHelpers;
+        // State checkpoint verification (local Ed25519 over the XCHECKPOINT
+        // canonical) — `sdk.checkpoint.fetchAndVerifyCheckpoint(...)` lets a
+        // client verify explorer state against the validator quorum without
+        // trusting the server. Spec: protocol/actions/ANCHOR.md.
+        this.checkpoint = CheckpointVerifier;
 
         // Service clients (initialized by _initClients or init)
         this.explorer = null;

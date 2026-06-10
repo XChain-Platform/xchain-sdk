@@ -1,0 +1,117 @@
+'use strict';
+
+// Copyright © 2025–2026 Dankest, LLC
+// Based on XChain Platform by Dankest, LLC – https://dankest.llc
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+// This file is part of XChain Platform. Licensed under the GNU Affero
+// General Public License v3.0 or later; see LICENSE.md. A commercial
+// license (without AGPL source-disclosure terms) is available —
+// contact legal@dankest.llc.
+
+// CheckpointVerifier: canonical-string byte-compat with the hub engine,
+// real-Ed25519 quorum verification, tamper detection, and the explorer
+// fetch-and-verify path (stubbed fetch; server `verified` flag ignored).
+
+const assert  = require('assert');
+const crypto  = require('crypto');
+const Checkpoint = require('../../src/checkpoint.js');
+
+// Raw-hex Ed25519 keypair via Node crypto (SPKI/PKCS8 DER stripping mirrors
+// ValidatorIdentity's prefixes).
+function makeKeypair() {
+    let { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+    let pubDer = publicKey.export({ format: 'der', type: 'spki' });
+    return { pubkeyHex: pubDer.slice(12).toString('hex'), privateKey };
+}
+function signHex(privateKey, payload) {
+    return crypto.sign(null, Buffer.from(payload, 'utf8'), privateKey).toString('hex');
+}
+
+function makeCheckpoint(overrides = {}) {
+    return Object.assign({
+        chain: 'BTC', network: 'mainnet', block_index: 900123,
+        block_hash: 'ab'.repeat(32), ledger_hash: 'cd'.repeat(32),
+        actions_hash: 'ef'.repeat(32), contract_hash: '01'.repeat(32),
+        checkpoint_seq: 417, snapshot_block: 900120
+    }, overrides);
+}
+
+describe('CheckpointVerifier (SDK)', function () {
+
+    it('canonical string matches the ANCHOR spec byte-for-byte', function () {
+        assert.strictEqual(
+            Checkpoint.canonicalCheckpoint(makeCheckpoint()),
+            'XCHECKPOINT|BTC|mainnet|900123|' + 'ab'.repeat(32) + '|' + 'cd'.repeat(32) +
+            '|' + 'ef'.repeat(32) + '|' + '01'.repeat(32) + '|417|900120');
+    });
+
+    it('verifies a 2f+1 quorum of real Ed25519 signatures', function () {
+        let keys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
+        let cp = makeCheckpoint();
+        let canonical = Checkpoint.canonicalCheckpoint(cp);
+        // 3 of 4 sign (quorum 2f+1 = 3)
+        cp.validator_signatures = JSON.stringify(keys.slice(0, 3).map(k =>
+            ({ pubkey: k.pubkeyHex, sig: signHex(k.privateKey, canonical) })));
+        let result = Checkpoint.verifyCheckpoint(cp, keys.map(k => k.pubkeyHex));
+        assert.strictEqual(result.valid, true);
+        assert.strictEqual(result.validSigs, 3);
+        assert.strictEqual(result.quorum, 3);
+    });
+
+    it('rejects below quorum, unknown signers, and duplicated pubkeys', function () {
+        let keys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
+        let outsider = makeKeypair();
+        let cp = makeCheckpoint();
+        let canonical = Checkpoint.canonicalCheckpoint(cp);
+        let sig0 = { pubkey: keys[0].pubkeyHex, sig: signHex(keys[0].privateKey, canonical) };
+        cp.validator_signatures = JSON.stringify([
+            sig0, sig0, sig0,                                                          // duplicates count once
+            { pubkey: outsider.pubkeyHex, sig: signHex(outsider.privateKey, canonical) }, // not in the set
+            { pubkey: keys[1].pubkeyHex,  sig: signHex(keys[1].privateKey, canonical) }
+        ]);
+        let result = Checkpoint.verifyCheckpoint(cp, keys.map(k => k.pubkeyHex));
+        assert.strictEqual(result.validSigs, 2);
+        assert.strictEqual(result.valid, false);                                       // 2 < quorum 3
+    });
+
+    it('a tampered field invalidates every signature', function () {
+        let key = makeKeypair();
+        let cp = makeCheckpoint();
+        cp.validator_signatures = JSON.stringify([
+            { pubkey: key.pubkeyHex, sig: signHex(key.privateKey, Checkpoint.canonicalCheckpoint(cp)) }]);
+        cp.ledger_hash = 'ff'.repeat(32);                                              // tamper after signing
+        let result = Checkpoint.verifyCheckpoint(cp, [key.pubkeyHex]);
+        assert.strictEqual(result.valid, false);
+        assert.strictEqual(result.validSigs, 0);
+    });
+
+    it('an empty validator set can never be valid', function () {
+        let key = makeKeypair();
+        let cp = makeCheckpoint();
+        cp.validator_signatures = JSON.stringify([
+            { pubkey: key.pubkeyHex, sig: signHex(key.privateKey, Checkpoint.canonicalCheckpoint(cp)) }]);
+        assert.strictEqual(Checkpoint.verifyCheckpoint(cp, []).valid, false);
+    });
+
+    it('fetchAndVerifyCheckpoint verifies locally and ignores the server verdict', async function () {
+        let key = makeKeypair();
+        let cp = makeCheckpoint();
+        cp.validator_signatures = JSON.stringify([
+            { pubkey: key.pubkeyHex, sig: signHex(key.privateKey, Checkpoint.canonicalCheckpoint(cp)) }]);
+        let fetchedUrl = null;
+        let stubFetch = async (url) => {
+            fetchedUrl = url;
+            return { ok: true, json: async () => ({
+                checkpoint: cp, validators: [key.pubkeyHex],
+                verified: false,                                                       // lying server — must be ignored
+                snapshot_available: true
+            }) };
+        };
+        let result = await Checkpoint.fetchAndVerifyCheckpoint('https://explorer.xchain.io/', 'BTC', 900123, stubFetch);
+        assert.strictEqual(fetchedUrl, 'https://explorer.xchain.io/BTC/api/checkpoint/900123/verify');
+        assert.strictEqual(result.valid, true);                                        // local crypto decides
+        assert.strictEqual(result.snapshotAvailable, true);
+    });
+});
