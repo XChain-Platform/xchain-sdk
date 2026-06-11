@@ -616,6 +616,40 @@ export declare class ContractUtils {
 
 
 /*
+ *  NFT helpers — pure builders for the NFT pattern (ISSUE with DECIMALS=0 +
+ *  LOCK_MAX_SUPPLY=1). No network. Spec: protocol/NFT_Standard.md
+ */
+
+export interface NftUniqueParams { tick: string; description?: string; transfer?: string; memo?: string; }
+export interface NftEditionParams extends NftUniqueParams {
+    supply: string | number;
+    mint?: { maxMint: string | number; perAddress?: string | number; startBlock?: string | number; stopBlock?: string | number };
+}
+export interface NftCollectionItemParams { parent: string; name: string; description?: string; transfer?: string; memo?: string; }
+export interface NftAttachContentParams {
+    coin?: string;
+    fileCoin?: string;
+    issueCoin?: string;
+    fileActionIndex: string | number;
+    issueActionIndex: string | number;
+    memo?: string;
+}
+
+export declare class NftHelpers {
+    /** Build ISSUE params for a unique 1-of-1 (DECIMALS=0, LOCK_MAX_SUPPLY=1, supply 1, minted 1) */
+    unique(params: NftUniqueParams): ActionParams;
+    /** Build ISSUE params for an edition of N identical prints; pass `mint` for a fair-mint window */
+    edition(params: NftEditionParams): ActionParams;
+    /** Build ISSUE params for a child TICK `parent.name` as a 1-of-1 */
+    collectionItem(params: NftCollectionItemParams): ActionParams;
+    /** Build LINK params attaching a FILE to a token's ISSUE (owner-validated by the indexer) */
+    attachContentParams(params: NftAttachContentParams): ActionParams;
+    /** Canonical classifier: true when DECIMALS=0 AND LOCK_MAX_SUPPLY=1 (UPPER_SNAKE or camelCase keys) */
+    isNft(token: Record<string, unknown> | null | undefined): boolean;
+}
+
+
+/*
  *  Contract client (bound to a specific deployed contract)
  */
 
@@ -1013,6 +1047,21 @@ export declare class XChainSDK {
 
     /** Distribute a dividend to all holders of a token */
     distributeDividend(wif: string, dividendParams: DividendParams | ActionParams, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+
+    /** Pure NFT param builders + classifier (no network). Spec: protocol/NFT_Standard.md */
+    readonly nft: NftHelpers;
+
+    /** Issue a unique 1-of-1 NFT, fully minted to the issuer */
+    issueNft(wif: string, params: NftUniqueParams, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+
+    /** Issue an edition of N identical indivisible prints (pass `mint` for a fair-mint window) */
+    issueNftEdition(wif: string, params: NftEditionParams, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+
+    /** Issue a distinct collection item — a child TICK `parent.name` as a 1-of-1 */
+    issueCollectionItem(wif: string, params: NftCollectionItemParams, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+
+    /** Attach content to a token: upload a FILE then LINK it (owner-validated by the indexer) */
+    attachContent(wif: string, params: NftAttachContentParams, opts?: Partial<SubmitActionOpts>): Promise<{ file: SubmitActionResult; link: SubmitActionResult }>;
 
 
     /*
@@ -1466,5 +1515,5 @@ export function startREPL(options?: SDKOptions): Promise<any>;
  *  Module exports (CommonJS interop)
  */
 
-export { XChainSDK, BatchBuilder, ContractClient, ContractUtils, WalletUtils, WalletSession, AuthUtils, CrossChainHelper, UTXOCache, SDKError, SDKValidationError, SDKFormatError, SDKEncoderError, SDKExplorerError, SDKHubError, SDKConfigError, SDKContractError, SDKWalletError, SDKAuthError, SDKMessagingError, SDKActionError };
+export { XChainSDK, BatchBuilder, ContractClient, ContractUtils, NftHelpers, WalletUtils, WalletSession, AuthUtils, CrossChainHelper, UTXOCache, SDKError, SDKValidationError, SDKFormatError, SDKEncoderError, SDKExplorerError, SDKHubError, SDKConfigError, SDKContractError, SDKWalletError, SDKAuthError, SDKMessagingError, SDKActionError };
 export default XChainSDK;

@@ -218,6 +218,85 @@ class Workflows {
         return session.dividend(dividendParams, {}, opts);
     }
 
+    // ── NFT recipes ─────────────────────────────────────────────────────────
+    // Thin submit-flows over the NFT pattern (ISSUE with DECIMALS=0 +
+    // LOCK_MAX_SUPPLY=1). The field bundle is built by sdk.nft.* so the rule
+    // lives in one place. Spec: protocol/NFT_Standard.md.
+
+    // Issue a unique 1-of-1 NFT, fully minted to the issuer.
+    //
+    // wif    - issuer WIF
+    // params - { tick, description?, transfer?, memo? }
+    // Returns: <submitResult>
+    async issueNft(wif, params, opts = {}) {
+        let session = this.sdk.session(wif, opts);
+        return session.issue(this.sdk.nft.unique(params), {}, opts);
+    }
+
+    // Issue an edition of N identical, indivisible prints. Pass `mint` to
+    // distribute via a public MINT window instead of pre-minting to the issuer.
+    //
+    // wif    - issuer WIF
+    // params - { tick, supply, mint?: { maxMint, perAddress?, startBlock?, stopBlock? },
+    //            description?, transfer?, memo? }
+    // Returns: <submitResult>
+    async issueNftEdition(wif, params, opts = {}) {
+        let session = this.sdk.session(wif, opts);
+        return session.issue(this.sdk.nft.edition(params), {}, opts);
+    }
+
+    // Issue a distinct collection item — a child TICK `parent.name` as a 1-of-1.
+    // The issuer must currently own the parent (enforced by the indexer).
+    //
+    // wif    - issuer WIF
+    // params - { parent, name, description?, transfer?, memo? }
+    // Returns: <submitResult>
+    async issueCollectionItem(wif, params, opts = {}) {
+        let session = this.sdk.session(wif, opts);
+        return session.issue(this.sdk.nft.collectionItem(params), {}, opts);
+    }
+
+    // Attach content to a token: upload a FILE, then LINK it to the token's ISSUE.
+    // The LINK is owner-validated by the indexer (SOURCE must own the token).
+    //
+    // wif    - issuer WIF (must own the token)
+    // params - {
+    //   coin,                       // chain both actions live on
+    //   issueActionIndex,           // ACTION_INDEX of the token's ISSUE
+    //   file: { name, type, title?, memo?, rawData },  // FILE upload
+    //   memo?                       // LINK memo
+    // }
+    // Requires indexer confirmation (waitForIndexer) so the FILE's ACTION_INDEX
+    // is resolvable for the LINK.
+    //
+    // Returns: { file: <submitResult>, link: <submitResult> }
+    async attachContent(wif, params, opts = {}) {
+        let session = this.sdk.session(wif, opts);
+
+        // Step 1: upload the FILE
+        let fileResult = await session.file({
+            name:  params.file.name,
+            type:  params.file.type,
+            title: params.file.title,
+            memo:  params.file.memo
+        }, params.file.rawData !== undefined ? { rawData: params.file.rawData } : {}, opts);
+
+        // Resolve the FILE's action_index from the indexed result
+        let fileActionIndex = fileResult.indexed && fileResult.indexed.action_index;
+        if (fileActionIndex === undefined || fileActionIndex === null)
+            throw new Error('attachContent: FILE action_index unavailable — submit with waitForIndexer enabled');
+
+        // Step 2: LINK the FILE to the token's ISSUE (owner-validated by the indexer)
+        let linkResult = await session.link(this.sdk.nft.attachContentParams({
+            coin:             params.coin,
+            fileActionIndex,
+            issueActionIndex: params.issueActionIndex,
+            memo:             params.memo
+        }), {}, opts);
+
+        return { file: fileResult, link: linkResult };
+    }
+
 }
 
 module.exports = Workflows;

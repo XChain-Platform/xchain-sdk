@@ -29,6 +29,7 @@ const WalletSession    = require('./src/walletSession.js');
 const AuthUtils        = require('./src/auth.js');
 const CrossChainHelper   = require('./src/crossChain.js');
 const AttestationHelpers = require('./src/attestation.js');
+const NftHelpers         = require('./src/nft.js');
 const UTXOCache        = require('./src/utxoCache.js');
 const MuSig2           = require('./src/musig2.js');
 const { startREPL }   = require('./src/repl.js');
@@ -58,6 +59,7 @@ module.exports = {
     AuthUtils,
     CrossChainHelper,
     AttestationHelpers,
+    NftHelpers,
     UTXOCache,
     MuSig2,
     startREPL,

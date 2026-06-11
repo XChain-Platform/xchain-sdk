@@ -33,6 +33,7 @@ const WalletUtils    = require('./wallet.js');
 const AuthUtils      = require('./auth.js');
 const MessagingUtils = require('./messaging.js');
 const GatedFileUtils = require('./gatedFile.js');
+const NftHelpers     = require('./nft.js');
 const AttestationHelpers = require('./attestation.js');
 const CheckpointVerifier = require('./checkpoint.js');
 const MuSig2            = require('./musig2.js');
@@ -73,6 +74,12 @@ class XChainSDK {
         this.auth       = new AuthUtils(network);
         this.messaging  = new MessagingUtils(network);
         this.gatedFile  = new GatedFileUtils();
+        // NFT helpers — pure builders for the NFT pattern (ISSUE with DECIMALS=0 +
+        // LOCK_MAX_SUPPLY=1), collection child params, content-attach (LINK) params,
+        // and the canonical isNft() classifier. No network. Submit-flow recipes that
+        // compose these into live actions live on sdk.workflows (issueNft, etc.).
+        // Spec: protocol/NFT_Standard.md.
+        this.nft        = new NftHelpers();
         // Attestation request/payload builders (http_get URL validation, LLM
         // envelope, request options). Exposed on the instance for parity with
         // messaging/gatedFile so dapps can `sdk.attestation.httpGet(url)` before
@@ -471,6 +478,19 @@ class XChainSDK {
     }
     async distributeDividend(wif, dividendParams, opts) {
         return this.workflows.distributeDividend(wif, dividendParams, opts);
+    }
+    // NFT recipes (build params via sdk.nft.*; spec: protocol/NFT_Standard.md)
+    async issueNft(wif, params, opts) {
+        return this.workflows.issueNft(wif, params, opts);
+    }
+    async issueNftEdition(wif, params, opts) {
+        return this.workflows.issueNftEdition(wif, params, opts);
+    }
+    async issueCollectionItem(wif, params, opts) {
+        return this.workflows.issueCollectionItem(wif, params, opts);
+    }
+    async attachContent(wif, params, opts) {
+        return this.workflows.attachContent(wif, params, opts);
     }
 
     // Create a new BatchBuilder for fluent BATCH construction
