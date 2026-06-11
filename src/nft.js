@@ -47,8 +47,9 @@ class NftHelpers {
     // mint    - (optional) fair-mint config; when present the edition distributes
     //           through a public MINT window instead of being pre-minted:
     //             { maxMint, perAddress?, startBlock?, stopBlock? }
-    //           Exactly one print is self-minted at issuance so LOCK_MAX_SUPPLY is
-    //           valid on a token that otherwise has no supply yet (see NFT_Standard).
+    //           No print is self-minted: LOCK_MAX_SUPPLY validates the declared
+    //           cap (not minted supply), so the cap locks at issuance with zero
+    //           supply and the whole edition stays publicly mintable.
     // description, transfer, memo - (optional)
     edition({ tick, supply, mint, description, transfer, memo } = {}) {
         if (!tick) throw new Error('nft.edition: tick is required');

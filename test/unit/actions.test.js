@@ -600,8 +600,14 @@ describe('Actions – validateAction() dry-run', function () {
         expect(codes).to.include('MISSING_REQUIRED_FIELD');
     });
 
-    it('returns { valid: false, errors: [...] } for ISSUE with invalid tick (contains dot)', function () {
+    it('returns { valid: true } for ISSUE with a sub-TICK (dot is the parent/child separator)', function () {
         let result = actions.validateAction('ISSUE', { tick: 'TOKEN.CHILD' });
+        expect(result.valid).to.equal(true);
+        expect(result.errors).to.be.an('array').that.is.empty;
+    });
+
+    it('returns { valid: false, errors: [...] } for ISSUE tick with an empty dot segment', function () {
+        let result = actions.validateAction('ISSUE', { tick: 'TOKEN..CHILD' });
         expect(result.valid).to.equal(false);
         expect(result.errors).to.be.an('array').with.length.above(0);
     });

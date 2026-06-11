@@ -75,19 +75,22 @@ describe('NftHelpers', function () {
             expect(p).to.include({ tick: 'PRINT', maxSupply: '100', decimals: '0', lockMaxSupply: '1', mintSupply: '100' });
             expect(p.maxMint).to.equal(undefined);
         });
-        it('builds a fair-mint window and self-mints 1 so the cap can lock at issuance', function () {
+        it('builds a fair-mint window with NO self-mint — the cap locks at zero supply', function () {
             const p = nft.edition({ tick: 'PRINT', supply: 100, mint: { maxMint: 1, perAddress: 1, startBlock: 10, stopBlock: 20 } });
             expect(p).to.include({
                 maxSupply: '100', decimals: '0', lockMaxSupply: '1',
-                maxMint: '1', mintSupply: '1', mintAddressMax: '1', mintStartBlock: '10', mintStopBlock: '20'
+                maxMint: '1', mintAddressMax: '1', mintStartBlock: '10', mintStopBlock: '20'
             });
+            // LOCK_MAX_SUPPLY validates the declared cap (not minted supply), so no
+            // print is forced onto the issuer — the whole edition stays publicly mintable.
+            expect(p.mintSupply).to.equal(undefined);
         });
-        it('fair-mint edition serializes to a valid ISSUE that locks the cap with supply present', function () {
+        it('fair-mint edition serializes to a valid ISSUE that locks the cap with zero minted supply', function () {
             const r = sdk.actions.createAction({ action: 'ISSUE', params: nft.edition({ tick: 'PRINT', supply: 100, mint: { maxMint: 1 } }) });
             const f = parseIssue(r.actionString);
             expect(f.MAX_SUPPLY).to.equal('100');
             expect(f.DECIMALS).to.equal('0');
-            expect(f.MINT_SUPPLY).to.equal('1');     // one print self-minted so LOCK_MAX_SUPPLY is valid now
+            expect(f.MINT_SUPPLY).to.equal('');      // no self-mint — the cap locks against the declared MAX_SUPPLY
             expect(f.LOCK_MAX_SUPPLY).to.equal('1');
         });
         it('requires tick and supply', function () {

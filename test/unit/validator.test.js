@@ -96,9 +96,16 @@ describe('Validator — TICK name validation (ISSUE action)', function () {
         expect(hasErrorCode(errors, 'INVALID_TICK_NAME')).to.be.true;
     });
 
-    it('rejects a TICK containing a dot', function () {
-        const errors = v.validate('ISSUE', { TICK: 'BAD.TOKEN' });
-        expect(hasErrorCode(errors, 'INVALID_TICK_NAME')).to.be.true;
+    it('accepts a TICK containing a dot (sub-token parent/child separator)', function () {
+        const errors = v.validate('ISSUE', { TICK: 'PARENT.CHILD' });
+        expect(hasErrorCode(errors, 'INVALID_TICK_NAME')).to.be.false;
+    });
+
+    it('rejects a TICK with an empty dot segment (leading, trailing, consecutive)', function () {
+        for (const tick of ['.LEAD', 'TRAIL.', 'A..B']) {
+            const errors = v.validate('ISSUE', { TICK: tick });
+            expect(hasErrorCode(errors, 'INVALID_TICK_NAME'), 'tick: ' + tick).to.be.true;
+        }
     });
 
     it('rejects a TICK containing a slash', function () {
