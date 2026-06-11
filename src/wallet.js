@@ -529,14 +529,34 @@ class WalletUtils {
     // -------------------------------------------------------------------------
 
     /**
+     * Resolve the fee ceiling (sat/vB) applied before extractTransaction.
+     * bitcoinjs-lib's "absurd fee" guard defaults to 5000 sat/vB — calibrated
+     * for BTC's unit value. On chains whose base unit is worth far less, an
+     * ordinary fee blows past it (DOGE: a normal ~0.5 DOGE/kB estimator rate
+     * is ~50k sat/vB), rejecting every transaction at signing. Non-bitcoin
+     * networks therefore default to a far higher ceiling — real drain
+     * protection belongs upstream in the encoder's MAX_FEE_RATE_KB cap.
+     * Callers can override in either direction via opts.maximumFeeRate.
+     *
+     * @param {{ maximumFeeRate?: number }} [opts]
+     * @returns {number|null} sat/vB ceiling, or null to keep bitcoinjs's default
+     */
+    _maxFeeRate(opts) {
+        if (opts && Number.isFinite(opts.maximumFeeRate) && opts.maximumFeeRate > 0)
+            return opts.maximumFeeRate;
+        return String(this.network || '').startsWith('bitcoin') ? null : 10000000;
+    }
+
+    /**
      * Sign an unsigned PSBT hex string with a WIF private key.
      * Finalizes all inputs after signing.
      *
      * @param {string} psbtHex - Unsigned PSBT from encoder, as hex
      * @param {string} wif - WIF-encoded private key
+     * @param {{ maximumFeeRate?: number }} [opts] - sat/vB fee ceiling override
      * @returns {{ txHex: string, txid: string, psbtHex: string }}
      */
-    signPsbt(psbtHex, wif) {
+    signPsbt(psbtHex, wif, opts) {
         if (!psbtHex || typeof psbtHex !== 'string') {
             throw new SDKWalletError('INVALID_PSBT', 'PSBT hex string is required.');
         }
@@ -574,6 +594,8 @@ class WalletUtils {
             throw new SDKWalletError('FINALIZE_FAILED', `PSBT finalization failed: ${err.message}`);
         }
 
+        const maxFeeRate = this._maxFeeRate(opts);
+        if (maxFeeRate) psbt.setMaximumFeeRate(maxFeeRate);
         const tx = psbt.extractTransaction();
 
         return {
@@ -634,9 +656,10 @@ class WalletUtils {
      *
      * @param {string} psbtHex - phase-2 PSBT hex from encoder.spendP2sh
      * @param {string} wif
+     * @param {{ maximumFeeRate?: number }} [opts] - sat/vB fee ceiling override
      * @returns {{ txHex: string, txid: string, psbtHex: string }}
      */
-    signRevealPsbt(psbtHex, wif) {
+    signRevealPsbt(psbtHex, wif, opts) {
         if (!psbtHex || typeof psbtHex !== 'string') {
             throw new SDKWalletError('INVALID_PSBT', 'PSBT hex string is required.');
         }
@@ -674,6 +697,8 @@ class WalletUtils {
             throw new SDKWalletError('FINALIZE_FAILED', `Reveal PSBT finalization failed: ${err.message}`);
         }
 
+        const maxFeeRate = this._maxFeeRate(opts);
+        if (maxFeeRate) psbt.setMaximumFeeRate(maxFeeRate);
         const tx = psbt.extractTransaction();
         return {
             txHex: tx.toHex(),
