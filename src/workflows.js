@@ -281,8 +281,10 @@ class Workflows {
             memo:  params.file.memo
         }, params.file.rawData !== undefined ? { rawData: params.file.rawData } : {}, opts);
 
-        // Resolve the FILE's action_index from the indexed result
-        let fileActionIndex = fileResult.indexed && fileResult.indexed.action_index;
+        // Resolve the FILE's action_index from the indexed result. The waiter resolves
+        // a TRANSACTION object ({ tx_hash, actions: [...] }) on the polling path and a
+        // single-action object on the WS path, so check both shapes.
+        let fileActionIndex = this._actionIndexOf(fileResult.indexed);
         if (fileActionIndex === undefined || fileActionIndex === null)
             throw new Error('attachContent: FILE action_index unavailable — submit with waitForIndexer enabled');
 
@@ -295,6 +297,16 @@ class Workflows {
         }), {}, opts);
 
         return { file: fileResult, link: linkResult };
+    }
+
+    // Extract an action_index from a submitAction `indexed` result, tolerating both
+    // shapes the waiter can resolve: a transaction ({ actions: [{ action_index }] })
+    // on the polling path, or a single action ({ action_index }) on the WS path.
+    _actionIndexOf(indexed) {
+        if (!indexed) return undefined;
+        if (indexed.action_index !== undefined && indexed.action_index !== null) return indexed.action_index;
+        if (Array.isArray(indexed.actions) && indexed.actions.length) return indexed.actions[0].action_index;
+        return undefined;
     }
 
 }

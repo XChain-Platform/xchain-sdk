@@ -595,9 +595,11 @@ class Validator {
                 errors.push(this._error('INVALID_TICK_NAME', 'TICK name cannot contain ' + (ch === '|' ? 'pipe (|)' : 'semicolon (;)'), { value }));
         }
 
-        // Check for dot (parent/child separator) and slash (directory separator)
-        if (name.includes('.'))
-            errors.push(this._error('INVALID_TICK_NAME', 'TICK name cannot contain dot (.)', { value }));
+        // Dot is the parent/child separator for sub-tokens (e.g. PARENT.CHILD), which the
+        // indexer fully supports — so allow it as a separator, but reject empty segments
+        // (no leading, trailing, or consecutive dots). Slash is still forbidden.
+        if (name.includes('.') && name.split('.').some(seg => seg.length === 0))
+            errors.push(this._error('INVALID_TICK_NAME', 'TICK name has an empty parent/child segment (no leading, trailing, or consecutive dots)', { value }));
         if (name.includes('/'))
             errors.push(this._error('INVALID_TICK_NAME', 'TICK name cannot contain slash (/)', { value }));
 

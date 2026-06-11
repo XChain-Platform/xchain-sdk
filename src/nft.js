@@ -56,9 +56,11 @@ class NftHelpers {
             throw new Error('nft.edition: supply (maxSupply) is required');
         let params = this._issue({ tick, maxSupply: String(supply), description, transfer, memo });
         if (mint) {
-            // Fair-mint edition: open a MINT window, self-mint 1 so the cap can lock now.
+            // Fair-mint edition: open a public MINT window. The cap locks at issuance
+            // with zero minted supply (LOCK_MAX_SUPPLY now validates a declared cap, not
+            // minted supply), so the whole edition stays available for the public mint —
+            // no print is forced onto the issuer.
             params.maxMint        = String(mint.maxMint);
-            params.mintSupply     = '1';
             if (mint.perAddress !== undefined) params.mintAddressMax  = String(mint.perAddress);
             if (mint.startBlock !== undefined) params.mintStartBlock  = String(mint.startBlock);
             if (mint.stopBlock  !== undefined) params.mintStopBlock   = String(mint.stopBlock);
@@ -112,8 +114,10 @@ class NftHelpers {
     // (explorer/indexer shape) or camelCase keys.
     isNft(token) {
         if (!token) return false;
-        let decimals = token.DECIMALS         ?? token.decimals;
-        let locked   = token.LOCK_MAX_SUPPLY  ?? token.lockMaxSupply;
+        // Accept UPPER_SNAKE (indexer), lower snake_case (explorer JSON column names),
+        // and camelCase (SDK param) shapes — the explorer returns `lock_max_supply`.
+        let decimals = token.DECIMALS        ?? token.decimals;
+        let locked   = token.LOCK_MAX_SUPPLY ?? token.lock_max_supply ?? token.lockMaxSupply;
         return Number(decimals) === 0 && Number(locked) === 1;
     }
 

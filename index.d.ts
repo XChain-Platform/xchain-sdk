@@ -634,6 +634,14 @@ export interface NftAttachContentParams {
     issueActionIndex: string | number;
     memo?: string;
 }
+// Shape for the sdk.attachContent() workflow (uploads the FILE, then LINKs it) — distinct
+// from NftAttachContentParams (the LINK param builder, which takes an existing file index).
+export interface NftAttachContentOpts {
+    coin?: string;
+    issueActionIndex: string | number;
+    file: { name: string; type: string; title?: string; memo?: string; rawData?: string | Buffer };
+    memo?: string;
+}
 
 export declare class NftHelpers {
     /** Build ISSUE params for a unique 1-of-1 (DECIMALS=0, LOCK_MAX_SUPPLY=1, supply 1, minted 1) */
@@ -1061,7 +1069,7 @@ export declare class XChainSDK {
     issueCollectionItem(wif: string, params: NftCollectionItemParams, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
 
     /** Attach content to a token: upload a FILE then LINK it (owner-validated by the indexer) */
-    attachContent(wif: string, params: NftAttachContentParams, opts?: Partial<SubmitActionOpts>): Promise<{ file: SubmitActionResult; link: SubmitActionResult }>;
+    attachContent(wif: string, params: NftAttachContentOpts, opts?: Partial<SubmitActionOpts>): Promise<{ file: SubmitActionResult; link: SubmitActionResult }>;
 
 
     /*
