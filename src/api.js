@@ -32,6 +32,12 @@ dotenv.config();
 
 // Parse in the environmental variables
 const SDK_API_PORT = process.env.SDK_API_PORT || 3005;
+// Helper-API key. Always fails closed: action-creation methods can carry key
+// material in their params, so without a configured key every method except
+// ping is rejected (401) rather than left open.
+const SDK_API_KEY  = process.env.SDK_API_KEY || '';
+if(!SDK_API_KEY)
+    console.warn('WARNING: SDK_API_KEY is not set — all helper-API methods except ping will return 401. Set SDK_API_KEY to use the API.');
 const NETWORK      = process.env.NETWORK;
 const EXPLORER_URL = process.env.EXPLORER_URL;
 const EXPLORER_PORT = process.env.EXPLORER_PORT;
@@ -73,8 +79,24 @@ async function startApi() {
     // Allow JSON requests
     app.use(bodyParser.json());
 
-    // Allow CORS for development
-    app.use(cors());
+    // CORS disabled by default; set CORS_ORIGIN to allow a specific origin
+    app.use(cors({ origin: process.env.CORS_ORIGIN || false }));
+
+    // API key enforcement for all methods except ping. Fails closed: without
+    // a configured key, every non-ping method is rejected, never left open.
+    app.use((req, res, next) => {
+        let method = req.body && req.body.method;
+        if (method && method.toLowerCase() !== 'ping') {
+            let header = req.headers['authorization'];
+            if (!SDK_API_KEY || !header || header !== 'Bearer ' + SDK_API_KEY) {
+                return res.status(401).json({
+                    jsonrpc: '2.0', id: req.body.id || null,
+                    error: { code: -32001, message: 'Unauthorized' }
+                });
+            }
+        }
+        next();
+    });
 
     // Define JSON-RPC controller with all SDK methods
     const controller = {
