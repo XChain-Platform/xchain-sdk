@@ -950,7 +950,7 @@ describe('ExplorerClient', function () {
     describe('public methods', function () {
         const methods = [
             'getBalances', 'getAddress', 'getHolders', 'getCredits', 'getDebits', 'getEscrows',
-            'getToken', 'getTokens', 'getIssues',
+            'getToken', 'getProject', 'getTokens', 'getIssues',
             'getTransaction', 'getAction', 'getBlock', 'getHistory',
             'getAddresses', 'getAirdrops', 'getBatches', 'getBroadcasts', 'getCallbacks',
             'getCoinpays', 'getCoinpayExpires', 'getCoinpayObligations',
@@ -973,10 +973,10 @@ describe('ExplorerClient', function () {
             });
         }
 
-        it('has 81 public methods', function () {
+        it('has 82 public methods', function () {
             let publicMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(publicMethods).to.have.length(81);
+            expect(publicMethods).to.have.length(82);
         });
     });
 

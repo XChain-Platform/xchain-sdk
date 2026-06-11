@@ -658,6 +658,43 @@ export declare class NftHelpers {
 
 
 /*
+ *  Project registry helpers — pure builders for owner-attested official-token
+ *  rosters (TICK-type LIST + LINK to the project's ISSUE). No network.
+ *  Spec: protocol/Project_Registry.md
+ */
+
+export interface ProjectRosterParams { ticks: string[] | string; }
+export interface ProjectRosterEditParams {
+    listActionIndex: string | number;
+    add?: string[] | string;
+    remove?: string[] | string;
+}
+export interface ProjectAttestRosterParams {
+    coin: string;
+    listActionIndex: string | number;
+    issueActionIndex: string | number;
+    memo?: string;
+}
+// Shape for the sdk.setRoster() workflow (publishes the LIST, then LINKs it).
+export interface ProjectSetRosterOpts {
+    coin: string;
+    issueActionIndex: string | number;
+    ticks?: string[] | string;
+    edit?: ProjectRosterEditParams;
+    memo?: string;
+}
+
+export declare class ProjectHelpers {
+    /** Build LIST params for a new official-token roster (LIST v0, TYPE=TICK) */
+    rosterParams(params: ProjectRosterParams): ActionParams;
+    /** Build LIST params deriving a new roster from an existing one (LIST v1, add OR remove) */
+    rosterEditParams(params: ProjectRosterEditParams): ActionParams;
+    /** Build LINK params attesting a roster to the project's ISSUE (owner-validated by the indexer) */
+    attestRosterParams(params: ProjectAttestRosterParams): ActionParams;
+}
+
+
+/*
  *  Contract client (bound to a specific deployed contract)
  */
 
@@ -863,6 +900,9 @@ export declare class XChainSDK {
 
     /** Get a single token by ticker. */
     getToken(tick: string): Promise<any>;
+
+    /** Get a project tick's current official-token roster (spec: protocol/Project_Registry.md). */
+    getProject(tick: string): Promise<any>;
 
     /** Get tokens filtered by query and type. */
     getTokens(query: string, type: string, opts?: QueryOptions): Promise<any>;
@@ -1070,6 +1110,12 @@ export declare class XChainSDK {
 
     /** Attach content to a token: upload a FILE then LINK it (owner-validated by the indexer) */
     attachContent(wif: string, params: NftAttachContentOpts, opts?: Partial<SubmitActionOpts>): Promise<{ file: SubmitActionResult; link: SubmitActionResult }>;
+
+    /** Pure project-registry param builders (no network). Spec: protocol/Project_Registry.md */
+    readonly project: ProjectHelpers;
+
+    /** Publish (or replace) a project's official-token roster: LIST then owner-validated LINK */
+    setRoster(wif: string, params: ProjectSetRosterOpts, opts?: Partial<SubmitActionOpts>): Promise<{ list: SubmitActionResult; link: SubmitActionResult }>;
 
 
     /*
@@ -1523,5 +1569,5 @@ export function startREPL(options?: SDKOptions): Promise<any>;
  *  Module exports (CommonJS interop)
  */
 
-export { XChainSDK, BatchBuilder, ContractClient, ContractUtils, NftHelpers, WalletUtils, WalletSession, AuthUtils, CrossChainHelper, UTXOCache, SDKError, SDKValidationError, SDKFormatError, SDKEncoderError, SDKExplorerError, SDKHubError, SDKConfigError, SDKContractError, SDKWalletError, SDKAuthError, SDKMessagingError, SDKActionError };
+export { XChainSDK, BatchBuilder, ContractClient, ContractUtils, NftHelpers, ProjectHelpers, WalletUtils, WalletSession, AuthUtils, CrossChainHelper, UTXOCache, SDKError, SDKValidationError, SDKFormatError, SDKEncoderError, SDKExplorerError, SDKHubError, SDKConfigError, SDKContractError, SDKWalletError, SDKAuthError, SDKMessagingError, SDKActionError };
 export default XChainSDK;

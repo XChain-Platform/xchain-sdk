@@ -79,6 +79,16 @@ class Actions {
                 fields.CONSTRUCTOR_PARAMS = fields.CONSTRUCTOR_PARAMS.map(p => String(p));
         }
 
+        // [3d] LIST: ITEM is a rest-field — coerce to an array of strings so a
+        // multi-item list serializes as individual pipe segments (a lone string
+        // stays a single-item list, preserving the old call shape)
+        if (actionName === 'LIST' && fields.ITEM !== undefined && fields.ITEM !== null) {
+            if (!Array.isArray(fields.ITEM))
+                fields.ITEM = [String(fields.ITEM)];
+            else
+                fields.ITEM = fields.ITEM.map(i => String(i));
+        }
+
         // [4] Cast numeric fields
         fields = this.util.setNumberFormats(fields);
 

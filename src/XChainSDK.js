@@ -34,6 +34,7 @@ const AuthUtils      = require('./auth.js');
 const MessagingUtils = require('./messaging.js');
 const GatedFileUtils = require('./gatedFile.js');
 const NftHelpers     = require('./nft.js');
+const ProjectHelpers = require('./project.js');
 const AttestationHelpers = require('./attestation.js');
 const CheckpointVerifier = require('./checkpoint.js');
 const MuSig2            = require('./musig2.js');
@@ -80,6 +81,11 @@ class XChainSDK {
         // compose these into live actions live on sdk.workflows (issueNft, etc.).
         // Spec: protocol/NFT_Standard.md.
         this.nft        = new NftHelpers();
+        // Project registry helpers — pure builders for owner-attested official-token
+        // rosters (TICK-type LIST + LINK to the project's ISSUE). No network.
+        // Submit-flow recipe lives on sdk.workflows (setRoster).
+        // Spec: protocol/Project_Registry.md.
+        this.project    = new ProjectHelpers();
         // Attestation request/payload builders (http_get URL validation, LLM
         // envelope, request options). Exposed on the instance for parity with
         // messaging/gatedFile so dapps can `sdk.attestation.httpGet(url)` before
@@ -492,6 +498,10 @@ class XChainSDK {
     async attachContent(wif, params, opts) {
         return this.workflows.attachContent(wif, params, opts);
     }
+    // Project registry recipe (build params via sdk.project.*; spec: protocol/Project_Registry.md)
+    async setRoster(wif, params, opts) {
+        return this.workflows.setRoster(wif, params, opts);
+    }
 
     // Create a new BatchBuilder for fluent BATCH construction
     // Usage: await sdk.batch().send({...}).mint({...}).build(encoderOpts?)
@@ -731,6 +741,11 @@ class XChainSDK {
 
     async getToken(tick) {
         return this._requireExplorer().getToken(tick);
+    }
+
+    // Current official-token roster of a project tick (protocol/Project_Registry.md)
+    async getProject(tick) {
+        return this._requireExplorer().getProject(tick);
     }
 
     async getTokens(query, type, opts) {

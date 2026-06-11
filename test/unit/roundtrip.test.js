@@ -157,18 +157,22 @@ describe('Round-trip — serialize then parse back', function () {
             check: { COIN1: 'BTC', COIN1_ACTION_INDEX: '100', COIN2: 'LTC', COIN2_ACTION_INDEX: '200', MEMO: 'linked' }
         },
         {
+            // ITEM is a rest-field ('...ITEM') — multi-item lists expand into
+            // individual pipe segments; the naive positional parser here sees
+            // the first item under the rest-field name. Multi-item expansion is
+            // covered in project.test.js.
             name: 'LIST v0',
             action: 'list',
-            params: { type: 1, item: 'TOKEN1,TOKEN2' },
+            params: { type: 1, item: 'TOKEN1' },
             expectedVersion: 0,
-            check: { TYPE: '1', ITEM: 'TOKEN1,TOKEN2' }
+            check: { TYPE: '1', '...ITEM': 'TOKEN1' }
         },
         {
             name: 'LIST v1 (edit)',
             action: 'list',
             params: { edit: 1, listActionIndex: 555, item: 'TOKEN3' },
             expectedVersion: 1,
-            check: { EDIT: '1', LIST_ACTION_INDEX: '555', ITEM: 'TOKEN3' }
+            check: { EDIT: '1', LIST_ACTION_INDEX: '555', '...ITEM': 'TOKEN3' }
         },
         {
             name: 'MESSAGE v3 (plaintext)',

@@ -201,6 +201,12 @@ class ExplorerClient {
         return this._get('/token/' + tick);
     }
 
+    // Current official-token roster of a project tick (protocol/Project_Registry.md).
+    // The explorer 400s when the tick has no owner-attested roster.
+    async getProject(tick) {
+        return this._get('/project/' + tick);
+    }
+
     async getTokens(query, type, opts = {}) {
         return this._get('/tokens/' + query + '/' + type, opts);
     }

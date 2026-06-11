@@ -108,8 +108,10 @@ Formats = {
     },
 
     LIST: {
-        0: 'VERSION|TYPE|ITEM',
-        1: 'VERSION|EDIT|LIST_ACTION_INDEX|ITEM'
+        // ITEM is a rest-field: a LIST carries any number of items as
+        // individual pipe-delimited segments (LIST|0|1|JDOG|BRRR|TEST)
+        0: 'VERSION|TYPE|...ITEM',
+        1: 'VERSION|EDIT|LIST_ACTION_INDEX|...ITEM'
     },
 
     MESSAGE: {

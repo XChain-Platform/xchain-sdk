@@ -299,6 +299,48 @@ class Workflows {
         return { file: fileResult, link: linkResult };
     }
 
+    // Publish (or replace) a project's official-token roster: submit a TICK-type
+    // LIST, then LINK it to the project's ISSUE. The LINK is owner-validated by
+    // the indexer (SOURCE must be the project tick's current owner), and the
+    // latest owner-valid roster link supersedes earlier ones — see
+    // xchain-documentation/protocol/Project_Registry.md.
+    //
+    // wif    - project owner WIF
+    // params - {
+    //   coin,                       // the project's chain (both actions live on it)
+    //   issueActionIndex,           // ACTION_INDEX of the project tick's ISSUE
+    //   ticks,                      // array of TICK names for a NEW roster, OR
+    //   edit: { listActionIndex, add?, remove? },  // derive from an existing roster
+    //   memo?                       // LINK memo
+    // }
+    // Requires indexer confirmation (waitForIndexer) so the LIST's ACTION_INDEX
+    // is resolvable for the LINK.
+    //
+    // Returns: { list: <submitResult>, link: <submitResult> }
+    async setRoster(wif, params, opts = {}) {
+        let session = this.sdk.session(wif, opts);
+
+        // Step 1: publish the roster LIST (new, or derived from an existing one)
+        let listParams = params.edit
+            ? this.sdk.project.rosterEditParams(params.edit)
+            : this.sdk.project.rosterParams({ ticks: params.ticks });
+        let listResult = await session.list(listParams, {}, opts);
+
+        let listActionIndex = this._actionIndexOf(listResult.indexed);
+        if (listActionIndex === undefined || listActionIndex === null)
+            throw new Error('setRoster: LIST action_index unavailable — submit with waitForIndexer enabled');
+
+        // Step 2: LINK the roster to the project's ISSUE (owner-validated)
+        let linkResult = await session.link(this.sdk.project.attestRosterParams({
+            coin:             params.coin,
+            listActionIndex,
+            issueActionIndex: params.issueActionIndex,
+            memo:             params.memo
+        }), {}, opts);
+
+        return { list: listResult, link: linkResult };
+    }
+
     // Extract an action_index from a submitAction `indexed` result, tolerating both
     // shapes the waiter can resolve: a transaction ({ actions: [{ action_index }] })
     // on the polling path, or a single action ({ action_index }) on the WS path.
