@@ -94,8 +94,17 @@ class ActionWaiter {
                     if (result && result.tx_hash) {
                         let actions = Array.isArray(result.actions) ? result.actions : [];
                         let invalid = actions.find(a => typeof a.status === 'string' && /^invalid/i.test(a.status));
-                        // Surface a normalized top-level status for callers/tests.
-                        result.status = invalid ? invalid.status : 'valid';
+                        // Surface a normalized top-level status for callers/tests: the first
+                        // action whose status is not 'valid'. This covers wire rejections
+                        // ("invalid: ...") AND VM execution outcomes ('failed' / 'reverted' /
+                        // 'out_of_resource') — previously only "invalid:" surfaced, so a failed
+                        // contract execution read as top-level 'valid' and callers had to dig
+                        // into actions[n].status. Note requireValid still rejects ONLY on
+                        // "invalid:" — an indexed-but-failed execution is a successful
+                        // SUBMISSION (the tx is on-chain and processed), so flows that wait on
+                        // delivery (attestation callbacks, batch drivers) must not throw.
+                        let nonValid = actions.find(a => typeof a.status === 'string' && a.status !== 'valid');
+                        result.status = nonValid ? nonValid.status : 'valid';
                         if (requireValid && invalid) {
                             settle(new SDKActionError('ACTION_REJECTED',
                                 'Action was indexed but marked invalid: ' + invalid.status,
