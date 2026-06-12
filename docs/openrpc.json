@@ -1,0 +1,1141 @@
+{
+  "openrpc": "1.3.2",
+  "info": {
+    "title": "XChain SDK API",
+    "version": "1.0.0",
+    "description": "JSON-RPC 2.0 server (POST /) exposing xchain-sdk: action generation, PSBT encoding via xchain-encoder, and explorer/hub queries. Self-hosted (`npm run api` in xchain-sdk) — there is no public deployment; agents talking to the public platform should use the explorer REST API or the SDK as a library instead. Auth fails closed: every method except ping requires `Authorization: Bearer <SDK_API_KEY>`. Errors follow JSON-RPC 2.0 ({code, message}); registry: https://docs.xchain.io/protocol/Error_Codes.md. LLM-friendly docs: https://docs.xchain.io/llms.txt",
+    "license": {
+      "name": "AGPL-3.0-or-later",
+      "url": "https://docs.xchain.io/legal/LICENSING.md"
+    }
+  },
+  "servers": [
+    {
+      "name": "local",
+      "url": "http://localhost:3005/"
+    }
+  ],
+  "methods": [
+    {
+      "name": "ping",
+      "summary": "Health check (the only method that does not require auth).",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      }
+    },
+    {
+      "name": "create_action",
+      "summary": "Generate an XChain ACTION string from an action name + fields (auto-selects the smallest wire format).",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "validate_action",
+      "summary": "Validate action fields without generating output.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_actions",
+      "summary": "List the supported ACTION types.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_action_formats",
+      "summary": "Versioned wire-format templates for an action.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_action_fields",
+      "summary": "Field names/constraints for an action.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "encode_tx",
+      "summary": "Encode an ACTION string into an unsigned PSBT via xchain-encoder.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "spend_p2sh",
+      "summary": "Build the P2SH/P2WSH reveal (tx2) transaction.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "ping_encoder",
+      "summary": "Health-check the configured encoder.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "ping_hub",
+      "summary": "Health-check the configured hub.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_hub_config",
+      "summary": "Hub service-discovery config (getallconfigs).",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_balances",
+      "summary": "Token balances for an address.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_address",
+      "summary": "Address summary.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_holders",
+      "summary": "Holders of a token.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_credits",
+      "summary": "Ledger credits.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_debits",
+      "summary": "Ledger debits.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_escrows",
+      "summary": "Escrowed balances.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_token",
+      "summary": "Token detail.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_tokens",
+      "summary": "Token search.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_issues",
+      "summary": "ISSUE actions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_transaction",
+      "summary": "Transaction lookup.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_action",
+      "summary": "One action with decoded data.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_block",
+      "summary": "Block summary.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_history",
+      "summary": "Combined action history.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_addresses",
+      "summary": "ADDRESS actions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_airdrops",
+      "summary": "AIRDROP actions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_batches",
+      "summary": "BATCH actions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_broadcasts",
+      "summary": "BROADCAST actions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_callbacks",
+      "summary": "CALLBACK actions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_destroys",
+      "summary": "DESTROY actions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_dispensers",
+      "summary": "DISPENSER actions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_dispenses",
+      "summary": "Dispense events.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_dividends",
+      "summary": "DIVIDEND actions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_fees",
+      "summary": "Protocol fee payments.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_files",
+      "summary": "FILE actions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_links",
+      "summary": "LINK actions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_lists",
+      "summary": "LIST actions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_messages",
+      "summary": "MESSAGE actions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_mints",
+      "summary": "MINT actions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_orders",
+      "summary": "ORDER actions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_sends",
+      "summary": "SEND actions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_sleeps",
+      "summary": "SLEEP actions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_swaps",
+      "summary": "SWAP actions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_sweeps",
+      "summary": "SWEEP actions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_markets",
+      "summary": "All trading pairs.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_market",
+      "summary": "Market summary for a pair.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_market_history",
+      "summary": "Trade history for a pair.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_market_orders",
+      "summary": "Open orders for a pair.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_orderbook",
+      "summary": "Aggregated order book.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "get_status",
+      "summary": "Explorer status.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    },
+    {
+      "name": "search",
+      "summary": "Search addresses, tokens, broadcasts, transactions.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "description": "method parameters — see the SDK method of the same camelCase name"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "x-auth": "Authorization: Bearer SDK_API_KEY"
+    }
+  ]
+}
