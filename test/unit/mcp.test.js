@@ -234,7 +234,7 @@ describe('MCP server (write tools)', () => {
         expect(JSON.parse(denied.content[0].text).code).to.equal('POLICY_AMOUNT_EXCEEDED');
     });
 
-    it('compose_action composes unsigned PSBTs via the agent pubkey and never submits', async () => {
+    it('compose_action composes unsigned PSBTs via the agent wallet address and never submits', async () => {
         const created = [];
         const server = buildServer({
             sdkFactory: (network) => { const s = writableStub(network); created.push(s); return s; },
@@ -248,7 +248,9 @@ describe('MCP server (write tools)', () => {
         const res = await client.callTool({ name: 'compose_action', arguments: { coin: 'BTC', action: 'send', params: { tick: 'TOK', amount: '5' } } });
         const body = JSON.parse(res.content[0].text);
         expect(body).to.deep.equal({ action_string: 'SEND|0|TOK|5|dest', psbt: 'deadbeef', encoding: 'OP_RETURN', signed: false });
-        expect(created[0].calls.find((c) => c[0] === 'encodeTx')[1]).to.deep.equal({ pubkey: 'agentpub', data: 'SEND|0|TOK|5|dest' });
+        // The default sender is the session ADDRESS (the encoder's pubkey field
+        // base58-decodes on the P2SH path — a hex pubkey breaks past OP_RETURN).
+        expect(created[0].calls.find((c) => c[0] === 'encodeTx')[1]).to.deep.equal({ pubkey: 'agentaddr', data: 'SEND|0|TOK|5|dest' });
         expect(created[0].calls.some((c) => c[0] === 'session.submit')).to.equal(false);
     });
 });

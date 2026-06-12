@@ -86,7 +86,12 @@ class WalletSession {
         }
 
         let mergedEncoder = {
-            pubkey: this.pubkey,
+            // The encoder's `pubkey` field is the SENDER identity and must be
+            // the ADDRESS: the P2SH/P2WSH data-script path base58-decodes it
+            // (a hex pubkey throws "Non-base58 character" as soon as an action
+            // string outgrows OP_RETURN), and the UTXO-fetch fallback can only
+            // key on an address.
+            pubkey: this.address,
             change: this.address,
             ...encoderOpts
         };
@@ -212,7 +217,7 @@ class WalletSession {
 
     async estimateFees(actionData, encoderOpts = {}) {
         let merged = {
-            pubkey: this.pubkey,
+            pubkey: this.address,      // sender ADDRESS — see submit()
             change: this.address,
             ...encoderOpts
         };

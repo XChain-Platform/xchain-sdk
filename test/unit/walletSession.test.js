@@ -147,7 +147,9 @@ describe('WalletSession', function () {
             assert.ok(submitStub.calledOnce);
             let [actionData, encoderOpts, submitOpts] = submitStub.firstCall.args;
             assert.strictEqual(actionData.action, 'SEND');
-            assert.strictEqual(encoderOpts.pubkey, fakeKeyInfo.publicKeyHex);
+            // pubkey carries the sender ADDRESS (the encoder base58-decodes it
+            // on the P2SH/P2WSH path; a hex pubkey breaks past OP_RETURN size)
+            assert.strictEqual(encoderOpts.pubkey, 'mTestAddr123');
             assert.strictEqual(encoderOpts.change, 'mTestAddr123');
             assert.strictEqual(submitOpts.wif, WIF_MAINNET);
         });
@@ -224,8 +226,8 @@ describe('WalletSession', function () {
             await session.submit({ action: 'SEND', params: {} }, { fee: 2000 });
             let [, encoderOpts] = submitStub.firstCall.args;
             assert.strictEqual(encoderOpts.fee, 2000);
-            // pubkey and change still included
-            assert.strictEqual(encoderOpts.pubkey, fakeKeyInfo.publicKeyHex);
+            // pubkey (sender address) and change still included
+            assert.strictEqual(encoderOpts.pubkey, 'mTestAddr123');
         });
 
         it('returns lifecycle result', async function () {
@@ -398,7 +400,7 @@ describe('WalletSession', function () {
             let session = new WalletSession(sdk, WIF_MAINNET);
             let result = await session.estimateFees({ action: 'SEND', params: {} });
             assert.strictEqual(result.fee, 5000);
-            assert.strictEqual(capturedEnc.pubkey, fakeKeyInfo.publicKeyHex);
+            assert.strictEqual(capturedEnc.pubkey, 'mTestAddr123');
             assert.strictEqual(capturedEnc.change, 'mTestAddr123');
         });
 

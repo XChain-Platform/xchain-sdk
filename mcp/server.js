@@ -243,7 +243,7 @@ function buildServer(options = {}) {
             pubkey: z.string().optional().describe('Sender address/pubkey for UTXO selection' + (wallet ? ' (defaults to the agent wallet)' : ' (required)')),
         },
         async ({ coin, action, params, pubkey }) => {
-            const sender = pubkey || (wallet ? sessionFor(coin).pubkey : null);
+            const sender = pubkey || (wallet ? sessionFor(coin).address : null);
             if (!sender) throw Object.assign(new Error('pubkey is required: no agent wallet is configured'), { code: 'MISSING_PUBKEY' });
             const sdk = sdkFor(coin);
             const actionResult = await sdk.createAction({ action: String(action).toUpperCase(), params });
