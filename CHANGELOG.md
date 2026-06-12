@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `src/networks.js` — corrected the Litecoin `dustThreshold` from `546` to `5460` litoshis for `litecoin-mainnet` / `litecoin-testnet` / `litecoin-regtest`. Litecoin Core's dust relay fee is 10× Bitcoin's, so the effective dust floor for a standard output is 5460 litoshis; consumers building LTC transactions from these network objects previously risked emitting sub-dust fee/change outputs that the node rejects with `{"code":-26,"message":"dust"}`. Bitcoin and Dogecoin values are unchanged.
+
 ### Security
 - `src/api.js`, `.env.example` — the optional SDK helper API is no longer unauthenticated with browser-open CORS. Every JSON-RPC method except `ping` now requires `Authorization: Bearer <SDK_API_KEY>` and **always fails closed**: with no key configured the methods return 401 rather than being open, because action-creation calls can carry caller key material in their params and the server has no fleet caller that would break (it is a developer-facing opt-in service). CORS is now disabled by default (`origin: false`) with an explicit `CORS_ORIGIN` opt-in, so a malicious web page can no longer drive a developer's local helper API cross-origin. Startup logs a notice when `SDK_API_KEY` is unset so the locked-by-default behavior is discoverable; `.env.example` documents both settings.
 

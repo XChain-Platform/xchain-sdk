@@ -58,7 +58,7 @@ const NETWORKS = {
         pubKeyHash: 0x30,
         scriptHash: 0x32,
         wif: 0xb0,
-        dustThreshold: 546,
+        dustThreshold: 5460,
         supportsSegwit: true
     },
     'litecoin-testnet': {
@@ -68,7 +68,7 @@ const NETWORKS = {
         pubKeyHash: 0x6f,
         scriptHash: 0xc4,
         wif: 0xef,
-        dustThreshold: 546,
+        dustThreshold: 5460,
         supportsSegwit: true
     },
     'litecoin-regtest': {
@@ -78,7 +78,7 @@ const NETWORKS = {
         pubKeyHash: 0x6f,
         scriptHash: 0xc4,
         wif: 0xef,
-        dustThreshold: 546,
+        dustThreshold: 5460,
         supportsSegwit: true
     },
     'dogecoin-mainnet': {
