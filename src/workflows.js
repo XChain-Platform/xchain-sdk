@@ -264,12 +264,16 @@ class Workflows {
     //   coin,                       // chain both actions live on
     //   issueActionIndex,           // ACTION_INDEX of the token's ISSUE
     //   file: { name, type, title?, memo?, rawData },  // FILE upload
-    //   memo?                       // LINK memo
+    //   memo?,                      // LINK memo
+    //   tis?: {                     // OPTIONAL — also author the on-chain TIS
+    //     tick,                     //   document (Token_Information_Standard.md
+    //     name?, description?       //   On-Chain Format) and point the token's
+    //   }                           //   DESCRIPTION at it via ISSUE v1
     // }
-    // Requires indexer confirmation (waitForIndexer) so the FILE's ACTION_INDEX
-    // is resolvable for the LINK.
+    // Requires indexer confirmation (waitForIndexer) so each leg's ACTION_INDEX
+    // is resolvable for the next.
     //
-    // Returns: { file: <submitResult>, link: <submitResult> }
+    // Returns: { file, link, tisFile?, describe? } (each a <submitResult>)
     async attachContent(wif, params, opts = {}) {
         let session = this.sdk.session(wif, opts);
 
@@ -296,7 +300,39 @@ class Workflows {
             memo:             params.memo
         }), {}, opts);
 
-        return { file: fileResult, link: linkResult };
+        let out = { file: fileResult, link: linkResult };
+        if (!params.tis) return out;
+
+        // Step 3 (optional): author the TIS document on-chain — a JSON FILE
+        // whose images[] data_ref points at the artwork upload from step 1.
+        let { json } = this.sdk.nft.tisDocument({
+            tick:             params.tis.tick,
+            name:             params.tis.name,
+            description:      params.tis.description,
+            imageActionIndex: fileActionIndex,
+            imageType:        params.file.type,
+            imageName:        params.file.name
+        });
+        let tisFileResult = await session.file({
+            name:  String(params.tis.tick).toUpperCase() + '.json',
+            type:  'application/json',
+            title: 'Token information'
+        }, { rawData: Buffer.from(json, 'utf8').toString('binary') }, opts);
+        let tisActionIndex = this._actionIndexOf(tisFileResult.indexed);
+        if (tisActionIndex === undefined || tisActionIndex === null)
+            throw new Error('attachContent: TIS FILE action_index unavailable — submit with waitForIndexer enabled');
+
+        // Step 4: point the token's DESCRIPTION at the on-chain document
+        // (ISSUE v1 — edit description; owner-only at the indexer).
+        let describeResult = await session.issue({
+            version:     '1',
+            tick:        params.tis.tick,
+            description: 'action:' + String(tisActionIndex)
+        }, {}, opts);
+
+        out.tisFile  = tisFileResult;
+        out.describe = describeResult;
+        return out;
     }
 
     // Publish (or replace) a project's official-token roster: submit a TICK-type

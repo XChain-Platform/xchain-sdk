@@ -109,6 +109,43 @@ class NftHelpers {
         };
     }
 
+    // Build a minimal TIS v1.0.0 document for an NFT-pattern token
+    // (Token_Information_Standard.md). Intended for the fully on-chain
+    // authoring path: upload the returned JSON as a FILE action
+    // (TYPE application/json) and set the token's DESCRIPTION to
+    // "action:<index>" of that upload (the On-Chain Format).
+    //
+    // tick             - the token's TICK (required)
+    // name             - display name (optional)
+    // description      - prose description (optional)
+    // imageActionIndex - on-chain artwork FILE to reference via data_ref (optional)
+    // imageUrl         - off-chain artwork URL (optional; data_ref preferred when both)
+    // imageType        - artwork MIME type (optional)
+    // imageName        - artwork filename (optional)
+    //
+    // Returns { doc, json } — the document object and its serialized form.
+    tisDocument({ tick, name, description, imageActionIndex, imageUrl, imageType, imageName } = {}) {
+        if (!tick) throw new Error('nft.tisDocument: tick is required');
+        let doc = {
+            tick: String(tick).toUpperCase(),
+            // Declare collectible intent so clients distinguish an NFT from a
+            // currency that shares the same field values (TIS — NFT Usage).
+            categories: [{ type: 'main', data: 'NFT' }]
+        };
+        if (name)        doc.name        = String(name);
+        if (description) doc.description = String(description);
+        if (imageActionIndex !== undefined && imageActionIndex !== null || imageUrl) {
+            let entry = {};
+            if (imageActionIndex !== undefined && imageActionIndex !== null)
+                entry.data_ref = 'action:' + String(imageActionIndex);
+            if (imageUrl)  entry.data = String(imageUrl);
+            if (imageType) entry.type = String(imageType);
+            if (imageName) entry.name = String(imageName);
+            doc.images = [entry];
+        }
+        return { doc, json: JSON.stringify(doc) };
+    }
+
     // Canonical NFT classification (NFT_Standard.md): a token follows the NFT
     // pattern when it is indivisible (DECIMALS=0) and permanently supply-capped
     // (LOCK_MAX_SUPPLY=1). Accepts a token-info object using either UPPER_SNAKE

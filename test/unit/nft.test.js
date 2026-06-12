@@ -114,6 +114,35 @@ describe('NftHelpers', function () {
         });
     });
 
+    describe('tisDocument()', function () {
+        it('builds a minimal NFT-intent doc with an on-chain data_ref', function () {
+            const { doc, json } = nft.tisDocument({
+                tick: 'art1', name: 'Art One', description: 'First print',
+                imageActionIndex: 1234, imageType: 'image/png', imageName: 'art.png',
+            });
+            expect(doc.tick).to.equal('ART1');
+            expect(doc.name).to.equal('Art One');
+            expect(doc.categories).to.deep.equal([{ type: 'main', data: 'NFT' }]);
+            expect(doc.images).to.deep.equal([{
+                data_ref: 'action:1234', type: 'image/png', name: 'art.png',
+            }]);
+            expect(JSON.parse(json)).to.deep.equal(doc);
+        });
+        it('supports an off-chain image URL and omits empty fields', function () {
+            const { doc } = nft.tisDocument({ tick: 'X', imageUrl: 'https://a/b.png' });
+            expect(doc.images).to.deep.equal([{ data: 'https://a/b.png' }]);
+            expect(doc).to.not.have.property('name');
+            expect(doc).to.not.have.property('description');
+        });
+        it('omits images entirely when no artwork given', function () {
+            const { doc } = nft.tisDocument({ tick: 'X', name: 'X' });
+            expect(doc).to.not.have.property('images');
+        });
+        it('requires tick', function () {
+            expect(() => nft.tisDocument({})).to.throw(/tick is required/);
+        });
+    });
+
     describe('attachContentParams()', function () {
         it('maps file/issue action indices to LINK coin1/coin2 fields', function () {
             const p = nft.attachContentParams({ coin: 'BTC', fileActionIndex: 1234, issueActionIndex: 4321, memo: 'art' });
