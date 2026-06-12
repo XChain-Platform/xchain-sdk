@@ -76,6 +76,7 @@ describe('MCP server (read-only)', () => {
         const { tools } = await client.listTools();
         const names = tools.map((t) => t.name).sort();
         expect(names).to.deep.equal([
+            'compose_action',
             'get_action', 'get_address', 'get_attestations', 'get_balances', 'get_block',
             'get_contract', 'get_contract_state', 'get_dispensers', 'get_executions',
             'get_fee_schedule', 'get_history', 'get_holders', 'get_market', 'get_markets',
@@ -152,5 +153,102 @@ describe('MCP server (read-only)', () => {
         expect(Object.keys(COIN_NETWORKS)).to.have.lengthOf(9);
         for (const net of Object.values(COIN_NETWORKS))
             expect(net).to.match(/^(bitcoin|litecoin|dogecoin)-(mainnet|testnet|regtest)$/);
+    });
+});
+
+describe('MCP server (write tools)', () => {
+
+    const POLICY = { allowedActions: ['SEND'], maxPerAction: { SEND: { '*': '10' } } };
+
+    function writableStub(network) {
+        const base = stubSdk(network);
+        base.createAction = (...a) => { base.calls.push(['createAction', ...a]); return Promise.resolve({ actionString: 'SEND|0|TOK|5|dest' }); };
+        base.encodeTx = (...a) => { base.calls.push(['encodeTx', ...a]); return Promise.resolve({ psbt: 'deadbeef', encoding: 'OP_RETURN' }); };
+        base.agentSession = (wif, policy) => {
+            base.calls.push(['agentSession', wif === undefined ? 'NO-WIF' : 'WIF-SET', policy]);
+            return {
+                address: 'agentaddr', pubkey: 'agentpub',
+                getBalances: async () => [{ tick: 'TOK', amount: '1' }],
+                _windowUsage: () => ({ count: 0, perTick: {}, hours: 24 }),
+                submit: async (actionData) => {
+                    base.calls.push(['session.submit', actionData]);
+                    if (actionData.params && actionData.params.amount === '999') {
+                        const e = new Error('cap exceeded'); e.code = 'POLICY_AMOUNT_EXCEEDED'; e.name = 'SDKPolicyError';
+                        throw e;
+                    }
+                    return { txid: 'txAA', status: 'valid', policy: { action: actionData.action, windowUsage: { count: 1 } } };
+                },
+            };
+        };
+        return base;
+    }
+
+    it('without wallet config: write tools absent, compose demands a pubkey', async () => {
+        const { client } = await connectedPair();
+        const names = (await client.listTools()).tools.map((t) => t.name);
+        expect(names).to.include('compose_action');
+        expect(names).to.not.include('submit_action');
+        expect(names).to.not.include('get_agent_wallet');
+        const res = await client.callTool({ name: 'compose_action', arguments: { coin: 'BTC', action: 'SEND', params: { tick: 'TOK', amount: '5' } } });
+        expect(res.isError).to.equal(true);
+        expect(JSON.parse(res.content[0].text).code).to.equal('MISSING_PUBKEY');
+    });
+
+    it('refuses to build with incomplete or human-in-the-loop wallet config', () => {
+        expect(() => buildServer({ wallet: { wif: 'W' } })).to.throw(/fail-closed/);
+        expect(() => buildServer({ wallet: { wif: 'W', policy: { allowedActions: ['SEND'], confirmAbove: {} } } }))
+            .to.throw(/confirmAbove/);
+    });
+
+    it('with wallet config: submit_action flows through AgentSession and reports policy usage', async () => {
+        const created = [];
+        const server = buildServer({
+            sdkFactory: (network) => { const s = writableStub(network); created.push(s); return s; },
+            fetch: async () => ({ ok: true, text: async () => 'x' }),
+            wallet: { wif: 'WIF', policy: POLICY },
+        });
+        const client = new Client({ name: 't', version: '0' });
+        const [ct, st] = InMemoryTransport.createLinkedPair();
+        await Promise.all([server.connect(st), client.connect(ct)]);
+
+        const names = (await client.listTools()).tools.map((t) => t.name);
+        expect(names).to.include.members(['submit_action', 'get_agent_wallet', 'compose_action']);
+
+        const res = await client.callTool({
+            name: 'submit_action',
+            arguments: { coin: 'TDOGE', action: 'send', params: { tick: 'TOK', amount: '5', destination: 'd1' } },
+        });
+        const body = JSON.parse(res.content[0].text);
+        expect(body.txid).to.equal('txAA');
+        expect(body.policy.windowUsage.count).to.equal(1);
+        const sessCall = created[0].calls.find((c) => c[0] === 'agentSession');
+        expect(sessCall[2]).to.deep.equal(POLICY);
+        const submitCall = created[0].calls.find((c) => c[0] === 'session.submit');
+        expect(submitCall[1].action).to.equal('SEND');             // uppercased
+
+        const denied = await client.callTool({
+            name: 'submit_action',
+            arguments: { coin: 'TDOGE', action: 'SEND', params: { tick: 'TOK', amount: '999' } },
+        });
+        expect(denied.isError).to.equal(true);
+        expect(JSON.parse(denied.content[0].text).code).to.equal('POLICY_AMOUNT_EXCEEDED');
+    });
+
+    it('compose_action composes unsigned PSBTs via the agent pubkey and never submits', async () => {
+        const created = [];
+        const server = buildServer({
+            sdkFactory: (network) => { const s = writableStub(network); created.push(s); return s; },
+            fetch: async () => ({ ok: true, text: async () => 'x' }),
+            wallet: { wif: 'WIF', policy: POLICY },
+        });
+        const client = new Client({ name: 't', version: '0' });
+        const [ct, st] = InMemoryTransport.createLinkedPair();
+        await Promise.all([server.connect(st), client.connect(ct)]);
+
+        const res = await client.callTool({ name: 'compose_action', arguments: { coin: 'BTC', action: 'send', params: { tick: 'TOK', amount: '5' } } });
+        const body = JSON.parse(res.content[0].text);
+        expect(body).to.deep.equal({ action_string: 'SEND|0|TOK|5|dest', psbt: 'deadbeef', encoding: 'OP_RETURN', signed: false });
+        expect(created[0].calls.find((c) => c[0] === 'encodeTx')[1]).to.deep.equal({ pubkey: 'agentpub', data: 'SEND|0|TOK|5|dest' });
+        expect(created[0].calls.some((c) => c[0] === 'session.submit')).to.equal(false);
     });
 });

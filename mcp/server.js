@@ -21,6 +21,11 @@
  * buildServer() is transport-agnostic and takes an injectable SDK factory
  * so tests can run against a stub. mcp/cli.js wires stdio.
  *
+ * WRITE TOOLS exist only when the OPERATOR configures a wallet
+ * (options.wallet = { wif, policy }, from env in cli.js — never from the
+ * model conversation), and every submit goes through AgentSession policy
+ * enforcement. No wallet config → the write tools are not even listed.
+ *
  ********************************************************************/
 
 'use strict';
@@ -179,6 +184,72 @@ function buildServer(options = {}) {
         ({ coin, block_index }) => {
             const sdk = sdkFor(coin);
             return sdk.checkpoint.fetchAndVerifyCheckpoint(explorerBaseUrl(sdk), coin, block_index, fetchImpl || undefined);
+        });
+
+    /* ── write tools (operator-configured wallet only) ──────────────── */
+
+    const wallet = options.wallet || null;
+    if (wallet && (!wallet.wif || !wallet.policy))
+        throw new Error('mcp wallet config requires both wif and policy (fail-closed)');
+    if (wallet && wallet.policy.confirmAbove)
+        throw new Error('confirmAbove is not supported in the MCP policy file (no human in this loop) — use hard caps instead');
+
+    // One AgentSession per coin, lazily — same key, per-network address,
+    // per-address window state. Policy is shared across chains.
+    const sessions = new Map();
+    const sessionFor = (coin) => {
+        if (!wallet) return null;
+        if (!sessions.has(coin))
+            sessions.set(coin, sdkFor(coin).agentSession(wallet.wif, wallet.policy));
+        return sessions.get(coin);
+    };
+
+    if (wallet) {
+        tool('get_agent_wallet', 'The configured agent wallet: address, balances, and current policy window usage for a coin.',
+            { coin: coinParam },
+            async ({ coin }) => {
+                const s = sessionFor(coin);
+                return {
+                    address: s.address,
+                    balances: await s.getBalances(),
+                    window_usage: s._windowUsage(),
+                };
+            });
+
+        server.registerTool('submit_action', {
+            description: 'Compose, policy-check, sign, broadcast an XChain action and wait for the indexer. '
+                + 'Enforced by the operator-configured AgentSession policy: out-of-policy actions are refused '
+                + 'before signing, with a POLICY_* code. Treat policy refusals as final, not retryable.',
+            inputSchema: {
+                coin: coinParam,
+                action: z.string().describe('ACTION name, e.g. SEND, MINT, EXECUTE'),
+                params: z.record(z.string(), z.any()).describe('Action parameters (e.g. {tick, amount, destination}). Amounts are decimal strings.'),
+            },
+            annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+        }, async ({ coin, action, params }) => {
+            try {
+                const result = await sessionFor(coin).submit({ action: String(action).toUpperCase(), params });
+                return ok({ txid: result.txid, status: result.status, policy: result.policy });
+            } catch (err) { return fail(err); }
+        });
+    }
+
+    tool('compose_action', 'Compose an unsigned transaction for an XChain action: returns the ACTION string and an unsigned PSBT. Nothing is signed or broadcast — the caller signs externally.'
+        + (wallet ? ' Defaults to the configured agent wallet\'s pubkey.' : ' Requires pubkey (no wallet is configured).'),
+        {
+            coin: coinParam,
+            action: z.string().describe('ACTION name, e.g. SEND, MINT'),
+            params: z.record(z.string(), z.any()).describe('Action parameters'),
+            pubkey: z.string().optional().describe('Sender address/pubkey for UTXO selection' + (wallet ? ' (defaults to the agent wallet)' : ' (required)')),
+        },
+        async ({ coin, action, params, pubkey }) => {
+            const sender = pubkey || (wallet ? sessionFor(coin).pubkey : null);
+            if (!sender) throw Object.assign(new Error('pubkey is required: no agent wallet is configured'), { code: 'MISSING_PUBKEY' });
+            const sdk = sdkFor(coin);
+            const actionResult = await sdk.createAction({ action: String(action).toUpperCase(), params });
+            const actionString = actionResult && actionResult.actionString !== undefined ? actionResult.actionString : actionResult;
+            const tx = await sdk.encodeTx({ pubkey: sender, data: actionString });
+            return { action_string: actionString, psbt: tx.psbt, encoding: tx.encoding, signed: false };
         });
 
     /* ── documentation resources ────────────────────────────────────── */

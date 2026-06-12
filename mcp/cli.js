@@ -26,14 +26,30 @@
 
 'use strict';
 
+const fs = require('fs');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
 const { buildServer } = require('./server.js');
 
+// Optional agent wallet — BOTH must be set or write tools don't exist:
+//   XCHAIN_MCP_WIF     the agent key (never logged, never echoed)
+//   XCHAIN_MCP_POLICY  path to the AgentSession policy JSON
+function walletFromEnv() {
+    const wif = process.env.XCHAIN_MCP_WIF;
+    const policyPath = process.env.XCHAIN_MCP_POLICY;
+    if (!wif && !policyPath) return null;
+    if (!wif || !policyPath) {
+        console.error('xchain-mcp: XCHAIN_MCP_WIF and XCHAIN_MCP_POLICY must BOTH be set to enable write tools; starting read-only.');
+        return null;
+    }
+    return { wif, policy: JSON.parse(fs.readFileSync(policyPath, 'utf8')) };
+}
+
 async function main() {
-    const server = buildServer();
+    const wallet = walletFromEnv();
+    const server = buildServer({ wallet });
     // stdio transport: stdout is the protocol channel — never console.log here.
     await server.connect(new StdioServerTransport());
-    console.error('xchain-mcp ready (stdio)');
+    console.error(`xchain-mcp ready (stdio${wallet ? ', agent wallet enabled' : ', read-only'})`);
 }
 
 main().catch((err) => {
