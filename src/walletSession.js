@@ -74,6 +74,16 @@ class WalletSession {
         }
 
         let utxos = this._utxoCache.getAvailable();
+        // A prior submit in this session drains the cache (spent inputs are
+        // marked, but the change output isn't tracked), so the second leg of
+        // a two-step workflow (setRoster, attachContent) would otherwise fall
+        // through to the encoder's pubkey-keyed UTXO fetch — which cannot
+        // resolve a hex pubkey to an address. With waitForIndexer (the
+        // default) the prior action's change is confirmed by now: re-pull it.
+        if (!encoderOpts.utxos && utxos.length === 0 && this._utxoCache.isLoaded()) {
+            await this.refreshUTXOs();
+            utxos = this._utxoCache.getAvailable();
+        }
 
         let mergedEncoder = {
             pubkey: this.pubkey,

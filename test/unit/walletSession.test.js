@@ -182,6 +182,36 @@ describe('WalletSession', function () {
             assert.strictEqual(session._utxoCache.getAvailable().length, 0);
         });
 
+        it('re-refreshes a drained cache so two-step workflows keep funding', async function () {
+            // First refresh returns the funding UTXO; after the first submit
+            // spends it the cache is empty, and the second submit must
+            // re-pull (returning the confirmed change) rather than fall
+            // through to the encoder's pubkey-keyed fetch — a hex pubkey
+            // resolves to no UTXOs there (setRoster / attachContent leg 2).
+            let calls = 0;
+            let sdk = makeSdk({
+                _requireEncoder: () => ({
+                    getUTXOs: async () => {
+                        calls += 1;
+                        return { utxos: calls === 1
+                            ? [{ txid: 'utxo1', vout: 0, value: 100000 }]
+                            : [{ txid: 'change1', vout: 1, value: 90000 }] };
+                    }
+                })
+            });
+            let session = new WalletSession(sdk, WIF_MAINNET);
+
+            await session.submit({ action: 'LIST', params: {} });
+            // spentInputs in the stub result consumed utxo1
+            assert.strictEqual(session._utxoCache.getAvailable().length, 0);
+
+            await session.submit({ action: 'LINK', params: {} });
+            assert.strictEqual(calls, 2, 'second submit re-pulled UTXOs');
+            let [, encoderOpts] = submitStub.secondCall.args;
+            assert.ok(Array.isArray(encoderOpts.utxos), 'second submit funded from the cache');
+            assert.strictEqual(encoderOpts.utxos[0].txid, 'change1');
+        });
+
         it('merges submitOpts overrides', async function () {
             let session = new WalletSession(makeSdk(), WIF_MAINNET);
             await session.submit({ action: 'SEND', params: {} }, {}, { timeout: 30000 });
