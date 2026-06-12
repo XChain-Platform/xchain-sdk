@@ -32,6 +32,20 @@ describe('ExplorerClient', function () {
     });
 
     /*
+     *  fileRawUrl
+     */
+
+    describe('fileRawUrl()', function () {
+        it('builds the absolute raw FILE URL for the configured explorer', function () {
+            expect(client.fileRawUrl(123)).to.equal('http://explorer.test:8080/BTC/api/file/123/raw');
+        });
+        it('respects an http(s) baseUrl and strips trailing slashes', function () {
+            let c = new ExplorerClient({ network: 'bitcoin-regtest', explorerUrl: 'https://explorer.xchain.io/', retry: false });
+            expect(c.fileRawUrl('7')).to.equal('https://explorer.xchain.io/RBTC/api/file/7/raw');
+        });
+    });
+
+    /*
      *  Coin prefix derivation
      */
 
@@ -973,10 +987,10 @@ describe('ExplorerClient', function () {
             });
         }
 
-        it('has 82 public methods', function () {
+        it('has 83 public methods', function () {
             let publicMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(publicMethods).to.have.length(82);
+            expect(publicMethods).to.have.length(83);
         });
     });
 

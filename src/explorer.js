@@ -336,6 +336,17 @@ class ExplorerClient {
         return this._get('/files/' + query + '/' + type, opts);
     }
 
+    // Absolute URL of a FILE action's raw bytes on this explorer — the
+    // resolution target for TIS `data_ref` entries and on-chain TIS
+    // documents (DESCRIPTION = action:<index>). Pure string builder, no
+    // request.
+    fileRawUrl(actionIndex) {
+        let base = this.baseUrl.startsWith('http')
+            ? this.baseUrl
+            : 'http://' + this.baseUrl + ':' + this.port;
+        return base.replace(/\/+$/, '') + '/' + this.coin + '/api/file/' + String(actionIndex) + '/raw';
+    }
+
     // Fetch the raw ciphertext bytes for a token-gated FILE action by
     // ACTION_INDEX. Returns a Buffer of the encrypted file bytes
     // ([12-byte nonce][ct][16-byte GCM tag]) ready for decryption with
