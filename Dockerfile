@@ -7,6 +7,7 @@ WORKDIR /XChainSDK
 RUN npm ci
 
 COPY ./src /XChainSDK/src
+COPY ./docs /XChainSDK/docs
 COPY ./.en[v] /XChainSDK/.env
 
 CMD ["npm", "run", "api"]
