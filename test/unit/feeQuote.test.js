@@ -121,6 +121,36 @@ describe('Native-coin fee quote (client)', function () {
             expect(threw, 'expected estimateFees to throw').to.equal(true);
         });
 
+        // Regression: a shared explorer that doesn't serve this coin can answer 200 with an
+        // HTML page or an error envelope — neither is a quote, and silently treating it as one
+        // built a doomed tx with no fee output (forfeits the fee on-chain).
+        it('quoteNativeFee hard-fails on a non-JSON (HTML) explorer response', async function () {
+            let sdk = makeSdk();
+            sdk.explorer.getFeeQuote = async () => '<!DOCTYPE html><html><body>404</body></html>';
+            let threw = false;
+            try { await sdk.quoteNativeFee({ action: 'ISSUE', params: { tick: 'NEWTICK', description: 'x' } }, { source: 'src1' }); }
+            catch (e) { threw = true; expect(e.code).to.equal('EXPLORER_BAD_FEEQUOTE'); }
+            expect(threw, 'expected quoteNativeFee to throw').to.equal(true);
+        });
+
+        it('quoteNativeFee hard-fails on an error envelope without a supported flag', async function () {
+            let sdk = makeSdk();
+            sdk.explorer.getFeeQuote = async () => ({ error: 'indexer not ready' });
+            let threw = false;
+            try { await sdk.quoteNativeFee({ action: 'ISSUE', params: { tick: 'NEWTICK', description: 'x' } }, { source: 'src1' }); }
+            catch (e) { threw = true; expect(e.code).to.equal('EXPLORER_BAD_FEEQUOTE'); expect(e.message).to.include('indexer not ready'); }
+            expect(threw, 'expected quoteNativeFee to throw').to.equal(true);
+        });
+
+        it('estimateFees({ payFeeInNativeCoin }) propagates the malformed-quote refusal', async function () {
+            let sdk = makeSdk();
+            sdk.explorer.getFeeQuote = async () => null;
+            let threw = false;
+            try { await sdk.estimateFees({ action: 'ISSUE', params: { tick: 'NEWTICK', description: 'x' } }, { payFeeInNativeCoin: true, pubkey: 'pk', change: 'src1' }); }
+            catch (e) { threw = true; expect(e.code).to.equal('EXPLORER_BAD_FEEQUOTE'); }
+            expect(threw, 'expected estimateFees to throw').to.equal(true);
+        });
+
         it('estimateFees without payFeeInNativeCoin adds no native output', async function () {
             let sdk = makeSdk();
             await sdk.estimateFees({ action: 'ISSUE', params: { tick: 'NEWTICK', description: 'x' } }, { pubkey: 'pk', change: 'src1' });

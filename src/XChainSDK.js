@@ -43,7 +43,7 @@ const LifecycleManager  = require('./lifecycleManager.js');
 const WalletSession     = require('./walletSession.js');
 const Workflows         = require('./workflows.js');
 const { publicDefaults } = require('./endpoints.js');
-const { SDKConfigError } = require('./errors.js');
+const { SDKConfigError, SDKExplorerError } = require('./errors.js');
 
 class XChainSDK {
 
@@ -460,6 +460,15 @@ class XChainSDK {
         return new WalletSession(this, wif, opts);
     }
 
+    // Create a policy-bounded session for an AUTOMATED AGENT: same surface as
+    // session(), but every submit is checked against a declarative spending
+    // policy (action allowlist, per-action and per-window caps, destination
+    // allowlist, confirmation hook). Fail-closed. See src/agentSession.js.
+    agentSession(wif, policy, opts) {
+        const AgentSession = require('./agentSession.js');
+        return new AgentSession(this, wif, policy, opts);
+    }
+
     // Workflow recipes: high-level multi-step helpers
     async issueAndDistribute(wif, issueParams, distributions, opts) {
         return this.workflows.issueAndDistribute(wif, issueParams, distributions, opts);
@@ -588,7 +597,13 @@ class XChainSDK {
             source:        opts.source,
             feeOutputSats: opts.feeOutputSats
         });
-        if (quote && typeof quote === 'object') quote.actionString = result.actionString;
+        // An explorer that doesn't serve this coin can answer 200 with an HTML page or an
+        // unrelated JSON body; treating that as a quote builds a doomed fee-forfeiting tx.
+        if (!quote || typeof quote !== 'object' || Array.isArray(quote) || typeof quote.supported !== 'boolean') {
+            let detail = (quote && typeof quote === 'object' && quote.error) ? String(quote.error) : 'not a quote object';
+            throw new SDKExplorerError('EXPLORER_BAD_FEEQUOTE', 'Explorer returned a malformed native-fee quote (' + detail + ') — refusing to size the fee output', { quote: typeof quote === 'string' ? quote.slice(0, 200) : quote });
+        }
+        quote.actionString = result.actionString;
         return quote;
     }
 

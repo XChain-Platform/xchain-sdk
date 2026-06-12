@@ -26,6 +26,7 @@ const ContractClient   = require('./src/contractClient.js');
 const ContractUtils    = require('./src/contracts.js');
 const WalletUtils      = require('./src/wallet.js');
 const WalletSession    = require('./src/walletSession.js');
+const AgentSession     = require('./src/agentSession.js');
 const AuthUtils        = require('./src/auth.js');
 const CrossChainHelper   = require('./src/crossChain.js');
 const AttestationHelpers = require('./src/attestation.js');
@@ -47,7 +48,8 @@ const {
     SDKAuthError,
     SDKMessagingError,
     SDKActionError,
-    SDKMuSigError
+    SDKMuSigError,
+    SDKPolicyError
 } = require('./src/errors.js');
 
 module.exports = {
@@ -57,6 +59,7 @@ module.exports = {
     ContractUtils,
     WalletUtils,
     WalletSession,
+    AgentSession,
     AuthUtils,
     CrossChainHelper,
     AttestationHelpers,
@@ -78,6 +81,7 @@ module.exports = {
     SDKMessagingError,
     SDKActionError,
     SDKMuSigError,
+    SDKPolicyError,
     // Default export for convenience
     default: XChainSDK
 };
