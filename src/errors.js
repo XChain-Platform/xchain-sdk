@@ -126,6 +126,13 @@ class SDKPolicyError extends SDKError {
     }
 }
 
+class SDKX402Error extends SDKError {
+    constructor(code, message, details = {}) {
+        super(code, message, details);
+        this.name = 'SDKX402Error';
+    }
+}
+
 module.exports = {
     SDKError,
     SDKValidationError,
@@ -141,5 +148,6 @@ module.exports = {
     SDKActionError,
     SDKMuSigError,
     SDKGatedFileError,
-    SDKPolicyError
+    SDKPolicyError,
+    SDKX402Error
 };
