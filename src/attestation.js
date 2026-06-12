@@ -66,18 +66,25 @@ function buildHttpGetPayload(opts){
 }
 
 // Resolve a callback options object to the shape the VM gateway expects
-// (`{ redundancy, deadlineBlocks }`). Trivial today — kept here so the
+// (`{ redundancy, deadlineBlocks, feeTick, feeAmount }`). Kept here so the
 // helper layer is the single place defaults can change.
+//
+// feeTick/feeAmount (E1 paid attestations) travel as STRINGS — amounts are
+// arbitrary-precision decimals, never floats. v1 consensus accepts only
+// feeTick == 'XCHAIN'; the fields exist on the wire so multi-tick support
+// is a post-launch rule loosening, not a format change.
 //
 // Note: per-provider `max_response_bytes` is governance state on the
 // provider registry, not a per-request override. The VM gateway ignores
-// any extra keys, so this helper deliberately only surfaces the two
+// any extra keys, so this helper deliberately only surfaces the four
 // fields the gateway actually reads.
 function buildRequestOptions(opts){
     opts = opts || {};
     let out = {};
     if (opts.redundancy     !== undefined) out.redundancy     = Number(opts.redundancy);
     if (opts.deadlineBlocks !== undefined) out.deadlineBlocks = Number(opts.deadlineBlocks);
+    if (opts.feeTick        !== undefined) out.feeTick        = String(opts.feeTick);
+    if (opts.feeAmount      !== undefined) out.feeAmount      = String(opts.feeAmount);
     return out;
 }
 

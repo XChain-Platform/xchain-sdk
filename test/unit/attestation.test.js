@@ -134,4 +134,16 @@ describe('AttestationHelpers.requestOptions', function () {
         expect(out).to.not.have.property('foo');
     });
 
+    it('passes through feeTick + feeAmount as STRINGS (amounts are decimals, never floats)', function () {
+        const out = Attestation.requestOptions({ feeTick: 'XCHAIN', feeAmount: 2.5 });
+        expect(out).to.deep.equal({ feeTick: 'XCHAIN', feeAmount: '2.5' });
+        expect(out.feeAmount).to.be.a('string');
+    });
+
+    it('omits fee fields entirely when not provided (feeless wire format unchanged)', function () {
+        const out = Attestation.requestOptions({ redundancy: 1 });
+        expect(out).to.not.have.property('feeTick');
+        expect(out).to.not.have.property('feeAmount');
+    });
+
 });
