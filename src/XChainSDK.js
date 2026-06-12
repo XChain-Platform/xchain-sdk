@@ -684,11 +684,11 @@ class XChainSDK {
      */
 
     // Fetch the raw ciphertext bytes for a gated FILE by ACTION_INDEX.
-    async getGatedFileRaw(actionIndex) { return this._requireExplorer().getGatedFileRaw(actionIndex); }
+    async getGatedFileRaw(actionIndex, coin = null) { return this._requireExplorer().getGatedFileRaw(actionIndex, coin); }
 
     // Absolute URL of a FILE action's raw bytes on the configured explorer —
     // the resolution target for TIS data_ref entries and on-chain TIS docs.
-    fileRawUrl(actionIndex) { return this._requireExplorer().fileRawUrl(actionIndex); }
+    fileRawUrl(actionIndex, coin = null) { return this._requireExplorer().fileRawUrl(actionIndex, coin); }
 
     /**
      * Fetch messages for an address across all chains (BTC, LTC, DOGE).

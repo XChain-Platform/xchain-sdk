@@ -336,15 +336,25 @@ class ExplorerClient {
         return this._get('/files/' + query + '/' + type, opts);
     }
 
+    // Coin-prefix for a sibling chain at THIS client's network tier:
+    // RBTC client + 'DOGE' → 'RDOGE' (Token_Information_Standard.md —
+    // cross-chain action refs carry the base ticker; the tier is implied).
+    _siblingCoin(baseCoin) {
+        if (!baseCoin) return this.coin;
+        let tier = (this.coin.match(/^([TR])(BTC|LTC|DOGE)$/) || [])[1] || '';
+        return tier + String(baseCoin).toUpperCase();
+    }
+
     // Absolute URL of a FILE action's raw bytes on this explorer — the
     // resolution target for TIS `data_ref` entries and on-chain TIS
-    // documents (DESCRIPTION = action:<index>). Pure string builder, no
-    // request.
-    fileRawUrl(actionIndex) {
+    // documents (DESCRIPTION = action:<index> / action:<COIN>:<index>).
+    // Pass `coin` (base ticker) for a sibling-chain reference. Pure string
+    // builder, no request.
+    fileRawUrl(actionIndex, coin = null) {
         let base = this.baseUrl.startsWith('http')
             ? this.baseUrl
             : 'http://' + this.baseUrl + ':' + this.port;
-        return base.replace(/\/+$/, '') + '/' + this.coin + '/api/file/' + String(actionIndex) + '/raw';
+        return base.replace(/\/+$/, '') + '/' + this._siblingCoin(coin) + '/api/file/' + String(actionIndex) + '/raw';
     }
 
     // Fetch the raw ciphertext bytes for a token-gated FILE action by
@@ -352,8 +362,8 @@ class ExplorerClient {
     // ([12-byte nonce][ct][16-byte GCM tag]) ready for decryption with
     // the symmetric key from the corresponding MESSAGE handoff.
     // See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
-    async getGatedFileRaw(actionIndex) {
-        let url = '/' + this.coin + '/api/file/' + actionIndex + '/raw';
+    async getGatedFileRaw(actionIndex, coin = null) {
+        let url = '/' + this._siblingCoin(coin) + '/api/file/' + actionIndex + '/raw';
         let self = this;
         try {
             if (self.hooks.onRequest)

@@ -138,6 +138,10 @@ describe('NftHelpers', function () {
             const { doc } = nft.tisDocument({ tick: 'X', name: 'X' });
             expect(doc).to.not.have.property('images');
         });
+        it('builds a cross-chain data_ref when imageCoin is given', function () {
+            const { doc } = nft.tisDocument({ tick: 'X', imageActionIndex: 55, imageCoin: 'doge' });
+            expect(doc.images[0].data_ref).to.equal('action:DOGE:55');
+        });
         it('requires tick', function () {
             expect(() => nft.tisDocument({})).to.throw(/tick is required/);
         });

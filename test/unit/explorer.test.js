@@ -43,6 +43,13 @@ describe('ExplorerClient', function () {
             let c = new ExplorerClient({ network: 'bitcoin-regtest', explorerUrl: 'https://explorer.xchain.io/', retry: false });
             expect(c.fileRawUrl('7')).to.equal('https://explorer.xchain.io/RBTC/api/file/7/raw');
         });
+        it('resolves a sibling-chain coin at the same network tier', function () {
+            // Mainnet client: DOGE → DOGE
+            expect(client.fileRawUrl(9, 'DOGE')).to.equal('http://explorer.test:8080/DOGE/api/file/9/raw');
+            // Regtest client: DOGE → RDOGE (tier implied by the client's network)
+            let c = new ExplorerClient({ network: 'bitcoin-regtest', explorerUrl: 'https://explorer.xchain.io/', retry: false });
+            expect(c.fileRawUrl('7', 'doge')).to.equal('https://explorer.xchain.io/RDOGE/api/file/7/raw');
+        });
     });
 
     /*

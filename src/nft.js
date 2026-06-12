@@ -119,12 +119,15 @@ class NftHelpers {
     // name             - display name (optional)
     // description      - prose description (optional)
     // imageActionIndex - on-chain artwork FILE to reference via data_ref (optional)
+    // imageCoin        - base coin ticker (BTC/LTC/DOGE) when the artwork FILE
+    //                    lives on a SIBLING chain (optional; omitted = same
+    //                    chain as the token — network tier is implied)
     // imageUrl         - off-chain artwork URL (optional; data_ref preferred when both)
     // imageType        - artwork MIME type (optional)
     // imageName        - artwork filename (optional)
     //
     // Returns { doc, json } — the document object and its serialized form.
-    tisDocument({ tick, name, description, imageActionIndex, imageUrl, imageType, imageName } = {}) {
+    tisDocument({ tick, name, description, imageActionIndex, imageCoin, imageUrl, imageType, imageName } = {}) {
         if (!tick) throw new Error('nft.tisDocument: tick is required');
         let doc = {
             tick: String(tick).toUpperCase(),
@@ -137,7 +140,7 @@ class NftHelpers {
         if (imageActionIndex !== undefined && imageActionIndex !== null || imageUrl) {
             let entry = {};
             if (imageActionIndex !== undefined && imageActionIndex !== null)
-                entry.data_ref = 'action:' + String(imageActionIndex);
+                entry.data_ref = 'action:' + (imageCoin ? String(imageCoin).toUpperCase() + ':' : '') + String(imageActionIndex);
             if (imageUrl)  entry.data = String(imageUrl);
             if (imageType) entry.type = String(imageType);
             if (imageName) entry.name = String(imageName);
