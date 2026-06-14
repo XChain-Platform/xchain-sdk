@@ -24,9 +24,9 @@ describe('ContractUtils', function () {
      */
 
     describe('encode()', function () {
-        it('hex-encodes a simple JS string', function () {
-            let hex = utils.encode('hello');
-            assert.strictEqual(hex, Buffer.from('hello', 'utf8').toString('hex'));
+        it('base64-encodes a simple JS string', function () {
+            let b64 = utils.encode('hello');
+            assert.strictEqual(b64, Buffer.from('hello', 'utf8').toString('base64'));
         });
 
         it('round-trips with decode()', function () {
@@ -65,12 +65,12 @@ describe('ContractUtils', function () {
      */
 
     describe('decode()', function () {
-        it('decodes a valid hex string', function () {
-            let hex = Buffer.from('world', 'utf8').toString('hex');
-            assert.strictEqual(utils.decode(hex), 'world');
+        it('decodes a valid base64 string', function () {
+            let b64 = Buffer.from('world', 'utf8').toString('base64');
+            assert.strictEqual(utils.decode(b64), 'world');
         });
 
-        it('decodes empty hex string to empty string', function () {
+        it('decodes empty base64 string to empty string', function () {
             assert.strictEqual(utils.decode(''), '');
         });
 
@@ -84,9 +84,9 @@ describe('ContractUtils', function () {
             }
         });
 
-        it('throws SDKContractError for invalid hex characters', function () {
+        it('throws SDKContractError for invalid base64 characters', function () {
             try {
-                utils.decode('zzzz');
+                utils.decode('!!!!');   // '!' is outside the base64 alphabet
                 assert.fail('should have thrown');
             } catch (e) {
                 assert.strictEqual(e.name, 'SDKContractError');
@@ -94,9 +94,9 @@ describe('ContractUtils', function () {
             }
         });
 
-        it('accepts upper-case hex', function () {
-            let hex = Buffer.from('hi', 'utf8').toString('hex').toUpperCase();
-            assert.strictEqual(utils.decode(hex), 'hi');
+        it('accepts padded base64', function () {
+            let b64 = Buffer.from('hi', 'utf8').toString('base64'); // 'aGk='
+            assert.strictEqual(utils.decode(b64), 'hi');
         });
     });
 

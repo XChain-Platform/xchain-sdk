@@ -426,9 +426,9 @@ export interface AddressParams extends ActionParams {
 }
 
 export interface DeployParams extends ActionParams {
-    /** Raw JavaScript source code (SDK hex-encodes it into CODE_ENCODING) */
+    /** Raw JavaScript source code (SDK base64-encodes it into CODE_ENCODING) */
     code?: string;
-    /** Pre-encoded hex of contract source (alternative to `code`) */
+    /** Pre-encoded base64 of contract source (alternative to `code`) */
     codeEncoding?: string;
     /** Maximum gas units allowed for deployment */
     gasLimit: number;
@@ -612,10 +612,10 @@ export declare class BatchBuilder {
  */
 
 export declare class ContractUtils {
-    /** Hex-encode contract source code for DEPLOY payloads */
+    /** Base64-encode contract source code for DEPLOY payloads */
     encode(sourceCode: string): string;
-    /** Hex-decode back to UTF-8 source */
-    decode(hexString: string): string;
+    /** Base64-decode back to UTF-8 source */
+    decode(b64String: string): string;
     /** Lightweight syntax pre-validation (acorn-based, no V8 required) */
     validate(sourceCode: string): SyntaxValidationResult;
     /** Detect float literal usage in contract source */
@@ -888,7 +888,7 @@ export declare class XChainSDK {
     /** Create a new `BatchBuilder` for fluent BATCH construction. */
     batch(): BatchBuilder;
 
-    /** Contract authoring utilities (hex encoding, validation, gas estimation) */
+    /** Contract authoring utilities (base64 encoding, validation, gas estimation) */
     readonly contracts: ContractUtils;
 
     /** Create a bound contract client for repeated interactions with a deployed contract */

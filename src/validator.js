@@ -339,13 +339,16 @@ class Validator {
                 errors.push(...this._validateTextContent(field, value));
         }
 
-        // CODE_ENCODING validation (hex string, size limit)
+        // CODE_ENCODING validation (base64 string, decoded-size limit)
         if (field === 'CODE_ENCODING') {
-            let hex = String(value);
-            if (!/^[0-9a-fA-F]*$/.test(hex))
-                errors.push(this._error('INVALID_FIELD_VALUE', 'CODE_ENCODING must be a valid hex string', { field }));
-            else if (hex.length / 2 > MAX_CODE_SIZE)
-                errors.push(this._error('CODE_TOO_LARGE', 'Contract code exceeds ' + MAX_CODE_SIZE + ' byte limit (' + Math.ceil(hex.length / 2) + ' bytes)', { field, bytes: Math.ceil(hex.length / 2), limit: MAX_CODE_SIZE }));
+            let b64 = String(value);
+            if (!/^[A-Za-z0-9+/]*={0,2}$/.test(b64)) {
+                errors.push(this._error('INVALID_FIELD_VALUE', 'CODE_ENCODING must be a valid base64 string', { field }));
+            } else {
+                let bytes = Buffer.from(b64, 'base64').length; // decoded source size
+                if (bytes > MAX_CODE_SIZE)
+                    errors.push(this._error('CODE_TOO_LARGE', 'Contract code exceeds ' + MAX_CODE_SIZE + ' byte limit (' + bytes + ' bytes)', { field, bytes, limit: MAX_CODE_SIZE }));
+            }
         }
 
         // CONSTRUCTOR_PARAMS / PARAMS validation (array items must not contain separators)

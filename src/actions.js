@@ -58,10 +58,13 @@ class Actions {
         // [3] Normalize field names (camelCase -> UPPER_SNAKE_CASE)
         let fields = this.util.normalizeFields(params);
 
-        // [3b] DEPLOY pre-processing: hex-encode raw 'code' into CODE_ENCODING
+        // [3b] DEPLOY pre-processing: base64-encode raw 'code' into CODE_ENCODING.
+        // base64 (1.33x) instead of hex (2x) — the action string is pipe-delimited and
+        // base64's alphabet (A-Za-z0-9+/=) has no '|', so it stays delimiter-safe while
+        // cutting the on-chain payload by a third (lifts the single-tx contract ceiling).
         if (actionName === 'DEPLOY' && fields.CODE !== undefined && fields.CODE !== null && fields.CODE_ENCODING === undefined) {
             let code = String(fields.CODE);
-            fields.CODE_ENCODING = Buffer.from(code, 'utf8').toString('hex');
+            fields.CODE_ENCODING = Buffer.from(code, 'utf8').toString('base64');
             delete fields.CODE;
         }
 

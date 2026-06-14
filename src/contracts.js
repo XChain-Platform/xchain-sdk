@@ -14,7 +14,7 @@
  *
  * XChain Platform SDK - Contract Utilities
  *
- * Authoring helpers for VM smart contracts: hex encoding, syntax
+ * Authoring helpers for VM smart contracts: base64 encoding, syntax
  * validation, float detection, code size checks, gas estimation.
  *
  * These are pure functions with no dependency on isolated-vm.
@@ -59,18 +59,19 @@ function loadAcornWalk() {
 
 class ContractUtils {
 
-    // Hex-encode UTF-8 contract source code for DEPLOY payloads
+    // base64-encode UTF-8 contract source code for DEPLOY payloads (1.33x vs hex's 2x;
+    // base64's alphabet has no '|' so it is safe in the pipe-delimited action string).
     encode(sourceCode) {
         if (typeof sourceCode !== 'string')
             throw new SDKContractError('CODE_ENCODING_FAILED', 'Contract source must be a string');
-        return Buffer.from(sourceCode, 'utf8').toString('hex');
+        return Buffer.from(sourceCode, 'utf8').toString('base64');
     }
 
-    // Hex-decode back to UTF-8 source for inspection
-    decode(hexString) {
-        if (typeof hexString !== 'string' || !/^[0-9a-fA-F]*$/.test(hexString))
-            throw new SDKContractError('CODE_ENCODING_FAILED', 'Invalid hex string');
-        return Buffer.from(hexString, 'hex').toString('utf8');
+    // base64-decode back to UTF-8 source for inspection
+    decode(b64String) {
+        if (typeof b64String !== 'string' || !/^[A-Za-z0-9+/]*={0,2}$/.test(b64String))
+            throw new SDKContractError('CODE_ENCODING_FAILED', 'Invalid base64 string');
+        return Buffer.from(b64String, 'base64').toString('utf8');
     }
 
     // Lightweight syntax pre-validation using acorn (no V8 required)

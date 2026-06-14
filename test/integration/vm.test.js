@@ -61,7 +61,7 @@ describe('VM Actions – DEPLOY', function () {
     let actions;
     beforeEach(function () { actions = createActions(); });
 
-    it('creates DEPLOY with raw code (auto hex-encoding)', function () {
+    it('creates DEPLOY with raw code (auto base64-encoding)', function () {
         let result = actions.createAction({
             action: 'DEPLOY',
             params: { code: 'module.exports = {}', gasLimit: 100000 }
@@ -70,19 +70,19 @@ describe('VM Actions – DEPLOY', function () {
         expect(result.version).to.equal(0);
         expect(result.actionString).to.match(/^DEPLOY\|0\|/);
         expect(result.fields.CODE_ENCODING).to.equal(
-            Buffer.from('module.exports = {}', 'utf8').toString('hex')
+            Buffer.from('module.exports = {}', 'utf8').toString('base64')
         );
         expect(result.fields.GAS_LIMIT).to.equal(100000);
         expect(result.fields.CODE).to.be.undefined;
     });
 
-    it('creates DEPLOY with pre-encoded hex', function () {
-        let hex = Buffer.from('var x = 1;', 'utf8').toString('hex');
+    it('creates DEPLOY with pre-encoded base64', function () {
+        let b64 = Buffer.from('var x = 1;', 'utf8').toString('base64');
         let result = actions.createAction({
             action: 'DEPLOY',
-            params: { codeEncoding: hex, gasLimit: 50000 }
+            params: { codeEncoding: b64, gasLimit: 50000 }
         });
-        expect(result.fields.CODE_ENCODING).to.equal(hex);
+        expect(result.fields.CODE_ENCODING).to.equal(b64);
     });
 
     it('creates DEPLOY with constructor params', function () {
@@ -101,7 +101,7 @@ describe('VM Actions – DEPLOY', function () {
         let parts = result.actionString.split('|');
         expect(parts[0]).to.equal('DEPLOY');
         expect(parts[1]).to.equal('0');
-        // parts[2] = hex code, parts[3] = gas limit, parts[4+] = constructor params
+        // parts[2] = base64 code, parts[3] = gas limit, parts[4+] = constructor params
         expect(parts[parts.length - 3]).to.equal('arg1');
         expect(parts[parts.length - 2]).to.equal('arg2');
         expect(parts[parts.length - 1]).to.equal('arg3');
@@ -121,10 +121,10 @@ describe('VM Actions – DEPLOY', function () {
         })).to.throw(SDKValidationError);
     });
 
-    it('rejects DEPLOY with invalid hex in CODE_ENCODING', function () {
+    it('rejects DEPLOY with invalid base64 in CODE_ENCODING', function () {
         expect(() => actions.createAction({
             action: 'DEPLOY',
-            params: { codeEncoding: 'not-hex!', gasLimit: 100000 }
+            params: { codeEncoding: 'not-base64!', gasLimit: 100000 }
         })).to.throw(SDKValidationError);
     });
 
@@ -492,9 +492,9 @@ describe('Validator – VM action rules', function () {
         expect(errors).to.have.lengthOf(0);
     });
 
-    it('rejects DEPLOY with non-hex CODE_ENCODING', function () {
+    it('rejects DEPLOY with non-base64 CODE_ENCODING', function () {
         let errors = validator.validate('DEPLOY', {
-            CODE_ENCODING: 'xyz',
+            CODE_ENCODING: '@@@',   // outside the base64 alphabet
             GAS_LIMIT: 100000
         });
         expect(errors.some(e => e.code === 'INVALID_FIELD_VALUE' && e.details.field === 'CODE_ENCODING')).to.be.true;
@@ -606,9 +606,9 @@ describe('ContractUtils', function () {
     describe('encode / decode', function () {
 
         it('round-trips UTF-8 source code', function () {
-            let hex = utils.encode(SIMPLE_CONTRACT);
-            expect(hex).to.match(/^[0-9a-f]+$/);
-            let decoded = utils.decode(hex);
+            let b64 = utils.encode(SIMPLE_CONTRACT);
+            expect(b64).to.match(/^[A-Za-z0-9+/]*={0,2}$/);
+            let decoded = utils.decode(b64);
             expect(decoded).to.equal(SIMPLE_CONTRACT);
         });
 
@@ -616,8 +616,8 @@ describe('ContractUtils', function () {
             expect(() => utils.encode(123)).to.throw(SDKContractError);
         });
 
-        it('decode throws for invalid hex', function () {
-            expect(() => utils.decode('not-hex!')).to.throw(SDKContractError);
+        it('decode throws for invalid base64', function () {
+            expect(() => utils.decode('not-base64!')).to.throw(SDKContractError);
         });
     });
 
@@ -927,7 +927,7 @@ describe('VM Actions – round-trip serialize → verify', function () {
 
     it('DEPLOY fields match action string', function () {
         let code = 'module.exports = function() { return 1; }';
-        let hex = Buffer.from(code, 'utf8').toString('hex');
+        let b64 = Buffer.from(code, 'utf8').toString('base64');
         let result = actions.createAction({
             action: 'DEPLOY',
             params: { code: code, gasLimit: 200000 }
@@ -935,7 +935,7 @@ describe('VM Actions – round-trip serialize → verify', function () {
         let parts = result.actionString.split('|');
         expect(parts[0]).to.equal('DEPLOY');
         expect(parts[1]).to.equal('0');
-        expect(parts[2]).to.equal(hex);
+        expect(parts[2]).to.equal(b64);
         expect(parts[3]).to.equal('200000');
     });
 
