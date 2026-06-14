@@ -498,6 +498,12 @@ class XChainSDK {
     async deployAndFund(wif, deployParams, deposits, opts) {
         return this.workflows.deployAndFund(wif, deployParams, deposits, opts);
     }
+    // Deploy auto-selecting single-shot vs chunked (DEPLOYCHUNK + DEPLOY v2/v3) by source
+    // size, then optionally fund. Pass raw `code` so the planner can size it. See
+    // workflows.deployContract / chunkHelper. Spec: protocol/actions/DEPLOY.md.
+    async deployContract(wif, deployParams, deposits, opts) {
+        return this.workflows.deployContract(wif, deployParams, deposits, opts);
+    }
     async distributeDividend(wif, dividendParams, opts) {
         return this.workflows.distributeDividend(wif, dividendParams, opts);
     }

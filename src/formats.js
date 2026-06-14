@@ -65,7 +65,19 @@ Formats = {
 
     DEPLOY: {
         0: 'VERSION|CODE_ENCODING|GAS_LIMIT|...CONSTRUCTOR_PARAMS',
-        1: 'VERSION|CODE_ENCODING|GAS_LIMIT|CONSTRUCTOR_PARAMS|COOLDOWN_BLOCKS|SLASH_DESTINATION'
+        1: 'VERSION|CODE_ENCODING|GAS_LIMIT|CONSTRUCTOR_PARAMS|COOLDOWN_BLOCKS|SLASH_DESTINATION',
+        // Chunked: code is assembled from prior DEPLOYCHUNK actions keyed on CODE_HASH
+        // (sha256 of the assembled UTF-8 source). v2 mirrors v0 (rest CONSTRUCTOR_PARAMS),
+        // v3 mirrors v1 (fixed staking fields).
+        2: 'VERSION|CODE_HASH|GAS_LIMIT|...CONSTRUCTOR_PARAMS',
+        3: 'VERSION|CODE_HASH|GAS_LIMIT|CONSTRUCTOR_PARAMS|COOLDOWN_BLOCKS|SLASH_DESTINATION'
+    },
+
+    // One ordered base64 slice of a chunked contract's source. CODE_PART is a
+    // substring of base64(code); plain concatenation in CHUNK_INDEX order restores
+    // the base64 string exactly. The assembling DEPLOY v2/v3 verifies sha256.
+    DEPLOYCHUNK: {
+        0: 'VERSION|CODE_HASH|CHUNK_INDEX|TOTAL_CHUNKS|CODE_PART'
     },
 
     DEPOSIT: {

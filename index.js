@@ -36,6 +36,7 @@ const ProjectHelpers     = require('./src/project.js');
 const ControllerHelpers  = require('./src/controller.js');
 const UTXOCache        = require('./src/utxoCache.js');
 const MuSig2           = require('./src/musig2.js');
+const chunkHelper      = require('./src/chunkHelper.js');
 const { startREPL }   = require('./src/repl.js');
 const {
     SDKError,
@@ -74,6 +75,7 @@ module.exports = {
     ControllerHelpers,
     UTXOCache,
     MuSig2,
+    chunkHelper,
     startREPL,
     SDKError,
     SDKValidationError,

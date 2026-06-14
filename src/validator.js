@@ -33,6 +33,13 @@ const MAX_MESSAGE_LENGTH = 1048576; // 1MB
 // (MAX_CODE_SIZE); kept equal by the cross-service regression suite.
 const MAX_CODE_SIZE      = 65536;
 
+// Max base64 bytes per DEPLOYCHUNK CODE_PART (chunked deploy). Canonical source:
+// xchain-documentation/protocol/constants.js (MAX_DEPLOYCHUNK_PART_BYTES); kept
+// equal to the indexer's per-chunk cap by the cross-service regression suite.
+const MAX_DEPLOYCHUNK_PART_BYTES = 7800;
+// Max chunks one DEPLOY may assemble (canonical: constants.js MAX_DEPLOY_CHUNKS).
+const MAX_DEPLOY_CHUNKS = 16;
+
 // Allowed TICK characters: a-zA-Z0-9 and ~!@#$%^&*()_+-={}[]\:<>.?
 // Forbidden: | ; . / and ^ as first char
 const TICK_REGEX = /^[a-zA-Z0-9~!@#$%^&*()_+\-={}[\]\\:<>.?]+$/;
@@ -57,7 +64,10 @@ const ACTION_REQUIRED_FIELDS = {
     COINPAY:            ['ORDER_MATCH_ACTION_INDEX'],
     COLLECT:            [],
     DELEGATE:           [],
-    DEPLOY:             ['CODE_ENCODING', 'GAS_LIMIT'],
+    // CODE_ENCODING (v0/v1 inline) vs CODE_HASH (v2/v3 chunked) is enforced as an
+    // exactly-one cross-field rule in _validateAction; only GAS_LIMIT is universally required.
+    DEPLOY:             ['GAS_LIMIT'],
+    DEPLOYCHUNK:        ['CODE_HASH', 'CHUNK_INDEX', 'TOTAL_CHUNKS', 'CODE_PART'],
     DEPOSIT:            ['CONTRACT_ACTION_INDEX', 'TICK', 'QUANTITY'],
     DESTROY:            ['TICK', 'AMOUNT'],
     DISPENSER:          [],
@@ -351,6 +361,27 @@ class Validator {
             }
         }
 
+        // CODE_HASH validation (DEPLOY v2/v3 + DEPLOYCHUNK group key — sha256 hex)
+        if (field === 'CODE_HASH') {
+            if (!/^[0-9a-f]{64}$/.test(String(value)))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'CODE_HASH must be a 64-char lowercase sha256 hex string', { field }));
+        }
+
+        // CODE_PART validation (one base64 slice of a chunked contract's source)
+        if (field === 'CODE_PART') {
+            let part = String(value);
+            if (!/^[A-Za-z0-9+/]*={0,2}$/.test(part))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'CODE_PART must be a valid base64 string', { field }));
+            else if (Buffer.byteLength(part, 'utf8') > MAX_DEPLOYCHUNK_PART_BYTES)
+                errors.push(this._error('CODE_PART_TOO_LARGE', 'CODE_PART exceeds ' + MAX_DEPLOYCHUNK_PART_BYTES + ' byte limit', { field, limit: MAX_DEPLOYCHUNK_PART_BYTES }));
+        }
+
+        // CHUNK_INDEX / TOTAL_CHUNKS validation (non-negative integers; bounds checked cross-field)
+        if (field === 'CHUNK_INDEX' || field === 'TOTAL_CHUNKS') {
+            if (!this.util.isNumeric(value) || !Number.isInteger(Number(value)) || Number(value) < 0)
+                errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be a non-negative integer', { field, value }));
+        }
+
         // CONSTRUCTOR_PARAMS / PARAMS validation (array items must not contain separators)
         if (field === 'CONSTRUCTOR_PARAMS' || field === 'PARAMS') {
             if (Array.isArray(value)) {
@@ -453,6 +484,9 @@ class Validator {
             case 'DEPLOY':
                 errors.push(...this._validateDeploy(fields));
                 break;
+            case 'DEPLOYCHUNK':
+                errors.push(...this._validateDeployChunk(fields));
+                break;
             case 'DISPENSER':
                 errors.push(...this._validateDispenser(fields));
                 break;
@@ -535,6 +569,14 @@ class Validator {
     // DEPLOY-specific validation
     _validateDeploy(fields) {
         let errors = [];
+        // Inline (v0/v1) carries CODE_ENCODING; chunked (v2/v3) carries CODE_HASH and
+        // assembles the code from prior DEPLOYCHUNKs. Exactly one must be present.
+        let hasInline = !this._isEmpty(fields.CODE_ENCODING);
+        let hasHash   = !this._isEmpty(fields.CODE_HASH);
+        if (!hasInline && !hasHash)
+            errors.push(this._error('MISSING_REQUIRED_FIELD', 'DEPLOY requires CODE_ENCODING (inline) or CODE_HASH (chunked)', { action: 'DEPLOY' }));
+        else if (hasInline && hasHash)
+            errors.push(this._error('DEPLOY_CONSTRAINT', 'DEPLOY cannot carry both CODE_ENCODING and CODE_HASH', { action: 'DEPLOY' }));
         // v1 stakeable-contract config: SLASH_DESTINATION without COOLDOWN_BLOCKS is meaningless.
         // (The indexer applies the same rule and additionally defaults SLASH_DESTINATION→BURN
         // when COOLDOWN_BLOCKS is set without a destination, so we don't enforce SLASH_DESTINATION
@@ -543,6 +585,18 @@ class Validator {
         let hasDest     = !this._isEmpty(fields.SLASH_DESTINATION);
         if (hasDest && !hasCooldown)
             errors.push(this._error('DEPLOY_CONSTRAINT', 'SLASH_DESTINATION requires COOLDOWN_BLOCKS', { cooldown: fields.COOLDOWN_BLOCKS, destination: fields.SLASH_DESTINATION }));
+        return errors;
+    }
+
+    // DEPLOYCHUNK-specific validation (CHUNK_INDEX < TOTAL_CHUNKS ≤ MAX_DEPLOY_CHUNKS)
+    _validateDeployChunk(fields) {
+        let errors = [];
+        let total = Number(fields.TOTAL_CHUNKS);
+        let idx   = Number(fields.CHUNK_INDEX);
+        if (!this._isEmpty(fields.TOTAL_CHUNKS) && (total < 1 || total > MAX_DEPLOY_CHUNKS))
+            errors.push(this._error('DEPLOYCHUNK_CONSTRAINT', 'TOTAL_CHUNKS must be in [1, ' + MAX_DEPLOY_CHUNKS + ']', { total }));
+        if (!this._isEmpty(fields.CHUNK_INDEX) && !this._isEmpty(fields.TOTAL_CHUNKS) && idx >= total)
+            errors.push(this._error('DEPLOYCHUNK_CONSTRAINT', 'CHUNK_INDEX must be < TOTAL_CHUNKS', { index: idx, total }));
         return errors;
     }
 
