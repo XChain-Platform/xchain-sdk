@@ -87,6 +87,39 @@ class ContractClient {
         return explorer.getContractBalance(this.contractActionIndex, tick);
     }
 
+    // Get the contract's declared permissions manifest (programmable policy layer).
+    // Returns { permissions: string[]|null, maxTakeBps: number|null }: permissions=null
+    // means no declared allowlist (unrestricted); maxTakeBps=null means the global cap
+    // applies. Delegates to the explorer's normalizing reader.
+    async getManifest() {
+        let explorer = this.sdk._requireExplorer();
+        return explorer.getContractManifest(this.contractActionIndex);
+    }
+
+    // Back-compat alias for getManifest(). Reads the cached getInfo() result when
+    // present to avoid a second fetch.
+    async getPermissions() {
+        let info = this._info || await this.getInfo();
+        return ContractClient.parseManifest(info);
+    }
+
+    // Normalize the manifest off a raw explorer contract object. `permissions` may arrive
+    // as a JSON string ('["SEND"]') or an already-parsed array; anything else → null.
+    static parseManifest(info) {
+        if (!info)
+            return { permissions: null, maxTakeBps: null };
+        let permissions = null;
+        let raw = info.permissions;
+        if (Array.isArray(raw)) {
+            permissions = raw;
+        } else if (typeof raw === 'string' && raw.length) {
+            try { let p = JSON.parse(raw); if (Array.isArray(p)) permissions = p; } catch (e) { permissions = null; }
+        }
+        let mtb = info.max_take_bps;
+        let maxTakeBps = (mtb === null || mtb === undefined || mtb === '') ? null : Number(mtb);
+        return { permissions, maxTakeBps };
+    }
+
 }
 
 module.exports = ContractClient;

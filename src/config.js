@@ -43,8 +43,10 @@ Config = {
             'CALLBACK_BLOCK',
             'COIN1_ACTION_INDEX',
             'CONTRACT_ACTION_INDEX',
+            'CONTROLLER',
             'COIN2_ACTION_INDEX',
-            'DECIMALS', 
+            'COOLDOWN_BLOCKS',
+            'DECIMALS',
             'DISPENSER_ACTION_INDEX',
             'EDIT',
             'ENCRYPTION_METHOD',
@@ -70,6 +72,7 @@ Config = {
             'TIER',
             'TRANSFER_SUPPLY',
             'TYPE',
+            'UNBIND',
             'VALUE',
         ];
 
@@ -88,6 +91,17 @@ Config = {
         config['LIST_FIELDS'] = [
             'ALLOW_LIST',
             'BLOCK_LIST'
+        ];
+
+        // Programmable policy layer — the controller action classes a token (ISSUE v6) or
+        // account (ADDRESS v1) may bind. MUST stay in lockstep with the indexer's
+        // config CONTROLLER_ACTION_CLASSES (a cross-service regression pins it).
+        config['ACTION_CLASSES'] = [
+            'transfer',
+            'trade',
+            'burn',
+            'mint',
+            'stake'
         ];
 
         // Define stop check interval (default 5 seconds; override via STOP_CHECK_INTERVAL)

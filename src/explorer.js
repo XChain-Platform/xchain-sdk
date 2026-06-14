@@ -23,6 +23,7 @@ const { SDKExplorerError } = require('./errors.js');
 const { withRetry, isRetryable } = require('./retry.js');
 const { coinPrefix } = require('./endpoints.js');
 const { getSupportedNetworks } = require('./networks.js');
+const ContractClient = require('./contractClient.js');
 
 // (Coin prefix mapping lives in endpoints.coinPrefix — single source of truth,
 //  shared with the public-default resolution.)
@@ -484,6 +485,18 @@ class ExplorerClient {
 
     async getContract(contractActionIndex) {
         return this._get('/contract/' + contractActionIndex);
+    }
+
+    // Read a contract's declared permissions manifest (programmable policy layer),
+    // normalized to camelCase for JS/wallet consumers. The explorer serves the
+    // manifest as snake_case fields on the /contract/{idx} response
+    // (`permissions`: string[]|null, `max_take_bps`: number|null). Returns
+    //   { permissions: string[]|null, maxTakeBps: number|null }
+    // permissions=null → no declared allowlist (unrestricted); maxTakeBps=null →
+    // the global cap applies.
+    async getContractManifest(contractActionIndex) {
+        let info = await this.getContract(contractActionIndex);
+        return ContractClient.parseManifest(info);
     }
 
     async getContracts(query, type, opts = {}) {

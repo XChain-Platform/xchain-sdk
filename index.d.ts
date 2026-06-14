@@ -471,7 +471,19 @@ export interface ContractInfo {
     status?: string;
     deployBlock?: number;
     gasLimit?: number;
+    /** Declared emission allowlist (programmable policy layer); null/absent = unrestricted */
+    permissions?: string[] | null;
+    /** Declared royalty cap in basis points (snake_case on the wire); null/absent = global cap */
+    max_take_bps?: number | null;
     [key: string]: any;
+}
+
+/** Normalized permissions manifest (programmable policy layer). See sdk.getContractManifest. */
+export interface ContractManifest {
+    /** Declared emission allowlist; null = no allowlist (unrestricted, the default) */
+    permissions: string[] | null;
+    /** Declared royalty cap in basis points; null = the global cap applies */
+    maxTakeBps: number | null;
 }
 
 export interface ContractStateEntry {
@@ -695,6 +707,53 @@ export declare class ProjectHelpers {
 
 
 /*
+ *  Controller (programmable-policy) helpers — pure builders for the bind/unbind
+ *  wire actions (ISSUE v6 for a token, ADDRESS v1 for an account) that route a
+ *  native action class to a guard contract. No network.
+ *  Spec: protocol/Controller_Bound_Tokens.md
+ */
+
+/** A native action class a token/account may route to a guard contract */
+export type ControllerActionClass = 'transfer' | 'trade' | 'burn' | 'mint' | 'stake';
+
+export interface ControllerBindTokenParams {
+    tick: string;
+    controller: string | number;
+    actionClass: ControllerActionClass | string;
+    cooldownBlocks?: string | number;
+    memo?: string;
+}
+export interface ControllerUnbindTokenParams {
+    tick: string;
+    actionClass: ControllerActionClass | string;
+    memo?: string;
+}
+export interface ControllerBindAddressParams {
+    controller: string | number;
+    actionClass: ControllerActionClass | string;
+    cooldownBlocks?: string | number;
+    memo?: string;
+}
+export interface ControllerUnbindAddressParams {
+    actionClass: ControllerActionClass | string;
+    memo?: string;
+}
+
+export declare class ControllerHelpers {
+    /** The canonical action-class list (for dropdowns / validation) */
+    actionClasses(): ControllerActionClass[];
+    /** Build ISSUE v6 params binding a token's action class to a guard contract (UNBIND=0) */
+    bindToken(params: ControllerBindTokenParams): ActionParams;
+    /** Build ISSUE v6 params dropping a token's controller binding (UNBIND=1) */
+    unbindToken(params: ControllerUnbindTokenParams): ActionParams;
+    /** Build ADDRESS v1 params binding the SOURCE account's action class to a guard contract (UNBIND=0) */
+    bindAddress(params: ControllerBindAddressParams): ActionParams;
+    /** Build ADDRESS v1 params dropping the SOURCE account's controller binding (UNBIND=1) */
+    unbindAddress(params: ControllerUnbindAddressParams): ActionParams;
+}
+
+
+/*
  *  Contract client (bound to a specific deployed contract)
  */
 
@@ -719,6 +778,8 @@ export declare class ContractClient {
     getExecutions(opts?: QueryOptions): Promise<ExecutionInfo[]>;
     /** Get contract token balances */
     getBalance(tick?: string): Promise<ContractBalanceEntry | ContractBalanceEntry[]>;
+    /** Get the contract's declared permissions manifest (programmable policy layer) */
+    getManifest(): Promise<ContractManifest>;
 }
 
 
@@ -972,6 +1033,9 @@ export declare class XChainSDK {
     /** Get contract metadata by its deploy ACTION_INDEX */
     getContract(contractActionIndex: number | string): Promise<ContractInfo>;
 
+    /** Read a contract's declared permissions manifest, normalized to camelCase (programmable policy layer) */
+    getContractManifest(contractActionIndex: number | string): Promise<ContractManifest>;
+
     /** Get a list of contracts, optionally filtered by owner address */
     getContracts(query?: string, type?: string, opts?: QueryOptions): Promise<ContractInfo[]>;
 
@@ -1116,6 +1180,9 @@ export declare class XChainSDK {
 
     /** Publish (or replace) a project's official-token roster: LIST then owner-validated LINK */
     setRoster(wif: string, params: ProjectSetRosterOpts, opts?: Partial<SubmitActionOpts>): Promise<{ list: SubmitActionResult; link: SubmitActionResult }>;
+
+    /** Pure controller (programmable-policy) param builders (no network). Spec: protocol/Controller_Bound_Tokens.md */
+    readonly controller: ControllerHelpers;
 
 
     /*
@@ -1569,5 +1636,5 @@ export function startREPL(options?: SDKOptions): Promise<any>;
  *  Module exports (CommonJS interop)
  */
 
-export { XChainSDK, BatchBuilder, ContractClient, ContractUtils, NftHelpers, ProjectHelpers, WalletUtils, WalletSession, AuthUtils, CrossChainHelper, UTXOCache, SDKError, SDKValidationError, SDKFormatError, SDKEncoderError, SDKExplorerError, SDKHubError, SDKConfigError, SDKContractError, SDKWalletError, SDKAuthError, SDKMessagingError, SDKActionError };
+export { XChainSDK, BatchBuilder, ContractClient, ContractUtils, NftHelpers, ProjectHelpers, ControllerHelpers, WalletUtils, WalletSession, AuthUtils, CrossChainHelper, UTXOCache, SDKError, SDKValidationError, SDKFormatError, SDKEncoderError, SDKExplorerError, SDKHubError, SDKConfigError, SDKContractError, SDKWalletError, SDKAuthError, SDKMessagingError, SDKActionError };
 export default XChainSDK;

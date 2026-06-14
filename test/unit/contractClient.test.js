@@ -18,6 +18,7 @@ function makeSdk(overrides = {}) {
         getContractState:  async (idx, key) => key ? { value: 'stateVal' } : { key1: 'v1' },
         getExecutions:     async (idx, opts) => ({ total: 2, data: [{ method: 'run' }] }),
         getContractBalance: async (idx, tick) => tick ? { tick, quantity: '1000' } : [{ tick: 'TOK', quantity: '500' }],
+        getContractManifest: async (idx) => ({ permissions: ['SEND'], maxTakeBps: 250 }),
         ...overrides.explorer
     };
     return {
@@ -209,6 +210,56 @@ describe('ContractClient', function () {
             let result = await client.getBalance();
             assert.ok(Array.isArray(result));
             assert.strictEqual(result[0].tick, 'TOK');
+        });
+    });
+
+    /*
+     *  getManifest()
+     */
+
+    describe('getManifest()', function () {
+        it('delegates to explorer.getContractManifest with the bound index', async function () {
+            let capturedIdx;
+            let sdk = makeSdk({
+                explorer: {
+                    getContractManifest: async (idx) => { capturedIdx = idx; return { permissions: ['MINT'], maxTakeBps: 100 }; }
+                }
+            });
+            let client = new ContractClient(sdk, 17);
+            let m = await client.getManifest();
+            assert.strictEqual(capturedIdx, 17);
+            assert.deepStrictEqual(m, { permissions: ['MINT'], maxTakeBps: 100 });
+        });
+    });
+
+    /*
+     *  parseManifest() (static normalizer)
+     */
+
+    describe('parseManifest()', function () {
+        it('parses a permissions JSON string and numeric max_take_bps', function () {
+            assert.deepStrictEqual(
+                ContractClient.parseManifest({ permissions: '["SEND","MINT"]', max_take_bps: 300 }),
+                { permissions: ['SEND', 'MINT'], maxTakeBps: 300 }
+            );
+        });
+        it('passes through an already-parsed array', function () {
+            assert.deepStrictEqual(
+                ContractClient.parseManifest({ permissions: ['SEND'], max_take_bps: null }),
+                { permissions: ['SEND'], maxTakeBps: null }
+            );
+        });
+        it('returns nulls for a manifest-less contract', function () {
+            assert.deepStrictEqual(ContractClient.parseManifest({}), { permissions: null, maxTakeBps: null });
+        });
+        it('returns nulls for null input', function () {
+            assert.deepStrictEqual(ContractClient.parseManifest(null), { permissions: null, maxTakeBps: null });
+        });
+        it('treats unparseable permissions as null (no throw)', function () {
+            assert.deepStrictEqual(
+                ContractClient.parseManifest({ permissions: 'not-json', max_take_bps: '' }),
+                { permissions: null, maxTakeBps: null }
+            );
         });
     });
 

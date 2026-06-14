@@ -188,6 +188,28 @@ describe('ExplorerClient', function () {
     });
 
     /*
+     *  Contract permissions manifest (programmable policy layer)
+     */
+
+    describe('getContractManifest()', function () {
+        it('normalizes a snake_case manifest (permissions JSON string + max_take_bps)', async function () {
+            nock(BASE).get('/BTC/api/contract/42').reply(200, { action_index: 42, permissions: '["SEND","MINT"]', max_take_bps: 300 });
+            let m = await client.getContractManifest(42);
+            expect(m).to.deep.equal({ permissions: ['SEND', 'MINT'], maxTakeBps: 300 });
+        });
+        it('passes through an already-parsed permissions array', async function () {
+            nock(BASE).get('/BTC/api/contract/7').reply(200, { action_index: 7, permissions: ['SEND'], max_take_bps: null });
+            let m = await client.getContractManifest(7);
+            expect(m).to.deep.equal({ permissions: ['SEND'], maxTakeBps: null });
+        });
+        it('returns nulls when the contract declares no manifest', async function () {
+            nock(BASE).get('/BTC/api/contract/9').reply(200, { action_index: 9 });
+            let m = await client.getContractManifest(9);
+            expect(m).to.deep.equal({ permissions: null, maxTakeBps: null });
+        });
+    });
+
+    /*
      *  Pagination params
      */
 
@@ -994,10 +1016,10 @@ describe('ExplorerClient', function () {
             });
         }
 
-        it('has 83 public methods', function () {
+        it('has 84 public methods', function () {
             let publicMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(publicMethods).to.have.length(83);
+            expect(publicMethods).to.have.length(84);
         });
     });
 

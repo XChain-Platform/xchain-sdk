@@ -890,3 +890,86 @@ describe('Validator — field + cross-field constraints', function () {
         expect(errors.some(e => /GIVE_ESCROW must be empty when GIVE_OWNERSHIP=1/.test(e.message))).to.be.true;
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONTROLLER BIND/UNBIND VALIDATION (ISSUE v6 / ADDRESS v1 — programmable policy)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Validator — controller bind/unbind (ISSUE v6 / ADDRESS v1)', function () {
+
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    // CONTROLLER — non-negative integer (a contract ACTION_INDEX)
+    it('accepts a non-negative integer CONTROLLER', function () {
+        const errors = v.validate('ISSUE', { TICK: 'X', CONTROLLER: '42', ACTION_CLASS: 'transfer', UNBIND: '0' });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.false;
+    });
+    it('rejects a negative CONTROLLER', function () {
+        const errors = v.validate('ISSUE', { TICK: 'X', CONTROLLER: '-1', ACTION_CLASS: 'transfer', UNBIND: '0' });
+        expect(errors.some(e => /CONTROLLER must be a non-negative integer/.test(e.message))).to.be.true;
+    });
+    it('rejects a non-integer CONTROLLER', function () {
+        const errors = v.validate('ISSUE', { TICK: 'X', CONTROLLER: '4.2', ACTION_CLASS: 'transfer', UNBIND: '0' });
+        expect(errors.some(e => /CONTROLLER must be a non-negative integer/.test(e.message))).to.be.true;
+    });
+
+    // ACTION_CLASS — must be one of {transfer, trade, burn, mint, stake}
+    ['transfer', 'trade', 'burn', 'mint', 'stake'].forEach(cls => {
+        it('accepts ACTION_CLASS=' + cls, function () {
+            const errors = v.validate('ISSUE', { TICK: 'X', CONTROLLER: '1', ACTION_CLASS: cls, UNBIND: '0' });
+            expect(errors.some(e => /ACTION_CLASS must be one of/.test(e.message))).to.be.false;
+        });
+    });
+    it('rejects an unknown ACTION_CLASS', function () {
+        const errors = v.validate('ISSUE', { TICK: 'X', CONTROLLER: '1', ACTION_CLASS: 'admin', UNBIND: '0' });
+        expect(errors.some(e => /ACTION_CLASS must be one of/.test(e.message))).to.be.true;
+    });
+
+    // UNBIND — 0 or 1 only
+    it('accepts UNBIND=0 and UNBIND=1', function () {
+        expect(v.validate('ADDRESS', { CONTROLLER: '1', ACTION_CLASS: 'trade', UNBIND: '0' }).some(e => /UNBIND must be/.test(e.message))).to.be.false;
+        expect(v.validate('ADDRESS', { ACTION_CLASS: 'trade', UNBIND: '1' }).some(e => /UNBIND must be/.test(e.message))).to.be.false;
+    });
+    it('rejects UNBIND=2', function () {
+        const errors = v.validate('ADDRESS', { CONTROLLER: '1', ACTION_CLASS: 'trade', UNBIND: '2' });
+        expect(errors.some(e => /UNBIND must be 0 .bind. or 1 .unbind./.test(e.message))).to.be.true;
+    });
+
+    // COOLDOWN_BLOCKS — non-negative integer on a controller bind (0 allowed)
+    it('accepts COOLDOWN_BLOCKS=0 on an ISSUE controller bind', function () {
+        const errors = v.validate('ISSUE', { TICK: 'X', CONTROLLER: '1', ACTION_CLASS: 'mint', COOLDOWN_BLOCKS: '0', UNBIND: '0' });
+        expect(errors.some(e => /COOLDOWN_BLOCKS/.test(e.message))).to.be.false;
+    });
+    it('accepts COOLDOWN_BLOCKS=0 on an ADDRESS controller bind', function () {
+        const errors = v.validate('ADDRESS', { CONTROLLER: '1', ACTION_CLASS: 'trade', COOLDOWN_BLOCKS: '0', UNBIND: '0' });
+        expect(errors.some(e => /COOLDOWN_BLOCKS/.test(e.message))).to.be.false;
+    });
+    it('rejects a negative COOLDOWN_BLOCKS on a controller bind', function () {
+        const errors = v.validate('ISSUE', { TICK: 'X', CONTROLLER: '1', ACTION_CLASS: 'mint', COOLDOWN_BLOCKS: '-5', UNBIND: '0' });
+        expect(errors.some(e => /COOLDOWN_BLOCKS must be a non-negative integer/.test(e.message))).to.be.true;
+    });
+    it('still enforces the DEPLOY COOLDOWN_BLOCKS [1,100000] range', function () {
+        const errors = v.validate('DEPLOY', { CODE_ENCODING: 'ab', GAS_LIMIT: '1', COOLDOWN_BLOCKS: '0' });
+        expect(errors.some(e => /COOLDOWN_BLOCKS must be in \[1, 100000\]/.test(e.message))).to.be.true;
+    });
+
+    // Bind/unbind interlock
+    it('requires CONTROLLER on a bind (UNBIND=0)', function () {
+        const errors = v.validate('ISSUE', { TICK: 'X', ACTION_CLASS: 'transfer', UNBIND: '0' });
+        expect(errors.some(e => /CONTROLLER is required to bind/.test(e.message))).to.be.true;
+    });
+    it('requires ACTION_CLASS whenever controller fields are present', function () {
+        const errors = v.validate('ADDRESS', { CONTROLLER: '1', UNBIND: '0' });
+        expect(errors.some(e => /ACTION_CLASS is required for a controller bind\/unbind/.test(e.message))).to.be.true;
+    });
+    it('allows an unbind (UNBIND=1) with no CONTROLLER', function () {
+        const errors = v.validate('ISSUE', { TICK: 'X', ACTION_CLASS: 'burn', UNBIND: '1' });
+        expect(errors.some(e => /CONTROLLER is required to bind/.test(e.message))).to.be.false;
+    });
+    it('leaves a plain ISSUE (no controller fields) unaffected by the interlock', function () {
+        const errors = v.validate('ISSUE', { TICK: 'PLAIN', DESCRIPTION: 'hi' });
+        expect(errors.some(e => /controller bind/.test(e.message))).to.be.false;
+        expect(errors.some(e => /CONTROLLER is required/.test(e.message))).to.be.false;
+    });
+});

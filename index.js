@@ -33,6 +33,7 @@ const CrossChainHelper   = require('./src/crossChain.js');
 const AttestationHelpers = require('./src/attestation.js');
 const NftHelpers         = require('./src/nft.js');
 const ProjectHelpers     = require('./src/project.js');
+const ControllerHelpers  = require('./src/controller.js');
 const UTXOCache        = require('./src/utxoCache.js');
 const MuSig2           = require('./src/musig2.js');
 const { startREPL }   = require('./src/repl.js');
@@ -70,6 +71,7 @@ module.exports = {
     AttestationHelpers,
     NftHelpers,
     ProjectHelpers,
+    ControllerHelpers,
     UTXOCache,
     MuSig2,
     startREPL,

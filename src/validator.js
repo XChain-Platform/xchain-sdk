@@ -198,6 +198,8 @@ class Validator {
             if (!this.util.isValidLockValue(value))
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be 0 or 1', { field, value, constraint: { valid: [0, 1] } }));
         }
+        // NOTE: ISSUE v6 / ADDRESS v1 controller field checks (CONTROLLER / ACTION_CLASS /
+        // UNBIND / COOLDOWN_BLOCKS) live in the consolidated block further down (~line 390).
 
         // FIAT_CODE validation
         if (field === 'FIAT_CODE') {
@@ -371,10 +373,40 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', 'TARGET_CONTRACT_INDEX must be a positive integer', { field, value }));
         }
 
-        // COOLDOWN_BLOCKS validation (DEPLOY v1 — integer in [1, 100000])
+        // CONTROLLER validation (ISSUE v6 / ADDRESS v1 — controller bind/unbind):
+        // ACTION_INDEX of a deployed guard contract, so a non-negative integer.
+        if (field === 'CONTROLLER') {
+            if (!/^[0-9]+$/.test(String(value)))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'CONTROLLER must be a non-negative integer (a contract ACTION_INDEX)', { field, value }));
+        }
+
+        // ACTION_CLASS validation (ISSUE v6 / ADDRESS v1 — programmable policy
+        // layer): which native action class the guard gates. Must be one of the
+        // indexer's CONTROLLER_ACTION_CLASSES (case-insensitive on the wire);
+        // mirrored here as config['ACTION_CLASSES'].
+        if (field === 'ACTION_CLASS') {
+            let classes = this.config['ACTION_CLASSES'] || [];
+            if (classes.indexOf(String(value).toLowerCase()) === -1)
+                errors.push(this._error('INVALID_FIELD_VALUE', 'ACTION_CLASS must be one of: ' + classes.join(', '), { field, value, constraint: { valid: classes } }));
+        }
+
+        // UNBIND validation (ISSUE v6 / ADDRESS v1): 0 = bind / 1 = unbind.
+        if (field === 'UNBIND') {
+            if (!this.util.isValidLockValue(value))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'UNBIND must be 0 (bind) or 1 (unbind)', { field, value, constraint: { valid: [0, 1] } }));
+        }
+
+        // COOLDOWN_BLOCKS validation. Two callers with different ranges:
+        //  - DEPLOY v1 (stakeable contract): integer in [1, 100000].
+        //  - ISSUE v6 / ADDRESS v1 (controller bind): non-negative integer (≥ 0),
+        //    committed at bind as the friction on a later unbind (the indexer
+        //    accepts /^\d+$/, so 0 is valid).
         if (field === 'COOLDOWN_BLOCKS') {
             if (value !== '' && value !== null && value !== undefined) {
-                if (!this.util.isNumeric(value)) {
+                if (action === 'ISSUE' || action === 'ADDRESS') {
+                    if (!/^[0-9]+$/.test(String(value)))
+                        errors.push(this._error('INVALID_FIELD_VALUE', 'COOLDOWN_BLOCKS must be a non-negative integer', { field, value, constraint: { min: 0 } }));
+                } else if (!this.util.isNumeric(value)) {
                     errors.push(this._error('INVALID_FIELD_VALUE', 'COOLDOWN_BLOCKS must be numeric', { field, value }));
                 } else {
                     let cb = Number(value);
@@ -403,6 +435,12 @@ class Validator {
         let errors = [];
 
         switch (action) {
+            case 'ADDRESS':
+            case 'ISSUE':
+                // ISSUE v6 / ADDRESS v1 controller bind/unbind cross-field rules (no-op for a
+                // plain ISSUE/ADDRESS that carries no controller fields).
+                errors.push(...this._validateControllerBind(fields));
+                break;
             case 'BATCH':
                 errors.push(...this._validateBatch(fields));
                 break;
@@ -426,6 +464,26 @@ class Validator {
                 break;
         }
 
+        return errors;
+    }
+
+    // Controller bind/unbind cross-field rules (ISSUE v6 token controller / ADDRESS v1 account
+    // controller). Only applies when controller fields are present — a plain ISSUE/ADDRESS is
+    // unaffected. Stateless client-side pre-check only (the indexer owns "already bound", contract
+    // existence, etc.). UNBIND=1 drops a binding (CONTROLLER then ignored); a bind requires CONTROLLER.
+    _validateControllerBind(fields) {
+        let errors = [];
+        let hasController = !this.util.isNull(fields['CONTROLLER']);
+        let hasClass      = !this.util.isNull(fields['ACTION_CLASS']);
+        let hasUnbind     = !this.util.isNull(fields['UNBIND']);
+        // Not a controller bind at all → nothing to check.
+        if (!hasController && !hasClass && !hasUnbind)
+            return errors;
+        let isUnbind = Number(fields['UNBIND']) === 1;
+        if (!hasClass)
+            errors.push(this._error('MISSING_REQUIRED_FIELD', 'ACTION_CLASS is required for a controller bind/unbind', { field: 'ACTION_CLASS' }));
+        if (!isUnbind && !hasController)
+            errors.push(this._error('MISSING_REQUIRED_FIELD', 'CONTROLLER is required to bind a controller', { field: 'CONTROLLER' }));
         return errors;
     }
 

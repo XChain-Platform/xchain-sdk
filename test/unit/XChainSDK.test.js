@@ -368,6 +368,21 @@ describe('XChainSDK', function () {
         });
     });
 
+    describe('controller (programmable policy)', function () {
+        it('exposes sdk.controller as a ControllerHelpers instance', function () {
+            const sdk = makeSDK();
+            const ControllerHelpers = require('../../src/controller.js');
+            expect(sdk.controller).to.be.instanceOf(ControllerHelpers);
+        });
+        it('getContractManifest delegates to the explorer reader', async function () {
+            const sdk = makeSDK();
+            sinon.stub(sdk.explorer, 'getContractManifest').resolves({ permissions: ['SEND'], maxTakeBps: 250 });
+            const m = await sdk.getContractManifest(42);
+            expect(m).to.deep.equal({ permissions: ['SEND'], maxTakeBps: 250 });
+            expect(sdk.explorer.getContractManifest.calledWith(42)).to.equal(true);
+        });
+    });
+
     describe('session()', function () {
         it('returns a WalletSession instance', function () {
             const sdk = makeSDK();

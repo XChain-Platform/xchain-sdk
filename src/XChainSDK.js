@@ -35,6 +35,7 @@ const MessagingUtils = require('./messaging.js');
 const GatedFileUtils = require('./gatedFile.js');
 const NftHelpers     = require('./nft.js');
 const ProjectHelpers = require('./project.js');
+const ControllerHelpers = require('./controller.js');
 const AttestationHelpers = require('./attestation.js');
 const CheckpointVerifier = require('./checkpoint.js');
 const MuSig2            = require('./musig2.js');
@@ -86,6 +87,12 @@ class XChainSDK {
         // Submit-flow recipe lives on sdk.workflows (setRoster).
         // Spec: protocol/Project_Registry.md.
         this.project    = new ProjectHelpers();
+        // Controller (programmable-policy) helpers — pure builders for the
+        // bind/unbind wire actions (ISSUE v6 for a token, ADDRESS v1 for an
+        // account) that route a native action class to a guard contract. No
+        // network. Read the resulting manifest via sdk.getContractManifest().
+        // Spec: protocol/Controller_Bound_Tokens.md.
+        this.controller = new ControllerHelpers();
         // Attestation request/payload builders (http_get URL validation, LLM
         // envelope, request options). Exposed on the instance for parity with
         // messaging/gatedFile so dapps can `sdk.attestation.httpGet(url)` before
@@ -905,6 +912,14 @@ class XChainSDK {
 
     async getContract(contractActionIndex) {
         return this._requireExplorer().getContract(contractActionIndex);
+    }
+
+    // Read a contract's declared permissions manifest (programmable policy layer),
+    // normalized to { permissions: string[]|null, maxTakeBps: number|null }.
+    // permissions=null → unrestricted (no declared allowlist); maxTakeBps=null →
+    // the global fee cap applies. Backs the wallet consent disclosure.
+    async getContractManifest(contractActionIndex) {
+        return this._requireExplorer().getContractManifest(contractActionIndex);
     }
 
     async getContracts(query, type, opts) {
