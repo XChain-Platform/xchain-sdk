@@ -87,7 +87,7 @@ const NETWORKS = {
         pubKeyHash: 0x1e,
         scriptHash: 0x16,
         wif: 0x9e,
-        dustThreshold: 546,
+        dustThreshold: 100000,
         supportsSegwit: false
     },
     'dogecoin-testnet': {
@@ -96,7 +96,7 @@ const NETWORKS = {
         pubKeyHash: 0x71,
         scriptHash: 0xc4,
         wif: 0xf1,
-        dustThreshold: 546,
+        dustThreshold: 100000,
         supportsSegwit: false
     },
     'dogecoin-regtest': {
@@ -108,7 +108,7 @@ const NETWORKS = {
         pubKeyHash: 0x6f,
         scriptHash: 0xc4,
         wif: 0xef,
-        dustThreshold: 546,
+        dustThreshold: 100000,
         supportsSegwit: false
     }
 };
