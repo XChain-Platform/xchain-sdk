@@ -524,6 +524,46 @@ export interface GasEstimate {
     rationale: string;
 }
 
+/** A single contract-lint finding (from sdk.validateContract). */
+export interface ContractLintFinding {
+    /** Stable rule id, e.g. 'banned-math', 'crossCallable-not-array', 'unbounded-loop'. */
+    rule: string;
+    /** Human-readable message. */
+    message: string;
+    /** 1-based source line, or null when not line-specific. */
+    line: number | null;
+    /** 'error' fails the lint; 'warning' is advisory. */
+    severity: 'error' | 'warning';
+}
+
+/**
+ * Result of sdk.validateContract — advisory. The isolated-vm V8 syntax compile
+ * runs only at deploy/CLI, so `authoritative` is always false; a clean result
+ * means the contract passes every acorn-coverable deploy rule.
+ */
+export interface ContractValidationResult {
+    /** True iff there are no error-severity findings. */
+    valid: boolean;
+    errors: ContractLintFinding[];
+    warnings: ContractLintFinding[];
+    authoritative: false;
+}
+
+/** The scaffoldable template and pattern names (from sdk.listTemplates). */
+export interface ContractTemplateList {
+    templates: string[];
+    patterns: string[];
+}
+
+/** Pre-flight lint options for sdk.deploy(). */
+export interface DeployLintOptions {
+    /**
+     * 'block' (default): throw before building the action if the contract has
+     * lint errors. 'warn': log and proceed. 'off': skip the pre-flight lint.
+     */
+    lint?: 'block' | 'warn' | 'off';
+}
+
 /** Input shape for createAction */
 export interface CreateActionData {
     /** ACTION name, e.g. `'SEND'` */
@@ -1137,10 +1177,22 @@ export declare class XChainSDK {
     claimRewards(params?: ClaimRewardsParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
 
     // VM action convenience methods
-    deploy(params: DeployParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
+    deploy(params: DeployParams | ActionParams, encoder?: EncoderOptions, opts?: DeployLintOptions): Promise<ActionResult>;
     execute(params: ExecuteParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     deposit(params: DepositParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     withdraw(params: WithdrawParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
+
+    // Contract authoring (synchronous, browser-safe, no network)
+    /**
+     * Pre-flight lint of raw contract source. Advisory — runs every acorn-coverable
+     * deploy rule; the isolated-vm V8 syntax compile runs only at deploy/CLI, so
+     * `authoritative` is always false.
+     */
+    validateContract(code: string): ContractValidationResult;
+    /** Return the source of a contract template or pattern by name (throws if unknown). */
+    scaffold(name: string): string;
+    /** List the scaffoldable template and pattern names. */
+    listTemplates(): ContractTemplateList;
 
     /** Create a bound wallet session for repeated actions from one address */
     session(wif: string, opts?: WalletSessionOpts): WalletSession;
