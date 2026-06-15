@@ -26,6 +26,7 @@
  ********************************************************************/
 
 const crypto = require('crypto');
+const eq     = require('./equivocation_header.js');
 
 // ASN.1 DER prefix for Ed25519 SPKI — mirrors the hub's ValidatorIdentity and
 // the indexer's ed25519.js, so validator signatures verify identically here.
@@ -37,9 +38,16 @@ const SPKI_ED25519_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
 //   XCHECKPOINT|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK
 function canonicalCheckpoint(cp){
     if (!cp) throw new Error('CheckpointVerifier: checkpoint object required');
-    return ['XCHECKPOINT', cp.chain, cp.network, String(cp.block_index), cp.block_hash,
+    let raw = ['XCHECKPOINT', cp.chain, cp.network, String(cp.block_index), cp.block_hash,
             cp.ledger_hash, cp.actions_hash, cp.contract_hash,
             String(cp.checkpoint_seq), String(cp.snapshot_block)].join('|');
+    // At/above the EQUIV flag-day (gated on the BTC snapshot_block + network) the v0
+    // canonical is wrapped in the uniform header (TAG=XCHECKPOINT, v0 ROUND_ID, VIEW=0);
+    // below it, the bare bytes — must byte-match the hub + indexer.
+    if(eq.isEquivHeaderActive(cp.snapshot_block, cp.network))
+        return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,
+            cp.chain + '|' + cp.network + '|' + cp.block_index + '|' + cp.checkpoint_seq, 0, raw);
+    return raw;
 }
 
 // Verify one Ed25519 signature over a UTF-8 payload (never throws).
