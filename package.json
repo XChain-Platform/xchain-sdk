@@ -52,6 +52,7 @@
     "scripts": {
         "api": "node ./src/api.js",
         "test": "mocha --timeout 5000 --recursive 'test/unit/**/*.test.js'",
+        "sync:templates": "node scripts/sync-templates.js",
         "ci": "mocha --timeout 5000 --recursive 'test/unit/**/*.test.js' --exit",
         "coverage": "c8 --reporter=text --reporter=html --include 'src/**/*.js' mocha --timeout 5000 --recursive 'test/unit/**/*.test.js' --exit",
         "test:smoke": "mocha --timeout 15000 --recursive 'test/smoke/**/*.test.js'",

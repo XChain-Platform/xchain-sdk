@@ -46,6 +46,7 @@ const Workflows         = require('./workflows.js');
 const { publicDefaults } = require('./endpoints.js');
 const { SDKConfigError, SDKExplorerError, SDKContractError } = require('./errors.js');
 const { lintSource } = require('./contract/lint-core.js');
+const CONTRACT_SOURCES = require('./contract/templates.js');
 
 class XChainSDK {
 
@@ -460,6 +461,32 @@ class XChainSDK {
     validateContract(code) {
         const { errors, warnings } = lintSource(code);
         return { valid: errors.length === 0, errors, warnings, authoritative: false };
+    }
+
+    // Return the source of a contract template or pattern by name, ready to
+    // customize and deploy (synchronous, no network, browser-safe). Sources are
+    // the audited xchain-contracts library, embedded at build time. Templates:
+    // 'escrow' | 'vesting' | 'crowdsale' | 'amm'. Patterns: 'access-control' |
+    // 'pausable' | 'safe-transfer' | 'validation' | 'state-machine'.
+    // Throws SDKContractError('TEMPLATE_NOT_FOUND') for an unknown name.
+    scaffold(name) {
+        const b64 = (CONTRACT_SOURCES.templates && CONTRACT_SOURCES.templates[name]) ||
+                    (CONTRACT_SOURCES.patterns && CONTRACT_SOURCES.patterns[name]);
+        if (!b64) {
+            const avail = this.listTemplates();
+            throw new SDKContractError('TEMPLATE_NOT_FOUND',
+                'No template or pattern named "' + name + '". Available templates: ' +
+                avail.templates.join(', ') + '; patterns: ' + avail.patterns.join(', '));
+        }
+        return Buffer.from(b64, 'base64').toString('utf8');
+    }
+
+    // List the available scaffold names: { templates: [...], patterns: [...] }.
+    listTemplates() {
+        return {
+            templates: Object.keys(CONTRACT_SOURCES.templates || {}),
+            patterns:  Object.keys(CONTRACT_SOURCES.patterns || {})
+        };
     }
 
     // Lint params.CODE (raw source) before a DEPLOY action is built.
