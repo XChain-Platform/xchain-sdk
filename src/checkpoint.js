@@ -68,7 +68,7 @@ function verifySignature(payload, sigHex, pubkeyHex){
 function verifyCheckpoint(checkpoint, validators){
     let canonical = canonicalCheckpoint(checkpoint);
     let qualified = new Set((validators || []).map(p => String(p && p.pubkey !== undefined ? p.pubkey : p).toLowerCase()));
-    let quorum    = (qualified.size <= 1) ? 1 : (2 * Math.floor((qualified.size - 1) / 3) + 1);
+    let quorum    = (qualified.size <= 1) ? 1 : Math.max(2 * Math.floor((qualified.size - 1) / 3) + 1, Math.ceil((qualified.size + 1) / 2));
 
     let sigs = checkpoint.validator_signatures;
     if (typeof sigs === 'string'){

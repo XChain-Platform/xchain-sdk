@@ -60,6 +60,23 @@ describe('CheckpointVerifier (SDK)', function () {
         assert.strictEqual(result.quorum, 3);
     });
 
+    it('floors quorum at a simple majority: N=3 requires 2, not bare 2f+1=1', function () {
+        // Spec (ANCHOR.md): quorum = max(2f+1, ceil((N+1)/2)). At N=3 bare 2f+1
+        // is 1, but the floor lifts it to 2. A checkpoint carrying a single
+        // Byzantine oracle_publish signature (within the f=1 budget) must NOT
+        // verify — the SDK must match the consensus producers, not bare PBFT.
+        let keys = [makeKeypair(), makeKeypair(), makeKeypair()];
+        let cp = makeCheckpoint();
+        let canonical = Checkpoint.canonicalCheckpoint(cp);
+        // Only 1 of 3 signs.
+        cp.validator_signatures = JSON.stringify([
+            { pubkey: keys[0].pubkeyHex, sig: signHex(keys[0].privateKey, canonical) }]);
+        let result = Checkpoint.verifyCheckpoint(cp, keys.map(k => k.pubkeyHex));
+        assert.strictEqual(result.quorum, 2);                                          // floored, not 1
+        assert.strictEqual(result.validSigs, 1);
+        assert.strictEqual(result.valid, false);                                       // 1 < quorum 2
+    });
+
     it('rejects below quorum, unknown signers, and duplicated pubkeys', function () {
         let keys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
         let outsider = makeKeypair();
