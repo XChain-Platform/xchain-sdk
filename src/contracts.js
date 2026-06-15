@@ -18,12 +18,18 @@
  * validation, float detection, code size checks, gas estimation.
  *
  * These are pure functions with no dependency on isolated-vm.
- * acorn/acorn-walk are optional — validate() and checkFloatUsage()
- * degrade gracefully when they are not installed.
+ *
+ * validate() / checkFloatUsage() delegate to ./contract/lint-core.js — a
+ * BYTE-IDENTICAL vendored copy of xchain-vm/src/lint-core.js — so the SDK's
+ * pre-flight verdict matches the indexer's deploy-time validation exactly
+ * (no false greens). A CI parity guard (sha256) fails the build on drift.
+ * lint-core pulls acorn/acorn-walk/astring (pure JS, browser-safe; now hard
+ * deps), never isolated-vm.
  *
  ********************************************************************/
 
 const { SDKContractError } = require('./errors.js');
+const { lintSource, findFloatWarnings } = require('./contract/lint-core.js');
 
 // 64KB contract source code limit — canonical value in
 // xchain-documentation/protocol/constants.js (MAX_CODE_SIZE), also enforced by
@@ -74,63 +80,34 @@ class ContractUtils {
         return Buffer.from(b64String, 'base64').toString('utf8');
     }
 
-    // Lightweight syntax pre-validation using acorn (no V8 required)
-    // Returns { valid, error?, warnings? }
+    // Pre-flight syntax/rule validation (no V8 / isolated-vm required). Runs every
+    // acorn-coverable deploy check via the vendored lint-core (deploy parity), so a
+    // valid result here means the contract clears the indexer's syntax gate too —
+    // EXCEPT the V8-only step-1 compile, which can only run at deploy/CLI.
+    // Returns { valid, error?, warnings? } (back-compat shape; error = first error).
     validate(sourceCode) {
         if (typeof sourceCode !== 'string')
             return { valid: false, error: 'Contract source must be a string' };
 
-        // Check code size first
+        // Check code size first (SDK-side guard; mirrors MAX_CODE_SIZE)
         let sizeCheck = this.checkCodeSize(sourceCode);
         if (!sizeCheck.withinLimit)
             return { valid: false, error: 'Contract code exceeds ' + MAX_CODE_SIZE + ' byte limit (' + sizeCheck.bytes + ' bytes)' };
 
-        let parser = loadAcorn();
-        if (!parser)
-            return { valid: false, error: 'acorn is required for syntax validation. Install it with: npm install acorn' };
+        let { errors, warnings } = lintSource(sourceCode);
+        let warns = warnings.map((w) => w.message);
+        if (errors.length > 0)
+            return { valid: false, error: errors[0].message, warnings: warns.length > 0 ? warns : undefined };
 
-        try {
-            parser.parse(sourceCode, { ecmaVersion: 2020, sourceType: 'script' });
-        } catch (e) {
-            return { valid: false, error: 'Syntax error: ' + e.message };
-        }
-
-        // Check for __gas reserved identifier
-        if (/__gas\b/.test(sourceCode))
-            return { valid: false, error: 'Reserved identifier: __gas is used internally by the VM gas metering system' };
-
-        // Collect float warnings
-        let warnings = this.checkFloatUsage(sourceCode);
-
-        return { valid: true, warnings: warnings.length > 0 ? warnings : undefined };
+        return { valid: true, warnings: warns.length > 0 ? warns : undefined };
     }
 
-    // Detect float literal usage in contract source via AST walk
-    // Returns array of warning strings
+    // Detect float literal usage in contract source. Delegates to the vendored
+    // lint-core so the warning text matches the VM / deploy path exactly.
+    // Returns array of warning strings.
     checkFloatUsage(sourceCode) {
-        let warnings = [];
-        let parser = loadAcorn();
-        let walker = loadAcornWalk();
-
-        if (!parser || !walker) return warnings;
-
-        let ast;
-        try {
-            ast = parser.parse(sourceCode, { ecmaVersion: 2020, sourceType: 'script', locations: true });
-        } catch (e) {
-            return warnings;
-        }
-
-        walker.simple(ast, {
-            Literal(node) {
-                if (typeof node.value === 'number' && String(node.value).includes('.')) {
-                    let line = node.loc ? node.loc.start.line : '?';
-                    warnings.push('Float literal (' + node.value + ') at line ' + line + ' — use xchain.math for deterministic arithmetic');
-                }
-            }
-        });
-
-        return warnings;
+        if (typeof sourceCode !== 'string') return [];
+        return findFloatWarnings(sourceCode).map((w) => w.message);
     }
 
     // Check if contract source is within the 64KB byte limit

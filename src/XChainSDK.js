@@ -44,7 +44,8 @@ const LifecycleManager  = require('./lifecycleManager.js');
 const WalletSession     = require('./walletSession.js');
 const Workflows         = require('./workflows.js');
 const { publicDefaults } = require('./endpoints.js');
-const { SDKConfigError, SDKExplorerError } = require('./errors.js');
+const { SDKConfigError, SDKExplorerError, SDKContractError } = require('./errors.js');
+const { lintSource } = require('./contract/lint-core.js');
 
 class XChainSDK {
 
@@ -450,8 +451,57 @@ class XChainSDK {
     async delegate(params, encoder)         { return this.createAction({ action: 'DELEGATE', params, encoder }); }
     async collect(params, encoder)          { return this.createAction({ action: 'COLLECT', params, encoder }); }
 
+    // Pre-flight lint of raw contract source (plain JS, pre-base64). Advisory,
+    // synchronous, no network, browser-safe — runs every acorn-coverable deploy
+    // check via the vendored lint-core. The isolated-vm V8 syntax compile runs
+    // only at deploy/CLI, so authoritative is always false; the CLI / on-chain
+    // deploy has the final word.
+    // @returns {{ valid:boolean, errors:Rule[], warnings:Rule[], authoritative:false }}
+    validateContract(code) {
+        const { errors, warnings } = lintSource(code);
+        return { valid: errors.length === 0, errors, warnings, authoritative: false };
+    }
+
+    // Lint params.CODE (raw source) before a DEPLOY action is built.
+    //   'block' (default): throw on any error — saves a guaranteed-to-fail on-chain tx
+    //   'warn'           : log errors + warnings, proceed
+    //   'off'            : skip entirely
+    // Chunked/hash-only deploys (no inline CODE) are skipped here — deployContract()
+    // lints the assembled source before chunking instead.
+    _preflightContractLint(params, mode) {
+        mode = mode || 'block';
+        if (mode === 'off') return;
+
+        let code;
+        if (params && typeof params.CODE === 'string') code = params.CODE;
+        else if (params && typeof params.CODE_ENCODING === 'string') {
+            try { code = this.contracts.decode(params.CODE_ENCODING); } catch (e) { return; }
+        }
+        if (typeof code !== 'string') return;
+
+        const result = this.validateContract(code);
+        for (const w of result.warnings)
+            console.warn('DEPLOY lint warning: ' + w.message);
+        if (result.valid) return;
+
+        if (mode === 'warn') {
+            for (const e of result.errors)
+                console.warn('DEPLOY lint error: ' + e.message);
+            return;
+        }
+        // 'block'
+        const first = result.errors[0];
+        const more = result.errors.length > 1 ? ' (+' + (result.errors.length - 1) + ' more)' : '';
+        throw new SDKContractError('CONTRACT_LINT_FAILED',
+            'Contract failed pre-flight validation: ' + first.message + more +
+            " — fix the contract or pass { lint: 'off' } to skip (it would still be rejected at deploy).");
+    }
+
     // VM action convenience methods
-    async deploy(params, encoder)    { return this.createAction({ action: 'DEPLOY', params, encoder }); }
+    async deploy(params, encoder, opts = {}) {
+        this._preflightContractLint(params, opts.lint);
+        return this.createAction({ action: 'DEPLOY', params, encoder });
+    }
     async execute(params, encoder)   { return this.createAction({ action: 'EXECUTE', params, encoder }); }
     async deposit(params, encoder)   { return this.createAction({ action: 'DEPOSIT', params, encoder }); }
     async withdraw(params, encoder)  { return this.createAction({ action: 'WITHDRAW', params, encoder }); }
@@ -498,7 +548,7 @@ class XChainSDK {
     async deployAndFund(wif, deployParams, deposits, opts) {
         return this.workflows.deployAndFund(wif, deployParams, deposits, opts);
     }
-    // Deploy auto-selecting single-shot vs chunked (DEPLOYCHUNK + DEPLOY v2/v3) by source
+    // Deploy auto-selecting single-shot vs chunked (DEPLOY v4 carriers + DEPLOY v2/v3) by source
     // size, then optionally fund. Pass raw `code` so the planner can size it. See
     // workflows.deployContract / chunkHelper. Spec: protocol/actions/DEPLOY.md.
     async deployContract(wif, deployParams, deposits, opts) {

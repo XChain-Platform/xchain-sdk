@@ -185,7 +185,7 @@ describe('ContractUtils', function () {
             if (result.valid) {
                 // acorn is available
                 assert.ok(Array.isArray(result.warnings));
-                assert.ok(result.warnings.some(w => w.includes('Float')));
+                assert.ok(result.warnings.some(w => w.includes('decimal number literal')));
             }
         });
 
@@ -212,7 +212,7 @@ describe('ContractUtils', function () {
             let warnings = utils.checkFloatUsage('var pi = 3.14;');
             // If acorn is installed, we get a warning
             if (warnings.length > 0) {
-                assert.ok(warnings[0].includes('Float'));
+                assert.ok(warnings[0].includes('decimal number literal'));
             }
         });
 

@@ -209,7 +209,7 @@ class Workflows {
 
     // Deploy a smart contract, AUTO-SELECTING single-shot vs chunked, then optionally
     // deposit initial tokens. If base64(code) fits one DEPLOY action it deploys inline
-    // (DEPLOY v0/v1); otherwise it submits each base64 slice as a DEPLOYCHUNK (awaiting
+    // (DEPLOY v0/v1); otherwise it submits each base64 slice as a DEPLOY v4 carrier (awaiting
     // indexer confirmation per chunk) then an assembling DEPLOY v2/v3 carrying the
     // CODE_HASH. Pass raw `code` (not codeEncoding/codeHash) so the planner can size it.
     //
@@ -228,6 +228,12 @@ class Workflows {
         let slashDst = (deployParams.slashDestination !== undefined) ? deployParams.slashDestination : deployParams.SLASH_DESTINATION;
         let hasStaking = (cooldown !== undefined && cooldown !== null && cooldown !== '');
 
+        // Pre-flight lint the fully-assembled source ONCE, before chunking, so the
+        // single-shot and chunked paths share one verdict (default 'block'; pass
+        // opts.lint = 'warn' | 'off' to relax). Skipped when the caller pre-encoded.
+        if (code !== undefined && code !== null)
+            this.sdk._preflightContractLint({ CODE: String(code) }, opts.lint);
+
         // No raw code (caller pre-encoded) → defer to the normal single-shot deploy.
         let plan = (code !== undefined && code !== null)
             ? chunkHelper.planDeploy(String(code), { gasLimit, constructorParams: ctor })
@@ -238,7 +244,7 @@ class Workflows {
         if (plan.single) {
             deployResult = await session.deploy(deployParams, {}, opts);
         } else {
-            // Phase 1: each ordered base64 slice as its own DEPLOYCHUNK, confirmed in turn so
+            // Phase 1: each ordered base64 slice as its own DEPLOY v4 carrier, confirmed in turn so
             // they are all on-chain (at lower action_index) before the assembling DEPLOY runs.
             for (let i = 0; i < plan.parts.length; i++) {
                 let r = await session.deployChunk({
