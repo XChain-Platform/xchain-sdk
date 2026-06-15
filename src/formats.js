@@ -21,7 +21,7 @@
 var Formats = {
 
     ADDRESS: {
-        0: 'VERSION|FEE_PREFERENCE|REQUIRE_MEMO|MEMO',
+        0: 'VERSION|FEE_PREFERENCE|REQUIRE_MEMO|DISPENSER_PREFERENCE|MEMO',
         // v1: self-signed account controller bind/unbind (programmable policy layer).
         1: 'VERSION|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO'
     },
@@ -143,6 +143,12 @@ var Formats = {
         0: 'VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_OWNERSHIP|GET_COIN|GET_TICK|GET_AMOUNT|GET_OWNERSHIP|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO',
         1: 'VERSION|ORDER_ACTION_INDEX|MEMO',
         2: 'VERSION|ORDER_ACTION_INDEX|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO'
+    },
+
+    PRICE: {
+        // v0 (validator PBFT COIN/FIAT snapshot) is validator-broadcast only — not SDK-encodable.
+        // v1: permissionless user-run TOKEN/FIAT price oracle (no stake required).
+        1: 'VERSION|COIN|TICK|FIAT|VALUE|FEE|MEMO'
     },
 
     SEND: {

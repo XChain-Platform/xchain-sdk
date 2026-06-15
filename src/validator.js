@@ -80,6 +80,7 @@ const ACTION_REQUIRED_FIELDS = {
     MESSAGE:            ['COIN', 'DESTINATION'],
     MINT:               ['TICK', 'AMOUNT'],
     ORDER:              [],
+    PRICE:              ['COIN', 'TICK', 'FIAT', 'VALUE'],
     SEND:               ['TICK', 'AMOUNT', 'DESTINATION'],
     SLEEP:              ['RESUME_BLOCK'],
     STAKE:              ['AMOUNT', 'SIGNING_PUBKEY'],
@@ -275,6 +276,12 @@ class Validator {
         if (field === 'FEE_PREFERENCE') {
             if (!this.util.isValidValue(value, [1, 2, 3]))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'FEE_PREFERENCE must be 1 (destroy), 2 (protocol), or 3 (community)', { field, value, constraint: { valid: [1, 2, 3] } }));
+        }
+
+        // DISPENSER_PREFERENCE validation (ADDRESS action) — who may open dispensers on this address
+        if (field === 'DISPENSER_PREFERENCE') {
+            if (!this.util.isValidValue(value, [1, 2]))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'DISPENSER_PREFERENCE must be 1 (owner only) or 2 (anyone)', { field, value, constraint: { valid: [1, 2] } }));
         }
 
         // LIST TYPE validation

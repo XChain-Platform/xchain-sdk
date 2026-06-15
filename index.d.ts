@@ -754,6 +754,266 @@ export declare class ControllerHelpers {
 
 
 /*
+ *  AttestationHelpers — pure builders for External Attestation Framework
+ *  payloads (used inside contract source; not submitted by the SDK directly).
+ *  Spec: protocol/External_Attestation_Framework.md
+ */
+
+export interface AttestationLlmOpts {
+    /** Prompt text to send to the LLM provider (required) */
+    prompt: string;
+    /** Optional system message */
+    system?: string;
+    /** Maximum tokens in the response */
+    maxTokens?: number;
+    /** Response format: 'text' (default) or 'json_object' */
+    format?: 'text' | 'json_object';
+    /** Sampling temperature */
+    temperature?: number;
+    /** Envelope version (default: current) */
+    envelopeVersion?: number;
+}
+
+export interface AttestationRequestOpts {
+    /** Number of independent providers that must agree (default: 1) */
+    redundancy?: number;
+    /** Block deadline for the attestation response */
+    deadlineBlocks?: number;
+    /** Tick used to pay the attestation fee (must be 'XCHAIN' for v1 consensus) */
+    feeTick?: string;
+    /** Amount to pay the attestation provider (decimal string) */
+    feeAmount?: string;
+}
+
+export declare const AttestationHelpers: {
+    /** Build a JSON envelope string for an LLM attestation provider request */
+    llm(opts: AttestationLlmOpts): string;
+    /** Validate and return an https-only URL for an http_get attestation provider request (max 2048 bytes) */
+    httpGet(opts: string | { url: string }): string;
+    /** Build the options object that the VM gateway reads for a provider request */
+    requestOptions(opts?: AttestationRequestOpts): AttestationRequestOpts;
+};
+
+
+/*
+ *  GatedFileUtils — AES-256-GCM encryption / key-handoff (de)serialization
+ *  for FILE v1 token-gated content.
+ *  Spec: protocol/TOKEN_GATED_CONTENT.md
+ */
+
+export interface GenerateKeyResult {
+    /** 32-byte symmetric key */
+    key: Buffer;
+    /** hex sha256(key) — matches the FILE v1 KEY_HASH field */
+    keyHash: string;
+}
+
+export interface EncryptFileResult {
+    /** Encrypted bytes: [iv(12)][authTag(16)][ciphertext] */
+    ciphertext: Buffer;
+    /** 32-byte symmetric key */
+    key: Buffer;
+    /** hex sha256(key) */
+    keyHash: string;
+}
+
+export interface EncryptPackResult {
+    /** One ciphertext per plaintext, all sharing the same key */
+    ciphertexts: Buffer[];
+    /** 32-byte symmetric key */
+    key: Buffer;
+    /** hex sha256(key) */
+    keyHash: string;
+}
+
+// Internal: reached only via `sdk.gatedFile`; not re-exported from index.js, so declared (not exported) here.
+declare class GatedFileUtils {
+    /** Generate a fresh random 256-bit symmetric key */
+    generateKey(): GenerateKeyResult;
+
+    /** Encrypt plaintext under an existing key (pack composition) */
+    encryptWithKey(plaintext: Buffer | string, key: Buffer): Buffer;
+
+    /** Single-file convenience: generate a key then encrypt in one call */
+    encryptFileBytes(plaintext: Buffer | string): EncryptFileResult;
+
+    /** Pack convenience: generate one key, encrypt N plaintexts under it */
+    encryptPack(plaintexts: Array<Buffer | string>): EncryptPackResult;
+
+    /**
+     * Decrypt ciphertext produced by encryptWithKey / encryptFileBytes / encryptPack.
+     * @throws SDKGatedFileError on GCM authentication failure.
+     */
+    decryptFileBytes(ciphertext: Buffer, key: Buffer): Buffer;
+
+    /** Verify that a symmetric key matches a KEY_HASH (hex sha256) */
+    verifyKey(key: Buffer, keyHash: string): boolean;
+
+    /**
+     * Serialize one or more keys into the binary handoff payload
+     * (sent via MESSAGE v2 ECIES binary mode).
+     * Wire: [0x01][32-byte K1][32-byte K2]...
+     */
+    serializeKeyPayload(keys: Buffer[] | Record<string, Buffer>): Buffer;
+
+    /**
+     * Parse a binary handoff payload after ECIES decryption.
+     * Returns an array of 32-byte candidate keys.
+     * @throws SDKGatedFileError if the payload is malformed.
+     */
+    parseKeyPayload(payload: Buffer | string): Buffer[];
+}
+
+
+/*
+ *  MuSig2 — BIP327 key aggregation, nonce generation, and Schnorr
+ *  multi-signature primitives.
+ */
+
+export interface MuSig2KeyGenContext {
+    /** 33-byte compressed aggregated public key */
+    aggPublicKey: Uint8Array;
+    /** 32-byte x-only form, suitable for Taproot */
+    xOnlyPubkey: Uint8Array;
+    gacc: Uint8Array;
+    tacc: Uint8Array;
+}
+
+export interface MuSig2GenerateNonceParams {
+    /** Our 33-byte compressed public key */
+    publicKey: Uint8Array;
+    /** Optional secret key (32 bytes) — improves nonce randomness */
+    secretKey?: Uint8Array;
+    /** 32 bytes of session randomness; library uses secure random if omitted */
+    sessionId?: Uint8Array;
+    /** Aggregated x-only public key (binds nonce to the key-agg context) */
+    xOnlyPublicKey?: Uint8Array;
+    /** 32-byte message to be signed */
+    msg?: Uint8Array;
+    /** Additional entropy */
+    extraInput?: Uint8Array;
+}
+
+export interface MuSig2PartialSignParams {
+    /** 32-byte secret key */
+    secretKey: Uint8Array;
+    /** 66-byte public nonce from generateNonce (must be from this instance) */
+    publicNonce: Uint8Array;
+    /** Session key from startSession */
+    sessionKey: object;
+    /** Self-verify the partial signature (default: true) */
+    verify?: boolean;
+}
+
+export interface MuSig2VerifyPartialParams {
+    /** 32-byte partial signature */
+    sig: Uint8Array;
+    /** 33-byte compressed public key of the signer */
+    publicKey: Uint8Array;
+    /** 66-byte public nonce */
+    publicNonce: Uint8Array;
+    /** Session key from startSession */
+    sessionKey: object;
+}
+
+export declare class MuSig2 {
+    /**
+     * Aggregate N public keys into a single MuSig2 key-gen context.
+     * @param publicKeys  33-byte compressed pubkeys (hex string or Uint8Array).
+     * @param tweaks      Optional post-aggregation tweaks.
+     */
+    aggregateKeys(publicKeys: Array<Uint8Array | string>, tweaks?: Uint8Array[]): MuSig2KeyGenContext;
+
+    /**
+     * Sort public keys into BIP327 canonical order.
+     */
+    sortKeys(publicKeys: Array<Uint8Array | string>): Uint8Array[];
+
+    /**
+     * Generate a MuSig2 nonce (round 1).
+     * Returns a 66-byte public nonce; secret nonce is cached internally.
+     */
+    generateNonce(params: MuSig2GenerateNonceParams): Uint8Array;
+
+    /**
+     * Aggregate N 66-byte public nonces into a single 66-byte aggNonce.
+     */
+    aggregateNonces(publicNonces: Uint8Array[]): Uint8Array;
+
+    /**
+     * Start a MuSig2 signing session.
+     * Returns a session key consumed by partialSign / verifyPartial / aggregateSignatures.
+     */
+    startSession(aggNonce: Uint8Array, msg: Uint8Array, publicKeys: Array<Uint8Array | string>, tweaks?: Uint8Array[]): object;
+
+    /**
+     * Produce a 32-byte partial signature using the secret nonce cached by generateNonce.
+     */
+    partialSign(params: MuSig2PartialSignParams): Uint8Array;
+
+    /**
+     * Verify a partial signature. Returns true if valid.
+     */
+    verifyPartial(params: MuSig2VerifyPartialParams): boolean;
+
+    /**
+     * Aggregate N 32-byte partial signatures into a single 64-byte Schnorr signature.
+     */
+    aggregateSignatures(sigs: Uint8Array[], sessionKey: object): Uint8Array;
+}
+
+
+/*
+ *  chunkHelper — chunked DEPLOY utilities
+ *
+ *  planDeploy() decides single-shot vs chunked and produces deterministic
+ *  base64 slices + SHA-256 hash for the DEPLOY v4 carrier / v2/v3 assembler flow.
+ */
+
+export interface DeployPlanSingle {
+    codeHash: string;
+    single: true;
+    parts: null;
+    totalChunks: 0;
+}
+
+export interface DeployPlanChunked {
+    codeHash: string;
+    single: false;
+    /** Ordered base64 slices — submit each as a DEPLOY v4 carrier action */
+    parts: string[];
+    totalChunks: number;
+}
+
+export type DeployPlan = DeployPlanSingle | DeployPlanChunked;
+
+export interface DeployPlanOpts {
+    gasLimit?: number | string;
+    constructorParams?: string | string[];
+}
+
+export declare const chunkHelper: {
+    /** SHA-256 hex of the UTF-8 source (matches the indexer's codeHash) */
+    codeHashOf(code: string): string;
+    /** True when base64(code) fits a single inline DEPLOY action (< 8192-byte cap) */
+    fitsSingleDeploy(code: string, opts?: DeployPlanOpts): boolean;
+    /** Split base64(code) into ordered slices each ≤ 7800 bytes */
+    splitCode(code: string): string[];
+    /**
+     * Plan a deploy: single-shot or chunked.
+     * @throws Error if the code needs more than MAX_DEPLOY_CHUNKS (16) slices.
+     */
+    planDeploy(code: string, opts?: DeployPlanOpts): DeployPlan;
+    /** Maximum total action-data length (8192 bytes) */
+    readonly MAX_ACTION_DATA_LENGTH: number;
+    /** Maximum bytes per DEPLOYCHUNK part (7800 bytes) */
+    readonly MAX_DEPLOYCHUNK_PART_BYTES: number;
+    /** Maximum number of chunk carrier actions (16) */
+    readonly MAX_DEPLOY_CHUNKS: number;
+};
+
+
+/*
  *  Contract client (bound to a specific deployed contract)
  */
 
@@ -884,6 +1144,13 @@ export declare class XChainSDK {
 
     /** Create a bound wallet session for repeated actions from one address */
     session(wif: string, opts?: WalletSessionOpts): WalletSession;
+
+    /**
+     * Create a policy-enforced agent session — a WalletSession with a
+     * declarative spending policy (fail-closed). Ideal for handing a key
+     * to an automated agent with a bounded blast radius.
+     */
+    agentSession(wif: string, policy: AgentSessionPolicy, opts?: WalletSessionOpts): AgentSession;
 
     /** Create a new `BatchBuilder` for fluent BATCH construction. */
     batch(): BatchBuilder;
@@ -1184,6 +1451,12 @@ export declare class XChainSDK {
     /** Pure controller (programmable-policy) param builders (no network). Spec: protocol/Controller_Bound_Tokens.md */
     readonly controller: ControllerHelpers;
 
+    /**
+     * AES-256-GCM encryption / key-handoff utilities for FILE v1 token-gated content.
+     * Spec: protocol/TOKEN_GATED_CONTENT.md
+     */
+    readonly gatedFile: GatedFileUtils;
+
 
     /*
      *  Wallet convenience methods
@@ -1354,6 +1627,11 @@ export declare class SDKWalletError extends SDKError {}
 export declare class SDKAuthError extends SDKError {}
 export declare class SDKMessagingError extends SDKError {}
 export declare class SDKActionError extends SDKError {}
+export declare class SDKMuSigError extends SDKError {}
+// Internal: thrown by GatedFileUtils but not re-exported from index.js — declared (not exported) for @throws references.
+declare class SDKGatedFileError extends SDKError {}
+export declare class SDKPolicyError extends SDKError {}
+export declare class SDKX402Error extends SDKError {}
 
 
 /*
@@ -1514,7 +1792,19 @@ export declare class WalletSession {
     delegate(params: DelegateParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
     revokeDelegation(params: RevokeDelegationParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
     claimRewards(params?: ClaimRewardsParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    collect(params: ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+
+    // Contract-targeted staking (VERSION forced to prevent accidental capability-staking)
+    /** STAKE V3 — stake to a specific deployed contract (forces VERSION=3) */
+    stakeToContract(params: ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    /** UNSTAKE V1 — unstake from a specific deployed contract (forces VERSION=1) */
+    unstakeFromContract(params: ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    /** DELEGATE V1 — rotate signing key for a specific deployed contract (forces VERSION=1) */
+    delegateForContract(params: ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+
     deploy(params: DeployParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    /** Submit a single base64 code slice as a DEPLOY v4 carrier (chunked-deploy phase 1) */
+    deployChunk(params: ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
     execute(params: ExecuteParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
     deposit(params: DepositParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
     withdraw(params: WithdrawParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
@@ -1532,6 +1822,243 @@ export declare class WalletSession {
     /** Estimate fees for an action using this session's credentials */
     estimateFees(actionData: { action: string; params: ActionParams }, encoderOpts?: Partial<EncoderOptions>): Promise<EstimateFeeResult>;
 }
+
+
+/*
+ *  AgentSession class — WalletSession with a declarative spending policy
+ *
+ *  Wraps WalletSession with a policy enforced at submit(). Fail-closed:
+ *  no allowedActions means nothing is allowed. State persists across
+ *  restarts (stateFile) so a crash-loop cannot reset the spending window.
+ */
+
+export interface AgentSessionMaxPerWindow {
+    /** Length of the rolling window in hours (required when maxPerWindow is set) */
+    hours: number;
+    /** Per-tick cumulative amount caps within the window; use '*' as a catch-all key */
+    perTick?: Record<string, string>;
+    /** Maximum number of actions in the window */
+    maxActions?: number;
+}
+
+export interface AgentSessionConfirmAbove {
+    /** Per-tick threshold above which the handler must approve; use '*' as catch-all */
+    perTick?: Record<string, string>;
+    /** Async approval callback — return true to allow, false to deny */
+    handler: (ctx: {
+        action: string;
+        tick?: string;
+        amount?: string;
+        destinations: string[];
+        address: string;
+        windowUsage: { count: number; perTick: Record<string, string>; hours: number | null };
+    }) => Promise<boolean> | boolean;
+}
+
+export interface AgentSessionPolicy {
+    /** Allowlist of ACTION names this session may submit (required; nothing allowed by default) */
+    allowedActions: string[];
+    /** Allowlist of destination addresses; omit to allow any destination */
+    allowedDestinations?: string[];
+    /** Per-action per-tick amount caps; use '*' as a catch-all tick key */
+    maxPerAction?: Record<string, Record<string, string>>;
+    /** Rolling-window caps across all actions */
+    maxPerWindow?: AgentSessionMaxPerWindow;
+    /** Require async approval for amounts above a threshold */
+    confirmAbove?: AgentSessionConfirmAbove;
+    /** Observer called on every policy denial (must not throw) */
+    onPolicyViolation?: (violation: { code: string; message: string; address: string; [key: string]: any }) => void;
+    /** Path to the usage persistence file (default: ~/.xchain/agent-usage-<address>.json) */
+    stateFile?: string;
+}
+
+export declare class AgentSession extends WalletSession {
+    readonly policy: {
+        allowedActions: Set<string>;
+        allowedDestinations: Set<string> | null;
+        maxPerAction: Record<string, Record<string, string>> | null;
+        maxPerWindow: AgentSessionMaxPerWindow | null;
+        confirmAbove: AgentSessionConfirmAbove | null;
+        onPolicyViolation: ((violation: any) => void) | null;
+    };
+
+    constructor(sdk: XChainSDK, wif: string, policy: AgentSessionPolicy, opts?: WalletSessionOpts);
+
+    /**
+     * Submit an action through the policy chokepoint.
+     * Resolves with the normal SubmitActionResult plus a `policy` summary.
+     * @throws SDKPolicyError if the action is denied.
+     */
+    submit(
+        actionData: { action: string; params: ActionParams },
+        encoderOpts?: Partial<EncoderOptions>,
+        submitOpts?: Partial<SubmitActionOpts>
+    ): Promise<SubmitActionResult & {
+        policy: {
+            action: string;
+            tick?: string;
+            amount?: string;
+            confirmed?: boolean;
+            windowUsage: { count: number; perTick: Record<string, string>; hours: number | null };
+        };
+    }>;
+}
+
+
+/*
+ *  X402 — HTTP 402 "Payment Required" flow settled in XChain tokens
+ *
+ *  Three payment schemes:
+ *    xchain-send       pay-per-call SEND with MEMO = invoice nonce
+ *    xchain-dispenser  hold-to-access (caller holds >= minBalance of holdTick)
+ *    xchain-deposit    metered: confirmed deposits fund a local spend ledger
+ */
+
+export interface X402SendSchemeOpts {
+    tick: string;
+    amount: string | number;
+    payTo: string;
+    /** 0 accepts mempool visibility (provisional); 1+ requires indexed confirmation (default: 1) */
+    minConfirmations?: number;
+    /** Invoice TTL in milliseconds (default: 5 minutes) */
+    ttlMs?: number;
+}
+
+export interface X402DispenserSchemeOpts {
+    holdTick: string;
+    /** Minimum token balance the payer must hold (default: '1') */
+    minBalance?: string | number;
+    dispenserIndex?: number | string;
+    dispenserAddress?: string | null;
+}
+
+export interface X402DepositSchemeOpts {
+    tick: string;
+    depositAddress: string;
+    pricePerCall: string | number;
+    /** Directory for the per-payer spend ledger (default: stateDir/deposits/<coin>) */
+    ledgerDir?: string;
+}
+
+export interface X402GatewayOptions {
+    /** Coin this gateway operates on (BTC / LTC / DOGE) */
+    coin: string;
+    /** An SDK ExplorerClient (or compatible) for verifying on-chain payments */
+    explorer: any;
+    /** xchain-send pay-per-call scheme config */
+    send?: X402SendSchemeOpts;
+    /** xchain-dispenser hold-to-access scheme config */
+    dispenser?: X402DispenserSchemeOpts;
+    /** xchain-deposit metered-access scheme config */
+    deposit?: X402DepositSchemeOpts;
+    /** External invoice store (for multi-node deployments); omit for file-backed single-node */
+    invoiceStore?: any;
+    /** Root directory for the file-backed state (invoices + ledgers) (default: '.x402') */
+    stateDir?: string;
+    /** Window (ms) in which a 0-conf grant must reach a confirmed block (default: 10 min) */
+    confirmWindowMs?: number;
+    /** Grace period (ms) after invoice expiry for in-flight payments (default: 10s) */
+    expiryGraceMs?: number;
+    /** Called when a provisional 0-conf grant fails to confirm within confirmWindowMs */
+    onProvisionalFailed?: ((invoice: any) => void) | null;
+    /** Human-readable description for 402 challenge bodies (default: 'Payment required') */
+    description?: string;
+}
+
+export interface X402VerifyResult {
+    ok: boolean;
+    /** Populated on success: confirmed | provisional_0conf | dispenser_verified | deposit_debited */
+    status?: string;
+    provisional?: boolean;
+    txid?: string;
+    blockIndex?: number;
+    /** Remaining deposit balance (deposit scheme only) */
+    remaining?: string;
+    /** Populated on failure */
+    code?: string;
+}
+
+export interface X402ChallengeBody {
+    x402Version: number;
+    error: string;
+    resource: string | null;
+    accepts: any[];
+    reason?: string;
+}
+
+export declare class X402Gateway {
+    readonly coin: string;
+    readonly explorer: any;
+
+    constructor(options: X402GatewayOptions);
+
+    /** Build a 402 challenge body for the given resource URL */
+    challengeBody(resource?: string): Promise<X402ChallengeBody>;
+
+    /** Parse the base64url-encoded X-Payment header into a proof object (returns null if invalid) */
+    static parseProofHeader(header: string): any | null;
+
+    /** Verify a payment proof. Returns { ok, status, txid, ... } */
+    verify(proof: any, resource?: string): Promise<X402VerifyResult>;
+
+    /** Build the base64url-encoded X-Payment-Response header value */
+    static buildResponseHeader(result: X402VerifyResult): string;
+
+    /** Return an Express-style middleware that enforces payment before calling next() */
+    middleware(): (req: any, res: any, next: () => void) => Promise<void>;
+
+    /**
+     * Low-level guard: verify payment on req, write 402 on failure.
+     * Returns true if paid (req.x402 is set); false if the response was already sent.
+     */
+    guard(req: any, res: any): Promise<boolean>;
+
+    /** Re-check provisional 0-conf grants; promote on confirmation or mark failed */
+    sweep(): Promise<void>;
+
+    /** Start the background sweeper on the given interval (default: 30s) */
+    startSweeper(intervalMs?: number): void;
+
+    /** Stop the background sweeper */
+    stopSweeper(): void;
+}
+
+export interface X402ClientOptions {
+    /** Paying WalletSession or AgentSession */
+    session: WalletSession | AgentSession;
+    /** Fetch implementation (default: global fetch) */
+    fetch?: typeof fetch;
+    /** Maximum token amount the client will auto-pay without throwing (decimal string) */
+    maxAmount?: string | number | null;
+    /** Delay between retry attempts in ms (default: 1500) */
+    retryDelayMs?: number;
+    /** Maximum number of payment-verification retry attempts (default: 40) */
+    maxRetries?: number;
+}
+
+export declare class X402Client {
+    readonly session: WalletSession | AgentSession;
+
+    constructor(options: X402ClientOptions);
+
+    /**
+     * Fetch a URL, handling HTTP 402 automatically:
+     * pays with the bound session and retries until the gateway accepts.
+     * @throws SDKX402Error on no usable scheme, price too high, or max retries exceeded.
+     */
+    fetchUrl(url: string, init?: RequestInit): Promise<Response>;
+}
+
+/**
+ * Parse a decoded XChain action string into structured fields.
+ * Returns null for malformed input. For SEND, returns per-output tuples
+ * with amount/destination/memo correctly paired (multi-output v1–v3 safe).
+ */
+export function x402ParseActionString(text: string): {
+    action: string;
+    version: string;
+    outputs: Array<{ tick: string; amount: string; destination: string; memo: string }>;
+} | null;
 
 
 /*
@@ -1636,5 +2163,40 @@ export function startREPL(options?: SDKOptions): Promise<any>;
  *  Module exports (CommonJS interop)
  */
 
-export { XChainSDK, BatchBuilder, ContractClient, ContractUtils, NftHelpers, ProjectHelpers, ControllerHelpers, WalletUtils, WalletSession, AuthUtils, CrossChainHelper, UTXOCache, SDKError, SDKValidationError, SDKFormatError, SDKEncoderError, SDKExplorerError, SDKHubError, SDKConfigError, SDKContractError, SDKWalletError, SDKAuthError, SDKMessagingError, SDKActionError };
+export {
+    XChainSDK,
+    BatchBuilder,
+    ContractClient,
+    ContractUtils,
+    NftHelpers,
+    ProjectHelpers,
+    ControllerHelpers,
+    AttestationHelpers,
+    MuSig2,
+    chunkHelper,
+    WalletUtils,
+    WalletSession,
+    AgentSession,
+    X402Gateway,
+    X402Client,
+    x402ParseActionString,
+    AuthUtils,
+    CrossChainHelper,
+    UTXOCache,
+    SDKError,
+    SDKValidationError,
+    SDKFormatError,
+    SDKEncoderError,
+    SDKExplorerError,
+    SDKHubError,
+    SDKConfigError,
+    SDKContractError,
+    SDKWalletError,
+    SDKAuthError,
+    SDKMessagingError,
+    SDKActionError,
+    SDKMuSigError,
+    SDKPolicyError,
+    SDKX402Error,
+};
 export default XChainSDK;
