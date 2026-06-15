@@ -106,6 +106,57 @@ describe('contract-lint parity + drift', function () {
         });
     });
 
+    describe('Move 2 — logic-level rules (advisory, never deploy-blocking)', function () {
+        const { CONSENSUS_RULES } = require('../../src/contract/lint-core.js');
+        let sdk;
+        before(function () { sdk = new XChainSDK({ network: 'bitcoin-regtest', noHub: true }); });
+
+        it('crossCallable non-array → error (rule crossCallable-not-array), but NOT a consensus rule', function () {
+            const r = sdk.validateContract('module.exports = { foo: function(){}, crossCallable: "oops" };');
+            assert.strictEqual(r.valid, false);
+            const e = r.errors.find(x => x.rule === 'crossCallable-not-array');
+            assert.ok(e, 'expected crossCallable-not-array error');
+            assert.strictEqual(e.severity, 'error');
+            // The chain still accepts it — it must NOT be in the deploy-blocking set.
+            assert.ok(!CONSENSUS_RULES.has('crossCallable-not-array'),
+                'crossCallable-not-array must never be a consensus (deploy-blocking) rule');
+        });
+
+        it('crossCallable array with an unknown method → warning, stays valid', function () {
+            const r = sdk.validateContract('module.exports = { foo: function(){}, crossCallable: ["foo","bar"] };');
+            assert.strictEqual(r.valid, true);
+            assert.ok(r.warnings.some(w => w.rule === 'crossCallable-unknown-method'));
+        });
+
+        const WARN_FIXTURES = [
+            { rule: 'unbounded-loop',           code: 'function f(){ while(true){ break; } }' },
+            { rule: 'large-allocation',         code: 'function f(){ return new Array(1000).fill(0); }' },
+            { rule: 'unchecked-state-get',      code: 'function f(){ return xchain.state.get("k").foo; }' },
+            { rule: 'missing-input-validation', code: 'module.exports = { foo: function(xchain){ return xchain.getInputParam(0); } };' }
+        ];
+        for (const fx of WARN_FIXTURES) {
+            it(fx.rule + ' → warning only (valid stays true)', function () {
+                const r = sdk.validateContract(fx.code);
+                assert.strictEqual(r.valid, true, fx.rule + ' must not block (it is advisory)');
+                assert.ok(r.warnings.some(w => w.rule === fx.rule),
+                    'expected warning ' + fx.rule + ', got ' + JSON.stringify(r.warnings.map(w => w.rule)));
+            });
+        }
+
+        it('the four templates emit zero Move-2 findings (low false-positive)', function () {
+            const fs = require('fs');
+            const dir = path.join(__dirname, '..', '..', '..', 'xchain-contracts');
+            if (!fs.existsSync(dir)) return this.skip();
+            for (const name of ['escrow', 'vesting', 'crowdsale', 'amm']) {
+                const f = path.join(dir, name, name + '.js');
+                if (!fs.existsSync(f)) continue;
+                const r = sdk.validateContract(fs.readFileSync(f, 'utf8'));
+                assert.strictEqual(r.errors.length, 0, name + ' errors: ' + JSON.stringify(r.errors));
+                assert.strictEqual(r.warnings.length, 0, name + ' warnings: ' + JSON.stringify(r.warnings.map(w => w.rule)));
+            }
+        });
+    });
+
     describe('back-compat — ContractUtils.validate() shape', function () {
         const utils = new ContractUtils();
         it('good → { valid:true }', function () {
