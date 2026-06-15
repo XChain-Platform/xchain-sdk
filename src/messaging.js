@@ -424,8 +424,12 @@ class MessagingUtils {
             let result = messageIsBytes
                 ? this.eciesEncryptBytes(params.message, recipientPubkey)
                 : this.eciesEncrypt(params.message, recipientPubkey);
+            // MESSAGE v2 (VERSION|COIN|DESTINATION|ENCRYPTED_MESSAGE) carries no
+            // ENCRYPTION_METHOD on the wire — absence implies ECIES (1) by protocol.
+            // Setting encryptionMethod here would add a field with no v2 slot and the
+            // format selector would reject every version (NO_MATCHING_FORMAT), so the
+            // method is deliberately kept off actionParams.
             actionParams.encryptedMessage = result.ciphertext;
-            actionParams.encryptionMethod = METHOD_ECIES;
 
         } else if (method === METHOD_ECDH) {
             // ECDH — requires a pre-derived shared secret
@@ -437,8 +441,10 @@ class MessagingUtils {
                     'Shared secret is required for ECDH encryption. Use deriveSharedSecret() first.');
 
             let result = this.sessionEncrypt(params.message, params.sharedSecret);
+            // v2 has no ENCRYPTION_METHOD slot (see ECIES branch above); the ECDH
+            // session is established out-of-band via v0/v1 key exchange, so the
+            // method stays off the wire.
             actionParams.encryptedMessage = result.ciphertext;
-            actionParams.encryptionMethod = METHOD_ECDH;
 
         } else if (method === METHOD_AES) {
             // AES — requires a pre-shared key
@@ -450,8 +456,9 @@ class MessagingUtils {
                     'Shared key is required for AES encryption.');
 
             let result = this.aesEncrypt(params.message, params.sharedKey);
+            // v2 has no ENCRYPTION_METHOD slot (see ECIES branch above); the AES
+            // shared key is distributed out-of-band, so the method stays off the wire.
             actionParams.encryptedMessage = result.ciphertext;
-            actionParams.encryptionMethod = METHOD_AES;
 
         } else {
             throw new SDKMessagingError('INVALID_METHOD',
@@ -520,6 +527,14 @@ class MessagingUtils {
 
         let results = [];
         for (let msg of rawMessages) {
+            // MESSAGE v2 carries no ENCRYPTION_METHOD on the wire — absence implies
+            // ECIES (1) by protocol. The indexer stamps 1 for v2 rows, but legacy
+            // rows (indexed before that change) may still carry a null method, so
+            // infer ECIES here whenever an encrypted body is present without a method.
+            let method = msg.encryption_method ? Number(msg.encryption_method) : null;
+            if (method === null && msg.encrypted_message)
+                method = METHOD_ECIES;
+
             let entry = {
                 from:      msg.source || null,
                 to:        msg.destination || null,
@@ -528,7 +543,7 @@ class MessagingUtils {
                 text:      null,
                 bytes:     null,
                 encrypted: false,
-                method:    msg.encryption_method ? Number(msg.encryption_method) : null,
+                method:    method,
                 txid:      msg.tx_hash || null,
                 block:     msg.block_index || null,
                 timestamp: msg.block_time || null
@@ -537,7 +552,6 @@ class MessagingUtils {
             if (msg.plaintext_message) {
                 entry.text = msg.plaintext_message;
             } else if (msg.encrypted_message && opts.wif) {
-                let method = entry.method;
                 try {
                     if (method === METHOD_ECIES) {
                         // Decrypt to raw bytes so binary payloads (gated-content

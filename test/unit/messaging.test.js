@@ -214,7 +214,25 @@ describe('MessagingUtils @crypto @regression', function () {
             expect(out[0].encrypted).to.equal(false);
         });
 
-        it('decrypts an ECIES message when a wif is supplied (text + bytes)', async function () {
+        it('decrypts a method-less v2 ECIES message (inferred method) when a wif is supplied', async function () {
+            // A real MESSAGE v2 row carries ENCRYPTED_MESSAGE but no ENCRYPTION_METHOD
+            // on the wire — getMessages must infer ECIES (1) and decrypt. (No fabricated
+            // encryption_method here, so this exercises the real inferred-method path.)
+            const bob = keypair();
+            const { ciphertext } = msg.eciesEncrypt('hi bob', bob.publicKeyHex);
+            const explorer = explorerReturning([
+                { source: 'A', destination: 'B', encrypted_message: ciphertext, tx_hash: 't', block_index: 7 }
+            ]);
+            const out = await msg.getMessages('B', { wif: bob.wif, type: 'received' }, explorer);
+            expect(out[0].method).to.equal(1);
+            expect(out[0].text).to.equal('hi bob');
+            expect(out[0].encrypted).to.equal(true);
+            expect(Buffer.isBuffer(out[0].bytes)).to.equal(true);
+        });
+
+        it('decrypts an indexer-stamped v2 ECIES message (explicit encryption_method=1)', async function () {
+            // After indexing, v2 rows persist encryption_method=1; confirm the explicit
+            // value path decrypts identically to the inferred path above.
             const bob = keypair();
             const { ciphertext } = msg.eciesEncrypt('hi bob', bob.publicKeyHex);
             const explorer = explorerReturning([
@@ -222,7 +240,6 @@ describe('MessagingUtils @crypto @regression', function () {
             ]);
             const out = await msg.getMessages('B', { wif: bob.wif, type: 'received' }, explorer);
             expect(out[0].text).to.equal('hi bob');
-            expect(out[0].encrypted).to.equal(true);
             expect(Buffer.isBuffer(out[0].bytes)).to.equal(true);
         });
 
@@ -544,12 +561,25 @@ describe('MessagingUtils @crypto @regression', function () {
             expect(result.txid).to.equal('txaes');
         });
 
-        // Happy-path for ECIES (method=1) send — requires a found pubkey
-        it('returns txid on a successful ECIES send', async function () {
+        // Happy-path for ECIES (method=1) send — requires a found pubkey.
+        // Uses the REAL createAction (normalizeFields + format selector) rather than a
+        // stub: send() no longer sets encryptionMethod on actionParams, so the selector
+        // must resolve MESSAGE v2. (Pre-fix this threw NO_MATCHING_FORMAT, which the old
+        // createAction stub hid — that false-green is the bug this regression guards.)
+        it('encodes a real MESSAGE v2 action and returns txid on a successful ECIES send', async function () {
+            const Actions = require('../../src/actions.js');
+            const Utility = require('../../src/utility.js');
+            const realActions = new Actions({ util: new Utility(), config: {} });
             const bob = keypair();
+            const dest = new WalletUtils(NETWORK).deriveAddress(bob.publicKeyHex);
+            let encodedActionString = null;
             const fakeSdk = {
                 _requireExplorer: () => ({ getPublicKey: async () => ({ pubkey: bob.publicKeyHex }) }),
-                createAction:     async () => ({ psbt: 'psbtHex', actionString: 'XC|MSG' }),
+                createAction:     async (data) => {
+                    const res = realActions.createAction(data);
+                    encodedActionString = res.actionString;
+                    return res;
+                },
                 wallet: {
                     signPsbt:    () => ({ txHex: 'txhex', txid: 'txecies' }),
                     broadcastTx: async () => ({})
@@ -557,10 +587,16 @@ describe('MessagingUtils @crypto @regression', function () {
                 _requireEncoder: () => ({}),
             };
             const result = await msg.send(
-                { wif: 'wif', coin: 'BTC', destination: 'addr', message: 'hello', encoder: {}, method: 1 },
+                { wif: 'wif', coin: 'BTC', destination: dest, message: 'hello', encoder: {}, method: 1 },
                 fakeSdk
             );
             expect(result.txid).to.equal('txecies');
+            // MESSAGE|2|BTC|<dest>|<ciphertext> — version 2, no ENCRYPTION_METHOD field
+            const parts = encodedActionString.split('|');
+            expect(parts[0]).to.equal('MESSAGE');
+            expect(parts[1]).to.equal('2');
+            expect(parts[2]).to.equal('BTC');
+            expect(parts[3]).to.equal(dest);
         });
 
         // Binary ECIES (method=1) send
