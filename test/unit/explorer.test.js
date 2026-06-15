@@ -185,6 +185,26 @@ describe('ExplorerClient', function () {
             let result = await client.getSlashEvents('42', 'contract');
             expect(result.data[0].slashed_amount).to.equal('50');
         });
+
+        it('getXcalls hits /{COIN}/api/xcalls/{query}/{type}', async function () {
+            nock(BASE).get('/BTC/api/xcalls/42/contract').reply(200, { total: 1, data: [{ call_id: 'abc', request_status: 'pending' }] });
+            let result = await client.getXcalls('42', 'contract');
+            expect(result.data[0].call_id).to.equal('abc');
+        });
+
+        it('getXcalls without args hits /{COIN}/api/xcalls', async function () {
+            nock(BASE).get('/BTC/api/xcalls').reply(200, { total: 0, data: [] });
+            let result = await client.getXcalls();
+            expect(result).to.have.property('data');
+        });
+
+        it('getXcall hits /{COIN}/api/xcall/{callId} and returns the lifecycle object', async function () {
+            nock(BASE).get('/BTC/api/xcall/' + 'a'.repeat(64)).reply(200,
+                { call_id: 'a'.repeat(64), request_status: 'completed', execution: { result_status: 'ok' }, callback_delivery: null });
+            let result = await client.getXcall('a'.repeat(64));
+            expect(result.request_status).to.equal('completed');
+            expect(result.execution.result_status).to.equal('ok');
+        });
     });
 
     /*
@@ -1007,6 +1027,7 @@ describe('ExplorerClient', function () {
             'getPrices', 'getPriceSnapshots',
             'getStakes', 'getDelegations', 'getValidators', 'getValidatorRewards',
             'getContractStakes', 'getContractUnstakes', 'getSlashEvents',
+            'getXcalls', 'getXcall',
             'getMarkets', 'getMarket', 'getMarketHistory', 'getMarketOrders', 'getOrderbook',
             'getStatus', 'getMempool', 'getNetwork', 'search'
         ];
@@ -1016,10 +1037,10 @@ describe('ExplorerClient', function () {
             });
         }
 
-        it('has 84 public methods', function () {
+        it('has 86 public methods', function () {
             let publicMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(publicMethods).to.have.length(84);
+            expect(publicMethods).to.have.length(86);
         });
     });
 

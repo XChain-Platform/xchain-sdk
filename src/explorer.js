@@ -588,6 +588,21 @@ class ExplorerClient {
         return this._get('/slash_events', opts);
     }
 
+    // XCALL cross-chain calls (VM-emitted via xchain.emit.crossExecute; read-only).
+    // List the source-chain request rows — type ∈ {block, contract, status}.
+    async getXcalls(query, type, opts = {}) {
+        if (query)
+            return this._get('/xcalls/' + query + '/' + type, opts);
+        return this._get('/xcalls', opts);
+    }
+
+    // Full lifecycle for one cross-chain call by call_id: the source request plus the
+    // target-chain execution outcome and the source-chain callback delivery (each null
+    // until the call is relayed/executed/delivered).
+    async getXcall(callId) {
+        return this._get('/xcall/' + callId);
+    }
+
 
     /*
      *  Market Methods

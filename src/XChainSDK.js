@@ -1024,6 +1024,17 @@ class XChainSDK {
         return this._requireExplorer().getAttestations(query, type, opts);
     }
 
+    // Read XCALL cross-chain calls (VM-emitted; read-only — no submit path). List the
+    // source-chain requests (type ∈ {block, contract, status}); a dapp polls getXcall(callId)
+    // for one call's full lifecycle (request + target execution + source callback).
+    async getXcalls(query, type, opts) {
+        return this._requireExplorer().getXcalls(query, type, opts);
+    }
+
+    async getXcall(callId) {
+        return this._requireExplorer().getXcall(callId);
+    }
+
     async getExecution(executionActionIndex) {
         return this._requireExplorer().getExecution(executionActionIndex);
     }
