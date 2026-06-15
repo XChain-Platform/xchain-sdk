@@ -27,6 +27,7 @@
 
 const crypto = require('crypto');
 const eq     = require('./equivocation_header.js');
+const swq    = require('./stake_weighted_quorum.js');
 
 // ASN.1 DER prefix for Ed25519 SPKI — mirrors the hub's ValidatorIdentity and
 // the indexer's ed25519.js, so validator signatures verify identically here.
@@ -68,15 +69,28 @@ function verifySignature(payload, sigHex, pubkeyHex){
 //   checkpoint — { chain, network, block_index, block_hash, ledger_hash,
 //                  actions_hash, contract_hash, checkpoint_seq, snapshot_block,
 //                  validator_signatures } (signatures as a JSON string or array)
-//   validators — array of 64-hex `oracle_publish` pubkeys qualified at the
-//                checkpoint's snapshot_block (e.g. the explorer verify
-//                endpoint's `validators`, or an independently fetched set)
-// Returns { valid, validSigs, quorum, canonical } — valid means validSigs
-// reached 2f+1 of the supplied set. Pure local verification.
+//   validators — the `oracle_publish` set qualified at the checkpoint's
+//                snapshot_block. Each entry is either a bare 64-hex pubkey (legacy
+//                count regime) or an object { pubkey, weight, source } (required at
+//                or above the stake-weighted flag-day). Typically the explorer
+//                verify endpoint's `validators`, or an independently fetched set.
+// Returns { valid, validSigs, quorum, weighted, canonical }. Below the flag-day
+// `valid` means validSigs reached the count `2f+1`; at/above it `valid` means the
+// VALID signers' distinct sources clear the source-deduped 3·Σ > 2·S stake
+// predicate. Pure local verification — the `weighted` decision is derived locally
+// from the checkpoint's snapshot_block + network (the SDK trusts neither the
+// server's `verified` flag nor any server-supplied `is_weighted`); only the stake
+// WEIGHTS themselves come from the supplied set, exactly as the pubkeys always have.
 function verifyCheckpoint(checkpoint, validators){
     let canonical = canonicalCheckpoint(checkpoint);
-    let qualified = new Set((validators || []).map(p => String(p && p.pubkey !== undefined ? p.pubkey : p).toLowerCase()));
+    let vset      = validators || [];
+    let qualified = new Set(vset.map(p => String(p && p.pubkey !== undefined ? p.pubkey : p).toLowerCase()));
     let quorum    = (qualified.size <= 1) ? 1 : Math.max(2 * Math.floor((qualified.size - 1) / 3) + 1, Math.ceil((qualified.size + 1) / 2));
+
+    // Weighted-or-count is gated locally on the BTC-anchored snapshot_block +
+    // network — byte-for-byte the same flag-day the hub/indexer flip on, and the
+    // same gating the canonical signing string already applies for the equiv header.
+    let weighted = swq.isStakeWeightedQuorumActive(checkpoint && checkpoint.snapshot_block, checkpoint && checkpoint.network);
 
     let sigs = checkpoint.validator_signatures;
     if (typeof sigs === 'string'){
@@ -84,18 +98,32 @@ function verifyCheckpoint(checkpoint, validators){
     }
     if (!Array.isArray(sigs)) sigs = [];
 
-    let validSigs = 0, seen = new Set();
+    let validSigs = 0, seen = new Set(), validSigners = [];
     for (let s of sigs){
         let pk  = String(s && s.pubkey || '').toLowerCase();
         let sig = String(s && s.sig || '');
         if (!pk || seen.has(pk) || !qualified.has(pk)) continue;
         seen.add(pk);
-        if (verifySignature(canonical, sig, pk)) validSigs++;
+        if (verifySignature(canonical, sig, pk)){ validSigs++; validSigners.push(pk); }
     }
+
+    let valid;
+    if (weighted){
+        // Stake-weighted regime: the supplied set MUST carry per-validator weight
+        // + source. If it doesn't (e.g. a legacy bare-pubkey list, or an explorer
+        // that hasn't been upgraded), we cannot confirm stake quorum — fail closed
+        // (false-reject leaning, the fail-safe direction for a light client).
+        let hasWeights = vset.some(v => v && typeof v === 'object' && v.source !== undefined && v.weight !== undefined);
+        valid = hasWeights && swq.meetsStakeThreshold(vset, validSigners);
+    } else {
+        valid = qualified.size > 0 && validSigs >= quorum;
+    }
+
     return {
-        valid:     qualified.size > 0 && validSigs >= quorum,
+        valid:     valid,
         validSigs: validSigs,
         quorum:    quorum,
+        weighted:  weighted,
         canonical: canonical
     };
 }

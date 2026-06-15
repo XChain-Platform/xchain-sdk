@@ -132,3 +132,83 @@ describe('CheckpointVerifier (SDK)', function () {
         assert.strictEqual(result.snapshotAvailable, true);
     });
 });
+
+// Stake-weighted regime (STAKE_WEIGHTED_QUORUM / WI-1). On a network where the
+// flag-day is active (regtest activation = 0) the SDK must apply the same
+// source-deduped 3·Σ > 2·S predicate the hub finalizes on, NOT the count 2f+1 —
+// otherwise it false-rejects a stake-heavy minority the federation anchored, and
+// unsafe-accepts a key-count majority that lacks stake majority.
+describe('CheckpointVerifier — stake-weighted quorum (SDK)', function () {
+
+    // Each key of a source carries the SAME source + weight (DELEGATE v0 additive,
+    // source-deduped) — mirrors the hub/indexer snapshot shape.
+    function vset(entries) {
+        let out = [];
+        for (let e of entries)
+            for (let k of e.keys)
+                out.push({ pubkey: k.pubkeyHex, source: e.source, weight: String(e.weight) });
+        return out;
+    }
+    function signAll(keys, canonical) {
+        return JSON.stringify(keys.map(k => ({ pubkey: k.pubkeyHex, sig: signHex(k.privateKey, canonical) })));
+    }
+
+    it('weighted PASS: a single-source stake-heavy minority (>2/3 stake, below count) verifies', function () {
+        // 4 distinct sources; A holds 70 of 100 stake. Only A's one key signs.
+        let A = makeKeypair(), B = makeKeypair(), C = makeKeypair(), D = makeKeypair();
+        let cp = makeCheckpoint({ network: 'regtest' });
+        let canonical = Checkpoint.canonicalCheckpoint(cp);
+        let validators = vset([
+            { source: 'srcA', weight: 70, keys: [A] },
+            { source: 'srcB', weight: 10, keys: [B] },
+            { source: 'srcC', weight: 10, keys: [C] },
+            { source: 'srcD', weight: 10, keys: [D] }
+        ]);
+        cp.validator_signatures = signAll([A], canonical);                              // 1 sig only
+        let result = Checkpoint.verifyCheckpoint(cp, validators);
+        assert.strictEqual(result.weighted, true);
+        assert.strictEqual(result.validSigs, 1);
+        assert.ok(result.validSigs < result.quorum, 'below the count threshold');       // 1 < 3
+        assert.strictEqual(result.valid, true);                                         // 3·70 > 2·100
+    });
+
+    it('weighted FAIL: a key-count majority lacking stake majority does NOT verify', function () {
+        // Source A has 3 keys but only 5 stake; source B has 1 key with 95 stake.
+        // A's three keys are a count majority (3 of 4 keys) but a stake minority.
+        let A1 = makeKeypair(), A2 = makeKeypair(), A3 = makeKeypair(), B = makeKeypair();
+        let cp = makeCheckpoint({ network: 'regtest' });
+        let canonical = Checkpoint.canonicalCheckpoint(cp);
+        let validators = vset([
+            { source: 'srcA', weight: 5,  keys: [A1, A2, A3] },
+            { source: 'srcB', weight: 95, keys: [B] }
+        ]);
+        cp.validator_signatures = signAll([A1, A2, A3], canonical);                     // count majority
+        let result = Checkpoint.verifyCheckpoint(cp, validators);
+        assert.strictEqual(result.weighted, true);
+        assert.strictEqual(result.validSigs, 3);
+        assert.ok(result.validSigs >= result.quorum, 'would pass the count threshold');  // 3 >= 3
+        assert.strictEqual(result.valid, false);                                        // 3·5 ≯ 2·100
+    });
+
+    it('weighted regime fails closed when the set carries no weight/source', function () {
+        // An un-upgraded explorer (or a legacy bare-pubkey list) cannot prove stake
+        // quorum once weighting is active — the SDK must refuse, not silently count.
+        let A = makeKeypair(), B = makeKeypair(), C = makeKeypair();
+        let cp = makeCheckpoint({ network: 'regtest' });
+        let canonical = Checkpoint.canonicalCheckpoint(cp);
+        cp.validator_signatures = signAll([A, B, C], canonical);
+        let result = Checkpoint.verifyCheckpoint(cp, [A.pubkeyHex, B.pubkeyHex, C.pubkeyHex]);
+        assert.strictEqual(result.weighted, true);
+        assert.strictEqual(result.valid, false);
+    });
+
+    it('below the flag-day (mainnet) the count path is unchanged: weighted=false', function () {
+        let keys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
+        let cp = makeCheckpoint();                                                      // mainnet, inactive
+        let canonical = Checkpoint.canonicalCheckpoint(cp);
+        cp.validator_signatures = signAll(keys.slice(0, 3), canonical);
+        let result = Checkpoint.verifyCheckpoint(cp, keys.map(k => k.pubkeyHex));
+        assert.strictEqual(result.weighted, false);
+        assert.strictEqual(result.valid, true);                                         // count 3 >= quorum 3
+    });
+});
