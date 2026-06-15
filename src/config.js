@@ -24,7 +24,7 @@ const parseIntMin0 = (val, defaultVal) => {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : defaultVal;
 };
 
-Config = {
+var Config = {
 
     // Handle returning the current sdk configuration
     getConfig: function(){

@@ -6,6 +6,10 @@
     "main": "index.js",
     "types": "index.d.ts",
     "license": "AGPL-3.0-or-later",
+    "comment:browser": "Browserify's resolver predates the package `exports` field, so it can't map @brandonblack/musig's './base_crypto' subpath to lib/base_crypto.js. Alias it to the concrete file for bundling only; Node still resolves the subpath via exports.",
+    "browser": {
+        "@brandonblack/musig/base_crypto": "@brandonblack/musig/lib/base_crypto.js"
+    },
     "repository": {
         "type": "git",
         "url": "https://github.com/XChain-platform/xchain-sdk.git"

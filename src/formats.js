@@ -18,7 +18,7 @@
  * 
  ********************************************************************/
 
-Formats = {
+var Formats = {
 
     ADDRESS: {
         0: 'VERSION|FEE_PREFERENCE|REQUIRE_MEMO|MEMO',
