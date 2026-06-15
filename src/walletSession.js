@@ -169,8 +169,8 @@ class WalletSession {
 
     // VM / Smart Contracts
     async deploy(params, enc, opts)      { return this.submit({ action: 'DEPLOY', params }, enc, opts); }
-    // One base64 code slice of a chunked deploy (see sdk.deployContract / chunkHelper).
-    async deployChunk(params, enc, opts) { return this.submit({ action: 'DEPLOYCHUNK', params }, enc, opts); }
+    // One base64 code slice of a chunked deploy — DEPLOY v4 carrier (see sdk.deployContract / chunkHelper).
+    async deployChunk(params, enc, opts) { return this.submit({ action: 'DEPLOY', params: { VERSION: '4', ...params } }, enc, opts); }
     async execute(params, enc, opts)   { return this.submit({ action: 'EXECUTE', params }, enc, opts); }
     async deposit(params, enc, opts)   { return this.submit({ action: 'DEPOSIT', params }, enc, opts); }
     async withdraw(params, enc, opts)  { return this.submit({ action: 'WITHDRAW', params }, enc, opts); }

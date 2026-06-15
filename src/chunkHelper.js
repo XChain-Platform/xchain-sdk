@@ -16,7 +16,7 @@
  *
  * A contract whose base64-encoded source does not fit a single DEPLOY action
  * (the compiled-action cap is MAX_ACTION_DATA_LENGTH) is deployed in two phases:
- *   1. one DEPLOYCHUNK action per ordered base64 slice, and
+ *   1. one DEPLOY v4 carrier action per ordered base64 slice, and
  *   2. an assembling DEPLOY v2/v3 carrying the CODE_HASH (sha256 of the source).
  * The indexer reassembles the slices, sha256-verifies them against CODE_HASH,
  * and runs the normal deploy flow. This module decides single-shot vs chunked
@@ -71,7 +71,7 @@ function splitCode(code) {
 }
 
 // Plan a deploy: { codeHash, single, parts, totalChunks }. `single` true ⇒ deploy
-// inline (DEPLOY v0/v1); false ⇒ submit `parts` as DEPLOYCHUNKs then assemble via
+// inline (DEPLOY v0/v1); false ⇒ submit `parts` as DEPLOY v4 carriers then assemble via
 // DEPLOY v2/v3. Throws if the code needs more than MAX_DEPLOY_CHUNKS slices.
 function planDeploy(code, opts = {}) {
     let codeHash = codeHashOf(code);

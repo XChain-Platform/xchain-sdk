@@ -33,7 +33,7 @@ const MAX_MESSAGE_LENGTH = 1048576; // 1MB
 // (MAX_CODE_SIZE); kept equal by the cross-service regression suite.
 const MAX_CODE_SIZE      = 65536;
 
-// Max base64 bytes per DEPLOYCHUNK CODE_PART (chunked deploy). Canonical source:
+// Max base64 bytes per DEPLOY v4 carrier CODE_PART (chunked deploy). Canonical source:
 // xchain-documentation/protocol/constants.js (MAX_DEPLOYCHUNK_PART_BYTES); kept
 // equal to the indexer's per-chunk cap by the cross-service regression suite.
 const MAX_DEPLOYCHUNK_PART_BYTES = 7800;
@@ -64,10 +64,10 @@ const ACTION_REQUIRED_FIELDS = {
     COINPAY:            ['ORDER_MATCH_ACTION_INDEX'],
     COLLECT:            [],
     DELEGATE:           [],
-    // CODE_ENCODING (v0/v1 inline) vs CODE_HASH (v2/v3 chunked) is enforced as an
-    // exactly-one cross-field rule in _validateAction; only GAS_LIMIT is universally required.
-    DEPLOY:             ['GAS_LIMIT'],
-    DEPLOYCHUNK:        ['CODE_HASH', 'CHUNK_INDEX', 'TOTAL_CHUNKS', 'CODE_PART'],
+    // DEPLOY required fields are version-dependent (inline v0/v1 + assemble v2/v3 need
+    // GAS_LIMIT; the v4 chunk carrier needs CODE_HASH/CHUNK_INDEX/TOTAL_CHUNKS/CODE_PART
+    // but no GAS_LIMIT), so they are all enforced per-version in _validateDeploy.
+    DEPLOY:             [],
     DEPOSIT:            ['CONTRACT_ACTION_INDEX', 'TICK', 'QUANTITY'],
     DESTROY:            ['TICK', 'AMOUNT'],
     DISPENSER:          [],
@@ -361,7 +361,7 @@ class Validator {
             }
         }
 
-        // CODE_HASH validation (DEPLOY v2/v3 + DEPLOYCHUNK group key — sha256 hex)
+        // CODE_HASH validation (DEPLOY v2/v3 assemble + v4 carrier group key — sha256 hex)
         if (field === 'CODE_HASH') {
             if (!/^[0-9a-f]{64}$/.test(String(value)))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'CODE_HASH must be a 64-char lowercase sha256 hex string', { field }));
@@ -484,9 +484,6 @@ class Validator {
             case 'DEPLOY':
                 errors.push(...this._validateDeploy(fields));
                 break;
-            case 'DEPLOYCHUNK':
-                errors.push(...this._validateDeployChunk(fields));
-                break;
             case 'DISPENSER':
                 errors.push(...this._validateDispenser(fields));
                 break;
@@ -566,11 +563,18 @@ class Validator {
         return errors;
     }
 
-    // DEPLOY-specific validation
+    // DEPLOY-specific validation (version-dependent)
     _validateDeploy(fields) {
+        // v4 = chunk carrier: validate the slice fields only; no GAS_LIMIT / inline code / staking.
+        if (Number(fields.VERSION) === 4)
+            return this._validateDeployCarrier(fields);
+
         let errors = [];
-        // Inline (v0/v1) carries CODE_ENCODING; chunked (v2/v3) carries CODE_HASH and
-        // assembles the code from prior DEPLOYCHUNKs. Exactly one must be present.
+        // GAS_LIMIT is required for an actual deploy (inline v0/v1 + chunked-assemble v2/v3).
+        if (this._isEmpty(fields.GAS_LIMIT))
+            errors.push(this._error('MISSING_REQUIRED_FIELD', 'DEPLOY requires GAS_LIMIT', { field: 'GAS_LIMIT' }));
+        // Inline (v0/v1) carries CODE_ENCODING; chunked-assemble (v2/v3) carries CODE_HASH and
+        // assembles the code from prior v4 carriers. Exactly one must be present.
         let hasInline = !this._isEmpty(fields.CODE_ENCODING);
         let hasHash   = !this._isEmpty(fields.CODE_HASH);
         if (!hasInline && !hasHash)
@@ -588,15 +592,20 @@ class Validator {
         return errors;
     }
 
-    // DEPLOYCHUNK-specific validation (CHUNK_INDEX < TOTAL_CHUNKS ≤ MAX_DEPLOY_CHUNKS)
-    _validateDeployChunk(fields) {
+    // DEPLOY v4 (chunk carrier) validation: required slice fields + CHUNK_INDEX < TOTAL_CHUNKS ≤ MAX_DEPLOY_CHUNKS.
+    // (Field-level format checks for CODE_HASH/CODE_PART/CHUNK_INDEX/TOTAL_CHUNKS run in the
+    // per-field pass.)
+    _validateDeployCarrier(fields) {
         let errors = [];
+        for (let f of ['CODE_HASH', 'CHUNK_INDEX', 'TOTAL_CHUNKS', 'CODE_PART'])
+            if (this._isEmpty(fields[f]))
+                errors.push(this._error('MISSING_REQUIRED_FIELD', 'DEPLOY v4 (chunk carrier) requires ' + f, { field: f }));
         let total = Number(fields.TOTAL_CHUNKS);
         let idx   = Number(fields.CHUNK_INDEX);
         if (!this._isEmpty(fields.TOTAL_CHUNKS) && (total < 1 || total > MAX_DEPLOY_CHUNKS))
-            errors.push(this._error('DEPLOYCHUNK_CONSTRAINT', 'TOTAL_CHUNKS must be in [1, ' + MAX_DEPLOY_CHUNKS + ']', { total }));
+            errors.push(this._error('DEPLOY_CHUNK_CONSTRAINT', 'TOTAL_CHUNKS must be in [1, ' + MAX_DEPLOY_CHUNKS + ']', { total }));
         if (!this._isEmpty(fields.CHUNK_INDEX) && !this._isEmpty(fields.TOTAL_CHUNKS) && idx >= total)
-            errors.push(this._error('DEPLOYCHUNK_CONSTRAINT', 'CHUNK_INDEX must be < TOTAL_CHUNKS', { index: idx, total }));
+            errors.push(this._error('DEPLOY_CHUNK_CONSTRAINT', 'CHUNK_INDEX must be < TOTAL_CHUNKS', { index: idx, total }));
         return errors;
     }
 

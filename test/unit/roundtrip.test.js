@@ -334,14 +334,10 @@ describe('Round-trip — serialize then parse back', function () {
             params: {},
             expectedVersion: 0,
             check: {}
-        },
-        {
-            name: 'DEPLOYCHUNK v0 (chunked-deploy code slice)',
-            action: 'deploychunk',
-            params: { codeHash: 'a'.repeat(64), chunkIndex: 2, totalChunks: 5, codePart: 'aGVsbG8gd29ybGQ=' },
-            expectedVersion: 0,
-            check: { CODE_HASH: 'a'.repeat(64), CHUNK_INDEX: '2', TOTAL_CHUNKS: '5', CODE_PART: 'aGVsbG8gd29ybGQ=' }
         }
+        // DEPLOY v4 (chunk carrier) is exercised by the indexer carrier unit test and the
+        // chunked-deploy e2e test; DEPLOY is excluded from this round-trip harness (its
+        // rest-fields need custom parsing — see the exclusion list below).
     ];
 
     for (let tc of testCases) {
