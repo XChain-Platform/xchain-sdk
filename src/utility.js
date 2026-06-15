@@ -161,12 +161,17 @@ class Utility {
         return (value === null || value === undefined || value==='');
     }
 
-    // Handle converting a string number to an integer or float
+    // Coerce a value to a full-precision bignumber (matches the indexer's
+    // canonical bcnum). Returns a mathjs bignumber — NOT a JS double — so neither
+    // this nor the bc* helpers below truncate amounts beyond 2^53 or past ~16
+    // significant digits, and no result is ever re-funnelled through parseFloat
+    // (which also emits scientific notation). Non-numeric / NaN / Infinity inputs
+    // yield bignumber(0) rather than throwing, mirroring the indexer guard.
     bcnum(num){
-        if(String(num).indexOf('.')!=-1)
-            return parseFloat(num);
-        else
-            return parseInt(num);
+        let str = String(num).trim();
+        if(str === 'NaN' || str === 'Infinity' || str === '-Infinity' || !this.isNumeric(num))
+            return mathjs.bignumber(0);
+        return mathjs.bignumber(str);
     }
 
     // Handle returning a number to a given decimal point precision
@@ -180,7 +185,7 @@ class Utility {
         let a = (!this.isNull(numA)) ? numA : 0;
         let b = (!this.isNull(numB)) ? numB : 0;
         let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
-        return this.bcnum(mathjs.format(mathjs.subtract(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d}));
+        return mathjs.format(mathjs.subtract(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d});
     }
 
     // Handle adding 2 big numbers
@@ -188,7 +193,7 @@ class Utility {
         let a = (!this.isNull(numA)) ? numA : 0;
         let b = (!this.isNull(numB)) ? numB : 0;
         let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
-        return this.bcnum(mathjs.format(mathjs.add(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d}));
+        return mathjs.format(mathjs.add(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d});
     }
 
     // Handle multiplying 2 big numbers
@@ -196,7 +201,7 @@ class Utility {
         let a = (!this.isNull(numA)) ? numA : 0;
         let b = (!this.isNull(numB)) ? numB : 0;
         let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
-        return this.bcnum(mathjs.format(mathjs.multiply(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d}));
+        return mathjs.format(mathjs.multiply(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d});
     }
 
     // Handle dividing 2 big numbers
@@ -204,7 +209,7 @@ class Utility {
         let a = (!this.isNull(numA)) ? numA : 0;
         let b = (!this.isNull(numB)) ? numB : 0;
         let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
-        return this.bcnum(mathjs.format(mathjs.divide(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d}));
+        return mathjs.format(mathjs.divide(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d});
     }
 
     // Validate if a given value is considered valid

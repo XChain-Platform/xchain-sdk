@@ -83,3 +83,50 @@ describe('Regression (fe9161e): amount full-precision wire formatting', function
     expect(data.AMOUNT).to.equal(null);
   });
 });
+
+// ─── Regression: bcnum + bc* helpers preserve full precision (no JS double) ────
+//
+// bcnum used parseFloat/parseInt, and every bc* wrapper re-funnelled its
+// already-correct fixed-notation result back through bcnum — throwing the
+// precision away to a ~16-digit double (and re-emitting scientific notation for
+// tiny values). The most damaging consumer is getPrice(...,64), whose result
+// feeds ORDER GET_PRICE/GIVE_PRICE and drives order_match fills. bcnum now
+// returns a full-precision bignumber (matching the indexer) and the wrappers
+// return the fixed string directly.
+
+describe('Regression (#3735): bc* helpers preserve full precision', function () {
+
+  it('getPrice("1","3",64) yields a 64-digit price string, not a ~16-digit double', function () {
+    const out = u().getPrice('1', '3', 64);
+    expect(out).to.equal('0.' + '3'.repeat(64));
+    expect(out).to.not.equal('0.3333333333333333');           // the old parseFloat double
+    expect(/e/i.test(out), 'scientific notation leaked').to.equal(false);
+  });
+
+  it('bcadd preserves an 18-decimal fractional tail (1e-18 not lost)', function () {
+    expect(u().bcadd('1000000000000.000000000000000001', '0', 18))
+      .to.equal('1000000000000.000000000000000001');
+  });
+
+  it('bcsub/bcmul keep precision past 2^53', function () {
+    // 2^53 + 1 would round to ...992 as a double.
+    expect(u().bcsub('9007199254740993', '0', 0)).to.equal('9007199254740993');
+    expect(u().bcmul('9007199254740993', '1', 0)).to.equal('9007199254740993');
+  });
+
+  it('bcdiv result re-parses to the exact value (no double drift)', function () {
+    const q = u().bcdiv('2', '7', 50);
+    // q is a 50-dp fixed string; re-parsing it as a bignumber must round-trip,
+    // and it must carry far more than a double's ~16 significant digits.
+    expect(/^0\.\d{50}$/.test(q), `unexpected shape: ${q}`).to.equal(true);
+    expect(q.replace(/^0\./, '').replace(/0+$/, '').length).to.be.greaterThan(16);
+    expect(/e/i.test(q)).to.equal(false);
+  });
+
+  it('bcnum returns a full-precision bignumber (round-trips beyond 2^53)', function () {
+    expect(u().bcnum('9007199254740993').toString()).to.equal('9007199254740993');
+    // non-numeric / NaN / Infinity guard → bignumber(0), never a throw
+    expect(u().bcnum('text/plain').toString()).to.equal('0');
+    expect(u().bcnum('Infinity').toString()).to.equal('0');
+  });
+});
