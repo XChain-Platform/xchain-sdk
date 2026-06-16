@@ -1107,6 +1107,7 @@ describe('XChainSDK', function () {
             ['file', 'FILE'], ['address', 'ADDRESS'], ['stake', 'STAKE'], ['unstake', 'UNSTAKE'],
             ['delegate', 'DELEGATE'], ['collect', 'COLLECT'], ['deploy', 'DEPLOY'],
             ['execute', 'EXECUTE'], ['deposit', 'DEPOSIT'], ['withdraw', 'WITHDRAW'],
+            ['price', 'PRICE'],
         ];
 
         let sdk, createStub;

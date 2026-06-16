@@ -210,6 +210,13 @@ describe('Round-trip — serialize then parse back', function () {
             check: { ORDER_MATCH_ACTION_INDEX: '12345' }
         },
         {
+            name: 'PRICE v1 (permissionless user TOKEN/FIAT oracle)',
+            action: 'price',
+            params: { coin: 'BTC', tick: 'PEPECASH', fiat: 'USD', value: '1.5', fee: '0.01', memo: 'noon' },
+            expectedVersion: 1,
+            check: { COIN: 'BTC', TICK: 'PEPECASH', FIAT: 'USD', VALUE: '1.5', FEE: '0.01', MEMO: 'noon' }
+        },
+        {
             name: 'SEND v0',
             action: 'send',
             params: { tick: 'TOKEN', amount: '100', destination: ADDR, memo: 'payment' },

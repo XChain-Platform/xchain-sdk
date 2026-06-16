@@ -307,6 +307,13 @@ describe('WalletSession', function () {
             assert.strictEqual(actionData.action, 'DELEGATE');
             assert.strictEqual(actionData.params.VERSION, '1');
         });
+
+        it('price() submits a PRICE action (v1 user oracle — only SDK-encodable version)', async function () {
+            await session.price({ coin: 'BTC', tick: 'PEPECASH', fiat: 'USD', value: '1.50000000', fee: '0' });
+            let [actionData] = submitStub.lastCall.args;
+            assert.strictEqual(actionData.action, 'PRICE');
+            assert.strictEqual(actionData.params.tick, 'PEPECASH');
+        });
     });
 
     /*

@@ -153,6 +153,11 @@ class WalletSession {
     async sleep(params, enc, opts)     { return this.submit({ action: 'SLEEP', params }, enc, opts); }
     async address(params, enc, opts)   { return this.submit({ action: 'ADDRESS', params }, enc, opts); }
 
+    // Oracle — permissionless user-run TOKEN/FIAT price (PRICE v1). Only v1 is
+    // SDK-encodable (formats.js has no v0), so the encoder always selects it.
+    // Params: { coin, tick, fiat, value, fee, memo }. See protocol/actions/PRICE.md.
+    async price(params, enc, opts)     { return this.submit({ action: 'PRICE', params }, enc, opts); }
+
     // Staking (BTC-only)
     async stake(params, enc, opts)            { return this.submit({ action: 'STAKE', params }, enc, opts); }
     async unstake(params, enc, opts)          { return this.submit({ action: 'UNSTAKE', params }, enc, opts); }

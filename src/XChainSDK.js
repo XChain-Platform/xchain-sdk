@@ -445,6 +445,10 @@ class XChainSDK {
     async link(params, encoder)      { return this.createAction({ action: 'LINK', params, encoder }); }
     async file(params, encoder)      { return this.createAction({ action: 'FILE', params, encoder }); }
     async address(params, encoder)   { return this.createAction({ action: 'ADDRESS', params, encoder }); }
+    // PRICE: only v1 (permissionless user-run TOKEN/FIAT oracle) is SDK-encodable —
+    // formats.js has no v0, so the validator COIN/FIAT snapshot can never be built here.
+    // Params: { coin, tick, fiat, value, fee, memo }. See protocol/actions/PRICE.md.
+    async price(params, encoder)     { return this.createAction({ action: 'PRICE', params, encoder }); }
 
     // Staking action convenience methods (BTC-only)
     async stake(params, encoder)            { return this.createAction({ action: 'STAKE', params, encoder }); }
@@ -1072,6 +1076,18 @@ class XChainSDK {
         return this._requireExplorer().getValidatorRewards(query, type, opts);
     }
 
+    async getContractStakes(query, type, opts) {
+        return this._requireExplorer().getContractStakes(query, type, opts);
+    }
+
+    async getContractUnstakes(query, type, opts) {
+        return this._requireExplorer().getContractUnstakes(query, type, opts);
+    }
+
+    async getSlashEvents(query, type, opts) {
+        return this._requireExplorer().getSlashEvents(query, type, opts);
+    }
+
 
     /*
      *  Explorer: Market Methods
@@ -1095,6 +1111,14 @@ class XChainSDK {
 
     async getOrderbook(tick1, tick2) {
         return this._requireExplorer().getOrderbook(tick1, tick2);
+    }
+
+    async getPrices(query, type, opts) {
+        return this._requireExplorer().getPrices(query, type, opts);
+    }
+
+    async getPriceSnapshots(query, type, opts) {
+        return this._requireExplorer().getPriceSnapshots(query, type, opts);
     }
 
 
