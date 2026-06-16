@@ -17,6 +17,7 @@
 const assert  = require('assert');
 const crypto  = require('crypto');
 const Checkpoint = require('../../src/checkpoint.js');
+const eq         = require('../../src/equivocation_header.js');
 
 // Raw-hex Ed25519 keypair via Node crypto (SPKI/PKCS8 DER stripping mirrors
 // ValidatorIdentity's prefixes).
@@ -210,5 +211,55 @@ describe('CheckpointVerifier — stake-weighted quorum (SDK)', function () {
         let result = Checkpoint.verifyCheckpoint(cp, keys.map(k => k.pubkeyHex));
         assert.strictEqual(result.weighted, false);
         assert.strictEqual(result.valid, true);                                         // count 3 >= quorum 3
+    });
+});
+
+// EQUIV uniform header (WI-2). At/above the flag-day (regtest activation = 0) the
+// checkpoint canonical is the v0 raw wrapped in the equivocation header the hub
+// signs over — TAG=XCHECKPOINT, ROUND_ID=chain|network|block|checkpoint_seq, VIEW=0.
+// A light client that signs/checks the BARE bytes post-flag-day would reject every
+// real checkpoint, so the SDK must build the SAME wrapped bytes the producers do.
+// (validSigs is asserted here because it is pure signature-over-canonical — it
+// isolates the canonical-binding from the weighted-vs-count verdict, which regtest
+// also flips on.)
+describe('CheckpointVerifier — EQUIV uniform header (SDK)', function () {
+
+    function rawCanonical(cp) {
+        return ['XCHECKPOINT', cp.chain, cp.network, String(cp.block_index), cp.block_hash,
+            cp.ledger_hash, cp.actions_hash, cp.contract_hash,
+            String(cp.checkpoint_seq), String(cp.snapshot_block)].join('|');
+    }
+
+    it('EQUIV active (regtest): the canonical is the v0 raw wrapped in the uniform header', function () {
+        let cp  = makeCheckpoint({ network: 'regtest' });
+        let raw = rawCanonical(cp);
+        let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,
+            cp.chain + '|' + cp.network + '|' + cp.block_index + '|' + cp.checkpoint_seq, 0, raw);
+        assert.strictEqual(Checkpoint.canonicalCheckpoint(cp), expected);
+        assert.notStrictEqual(expected, raw, 'wrapping must change the bytes');
+    });
+
+    it('EQUIV active: a sig over the WRAPPED canonical counts; one over the RAW canonical does not', function () {
+        let key = makeKeypair();
+        let cp  = makeCheckpoint({ network: 'regtest' });
+        // A signature over the pre-EQUIV raw bytes must NOT verify post-flag-day.
+        cp.validator_signatures = JSON.stringify([
+            { pubkey: key.pubkeyHex, sig: signHex(key.privateKey, rawCanonical(cp)) }]);
+        assert.strictEqual(Checkpoint.verifyCheckpoint(cp, [key.pubkeyHex]).validSigs, 0);
+        // A signature over the wrapped canonical — the bytes the SDK actually checks.
+        cp.validator_signatures = JSON.stringify([
+            { pubkey: key.pubkeyHex, sig: signHex(key.privateKey, Checkpoint.canonicalCheckpoint(cp)) }]);
+        assert.strictEqual(Checkpoint.verifyCheckpoint(cp, [key.pubkeyHex]).validSigs, 1);
+    });
+
+    it('below the flag-day (mainnet): the canonical is NOT wrapped, and a raw-signed checkpoint verifies', function () {
+        let key = makeKeypair();
+        let cp  = makeCheckpoint();                                                      // mainnet → EQUIV inactive
+        assert.strictEqual(Checkpoint.canonicalCheckpoint(cp), rawCanonical(cp));        // bare bytes
+        cp.validator_signatures = JSON.stringify([
+            { pubkey: key.pubkeyHex, sig: signHex(key.privateKey, rawCanonical(cp)) }]);
+        let result = Checkpoint.verifyCheckpoint(cp, [key.pubkeyHex]);
+        assert.strictEqual(result.validSigs, 1);
+        assert.strictEqual(result.valid, true);                                          // count path, quorum 1
     });
 });
