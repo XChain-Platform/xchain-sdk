@@ -3,7 +3,7 @@
  * Copyright © 2025–2026 Dankest, LLC
  * SPDX-License-Identifier: AGPL-3.0-or-later
  * Licensed under the GNU Affero GPL v3.0 or later; see LICENSE.md.
- * A commercial license is available — contact legal@dankest.llc.
+ * A commercial license is available - contact legal@dankest.llc.
  *
  * Generates docs/openrpc.json (OpenRPC 1.3.2) for the SDK's standalone
  * JSON-RPC server (src/api.js, `npm run api`). METHODS below mirrors the
