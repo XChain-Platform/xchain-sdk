@@ -118,6 +118,32 @@ describe('Validator — TICK name validation (ISSUE action)', function () {
         expect(hasErrorCode(errors, 'INVALID_TICK_NAME')).to.be.true;
     });
 
+    it('rejects a TICK containing a backslash', function () {
+        const errors = v.validate('ISSUE', { TICK: 'BAD\\TOKEN' });
+        expect(hasErrorCode(errors, 'INVALID_TICK_NAME')).to.be.true;
+    });
+
+    // Cross-service guard: the SDK must never be more permissive than the
+    // indexer's consensus TICK_CHARACTERS (xchain-indexer src/config.js). The
+    // special-character set below is a verbatim copy of that consensus set —
+    // if config.js changes, this literal (and TICK_REGEX) must change with it.
+    // A user who clears the SDK pre-flight must always pass consensus, or they
+    // sign+broadcast+pay for a transaction consensus then rejects.
+    it('accepts exactly the indexer consensus special-character set (no more, no less)', function () {
+        const CONSENSUS_TICK_SPECIALS = '~!@#$%^&*()_+-={}[]:<>.?'; // xchain-indexer/src/config.js TICK_CHARACTERS
+        for (const ch of CONSENSUS_TICK_SPECIALS) {
+            if (ch === '.') continue; // dot is the sub-token separator — covered by its own cases
+            const tick = 'A' + ch + 'B'; // avoid the caret-first-char rule
+            const errors = v.validate('ISSUE', { TICK: tick });
+            expect(hasNoErrorCode(errors, 'INVALID_TICK_NAME'), 'consensus char rejected: ' + ch).to.be.true;
+        }
+        // Characters the indexer set excludes must also fail the SDK pre-flight.
+        for (const ch of ['\\', '|', ';', '/', ' ', '\t', 'é', '€']) {
+            const errors = v.validate('ISSUE', { TICK: 'A' + ch + 'B' });
+            expect(hasErrorCode(errors, 'INVALID_TICK_NAME'), 'non-consensus char accepted: ' + JSON.stringify(ch)).to.be.true;
+        }
+    });
+
     // TICK validation only applies to ISSUE — SEND just needs non-empty
     it('does NOT apply ISSUE tick-name rules when action is SEND', function () {
         // A dot in TICK is forbidden for ISSUE but irrelevant for SEND

@@ -40,9 +40,11 @@ const MAX_DEPLOYCHUNK_PART_BYTES = 7800;
 // Max chunks one DEPLOY may assemble (canonical: constants.js MAX_DEPLOY_CHUNKS).
 const MAX_DEPLOY_CHUNKS = 16;
 
-// Allowed TICK characters: a-zA-Z0-9 and ~!@#$%^&*()_+-={}[]\:<>.?
-// Forbidden: | ; . / and ^ as first char
-const TICK_REGEX = /^[a-zA-Z0-9~!@#$%^&*()_+\-={}[\]\\:<>.?]+$/;
+// Allowed TICK characters: a-zA-Z0-9 and ~!@#$%^&*()_+-={}[]:<>.?
+// Must stay an exact match for the indexer's TICK_CHARACTERS (xchain-indexer
+// src/config.js) — the SDK must never be more permissive than consensus.
+// Forbidden: \ | ; . / and ^ as first char
+const TICK_REGEX = /^[a-zA-Z0-9~!@#$%^&*()_+\-={}[\]:<>.?]+$/;
 const TICK_FORBIDDEN_FIRST_CHAR = '^';
 
 // Characters forbidden in text fields (pipe = field separator, semicolon = command separator)
@@ -718,7 +720,7 @@ class Validator {
             errors.push(this._error('INVALID_TICK_NAME', 'TICK name cannot start with ^', { value }));
 
         if (!TICK_REGEX.test(name))
-            errors.push(this._error('INVALID_TICK_NAME', 'TICK name contains invalid characters', { value, allowed: 'a-zA-Z0-9~!@#$%^&*()_+-={}[]\\:<>.?' }));
+            errors.push(this._error('INVALID_TICK_NAME', 'TICK name contains invalid characters', { value, allowed: 'a-zA-Z0-9~!@#$%^&*()_+-={}[]:<>.?' }));
 
         // Check for forbidden characters
         for (let ch of FORBIDDEN_TEXT_CHARS) {
