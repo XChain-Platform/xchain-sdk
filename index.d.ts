@@ -1452,6 +1452,50 @@ export declare class XChainSDK {
 
 
     /*
+     *  WebSocket: Real-Time Subscription methods
+     *
+     *  Each on*() registers a handler and subscribes the relevant explorer
+     *  channel, returning an unsubscribe function. The callback receives the
+     *  raw WS message envelope `{ type, data, chain, network, timestamp,
+     *  catch_up? }`. Requires the WS client to be configured (network +
+     *  websocketUrl/explorerUrl, or hub discovery) and connected.
+     */
+
+    /** Connect the WebSocket client (auto-called by init() when configured). */
+    connectWs(): Promise<any>;
+
+    /** Disconnect the WebSocket client. */
+    disconnectWs(): void;
+
+    /** Subscribe to new blocks. Returns an unsubscribe function. */
+    onBlock(callback: (msg: any) => void): () => void;
+
+    /** Subscribe to new actions with optional type/status/tick filters. */
+    onAction(callback: (msg: any) => void, opts?: { types?: string[]; statuses?: string[]; ticks?: string[] }): () => void;
+
+    /** Subscribe to all events touching an address (NEW_ACTION, ADDRESS_UPDATE, ORDER_MATCH, COINPAY_*, SWAP_MATCH, DISPENSE). */
+    onAddress(address: string, callback: (msg: any) => void, opts?: { types?: string[]; statuses?: string[]; snapshot?: boolean }): () => void;
+
+    /** Subscribe to updates for a token. */
+    onToken(tick: string, callback: (msg: any) => void): () => void;
+
+    /** Subscribe to updates for a market pair. */
+    onMarket(tick1: string, tick2: string, callback: (msg: any) => void): () => void;
+
+    /** Subscribe to updates for a dispenser (by its action index). */
+    onDispenser(actionIndex: number | string, callback: (msg: any) => void): () => void;
+
+    /** Subscribe to COINPAY_REQUIRED events on an address. */
+    onCoinpayRequired(address: string, callback: (msg: any) => void): () => void;
+
+    /** Subscribe to ORDER_MATCH events on an address. */
+    onOrderMatch(address: string, callback: (msg: any) => void, opts?: { statuses?: string[] }): () => void;
+
+    /** Subscribe to network-statistics updates. */
+    onNetworkStats(callback: (msg: any) => void): () => void;
+
+
+    /*
      *  Workflow recipes
      */
 
