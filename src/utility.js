@@ -162,7 +162,7 @@ class Utility {
     }
 
     // Coerce a value to a full-precision bignumber (matches the indexer's
-    // canonical bcnum). Returns a mathjs bignumber — NOT a JS double — so neither
+    // canonical bcnum). Returns a mathjs bignumber (NOT a JS double), so neither
     // this nor the bc* helpers below truncate amounts beyond 2^53 or past ~16
     // significant digits, and no result is ever re-funnelled through parseFloat
     // (which also emits scientific notation). Non-numeric / NaN / Infinity inputs
@@ -274,8 +274,10 @@ class Utility {
         // Check P2PKH (26-35 chars)
         if(len>=26 && len<=35)
             return true;
-        // Check Segwit (42 chars)
-        if(len==42)
+        // Check segwit bech32: BTC/LTC P2WPKH and P2WSH across mainnet/testnet/regtest
+        // span roughly 42 to 64 chars (bc1/tb1/bcrt1/ltc1/tltc1 HRP + program). This is a
+        // loose pre-flight only; real validation happens at encode/broadcast time.
+        if(len>=42 && len<=64)
             return true;
         return false;
     }
@@ -328,7 +330,7 @@ class Utility {
             // Use a full-precision bignumber + fixed notation rather than bcnum's
             // parseFloat/parseInt: amounts can be DIVISIBLE to 18 decimals
             // (MAX_DECIMALS) and supplies can exceed 2^53, both of which JS doubles
-            // truncate — and parseFloat also emits scientific notation (e.g.
+            // truncate, and parseFloat also emits scientific notation (e.g.
             // "1e-18"), corrupting the on-chain ACTION string. fixed notation keeps
             // the exact wire value, matching how the indexer reads it back.
             if(!this.isNull(value) && this.isNumeric(value))
@@ -338,7 +340,7 @@ class Utility {
     }
 
     // Determine if a tx hash is valid or not
-    // TODO: clean this up to verify it is an actual tx hash
+    // TODO: only checks length === 64; does not verify hex encoding or format
     isValidTransactionHash(hash){
         if(String(hash).length==64)
             return 1;

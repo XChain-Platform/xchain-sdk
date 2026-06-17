@@ -13,7 +13,7 @@
  **********************************************************************
  *
  * XChain Platform SDK - Configuration
- * 
+ *
  ********************************************************************/
 
 // Parse a non-negative integer from an env var, falling back to defaultVal when
@@ -34,10 +34,10 @@ var Config = {
 
         // Define list of NUMBER fields
         config['NUMBER_FIELDS'] = [
-            'ALLOW_LIST', 
-            'AMOUNT', 
+            'ALLOW_LIST',
+            'AMOUNT',
             'BALANCES',
-            'BLOCK_LIST', 
+            'BLOCK_LIST',
             'BROADCAST_ACTION_INDEX',
             'CALLBACK_AMOUNT',
             'CALLBACK_BLOCK',
@@ -50,20 +50,20 @@ var Config = {
             'DISPENSER_ACTION_INDEX',
             'EDIT',
             'ENCRYPTION_METHOD',
-            'EXPIRATION', 
+            'EXPIRATION',
             'FEE',
-            'FIAT_AMOUNT', 
-            'GET_AMOUNT', 
+            'FIAT_AMOUNT',
+            'GET_AMOUNT',
             'GAS_LIMIT',
             'GIVE_AMOUNT',
             'GIVE_ESCROW',
             'LIST_ACTION_INDEX',
-            'MAX_SUPPLY', 
-            'MAX_MINT', 
-            'MINT_ADDRESS_MAX', 
-            'MINT_START_BLOCK', 
+            'MAX_SUPPLY',
+            'MAX_MINT',
+            'MINT_ADDRESS_MAX',
+            'MINT_START_BLOCK',
             'MINT_STOP_BLOCK',
-            'MINT_SUPPLY', 
+            'MINT_SUPPLY',
             'ORDER_ACTION_INDEX',
             'OWNERSHIPS',
             'QUANTITY',
@@ -85,7 +85,7 @@ var Config = {
             'LOCK_DESCRIPTION',
             'LOCK_SLEEP',
             'LOCK_CALLBACK'
-        ];        
+        ];
 
         // Define list of LIST fields
         config['LIST_FIELDS'] = [
@@ -93,7 +93,7 @@ var Config = {
             'BLOCK_LIST'
         ];
 
-        // Programmable policy layer — the controller action classes a token (ISSUE v6) or
+        // Programmable policy layer: the controller action classes a token (ISSUE v6) or
         // account (ADDRESS v1) may bind. MUST stay in lockstep with the indexer's
         // config CONTROLLER_ACTION_CLASSES (a cross-service regression pins it).
         config['ACTION_CLASSES'] = [
@@ -107,7 +107,6 @@ var Config = {
         // Define stop check interval (default 5 seconds; override via STOP_CHECK_INTERVAL)
         config['STOP_CHECK_INTERVAL'] = parseIntMin0(process.env.STOP_CHECK_INTERVAL, 5000);
 
-        // TODO: coming soon...
         return config;
     },
 

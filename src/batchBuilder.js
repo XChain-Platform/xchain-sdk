@@ -53,7 +53,7 @@ class BatchBuilder {
     link(params)      { return this.add('LINK', params); }
     address(params)   { return this.add('ADDRESS', params); }
 
-    // VM action convenience methods (DEPLOY excluded — too large for BATCH)
+    // VM action convenience methods (DEPLOY excluded: too large for BATCH)
     execute(params)   { return this.add('EXECUTE', params); }
     deposit(params)   { return this.add('DEPOSIT', params); }
     withdraw(params)  { return this.add('WITHDRAW', params); }
@@ -93,23 +93,27 @@ class BatchBuilder {
                 { count: fileCount });
     }
 
-    // Build the BATCH action — validates each sub-action, enforces constraints,
+    // Build the BATCH action: validates each sub-action, enforces constraints,
     // produces the semicolon-joined command string. If a FILE sub-action carries
     // `rawData` in its params (gated-content publishing), that rawData is
     // promoted to BATCH-level encoder options so the encoder attaches it to the
     // transaction.
     //
-    // NOTE: returns a Promise — it wraps the SDK's async createAction (which may
-    // build a PSBT when encoder.pubkey is supplied). Callers MUST await:
+    // NOTE: returns a Promise. Sub-action strings are built synchronously via
+    // sdk.actions.createAction (validate + format select + serialize); the Promise
+    // comes from the final sdk.createAction call, which is async only when
+    // encoder.pubkey is supplied and a PSBT needs to be built. Callers MUST await:
     //   const batchAction = await sdk.batch().send(...).mint(...).build();
     build(encoderOpts) {
         this._validate();
 
-        // Build each sub-action through the full pipeline (validate + format select + serialize)
+        // Build each sub-action through the full pipeline (validate + format select + serialize).
+        // This inner loop is synchronous: it calls sdk.actions.createAction directly, not
+        // the async sdk.createAction wrapper.
         let commandParts = [];
         let extractedRawData = null;
         for (let entry of this._actions) {
-            // FILE's rawData is encoder-level, not part of the action string —
+            // FILE's rawData is encoder-level, not part of the action string:
             // strip it from params before serializing and hoist it to encoder opts.
             let subParams = entry.params;
             if (entry.action === 'FILE' && subParams && subParams.rawData !== undefined) {
@@ -133,7 +137,7 @@ class BatchBuilder {
             mergedEncoder = { ...mergedEncoder, rawData: extractedRawData };
         }
 
-        // Now create the BATCH action itself
+        // Now create the BATCH action itself (async: may build a PSBT if pubkey supplied)
         return this.sdk.createAction({
             action: 'BATCH',
             params: { command },

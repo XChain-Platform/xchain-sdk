@@ -14,7 +14,7 @@
  *
  * XChain Platform SDK - Validator
  *
- * Per-action input validation rules for all 23 ACTION types
+ * Per-action input validation rules for all 29 ACTION types
  *
  ********************************************************************/
 
@@ -42,7 +42,7 @@ const MAX_DEPLOY_CHUNKS = 16;
 
 // Allowed TICK characters: a-zA-Z0-9 and ~!@#$%^&*()_+-={}[]:<>.?
 // Must stay an exact match for the indexer's TICK_CHARACTERS (xchain-indexer
-// src/config.js) — the SDK must never be more permissive than consensus.
+// src/config.js); the SDK must never be more permissive than consensus.
 // Forbidden: \ | ; . / and ^ as first char
 const TICK_REGEX = /^[a-zA-Z0-9~!@#$%^&*()_+\-={}[\]:<>.?]+$/;
 const TICK_FORBIDDEN_FIRST_CHAR = '^';
@@ -119,8 +119,8 @@ class Validator {
 
         // Check action exists. Use hasOwnProperty so a crafted action name that
         // matches an Object.prototype property (__proto__, constructor, toString,
-        // hasOwnProperty, valueOf, …) resolves to UNKNOWN_ACTION instead of the
-        // truthy inherited value — which otherwise slipped past this guard and
+        // hasOwnProperty, valueOf, ...) resolves to UNKNOWN_ACTION instead of the
+        // truthy inherited value, which otherwise slipped past this guard and
         // then threw "required is not iterable" on the ACTION_REQUIRED_FIELDS
         // lookup below (prototype-pollution-shaped crash in the validation path).
         if (!Object.prototype.hasOwnProperty.call(formats, action)) {
@@ -170,7 +170,7 @@ class Validator {
                 // Full TICK name validation on ISSUE (includes ^ first char check)
                 errors.push(...this._validateTickName(value));
             } else if (String(value).startsWith('^')) {
-                // TICK_ID reference (^123) — only valid outside of ISSUE
+                // TICK_ID reference (^123), only valid outside of ISSUE
                 let id = String(value).substring(1);
                 if (!this.util.isNumeric(id))
                     errors.push(this._error('INVALID_TICK_ID', field + ' ID reference must be numeric: ' + value, { field, value }));
@@ -212,7 +212,7 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be 0 or 1', { field, value, constraint: { valid: [0, 1] } }));
         }
         // NOTE: ISSUE v6 / ADDRESS v1 controller field checks (CONTROLLER / ACTION_CLASS /
-        // UNBIND / COOLDOWN_BLOCKS) live in the consolidated block further down (~line 390).
+        // UNBIND / COOLDOWN_BLOCKS) live in the consolidated block further down (~line 419).
 
         // FIAT_CODE validation
         if (field === 'FIAT_CODE') {
@@ -280,7 +280,7 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', 'FEE_PREFERENCE must be 1 (destroy), 2 (protocol), or 3 (community)', { field, value, constraint: { valid: [1, 2, 3] } }));
         }
 
-        // DISPENSER_PREFERENCE validation (ADDRESS action) — who may open dispensers on this address
+        // DISPENSER_PREFERENCE validation (ADDRESS action): who may open dispensers on this address
         if (field === 'DISPENSER_PREFERENCE') {
             if (!this.util.isValidValue(value, [1, 2]))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'DISPENSER_PREFERENCE must be 1 (owner only) or 2 (anyone)', { field, value, constraint: { valid: [1, 2] } }));
@@ -316,7 +316,7 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be numeric', { field, value }));
         }
 
-        // FEE validation (BROADCAST — percentage format)
+        // FEE validation (BROADCAST, percentage format)
         if (field === 'FEE' && action === 'BROADCAST') {
             if (!this.util.isNumeric(value))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'FEE must be numeric (percentage)', { field, value }));
@@ -370,7 +370,7 @@ class Validator {
             }
         }
 
-        // CODE_HASH validation (DEPLOY v2/v3 assemble + v4 carrier group key — sha256 hex)
+        // CODE_HASH validation: DEPLOY v2/v3 assemble + v4 carrier group key (sha256 hex)
         if (field === 'CODE_HASH') {
             if (!/^[0-9a-f]{64}$/.test(String(value)))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'CODE_HASH must be a 64-char lowercase sha256 hex string', { field }));
@@ -410,20 +410,20 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be a 64-character hex string (Ed25519 public key)', { field, value }));
         }
 
-        // TARGET_CONTRACT_INDEX validation (STAKE v3 / UNSTAKE v1 / DELEGATE v1 — positive integer)
+        // TARGET_CONTRACT_INDEX validation (STAKE v3 / UNSTAKE v1 / DELEGATE v1): must be a positive integer
         if (field === 'TARGET_CONTRACT_INDEX') {
             if (!/^[0-9]+$/.test(String(value)) || Number(value) <= 0)
                 errors.push(this._error('INVALID_FIELD_VALUE', 'TARGET_CONTRACT_INDEX must be a positive integer', { field, value }));
         }
 
-        // CONTROLLER validation (ISSUE v6 / ADDRESS v1 — controller bind/unbind):
+        // CONTROLLER validation (ISSUE v6 / ADDRESS v1, controller bind/unbind):
         // ACTION_INDEX of a deployed guard contract, so a non-negative integer.
         if (field === 'CONTROLLER') {
             if (!/^[0-9]+$/.test(String(value)))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'CONTROLLER must be a non-negative integer (a contract ACTION_INDEX)', { field, value }));
         }
 
-        // ACTION_CLASS validation (ISSUE v6 / ADDRESS v1 — programmable policy
+        // ACTION_CLASS validation (ISSUE v6 / ADDRESS v1, programmable policy
         // layer): which native action class the guard gates. Must be one of the
         // indexer's CONTROLLER_ACTION_CLASSES (case-insensitive on the wire);
         // mirrored here as config['ACTION_CLASSES'].
@@ -441,7 +441,7 @@ class Validator {
 
         // COOLDOWN_BLOCKS validation. Two callers with different ranges:
         //  - DEPLOY v1 (stakeable contract): integer in [1, 100000].
-        //  - ISSUE v6 / ADDRESS v1 (controller bind): non-negative integer (≥ 0),
+        //  - ISSUE v6 / ADDRESS v1 (controller bind): non-negative integer (>= 0),
         //    committed at bind as the friction on a later unbind (the indexer
         //    accepts /^\d+$/, so 0 is valid).
         if (field === 'COOLDOWN_BLOCKS') {
@@ -511,7 +511,7 @@ class Validator {
     }
 
     // Controller bind/unbind cross-field rules (ISSUE v6 token controller / ADDRESS v1 account
-    // controller). Only applies when controller fields are present — a plain ISSUE/ADDRESS is
+    // controller). Only applies when controller fields are present; a plain ISSUE/ADDRESS is
     // unaffected. Stateless client-side pre-check only (the indexer owns "already bound", contract
     // existence, etc.). UNBIND=1 drops a binding (CONTROLLER then ignored); a bind requires CONTROLLER.
     _validateControllerBind(fields) {
@@ -519,7 +519,7 @@ class Validator {
         let hasController = !this.util.isNull(fields['CONTROLLER']);
         let hasClass      = !this.util.isNull(fields['ACTION_CLASS']);
         let hasUnbind     = !this.util.isNull(fields['UNBIND']);
-        // Not a controller bind at all → nothing to check.
+        // Not a controller bind at all - nothing to check.
         if (!hasController && !hasClass && !hasUnbind)
             return errors;
         let isUnbind = Number(fields['UNBIND']) === 1;
@@ -591,7 +591,7 @@ class Validator {
         else if (hasInline && hasHash)
             errors.push(this._error('DEPLOY_CONSTRAINT', 'DEPLOY cannot carry both CODE_ENCODING and CODE_HASH', { action: 'DEPLOY' }));
         // v1 stakeable-contract config: SLASH_DESTINATION without COOLDOWN_BLOCKS is meaningless.
-        // (The indexer applies the same rule and additionally defaults SLASH_DESTINATION→BURN
+        // (The indexer applies the same rule and additionally defaults SLASH_DESTINATION->BURN
         // when COOLDOWN_BLOCKS is set without a destination, so we don't enforce SLASH_DESTINATION
         // as required when COOLDOWN_BLOCKS is present.)
         let hasCooldown = !this._isEmpty(fields.COOLDOWN_BLOCKS);
@@ -601,7 +601,7 @@ class Validator {
         return errors;
     }
 
-    // DEPLOY v4 (chunk carrier) validation: required slice fields + CHUNK_INDEX < TOTAL_CHUNKS ≤ MAX_DEPLOY_CHUNKS.
+    // DEPLOY v4 (chunk carrier) validation: required slice fields + CHUNK_INDEX < TOTAL_CHUNKS <= MAX_DEPLOY_CHUNKS.
     // (Field-level format checks for CODE_HASH/CODE_PART/CHUNK_INDEX/TOTAL_CHUNKS run in the
     // per-field pass.)
     _validateDeployCarrier(fields) {
@@ -623,9 +623,9 @@ class Validator {
         let errors = [];
         // If not a cancel/edit (no DISPENSER_ACTION_INDEX), full create requires
         // give-side fields + GET_AMOUNT, plus either GET_TICK (token-paid) or
-        // GET_COIN (coin-paid — the primary §40.7.1 lane where a buyer pays in
+        // GET_COIN (coin-paid; the primary §40.7.1 lane where a buyer pays in
         // the native coin; GET_TICK is empty in that mode per DISPENSER.md).
-        // Ownership dispensers (GIVE_OWNERSHIP=1) are single-shot — GIVE_AMOUNT
+        // Ownership dispensers (GIVE_OWNERSHIP=1) are single-shot: GIVE_AMOUNT
         // and GIVE_ESCROW must be EMPTY in that mode, and GET_AMOUNT is the price.
         if (this._isEmpty(fields.DISPENSER_ACTION_INDEX)) {
             let isOwnershipGive = (Number(fields.GIVE_OWNERSHIP || 0) === 1);
@@ -701,7 +701,7 @@ class Validator {
         let errors = [];
         // LIST v0 (create) requires TYPE; LIST v1 (edit) requires EDIT + LIST_ACTION_INDEX
         if (this._isEmpty(fields.LIST_ACTION_INDEX) && this._isEmpty(fields.EDIT)) {
-            // Create mode — TYPE is required
+            // Create mode: TYPE is required
             if (this._isEmpty(fields.TYPE))
                 errors.push(this._error('MISSING_REQUIRED_FIELD', 'LIST create requires field: TYPE', { field: 'TYPE' }));
         }
@@ -729,7 +729,7 @@ class Validator {
         }
 
         // Dot is the parent/child separator for sub-tokens (e.g. PARENT.CHILD), which the
-        // indexer fully supports — so allow it as a separator, but reject empty segments
+        // indexer fully supports; use it as a separator but reject empty segments
         // (no leading, trailing, or consecutive dots). Slash is still forbidden.
         if (name.includes('.') && name.split('.').some(seg => seg.length === 0))
             errors.push(this._error('INVALID_TICK_NAME', 'TICK name has an empty parent/child segment (no leading, trailing, or consecutive dots)', { value }));

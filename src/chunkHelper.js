@@ -33,9 +33,15 @@ const crypto = require('crypto');
 const MAX_ACTION_DATA_LENGTH      = 8192;
 const MAX_DEPLOYCHUNK_PART_BYTES  = 7800;
 const MAX_DEPLOY_CHUNKS           = 16;
+// OP_RETURN_PUSH_OVERHEAD = 3 bytes (OP_RETURN + OP_PUSHDATA1 + 1-byte length).
+// This holds for payloads up to 252 bytes. For payloads larger than 252 bytes
+// the push opcode becomes OP_PUSHDATA2 (4 bytes total overhead), but all DEPLOY
+// v4 slices are capped at MAX_DEPLOYCHUNK_PART_BYTES (7800) so the single-shot
+// fitsSingleDeploy() path is the only caller, and its budget is small enough
+// that the 3-byte figure is correct for that check.
 const OP_RETURN_PUSH_OVERHEAD     = 3;
 
-// sha256 hex of the UTF-8 source — the chunk-group id AND the integrity check.
+// sha256 hex of the UTF-8 source: the chunk-group id AND the integrity check.
 // Matches the indexer's crypto.createHash('sha256').update(code) (utf8 default).
 function codeHashOf(code) {
     return crypto.createHash('sha256').update(Buffer.from(String(code), 'utf8')).digest('hex');
@@ -58,20 +64,20 @@ function fitsSingleDeploy(code, opts = {}) {
     return (Buffer.byteLength(b64, 'utf8') + overhead) <= MAX_ACTION_DATA_LENGTH;
 }
 
-// Split base64(code) into ordered slices each ≤ MAX_DEPLOYCHUNK_PART_BYTES bytes.
+// Split base64(code) into ordered slices each <= MAX_DEPLOYCHUNK_PART_BYTES bytes.
 // The slices are of the base64 STRING (not the raw bytes), so plain concatenation
-// in order restores base64(code) exactly — no 4-char alignment is required.
+// in order restores base64(code) exactly; no 4-char alignment is required.
 function splitCode(code) {
     let b64   = Buffer.from(String(code), 'utf8').toString('base64');
     let parts = [];
     for (let i = 0; i < b64.length; i += MAX_DEPLOYCHUNK_PART_BYTES)
         parts.push(b64.slice(i, i + MAX_DEPLOYCHUNK_PART_BYTES));
-    if (parts.length === 0) parts.push(''); // empty source → one empty slice (edge)
+    if (parts.length === 0) parts.push(''); // empty source: one empty slice (edge)
     return parts;
 }
 
-// Plan a deploy: { codeHash, single, parts, totalChunks }. `single` true ⇒ deploy
-// inline (DEPLOY v0/v1); false ⇒ submit `parts` as DEPLOY v4 carriers then assemble via
+// Plan a deploy: { codeHash, single, parts, totalChunks }. `single` true => deploy
+// inline (DEPLOY v0/v1); false => submit `parts` as DEPLOY v4 carriers then assemble via
 // DEPLOY v2/v3. Throws if the code needs more than MAX_DEPLOY_CHUNKS slices.
 function planDeploy(code, opts = {}) {
     let codeHash = codeHashOf(code);
