@@ -1,7 +1,7 @@
 /*********************************************************************
  *
- * Copyright © 2025–2026 Dankest, LLC
- * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ * Copyright © 2025-2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC - https://dankest.llc
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
@@ -35,6 +35,9 @@ class ActionWaiter {
     //   timeout      - ms to wait before rejecting (default 120000)
     //   pollInterval - ms between explorer poll attempts (default 2000)
     //   requireValid - if true (default), reject if the action status is 'invalid'
+    //   actionIndex  - when supplied, status is resolved from that specific action
+    //                  only, preventing a neighboring action's status from leaking
+    //                  into the result (relevant for multi-action transactions)
     async waitForTxid(txid, opts = {}) {
         let timeout      = opts.timeout || 120000;
         let pollInterval = opts.pollInterval || 2000;
@@ -93,17 +96,25 @@ class ActionWaiter {
                     let result = await explorer.getTransaction(txid, 'tx_hash');
                     if (result && result.tx_hash) {
                         let actions = Array.isArray(result.actions) ? result.actions : [];
-                        let invalid = actions.find(a => typeof a.status === 'string' && /^invalid/i.test(a.status));
+
+                        // If a specific action_index was requested, narrow the action list to
+                        // that entry only. This prevents a neighboring action's status from
+                        // surfacing as the top-level result in multi-action transactions.
+                        let targetActions = (opts.actionIndex !== undefined)
+                            ? actions.filter(a => a.action_index === opts.actionIndex)
+                            : actions;
+
+                        let invalid = targetActions.find(a => typeof a.status === 'string' && /^invalid/i.test(a.status));
                         // Surface a normalized top-level status for callers/tests: the first
                         // action whose status is not 'valid'. This covers wire rejections
                         // ("invalid: ...") AND VM execution outcomes ('failed' / 'reverted' /
-                        // 'out_of_resource') — previously only "invalid:" surfaced, so a failed
+                        // 'out_of_resource'). Previously only "invalid:" surfaced, so a failed
                         // contract execution read as top-level 'valid' and callers had to dig
                         // into actions[n].status. Note requireValid still rejects ONLY on
-                        // "invalid:" — an indexed-but-failed execution is a successful
+                        // "invalid:"; an indexed-but-failed execution is a successful
                         // SUBMISSION (the tx is on-chain and processed), so flows that wait on
                         // delivery (attestation callbacks, batch drivers) must not throw.
-                        let nonValid = actions.find(a => typeof a.status === 'string' && a.status !== 'valid');
+                        let nonValid = targetActions.find(a => typeof a.status === 'string' && a.status !== 'valid');
                         result.status = nonValid ? nonValid.status : 'valid';
                         if (requireValid && invalid) {
                             settle(new SDKActionError('ACTION_REJECTED',
@@ -114,7 +125,7 @@ class ActionWaiter {
                         }
                     }
                 } catch (e) {
-                    // 404 or network error — keep polling
+                    // 404 or network error; keep polling
                 }
             };
 

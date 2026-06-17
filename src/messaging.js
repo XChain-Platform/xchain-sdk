@@ -1,7 +1,7 @@
 /*********************************************************************
  *
- * Copyright © 2025–2026 Dankest, LLC
- * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ * Copyright © 2025-2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC - https://dankest.llc
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
@@ -56,7 +56,7 @@ class MessagingUtils {
     }
 
     // -------------------------------------------------------------------------
-    //  ECIES (Method 1) — Address Communication
+    //  ECIES (Method 1): Address Communication
     // -------------------------------------------------------------------------
 
     /**
@@ -79,6 +79,11 @@ class MessagingUtils {
 
         if (pubkeyBuf.length !== 33 && pubkeyBuf.length !== 65)
             throw new SDKMessagingError('INVALID_PUBKEY', `Invalid public key length: ${pubkeyBuf.length}`);
+
+        // Validate curve point before passing to ECDH (rejects off-curve / small-subgroup points
+        // regardless of Node version and guards against future polyfill/shim environments).
+        if (!ecc.isPoint(pubkeyBuf))
+            throw new SDKMessagingError('INVALID_PUBKEY', 'Recipient public key is not a valid secp256k1 point.');
 
         // Generate ephemeral keypair
         let ephemeral = ECPair.makeRandom({ compressed: true });
@@ -148,8 +153,8 @@ class MessagingUtils {
 
     /**
      * Encrypt raw bytes using ECIES. Mirrors eciesEncrypt but skips the
-     * utf8 conversion — for binary payloads (e.g. gated-content key
-     * handoffs) where the plaintext is not text.
+     * utf8 conversion (for binary payloads, e.g. gated-content key
+     * handoffs, where the plaintext is not text).
      *
      * @param {Buffer} plaintext - Bytes to encrypt
      * @param {string|Buffer} recipientPubkey - Recipient's compressed public key (hex or Buffer)
@@ -168,6 +173,10 @@ class MessagingUtils {
         if (pubkeyBuf.length !== 33 && pubkeyBuf.length !== 65)
             throw new SDKMessagingError('INVALID_PUBKEY', `Invalid public key length: ${pubkeyBuf.length}`);
 
+        // Validate curve point (same guard as eciesEncrypt).
+        if (!ecc.isPoint(pubkeyBuf))
+            throw new SDKMessagingError('INVALID_PUBKEY', 'Recipient public key is not a valid secp256k1 point.');
+
         let ephemeral = ECPair.makeRandom({ compressed: true });
         let sharedSecret = this._deriveECDHSecret(ephemeral.privateKey, pubkeyBuf);
 
@@ -182,7 +191,7 @@ class MessagingUtils {
 
     /**
      * Decrypt an ECIES ciphertext into raw bytes (no utf8 conversion).
-     * Counterpart to eciesEncryptBytes — preserves binary plaintexts.
+     * Counterpart to eciesEncryptBytes; preserves binary plaintexts.
      *
      * @param {string|Buffer} ciphertext - Hex-encoded ciphertext
      * @param {string} wif - Recipient's WIF private key
@@ -227,7 +236,7 @@ class MessagingUtils {
     }
 
     // -------------------------------------------------------------------------
-    //  ECDH (Method 2) — Session Communication
+    //  ECDH (Method 2): Session Communication
     // -------------------------------------------------------------------------
 
     /**
@@ -308,7 +317,7 @@ class MessagingUtils {
     }
 
     // -------------------------------------------------------------------------
-    //  AES (Method 3) — Shared Secret Communication
+    //  AES (Method 3): Shared Secret Communication
     // -------------------------------------------------------------------------
 
     /**
@@ -373,8 +382,8 @@ class MessagingUtils {
      * @param {string} params.wif - Sender's WIF private key
      * @param {string} params.coin - Destination coin network (BTC, LTC, DOGE)
      * @param {string} params.destination - Recipient address
-     * @param {string|Buffer} params.message - Message content. Buffer triggers binary
-     *                                          ECIES (no utf8 conversion) — used for
+     * @param {string|Buffer} params.message - Message content. A Buffer triggers binary
+     *                                          ECIES (no utf8 conversion), used for
      *                                          gated-content key handoffs and other
      *                                          binary payloads.
      * @param {number} [params.method=1] - Encryption method (1=ECIES, 2=ECDH, 3=AES, null=plaintext)
@@ -407,14 +416,14 @@ class MessagingUtils {
         let encryptedMessage;
 
         if (method === null) {
-            // Plaintext (format 3) — binary payloads can't be sent unencrypted
+            // Plaintext (format 3): binary payloads cannot be sent unencrypted
             if (messageIsBytes)
                 throw new SDKMessagingError('INVALID_MESSAGE',
-                    'Plaintext (method=null) requires a string message — binary payloads must be encrypted.');
+                    'Plaintext (method=null) requires a string message; binary payloads must be encrypted.');
             actionParams.plaintextMessage = params.message;
 
         } else if (method === METHOD_ECIES) {
-            // ECIES — look up recipient pubkey and encrypt
+            // ECIES: look up recipient pubkey and encrypt
             let explorer = sdk._requireExplorer();
             let recipientPubkey = await this.getPublicKey(params.destination, explorer);
             if (!recipientPubkey)
@@ -425,17 +434,17 @@ class MessagingUtils {
                 ? this.eciesEncryptBytes(params.message, recipientPubkey)
                 : this.eciesEncrypt(params.message, recipientPubkey);
             // MESSAGE v2 (VERSION|COIN|DESTINATION|ENCRYPTED_MESSAGE) carries no
-            // ENCRYPTION_METHOD on the wire — absence implies ECIES (1) by protocol.
+            // ENCRYPTION_METHOD on the wire; absence implies ECIES (1) by protocol.
             // Setting encryptionMethod here would add a field with no v2 slot and the
             // format selector would reject every version (NO_MATCHING_FORMAT), so the
             // method is deliberately kept off actionParams.
             actionParams.encryptedMessage = result.ciphertext;
 
         } else if (method === METHOD_ECDH) {
-            // ECDH — requires a pre-derived shared secret
+            // ECDH: requires a pre-derived shared secret
             if (messageIsBytes)
                 throw new SDKMessagingError('INVALID_MESSAGE',
-                    'ECDH (method=2) does not yet support binary payloads — pass a string message.');
+                    'ECDH (method=2) does not yet support binary payloads; pass a string message.');
             if (!params.sharedSecret)
                 throw new SDKMessagingError('SHARED_SECRET_REQUIRED',
                     'Shared secret is required for ECDH encryption. Use deriveSharedSecret() first.');
@@ -447,10 +456,10 @@ class MessagingUtils {
             actionParams.encryptedMessage = result.ciphertext;
 
         } else if (method === METHOD_AES) {
-            // AES — requires a pre-shared key
+            // AES: requires a pre-shared key
             if (messageIsBytes)
                 throw new SDKMessagingError('INVALID_MESSAGE',
-                    'AES (method=3) does not yet support binary payloads — pass a string message.');
+                    'AES (method=3) does not yet support binary payloads; pass a string message.');
             if (!params.sharedKey)
                 throw new SDKMessagingError('SHARED_KEY_REQUIRED',
                     'Shared key is required for AES encryption.');
@@ -527,7 +536,7 @@ class MessagingUtils {
 
         let results = [];
         for (let msg of rawMessages) {
-            // MESSAGE v2 carries no ENCRYPTION_METHOD on the wire — absence implies
+            // MESSAGE v2 carries no ENCRYPTION_METHOD on the wire; absence implies
             // ECIES (1) by protocol. The indexer stamps 1 for v2 rows, but legacy
             // rows (indexed before that change) may still carry a null method, so
             // infer ECIES here whenever an encrypted body is present without a method.
@@ -564,7 +573,7 @@ class MessagingUtils {
                     // ECDH and AES require the shared secret/key which we don't have here
                     // Those must be decrypted by the application
                 } catch (err) {
-                    // Decryption failed — leave text/bytes as null
+                    // Decryption failed; leave text/bytes as null
                 }
                 entry.encrypted = true;
             } else if (msg.encrypted_message) {
@@ -597,7 +606,7 @@ class MessagingUtils {
         let queries = explorers.map(({ explorer, chain }) => {
             return this.getMessages(address, { ...opts, _chain: chain }, explorer)
                 .then(messages => { allMessages.push(...messages); })
-                .catch(() => { /* Explorer unavailable — skip */ });
+                .catch(() => { /* Explorer unavailable; skip */ });
         });
 
         await Promise.all(queries);
