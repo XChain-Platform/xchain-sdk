@@ -109,7 +109,7 @@ describe('ControllerHelpers', function () {
     });
 
     describe('bindAddress()', function () {
-        it('builds ADDRESS v1 params with UNBIND=0 (no address — self-signed)', function () {
+        it('builds ADDRESS v1 params with UNBIND=0 (no address, self-signed)', function () {
             const p = controller.bindAddress({ controller: 42, actionClass: 'trade', cooldownBlocks: 50, memo: 'x' });
             expect(p).to.include({ controller: '42', actionClass: 'trade', cooldownBlocks: '50', unbind: '0', memo: 'x' });
         });

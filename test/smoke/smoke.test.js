@@ -12,7 +12,7 @@ const { expect } = require('chai');
 const axios = require('axios');
 const http = require('http');
 
-describe('Smoke — API server end-to-end', function () {
+describe('Smoke: API server end-to-end', function () {
 
     let server;
     const PORT = 19876; // Unlikely to collide

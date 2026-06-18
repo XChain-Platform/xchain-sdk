@@ -18,7 +18,7 @@ const sinon = require('sinon');
 const LifecycleManager = require('../../src/lifecycleManager.js');
 const WalletSession = require('../../src/walletSession.js');
 
-// Fake WIF key — bitcoinjs/ecpair accepts mainnet WIF
+// Fake WIF key: bitcoinjs/ecpair accepts mainnet WIF
 const WIF_MAINNET = 'KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFU73NUBBy7N';
 
 // Minimal wallet stub that mimics sdk.wallet
@@ -188,7 +188,7 @@ describe('WalletSession', function () {
             // First refresh returns the funding UTXO; after the first submit
             // spends it the cache is empty, and the second submit must
             // re-pull (returning the confirmed change) rather than fall
-            // through to the encoder's pubkey-keyed fetch — a hex pubkey
+            // through to the encoder's pubkey-keyed fetch (a hex pubkey
             // resolves to no UTXOs there (setRoster / attachContent leg 2).
             let calls = 0;
             let sdk = makeSdk({
@@ -308,7 +308,7 @@ describe('WalletSession', function () {
             assert.strictEqual(actionData.params.VERSION, '1');
         });
 
-        it('price() submits a PRICE action (v1 user oracle — only SDK-encodable version)', async function () {
+        it('price() submits a PRICE action (v1 user oracle, only SDK-encodable version)', async function () {
             await session.price({ coin: 'BTC', tick: 'PEPECASH', fiat: 'USD', value: '1.50000000', fee: '0' });
             let [actionData] = submitStub.lastCall.args;
             assert.strictEqual(actionData.action, 'PRICE');

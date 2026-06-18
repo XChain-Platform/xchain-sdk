@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Unit tests for mcp/server.js — the read-only MCP server. Runs the real
+ * Unit tests for mcp/server.js: the read-only MCP server. Runs the real
  * MCP protocol over an in-memory transport pair against a stubbed SDK
  * factory: no network, no real XChainSDK instances.
  *
@@ -249,7 +249,7 @@ describe('MCP server (write tools)', () => {
         const body = JSON.parse(res.content[0].text);
         expect(body).to.deep.equal({ action_string: 'SEND|0|TOK|5|dest', psbt: 'deadbeef', encoding: 'OP_RETURN', signed: false });
         // The default sender is the session ADDRESS (the encoder's pubkey field
-        // base58-decodes on the P2SH path — a hex pubkey breaks past OP_RETURN).
+        // base58-decodes on the P2SH path; a hex pubkey breaks past OP_RETURN).
         expect(created[0].calls.find((c) => c[0] === 'encodeTx')[1]).to.deep.equal({ pubkey: 'agentaddr', data: 'SEND|0|TOK|5|dest' });
         expect(created[0].calls.some((c) => c[0] === 'session.submit')).to.equal(false);
     });

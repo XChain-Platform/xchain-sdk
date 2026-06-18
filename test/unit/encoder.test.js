@@ -613,7 +613,7 @@ describe('EncoderClient', function () {
                 retry: false
             });
 
-            // Only intercept one call — if retried, nock would throw unmatched request
+            // Only intercept one call; if retried, nock would throw unmatched request
             nock(BASE)
                 .post('/')
                 .reply(503, 'Service Unavailable');
@@ -659,7 +659,7 @@ describe('EncoderClient', function () {
     });
 
     /*
-     *  estimateFee — nonWitnessUtxo path (legacy inputs)
+     *  estimateFee: nonWitnessUtxo path (legacy inputs)
      */
 
     describe('estimateFee nonWitnessUtxo', function () {

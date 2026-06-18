@@ -20,7 +20,7 @@ const { SDKConfigError } = require('../../src/errors.js');
 //  Helpers
 // ---------------------------------------------------------------------------
 
-// Env vars the SDK reads — clear them so tests are deterministic
+// Env vars the SDK reads: clear them so tests are deterministic
 const ENV_KEYS = ['NETWORK', 'EXPLORER_URL', 'EXPLORER_PORT', 'ENCODER_URL',
     'ENCODER_PORT', 'HUB_API_HOST', 'HUB_PORT', 'WEBSOCKET_URL', 'WEBSOCKET_PORT'];
 
@@ -102,7 +102,7 @@ describe('XChainSDK', function () {
 
         it('exposes version and name', function () {
             const sdk = makeSDK();
-            // These come from npm_package_version — may be undefined in test env
+            // These come from npm_package_version; may be undefined in test env
             expect(sdk).to.have.property('version');
             expect(sdk).to.have.property('name');
         });
@@ -981,14 +981,14 @@ describe('XChainSDK', function () {
     });
 
     // -----------------------------------------------------------------------
-    // _applyEndpoints — creates clients when they don't exist
+    // _applyEndpoints: creates clients when they don't exist
     // -----------------------------------------------------------------------
 
     describe('_applyEndpoints', function () {
 
         it('creates explorer client from hub endpoints when explorer is null', async function () {
             // Use a network that has no explorer URL without a hub so explorer starts null,
-            // then hub supplies one — triggers line 240 "else if (network)" create branch
+            // then hub supplies one, triggering the "else if (network)" create branch
             const sdk = new XChainSDK({
                 network: 'bitcoin-regtest',
                 hubUrl: 'http://localhost:8001'
@@ -1055,7 +1055,7 @@ describe('XChainSDK', function () {
     });
 
     // -----------------------------------------------------------------------
-    // start() — polling loop that stops when stopFlag is set
+    // start(): polling loop that stops when stopFlag is set
     // -----------------------------------------------------------------------
 
     describe('start()', function () {
@@ -1072,7 +1072,7 @@ describe('XChainSDK', function () {
     });
 
     // -----------------------------------------------------------------------
-    // _isDowngrade — warns only once per service
+    // _isDowngrade: warns only once per service
     // -----------------------------------------------------------------------
 
     describe('_isDowngrade', function () {
@@ -1087,7 +1087,7 @@ describe('XChainSDK', function () {
             sdk.hub.startPolling = sinon.stub();
             const warnSpy = sinon.stub(console, 'warn');
             await sdk._ensureReady();
-            // Call _applyEndpoints again — second warning should be suppressed
+            // Call _applyEndpoints again; second warning should be suppressed
             sdk._discovering = null;  // reset to allow re-apply
             sdk._applyEndpoints();
             // warn should have been called at most once for 'explorer'

@@ -11,7 +11,7 @@
 const { expect } = require('chai');
 const XChainSDK = require('../../src/XChainSDK.js');
 
-// Endpoint env vars the SDK consults — cleared so tests are deterministic.
+// Endpoint env vars the SDK consults: cleared so tests are deterministic.
 const ENV_KEYS = ['NETWORK', 'EXPLORER_URL', 'EXPLORER_PORT', 'ENCODER_URL',
     'ENCODER_PORT', 'HUB_API_HOST', 'HUB_PORT', 'WEBSOCKET_URL', 'WEBSOCKET_PORT'];
 
@@ -86,7 +86,7 @@ describe('XChainSDK config resolution', function () {
             expect(exBase(sdk)).to.equal('https://explorer.internal');
         });
 
-        it('is memoized — discovery runs at most once', async function () {
+        it('is memoized: discovery runs at most once', async function () {
             let calls = 0;
             const sdk = withHub({ explorerUrl: 'https://explorer.internal' }, async () => { calls++; return {}; });
             await sdk._ensureReady();

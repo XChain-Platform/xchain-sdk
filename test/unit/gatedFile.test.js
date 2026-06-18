@@ -117,7 +117,7 @@ describe('GatedFileUtils', function () {
         });
     });
 
-    describe('decryptFileBytes — negative paths', function () {
+    describe('decryptFileBytes - negative paths', function () {
         it('throws on wrong key (GCM auth fail)', function () {
             let { ciphertext } = g.encryptFileBytes('secret');
             let { key: wrongKey } = g.generateKey();
@@ -254,7 +254,7 @@ describe('GatedFileUtils', function () {
 
             // (Wire would ECIES-encrypt payload bytes into a MESSAGE)
 
-            // Holder side — receives MESSAGE, decrypts, parses payload.
+            // Holder side: receives MESSAGE, decrypts, parses payload.
             // Identify the right key by hashing each candidate against the
             // gated FILE's KEY_HASH (the same check verifyKey performs).
             let parsed = g.parseKeyPayload(payload);
@@ -269,7 +269,7 @@ describe('GatedFileUtils', function () {
         });
     });
 
-    // ─── serializeKeyPayload — object-map input + guards ──────────────────
+    // serializeKeyPayload: object-map input + guards
     describe('serializeKeyPayload (object-map + guards)', function () {
 
         it('accepts an object map of { keyHash: key } and round-trips', function () {

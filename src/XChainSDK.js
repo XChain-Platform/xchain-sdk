@@ -83,18 +83,18 @@ class XChainSDK {
         this.auth       = new AuthUtils(network);
         this.messaging  = new MessagingUtils(network);
         this.gatedFile  = new GatedFileUtils();
-        // NFT helpers — pure builders for the NFT pattern (ISSUE with DECIMALS=0 +
+        // NFT helpers: pure builders for the NFT pattern (ISSUE with DECIMALS=0 +
         // LOCK_MAX_SUPPLY=1), collection child params, content-attach (LINK) params,
         // and the canonical isNft() classifier. No network. Submit-flow recipes that
         // compose these into live actions live on sdk.workflows (issueNft, etc.).
         // Spec: protocol/NFT_Standard.md.
         this.nft        = new NftHelpers();
-        // Project registry helpers — pure builders for owner-attested official-token
+        // Project registry helpers: pure builders for owner-attested official-token
         // rosters (TICK-type LIST + LINK to the project's ISSUE). No network.
         // Submit-flow recipe lives on sdk.workflows (setRoster).
         // Spec: protocol/Project_Registry.md.
         this.project    = new ProjectHelpers();
-        // Controller (programmable-policy) helpers — pure builders for the
+        // Controller (programmable-policy) helpers: pure builders for the
         // bind/unbind wire actions (ISSUE v6 for a token, ADDRESS v1 for an
         // account) that route a native action class to a guard contract. No
         // network. Read the resulting manifest via sdk.getContractManifest().
@@ -106,7 +106,7 @@ class XChainSDK {
         // passing a URL into an EXECUTE that emits xchain.attestation.request().
         this.attestation = AttestationHelpers;
         // State checkpoint verification (local Ed25519 over the XCHECKPOINT
-        // canonical) — `sdk.checkpoint.fetchAndVerifyCheckpoint(...)` lets a
+        // canonical): `sdk.checkpoint.fetchAndVerifyCheckpoint(...)` lets a
         // client verify explorer state against the validator quorum without
         // trusting the server. Spec: protocol/actions/ANCHOR.md.
         this.checkpoint = CheckpointVerifier;
@@ -208,7 +208,7 @@ class XChainSDK {
     }
 
     // Async initialization: fetch config from hub and resolve service endpoints.
-    // Optional — service clients are already usable after construction (explicit
+    // Optional: service clients are already usable after construction (explicit
     // URLs, env vars, or public defaults). Call this to force hub discovery up
     // front; otherwise it happens lazily on the first service call (_ensureReady).
     // Unlike the lazy path, init() surfaces a hub error when there is no fallback
@@ -231,7 +231,7 @@ class XChainSDK {
 
     // Lazy-readiness gate. Awaited once (via each client's readyHook) before the
     // first request, so hub-discovered endpoints overlay the default clients.
-    // Never throws — on hub failure the hardcoded/explicit config stands.
+    // Never throws: on hub failure the hardcoded/explicit config stands.
     _ensureReady() {
         if (!this.hub) return Promise.resolve();
         if (!this._readyPromise) this._readyPromise = this._discover().catch(() => {});
@@ -300,7 +300,7 @@ class XChainSDK {
     // a client whose current base is https (the public default) would replace
     // https://explorer.xchain.io with a broken http://host:port. When the
     // current base is secure and the incoming endpoint is not, keep the secure
-    // base and warn once. (No effect on http/localhost bases — dev is unchanged.
+    // base and warn once. (No effect on http/localhost bases; dev is unchanged.
     // Set option `allowInsecureEndpoints: true` to opt out.)
     _isDowngrade(service, client, incomingUrl) {
         if (this.options.allowInsecureEndpoints) return false;
@@ -458,7 +458,7 @@ class XChainSDK {
     async link(params, encoder)      { return this.createAction({ action: 'LINK', params, encoder }); }
     async file(params, encoder)      { return this.createAction({ action: 'FILE', params, encoder }); }
     async address(params, encoder)   { return this.createAction({ action: 'ADDRESS', params, encoder }); }
-    // PRICE: only v1 (permissionless user-run TOKEN/FIAT oracle) is SDK-encodable —
+    // PRICE: only v1 (permissionless user-run TOKEN/FIAT oracle) is SDK-encodable;
     // formats.js has no v0, so the validator COIN/FIAT snapshot can never be built here.
     // Params: { coin, tick, fiat, value, fee, memo }. See protocol/actions/PRICE.md.
     async price(params, encoder)     { return this.createAction({ action: 'PRICE', params, encoder }); }
@@ -470,7 +470,7 @@ class XChainSDK {
     async collect(params, encoder)          { return this.createAction({ action: 'COLLECT', params, encoder }); }
 
     // Pre-flight lint of raw contract source (plain JS, pre-base64). Advisory,
-    // synchronous, no network, browser-safe — runs every acorn-coverable deploy
+    // synchronous, no network, browser-safe; runs every acorn-coverable deploy
     // check via the vendored lint-core. The isolated-vm V8 syntax compile runs
     // only at deploy/CLI, so authoritative is always false; the CLI / on-chain
     // deploy has the final word.
@@ -507,10 +507,10 @@ class XChainSDK {
     }
 
     // Lint params.CODE (raw source) before a DEPLOY action is built.
-    //   'block' (default): throw on any error — saves a guaranteed-to-fail on-chain tx
+    //   'block' (default): throw on any error (saves a guaranteed-to-fail on-chain tx)
     //   'warn'           : log errors + warnings, proceed
     //   'off'            : skip entirely
-    // Chunked/hash-only deploys (no inline CODE) are skipped here — deployContract()
+    // Chunked/hash-only deploys (no inline CODE) are skipped here; deployContract()
     // lints the assembled source before chunking instead.
     _preflightContractLint(params, mode) {
         mode = mode || 'block';
@@ -538,7 +538,7 @@ class XChainSDK {
         const more = result.errors.length > 1 ? ' (+' + (result.errors.length - 1) + ' more)' : '';
         throw new SDKContractError('CONTRACT_LINT_FAILED',
             'Contract failed pre-flight validation: ' + first.message + more +
-            " — fix the contract or pass { lint: 'off' } to skip (it would still be rejected at deploy).");
+            ". Fix the contract or pass { lint: 'off' } to skip (it would still be rejected at deploy).");
     }
 
     // VM action convenience methods
@@ -621,7 +621,7 @@ class XChainSDK {
 
     // Create a new BatchBuilder for fluent BATCH construction
     // Usage: await sdk.batch().send({...}).mint({...}).build(encoderOpts?)
-    // NOTE: build() is async (it wraps the async createAction) — you must await
+    // NOTE: build() is async (it wraps the async createAction); you must await
     // it; passing the un-awaited Promise to submitAction will not work.
     batch() {
         return new BatchBuilder(this);
@@ -649,7 +649,7 @@ class XChainSDK {
     // Native-coin protocol fee (opt-in via encoderOpts.payFeeInNativeCoin): pay the XCHAIN
     // protocol fee in BTC/LTC/DOGE at the USD-equivalent by adding a FEE_DESTINATION output.
     // This runs the indexer pre-flight (quoteNativeFee) to size that output exactly and REFUSES
-    // to build a doomed tx (unsupported action / stale-or-missing oracle price) — a failed
+    // to build a doomed tx (unsupported action / stale-or-missing oracle price). A failed
     // native-fee action forfeits the fee on-chain, so we never produce one that can't be priced.
     // The quote is attached as feeResult.nativeFeeQuote.
     async estimateFees(actionData, encoderOpts = {}) {
@@ -708,7 +708,7 @@ class XChainSDK {
         // unrelated JSON body; treating that as a quote builds a doomed fee-forfeiting tx.
         if (!quote || typeof quote !== 'object' || Array.isArray(quote) || typeof quote.supported !== 'boolean') {
             let detail = (quote && typeof quote === 'object' && quote.error) ? String(quote.error) : 'not a quote object';
-            throw new SDKExplorerError('EXPLORER_BAD_FEEQUOTE', 'Explorer returned a malformed native-fee quote (' + detail + ') — refusing to size the fee output', { quote: typeof quote === 'string' ? quote.slice(0, 200) : quote });
+            throw new SDKExplorerError('EXPLORER_BAD_FEEQUOTE', 'Explorer returned a malformed native-fee quote (' + detail + '): refusing to size the fee output', { quote: typeof quote === 'string' ? quote.slice(0, 200) : quote });
         }
         quote.actionString = result.actionString;
         return quote;
@@ -793,7 +793,7 @@ class XChainSDK {
     // Fetch the raw ciphertext bytes for a gated FILE by ACTION_INDEX.
     async getGatedFileRaw(actionIndex, coin = null) { return this._requireExplorer().getGatedFileRaw(actionIndex, coin); }
 
-    // Absolute URL of a FILE action's raw bytes on the configured explorer —
+    // Absolute URL of a FILE action's raw bytes on the configured explorer:
     // the resolution target for TIS data_ref entries and on-chain TIS docs.
     fileRawUrl(actionIndex, coin = null) { return this._requireExplorer().fileRawUrl(actionIndex, coin); }
 
@@ -996,7 +996,7 @@ class XChainSDK {
         return this._requireExplorer().getSwaps(query, type, opts);
     }
 
-    // Completed swap matches (type 'block' — the explorer keys matches by block).
+    // Completed swap matches (type 'block'; the explorer keys matches by block).
     async getSwapMatches(query, type, opts) {
         return this._requireExplorer().getSwapMatches(query, type, opts);
     }
@@ -1041,7 +1041,7 @@ class XChainSDK {
         return this._requireExplorer().getAttestations(query, type, opts);
     }
 
-    // Read XCALL cross-chain calls (VM-emitted; read-only — no submit path). List the
+    // Read XCALL cross-chain calls (VM-emitted, read-only; no submit path). List the
     // source-chain requests (type ∈ {block, contract, status}); a dapp polls getXcall(callId)
     // for one call's full lifecycle (request + target execution + source callback).
     async getXcalls(query, type, opts) {

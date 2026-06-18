@@ -25,7 +25,7 @@ const { coinPrefix } = require('./endpoints.js');
 const { getSupportedNetworks } = require('./networks.js');
 const ContractClient = require('./contractClient.js');
 
-// (Coin prefix mapping lives in endpoints.coinPrefix — single source of truth,
+// (Coin prefix mapping lives in endpoints.coinPrefix, single source of truth,
 //  shared with the public-default resolution.)
 
 class ExplorerClient {
@@ -293,7 +293,7 @@ class ExplorerClient {
         return this._get('/dispenses/' + query + '/' + type, opts);
     }
 
-    // Dispenser lifecycle events — type ∈ {block, address}.
+    // Dispenser lifecycle events, type ∈ {block, address}.
     async getDispenserCancels(query, type, opts = {}) {
         return this._get('/dispenser_cancels/' + query + '/' + type, opts);
     }
@@ -341,7 +341,7 @@ class ExplorerClient {
     }
 
     // Coin-prefix for a sibling chain at THIS client's network tier:
-    // RBTC client + 'DOGE' → 'RDOGE' (Token_Information_Standard.md —
+    // RBTC client + 'DOGE' → 'RDOGE' (Token_Information_Standard.md:
     // cross-chain action refs carry the base ticker; the tier is implied).
     _siblingCoin(baseCoin) {
         if (!baseCoin) return this.coin;
@@ -349,7 +349,7 @@ class ExplorerClient {
         return tier + String(baseCoin).toUpperCase();
     }
 
-    // Absolute URL of a FILE action's raw bytes on this explorer — the
+    // Absolute URL of a FILE action's raw bytes on this explorer: the
     // resolution target for TIS `data_ref` entries and on-chain TIS
     // documents (DESCRIPTION = action:<index> / action:<COIN>:<index>).
     // Pass `coin` (base ticker) for a sibling-chain reference. Pure string
@@ -403,7 +403,7 @@ class ExplorerClient {
         return this._get('/orders/' + query + '/' + type, opts);
     }
 
-    // Order lifecycle events — type ∈ {block, address}.
+    // Order lifecycle events, type ∈ {block, address}.
     async getOrderCancels(query, type, opts = {}) {
         return this._get('/order_cancels/' + query + '/' + type, opts);
     }
@@ -436,7 +436,7 @@ class ExplorerClient {
         return this._get('/swaps/' + query + '/' + type, opts);
     }
 
-    // Swap lifecycle events — type ∈ {block, address}.
+    // Swap lifecycle events, type ∈ {block, address}.
     async getSwapCancels(query, type, opts = {}) {
         return this._get('/swap_cancels/' + query + '/' + type, opts);
     }
@@ -466,7 +466,7 @@ class ExplorerClient {
      *  Price Methods
      */
 
-    // PRICE v0 validator COIN/FIAT snapshots + v1 user TOKEN/FIAT oracle —
+    // PRICE v0 validator COIN/FIAT snapshots + v1 user TOKEN/FIAT oracle,
     // type ∈ {block, address, source, token}.
     async getPrices(query, type, opts = {}) {
         if (query)
@@ -474,7 +474,7 @@ class ExplorerClient {
         return this._get('/prices', opts);
     }
 
-    // Oracle price-snapshot rounds — type ∈ {pair, round, status}.
+    // Oracle price-snapshot rounds, type ∈ {pair, round, status}.
     async getPriceSnapshots(query, type, opts = {}) {
         if (query)
             return this._get('/price_snapshots/' + query + '/' + type, opts);
@@ -561,14 +561,14 @@ class ExplorerClient {
         return this._get('/rewards/' + query + '/' + type, opts);
     }
 
-    // Contract-targeted stakes (STAKE v3) — type ∈ {address, block, contract}.
+    // Contract-targeted stakes (STAKE v3), type ∈ {address, block, contract}.
     async getContractStakes(query, type, opts = {}) {
         if (query)
             return this._get('/contract_stakes/' + query + '/' + type, opts);
         return this._get('/contract_stakes', opts);
     }
 
-    // Contract-targeted unstakes (UNSTAKE v1) — type ∈ {address, block, contract}.
+    // Contract-targeted unstakes (UNSTAKE v1), type ∈ {address, block, contract}.
     async getContractUnstakes(query, type, opts = {}) {
         if (query)
             return this._get('/contract_unstakes/' + query + '/' + type, opts);
@@ -576,14 +576,14 @@ class ExplorerClient {
     }
 
     // External Attestation Framework rows (ATTEST v0 requests + v1/v2
-    // responses from the `attests` table) — type ∈ {address, block, contract}.
+    // responses from the `attests` table), type ∈ {address, block, contract}.
     async getAttestations(query, type, opts = {}) {
         if (query)
             return this._get('/attestations/' + query + '/' + type, opts);
         return this._get('/attestations', opts);
     }
 
-    // Slash events emitted by contracts via xchain.contract.slash —
+    // Slash events emitted by contracts via xchain.contract.slash,
     // type ∈ {address, block, contract}.
     async getSlashEvents(query, type, opts = {}) {
         if (query)
@@ -592,7 +592,7 @@ class ExplorerClient {
     }
 
     // XCALL cross-chain calls (VM-emitted via xchain.emit.crossExecute; read-only).
-    // List the source-chain request rows — type ∈ {block, contract, status}.
+    // List the source-chain request rows, type ∈ {block, contract, status}.
     async getXcalls(query, type, opts = {}) {
         if (query)
             return this._get('/xcalls/' + query + '/' + type, opts);
@@ -643,13 +643,13 @@ class ExplorerClient {
      */
 
     // Indexer status. Returns per-coin maps:
-    //   supported / available — configured and currently-served coins
-    //   last_block[coin]       — highest block the indexer has processed
-    //   last_block_time[coin]  — block_time of that block
-    //   decoder_tip[coin]      — the decoder's highest *processed* block, or null
-    //                            if unavailable. NOT the coin node's chain tip — see
-    //                            the decoder's health() RPC for the chain->decoder gap.
-    //   decoder_lag_blocks[coin] — decoder_tip - last_block (>= 0), or null when
+    //   supported / available: configured and currently-served coins
+    //   last_block[coin]:       highest block the indexer has processed
+    //   last_block_time[coin]:  block_time of that block
+    //   decoder_tip[coin]:      the decoder's highest *processed* block, or null
+    //                            if unavailable. NOT the coin node's chain tip (see
+    //                            the decoder's health() RPC for the chain->decoder gap).
+    //   decoder_lag_blocks[coin]: decoder_tip - last_block (>= 0), or null when
     //                            decoder_tip is null. Lets a caller detect a stalled
     //                            indexer (indexer->decoder slice) from this single
     //                            call rather than a separate tip query.
@@ -657,13 +657,13 @@ class ExplorerClient {
         return this._get('/status');
     }
 
-    // Unconfirmed mempool actions — type ∈ {address, token}.
+    // Unconfirmed mempool actions, type ∈ {address, token}.
     async getMempool(query, type, opts = {}) {
         return this._get('/mempool/' + query + '/' + type, opts);
     }
 
     // Network-wide summary (chain heights, indexer status, peer counts). Also
-    // includes a `finality` map ({ BTC, LTC, DOGE }) — the recommended number of
+    // includes a `finality` map ({ BTC, LTC, DOGE }): the recommended number of
     // confirmations to wait before treating a same-chain receipt as final
     // (display/UX guidance; the indexer itself processes actions at the tip).
     async getNetwork(opts = {}) {

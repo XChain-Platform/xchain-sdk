@@ -120,7 +120,7 @@ describe('retry utility', () => {
 
     describe('withRetry()', () => {
 
-        it('succeeds on first try — fn called exactly once', async () => {
+        it('succeeds on first try: fn called exactly once', async () => {
             let callCount = 0;
             let result = await withRetry(async () => {
                 callCount++;
@@ -130,7 +130,7 @@ describe('retry utility', () => {
             expect(callCount).to.equal(1);
         });
 
-        it('fails once then succeeds — fn called exactly twice', async () => {
+        it('fails once then succeeds: fn called exactly twice', async () => {
             let callCount = 0;
             let result = await withRetry(async () => {
                 callCount++;
@@ -145,7 +145,7 @@ describe('retry utility', () => {
             expect(callCount).to.equal(2);
         });
 
-        it('fails with non-retryable error — throws immediately, fn called once', async () => {
+        it('fails with non-retryable error: throws immediately, fn called once', async () => {
             let callCount = 0;
             let err400 = new Error('bad request');
             err400.response = { status: 400 };
@@ -163,7 +163,7 @@ describe('retry utility', () => {
             expect(callCount).to.equal(1);
         });
 
-        it('exhausts all retries — throws last error', async () => {
+        it('exhausts all retries: throws last error', async () => {
             let callCount = 0;
             let transient = new Error('service unavailable');
             transient.response = { status: 503 };
@@ -210,7 +210,7 @@ describe('ExplorerClient retry integration', () => {
         nock.cleanAll();
     });
 
-    it('HTTP 503 then 200 — succeeds', async () => {
+    it('HTTP 503 then 200: succeeds', async () => {
         nock(EXPLORER_BASE)
             .get('/BTC/api/status').reply(503)
             .get('/BTC/api/status').reply(200, { ok: true });
@@ -219,7 +219,7 @@ describe('ExplorerClient retry integration', () => {
         expect(result).to.deep.equal({ ok: true });
     });
 
-    it('HTTP 429 then 200 — succeeds', async () => {
+    it('HTTP 429 then 200: succeeds', async () => {
         nock(EXPLORER_BASE)
             .get('/BTC/api/status').reply(429)
             .get('/BTC/api/status').reply(200, { ok: true });
@@ -228,7 +228,7 @@ describe('ExplorerClient retry integration', () => {
         expect(result).to.deep.equal({ ok: true });
     });
 
-    it('HTTP 503 three times — throws SDKExplorerError (maxRetries: 2 = 3 total attempts)', async () => {
+    it('HTTP 503 three times: throws SDKExplorerError (maxRetries: 2 = 3 total attempts)', async () => {
         nock(EXPLORER_BASE)
             .get('/BTC/api/status').reply(503)
             .get('/BTC/api/status').reply(503)
@@ -245,7 +245,7 @@ describe('ExplorerClient retry integration', () => {
         expect(thrown.code).to.equal('EXPLORER_HTTP_503');
     });
 
-    it('HTTP 400 — throws immediately, no retry', async () => {
+    it('HTTP 400: throws immediately, no retry', async () => {
         // Only one nock scope; a retry would cause nock to throw "Nock: No match" (test would fail differently)
         nock(EXPLORER_BASE)
             .get('/BTC/api/status').reply(400, { error: 'bad request' });
@@ -261,7 +261,7 @@ describe('ExplorerClient retry integration', () => {
         expect(thrown.code).to.equal('EXPLORER_HTTP_400');
     });
 
-    it('retry: false — HTTP 503 throws immediately without retry', async () => {
+    it('retry: false, HTTP 503 throws immediately without retry', async () => {
         let noRetryClient = new ExplorerClient({
             network:     'bitcoin-mainnet',
             explorerUrl: 'retry.test',
@@ -308,7 +308,7 @@ describe('EncoderClient retry integration', () => {
         nock.cleanAll();
     });
 
-    it('HTTP 502 then success — succeeds', async () => {
+    it('HTTP 502 then success: succeeds', async () => {
         nock(ENCODER_BASE)
             .post('/').reply(502)
             .post('/').reply(200, { jsonrpc: '2.0', id: 2, result: 'pong' });
@@ -317,7 +317,7 @@ describe('EncoderClient retry integration', () => {
         expect(result).to.equal('pong');
     });
 
-    it('HTTP 500 — throws immediately (500 is not retryable)', async () => {
+    it('HTTP 500: throws immediately (500 is not retryable)', async () => {
         // Only register a single reply; a retry would exhaust nock and the test would
         // fail with a different error, making the assertion below reliable.
         nock(ENCODER_BASE)
@@ -334,7 +334,7 @@ describe('EncoderClient retry integration', () => {
         expect(thrown.code).to.equal('ENCODER_HTTP_500');
     });
 
-    it('JSON-RPC body.error — throws immediately (valid response, not retryable)', async () => {
+    it('JSON-RPC body.error: throws immediately (valid response, not retryable)', async () => {
         let rpcError = { code: -32601, message: 'Method not found' };
         nock(ENCODER_BASE)
             .post('/').reply(200, { jsonrpc: '2.0', id: 1, error: rpcError });
@@ -350,7 +350,7 @@ describe('EncoderClient retry integration', () => {
         expect(thrown.code).to.equal('ENCODER_RPC_ERROR');
     });
 
-    it('network error (ECONNRESET) then success — succeeds', async () => {
+    it('network error (ECONNRESET) then success: succeeds', async () => {
         // Pass a real Error instance carrying the code so the network error
         // propagates to the HTTP client as a socket error (object literals are
         // not surfaced as connection errors by the interceptor)
@@ -369,7 +369,7 @@ describe('EncoderClient retry integration', () => {
 // Section 4: Request hook tests
 // ---------------------------------------------------------------------------
 
-describe('request hooks — ExplorerClient', () => {
+describe('request hooks - ExplorerClient', () => {
 
     const EXPLORER_BASE = 'http://hooks.test:8080';
 
@@ -434,7 +434,7 @@ describe('request hooks — ExplorerClient', () => {
         expect(req.method).to.equal('GET');
     });
 
-    it('no hooks configured — no crash on successful request', async () => {
+    it('no hooks configured: no crash on successful request', async () => {
         let noHookClient = new ExplorerClient({
             network:     'bitcoin-mainnet',
             explorerUrl: 'hooks.test',
@@ -452,7 +452,7 @@ describe('request hooks — ExplorerClient', () => {
 });
 
 
-describe('request hooks — EncoderClient', () => {
+describe('request hooks - EncoderClient', () => {
 
     const ENCODER_BASE = 'http://hooks.test:3000';
 
@@ -532,7 +532,7 @@ describe('request hooks — EncoderClient', () => {
         expect(retryEntry.service).to.equal('encoder');
     });
 
-    it('no hooks configured — no crash on successful request', async () => {
+    it('no hooks configured: no crash on successful request', async () => {
         let noHookClient = new EncoderClient({
             encoderUrl:  'hooks.test',
             encoderPort: 3000,
@@ -615,7 +615,7 @@ describe('retry helpers (pure)', function () {
             const cfg = { baseDelay: 1000, backoffFactor: 10, maxDelay: 2000 };
             const d = getDelay(5, cfg, new Error('net')); // huge → capped to 2000, then ±25% jitter
             // The cap is applied BEFORE the ±25% jitter, so the final value lands in
-            // [maxDelay*0.75, maxDelay*1.25] = [1500, 2500] — never the un-capped huge value.
+            // [maxDelay*0.75, maxDelay*1.25] = [1500, 2500], never the un-capped huge value.
             expect(d).to.be.at.least(1500);
             expect(d).to.be.at.most(2500);
         });

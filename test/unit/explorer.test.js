@@ -448,7 +448,7 @@ describe('ExplorerClient', function () {
     });
 
     /*
-     *  Balance & Address Methods — direct calls
+     *  Balance & Address Methods (direct calls)
      */
 
     describe('balance & address methods', function () {
@@ -490,7 +490,7 @@ describe('ExplorerClient', function () {
     });
 
     /*
-     *  Token methods — direct calls
+     *  Token methods (direct calls)
      */
 
     describe('token methods', function () {
@@ -508,7 +508,7 @@ describe('ExplorerClient', function () {
     });
 
     /*
-     *  Transaction & History methods — direct calls
+     *  Transaction & History methods (direct calls)
      */
 
     describe('transaction & history methods', function () {
@@ -538,7 +538,7 @@ describe('ExplorerClient', function () {
     });
 
     /*
-     *  ACTION-specific methods — direct calls (a representative sample)
+     *  ACTION-specific methods: direct calls (a representative sample)
      */
 
     describe('action-specific methods', function () {
@@ -611,7 +611,7 @@ describe('ExplorerClient', function () {
     });
 
     /*
-     *  Fee methods — direct calls
+     *  Fee methods (direct calls)
      */
 
     describe('fee methods', function () {
@@ -650,7 +650,7 @@ describe('ExplorerClient', function () {
     });
 
     /*
-     *  Price methods — direct calls
+     *  Price methods (direct calls)
      */
 
     describe('price methods', function () {
@@ -680,7 +680,7 @@ describe('ExplorerClient', function () {
     });
 
     /*
-     *  Contract / VM methods — direct calls
+     *  Contract / VM methods (direct calls)
      */
 
     describe('contract/VM methods', function () {
@@ -758,7 +758,7 @@ describe('ExplorerClient', function () {
     });
 
     /*
-     *  Attestation methods — direct calls
+     *  Attestation methods (direct calls)
      */
 
     describe('attestation methods', function () {
@@ -776,7 +776,7 @@ describe('ExplorerClient', function () {
     });
 
     /*
-     *  Market methods — additional coverage
+     *  Market methods: additional coverage
      */
 
     describe('market methods', function () {
@@ -812,7 +812,7 @@ describe('ExplorerClient', function () {
     });
 
     /*
-     *  Staking methods — additional
+     *  Staking methods: additional
      */
 
     describe('staking methods', function () {
@@ -836,7 +836,7 @@ describe('ExplorerClient', function () {
     });
 
     /*
-     *  Utility methods — additional
+     *  Utility methods: additional
      */
 
     describe('utility methods', function () {
@@ -860,7 +860,7 @@ describe('ExplorerClient', function () {
     });
 
     /*
-     *  gatedFile — getGatedFileRaw
+     *  gatedFile: getGatedFileRaw
      */
 
     describe('getGatedFileRaw', function () {
@@ -910,7 +910,7 @@ describe('ExplorerClient', function () {
     });
 
     /*
-     *  search — error handling path
+     *  search: error handling path
      */
 
     describe('search error handling', function () {
@@ -990,7 +990,7 @@ describe('ExplorerClient', function () {
     });
 
     /*
-     *  _buildParams — additional params coverage
+     *  _buildParams: additional params coverage
      */
 
     describe('_buildParams additional params', function () {

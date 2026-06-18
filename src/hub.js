@@ -23,7 +23,7 @@ const { SDKHubError } = require('./errors.js');
 
 // Fold a getallconfigs delta (only the rows that changed since our cursor) into
 // the cached nested config map, mutating and returning `base`. The hub's configs
-// table is upsert-only — rows are never deleted — so applying successive deltas
+// table is upsert-only (rows are never deleted), so applying successive deltas
 // reconstructs exactly the tree a full fetch would have produced.
 function mergeConfigDelta(base, delta){
     for(let coin in delta){
@@ -135,7 +135,7 @@ class HubConnector {
     // watermark is present the payload is a delta (only rows changed since the
     // cursor we sent), so we MERGE it into the cache and advance the cursor.
     // Older hubs return the bare map (or a { configs, seq } wrapper without a
-    // watermark) — those are always the full tree, so we REPLACE. Callers
+    // watermark): those are always the full tree, so we REPLACE. Callers
     // (extractServiceEndpoints) see the same full-map shape regardless of hub
     // version. seq stays 0 against an old hub.
     _applyConfigResult(result) {
@@ -152,7 +152,7 @@ class HubConnector {
         this.lastSeq = seq;
 
         if (watermark === undefined || watermark === null) {
-            // Hub doesn't report a watermark — payload is the full tree. Reset the
+            // Hub doesn't report a watermark. Payload is the full tree. Reset the
             // cursor so the next poll also requests in full.
             this.lastWatermark = 0;
             return payload || {};
@@ -165,7 +165,7 @@ class HubConnector {
             // Delta against the cursor we sent: merge changed rows into the cache.
             return mergeConfigDelta(this.configs, payload || {});
         }
-        // First fetch (or post-restart) — payload is the full tree.
+        // First fetch (or post-restart): payload is the full tree.
         return payload || {};
     }
 
@@ -277,7 +277,7 @@ class HubConnector {
                 await this.getAllConfig();
                 if (callback) callback(this.configs);
             } catch (err) {
-                // Silently continue — hub unavailability during polling is non-fatal
+                // Silently continue: hub unavailability during polling is non-fatal
                 console.warn('Hub poll failed:', err);
             }
         }, this.pollInterval);

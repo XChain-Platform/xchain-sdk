@@ -122,7 +122,7 @@ describe('Native-coin fee quote (client)', function () {
         });
 
         // Regression: a shared explorer that doesn't serve this coin can answer 200 with an
-        // HTML page or an error envelope — neither is a quote, and silently treating it as one
+        // HTML page or an error envelope; neither is a quote, and silently treating it as one
         // built a doomed tx with no fee output (forfeits the fee on-chain).
         it('quoteNativeFee hard-fails on a non-JSON (HTML) explorer response', async function () {
             let sdk = makeSdk();

@@ -15,8 +15,8 @@
  * XChain Platform SDK - Auth Utilities
  *
  * Challenge-response wallet ownership verification.
- * signMessage and verifyMessage work with any arbitrary string —
- * sites can generate their own messages and verify independently
+ * signMessage and verifyMessage work with any arbitrary string.
+ * Sites can generate their own messages and verify independently
  * of this SDK.
  *
  ********************************************************************/
@@ -38,7 +38,7 @@ class AuthUtils {
         this._netParams = network ? getNetwork(network) : null;
     }
 
-    // Resolve network params — instance default or per-call override
+    // Resolve network params: instance default or per-call override
     _resolveNet(network) {
         if (network) return getNetwork(network);
         if (this._netParams) return this._netParams;
@@ -52,7 +52,7 @@ class AuthUtils {
      * If opts.message is provided, it is used as-is (custom site message).
      * Otherwise a default structured message is generated including the address.
      *
-     * Stateless — the caller stores the nonce and enforces expiry/single-use.
+     * Stateless: the caller stores the nonce and enforces expiry/single-use.
      *
      * @param {string} address - The address being verified
      * @param {Object} [opts]
@@ -74,7 +74,7 @@ class AuthUtils {
 
         let challenge;
         if (opts.message) {
-            // Custom message — use as-is
+            // Custom message: use as-is
             challenge = opts.message;
         } else {
             // Default structured message
@@ -87,7 +87,7 @@ class AuthUtils {
 
     /**
      * Sign a message with a WIF private key using Bitcoin message signing.
-     * Works with any string — a challenge from generateChallenge, a custom
+     * Works with any string: a challenge from generateChallenge, a custom
      * site message, or anything else.
      *
      * @param {string} message - The message to sign
@@ -158,7 +158,7 @@ class AuthUtils {
     }
 
     /**
-     * Verify wallet ownership — confirm a signature was produced by the private
+     * Verify wallet ownership: confirm a signature was produced by the private
      * key corresponding to the given address.
      *
      * Works with any message string.

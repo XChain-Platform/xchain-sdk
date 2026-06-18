@@ -37,7 +37,7 @@ function parseActionString(actionString, action, version) {
     return { action: parsedAction, version: parseInt(fields.VERSION), fields };
 }
 
-describe('Round-trip — serialize then parse back', function () {
+describe('Round-trip: serialize then parse back', function () {
 
     let actions;
     beforeEach(function () { actions = createActions(); });
@@ -157,7 +157,7 @@ describe('Round-trip — serialize then parse back', function () {
             check: { COIN1: 'BTC', COIN1_ACTION_INDEX: '100', COIN2: 'LTC', COIN2_ACTION_INDEX: '200', MEMO: 'linked' }
         },
         {
-            // ITEM is a rest-field ('...ITEM') — multi-item lists expand into
+            // ITEM is a rest-field ('...ITEM'); multi-item lists expand into
             // individual pipe segments; the naive positional parser here sees
             // the first item under the rest-field name. Multi-item expansion is
             // covered in project.test.js.
@@ -273,7 +273,7 @@ describe('Round-trip — serialize then parse back', function () {
             check: { CONTRACT_ACTION_INDEX: '42', TICK: '^99', QUANTITY: '500' }
         },
         {
-            name: 'STAKE v1 (new stake — capability model)',
+            name: 'STAKE v1 (new stake, capability model)',
             action: 'stake',
             params: { version: 1, amount: '1000', signingPubkey: 'a'.repeat(64) },
             expectedVersion: 1,
@@ -344,7 +344,7 @@ describe('Round-trip — serialize then parse back', function () {
         }
         // DEPLOY v4 (chunk carrier) is exercised by the indexer carrier unit test and the
         // chunked-deploy e2e test; DEPLOY is excluded from this round-trip harness (its
-        // rest-fields need custom parsing — see the exclusion list below).
+        // rest-fields need custom parsing; see the exclusion list below).
     ];
 
     for (let tc of testCases) {

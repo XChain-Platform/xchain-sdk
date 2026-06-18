@@ -146,7 +146,7 @@ var Formats = {
     },
 
     PRICE: {
-        // v0 (validator PBFT COIN/FIAT snapshot) is validator-broadcast only — not SDK-encodable.
+        // v0 (validator PBFT COIN/FIAT snapshot) is validator-broadcast only; not SDK-encodable.
         // v1: permissionless user-run TOKEN/FIAT price oracle (no stake required).
         1: 'VERSION|COIN|TICK|FIAT|VALUE|FEE|MEMO'
     },

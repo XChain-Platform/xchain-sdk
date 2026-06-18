@@ -21,7 +21,7 @@
  *   [1 byte version=0x01] [32-byte K] [32-byte K] ...
  * Recipients hash each 32-byte candidate to identify which gated FILE
  * (by KEY_HASH) it unlocks; no KEY_HASH is sent on the wire. Pack
- * membership is implicit — files sharing one K share one entry.
+ * membership is implicit; files sharing one K share one entry.
  * See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
  *
  ********************************************************************/
@@ -140,7 +140,7 @@ class GatedFileUtils {
             return Buffer.concat([decipher.update(encrypted), decipher.final()]);
         } catch (e) {
             throw new SDKGatedFileError('DECRYPT_FAILED',
-                'AES-256-GCM authentication failed — wrong key or tampered ciphertext.',
+                'AES-256-GCM authentication failed: wrong key or tampered ciphertext.',
                 { cause: e.message });
         }
     }
@@ -168,7 +168,7 @@ class GatedFileUtils {
      * Wire layout:
      *   [1 byte version=0x01] [32-byte K1] [32-byte K2] ...
      *
-     * No KEY_HASH is sent — the recipient hashes each 32-byte candidate
+     * No KEY_HASH is sent; the recipient hashes each 32-byte candidate
      * to identify which gated FILE it unlocks. Pack support is implicit
      * (files sharing one K share one entry).
      *

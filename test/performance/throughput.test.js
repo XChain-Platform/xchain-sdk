@@ -19,7 +19,7 @@
 // validate() and setNumberFormats() run on every action a dapp builds, often in
 // tight loops (batch builders, order books). These are throughput SANITY checks:
 // the bounds are deliberately generous (≈50× headroom over observed speed) so
-// they never flake on a loaded CI, but they DO catch a catastrophic regression —
+// they never flake on a loaded CI, but they DO catch a catastrophic regression:
 // accidental O(n²) work, a sync read, or a per-call network/file hit slipping
 // into the hot path. Scale with PERF_ITERATIONS.
 
@@ -46,7 +46,7 @@ describe('Performance: SDK hot-path throughput', function () {
     // eslint-disable-next-line no-console -- performance test intentionally reports throughput to stdout
     console.log(`        validate: ${ITERATIONS} ops in ${ms.toFixed(1)}ms (${opsPerSec.toLocaleString()} ops/s)`);
 
-    // Ceiling: 5s for 10k validations is ~50× slower than observed — a true
+    // Ceiling: 5s for 10k validations is ~50× slower than observed; a true
     // regression (e.g. per-call I/O) would blow well past it.
     expect(ms, `validate too slow: ${ms.toFixed(1)}ms for ${ITERATIONS}`).to.be.below(5000 * (ITERATIONS / 10000));
   });

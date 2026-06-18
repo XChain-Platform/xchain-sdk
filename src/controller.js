@@ -19,8 +19,8 @@
  * native action class to a guard contract via ISSUE v6, and an account does
  * the same via ADDRESS v1 (see
  * xchain-documentation/protocol/Controller_Bound_Tokens.md). These helpers
- * build the bind/unbind params in one place — UNBIND=0 to bind, UNBIND=1 to
- * drop — so every client authors the same wire fields. All pure: no network,
+ * build the bind/unbind params in one place (UNBIND=0 to bind, UNBIND=1 to
+ * drop) so every client authors the same wire fields. All pure: no network,
  * no consensus. The indexer owns the live "already bound / not bound",
  * contract-existence and cooldown checks; these only build the params.
  *
@@ -60,7 +60,7 @@ class ControllerHelpers {
     }
 
     // Unbind a TOKEN's action class from its guard contract (ISSUE v6, UNBIND=1).
-    // The CONTROLLER field is omitted — the indexer ignores it on an unbind.
+    // The CONTROLLER field is omitted; the indexer ignores it on an unbind.
     //
     // tick        - the token TICK (required)
     // actionClass - which class to unbind (required)
@@ -72,7 +72,7 @@ class ControllerHelpers {
     }
 
     // Bind MY ACCOUNT's action class to a guard contract (ADDRESS v1, UNBIND=0).
-    // The action is self-signed — the subject is the SOURCE address, so there is
+    // The action is self-signed: the subject is the SOURCE address, so there is
     // no address param.
     //
     // controller    - ACTION_INDEX of the deployed guard contract (required)

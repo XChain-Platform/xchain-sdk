@@ -125,7 +125,7 @@ describe('AuthUtils', function() {
         });
     });
 
-    describe('verifyOwnership() — failure cases', function() {
+    describe('verifyOwnership() - failure cases', function() {
         const wallet = new WalletUtils('bitcoin-regtest');
         const auth = new AuthUtils('bitcoin-regtest');
 
@@ -181,7 +181,7 @@ describe('AuthUtils', function() {
         });
     });
 
-    describe('signMessage() — error cases', function() {
+    describe('signMessage() - error cases', function() {
         const auth = new AuthUtils('bitcoin-regtest');
 
         it('should throw on missing message', function() {

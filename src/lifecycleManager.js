@@ -102,7 +102,7 @@ class LifecycleManager {
             // Phase 2 spends the P2SH/P2WSH output created by phase 1. The encoder
             // identifies that output from the phase-1 transaction itself, so p2shHash
             // is the broadcast phase-1 txid and p2shHex is its raw hex (the encoder's
-            // create_tx response carries only { psbt, encoding } — there is no separate
+            // create_tx response carries only { psbt, encoding }; there is no separate
             // hash field). Matches the connector flow in xchain-e2e-test transactionHelper.
             let spendResult = await encoder.spendP2sh({
                 pubkey:           encoderOpts.pubkey,
@@ -117,7 +117,7 @@ class LifecycleManager {
                 feePerKb:         encoderOpts.feePerKb
             });
 
-            // Phase-2 inputs are non-standard P2SH/P2WSH reveal inputs — they need
+            // Phase-2 inputs are non-standard P2SH/P2WSH reveal inputs; they need
             // the custom finalizer, not the default single-sig finalizeAllInputs.
             let spendSigned = this.sdk.wallet.signRevealPsbt(spendResult.psbt, wif);
             await encoder.broadcastTx(spendSigned.txHex);

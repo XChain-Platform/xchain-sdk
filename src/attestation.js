@@ -69,7 +69,7 @@ function buildHttpGetPayload(opts){
 // (`{ redundancy, deadlineBlocks, feeTick, feeAmount }`). Kept here so the
 // helper layer is the single place defaults can change.
 //
-// feeTick/feeAmount (E1 paid attestations) travel as STRINGS — amounts are
+// feeTick/feeAmount (E1 paid attestations) travel as STRINGS; amounts are
 // arbitrary-precision decimals, never floats. v1 consensus accepts only
 // feeTick == 'XCHAIN'; the fields exist on the wire so multi-tick support
 // is a post-launch rule loosening, not a format change.

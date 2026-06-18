@@ -15,7 +15,7 @@
  * XChain Platform SDK - Network Parameters
  *
  * bitcoinjs-lib compatible network objects for all supported chains.
- * Ported from xchain-encoder/src/CryptoNetworks.js — kept in the SDK
+ * Ported from xchain-encoder/src/CryptoNetworks.js; kept in the SDK
  * so there is no cross-package dependency.
  *
  ********************************************************************/

@@ -40,7 +40,7 @@ function createActions() {
 
 
 // ---------------------------------------------------------------------------
-// Section 1: All 19 ACTION types — basic smoke tests
+// Section 1: All 19 ACTION types - basic smoke tests
 // ---------------------------------------------------------------------------
 
 describe('Actions – all 19 ACTION types', function () {
@@ -482,7 +482,7 @@ describe('Actions – pre-flight encoding validation', function () {
     beforeEach(function () { actions = createActions(); });
 
     it('OP_RETURN with oversized data throws SDKValidationError with code ENCODING_DATA_TOO_LARGE', function () {
-        // Build a long but valid SEND — destination is 42 chars, tick is long, amount is long
+        // Build a long but valid SEND; destination is 42 chars, tick is long, amount is long
         // OP_RETURN limit is 76 bytes of payload (80 - 4 byte magic)
         // "SEND|0|AVERYLONGTICKNAME|99999999999|bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"
         // is well above 76 bytes
@@ -548,7 +548,7 @@ describe('Actions – pre-flight encoding validation', function () {
     });
 
     it('OP_RETURN with short data does NOT throw', function () {
-        // "SEND|0|A|1|bc1q..." — very short, well within 76 bytes
+        // "SEND|0|A|1|bc1q..." - very short, well within 76 bytes
         expect(function () {
             actions.createAction({
                 action: 'SEND',
@@ -618,7 +618,7 @@ describe('Actions – validateAction() dry-run', function () {
         expect(result.errors).to.be.an('array').that.is.empty;
     });
 
-    it('does not throw even for invalid params — returns errors object instead', function () {
+    it('does not throw even for invalid params: returns errors object instead', function () {
         expect(function () {
             actions.validateAction('SEND', {});
         }).to.not.throw();
@@ -758,7 +758,7 @@ describe('Actions – edge cases', function () {
     });
 
     it('trailing empty fields are trimmed from actionString', function () {
-        // SEND with no memo — trailing MEMO slot should be removed
+        // SEND with no memo, trailing MEMO slot should be removed
         let result = actions.createAction({
             action: 'SEND',
             params: { tick: 'TOKEN', amount: '100', destination: ADDR }

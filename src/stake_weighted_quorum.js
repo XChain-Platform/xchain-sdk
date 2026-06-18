@@ -10,11 +10,11 @@
  *
  **********************************************************************
  *
- * XChain SDK — Stake-Weighted Quorum (STAKE_WEIGHTED_QUORUM / WI-1)
+ * XChain SDK: Stake-Weighted Quorum (STAKE_WEIGHTED_QUORUM / WI-1)
  *
  * The single, CONSENSUS-CRITICAL implementation of the stake-weighted quorum
  * predicate for the SDK. The SDK's checkpoint verifier (checkpoint.js) decides
- * client-side whether a quorum-signed checkpoint meets quorum — it MUST flip on
+ * client-side whether a quorum-signed checkpoint meets quorum. It MUST flip on
  * the same flag-day and apply the same predicate as the hub + indexer, or it
  * will report the wrong verdict (false-reject a stake-heavy minority the
  * federation finalized, or bless a key-count majority that lacks stake majority).
@@ -24,7 +24,7 @@
  * asserts the activation map + predicate agree (a divergence forks the chain).
  *
  * Self-contained on purpose: verifyCheckpoint is a pure function with no bound
- * utility instance, so the bignumber math lives here (mathjs bignumber — exact,
+ * utility instance, so the bignumber math lives here (mathjs bignumber, exact,
  * never a JS double) rather than being injected.
  *
  ********************************************************************/
@@ -32,11 +32,11 @@
 const mathjs = require('mathjs');
 
 // Per-network activation height (LOCAL COPY of the canonical map in
-// xchain-documentation/protocol/constants.js — kept equal by the cross-service
+// xchain-documentation/protocol/constants.js (kept equal by the cross-service
 // regression suite). Keyed on the BTC-anchored snapshot_block, NOT each chain's
 // local height, so every chain + the hub flip on the same anchor.
 const STAKE_WEIGHTED_QUORUM_ACTIVATION = {
-    mainnet: 999999999,   // PLACEHOLDER — set the real BTC flag-day height before mainnet enable
+    mainnet: 999999999,   // PLACEHOLDER: set the real BTC flag-day height before mainnet enable
     testnet: 0,
     regtest: 0,
 };
@@ -59,9 +59,9 @@ function bcnum(v){
 }
 
 // Source-deduped stake-weighted quorum test.
-//   validators    — full snapshot: [{ pubkey, source, weight }]  (every key of a
+//   validators      full snapshot: [{ pubkey, source, weight }]  (every key of a
 //                   source carries the SAME source + weight)
-//   signerPubkeys — iterable of pubkeys that produced a VALID signature
+//   signerPubkeys   iterable of pubkeys that produced a VALID signature
 // Returns true iff 3·Σ(distinct signing-source weight) > 2·S, where
 // S = Σ(weight over DISTINCT sources). A source counts ONCE no matter how many of
 // its keys signed (DELEGATE v0 is additive). Degenerate cases fall out with no
@@ -94,7 +94,7 @@ function meetsStakeThreshold(validators, signerPubkeys){
         tally = mathjs.add(tally, bcnum(weightBySource.get(src)));
     }
     // Strictly greater than two-thirds of stake, integer-free: 3·tally > 2·S.
-    // Use the bignumber's exact `.gt` (decimal.js) — NOT mathjs.larger, which
+    // Use the bignumber's exact `.gt` (decimal.js), NOT mathjs.larger, which
     // applies a ~1e-12 relative epsilon and would treat large near-equal stake
     // totals as equal, flipping the verdict at the boundary.
     return mathjs.multiply(tally, 3).gt(mathjs.multiply(S, 2));

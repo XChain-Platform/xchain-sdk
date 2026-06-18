@@ -14,7 +14,7 @@
  *
  * XChain SDK - State Checkpoint Verifier
  *
- * Client-side verification of quorum-signed state checkpoints — the
+ * Client-side verification of quorum-signed state checkpoints: the
  * light-client primitive that lets a wallet or application verify an
  * indexer/explorer's state against `2f+1` `oracle_publish` validator
  * signatures instead of trusting any single operator. Verification is
@@ -29,11 +29,11 @@ const crypto = require('crypto');
 const eq     = require('./equivocation_header.js');
 const swq    = require('./stake_weighted_quorum.js');
 
-// ASN.1 DER prefix for Ed25519 SPKI — mirrors the hub's ValidatorIdentity and
+// ASN.1 DER prefix for Ed25519 SPKI. Mirrors the hub's ValidatorIdentity and
 // the indexer's ed25519.js, so validator signatures verify identically here.
 const SPKI_ED25519_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
 
-// Build the canonical signing string for a checkpoint object — MUST stay
+// Build the canonical signing string for a checkpoint object. MUST stay
 // byte-identical to the hub's StateCheckpointEngine.canonicalCheckpoint and
 // the indexer's ANCHOR verifier:
 //   XCHECKPOINT|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK
@@ -44,7 +44,7 @@ function canonicalCheckpoint(cp){
             String(cp.checkpoint_seq), String(cp.snapshot_block)].join('|');
     // At/above the EQUIV flag-day (gated on the BTC snapshot_block + network) the v0
     // canonical is wrapped in the uniform header (TAG=XCHECKPOINT, v0 ROUND_ID, VIEW=0);
-    // below it, the bare bytes — must byte-match the hub + indexer.
+    // below it the bare bytes (must byte-match the hub + indexer).
     if(eq.isEquivHeaderActive(cp.snapshot_block, cp.network))
         return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,
             cp.chain + '|' + cp.network + '|' + cp.block_index + '|' + cp.checkpoint_seq, 0, raw);
@@ -66,18 +66,18 @@ function verifySignature(payload, sigHex, pubkeyHex){
 }
 
 // Verify a checkpoint against a qualifying validator set.
-//   checkpoint — { chain, network, block_index, block_hash, ledger_hash,
-//                  actions_hash, contract_hash, checkpoint_seq, snapshot_block,
-//                  validator_signatures } (signatures as a JSON string or array)
-//   validators — the `oracle_publish` set qualified at the checkpoint's
-//                snapshot_block. Each entry is either a bare 64-hex pubkey (legacy
-//                count regime) or an object { pubkey, weight, source } (required at
-//                or above the stake-weighted flag-day). Typically the explorer
-//                verify endpoint's `validators`, or an independently fetched set.
+//   checkpoint: { chain, network, block_index, block_hash, ledger_hash,
+//                 actions_hash, contract_hash, checkpoint_seq, snapshot_block,
+//                 validator_signatures } (signatures as a JSON string or array)
+//   validators: the `oracle_publish` set qualified at the checkpoint's
+//               snapshot_block. Each entry is either a bare 64-hex pubkey (legacy
+//               count regime) or an object { pubkey, weight, source } (required at
+//               or above the stake-weighted flag-day). Typically the explorer
+//               verify endpoint's `validators`, or an independently fetched set.
 // Returns { valid, validSigs, quorum, weighted, canonical }. Below the flag-day
 // `valid` means validSigs reached the count `2f+1`; at/above it `valid` means the
 // VALID signers' distinct sources clear the source-deduped 3·Σ > 2·S stake
-// predicate. Pure local verification — the `weighted` decision is derived locally
+// predicate. Pure local verification: the `weighted` decision is derived locally
 // from the checkpoint's snapshot_block + network (the SDK trusts neither the
 // server's `verified` flag nor any server-supplied `is_weighted`); only the stake
 // WEIGHTS themselves come from the supplied set, exactly as the pubkeys always have.
@@ -88,7 +88,7 @@ function verifyCheckpoint(checkpoint, validators){
     let quorum    = (qualified.size <= 1) ? 1 : Math.max(2 * Math.floor((qualified.size - 1) / 3) + 1, Math.ceil((qualified.size + 1) / 2));
 
     // Weighted-or-count is gated locally on the BTC-anchored snapshot_block +
-    // network — byte-for-byte the same flag-day the hub/indexer flip on, and the
+    // network, byte-for-byte the same flag-day the hub/indexer flip on, and the
     // same gating the canonical signing string already applies for the equiv header.
     let weighted = swq.isStakeWeightedQuorumActive(checkpoint && checkpoint.snapshot_block, checkpoint && checkpoint.network);
 
@@ -111,7 +111,7 @@ function verifyCheckpoint(checkpoint, validators){
     if (weighted){
         // Stake-weighted regime: the supplied set MUST carry per-validator weight
         // + source. If it doesn't (e.g. a legacy bare-pubkey list, or an explorer
-        // that hasn't been upgraded), we cannot confirm stake quorum — fail closed
+        // that hasn't been upgraded), we cannot confirm stake quorum; fail closed
         // (false-reject leaning, the fail-safe direction for a light client).
         let hasWeights = vset.some(v => v && typeof v === 'object' && v.source !== undefined && v.weight !== undefined);
         valid = hasWeights && swq.meetsStakeThreshold(vset, validSigners);
@@ -129,11 +129,11 @@ function verifyCheckpoint(checkpoint, validators){
 }
 
 // Convenience: fetch a checkpoint (+ the qualifying validator set) from an
-// explorer's verify endpoint and re-verify LOCALLY — the server's `verified`
+// explorer's verify endpoint and re-verify LOCALLY. The server's `verified`
 // flag is ignored; only local crypto decides.
-//   explorerUrl — e.g. 'https://explorer.xchain.io'
-//   coin        — explorer coin code (e.g. 'BTC', 'TBTC', 'RDOGE')
-//   blockIndex  — checkpointed height
+//   explorerUrl: e.g. 'https://explorer.xchain.io'
+//   coin:        explorer coin code (e.g. 'BTC', 'TBTC', 'RDOGE')
+//   blockIndex:  checkpointed height
 async function fetchAndVerifyCheckpoint(explorerUrl, coin, blockIndex, fetchImpl){
     let f = fetchImpl || (typeof fetch === 'function' ? fetch : null);
     if (!f) throw new Error('CheckpointVerifier: no fetch implementation available');

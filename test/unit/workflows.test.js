@@ -237,7 +237,7 @@ describe('Workflows', function () {
     //  deployAndFund()
     // -----------------------------------------------------------------------
     describe('deployAndFund()', function () {
-        it('deploys with no deposits — returns empty deposits array', async function () {
+        it('deploys with no deposits: returns empty deposits array', async function () {
             const sdk = makeSdk();
             const wf = new Workflows(sdk);
             const result = await wf.deployAndFund(FAKE_WIF, { code: 'x', gasLimit: 1000 }, []);
@@ -245,7 +245,7 @@ describe('Workflows', function () {
             assert.deepStrictEqual(result.deposits, []);
         });
 
-        it('deploys with null deposits — returns empty deposits array', async function () {
+        it('deploys with null deposits: returns empty deposits array', async function () {
             const sdk = makeSdk();
             const wf = new Workflows(sdk);
             const result = await wf.deployAndFund(FAKE_WIF, { code: 'x' }, null);
@@ -385,7 +385,7 @@ describe('Workflows', function () {
     });
 
     // -----------------------------------------------------------------------
-    //  attachContent() — optional on-chain TIS authoring legs
+    //  attachContent() (optional on-chain TIS authoring legs)
     // -----------------------------------------------------------------------
     describe('attachContent()', function () {
         const NftHelpers = require('../../src/nft.js');

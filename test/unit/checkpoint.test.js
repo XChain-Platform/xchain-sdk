@@ -65,7 +65,7 @@ describe('CheckpointVerifier (SDK)', function () {
         // Spec (ANCHOR.md): quorum = max(2f+1, ceil((N+1)/2)). At N=3 bare 2f+1
         // is 1, but the floor lifts it to 2. A checkpoint carrying a single
         // Byzantine oracle_publish signature (within the f=1 budget) must NOT
-        // verify — the SDK must match the consensus producers, not bare PBFT.
+        // verify; the SDK must match the consensus producers, not bare PBFT.
         let keys = [makeKeypair(), makeKeypair(), makeKeypair()];
         let cp = makeCheckpoint();
         let canonical = Checkpoint.canonicalCheckpoint(cp);
@@ -123,7 +123,7 @@ describe('CheckpointVerifier (SDK)', function () {
             fetchedUrl = url;
             return { ok: true, json: async () => ({
                 checkpoint: cp, validators: [key.pubkeyHex],
-                verified: false,                                                       // lying server — must be ignored
+                verified: false,                                                       // lying server: must be ignored
                 snapshot_available: true
             }) };
         };
@@ -136,13 +136,13 @@ describe('CheckpointVerifier (SDK)', function () {
 
 // Stake-weighted regime (STAKE_WEIGHTED_QUORUM / WI-1). On a network where the
 // flag-day is active (regtest activation = 0) the SDK must apply the same
-// source-deduped 3·Σ > 2·S predicate the hub finalizes on, NOT the count 2f+1 —
+// source-deduped 3·Σ > 2·S predicate the hub finalizes on, NOT the count 2f+1 -
 // otherwise it false-rejects a stake-heavy minority the federation anchored, and
 // unsafe-accepts a key-count majority that lacks stake majority.
-describe('CheckpointVerifier — stake-weighted quorum (SDK)', function () {
+describe('CheckpointVerifier - stake-weighted quorum (SDK)', function () {
 
     // Each key of a source carries the SAME source + weight (DELEGATE v0 additive,
-    // source-deduped) — mirrors the hub/indexer snapshot shape.
+    // source-deduped): mirrors the hub/indexer snapshot shape.
     function vset(entries) {
         let out = [];
         for (let e of entries)
@@ -193,7 +193,7 @@ describe('CheckpointVerifier — stake-weighted quorum (SDK)', function () {
 
     it('weighted regime fails closed when the set carries no weight/source', function () {
         // An un-upgraded explorer (or a legacy bare-pubkey list) cannot prove stake
-        // quorum once weighting is active — the SDK must refuse, not silently count.
+        // quorum once weighting is active; the SDK must refuse, not silently count.
         let A = makeKeypair(), B = makeKeypair(), C = makeKeypair();
         let cp = makeCheckpoint({ network: 'regtest' });
         let canonical = Checkpoint.canonicalCheckpoint(cp);
@@ -216,13 +216,13 @@ describe('CheckpointVerifier — stake-weighted quorum (SDK)', function () {
 
 // EQUIV uniform header (WI-2). At/above the flag-day (regtest activation = 0) the
 // checkpoint canonical is the v0 raw wrapped in the equivocation header the hub
-// signs over — TAG=XCHECKPOINT, ROUND_ID=chain|network|block|checkpoint_seq, VIEW=0.
+// signs over: TAG=XCHECKPOINT, ROUND_ID=chain|network|block|checkpoint_seq, VIEW=0.
 // A light client that signs/checks the BARE bytes post-flag-day would reject every
 // real checkpoint, so the SDK must build the SAME wrapped bytes the producers do.
-// (validSigs is asserted here because it is pure signature-over-canonical — it
+// (validSigs is asserted here because it is pure signature-over-canonical; it
 // isolates the canonical-binding from the weighted-vs-count verdict, which regtest
 // also flips on.)
-describe('CheckpointVerifier — EQUIV uniform header (SDK)', function () {
+describe('CheckpointVerifier - EQUIV uniform header (SDK)', function () {
 
     function rawCanonical(cp) {
         return ['XCHECKPOINT', cp.chain, cp.network, String(cp.block_index), cp.block_hash,
@@ -246,7 +246,7 @@ describe('CheckpointVerifier — EQUIV uniform header (SDK)', function () {
         cp.validator_signatures = JSON.stringify([
             { pubkey: key.pubkeyHex, sig: signHex(key.privateKey, rawCanonical(cp)) }]);
         assert.strictEqual(Checkpoint.verifyCheckpoint(cp, [key.pubkeyHex]).validSigs, 0);
-        // A signature over the wrapped canonical — the bytes the SDK actually checks.
+        // A signature over the wrapped canonical: the bytes the SDK actually checks.
         cp.validator_signatures = JSON.stringify([
             { pubkey: key.pubkeyHex, sig: signHex(key.privateKey, Checkpoint.canonicalCheckpoint(cp)) }]);
         assert.strictEqual(Checkpoint.verifyCheckpoint(cp, [key.pubkeyHex]).validSigs, 1);

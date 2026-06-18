@@ -15,7 +15,7 @@
  * XChain Platform SDK - WebSocket Client
  *
  * Real-time event client wrapping the xchain-explorer WebSocket API.
- * Mirrors the ExplorerClient pattern — connection management,
+ * Mirrors the ExplorerClient pattern: connection management,
  * subscription API, event dispatch, reconnection with catch-up.
  *
  ********************************************************************/
@@ -369,7 +369,7 @@ class WebSocketClient {
                 await this.connect();
                 this._resubscribe();
             } catch (e) {
-                // connect() failed — will trigger another _reconnect via close handler
+                // connect() failed; will trigger another _reconnect via close handler
             }
         }, delay);
     }

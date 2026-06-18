@@ -12,12 +12,12 @@
  *
  **********************************************************************
  *
- * Unit: chunkHelper — the chunked-DEPLOY planner.
+ * Unit: chunkHelper - the chunked-DEPLOY planner.
  *
  * chunkHelper produces the deterministic base64 slices + CODE_HASH that the whole
  * chunked-deploy feature rests on. It is consensus-adjacent: codeHashOf MUST equal
  * the indexer's sha256(utf8(source)), and the slices MUST reassemble to canonical
- * base64 of the source — otherwise the indexer rejects the assembly. These tests
+ * base64 of the source; otherwise the indexer rejects the assembly. These tests
  * pin that behavior AND replay the indexer's exact assembly+verify against the plan
  * output (deploy.js: concat → base64-decode → canonical check → sha256 vs CODE_HASH),
  * so an SDK-side regression that would fork the deploy is caught here, runnably,
@@ -146,7 +146,7 @@ describe('chunkHelper @regression', function () {
             expect(plan.codeHash).to.equal(codeHashOf(MID));
         });
 
-        it('is deterministic — identical parts + hash across calls', function () {
+        it('is deterministic: identical parts + hash across calls', function () {
             const a = planDeploy(MID, { gasLimit: 100000 });
             const b = planDeploy(MID, { gasLimit: 100000 });
             expect(a.codeHash).to.equal(b.codeHash);
@@ -189,7 +189,7 @@ describe('chunkHelper @regression', function () {
                 String(MAX_DEPLOY_CHUNKS), 'p'.repeat(MAX_DEPLOYCHUNK_PART_BYTES)].join('|');
             expect(Buffer.byteLength(carrier, 'utf8') + OP_PUSHDATA2_OVERHEAD).to.be.at.most(
                 MAX_ACTION_DATA_LENGTH,
-                'a full v4 carrier incl. push overhead must fit one action — else every chunked deploy fails to encode');
+                'a full v4 carrier incl. push overhead must fit one action, else every chunked deploy fails to encode');
         });
 
         it('MAX_DEPLOY_CHUNKS slices can carry a maximum-size (64 KB) contract', function () {

@@ -51,7 +51,7 @@ function makeSendOfLength(targetBytes) {
 
 
 // ---------------------------------------------------------------------------
-// Section 1 — OP_RETURN pre-flight encoding (6 tests)
+// Section 1: OP_RETURN pre-flight encoding (6 tests)
 // ---------------------------------------------------------------------------
 
 describe('OP_RETURN pre-flight encoding boundary', function () {
@@ -71,7 +71,7 @@ describe('OP_RETURN pre-flight encoding boundary', function () {
         });
         let byteLen = Buffer.byteLength(result.actionString, 'utf8');
         expect(byteLen).to.equal(76, 'action string must be exactly 76 bytes');
-        // No throw means the test passes — just confirm the result is a string
+        // No throw means the test passes:just confirm the result is a string
         expect(result.actionString).to.be.a('string');
     });
 
@@ -113,7 +113,7 @@ describe('OP_RETURN pre-flight encoding boundary', function () {
         expect(result.actionString).to.be.a('string');
     });
 
-    it('accepts a 1000-byte SEND action string with P2SH encoding (chunking — no limit check)', function () {
+    it('accepts a 1000-byte SEND action string with P2SH encoding (chunking:no limit check)', function () {
         let params = makeSendOfLength(1000);
         let result = actions.createAction({
             action: 'SEND',
@@ -125,7 +125,7 @@ describe('OP_RETURN pre-flight encoding boundary', function () {
         expect(result.actionString).to.be.a('string');
     });
 
-    it('accepts a 1000-byte SEND action string with P2WSH encoding (chunking — no limit check)', function () {
+    it('accepts a 1000-byte SEND action string with P2WSH encoding (chunking:no limit check)', function () {
         let params = makeSendOfLength(1000);
         let result = actions.createAction({
             action: 'SEND',
@@ -141,7 +141,7 @@ describe('OP_RETURN pre-flight encoding boundary', function () {
 
 
 // ---------------------------------------------------------------------------
-// Section 2 — TICK name length boundary (4 tests)
+// Section 2:TICK name length boundary (4 tests)
 // ---------------------------------------------------------------------------
 
 describe('TICK name length boundary', function () {
@@ -184,7 +184,7 @@ describe('TICK name length boundary', function () {
 
 
 // ---------------------------------------------------------------------------
-// Section 3 — DECIMALS boundary (4 tests)
+// Section 3:DECIMALS boundary (4 tests)
 // ---------------------------------------------------------------------------
 
 describe('DECIMALS boundary', function () {
@@ -225,7 +225,7 @@ describe('DECIMALS boundary', function () {
 
 
 // ---------------------------------------------------------------------------
-// Section 4 — MAX_SUPPLY boundary (4 tests)
+// Section 4:MAX_SUPPLY boundary (4 tests)
 // ---------------------------------------------------------------------------
 
 describe('MAX_SUPPLY boundary', function () {
@@ -265,7 +265,7 @@ describe('MAX_SUPPLY boundary', function () {
 
 
 // ---------------------------------------------------------------------------
-// Section 5 — DESCRIPTION length boundary (3 tests)
+// Section 5:DESCRIPTION length boundary (3 tests)
 // ---------------------------------------------------------------------------
 
 describe('DESCRIPTION length boundary', function () {
@@ -302,7 +302,7 @@ describe('DESCRIPTION length boundary', function () {
 
 
 // ---------------------------------------------------------------------------
-// Section 6 — MESSAGE length boundary (3 tests)
+// Section 6:MESSAGE length boundary (3 tests)
 // ---------------------------------------------------------------------------
 
 describe('MESSAGE (PLAINTEXT_MESSAGE) length boundary', function () {
@@ -341,7 +341,7 @@ describe('MESSAGE (PLAINTEXT_MESSAGE) length boundary', function () {
 
 
 // ---------------------------------------------------------------------------
-// Section 7 — FIAT_AMOUNT format boundary (5 tests)
+// Section 7:FIAT_AMOUNT format boundary (5 tests)
 // ---------------------------------------------------------------------------
 
 describe('FIAT_AMOUNT format boundary', function () {
@@ -395,7 +395,7 @@ describe('FIAT_AMOUNT format boundary', function () {
 
 
 // ---------------------------------------------------------------------------
-// Section 8 — Address length boundary (4 tests)
+// Section 8:Address length boundary (4 tests)
 // ---------------------------------------------------------------------------
 
 describe('Address (DESTINATION) length boundary', function () {
@@ -442,7 +442,7 @@ describe('Address (DESTINATION) length boundary', function () {
 
 
 // ---------------------------------------------------------------------------
-// Section 9 — Lock field boundary (3 tests)
+// Section 9:Lock field boundary (3 tests)
 // ---------------------------------------------------------------------------
 
 describe('Lock field boundary', function () {

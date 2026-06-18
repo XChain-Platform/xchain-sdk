@@ -15,11 +15,11 @@
  * XChain Platform SDK - ActionWaiter Tests
  *
  * The normalized top-level `status` on a waitForTxid result must surface
- * the first non-valid per-action status — wire rejections ("invalid: ...")
+ * the first non-valid per-action status: wire rejections ("invalid: ...")
  * AND VM execution outcomes ('failed' / 'reverted' / 'out_of_resource').
  * Previously only "invalid:" surfaced, so a failed contract execution read
  * as top-level 'valid' (found via the cross-contract e2e suite, 2026-06-11).
- * requireValid must still reject ONLY on "invalid:" — an indexed-but-failed
+ * requireValid must still reject ONLY on "invalid:": an indexed-but-failed
  * execution is a successful SUBMISSION and delivery waiters must not throw.
  *
  ********************************************************************/
@@ -75,7 +75,7 @@ describe('ActionWaiter.waitForTxid normalized status', function () {
 
     it('does NOT reject on a failed execution (successful submission)', async function () {
         const waiter = makeWaiter(tx([{ action: 'EXECUTE', status: 'failed' }]));
-        // requireValid default true — must still resolve.
+        // requireValid default true: must still resolve.
         const result = await waiter.waitForTxid('aa'.repeat(32), { timeout: 2000, pollInterval: 50 });
         assert.strictEqual(result.status, 'failed');
     });

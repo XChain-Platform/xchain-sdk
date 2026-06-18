@@ -99,14 +99,14 @@ class FormatSelector {
     // Select the optimal format version for a given action and populated fields.
     // If `explicitVersion` is provided, that version is used unconditionally
     // (used by actions like STAKE where V1=new vs V2=top-up have identical
-    // field shapes but different semantics — the caller picks).
+    // field shapes but different semantics (the caller picks).
     // Returns { version, formatFields, estimatedLength }
     static select(action, fields, explicitVersion) {
         // Validate action exists
         if (!formats[action])
             throw new SDKFormatError('UNKNOWN_ACTION', 'Unknown ACTION type: ' + action, { action });
 
-        // Caller forced a specific version — validate and use it without auto-selection
+        // Caller forced a specific version: validate and use it without auto-selection
         if (explicitVersion !== undefined && explicitVersion !== null) {
             let v = Number(explicitVersion);
             if (!formats[action][v])
@@ -150,7 +150,7 @@ class FormatSelector {
             }
             if (!allFieldsFit) continue;
 
-            // This version is eligible — estimate output length
+            // This version is eligible: estimate output length
             let estimatedLength = this.estimateLength(action, version, fields);
             candidates.push({ version, formatFields, estimatedLength });
         }

@@ -74,7 +74,7 @@ describe('UTXOCache', function () {
 
             let encoder2 = { getUTXOs: async () => ({ utxos: [{ txid: 'tx2', vout: 0, value: 2 }] }) };
             await cache.refresh('addr2', encoder2);
-            // Spent set cleared — tx2 should be available
+            // Spent set cleared; tx2 should be available
             assert.strictEqual(cache.getAvailable().length, 1);
             assert.strictEqual(cache.address, 'addr2');
         });
@@ -84,7 +84,7 @@ describe('UTXOCache', function () {
             await cache.refresh('addr1', encoder);
             cache.markSpent([{ txid: 'tx1', vout: 0 }]);
 
-            // refresh same address — spent set should be preserved
+            // refresh same address; spent set should be preserved
             let encoder2 = { getUTXOs: async () => ({ utxos: [{ txid: 'tx2', vout: 0, value: 2 }] }) };
             await cache.refresh('addr1', encoder2);
             // tx1 still marked spent, tx2 available
@@ -100,7 +100,7 @@ describe('UTXOCache', function () {
             // Next refresh: spec1 is now confirmed
             let encoder2 = { getUTXOs: async () => ({ utxos: [{ txid: 'spec1', vout: 0, value: 9999 }] }) };
             await cache.refresh('addr1', encoder2);
-            // speculative list pruned, but still in _utxos — only 1 result (not 2)
+            // speculative list pruned, but still in _utxos; only 1 result (not 2)
             assert.strictEqual(cache.getAvailable().length, 1);
         });
 

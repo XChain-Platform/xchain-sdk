@@ -19,8 +19,8 @@
  *
  * These are pure functions with no dependency on isolated-vm.
  *
- * validate() / checkFloatUsage() delegate to ./contract/lint-core.js — a
- * BYTE-IDENTICAL vendored copy of xchain-vm/src/lint-core.js — so the SDK's
+ * validate() / checkFloatUsage() delegate to ./contract/lint-core.js, a
+ * BYTE-IDENTICAL vendored copy of xchain-vm/src/lint-core.js, so the SDK's
  * pre-flight verdict matches the indexer's deploy-time validation exactly
  * (no false greens). A CI parity guard (sha256) fails the build on drift.
  * lint-core pulls acorn/acorn-walk/astring (pure JS, browser-safe; now hard
@@ -31,7 +31,7 @@
 const { SDKContractError } = require('./errors.js');
 const { lintSource, findFloatWarnings } = require('./contract/lint-core.js');
 
-// 64KB contract source code limit — canonical value in
+// 64KB contract source code limit. Canonical value in
 // xchain-documentation/protocol/constants.js (MAX_CODE_SIZE), also enforced by
 // the SDK validator, the indexer (DEPLOY) and the VM isolate limit.
 const MAX_CODE_SIZE = 65536;
@@ -82,7 +82,7 @@ class ContractUtils {
 
     // Pre-flight syntax/rule validation (no V8 / isolated-vm required). Runs every
     // acorn-coverable deploy check via the vendored lint-core (deploy parity), so a
-    // valid result here means the contract clears the indexer's syntax gate too —
+    // valid result here means the contract clears the indexer's syntax gate too,
     // EXCEPT the V8-only step-1 compile, which can only run at deploy/CLI.
     // Returns { valid, error?, warnings? } (back-compat shape; error = first error).
     validate(sourceCode) {
@@ -120,7 +120,7 @@ class ContractUtils {
         };
     }
 
-    // Count C-style `for (init; test; update)` statements — the loops the VM
+    // Count C-style `for (init; test; update)` statements: the loops the VM
     // double-charges per iteration (body + update expression). for-in / for-of /
     // while / do-while have no update slot and are excluded. Prefers an AST walk;
     // degrades to a header-shape regex when acorn is unavailable.
@@ -135,7 +135,7 @@ class ContractUtils {
                 walker.simple(ast, { ForStatement() { count++; } });
                 return count;
             } catch (e) {
-                // Unparseable source — fall through to the regex approximation.
+                // Unparseable source; fall through to the regex approximation.
             }
         }
         // Fallback: a C-style `for` header contains semicolons; for-in / for-of
@@ -162,8 +162,8 @@ class ContractUtils {
 
         // Indexed `for` loops cost ~2x per iteration vs while / do-while / for-in /
         // for-of. The VM's gas-metering transform injects a charge for BOTH the loop
-        // body AND the update expression — `for (...; i++)` is metered as
-        // `for (...; (__gas(1), i++))` — so each iteration is charged twice. Loops
+        // body AND the update expression. `for (...; i++)` is metered as
+        // `for (...; (__gas(1), i++))`, so each iteration is charged twice. Loops
         // without an update slot are charged once. Count each C-style `for` an extra
         // time so its estimated budget reflects the doubled charge.
         let forLoops = this._countForStatements(code);

@@ -16,7 +16,7 @@ const LifecycleManager = require('../../src/lifecycleManager.js');
 const ActionWaiter = require('../../src/actionWaiter.js');
 
 // ---------------------------------------------------------------------------
-//  Helpers — minimal fake SDK and collaborators
+//  Helpers: minimal fake SDK and collaborators
 // ---------------------------------------------------------------------------
 
 // A valid signed P2WPKH tx hex that bitcoinjs-lib can parse (so
@@ -134,9 +134,9 @@ describe('LifecycleManager', function () {
     });
 
     // -----------------------------------------------------------------------
-    //  submitAction() — missing WIF
+    //  submitAction(): missing WIF
     // -----------------------------------------------------------------------
-    describe('submitAction() — missing WIF', function () {
+    describe('submitAction(): missing WIF', function () {
         it('throws SDKConfigError MISSING_WIF when wif is absent', async function () {
             const sdk = makeSdk();
             const lm = new LifecycleManager(sdk);
@@ -161,9 +161,9 @@ describe('LifecycleManager', function () {
     });
 
     // -----------------------------------------------------------------------
-    //  submitAction() — happy path, waitForIndexer=false
+    //  submitAction(): happy path, waitForIndexer=false
     // -----------------------------------------------------------------------
-    describe('submitAction() — waitForIndexer=false', function () {
+    describe('submitAction(): waitForIndexer=false', function () {
         it('returns result with txid, actionString, encoding without waiting', async function () {
             const sdk = makeSdk();
             const lm = new LifecycleManager(sdk);
@@ -230,9 +230,9 @@ describe('LifecycleManager', function () {
     });
 
     // -----------------------------------------------------------------------
-    //  submitAction() — P2SH two-phase path
+    //  submitAction(): P2SH two-phase path
     // -----------------------------------------------------------------------
-    describe('submitAction() — P2SH two-phase encoding', function () {
+    describe('submitAction(): P2SH two-phase encoding', function () {
         it('runs phase-2 when encoding is P2SH, broadcasts twice, returns phase-2 txid', async function () {
             const steps = [];
             const signed = buildSignedTx();
@@ -304,9 +304,9 @@ describe('LifecycleManager', function () {
     });
 
     // -----------------------------------------------------------------------
-    //  submitAction() — waitForIndexer=true
+    //  submitAction(): waitForIndexer=true
     // -----------------------------------------------------------------------
-    describe('submitAction() — waitForIndexer=true', function () {
+    describe('submitAction(): waitForIndexer=true', function () {
         it('waits for indexer and populates result.indexed', async function () {
             const indexedAction = { action: 'SEND', status: 'valid', tx_hash: 'fakeid' };
             // Stub ActionWaiter.prototype.waitForTxid to resolve immediately

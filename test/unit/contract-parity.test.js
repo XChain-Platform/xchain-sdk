@@ -14,10 +14,10 @@
 // The SDK's contract linter MUST match the indexer's deploy-time validator, or
 // authors get false greens (lint passes, on-chain deploy rejects). Two guards:
 //
-//   1. DRIFT — the vendored src/contract/{lint-core,metering}.js must be
+//   1. DRIFT: the vendored src/contract/{lint-core,metering}.js must be
 //      byte-identical (sha256) to the xchain-vm canonicals. (Skipped when the
 //      sibling xchain-vm checkout is absent, e.g. SDK cloned standalone.)
-//   2. VERDICT — a fixture corpus (good templates + one bad per rule) gets the
+//   2. VERDICT: a fixture corpus (good templates + one bad per rule) gets the
 //      expected verdict from sdk.validateContract / contracts.validate.
 //
 // The cross-ENGINE check (validateContract vs vm.validateSyntax incl. the V8
@@ -66,13 +66,13 @@ describe('contract-lint parity + drift', function () {
                 const canonical = path.join(VM_SRC_DIR, f);
                 assert.strictEqual(
                     sha256(vendored), sha256(canonical),
-                    'VENDOR DRIFT: ' + f + ' differs from xchain-vm canonical — re-sync the copy.'
+                    'VENDOR DRIFT: ' + f + ' differs from xchain-vm canonical; re-sync the copy.'
                 );
             });
         }
     });
 
-    describe('verdict corpus — sdk.validateContract', function () {
+    describe('verdict corpus: sdk.validateContract', function () {
         let sdk;
         before(function () { sdk = new XChainSDK({ network: 'bitcoin-regtest', noHub: true }); });
 
@@ -106,7 +106,7 @@ describe('contract-lint parity + drift', function () {
         });
     });
 
-    describe('Move 2 — logic-level rules (advisory, never deploy-blocking)', function () {
+    describe('Move 2: logic-level rules (advisory, never deploy-blocking)', function () {
         const { CONSENSUS_RULES } = require('../../src/contract/lint-core.js');
         let sdk;
         before(function () { sdk = new XChainSDK({ network: 'bitcoin-regtest', noHub: true }); });
@@ -117,7 +117,7 @@ describe('contract-lint parity + drift', function () {
             const e = r.errors.find(x => x.rule === 'crossCallable-not-array');
             assert.ok(e, 'expected crossCallable-not-array error');
             assert.strictEqual(e.severity, 'error');
-            // The chain still accepts it — it must NOT be in the deploy-blocking set.
+            // The chain still accepts it; it must NOT be in the deploy-blocking set.
             assert.ok(!CONSENSUS_RULES.has('crossCallable-not-array'),
                 'crossCallable-not-array must never be a consensus (deploy-blocking) rule');
         });
@@ -157,7 +157,7 @@ describe('contract-lint parity + drift', function () {
         });
     });
 
-    describe('back-compat — ContractUtils.validate() shape', function () {
+    describe('back-compat: ContractUtils.validate() shape', function () {
         const utils = new ContractUtils();
         it('good → { valid:true }', function () {
             assert.strictEqual(utils.validate(GOOD_FIXTURE).valid, true);

@@ -18,7 +18,7 @@
 //
 // Validator.validate(action, fields) is the SDK's gate between dapp-supplied
 // (often user-supplied) action data and the on-chain ACTION string. Its contract
-// is to RETURN an array of structured errors — never to throw — so a dapp can
+// is to RETURN an array of structured errors (never to throw) so a dapp can
 // surface validation failures. _isDowngrade is the transport-security control
 // that stops a malicious/compromised hub from silently moving a dapp off https.
 // These attack both surfaces.
@@ -30,7 +30,7 @@ const XChainSDK  = require('../../src/XChainSDK.js');
 
 function v() { return new Validator(new Utility()); }
 
-describe('Security: Validator.validate — hostile actions', function () {
+describe('Security: Validator.validate - hostile actions', function () {
 
   const HOSTILE_ACTIONS = [
     ['empty string', ''],
@@ -63,7 +63,7 @@ describe('Security: Validator.validate — hostile actions', function () {
 
   // FIXED: validate() previously looked the action up as `formats[action]` with
   // bracket access, so any Object.prototype property name (__proto__, constructor,
-  // toString, hasOwnProperty, valueOf, …) resolved up the prototype chain — the
+  // toString, hasOwnProperty, valueOf, …) resolved up the prototype chain; the
   // truthy inherited value slipped past the UNKNOWN_ACTION guard and then threw
   // "required is not iterable" on the ACTION_REQUIRED_FIELDS lookup. The guard now
   // uses Object.prototype.hasOwnProperty.call(formats, action), so these return
@@ -77,11 +77,11 @@ describe('Security: Validator.validate — hostile actions', function () {
   });
 });
 
-describe('Security: Validator.validate — hostile field values', function () {
+describe('Security: Validator.validate - hostile field values', function () {
 
   // Feed a known-valid action (ISSUE) hostile values for its fields. Whatever the
   // verdict, validate() must produce an error array and never throw.
-  // Restricted to the realistic untrusted domain — values that can arrive via a
+  // Restricted to the realistic untrusted domain: values that can arrive via a
   // JSON body or dapp call (object/array/string/number/boolean/null). Exotic
   // values whose own toString() throws cannot cross that boundary.
   const HOSTILE_VALUES = [

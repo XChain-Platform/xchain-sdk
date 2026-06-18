@@ -77,7 +77,7 @@ class WalletSession {
         // A prior submit in this session drains the cache (spent inputs are
         // marked, but the change output isn't tracked), so the second leg of
         // a two-step workflow (setRoster, attachContent) would otherwise fall
-        // through to the encoder's pubkey-keyed UTXO fetch — which cannot
+        // through to the encoder's pubkey-keyed UTXO fetch, which cannot
         // resolve a hex pubkey to an address. With waitForIndexer (the
         // default) the prior action's change is confirmed by now: re-pull it.
         if (!encoderOpts.utxos && utxos.length === 0 && this._utxoCache.isLoaded()) {
@@ -153,7 +153,7 @@ class WalletSession {
     async sleep(params, enc, opts)     { return this.submit({ action: 'SLEEP', params }, enc, opts); }
     async address(params, enc, opts)   { return this.submit({ action: 'ADDRESS', params }, enc, opts); }
 
-    // Oracle — permissionless user-run TOKEN/FIAT price (PRICE v1). Only v1 is
+    // Oracle: permissionless user-run TOKEN/FIAT price (PRICE v1). Only v1 is
     // SDK-encodable (formats.js has no v0), so the encoder always selects it.
     // Params: { coin, tick, fiat, value, fee, memo }. See protocol/actions/PRICE.md.
     async price(params, enc, opts)     { return this.submit({ action: 'PRICE', params }, enc, opts); }
@@ -174,7 +174,7 @@ class WalletSession {
 
     // VM / Smart Contracts
     async deploy(params, enc, opts)      { return this.submit({ action: 'DEPLOY', params }, enc, opts); }
-    // One base64 code slice of a chunked deploy — DEPLOY v4 carrier (see sdk.deployContract / chunkHelper).
+    // One base64 code slice of a chunked deploy. DEPLOY v4 carrier (see sdk.deployContract / chunkHelper).
     async deployChunk(params, enc, opts) { return this.submit({ action: 'DEPLOY', params: { VERSION: '4', ...params } }, enc, opts); }
     async execute(params, enc, opts)   { return this.submit({ action: 'EXECUTE', params }, enc, opts); }
     async deposit(params, enc, opts)   { return this.submit({ action: 'DEPOSIT', params }, enc, opts); }
@@ -224,7 +224,7 @@ class WalletSession {
 
     async estimateFees(actionData, encoderOpts = {}) {
         let merged = {
-            pubkey: this.address,      // sender ADDRESS — see submit()
+            pubkey: this.address,      // sender ADDRESS (see submit())
             change: this.address,
             ...encoderOpts
         };

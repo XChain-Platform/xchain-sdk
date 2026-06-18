@@ -15,7 +15,7 @@
  * XChain Platform SDK - Agent Session
  *
  * A WalletSession with a declarative spending policy enforced at the
- * submit() chokepoint — built for handing a key to an AUTOMATED AGENT
+ * submit() chokepoint, built for handing a key to an AUTOMATED AGENT
  * with a bounded blast radius. Fail-closed throughout: no allowedActions
  * means nothing is allowed; a corrupt usage-state file blocks submits
  * rather than silently resetting the window.
@@ -31,7 +31,7 @@
  *   });
  *   await agent.send({ tick: 'MYTOKEN', amount: '5', destination: addr });
  *
- * HONESTY NOTE — this is a client-side guardrail, not a security
+ * HONESTY NOTE: this is a client-side guardrail, not a security
  * boundary: whoever holds the WIF can bypass it with raw SDK calls.
  * The hard-enforcement upgrade path is a MuSig2 co-signer that refuses
  * to co-sign out-of-policy PSBTs (interface spec'd, not yet built).
@@ -108,7 +108,7 @@ class AgentSession extends WalletSession {
         return table['*'];
     }
 
-    // Exact decimal comparison via the BigNumber methods — mathjs larger()/equal()
+    // Exact decimal comparison via the BigNumber methods. mathjs larger()/equal()
     // apply an epsilon tolerance, which is exactly wrong for policy caps.
     _gt(a, b) { return math.bignumber(String(a)).gt(math.bignumber(String(b))); }
     _add(a, b) { return math.bignumber(String(a)).plus(math.bignumber(String(b))).toString(); }

@@ -27,12 +27,12 @@ function createValidator() {
     return new Validator(new Utility());
 }
 
-// Helper — assert no errors of a given code in the result set
+// Helper: assert no errors of a given code in the result set
 function hasNoErrorCode(errors, code) {
     return !errors.some(e => e.code === code);
 }
 
-// Helper — assert at least one error with given code
+// Helper: assert at least one error with given code
 function hasErrorCode(errors, code) {
     return errors.some(e => e.code === code);
 }
@@ -41,7 +41,7 @@ function hasErrorCode(errors, code) {
 // TICK NAME VALIDATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — TICK name validation (ISSUE action)', function () {
+describe('Validator: TICK name validation (ISSUE action)', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
@@ -125,14 +125,14 @@ describe('Validator — TICK name validation (ISSUE action)', function () {
 
     // Cross-service guard: the SDK must never be more permissive than the
     // indexer's consensus TICK_CHARACTERS (xchain-indexer src/config.js). The
-    // special-character set below is a verbatim copy of that consensus set —
+    // special-character set below is a verbatim copy of that consensus set;
     // if config.js changes, this literal (and TICK_REGEX) must change with it.
     // A user who clears the SDK pre-flight must always pass consensus, or they
     // sign+broadcast+pay for a transaction consensus then rejects.
     it('accepts exactly the indexer consensus special-character set (no more, no less)', function () {
         const CONSENSUS_TICK_SPECIALS = '~!@#$%^&*()_+-={}[]:<>.?'; // xchain-indexer/src/config.js TICK_CHARACTERS
         for (const ch of CONSENSUS_TICK_SPECIALS) {
-            if (ch === '.') continue; // dot is the sub-token separator — covered by its own cases
+            if (ch === '.') continue; // dot is the sub-token separator, covered by its own cases
             const tick = 'A' + ch + 'B'; // avoid the caret-first-char rule
             const errors = v.validate('ISSUE', { TICK: tick });
             expect(hasNoErrorCode(errors, 'INVALID_TICK_NAME'), 'consensus char rejected: ' + ch).to.be.true;
@@ -144,7 +144,7 @@ describe('Validator — TICK name validation (ISSUE action)', function () {
         }
     });
 
-    // TICK validation only applies to ISSUE — SEND just needs non-empty
+    // TICK validation only applies to ISSUE; SEND just needs non-empty
     it('does NOT apply ISSUE tick-name rules when action is SEND', function () {
         // A dot in TICK is forbidden for ISSUE but irrelevant for SEND
         const errors = v.validate('SEND', {
@@ -160,7 +160,7 @@ describe('Validator — TICK name validation (ISSUE action)', function () {
 // MEMO / DESCRIPTION VALIDATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — MEMO validation', function () {
+describe('Validator: MEMO validation', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
@@ -206,7 +206,7 @@ describe('Validator — MEMO validation', function () {
     });
 });
 
-describe('Validator — DESCRIPTION validation', function () {
+describe('Validator: DESCRIPTION validation', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
@@ -240,7 +240,7 @@ describe('Validator — DESCRIPTION validation', function () {
 // DECIMALS VALIDATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — DECIMALS validation', function () {
+describe('Validator: DECIMALS validation', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
@@ -272,7 +272,7 @@ describe('Validator — DECIMALS validation', function () {
 // MAX_SUPPLY VALIDATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — MAX_SUPPLY validation', function () {
+describe('Validator: MAX_SUPPLY validation', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
@@ -298,7 +298,7 @@ describe('Validator — MAX_SUPPLY validation', function () {
 // LOCK FIELD VALIDATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — lock field validation', function () {
+describe('Validator: lock field validation', function () {
 
     const LOCK_FIELDS = [
         'LOCK_MAX_SUPPLY',
@@ -348,7 +348,7 @@ describe('Validator — lock field validation', function () {
 // FIAT_CODE VALIDATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — FIAT_CODE validation', function () {
+describe('Validator: FIAT_CODE validation', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
@@ -383,7 +383,7 @@ describe('Validator — FIAT_CODE validation', function () {
 // FIAT_AMOUNT VALIDATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — FIAT_AMOUNT validation', function () {
+describe('Validator: FIAT_AMOUNT validation', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
@@ -427,7 +427,7 @@ describe('Validator — FIAT_AMOUNT validation', function () {
 // COIN FIELD VALIDATION (GIVE_COIN, GET_COIN)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — COIN field validation', function () {
+describe('Validator: COIN field validation', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
@@ -471,7 +471,7 @@ describe('Validator — COIN field validation', function () {
 // FEE_PREFERENCE VALIDATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — FEE_PREFERENCE validation', function () {
+describe('Validator: FEE_PREFERENCE validation', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
@@ -498,7 +498,7 @@ describe('Validator — FEE_PREFERENCE validation', function () {
 // LIST TYPE VALIDATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — LIST TYPE validation', function () {
+describe('Validator: LIST TYPE validation', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
@@ -528,7 +528,7 @@ describe('Validator — LIST TYPE validation', function () {
 // ENCRYPTION_METHOD VALIDATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — ENCRYPTION_METHOD validation', function () {
+describe('Validator: ENCRYPTION_METHOD validation', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
@@ -572,7 +572,7 @@ describe('Validator — ENCRYPTION_METHOD validation', function () {
 // REQUIRED FIELDS
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — required field enforcement', function () {
+describe('Validator: required field enforcement', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
@@ -619,7 +619,7 @@ describe('Validator — required field enforcement', function () {
 //                 the coin-paid lane unreachable through createAction.
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — DISPENSER create required fields', function () {
+describe('Validator: DISPENSER create required fields', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
@@ -671,7 +671,7 @@ describe('Validator — DISPENSER create required fields', function () {
 // BATCH CONSTRAINTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — BATCH constraints', function () {
+describe('Validator: BATCH constraints', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
@@ -712,7 +712,7 @@ describe('Validator — BATCH constraints', function () {
 // ACTION-INDEX OPERATIONS SKIP REQUIRED FIELDS
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — action-index operations skip required fields', function () {
+describe('Validator: action-index operations skip required fields', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
@@ -732,7 +732,7 @@ describe('Validator — action-index operations skip required fields', function 
 // validateOrThrow
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — validateOrThrow', function () {
+describe('Validator: validateOrThrow', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
@@ -801,7 +801,7 @@ describe('Validator — validateOrThrow', function () {
 // ADDRESS VALIDATION (DESTINATION)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — address validation', function () {
+describe('Validator: address validation', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
@@ -838,7 +838,7 @@ describe('Validator — address validation', function () {
 // UNKNOWN ACTION
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — unknown action', function () {
+describe('Validator: unknown action', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
@@ -850,10 +850,10 @@ describe('Validator — unknown action', function () {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FIELD-LEVEL VALIDATION — COOLDOWN_BLOCKS / VALUE / DEPLOY / DISPENSER ownership
+// FIELD-LEVEL VALIDATION: COOLDOWN_BLOCKS / VALUE / DEPLOY / DISPENSER ownership
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — field + cross-field constraints', function () {
+describe('Validator: field + cross-field constraints', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
@@ -918,15 +918,15 @@ describe('Validator — field + cross-field constraints', function () {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CONTROLLER BIND/UNBIND VALIDATION (ISSUE v6 / ADDRESS v1 — programmable policy)
+// CONTROLLER BIND/UNBIND VALIDATION (ISSUE v6 / ADDRESS v1, programmable policy)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Validator — controller bind/unbind (ISSUE v6 / ADDRESS v1)', function () {
+describe('Validator: controller bind/unbind (ISSUE v6 / ADDRESS v1)', function () {
 
     let v;
     beforeEach(function () { v = createValidator(); });
 
-    // CONTROLLER — non-negative integer (a contract ACTION_INDEX)
+    // CONTROLLER: non-negative integer (a contract ACTION_INDEX)
     it('accepts a non-negative integer CONTROLLER', function () {
         const errors = v.validate('ISSUE', { TICK: 'X', CONTROLLER: '42', ACTION_CLASS: 'transfer', UNBIND: '0' });
         expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.false;
@@ -940,7 +940,7 @@ describe('Validator — controller bind/unbind (ISSUE v6 / ADDRESS v1)', functio
         expect(errors.some(e => /CONTROLLER must be a non-negative integer/.test(e.message))).to.be.true;
     });
 
-    // ACTION_CLASS — must be one of {transfer, trade, burn, mint, stake}
+    // ACTION_CLASS: must be one of {transfer, trade, burn, mint, stake}
     ['transfer', 'trade', 'burn', 'mint', 'stake'].forEach(cls => {
         it('accepts ACTION_CLASS=' + cls, function () {
             const errors = v.validate('ISSUE', { TICK: 'X', CONTROLLER: '1', ACTION_CLASS: cls, UNBIND: '0' });
@@ -952,7 +952,7 @@ describe('Validator — controller bind/unbind (ISSUE v6 / ADDRESS v1)', functio
         expect(errors.some(e => /ACTION_CLASS must be one of/.test(e.message))).to.be.true;
     });
 
-    // UNBIND — 0 or 1 only
+    // UNBIND: 0 or 1 only
     it('accepts UNBIND=0 and UNBIND=1', function () {
         expect(v.validate('ADDRESS', { CONTROLLER: '1', ACTION_CLASS: 'trade', UNBIND: '0' }).some(e => /UNBIND must be/.test(e.message))).to.be.false;
         expect(v.validate('ADDRESS', { ACTION_CLASS: 'trade', UNBIND: '1' }).some(e => /UNBIND must be/.test(e.message))).to.be.false;
@@ -962,7 +962,7 @@ describe('Validator — controller bind/unbind (ISSUE v6 / ADDRESS v1)', functio
         expect(errors.some(e => /UNBIND must be 0 .bind. or 1 .unbind./.test(e.message))).to.be.true;
     });
 
-    // COOLDOWN_BLOCKS — non-negative integer on a controller bind (0 allowed)
+    // COOLDOWN_BLOCKS: non-negative integer on a controller bind (0 allowed)
     it('accepts COOLDOWN_BLOCKS=0 on an ISSUE controller bind', function () {
         const errors = v.validate('ISSUE', { TICK: 'X', CONTROLLER: '1', ACTION_CLASS: 'mint', COOLDOWN_BLOCKS: '0', UNBIND: '0' });
         expect(errors.some(e => /COOLDOWN_BLOCKS/.test(e.message))).to.be.false;

@@ -18,9 +18,9 @@
  * new action (see xchain-documentation/protocol/Project_Registry.md):
  * the project is a TICK, its official-token roster is a TICK-type
  * LIST, and the binding is a LINK from the LIST to the project's
- * ISSUE — which the indexer only accepts from the project tick's
+ * ISSUE, which the indexer only accepts from the project tick's
  * current owner. These helpers build the params in one place so every
- * client publishes rosters correctly. All pure — no network, no
+ * client publishes rosters correctly. All pure: no network, no
  * consensus. Submit-flow recipes live on sdk.workflows (setRoster).
  *
  ********************************************************************/
@@ -36,7 +36,7 @@ class ProjectHelpers {
     }
 
     // Build LIST params that derive a new roster from an existing one
-    // (LIST v1). EDIT is a single operation per action — pass `add` OR
+    // (LIST v1). EDIT is a single operation per action; pass `add` OR
     // `remove`, not both (two edits = two LIST actions).
     //
     // listActionIndex - ACTION_INDEX of the roster being edited
@@ -60,7 +60,7 @@ class ProjectHelpers {
     // Build LINK params attesting a roster to the project (the green-banner
     // attestation). The LINK SOURCE must be the project tick's current owner;
     // the indexer validates ownership and rejects during ownership escrow.
-    // Both sides MUST be on the project's own chain — LINK skips owner
+    // Both sides MUST be on the project's own chain; LINK skips owner
     // validation when COIN2 is remote, so cross-chain roster links carry no
     // authority (Project_Registry.md).
     //

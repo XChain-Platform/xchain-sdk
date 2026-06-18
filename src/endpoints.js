@@ -22,7 +22,7 @@
  *
  * The constants are FULL URLs (with scheme). The service clients build
  * their axios baseURL as `url.startsWith('http') ? url : 'http://'+url+':'+port`,
- * so a full `https://` URL is used verbatim — correct scheme, no stray
+ * so a full `https://` URL is used verbatim (correct scheme, no stray
  * dev port appended (public infra serves https on 443).
  *
  ********************************************************************/

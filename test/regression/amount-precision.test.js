@@ -20,7 +20,7 @@
 // setNumberFormats casts NUMBER_FIELDS to their wire form. The bug was using
 // bcnum's parseFloat/parseInt path, which (a) truncates amounts beyond 2^53,
 // (b) loses precision past 15-16 significant digits, and (c) emits SCIENTIFIC
-// notation (e.g. "1e-18") — each of which corrupts the on-chain ACTION string
+// notation (e.g. "1e-18"): each of which corrupts the on-chain ACTION string
 // the indexer reads back byte-for-byte. The fix formats via a full-precision
 // mathjs bignumber with fixed notation. These pin that exact-wire behaviour, and
 // the companion guard that non-numeric values in numeric-NAMED fields (e.g. TYPE
@@ -87,7 +87,7 @@ describe('Regression (fe9161e): amount full-precision wire formatting', function
 // ─── Regression: bcnum + bc* helpers preserve full precision (no JS double) ────
 //
 // bcnum used parseFloat/parseInt, and every bc* wrapper re-funnelled its
-// already-correct fixed-notation result back through bcnum — throwing the
+// already-correct fixed-notation result back through bcnum, throwing the
 // precision away to a ~16-digit double (and re-emitting scientific notation for
 // tiny values). The most damaging consumer is getPrice(...,64), whose result
 // feeds ORDER GET_PRICE/GIVE_PRICE and drives order_match fills. bcnum now

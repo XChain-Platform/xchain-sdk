@@ -62,7 +62,7 @@ class Workflows {
     //
     // wif         - WIF private key
     // issueParams - ISSUE action params (tick, maxSupply, etc.)
-    // mintParams  - MINT action params (amount, destination — tick is auto-filled)
+    // mintParams  - MINT action params (amount, destination; tick is auto-filled)
     // opts        - submit options
     //
     // Returns: { issue: <submitResult>, mint: <submitResult> }
@@ -119,7 +119,7 @@ class Workflows {
     // wif            - WIF private key
     // stakeParams    - STAKE action params (version, amount, signingPubkey)
     //                  version=1 for a new stake, version=2 to top up an existing pubkey
-    // delegateParams - DELEGATE action params (newSigningPubkey) — optional, omit to skip
+    // delegateParams - DELEGATE action params (newSigningPubkey); optional, omit to skip
     // opts           - submit options
     //
     // Returns: { stake: <submitResult>, delegate: <submitResult>|null }
@@ -140,7 +140,7 @@ class Workflows {
     //
     // wif            - WIF private key
     // stakeParams    - { AMOUNT, SIGNING_PUBKEY, TARGET_CONTRACT_INDEX, TICK }
-    // delegateParams - { SIGNING_PUBKEY, TARGET_CONTRACT_INDEX, TICK } — optional
+    // delegateParams - { SIGNING_PUBKEY, TARGET_CONTRACT_INDEX, TICK } (optional)
     // opts           - submit options
     //
     // Returns: { stake: <submitResult>, delegate: <submitResult>|null }
@@ -154,13 +154,13 @@ class Workflows {
         return { stake: stakeResult, delegate: delegateResult };
     }
 
-    // Deploy a stakeable smart contract — enforces presence of COOLDOWN_BLOCKS + SLASH_DESTINATION
-    // metadata so the resulting contract can accept STAKE v3 actions.
+    // Deploy a stakeable smart contract. Enforces presence of COOLDOWN_BLOCKS +
+    // SLASH_DESTINATION metadata so the resulting contract can accept STAKE v3 actions.
     //
     // wif           - WIF private key
     // deployParams  - DEPLOY action params; MUST include COOLDOWN_BLOCKS (1..100000) and
     //                 SLASH_DESTINATION (address or 'BURN' sentinel). VERSION is forced to 1.
-    // deposits      - [{ tick, quantity }, ...] — optional initial token deposits
+    // deposits      - [{ tick, quantity }, ...] (optional initial token deposits)
     // opts          - submit options
     //
     // Returns: { deploy: <submitResult>, deposits: [<submitResult>, ...] }
@@ -176,7 +176,7 @@ class Workflows {
     //
     // wif           - WIF private key
     // deployParams  - DEPLOY action params (code/codeEncoding, gasLimit, constructorParams)
-    // deposits      - [{ tick, quantity }, ...] — optional initial token deposits
+    // deposits      - [{ tick, quantity }, ...] (optional initial token deposits)
     // opts          - submit options
     //
     // Returns: { deploy: <submitResult>, deposits: [<submitResult>, ...] }
@@ -215,7 +215,7 @@ class Workflows {
     //
     // wif           - WIF private key
     // deployParams  - { code, gasLimit, constructorParams, [cooldownBlocks, slashDestination] }
-    // deposits      - [{ tick, quantity }, ...] — optional initial token deposits
+    // deposits      - [{ tick, quantity }, ...] (optional initial token deposits)
     // opts          - submit options
     //
     // Returns: { deploy: <submitResult>, chunks: [<submitResult>...], deposits: [...] }
@@ -322,7 +322,7 @@ class Workflows {
         return session.issue(this.sdk.nft.edition(params), {}, opts);
     }
 
-    // Issue a distinct collection item — a child TICK `parent.name` as a 1-of-1.
+    // Issue a distinct collection item: a child TICK `parent.name` as a 1-of-1.
     // The issuer must currently own the parent (enforced by the indexer).
     //
     // wif    - issuer WIF
@@ -342,7 +342,7 @@ class Workflows {
     //   issueActionIndex,           // ACTION_INDEX of the token's ISSUE
     //   file: { name, type, title?, memo?, rawData },  // FILE upload
     //   memo?,                      // LINK memo
-    //   tis?: {                     // OPTIONAL — also author the on-chain TIS
+    //   tis?: {                     // OPTIONAL: also author the on-chain TIS
     //     tick,                     //   document (Token_Information_Standard.md
     //     name?, description?       //   On-Chain Format) and point the token's
     //   }                           //   DESCRIPTION at it via ISSUE v1
@@ -367,7 +367,7 @@ class Workflows {
         // single-action object on the WS path, so check both shapes.
         let fileActionIndex = this._actionIndexOf(fileResult.indexed);
         if (fileActionIndex === undefined || fileActionIndex === null)
-            throw new Error('attachContent: FILE action_index unavailable — submit with waitForIndexer enabled');
+            throw new Error('attachContent: FILE action_index unavailable; submit with waitForIndexer enabled');
 
         // Step 2: LINK the FILE to the token's ISSUE (owner-validated by the indexer)
         let linkResult = await session.link(this.sdk.nft.attachContentParams({
@@ -380,7 +380,7 @@ class Workflows {
         let out = { file: fileResult, link: linkResult };
         if (!params.tis) return out;
 
-        // Step 3 (optional): author the TIS document on-chain — a JSON FILE
+        // Step 3 (optional): author the TIS document on-chain as a JSON FILE
         // whose images[] data_ref points at the artwork upload from step 1.
         let { json } = this.sdk.nft.tisDocument({
             tick:             params.tis.tick,
@@ -397,10 +397,10 @@ class Workflows {
         }, { rawData: Buffer.from(json, 'utf8').toString('binary') }, opts);
         let tisActionIndex = this._actionIndexOf(tisFileResult.indexed);
         if (tisActionIndex === undefined || tisActionIndex === null)
-            throw new Error('attachContent: TIS FILE action_index unavailable — submit with waitForIndexer enabled');
+            throw new Error('attachContent: TIS FILE action_index unavailable; submit with waitForIndexer enabled');
 
         // Step 4: point the token's DESCRIPTION at the on-chain document
-        // (ISSUE v1 — edit description; owner-only at the indexer).
+        // (ISSUE v1 edits description; owner-only at the indexer).
         let describeResult = await session.issue({
             version:     '1',
             tick:        params.tis.tick,
@@ -415,7 +415,7 @@ class Workflows {
     // Publish (or replace) a project's official-token roster: submit a TICK-type
     // LIST, then LINK it to the project's ISSUE. The LINK is owner-validated by
     // the indexer (SOURCE must be the project tick's current owner), and the
-    // latest owner-valid roster link supersedes earlier ones — see
+    // latest owner-valid roster link supersedes earlier ones. See
     // xchain-documentation/protocol/Project_Registry.md.
     //
     // wif    - project owner WIF
@@ -441,7 +441,7 @@ class Workflows {
 
         let listActionIndex = this._actionIndexOf(listResult.indexed);
         if (listActionIndex === undefined || listActionIndex === null)
-            throw new Error('setRoster: LIST action_index unavailable — submit with waitForIndexer enabled');
+            throw new Error('setRoster: LIST action_index unavailable; submit with waitForIndexer enabled');
 
         // Step 2: LINK the roster to the project's ISSUE (owner-validated)
         let linkResult = await session.link(this.sdk.project.attestRosterParams({

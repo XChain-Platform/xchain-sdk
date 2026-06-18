@@ -64,7 +64,7 @@ describe('Fuzz – Group 1: Garbage types for action field', function() {
         let actions = createActions();
         try {
             actions.createAction({ action: null });
-            // If it doesn't throw, the null was somehow accepted — still not a crash
+            // If it doesn't throw, the null was somehow accepted; still not a crash
         } catch (e) {
             assertCleanError(e);
             expect(e).to.be.instanceOf(SDKValidationError);
@@ -227,7 +227,7 @@ describe('Fuzz – Group 3: Extreme string lengths', function() {
             assertCleanError(e);
         }
         // A 10k-char TICK passes the non-ISSUE TICK path (only ^-prefix check applies),
-        // so it may or may not throw — either is acceptable as long as no crash.
+        // so it may or may not throw; either is acceptable as long as no crash.
     });
 
     it('MEMO with 1MB string → must not crash', function() {
@@ -457,7 +457,7 @@ describe('Fuzz – Group 6: Validator with garbage inputs', function() {
         let threw = false;
         try {
             let result = validator.validate('SEND', null);
-            // null fields — may return errors or empty array
+            // null fields: may return errors or empty array
             expect(result).to.be.an('array');
         } catch (e) {
             threw = true;
@@ -694,7 +694,7 @@ describe('Fuzz – Group 8: Rapid-fire random actions', function() {
         }
 
         // Report
-        // All errors must be SDKError subclasses — no raw runtime errors allowed
+        // All errors must be SDKError subclasses; no raw runtime errors allowed
         if (badErrors.length > 0) {
             let summary = badErrors.map(b =>
                 `action=${b.action} threw ${b.errorConstructor}: ${b.errorMessage}`

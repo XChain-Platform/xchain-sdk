@@ -512,7 +512,7 @@ describe('WalletUtils', function() {
         });
     });
 
-    describe('broadcastTx() — success and error paths', function() {
+    describe('broadcastTx() - success and error paths', function() {
         afterEach(() => sinon.restore());
 
         it('should return txid from encoder.broadcastTx', async function() {
@@ -564,7 +564,7 @@ describe('WalletUtils', function() {
 
         it('should throw INVALID_INPUT for wrong msgHash type (string)', function() {
             const wallet = new WalletUtils('bitcoin-regtest');
-            // Pass a plain string (not a Uint8Array) — the instanceof check fires
+            // Pass a plain string (not a Uint8Array); the instanceof check fires
             expect(() => wallet.signEcdsa('notauint8array', new Uint8Array(32))).to.throw(/msgHash must be a 32-byte Uint8Array/);
         });
 
@@ -587,7 +587,7 @@ describe('WalletUtils', function() {
 
         it('should throw INVALID_INPUT for invalid secp256k1 scalar (zero key)', function() {
             const wallet = new WalletUtils('bitcoin-regtest');
-            const badKey = new Uint8Array(32); // all zeros — invalid scalar
+            const badKey = new Uint8Array(32); // all zeros (invalid scalar)
             expect(() => wallet.signEcdsa(new Uint8Array(32), badKey)).to.throw(/not a valid secp256k1 scalar/);
         });
 
@@ -678,7 +678,7 @@ describe('WalletUtils', function() {
 
         it('should throw INVALID_SCRIPT_TEMPLATE for uncompressed pubkey in multisig template', function() {
             const wallet = new WalletUtils('bitcoin-regtest');
-            // 65-byte (130 hex chars) uncompressed pubkey — need at least 4 parts
+            // 65-byte (130 hex chars) uncompressed pubkey; need at least 4 parts
             const validKp = wallet.generateKeyPair();
             const badPubkey = '04' + 'ab'.repeat(64);
             expect(() => wallet.deriveMultisigAddress({
@@ -716,7 +716,7 @@ describe('WalletUtils', function() {
 
         it('should throw INVALID_SCRIPT_TEMPLATE for musig2 with wrong pubkey length', function() {
             const wallet = new WalletUtils('bitcoin-regtest');
-            // 16 bytes — too short
+            // 16 bytes: too short
             const shortXOnly = 'deadbeef'.repeat(4);
             expect(() => wallet.deriveMultisigAddress({
                 scriptTemplate: `musig2:${shortXOnly}`,
@@ -821,7 +821,7 @@ describe('WalletUtils', function() {
         });
 
         it('sign + finalize completes a 1-of-1 p2wpkh PSBT', function() {
-            // Build a single-key P2WPKH PSBT, sign with signPsbt — exercise finalize path
+            // Build a single-key P2WPKH PSBT, sign with signPsbt; exercise finalize path
             const wallet = new WalletUtils('bitcoin-regtest');
             const net = getNetwork('bitcoin-regtest');
             const kp = wallet.generateKeyPair();
@@ -844,7 +844,7 @@ describe('WalletUtils', function() {
         });
     });
 
-    describe('validateAddress() — extended', function() {
+    describe('validateAddress() - extended', function() {
         it('should validate a P2SH address on bitcoin-regtest', function() {
             const wallet = new WalletUtils('bitcoin-regtest');
             const net = getNetwork('bitcoin-regtest');
@@ -873,7 +873,7 @@ describe('WalletUtils', function() {
         });
     });
 
-    describe('deriveAddress() — extended', function() {
+    describe('deriveAddress() - extended', function() {
         it('should throw INVALID_ADDRESS_TYPE for unknown type', function() {
             const wallet = new WalletUtils('bitcoin-regtest');
             const kp = wallet.generateKeyPair();
@@ -957,13 +957,13 @@ describe('WalletUtils', function() {
         });
     });
 
-    describe('decomposePsbt() — OP_RETURN and missing UTXO paths', function() {
+    describe('decomposePsbt() - OP_RETURN and missing UTXO paths', function() {
         it('should set address null for OP_RETURN output', function() {
             const wallet = new WalletUtils('bitcoin-regtest');
             const net = getNetwork('bitcoin-regtest');
             const kp = wallet.generateKeyPair();
             const inputScript = bitcoin.payments.p2wpkh({ pubkey: kp.publicKey, network: net }).output;
-            // OP_RETURN output — cannot be converted to an address
+            // OP_RETURN output: cannot be converted to an address
             const opReturnScript = bitcoin.script.compile([
                 bitcoin.opcodes.OP_RETURN,
                 Buffer.from('58434841494e', 'hex'), // "XCHAIN" in hex

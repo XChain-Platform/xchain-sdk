@@ -228,7 +228,7 @@ class EncoderClient {
         if (!params.p2shHex)
             throw new SDKEncoderError('MISSING_P2SH_HEX', 'spendP2sh requires p2shHex');
 
-        // Phase 2 must be built with the SAME action data + encoding as phase 1 —
+        // Phase 2 must be built with the SAME action data + encoding as phase 1;
         // the encoder re-derives the reveal script chunks from them. Sending empty
         // data makes the encoder fail to build the reveal outputs.
         let rpcParams = {

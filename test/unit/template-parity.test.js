@@ -33,7 +33,7 @@ function sha256(buf) { return crypto.createHash('sha256').update(buf).digest('he
 function canonicalTemplatePath(name) { return path.join(CONTRACTS_DIR, name, name + '.js'); }
 function canonicalPatternPath(name)  { return path.join(CONTRACTS_DIR, 'patterns', name + '.js'); }
 
-describe('scaffold sources — drift + verdict', function () {
+describe('scaffold sources: drift + verdict', function () {
 
     let sdk;
     before(function () { sdk = new XChainSDK({ network: 'bitcoin-regtest', noHub: true }); });
@@ -45,7 +45,7 @@ describe('scaffold sources — drift + verdict', function () {
                 const embedded  = Buffer.from(EMBEDDED.templates[name], 'base64');
                 const canonical = fs.readFileSync(canonicalTemplatePath(name));
                 assert.strictEqual(sha256(embedded), sha256(canonical),
-                    'TEMPLATE DRIFT: ' + name + ' — re-run `npm run sync:templates`.');
+                    'TEMPLATE DRIFT: ' + name + '; re-run `npm run sync:templates`.');
             });
         }
         for (const name of Object.keys(EMBEDDED.patterns)) {
@@ -54,7 +54,7 @@ describe('scaffold sources — drift + verdict', function () {
                 const embedded  = Buffer.from(EMBEDDED.patterns[name], 'base64');
                 const canonical = fs.readFileSync(canonicalPatternPath(name));
                 assert.strictEqual(sha256(embedded), sha256(canonical),
-                    'PATTERN DRIFT: ' + name + ' — re-run `npm run sync:templates`.');
+                    'PATTERN DRIFT: ' + name + '; re-run `npm run sync:templates`.');
             });
         }
     });

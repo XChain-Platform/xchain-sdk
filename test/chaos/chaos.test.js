@@ -304,7 +304,7 @@ describe('EncoderClient – network chaos', function () {
     after(() => nock.enableNetConnect());
     afterEach(() => nock.cleanAll());
 
-    // (a) Malformed JSON-RPC response — axios returns the raw string without
+    // (a) Malformed JSON-RPC response: axios returns the raw string without
     //     throwing, so body.error is undefined and body.result is undefined.
     //     The client returns undefined (graceful degradation, no crash).
     it('a) malformed JSON – does not crash', async () => {

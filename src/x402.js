@@ -24,7 +24,7 @@
  * Schemes:
  *   xchain-send       pay-per-call: SEND tick/amount to payTo with
  *                     MEMO = invoice nonce. minConfirmations 0 accepts
- *                     mempool visibility (PROVISIONAL — decoder mempool
+ *                     mempool visibility (PROVISIONAL: decoder mempool
  *                     rows are pre-validation; a sweeper promotes to
  *                     confirmed or revokes), 1+ requires indexed rows.
  *   xchain-dispenser  hold-to-access: caller holds >= minBalance of
@@ -51,10 +51,10 @@ const { SDKX402Error } = require('./errors.js');
 
 const math = create(all, { number: 'BigNumber', precision: 64 });
 const bn   = (v) => math.bignumber(String(v));
-// Exact decimal comparisons via BigNumber methods — mathjs larger()/equal()
+// Exact decimal comparisons via BigNumber methods. mathjs larger()/equal()
 // apply an epsilon tolerance (see agentSession.js).
 const gte  = (a, b) => bn(a).gte(bn(b));
-// Protocol amounts are plain decimal strings — reject exponents, signs,
+// Protocol amounts are plain decimal strings; reject exponents, signs,
 // unicode digits, anything bignumber would "helpfully" accept.
 const isPosNum = (v) => {
     if (!/^\d+(\.\d+)?$/.test(String(v))) return false;
@@ -67,7 +67,7 @@ const X402_VERSION = 1;
 
 // Wire layout (verified against FormatSelector.serialize): pipe-joined with
 // the action name first, e.g. SEND|0|TICK|AMOUNT|DESTINATION|MEMO.
-// SEND output tuples per version — index maps into the segment array.
+// SEND output tuples per version; index maps into the segment array.
 const SEND_LAYOUTS = {
     0: { count: 6,  outputs: [{ tick: 2, amount: 3, destination: 4, memo: 5 }] },
     1: { count: 8,  outputs: [{ tick: 2, amount: 3, destination: 4, memo: 7 },
@@ -315,7 +315,7 @@ class X402Gateway {
         if (Date.now() > invoice.expiresAt + this.expiryGraceMs)
             return { ok: false, code: 'X402_INVOICE_EXPIRED' };
 
-        // Confirmed path first — strongest evidence.
+        // Confirmed path first (strongest evidence).
         const confirmed = await this._findConfirmedSend(invoice, payer);
         if (confirmed) {
             const updated = await this.store.update(nonce, (inv) => {
@@ -328,7 +328,7 @@ class X402Gateway {
         }
 
         // 0-conf path (only when the invoice allows it): decoder mempool rows,
-        // parsed with full multi-output pairing. PRE-VALIDATION — provisional.
+        // parsed with full multi-output pairing. PRE-VALIDATION (provisional).
         if (invoice.minConfirmations === 0) {
             const hit = await this._findMempoolSend(invoice, payer);
             if (hit) {
@@ -530,7 +530,7 @@ class X402Client {
         if (this.maxAmount !== null && !gte(this.maxAmount, offer.amount))
             throw new SDKX402Error('X402_PRICE_TOO_HIGH', `offer ${offer.amount} ${offer.tick} exceeds maxAmount ${this.maxAmount}`, { offer });
 
-        // Pay. SDKPolicyError from an AgentSession propagates — refusals are final.
+        // Pay. SDKPolicyError from an AgentSession propagates; refusals are final.
         const zeroConf = Number(offer.minConfirmations) === 0;
         const payResult = await this.session.send(
             { tick: offer.tick, amount: offer.amount, destination: offer.payTo, memo: offer.invoice },

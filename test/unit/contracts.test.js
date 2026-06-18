@@ -143,7 +143,7 @@ describe('ContractUtils', function () {
             if (result.valid) {
                 assert.strictEqual(result.valid, true);
             } else {
-                // acorn not installed — check the degraded message
+                // acorn not installed: check the degraded message
                 assert.ok(result.error.includes('acorn') || result.error.includes('syntax'));
             }
         });
@@ -167,7 +167,7 @@ describe('ContractUtils', function () {
             if (result.valid === false && result.error && result.error.includes('__gas')) {
                 assert.ok(true);
             } else if (result.valid === true) {
-                // acorn not installed path would not reach here — this is ok
+                // acorn not installed path would not reach here; this is ok
                 assert.ok(true);
             }
             // Either way no throw
@@ -243,7 +243,7 @@ describe('ContractUtils', function () {
         });
 
         it('does NOT count for-in loops (no semicolons in header)', function () {
-            // for-in does not have semicolons — falls outside the regex pattern
+            // for-in does not have semicolons, so it falls outside the regex pattern
             let count = utils._countForStatements('for (var k in obj) {}');
             assert.strictEqual(count, 0);
         });

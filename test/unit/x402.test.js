@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Unit tests for src/x402.js — action-string parsing (incl. spoof
+ * Unit tests for src/x402.js: action-string parsing (incl. spoof
  * cases), invoice lifecycle, send/dispenser/deposit verification with
  * a stubbed explorer, the provisional sweeper, and the client loop
  * with a stubbed session. No network, no real chain.
@@ -163,7 +163,7 @@ describe('x402', () => {
         it('0-conf: grants provisionally from a parsed mempool SEND (multi-output pairing enforced)', async () => {
             const gw = mkGateway({ send: { tick: 'TOK', amount: '5', payTo: 'gateAddr', minConfirmations: 0 } });
             await issueInvoice(gw);
-            // v1 multi-output: the BIG amount goes elsewhere; gateAddr's output is only 2 — must NOT pass
+            // v1 multi-output: the BIG amount goes elsewhere; gateAddr's output is only 2, must NOT pass
             explorer.getMempool.resolves({ data: [{ tx_hash: 'txDD', source: 'payerAddr', action: 'SEND', data: `SEND|1|TOK|100|other|2|gateAddr|${NONCE}` }] });
             expect((await gw.verify(proof({ txid: 'txDD' }))).ok).to.equal(false);
             // correct amount on the gateAddr output passes provisionally

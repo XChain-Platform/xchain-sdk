@@ -37,7 +37,7 @@ const SDK_API_PORT = process.env.SDK_API_PORT || 3005;
 // ping is rejected (401) rather than left open.
 const SDK_API_KEY  = process.env.SDK_API_KEY || '';
 if(!SDK_API_KEY)
-    console.warn('WARNING: SDK_API_KEY is not set — all helper-API methods except ping will return 401. Set SDK_API_KEY to use the API.');
+    console.warn('WARNING: SDK_API_KEY is not set. All helper-API methods except ping will return 401. Set SDK_API_KEY to use the API.');
 const NETWORK      = process.env.NETWORK;
 const EXPLORER_URL = process.env.EXPLORER_URL;
 const EXPLORER_PORT = process.env.EXPLORER_PORT;

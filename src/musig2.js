@@ -15,7 +15,7 @@
  * XChain Platform SDK - MuSig2 Primitives (BIP327)
  *
  * Key aggregation, nonce generation, partial signing, and signature
- * aggregation for MuSig2 — used by Taproot-MuSig2 multisig wallets.
+ * aggregation for MuSig2, used by Taproot-MuSig2 multisig wallets.
  *
  * MuSig2-aggregated signatures are indistinguishable from single-sig
  * Schnorr signatures on chain: the VM / decoder / indexer / explorer
@@ -29,7 +29,7 @@
  * same module instance. The underlying library uses an internal
  * nonce cache keyed by publicNonce; a publicNonce generated on one
  * process cannot be partially-signed on another without also
- * transferring the secret nonce — which intentionally is not
+ * transferring the secret nonce, which intentionally is not
  * exposed by this module. Cross-process signing requires the
  * deterministicSign flow (not yet wrapped).
  *
@@ -108,8 +108,8 @@ const ecc = {
         }
     },
 
-    // a*P — "unsafe" in the sense that it accepts scalars that may be
-    // zero; infinity returns null so the caller can branch.
+    // a*P ("unsafe" in the sense that it accepts scalars that may be
+    // zero; infinity returns null so the caller can branch).
     pointMultiplyUnsafe(p, a, compressed) {
         try {
             let scalar = baseCrypto.readScalar(a);
@@ -228,12 +228,12 @@ class MuSig2 {
     /*
      * Aggregate N public keys into a single MuSig2 context.
      *
-     * @param {(Uint8Array|string)[]} publicKeys  — 33-byte compressed pubkeys
-     * @param {Uint8Array[]} [tweaks]             — optional post-aggregation tweaks
+     * @param {(Uint8Array|string)[]} publicKeys  33-byte compressed pubkeys
+     * @param {Uint8Array[]} [tweaks]             optional post-aggregation tweaks
      * @returns {object} KeyGenContext:
      *   {
-     *     aggPublicKey: Uint8Array(33),  — compressed aggregated pubkey
-     *     xOnlyPubkey:  Uint8Array(32),  — x-only form for Taproot
+     *     aggPublicKey: Uint8Array(33),  compressed aggregated pubkey
+     *     xOnlyPubkey:  Uint8Array(32),  x-only form for Taproot
      *     gacc: Uint8Array(32),
      *     tacc: Uint8Array(32)
      *   }
@@ -267,12 +267,12 @@ class MuSig2 {
      * Generate a MuSig2 nonce (round 1).
      *
      * @param {object} params
-     * @param {Uint8Array} params.publicKey        — our 33-byte compressed pubkey
-     * @param {Uint8Array} [params.secretKey]      — our secret (optional, improves randomness)
-     * @param {Uint8Array} [params.sessionId]      — 32 bytes; if omitted, library uses secure random
-     * @param {Uint8Array} [params.xOnlyPublicKey] — aggregated x-only pubkey (binds nonce to the key-agg ctx)
-     * @param {Uint8Array} [params.msg]            — 32-byte message to be signed
-     * @param {Uint8Array} [params.extraInput]     — additional entropy
+     * @param {Uint8Array} params.publicKey        our 33-byte compressed pubkey
+     * @param {Uint8Array} [params.secretKey]      our secret (optional, improves randomness)
+     * @param {Uint8Array} [params.sessionId]      32 bytes; if omitted, library uses secure random
+     * @param {Uint8Array} [params.xOnlyPublicKey] aggregated x-only pubkey (binds nonce to the key-agg ctx)
+     * @param {Uint8Array} [params.msg]            32-byte message to be signed
+     * @param {Uint8Array} [params.extraInput]     additional entropy
      * @returns {Uint8Array} 66-byte publicNonce (secretNonce is stashed internally by the library)
      */
     generateNonce(params) {
@@ -309,8 +309,8 @@ class MuSig2 {
      * Start a MuSig2 signing session. Produces a SessionKey consumed
      * by partialSign / verifyPartial / aggregateSignatures.
      *
-     * @param {Uint8Array} aggNonce       — 66-byte aggregated nonce
-     * @param {Uint8Array} msg            — 32-byte message
+     * @param {Uint8Array} aggNonce       66-byte aggregated nonce
+     * @param {Uint8Array} msg            32-byte message
      * @param {(Uint8Array|string)[]} publicKeys
      * @param {Uint8Array[]} [tweaks]
      * @returns {object} SessionKey { publicKey, aggNonce, msg }
@@ -333,10 +333,10 @@ class MuSig2 {
      * cached from the corresponding generateNonce call.
      *
      * @param {object} params
-     * @param {Uint8Array} params.secretKey    — 32 bytes
-     * @param {Uint8Array} params.publicNonce  — 66 bytes, must originate from generateNonce on this instance
-     * @param {object} params.sessionKey       — from startSession
-     * @param {boolean} [params.verify=true]   — self-verify the partial sig
+     * @param {Uint8Array} params.secretKey    32 bytes
+     * @param {Uint8Array} params.publicNonce  66 bytes, must originate from generateNonce on this instance
+     * @param {object} params.sessionKey       from startSession
+     * @param {boolean} [params.verify=true]   self-verify the partial sig
      */
     partialSign(params) {
         if (!params || typeof params !== 'object')

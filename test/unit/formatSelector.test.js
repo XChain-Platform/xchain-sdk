@@ -40,10 +40,10 @@ function fields(...keys) {
 
 
 // ===========================================================================
-// select() — basic selection for each action type
+// select() - basic selection for each action type
 // ===========================================================================
 
-describe('FormatSelector.select() — basic action-type selection', function () {
+describe('FormatSelector.select(): basic action-type selection', function () {
 
     // -------------------------------------------------------------------------
     // SEND
@@ -72,7 +72,7 @@ describe('FormatSelector.select() — basic action-type selection', function () 
     describe('ISSUE', function () {
 
         it('selects v1 (shortest) for TICK + DESCRIPTION', function () {
-            // v1: VERSION|TICK|DESCRIPTION|MEMO  — much shorter than v0
+            // v1: VERSION|TICK|DESCRIPTION|MEMO  (much shorter than v0)
             const result = FormatSelector.select('ISSUE', {
                 TICK: 'TOKEN', DESCRIPTION: 'My token'
             });
@@ -111,7 +111,7 @@ describe('FormatSelector.select() — basic action-type selection', function () 
         });
 
         it('selects v5 for TICK + ALLOW_LIST + BLOCK_LIST', function () {
-            // v5: VERSION|TICK|ALLOW_LIST|BLOCK_LIST|MEMO — shorter than v0
+            // v5: VERSION|TICK|ALLOW_LIST|BLOCK_LIST|MEMO (shorter than v0)
             const result = FormatSelector.select('ISSUE', {
                 TICK: 'TOKEN', ALLOW_LIST: '1', BLOCK_LIST: '2'
             });
@@ -173,13 +173,13 @@ describe('FormatSelector.select() — basic action-type selection', function () 
     describe('SLEEP', function () {
 
         it('selects v0 for RESUME_BLOCK only', function () {
-            // v0: VERSION|RESUME_BLOCK|MEMO  — shorter than v1
+            // v0: VERSION|RESUME_BLOCK|MEMO  (shorter than v1)
             const result = FormatSelector.select('SLEEP', { RESUME_BLOCK: '900000' });
             expect(result.version).to.equal(0);
         });
 
         it('selects v1 for RESUME_BLOCK + TICK', function () {
-            // v1: VERSION|RESUME_BLOCK|TICK|MEMO — only format with TICK slot
+            // v1: VERSION|RESUME_BLOCK|TICK|MEMO (only format with TICK slot)
             const result = FormatSelector.select('SLEEP', { RESUME_BLOCK: '900000', TICK: 'TOKEN' });
             expect(result.version).to.equal(1);
         });
@@ -192,7 +192,7 @@ describe('FormatSelector.select() — basic action-type selection', function () 
     describe('BROADCAST', function () {
 
         it('selects v0 for MESSAGE + VALUE', function () {
-            // v0: VERSION|MESSAGE|VALUE  — shorter than v1
+            // v0: VERSION|MESSAGE|VALUE  (shorter than v1)
             const result = FormatSelector.select('BROADCAST', { MESSAGE: 'hello', VALUE: '100' });
             expect(result.version).to.equal(0);
         });
@@ -210,10 +210,10 @@ describe('FormatSelector.select() — basic action-type selection', function () 
 
 
 // ===========================================================================
-// select() — picks the smallest (shortest) format
+// select() - picks the smallest (shortest) format
 // ===========================================================================
 
-describe('FormatSelector.select() — picks the smallest format', function () {
+describe('FormatSelector.select(): picks the smallest format', function () {
 
     it('selects v1 (shorter than v0) for ISSUE with only TICK', function () {
         // v1 = VERSION|TICK|DESCRIPTION|MEMO  (4 fields)
@@ -236,10 +236,10 @@ describe('FormatSelector.select() — picks the smallest format', function () {
 
 
 // ===========================================================================
-// select() — return structure
+// select() - return structure
 // ===========================================================================
 
-describe('FormatSelector.select() — return structure', function () {
+describe('FormatSelector.select(): return structure', function () {
 
     it('returns an object with version, formatFields, and estimatedLength', function () {
         const result = FormatSelector.select('SEND', {
@@ -267,10 +267,10 @@ describe('FormatSelector.select() — return structure', function () {
 
 
 // ===========================================================================
-// select() — error cases
+// select() - error cases
 // ===========================================================================
 
-describe('FormatSelector.select() — error cases', function () {
+describe('FormatSelector.select(): error cases', function () {
 
     it('throws SDKFormatError with code UNKNOWN_ACTION for an unrecognised action', function () {
         expect(() => FormatSelector.select('NONEXISTENT', {}))
@@ -336,10 +336,10 @@ describe('FormatSelector.select() — error cases', function () {
 
 
 // ===========================================================================
-// serialize() — basic serialization
+// serialize() - basic serialization
 // ===========================================================================
 
-describe('FormatSelector.serialize() — basic serialization', function () {
+describe('FormatSelector.serialize(): basic serialization', function () {
 
     it('serializes SEND v0 with TICK, AMOUNT, DESTINATION', function () {
         const result = FormatSelector.serialize('SEND', 0, {
@@ -378,10 +378,10 @@ describe('FormatSelector.serialize() — basic serialization', function () {
 
 
 // ===========================================================================
-// serialize() — trailing empty fields are trimmed
+// serialize() - trailing empty fields are trimmed
 // ===========================================================================
 
-describe('FormatSelector.serialize() — trailing empty fields are trimmed', function () {
+describe('FormatSelector.serialize(): trailing empty fields are trimmed', function () {
 
     it('SEND v0 without MEMO has no trailing pipe', function () {
         const result = FormatSelector.serialize('SEND', 0, {
@@ -400,7 +400,7 @@ describe('FormatSelector.serialize() — trailing empty fields are trimmed', fun
     });
 
     it('BROADCAST v0 with only MESSAGE trims empty VALUE', function () {
-        // v0: VERSION|MESSAGE|VALUE — VALUE is empty and trailing → trimmed
+        // v0: VERSION|MESSAGE|VALUE (VALUE is empty and trailing, so trimmed)
         const result = FormatSelector.serialize('BROADCAST', 0, { MESSAGE: 'ping' });
         expect(result).to.equal('BROADCAST|0|ping');
     });
@@ -419,10 +419,10 @@ describe('FormatSelector.serialize() — trailing empty fields are trimmed', fun
 
 
 // ===========================================================================
-// serialize() — VERSION is auto-populated
+// serialize() - VERSION is auto-populated
 // ===========================================================================
 
-describe('FormatSelector.serialize() — VERSION is auto-populated', function () {
+describe('FormatSelector.serialize(): VERSION is auto-populated', function () {
 
     it('VERSION appears as the first pipe-separated field after the action name', function () {
         const result = FormatSelector.serialize('SEND', 0, {
@@ -452,10 +452,10 @@ describe('FormatSelector.serialize() — VERSION is auto-populated', function ()
 
 
 // ===========================================================================
-// serialize() — empty / missing fields become empty strings between pipes
+// serialize() - empty / missing fields become empty strings between pipes
 // ===========================================================================
 
-describe('FormatSelector.serialize() — empty / missing fields become empty strings', function () {
+describe('FormatSelector.serialize(): empty / missing fields become empty strings', function () {
 
     it('ORDER v0 with GIVE_TICK and GET_TICK but no GIVE_COIN produces empty segment for GIVE_COIN', function () {
         // v0: VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_OWNERSHIP|GET_COIN|GET_TICK|GET_AMOUNT|GET_OWNERSHIP|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
@@ -577,13 +577,13 @@ describe('FormatSelector.getPopulatedFields()', function () {
     });
 
     it('includes fields with numeric zero value (0)', function () {
-        // 0 is not null/undefined/empty-string — it should be kept
+        // 0 is not null/undefined/empty-string, so it should be kept
         const result = FormatSelector.getPopulatedFields({ DECIMALS: 0, TICK: 'TOKEN' });
         expect(result).to.include('DECIMALS');
     });
 
     it('includes fields with boolean false value', function () {
-        // false is not null/undefined/empty-string — it should be kept
+        // false is not null/undefined/empty-string, so it should be kept
         const result = FormatSelector.getPopulatedFields({ LOCK_MINT: false, TICK: 'TOKEN' });
         expect(result).to.include('LOCK_MINT');
     });
@@ -609,7 +609,7 @@ describe('FormatSelector.estimateLength()', function () {
     it('computes correct byte count for SEND v0 with TOKEN/100/addr1', function () {
         // FORMAT: SEND|VERSION|TICK|AMOUNT|DESTINATION|MEMO
         // Serialized (trailing MEMO trimmed): SEND|0|TOKEN|100|addr1
-        // estimateLength does NOT trim — it counts all fields including trailing empty ones.
+        // estimateLength does NOT trim; it counts all fields including trailing empty ones.
         // Fields: VERSION=0(1), TICK=TOKEN(5), AMOUNT=100(3), DESTINATION=addr1(5), MEMO='empty'(0)
         // Pipes between fields: 4 (one between each of the 5 format fields)
         // action prefix: SEND|(5 chars)
@@ -649,7 +649,7 @@ describe('FormatSelector.estimateLength()', function () {
 });
 
 // ─── Explicit version + rest-field handling ──────────────────────────────────
-describe('FormatSelector — explicit version + rest fields', function () {
+describe('FormatSelector: explicit version + rest fields', function () {
 
     it('honours a valid explicit version', function () {
         const result = FormatSelector.select('SEND', { TICK: 'X', AMOUNT: '1', DESTINATION: 'a' }, 0);

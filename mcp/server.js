@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * XChain MCP server — read-only Model Context Protocol tools over the
+ * XChain MCP server: read-only Model Context Protocol tools over the
  * public XChain Platform (or a local regtest stack). Phase B-read of the
  * AI-agent readiness program: every tool is a query; nothing here touches
  * keys, signs, or submits. Write tools arrive separately, gated on
@@ -22,7 +22,7 @@
  * so tests can run against a stub. mcp/cli.js wires stdio.
  *
  * WRITE TOOLS exist only when the OPERATOR configures a wallet
- * (options.wallet = { wif, policy }, from env in cli.js — never from the
+ * (options.wallet = { wif, policy }, from env in cli.js; never from the
  * model conversation), and every submit goes through AgentSession policy
  * enforcement. No wallet config → the write tools are not even listed.
  *
@@ -72,7 +72,7 @@ function buildServer(options = {}) {
     const server = new McpServer({ name: 'xchain', version: SDK_VERSION });
 
     // Every tool returns the raw JSON the platform returned, as text. Amounts
-    // are arbitrary-precision decimal STRINGS — never parse them as floats.
+    // are arbitrary-precision decimal STRINGS; never parse them as floats.
     const ok = (data) => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 1) }] });
     const fail = (err) => ({
         isError: true,
@@ -110,7 +110,7 @@ function buildServer(options = {}) {
         { coin: coinParam, tick: z.string(), ...pageOpts },
         ({ coin, tick, page, limit }) => sdkFor(coin).getHolders(tick, { page, limit }));
 
-    tool('get_project', 'Project registry roster — the owner-attested list of a project\'s official tokens.',
+    tool('get_project', 'Project registry roster: the owner-attested list of a project\'s official tokens.',
         { coin: coinParam, tick: z.string().describe('The project token tick') },
         ({ coin, tick }) => sdkFor(coin).getProject(tick));
 
@@ -162,7 +162,7 @@ function buildServer(options = {}) {
         { coin: coinParam, contract_action_index: z.number().int().min(0) },
         ({ coin, contract_action_index }) => sdkFor(coin).getContract(contract_action_index));
 
-    tool('get_contract_state', 'Contract state — all keys, or one key.',
+    tool('get_contract_state', 'Contract state: all keys, or one key.',
         { coin: coinParam, contract_action_index: z.number().int().min(0), key: z.string().optional() },
         ({ coin, contract_action_index, key }) => sdkFor(coin).getContractState(contract_action_index, key));
 
@@ -171,7 +171,7 @@ function buildServer(options = {}) {
         ({ coin, contract_action_index, page, limit }) => sdkFor(coin).getExecutions(contract_action_index, { page, limit }));
 
     /* ── attestations / validators / checkpoints ────────────────────── */
-    tool('get_attestations', 'ATTEST v0 requests + v1 responses — including LLM attestations contracts requested via xchain.attestation.request.',
+    tool('get_attestations', 'ATTEST v0 requests + v1 responses, including LLM attestations contracts requested via xchain.attestation.request.',
         { coin: coinParam, query: z.string().optional(), type: z.enum(['block', 'address', 'contract']).optional(), ...pageOpts },
         ({ coin, query, type, page, limit }) => sdkFor(coin).getAttestations(query, type, { page, limit }));
 
@@ -192,9 +192,9 @@ function buildServer(options = {}) {
     if (wallet && (!wallet.wif || !wallet.policy))
         throw new Error('mcp wallet config requires both wif and policy (fail-closed)');
     if (wallet && wallet.policy.confirmAbove)
-        throw new Error('confirmAbove is not supported in the MCP policy file (no human in this loop) — use hard caps instead');
+        throw new Error('confirmAbove is not supported in the MCP policy file (no human in this loop): use hard caps instead');
 
-    // One AgentSession per coin, lazily — same key, per-network address,
+    // One AgentSession per coin, lazily created: same key, per-network address,
     // per-address window state. Policy is shared across chains.
     const sessions = new Map();
     const sessionFor = (coin) => {
@@ -234,7 +234,7 @@ function buildServer(options = {}) {
         });
     }
 
-    tool('compose_action', 'Compose an unsigned transaction for an XChain action: returns the ACTION string and an unsigned PSBT. Nothing is signed or broadcast — the caller signs externally.'
+    tool('compose_action', 'Compose an unsigned transaction for an XChain action: returns the ACTION string and an unsigned PSBT. Nothing is signed or broadcast; the caller signs externally.'
         + (wallet ? ' Defaults to the configured agent wallet\'s pubkey.' : ' Requires pubkey (no wallet is configured).'),
         {
             coin: coinParam,

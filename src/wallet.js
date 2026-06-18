@@ -39,7 +39,7 @@ bitcoin.initEccLib(ecc);
  * carried inside nonWitnessUtxo so the wallet's format converters
  * don't need to reach for bitcoinjs-lib themselves.
  *
- * Field names match Trezor's `RefTransaction` shape — `hash` is the
+ * Field names match Trezor's `RefTransaction` shape: `hash` is the
  * display-order txid, amounts are decimal-string sats, inputs expose
  * `prev_hash` / `prev_index` / `script_sig` / `sequence` and outputs
  * expose `amount` / `script_pubkey`. Extra fields that Trezor ignores
@@ -89,7 +89,7 @@ function classifyScript(scriptBuf, redeemScriptBuf) {
         && b[23] === 0x88 && b[24] === 0xac) {
         return 'p2pkh';
     }
-    // P2SH: OP_HASH160 <20> OP_EQUAL — disambiguate via redeemScript.
+    // P2SH: OP_HASH160 <20> OP_EQUAL; disambiguate via redeemScript.
     if (b.length === 23 && b[0] === 0xa9 && b[1] === 0x14 && b[22] === 0x87) {
         if (redeemScriptBuf && redeemScriptBuf.length > 0) {
             const r = redeemScriptBuf;
@@ -111,7 +111,7 @@ class WalletUtils {
         this._netParams = network ? getNetwork(network) : null;
     }
 
-    // Resolve network params — instance default or per-call override
+    // Resolve network params: instance default or per-call override
     _resolveNet(network) {
         if (network) return getNetwork(network);
         if (this._netParams) return this._netParams;
@@ -245,11 +245,11 @@ class WalletUtils {
      * Three schemes are supported, matching the MultisigConfig schema
      * in xchain-wallet (§22.4 / §11.3.6):
      *
-     *   - 'p2sh-multisig'  — scriptTemplate is "multi:<T>:<pk1>:<pk2>:..."
+     *   - 'p2sh-multisig':  scriptTemplate is "multi:<T>:<pk1>:<pk2>:..."
      *                        Redeem script is the standard N-of-M
      *                        OP_CHECKMULTISIG, wrapped in P2SH.
-     *   - 'p2wsh-multisig' — same template; native segwit witness program.
-     *   - 'taproot-musig2' — scriptTemplate is "musig2:<aggregatedXOnly>".
+     *   - 'p2wsh-multisig': same template; native segwit witness program.
+     *   - 'taproot-musig2': scriptTemplate is "musig2:<aggregatedXOnly>".
      *                        The 32-byte aggregated x-only pubkey is the
      *                        final output pubkey (key-path only, no
      *                        script tree); produces a P2TR bech32m
@@ -414,7 +414,7 @@ class WalletUtils {
     /**
      * Produce a DER-encoded ECDSA signature over the given 32-byte
      * sighash using the given 32-byte secret key. Used by §22.3
-     * P2SH / P2WSH classical multisig signing — each cosigner emits
+     * P2SH / P2WSH classical multisig signing: each cosigner emits
      * one of these against the input's sighash; the coordinator's
      * PSBT finalizer assembles the threshold-of-N signatures into
      * the witness / redeem-script-input.
@@ -439,13 +439,13 @@ class WalletUtils {
         }
         const compactSig = ecc.sign(msgHash, secretKey);
         // ecc.sign returns the 64-byte compact (r || s) form. Convert
-        // to DER for PSBT-finalizer compatibility — bitcoinjs-lib's
+        // to DER for PSBT-finalizer compatibility; bitcoinjs-lib's
         // PSBT input slot expects DER-encoded signatures.
         return compactToDer(compactSig);
     }
 
     // -------------------------------------------------------------------------
-    //  PSBT signing — multisig variants (xchain-wallet §22.3)
+    //  PSBT signing: multisig variants (xchain-wallet §22.3)
     // -------------------------------------------------------------------------
 
     /**
@@ -530,11 +530,11 @@ class WalletUtils {
 
     /**
      * Resolve the fee ceiling (sat/vB) applied before extractTransaction.
-     * bitcoinjs-lib's "absurd fee" guard defaults to 5000 sat/vB — calibrated
+     * bitcoinjs-lib's "absurd fee" guard defaults to 5000 sat/vB, calibrated
      * for BTC's unit value. On chains whose base unit is worth far less, an
      * ordinary fee blows past it (DOGE: a normal ~0.5 DOGE/kB estimator rate
      * is ~50k sat/vB), rejecting every transaction at signing. Non-bitcoin
-     * networks therefore default to a far higher ceiling — real drain
+     * networks therefore default to a far higher ceiling; real drain
      * protection belongs upstream in the encoder's MAX_FEE_RATE_KB cap.
      * Callers can override in either direction via opts.maximumFeeRate.
      *
@@ -606,7 +606,7 @@ class WalletUtils {
     }
 
     /**
-     * Build a finalizer for XChain P2SH / P2WSH "reveal" inputs — the phase-2
+     * Build a finalizer for XChain P2SH / P2WSH "reveal" inputs (the phase-2
      * transaction of the two-step large-action encoding. Each such input
      * spends a data-carrying P2SH/P2WSH output created by phase 1, so its
      * redeem/witness script is the non-standard XChain payload script and
@@ -716,7 +716,7 @@ class WalletUtils {
      *
      * The wallet tracks BIP32 derivation paths out-of-band (on its own
      * Address records), so the returned shape deliberately omits
-     * derivation info — callers pair `inputs[i]` with the matching
+     * derivation info; callers pair `inputs[i]` with the matching
      * signingPath by index.
      *
      * @param {string} psbtHex - Unsigned PSBT hex string from the encoder
@@ -875,7 +875,7 @@ class WalletUtils {
      * transaction hex string. Used by the hardware-signer path, which
      * receives a signed `serializedTx` from the device and still needs
      * a txid for broadcast wiring. Handles both legacy and segwit
-     * serializations — bitcoinjs-lib's `Transaction.fromHex` auto-
+     * serializations; bitcoinjs-lib's `Transaction.fromHex` auto-
      * detects the segwit marker and `getId()` computes the txid over
      * the non-witness portion correctly.
      *
@@ -894,7 +894,7 @@ class WalletUtils {
     }
 
     // -------------------------------------------------------------------------
-    //  Transaction broadcasting (async — goes through encoder)
+    //  Transaction broadcasting (async, goes through encoder)
     // -------------------------------------------------------------------------
 
     /**
@@ -922,7 +922,7 @@ class WalletUtils {
     }
 
     // -------------------------------------------------------------------------
-    //  UTXO queries (async — goes through encoder)
+    //  UTXO queries (async, goes through encoder)
     // -------------------------------------------------------------------------
 
     /**

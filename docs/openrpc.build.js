@@ -82,7 +82,7 @@ const spec = {
         version: '1.0.0',
         description: 'JSON-RPC 2.0 server (POST /) exposing xchain-sdk: action generation, PSBT '
             + 'encoding via xchain-encoder, and explorer/hub queries. Self-hosted (`npm run api` in '
-            + 'xchain-sdk) — there is no public deployment; agents talking to the public platform '
+            + 'xchain-sdk): there is no public deployment; agents talking to the public platform '
             + 'should use the explorer REST API or the SDK as a library instead. Auth fails closed: '
             + 'every method except ping requires `Authorization: Bearer <SDK_API_KEY>`. Errors follow '
             + 'JSON-RPC 2.0 ({code, message}); registry: https://docs.xchain.io/protocol/Error_Codes.md. '
@@ -93,7 +93,7 @@ const spec = {
     methods: METHODS.map(([name, summary]) => ({
         name, summary,
         paramStructure: 'by-name',
-        params: [{ name: 'params', required: false, schema: { type: 'object', description: 'method parameters — see the SDK method of the same camelCase name' } }],
+        params: [{ name: 'params', required: false, schema: { type: 'object', description: 'method parameters (see the SDK method of the same camelCase name)' } }],
         result: { name: 'result', schema: { type: 'object' } },
         'x-auth': name === 'ping' ? undefined : 'Authorization: Bearer SDK_API_KEY',
     })),

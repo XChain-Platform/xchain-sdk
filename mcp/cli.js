@@ -13,7 +13,7 @@
  *
  **********************************************************************
  *
- * xchain-mcp — stdio entry point for the XChain MCP server.
+ * xchain-mcp: stdio entry point for the XChain MCP server.
  *
  * Zero-config: tools default to the public *.xchain.io hosts per network
  * (R*-prefixed regtest coins default to localhost services; the standard
@@ -30,7 +30,7 @@ const fs = require('fs');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
 const { buildServer } = require('./server.js');
 
-// Optional agent wallet — BOTH must be set or write tools don't exist:
+// Optional agent wallet (BOTH must be set, or write tools don't exist):
 //   XCHAIN_MCP_WIF     the agent key (never logged, never echoed)
 //   XCHAIN_MCP_POLICY  path to the AgentSession policy JSON
 function walletFromEnv() {
@@ -47,7 +47,7 @@ function walletFromEnv() {
 async function main() {
     const wallet = walletFromEnv();
     const server = buildServer({ wallet });
-    // stdio transport: stdout is the protocol channel — never console.log here.
+    // stdio transport: stdout is the protocol channel; never console.log here.
     await server.connect(new StdioServerTransport());
     console.error(`xchain-mcp ready (stdio${wallet ? ', agent wallet enabled' : ', read-only'})`);
 }
