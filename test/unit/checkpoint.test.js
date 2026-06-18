@@ -48,6 +48,28 @@ describe('CheckpointVerifier (SDK)', function () {
             '|' + 'ef'.repeat(32) + '|' + '01'.repeat(32) + '|417|900120');
     });
 
+    it('SPV Phase 2: a post-flag-day rooted checkpoint commits the roots and verifies', function () {
+        // regtest CHECKPOINT_COMMITMENT flag-day is 0, so the canonical commits the roots.
+        let STATE_ROOT = 'd4'.repeat(32), BLOCK_MERKLE = 'e5'.repeat(32);
+        let cp = makeCheckpoint({ network: 'regtest', snapshot_block: 100,
+            state_root: STATE_ROOT, state_root_version: 1,
+            block_merkle_root: BLOCK_MERKLE, block_merkle_version: 1 });
+        let canonical = Checkpoint.canonicalCheckpoint(cp);
+        assert.ok(canonical.includes('|' + STATE_ROOT + '|1|' + BLOCK_MERKLE + '|1'),
+            'rooted checkpoint canonical must commit the SPV root suffix');
+        let keys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
+        cp.validator_signatures = JSON.stringify(keys.slice(0, 3).map(k =>
+            ({ pubkey: k.pubkeyHex, sig: signHex(k.privateKey, canonical) })));
+        // regtest also activates stake-weighted quorum (same flag-day), so supply
+        // per-validator { weight, source }; 3 distinct sources of 4 (15/20) clears 3*Σ > 2*S.
+        let vset = keys.map((k, i) => ({ pubkey: k.pubkeyHex, weight: '5', source: 'src_' + i }));
+        let result = Checkpoint.verifyCheckpoint(cp, vset);
+        assert.strictEqual(result.valid, true);
+        // Tampering with the committed state_root must invalidate the signatures.
+        let tampered = Object.assign({}, cp, { state_root: 'ff'.repeat(32) });
+        assert.strictEqual(Checkpoint.verifyCheckpoint(tampered, vset).valid, false);
+    });
+
     it('verifies a 2f+1 quorum of real Ed25519 signatures', function () {
         let keys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
         let cp = makeCheckpoint();

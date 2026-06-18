@@ -28,6 +28,7 @@
 const crypto = require('crypto');
 const eq     = require('./equivocation_header.js');
 const swq    = require('./stake_weighted_quorum.js');
+const ckpt   = require('./checkpoint_commitment_activation.js');
 
 // ASN.1 DER prefix for Ed25519 SPKI. Mirrors the hub's ValidatorIdentity and
 // the indexer's ed25519.js, so validator signatures verify identically here.
@@ -42,6 +43,18 @@ function canonicalCheckpoint(cp){
     let raw = ['XCHECKPOINT', cp.chain, cp.network, String(cp.block_index), cp.block_hash,
             cp.ledger_hash, cp.actions_hash, cp.contract_hash,
             String(cp.checkpoint_seq), String(cp.snapshot_block)].join('|');
+    // SPV Phase 2 (spec §6.1): at/above the CHECKPOINT_COMMITMENT flag-day the signed
+    // string additively commits the light-client roots + version bytes (read from the
+    // checkpoint row the explorer serves). Appended to the RAW string BEFORE the EQUIV
+    // wrap. Append only when the roots are present (post-flag-day the hub never signs a
+    // rootless checkpoint, so this is always true for real post-flag-day rows; the guard
+    // keeps legacy/null-root rows on their original rootless canonical). MUST stay byte-
+    // identical to the hub engine + indexer ANCHOR + explorer.
+    if(ckpt.isCheckpointCommitmentActive(cp.snapshot_block, cp.network) &&
+       cp.state_root != null && cp.block_merkle_root != null &&
+       cp.state_root_version != null && cp.block_merkle_version != null)
+        raw += '|' + [String(cp.state_root).toLowerCase(), String(cp.state_root_version),
+                      String(cp.block_merkle_root).toLowerCase(), String(cp.block_merkle_version)].join('|');
     // At/above the EQUIV flag-day (gated on the BTC snapshot_block + network) the v0
     // canonical is wrapped in the uniform header (TAG=XCHECKPOINT, v0 ROUND_ID, VIEW=0);
     // below it the bare bytes (must byte-match the hub + indexer).
