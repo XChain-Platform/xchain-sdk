@@ -104,12 +104,13 @@ class BatchBuilder {
     // comes from the final sdk.createAction call, which is async only when
     // encoder.pubkey is supplied and a PSBT needs to be built. Callers MUST await:
     //   const batchAction = await sdk.batch().send(...).mint(...).build();
-    build(encoderOpts) {
+    async build(encoderOpts) {
         this._validate();
 
         // Build each sub-action through the full pipeline (validate + format select + serialize).
-        // This inner loop is synchronous: it calls sdk.actions.createAction directly, not
-        // the async sdk.createAction wrapper.
+        // The serialize step itself is synchronous (sdk.actions.createAction); the
+        // per-action await is the ticker-compaction lookup that rewrites names to
+        // their `^<id>` wire form before serializing.
         let commandParts = [];
         let extractedRawData = null;
         for (let entry of this._actions) {
@@ -121,9 +122,10 @@ class BatchBuilder {
                 subParams = rest;
                 extractedRawData = rawData;
             }
+            let resolvedParams = await this.sdk.tickResolver.resolveActionParams(entry.action, subParams);
             let result = this.sdk.actions.createAction({
                 action: entry.action,
-                params: subParams
+                params: resolvedParams
             });
             commandParts.push(result.actionString);
         }

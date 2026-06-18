@@ -118,8 +118,11 @@ class ExplorerClient {
             this.hooks.onRetry({ service: 'explorer', method: 'GET', url, attempt, delay, error: err.message });
         } : null;
 
-        // Disable retry if retry === false
-        let retryConfig = this.retry === false ? { maxRetries: 0 } : this.retry;
+        // Disable retry if retry === false, or per-call via opts.noRetry (used by
+        // best-effort callers like ticker compaction that must fail fast and fall
+        // back rather than block on backoff). noRetry is not a query param, so
+        // _buildParams (whitelist) ignores it.
+        let retryConfig = (this.retry === false || (opts && opts.noRetry)) ? { maxRetries: 0 } : this.retry;
 
         try {
             return await withRetry(async () => {
@@ -198,8 +201,8 @@ class ExplorerClient {
      *  Token Methods
      */
 
-    async getToken(tick) {
-        return this._get('/token/' + tick);
+    async getToken(tick, opts = {}) {
+        return this._get('/token/' + tick, opts);
     }
 
     // Current official-token roster of a project tick (protocol/Project_Registry.md).

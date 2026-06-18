@@ -101,6 +101,10 @@ function makeSdk(overrides = {}, encoderOverrides = {}) {
                 version:      1,
             }),
         },
+        // Ticker compaction runs before createAction; pass params through.
+        tickResolver: {
+            resolveActionParams: async (action, params) => params,
+        },
         wallet: {
             signPsbt:       () => ({ txHex: signed.txHex, txid: signed.txid, psbtHex: signed.psbtHex }),
             signRevealPsbt: () => ({ txHex: signed.txHex, txid: 'phase2txid', psbtHex: signed.psbtHex }),

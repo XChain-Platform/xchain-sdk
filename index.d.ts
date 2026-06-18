@@ -135,6 +135,15 @@ export interface SDKOptions {
     hooks?: SDKHooks;
     /** HTTP connection-pool settings applied to explorer and encoder clients */
     pool?: PoolConfig;
+    /**
+     * Compact ticker names to their smaller `^<id>` wire form before encoding,
+     * to shrink the on-chain payload (default: `true`). Best-effort: an existing
+     * token's immutable numeric id is resolved via the explorer and cached; on
+     * any miss (token not yet indexed, explorer offline) the supplied name is
+     * used. The defining `TICK` of an `ISSUE` is never compacted. Set `false` to
+     * always emit ticker names verbatim.
+     */
+    compactTickers?: boolean;
 }
 
 
