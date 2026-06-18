@@ -5,7 +5,7 @@
 //
 // This file is part of XChain Platform. Licensed under the GNU Affero
 // General Public License v3.0 or later; see LICENSE.md. A commercial
-// license (without AGPL source-disclosure terms) is available —
+// license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
 const { expect } = require('chai');
@@ -29,9 +29,9 @@ describe('MessagingUtils @crypto @regression', function () {
     beforeEach(function () { msg = new MessagingUtils(NETWORK); });
 
     // -----------------------------------------------------------------------
-    //  ECIES (method 1) — string payloads
+    //  ECIES (method 1): string payloads
     // -----------------------------------------------------------------------
-    describe('ECIES — string', function () {
+    describe('ECIES (string)', function () {
 
         it('round-trips a plaintext message', function () {
             const bob = keypair();
@@ -54,10 +54,12 @@ describe('MessagingUtils @crypto @regression', function () {
             expect(msg.eciesDecrypt(c2, bob.wif).plaintext).to.equal('same');
         });
 
-        it('carries exactly the documented 61-byte overhead (GCM is length-preserving)', function () {
+        it('carries the documented overhead plus a 1-byte v1 version prefix (GCM is length-preserving)', function () {
             const bob = keypair();
             const { ciphertext } = msg.eciesEncrypt('A', bob.publicKeyHex); // 1-byte plaintext
-            expect(Buffer.from(ciphertext, 'hex').length).to.equal(33 + 12 + 16 + 1);
+            // v1 layout: version(1) + ephemeralPubkey(33) + iv(12) + authTag(16) + data
+            expect(Buffer.from(ciphertext, 'hex').length).to.equal(1 + 33 + 12 + 16 + 1);
+            expect(Buffer.from(ciphertext, 'hex')[0]).to.equal(1); // KDF_VERSION_V1
         });
 
         it('cannot be decrypted with the wrong private key', function () {
@@ -82,12 +84,31 @@ describe('MessagingUtils @crypto @regression', function () {
             expectCode(() => msg.eciesDecrypt('00', bob.wif), 'INVALID_CIPHERTEXT');
             expectCode(() => msg.eciesDecrypt(ok, 'not-a-wif'), 'INVALID_WIF');
         });
+
+        it('rejects a 65-byte uncompressed pubkey as an invalid point (delegated to Node crypto)', function () {
+            // A 65-byte buffer passes the SDK length check but is not a valid secp256k1 point;
+            // Node's ECDH layer throws, so any error propagating out is the expected outcome.
+            const badPubkey = Buffer.alloc(65, 0x02);
+            expect(() => msg.eciesEncrypt('hello', badPubkey)).to.throw();
+        });
+
+        it('uses a distinct IV per encrypt call (nonce uniqueness)', function () {
+            const bob = keypair();
+            // v1 eciesEncrypt packs: version(1) + ephemeralPubkey(33) + iv(12) + authTag(16) + encrypted
+            const VERSION_LEN = 1, EPHEMERAL_LEN = 33, IV_LEN = 12;
+            const IV_OFFSET = VERSION_LEN + EPHEMERAL_LEN;
+            const c1 = Buffer.from(msg.eciesEncrypt('same', bob.publicKeyHex).ciphertext, 'hex');
+            const c2 = Buffer.from(msg.eciesEncrypt('same', bob.publicKeyHex).ciphertext, 'hex');
+            const iv1 = c1.subarray(IV_OFFSET, IV_OFFSET + IV_LEN).toString('hex');
+            const iv2 = c2.subarray(IV_OFFSET, IV_OFFSET + IV_LEN).toString('hex');
+            expect(iv1).to.not.equal(iv2);
+        });
     });
 
     // -----------------------------------------------------------------------
-    //  ECIES (method 1) — binary payloads (gated-content key handoff)
+    //  ECIES (method 1): binary payloads (gated-content key handoff)
     // -----------------------------------------------------------------------
-    describe('ECIES — bytes', function () {
+    describe('ECIES (bytes)', function () {
 
         it('round-trips a 33-byte binary key handoff intact', function () {
             const bob = keypair();
@@ -112,7 +133,7 @@ describe('MessagingUtils @crypto @regression', function () {
     });
 
     // -----------------------------------------------------------------------
-    //  ECDH (method 2) — session communication
+    //  ECDH (method 2): session communication
     // -----------------------------------------------------------------------
     describe('ECDH', function () {
 
@@ -155,7 +176,82 @@ describe('MessagingUtils @crypto @regression', function () {
     });
 
     // -----------------------------------------------------------------------
-    //  AES (method 3) — pre-shared key
+    //  KDF versioning + cross-method domain separation (fix #3520)
+    // -----------------------------------------------------------------------
+    describe('KDF v1 (HKDF-SHA256) versioning and domain separation', function () {
+
+        it('domain separation: same ECDH product derives DIFFERENT keys under ECIES vs ECDH-session', function () {
+            // Identical private/public pair feeds both per-method derivations.
+            // The distinct HKDF `info` labels MUST yield different keys.
+            const alice = keypair(), bob = keypair();
+            const priv = alice.privateKey;
+            const pub  = bob.publicKey;
+
+            const eciesKey = msg._deriveEciesKey(priv, pub);
+            const ecdhKey  = msg._deriveEcdhSessionKey(priv, pub);
+
+            expect(Buffer.isBuffer(eciesKey)).to.equal(true);
+            expect(eciesKey.length).to.equal(32);
+            expect(ecdhKey.length).to.equal(32);
+            // Same ECDH product, different info label => different key.
+            expect(eciesKey.equals(ecdhKey)).to.equal(false);
+            // And both differ from the legacy bare-SHA256 derivation.
+            const legacy = msg._deriveECDHSecretLegacy(priv, pub);
+            expect(eciesKey.equals(legacy)).to.equal(false);
+            expect(ecdhKey.equals(legacy)).to.equal(false);
+        });
+
+        it('emits v1-framed ECIES ciphertext (leading 0x01 version byte) and round-trips', function () {
+            const bob = keypair();
+            const { ciphertext } = msg.eciesEncrypt('v1 round trip', bob.publicKeyHex);
+            expect(Buffer.from(ciphertext, 'hex')[0]).to.equal(1); // KDF_VERSION_V1
+            expect(msg.eciesDecrypt(ciphertext, bob.wif).plaintext).to.equal('v1 round trip');
+        });
+
+        it('still decrypts a legacy (v0, no version byte, bare-SHA256) ECIES blob', function () {
+            // Build a legacy blob by hand: [ephemeralPubkey(33)][iv][authTag][data]
+            // keyed by SHA256(raw ecdh product), exactly the pre-#3520 layout.
+            const bob = keypair();
+            const ephemeral = keypair();
+            const legacyKey = msg._deriveECDHSecretLegacy(ephemeral.privateKey, bob.publicKey);
+            const iv = crypto.randomBytes(12);
+            const cipher = crypto.createCipheriv('aes-256-gcm', legacyKey, iv);
+            const enc = Buffer.concat([cipher.update('legacy hi', 'utf8'), cipher.final()]);
+            const tag = cipher.getAuthTag();
+            const legacyBlob = Buffer.concat([ephemeral.publicKey, iv, tag, enc]);
+            // Leading byte is 0x02/0x03 (compressed pubkey), so it is sniffed as v0.
+            expect([2, 3]).to.include(legacyBlob[0]);
+            expect(msg.eciesDecrypt(legacyBlob.toString('hex'), bob.wif).plaintext).to.equal('legacy hi');
+        });
+
+        it('round-trips a legacy v0 binary (bytes) ECIES blob', function () {
+            const bob = keypair();
+            const ephemeral = keypair();
+            const legacyKey = msg._deriveECDHSecretLegacy(ephemeral.privateKey, bob.publicKey);
+            const payload = crypto.randomBytes(33);
+            const iv = crypto.randomBytes(12);
+            const cipher = crypto.createCipheriv('aes-256-gcm', legacyKey, iv);
+            const enc = Buffer.concat([cipher.update(payload), cipher.final()]);
+            const tag = cipher.getAuthTag();
+            const legacyBlob = Buffer.concat([ephemeral.publicKey, iv, tag, enc]);
+            expect(msg.eciesDecryptBytes(legacyBlob.toString('hex'), bob.wif).plaintext.equals(payload)).to.equal(true);
+        });
+
+        it('deriveSharedSecret defaults to v1 HKDF and exposes the legacy secret via {legacy:true}', function () {
+            const alice = keypair(), bob = keypair();
+            const bPub = msg.generateSessionKey(bob.wif).publicKey;
+            const v1 = msg.deriveSharedSecret(alice.wif, bPub).sharedSecret;
+            const legacy = msg.deriveSharedSecret(alice.wif, bPub, { legacy: true }).sharedSecret;
+            expect(v1).to.not.equal(legacy);
+            // v1 is symmetric (both parties agree) under the ECDH-session label.
+            const aPub = msg.generateSessionKey(alice.wif).publicKey;
+            const v1Other = msg.deriveSharedSecret(bob.wif, aPub).sharedSecret;
+            expect(v1).to.equal(v1Other);
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    //  AES (method 3): pre-shared key
     // -----------------------------------------------------------------------
     describe('AES', function () {
 
@@ -190,10 +286,21 @@ describe('MessagingUtils @crypto @regression', function () {
             expectCode(() => msg.aesEncrypt('m', null), 'INVALID_KEY');
             expectCode(() => msg.aesEncrypt('m', 12345), 'INVALID_TYPE');
         });
+
+        it('uses a distinct IV per aesEncrypt call (nonce uniqueness)', function () {
+            const key = crypto.randomBytes(32);
+            // _aesEncrypt packs: iv(12) + authTag(16) + encrypted
+            const IV_LEN = 12;
+            const c1 = Buffer.from(msg.aesEncrypt('same', key).ciphertext, 'hex');
+            const c2 = Buffer.from(msg.aesEncrypt('same', key).ciphertext, 'hex');
+            const iv1 = c1.subarray(0, IV_LEN).toString('hex');
+            const iv2 = c2.subarray(0, IV_LEN).toString('hex');
+            expect(iv1).to.not.equal(iv2);
+        });
     });
 
     // -----------------------------------------------------------------------
-    //  High-level getMessages() — decryption integration
+    //  High-level getMessages(): decryption integration
     // -----------------------------------------------------------------------
     describe('getMessages()', function () {
 
@@ -216,7 +323,7 @@ describe('MessagingUtils @crypto @regression', function () {
 
         it('decrypts a method-less v2 ECIES message (inferred method) when a wif is supplied', async function () {
             // A real MESSAGE v2 row carries ENCRYPTED_MESSAGE but no ENCRYPTION_METHOD
-            // on the wire — getMessages must infer ECIES (1) and decrypt. (No fabricated
+            // on the wire: getMessages must infer ECIES (1) and decrypt. (No fabricated
             // encryption_method here, so this exercises the real inferred-method path.)
             const bob = keypair();
             const { ciphertext } = msg.eciesEncrypt('hi bob', bob.publicKeyHex);
@@ -296,9 +403,9 @@ describe('MessagingUtils @crypto @regression', function () {
     });
 
     // -----------------------------------------------------------------------
-    //  ECIES binary — error paths
+    //  ECIES binary: error paths
     // -----------------------------------------------------------------------
-    describe('ECIES bytes — additional error paths', function () {
+    describe('ECIES bytes: additional error paths', function () {
 
         it('throws INVALID_WIF on bad WIF in eciesDecryptBytes', function () {
             const { ciphertext } = msg.eciesEncryptBytes(Buffer.from('hello'), keypair().publicKeyHex);
@@ -316,9 +423,9 @@ describe('MessagingUtils @crypto @regression', function () {
     });
 
     // -----------------------------------------------------------------------
-    //  deriveSharedSecret() — error paths
+    //  deriveSharedSecret(): error paths
     // -----------------------------------------------------------------------
-    describe('deriveSharedSecret() — error paths', function () {
+    describe('deriveSharedSecret(): error paths', function () {
 
         it('throws INVALID_WIF on bad WIF', function () {
             const alice = keypair();
@@ -367,15 +474,15 @@ describe('MessagingUtils @crypto @regression', function () {
     });
 
     // -----------------------------------------------------------------------
-    //  getMessages() — encrypted_message without wif (sets encrypted=true)
+    //  getMessages(): encrypted_message without wif (sets encrypted=true)
     // -----------------------------------------------------------------------
-    describe('getMessages() — encrypted without wif', function () {
+    describe('getMessages(): encrypted without wif', function () {
 
         it('marks entry encrypted=true and leaves text=null when encrypted_message present but no wif', async function () {
             const explorer = { getMessages: async () => ([
                 { source: 'A', destination: 'B', encryption_method: 1, encrypted_message: 'aabbcc', tx_hash: 'tx', block_index: 5 }
             ]) };
-            // No wif in opts — should hit the `else if (msg.encrypted_message)` branch
+            // No wif in opts: should hit the `else if (msg.encrypted_message)` branch
             const out = await msg.getMessages('B', {}, explorer);
             expect(out).to.have.length(1);
             expect(out[0].encrypted).to.equal(true);
@@ -420,9 +527,9 @@ describe('MessagingUtils @crypto @regression', function () {
     });
 
     // -----------------------------------------------------------------------
-    //  send() — validation guards (does not need real network calls)
+    //  send(): validation guards (does not need real network calls)
     // -----------------------------------------------------------------------
-    describe('send() — validation guards', function () {
+    describe('send(): validation guards', function () {
 
         it('throws INVALID_WIF when wif is missing', async function () {
             await msg.send({ coin: 'BTC', destination: 'addr', message: 'hi', encoder: {} }, {})
@@ -504,7 +611,7 @@ describe('MessagingUtils @crypto @regression', function () {
                 .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('PUBKEY_NOT_FOUND'));
         });
 
-        // Happy-path for send() — uses method=null (plaintext) so we can avoid
+        // Happy-path for send(): uses method=null (plaintext) so we can avoid
         // encoding and signing (stub createAction + wallet.signPsbt + broadcastTx).
         it('returns txid and actionString on a successful plaintext send', async function () {
             const fakeSdk = {
@@ -561,11 +668,11 @@ describe('MessagingUtils @crypto @regression', function () {
             expect(result.txid).to.equal('txaes');
         });
 
-        // Happy-path for ECIES (method=1) send — requires a found pubkey.
+        // Happy-path for ECIES (method=1) send: requires a found pubkey.
         // Uses the REAL createAction (normalizeFields + format selector) rather than a
         // stub: send() no longer sets encryptionMethod on actionParams, so the selector
         // must resolve MESSAGE v2. (Pre-fix this threw NO_MATCHING_FORMAT, which the old
-        // createAction stub hid — that false-green is the bug this regression guards.)
+        // createAction stub hid: that false-green is the bug this regression guards.)
         it('encodes a real MESSAGE v2 action and returns txid on a successful ECIES send', async function () {
             const Actions = require('../../src/actions.js');
             const Utility = require('../../src/utility.js');
@@ -591,7 +698,7 @@ describe('MessagingUtils @crypto @regression', function () {
                 fakeSdk
             );
             expect(result.txid).to.equal('txecies');
-            // MESSAGE|2|BTC|<dest>|<ciphertext> — version 2, no ENCRYPTION_METHOD field
+            // MESSAGE|2|BTC|<dest>|<ciphertext>: version 2, no ENCRYPTION_METHOD field
             const parts = encodedActionString.split('|');
             expect(parts[0]).to.equal('MESSAGE');
             expect(parts[1]).to.equal('2');

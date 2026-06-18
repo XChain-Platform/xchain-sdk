@@ -40,6 +40,44 @@ const METHOD_ECIES = 1;
 const METHOD_ECDH  = 2;
 const METHOD_AES   = 3;
 
+// -----------------------------------------------------------------------------
+//  ECDH key-derivation versioning (fix #3520)
+//
+//  Legacy (v0) derivation was a bare SHA256(raw_ecdh_product) with no HKDF and
+//  no domain separation: the SAME raw ECDH product produced the SAME AES key
+//  regardless of which method (ECIES vs ECDH-session) consumed it. v1 replaces
+//  this with HKDF-SHA256 and a per-method `info` label so the two methods can
+//  never collide, even with an identical ECDH product.
+//
+//  Envelope versioning (ECIES only): the ECIES ciphertext is framed as
+//    [ephemeralPubkey(33)] [iv(12)] [authTag(16)] [encrypted]
+//  A compressed secp256k1 pubkey ALWAYS begins with 0x02 or 0x03, so a v0 blob
+//  never starts with any other byte. v1 blobs therefore prepend a single
+//  version byte (KDF_VERSION_V1 = 0x01) which is unambiguous against 0x02/0x03.
+//  On decrypt we sniff byte 0: 0x01 -> v1 (HKDF), 0x02/0x03 -> v0 (legacy SHA256).
+//
+//  ECDH-session (deriveSharedSecret) returns a RAW 32-byte secret with no
+//  envelope to version. Pre-launch, sessions are short-lived and established
+//  out-of-band, so deriveSharedSecret() now derives the v1 HKDF secret by
+//  default; the legacy secret stays reachable via the `legacy` option for any
+//  pre-existing session that must still interoperate.
+// -----------------------------------------------------------------------------
+const KDF_VERSION_V0 = 0;       // bare SHA256(raw ecdh product), no domain sep
+const KDF_VERSION_V1 = 1;       // HKDF-SHA256 with per-method info label
+
+// Fixed protocol-domain salt for HKDF. A constant (non-secret) salt is the
+// standard HKDF choice when no high-entropy salt is available; domain
+// separation is carried by the per-method `info` label below. The bytes are
+// the ASCII of "xchain-messaging-kdf-v1".
+const HKDF_SALT = Buffer.from('xchain-messaging-kdf-v1', 'utf8');
+
+// Per-method HKDF `info` labels. These MUST differ so an identical ECDH
+// product can never derive the same key across methods.
+const HKDF_INFO_ECIES = Buffer.from('xchain-ecies-v1', 'utf8');
+const HKDF_INFO_ECDH  = Buffer.from('xchain-ecdh-session-v1', 'utf8');
+
+const HKDF_KEY_LEN = 32;        // AES-256 key
+
 
 class MessagingUtils {
 
@@ -88,8 +126,8 @@ class MessagingUtils {
         // Generate ephemeral keypair
         let ephemeral = ECPair.makeRandom({ compressed: true });
 
-        // Derive shared secret via ECDH
-        let sharedSecret = this._deriveECDHSecret(ephemeral.privateKey, pubkeyBuf);
+        // Derive shared secret via ECDH + v1 HKDF (ECIES domain label)
+        let sharedSecret = this._deriveEciesKey(ephemeral.privateKey, pubkeyBuf);
 
         // Encrypt with AES-256-GCM
         let iv = crypto.randomBytes(IV_LEN);
@@ -97,8 +135,10 @@ class MessagingUtils {
         let encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
         let authTag = cipher.getAuthTag();
 
-        // Pack: ephemeralPubkey(33) + iv(12) + authTag(16) + encrypted
-        let ciphertext = Buffer.concat([ephemeral.publicKey, iv, authTag, encrypted]);
+        // Pack v1: version(1) + ephemeralPubkey(33) + iv(12) + authTag(16) + encrypted
+        let ciphertext = Buffer.concat([
+            Buffer.from([KDF_VERSION_V1]), ephemeral.publicKey, iv, authTag, encrypted
+        ]);
 
         return { ciphertext: ciphertext.toString('hex') };
     }
@@ -120,9 +160,6 @@ class MessagingUtils {
             ? ciphertext
             : Buffer.from(ciphertext, 'hex');
 
-        if (ciphertextBuf.length < ECIES_OVERHEAD)
-            throw new SDKMessagingError('INVALID_CIPHERTEXT', 'Ciphertext too short to contain ECIES data.');
-
         let net = this._resolveNet();
         let keyPair;
         try {
@@ -131,14 +168,9 @@ class MessagingUtils {
             throw new SDKMessagingError('INVALID_WIF', `Failed to import WIF: ${err.message}`);
         }
 
-        // Unpack
-        let ephemeralPubkey = ciphertextBuf.subarray(0, EPHEMERAL_PUBKEY_LEN);
-        let iv              = ciphertextBuf.subarray(EPHEMERAL_PUBKEY_LEN, EPHEMERAL_PUBKEY_LEN + IV_LEN);
-        let authTag         = ciphertextBuf.subarray(EPHEMERAL_PUBKEY_LEN + IV_LEN, ECIES_OVERHEAD);
-        let encrypted       = ciphertextBuf.subarray(ECIES_OVERHEAD);
-
-        // Derive shared secret
-        let sharedSecret = this._deriveECDHSecret(keyPair.privateKey, ephemeralPubkey);
+        // Unpack envelope (version-aware) and derive the matching ECIES key.
+        let { iv, authTag, encrypted, sharedSecret } =
+            this._unpackEcies(ciphertextBuf, keyPair.privateKey);
 
         // Decrypt
         try {
@@ -178,14 +210,17 @@ class MessagingUtils {
             throw new SDKMessagingError('INVALID_PUBKEY', 'Recipient public key is not a valid secp256k1 point.');
 
         let ephemeral = ECPair.makeRandom({ compressed: true });
-        let sharedSecret = this._deriveECDHSecret(ephemeral.privateKey, pubkeyBuf);
+        let sharedSecret = this._deriveEciesKey(ephemeral.privateKey, pubkeyBuf);
 
         let iv = crypto.randomBytes(IV_LEN);
         let cipher = crypto.createCipheriv('aes-256-gcm', sharedSecret, iv);
         let encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
         let authTag = cipher.getAuthTag();
 
-        let ciphertext = Buffer.concat([ephemeral.publicKey, iv, authTag, encrypted]);
+        // Pack v1: version(1) + ephemeralPubkey(33) + iv(12) + authTag(16) + encrypted
+        let ciphertext = Buffer.concat([
+            Buffer.from([KDF_VERSION_V1]), ephemeral.publicKey, iv, authTag, encrypted
+        ]);
         return { ciphertext: ciphertext.toString('hex') };
     }
 
@@ -207,9 +242,6 @@ class MessagingUtils {
             ? ciphertext
             : Buffer.from(ciphertext, 'hex');
 
-        if (ciphertextBuf.length < ECIES_OVERHEAD)
-            throw new SDKMessagingError('INVALID_CIPHERTEXT', 'Ciphertext too short to contain ECIES data.');
-
         let net = this._resolveNet();
         let keyPair;
         try {
@@ -218,12 +250,8 @@ class MessagingUtils {
             throw new SDKMessagingError('INVALID_WIF', `Failed to import WIF: ${err.message}`);
         }
 
-        let ephemeralPubkey = ciphertextBuf.subarray(0, EPHEMERAL_PUBKEY_LEN);
-        let iv              = ciphertextBuf.subarray(EPHEMERAL_PUBKEY_LEN, EPHEMERAL_PUBKEY_LEN + IV_LEN);
-        let authTag         = ciphertextBuf.subarray(EPHEMERAL_PUBKEY_LEN + IV_LEN, ECIES_OVERHEAD);
-        let encrypted       = ciphertextBuf.subarray(ECIES_OVERHEAD);
-
-        let sharedSecret = this._deriveECDHSecret(keyPair.privateKey, ephemeralPubkey);
+        let { iv, authTag, encrypted, sharedSecret } =
+            this._unpackEcies(ciphertextBuf, keyPair.privateKey);
 
         try {
             let decipher = crypto.createDecipheriv('aes-256-gcm', sharedSecret, iv);
@@ -265,9 +293,13 @@ class MessagingUtils {
      *
      * @param {string} wif - Your WIF private key
      * @param {string|Buffer} theirPublicKey - Other party's public key (hex or Buffer)
+     * @param {Object} [opts={}]
+     * @param {boolean} [opts.legacy=false] - Derive the pre-#3520 bare-SHA256
+     *        secret instead of v1 HKDF. Use ONLY to interoperate with a session
+     *        established under the legacy derivation.
      * @returns {{ sharedSecret: string }} - Hex-encoded 32-byte shared secret
      */
-    deriveSharedSecret(wif, theirPublicKey) {
+    deriveSharedSecret(wif, theirPublicKey, opts = {}) {
         if (!wif || typeof wif !== 'string')
             throw new SDKMessagingError('INVALID_WIF', 'WIF private key is required.');
         if (!theirPublicKey)
@@ -285,7 +317,9 @@ class MessagingUtils {
             ? theirPublicKey
             : Buffer.from(theirPublicKey, 'hex');
 
-        let secret = this._deriveECDHSecret(keyPair.privateKey, pubkeyBuf);
+        let secret = opts.legacy
+            ? this._deriveECDHSecretLegacy(keyPair.privateKey, pubkeyBuf)
+            : this._deriveEcdhSessionKey(keyPair.privateKey, pubkeyBuf);
         return { sharedSecret: secret.toString('hex') };
     }
 
@@ -621,13 +655,68 @@ class MessagingUtils {
     //  Internal helpers
     // -------------------------------------------------------------------------
 
-    // Derive a 32-byte shared secret via ECDH on secp256k1
-    _deriveECDHSecret(privateKey, publicKey) {
+    // Compute the raw ECDH product (uniform input keying material for the KDF).
+    _ecdhProduct(privateKey, publicKey) {
         let ecdh = crypto.createECDH('secp256k1');
         ecdh.setPrivateKey(privateKey);
-        let raw = ecdh.computeSecret(publicKey);
-        // Hash to get a uniform 32-byte key
+        return ecdh.computeSecret(publicKey);
+    }
+
+    // v0 (legacy, pre-#3520): bare SHA256 over the raw ECDH product, no domain
+    // separation. Kept ONLY for decrypting old-version blobs / legacy sessions.
+    _deriveECDHSecretLegacy(privateKey, publicKey) {
+        let raw = this._ecdhProduct(privateKey, publicKey);
         return crypto.createHash('sha256').update(raw).digest();
+    }
+
+    // v1 KDF: HKDF-SHA256 over the raw ECDH product with a fixed protocol salt
+    // and a per-method `info` label. The differing `info` per method is what
+    // guarantees cross-method domain separation (fix #3520).
+    _hkdfFromEcdh(privateKey, publicKey, info) {
+        let raw = this._ecdhProduct(privateKey, publicKey);
+        let derived = crypto.hkdfSync('sha256', raw, HKDF_SALT, info, HKDF_KEY_LEN);
+        // hkdfSync returns an ArrayBuffer; normalize to a Buffer.
+        return Buffer.from(derived);
+    }
+
+    // v1 ECIES key (info = xchain-ecies-v1)
+    _deriveEciesKey(privateKey, publicKey) {
+        return this._hkdfFromEcdh(privateKey, publicKey, HKDF_INFO_ECIES);
+    }
+
+    // v1 ECDH-session key (info = xchain-ecdh-session-v1)
+    _deriveEcdhSessionKey(privateKey, publicKey) {
+        return this._hkdfFromEcdh(privateKey, publicKey, HKDF_INFO_ECDH);
+    }
+
+    // Unpack a (possibly versioned) ECIES envelope and derive the matching key.
+    //   v1: [0x01][ephemeralPubkey(33)][iv(12)][authTag(16)][encrypted] -> HKDF
+    //   v0: [ephemeralPubkey(33)][iv(12)][authTag(16)][encrypted]       -> legacy SHA256
+    // A compressed pubkey always starts with 0x02/0x03, so byte 0 == 0x01
+    // unambiguously identifies a v1 blob.
+    _unpackEcies(buf, recipientPrivateKey) {
+        let version, offset;
+        if (buf.length > 0 && buf[0] === KDF_VERSION_V1) {
+            version = KDF_VERSION_V1;
+            offset = 1;
+        } else {
+            version = KDF_VERSION_V0;
+            offset = 0;
+        }
+
+        if (buf.length < offset + ECIES_OVERHEAD)
+            throw new SDKMessagingError('INVALID_CIPHERTEXT', 'Ciphertext too short to contain ECIES data.');
+
+        let ephemeralPubkey = buf.subarray(offset, offset + EPHEMERAL_PUBKEY_LEN);
+        let iv              = buf.subarray(offset + EPHEMERAL_PUBKEY_LEN, offset + EPHEMERAL_PUBKEY_LEN + IV_LEN);
+        let authTag         = buf.subarray(offset + EPHEMERAL_PUBKEY_LEN + IV_LEN, offset + ECIES_OVERHEAD);
+        let encrypted       = buf.subarray(offset + ECIES_OVERHEAD);
+
+        let sharedSecret = version === KDF_VERSION_V1
+            ? this._deriveEciesKey(recipientPrivateKey, ephemeralPubkey)
+            : this._deriveECDHSecretLegacy(recipientPrivateKey, ephemeralPubkey);
+
+        return { version, iv, authTag, encrypted, sharedSecret };
     }
 
     // AES-256-GCM encrypt (shared between ECDH session and AES methods)
