@@ -37,6 +37,8 @@ const ControllerHelpers  = require('./src/controller.js');
 const UTXOCache        = require('./src/utxoCache.js');
 const MuSig2           = require('./src/musig2.js');
 const chunkHelper      = require('./src/chunkHelper.js');
+const CheckpointVerifier = require('./src/checkpoint.js');
+const LightClient        = require('./src/light.js');
 const { startREPL }   = require('./src/repl.js');
 const {
     SDKError,
@@ -76,6 +78,8 @@ module.exports = {
     UTXOCache,
     MuSig2,
     chunkHelper,
+    CheckpointVerifier,
+    LightClient,
     startREPL,
     SDKError,
     SDKValidationError,

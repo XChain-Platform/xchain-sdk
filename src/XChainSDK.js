@@ -38,6 +38,7 @@ const ProjectHelpers = require('./project.js');
 const ControllerHelpers = require('./controller.js');
 const AttestationHelpers = require('./attestation.js');
 const CheckpointVerifier = require('./checkpoint.js');
+const LightClient        = require('./light.js');
 const MuSig2            = require('./musig2.js');
 const ActionWaiter      = require('./actionWaiter.js');
 const LifecycleManager  = require('./lifecycleManager.js');
@@ -110,6 +111,11 @@ class XChainSDK {
         // client verify explorer state against the validator quorum without
         // trusting the server. Spec: protocol/actions/ANCHOR.md.
         this.checkpoint = CheckpointVerifier;
+        // SPV light client (spec §8): `sdk.light.verifyBalance(...)` /
+        // `sdk.light.verifyAction(...)` fetch a server proof and verify it LOCALLY
+        // against a quorum-signed checkpoint's committed roots (merkle.js twin +
+        // sdk.checkpoint). Nothing trusts the server's own verified/amount.
+        this.light = LightClient;
 
         // Service clients (initialized by _initClients or init)
         this.explorer = null;
