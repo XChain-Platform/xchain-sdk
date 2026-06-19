@@ -53,12 +53,13 @@ class LifecycleManager {
         let encoder = this.sdk._requireEncoder();
         let progress = onProgress || (() => {});
 
-        // Step 1: Create and validate action string. Compact ticker names to
-        // their `^<id>` wire form first (on by default; resolveActionParams
-        // returns the params unchanged when compaction is disabled or an id
-        // can't be resolved).
+        // Step 1: Create and validate action string. Compact ticker names AND
+        // addresses to their `^<id>` wire form first (on by default; each
+        // resolveActionParams returns the params unchanged when compaction is
+        // disabled or an id can't be resolved).
         progress('creating', { action: actionData.action });
         let resolvedParams = await this.sdk.tickResolver.resolveActionParams(actionData.action, actionData.params);
+        resolvedParams = await this.sdk.addressResolver.resolveActionParams(actionData.action, resolvedParams);
         let createResult = this.sdk.actions.createAction(Object.assign({}, actionData, { params: resolvedParams }));
 
         // Step 2: Encode to PSBT

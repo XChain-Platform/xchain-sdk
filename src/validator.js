@@ -21,6 +21,19 @@
 const formats = require('./formats.js');
 const config  = require('./config.js');
 const { SDKValidationError, SDKContractError } = require('./errors.js');
+const { ADDRESS_REF_FIELDS } = require('./addressRefFields.js');
+
+// Flat set of address-bearing wire fields (excludes type-gated LIST.ITEM, validated
+// per list TYPE elsewhere). A ^<id> reference to an already-indexed address is valid
+// anywhere a full address is; the indexer resolves it via getAddressId and the SDK
+// address compactor (addressResolver.js) emits this form.
+const ADDRESS_REF_FIELD_SET = (() => {
+    const s = new Set();
+    for (const a of Object.keys(ADDRESS_REF_FIELDS))
+        for (const spec of ADDRESS_REF_FIELDS[a])
+            if (!spec.listType) s.add(spec.field);
+    return s;
+})();
 
 // Maximum values
 const MAX_SUPPLY_CEILING = 1000000000000000000000; // 1 sextillion
@@ -232,9 +245,20 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be one of: ' + VALID_COINS.join(', '), { field, value, constraint: { valid: VALID_COINS } }));
         }
 
-        // DESTINATION / GET_ADDRESS validation
+        // ADDRESS_ID reference (^57): valid for any address-bearing field, only
+        // outside the full-address form. Mirrors the TICK ^id branch above; the
+        // indexer resolves ^<id> via getAddressId, and addressResolver.js emits it.
+        if (ADDRESS_REF_FIELD_SET.has(field) && String(value).charAt(0) === '^') {
+            let id = String(value).substring(1);
+            if (!this.util.isNumeric(id))
+                errors.push(this._error('INVALID_ADDRESS_ID', field + ' ID reference must be numeric: ' + value, { field, value }));
+        }
+
+        // DESTINATION / GET_ADDRESS / TRANSFER full-address validation. A ^<id>
+        // reference is handled by the branch above, so skip the crypto-address check
+        // for it (an empty value never reaches here; the caller skips empties).
         if (field === 'DESTINATION' || field === 'GET_ADDRESS' || field === 'TRANSFER') {
-            if (!this.util.isCryptoAddress(value))
+            if (String(value).charAt(0) !== '^' && !this.util.isCryptoAddress(value))
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be a valid crypto address', { field, value }));
         }
 

@@ -172,8 +172,8 @@ class ExplorerClient {
         return this._get('/balances/' + address, opts);
     }
 
-    async getAddress(address) {
-        return this._get('/address/' + address);
+    async getAddress(address, opts = {}) {
+        return this._get('/address/' + address, opts);
     }
 
     async getPublicKey(address) {

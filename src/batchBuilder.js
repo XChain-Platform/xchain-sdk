@@ -123,6 +123,7 @@ class BatchBuilder {
                 extractedRawData = rawData;
             }
             let resolvedParams = await this.sdk.tickResolver.resolveActionParams(entry.action, subParams);
+            resolvedParams = await this.sdk.addressResolver.resolveActionParams(entry.action, resolvedParams);
             let result = this.sdk.actions.createAction({
                 action: entry.action,
                 params: resolvedParams

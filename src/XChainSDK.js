@@ -45,6 +45,7 @@ const LifecycleManager  = require('./lifecycleManager.js');
 const WalletSession     = require('./walletSession.js');
 const Workflows         = require('./workflows.js');
 const TickResolver      = require('./tickResolver.js');
+const AddressResolver   = require('./addressResolver.js');
 const { publicDefaults } = require('./endpoints.js');
 const { SDKConfigError, SDKExplorerError, SDKContractError } = require('./errors.js');
 const { lintSource } = require('./contract/lint-core.js');
@@ -72,6 +73,10 @@ class XChainSDK {
         // form before serialization (on by default; { compactTickers: false } to
         // opt out). See tickResolver.js.
         this.tickResolver = new TickResolver(this);
+        // Address compaction: the address twin of tickResolver, rewrites an address
+        // to its smaller `^<id>` wire form before serialization (on by default;
+        // { compactAddresses: false } to opt out). See addressResolver.js.
+        this.addressResolver = new AddressResolver(this);
         this.contracts = new ContractUtils();
         this.musig2    = new MuSig2();
 
@@ -372,13 +377,15 @@ class XChainSDK {
     // Create an action string and optionally encode it into a PSBT
     // If data.encoder contains pubkey, this calls the encoder and returns the PSBT
     async createAction(data) {
-        // Compact ticker names to their `^<id>` wire form before serializing
-        // (on by default; falls back to the supplied name when an id can't be
-        // resolved). Does not mutate the caller's data object.
+        // Compact ticker names and addresses to their `^<id>` wire form before
+        // serializing (on by default; each falls back to the supplied value when an
+        // id can't be resolved). The two resolvers touch disjoint fields and each
+        // returns a fresh shallow copy, so chaining them never mutates the caller's
+        // data object.
         if (data && data.params) {
-            data = Object.assign({}, data, {
-                params: await this.tickResolver.resolveActionParams(data.action, data.params)
-            });
+            let params = await this.tickResolver.resolveActionParams(data.action, data.params);
+            params = await this.addressResolver.resolveActionParams(data.action, params);
+            data = Object.assign({}, data, { params });
         }
         let result = this.actions.createAction(data);
 

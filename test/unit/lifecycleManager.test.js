@@ -101,8 +101,11 @@ function makeSdk(overrides = {}, encoderOverrides = {}) {
                 version:      1,
             }),
         },
-        // Ticker compaction runs before createAction; pass params through.
+        // Ticker + address compaction run before createAction; pass params through.
         tickResolver: {
+            resolveActionParams: async (action, params) => params,
+        },
+        addressResolver: {
             resolveActionParams: async (action, params) => params,
         },
         wallet: {

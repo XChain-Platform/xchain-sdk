@@ -999,3 +999,34 @@ describe('Validator: controller bind/unbind (ISSUE v6 / ADDRESS v1)', function (
         expect(errors.some(e => /CONTROLLER is required/.test(e.message))).to.be.false;
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADDRESS ^id REFERENCE VALIDATION (address compaction)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Validator: address ^id reference', function () {
+
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    it('accepts a numeric ^id in DESTINATION (no crypto-address error)', function () {
+        const errors = v.validate('SEND', { TICK: 'JDOG', AMOUNT: '1', DESTINATION: '^57' });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+        expect(hasNoErrorCode(errors, 'INVALID_ADDRESS_ID')).to.be.true;
+    });
+
+    it('accepts a numeric ^id in GET_ADDRESS', function () {
+        const errors = v.validate('DISPENSER', { GIVE_TICK: 'JDOG', GIVE_QUANTITY: '1', ESCROW_QUANTITY: '1', MAINCHAINRATE: '1', GET_ADDRESS: '^900' });
+        expect(hasNoErrorCode(errors, 'INVALID_ADDRESS_ID')).to.be.true;
+    });
+
+    it('rejects a non-numeric ^id with INVALID_ADDRESS_ID', function () {
+        const errors = v.validate('SEND', { TICK: 'JDOG', AMOUNT: '1', DESTINATION: '^notanumber' });
+        expect(hasErrorCode(errors, 'INVALID_ADDRESS_ID')).to.be.true;
+    });
+
+    it('still rejects a malformed full address in DESTINATION', function () {
+        const errors = v.validate('SEND', { TICK: 'JDOG', AMOUNT: '1', DESTINATION: 'not-an-address!!' });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+});
