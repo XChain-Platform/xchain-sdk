@@ -51,6 +51,11 @@ async function _json(f, url){
 }
 function _hx(x){ return String(x == null ? '' : x).toLowerCase(); }
 
+// Default DOGE confirmation depth a cold-start anchor must be buried under before
+// it is trusted. DOGE blocks ~1 min and ANCHORs land ~daily, so a recent valid
+// anchor is normally far deeper than this; callers SHOULD set their own policy.
+const DEFAULT_ANCHOR_MIN_DEPTH = 60;
+
 // ── Pure verifiers (no network; the heart of the light client) ────────────────
 
 // Verify a §4.4 BalanceProof binds to a TRUSTED state_root (one already proven to
@@ -137,9 +142,23 @@ async function verifyBalance(opts){
                 '/api/proof/balance/' + encodeURIComponent(String(opts.address)) +
                 '/' + encodeURIComponent(String(opts.tick)) + hq;
     const body = await _json(f, url);
-    if (!body || !body.proof || !body.checkpoint) throw new Error('LightClient: no proof/checkpoint in response');
-    const proof = body.proof, cp = body.checkpoint;
-    const q = await _verifyQuorum(f, opts.explorerUrl, opts.coin, cp, opts.validators);
+    if (!body || !body.proof) throw new Error('LightClient: no proof in response');
+    const proof = body.proof;
+    // Trust source: a caller-supplied pre-trusted checkpoint (e.g. a DOGE-anchored
+    // one from verifyAnchoredCheckpoint) binds without re-fetching quorum, but only
+    // if the proof is FOR that checkpoint's height; else verify the served one.
+    let cp, q;
+    if (opts.trustedCheckpoint){
+        cp = opts.trustedCheckpoint;
+        if (Number(proof.height) !== Number(cp.block_index))
+            return { verified: false, amount: null, reason: 'PROOF_HEIGHT_MISMATCH',
+                     height: Number(proof.height), checkpoint: cp, quorum: null, weighted: null };
+        q = { valid: true, quorum: null, weighted: null };
+    } else {
+        if (!body.checkpoint) throw new Error('LightClient: no checkpoint in response');
+        cp = body.checkpoint;
+        q = await _verifyQuorum(f, opts.explorerUrl, opts.coin, cp, opts.validators);
+    }
     const base = { height: Number(proof.height), checkpoint: cp, quorum: q.quorum, weighted: q.weighted };
     if (!q.valid) return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_QUORUM_FAILED' }, base);
     const trusted = _hx(cp.state_root);
@@ -158,9 +177,22 @@ async function verifyAction(opts){
     const url = _base(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.coin)) +
                 '/api/proof/action/' + encodeURIComponent(String(opts.actionIndex));
     const body = await _json(f, url);
-    if (!body || !body.proof || !body.checkpoint) throw new Error('LightClient: no proof/checkpoint in response');
-    const proof = body.proof, cp = body.checkpoint;
-    const q = await _verifyQuorum(f, opts.explorerUrl, opts.coin, cp, opts.validators);
+    if (!body || !body.proof) throw new Error('LightClient: no proof in response');
+    const proof = body.proof;
+    let cp, q;
+    if (opts.trustedCheckpoint){
+        cp = opts.trustedCheckpoint;
+        if (Number(proof.height) !== Number(cp.block_index))
+            return { verified: false, reason: 'PROOF_HEIGHT_MISMATCH', height: Number(proof.height),
+                     action: proof.action, action_index: Number(proof.action_index),
+                     tx_index: (proof.tx_index == null) ? null : Number(proof.tx_index),
+                     checkpoint: cp, quorum: null, weighted: null };
+        q = { valid: true, quorum: null, weighted: null };
+    } else {
+        if (!body.checkpoint) throw new Error('LightClient: no checkpoint in response');
+        cp = body.checkpoint;
+        q = await _verifyQuorum(f, opts.explorerUrl, opts.coin, cp, opts.validators);
+    }
     const base = { height: Number(proof.height), action: proof.action, action_index: Number(proof.action_index),
                    tx_index: (proof.tx_index == null) ? null : Number(proof.tx_index),
                    checkpoint: cp, quorum: q.quorum, weighted: q.weighted };
@@ -173,9 +205,114 @@ async function verifyAction(opts){
     return Object.assign({ verified: v.verified, reason: v.reason }, base);
 }
 
+// ── DOGE-anchor cold-start trust (spec §7.2 b / D4) ───────────────────────────
+// A client with no prior trust root bootstraps from the on-chain ANCHOR: read the
+// latest v3 ANCHOR off DOGE, confirm it is buried under a chosen PoW depth, and
+// adopt its quorum-signed checkpoint. Trust still bottoms out at the federation
+// quorum (the DOGE PoW only hardens delivery/timing, §7.4); the SDK has no DOGE
+// backend, so the caller supplies the confirmation depth from its own DOGE source.
+
+// Parse a v3 ANCHOR wire string (optional leading "ANCHOR|") into the checkpoint
+// shape sdk.checkpoint.verifyCheckpoint consumes. Pure; for callers who decode the
+// raw DOGE transaction themselves. Throws on a malformed / non-v3 string.
+function parseAnchorV3(wire){
+    let p = String(wire || '').split('|');
+    if (p.length && /^anchor$/i.test(p[0])) p = p.slice(1);
+    if (String(p[0]) !== '3') throw new Error('LightClient: not a v3 ANCHOR (VERSION ' + p[0] + ')');
+    const sigBase = 14;                                        // formats[3] index of SIG_COUNT
+    const n = parseInt(p[sigBase], 10);
+    if (!Number.isFinite(n) || n < 1) throw new Error('LightClient: bad ANCHOR SIG_COUNT');
+    const sigs = [];
+    for (let i = 0; i < n; i++){
+        const pubkey = p[sigBase + 1 + 2 * i], sig = p[sigBase + 1 + 2 * i + 1];
+        if (!pubkey || !sig) throw new Error('LightClient: missing ANCHOR sig at index ' + i);
+        sigs.push({ pubkey: String(pubkey).toLowerCase(), sig: String(sig).toLowerCase() });
+    }
+    return {
+        chain: String(p[1] || '').toUpperCase(), network: String(p[2] || ''),
+        block_index: Number(p[3]), block_hash: _hx(p[4]),
+        ledger_hash: _hx(p[5]), actions_hash: _hx(p[6]), contract_hash: _hx(p[7]),
+        checkpoint_seq: Number(p[8]), snapshot_block: Number(p[9]),
+        state_root: _hx(p[10]), state_root_version: Number(p[11]),
+        block_merkle_root: _hx(p[12]), block_merkle_version: Number(p[13]),
+        validator_signatures: sigs
+    };
+}
+
+// Normalize an explorer /api/anchors record (a full row) into the checkpoint shape.
+function anchorToCheckpoint(a){
+    if (!a) throw new Error('LightClient: empty anchor record');
+    let sigs = a.validator_signatures;
+    if (typeof sigs === 'string'){ try { sigs = JSON.parse(sigs); } catch (e){ sigs = []; } }
+    if (!Array.isArray(sigs)) sigs = [];
+    return {
+        chain: a.chain, network: a.network, block_index: Number(a.block_index),
+        block_hash: a.block_hash, ledger_hash: a.ledger_hash, actions_hash: a.actions_hash, contract_hash: a.contract_hash,
+        checkpoint_seq: Number(a.checkpoint_seq), snapshot_block: Number(a.snapshot_block),
+        state_root: a.state_root, state_root_version: a.state_root_version,
+        block_merkle_root: a.block_merkle_root, block_merkle_version: a.block_merkle_version,
+        validator_signatures: sigs
+    };
+}
+
+// Verify a DOGE-anchored checkpoint as a trust root. `checkpoint` is the normalized
+// object (parseAnchorV3 / anchorToCheckpoint), which MUST carry the v3 roots;
+// `confirmations` is the DOGE depth the caller obtained from its own DOGE source.
+// Returns { verified, reason, checkpoint, confirmations, minDepth, quorum, weighted }.
+function verifyAnchoredCheckpoint(opts){
+    opts = opts || {};
+    const cp = opts.checkpoint;
+    const minDepth = (opts.minDepth != null) ? Number(opts.minDepth) : DEFAULT_ANCHOR_MIN_DEPTH;
+    const confirmations = Number(opts.confirmations);
+    const safeConf = Number.isFinite(confirmations) ? confirmations : 0;
+    if (!cp) return { verified: false, reason: 'NO_CHECKPOINT', checkpoint: null, confirmations: 0, minDepth, quorum: null, weighted: null };
+    // v3 carries the committed roots; a rootless (v0) anchor cannot serve SPV trust.
+    if (cp.state_root == null || cp.block_merkle_root == null)
+        return { verified: false, reason: 'NOT_A_V3_ANCHOR', checkpoint: cp, confirmations: safeConf, minDepth, quorum: null, weighted: null };
+    const q = checkpoint.verifyCheckpoint(cp, opts.validators || []);
+    const base = { checkpoint: cp, confirmations: safeConf, minDepth, quorum: q.quorum, weighted: q.weighted };
+    if (!q.valid) return Object.assign({ verified: false, reason: 'CHECKPOINT_QUORUM_FAILED' }, base);
+    if (!(Number.isFinite(confirmations) && confirmations >= minDepth))
+        return Object.assign({ verified: false, reason: 'INSUFFICIENT_DOGE_DEPTH' }, base);
+    return Object.assign({ verified: true, reason: null }, base);
+}
+
+// Convenience: fetch the latest v3 ANCHOR for `targetChain` from the DOGE explorer,
+// confirm its DOGE depth (caller supplies the tip via dogeTipHeight or getDogeTipHeight),
+// and verify it. Anchors are DOGE-only, so the list is served by the DOGE explorer;
+// each record's `chain` is the chain whose checkpoint it commits. Returns the
+// verifyAnchoredCheckpoint result plus { anchor, dogeTxid }.
+async function fetchAnchoredCheckpoint(opts){
+    opts = opts || {};
+    const f = _fetch(opts.fetchImpl);
+    const dogeCoin = opts.dogeCoin || 'DOGE';
+    const minDepth = (opts.minDepth != null) ? Number(opts.minDepth) : DEFAULT_ANCHOR_MIN_DEPTH;
+    const url = _base(opts.explorerUrl) + '/' + encodeURIComponent(String(dogeCoin)) +
+                '/api/anchors/' + encodeURIComponent(String(opts.targetChain)) + '/chain';
+    const body = await _json(f, url);
+    let rows = Array.isArray(body) ? body : ((body && (body.data || body.results || body.rows)) || []);
+    rows = rows.filter(r => r && Number(r.version) === 3 && r.state_root &&
+                            String(r.chain).toUpperCase() === String(opts.targetChain).toUpperCase());
+    rows.sort((a, b) => Number(b.checkpoint_seq) - Number(a.checkpoint_seq));   // newest checkpoint first
+    if (!rows.length)
+        return { verified: false, reason: 'NO_V3_ANCHOR', checkpoint: null, anchor: null, dogeTxid: null, confirmations: 0, minDepth, quorum: null, weighted: null };
+    const rec = rows[0];
+    let tip = opts.dogeTipHeight;
+    if (tip == null && typeof opts.getDogeTipHeight === 'function') tip = await opts.getDogeTipHeight();
+    const confirmations = (tip != null && rec.block_index_doge != null)
+        ? (Number(tip) - Number(rec.block_index_doge) + 1) : NaN;
+    const res = verifyAnchoredCheckpoint({ checkpoint: anchorToCheckpoint(rec), validators: opts.validators,
+        confirmations, minDepth });
+    return Object.assign({}, res, { anchor: rec, dogeTxid: rec.tx_hash || null });
+}
+
 module.exports = {
     verifyBalanceProof,
     verifyActionProof,
     verifyBalance,
-    verifyAction
+    verifyAction,
+    parseAnchorV3,
+    anchorToCheckpoint,
+    verifyAnchoredCheckpoint,
+    fetchAnchoredCheckpoint
 };

@@ -252,3 +252,122 @@ describe('SPV Phase 4: sdk.light.verifyBalance end-to-end (signed checkpoint, mo
         assert.strictEqual(r.reason, 'LEAF_AMOUNT_MISMATCH');
     });
 });
+
+describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
+
+    function makeSigner() {
+        const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+        const spki = publicKey.export({ format: 'der', type: 'spki' });
+        return { privateKey, pubkeyHex: spki.subarray(spki.length - 32).toString('hex') };
+    }
+    // A v3-anchored checkpoint (state_root threaded in so it can bind a balance proof),
+    // returned as the checkpoint object, a signed wire string, an explorer record, and
+    // the qualifying validator set.
+    function makeSignedV3(stateRoot, dogeBlock) {
+        const signer = makeSigner();
+        const cp = {
+            chain: CHAIN, network: NET, block_index: 100, block_hash: 'c0'.repeat(32),
+            ledger_hash: 'a1'.repeat(32), actions_hash: 'b2'.repeat(32), contract_hash: 'c3'.repeat(32),
+            checkpoint_seq: 7, snapshot_block: 100,
+            state_root: stateRoot || ('d4'.repeat(32)), state_root_version: 1,
+            block_merkle_root: 'e5'.repeat(32), block_merkle_version: 1, validator_signatures: []
+        };
+        const canonical = checkpoint.canonicalCheckpoint(cp);
+        const sigs = [{ pubkey: signer.pubkeyHex, sig: crypto.sign(null, Buffer.from(canonical, 'utf8'), signer.privateKey).toString('hex') }];
+        cp.validator_signatures = sigs;
+        const validators = [{ pubkey: signer.pubkeyHex, source: signer.pubkeyHex, weight: '100' }];
+        const wire = ['3', cp.chain, cp.network, cp.block_index, cp.block_hash, cp.ledger_hash, cp.actions_hash,
+            cp.contract_hash, cp.checkpoint_seq, cp.snapshot_block, cp.state_root, cp.state_root_version,
+            cp.block_merkle_root, cp.block_merkle_version, sigs.length, sigs[0].pubkey, sigs[0].sig].join('|');
+        const record = {
+            version: 3, chain: cp.chain, network: cp.network, block_index: cp.block_index, block_hash: cp.block_hash,
+            ledger_hash: cp.ledger_hash, actions_hash: cp.actions_hash, contract_hash: cp.contract_hash,
+            checkpoint_seq: cp.checkpoint_seq, snapshot_block: cp.snapshot_block,
+            state_root: cp.state_root, state_root_version: cp.state_root_version,
+            block_merkle_root: cp.block_merkle_root, block_merkle_version: cp.block_merkle_version,
+            validator_signatures: JSON.stringify(sigs), block_index_doge: (dogeBlock != null ? dogeBlock : 1000), tx_hash: 'dd'.repeat(32)
+        };
+        return { cp, sigs, validators, wire, record };
+    }
+
+    it('parseAnchorV3 round-trips a v3 wire into a quorum-verifiable checkpoint', function () {
+        const { wire, validators } = makeSignedV3();
+        const cp = light.parseAnchorV3(wire);
+        assert.strictEqual(cp.chain, CHAIN);
+        assert.strictEqual(cp.state_root_version, 1);
+        assert.strictEqual(cp.validator_signatures.length, 1);
+        assert.strictEqual(checkpoint.verifyCheckpoint(cp, validators).valid, true);
+    });
+
+    it('parseAnchorV3 tolerates a leading ANCHOR| and rejects non-v3', function () {
+        const { wire } = makeSignedV3();
+        assert.strictEqual(light.parseAnchorV3('ANCHOR|' + wire).checkpoint_seq, 7);
+        assert.throws(() => light.parseAnchorV3('0|BTC|regtest|1'), /not a v3 ANCHOR/);
+    });
+
+    it('verifyAnchoredCheckpoint ACCEPTS a quorum-signed anchor buried past minDepth', function () {
+        const { cp, validators } = makeSignedV3();
+        const r = light.verifyAnchoredCheckpoint({ checkpoint: cp, validators, confirmations: 120, minDepth: 60 });
+        assert.strictEqual(r.verified, true, r.reason);
+        assert.strictEqual(r.confirmations, 120);
+    });
+
+    it('verifyAnchoredCheckpoint REJECTS an anchor too shallow on DOGE', function () {
+        const { cp, validators } = makeSignedV3();
+        const r = light.verifyAnchoredCheckpoint({ checkpoint: cp, validators, confirmations: 5, minDepth: 60 });
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'INSUFFICIENT_DOGE_DEPTH');
+    });
+
+    it('verifyAnchoredCheckpoint REJECTS a rootless (non-v3) checkpoint', function () {
+        const { cp, validators } = makeSignedV3();
+        cp.state_root = null; cp.block_merkle_root = null;
+        const r = light.verifyAnchoredCheckpoint({ checkpoint: cp, validators, confirmations: 120 });
+        assert.strictEqual(r.reason, 'NOT_A_V3_ANCHOR');
+    });
+
+    it('fetchAnchoredCheckpoint picks the newest v3 anchor and verifies depth + quorum', async function () {
+        const a = makeSignedV3(null, 1000);
+        // an older, lower-seq anchor that should be ignored in favor of the newest
+        const fetchImpl = async (url) => {
+            if (url.includes('/api/anchors/'))
+                return { ok: true, status: 200, json: async () => ({ data: [
+                    Object.assign({}, a.record, { checkpoint_seq: 3, block_index_doge: 500 }),
+                    a.record
+                ] }) };
+            return { ok: false, status: 404, json: async () => ({}) };
+        };
+        const r = await light.fetchAnchoredCheckpoint({ explorerUrl: 'https://x', dogeCoin: 'DOGE',
+            targetChain: CHAIN, validators: a.validators, dogeTipHeight: 1200, minDepth: 60, fetchImpl });
+        assert.strictEqual(r.verified, true, r.reason);
+        assert.strictEqual(r.checkpoint.checkpoint_seq, 7);     // newest, not the seq-3 decoy
+        assert.strictEqual(r.confirmations, 201);               // 1200 - 1000 + 1
+        assert.strictEqual(r.dogeTxid, 'dd'.repeat(32));
+    });
+
+    it('a DOGE-anchored checkpoint then binds a balance proof via trustedCheckpoint', async function () {
+        const { proof, stateRoot } = buildBalanceProof(ADDR_A, TICK, '7');
+        const a = makeSignedV3(stateRoot, 1000);
+        const anchored = light.verifyAnchoredCheckpoint({ checkpoint: a.cp, validators: a.validators, confirmations: 300, minDepth: 60 });
+        assert.strictEqual(anchored.verified, true, anchored.reason);
+        // No validators / no verify-endpoint fetch: the trusted checkpoint carries the trust.
+        const fetchImpl = async (url) => url.includes('/api/proof/balance/')
+            ? { ok: true, status: 200, json: async () => ({ proof }) }
+            : { ok: false, status: 500, json: async () => ({}) };
+        const r = await light.verifyBalance({ explorerUrl: 'https://x', coin: COIN, address: ADDR_A,
+            tick: TICK, atHeight: 100, trustedCheckpoint: anchored.checkpoint, fetchImpl });
+        assert.strictEqual(r.verified, true, r.reason);
+        assert.strictEqual(r.amount, M.canonicalAmount('7'));
+    });
+
+    it('trustedCheckpoint rejects a proof for the wrong height (PROOF_HEIGHT_MISMATCH)', async function () {
+        const { proof } = buildBalanceProof(ADDR_A, TICK, '7');   // proof.height = 100
+        const a = makeSignedV3('d4'.repeat(32), 1000);
+        a.cp.block_index = 999;                                   // trusted checkpoint at a different height
+        const fetchImpl = async () => ({ ok: true, status: 200, json: async () => ({ proof }) });
+        const r = await light.verifyBalance({ explorerUrl: 'https://x', coin: COIN, address: ADDR_A,
+            tick: TICK, atHeight: 100, trustedCheckpoint: a.cp, fetchImpl });
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'PROOF_HEIGHT_MISMATCH');
+    });
+});
