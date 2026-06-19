@@ -19,7 +19,7 @@
         "@brandonblack/musig": "0.0.1-alpha.1",
         "@modelcontextprotocol/sdk": "^1.29.0",
         "@noble/curves": "1.9.1",
-        "@noble/hashes": "1.8.0",
+        "@noble/hashes": "^1.8.0",
         "acorn": "8.16.0",
         "acorn-walk": "8.3.5",
         "astring": "1.9.0",

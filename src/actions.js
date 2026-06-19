@@ -7,7 +7,7 @@
  *
  * This file is part of XChain Platform. Licensed under the GNU Affero
  * General Public License v3.0 or later; see LICENSE.md. A commercial
- * license (without AGPL source-disclosure terms) is available —
+ * license (without AGPL source-disclosure terms) is available -
  * contact legal@dankest.llc.
  *
  **********************************************************************
@@ -25,9 +25,9 @@ const { SDKValidationError, SDKContractError } = require('./errors.js');
 // Encoding byte limits for pre-flight validation
 const ENCODING_LIMITS = {
     OP_RETURN:  76,   // 80 - 4 byte magic word (XCHN)
-    MULTISIGN:  61,   // ~61 bytes per chunk (data split across 2 fake pubkeys)
+    MULTISIGN:  60,   // 60 bytes of data per chunk (data split across 2 fake pubkeys)
     P2SH:       476,  // 520 - 44 byte script overhead
-    P2WSH:      9956  // 10000 - 44 byte script overhead
+    P2WSH:      476   // 520 - 44 byte script overhead per chunk (MAX_SCRIPT_ELEMENT_SIZE bound)
 };
 
 
@@ -59,7 +59,7 @@ class Actions {
         let fields = this.util.normalizeFields(params);
 
         // [3b] DEPLOY pre-processing: base64-encode raw 'code' into CODE_ENCODING.
-        // base64 (1.33x) instead of hex (2x) — the action string is pipe-delimited and
+        // base64 (1.33x) instead of hex (2x): the action string is pipe-delimited and
         // base64's alphabet (A-Za-z0-9+/=) has no '|', so it stays delimiter-safe while
         // cutting the on-chain payload by a third (lifts the single-tx contract ceiling).
         if (actionName === 'DEPLOY' && fields.CODE !== undefined && fields.CODE !== null && fields.CODE_ENCODING === undefined) {
@@ -82,7 +82,7 @@ class Actions {
                 fields.CONSTRUCTOR_PARAMS = fields.CONSTRUCTOR_PARAMS.map(p => String(p));
         }
 
-        // [3d] LIST: ITEM is a rest-field — coerce to an array of strings so a
+        // [3d] LIST: ITEM is a rest-field; coerce to an array of strings so a
         // multi-item list serializes as individual pipe segments (a lone string
         // stays a single-item list, preserving the old call shape)
         if (actionName === 'LIST' && fields.ITEM !== undefined && fields.ITEM !== null) {

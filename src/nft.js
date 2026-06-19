@@ -7,7 +7,7 @@
  *
  * This file is part of XChain Platform. Licensed under the GNU Affero
  * General Public License v3.0 or later; see LICENSE.md. A commercial
- * license (without AGPL source-disclosure terms) is available —
+ * license (without AGPL source-disclosure terms) is available -
  * contact legal@dankest.llc.
  *
  **********************************************************************
@@ -17,11 +17,11 @@
  * Non-fungible tokens on XChain are a composition of existing
  * primitives, not a special token type (see
  * xchain-documentation/protocol/NFT_Standard.md). There is no NFT
- * action, flag, or wire format — an "NFT" is an ISSUE with DECIMALS=0
+ * action, flag, or wire format. An "NFT" is an ISSUE with DECIMALS=0
  * and LOCK_MAX_SUPPLY=1. These helpers are the guided builders that
  * encode that rule in one place so every client mints NFTs correctly,
  * plus the canonical classification predicate and the content-attach
- * (LINK) param builder. All pure — no network, no consensus.
+ * (LINK) param builder. All pure: no network, no consensus.
  *
  ********************************************************************/
 
@@ -59,7 +59,7 @@ class NftHelpers {
         if (mint) {
             // Fair-mint edition: open a public MINT window. The cap locks at issuance
             // with zero minted supply (LOCK_MAX_SUPPLY now validates a declared cap, not
-            // minted supply), so the whole edition stays available for the public mint —
+            // minted supply), so the whole edition stays available for the public mint;
             // no print is forced onto the issuer.
             params.maxMint        = String(mint.maxMint);
             if (mint.perAddress !== undefined) params.mintAddressMax  = String(mint.perAddress);
@@ -72,7 +72,7 @@ class NftHelpers {
         return params;
     }
 
-    // Build ISSUE params for a distinct item in a collection — a child TICK
+    // Build ISSUE params for a distinct item in a collection (a child TICK
     // `parent.name`, issued as a unique 1-of-1. The SOURCE must own the parent
     // (enforced by the indexer); this only builds the params.
     //
@@ -121,18 +121,18 @@ class NftHelpers {
     // imageActionIndex - on-chain artwork FILE to reference via data_ref (optional)
     // imageCoin        - base coin ticker (BTC/LTC/DOGE) when the artwork FILE
     //                    lives on a SIBLING chain (optional; omitted = same
-    //                    chain as the token — network tier is implied)
+    //                    chain as the token; network tier is implied)
     // imageUrl         - off-chain artwork URL (optional; data_ref preferred when both)
     // imageType        - artwork MIME type (optional)
     // imageName        - artwork filename (optional)
     //
-    // Returns { doc, json } — the document object and its serialized form.
+    // Returns { doc, json }: the document object and its serialized form.
     tisDocument({ tick, name, description, imageActionIndex, imageCoin, imageUrl, imageType, imageName } = {}) {
         if (!tick) throw new Error('nft.tisDocument: tick is required');
         let doc = {
             tick: String(tick).toUpperCase(),
             // Declare collectible intent so clients distinguish an NFT from a
-            // currency that shares the same field values (TIS — NFT Usage).
+            // currency that shares the same field values (TIS, NFT Usage).
             categories: [{ type: 'main', data: 'NFT' }]
         };
         if (name)        doc.name        = String(name);
@@ -156,9 +156,9 @@ class NftHelpers {
     isNft(token) {
         if (!token) return false;
         // Accept UPPER_SNAKE (indexer), lower snake_case (explorer JSON column names),
-        // and camelCase (SDK param) shapes — the explorer returns `lock_max_supply`.
+        // and camelCase (SDK param) shapes; the explorer returns `lock_max_supply`.
         let decimals = token.DECIMALS        ?? token.decimals;
-        let locked   = token.LOCK_MAX_SUPPLY ?? token.lock_max_supply ?? token.lockMaxSupply;
+        let locked   = token.LOCK_MAX_SUPPLY ?? token.lock_max_supply ?? token.lockMaxSupply ?? token.locks?.max_supply;
         return Number(decimals) === 0 && Number(locked) === 1;
     }
 

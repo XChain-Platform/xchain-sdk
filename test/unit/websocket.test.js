@@ -7,7 +7,7 @@
  *
  * This file is part of XChain Platform. Licensed under the GNU Affero
  * General Public License v3.0 or later; see LICENSE.md. A commercial
- * license (without AGPL source-disclosure terms) is available —
+ * license (without AGPL source-disclosure terms) is available -
  * contact legal@dankest.llc.
  *
  **********************************************************************
@@ -367,7 +367,7 @@ describe('WebSocketClient', function () {
                 pingInterval: 60000
             });
             await client.connect();
-            // WELCOME already received — should have at least 1 call
+            // WELCOME already received; should have at least 1 call
             expect(msgSpy.callCount).to.be.greaterThanOrEqual(1);
         });
     });
@@ -462,7 +462,7 @@ describe('WebSocketClient', function () {
             client = createClient(port);
             await client.connect();
 
-            // Send garbage data — should be silently ignored
+            // Send garbage data; should be silently ignored
             server._lastClient.send('not valid json!!');
             await new Promise(r => setTimeout(r, 50));
             // Client should still be connected
@@ -579,7 +579,7 @@ describe('WebSocketClient', function () {
     });
 
     // -----------------------------------------------------------------
-    // _rejectAllPending — rejects pending on disconnect
+    // _rejectAllPending: rejects pending on disconnect
     // -----------------------------------------------------------------
 
     describe('_rejectAllPending', function () {
@@ -670,7 +670,7 @@ describe('WebSocketClient', function () {
             // Exhaust all reconnect attempts by pre-setting the counter
             client.reconnectAttempts = client.maxReconnectAttempts;
 
-            // Force close from server (not intentional from client) — triggers _reconnect
+            // Force close from server (not intentional from client); triggers _reconnect
             // which immediately sees reconnectAttempts >= maxReconnectAttempts and emits connection_lost
             server._lastClient.close();
             await new Promise(r => setTimeout(r, 200));
@@ -700,6 +700,13 @@ describe('WebSocketClient', function () {
     describe('_startPing', function () {
 
         it('sends ping messages on interval', async function () {
+            let pingCount = 0;
+            server.on('connection', (ws) => {
+                ws.on('message', (raw) => {
+                    try { if (JSON.parse(raw).action === 'ping') pingCount++; } catch (_) {}
+                });
+            });
+
             const c = new WebSocketClient({
                 network: 'bitcoin-regtest',
                 websocketUrl: '127.0.0.1',
@@ -712,7 +719,7 @@ describe('WebSocketClient', function () {
             // Wait for at least one ping to be sent
             await new Promise(r => setTimeout(r, 150));
             c.disconnect();
-            // If no error thrown, ping was sent successfully
+            expect(pingCount).to.be.greaterThan(0);
         });
     });
 
@@ -842,7 +849,7 @@ describe('WebSocketClient', function () {
                 retry: { maxRetries: 0 },
                 pingInterval: 60000
             });
-            // ws is null — should not throw
+            // ws is null; should not throw
             expect(() => client._send({ action: 'ping' })).to.not.throw();
         });
     });
@@ -876,7 +883,7 @@ describe('WebSocketClient', function () {
     });
 
     // -----------------------------------------------------------------
-    // _resubscribe — direct unit test
+    // _resubscribe: direct unit test
     // -----------------------------------------------------------------
 
     describe('_resubscribe', function () {

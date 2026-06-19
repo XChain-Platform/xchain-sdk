@@ -6,7 +6,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/version-1.8.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/tests-520%20passing-brightgreen" alt="Tests">
-  <img src="https://img.shields.io/badge/node-%3E%3D18-green" alt="Node">
+  <img src="https://img.shields.io/badge/node-%3E%3D22-green" alt="Node">
   <img src="https://img.shields.io/badge/license-Dankest%20Community-orange" alt="License">
 </p>
 
@@ -18,32 +18,32 @@ Developer-facing SDK for generating XChain platform transactions and querying bl
 
 ## Features
 
-- **29 ACTION types** — `sdk.send()`, `sdk.issue()`, `sdk.mint()`, `sdk.stake()`, and 25 more convenience methods
-- **Transaction lifecycle** — `sdk.submitAction()` handles the full encode → sign → broadcast → wait pipeline in one call
-- **Wallet sessions** — `sdk.session(wif)` bundles address/key/UTXO state for repeated actions from one address
-- **Fee estimation** — `sdk.estimateFees()` returns fee info without signing or broadcasting
-- **UTXO chaining** — in-memory UTXO cache prevents double-spend on rapid sequential transactions
-- **Workflow recipes** — `sdk.issueAndDistribute()`, `sdk.deployAndFund()`, `sdk.stakeAndDelegate()`, and more
-- **Cross-chain helpers** — coordinate swaps and parallel actions across BTC, LTC, and DOGE SDK instances
-- **Event-driven confirmation** — `sdk.waitForAction(txid)` resolves when the indexer processes a transaction
-- **Interactive REPL** — `npm run repl` drops into a live session with a pre-configured SDK instance
-- **Automatic format selection** — picks the smallest encoding format for every action
-- **PSBT generation** — integrates with xchain-encoder to produce unsigned transactions
-- **40+ explorer endpoints** — balances, tokens, transactions, markets, history, contracts
-- **Batch builder** — fluent API: `await sdk.batch().send({...}).mint({...}).build()` (`build()` is async)
-- **Real-time events** — WebSocket streaming with `onBlock()`, `onAction()`, `onAddress()`, and more
-- **Encrypted messaging** — ECIES, ECDH, and AES encryption for MESSAGE actions; `messaging.send()` accepts a `Buffer` payload and `getMessages()` exposes `msg.bytes` for binary ECIES
-- **Token-gated file publishing** — `sdk.gatedFile.encryptFileBytes()` and `sdk.gatedFile.encryptPack()` produce AES-256-GCM ciphertext + key for FILE v1 gated content; key handoff as a compact 33-byte binary payload via `serializeKeyPayload()` / `parseKeyPayload()` (sent through ECIES in binary mode). See [Token-Gated Content](https://github.com/XChain-platform/xchain-documentation/blob/master/protocol/TOKEN_GATED_CONTENT.md)
-- **Attestation envelope helpers** — `AttestationHelpers.llm({...})` builds the JSON envelope a VM contract passes to `xchain.attestation.request(...)` with provider_id `'llm'`; `AttestationHelpers.httpGet({url})` validates the URL and returns the payload string for `'http_get'`; `AttestationHelpers.requestOptions({redundancy, deadlineBlocks})` builds the gateway options object. **By design these are envelope builders only — there is no user-submittable ATTEST action.** ATTEST v0 (request) and v1 (response) are *VM-emitted*: a contract calls `xchain.attestation.request(...)` and validators emit the on-chain attestation. So the SDK helps you shape the request a contract makes, and you read the results via `getAttestations()` — it does not (and cannot) encode an ATTEST action directly, the same way XCALL is VM-emission-only.
-- **Token-ownership trading helpers** — `ORDER`/`SWAP`/`DISPENSER` v0 carry `GIVE_OWNERSHIP` / `GET_OWNERSHIP` flags; `SWEEP` carries independent `ORDERS` / `SWAPS` / `DISPENSERS` flags (was a single `ESCROWS` flag)
-- **Contract-targeted staking** — `session.stakeToContract({ amount, signingPubkey, targetContractIndex, tick })`, `session.unstakeFromContract({...})`, and `session.delegateForContract({...})` emit STAKE v3 / UNSTAKE v1 / DELEGATE v1 against a smart contract deployed via DEPLOY v1 (with `COOLDOWN_BLOCKS` + `SLASH_DESTINATION`). High-level recipes: `sdk.deployStakeableContract()` and `sdk.stakeToContractAndDelegate()`
-- **Wallet & auth** — key management, PSBT signing, challenge-response verification
-- **Smart contracts** — deploy, execute, deposit, withdraw via xchain-vm integration
-- **Hub discovery** — auto-resolves service endpoints from xchain-hub
-- **Retry with backoff** — handles HTTP 429/502/503/504, respects `Retry-After` headers
-- **Request hooks** — `onRequest`, `onResponse`, `onError`, `onRetry` callbacks
-- **TypeScript definitions** — full `.d.ts` for IDE autocomplete
-- **Browser bundle** — Browserify build for client-side use
+- **29 ACTION types**: `sdk.send()`, `sdk.issue()`, `sdk.mint()`, `sdk.stake()`, and 25 more convenience methods
+- **Transaction lifecycle**: `sdk.submitAction()` handles the full encode -> sign -> broadcast -> wait pipeline in one call
+- **Wallet sessions**: `sdk.session(wif)` bundles address/key/UTXO state for repeated actions from one address
+- **Fee estimation**: `sdk.estimateFees()` returns fee info without signing or broadcasting
+- **UTXO chaining**: in-memory UTXO cache prevents double-spend on rapid sequential transactions
+- **Workflow recipes**: `sdk.issueAndDistribute()`, `sdk.deployAndFund()`, `sdk.stakeAndDelegate()`, and more
+- **Cross-chain helpers**: coordinate swaps and parallel actions across BTC, LTC, and DOGE SDK instances
+- **Event-driven confirmation**: `sdk.waitForAction(txid)` resolves when the indexer processes a transaction
+- **Interactive REPL**: `npm run repl` drops into a live session with a pre-configured SDK instance
+- **Automatic format selection**: picks the smallest encoding format for every action
+- **PSBT generation**: integrates with xchain-encoder to produce unsigned transactions
+- **40+ explorer endpoints**: balances, tokens, transactions, markets, history, contracts
+- **Batch builder**: fluent API: `await sdk.batch().send({...}).mint({...}).build()` (`build()` is async)
+- **Real-time events**: WebSocket streaming with `onBlock()`, `onAction()`, `onAddress()`, and more
+- **Encrypted messaging**: ECIES, ECDH, and AES encryption for MESSAGE actions; `messaging.send()` accepts a `Buffer` payload and `getMessages()` exposes `msg.bytes` for binary ECIES
+- **Token-gated file publishing**: `sdk.gatedFile.encryptFileBytes()` and `sdk.gatedFile.encryptPack()` produce AES-256-GCM ciphertext + key for FILE v1 gated content; key handoff as a compact 33-byte binary payload via `serializeKeyPayload()` / `parseKeyPayload()` (sent through ECIES in binary mode). See [Token-Gated Content](https://github.com/XChain-platform/xchain-documentation/blob/master/protocol/TOKEN_GATED_CONTENT.md)
+- **Attestation envelope helpers**: `AttestationHelpers.llm({...})` builds the JSON envelope a VM contract passes to `xchain.attestation.request(...)` with provider_id `'llm'`; `AttestationHelpers.httpGet({url})` validates the URL and returns the payload string for `'http_get'`; `AttestationHelpers.requestOptions({redundancy, deadlineBlocks})` builds the gateway options object. By design these are envelope builders only: there is no user-submittable ATTEST action. ATTEST v0 (request) and v1 (response) are VM-emitted: a contract calls `xchain.attestation.request(...)` and validators emit the on-chain attestation. So the SDK helps you shape the request a contract makes, and you read the results via `getAttestations()`. It does not (and cannot) encode an ATTEST action directly, the same way XCALL is VM-emission-only.
+- **Token-ownership trading helpers**: `ORDER`/`SWAP`/`DISPENSER` v0 carry `GIVE_OWNERSHIP` / `GET_OWNERSHIP` flags; `SWEEP` carries independent `ORDERS` / `SWAPS` / `DISPENSERS` flags (was a single `ESCROWS` flag)
+- **Contract-targeted staking**: `session.stakeToContract({ amount, signingPubkey, targetContractIndex, tick })`, `session.unstakeFromContract({...})`, and `session.delegateForContract({...})` emit STAKE v3 / UNSTAKE v1 / DELEGATE v1 against a smart contract deployed via DEPLOY v1 (with `COOLDOWN_BLOCKS` + `SLASH_DESTINATION`). High-level recipes: `sdk.deployStakeableContract()` and `sdk.stakeToContractAndDelegate()`
+- **Wallet & auth**: key management, PSBT signing, challenge-response verification
+- **Smart contracts**: deploy, execute, deposit, withdraw via xchain-vm integration
+- **Hub discovery**: auto-resolves service endpoints from xchain-hub
+- **Retry with backoff**: handles HTTP 429/502/503/504, respects `Retry-After` headers
+- **Request hooks**: `onRequest`, `onResponse`, `onError`, `onRetry` callbacks
+- **TypeScript definitions**: full `.d.ts` for IDE autocomplete
+- **Browser bundle**: Browserify build for client-side use
 
 ## Documentation
 
@@ -53,13 +53,13 @@ Full SDK developer guide is available in the [xchain-documentation](https://gith
 |---|---|
 | [README](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/README.md) | Overview, installation, usage modes |
 | [Configuration](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/CONFIGURATION.md) | Constructor options, env vars, hub discovery, retry, pooling, hooks |
-| [Actions](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/ACTIONS.md) | All 29 ACTION types — params, validation rules, format versions, examples |
+| [Actions](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/ACTIONS.md) | All 29 ACTION types: params, validation rules, format versions, examples |
 | [Transaction Lifecycle](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/LIFECYCLE.md) | submitAction, fee estimation, UTXO chaining, P2SH two-phase handling |
 | [Wallet Sessions](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/SESSIONS.md) | Bound wallet sessions, convenience methods, UTXO cache |
 | [Workflows](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/WORKFLOWS.md) | High-level recipes: issueAndDistribute, deployAndFund, stakeAndDelegate |
 | [Cross-Chain](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/CROSSCHAIN.md) | Multi-chain coordination: parallel actions, swaps, links |
-| [Explorer](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/EXPLORER.md) | All 40+ query methods — balances, tokens, transactions, markets |
-| [Encoder](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/ENCODER.md) | PSBT generation — encoding types, options, pre-flight validation, P2SH two-phase |
+| [Explorer](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/EXPLORER.md) | All 40+ query methods: balances, tokens, transactions, markets |
+| [Encoder](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/ENCODER.md) | PSBT generation: encoding types, options, pre-flight validation, P2SH two-phase |
 | [Batch Builder](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/BATCH.md) | Fluent API for multi-action transactions |
 | [Contracts](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/CONTRACTS.md) | VM smart contract integration: deploy, execute, deposit, withdraw |
 | [WebSocket](https://github.com/XChain-platform/xchain-documentation/blob/master/components/sdk/WEBSOCKET.md) | Real-time event streaming: blocks, actions, addresses, markets |
@@ -80,7 +80,7 @@ const { XChainSDK } = require('xchain-sdk');
 // any *-regtest network defaults to localhost.
 const sdk = new XChainSDK({ network: 'bitcoin-mainnet' });
 
-// To point at your own services, pass full URLs (include the scheme — a
+// To point at your own services, pass full URLs (include the scheme; a
 // bare host is treated as http://host:<dev-port>):
 // const sdk = new XChainSDK({
 //     network: 'bitcoin-mainnet',
@@ -132,20 +132,20 @@ const token = await sdk.getToken('MYTOKEN');
 | `npm run api` | Start JSON-RPC server (port from `SDK_API_PORT`, default 3005) |
 | `npm test` | Run unit tests |
 | `npm run repl` | Start interactive REPL with a pre-configured SDK instance |
-| `npm run build` | Production browser bundle → `dist/xchain_sdk.min.js` |
-| `npm run build:dev` | Development browser bundle → `dist/xchain_sdk.js` |
+| `npm run build` | Production browser bundle -> `dist/xchain_sdk.min.js` |
+| `npm run build:dev` | Development browser bundle -> `dist/xchain_sdk.js` |
 
 ## Test Suite
 
 | Type | Tests |
 |---|---|
-| Unit — actions, validators, format selection, convenience methods | 300+ |
-| Unit — explorer, encoder, retry, WebSocket, wallet, auth, contracts | 150+ |
-| Boundary — exact encoding limits | 36 |
-| Fuzz — garbage types, unicode, prototype pollution | 56 |
-| Chaos — malformed responses, HTTP errors, timeouts | 28 |
-| Round-trip — serialize → parse → verify for all 29 actions | 34 |
-| Smoke — boot API server, end-to-end JSON-RPC | 11 |
+| Unit: actions, validators, format selection, convenience methods | 300+ |
+| Unit: explorer, encoder, retry, WebSocket, wallet, auth, contracts | 150+ |
+| Boundary: exact encoding limits | 36 |
+| Fuzz: garbage types, unicode, prototype pollution | 56 |
+| Chaos: malformed responses, HTTP errors, timeouts | 28 |
+| Round-trip: serialize -> parse -> verify for all 29 actions | 34 |
+| Smoke: boot API server, end-to-end JSON-RPC | 11 |
 | **Total** | **520+** |
 
 ---

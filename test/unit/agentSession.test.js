@@ -7,12 +7,12 @@
  *
  * This file is part of XChain Platform. Licensed under the GNU Affero
  * General Public License v3.0 or later; see LICENSE.md. A commercial
- * license (without AGPL source-disclosure terms) is available —
+ * license (without AGPL source-disclosure terms) is available -
  * contact legal@dankest.llc.
  *
  **********************************************************************
  *
- * Unit tests for src/agentSession.js — the policy-bounded agent wallet.
+ * Unit tests for src/agentSession.js: the policy-bounded agent wallet.
  * WalletSession.submit is stubbed so no encoder/explorer is touched;
  * these tests exercise ONLY the policy layer and its persistence.
  *
@@ -159,7 +159,9 @@ describe('AgentSession (policy-bounded wallet)', () => {
         try {
             await s.send({ tick: 'TOK', amount: '10' });
             clock.tick(61 * 60 * 1000);
-            await s.send({ tick: 'TOK', amount: '10' });               // old entry expired
+            const res = await s.send({ tick: 'TOK', amount: '10' });   // old entry expired
+            expect(res.policy.windowUsage.perTick.TOK).to.equal('10');
+            expect(res.policy.windowUsage.count).to.equal(1);
         } finally { clock.restore(); }
     });
 
