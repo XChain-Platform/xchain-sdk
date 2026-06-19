@@ -306,6 +306,125 @@ async function fetchAnchoredCheckpoint(opts){
     return Object.assign({}, res, { anchor: rec, dogeTxid: rec.tx_hash || null });
 }
 
+// ── Validator-set proof + forward-following (spec §7, Phase 5) ────────────────
+// The keystone of a self-verifying client: instead of trusting an explorer for the
+// signer set, the client PROVES each signer's (source, weight) and the source-deduped
+// total S against a trusted, committed BTC `stakes_root`, then checks the weighted
+// quorum `3·Σ(distinct signer-source weight) > 2·S` locally. Breaks the §7.1 circularity.
+
+function _scaled(a){ const [i, f] = M.canonicalAmount(String(a)).split('.'); return BigInt(i) * 1000000000000000000n + BigInt(f); }
+
+// Pure: verify a /proof/validator-set response binds into a TRUSTED state_root.
+// Returns { verified, capabilities: { cap: { validators:[{pubkey,source,weight}], total } }, reason }.
+// Every returned (pubkey, source, weight) is membership-proven; `total` is the
+// committed source-deduped S (proven via the __total__ leaf).
+function verifyValidatorSetProof(proof, trustedStateRoot){
+    try {
+        if (!proof || !proof.sub_root_path || !proof.capabilities) return { verified: false, capabilities: {}, reason: 'MALFORMED_PROOF' };
+        // 1. stakes_root binds into the trusted state_root (fixed 5-leaf top tree).
+        if (!M.verifyFixedMerkleProof(trustedStateRoot, M.toBuf(proof.stakes_root), proof.sub_root_path.index, proof.sub_root_path.siblings))
+            return { verified: false, capabilities: {}, reason: 'SUBROOT_BIND_INVALID' };
+        const out = {};
+        for (const cap of Object.keys(proof.capabilities)){
+            const c = proof.capabilities[cap];
+            const validators = [];
+            for (const v of (c.validators || [])){
+                // The committed leaf must be exactly stakeMemberLeaf(source, weight) and
+                // the SMT proof must reconstruct stakes_root for stakeKey(pubkey, cap).
+                if (_hx(v.smt_proof && v.smt_proof.leaf_value) !== M.toHex(M.stakeMemberLeaf(v.source, v.weight)))
+                    return { verified: false, capabilities: {}, reason: 'MEMBER_LEAF_MISMATCH:' + v.pubkey };
+                if (!M.verifyCompressedSmtProof(proof.stakes_root, M.stakeKey(String(v.pubkey), cap), v.smt_proof.leaf_value, v.smt_proof.compressed))
+                    return { verified: false, capabilities: {}, reason: 'MEMBER_PROOF_INVALID:' + v.pubkey };
+                validators.push({ pubkey: String(v.pubkey), source: String(v.source), weight: String(v.weight) });
+            }
+            // The committed total S (proven via __total__) is the quorum denominator.
+            let total = '0';
+            if (c.total_proof){
+                if (_hx(c.total_proof.leaf_value) !== M.toHex(M.stakeTotalLeaf(c.total)))
+                    return { verified: false, capabilities: {}, reason: 'TOTAL_LEAF_MISMATCH:' + cap };
+                if (!M.verifyCompressedSmtProof(proof.stakes_root, M.stakeKey(M.STAKE_TOTAL_PUBKEY, cap), c.total_proof.leaf_value, c.total_proof.compressed))
+                    return { verified: false, capabilities: {}, reason: 'TOTAL_PROOF_INVALID:' + cap };
+                total = M.canonicalAmount(String(c.total));
+            }
+            out[cap] = { validators, total };
+        }
+        return { verified: true, capabilities: out, reason: null };
+    } catch (e){ return { verified: false, capabilities: {}, reason: 'VERIFY_ERROR:' + (e && e.message) }; }
+}
+
+// Network: fetch + verify the validator-set proof at BTC snapshot height S.
+async function verifyValidatorSet(opts){
+    opts = opts || {};
+    const f = _fetch(opts.fetchImpl);
+    const url = _base(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.btcCoin || 'BTC')) +
+                '/api/proof/validator-set?height=' + encodeURIComponent(String(opts.snapshotBlock));
+    const body = await _json(f, url);
+    if (!body || !body.proof) throw new Error('LightClient: no validator-set proof in response');
+    const v = verifyValidatorSetProof(body.proof, opts.trustedStateRoot);
+    return Object.assign({}, v, { height: Number(body.proof.height), checkpoint: body.checkpoint });
+}
+
+// Pure: verify a checkpoint's quorum using a PROVEN validator set (from
+// verifyValidatorSet). Source-dedupes valid signers and checks 3·Σ > 2·S against the
+// committed total. Fully trustless: nothing here trusts a server-supplied set.
+function verifyCheckpointWithProvenSet(cp, provenOraclePublish){
+    const canonical = cp && checkpoint.canonicalCheckpoint(cp);
+    const bySource = new Map(), pkToSource = new Map();
+    for (const v of ((provenOraclePublish && provenOraclePublish.validators) || [])){
+        const s = String(v.source), pk = String(v.pubkey).toLowerCase();
+        pkToSource.set(pk, s);
+        if (!bySource.has(s)) bySource.set(s, String(v.weight));
+    }
+    let sigs = cp && cp.validator_signatures;
+    if (typeof sigs === 'string'){ try { sigs = JSON.parse(sigs); } catch (e){ sigs = []; } }
+    if (!Array.isArray(sigs)) sigs = [];
+    const countedSources = new Set(), seenPk = new Set(), weights = [];
+    for (const sig of sigs){
+        const pk = String(sig && sig.pubkey || '').toLowerCase();
+        if (seenPk.has(pk)) continue; seenPk.add(pk);
+        const src = pkToSource.get(pk);
+        if (src === undefined) continue;                          // signer not in the proven set
+        if (!checkpoint.verifySignature(canonical, String(sig && sig.sig || ''), pk)) continue;
+        if (countedSources.has(src)) continue; countedSources.add(src);   // source-dedupe
+        weights.push(bySource.get(src));
+    }
+    const numerator = M.sumCanonicalAmounts(weights);
+    const total = M.canonicalAmount(String((provenOraclePublish && provenOraclePublish.total) || '0'));
+    const valid = _scaled(total) > 0n && 3n * _scaled(numerator) > 2n * _scaled(total);
+    return { valid, numerator, total };
+}
+
+// Forward-following (spec §7.3): from a trusted BTC checkpoint, walk /checkpoints/range
+// and adopt each next checkpoint whose quorum verifies against a validator set proven at
+// its snapshot_block (against the current trusted BTC state_root). Returns the new rolling
+// trust root + the chain of adopted checkpoints. Stops at the first step that fails to verify.
+async function followForward(opts){
+    opts = opts || {};
+    const f = _fetch(opts.fetchImpl);
+    const btcCoin = opts.btcCoin || 'BTC';
+    let trusted = opts.trustedCheckpoint;
+    if (!trusted || trusted.state_root == null) throw new Error('LightClient: followForward needs a trusted BTC checkpoint with a committed state_root');
+    const from = Number(trusted.block_index) + 1;
+    const to   = Number(opts.toHeight != null ? opts.toHeight : trusted.block_index);
+    const adopted = [];
+    if (to >= from){
+        const rangeUrl = _base(opts.explorerUrl) + '/' + encodeURIComponent(String(btcCoin)) +
+                         '/api/checkpoints/range?from=' + from + '&to=' + to;
+        const rangeBody = await _json(f, rangeUrl);
+        const steps = (rangeBody && rangeBody.checkpoints) || [];
+        for (const next of steps){
+            // Prove the signer set at next.snapshot_block against the current trusted state_root.
+            const vs = await verifyValidatorSet({ explorerUrl: opts.explorerUrl, btcCoin,
+                snapshotBlock: next.snapshot_block, trustedStateRoot: _hx(trusted.state_root), fetchImpl: f });
+            if (!vs.verified) return { trusted, adopted, reason: 'VALIDATOR_SET_UNVERIFIED@' + next.block_index, stoppedAt: next.block_index };
+            const q = verifyCheckpointWithProvenSet(next, vs.capabilities.oracle_publish);
+            if (!q.valid) return { trusted, adopted, reason: 'QUORUM_FAILED@' + next.block_index, stoppedAt: next.block_index };
+            trusted = next; adopted.push(next);                   // roll the trust root forward
+        }
+    }
+    return { trusted, adopted, reason: null, stoppedAt: null };
+}
+
 module.exports = {
     verifyBalanceProof,
     verifyActionProof,
@@ -314,5 +433,9 @@ module.exports = {
     parseAnchorV3,
     anchorToCheckpoint,
     verifyAnchoredCheckpoint,
-    fetchAnchoredCheckpoint
+    fetchAnchoredCheckpoint,
+    verifyValidatorSetProof,
+    verifyValidatorSet,
+    verifyCheckpointWithProvenSet,
+    followForward
 };
