@@ -46,15 +46,16 @@ function _fetch(impl){
 }
 
 // Pinned trust root (spec D4): when a caller supplies neither `validators` nor
-// `trustedCheckpoint`, fall back to the out-of-band launch validator set pinned
-// for the target coin instead of trusting the explorer's /verify set. Returns
-// null when nothing is pinned (the convenience path stands). `pinnedResolver`
-// is a test/override seam over the shipped registry.
-function _pinnedValidators(opts){
+// `trustedCheckpoint`, fall back to the out-of-band launch entry pinned for the
+// target coin instead of trusting the explorer's /verify set. Returns null when
+// nothing is pinned (the convenience path stands). The entry is
+// { checkpoint, validators }: the launch checkpoint (committed state_root, the
+// seed for rotation-following) plus the set that signed it. `pinnedResolver` is
+// a test/override seam over the shipped registry.
+function _pinnedEntry(opts){
     if (opts.validators || opts.trustedCheckpoint) return null;
     const resolve = opts.pinnedResolver || pinned.getPinnedCheckpoint;
-    const entry = resolve(opts.coin);
-    return (entry && Array.isArray(entry.validators) && entry.validators.length) ? entry.validators : null;
+    return resolve(opts.coin) || null;
 }
 function _base(u){ return String(u || '').replace(/\/+$/, ''); }
 async function _json(f, url){
@@ -140,11 +141,50 @@ async function _verifyQuorum(f, explorerUrl, coin, cp, suppliedValidators){
     return checkpoint.verifyCheckpoint(cp, validators);
 }
 
+// Resolve a served checkpoint `cp` to a quorum verdict. Order of trust:
+//   1. caller-supplied `validators` -- an explicit out-of-band set (no fetch).
+//   2. the pinned launch set for the coin (spec D4). If it still signs `cp`,
+//      done. Otherwise, when the pinned entry also carries a committed-state
+//      checkpoint and `cp` is a LATER BTC checkpoint, roll the pinned trust root
+//      FORWARD across validator rotation (spec §7.3): followForward proves each
+//      successor oracle_publish set against the committed BTC stakes_root (the
+//      only chain that commits stakes, §4.1) and adopts it, and we accept iff
+//      the walk reaches exactly `cp` (same height + state_root + block-merkle
+//      root). The explorer /verify set is NEVER consulted on the pinned path
+//      (no silent downgrade); a rotation that cannot be followed fails quorum.
+//   3. nothing pinned -> the explorer /verify convenience path (weakest).
+// Returns a checkpoint.verifyCheckpoint-shaped { valid, quorum, weighted }.
+// Transport failures propagate (throw), exactly like the convenience path.
+async function _resolveQuorum(f, opts, cp){
+    if (opts.validators) return checkpoint.verifyCheckpoint(cp, opts.validators);
+    const entry = _pinnedEntry(opts);
+    if (!entry) return _verifyQuorum(f, opts.explorerUrl, opts.coin, cp, null);
+    const pinnedVals = (Array.isArray(entry.validators) && entry.validators.length) ? entry.validators : null;
+    if (pinnedVals){
+        const q = checkpoint.verifyCheckpoint(cp, pinnedVals);
+        if (q.valid) return q;                                 // launch epoch: pinned set still signs
+    }
+    const pcp = entry.checkpoint;
+    if (pcp && pcp.state_root != null && _hx(cp.chain) === 'btc'
+        && Number(cp.block_index) > Number(pcp.block_index)){
+        const ff = await followForward({ explorerUrl: opts.explorerUrl, btcCoin: opts.coin,
+            trustedCheckpoint: pcp, toHeight: Number(cp.block_index), fetchImpl: f });
+        const t = ff && ff.trusted;
+        if (t && Number(t.block_index) === Number(cp.block_index)
+            && _hx(t.state_root) === _hx(cp.state_root)
+            && _hx(t.block_merkle_root) === _hx(cp.block_merkle_root))
+            return { valid: true, quorum: null, weighted: null };
+    }
+    return { valid: false, quorum: null, weighted: null };
+}
+
 // ── Public network API ────────────────────────────────────────────────────────
 
 // verifyBalance({ explorerUrl, coin, address, tick, atHeight?, validators?, trustedCheckpoint?, pinnedResolver?, fetchImpl? })
 //  When neither validators nor trustedCheckpoint is given, the pinned launch set
 //  for `coin` (spec D4) is used if one is registered, else the explorer's set.
+//  A checkpoint past the pinned epoch is verified by rolling the pinned trust
+//  root forward across validator rotation (§7.3); see _resolveQuorum.
 //  -> { verified, amount, height, reason, checkpoint, quorum, weighted }
 // Returns the verified amount as-of the proven (nearest checkpointed >= atHeight)
 // height, echoed in `height`. A zero balance verifies as non-inclusion. Throws
@@ -172,7 +212,7 @@ async function verifyBalance(opts){
     } else {
         if (!body.checkpoint) throw new Error('LightClient: no checkpoint in response');
         cp = body.checkpoint;
-        q = await _verifyQuorum(f, opts.explorerUrl, opts.coin, cp, opts.validators || _pinnedValidators(opts));
+        q = await _resolveQuorum(f, opts, cp);
     }
     const base = { height: Number(proof.height), checkpoint: cp, quorum: q.quorum, weighted: q.weighted };
     if (!q.valid) return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_QUORUM_FAILED' }, base);
@@ -186,7 +226,8 @@ async function verifyBalance(opts){
 
 // verifyAction({ explorerUrl, coin, actionIndex, validators?, trustedCheckpoint?, pinnedResolver?, fetchImpl? })
 //  Same pinned-launch-set (spec D4) fallback as verifyBalance when no validators
-//  and no trustedCheckpoint are supplied.
+//  and no trustedCheckpoint are supplied, including the rotation-aware
+//  forward-following of a post-epoch checkpoint (§7.3; see _resolveQuorum).
 //  -> { verified, height, action, action_index, tx_index, reason, checkpoint, quorum, weighted }
 async function verifyAction(opts){
     opts = opts || {};
@@ -208,7 +249,7 @@ async function verifyAction(opts){
     } else {
         if (!body.checkpoint) throw new Error('LightClient: no checkpoint in response');
         cp = body.checkpoint;
-        q = await _verifyQuorum(f, opts.explorerUrl, opts.coin, cp, opts.validators || _pinnedValidators(opts));
+        q = await _resolveQuorum(f, opts, cp);
     }
     const base = { height: Number(proof.height), action: proof.action, action_index: Number(proof.action_index),
                    tx_index: (proof.tx_index == null) ? null : Number(proof.tx_index),
