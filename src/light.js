@@ -37,11 +37,24 @@
 
 const M          = require('./merkle.js');
 const checkpoint = require('./checkpoint.js');
+const pinned     = require('./pinnedCheckpoints.js');
 
 function _fetch(impl){
     let f = impl || (typeof fetch === 'function' ? fetch : null);
     if (!f) throw new Error('LightClient: no fetch implementation available');
     return f;
+}
+
+// Pinned trust root (spec D4): when a caller supplies neither `validators` nor
+// `trustedCheckpoint`, fall back to the out-of-band launch validator set pinned
+// for the target coin instead of trusting the explorer's /verify set. Returns
+// null when nothing is pinned (the convenience path stands). `pinnedResolver`
+// is a test/override seam over the shipped registry.
+function _pinnedValidators(opts){
+    if (opts.validators || opts.trustedCheckpoint) return null;
+    const resolve = opts.pinnedResolver || pinned.getPinnedCheckpoint;
+    const entry = resolve(opts.coin);
+    return (entry && Array.isArray(entry.validators) && entry.validators.length) ? entry.validators : null;
 }
 function _base(u){ return String(u || '').replace(/\/+$/, ''); }
 async function _json(f, url){
@@ -129,7 +142,9 @@ async function _verifyQuorum(f, explorerUrl, coin, cp, suppliedValidators){
 
 // ── Public network API ────────────────────────────────────────────────────────
 
-// verifyBalance({ explorerUrl, coin, address, tick, atHeight?, validators?, fetchImpl? })
+// verifyBalance({ explorerUrl, coin, address, tick, atHeight?, validators?, trustedCheckpoint?, pinnedResolver?, fetchImpl? })
+//  When neither validators nor trustedCheckpoint is given, the pinned launch set
+//  for `coin` (spec D4) is used if one is registered, else the explorer's set.
 //  -> { verified, amount, height, reason, checkpoint, quorum, weighted }
 // Returns the verified amount as-of the proven (nearest checkpointed >= atHeight)
 // height, echoed in `height`. A zero balance verifies as non-inclusion. Throws
@@ -157,7 +172,7 @@ async function verifyBalance(opts){
     } else {
         if (!body.checkpoint) throw new Error('LightClient: no checkpoint in response');
         cp = body.checkpoint;
-        q = await _verifyQuorum(f, opts.explorerUrl, opts.coin, cp, opts.validators);
+        q = await _verifyQuorum(f, opts.explorerUrl, opts.coin, cp, opts.validators || _pinnedValidators(opts));
     }
     const base = { height: Number(proof.height), checkpoint: cp, quorum: q.quorum, weighted: q.weighted };
     if (!q.valid) return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_QUORUM_FAILED' }, base);
@@ -169,7 +184,9 @@ async function verifyBalance(opts){
     return Object.assign({ verified: v.verified, amount: v.verified ? v.amount : null, reason: v.reason }, base);
 }
 
-// verifyAction({ explorerUrl, coin, actionIndex, validators?, fetchImpl? })
+// verifyAction({ explorerUrl, coin, actionIndex, validators?, trustedCheckpoint?, pinnedResolver?, fetchImpl? })
+//  Same pinned-launch-set (spec D4) fallback as verifyBalance when no validators
+//  and no trustedCheckpoint are supplied.
 //  -> { verified, height, action, action_index, tx_index, reason, checkpoint, quorum, weighted }
 async function verifyAction(opts){
     opts = opts || {};
@@ -191,7 +208,7 @@ async function verifyAction(opts){
     } else {
         if (!body.checkpoint) throw new Error('LightClient: no checkpoint in response');
         cp = body.checkpoint;
-        q = await _verifyQuorum(f, opts.explorerUrl, opts.coin, cp, opts.validators);
+        q = await _verifyQuorum(f, opts.explorerUrl, opts.coin, cp, opts.validators || _pinnedValidators(opts));
     }
     const base = { height: Number(proof.height), action: proof.action, action_index: Number(proof.action_index),
                    tx_index: (proof.tx_index == null) ? null : Number(proof.tx_index),

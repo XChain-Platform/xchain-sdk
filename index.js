@@ -39,6 +39,7 @@ const MuSig2           = require('./src/musig2.js');
 const chunkHelper      = require('./src/chunkHelper.js');
 const CheckpointVerifier = require('./src/checkpoint.js');
 const LightClient        = require('./src/light.js');
+const PinnedCheckpoints  = require('./src/pinnedCheckpoints.js');
 const { startREPL }   = require('./src/repl.js');
 const {
     SDKError,
@@ -80,6 +81,7 @@ module.exports = {
     chunkHelper,
     CheckpointVerifier,
     LightClient,
+    PinnedCheckpoints,
     startREPL,
     SDKError,
     SDKValidationError,

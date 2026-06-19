@@ -462,3 +462,101 @@ describe('SPV Phase 5: validator-set proof + trustless quorum', function () {
         assert.strictEqual(light.verifyCheckpointWithProvenSet(cp, proven).valid, false);
     });
 });
+
+describe('SPV D4: pinned launch trust root', function () {
+
+    const pinned = require('../../src/pinnedCheckpoints.js');
+
+    function makeSigner() {
+        const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+        const spki = publicKey.export({ format: 'der', type: 'spki' });
+        return { privateKey, pubkeyHex: spki.subarray(spki.length - 32).toString('hex') };
+    }
+    function sign(privateKey, canonical) {
+        return crypto.sign(null, Buffer.from(canonical, 'utf8'), privateKey).toString('hex');
+    }
+    // A signed checkpoint at the balance-proof height (100) for `signer`, with the
+    // given committed state_root, plus the qualifying validator set entry.
+    function signedBalanceCp(stateRoot, signer) {
+        const cp = { chain: CHAIN, network: NET, block_index: 100, block_hash: 'c0'.repeat(32),
+            ledger_hash: 'a1'.repeat(32), actions_hash: 'b2'.repeat(32), contract_hash: 'c3'.repeat(32),
+            checkpoint_seq: 0, snapshot_block: 100, state_root: stateRoot, state_root_version: 1,
+            block_merkle_root: 'e5'.repeat(32), block_merkle_version: 1, validator_signatures: [] };
+        cp.validator_signatures = [{ pubkey: signer.pubkeyHex, sig: sign(signer.privateKey, checkpoint.canonicalCheckpoint(cp)) }];
+        return cp;
+    }
+    function validatorOf(signer) {
+        return [{ pubkey: signer.pubkeyHex, source: signer.pubkeyHex, weight: '100' }];
+    }
+    // Records every URL it is asked for, so a test can assert the /verify endpoint
+    // (the explorer-trusted validator-set source) was or was not consulted.
+    function spyFetch(map) {
+        const urls = [];
+        const f = async (url) => {
+            urls.push(url);
+            for (const [needle, body] of map) if (url.includes(needle)) return { ok: true, status: 200, json: async () => body };
+            return { ok: false, status: 404, json: async () => ({}) };
+        };
+        f.saw = (needle) => urls.some((u) => u.includes(needle));
+        return f;
+    }
+
+    it('the shipped registry is INERT: every real coin pins null (convenience path stands)', function () {
+        for (const coin of ['BTC', 'TBTC', 'RBTC', 'LTC', 'TLTC', 'RLTC', 'DOGE', 'TDOGE', 'RDOGE']) {
+            assert.strictEqual(pinned.getPinnedCheckpoint(coin), null, coin);
+            assert.strictEqual(pinned.getPinnedValidators(coin), null, coin);
+        }
+        assert.strictEqual(pinned.getPinnedCheckpoint(null), null);
+    });
+
+    it('verifyBalance uses the PINNED set and never fetches the explorer /verify endpoint', async function () {
+        const { proof, stateRoot } = buildBalanceProof(ADDR_A, TICK, '42');
+        const s = makeSigner();
+        const cp = signedBalanceCp(stateRoot, s);
+        const f = spyFetch([['/api/proof/balance/', { proof, checkpoint: cp }]]);   // NOTE: no /verify mapping
+        const r = await light.verifyBalance({ explorerUrl: 'https://x', coin: COIN, address: ADDR_A,
+            tick: TICK, atHeight: 100, pinnedResolver: () => ({ validators: validatorOf(s) }), fetchImpl: f });
+        assert.strictEqual(r.verified, true, r.reason);
+        assert.strictEqual(r.amount, M.canonicalAmount('42'));
+        assert.strictEqual(f.saw('/verify'), false, 'must not consult the explorer validator-set endpoint when pinned');
+        assert.strictEqual(f.saw('/api/proof/balance/'), true);
+    });
+
+    it('with NO pinned entry, verifyBalance falls back to the explorer /verify set (convenience path)', async function () {
+        const { proof, stateRoot } = buildBalanceProof(ADDR_A, TICK, '42');
+        const s = makeSigner();
+        const cp = signedBalanceCp(stateRoot, s);
+        const f = spyFetch([['/api/proof/balance/', { proof, checkpoint: cp }], ['/verify', { validators: validatorOf(s) }]]);
+        const r = await light.verifyBalance({ explorerUrl: 'https://x', coin: COIN, address: ADDR_A,
+            tick: TICK, atHeight: 100, pinnedResolver: () => null, fetchImpl: f });
+        assert.strictEqual(r.verified, true, r.reason);
+        assert.strictEqual(f.saw('/verify'), true, 'must consult the explorer set when nothing is pinned');
+    });
+
+    it('a checkpoint NOT signed by the pinned set fails quorum (no silent fallback to the explorer)', async function () {
+        const { proof, stateRoot } = buildBalanceProof(ADDR_A, TICK, '42');
+        const pinnedSigner = makeSigner(), rogue = makeSigner();
+        const cp = signedBalanceCp(stateRoot, rogue);                 // signed by a non-pinned key
+        const f = spyFetch([['/api/proof/balance/', { proof, checkpoint: cp }], ['/verify', { validators: validatorOf(rogue) }]]);
+        const r = await light.verifyBalance({ explorerUrl: 'https://x', coin: COIN, address: ADDR_A,
+            tick: TICK, atHeight: 100, pinnedResolver: () => ({ validators: validatorOf(pinnedSigner) }), fetchImpl: f });
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'CHECKPOINT_QUORUM_FAILED');
+        assert.strictEqual(f.saw('/verify'), false, 'pinned set is authoritative; it must not fall back to the explorer set');
+    });
+
+    it('verifyAction also uses the pinned set and skips /verify', async function () {
+        const { proof, blockMerkleRoot } = buildActionProof();        // height 200, action_index 11
+        const s = makeSigner();
+        const cp = { chain: CHAIN, network: NET, block_index: 200, block_hash: 'c0'.repeat(32),
+            ledger_hash: 'a1'.repeat(32), actions_hash: 'b2'.repeat(32), contract_hash: 'c3'.repeat(32),
+            checkpoint_seq: 0, snapshot_block: 200, state_root: 'd4'.repeat(32), state_root_version: 1,
+            block_merkle_root: blockMerkleRoot, block_merkle_version: 1, validator_signatures: [] };
+        cp.validator_signatures = [{ pubkey: s.pubkeyHex, sig: sign(s.privateKey, checkpoint.canonicalCheckpoint(cp)) }];
+        const f = spyFetch([['/api/proof/action/', { proof, checkpoint: cp }]]);
+        const r = await light.verifyAction({ explorerUrl: 'https://x', coin: COIN, actionIndex: 11,
+            pinnedResolver: () => ({ validators: validatorOf(s) }), fetchImpl: f });
+        assert.strictEqual(r.verified, true, r.reason);
+        assert.strictEqual(f.saw('/verify'), false);
+    });
+});
