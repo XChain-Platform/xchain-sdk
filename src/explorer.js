@@ -105,6 +105,11 @@ class ExplorerClient {
         if (opts.tick !== undefined)        params.tick = opts.tick;
         if (opts.txid !== undefined)        params.txid = opts.txid;
         if (opts.blockIndex !== undefined)  params.blockIndex = opts.blockIndex;
+        // SPV proof / checkpoint-range selectors (proof/balance + proof/validator-set
+        // take ?height=, checkpoints/range takes ?from=&to=).
+        if (opts.from !== undefined)        params.from = opts.from;
+        if (opts.to !== undefined)          params.to = opts.to;
+        if (opts.height !== undefined)      params.height = opts.height;
         return params;
     }
 
@@ -575,6 +580,13 @@ class ExplorerClient {
         return this._get('/contract_unstakes', opts);
     }
 
+    // Contract-targeted delegations (DELEGATE v1), type ∈ {block, address, contract}.
+    async getContractDelegations(query, type, opts = {}) {
+        if (query)
+            return this._get('/contract_delegations/' + query + '/' + type, opts);
+        return this._get('/contract_delegations', opts);
+    }
+
     // External Attestation Framework rows (ATTEST v0 requests + v1/v2
     // responses from the `attests` table), type ∈ {address, block, contract}.
     async getAttestations(query, type, opts = {}) {
@@ -604,6 +616,86 @@ class ExplorerClient {
     // until the call is relayed/executed/delivered).
     async getXcall(callId) {
         return this._get('/xcall/' + callId);
+    }
+
+    // Controller-bound token policy rows (programmable policy layer; read-only, no query).
+    async getControllers(opts = {}) {
+        return this._get('/controllers', opts);
+    }
+
+    // DEPLOY v4 carrier chunks (chunked-DEPLOY reassembly; read-only, no query).
+    async getDeployChunks(opts = {}) {
+        return this._get('/deploy_chunks', opts);
+    }
+
+    // Full-node possession-proof verdicts (NODEPROOF v0), type ∈ {block, epoch, pubkey, address}.
+    async getFullNodeVerifications(query, type, opts = {}) {
+        if (query)
+            return this._get('/full_node_verifications/' + query + '/' + type, opts);
+        return this._get('/full_node_verifications', opts);
+    }
+
+    // Cross-chain settlement match rows (XCALL/DEX mirrors), type ∈ {match, block, status}.
+    async getCrossChainMatches(query, type, opts = {}) {
+        if (query)
+            return this._get('/cross_chain_matches/' + query + '/' + type, opts);
+        return this._get('/cross_chain_matches', opts);
+    }
+
+    // Cross-chain settlement rows (the settle leg of a match), type ∈ {match, block}.
+    async getCrossChainSettlements(query, type, opts = {}) {
+        if (query)
+            return this._get('/cross_chain_settlements/' + query + '/' + type, opts);
+        return this._get('/cross_chain_settlements', opts);
+    }
+
+    // ANCHOR checkpoint-anchor rows, type ∈ {block, chain, network, status}.
+    async getAnchors(query, type, opts = {}) {
+        if (query)
+            return this._get('/anchors/' + query + '/' + type, opts);
+        return this._get('/anchors', opts);
+    }
+
+    /*
+     *  Light-client (SPV) checkpoint + proof methods
+     *  The typed, pooled, retry-aware path to the explorer's state-checkpoint
+     *  verification surface (SPV spec §4/§5/§7/§8).
+     */
+
+    // Latest quorum-signed state checkpoints for this coin's chain. opts.limit caps the list.
+    async getCheckpoints(opts = {}) {
+        return this._get('/checkpoints', opts);
+    }
+
+    // Forward-following checkpoint range [from, to] (SPV §8.1). from/to are block heights.
+    async getCheckpointRange(from, to, opts = {}) {
+        return this._get('/checkpoints/range', Object.assign({ from, to }, opts));
+    }
+
+    // Re-fetch the checkpoint at blockIndex with its validator set for LOCAL re-verification.
+    async getCheckpointVerify(blockIndex) {
+        return this._get('/checkpoint/' + blockIndex + '/verify');
+    }
+
+    // Merkle inclusion proof for an address/tick balance against stakes/ledger root
+    // (SPV §4.4). opts.height pins the checkpoint snapshot height.
+    async getBalanceProof(address, tick, opts = {}) {
+        return this._get('/proof/balance/' + address + '/' + tick, opts);
+    }
+
+    // Merkle inclusion proof for an action by index (SPV §5).
+    async getActionProof(actionIndex) {
+        return this._get('/proof/action/' + actionIndex);
+    }
+
+    // Validator-set (stakes_root) proof (SPV §7.2; BTC-only). opts.height pins the snapshot.
+    async getValidatorSetProof(opts = {}) {
+        return this._get('/proof/validator-set', opts);
+    }
+
+    // Contract-state inclusion proof for (contractIndex, key) (SPV §8.1).
+    async getContractStateProof(contractIndex, key) {
+        return this._get('/proof/contract-state/' + contractIndex + '/' + key);
     }
 
 

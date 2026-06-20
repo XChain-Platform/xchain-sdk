@@ -205,6 +205,61 @@ describe('ExplorerClient', function () {
             expect(result.request_status).to.equal('completed');
             expect(result.execution.result_status).to.equal('ok');
         });
+
+        // Newly-wrapped explorer entity routes (server-ahead-of-client drift fix).
+        it('getControllers hits /{COIN}/api/controllers', async function () {
+            nock(BASE).get('/BTC/api/controllers').reply(200, { data: [] });
+            expect(await client.getControllers()).to.have.property('data');
+        });
+
+        it('getContractDelegations hits /{COIN}/api/contract_delegations/{query}/{type}', async function () {
+            nock(BASE).get('/BTC/api/contract_delegations/5/contract').reply(200, { data: [{ id: 1 }] });
+            let r = await client.getContractDelegations('5', 'contract');
+            expect(r.data[0].id).to.equal(1);
+        });
+
+        it('getCrossChainSettlements bare hits /{COIN}/api/cross_chain_settlements', async function () {
+            nock(BASE).get('/BTC/api/cross_chain_settlements').reply(200, { data: [] });
+            expect(await client.getCrossChainSettlements()).to.have.property('data');
+        });
+
+        it('getAnchors hits /{COIN}/api/anchors/{query}/{type}', async function () {
+            nock(BASE).get('/BTC/api/anchors/regtest/network').reply(200, { data: [{ chain: 'BTC' }] });
+            let r = await client.getAnchors('regtest', 'network');
+            expect(r.data[0].chain).to.equal('BTC');
+        });
+
+        // Newly-wrapped SPV checkpoint + proof routes.
+        it('getCheckpoints hits /{COIN}/api/checkpoints', async function () {
+            nock(BASE).get('/BTC/api/checkpoints').reply(200, { checkpoints: [], count: 0 });
+            expect(await client.getCheckpoints()).to.have.property('count', 0);
+        });
+
+        it('getCheckpointRange passes ?from=&to=', async function () {
+            nock(BASE).get('/BTC/api/checkpoints/range').query({ from: '100', to: '200' }).reply(200, { checkpoints: [] });
+            expect(await client.getCheckpointRange(100, 200)).to.have.property('checkpoints');
+        });
+
+        it('getBalanceProof passes ?height= and the address/tick path', async function () {
+            nock(BASE).get('/BTC/api/proof/balance/addr1/MYTOKEN').query({ height: '500' }).reply(200, { proof: [] });
+            expect(await client.getBalanceProof('addr1', 'MYTOKEN', { height: 500 })).to.have.property('proof');
+        });
+
+        it('getActionProof hits /{COIN}/api/proof/action/{actionIndex}', async function () {
+            nock(BASE).get('/BTC/api/proof/action/42').reply(200, { proof: [] });
+            expect(await client.getActionProof(42)).to.have.property('proof');
+        });
+
+        it('getContractStateProof hits /{COIN}/api/proof/contract-state/{contractIndex}/{key}', async function () {
+            nock(BASE).get('/BTC/api/proof/contract-state/7/balances').reply(200, { code: 'EMPTY' });
+            expect(await client.getContractStateProof(7, 'balances')).to.have.property('code');
+        });
+
+        it('getCheckpointVerify hits /{COIN}/api/checkpoint/{blockIndex}/verify', async function () {
+            nock(BASE).get('/BTC/api/checkpoint/494/verify').reply(200, { checkpoint: { block_index: 494 }, validators: [] });
+            let r = await client.getCheckpointVerify(494);
+            expect(r.checkpoint.block_index).to.equal(494);
+        });
     });
 
     /*
@@ -1026,8 +1081,12 @@ describe('ExplorerClient', function () {
             'getSwapCancels', 'getSwapEdits', 'getSwapExpires', 'getSweeps',
             'getPrices', 'getPriceSnapshots',
             'getStakes', 'getDelegations', 'getValidators', 'getValidatorRewards',
-            'getContractStakes', 'getContractUnstakes', 'getSlashEvents',
+            'getContractStakes', 'getContractUnstakes', 'getContractDelegations', 'getSlashEvents',
             'getXcalls', 'getXcall',
+            'getControllers', 'getDeployChunks', 'getFullNodeVerifications',
+            'getCrossChainMatches', 'getCrossChainSettlements', 'getAnchors',
+            'getCheckpoints', 'getCheckpointRange', 'getCheckpointVerify',
+            'getBalanceProof', 'getActionProof', 'getValidatorSetProof', 'getContractStateProof',
             'getMarkets', 'getMarket', 'getMarketHistory', 'getMarketOrders', 'getOrderbook',
             'getStatus', 'getMempool', 'getNetwork', 'search'
         ];
@@ -1037,10 +1096,10 @@ describe('ExplorerClient', function () {
             });
         }
 
-        it('has 86 public methods', function () {
+        it('has 100 public methods', function () {
             let publicMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(publicMethods).to.have.length(86);
+            expect(publicMethods).to.have.length(100);
         });
     });
 

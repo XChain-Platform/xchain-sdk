@@ -186,7 +186,7 @@ export interface EncoderOptions {
     dust?: number;
     /** Include unconfirmed UTXOs (default: true on the encoder side) */
     unconfirmed?: boolean;
-    /** Compressed public key — required for MULTISIGN encoding */
+    /** Compressed public key, required for MULTISIGN encoding */
     compressedPubKey?: string;
     /** Additional transaction outputs beyond the protocol output */
     customOutputs?: CustomOutput[];
@@ -266,6 +266,12 @@ export interface QueryOptions {
     start?: number;
     /** DataTables-style page length */
     length?: number;
+    /** SPV proof snapshot height (proof/balance, proof/validator-set) */
+    height?: number | string;
+    /** SPV checkpoint-range lower bound (checkpoints/range) */
+    from?: number | string;
+    /** SPV checkpoint-range upper bound (checkpoints/range) */
+    to?: number | string;
 }
 
 
@@ -273,7 +279,7 @@ export interface QueryOptions {
  *  Action-specific parameter interfaces
  */
 
-/** Base type — all action params are open records */
+/** Base type: all action params are open records */
 export type ActionParams = Record<string, any>;
 
 export interface SendParams extends ActionParams {
@@ -546,7 +552,7 @@ export interface ContractLintFinding {
 }
 
 /**
- * Result of sdk.validateContract — advisory. The isolated-vm V8 syntax compile
+ * Result of sdk.validateContract, advisory. The isolated-vm V8 syntax compile
  * runs only at deploy/CLI, so `authoritative` is always false; a clean result
  * means the contract passes every acorn-coverable deploy rule.
  */
@@ -615,7 +621,7 @@ export declare class BatchBuilder {
     /** Add an action by name and params */
     add(action: string, params?: ActionParams): this;
 
-    // Convenience methods — mirror XChainSDK convenience methods minus FILE and BATCH
+    // Convenience methods, mirror XChainSDK convenience methods minus FILE and BATCH
     send(params: SendParams | ActionParams): this;
     issue(params: IssueParams | ActionParams): this;
     mint(params: MintParams | ActionParams): this;
@@ -677,7 +683,7 @@ export declare class ContractUtils {
 
 
 /*
- *  NFT helpers — pure builders for the NFT pattern (ISSUE with DECIMALS=0 +
+ *  NFT helpers: pure builders for the NFT pattern (ISSUE with DECIMALS=0 +
  *  LOCK_MAX_SUPPLY=1). No network. Spec: protocol/NFT_Standard.md
  */
 
@@ -695,7 +701,7 @@ export interface NftAttachContentParams {
     issueActionIndex: string | number;
     memo?: string;
 }
-// Shape for the sdk.attachContent() workflow (uploads the FILE, then LINKs it) — distinct
+// Shape for the sdk.attachContent() workflow (uploads the FILE, then LINKs it), distinct
 // from NftAttachContentParams (the LINK param builder, which takes an existing file index).
 export interface NftAttachContentOpts {
     coin?: string;
@@ -719,7 +725,7 @@ export declare class NftHelpers {
 
 
 /*
- *  Project registry helpers — pure builders for owner-attested official-token
+ *  Project registry helpers: pure builders for owner-attested official-token
  *  rosters (TICK-type LIST + LINK to the project's ISSUE). No network.
  *  Spec: protocol/Project_Registry.md
  */
@@ -756,7 +762,7 @@ export declare class ProjectHelpers {
 
 
 /*
- *  Controller (programmable-policy) helpers — pure builders for the bind/unbind
+ *  Controller (programmable-policy) helpers: pure builders for the bind/unbind
  *  wire actions (ISSUE v6 for a token, ADDRESS v1 for an account) that route a
  *  native action class to a guard contract. No network.
  *  Spec: protocol/Controller_Bound_Tokens.md
@@ -803,7 +809,7 @@ export declare class ControllerHelpers {
 
 
 /*
- *  AttestationHelpers — pure builders for External Attestation Framework
+ *  AttestationHelpers: pure builders for External Attestation Framework
  *  payloads (used inside contract source; not submitted by the SDK directly).
  *  Spec: protocol/External_Attestation_Framework.md
  */
@@ -845,7 +851,7 @@ export declare const AttestationHelpers: {
 
 
 /*
- *  GatedFileUtils — AES-256-GCM encryption / key-handoff (de)serialization
+ *  GatedFileUtils: AES-256-GCM encryption / key-handoff (de)serialization
  *  for FILE v1 token-gated content.
  *  Spec: protocol/TOKEN_GATED_CONTENT.md
  */
@@ -853,7 +859,7 @@ export declare const AttestationHelpers: {
 export interface GenerateKeyResult {
     /** 32-byte symmetric key */
     key: Buffer;
-    /** hex sha256(key) — matches the FILE v1 KEY_HASH field */
+    /** hex sha256(key), matches the FILE v1 KEY_HASH field */
     keyHash: string;
 }
 
@@ -915,7 +921,7 @@ declare class GatedFileUtils {
 
 
 /*
- *  MuSig2 — BIP327 key aggregation, nonce generation, and Schnorr
+ *  MuSig2: BIP327 key aggregation, nonce generation, and Schnorr
  *  multi-signature primitives.
  */
 
@@ -931,7 +937,7 @@ export interface MuSig2KeyGenContext {
 export interface MuSig2GenerateNonceParams {
     /** Our 33-byte compressed public key */
     publicKey: Uint8Array;
-    /** Optional secret key (32 bytes) — improves nonce randomness */
+    /** Optional secret key (32 bytes), improves nonce randomness */
     secretKey?: Uint8Array;
     /** 32 bytes of session randomness; library uses secure random if omitted */
     sessionId?: Uint8Array;
@@ -1013,7 +1019,7 @@ export declare class MuSig2 {
 
 
 /*
- *  chunkHelper — chunked DEPLOY utilities
+ *  chunkHelper: chunked DEPLOY utilities
  *
  *  planDeploy() decides single-shot vs chunked and produces deterministic
  *  base64 slices + SHA-256 hash for the DEPLOY v4 carrier / v2/v3 assembler flow.
@@ -1029,7 +1035,7 @@ export interface DeployPlanSingle {
 export interface DeployPlanChunked {
     codeHash: string;
     single: false;
-    /** Ordered base64 slices — submit each as a DEPLOY v4 carrier action */
+    /** Ordered base64 slices, submit each as a DEPLOY v4 carrier action */
     parts: string[];
     totalChunks: number;
 }
@@ -1193,7 +1199,7 @@ export declare class XChainSDK {
 
     // Contract authoring (synchronous, browser-safe, no network)
     /**
-     * Pre-flight lint of raw contract source. Advisory — runs every acorn-coverable
+     * Pre-flight lint of raw contract source. Advisory, runs every acorn-coverable
      * deploy rule; the isolated-vm V8 syntax compile runs only at deploy/CLI, so
      * `authoritative` is always false.
      */
@@ -1207,7 +1213,7 @@ export declare class XChainSDK {
     session(wif: string, opts?: WalletSessionOpts): WalletSession;
 
     /**
-     * Create a policy-enforced agent session — a WalletSession with a
+     * Create a policy-enforced agent session, a WalletSession with a
      * declarative spending policy (fail-closed). Ideal for handing a key
      * to an automated agent with a bounded blast radius.
      */
@@ -1387,6 +1393,96 @@ export declare class XChainSDK {
 
 
     /*
+     *  Explorer: staking / validator / capability query methods
+     */
+
+    /** Capability stakes (STAKE v1/v2), type in {block, address, source}. */
+    getStakes(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    /** Capability delegations (DELEGATE v0), type in {block, address, source}. */
+    getDelegations(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    /** Active validator set. */
+    getValidators(opts?: QueryOptions): Promise<any>;
+    /** Validator reward rows, type in {address, source}. */
+    getValidatorRewards(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    /** Contract-targeted stakes (STAKE v3), type in {block, address, contract}. */
+    getContractStakes(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    /** Contract-targeted unstakes (UNSTAKE v1), type in {block, address, contract}. */
+    getContractUnstakes(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    /** Contract-targeted delegations (DELEGATE v1), type in {block, address, contract}. */
+    getContractDelegations(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    /** Slash events emitted by contracts, type in {block, address, contract}. */
+    getSlashEvents(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    /** Full-node possession-proof verdicts (NODEPROOF v0), type in {block, epoch, pubkey, address}. */
+    getFullNodeVerifications(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    /** Controller-bound token policy rows (programmable policy layer). */
+    getControllers(opts?: QueryOptions): Promise<any>;
+
+
+    /*
+     *  Explorer: attestation / cross-chain / coinpay / fee query methods
+     */
+
+    /** External Attestation Framework rows, type in {block, address, contract}. */
+    getAttestations(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    /** XCALL source-chain request rows, type in {block, contract, status}. */
+    getXcalls(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    /** Full lifecycle of one cross-chain call by call_id. */
+    getXcall(callId: string): Promise<any>;
+    /** Cross-chain settlement match rows, type in {match, block, status}. */
+    getCrossChainMatches(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    /** Cross-chain settlement rows (settle leg of a match), type in {match, block}. */
+    getCrossChainSettlements(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    /** ANCHOR checkpoint-anchor rows, type in {block, chain, network, status}. */
+    getAnchors(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    /** DEPLOY v4 carrier chunks. */
+    getDeployChunks(opts?: QueryOptions): Promise<any>;
+    /** Swap order-match rows, type in {match, block} (defaults to block). */
+    getSwapMatches(query: string, type?: string, opts?: QueryOptions): Promise<any>;
+    /** COINPay native-coin payment rows, type in {block, address, source}. */
+    getCoinpays(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    /** COINPay expiry rows, type in {block, address, source}. */
+    getCoinpayExpires(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    /** COINPay outstanding-obligation rows, type in {block, address, source}. */
+    getCoinpayObligations(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    /** Native-coin fee pre-flight for one action (proxies the indexer feequote). */
+    getFeeQuote(opts: { action: string; params?: ActionParams; source?: string; feeOutputSats?: number }): Promise<any>;
+    /** Native-coin fee schedule plus current oracle prices. */
+    getFeeSchedule(): Promise<any>;
+
+
+    /*
+     *  Explorer: gated-FILE access
+     */
+
+    /** Raw bytes of a gated FILE action (token-gated content). */
+    getGatedFileRaw(actionIndex: number | string, coin?: string): Promise<any>;
+    /** Build the raw-content URL for a gated FILE action (no request issued). */
+    fileRawUrl(actionIndex: number | string, coin?: string): string;
+
+
+    /*
+     *  Explorer: light-client (SPV) checkpoint + proof methods
+     */
+
+    /** Latest quorum-signed state checkpoints for this coin's chain (opts.limit caps the list). */
+    getCheckpoints(opts?: QueryOptions): Promise<any>;
+    /** Forward-following checkpoint range [from, to] of block heights (SPV spec). */
+    getCheckpointRange(from: number | string, to: number | string, opts?: QueryOptions): Promise<any>;
+    /** Re-fetch the checkpoint at a height with its validator set for LOCAL re-verification. */
+    getCheckpointVerify(blockIndex: number | string): Promise<any>;
+    /** Merkle inclusion proof for an address/tick balance (opts.height pins the snapshot). */
+    getBalanceProof(address: string, tick: string, opts?: QueryOptions): Promise<any>;
+    /** Merkle inclusion proof for an action by index. */
+    getActionProof(actionIndex: number | string): Promise<any>;
+    /** Validator-set (stakes_root) proof, BTC-only (opts.height pins the snapshot). */
+    getValidatorSetProof(opts?: QueryOptions): Promise<any>;
+    /** Contract-state inclusion proof for (contractIndex, key). */
+    getContractStateProof(contractIndex: number | string, key: string): Promise<any>;
+    /** Fetch a checkpoint via the pooled client and re-verify it locally (Ed25519). */
+    verifyCheckpoint(blockIndex: number | string): Promise<any>;
+
+
+    /*
      *  Explorer: Market methods
      */
 
@@ -1425,14 +1521,14 @@ export declare class XChainSDK {
      * Get explorer service status and indexer sync position.
      *
      * Resolves to an object with `supported` and `available` coin maps plus
-     * `last_block` and `last_block_time` — per-coin maps (keyed by ticker) of
+     * `last_block` and `last_block_time`, per-coin maps (keyed by ticker) of
      * the highest block index processed by the indexer and its block_time.
      *
      * Also includes `decoder_tip` and `decoder_lag_blocks` per-coin maps:
      * `decoder_tip` is the decoder's highest *processed* block and
      * `decoder_lag_blocks` is `decoder_tip - last_block` (>= 0), so a stalled
      * indexer is detectable from this single call. These measure the
-     * indexer→decoder slice only — NOT the coin node's chain tip; the explorer
+     * indexer→decoder slice only, NOT the coin node's chain tip; the explorer
      * never talks to a coin node, so the chain→decoder gap is exposed by the
      * decoder's own `health()` RPC, not here. Both are `null` for a coin when the
      * decoder tip is unavailable.
@@ -1541,7 +1637,7 @@ export declare class XChainSDK {
     /** Issue an edition of N identical indivisible prints (pass `mint` for a fair-mint window) */
     issueNftEdition(wif: string, params: NftEditionParams, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
 
-    /** Issue a distinct collection item — a child TICK `parent.name` as a 1-of-1 */
+    /** Issue a distinct collection item, a child TICK `parent.name` as a 1-of-1 */
     issueCollectionItem(wif: string, params: NftCollectionItemParams, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
 
     /** Attach content to a token: upload a FILE then LINK it (owner-validated by the indexer) */
@@ -1733,7 +1829,7 @@ export declare class SDKAuthError extends SDKError {}
 export declare class SDKMessagingError extends SDKError {}
 export declare class SDKActionError extends SDKError {}
 export declare class SDKMuSigError extends SDKError {}
-// Internal: thrown by GatedFileUtils but not re-exported from index.js — declared (not exported) for @throws references.
+// Internal: thrown by GatedFileUtils but not re-exported from index.js, declared (not exported) for @throws references.
 declare class SDKGatedFileError extends SDKError {}
 export declare class SDKPolicyError extends SDKError {}
 export declare class SDKX402Error extends SDKError {}
@@ -1900,11 +1996,11 @@ export declare class WalletSession {
     collect(params: ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
 
     // Contract-targeted staking (VERSION forced to prevent accidental capability-staking)
-    /** STAKE V3 — stake to a specific deployed contract (forces VERSION=3) */
+    /** STAKE V3: stake to a specific deployed contract (forces VERSION=3) */
     stakeToContract(params: ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
-    /** UNSTAKE V1 — unstake from a specific deployed contract (forces VERSION=1) */
+    /** UNSTAKE V1: unstake from a specific deployed contract (forces VERSION=1) */
     unstakeFromContract(params: ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
-    /** DELEGATE V1 — rotate signing key for a specific deployed contract (forces VERSION=1) */
+    /** DELEGATE V1: rotate signing key for a specific deployed contract (forces VERSION=1) */
     delegateForContract(params: ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
 
     deploy(params: DeployParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
@@ -1930,7 +2026,7 @@ export declare class WalletSession {
 
 
 /*
- *  AgentSession class — WalletSession with a declarative spending policy
+ *  AgentSession class, WalletSession with a declarative spending policy
  *
  *  Wraps WalletSession with a policy enforced at submit(). Fail-closed:
  *  no allowedActions means nothing is allowed. State persists across
@@ -1949,7 +2045,7 @@ export interface AgentSessionMaxPerWindow {
 export interface AgentSessionConfirmAbove {
     /** Per-tick threshold above which the handler must approve; use '*' as catch-all */
     perTick?: Record<string, string>;
-    /** Async approval callback — return true to allow, false to deny */
+    /** Async approval callback, return true to allow, false to deny */
     handler: (ctx: {
         action: string;
         tick?: string;
@@ -2011,7 +2107,7 @@ export declare class AgentSession extends WalletSession {
 
 
 /*
- *  X402 — HTTP 402 "Payment Required" flow settled in XChain tokens
+ *  X402: HTTP 402 "Payment Required" flow settled in XChain tokens
  *
  *  Three payment schemes:
  *    xchain-send       pay-per-call SEND with MEMO = invoice nonce

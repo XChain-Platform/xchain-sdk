@@ -1110,8 +1110,79 @@ class XChainSDK {
         return this._requireExplorer().getContractUnstakes(query, type, opts);
     }
 
+    async getContractDelegations(query, type, opts) {
+        return this._requireExplorer().getContractDelegations(query, type, opts);
+    }
+
     async getSlashEvents(query, type, opts) {
         return this._requireExplorer().getSlashEvents(query, type, opts);
+    }
+
+    async getControllers(opts) {
+        return this._requireExplorer().getControllers(opts);
+    }
+
+    async getDeployChunks(opts) {
+        return this._requireExplorer().getDeployChunks(opts);
+    }
+
+    async getFullNodeVerifications(query, type, opts) {
+        return this._requireExplorer().getFullNodeVerifications(query, type, opts);
+    }
+
+    async getCrossChainMatches(query, type, opts) {
+        return this._requireExplorer().getCrossChainMatches(query, type, opts);
+    }
+
+    async getCrossChainSettlements(query, type, opts) {
+        return this._requireExplorer().getCrossChainSettlements(query, type, opts);
+    }
+
+    async getAnchors(query, type, opts) {
+        return this._requireExplorer().getAnchors(query, type, opts);
+    }
+
+    /*
+     *  Explorer: Light-client (SPV) checkpoint + proof methods
+     */
+
+    async getCheckpoints(opts) {
+        return this._requireExplorer().getCheckpoints(opts);
+    }
+
+    async getCheckpointRange(from, to, opts) {
+        return this._requireExplorer().getCheckpointRange(from, to, opts);
+    }
+
+    async getCheckpointVerify(blockIndex) {
+        return this._requireExplorer().getCheckpointVerify(blockIndex);
+    }
+
+    async getBalanceProof(address, tick, opts) {
+        return this._requireExplorer().getBalanceProof(address, tick, opts);
+    }
+
+    async getActionProof(actionIndex) {
+        return this._requireExplorer().getActionProof(actionIndex);
+    }
+
+    async getValidatorSetProof(opts) {
+        return this._requireExplorer().getValidatorSetProof(opts);
+    }
+
+    async getContractStateProof(contractIndex, key) {
+        return this._requireExplorer().getContractStateProof(contractIndex, key);
+    }
+
+    // Fetch the checkpoint at blockIndex through the pooled, retry-aware
+    // ExplorerClient (vs sdk.checkpoint.fetchAndVerifyCheckpoint's bare fetch),
+    // then re-verify it LOCALLY with Ed25519. The server's `verified` flag is
+    // ignored; only local crypto decides.
+    async verifyCheckpoint(blockIndex) {
+        let body = await this._requireExplorer().getCheckpointVerify(blockIndex);
+        if (!body || !body.checkpoint) throw new Error('verifyCheckpoint: no checkpoint in response');
+        let result = CheckpointVerifier.verifyCheckpoint(body.checkpoint, body.validators || []);
+        return Object.assign({ checkpoint: body.checkpoint, snapshotAvailable: !!body.snapshot_available }, result);
     }
 
 
