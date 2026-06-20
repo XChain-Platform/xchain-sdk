@@ -122,7 +122,6 @@ class Validator {
         this.config = config.getConfig();
     }
 
-    // Validate all fields for a given action
     // Returns array of error objects. Empty array = valid.
     validate(action, fields) {
         let errors = [];
@@ -156,7 +155,6 @@ class Validator {
             }
         }
 
-        // Validate individual field values
         for (let field in fields) {
             let value = fields[field];
             if (this._isEmpty(value)) continue;
@@ -165,14 +163,12 @@ class Validator {
             errors.push(...fieldErrors);
         }
 
-        // Action-specific cross-field validation
         let actionErrors = this._validateAction(action, fields);
         errors.push(...actionErrors);
 
         return errors;
     }
 
-    // Validate a single field value
     _validateField(action, field, value, allFields) {
         let errors = [];
 
@@ -497,7 +493,6 @@ class Validator {
         return errors;
     }
 
-    // Action-specific cross-field validation
     _validateAction(action, fields) {
         let errors = [];
 
@@ -732,7 +727,6 @@ class Validator {
         return errors;
     }
 
-    // Validate TICK name
     _validateTickName(value) {
         let errors = [];
         let name = String(value);
@@ -763,7 +757,6 @@ class Validator {
         return errors;
     }
 
-    // Validate text content (no pipe or semicolon)
     _validateTextContent(field, value) {
         let errors = [];
         let text = String(value);
@@ -774,17 +767,14 @@ class Validator {
         return errors;
     }
 
-    // Check if a value is null/undefined/empty
     _isEmpty(value) {
         return value === null || value === undefined || value === '';
     }
 
-    // Create a structured error object
     _error(code, message, details = {}) {
         return { code, message, details };
     }
 
-    // Convenience: validate and throw if errors found
     validateOrThrow(action, fields) {
         let errors = this.validate(action, fields);
         if (errors.length > 0) {

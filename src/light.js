@@ -70,8 +70,6 @@ function _hx(x){ return String(x == null ? '' : x).toLowerCase(); }
 // anchor is normally far deeper than this; callers SHOULD set their own policy.
 const DEFAULT_ANCHOR_MIN_DEPTH = 60;
 
-// ── Pure verifiers (no network; the heart of the light client) ────────────────
-
 // Verify a §4.4 BalanceProof binds to a TRUSTED state_root (one already proven to
 // be in a quorum-signed checkpoint). chain/network come from the trusted
 // checkpoint, never the proof. Returns { verified, amount, reason }.

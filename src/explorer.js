@@ -85,7 +85,6 @@ class ExplorerClient {
         this._buildClient();
     }
 
-    // Derive coin prefix from network string
     _deriveCoinPrefix(network) {
         if (!network) return 'BTC';
         let prefix = coinPrefix(network);
@@ -94,7 +93,6 @@ class ExplorerClient {
         return prefix;
     }
 
-    // Build query params string from options
     _buildParams(opts = {}) {
         let params = {};
         if (opts.page !== undefined)        params.page = opts.page;
@@ -113,7 +111,6 @@ class ExplorerClient {
         return params;
     }
 
-    // Make a GET request with retry and hooks
     async _get(path, opts = {}) {
         if (this._readyHook) await this._readyHook();
         let url = '/' + this.coin + '/api' + path;
@@ -153,7 +150,6 @@ class ExplorerClient {
         }
     }
 
-    // Handle HTTP errors
     _handleError(err, url) {
         if (err.response) {
             throw new SDKExplorerError(

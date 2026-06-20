@@ -46,9 +46,6 @@ const Point      = secp256k1.ProjectivePoint;
 const schnorrUtl = schnorr.utils;
 
 
-/*
- * Concatenate Uint8Arrays into one buffer (sha256 / taggedHash helpers)
- */
 function concat(...parts) {
     let total = 0;
     for (let p of parts) total += p.length;
@@ -69,7 +66,7 @@ function concat(...parts) {
  */
 const ecc = {
 
-    // --- Scalar ops and predicates from base_crypto ---
+    // Scalar ops and predicates from base_crypto
     scalarAdd:      baseCrypto.scalarAdd,
     scalarMultiply: baseCrypto.scalarMultiply,
     scalarNegate:   baseCrypto.scalarNegate,
@@ -82,7 +79,7 @@ const ecc = {
     pointX:         baseCrypto.pointX,
     hasEvenY:       baseCrypto.hasEvenY,
 
-    // --- Curve ops over @noble/curves/secp256k1 ---
+    // Curve ops over @noble/curves/secp256k1
 
     // P + t*G, tweaked public key addition
     pointAddTweak(p, t, compressed) {

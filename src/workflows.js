@@ -40,10 +40,8 @@ class Workflows {
     async issueAndDistribute(wif, issueParams, distributions, opts = {}) {
         let session = this.sdk.session(wif, opts);
 
-        // Step 1: Issue the token
         let issueResult = await session.issue(issueParams, {}, opts);
 
-        // Step 2: Send to each recipient
         let sends = [];
         for (let dist of distributions) {
             let sendResult = await session.send({
@@ -295,11 +293,6 @@ class Workflows {
         return session.dividend(dividendParams, {}, opts);
     }
 
-    // ── NFT recipes ─────────────────────────────────────────────────────────
-    // Thin submit-flows over the NFT pattern (ISSUE with DECIMALS=0 +
-    // LOCK_MAX_SUPPLY=1). The field bundle is built by sdk.nft.* so the rule
-    // lives in one place. Spec: protocol/NFT_Standard.md.
-
     // Issue a unique 1-of-1 NFT, fully minted to the issuer.
     //
     // wif    - issuer WIF
@@ -354,7 +347,6 @@ class Workflows {
     async attachContent(wif, params, opts = {}) {
         let session = this.sdk.session(wif, opts);
 
-        // Step 1: upload the FILE
         let fileResult = await session.file({
             name:  params.file.name,
             type:  params.file.type,
@@ -362,14 +354,12 @@ class Workflows {
             memo:  params.file.memo
         }, params.file.rawData !== undefined ? { rawData: params.file.rawData } : {}, opts);
 
-        // Resolve the FILE's action_index from the indexed result. The waiter resolves
-        // a TRANSACTION object ({ tx_hash, actions: [...] }) on the polling path and a
-        // single-action object on the WS path, so check both shapes.
+        // The waiter resolves a TRANSACTION object on the polling path and a single-action
+        // object on the WS path; _actionIndexOf handles both shapes.
         let fileActionIndex = this._actionIndexOf(fileResult.indexed);
         if (fileActionIndex === undefined || fileActionIndex === null)
             throw new Error('attachContent: FILE action_index unavailable; submit with waitForIndexer enabled');
 
-        // Step 2: LINK the FILE to the token's ISSUE (owner-validated by the indexer)
         let linkResult = await session.link(this.sdk.nft.attachContentParams({
             coin:             params.coin,
             fileActionIndex,
@@ -380,8 +370,6 @@ class Workflows {
         let out = { file: fileResult, link: linkResult };
         if (!params.tis) return out;
 
-        // Step 3 (optional): author the TIS document on-chain as a JSON FILE
-        // whose images[] data_ref points at the artwork upload from step 1.
         let { json } = this.sdk.nft.tisDocument({
             tick:             params.tis.tick,
             name:             params.tis.name,
@@ -399,8 +387,7 @@ class Workflows {
         if (tisActionIndex === undefined || tisActionIndex === null)
             throw new Error('attachContent: TIS FILE action_index unavailable; submit with waitForIndexer enabled');
 
-        // Step 4: point the token's DESCRIPTION at the on-chain document
-        // (ISSUE v1 edits description; owner-only at the indexer).
+        // ISSUE v1 edits description; owner-only at the indexer.
         let describeResult = await session.issue({
             version:     '1',
             tick:        params.tis.tick,
@@ -433,7 +420,6 @@ class Workflows {
     async setRoster(wif, params, opts = {}) {
         let session = this.sdk.session(wif, opts);
 
-        // Step 1: publish the roster LIST (new, or derived from an existing one)
         let listParams = params.edit
             ? this.sdk.project.rosterEditParams(params.edit)
             : this.sdk.project.rosterParams({ ticks: params.ticks });
@@ -443,7 +429,6 @@ class Workflows {
         if (listActionIndex === undefined || listActionIndex === null)
             throw new Error('setRoster: LIST action_index unavailable; submit with waitForIndexer enabled');
 
-        // Step 2: LINK the roster to the project's ISSUE (owner-validated)
         let linkResult = await session.link(this.sdk.project.attestRosterParams({
             coin:             params.coin,
             listActionIndex,

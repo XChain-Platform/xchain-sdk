@@ -93,10 +93,6 @@ class MessagingUtils {
             'Network not configured. Provide network in SDK options or pass it to this method.');
     }
 
-    // -------------------------------------------------------------------------
-    //  ECIES (Method 1): Address Communication
-    // -------------------------------------------------------------------------
-
     /**
      * Encrypt a message using ECIES for a recipient's public key.
      * Generates an ephemeral keypair per message.
@@ -123,13 +119,9 @@ class MessagingUtils {
         if (!ecc.isPoint(pubkeyBuf))
             throw new SDKMessagingError('INVALID_PUBKEY', 'Recipient public key is not a valid secp256k1 point.');
 
-        // Generate ephemeral keypair
         let ephemeral = ECPair.makeRandom({ compressed: true });
-
-        // Derive shared secret via ECDH + v1 HKDF (ECIES domain label)
         let sharedSecret = this._deriveEciesKey(ephemeral.privateKey, pubkeyBuf);
 
-        // Encrypt with AES-256-GCM
         let iv = crypto.randomBytes(IV_LEN);
         let cipher = crypto.createCipheriv('aes-256-gcm', sharedSecret, iv);
         let encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
@@ -168,11 +160,9 @@ class MessagingUtils {
             throw new SDKMessagingError('INVALID_WIF', `Failed to import WIF: ${err.message}`);
         }
 
-        // Unpack envelope (version-aware) and derive the matching ECIES key.
         let { iv, authTag, encrypted, sharedSecret } =
             this._unpackEcies(ciphertextBuf, keyPair.privateKey);
 
-        // Decrypt
         try {
             let decipher = crypto.createDecipheriv('aes-256-gcm', sharedSecret, iv);
             decipher.setAuthTag(authTag);
@@ -205,7 +195,6 @@ class MessagingUtils {
         if (pubkeyBuf.length !== 33 && pubkeyBuf.length !== 65)
             throw new SDKMessagingError('INVALID_PUBKEY', `Invalid public key length: ${pubkeyBuf.length}`);
 
-        // Validate curve point (same guard as eciesEncrypt).
         if (!ecc.isPoint(pubkeyBuf))
             throw new SDKMessagingError('INVALID_PUBKEY', 'Recipient public key is not a valid secp256k1 point.');
 
@@ -262,10 +251,6 @@ class MessagingUtils {
             throw new SDKMessagingError('DECRYPTION_FAILED', `ECIES decryption failed: ${err.message}`);
         }
     }
-
-    // -------------------------------------------------------------------------
-    //  ECDH (Method 2): Session Communication
-    // -------------------------------------------------------------------------
 
     /**
      * Generate a public key for ECDH key exchange (format 0/1 messages).
@@ -350,10 +335,6 @@ class MessagingUtils {
         return this._aesDecrypt(ciphertext, key);
     }
 
-    // -------------------------------------------------------------------------
-    //  AES (Method 3): Shared Secret Communication
-    // -------------------------------------------------------------------------
-
     /**
      * Encrypt a message with a pre-shared AES key.
      *
@@ -381,10 +362,6 @@ class MessagingUtils {
         return this._aesDecrypt(ciphertext, key);
     }
 
-    // -------------------------------------------------------------------------
-    //  Public Key Lookup
-    // -------------------------------------------------------------------------
-
     /**
      * Look up the public key for an address via the explorer API.
      *
@@ -403,10 +380,6 @@ class MessagingUtils {
         if (result && result.pubkey) return result.pubkey;
         return null;
     }
-
-    // -------------------------------------------------------------------------
-    //  High-Level Send
-    // -------------------------------------------------------------------------
 
     /**
      * Send a message to a destination address.
@@ -508,14 +481,12 @@ class MessagingUtils {
                 `Invalid encryption method: ${method}. Use 1 (ECIES), 2 (ECDH), 3 (AES), or null (plaintext).`);
         }
 
-        // Create the MESSAGE action and encode into PSBT
         let actionResult = await sdk.createAction({
             action: 'MESSAGE',
             params: actionParams,
             encoder: params.encoder
         });
 
-        // Sign and broadcast
         let signed = sdk.wallet.signPsbt(actionResult.psbt, params.wif);
         let broadcast = await sdk.wallet.broadcastTx(signed.txHex, sdk._requireEncoder());
 
@@ -524,10 +495,6 @@ class MessagingUtils {
             actionString: actionResult.actionString
         };
     }
-
-    // -------------------------------------------------------------------------
-    //  High-Level Receive / Read
-    // -------------------------------------------------------------------------
 
     /**
      * Fetch messages for an address, optionally decrypting them.
@@ -645,15 +612,10 @@ class MessagingUtils {
 
         await Promise.all(queries);
 
-        // Sort by block descending (newest first)
         allMessages.sort((a, b) => (b.block || 0) - (a.block || 0));
 
         return allMessages;
     }
-
-    // -------------------------------------------------------------------------
-    //  Internal helpers
-    // -------------------------------------------------------------------------
 
     // Compute the raw ECDH product (uniform input keying material for the KDF).
     _ecdhProduct(privateKey, publicKey) {
@@ -719,7 +681,6 @@ class MessagingUtils {
         return { version, iv, authTag, encrypted, sharedSecret };
     }
 
-    // AES-256-GCM encrypt (shared between ECDH session and AES methods)
     _aesEncrypt(plaintext, key) {
         let iv = crypto.randomBytes(IV_LEN);
         let cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
@@ -731,7 +692,6 @@ class MessagingUtils {
         return { ciphertext: ciphertext.toString('hex') };
     }
 
-    // AES-256-GCM decrypt
     _aesDecrypt(ciphertext, key) {
         if (!ciphertext)
             throw new SDKMessagingError('INVALID_CIPHERTEXT', 'Ciphertext is required.');
@@ -757,18 +717,15 @@ class MessagingUtils {
         }
     }
 
-    // Normalize a key to a 32-byte Buffer (hash if not already 32 bytes)
     _normalizeKey(key) {
         if (!key)
             throw new SDKMessagingError('INVALID_KEY', 'Encryption key is required.');
 
         let buf = this._toBuffer(key, 'key');
         if (buf.length === 32) return buf;
-        // Hash to 32 bytes if not already the right length
         return crypto.createHash('sha256').update(buf).digest();
     }
 
-    // Convert hex string or Buffer to Buffer
     _toBuffer(value, name) {
         if (Buffer.isBuffer(value)) return value;
         if (typeof value === 'string') return Buffer.from(value, 'hex');

@@ -18,7 +18,6 @@
  *
  ********************************************************************/
 
-// Load required libraries
 const config  = require('./config.js');
 const formats = require('./formats.js');
 const mathjs  = require('mathjs');
@@ -30,63 +29,42 @@ BigInt.prototype.toJSON = function(){
 
 class Utility {
 
-    // Handle constructing a class instance
     constructor(){
-        // Setup placeholders to keep track of addresses/tickers/transactions 
         this.addresses = {}; // this.addresses[address] = [tick, tick, tick];
         this.tickers   = [];
-
-        // Get indexer configuration
         this.config = config.getConfig();
     }
 
-    /*
-     *  List management functions
-     */
-
-    // Reset the addresses list
     resetAddressesList(){
         this.addresses = {};
     }
 
-    // Reset the tickers list
     resetTickersList(){
         this.tickers = [];
     }
 
-    // Reset all the lists
     resetLists(){
         this.resetAddressesList();
         this.resetTickersList();
     }
 
-    // Return list of addresses
-    // FORMAT : address = [tick, tick, tick]
     getAddressesList(){
         return this.addresses;
     }
 
-    // Return list of tickers
     getTickersList(){
         return this.tickers;
     }
 
-    /* 
-     * General utility functions
-     */
-
-    // Handle sleeping for a given number of milliseconds
     sleep(ms) {
         return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
-    // Throw an error and log to console
     throwError(error){
         console.error('throwError:', error);
         throw error;
     }
 
-    // Log an error to the error.log file
     logError(error, info){
         // let file  = '/XChainIndexer/error.log';
         // fs.appendFileSync(file, error);
@@ -95,13 +73,11 @@ class Utility {
         this.throwError(error);
     }
 
-    // Start a debug timer
     startTimer(){
         let now = Date.now();
         return now;
     }
 
-    // get a timer using a given name
     getTimer(timer){
         let now = Date.now();
         let ms  = now - timer;
@@ -112,7 +88,6 @@ class Utility {
         return niceString;
     }
 
-    // Log a timer using a given name (timeName : (timeString))
     logTimer(timer, timeName){
         var timeString = this.getTimer(timer);
         var niceString = (timeName!=null) ? timeName : 'Time';
@@ -121,18 +96,15 @@ class Utility {
         console.log(niceString);
     }
 
-    // Create nice human readable time string based on miliiseconds
     millisecondsToTimeString(ms){
         var milliseconds = Math.floor((ms % 1000) / 100),
             seconds      = Math.floor((ms / 1000) % 60),
             minutes      = Math.floor((ms / (1000 * 60)) % 60),
             hours        = Math.floor((ms / (1000 * 60 * 60)) % 24),
             days         = Math.floor((ms / (1000 * 60 * 60 * 24)) % 365);
-        // Display time in XX format
         hours   = (hours < 10)   ? "0" + hours : hours;
         minutes = (minutes < 10) ? "0" + minutes : minutes;
         seconds = (seconds < 10) ? "0" + seconds : seconds;
-        // Build out time string to nicely display time
         var str = '';
         if(days    > 0) str += days + 'd ';
         if(hours   > 0) str += hours + 'h ';
@@ -141,22 +113,18 @@ class Utility {
         return str;
     }
 
-    // Determine if a value is numeric
     isNumeric(value){
         return typeof value === 'bigint' || (!isNaN(parseFloat(value)) && isFinite(value));
     }
 
-    // Determine if value is floating point
     isFloat(value){
         return value === +value && value !== (value|0);
     }
 
-    // Determine if value is integer
     isInteger(value){
         return value === +value && value === (value|0);
     }
 
-    // Determine if value is null or undefined or empty
     isNull(value){
         return (value === null || value === undefined || value==='');
     }
@@ -174,13 +142,11 @@ class Utility {
         return mathjs.bignumber(str);
     }
 
-    // Handle returning a number to a given decimal point precision
     bcformat(num, decimals){
         let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
         return mathjs.format(this.bcnum(num),{notation: 'fixed', precision: d});
     }
 
-    // Handle subtracting 2 big numbers
     bcsub(numA, numB, decimals){
         let a = (!this.isNull(numA)) ? numA : 0;
         let b = (!this.isNull(numB)) ? numB : 0;
@@ -188,7 +154,6 @@ class Utility {
         return mathjs.format(mathjs.subtract(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d});
     }
 
-    // Handle adding 2 big numbers
     bcadd(numA, numB, decimals){
         let a = (!this.isNull(numA)) ? numA : 0;
         let b = (!this.isNull(numB)) ? numB : 0;
@@ -196,7 +161,6 @@ class Utility {
         return mathjs.format(mathjs.add(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d});
     }
 
-    // Handle multiplying 2 big numbers
     bcmul(numA, numB, decimals){
         let a = (!this.isNull(numA)) ? numA : 0;
         let b = (!this.isNull(numB)) ? numB : 0;
@@ -204,7 +168,6 @@ class Utility {
         return mathjs.format(mathjs.multiply(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d});
     }
 
-    // Handle dividing 2 big numbers
     bcdiv(numA, numB, decimals){
         let a = (!this.isNull(numA)) ? numA : 0;
         let b = (!this.isNull(numB)) ? numB : 0;
@@ -212,27 +175,19 @@ class Utility {
         return mathjs.format(mathjs.divide(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d});
     }
 
-    // Validate if a given value is considered valid
-    // @value = string or integer
-    // @valid = string or array of values
     isValidValue(value, valid){
         let valueType = typeof value,
             validType = typeof valid;
-        // Convert any numeric string values to integer value
         if(valueType=='string' && this.isNumeric(value))
             value = parseInt(value);
-        // Convert a valid string to an array
         if(validType=='string')
             valid = [valid];
-        // Only return true for valid values
         if(valid.indexOf(value)!=-1)
             return true;
         return false;
     }
 
-    // Handle validating amount format
     isValidAmountFormat(decimals, amount){
-        // Determine divisibility and default to true
         let divisible   = (parseInt(decimals)==0) ? false : true;
         let [int, sats] = String(amount).split('.');
         if(!divisible && this.isNumeric(int) && int==amount)
@@ -242,7 +197,6 @@ class Utility {
         return false;
     }
 
-    // Handle validating fiat amount format
     isValidFiatFormat(decimals, amount){
         let valid = this.isValidAmountFormat(decimals, amount);
         if(valid){
@@ -253,14 +207,11 @@ class Utility {
         return valid;
     }
 
-    // Validate if a lock flag value evaluates to 0 (unlocked) or 1 (locked)
     isValidLockValue(value){
         let type  = typeof value,
             valid = [0,1];
-        // Convert any numeric strings to integer value
         if(type=='string' && this.isNumeric(value))
             value = parseInt(value);
-        // Only return true for 0/1 values
         if(valid.indexOf(value)!=-1)
             return true;
         return false;
@@ -282,42 +233,31 @@ class Utility {
         return false;
     }
 
-    // Handle adding a ticker to the addreses
     addAddressTicker(address, tick){
         let type = typeof tick;
         let list = (!this.isNull(this.addresses[address])) ? this.addresses[address] : [];
-        // If tick is not null and type is an object, loop through tickers
         if(type=="object" && !this.isNull(tick)){
             for(let t of tick){
-                // Add ticker to addresses list 
                 if(!list.includes(t))
                     list.push(t);
-                // Add ticker to tickers list
                 if(!this.tickers.includes(t))
                     this.tickers.push(t);
             }
         } else if(type!='undefined'){
-            // Add ticker to addresses list 
             if(!list.includes(tick))
                 list.push(tick);
-            // Add ticker to tickers list
             if(!this.tickers.includes(tick))
                 this.tickers.push(tick);
         }
-        // Update address list with updated list of tickers
         this.addresses[address] = list;
     }
 
-    // Handle getting the default EXPIRATION
     getDefaultExpiration(block_time){
-        // Get current time in seconds
         let now = block_time;
-        // Get number of seconds in EXPIRATION_FEE_DEFAULT_DAYS
         let sec = this.bcmul(this.config['EXPIRATION_FEE_DEFAULT_DAYS'], 86400, 0);
         return this.bcadd(now, sec, 0);
     }
 
-    // Convert NUMBER fields from string value to number value so comparisons are mathematical 
     setNumberFormats(data){
         for(let name of this.config['NUMBER_FIELDS']){
             let value = data[name];
@@ -347,13 +287,11 @@ class Utility {
         return 0;
     }
 
-    // Determine price of an item (numerator / denominator)
-    // Note : Use precision up to 64 decimals points for very precise prices
+    // Precision up to 64 decimal points for very precise prices
     getPrice(numerator, denominator, precision=64){
         return this.bcdiv(numerator, denominator, precision);
     }
 
-    // Sort an object by key values
     ksort(obj){
         const sortedKeys = Object.keys(obj).sort();
         const sortedObj = sortedKeys.reduce((acc, key) => {
@@ -363,12 +301,10 @@ class Utility {
         return sortedObj;
     }
 
-    // Convert camelCase to UPPER_SNAKE_CASE (e.g. maxSupply -> MAX_SUPPLY)
     camelToUpperSnake(str) {
         return str.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase();
     }
 
-    // Normalize field names from camelCase input to UPPER_SNAKE_CASE internal format
     normalizeFields(data) {
         let normalized = {};
         for (let key in data) {
@@ -378,7 +314,6 @@ class Utility {
         return normalized;
     }
 
-    // Handle getting a list of actions from
     getActions(){
         let actions = [];
         for(let action in formats)
@@ -386,7 +321,6 @@ class Utility {
         return actions;
     }
 
-    // Handle returning integer format version
     getActionFormats(action){
         let arr  = null,
             name = String(action).toUpperCase();
@@ -395,7 +329,6 @@ class Utility {
         return arr;
     }
 
-    // Handle getting a list of all possible fields from the formats object
     getActionFormatFieldList(action, format){
         let list = [],
             arr  = this.getActionFormats(action);

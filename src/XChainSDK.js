@@ -18,7 +18,6 @@
  *
  ********************************************************************/
 
-// Load required libraries
 const config         = require('./config.js');
 const Actions        = require('./actions.js');
 const Utility        = require('./utility.js');
@@ -53,16 +52,12 @@ const CONTRACT_SOURCES = require('./contract/templates.js');
 
 class XChainSDK {
 
-    // Handle constructing a class instance
     // Options are applied immediately for core + explicit URLs.
     // Hub discovery requires calling init() (async) after construction.
     constructor(options = {}) {
 
-        // XChain Platform SDK Version
         this.version = process.env.npm_package_version;
         this.name    = process.env.npm_package_name;
-
-        // Store options
         this.options = options;
 
         // Initialize core (no network required)
@@ -80,10 +75,8 @@ class XChainSDK {
         this.contracts = new ContractUtils();
         this.musig2    = new MuSig2();
 
-        // Workflow recipes
         this.workflows = new Workflows(this);
 
-        // Wallet and auth modules (network-aware but don't require services)
         let network = options.network || process.env.NETWORK || null;
         this.wallet     = new WalletUtils(network);
         this.auth       = new AuthUtils(network);
@@ -128,13 +121,11 @@ class XChainSDK {
         this.hub      = null;
         this.ws       = null;
 
-        // Lazy hub-discovery state (see _ensureReady). Discovery runs once,
-        // transparently, before the first service call; it overlays
-        // hub-discovered endpoints onto the (already usable) default clients.
+        // Lazy hub-discovery state (see _ensureReady).
         this._readyPromise = null;
         this._polling      = false;
 
-        // Initialize the hub connector. Precedence for the hub URL is
+        // Hub URL precedence:
         // options > env (HUB_API_HOST/HUB_PORT) > public default. For
         // non-regtest networks this defaults to https://hub.xchain.io so a
         // network-only construction discovers endpoints with zero config;
@@ -146,24 +137,19 @@ class XChainSDK {
             this.hub = new HubConnector(Object.assign({}, options, { hubUrl, hubPort }));
         }
 
-        // Initialize clients from explicit options / env vars / public defaults
         this._initClients(options);
     }
 
-    // Initialize explorer + encoder from resolved options
-    // Config resolution: constructor options > env vars > defaults
+    // Config resolution: constructor options > env vars > public defaults > localhost.
     _initClients(resolved) {
         let network = resolved.network || process.env.NETWORK;
         let hooks   = this.options.hooks || {};
         let retry   = this.options.retry !== undefined ? this.options.retry : {};
         let pool    = this.options.pool || {};
-        // Network-derived public defaults (empty for regtest, so those clients
-        // keep their localhost fallback). Resolution order per endpoint:
-        // constructor options > env vars > public default > localhost.
+        // Empty for regtest, so those clients keep their localhost fallback.
         let pub       = publicDefaults(network);
         let readyHook = () => this._ensureReady();
 
-        // Explorer
         let explorerUrl  = resolved.explorerUrl  || process.env.EXPLORER_URL || pub.explorerUrl;
         let explorerPort = resolved.explorerPort || process.env.EXPLORER_PORT;
         if (network && (explorerUrl || explorerPort)) {
@@ -181,7 +167,6 @@ class XChainSDK {
             this.explorer = new ExplorerClient({ network, timeout: resolved.timeout, hooks, retry, pool, readyHook });
         }
 
-        // Encoder
         let encoderUrl  = resolved.encoderUrl  || process.env.ENCODER_URL || pub.encoderUrl;
         let encoderPort = resolved.encoderPort || process.env.ENCODER_PORT;
         if (encoderUrl || encoderPort) {
@@ -196,15 +181,13 @@ class XChainSDK {
             });
         }
 
-        // WebSocket (uses explorer URL/port by default unless explicit websocketUrl given)
+        // WebSocket follows explorer URL/port unless an explicit websocketUrl is given.
         let websocketUrl  = resolved.websocketUrl  || this.options.websocketUrl  || process.env.WEBSOCKET_URL;
         let websocketPort = resolved.websocketPort || this.options.websocketPort || process.env.WEBSOCKET_PORT;
         if (network && (websocketUrl || websocketPort || explorerUrl || explorerPort)) {
-            // Only create if not already created, or if URL changed
             let wsUrl  = websocketUrl  || explorerUrl;
             let wsPort = websocketPort ? parseInt(websocketPort) : (explorerPort ? parseInt(explorerPort) : undefined);
             if (!this.ws || this.ws.baseUrl !== wsUrl || this.ws.port !== wsPort) {
-                // Disconnect old client if it exists
                 if (this.ws) this.ws.disconnect();
                 this.ws = new WebSocketClient({
                     network:       network,
@@ -335,11 +318,8 @@ class XChainSDK {
         this.hub.startPolling(() => this._applyEndpoints());
     }
 
-    // Handle starting up the SDK (server mode with polling loop)
     async start() {
         console.log('Starting up ' + this.name + ' v' + this.version + '...');
-
-        // Auto-init from hub if configured
         if (this.hub) await this.init();
 
         while (true) {
@@ -348,21 +328,18 @@ class XChainSDK {
         }
     }
 
-    // Stop the SDK (stop hub polling, disconnect WebSocket, set stop flag)
     stop() {
         this.stopFlag = true;
         if (this.hub) this.hub.stopPolling();
         if (this.ws) this.ws.disconnect();
     }
 
-    // Ensure explorer is initialized before calling explorer methods
     _requireExplorer() {
         if (!this.explorer)
             throw new SDKConfigError('EXPLORER_NOT_CONFIGURED', 'Explorer not configured. Provide network + explorerUrl, or use hub discovery via init().');
         return this.explorer;
     }
 
-    // Ensure encoder is initialized before calling encoder methods
     _requireEncoder() {
         if (!this.encoder)
             throw new SDKConfigError('ENCODER_NOT_CONFIGURED', 'Encoder not configured. Provide encoderUrl, or use hub discovery via init().');
@@ -371,11 +348,11 @@ class XChainSDK {
 
 
     /*
-     *  ACTION Methods (Phase 1)
+     *  ACTION Methods
      */
 
-    // Create an action string and optionally encode it into a PSBT
-    // If data.encoder contains pubkey, this calls the encoder and returns the PSBT
+    // Create an action string and optionally encode it into a PSBT.
+    // If data.encoder contains pubkey, calls the encoder and returns the PSBT.
     async createAction(data) {
         // Compact ticker names and addresses to their `^<id>` wire form before
         // serializing (on by default; each falls back to the supplied value when an
@@ -389,7 +366,6 @@ class XChainSDK {
         }
         let result = this.actions.createAction(data);
 
-        // If encoder options with pubkey provided, encode the action into a PSBT
         if (data.encoder && data.encoder.pubkey) {
             let encoder = this._requireEncoder();
             let txResult = await encoder.createTx({
@@ -414,31 +390,26 @@ class XChainSDK {
         return result;
     }
 
-    // Submit an action through the full lifecycle: create → encode → sign → broadcast → wait
-    // actionData  = { action, params } (same as createAction, without encoder)
-    // encoderOpts = { pubkey, change, utxos, encoding, fee, ... }
-    // opts        = { wif, waitForIndexer, timeout, pollInterval, requireValid, onProgress }
+    // Submit an action through the full lifecycle: create, encode, sign, broadcast, wait.
+    // actionData = { action, params }; encoderOpts = { pubkey, change, utxos, encoding, fee, ... };
+    // opts = { wif, waitForIndexer, timeout, pollInterval, requireValid, onProgress }.
     async submitAction(actionData, encoderOpts, opts) {
         let mgr = new LifecycleManager(this);
         return mgr.submitAction(actionData, encoderOpts, opts);
     }
 
-    // Dry-run validation without building the string
     validateAction(action, params) {
         return this.actions.validateAction(action, params);
     }
 
-    // Introspection: list all supported actions
     getActions() {
         return this.actions.getActions();
     }
 
-    // Introspection: get format versions for an action
     getActionFormats(action) {
         return this.actions.getActionFormats(action);
     }
 
-    // Introspection: get fields for an action + optional version
     getActionFields(action, version) {
         return this.actions.getActionFields(action, version);
     }
@@ -476,7 +447,6 @@ class XChainSDK {
     // Params: { coin, tick, fiat, value, fee, memo }. See protocol/actions/PRICE.md.
     async price(params, encoder)     { return this.createAction({ action: 'PRICE', params, encoder }); }
 
-    // Staking action convenience methods (BTC-only)
     async stake(params, encoder)            { return this.createAction({ action: 'STAKE', params, encoder }); }
     async unstake(params, encoder)          { return this.createAction({ action: 'UNSTAKE', params, encoder }); }
     async delegate(params, encoder)         { return this.createAction({ action: 'DELEGATE', params, encoder }); }
@@ -554,7 +524,6 @@ class XChainSDK {
             ". Fix the contract or pass { lint: 'off' } to skip (it would still be rejected at deploy).");
     }
 
-    // VM action convenience methods
     async deploy(params, encoder, opts = {}) {
         this._preflightContractLint(params, opts.lint);
         return this.createAction({ action: 'DEPLOY', params, encoder });
@@ -563,12 +532,10 @@ class XChainSDK {
     async deposit(params, encoder)   { return this.createAction({ action: 'DEPOSIT', params, encoder }); }
     async withdraw(params, encoder)  { return this.createAction({ action: 'WITHDRAW', params, encoder }); }
 
-    // Create a bound contract client for repeated interactions with a deployed contract
     contract(contractActionIndex) {
         return new ContractClient(this, contractActionIndex);
     }
 
-    // Create a bound wallet session for repeated actions from one address
     // Usage: let w = sdk.session(wif); await w.send({...}); await w.issue({...});
     session(wif, opts) {
         return new WalletSession(this, wif, opts);
@@ -583,7 +550,6 @@ class XChainSDK {
         return new AgentSession(this, wif, policy, opts);
     }
 
-    // Workflow recipes: high-level multi-step helpers
     async issueAndDistribute(wif, issueParams, distributions, opts) {
         return this.workflows.issueAndDistribute(wif, issueParams, distributions, opts);
     }
@@ -614,7 +580,6 @@ class XChainSDK {
     async distributeDividend(wif, dividendParams, opts) {
         return this.workflows.distributeDividend(wif, dividendParams, opts);
     }
-    // NFT recipes (build params via sdk.nft.*; spec: protocol/NFT_Standard.md)
     async issueNft(wif, params, opts) {
         return this.workflows.issueNft(wif, params, opts);
     }
@@ -627,30 +592,25 @@ class XChainSDK {
     async attachContent(wif, params, opts) {
         return this.workflows.attachContent(wif, params, opts);
     }
-    // Project registry recipe (build params via sdk.project.*; spec: protocol/Project_Registry.md)
     async setRoster(wif, params, opts) {
         return this.workflows.setRoster(wif, params, opts);
     }
 
-    // Create a new BatchBuilder for fluent BATCH construction
     // Usage: await sdk.batch().send({...}).mint({...}).build(encoderOpts?)
-    // NOTE: build() is async (it wraps the async createAction); you must await
-    // it; passing the un-awaited Promise to submitAction will not work.
+    // build() is async; passing the un-awaited Promise to submitAction will not work.
     batch() {
         return new BatchBuilder(this);
     }
 
 
     /*
-     *  Encoder Methods (Phase 3)
+     *  Encoder Methods
      */
 
-    // Direct access to encoder createTx (for advanced use / custom data)
     async encodeTx(params) {
         return this._requireEncoder().createTx(params);
     }
 
-    // P2SH/P2WSH phase 2: spend a previously created P2SH/P2WSH output
     async spendP2sh(params) {
         return this._requireEncoder().spendP2sh(params);
     }
@@ -727,28 +687,24 @@ class XChainSDK {
         return quote;
     }
 
-    // Fetch the native-coin fee schedule + current oracle prices (for display / rough estimates).
     async getFeeSchedule() {
         return this._requireExplorer().getFeeSchedule();
     }
 
-    // Ping the encoder
     async pingEncoder() {
         return this._requireEncoder().ping();
     }
 
 
     /*
-     *  Hub Methods (Phase 4)
+     *  Hub Methods
      */
 
-    // Ping the hub
     async pingHub() {
         if (!this.hub) throw new SDKConfigError('HUB_NOT_CONFIGURED', 'Hub not configured. Provide hubUrl in SDK options.');
         return this.hub.ping();
     }
 
-    // Get raw hub config (for debugging / advanced use)
     getHubConfig() {
         if (!this.hub) return null;
         return this.hub.configs;

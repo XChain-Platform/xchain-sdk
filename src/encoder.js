@@ -81,7 +81,6 @@ class EncoderClient {
         this._buildClient();
     }
 
-    // Make a JSON-RPC 2.0 call with retry and hooks
     async _rpc(method, params = {}) {
         if (this._readyHook) await this._readyHook();
         let self = this;
@@ -138,7 +137,6 @@ class EncoderClient {
         }
     }
 
-    // Handle HTTP/network errors
     _handleError(err, method) {
         if (err.response) {
             throw new SDKEncoderError(
@@ -153,12 +151,10 @@ class EncoderClient {
         throw new SDKEncoderError('ENCODER_NETWORK', 'Encoder request failed: ' + err.message, { method, error: err.message });
     }
 
-    // Ping the encoder
     async ping() {
         return this._rpc('ping');
     }
 
-    // Create a transaction (main encoding method)
     // Accepts the full parameter set supported by xchain-encoder's create_tx
     //
     // Required:

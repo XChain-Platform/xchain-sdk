@@ -27,7 +27,6 @@ const { SDKWalletError } = require('./errors.js');
 
 const ECPair = ECPairFactory(ecc);
 
-// Initialize bitcoinjs-lib with the ecc library
 bitcoin.initEccLib(ecc);
 
 
@@ -111,17 +110,12 @@ class WalletUtils {
         this._netParams = network ? getNetwork(network) : null;
     }
 
-    // Resolve network params: instance default or per-call override
     _resolveNet(network) {
         if (network) return getNetwork(network);
         if (this._netParams) return this._netParams;
         throw new SDKWalletError('NETWORK_NOT_CONFIGURED',
             'Network not configured. Provide network in SDK options or pass it to this method.');
     }
-
-    // -------------------------------------------------------------------------
-    //  Key utilities
-    // -------------------------------------------------------------------------
 
     /**
      * Import a WIF-encoded private key.
@@ -182,10 +176,6 @@ class WalletUtils {
             compressed: keyPair.compressed
         };
     }
-
-    // -------------------------------------------------------------------------
-    //  Address derivation & validation
-    // -------------------------------------------------------------------------
 
     /**
      * Derive an address from a public key (Buffer or hex string).
@@ -407,10 +397,6 @@ class WalletUtils {
         return { valid: false, type: null, network: null, error: 'Address does not match any supported network.' };
     }
 
-    // -------------------------------------------------------------------------
-    //  Raw ECDSA signing (multisig cosigner contributions)
-    // -------------------------------------------------------------------------
-
     /**
      * Produce a DER-encoded ECDSA signature over the given 32-byte
      * sighash using the given 32-byte secret key. Used by §22.3
@@ -443,10 +429,6 @@ class WalletUtils {
         // PSBT input slot expects DER-encoded signatures.
         return compactToDer(compactSig);
     }
-
-    // -------------------------------------------------------------------------
-    //  PSBT signing: multisig variants (xchain-wallet §22.3)
-    // -------------------------------------------------------------------------
 
     /**
      * Sign every input of a PSBT with a WIF, BUT do NOT finalize. Used
@@ -524,10 +506,6 @@ class WalletUtils {
         };
     }
 
-    // -------------------------------------------------------------------------
-    //  PSBT signing
-    // -------------------------------------------------------------------------
-
     /**
      * Resolve the fee ceiling (sat/vB) applied before extractTransaction.
      * bitcoinjs-lib's "absurd fee" guard defaults to 5000 sat/vB, calibrated
@@ -580,14 +558,12 @@ class WalletUtils {
             throw new SDKWalletError('INVALID_PSBT', `Failed to parse PSBT: ${err.message}`);
         }
 
-        // Sign all inputs
         try {
             psbt.signAllInputs(keyPair);
         } catch (err) {
             throw new SDKWalletError('SIGN_FAILED', `PSBT signing failed: ${err.message}`);
         }
 
-        // Finalize all inputs
         try {
             psbt.finalizeAllInputs();
         } catch (err) {
@@ -766,8 +742,7 @@ class WalletUtils {
             const psbtInput = psbt.data.inputs[i];
             const txInput = psbt.txInputs[i];
 
-            // psbt.txInputs[i].hash is a Buffer in internal (little-endian)
-            // byte order. Reverse to get the display-order txid hex.
+            // txInput.hash is little-endian; reverse to get display-order txid hex.
             const prevTxHash = Buffer.from(txInput.hash).reverse().toString('hex');
 
             let value = null;
@@ -893,10 +868,6 @@ class WalletUtils {
         }
     }
 
-    // -------------------------------------------------------------------------
-    //  Transaction broadcasting (async, goes through encoder)
-    // -------------------------------------------------------------------------
-
     /**
      * Broadcast a signed raw transaction hex to the coin node via the encoder.
      *
@@ -920,10 +891,6 @@ class WalletUtils {
             throw new SDKWalletError('BROADCAST_FAILED', `Transaction broadcast failed: ${err.message}`);
         }
     }
-
-    // -------------------------------------------------------------------------
-    //  UTXO queries (async, goes through encoder)
-    // -------------------------------------------------------------------------
 
     /**
      * Fetch UTXOs for an address from the UTXO tracker via the encoder.
