@@ -441,13 +441,23 @@ class X402Gateway {
                         try { this.onProvisionalFailed(failed); } catch (e) { /* observer must not break the sweep */ }
                     }
                 }
-            } catch (e) { /* per-invoice errors must not stop the sweep */ }
+            } catch (e) {
+                // Isolate per-invoice failures so one bad invoice can't stall the sweep, but
+                // log it: a consistently-throwing _findConfirmedSend/store.update leaves a
+                // genuinely-paid invoice stuck in provisional_0conf forever (never promoted,
+                // never failed, no operator notification) while the loop looks healthy.
+                console.error('x402 sweep: invoice ' + inv.nonce + ' (payer ' + inv.payer + ') failed this cycle:', e);
+            }
         }
     }
 
     startSweeper(intervalMs) {
         if (this._sweepTimer) return;
-        this._sweepTimer = setInterval(() => { this.sweep().catch(() => {}); }, intervalMs || 30000);
+        this._sweepTimer = setInterval(() => {
+            // A whole-sweep failure (e.g. listByStatus throwing) must not crash the timer,
+            // but log it instead of eating it so a stuck sweeper is visible after one cycle.
+            this.sweep().catch((e) => console.error('x402 sweep: cycle failed:', e));
+        }, intervalMs || 30000);
         if (this._sweepTimer.unref) this._sweepTimer.unref();
     }
     stopSweeper() { if (this._sweepTimer) { clearInterval(this._sweepTimer); this._sweepTimer = null; } }
