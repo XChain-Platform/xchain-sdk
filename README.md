@@ -4,14 +4,14 @@
 # XChain Platform - Software Developer Kit (SDK)
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.8.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.14.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/tests-520%20passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/node-%3E%3D22-green" alt="Node">
-  <img src="https://img.shields.io/badge/license-Dankest%20Community-orange" alt="License">
+  <img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue" alt="License">
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/coverage-unit%20%7C%20fuzz%20%7C%20chaos%20%7C%20boundary%20%7C%20smoke-brightgreen" alt="Coverage">
+  <img src="https://img.shields.io/badge/coverage-unit%20%7C%20integration%20%7C%20boundary%20%7C%20fuzz%20%7C%20chaos%20%7C%20smoke%20%7C%20security%20%7C%20regression%20%7C%20performance-brightgreen" alt="Coverage">
 </p>
 
 Developer-facing SDK for generating XChain platform transactions and querying blockchain data.
@@ -37,6 +37,10 @@ Developer-facing SDK for generating XChain platform transactions and querying bl
 - **Attestation envelope helpers**: `AttestationHelpers.llm({...})` builds the JSON envelope a VM contract passes to `xchain.attestation.request(...)` with provider_id `'llm'`; `AttestationHelpers.httpGet({url})` validates the URL and returns the payload string for `'http_get'`; `AttestationHelpers.requestOptions({redundancy, deadlineBlocks})` builds the gateway options object. By design these are envelope builders only: there is no user-submittable ATTEST action. ATTEST v0 (request) and v1 (response) are VM-emitted: a contract calls `xchain.attestation.request(...)` and validators emit the on-chain attestation. So the SDK helps you shape the request a contract makes, and you read the results via `getAttestations()`. It does not (and cannot) encode an ATTEST action directly, the same way XCALL is VM-emission-only.
 - **Token-ownership trading helpers**: `ORDER`/`SWAP`/`DISPENSER` v0 carry `GIVE_OWNERSHIP` / `GET_OWNERSHIP` flags; `SWEEP` carries independent `ORDERS` / `SWAPS` / `DISPENSERS` flags (was a single `ESCROWS` flag)
 - **Contract-targeted staking**: `session.stakeToContract({ amount, signingPubkey, targetContractIndex, tick })`, `session.unstakeFromContract({...})`, and `session.delegateForContract({...})` emit STAKE v3 / UNSTAKE v1 / DELEGATE v1 against a smart contract deployed via DEPLOY v1 (with `COOLDOWN_BLOCKS` + `SLASH_DESTINATION`). High-level recipes: `sdk.deployStakeableContract()` and `sdk.stakeToContractAndDelegate()`
+- **NFT helpers**: `sdk.nft.unique()`, `sdk.nft.edition()`, `sdk.nft.collectionItem()`, `sdk.nft.attachContentParams()`, and `sdk.nft.isNft()` for building the NFT pattern (ISSUE with DECIMALS=0 + LOCK_MAX_SUPPLY=1) plus high-level `sdk.issueNft()`, `sdk.issueNftEdition()`, `sdk.issueCollectionItem()`, and `sdk.attachContent()` submit recipes
+- **Project registry helpers**: `sdk.project.rosterParams()` and `sdk.project.rosterEditParams()` build LIST actions for owner-attested token rosters; `sdk.setRoster()` runs LIST then LINK and waits for the indexer
+- **Ticker compaction**: on by default; resolves token tickers to their compact `^id` wire form via the explorer before encoding to shrink on-chain payload size; opt out with `{ compactTickers: false }`
+- **MCP server**: `npx xchain-mcp` exposes all explorer query tools as Model Context Protocol tools for AI agent use
 - **Wallet & auth**: key management, PSBT signing, challenge-response verification
 - **Smart contracts**: deploy, execute, deposit, withdraw via xchain-vm integration
 - **Hub discovery**: auto-resolves service endpoints from xchain-hub
@@ -160,14 +164,3 @@ with a commercial license available for proprietary use.
 You may use, modify, and distribute this material under the terms of the License.
 See [LICENSE](./LICENSE.md) and [NOTICE](./NOTICE.md) for full terms.
 See the [licensing overview](https://docs.xchain.io/legal/licensing).
-
-## License
-
-XChain Platform is **open source**, dual-licensed under:
-
-- the **[GNU Affero General Public License v3.0](./LICENSE.md)** (`AGPL-3.0-or-later`), free for everyone, and
-- a **[commercial license](https://docs.xchain.io/legal/commercial-license)** for companies that need to keep modifications private.
-
-See the **[licensing overview](https://docs.xchain.io/legal/licensing)** for which one applies to you. "XChain" is a trademark of Dankest, LLC. See the **[Trademark Policy](https://docs.xchain.io/legal/trademark)**.
-
-Copyright © 2025-2026 Dankest, LLC.
