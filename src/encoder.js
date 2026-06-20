@@ -314,7 +314,11 @@ class EncoderClient {
     // Required:
     //   address - coin address to query
     //
-    // Returns: { utxos: [ { txid, vout, value }, ... ] }
+    // Returns: { utxos: [ { txid, vout, value, scriptPubKey }, ... ] }
+    //   scriptPubKey is a non-empty hex string and is REQUIRED when feeding these
+    //   UTXOs back into createTx({ utxos }): the encoder's validateUtxoEntry rejects
+    //   any entry missing it with a -32602. A real get_utxos response always includes
+    //   it; build caller-supplied utxos arrays with the full shape, not just txid/vout/value.
     async getUTXOs(address) {
         if (!address)
             throw new SDKEncoderError('MISSING_ADDRESS', 'getUTXOs requires address');
