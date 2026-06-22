@@ -723,10 +723,10 @@ describe('EncoderClient', function () {
      */
 
     describe('public methods', function () {
-        it('has 7 public methods', function () {
+        it('has 9 public methods', function () {
             let methods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(methods).to.have.length(7);
+            expect(methods).to.have.length(9);
             expect(methods).to.include('ping');
             expect(methods).to.include('createTx');
             expect(methods).to.include('spendP2sh');
@@ -734,6 +734,72 @@ describe('EncoderClient', function () {
             expect(methods).to.include('getUTXOs');
             expect(methods).to.include('estimateFee');
             expect(methods).to.include('setBase');
+            expect(methods).to.include('health');
+            expect(methods).to.include('getFeeTiers');
+        });
+    });
+
+    /*
+     *  health
+     */
+
+    describe('health', function () {
+        it('calls the health RPC and returns tracker status fields', async function () {
+            nock(BASE)
+                .post('/', (body) => {
+                    expect(body.jsonrpc).to.equal('2.0');
+                    expect(body.method).to.equal('health');
+                    return true;
+                })
+                .reply(200, {
+                    jsonrpc: '2.0',
+                    result: { tracker_reachable: true, tracker_synced: true, tracker_lag: 0 },
+                    id: 1
+                });
+
+            let result = await client.health();
+            expect(result.tracker_reachable).to.equal(true);
+            expect(result.tracker_synced).to.equal(true);
+            expect(result.tracker_lag).to.equal(0);
+        });
+
+        it('returns unreachable state when tracker is down', async function () {
+            nock(BASE)
+                .post('/', (body) => body.method === 'health')
+                .reply(200, {
+                    jsonrpc: '2.0',
+                    result: { tracker_reachable: false, tracker_synced: false, tracker_lag: null },
+                    id: 1
+                });
+
+            let result = await client.health();
+            expect(result.tracker_reachable).to.equal(false);
+            expect(result.tracker_lag).to.equal(null);
+        });
+    });
+
+    /*
+     *  getFeeTiers
+     */
+
+    describe('getFeeTiers', function () {
+        it('calls estimate_fee RPC and returns low/medium/high tiers', async function () {
+            nock(BASE)
+                .post('/', (body) => {
+                    expect(body.jsonrpc).to.equal('2.0');
+                    expect(body.method).to.equal('estimate_fee');
+                    return true;
+                })
+                .reply(200, {
+                    jsonrpc: '2.0',
+                    result: { low: 2, medium: 5, high: 12 },
+                    id: 1
+                });
+
+            let result = await client.getFeeTiers();
+            expect(result.low).to.equal(2);
+            expect(result.medium).to.equal(5);
+            expect(result.high).to.equal(12);
         });
     });
 

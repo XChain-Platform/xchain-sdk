@@ -1251,6 +1251,20 @@ export declare class XChainSDK {
     /** Ping the encoder service. Returns the RPC result. */
     pingEncoder(): Promise<any>;
 
+    /**
+     * Check encoder hard-dependency health (UTXO tracker reachability and sync state).
+     * Returns `{ tracker_reachable: boolean, tracker_synced: boolean, tracker_lag: number | null }`.
+     * A green pingEncoder does not imply create_tx will succeed; this call does.
+     */
+    healthEncoder(): Promise<{ tracker_reachable: boolean; tracker_synced: boolean; tracker_lag: number | null }>;
+
+    /**
+     * Suggested network fee tiers in base-unit per vByte (sat/litoshi/koinu) at
+     * low (6-block), medium (3-block), and high (1-block) confirmation targets from
+     * the coin node's estimatesmartfee. Multiply a tier by 1000 for use as feePerKb.
+     */
+    getFeeTiers(): Promise<{ low: number; medium: number; high: number }>;
+
 
     /*
      *  Hub methods

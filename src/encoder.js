@@ -155,6 +155,24 @@ class EncoderClient {
         return this._rpc('ping');
     }
 
+    // Reports whether the encoder's hard dependencies are healthy. The
+    // tracker_reachable / tracker_synced / tracker_lag fields tell the caller
+    // whether the encoder can actually build transactions; a green ping() does
+    // not guarantee a reachable UTXO tracker. Maps to the encoder's `health` RPC.
+    async health() {
+        return this._rpc('health');
+    }
+
+    // Returns suggested fee tiers (base-unit per vByte: sat/litoshi/koinu) from
+    // the coin node's estimatesmartfee at three confirmation targets: low (6
+    // blocks), medium (3 blocks), high (1 block). Use the chosen tier's value as
+    // feePerKb (multiply by 1000) when calling createTx. Maps to encoder `estimate_fee`.
+    // Note: this is distinct from estimateFee(), which builds a tx and parses the PSBT
+    // to compute the actual fee amount of that specific transaction.
+    async getFeeTiers() {
+        return this._rpc('estimate_fee');
+    }
+
     // Accepts the full parameter set supported by xchain-encoder's create_tx
     //
     // Required:

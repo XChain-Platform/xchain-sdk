@@ -695,6 +695,20 @@ class XChainSDK {
         return this._requireEncoder().ping();
     }
 
+    // Check encoder hard-dependency health (UTXO tracker reachability + sync state).
+    // Returns { tracker_reachable, tracker_synced, tracker_lag }. A passing pingEncoder
+    // does not guarantee create_tx will succeed; this call does.
+    async healthEncoder() {
+        return this._requireEncoder().health();
+    }
+
+    // Suggested network fee tiers (base-unit/vByte) at low/medium/high confirmation
+    // targets from the coin node's estimatesmartfee. Multiply a tier value by 1000 to
+    // pass as feePerKb to submitAction or encodeTx.
+    async getFeeTiers() {
+        return this._requireEncoder().getFeeTiers();
+    }
+
 
     /*
      *  Hub Methods
