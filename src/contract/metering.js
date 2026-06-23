@@ -305,6 +305,7 @@ function meterCode(source) {
     // any __gas() insertion. The helper calls are exempted from Phase 3 below.
     transformAllocators(ast);
 
+    // Track nodes we've already processed to avoid double-injection
     const processed = new WeakSet();
 
     // Charge gas at the top-level script entry point. The metered source runs
