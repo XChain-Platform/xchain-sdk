@@ -1290,6 +1290,9 @@ export declare class XChainSDK {
     /** Get address summary information. */
     getAddress(address: string): Promise<any>;
 
+    /** Get the public key registered for an address (used by messaging). */
+    getPublicKey(address: string): Promise<any>;
+
     /** Get holders of a token. */
     getHolders(tick: string, opts?: QueryOptions): Promise<any>;
 
