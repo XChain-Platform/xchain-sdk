@@ -361,6 +361,64 @@ describe('MessagingUtils @crypto @regression', function () {
             expect(out[0].encrypted).to.equal(true);
         });
 
+        it('decrypts an ECDH (method 2) payload via the counterparty pubkey and labels it method 2', async function () {
+            // ECDH payloads are byte-identical to ECIES on the wire (no method/key),
+            // so getMessages falls back to an ECDH session decrypt using the
+            // counterparty's address pubkey resolved via explorer.getPublicKey.
+            const alice = keypair(), bob = keypair();
+            const secret = msg.deriveSharedSecret(alice.wif, bob.publicKeyHex).sharedSecret;
+            const { ciphertext } = msg.sessionEncrypt('ecdh hello', secret);
+            const explorer = {
+                getMessages: async () => ([
+                    { source: 'A', destination: 'B', encrypted_message: ciphertext, tx_hash: 't', block_index: 7 },
+                ]),
+                getPublicKey: async (addr) => (addr === 'A' ? { pubkey: alice.publicKeyHex } : null),
+            };
+            const out = await msg.getMessages('B', { wif: bob.wif, type: 'received' }, explorer);
+            expect(out[0].text).to.equal('ecdh hello');
+            expect(out[0].method).to.equal(2);
+            expect(out[0].encrypted).to.equal(true);
+        });
+
+        it('prefers ECIES and does not relabel when the message is plain ECIES', async function () {
+            const alice = keypair(), bob = keypair();
+            const { ciphertext } = msg.eciesEncrypt('plain ecies', bob.publicKeyHex);
+            const explorer = {
+                getMessages: async () => ([
+                    { source: 'A', destination: 'B', encrypted_message: ciphertext, tx_hash: 't', block_index: 7 },
+                ]),
+                getPublicKey: async () => ({ pubkey: alice.publicKeyHex }),
+            };
+            const out = await msg.getMessages('B', { wif: bob.wif, type: 'received' }, explorer);
+            expect(out[0].text).to.equal('plain ecies');
+            expect(out[0].method).to.equal(1);
+        });
+
+        it('leaves an AES (method 3) payload locked (no key, no false decrypt)', async function () {
+            const alice = keypair(), bob = keypair();
+            const sharedKey = crypto.randomBytes(32).toString('hex');
+            const { ciphertext } = msg.aesEncrypt('aes secret', sharedKey);
+            const explorer = {
+                getMessages: async () => ([
+                    { source: 'A', destination: 'B', encrypted_message: ciphertext, tx_hash: 't', block_index: 7 },
+                ]),
+                getPublicKey: async (addr) => (addr === 'A' ? { pubkey: alice.publicKeyHex } : null),
+            };
+            const out = await msg.getMessages('B', { wif: bob.wif, type: 'received' }, explorer);
+            expect(out[0].text).to.equal(null);
+            expect(out[0].encrypted).to.equal(true);
+        });
+
+        it('surfaces encryptionKey and format on returned entries (handshake rows)', async function () {
+            const explorer = explorerReturning([
+                { source: 'A', destination: 'B', action_format: 0, encryption_method: 2, encryption_key: 'deadbeef', tx_hash: 't', block_index: 7 },
+            ]);
+            const out = await msg.getMessages('B', { type: 'received' }, explorer);
+            expect(out[0].encryptionKey).to.equal('deadbeef');
+            expect(out[0].format).to.equal(0);
+            expect(out[0].method).to.equal(2);
+        });
+
         it('maps type → queryType (sent→source, received→destination, all→address)', async function () {
             const cap = {};
             const explorer = explorerReturning([], cap);

@@ -536,6 +536,10 @@ class MessagingUtils {
         if (!rawMessages || !Array.isArray(rawMessages)) return [];
 
         let results = [];
+        // Per-call cache of counterparty address -> resolved pubkey, so an
+        // inbox sweep with several ECDH messages from the same sender only
+        // hits the pubkey endpoint once.
+        let pubkeyCache = new Map();
         for (let msg of rawMessages) {
             // MESSAGE v2 carries no ENCRYPTION_METHOD on the wire; absence implies
             // ECIES (1) by protocol. The indexer stamps 1 for v2 rows, but legacy
@@ -554,6 +558,12 @@ class MessagingUtils {
                 bytes:     null,
                 encrypted: false,
                 method:    method,
+                // The counterparty's published pubkey + the wire format, surfaced
+                // so handshake-aware callers can read format-0/1 key-exchange rows
+                // (encryption_key) that getMessages otherwise drops.
+                encryptionKey: msg.encryption_key || null,
+                format:    (msg.action_format === undefined || msg.action_format === null)
+                    ? null : Number(msg.action_format),
                 txid:      msg.tx_hash || null,
                 block:     msg.block_index || null,
                 timestamp: msg.block_time || null
@@ -562,20 +572,32 @@ class MessagingUtils {
             if (msg.plaintext_message) {
                 entry.text = msg.plaintext_message;
             } else if (msg.encrypted_message && opts.wif) {
+                // An encrypted payload is format 2 on the wire with no method or
+                // key, so the indexer stamps it method=1 (ECIES) and an ECDH
+                // payload is byte-identical to an ECIES one. Try ECIES first
+                // (recipient private key only); on a miss, fall back to an ECDH
+                // session decrypt keyed by the counterparty's address pubkey.
+                // AES-256-GCM authentication makes a wrong key fail cleanly, so
+                // the fallback can never produce a false decrypt.
                 try {
-                    if (method === METHOD_ECIES) {
-                        // Decrypt to raw bytes so binary payloads (gated-content
-                        // handoffs) survive intact, then surface the utf8 view
-                        // for conversational callers.
-                        let result = this.eciesDecryptBytes(msg.encrypted_message, opts.wif);
-                        entry.bytes = result.plaintext;
-                        entry.text  = result.plaintext.toString('utf8');
-                    }
-                    // ECDH and AES require the shared secret/key which we don't have here
-                    // Those must be decrypted by the application
+                    // Decrypt to raw bytes so binary payloads (gated-content
+                    // handoffs) survive intact, then surface the utf8 view
+                    // for conversational callers.
+                    let result = this.eciesDecryptBytes(msg.encrypted_message, opts.wif);
+                    entry.bytes = result.plaintext;
+                    entry.text  = result.plaintext.toString('utf8');
                 } catch (err) {
-                    // Decryption failed; leave text/bytes as null
+                    // Not an ECIES message for us; the ECDH fallback runs below.
                 }
+                if (entry.text === null) {
+                    let plaintext = await this._tryEcdhDecrypt(msg, address, opts.wif, explorer, pubkeyCache);
+                    if (plaintext !== null) {
+                        entry.text   = plaintext;
+                        entry.method = METHOD_ECDH;  // correct the stamped-as-ECIES label
+                    }
+                }
+                // AES (method 3) needs an out-of-band shared key we don't have;
+                // those stay encrypted with text=null.
                 entry.encrypted = true;
             } else if (msg.encrypted_message) {
                 entry.encrypted = true;
@@ -585,6 +607,46 @@ class MessagingUtils {
         }
 
         return results;
+    }
+
+    /**
+     * Attempt an ECDH session decrypt of an encrypted message that ECIES
+     * couldn't open. The shared secret is deterministic from the two parties'
+     * permanent address keys, so it derives `ECDH(myWif, counterpartyPubkey)`
+     * (the counterparty being whichever side of the message isn't the inbox
+     * `address`), resolving the counterparty's pubkey on-chain. Tries the v1
+     * HKDF derivation first, then the v0 legacy SHA256 secret. Returns the
+     * plaintext, or null when the pubkey is unresolvable or no key matches.
+     *
+     * @param {Object} msg            raw message row (needs source/destination/encrypted_message)
+     * @param {string} address        the inbox address being read
+     * @param {string} wif            our private key
+     * @param {Object} explorer       explorer client for pubkey lookup
+     * @param {Map<string,string|null>} pubkeyCache  per-call counterparty pubkey cache
+     * @returns {Promise<string|null>}
+     */
+    async _tryEcdhDecrypt(msg, address, wif, explorer, pubkeyCache) {
+        let counterparty = msg.source === address ? msg.destination : msg.source;
+        if (!counterparty) return null;
+
+        let pubkey = pubkeyCache.get(counterparty);
+        if (pubkey === undefined) {
+            try { pubkey = await this.getPublicKey(counterparty, explorer); }
+            catch (err) { pubkey = null; }
+            pubkeyCache.set(counterparty, pubkey);
+        }
+        if (!pubkey) return null;
+
+        for (let legacy of [false, true]) {
+            try {
+                let { sharedSecret } = this.deriveSharedSecret(wif, pubkey, { legacy });
+                let { plaintext } = this.sessionDecrypt(msg.encrypted_message, sharedSecret);
+                return plaintext;
+            } catch (err) {
+                // wrong derivation version or not an ECDH message; try the next
+            }
+        }
+        return null;
     }
 
     /**
