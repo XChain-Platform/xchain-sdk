@@ -1087,6 +1087,7 @@ describe('ExplorerClient', function () {
             'getXcalls', 'getXcall',
             'getControllers', 'getDeployChunks', 'getFullNodeVerifications',
             'getCrossChainMatches', 'getCrossChainSettlements', 'getAnchors', 'getOraclePrices',
+            'getValidatorCapabilities', 'getGovernanceProposals', 'getGovernanceVotes',
             'getCheckpoints', 'getCheckpointRange', 'getCheckpointVerify',
             'getBalanceProof', 'getActionProof', 'getValidatorSetProof', 'getContractStateProof',
             'getMarkets', 'getMarket', 'getMarketHistory', 'getMarketOrders', 'getOrderbook',
@@ -1098,10 +1099,10 @@ describe('ExplorerClient', function () {
             });
         }
 
-        it('has 105 public methods', function () {
+        it('has 108 public methods', function () {
             let publicMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(publicMethods).to.have.length(105);
+            expect(publicMethods).to.have.length(108);
         });
     });
 

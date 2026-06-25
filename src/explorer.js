@@ -692,6 +692,29 @@ class ExplorerClient {
         return this._get('/oracle_prices', opts);
     }
 
+    // Per-validator per-capability qualification flags (hub-owned validator_capabilities,
+    // read from the explorer's co-located hub DB), type ∈ {capability, pubkey}.
+    async getValidatorCapabilities(query, type, opts = {}) {
+        if (query)
+            return this._get('/validator_capabilities/' + query + '/' + type, opts);
+        return this._get('/validator_capabilities', opts);
+    }
+
+    // Federation governance parameter proposals (hub-owned governance_proposals),
+    // type ∈ {status, parameter, proposal}.
+    async getGovernanceProposals(query, type, opts = {}) {
+        if (query)
+            return this._get('/governance_proposals/' + query + '/' + type, opts);
+        return this._get('/governance_proposals', opts);
+    }
+
+    // Per-validator governance votes (hub-owned governance_votes), type ∈ {proposal, voter}.
+    async getGovernanceVotes(query, type, opts = {}) {
+        if (query)
+            return this._get('/governance_votes/' + query + '/' + type, opts);
+        return this._get('/governance_votes', opts);
+    }
+
     /*
      *  Light-client (SPV) checkpoint + proof methods
      *  The typed, pooled, retry-aware path to the explorer's state-checkpoint

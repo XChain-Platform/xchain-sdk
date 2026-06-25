@@ -1132,6 +1132,18 @@ class XChainSDK {
         return this._requireExplorer().getOraclePrices(query, type, opts);
     }
 
+    async getValidatorCapabilities(query, type, opts) {
+        return this._requireExplorer().getValidatorCapabilities(query, type, opts);
+    }
+
+    async getGovernanceProposals(query, type, opts) {
+        return this._requireExplorer().getGovernanceProposals(query, type, opts);
+    }
+
+    async getGovernanceVotes(query, type, opts) {
+        return this._requireExplorer().getGovernanceVotes(query, type, opts);
+    }
+
     /*
      *  Explorer: Light-client (SPV) checkpoint + proof methods
      */
