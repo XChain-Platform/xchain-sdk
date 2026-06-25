@@ -63,8 +63,12 @@ const TICK_FORBIDDEN_FIRST_CHAR = '^';
 // Characters forbidden in text fields (pipe = field separator, semicolon = command separator)
 const FORBIDDEN_TEXT_CHARS = ['|', ';'];
 
-// Valid FIAT currency codes
-const VALID_FIAT_CODES = ['USD', 'CAD', 'AUD', 'MXN', 'GBP', 'JPY', 'CNY', 'CHF', 'BRL', 'INR'];
+// Valid FIAT currency codes. Must stay a byte-equal allow-list with the indexer's
+// config['FIATS'] keys (xchain-indexer/src/config.js), which is the on-chain arbiter
+// for PRICE FIAT_CODE. A subset here makes the SDK silently refuse a FIAT the protocol
+// accepts (EUR/KRW were missing). The cross-service parity assertion in
+// xchain-e2e-test/test/regression/protocol-size-limits.regression.js guards this.
+const VALID_FIAT_CODES = ['USD', 'CAD', 'AUD', 'MXN', 'GBP', 'JPY', 'CNY', 'CHF', 'BRL', 'INR', 'EUR', 'KRW'];
 
 // Valid coin identifiers
 const VALID_COINS = ['BTC', 'LTC', 'DOGE'];
@@ -804,3 +808,7 @@ module.exports = Validator;
 // Exported for the cross-service regression suite, which asserts this equals the
 // canonical protocol MAX_CODE_SIZE shared by the indexer and the VM.
 module.exports.MAX_CODE_SIZE = MAX_CODE_SIZE;
+
+// Exported for the cross-service FIAT-allow-list parity test (must equal the
+// canonical protocol.VALID_FIAT_CODES, which mirrors the indexer arbiter).
+module.exports.VALID_FIAT_CODES = VALID_FIAT_CODES;
