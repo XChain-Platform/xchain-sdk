@@ -550,6 +550,29 @@ class ExplorerClient {
         return this._get('/stakes', opts);
     }
 
+    // Capability unstakes (UNSTAKE v0; begins the global cooldown on a staked key),
+    // type ∈ {block, address, source}. Contract-targeted unstakes are getContractUnstakes.
+    async getUnstakes(query, type, opts = {}) {
+        if (query)
+            return this._get('/unstakes/' + query + '/' + type, opts);
+        return this._get('/unstakes', opts);
+    }
+
+    // Signing-key revocations (DELEGATE v2/v3), type ∈ {block, address, source}.
+    async getStakeKeyRevocations(query, type, opts = {}) {
+        if (query)
+            return this._get('/delegation_revocations/' + query + '/' + type, opts);
+        return this._get('/delegation_revocations', opts);
+    }
+
+    // Validator reward claims (COLLECT; the reward_claims table), type ∈ {block, address, source}.
+    // The per-reward-type accrual ledger is getValidatorRewards; this is the claim event.
+    async getCollects(query, type, opts = {}) {
+        if (query)
+            return this._get('/collects/' + query + '/' + type, opts);
+        return this._get('/collects', opts);
+    }
+
     async getDelegations(query, type, opts = {}) {
         return this._get('/delegations/' + query + '/' + type, opts);
     }
@@ -597,6 +620,15 @@ class ExplorerClient {
         if (query)
             return this._get('/slash_events/' + query + '/' + type, opts);
         return this._get('/slash_events', opts);
+    }
+
+    // Capability equivocation slashes (SLASH wire action; capability_slash_events),
+    // type ∈ {block, capability, pubkey, address}. Distinct from getSlashEvents, which
+    // lists contract-emitted slashes (xchain.contract.slash).
+    async getCapabilitySlashEvents(query, type, opts = {}) {
+        if (query)
+            return this._get('/capability_slash_events/' + query + '/' + type, opts);
+        return this._get('/capability_slash_events', opts);
     }
 
     // XCALL cross-chain calls (VM-emitted via xchain.emit.crossExecute; read-only).
@@ -650,6 +682,14 @@ class ExplorerClient {
         if (query)
             return this._get('/anchors/' + query + '/' + type, opts);
         return this._get('/anchors', opts);
+    }
+
+    // User-published token/fiat oracle prices (PRICE v1; hub-mirrored oracle_prices),
+    // type ∈ {token, address}. The validator COIN/FIAT snapshots are getPriceSnapshots.
+    async getOraclePrices(query, type, opts = {}) {
+        if (query)
+            return this._get('/oracle_prices/' + query + '/' + type, opts);
+        return this._get('/oracle_prices', opts);
     }
 
     /*

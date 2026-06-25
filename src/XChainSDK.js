@@ -1060,6 +1060,18 @@ class XChainSDK {
         return this._requireExplorer().getStakes(query, type, opts);
     }
 
+    async getUnstakes(query, type, opts) {
+        return this._requireExplorer().getUnstakes(query, type, opts);
+    }
+
+    async getStakeKeyRevocations(query, type, opts) {
+        return this._requireExplorer().getStakeKeyRevocations(query, type, opts);
+    }
+
+    async getCollects(query, type, opts) {
+        return this._requireExplorer().getCollects(query, type, opts);
+    }
+
     async getDelegations(query, type, opts) {
         return this._requireExplorer().getDelegations(query, type, opts);
     }
@@ -1088,6 +1100,10 @@ class XChainSDK {
         return this._requireExplorer().getSlashEvents(query, type, opts);
     }
 
+    async getCapabilitySlashEvents(query, type, opts) {
+        return this._requireExplorer().getCapabilitySlashEvents(query, type, opts);
+    }
+
     async getControllers(opts) {
         return this._requireExplorer().getControllers(opts);
     }
@@ -1110,6 +1126,10 @@ class XChainSDK {
 
     async getAnchors(query, type, opts) {
         return this._requireExplorer().getAnchors(query, type, opts);
+    }
+
+    async getOraclePrices(query, type, opts) {
+        return this._requireExplorer().getOraclePrices(query, type, opts);
     }
 
     /*
