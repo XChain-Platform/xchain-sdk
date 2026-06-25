@@ -263,19 +263,26 @@ async function verifyAction(opts){
 
 // ── DOGE-anchor cold-start trust (spec §7.2 b / D4) ───────────────────────────
 // A client with no prior trust root bootstraps from the on-chain ANCHOR: read the
-// latest v3 ANCHOR off DOGE, confirm it is buried under a chosen PoW depth, and
+// latest root-bearing ANCHOR (v3, or v5 at/above the ANCHOR_REWARD flag-day) off DOGE,
+// confirm it is buried under a chosen PoW depth, and
 // adopt its quorum-signed checkpoint. Trust still bottoms out at the federation
 // quorum (the DOGE PoW only hardens delivery/timing, §7.4); the SDK has no DOGE
 // backend, so the caller supplies the confirmation depth from its own DOGE source.
 
-// Parse a v3 ANCHOR wire string (optional leading "ANCHOR|") into the checkpoint
-// shape sdk.checkpoint.verifyCheckpoint consumes. Pure; for callers who decode the
-// raw DOGE transaction themselves. Throws on a malformed / non-v3 string.
+// Parse a root-bearing ANCHOR wire string (optional leading "ANCHOR|") into the
+// checkpoint shape sdk.checkpoint.verifyCheckpoint consumes. Accepts v3 AND v5
+// (v5 = the v3 checkpoint + an elected-publisher reward attestation tail): both
+// carry the SPV roots at the same positions and the same SIG_COUNT index, so the
+// v5 publisher/attestation tail simply trails the signature list and is ignored
+// here (SPV trust bottoms out at the checkpoint quorum, not the reward attestation).
+// A rootless v0/v4 anchor is rejected. Pure; for callers who decode the raw DOGE
+// transaction themselves. Throws on a malformed / non-root-bearing string.
 function parseAnchorV3(wire){
     let p = String(wire || '').split('|');
     if (p.length && /^anchor$/i.test(p[0])) p = p.slice(1);
-    if (String(p[0]) !== '3') throw new Error('LightClient: not a v3 ANCHOR (VERSION ' + p[0] + ')');
-    const sigBase = 14;                                        // formats[3] index of SIG_COUNT
+    const ver = String(p[0]);
+    if (ver !== '3' && ver !== '5') throw new Error('LightClient: not a root-bearing ANCHOR (need v3 or v5, got VERSION ' + p[0] + ')');
+    const sigBase = 14;                                        // formats[3]/[5] index of SIG_COUNT (roots occupy p[10..13])
     const n = parseInt(p[sigBase], 10);
     if (!Number.isFinite(n) || n < 1) throw new Error('LightClient: bad ANCHOR SIG_COUNT');
     const sigs = [];
@@ -322,7 +329,7 @@ function verifyAnchoredCheckpoint(opts){
     const confirmations = Number(opts.confirmations);
     const safeConf = Number.isFinite(confirmations) ? confirmations : 0;
     if (!cp) return { verified: false, reason: 'NO_CHECKPOINT', checkpoint: null, confirmations: 0, minDepth, quorum: null, weighted: null };
-    // v3 carries the committed roots; a rootless (v0) anchor cannot serve SPV trust.
+    // v3/v5 carry the committed roots; a rootless (v0/v4) anchor cannot serve SPV trust.
     if (cp.state_root == null || cp.block_merkle_root == null)
         return { verified: false, reason: 'NOT_A_V3_ANCHOR', checkpoint: cp, confirmations: safeConf, minDepth, quorum: null, weighted: null };
     const q = checkpoint.verifyCheckpoint(cp, opts.validators || []);
@@ -333,7 +340,7 @@ function verifyAnchoredCheckpoint(opts){
     return Object.assign({ verified: true, reason: null }, base);
 }
 
-// Convenience: fetch the latest v3 ANCHOR for `targetChain` from the DOGE explorer,
+// Convenience: fetch the latest root-bearing ANCHOR (v3 or v5) for `targetChain` from the DOGE explorer,
 // confirm its DOGE depth (caller supplies the tip via dogeTipHeight or getDogeTipHeight),
 // and verify it. Anchors are DOGE-only, so the list is served by the DOGE explorer;
 // each record's `chain` is the chain whose checkpoint it commits. Returns the
@@ -347,11 +354,14 @@ async function fetchAnchoredCheckpoint(opts){
                 '/api/anchors/' + encodeURIComponent(String(opts.targetChain)) + '/chain';
     const body = await _json(f, url);
     let rows = Array.isArray(body) ? body : ((body && (body.data || body.results || body.rows)) || []);
-    rows = rows.filter(r => r && Number(r.version) === 3 && r.state_root &&
+    // Accept v3 and v5: both carry the SPV roots (v5 = v3 + a publisher reward attestation,
+    // emitted in place of v3 at/above the ANCHOR_REWARD flag-day). v0/v4 are rootless and
+    // filtered out by the state_root presence check.
+    rows = rows.filter(r => r && (Number(r.version) === 3 || Number(r.version) === 5) && r.state_root &&
                             String(r.chain).toUpperCase() === String(opts.targetChain).toUpperCase());
     rows.sort((a, b) => Number(b.checkpoint_seq) - Number(a.checkpoint_seq));   // newest checkpoint first
     if (!rows.length)
-        return { verified: false, reason: 'NO_V3_ANCHOR', checkpoint: null, anchor: null, dogeTxid: null, confirmations: 0, minDepth, quorum: null, weighted: null };
+        return { verified: false, reason: 'NO_ROOT_ANCHOR', checkpoint: null, anchor: null, dogeTxid: null, confirmations: 0, minDepth, quorum: null, weighted: null };
     const rec = rows[0];
     let tip = opts.dogeTipHeight;
     if (tip == null && typeof opts.getDogeTipHeight === 'function') tip = await opts.getDogeTipHeight();

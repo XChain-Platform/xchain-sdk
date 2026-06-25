@@ -299,10 +299,26 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
         assert.strictEqual(checkpoint.verifyCheckpoint(cp, validators).valid, true);
     });
 
-    it('parseAnchorV3 tolerates a leading ANCHOR| and rejects non-v3', function () {
+    it('parseAnchorV3 tolerates a leading ANCHOR| and rejects rootless (v0/v4) anchors', function () {
         const { wire } = makeSignedV3();
         assert.strictEqual(light.parseAnchorV3('ANCHOR|' + wire).checkpoint_seq, 7);
-        assert.throws(() => light.parseAnchorV3('0|BTC|regtest|1'), /not a v3 ANCHOR/);
+        assert.throws(() => light.parseAnchorV3('0|BTC|regtest|1'), /not a root-bearing ANCHOR/);
+        assert.throws(() => light.parseAnchorV3('4|BTC|regtest|1'), /not a root-bearing ANCHOR/);
+    });
+
+    it('parseAnchorV3 also accepts a v5 wire, ignoring the publisher attestation tail', function () {
+        const { wire, sigs, validators } = makeSignedV3();
+        // v5 = the v3 wire with VERSION 5 plus a trailing PUBLISHER + attestation list. The
+        // roots and SIG_COUNT sit at the same positions, so the tail is parsed-past and the
+        // SPV checkpoint is byte-identical to the v3 form (trust is the checkpoint quorum).
+        const parts = wire.split('|');
+        parts[0] = '5';
+        const v5wire = parts.concat(['07'.repeat(32), '1', sigs[0].pubkey, sigs[0].sig]).join('|');
+        const cp = light.parseAnchorV3(v5wire);
+        assert.strictEqual(cp.checkpoint_seq, 7);
+        assert.strictEqual(cp.state_root_version, 1);
+        assert.strictEqual(cp.validator_signatures.length, 1);
+        assert.strictEqual(checkpoint.verifyCheckpoint(cp, validators).valid, true);
     });
 
     it('verifyAnchoredCheckpoint ACCEPTS a quorum-signed anchor buried past minDepth', function () {
@@ -343,6 +359,18 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
         assert.strictEqual(r.checkpoint.checkpoint_seq, 7);     // newest, not the seq-3 decoy
         assert.strictEqual(r.confirmations, 201);               // 1200 - 1000 + 1
         assert.strictEqual(r.dogeTxid, 'dd'.repeat(32));
+    });
+
+    it('fetchAnchoredCheckpoint accepts a v5 anchor record (post-flag-day root-bearing)', async function () {
+        const a = makeSignedV3(null, 1000);
+        a.record.version = 5;                                   // v5 row served by the explorer
+        const fetchImpl = async (url) => url.includes('/api/anchors/')
+            ? { ok: true, status: 200, json: async () => ({ data: [a.record] }) }
+            : { ok: false, status: 404, json: async () => ({}) };
+        const r = await light.fetchAnchoredCheckpoint({ explorerUrl: 'https://x', dogeCoin: 'DOGE',
+            targetChain: CHAIN, validators: a.validators, dogeTipHeight: 1200, minDepth: 60, fetchImpl });
+        assert.strictEqual(r.verified, true, r.reason);
+        assert.strictEqual(r.checkpoint.checkpoint_seq, 7);
     });
 
     it('a DOGE-anchored checkpoint then binds a balance proof via trustedCheckpoint', async function () {
