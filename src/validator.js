@@ -328,12 +328,22 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be 0 or 1', { field, value, constraint: { valid: [0, 1] } }));
         }
 
-        // AMOUNT validation (must be numeric and positive)
+        // AMOUNT validation: all listed fields must be numeric.
         if (field === 'AMOUNT' || field === 'GIVE_AMOUNT' || field === 'GET_AMOUNT' ||
             field === 'GIVE_ESCROW' || field === 'CALLBACK_AMOUNT' || field === 'TRANSFER_SUPPLY' ||
             field === 'MINT_SUPPLY' || field === 'MAX_MINT' || field === 'MINT_ADDRESS_MAX') {
             if (!this.util.isNumeric(value))
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be numeric', { field, value }));
+        }
+
+        // Spend/transfer amounts must additionally be positive: zero or negative
+        // produces a transaction the indexer rejects (e.g. STAKE/SEND require >0),
+        // so fail client-side rather than emit a doomed action. The supply-cap
+        // fields above legitimately accept 0 (disabled) and so are excluded here.
+        if (field === 'AMOUNT' || field === 'GIVE_AMOUNT' || field === 'GET_AMOUNT' ||
+            field === 'GIVE_ESCROW' || field === 'CALLBACK_AMOUNT') {
+            if (this.util.isNumeric(value) && Number(value) <= 0)
+                errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be a positive number', { field, value }));
         }
 
         // FEE validation (BROADCAST, percentage format)
