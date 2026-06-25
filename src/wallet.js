@@ -527,12 +527,20 @@ class WalletUtils {
 
     /**
      * Sign an unsigned PSBT hex string with a WIF private key.
-     * Finalizes all inputs after signing.
+     *
+     * By default every input the key can sign is signed and finalized. When
+     * `opts.inputIndices` is supplied, ONLY those inputs are signed/finalized;
+     * this is how the wallet restricts a dApp-supplied PSBT to the exact inputs
+     * the user was shown/approved, instead of blindly signing every UTXO the
+     * active key controls. With a partial (scoped) sign the transaction is not
+     * fully finalized, so the extracted tx is omitted and the partially-signed
+     * PSBT is returned for the caller/counterparty to complete.
      *
      * @param {string} psbtHex - Unsigned PSBT from encoder, as hex
      * @param {string} wif - WIF-encoded private key
-     * @param {{ maximumFeeRate?: number }} [opts] - sat/vB fee ceiling override
-     * @returns {{ txHex: string, txid: string, psbtHex: string }}
+     * @param {{ maximumFeeRate?: number, inputIndices?: number[] }} [opts] - sat/vB
+     *   fee ceiling override and/or the explicit set of input indices to sign
+     * @returns {{ txHex: (string|null), txid: (string|null), psbtHex: string }}
      */
     signPsbt(psbtHex, wif, opts) {
         if (!psbtHex || typeof psbtHex !== 'string') {
@@ -558,16 +566,43 @@ class WalletUtils {
             throw new SDKWalletError('INVALID_PSBT', `Failed to parse PSBT: ${err.message}`);
         }
 
+        // Scoped signing: when an explicit input set is given, sign/finalize ONLY
+        // those inputs. Any other input the key happens to control (e.g. a UTXO a
+        // crafted PSBT mixed in that the user never approved) is left untouched.
+        const scoped = (opts && Array.isArray(opts.inputIndices)) ? opts.inputIndices : null;
+        if (scoped && scoped.length === 0) {
+            throw new SDKWalletError('SIGN_FAILED', 'PSBT signing failed: inputIndices is empty');
+        }
+
         try {
-            psbt.signAllInputs(keyPair);
+            if (scoped) {
+                for (const i of scoped) psbt.signInput(i, keyPair);
+            } else {
+                psbt.signAllInputs(keyPair);
+            }
         } catch (err) {
             throw new SDKWalletError('SIGN_FAILED', `PSBT signing failed: ${err.message}`);
         }
 
         try {
-            psbt.finalizeAllInputs();
+            if (scoped) {
+                for (const i of scoped) psbt.finalizeInput(i);
+            } else {
+                psbt.finalizeAllInputs();
+            }
         } catch (err) {
             throw new SDKWalletError('FINALIZE_FAILED', `PSBT finalization failed: ${err.message}`);
+        }
+
+        // Only extract a broadcastable tx when EVERY input is finalized. A scoped
+        // partial sign deliberately leaves unapproved inputs unfinalized, so the tx
+        // is incomplete; return the partially-signed PSBT rather than throwing or
+        // emitting a half-finalized extraction.
+        const allFinalized = psbt.data.inputs.every(
+            (inp) => inp.finalScriptSig || inp.finalScriptWitness
+        );
+        if (!allFinalized) {
+            return { txHex: null, txid: null, psbtHex: psbt.toHex() };
         }
 
         const maxFeeRate = this._maxFeeRate(opts);
