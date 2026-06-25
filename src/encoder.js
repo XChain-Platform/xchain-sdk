@@ -231,7 +231,13 @@ class EncoderClient {
     //   p2shHex  - full transaction hex containing the P2SH output
     //
     // Optional:
-    //   change, fee, feePerKb, rbf, dust, unconfirmed
+    //   change, fee, feePerKb, rbf, dust, unconfirmed, compressedPubKey, encoding, rawData
+    //   customOutputs - additional outputs to emit on the reveal (phase 2). On
+    //     native-fee chains the protocol fee output MUST ride the reveal tx,
+    //     because the indexer treats the reveal (not the funding tx) as the
+    //     action and reads the fee output from it. The funding tx (phase 1) is
+    //     sized by the encoder to fund these reveal outputs without emitting
+    //     them, so the value is not double-paid.
     //
     // Returns: { psbt: <hex>, encoding: <string> }
     async spendP2sh(params) {
@@ -261,6 +267,7 @@ class EncoderClient {
         if (params.rbf !== undefined)              rpcParams.rbf = params.rbf;
         if (params.dust !== undefined)             rpcParams.dust = params.dust;
         if (params.unconfirmed !== undefined)      rpcParams.unconfirmed = params.unconfirmed;
+        if (params.customOutputs !== undefined)    rpcParams.customOutputs = params.customOutputs;
 
         return this._rpc('create_tx', rpcParams);
     }

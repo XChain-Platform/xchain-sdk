@@ -105,6 +105,12 @@ class LifecycleManager {
             // is the broadcast phase-1 txid and p2shHex is its raw hex (the encoder's
             // create_tx response carries only { psbt, encoding }; there is no separate
             // hash field). Matches the connector flow in xchain-e2e-test transactionHelper.
+            // customOutputs (e.g. the native-fee protocol-fee output) must ride
+            // the reveal, because the indexer treats the reveal as the action and
+            // reads the fee output from it. The encoder fences double-pay: for a
+            // P2SH/P2WSH funding tx it funds these outputs into the P2SH outputs
+            // WITHOUT emitting them, then emits them here on the reveal. So passing
+            // the same customOutputs to both phases is correct, not a double charge.
             let spendResult = await encoder.spendP2sh({
                 pubkey:           encoderOpts.pubkey,
                 p2shHash:         signed.txid,
@@ -115,7 +121,8 @@ class LifecycleManager {
                 compressedPubKey: encoderOpts.compressedPubKey,
                 change:           encoderOpts.change,
                 fee:              encoderOpts.fee,
-                feePerKb:         encoderOpts.feePerKb
+                feePerKb:         encoderOpts.feePerKb,
+                customOutputs:    encoderOpts.customOutputs
             });
 
             // Phase-2 inputs are non-standard P2SH/P2WSH reveal inputs; they need

@@ -433,6 +433,23 @@ describe('EncoderClient', function () {
 
             await client.spendP2sh({ pubkey: 'pub', p2shHash: 'h', p2shHex: 'x', data: 'MYACTION' });
         });
+
+        // #5352: the native-fee protocol-fee output rides customOutputs and must
+        // reach create_tx on the reveal (phase 2); previously spendP2sh dropped it.
+        it('maps customOutputs into the create_tx params', async function () {
+            const feeOutputs = [{ address: 'mfees5pa2HwNBonk5vG23aDWkN9fuDJib4', value: 10678 }];
+            nock(BASE)
+                .post('/', (body) => {
+                    expect(body.params.customOutputs).to.deep.equal(feeOutputs);
+                    return true;
+                })
+                .reply(200, { jsonrpc: '2.0', result: { psbt: 'hex', encoding: 'P2SH' }, id: 1 });
+
+            await client.spendP2sh({
+                pubkey: 'pub', p2shHash: 'h', p2shHex: 'x', data: 'ACTION',
+                customOutputs: feeOutputs
+            });
+        });
     });
 
     /*

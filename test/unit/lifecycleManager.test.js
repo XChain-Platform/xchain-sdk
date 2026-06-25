@@ -281,6 +281,44 @@ describe('LifecycleManager', function () {
             assert.strictEqual(result.txid, 'phase2');
         });
 
+        // Regression for #5352: on native-fee chains the protocol-fee output
+        // rides customOutputs. For the two-phase P2SH/P2WSH flow the indexer
+        // treats the reveal (phase 2) as the action and reads the fee output from
+        // it, so customOutputs MUST reach phase-2 spendP2sh. The encoder fences
+        // double-pay (funds-but-does-not-emit on the funding tx), so phase-1
+        // createTx legitimately also carries customOutputs; what matters is that
+        // phase 2 carries it and the fee value reaches the reveal.
+        it('forwards customOutputs to phase-2 spendP2sh (#5352 native-fee fix)', async function () {
+            const signed = buildSignedTx();
+            const feeOutputs = [{ address: 'mfees5pa2HwNBonk5vG23aDWkN9fuDJib4', value: 10678 }];
+            let createTxParams = null;
+            let spendP2shParams = null;
+            const sdk = makeSdk({
+                wallet: {
+                    signPsbt:       () => ({ txHex: signed.txHex, txid: 'p1txid', psbtHex: signed.psbtHex }),
+                    signRevealPsbt: () => ({ txHex: signed.txHex, txid: 'p2txid', psbtHex: signed.psbtHex }),
+                }
+            }, {
+                createTx:    async (p) => { createTxParams = p; return { psbt: signed.psbtHex, encoding: 'P2SH' }; },
+                spendP2sh:   async (p) => { spendP2shParams = p; return { psbt: signed.psbtHex }; },
+                broadcastTx: async () => ({}),
+            });
+            const lm = new LifecycleManager(sdk);
+            await lm.submitAction(
+                { action: 'DEPLOY', params: {} },
+                { pubkey: '03pub', change: 'addr', customOutputs: feeOutputs },
+                { wif: FAKE_WIF, waitForIndexer: false }
+            );
+
+            // Phase 2 (the reveal, indexed as the action) must carry the fee output.
+            assert.ok(spendP2shParams, 'spendP2sh should have been called');
+            assert.deepStrictEqual(spendP2shParams.customOutputs, feeOutputs,
+                'phase-2 reveal must carry the native-fee customOutputs');
+            // Phase 1 also receives it; the encoder funds-but-does-not-emit there,
+            // so this is not a double-pay (see XChainEncoder #5352 funding logic).
+            assert.deepStrictEqual(createTxParams.customOutputs, feeOutputs);
+        });
+
         it('concatenates phase-1 and phase-2 spentInputs', async function () {
             const signed = buildSignedTx();
             const sdk = makeSdk({
