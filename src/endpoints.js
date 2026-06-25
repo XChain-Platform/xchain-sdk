@@ -27,6 +27,8 @@
  *
  ********************************************************************/
 
+const coins = require('./coins');
+
 // Public XChain Platform service hosts (https on 443; the explorer host
 // also serves WebSocket, from which `wss://` is derived automatically).
 const PUBLIC_HUB      = 'https://hub.xchain.io';
@@ -44,7 +46,7 @@ function isRegtest(network) {
 // wallet chain descriptors. Returns null for an unknown network.
 function coinPrefix(network) {
     let [chain, net] = String(network || '').split('-');
-    let coin = { bitcoin: 'BTC', litecoin: 'LTC', dogecoin: 'DOGE' }[chain];
+    let coin = coins.FULL_NAME_TO_TICK[chain];
     let pre  = { mainnet: '', testnet: 'T', regtest: 'R' }[net];
     // Strict: reject unknown chain or network part (e.g. "bitcoin-foo").
     if (!coin || pre === undefined) return null;

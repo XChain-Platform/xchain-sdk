@@ -70,8 +70,8 @@ const FORBIDDEN_TEXT_CHARS = ['|', ';'];
 // xchain-e2e-test/test/regression/protocol-size-limits.regression.js guards this.
 const VALID_FIAT_CODES = ['USD', 'CAD', 'AUD', 'MXN', 'GBP', 'JPY', 'CNY', 'CHF', 'BRL', 'INR', 'EUR', 'KRW'];
 
-// Valid coin identifiers
-const VALID_COINS = ['BTC', 'LTC', 'DOGE'];
+// Valid coin identifiers (from the canonical coin registry).
+const VALID_COINS = [...require('./coins').ALLOWED_COINS];
 
 // Required fields per action (minimum fields that must be present regardless of version)
 const ACTION_REQUIRED_FIELDS = {
