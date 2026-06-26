@@ -81,17 +81,23 @@ describe('MuSig2 signer adapter (buildMuSig2Signer)', function () {
         expectValidKeyPathSpend(out.txHex, s.acct, s.value);
     });
 
-    it('fails closed on a multi-input PSBT (later slice)', async function () {
-        const s = buildAccountAndPsbt(`SEND|0|TOK|5|${DEST}|m`, { inputs: 2 });
+    it('signs every input of a multi-input aggregate spend in one round', async function () {
+        const s = buildAccountAndPsbt(`SEND|0|TOK|5|${DEST}|m`, { inputs: 3 });
         const co = new CoSigner({ secretKey: s.coSk, publicKeys: s.keys, tweaks: s.acct.tweaks,
             policy: { allowedActions: new Set(['SEND']) } });
         const client = new CoSignerClient({ transport: inProcessTransport(co), publicKeys: s.keys, tweaks: s.acct.tweaks });
         const sign = buildMuSig2Signer({ coSignerClient: client, secretKey: s.agentSk });
 
-        let err;
-        try { await sign(s.psbtHex); } catch (e) { err = e; }
-        expect(err).to.be.instanceOf(SDKPolicyError);
-        expect(err.code).to.equal('MUSIG2_MULTI_INPUT_UNSUPPORTED');
+        const out = await sign(s.psbtHex);
+        const tx = bitcoin.Transaction.fromHex(out.txHex);
+        expect(tx.ins).to.have.length(3);
+        const scripts = tx.ins.map(() => s.acct.output);
+        const values  = tx.ins.map(() => s.value);
+        for (let i = 0; i < tx.ins.length; i++) {
+            expect(tx.ins[i].witness).to.have.length(1);
+            const sighash = tx.hashForWitnessV1(i, scripts, values, bitcoin.Transaction.SIGHASH_DEFAULT);
+            expect(schnorr.verify(tx.ins[i].witness[0], sighash, s.acct.aggregateXOnly)).to.equal(true);
+        }
     });
 
     it('propagates a co-signer denial as SDKPolicyError (no tx produced)', async function () {

@@ -123,6 +123,57 @@ class CoSignerClient {
 
         return { signature: Buffer.from(signature), msg: Buffer.from(msg), action: res.action };
     }
+
+    /*
+     * Multi-input variant: co-sign a tx that spends several UTXOs of the aggregate
+     * account in ONE round (one authorization on the co-signer side). Generates a
+     * distinct nonce per input (never reused), sends them together, and aggregates
+     * each input's partials into its final key-path signature.
+     *
+     * @param {object} req
+     *   psbt          {string} PSBT hex
+     *   secretKey     {Uint8Array|hex}  the agent's key
+     *   inputIndexes  {number[]}  inputs to co-sign (default [0])
+     * @returns {Promise<object>}
+     *   { signatures:[{ index, signature:Buffer(64), msg:Buffer(32) }], action }
+     * @throws {SDKPolicyError}  when the co-signer denies
+     */
+    async signAll(req = {}) {
+        const secretKey = toBytes(req.secretKey, 'secretKey');
+        const agentPub  = secp256k1.getPublicKey(secretKey, true);
+        const indexes = (Array.isArray(req.inputIndexes) && req.inputIndexes.length) ? req.inputIndexes : [0];
+
+        // Round 1: a unique agent nonce per input (secret nonces stay in this.musig).
+        const nonceByIndex = {};
+        const inputs = indexes.map((i) => {
+            const n = this.musig.generateNonce({ publicKey: agentPub, secretKey });
+            nonceByIndex[i] = n;
+            return { index: i, agentPublicNonce: Buffer.from(n).toString('hex') };
+        });
+
+        const res = await this.transport({ psbt: req.psbt, inputs });
+        if (!res || res.approved !== true)
+            throw new SDKPolicyError(res && res.reason ? res.reason : 'COSIGNER_DENIED',
+                'co-signer refused to sign: ' + (res && res.reason ? res.reason : 'unknown'),
+                res && res.detail ? { detail: res.detail } : {});
+        if (!Array.isArray(res.signatures)) throw new SDKPolicyError('COSIGNER_BAD_RESPONSE',
+            'co-signer approved but returned no signatures array');
+
+        const signatures = res.signatures.map((s) => {
+            const agentNonce = nonceByIndex[s.index];
+            if (!agentNonce) throw new SDKPolicyError('COSIGNER_BAD_RESPONSE',
+                'co-signer returned a signature for an unrequested input ' + s.index);
+            const msg     = toBytes(s.msg, 'msg');
+            const coNonce = toBytes(s.publicNonce, 'publicNonce');
+            const aggNonce = this.musig.aggregateNonces([agentNonce, coNonce]);
+            const session  = this.musig.startSession(aggNonce, msg, this.publicKeys, this.tweaks);
+            const agentSig = this.musig.partialSign({ secretKey, publicNonce: agentNonce, sessionKey: session });
+            const signature = this.musig.aggregateSignatures([agentSig, toBytes(s.sig, 'sig')], session);
+            return { index: s.index, signature: Buffer.from(signature), msg: Buffer.from(msg) };
+        });
+
+        return { signatures, action: res.action };
+    }
 }
 
 module.exports = CoSignerClient;

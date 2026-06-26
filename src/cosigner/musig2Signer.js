@@ -20,13 +20,10 @@
  * MuSig2 key-path spend wherever it would otherwise single-WIF sign. Wired
  * via submitOpts.signer (see lifecycleManager.js).
  *
- * SCOPE (P3 slice 2): a single taproot input under the aggregate account
- * (the common freshly-funded / consolidated agent wallet). A multi-input
- * tx needs a distinct MuSig2 nonce + round PER input AND single-shot budget
- * accounting on the daemon - a naive per-input loop both reuses nonces and
- * double-charges the policy window (the second input sees the first already
- * recorded). Until that lands we FAIL CLOSED on > 1 input rather than
- * mis-sign or over-count.
+ * Signs every taproot input of the aggregate spend in ONE co-signer round
+ * (one authorization, one budget charge, a distinct MuSig2 nonce per input).
+ * The co-signer rejects a mixed-account input set; all inputs here belong to
+ * the aggregate (the encoder funds the tx from that one address).
  *
  ********************************************************************/
 
@@ -56,19 +53,21 @@ function buildMuSig2Signer(config = {}) {
 
     return async function muSig2Sign(psbtHex) {
         const psbt = bitcoin.Psbt.fromHex(psbtHex, network ? { network } : undefined);
-        if (psbt.txInputs.length !== 1)
-            throw new SDKPolicyError('MUSIG2_MULTI_INPUT_UNSUPPORTED',
-                `MuSig2 submit supports a single input this slice; got ${psbt.txInputs.length}. ` +
-                'Consolidate the aggregate account to one UTXO (multi-input is a later slice).');
+        if (psbt.txInputs.length === 0)
+            throw new SDKPolicyError('MUSIG2_NO_INPUTS', 'PSBT has no inputs to sign');
+        const inputIndexes = psbt.txInputs.map((_, i) => i);
 
-        // The co-signer decodes the action FROM this PSBT, runs policy, and returns
-        // its half; the client combines into the final key-path signature. A denial
-        // throws SDKPolicyError here, aborting the submit before any broadcast.
-        const { signature } = await coSignerClient.sign({ psbt: psbtHex, secretKey, inputIndex: 0 });
+        // The co-signer decodes the action FROM this PSBT, runs policy once, and
+        // returns its half for each input; the client combines them into the final
+        // key-path signatures. A denial throws SDKPolicyError here, aborting the
+        // submit before any broadcast.
+        const { signatures } = await coSignerClient.signAll({ psbt: psbtHex, secretKey, inputIndexes });
 
-        // The 64-byte Schnorr sig over the BIP341 key-path sighash IS the witness.
-        psbt.updateInput(0, { tapKeySig: toBuf(signature) });
-        psbt.finalizeInput(0);
+        // Each 64-byte Schnorr sig over its input's BIP341 sighash IS that witness.
+        for (const s of signatures) {
+            psbt.updateInput(s.index, { tapKeySig: toBuf(s.signature) });
+            psbt.finalizeInput(s.index);
+        }
         const tx = psbt.extractTransaction();
         return { txHex: tx.toHex(), txid: tx.getId(), psbtHex: psbt.toHex() };
     };

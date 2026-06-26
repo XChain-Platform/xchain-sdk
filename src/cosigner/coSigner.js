@@ -183,9 +183,11 @@ class CoSigner {
      *   agentPublicNonce  {Uint8Array|hex} the live signer's 66-byte public nonce
      *   inputIndex        {number} the input this group signs (default 0)
      *   sighashType       {number} optional; default SIGHASH_DEFAULT
+     *   inputs            [{index, agentPublicNonce}]  multi-input form (see _processMulti)
      * @returns {object}
      *   { approved:false, reason, detail }
-     *   { approved:true, publicNonce, sig, msg }  (all hex)
+     *   { approved:true, publicNonce, sig, msg }            single-input
+     *   { approved:true, action, signatures:[...] }         multi-input (req.inputs)
      */
     process(req = {}) {
         let psbt;
@@ -195,6 +197,9 @@ class CoSigner {
                 : req.psbt;
         } catch (e) { return this._deny('PSBT_PARSE_FAILED', e.message); }
         if (!psbt) return this._deny('NO_PSBT');
+
+        // Multi-input request: one authorization, a partial sig per input.
+        if (Array.isArray(req.inputs)) return this._processMulti(psbt, req);
 
         // 1. Recover the action FROM the PSBT (never trust the caller's claim).
         const decoded = decodeActionFromPsbt(psbt, { network: this.network });
@@ -238,26 +243,8 @@ class CoSigner {
         } catch (e) { return this._deny('SIGN_FAILED', e.message); }
 
         // 7. Consume the budget on authorization (conservative: even if the agent
-        //    never completes the aggregate, the cap is already spent). The txid is
-        //    fixed pre-signature for segwit/taproot inputs, so it is a stable audit
-        //    key; best-effort (null if reconstruction fails).
-        if (this.windowStore) {
-            let txid = null;
-            try {
-                const tx = new bitcoin.Transaction();
-                tx.version = psbt.version;
-                tx.locktime = psbt.locktime;
-                for (const ti of psbt.txInputs)  tx.addInput(ti.hash, ti.index, ti.sequence);
-                for (const to of psbt.txOutputs) tx.addOutput(to.script, to.value);
-                txid = tx.getId();
-            } catch (e) { /* audit txid is best-effort */ }
-            this.windowStore.record({
-                action: verdict.evaluation.action,
-                tick:   verdict.evaluation.tick,
-                amount: verdict.evaluation.amount,
-                txid,
-            });
-        }
+        //    never completes the aggregate, the cap is already spent).
+        this._recordBudget(psbt, verdict.evaluation);
 
         return {
             approved:    true,
@@ -266,6 +253,106 @@ class CoSigner {
             msg:         Buffer.from(msg).toString('hex'),
             action:      decoded.action,
         };
+    }
+
+    // Record one window entry for the whole tx (single authorization). The txid is
+    // fixed pre-signature for segwit/taproot inputs, so it is a stable audit key;
+    // best-effort (null if reconstruction fails). No-op without a window store.
+    _recordBudget(psbt, evaluation) {
+        if (!this.windowStore) return;
+        let txid = null;
+        try {
+            const tx = new bitcoin.Transaction();
+            tx.version  = psbt.version;
+            tx.locktime = psbt.locktime;
+            for (const ti of psbt.txInputs)  tx.addInput(ti.hash, ti.index, ti.sequence);
+            for (const to of psbt.txOutputs) tx.addOutput(to.script, to.value);
+            txid = tx.getId();
+        } catch (e) { /* audit txid is best-effort */ }
+        this.windowStore.record({
+            action: evaluation.action, tick: evaluation.tick, amount: evaluation.amount, txid,
+        });
+    }
+
+    /*
+     * Multi-input variant: ONE authorization (decode + policy + output gate +
+     * budget once) covering a tx that spends several UTXOs of the same aggregate
+     * account, then a partial signature per input (each over its own BIP341
+     * sighash, with the input's own agent nonce - never a reused nonce). Routed to
+     * automatically when req.inputs is present.
+     *
+     * @param {bitcoin.Psbt} psbt
+     * @param {object} req
+     *   inputs       [{ index, agentPublicNonce }]  one per input to co-sign
+     *   sighashType  optional
+     * @returns {object}
+     *   { approved:false, reason, detail }
+     *   { approved:true, action, signatures:[{ index, publicNonce, sig, msg }] }
+     */
+    _processMulti(psbt, req) {
+        const inputs = req.inputs;
+        if (!Array.isArray(inputs) || inputs.length === 0) return this._deny('NO_INPUTS_REQUESTED');
+
+        // Validate the requested set: in range, witnessUtxo present, no duplicates,
+        // and ALL spending the SAME account script (a mixed-account spend makes
+        // change-detection ambiguous - fail closed).
+        const seenIdx = new Set();
+        let accountScript = null;
+        for (const it of inputs) {
+            const i = it.index;
+            if (!Number.isInteger(i) || i < 0 || i >= psbt.txInputs.length)
+                return this._deny('INPUT_INDEX_OUT_OF_RANGE', { index: i });
+            if (seenIdx.has(i)) return this._deny('DUPLICATE_INPUT_INDEX', { index: i });
+            seenIdx.add(i);
+            const wu = psbt.data.inputs[i] && psbt.data.inputs[i].witnessUtxo;
+            if (!wu || !wu.script) return this._deny('CANNOT_CHECK_OUTPUTS', 'missing witnessUtxo for input ' + i);
+            if (accountScript === null) accountScript = wu.script;
+            else if (!wu.script.equals(accountScript)) return this._deny('MIXED_INPUT_SCRIPTS', { index: i });
+        }
+
+        // Decode + policy + confirm, once for the whole tx.
+        const decoded = decodeActionFromPsbt(psbt, { network: this.network });
+        if (!decoded.ok) return this._deny('DECODE_' + decoded.reason, decoded.detail);
+        const windowUsage = this.windowStore ? this.windowStore.snapshot() : undefined;
+        const verdict = evaluatePolicy(this.policy,
+            { action: decoded.action, params: decoded.params }, windowUsage);
+        if (!verdict.ok) return this._deny(verdict.violation.code, verdict.violation.details);
+        if (verdict.evaluation.needsConfirmation && !this.allowConfirmable)
+            return this._deny('CONFIRMATION_REQUIRED',
+                { action: decoded.action, amount: verdict.evaluation.amount });
+
+        // Output gate, once (all signed inputs share accountScript by the check above).
+        const outDenial = this._checkOutputs(psbt, inputs[0].index);
+        if (outDenial) return outDenial;
+
+        // One partial signature per input (own sighash + own nonce).
+        const signatures = [];
+        for (const it of inputs) {
+            let msg;
+            try { msg = taprootKeyPathSighash(psbt, it.index, req.sighashType); }
+            catch (e) { return this._deny('CANNOT_DERIVE_SIGHASH', e.message); }
+            let det;
+            try {
+                det = this.musig.deterministicSign({
+                    secretKey:         this.secretKey,
+                    otherPublicNonces: [toBytes(it.agentPublicNonce, 'agentPublicNonce')],
+                    publicKeys:        this.publicKeys,
+                    tweaks:            this.tweaks,
+                    msg,
+                });
+            } catch (e) { return this._deny('SIGN_FAILED', e.message); }
+            signatures.push({
+                index:       it.index,
+                publicNonce: Buffer.from(det.publicNonce).toString('hex'),
+                sig:         Buffer.from(det.sig).toString('hex'),
+                msg:         Buffer.from(msg).toString('hex'),
+            });
+        }
+
+        // Budget consumed ONCE for the tx (a per-input record would over-count).
+        this._recordBudget(psbt, verdict.evaluation);
+
+        return { approved: true, action: decoded.action, signatures };
     }
 }
 

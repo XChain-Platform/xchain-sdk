@@ -53,18 +53,23 @@ function createCoSignerApp(coSigner, opts = {}) {
             if (got !== token) return res.status(401).json({ approved: false, reason: 'UNAUTHORIZED' });
         }
         const body = req.body || {};
-        if (typeof body.psbt !== 'string' || !body.agentPublicNonce)
+        // Two shapes: single-input { agentPublicNonce, inputIndex? } or multi-input
+        // { inputs: [{ index, agentPublicNonce }] }. PSBT is required either way.
+        const isMulti = Array.isArray(body.inputs);
+        if (typeof body.psbt !== 'string' || (!isMulti && !body.agentPublicNonce))
             return res.status(400).json({ approved: false, reason: 'BAD_REQUEST',
-                detail: 'psbt (hex) and agentPublicNonce are required' });
+                detail: 'psbt (hex) and agentPublicNonce (or inputs[]) are required' });
 
         let result;
         try {
-            result = coSigner.process({
-                psbt:             body.psbt,
-                agentPublicNonce: body.agentPublicNonce,
-                inputIndex:       body.inputIndex,
-                sighashType:      body.sighashType,
-            });
+            result = coSigner.process(isMulti
+                ? { psbt: body.psbt, inputs: body.inputs, sighashType: body.sighashType }
+                : {
+                    psbt:             body.psbt,
+                    agentPublicNonce: body.agentPublicNonce,
+                    inputIndex:       body.inputIndex,
+                    sighashType:      body.sighashType,
+                });
         } catch (e) {
             // CoSigner.process is fail-closed by return value; a throw here is an
             // unexpected internal fault. Surface as a denial, never as a sign.

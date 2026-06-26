@@ -227,6 +227,64 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         expect(res.approved).to.equal(false);
         expect(res.reason).to.equal('OUTPUT_OVER_CAP');
     });
+
+    // Multi-input: one authorization covering a tx that spends several aggregate
+    // UTXOs, a partial signature per input, the budget charged once.
+    function buildMultiInputPsbt(acct, n, scripts) {
+        const psbt = new bitcoin.Psbt();
+        for (let i = 0; i < n; i++)
+            psbt.addInput({ hash: crypto.randomBytes(32), index: i,
+                witnessUtxo: { script: (scripts && scripts[i]) || acct.p2trScript, value: 100000 } });
+        const firstTxid = Buffer.from(psbt.txInputs[0].hash).reverse().toString('hex');
+        const inner = bitcoin.script.compile([Buffer.from('SEND|0|TOK|1|1destX|m', 'utf8')]);
+        const cipher = crypto.createCipheriv('aes-128-ctr', firstTxid.substr(0, 16), firstTxid.substr(16, 16));
+        const obf = Buffer.concat([cipher.update(Buffer.concat([Buffer.from('XCHN'), inner])), cipher.final()]);
+        psbt.addOutput({ script: bitcoin.payments.embed({ data: [obf] }).output, value: 0 });
+        psbt.addOutput({ script: acct.p2trScript, value: n * 90000 });   // change to self
+        return psbt;
+    }
+    function multiInputs(acct, n) {
+        return Array.from({ length: n }, (_, i) => ({
+            index: i,
+            agentPublicNonce: Buffer.from(new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk })).toString('hex'),
+        }));
+    }
+
+    it('multi-input: approves once and returns one partial signature per input', function () {
+        const acct = makeAccount();
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
+        const res = co.process({ psbt: buildMultiInputPsbt(acct, 3).toHex(), inputs: multiInputs(acct, 3) });
+        expect(res.approved).to.equal(true);
+        expect(res.signatures).to.have.length(3);
+        expect(res.signatures.map((s) => s.index)).to.deep.equal([0, 1, 2]);
+    });
+
+    it('multi-input: charges the window once for the whole tx', function () {
+        const acct = makeAccount();
+        const stateFile = path.join(os.tmpdir(), `cosigner-multi-${crypto.randomBytes(6).toString('hex')}.json`);
+        const store = new WindowStore(stateFile, 24);
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
+            policy: policy({ maxPerWindow: { hours: 24, maxActions: 1 } }), windowStore: store });
+        try {
+            const first = co.process({ psbt: buildMultiInputPsbt(acct, 2).toHex(), inputs: multiInputs(acct, 2) });
+            expect(first.approved).to.equal(true);          // a 2-input tx consumes ONE action
+            const second = co.process({ psbt: buildMultiInputPsbt(acct, 2).toHex(), inputs: multiInputs(acct, 2) });
+            expect(second.approved).to.equal(false);
+            expect(second.reason).to.equal('POLICY_WINDOW_COUNT_EXCEEDED');
+        } finally {
+            try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
+        }
+    });
+
+    it('multi-input: fails closed on a mixed-account input set', function () {
+        const acct = makeAccount();
+        const foreign = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(secp256k1.getPublicKey(crypto.randomBytes(32), true)) }).output;
+        const psbt = buildMultiInputPsbt(acct, 2, [acct.p2trScript, foreign]);
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
+        const res = co.process({ psbt: psbt.toHex(), inputs: multiInputs(acct, 2) });
+        expect(res.approved).to.equal(false);
+        expect(res.reason).to.equal('MIXED_INPUT_SCRIPTS');
+    });
 });
 
 describe('WindowStore (fail-closed budget)', function () {
