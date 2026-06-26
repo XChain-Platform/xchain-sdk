@@ -45,7 +45,7 @@ const os   = require('os');
 const path = require('path');
 const AgentSession      = require('../agentSession.js');
 const CoSignerClient    = require('./client.js');
-const { deriveMuSig2P2TR } = require('./account.js');
+const { deriveMuSig2P2TR, deriveMuSig2P2TR2of3 } = require('./account.js');
 const { buildMuSig2Signer } = require('./musig2Signer.js');
 const { SDKPolicyError } = require('../errors.js');
 
@@ -62,14 +62,20 @@ class MuSig2AgentSession extends AgentSession {
      * @param {object} opts
      *   coSigner (or these flat on opts):
      *     transport   {function}  body -> Promise<result> (inProcessTransport / httpTransport)
-     *     publicKeys  {(hex|bytes)[]}  full signer set INCLUDING this agent's key, agreed order
+     *     publicKeys  {(hex|bytes)[]}  the [agent, daemon] key-path set INCLUDING this agent's key
      *     network     {object}     bitcoinjs network for the aggregate address (optional)
+     *     recovery    {hex|bytes}  optional operator-recovery pubkey. When set, the
+     *                 account is a 2-of-3 tap tree {agent, daemon, recovery}: the hot
+     *                 path stays agent+daemon key-path (tweaked), and either pairing
+     *                 with the recovery key can spend via a script path if a party is
+     *                 lost. Requires publicKeys to be exactly the [agent, daemon] pair.
      */
     constructor(sdk, wif, policy = {}, opts = {}) {
         const cfg = opts.coSigner || opts;
         const transport  = cfg.transport;
         const publicKeys = cfg.publicKeys;
         const network    = cfg.network || null;
+        const recovery   = cfg.recovery || null;
 
         if (typeof transport !== 'function')
             throw new SDKPolicyError('COSIGNER_CONFIG',
@@ -82,11 +88,28 @@ class MuSig2AgentSession extends AgentSession {
         // aggregate to the account key. Fail closed at construction.
         const keyInfo = sdk.wallet.importWIF(wif);
         const agentHex = String(keyInfo.publicKeyHex).toLowerCase();
-        if (!publicKeys.some((k) => pubHex(k) === agentHex))
+        const agentIdx = publicKeys.findIndex((k) => pubHex(k) === agentHex);
+        if (agentIdx < 0)
             throw new SDKPolicyError('COSIGNER_KEY_MISMATCH',
                 "this agent's public key is not in the MuSig2 signer set");
 
-        const account = deriveMuSig2P2TR(publicKeys, network);
+        // Derive the spending account + the key-path signing set/tweaks. With a
+        // recovery key it is a 2-of-3 tap tree (hot path = agent+daemon key-path,
+        // BIP341-tweaked); otherwise the plain 2-of-2 key-path account.
+        let account, signingKeys, signingTweaks;
+        if (recovery) {
+            if (publicKeys.length !== 2)
+                throw new SDKPolicyError('COSIGNER_CONFIG',
+                    'recovery mode requires exactly the [agent, daemon] pair in publicKeys');
+            const daemon = publicKeys[1 - agentIdx];
+            account = deriveMuSig2P2TR2of3({ agent: publicKeys[agentIdx], daemon, recovery }, network);
+            signingKeys   = account.keyPath.publicKeys;
+            signingTweaks = account.keyPath.tweaks;
+        } else {
+            account = deriveMuSig2P2TR(publicKeys, network);
+            signingKeys   = publicKeys;
+            signingTweaks = account.tweaks;
+        }
 
         // Key the client-side policy window on the AGGREGATE address (not the agent
         // p2pkh) so it tracks the account that actually spends.
@@ -96,12 +119,12 @@ class MuSig2AgentSession extends AgentSession {
 
         super(sdk, wif, policy, mergedOpts);
 
-        // The spending account is the aggregate P2TR; override the agent p2pkh that
-        // WalletSession derived so UTXO pulls + encoder pubkey/change target it.
+        // The spending account is the aggregate/recovery P2TR; override the agent
+        // p2pkh that WalletSession derived so UTXO pulls + encoder pubkey/change target it.
         this.address = account.address;
         this.musig2Account = account;
 
-        const client = new CoSignerClient({ transport, publicKeys, tweaks: account.tweaks });
+        const client = new CoSignerClient({ transport, publicKeys: signingKeys, tweaks: signingTweaks });
         this._musig2Signer = buildMuSig2Signer({ coSignerClient: client, secretKey: keyInfo.privateKey, network });
     }
 

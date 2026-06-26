@@ -24,36 +24,39 @@ const { secp256k1, schnorr } = require('@noble/curves/secp256k1');
 const CoSigner = require('../../src/cosigner/coSigner.js');
 const CoSignerClient = require('../../src/cosigner/client.js');
 const { inProcessTransport } = CoSignerClient;
-const { deriveMuSig2P2TR } = require('../../src/cosigner/account.js');
+const { deriveMuSig2P2TR, deriveMuSig2P2TR2of3 } = require('../../src/cosigner/account.js');
 const { buildMuSig2Signer } = require('../../src/cosigner/musig2Signer.js');
 const MuSig2AgentSession = require('../../src/cosigner/musig2AgentSession.js');
 const { SDKPolicyError } = require('../../src/errors.js');
 
 const DEST = '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2';
 
-// A 2-of-2 aggregate account plus an unsigned PSBT spending `inputs` UTXOs from
-// it, carrying `actionString` in an obfuscated OP_RETURN built exactly like the
-// encoder (AES-128-CTR keyed by the first input's txid, 'XCHN' magic).
-function buildAccountAndPsbt(actionString, { value = 100000, inputs = 1 } = {}) {
-    const agentSk = crypto.randomBytes(32), coSk = crypto.randomBytes(32);
-    const agentPk = Buffer.from(secp256k1.getPublicKey(agentSk, true));
-    const coPk    = Buffer.from(secp256k1.getPublicKey(coSk, true));
-    const keys    = [agentPk, coPk];
-    const acct    = deriveMuSig2P2TR(keys);
-
+// An unsigned PSBT spending `inputs` UTXOs of `output`, carrying `actionString`
+// in an obfuscated OP_RETURN built exactly like the encoder (AES-128-CTR keyed
+// by the first input's txid, 'XCHN' magic), with change back to `output`.
+function psbtSpending(output, actionString, { value = 100000, inputs = 1 } = {}) {
     const psbt = new bitcoin.Psbt();
-    for (let i = 0; i < inputs; i++) {
-        const prevHash = crypto.randomBytes(32);
-        psbt.addInput({ hash: prevHash, index: i, witnessUtxo: { script: acct.output, value } });
-    }
+    for (let i = 0; i < inputs; i++)
+        psbt.addInput({ hash: crypto.randomBytes(32), index: i, witnessUtxo: { script: output, value } });
     const firstTxid = Buffer.from(psbt.txInputs[0].hash).reverse().toString('hex');
     const inner  = bitcoin.script.compile([Buffer.from(actionString, 'utf8')]);
     const cipher = crypto.createCipheriv('aes-128-ctr', firstTxid.substr(0, 16), firstTxid.substr(16, 16));
     const obf    = Buffer.concat([cipher.update(Buffer.concat([Buffer.from('XCHN'), inner])), cipher.final()]);
     psbt.addOutput({ script: bitcoin.payments.embed({ data: [obf] }).output, value: 0 });
-    psbt.addOutput({ script: acct.output, value: value - 10000 });   // change back to the account
+    psbt.addOutput({ script: output, value: value - 10000 });   // change back to the account
+    return psbt.toHex();
+}
 
-    return { agentSk, coSk, agentPk, coPk, keys, acct, value, psbtHex: psbt.toHex() };
+// A 2-of-2 aggregate account plus an unsigned PSBT spending it.
+function buildAccountAndPsbt(actionString, opts = {}) {
+    const agentSk = crypto.randomBytes(32), coSk = crypto.randomBytes(32);
+    const agentPk = Buffer.from(secp256k1.getPublicKey(agentSk, true));
+    const coPk    = Buffer.from(secp256k1.getPublicKey(coSk, true));
+    const keys    = [agentPk, coPk];
+    const acct    = deriveMuSig2P2TR(keys);
+    const value   = opts.value || 100000;
+    return { agentSk, coSk, agentPk, coPk, keys, acct, value,
+             psbtHex: psbtSpending(acct.output, actionString, Object.assign({ value }, opts)) };
 }
 
 // Verify a finalized tx carries one valid key-path Schnorr witness for input 0
@@ -230,5 +233,39 @@ describe('MuSig2AgentSession', function () {
         expect(err.code).to.equal('POLICY_AMOUNT_EXCEEDED');
         expect(captured.encodeCalls).to.equal(1);    // reached the encoder
         expect(captured.broadcasts).to.have.length(0);   // co-signer withheld -> no broadcast
+    });
+
+    it('recovery mode: derives a 2-of-3 address and spends it via the agent+daemon key path', async function () {
+        const agentSk = crypto.randomBytes(32), daemonSk = crypto.randomBytes(32), recSk = crypto.randomBytes(32);
+        const agentPk  = Buffer.from(secp256k1.getPublicKey(agentSk, true));
+        const daemonPk = Buffer.from(secp256k1.getPublicKey(daemonSk, true));
+        const recPk    = Buffer.from(secp256k1.getPublicKey(recSk, true));
+        const a3 = deriveMuSig2P2TR2of3({ agent: agentPk, daemon: daemonPk, recovery: recPk });
+        const value = 100000;
+        const s = { agentSk, agentPk, psbtHex: psbtSpending(a3.output, `SEND|0|TOK|5|${DEST}|m`, { value }) };
+
+        const co = new CoSigner({ secretKey: daemonSk, publicKeys: a3.keyPath.publicKeys, tweaks: a3.keyPath.tweaks,
+            policy: { allowedActions: new Set(['SEND']) } });
+        const captured = { broadcasts: [], encodeCalls: 0 };
+        const session = new MuSig2AgentSession(makeSdk(s, captured), 'WIF',
+            { allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '100' } } },
+            { coSigner: { transport: inProcessTransport(co), publicKeys: [agentPk, daemonPk], recovery: recPk } });
+
+        expect(session.address).to.equal(a3.address);
+        await session.send({ tick: 'TOK', amount: '5', destination: DEST },
+            { utxos: [{ txid: 'a', vout: 0, value }] }, { waitForIndexer: false });
+        expect(captured.broadcasts).to.have.length(1);
+        // The broadcast witness verifies under the 2-of-3 address's tweaked output key.
+        expectValidKeyPathSpend(captured.broadcasts[0], { output: a3.output, aggregateXOnly: a3.outputXOnly }, value);
+    });
+
+    it('recovery mode requires exactly the [agent, daemon] pair', function () {
+        const s = buildAccountAndPsbt(`SEND|0|TOK|5|${DEST}|m`);
+        const recPk = Buffer.from(secp256k1.getPublicKey(crypto.randomBytes(32), true));
+        const third = Buffer.from(secp256k1.getPublicKey(crypto.randomBytes(32), true));
+        expect(() => new MuSig2AgentSession(makeSdk(s, { broadcasts: [], encodeCalls: 0 }), 'WIF',
+            { allowedActions: ['SEND'] },
+            { coSigner: { transport: () => {}, publicKeys: [s.agentPk, s.coPk, third], recovery: recPk } }))
+            .to.throw(SDKPolicyError).with.property('code', 'COSIGNER_CONFIG');
     });
 });
