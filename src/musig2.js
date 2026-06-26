@@ -25,13 +25,15 @@
  * @bitgo/secp256k1) with a Crypto adapter built from @noble/curves +
  * @noble/hashes + @brandonblack/musig/base_crypto.
  *
- * IMPORTANT: nonce generation and partial signing must happen on the
- * same module instance. The underlying library uses an internal
- * nonce cache keyed by publicNonce; a publicNonce generated on one
- * process cannot be partially-signed on another without also
- * transferring the secret nonce, which intentionally is not
- * exposed by this module. Cross-process signing requires the
- * deterministicSign flow (not yet wrapped).
+ * IMPORTANT: the two-round flow (generateNonce + partialSign) must
+ * happen on the same module instance. The underlying library uses an
+ * internal nonce cache keyed by publicNonce; a publicNonce generated on
+ * one process cannot be partially-signed on another without also
+ * transferring the secret nonce, which intentionally is not exposed by
+ * this module. Cross-process signing (e.g. a remote co-signer) uses
+ * deterministicSign() instead: it derives the secret nonce
+ * deterministically and returns the public nonce + partial signature in
+ * one stateless call, so nothing has to persist between rounds.
  *
  ********************************************************************/
 
@@ -394,6 +396,78 @@ class MuSig2 {
             return _musig.signAgg(sigs, sessionKey);
         } catch (e) {
             throw new SDKMuSigError('SIG_AGG_FAILED', e.message);
+        }
+    }
+
+    /*
+     * Stateless single-call partial signing (BIP327 deterministicSign).
+     *
+     * Unlike generateNonce + partialSign (two rounds that MUST share one live
+     * module instance, because the secret nonce is cached in-process), this
+     * derives the secret nonce deterministically from (secretKey, aggOtherNonce,
+     * publicKeys, msg) and returns the public nonce AND partial signature in one
+     * call. That is what lets a remote/stateless co-signer participate: it never
+     * has to persist a secret nonce between two requests. The deterministic
+     * signer must be the LAST signer (it needs every other signer's nonce first).
+     *
+     * @param {object} params
+     * @param {Uint8Array} params.secretKey            our 32-byte secret key
+     * @param {(Uint8Array|string)[]} params.publicKeys  full signer set, in the
+     *        same order + tweaks the other signers used (keyAgg runs internally)
+     * @param {Uint8Array} params.msg                  32-byte message (sighash)
+     * @param {Uint8Array} [params.aggOtherNonce]      66-byte aggregate of every
+     *        OTHER signer's public nonce, OR pass otherPublicNonces instead
+     * @param {Uint8Array[]} [params.otherPublicNonces] the other signers' 66-byte
+     *        public nonces; aggregated here (use this for the common 2-of-2 case,
+     *        where it is just the single counterparty nonce)
+     * @param {Uint8Array} [params.rand]               optional 32-byte aux entropy;
+     *        OMIT for a fully deterministic nonce (the whole point here)
+     * @param {boolean} [params.verify=true]           self-verify the partial sig
+     * @param {boolean} [params.nonceOnly=false]       return only { publicNonce }
+     * @returns {object} { sig:Uint8Array(32), sessionKey, publicNonce:Uint8Array(66) }
+     *          (or { publicNonce } when nonceOnly)
+     */
+    deterministicSign(params) {
+        if (!params || typeof params !== 'object')
+            throw new SDKMuSigError('INVALID_INPUT', 'deterministicSign params required');
+        requireBytes(params.secretKey, 'secretKey', 32);
+        requireBytes(params.msg, 'msg', 32);
+        if (params.rand !== undefined) requireBytes(params.rand, 'rand', 32);
+        let keys = normalizePubkeys(params.publicKeys);
+
+        // aggOtherNonce is the aggregation of every OTHER signer's public nonce.
+        // Accept it pre-aggregated (66 bytes), or aggregate an array here. For a
+        // single counterparty (2-of-2) nonceAgg of one element is that nonce itself.
+        let aggOtherNonce;
+        if (params.aggOtherNonce !== undefined) {
+            requireBytes(params.aggOtherNonce, 'aggOtherNonce', 66);
+            aggOtherNonce = params.aggOtherNonce;
+        } else if (Array.isArray(params.otherPublicNonces) && params.otherPublicNonces.length >= 1) {
+            params.otherPublicNonces.forEach((n, i) =>
+                requireBytes(n, 'otherPublicNonces[' + i + ']', 66));
+            try {
+                aggOtherNonce = _musig.nonceAgg(params.otherPublicNonces);
+            } catch (e) {
+                throw new SDKMuSigError('NONCE_AGG_FAILED', e.message);
+            }
+        } else {
+            throw new SDKMuSigError('INVALID_INPUT',
+                'deterministicSign requires aggOtherNonce (66 bytes) or a non-empty otherPublicNonces array');
+        }
+
+        try {
+            return _musig.deterministicSign({
+                secretKey:     params.secretKey,
+                aggOtherNonce: aggOtherNonce,
+                publicKeys:    keys,
+                tweaks:        params.tweaks || [],
+                msg:           params.msg,
+                rand:          params.rand,
+                verify:        params.verify !== false,
+                nonceOnly:     params.nonceOnly === true,
+            });
+        } catch (e) {
+            throw new SDKMuSigError('DETERMINISTIC_SIGN_FAILED', e.message);
         }
     }
 }

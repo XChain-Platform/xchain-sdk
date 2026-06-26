@@ -139,6 +139,104 @@ describe('MuSig2', function () {
     });
 
     /*
+     *  Cross-process 2-of-2 via deterministicSign: the keystone for a
+     *  remote co-signer. Signer B runs on a SEPARATE MuSig2 instance and
+     *  never calls generateNonce (no in-process secret-nonce cache to rely
+     *  on), proving a stateless co-signer can participate end-to-end.
+     */
+
+    describe('cross-process 2-of-2 (deterministicSign)', function () {
+        it('a separate-instance stateless co-signer produces a partial that aggregates + verifies', function () {
+            const agent    = new MuSig2();   // signer A (holds a cached secret nonce)
+            const cosigner = new MuSig2();   // signer B (different instance == different process)
+
+            const skA = crypto.randomBytes(32);
+            const skB = crypto.randomBytes(32);
+            const pkA = secp256k1.getPublicKey(skA, true);
+            const pkB = secp256k1.getPublicKey(skB, true);
+            const keys = [pkA, pkB];                       // agreed order, both sides
+            const ctx  = agent.aggregateKeys(keys);
+            const msg  = crypto.randomBytes(32);
+
+            // Round 1: agent makes its nonce; secret nonce stays inside `agent`.
+            const nA = agent.generateNonce({ publicKey: pkA, secretKey: skA, msg, xOnlyPublicKey: ctx.xOnlyPubkey });
+
+            // Co-signer: ONE stateless call. No prior generateNonce on `cosigner`.
+            const det = cosigner.deterministicSign({ secretKey: skB, otherPublicNonces: [nA], publicKeys: keys, msg });
+            expect(det.publicNonce.length).to.equal(66);
+            expect(det.sig.length).to.equal(32);
+
+            // Agent finishes from the co-signer's returned nonce + its own cached secret nonce.
+            const aggNonce = agent.aggregateNonces([nA, det.publicNonce]);
+            const session  = agent.startSession(aggNonce, msg, keys);
+            const sA       = agent.partialSign({ secretKey: skA, publicNonce: nA, sessionKey: session });
+
+            // The co-signer's partial must verify in the agent-built session...
+            expect(agent.verifyPartial({ sig: det.sig, publicKey: pkB, publicNonce: det.publicNonce, sessionKey: session }))
+                .to.equal(true);
+
+            // ...and the aggregate is a plain BIP340 Schnorr sig under the aggregated key.
+            const sig = agent.aggregateSignatures([sA, det.sig], session);
+            expect(schnorr.verify(sig, msg, ctx.xOnlyPubkey)).to.equal(true);
+        });
+
+        it('accepts a pre-aggregated aggOtherNonce equivalently to otherPublicNonces', function () {
+            const agent    = new MuSig2();
+            const cosigner = new MuSig2();
+            const skA = crypto.randomBytes(32), skB = crypto.randomBytes(32);
+            const pkA = secp256k1.getPublicKey(skA, true), pkB = secp256k1.getPublicKey(skB, true);
+            const keys = [pkA, pkB];
+            const ctx = agent.aggregateKeys(keys);
+            const msg = crypto.randomBytes(32);
+            const nA  = agent.generateNonce({ publicKey: pkA, secretKey: skA, msg, xOnlyPublicKey: ctx.xOnlyPubkey });
+
+            // For a single counterparty, the aggregate of "all other nonces" is nA itself.
+            const det = cosigner.deterministicSign({ secretKey: skB, aggOtherNonce: nA, publicKeys: keys, msg });
+            const aggNonce = agent.aggregateNonces([nA, det.publicNonce]);
+            const session  = agent.startSession(aggNonce, msg, keys);
+            const sA = agent.partialSign({ secretKey: skA, publicNonce: nA, sessionKey: session });
+            const sig = agent.aggregateSignatures([sA, det.sig], session);
+            expect(schnorr.verify(sig, msg, ctx.xOnlyPubkey)).to.equal(true);
+        });
+
+        it('is deterministic for fixed inputs but binds the message (no nonce reuse across messages)', function () {
+            const cosigner = new MuSig2();
+            const skB = crypto.randomBytes(32);
+            const pkA = secp256k1.getPublicKey(crypto.randomBytes(32), true);
+            const pkB = secp256k1.getPublicKey(skB, true);
+            const keys = [pkA, pkB];
+            const nA  = new MuSig2().generateNonce({ publicKey: pkA, secretKey: crypto.randomBytes(32) });
+            const msg1 = crypto.randomBytes(32);
+            const msg2 = crypto.randomBytes(32);
+
+            const a = cosigner.deterministicSign({ secretKey: skB, otherPublicNonces: [nA], publicKeys: keys, msg: msg1, nonceOnly: true });
+            const b = cosigner.deterministicSign({ secretKey: skB, otherPublicNonces: [nA], publicKeys: keys, msg: msg1, nonceOnly: true });
+            const c = cosigner.deterministicSign({ secretKey: skB, otherPublicNonces: [nA], publicKeys: keys, msg: msg2, nonceOnly: true });
+
+            expect(toHex(a.publicNonce)).to.equal(toHex(b.publicNonce));   // same inputs -> same nonce
+            expect(toHex(a.publicNonce)).to.not.equal(toHex(c.publicNonce)); // different msg -> different nonce
+        });
+
+        it('rejects when neither aggOtherNonce nor otherPublicNonces is provided', function () {
+            const cosigner = new MuSig2();
+            const skB = crypto.randomBytes(32);
+            const pkA = secp256k1.getPublicKey(crypto.randomBytes(32), true);
+            const pkB = secp256k1.getPublicKey(skB, true);
+            expect(() => cosigner.deterministicSign({ secretKey: skB, publicKeys: [pkA, pkB], msg: crypto.randomBytes(32) }))
+                .to.throw(/aggOtherNonce.*otherPublicNonces|otherPublicNonces/);
+        });
+
+        it('rejects a mis-sized msg', function () {
+            const cosigner = new MuSig2();
+            const skB = crypto.randomBytes(32);
+            const pkA = secp256k1.getPublicKey(crypto.randomBytes(32), true);
+            const pkB = secp256k1.getPublicKey(skB, true);
+            expect(() => cosigner.deterministicSign({ secretKey: skB, otherPublicNonces: [new Uint8Array(66)], publicKeys: [pkA, pkB], msg: h('ab') }))
+                .to.throw(/msg must be 32 bytes/);
+        });
+    });
+
+    /*
      *  Partial-sig verify + tamper detection.
      */
 
