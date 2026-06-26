@@ -74,6 +74,10 @@ class XChainSDK {
         this.addressResolver = new AddressResolver(this);
         this.contracts = new ContractUtils();
         this.musig2    = new MuSig2();
+        // Browser-safe MuSig2 co-signer toolkit (CoSigner, CoSignerClient, account
+        // derivations, recovery spend). Lets the wallet's passive co-signer build on
+        // the public API. The Node-only window store + express sidecar are not here.
+        this.coSigner  = require('./cosigner/index.js');
 
         this.workflows = new Workflows(this);
 
