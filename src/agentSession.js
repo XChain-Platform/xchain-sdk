@@ -43,24 +43,12 @@
 const fs   = require('fs');
 const os   = require('os');
 const path = require('path');
-const { create, all } = require('mathjs');
 const WalletSession    = require('./walletSession.js');
 const { SDKPolicyError } = require('./errors.js');
-
-const math = create(all, { number: 'BigNumber', precision: 64 });
-
-// Param keys that carry value/routing across action types (camelCase and
-// UPPER_SNAKE both appear at the session layer; createAction normalizes later).
-const AMOUNT_KEYS      = ['amount', 'AMOUNT'];
-const TICK_KEYS        = ['tick', 'TICK'];
-const DESTINATION_KEYS = ['destination', 'DESTINATION', 'destinations', 'DESTINATIONS'];
-
-function pick(params, keys) {
-    for (const k of keys)
-        if (params && params[k] !== undefined && params[k] !== null && params[k] !== '')
-            return params[k];
-    return undefined;
-}
+// The pure policy verdict is shared with the co-signer daemon so both
+// enforcement points run identical logic. AgentSession adds the throw +
+// observer + file-backed window store around it.
+const { evaluatePolicy, addDecimal } = require('./cosigner/policyEvaluator.js');
 
 class AgentSession extends WalletSession {
 
@@ -102,69 +90,14 @@ class AgentSession extends WalletSession {
         throw new SDKPolicyError(code, message, violation);
     }
 
-    _capFor(table, tick) {
-        if (!table) return undefined;
-        if (tick !== undefined && table[tick] !== undefined) return table[tick];
-        return table['*'];
-    }
-
-    // Exact decimal comparison via the BigNumber methods. mathjs larger()/equal()
-    // apply an epsilon tolerance, which is exactly wrong for policy caps.
-    _gt(a, b) { return math.bignumber(String(a)).gt(math.bignumber(String(b))); }
-    _add(a, b) { return math.bignumber(String(a)).plus(math.bignumber(String(b))).toString(); }
-
     _evaluate(actionData) {
-        const action = String(actionData.action || '').toUpperCase();
-        const params = actionData.params || {};
-        const tick   = pick(params, TICK_KEYS);
-        const amount = pick(params, AMOUNT_KEYS);
-        const destRaw = pick(params, DESTINATION_KEYS);
-        const destinations = destRaw === undefined ? []
-            : Array.isArray(destRaw) ? destRaw : String(destRaw).split(';');
-
-        if (!this.policy.allowedActions.has(action))
-            this._deny('POLICY_ACTION_DENIED', `action ${action} is not in allowedActions`, { action });
-
-        if (this.policy.allowedDestinations) {
-            for (const d of destinations)
-                if (!this.policy.allowedDestinations.has(d))
-                    this._deny('POLICY_DESTINATION_DENIED', `destination ${d} is not in allowedDestinations`, { action, destination: d });
-        }
-
-        if (this.policy.maxPerAction && amount !== undefined) {
-            const cap = this._capFor(this.policy.maxPerAction[action], tick);
-            if (cap !== undefined && this._gt(amount, cap))
-                this._deny('POLICY_AMOUNT_EXCEEDED',
-                    `${action} amount ${amount} exceeds per-action cap ${cap}${tick ? ' for ' + tick : ''}`,
-                    { action, tick, amount, cap });
-        }
-
-        const win = this.policy.maxPerWindow;
-        if (win) {
-            const usage = this._windowUsage();
-            if (win.maxActions !== undefined && usage.count + 1 > win.maxActions)
-                this._deny('POLICY_WINDOW_COUNT_EXCEEDED',
-                    `window already holds ${usage.count} actions (max ${win.maxActions} per ${win.hours}h)`,
-                    { action, count: usage.count, maxActions: win.maxActions });
-            if (win.perTick && amount !== undefined && tick !== undefined) {
-                const cap = this._capFor(win.perTick, tick);
-                if (cap !== undefined) {
-                    const projected = this._add(usage.perTick[tick] || '0', amount);
-                    if (this._gt(projected, cap))
-                        this._deny('POLICY_WINDOW_AMOUNT_EXCEEDED',
-                            `${tick} window total would reach ${projected} (cap ${cap} per ${win.hours}h)`,
-                            { action, tick, amount, windowTotal: usage.perTick[tick] || '0', cap });
-                }
-            }
-        }
-
-        let needsConfirmation = false;
-        if (this.policy.confirmAbove && amount !== undefined) {
-            const threshold = this._capFor(this.policy.confirmAbove.perTick, tick);
-            if (threshold !== undefined && this._gt(amount, threshold)) needsConfirmation = true;
-        }
-
-        return { action, tick, amount, destinations, needsConfirmation };
+        // Pass the live window snapshot to the pure evaluator (it does no I/O).
+        // Only read the window when the policy actually has a window rule.
+        const windowUsage = this.policy.maxPerWindow ? this._windowUsage() : undefined;
+        const verdict = evaluatePolicy(this.policy, actionData, windowUsage);
+        if (!verdict.ok)
+            this._deny(verdict.violation.code, verdict.violation.message, verdict.violation.details);
+        return verdict.evaluation;
     }
 
     /* ── window persistence ────────────────────────────────────────── */
@@ -203,7 +136,7 @@ class AgentSession extends WalletSession {
         const perTick = {};
         for (const e of usage.entries)
             if (e.tick !== undefined && e.amount !== undefined)
-                perTick[e.tick] = this._add(perTick[e.tick] || '0', e.amount);
+                perTick[e.tick] = addDecimal(perTick[e.tick] || '0', e.amount);
         return { count: usage.entries.length, perTick, hours: this.policy.maxPerWindow ? this.policy.maxPerWindow.hours : null };
     }
 
