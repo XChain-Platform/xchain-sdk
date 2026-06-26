@@ -192,8 +192,16 @@ class Utility {
         let [int, sats] = String(amount).split('.');
         if(!divisible && this.isNumeric(int) && int==amount)
             return true;
-        if(divisible && this.isNumeric(int) && (this.isNull(sats) || this.isNumeric(sats)))
+        //<FRACTIONAL-PRECISION-CAP> (item 5346): an amount must not carry more fractional
+        // digits than the tick's decimals. This mirrors the consensus-authoritative cap in
+        // xchain-indexer/src/utility.js so the SDK rejects over-precise amounts client-side
+        // before they are submitted. Parity is asserted in test/unit/utility.test.js.
+        if(divisible && this.isNumeric(int) && (this.isNull(sats) || this.isNumeric(sats))){
+            if(!this.isNull(sats) && String(sats).length > parseInt(decimals))
+                return false;
             return true;
+        }
+        //</FRACTIONAL-PRECISION-CAP>
         return false;
     }
 
