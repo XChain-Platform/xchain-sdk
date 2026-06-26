@@ -51,7 +51,7 @@ function buildAccountAndPsbt(actionString, { value = 100000, inputs = 1 } = {}) 
     const cipher = crypto.createCipheriv('aes-128-ctr', firstTxid.substr(0, 16), firstTxid.substr(16, 16));
     const obf    = Buffer.concat([cipher.update(Buffer.concat([Buffer.from('XCHN'), inner])), cipher.final()]);
     psbt.addOutput({ script: bitcoin.payments.embed({ data: [obf] }).output, value: 0 });
-    psbt.addOutput({ address: DEST, value: value - 10000 });
+    psbt.addOutput({ script: acct.output, value: value - 10000 });   // change back to the account
 
     return { agentSk, coSk, agentPk, coPk, keys, acct, value, psbtHex: psbt.toHex() };
 }

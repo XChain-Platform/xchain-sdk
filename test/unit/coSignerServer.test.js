@@ -52,7 +52,7 @@ describe('co-signer HTTP sidecar', function () {
         const psbt = new bitcoin.Psbt();
         psbt.addInput({ hash: prevHash, index: 0, witnessUtxo: { script: p2tr.output, value: 100000 } });
         psbt.addOutput({ script: bitcoin.payments.embed({ data: [obf] }).output, value: 0 });
-        psbt.addOutput({ address: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2', value: 90000 });
+        psbt.addOutput({ script: p2tr.output, value: 90000 });   // change back to the account
         psbtHex = psbt.toHex();
         agentNonce = Buffer.from(new MuSig2().generateNonce({ publicKey: agentPk, secretKey: agentSk })).toString('hex');
 

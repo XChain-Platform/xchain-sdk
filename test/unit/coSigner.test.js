@@ -61,7 +61,10 @@ function buildSignablePsbt(acct, actionString, opts = {}) {
     const witnessUtxo = opts.noWitnessUtxo ? undefined : { script: acct.p2trScript, value: 100000 };
     psbt.addInput(witnessUtxo ? { hash: prevHash, index: 0, witnessUtxo } : { hash: prevHash, index: 0 });
     psbt.addOutput({ script: bitcoin.payments.embed({ data: [obf] }).output, value: 0 });
-    psbt.addOutput({ address: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2', value: 90000 });
+    // Change returns to the account we spend from (a token SEND has no recipient
+    // output; the recipient rides the action string). Custom external outputs are
+    // tested explicitly in the anti-drain cases below.
+    psbt.addOutput({ script: acct.p2trScript, value: 90000 });
     return psbt;
 }
 
@@ -129,14 +132,16 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         expect(res.reason).to.equal('DECODE_NO_OP_RETURN');
     });
 
-    it('fails closed when a witnessUtxo is missing (cannot derive the sighash)', function () {
+    it('fails closed when a witnessUtxo is missing (output gate runs first, both refuse)', function () {
         const acct = makeAccount();
         const psbt = buildSignablePsbt(acct, 'SEND|0|TOK|1|1destX|m', { noWitnessUtxo: true });
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
         const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
         expect(res.approved).to.equal(false);
-        expect(res.reason).to.equal('CANNOT_DERIVE_SIGHASH');
+        // The output gate needs the spent script too, so it refuses before the
+        // sighash step would; either way nothing is signed.
+        expect(res.reason).to.equal('CANNOT_CHECK_OUTPUTS');
     });
 
     it('denies a confirm-required action (a headless daemon cannot prompt)', function () {
@@ -170,6 +175,57 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         } finally {
             try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
         }
+    });
+
+    // Anti-drain: a benign in-policy action must not let an attacker-controlled
+    // output siphon the account's native coin.
+    function buildDrainPsbt(acct, drainScript, drainValue) {
+        const prevHash = crypto.randomBytes(32);
+        const txid = Buffer.from(prevHash).reverse().toString('hex');
+        const inner = bitcoin.script.compile([Buffer.from('SEND|0|TOK|1|1destX|m', 'utf8')]);
+        const cipher = crypto.createCipheriv('aes-128-ctr', txid.substr(0, 16), txid.substr(16, 16));
+        const obf = Buffer.concat([cipher.update(Buffer.concat([Buffer.from('XCHN'), inner])), cipher.final()]);
+        const psbt = new bitcoin.Psbt();
+        psbt.addInput({ hash: prevHash, index: 0, witnessUtxo: { script: acct.p2trScript, value: 100000 } });
+        psbt.addOutput({ script: bitcoin.payments.embed({ data: [obf] }).output, value: 0 });
+        psbt.addOutput({ script: acct.p2trScript, value: 50000 });   // change to self
+        psbt.addOutput({ script: drainScript, value: drainValue });  // the suspect leg
+        return psbt;
+    }
+
+    it('refuses a benign action that drains native coin to an unauthorized output', function () {
+        const acct = makeAccount();
+        // An attacker P2WPKH output not in any allow-list.
+        const attacker = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(secp256k1.getPublicKey(crypto.randomBytes(32), true)) }).output;
+        const psbt = buildDrainPsbt(acct, attacker, 49000);
+        const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
+        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        expect(res.approved).to.equal(false);
+        expect(res.reason).to.equal('UNAUTHORIZED_OUTPUT');
+    });
+
+    it('allows an operator-authorized output (e.g. the protocol-fee leg)', function () {
+        const acct = makeAccount();
+        const fee = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(secp256k1.getPublicKey(crypto.randomBytes(32), true)) }).output;
+        const psbt = buildDrainPsbt(acct, fee, 1000);
+        const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
+            policy: policy(), allowedOutputs: [{ script: fee, maxValue: 5000 }] });
+        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        expect(res.approved).to.equal(true);
+    });
+
+    it('denies an authorized output that exceeds its value cap', function () {
+        const acct = makeAccount();
+        const fee = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(secp256k1.getPublicKey(crypto.randomBytes(32), true)) }).output;
+        const psbt = buildDrainPsbt(acct, fee, 49000);
+        const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
+            policy: policy(), allowedOutputs: [{ script: fee, maxValue: 5000 }] });
+        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        expect(res.approved).to.equal(false);
+        expect(res.reason).to.equal('OUTPUT_OVER_CAP');
     });
 });
 

@@ -60,7 +60,7 @@ describe('cosigner/account deriveMuSig2P2TR', function () {
         const psbt = new bitcoin.Psbt();
         psbt.addInput({ hash: prevHash, index: 0, witnessUtxo: { script: acct.output, value: 100000 } });
         psbt.addOutput({ script: bitcoin.payments.embed({ data: [obf] }).output, value: 0 });
-        psbt.addOutput({ address: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2', value: 90000 });
+        psbt.addOutput({ script: acct.output, value: 90000 });   // change back to the account
 
         const agentMusig = new MuSig2();
         const agentNonce = agentMusig.generateNonce({ publicKey: agentPk, secretKey: agentSk });

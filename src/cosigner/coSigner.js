@@ -26,15 +26,21 @@
  *   - The message signed is DERIVED from the PSBT (the BIP341 key-path
  *     sighash), never trusted from the caller. So the caller cannot show
  *     a benign PSBT for policy yet obtain a signature over a different tx.
+ *   - The tx OUTPUTS are gated too (_checkOutputs): the action string can't
+ *     constrain where the native coin goes, so only the OP_RETURN carrier,
+ *     change back to the spent account, and operator-authorized outputs are
+ *     allowed. This blocks a benign-action-with-drain-output craft.
  *   - Fail closed everywhere: any decode failure, policy denial, missing
- *     witnessUtxo, or confirm-required (a headless daemon cannot prompt)
- *     returns { approved:false, reason } and signs nothing.
+ *     witnessUtxo, unauthorized output, or confirm-required (a headless
+ *     daemon cannot prompt) returns { approved:false, reason } and signs nothing.
  *
  * SCOPE (slice 3): key-path P2TR spend of a configured aggregate (the
  * 2-of-2 case; the deterministic signer is this co-signer, the agent is
  * the live signer). The taproot tweak is supplied at construction (an
- * address-setup concern), not re-derived here. The 2-of-3 recovery tree
- * and native-coin output-leg cross-checks are later slices.
+ * address-setup concern), not re-derived here. The 2-of-3 recovery tree is
+ * a later slice. COINPAY/native-fee output legs are supported only when the
+ * operator allow-lists them via config.allowedOutputs (default: none, so
+ * plain token SEND/EXECUTE - OP_RETURN + change only - pass).
  *
  ********************************************************************/
 
@@ -106,10 +112,68 @@ class CoSigner {
         this.tweaks = config.tweaks || [];
         this.network = config.network || null;
         this.allowConfirmable = config.allowConfirmable === true;
+        // Operator-authorized non-change outputs (COINPAY native legs, the
+        // protocol-fee output). Everything NOT in this set, change-to-self, or the
+        // OP_RETURN carrier is treated as a drain and refused (see _checkOutputs).
+        this.allowedOutputs = this._normalizeAllowedOutputs(config.allowedOutputs || []);
         this.musig = new MuSig2();
     }
 
     _deny(reason, detail) { return { approved: false, reason, detail: detail || null }; }
+
+    // Normalize the allow-list once at construction (throws on bad config, never at
+    // sign time). Each entry: { address | script, maxValue? }.
+    _normalizeAllowedOutputs(list) {
+        if (!Array.isArray(list)) throw new Error('allowedOutputs must be an array');
+        return list.map((o, i) => {
+            let script;
+            if (o.script) {
+                script = Buffer.isBuffer(o.script) ? o.script : Buffer.from(o.script, 'hex');
+            } else if (o.address) {
+                try { script = bitcoin.address.toOutputScript(o.address, this.network || undefined); }
+                catch (e) { throw new Error(`allowedOutputs[${i}]: invalid address (${e.message})`); }
+            } else {
+                throw new Error(`allowedOutputs[${i}] needs an address or script`);
+            }
+            const maxValue = (o.maxValue === undefined || o.maxValue === null) ? null : Number(o.maxValue);
+            if (maxValue !== null && (!Number.isFinite(maxValue) || maxValue < 0))
+                throw new Error(`allowedOutputs[${i}].maxValue must be a non-negative number`);
+            return { script, maxValue };
+        });
+    }
+
+    // Anti-drain gate: the co-signer key-path-signs a spend of the aggregate
+    // account, so the tx OUTPUTS decide where the native coin goes - and the action
+    // string (the only thing decoded) does NOT constrain them. Without this, a WIF
+    // holder could show a benign in-policy action yet add an output draining the
+    // account's coin to themselves. Permit only: the OP_RETURN data carrier, change
+    // back to the account we spend from, and operator-authorized outputs. Anything
+    // else fails closed. Returns a denial object, or null when every output is safe.
+    _checkOutputs(psbt, idx) {
+        const inp = psbt.data.inputs[idx];
+        if (!inp || !inp.witnessUtxo || !inp.witnessUtxo.script)
+            return this._deny('CANNOT_CHECK_OUTPUTS', 'signed input has no witnessUtxo');
+        const accountScript = inp.witnessUtxo.script;
+        for (let i = 0; i < psbt.txOutputs.length; i++) {
+            const out = psbt.txOutputs[i];
+            // (a) OP_RETURN data carrier: carries the action, not value.
+            let decomp = null;
+            try { decomp = bitcoin.script.decompile(out.script); } catch (e) { /* non-standard */ }
+            if (decomp && decomp[0] === bitcoin.opcodes.OP_RETURN) continue;
+            // (b) Change back to the account we spend from stays under co-signer control.
+            if (out.script.equals(accountScript)) continue;
+            // (c) An operator-authorized native leg (COINPAY recipient / fee output).
+            const match = this.allowedOutputs.find((a) => out.script.equals(a.script));
+            if (match) {
+                if (match.maxValue !== null && out.value > match.maxValue)
+                    return this._deny('OUTPUT_OVER_CAP', { index: i, value: out.value, maxValue: match.maxValue });
+                continue;
+            }
+            // Anything else is an unauthorized native-coin drain.
+            return this._deny('UNAUTHORIZED_OUTPUT', { index: i, value: out.value });
+        }
+        return null;
+    }
 
     /*
      * Decide and (if approved) partial-sign.
@@ -147,14 +211,21 @@ class CoSigner {
             return this._deny('CONFIRMATION_REQUIRED',
                 { action: decoded.action, amount: verdict.evaluation.amount });
 
-        // 4. Derive the message FROM the PSBT (never trust a caller-supplied sighash).
+        const idx = Number.isInteger(req.inputIndex) ? req.inputIndex : 0;
+
+        // 4. Output gate: the action string doesn't constrain where the native coin
+        //    goes, so refuse any output that isn't the data carrier, change-to-self,
+        //    or operator-authorized. Blocks a benign-action / drain-output craft.
+        const outDenial = this._checkOutputs(psbt, idx);
+        if (outDenial) return outDenial;
+
+        // 5. Derive the message FROM the PSBT (never trust a caller-supplied sighash).
         let msg;
         try {
-            const idx = Number.isInteger(req.inputIndex) ? req.inputIndex : 0;
             msg = taprootKeyPathSighash(psbt, idx, req.sighashType);
         } catch (e) { return this._deny('CANNOT_DERIVE_SIGHASH', e.message); }
 
-        // 5. Stateless partial signature (the co-signer is the deterministic signer).
+        // 6. Stateless partial signature (the co-signer is the deterministic signer).
         let det;
         try {
             det = this.musig.deterministicSign({
@@ -166,7 +237,7 @@ class CoSigner {
             });
         } catch (e) { return this._deny('SIGN_FAILED', e.message); }
 
-        // 6. Consume the budget on authorization (conservative: even if the agent
+        // 7. Consume the budget on authorization (conservative: even if the agent
         //    never completes the aggregate, the cap is already spent). The txid is
         //    fixed pre-signature for segwit/taproot inputs, so it is a stable audit
         //    key; best-effort (null if reconstruction fails).
