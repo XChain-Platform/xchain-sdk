@@ -85,7 +85,22 @@ class LifecycleManager {
 
         // Step 3: Sign the PSBT
         progress('signing', { encoding: encoded.encoding });
-        let signed = this.sdk.wallet.signPsbt(encoded.psbt, wif);
+        let signed;
+        if (typeof opts.signer === 'function') {
+            // Custom signer (e.g. the MuSig2 co-signer): consumes the unsigned PSBT
+            // and returns the same { txHex, txid, psbtHex } shape as signPsbt. It is
+            // fail-closed - a policy denial or unenforceable shape throws here,
+            // aborting before any broadcast. A two-phase P2SH/P2WSH large action
+            // can't be completed through a custom signer (the co-signer reads only
+            // the OP_RETURN carrier), so reject it up front rather than broadcast a
+            // half-enforced phase 1.
+            if (encoded.encoding === 'P2SH' || encoded.encoding === 'P2WSH')
+                throw new SDKActionError('SIGNER_ENCODING_UNSUPPORTED',
+                    `custom signer cannot complete ${encoded.encoding} two-phase encoding`);
+            signed = await opts.signer(encoded.psbt, { encoding: encoded.encoding });
+        } else {
+            signed = this.sdk.wallet.signPsbt(encoded.psbt, wif);
+        }
 
         // Step 4: Broadcast
         progress('broadcasting', { txid: signed.txid });

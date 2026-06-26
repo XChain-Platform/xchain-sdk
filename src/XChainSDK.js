@@ -550,6 +550,16 @@ class XChainSDK {
         return new AgentSession(this, wif, policy, opts);
     }
 
+    // Create a HARD-enforced agent session: the spending account is a 2-of-2
+    // MuSig2 P2TR (agent key + policy co-signer key), so the WIF holder can't
+    // bypass policy with raw SDK calls - the co-signer withholds its partial on
+    // out-of-policy actions. opts.coSigner = { transport, publicKeys, network? };
+    // the agent's own pubkey must be in publicKeys. See src/cosigner/musig2AgentSession.js.
+    musig2AgentSession(wif, policy, opts) {
+        const MuSig2AgentSession = require('./cosigner/musig2AgentSession.js');
+        return new MuSig2AgentSession(this, wif, policy, opts);
+    }
+
     async issueAndDistribute(wif, issueParams, distributions, opts) {
         return this.workflows.issueAndDistribute(wif, issueParams, distributions, opts);
     }

@@ -27,6 +27,7 @@ const ContractUtils    = require('./src/contracts.js');
 const WalletUtils      = require('./src/wallet.js');
 const WalletSession    = require('./src/walletSession.js');
 const AgentSession     = require('./src/agentSession.js');
+const MuSig2AgentSession = require('./src/cosigner/musig2AgentSession.js');
 const { X402Gateway, X402Client, parseActionString: x402ParseActionString } = require('./src/x402.js');
 const AuthUtils        = require('./src/auth.js');
 const CrossChainHelper   = require('./src/crossChain.js');
@@ -67,6 +68,7 @@ module.exports = {
     WalletUtils,
     WalletSession,
     AgentSession,
+    MuSig2AgentSession,
     X402Gateway,
     X402Client,
     x402ParseActionString,
