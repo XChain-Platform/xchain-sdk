@@ -186,6 +186,14 @@ var Formats = {
 
     WITHDRAW: {
         0: 'VERSION|CONTRACT_ACTION_INDEX|TICK|QUANTITY'
+    },
+
+    // Token-weighted governance polls. v0 = create poll, v1 = cast ballot
+    // (v2 = system finalize, v3 = delegation are later phases).
+    // Must match xchain-indexer/src/actions/vote.js formats exactly.
+    VOTE: {
+        0: 'VERSION|TICK|END_BLOCK|OPTIONS|MAX_SELECTIONS|TALLY_MODE|WEIGHT_MODE|QUORUM|MIN_VOTERS|MIN_VOTE_BALANCE|DECIDE_THRESHOLD|QUESTION',
+        1: 'VERSION|POLL_REF|BALLOT|MEMO'
     }
 
 }
