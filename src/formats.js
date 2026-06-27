@@ -190,12 +190,13 @@ var Formats = {
 
     // Token-weighted governance polls. v0 = create poll, v1 = cast ballot,
     // v2 = finalize (system-injected only; listed for format parity, not
-    // user-encodable). v3 = delegation is a later phase.
+    // user-encodable), v3 = set/clear standing vote delegation.
     // Must match xchain-indexer/src/actions/vote.js formats exactly.
     VOTE: {
         0: 'VERSION|TICK|END_BLOCK|OPTIONS|MAX_SELECTIONS|TALLY_MODE|WEIGHT_MODE|QUORUM|MIN_VOTERS|MIN_VOTE_BALANCE|DECIDE_THRESHOLD|QUESTION',
         1: 'VERSION|POLL_REF|BALLOT|MEMO',
-        2: 'VERSION|POLL_REF'
+        2: 'VERSION|POLL_REF',
+        3: 'VERSION|TICK|DELEGATE_TO|MEMO'
     }
 
 }
