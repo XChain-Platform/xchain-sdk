@@ -1049,4 +1049,21 @@ describe('WalletUtils', function() {
             expect(opReturnOut.scriptType).to.equal('unknown');
         });
     });
+
+    describe('getBitcoinNetwork()', function() {
+        it('returns the configured network params', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            expect(wallet.getBitcoinNetwork()).to.equal(getNetwork('bitcoin-regtest'));
+        });
+
+        it('resolves a different network by name without a second SDK', function() {
+            const wallet = new WalletUtils('bitcoin-mainnet');
+            expect(wallet.getBitcoinNetwork('litecoin-mainnet')).to.equal(getNetwork('litecoin-mainnet'));
+        });
+
+        it('returns null when constructed without a network', function() {
+            const wallet = new WalletUtils();
+            expect(wallet.getBitcoinNetwork()).to.equal(null);
+        });
+    });
 });

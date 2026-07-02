@@ -117,6 +117,17 @@ class WalletUtils {
             'Network not configured. Provide network in SDK options or pass it to this method.');
     }
 
+    // Public accessor for the bitcoinjs-lib network params this SDK is
+    // configured for (null when constructed without a network). Consumers that
+    // build taproot scripts / addresses off the SDK (e.g. the wallet's
+    // co-signer provisioning deriving a MuSig2 aggregate address) read this
+    // instead of duplicating the coin-registry-derived params. Pass a network
+    // string to resolve a different network's params without a second SDK.
+    getBitcoinNetwork(network) {
+        if (network) return getNetwork(network);
+        return this._netParams;
+    }
+
     /**
      * Import a WIF-encoded private key.
      *
