@@ -36,6 +36,7 @@ const AttestationHelpers = require('./src/attestation.js');
 const NftHelpers         = require('./src/nft.js');
 const ProjectHelpers     = require('./src/project.js');
 const ControllerHelpers  = require('./src/controller.js');
+const VoteHelpers        = require('./src/vote.js');
 const UTXOCache        = require('./src/utxoCache.js');
 const MuSig2           = require('./src/musig2.js');
 const chunkHelper      = require('./src/chunkHelper.js');
@@ -88,6 +89,7 @@ module.exports = {
     NftHelpers,
     ProjectHelpers,
     ControllerHelpers,
+    VoteHelpers,
     UTXOCache,
     MuSig2,
     chunkHelper,

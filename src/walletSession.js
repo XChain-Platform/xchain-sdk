@@ -158,6 +158,11 @@ class WalletSession {
     // Params: { coin, tick, fiat, value, fee, memo }. See protocol/actions/PRICE.md.
     async price(params, enc, opts)     { return this.submit({ action: 'PRICE', params }, enc, opts); }
 
+    // Governance: VOTE (create poll / cast ballot / delegate). Build params with
+    // sdk.voting.*; the version rides in params.version. v2 (finalize) is
+    // system-only. See protocol/actions/VOTE.md.
+    async vote(params, enc, opts)      { return this.submit({ action: 'VOTE', params }, enc, opts); }
+
     // Staking (BTC-only)
     async stake(params, enc, opts)            { return this.submit({ action: 'STAKE', params }, enc, opts); }
     async unstake(params, enc, opts)          { return this.submit({ action: 'UNSTAKE', params }, enc, opts); }

@@ -35,6 +35,7 @@ const GatedFileUtils = require('./gatedFile.js');
 const NftHelpers     = require('./nft.js');
 const ProjectHelpers = require('./project.js');
 const ControllerHelpers = require('./controller.js');
+const VoteHelpers    = require('./vote.js');
 const AttestationHelpers = require('./attestation.js');
 const CheckpointVerifier = require('./checkpoint.js');
 const LightClient        = require('./light.js');
@@ -103,6 +104,12 @@ class XChainSDK {
         // network. Read the resulting manifest via sdk.getContractManifest().
         // Spec: protocol/Controller_Bound_Tokens.md.
         this.controller = new ControllerHelpers();
+        // Voting (token-weighted governance) helpers: pure builders for VOTE v0
+        // (create poll), v1 (cast ballot), and v3 (delegate), handling option /
+        // ballot encoding and mode/binding-poll validation. No network.
+        // Submit-flow recipes live on sdk.workflows (createPoll, castBallot,
+        // delegateVote). Spec: protocol/actions/VOTE.md.
+        this.voting     = new VoteHelpers();
         // Attestation request/payload builders (http_get URL validation, LLM
         // envelope, request options). Exposed on the instance for parity with
         // messaging/gatedFile so dapps can `sdk.attestation.httpGet(url)` before
@@ -451,6 +458,12 @@ class XChainSDK {
     // Params: { coin, tick, fiat, value, fee, memo }. See protocol/actions/PRICE.md.
     async price(params, encoder)     { return this.createAction({ action: 'PRICE', params, encoder }); }
 
+    // VOTE (token-weighted governance). Raw wrapper: the version is taken from
+    // params.version (0 create / 1 ballot / 3 delegate). Build the params with
+    // sdk.voting.* or hand-roll them. v2 (finalize) is system-only. For a
+    // signed+broadcast round-trip use sdk.createPoll / castBallot / delegateVote.
+    async vote(params, encoder)             { return this.createAction({ action: 'VOTE', params, encoder }); }
+
     async stake(params, encoder)            { return this.createAction({ action: 'STAKE', params, encoder }); }
     async unstake(params, encoder)          { return this.createAction({ action: 'UNSTAKE', params, encoder }); }
     async delegate(params, encoder)         { return this.createAction({ action: 'DELEGATE', params, encoder }); }
@@ -608,6 +621,22 @@ class XChainSDK {
     }
     async setRoster(wif, params, opts) {
         return this.workflows.setRoster(wif, params, opts);
+    }
+    // Governance submit recipes: build the VOTE params (via sdk.voting.*) then
+    // sign + broadcast in one call. `params` is the same object the matching
+    // sdk.voting builder takes. Set opts.waitForIndexer to get back the poll's
+    // action_index (needed as pollRef for later ballots).
+    async createPoll(wif, params, opts) {
+        return this.workflows.createPoll(wif, params, opts);
+    }
+    async castBallot(wif, params, opts) {
+        return this.workflows.castBallot(wif, params, opts);
+    }
+    async delegateVote(wif, params, opts) {
+        return this.workflows.delegateVote(wif, params, opts);
+    }
+    async clearVoteDelegation(wif, params, opts) {
+        return this.workflows.clearVoteDelegation(wif, params, opts);
     }
 
     // Usage: await sdk.batch().send({...}).mint({...}).build(encoderOpts?)

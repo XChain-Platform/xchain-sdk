@@ -439,6 +439,37 @@ class Workflows {
         return { list: listResult, link: linkResult };
     }
 
+    // Governance (VOTE) submit recipes: build the VOTE params via sdk.voting.*,
+    // then sign + broadcast. `params` matches the corresponding sdk.voting
+    // builder. See protocol/actions/VOTE.md.
+
+    // Create a poll (VOTE v0). Returns { result, pollRef }; pollRef is the
+    // poll's action_index (needed as pollRef for ballots), available when
+    // opts.waitForIndexer is set.
+    async createPoll(wif, params, opts = {}) {
+        let session = this.sdk.session(wif, opts);
+        let result = await session.vote(this.sdk.voting.createPollParams(params), {}, opts);
+        return { result, pollRef: this._actionIndexOf(result.indexed) };
+    }
+
+    // Cast a ballot against an existing poll (VOTE v1).
+    async castBallot(wif, params, opts = {}) {
+        let session = this.sdk.session(wif, opts);
+        return session.vote(this.sdk.voting.castBallotParams(params), {}, opts);
+    }
+
+    // Set a standing per-token vote delegation (VOTE v3).
+    async delegateVote(wif, params, opts = {}) {
+        let session = this.sdk.session(wif, opts);
+        return session.vote(this.sdk.voting.delegateParams(params), {}, opts);
+    }
+
+    // Clear a standing per-token vote delegation (VOTE v3, blank DELEGATE_TO).
+    async clearVoteDelegation(wif, params, opts = {}) {
+        let session = this.sdk.session(wif, opts);
+        return session.vote(this.sdk.voting.clearDelegationParams(params), {}, opts);
+    }
+
     // Extract an action_index from a submitAction `indexed` result, tolerating both
     // shapes the waiter can resolve: a transaction ({ actions: [{ action_index }] })
     // on the polling path, or a single action ({ action_index }) on the WS path.
