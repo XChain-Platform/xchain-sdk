@@ -341,6 +341,16 @@ describe('Round-trip: serialize then parse back', function () {
             params: {},
             expectedVersion: 0,
             check: {}
+        },
+        {
+            // VOTE v1 = cast a ballot against an existing poll (POLL_REF).
+            // v0 (create poll) / v2 (close) / v3 (delegate) are separate
+            // versions distinguished by VERSION; one round-trip covers the harness.
+            name: 'VOTE v1 (cast ballot)',
+            action: 'vote',
+            params: { version: 1, pollRef: '12345', ballot: '0', memo: 'yea' },
+            expectedVersion: 1,
+            check: { POLL_REF: '12345', BALLOT: '0', MEMO: 'yea' }
         }
         // DEPLOY v4 (chunk carrier) is exercised by the indexer carrier unit test and the
         // chunked-deploy e2e test; DEPLOY is excluded from this round-trip harness (its

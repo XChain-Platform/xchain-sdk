@@ -45,7 +45,7 @@ const CASES = [
         GET_COIN: 'BTC',  GET_AMOUNT: '1',  GET_OWNERSHIP: 0,
         GET_ADDRESS: ADDR, EXPIRATION: '100' } },
     { action: 'DISPENSER', tickFields: ['GIVE_TICK', 'GET_TICK'], base: {
-        GIVE_COIN: 'BTC', GIVE_AMOUNT: '1', GIVE_OWNERSHIP: 0, GIVE_ESCROW: 0,
+        GIVE_COIN: 'BTC', GIVE_AMOUNT: '1', GIVE_OWNERSHIP: 0, GIVE_ESCROW: '1',
         GET_COIN: 'BTC',  GET_AMOUNT: '1',
         GET_ADDRESS: ADDR, FIAT_CODE: '', FIAT_AMOUNT: '', ORACLE_ADDRESS: '', EXPIRATION: '100' } },
 ];
