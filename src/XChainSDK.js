@@ -1187,6 +1187,22 @@ class XChainSDK {
         return this._requireExplorer().getGovernanceVotes(query, type, opts);
     }
 
+    async getPolls(query, type, opts) {
+        return this._requireExplorer().getPolls(query, type, opts);
+    }
+
+    async getPoll(pollIndex, opts) {
+        return this._requireExplorer().getPoll(pollIndex, opts);
+    }
+
+    async getPollResults(pollIndex, opts) {
+        return this._requireExplorer().getPollResults(pollIndex, opts);
+    }
+
+    async getVotes(query, type, opts) {
+        return this._requireExplorer().getVotes(query, type, opts);
+    }
+
     /*
      *  Explorer: Light-client (SPV) checkpoint + proof methods
      */

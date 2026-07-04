@@ -831,6 +831,49 @@ describe('ExplorerClient', function () {
     });
 
     /*
+     *  VOTE governance methods (polls, poll results, ballots)
+     */
+
+    describe('VOTE governance methods', function () {
+        it('getPolls with query hits /{COIN}/api/polls/{query}/{type}', async function () {
+            nock(BASE).get('/BTC/api/polls/GOV/tick').reply(200, { total: 1, data: [{ action_index: 5, poll_status: 'open' }] });
+            const r = await client.getPolls('GOV', 'tick');
+            expect(r.data[0].poll_status).to.equal('open');
+        });
+
+        it('getPolls without query hits /{COIN}/api/polls', async function () {
+            nock(BASE).get('/BTC/api/polls').reply(200, { total: 0, data: [] });
+            const r = await client.getPolls();
+            expect(r).to.have.property('data');
+        });
+
+        it('getPoll hits /{COIN}/api/poll/{pollIndex} and returns the poll object', async function () {
+            nock(BASE).get('/BTC/api/poll/5').reply(200, { action_index: 5, question: 'Ship it?', options: ['yes', 'no'], poll_status: 'open' });
+            const r = await client.getPoll(5);
+            expect(r.action_index).to.equal(5);
+            expect(r.options).to.deep.equal(['yes', 'no']);
+        });
+
+        it('getPollResults hits /{COIN}/api/poll/{pollIndex}/results', async function () {
+            nock(BASE).get('/BTC/api/poll/5/results').reply(200, { total: 2, data: [{ option_index: 0, total_weight: '100', voter_count: 3 }] });
+            const r = await client.getPollResults(5);
+            expect(r.data[0].total_weight).to.equal('100');
+        });
+
+        it('getVotes with query hits /{COIN}/api/votes/{query}/{type}', async function () {
+            nock(BASE).get('/BTC/api/votes/5/poll').reply(200, { total: 1, data: [{ poll_index: 5, choice: 0, share: '1' }] });
+            const r = await client.getVotes('5', 'poll');
+            expect(r.data[0].choice).to.equal(0);
+        });
+
+        it('getVotes without query hits /{COIN}/api/votes', async function () {
+            nock(BASE).get('/BTC/api/votes').reply(200, { total: 0, data: [] });
+            const r = await client.getVotes();
+            expect(r).to.have.property('data');
+        });
+    });
+
+    /*
      *  Market methods: additional coverage
      */
 
@@ -1088,6 +1131,7 @@ describe('ExplorerClient', function () {
             'getControllers', 'getDeployChunks', 'getFullNodeVerifications',
             'getCrossChainMatches', 'getCrossChainSettlements', 'getAnchors', 'getOraclePrices',
             'getValidatorCapabilities', 'getGovernanceProposals', 'getGovernanceVotes',
+            'getPolls', 'getPoll', 'getPollResults', 'getVotes',
             'getCheckpoints', 'getCheckpointRange', 'getCheckpointVerify',
             'getBalanceProof', 'getActionProof', 'getValidatorSetProof', 'getContractStateProof',
             'getMarkets', 'getMarket', 'getMarketHistory', 'getMarketOrders', 'getOrderbook',
@@ -1099,10 +1143,10 @@ describe('ExplorerClient', function () {
             });
         }
 
-        it('has 108 public methods', function () {
+        it('has 112 public methods', function () {
             let publicMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(publicMethods).to.have.length(108);
+            expect(publicMethods).to.have.length(112);
         });
     });
 

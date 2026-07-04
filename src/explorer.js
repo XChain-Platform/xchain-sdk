@@ -715,6 +715,36 @@ class ExplorerClient {
         return this._get('/governance_votes', opts);
     }
 
+    // Token-weighted governance polls (VOTE v0; polls table), type ∈ {block, tick, status, source}.
+    // Distinct from getGovernanceVotes/getGovernanceProposals, which are the hub federation's
+    // parameter-change governance. tick = the electorate/weight token; status = the poll
+    // lifecycle (open/finalized/failed_quorum); source = the poll creator.
+    async getPolls(query, type, opts = {}) {
+        if (query)
+            return this._get('/polls/' + query + '/' + type, opts);
+        return this._get('/polls', opts);
+    }
+
+    // A single VOTE poll by its id (the creating action_index). Returns the full poll
+    // definition + finalization summary, with options/callback_params JSON-parsed.
+    async getPoll(pollIndex, opts = {}) {
+        return this._get('/poll/' + pollIndex, opts);
+    }
+
+    // The frozen per-option tally for one poll (poll_results, written by VOTE v2 finalize).
+    // Empty until the poll is finalized; ordered by option_index.
+    async getPollResults(pollIndex, opts = {}) {
+        return this._get('/poll/' + pollIndex + '/results', opts);
+    }
+
+    // VOTE ballots (v1; votes table), one row per (poll, voter, chosen option),
+    // type ∈ {address, poll, block}. The voter is the ballot's source address.
+    async getVotes(query, type, opts = {}) {
+        if (query)
+            return this._get('/votes/' + query + '/' + type, opts);
+        return this._get('/votes', opts);
+    }
+
     /*
      *  Light-client (SPV) checkpoint + proof methods
      *  The typed, pooled, retry-aware path to the explorer's state-checkpoint
