@@ -96,6 +96,33 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         expect(schnorr.verify(finalSig, msg, acct.aggKey)).to.equal(true);
     });
 
+    it('rejects a non-committing sighashType (NONE/SINGLE/ANYONECANPAY) that would bypass the output gate', function () {
+        const acct = makeAccount();
+        const psbt = buildSignablePsbt(acct, 'SEND|0|MYTOKEN|10|1destX|m');
+        const agentMusig = new MuSig2();
+        const agentNonce = agentMusig.generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
+        // The same in-policy PSBT the co-signer approves above, but under a sighash
+        // type that does not commit to the gated outputs. Each must be refused with
+        // no partial signature produced.
+        for (const bad of [0x02 /* NONE */, 0x03 /* SINGLE */, 0x81 /* ALL|ANYONECANPAY */, 0x83 /* SINGLE|ANYONECANPAY */]) {
+            const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce, inputIndex: 0, sighashType: bad });
+            expect(res.approved, 'sighashType 0x' + bad.toString(16) + ' must not approve').to.not.equal(true);
+            expect(res.reason).to.equal('SIGHASH_TYPE_NOT_ALLOWED');
+            expect(res.sig, 'no partial signature is produced').to.equal(undefined);
+        }
+    });
+
+    it('still approves an explicit SIGHASH_ALL (0x01) request', function () {
+        const acct = makeAccount();
+        const psbt = buildSignablePsbt(acct, 'SEND|0|MYTOKEN|10|1destX|m');
+        const agentMusig = new MuSig2();
+        const agentNonce = agentMusig.generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
+        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce, inputIndex: 0, sighashType: 0x01 });
+        expect(res.approved).to.equal(true);
+    });
+
     it('derives the message from the PSBT, not the caller (no msg input is accepted)', function () {
         const acct = makeAccount();
         const psbt = buildSignablePsbt(acct, 'SEND|0|TOK|1|1destX|m');

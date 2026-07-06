@@ -62,10 +62,25 @@ function toBytes(v, label) {
     throw new Error(label + ' must be a hex string or Uint8Array');
 }
 
+// Only SIGHASH_DEFAULT (0x00) and SIGHASH_ALL (0x01) commit to ALL outputs. The
+// NONE/SINGLE and ANYONECANPAY variants let a caller obtain a partial signature
+// over a message that does not bind the outputs the co-signer just gated, then
+// reassemble a drain transaction that still verifies on-chain. `undefined`
+// defaults to SIGHASH_DEFAULT and is allowed.
+const ALLOWED_SIGHASH = new Set([bitcoin.Transaction.SIGHASH_DEFAULT, bitcoin.Transaction.SIGHASH_ALL]);
+function sighashAllowed(hashType) {
+    return hashType === undefined || ALLOWED_SIGHASH.has(hashType);
+}
+
 // BIP341 key-path sighash for one input, reconstructed from the PSBT. Requires a
 // witnessUtxo on EVERY input (the sighash commits to all prevouts); throws if any
 // is missing, so the caller fails closed rather than signing a half-known tx.
 function taprootKeyPathSighash(psbt, inputIndex, hashType) {
+    // Defense in depth: never derive a signing message under a sighash type that
+    // does not commit to every output. The process/_processMulti guards reject it
+    // earlier with a clearer code; this also protects any other caller of this export.
+    if (!sighashAllowed(hashType))
+        throw new Error('disallowed sighashType 0x' + Number(hashType).toString(16).padStart(2, '0') + ' (only SIGHASH_DEFAULT/SIGHASH_ALL commit to all outputs)');
     const ins = psbt.txInputs;
     if (inputIndex < 0 || inputIndex >= ins.length)
         throw new Error('inputIndex ' + inputIndex + ' out of range');
@@ -224,13 +239,19 @@ class CoSigner {
         const outDenial = this._checkOutputs(psbt, idx);
         if (outDenial) return outDenial;
 
-        // 5. Derive the message FROM the PSBT (never trust a caller-supplied sighash).
+        // 5. Reject any sighash type that does not commit to every output. A
+        //    NONE/SINGLE/ANYONECANPAY partial would let the agent reassemble a
+        //    drain tx that still verifies, bypassing the output gate above.
+        if (!sighashAllowed(req.sighashType))
+            return this._deny('SIGHASH_TYPE_NOT_ALLOWED', { sighashType: req.sighashType });
+
+        // 6. Derive the message FROM the PSBT (never trust a caller-supplied sighash).
         let msg;
         try {
             msg = taprootKeyPathSighash(psbt, idx, req.sighashType);
         } catch (e) { return this._deny('CANNOT_DERIVE_SIGHASH', e.message); }
 
-        // 6. Stateless partial signature (the co-signer is the deterministic signer).
+        // 7. Stateless partial signature (the co-signer is the deterministic signer).
         let det;
         try {
             det = this.musig.deterministicSign({
@@ -324,6 +345,11 @@ class CoSigner {
         // Output gate, once (all signed inputs share accountScript by the check above).
         const outDenial = this._checkOutputs(psbt, inputs[0].index);
         if (outDenial) return outDenial;
+
+        // Same sighash guard as process(): only SIGHASH_DEFAULT/SIGHASH_ALL commit
+        // to all outputs; anything else makes the output gate above bypassable.
+        if (!sighashAllowed(req.sighashType))
+            return this._deny('SIGHASH_TYPE_NOT_ALLOWED', { sighashType: req.sighashType });
 
         // One partial signature per input (own sighash + own nonce).
         const signatures = [];
