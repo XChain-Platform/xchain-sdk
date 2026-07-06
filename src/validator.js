@@ -14,7 +14,7 @@
  *
  * XChain Platform SDK - Validator
  *
- * Per-action input validation rules for all 29 ACTION types
+ * Per-action input validation rules for all 30 ACTION types
  *
  ********************************************************************/
 

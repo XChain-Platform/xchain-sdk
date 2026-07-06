@@ -18,7 +18,7 @@ Developer-facing SDK for generating XChain platform transactions and querying bl
 
 ## Features
 
-- **29 ACTION types**: `sdk.send()`, `sdk.issue()`, `sdk.mint()`, `sdk.stake()`, and 25 more convenience methods
+- **30 ACTION types**: `sdk.send()`, `sdk.issue()`, `sdk.mint()`, `sdk.stake()`, and 26 more convenience methods
 - **Transaction lifecycle**: `sdk.submitAction()` handles the full encode -> sign -> broadcast -> wait pipeline in one call
 - **Wallet sessions**: `sdk.session(wif)` bundles address/key/UTXO state for repeated actions from one address
 - **Fee estimation**: `sdk.estimateFees()` returns fee info without signing or broadcasting
@@ -57,7 +57,7 @@ Full SDK developer guide is available in the [xchain-documentation](https://gith
 |---|---|
 | [README](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/README.md) | Overview, installation, usage modes |
 | [Configuration](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/CONFIGURATION.md) | Constructor options, env vars, hub discovery, retry, pooling, hooks |
-| [Actions](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/ACTIONS.md) | All 29 ACTION types: params, validation rules, format versions, examples |
+| [Actions](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/ACTIONS.md) | All 30 ACTION types: params, validation rules, format versions, examples |
 | [Transaction Lifecycle](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/LIFECYCLE.md) | submitAction, fee estimation, UTXO chaining, P2SH two-phase handling |
 | [Wallet Sessions](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/SESSIONS.md) | Bound wallet sessions, convenience methods, UTXO cache |
 | [Workflows](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/WORKFLOWS.md) | High-level recipes: issueAndDistribute, deployAndFund, stakeAndDelegate |
@@ -148,7 +148,7 @@ const token = await sdk.getToken('MYTOKEN');
 | Boundary: exact encoding limits | 36 |
 | Fuzz: garbage types, unicode, prototype pollution | 56 |
 | Chaos: malformed responses, HTTP errors, timeouts | 28 |
-| Round-trip: serialize -> parse -> verify for all 29 actions | 34 |
+| Round-trip: serialize -> parse -> verify for all 30 actions | 44 |
 | Smoke: boot API server, end-to-end JSON-RPC | 11 |
 | **Total** | **520+** |
 
