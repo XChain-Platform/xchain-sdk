@@ -61,6 +61,16 @@ class HubConnector {
     constructor(options = {}) {
         this.timeout = options.timeout || 5000;
 
+        // Optional hub API key: getallconfigs is in the hub's sensitive-read
+        // tier (its response carries service DB credentials) and 401s without
+        // a key once the hub operator sets HUB_API_KEY. Public zero-config
+        // SDK users don't hold a key and should not call getallconfigs against
+        // a keyed hub; operators/mesh services pass options.hubApiKey (or set
+        // HUB_API_KEY in a Node environment). Guarded for browser bundles
+        // where process is undefined.
+        this.apiKey = options.hubApiKey ||
+            (typeof process !== 'undefined' && process.env && process.env.HUB_API_KEY) || '';
+
         // Multi-endpoint support: hubValidators takes priority over hubUrl:hubPort
         if(options.hubValidators && Array.isArray(options.hubValidators) && options.hubValidators.length > 0){
             this.urls = options.hubValidators.map(e => e.startsWith('http') ? e : 'http://' + e);
@@ -107,11 +117,13 @@ class HubConnector {
         };
 
         let lastError = null;
+        let headers = {};
+        if (this.apiKey) headers['x-api-key'] = this.apiKey;
         for(let i = 0; i < this.urls.length; i++){
             let idx = (this._lastGoodIdx + i) % this.urls.length;
             let url = this.urls[idx];
             try {
-                let response = await axios.post(url, payload, { timeout: this.timeout });
+                let response = await axios.post(url, payload, { timeout: this.timeout, headers });
                 if (response.data && response.data.result) {
                     this._lastGoodIdx = idx;
                     this.configs = this._applyConfigResult(response.data.result);
