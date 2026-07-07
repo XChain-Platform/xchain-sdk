@@ -295,11 +295,58 @@ class X402Gateway {
     // Does this parsed-output / REST-row match the invoice? Exact rules:
     // destination verbatim, tick uppercased, amount >= as BigNumber,
     // memo strict === to the nonce after trim.
-    _outputMatches(invoice, out) {
-        return out.destination === invoice.payTo
-            && String(out.tick).toUpperCase() === invoice.tick
+    //
+    // `ids` (optional, mempool path only) carries the invoice payTo/tick resolved to their
+    // numeric index ids, so a raw decoder-mempool output that carries the SDK's compacted
+    // `^<id>` wire form (see _findMempoolSend) matches its literal invoice value. The confirmed
+    // REST path passes no ids: the explorer has already expanded index ids to canonical
+    // address/tick, so those rows only ever match the literal form.
+    _outputMatches(invoice, out, ids) {
+        const dest   = String(out.destination == null ? '' : out.destination);
+        const destOk = dest === invoice.payTo
+            || (ids && ids.payToId && dest === '^' + ids.payToId);
+        const tick   = String(out.tick).toUpperCase();
+        const tickOk = tick === invoice.tick
+            || (ids && ids.tickId && tick === '^' + ids.tickId);
+        return destOk && tickOk
             && isPosNum(out.amount) && gte(out.amount, invoice.amount)
             && String(out.memo == null ? '' : out.memo).trim() === invoice.nonce;
+    }
+
+    // Resolve the invoice's payTo address and tick to their numeric index ids, best-effort and
+    // cached by value (payTo/tick are gateway constants). Payments made through the reference
+    // X402Client go through the SDK's default `^<id>` address/tick compaction, and the decoder
+    // records the raw compacted action string in the mempool `data` column (only the indexer
+    // expands ids; the decoder does not). Resolving our own payTo/tick to ids lets the 0-conf
+    // matcher accept either the literal or the `^<id>` form. A lookup failure just leaves the id
+    // null and falls back to literal-only matching (never throws, never blocks verification).
+    async _resolveWireIds(invoice) {
+        this._wireIdCache = this._wireIdCache || { addr: new Map(), tick: new Map() };
+        const ids = { payToId: null, tickId: null };
+        if (!this.explorer) return ids;
+        if (this._wireIdCache.addr.has(invoice.payTo)) ids.payToId = this._wireIdCache.addr.get(invoice.payTo);
+        else {
+            try {
+                const res  = await this.explorer.getAddress(invoice.payTo, { noRetry: true });
+                const info = res && (Array.isArray(res) ? (res[0] || {}).info : res.info);
+                if (info && info.address_id != null && /^[0-9]+$/.test(String(info.address_id))) {
+                    ids.payToId = String(info.address_id);
+                    this._wireIdCache.addr.set(invoice.payTo, ids.payToId);
+                }
+            } catch (e) { /* literal-only fallback */ }
+        }
+        if (this._wireIdCache.tick.has(invoice.tick)) ids.tickId = this._wireIdCache.tick.get(invoice.tick);
+        else {
+            try {
+                const token = await this.explorer.getToken(invoice.tick, { noRetry: true });
+                const info  = token && (Array.isArray(token) ? (token[0] || {}).info : token.info);
+                if (info && info.tick_id != null && /^[0-9]+$/.test(String(info.tick_id))) {
+                    ids.tickId = String(info.tick_id);
+                    this._wireIdCache.tick.set(invoice.tick, ids.tickId);
+                }
+            } catch (e) { /* literal-only fallback */ }
+        }
+        return ids;
     }
 
     async _verifySend(proof) {
@@ -357,14 +404,21 @@ class X402Gateway {
     }
 
     async _findMempoolSend(invoice, payer) {
-        const res = await this.explorer.getMempool(invoice.payTo, 'address', { limit: 100 });
+        // Query the mempool by the PAYER (the on-chain source), not payTo. The decoder mempool
+        // prefilter matches an `address` query against the source OR any exact pipe-segment of the
+        // raw action string; when the payer's SDK compacts the destination to `^<id>` (the default),
+        // payTo is not a segment, so a payTo query would never return the row. The payer is always
+        // the source, so a payer query returns it regardless of destination compaction. payTo is
+        // still enforced below via _outputMatches (literal or resolved `^<id>`).
+        const res = await this.explorer.getMempool(payer, 'address', { limit: 100 });
         const rows = (res && res.data) || [];
+        const ids = await this._resolveWireIds(invoice);   // for compacted `^<id>` dest/tick matching
         for (const row of rows) {
             if (row.source !== payer) continue;            // anti-frontrun: payer must be the on-chain source
             const parsed = parseActionString(row.data);
             if (!parsed || parsed.action !== 'SEND') continue;
             for (const out of parsed.outputs)
-                if (this._outputMatches(invoice, out))
+                if (this._outputMatches(invoice, out, ids))
                     return { tx_hash: row.tx_hash };
         }
         return null;

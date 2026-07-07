@@ -110,6 +110,10 @@ describe('x402', () => {
                 getSends:    sinon.stub().resolves({ data: [] }),
                 getMempool:  sinon.stub().resolves({ data: [] }),
                 getBalances: sinon.stub().resolves({ data: [] }),
+                // Index-id resolution for the 0-conf compaction matcher: payTo 'gateAddr' -> id 3,
+                // tick 'TOK' -> id 7. Present so _resolveWireIds can accept `^<id>` wire forms.
+                getAddress:  sinon.stub().resolves({ info: { address_id: 3 } }),
+                getToken:    sinon.stub().resolves({ info: { tick_id: 7 } }),
             };
         });
         afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
@@ -170,6 +174,29 @@ describe('x402', () => {
             explorer.getMempool.resolves({ data: [{ tx_hash: 'txDD', source: 'payerAddr', action: 'SEND', data: `SEND|1|TOK|1|other|5|gateAddr|${NONCE}` }] });
             const r = await gw.verify(proof({ txid: 'txDD' }));
             expect(r).to.include({ ok: true, status: 'provisional_0conf', provisional: true });
+        });
+
+        it('0-conf: matches a mempool SEND whose destination+tick are SDK-compacted to ^<id> (default client)', async () => {
+            // The reference X402Client pays via session.send(), which by default compacts payTo and
+            // tick to their `^<id>` wire form. The decoder records that raw compacted string in the
+            // mempool `data` column (only the indexer expands ids). Query is keyed on the payer (the
+            // on-chain source), and _resolveWireIds maps gateAddr->^3, TOK->^7 so the output matches.
+            const gw = mkGateway({ send: { tick: 'TOK', amount: '5', payTo: 'gateAddr', minConfirmations: 0 } });
+            await issueInvoice(gw);
+            explorer.getMempool.resolves({ data: [{ tx_hash: 'txZZ', source: 'payerAddr', action: 'SEND', data: `SEND|0|^7|5|^3|${NONCE}` }] });
+            const r = await gw.verify(proof({ txid: 'txZZ' }));
+            expect(r).to.include({ ok: true, status: 'provisional_0conf', provisional: true });
+            // The mempool query must be keyed on the payer, not payTo (a payTo query misses a
+            // compacted-destination row because payTo is not a segment of the raw action string).
+            expect(explorer.getMempool.calledWith('payerAddr', 'address', sinon.match.any)).to.equal(true);
+        });
+
+        it('0-conf: a compacted ^<id> destination for the WRONG address does not match', async () => {
+            const gw = mkGateway({ send: { tick: 'TOK', amount: '5', payTo: 'gateAddr', minConfirmations: 0 } });
+            await issueInvoice(gw);
+            // ^9 is some other address id (not gateAddr's ^3); tick ^7 is correct. Must NOT match.
+            explorer.getMempool.resolves({ data: [{ tx_hash: 'txYY', source: 'payerAddr', action: 'SEND', data: `SEND|0|^7|5|^9|${NONCE}` }] });
+            expect((await gw.verify(proof({ txid: 'txYY' }))).ok).to.equal(false);
         });
 
         it('0-conf mempool match requires the payer to be the on-chain source', async () => {
