@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `ContractUtils.parseAbi(source)`: fail-closed AST reader for the optional contract `abi` display-metadata block (protocol/Contract_ABI.md).
+- Escrow, vesting, and crowdsale templates declare `abi` blocks (method summaries + `view` flags), re-embedded via `sync:templates`.
 - `hubApiKey` option (env fallback `HUB_API_KEY`) on the hub connector, required for `getallconfigs` against keyed hubs; public zero-config discovery should use the hub's `GET /api/v1/chain-registry` instead.
 
 ### Security
