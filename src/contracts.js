@@ -30,6 +30,7 @@
 
 const { SDKContractError } = require('./errors.js');
 const { lintSource, findFloatWarnings } = require('./contract/lint-core.js');
+const abiCore = require('./contract/abi-core.js');
 
 // 64KB contract source code limit. Canonical value in
 // xchain-documentation/protocol/constants.js (MAX_CODE_SIZE), also enforced by
@@ -191,83 +192,12 @@ class ContractUtils {
     // malformed SINGLE method entry drops only that method. The abi is display
     // metadata only, never validated against the code and never consensus.
     //
-    // NOTE: kept in manual sync with xchain-explorer/src/contract-introspect.js
-    // (the explorer cannot depend on the SDK); no CI drift guard exists, unlike
-    // lint-core. Returns { version, methods } | null. Never throws.
+    // Delegates to the vendored ./contract/abi-core.js (canonical copy:
+    // xchain-explorer/src/abi-core.js; byte-identity enforced by the
+    // abi-core-drift unit test and the root bin/ci-all.sh guard).
+    // Returns { version, methods } | null. Never throws.
     parseAbi(sourceCode) {
-        const ABI_PARAM_TYPES = new Set(['string', 'number', 'amount', 'address', 'tick', 'bool', 'json']);
-        let parser = loadAcorn();
-        let walker = loadAcornWalk();
-        if (!parser || !walker || typeof sourceCode !== 'string') return null;
-
-        // Static-literal readers: the convention requires the whole abi block
-        // to be literals so it can be read without executing code.
-        const literalOfType = (node, type) =>
-            node && node.type === 'Literal' && typeof node.value === type ? node.value : undefined;
-        const propMap = (objectExpression) => {
-            const map = new Map();
-            for (const p of objectExpression.properties) {
-                if (p.type !== 'Property' || p.computed) continue;
-                const key = p.key && (p.key.name || p.key.value);
-                if (key) map.set(String(key), p.value);
-            }
-            return map;
-        };
-
-        try {
-            const ast = parser.parse(sourceCode, { ecmaVersion: 2020, sourceType: 'script', locations: false });
-            let exported = null;
-            walker.simple(ast, {
-                AssignmentExpression(node) {
-                    if (exported) return;
-                    const l = node.left;
-                    const isModuleExports = l && l.type === 'MemberExpression' && !l.computed
-                        && l.object && l.object.type === 'Identifier' && l.object.name === 'module'
-                        && l.property && l.property.name === 'exports';
-                    if (isModuleExports && node.right) exported = node.right;
-                }
-            });
-            if (!exported || exported.type !== 'ObjectExpression') return null;
-
-            const abiNode = propMap(exported).get('abi');
-            if (!abiNode || abiNode.type !== 'ObjectExpression') return null;
-
-            const abiProps    = propMap(abiNode);
-            const version     = literalOfType(abiProps.get('version'), 'number');
-            const methodsNode = abiProps.get('methods');
-            if (version === undefined || !methodsNode || methodsNode.type !== 'ObjectExpression') return null;
-
-            const methods = {};
-            for (const [name, specNode] of propMap(methodsNode)) {
-                if (specNode.type !== 'ObjectExpression') continue;
-                const spec    = propMap(specNode);
-                const entry   = { params: [] };
-                const summary = literalOfType(spec.get('summary'), 'string');
-                const view    = literalOfType(spec.get('view'), 'boolean');
-                if (summary !== undefined) entry.summary = summary;
-                if (view !== undefined) entry.view = view;
-
-                let ok = true;
-                const paramsNode = spec.get('params');
-                if (paramsNode !== undefined) {
-                    if (paramsNode.type !== 'ArrayExpression') { ok = false; }
-                    else {
-                        for (const el of paramsNode.elements) {
-                            if (!el || el.type !== 'ObjectExpression') { ok = false; break; }
-                            const pSpec = propMap(el);
-                            const pName = literalOfType(pSpec.get('name'), 'string');
-                            const pType = literalOfType(pSpec.get('type'), 'string');
-                            if (pName === undefined || pType === undefined || !ABI_PARAM_TYPES.has(pType)) { ok = false; break; }
-                            entry.params.push({ name: pName, type: pType });
-                        }
-                    }
-                }
-                if (ok) methods[name] = entry;
-            }
-            return { version, methods };
-        } catch (e) {
-            return null;
-        }
+        return abiCore.parseAbi(sourceCode);
     }
 
 }
