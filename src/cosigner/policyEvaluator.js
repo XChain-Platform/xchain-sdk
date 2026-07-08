@@ -43,11 +43,42 @@ const AMOUNT_KEYS      = ['amount', 'AMOUNT'];
 const TICK_KEYS        = ['tick', 'TICK'];
 const DESTINATION_KEYS = ['destination', 'DESTINATION', 'destinations', 'DESTINATIONS'];
 
+// Per-action value/tick fields for actions whose primary outflow is NOT the
+// generic amount/AMOUNT + tick/TICK pair. The cap must bind to what the signer
+// GIVES AWAY, so the two-leg trade actions use the GIVE leg. Without this the
+// amount pick returns undefined and every amount cap is silently skipped, leaving
+// DEPOSIT / WITHDRAW / ORDER / SWAP / DISPENSER uncapped. (SEND / DESTROY / STAKE /
+// MINT etc. carry AMOUNT and need no entry.)
+const ACTION_VALUE_FIELDS = {
+    DEPOSIT:   { amount: ['quantity', 'QUANTITY'],      tick: TICK_KEYS },
+    WITHDRAW:  { amount: ['quantity', 'QUANTITY'],      tick: TICK_KEYS },
+    ORDER:     { amount: ['giveAmount', 'GIVE_AMOUNT'], tick: ['giveTick', 'GIVE_TICK'] },
+    SWAP:      { amount: ['giveAmount', 'GIVE_AMOUNT'], tick: ['giveTick', 'GIVE_TICK'] },
+    DISPENSER: { amount: ['giveAmount', 'GIVE_AMOUNT'], tick: ['giveTick', 'GIVE_TICK'] },
+};
+
+// Actions whose value outflow the evaluator cannot bound from the action params
+// alone: SWEEP transfers the ENTIRE balance (no amount field at all), and
+// AIRDROP / DIVIDEND disburse amount x an off-chain recipient/holder set, so the
+// per-unit AMOUNT under-counts the real total. When the operator has expressed any
+// amount-limiting intent, the co-signer must refuse to sign these rather than let
+// them slip past an unenforceable cap (a count-only maxActions is NOT an amount
+// limit and still bounds them normally).
+const UNBOUNDED_VALUE_ACTIONS = new Set(['SWEEP', 'AIRDROP', 'DIVIDEND']);
+
 function pick(params, keys) {
     for (const k of keys)
         if (params && params[k] !== undefined && params[k] !== null && params[k] !== '')
             return params[k];
     return undefined;
+}
+
+// Resolve the (amount, tick) the caps should bind to for this action.
+function resolveValue(action, params) {
+    const spec = ACTION_VALUE_FIELDS[action];
+    if (spec)
+        return { amount: pick(params, spec.amount), tick: pick(params, spec.tick) };
+    return { amount: pick(params, AMOUNT_KEYS), tick: pick(params, TICK_KEYS) };
 }
 
 // Membership test that accepts either a Set (AgentSession's normalized shape)
@@ -99,8 +130,7 @@ function evaluatePolicy(policy, actionData, windowUsage) {
     const data    = actionData || {};
     const action  = String(data.action || '').toUpperCase();
     const params  = data.params || {};
-    const tick    = pick(params, TICK_KEYS);
-    const amount  = pick(params, AMOUNT_KEYS);
+    const { amount, tick } = resolveValue(action, params);
     const destRaw = pick(params, DESTINATION_KEYS);
     const destinations = destRaw === undefined ? []
         : Array.isArray(destRaw) ? destRaw : String(destRaw).split(';');
@@ -115,6 +145,23 @@ function evaluatePolicy(policy, actionData, windowUsage) {
             if (!inCollection(policy.allowedDestinations, d))
                 return deny('POLICY_DESTINATION_DENIED',
                     `destination ${d} is not in allowedDestinations`, { action, destination: d }, evaluation);
+    }
+
+    // Fail closed on actions whose outflow the policy cannot measure (see
+    // UNBOUNDED_VALUE_ACTIONS) when any amount-based limit is configured. Without
+    // this a SWEEP (whole-balance drain, no amount) or an AIRDROP/DIVIDEND (per-unit
+    // amount x an off-chain set) would slip past every cap, since those checks are
+    // guarded by `amount !== undefined` against a scalar that doesn't represent the
+    // real total. A count-only maxActions is not an amount limit and does not trip this.
+    if (UNBOUNDED_VALUE_ACTIONS.has(action)) {
+        const hasAmountLimit = !!policy.maxPerAction
+            || !!(policy.maxPerWindow && policy.maxPerWindow.perTick)
+            || !!policy.confirmAbove;
+        if (hasAmountLimit)
+            return deny('POLICY_UNBOUNDED_ACTION',
+                `${action} moves an amount the policy cannot bound from the action alone; ` +
+                `it cannot be signed while an amount cap is set (remove the amount cap or disallow ${action})`,
+                { action }, evaluation);
     }
 
     if (policy.maxPerAction && amount !== undefined) {
@@ -163,4 +210,7 @@ module.exports = {
     AMOUNT_KEYS,
     TICK_KEYS,
     DESTINATION_KEYS,
+    ACTION_VALUE_FIELDS,
+    UNBOUNDED_VALUE_ACTIONS,
+    resolveValue,
 };

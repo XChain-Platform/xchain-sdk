@@ -105,4 +105,59 @@ describe('policyEvaluator.evaluatePolicy', function () {
     it('fail-closed default: empty allowedActions denies everything', function () {
         expect(evaluatePolicy({ allowedActions: new Set() }, send({ amount: '1' })).ok).to.equal(false);
     });
+
+    // Caps must bind to each action's real value field, not only literal AMOUNT.
+    describe('per-action value-field binding', function () {
+
+        it('caps a SWAP on its GIVE_AMOUNT/GIVE_TICK (was uncapped)', function () {
+            const policy = { allowedActions: new Set(['SWAP']), maxPerAction: { SWAP: { FOO: '100' } } };
+            const over = evaluatePolicy(policy, { action: 'SWAP', params: { giveTick: 'FOO', giveAmount: '1000000', getTick: 'BAR', getAmount: '1' } });
+            expect(over.ok).to.equal(false);
+            expect(over.violation.code).to.equal('POLICY_AMOUNT_EXCEEDED');
+            const under = evaluatePolicy(policy, { action: 'SWAP', params: { giveTick: 'FOO', giveAmount: '50', getTick: 'BAR', getAmount: '1' } });
+            expect(under.ok).to.equal(true);
+        });
+
+        it('caps a DEPOSIT on its QUANTITY (UPPER_SNAKE decoded form)', function () {
+            const policy = { allowedActions: new Set(['DEPOSIT']), maxPerAction: { DEPOSIT: { '*': '100' } } };
+            const over = evaluatePolicy(policy, { action: 'DEPOSIT', params: { TICK: 'FOO', QUANTITY: '1000000' } });
+            expect(over.ok).to.equal(false);
+            expect(over.violation.code).to.equal('POLICY_AMOUNT_EXCEEDED');
+            expect(evaluatePolicy(policy, { action: 'DEPOSIT', params: { TICK: 'FOO', QUANTITY: '50' } }).ok).to.equal(true);
+        });
+
+        it('caps ORDER/DISPENSER on the GIVE leg too', function () {
+            const policy = { allowedActions: new Set(['ORDER', 'DISPENSER']), maxPerAction: { '*': {} , ORDER: { '*': '10' }, DISPENSER: { '*': '10' } } };
+            expect(evaluatePolicy(policy, { action: 'ORDER', params: { GIVE_TICK: 'FOO', GIVE_AMOUNT: '11' } }).ok).to.equal(false);
+            expect(evaluatePolicy(policy, { action: 'DISPENSER', params: { GIVE_TICK: 'FOO', GIVE_AMOUNT: '11' } }).ok).to.equal(false);
+        });
+    });
+
+    // Actions whose outflow can't be measured from params must fail closed when
+    // an amount limit is set, instead of slipping past it silently.
+    describe('unbounded value actions (SWEEP / AIRDROP / DIVIDEND)', function () {
+
+        it('denies SWEEP when an amount cap is configured (whole-balance drain)', function () {
+            const policy = { allowedActions: new Set(['SWEEP']), maxPerAction: { SEND: { '*': '100' } } };
+            const v = evaluatePolicy(policy, { action: 'SWEEP', params: { destination: 'addr', balances: '1' } });
+            expect(v.ok).to.equal(false);
+            expect(v.violation.code).to.equal('POLICY_UNBOUNDED_ACTION');
+        });
+
+        it('denies AIRDROP/DIVIDEND under a per-tick window cap (per-unit amount under-counts)', function () {
+            const policy = { allowedActions: new Set(['AIRDROP', 'DIVIDEND']), maxPerWindow: { hours: 24, perTick: { '*': '100' } } };
+            expect(evaluatePolicy(policy, { action: 'AIRDROP', params: { tick: 'FOO', amount: '100' } }).violation.code).to.equal('POLICY_UNBOUNDED_ACTION');
+            expect(evaluatePolicy(policy, { action: 'DIVIDEND', params: { tick: 'FOO', amount: '100' } }).violation.code).to.equal('POLICY_UNBOUNDED_ACTION');
+        });
+
+        it('allows an unbounded action when NO amount limit is set (operator opted out)', function () {
+            const policy = { allowedActions: new Set(['SWEEP']) };
+            expect(evaluatePolicy(policy, { action: 'SWEEP', params: { destination: 'addr' } }).ok).to.equal(true);
+        });
+
+        it('a count-only maxActions is not an amount limit and still allows the action', function () {
+            const policy = { allowedActions: new Set(['AIRDROP']), maxPerWindow: { hours: 24, maxActions: 5 } };
+            expect(evaluatePolicy(policy, { action: 'AIRDROP', params: { tick: 'FOO', amount: '1' } }).ok).to.equal(true);
+        });
+    });
 });
