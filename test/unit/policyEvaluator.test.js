@@ -9,7 +9,7 @@
 // contact legal@dankest.llc.
 
 const { expect } = require('chai');
-const { evaluatePolicy } = require('../../src/cosigner/policyEvaluator.js');
+const { evaluatePolicy, GAS_TICK } = require('../../src/cosigner/policyEvaluator.js');
 
 // The pure verdict function shared by AgentSession (client guardrail) and the
 // co-signer daemon (hard enforcement). No I/O, no throws: deny is a return
@@ -130,6 +130,85 @@ describe('policyEvaluator.evaluatePolicy', function () {
             const policy = { allowedActions: new Set(['ORDER', 'DISPENSER']), maxPerAction: { '*': {} , ORDER: { '*': '10' }, DISPENSER: { '*': '10' } } };
             expect(evaluatePolicy(policy, { action: 'ORDER', params: { GIVE_TICK: 'FOO', GIVE_AMOUNT: '11' } }).ok).to.equal(false);
             expect(evaluatePolicy(policy, { action: 'DISPENSER', params: { GIVE_TICK: 'FOO', GIVE_AMOUNT: '11' } }).ok).to.equal(false);
+        });
+
+        // Capability STAKE (v1/v2) debits the gas token but carries no TICK field;
+        // its tick defaults to GAS_TICK so gas-scoped caps bind (previously only
+        // the '*' wildcard applied).
+        it('binds a gas-scoped cap to capability STAKE (no TICK field)', function () {
+            const policy = { allowedActions: new Set(['STAKE']), maxPerAction: { STAKE: { [GAS_TICK]: '100' } } };
+            const over = evaluatePolicy(policy, { action: 'STAKE', params: { amount: '150', signingPubkey: 'ab'.repeat(32) } });
+            expect(over.ok).to.equal(false);
+            expect(over.violation.code).to.equal('POLICY_AMOUNT_EXCEEDED');
+            expect(evaluatePolicy(policy, { action: 'STAKE', params: { amount: '50', signingPubkey: 'ab'.repeat(32) } }).ok).to.equal(true);
+        });
+
+        it('accumulates capability STAKE under the gas tick in the window cap', function () {
+            const policy = { allowedActions: new Set(['STAKE']), maxPerWindow: { hours: 24, perTick: { [GAS_TICK]: '100' } } };
+            const usage = { count: 1, perTick: { [GAS_TICK]: '95' } };
+            const v = evaluatePolicy(policy, { action: 'STAKE', params: { amount: '6' } }, usage);
+            expect(v.ok).to.equal(false);
+            expect(v.violation.code).to.equal('POLICY_WINDOW_AMOUNT_EXCEEDED');
+            expect(evaluatePolicy(policy, { action: 'STAKE', params: { amount: '5' } }, usage).ok).to.equal(true);
+        });
+
+        it('contract-targeted STAKE v3 keeps its own TICK (gas default does not override)', function () {
+            const policy = { allowedActions: new Set(['STAKE']), maxPerAction: { STAKE: { [GAS_TICK]: '1' } } };
+            // TICK=FOO: the XCHAIN cap must not bind, and with no FOO/'*' cap the stake passes.
+            const v = evaluatePolicy(policy, { action: 'STAKE', params: { amount: '50', TICK: 'FOO', TARGET_CONTRACT_INDEX: '7' } });
+            expect(v.ok).to.equal(true);
+            expect(v.evaluation.tick).to.equal('FOO');
+        });
+    });
+
+    // The SDK compacts an indexed token's tick to its ^<id> wire form by default,
+    // and the daemon evaluates params decoded from the PSBT, so the same token can
+    // arrive as 'NAME' or '^123'. Identity-sensitive rules must resolve the
+    // reference or fail closed; otherwise a named cap falls through to the
+    // wildcard and per-tick window totals fragment across the two wire forms.
+    describe('^id wire-form tick references', function () {
+
+        it('fails closed on an unresolvable ^id under a named per-action cap', function () {
+            const policy = { allowedActions: new Set(['SEND']), maxPerAction: { SEND: { MYTOKEN: '10' } } };
+            const v = evaluatePolicy(policy, send({ tick: '^123', amount: '1000000' }));
+            expect(v.ok).to.equal(false);
+            expect(v.violation.code).to.equal('POLICY_UNRESOLVED_TICK');
+        });
+
+        it('fails closed on an unresolvable ^id under a per-tick window cap (even wildcard)', function () {
+            const policy = { allowedActions: new Set(['SEND']), maxPerWindow: { hours: 24, perTick: { '*': '100' } } };
+            const v = evaluatePolicy(policy, send({ tick: '^123', amount: '1' }), { count: 0, perTick: {} });
+            expect(v.ok).to.equal(false);
+            expect(v.violation.code).to.equal('POLICY_UNRESOLVED_TICK');
+        });
+
+        it('resolves a declared ^id via policy.tickIds and binds the named cap', function () {
+            const policy = {
+                allowedActions: new Set(['SEND']),
+                maxPerAction:   { SEND: { MYTOKEN: '10' } },
+                tickIds:        { MYTOKEN: 123 },
+            };
+            const over = evaluatePolicy(policy, send({ tick: '^123', amount: '11' }));
+            expect(over.ok).to.equal(false);
+            expect(over.violation.code).to.equal('POLICY_AMOUNT_EXCEEDED');
+            const under = evaluatePolicy(policy, send({ tick: '^123', amount: '10' }));
+            expect(under.ok).to.equal(true);
+            // Resolved name flows into the evaluation, so window totals accumulate
+            // under one key regardless of wire form.
+            expect(under.evaluation.tick).to.equal('MYTOKEN');
+        });
+
+        it('lets a ^id through when no rule depends on tick identity', function () {
+            // Wildcard-only per-action cap binds by amount alone; count-only window
+            // caps count actions. Neither needs the tick name.
+            const policy = {
+                allowedActions: new Set(['SEND']),
+                maxPerAction:   { SEND: { '*': '10' } },
+                maxPerWindow:   { hours: 24, maxActions: 5 },
+            };
+            expect(evaluatePolicy(policy, send({ tick: '^123', amount: '5' }), { count: 0, perTick: {} }).ok).to.equal(true);
+            expect(evaluatePolicy(policy, send({ tick: '^123', amount: '11' }), { count: 0, perTick: {} }).violation.code)
+                .to.equal('POLICY_AMOUNT_EXCEEDED');
         });
     });
 

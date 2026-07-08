@@ -43,6 +43,14 @@ const AMOUNT_KEYS      = ['amount', 'AMOUNT'];
 const TICK_KEYS        = ['tick', 'TICK'];
 const DESTINATION_KEYS = ['destination', 'DESTINATION', 'destinations', 'DESTINATIONS'];
 
+// The protocol gas token. Capability STAKE (v1/v2) debits this token but carries
+// no TICK field, so without this default a tick-scoped cap (maxPerAction.STAKE.XCHAIN)
+// never binds and only the '*' wildcard applies. Mirrors the consensus value in
+// xchain-indexer/src/config.js (config['GAS']); the canonical copy lives in
+// xchain-documentation/protocol/constants.js and the cross-service drift guard in
+// xchain-e2e-test asserts all three stay equal.
+const GAS_TICK = 'XCHAIN';
+
 // Per-action value/tick fields for actions whose primary outflow is NOT the
 // generic amount/AMOUNT + tick/TICK pair. The cap must bind to what the signer
 // GIVES AWAY, so the two-leg trade actions use the GIVE leg. Without this the
@@ -55,6 +63,10 @@ const ACTION_VALUE_FIELDS = {
     ORDER:     { amount: ['giveAmount', 'GIVE_AMOUNT'], tick: ['giveTick', 'GIVE_TICK'] },
     SWAP:      { amount: ['giveAmount', 'GIVE_AMOUNT'], tick: ['giveTick', 'GIVE_TICK'] },
     DISPENSER: { amount: ['giveAmount', 'GIVE_AMOUNT'], tick: ['giveTick', 'GIVE_TICK'] },
+    // Capability STAKE (v1/v2) stakes the gas token with no TICK field; default the
+    // tick so gas-scoped caps bind. Contract-targeted STAKE v3 carries TICK, which
+    // pick() prefers over the default.
+    STAKE:     { amount: AMOUNT_KEYS, tick: TICK_KEYS, tickDefault: GAS_TICK },
 };
 
 // Actions whose value outflow the evaluator cannot bound from the action params
@@ -76,8 +88,13 @@ function pick(params, keys) {
 // Resolve the (amount, tick) the caps should bind to for this action.
 function resolveValue(action, params) {
     const spec = ACTION_VALUE_FIELDS[action];
-    if (spec)
-        return { amount: pick(params, spec.amount), tick: pick(params, spec.tick) };
+    if (spec) {
+        const tick = pick(params, spec.tick);
+        return {
+            amount: pick(params, spec.amount),
+            tick:   tick !== undefined ? tick : spec.tickDefault,
+        };
+    }
     return { amount: pick(params, AMOUNT_KEYS), tick: pick(params, TICK_KEYS) };
 }
 
@@ -94,6 +111,21 @@ function capFor(table, tick) {
     if (!table) return undefined;
     if (tick !== undefined && table[tick] !== undefined) return table[tick];
     return table['*'];
+}
+
+// Resolve a ^<id> wire-form tick reference to its name via the policy's
+// declared { NAME: id } map. Deterministic and offline: the daemon must not
+// depend on (or trust) an explorer lookup to decide what it signs.
+function resolveTickRef(tickIds, tick) {
+    if (!tickIds) return undefined;
+    const id = String(tick).slice(1);
+    for (const name of Object.keys(tickIds))
+        if (String(tickIds[name]) === id) return name;
+    return undefined;
+}
+
+function hasNamedKey(table) {
+    return !!table && Object.keys(table).some((k) => k !== '*');
 }
 
 // Exact decimal comparison via BigNumber methods. mathjs larger()/equal()
@@ -115,6 +147,7 @@ function deny(code, message, details, evaluation) {
  *     maxPerAction:        { ACTION: { TICK|'*': capString } } | null,
  *     maxPerWindow:        { hours, maxActions?, perTick?: { TICK|'*': capString } } | null,
  *     confirmAbove:        { perTick: { TICK|'*': thresholdString } } | null,
+ *     tickIds:             { TICK: numericId } | null   (resolves ^<id> wire-form tick references),
  *   }
  * @param {object} actionData  { action, params } (params may use camelCase or UPPER_SNAKE)
  * @param {object} [windowUsage]  current window snapshot, REQUIRED when policy.maxPerWindow is set:
@@ -130,10 +163,41 @@ function evaluatePolicy(policy, actionData, windowUsage) {
     const data    = actionData || {};
     const action  = String(data.action || '').toUpperCase();
     const params  = data.params || {};
-    const { amount, tick } = resolveValue(action, params);
+    let { amount, tick } = resolveValue(action, params);
     const destRaw = pick(params, DESTINATION_KEYS);
     const destinations = destRaw === undefined ? []
         : Array.isArray(destRaw) ? destRaw : String(destRaw).split(';');
+
+    // ^<id> wire-form tick references. The SDK compacts an indexed token's tick
+    // to its immutable ^<id> form by default (tickResolver), and the co-signer
+    // daemon evaluates the params it decodes FROM the PSBT, so the same token
+    // reaches this check as either 'NAME' or '^123' depending on the wire form
+    // the agent chose. Tick-identity-sensitive rules cannot bind a reference
+    // they can't resolve: a named per-action cap would silently fall through to
+    // the wildcard, and per-tick window accumulation (named or '*') would let
+    // one token spend its window once per wire form. policy.tickIds
+    // ({ NAME: id }) resolves the reference; without a resolution, identity-
+    // sensitive policies fail closed rather than sign past a cap the operator
+    // believes is enforced. (Wildcard-only per-action caps and count-only
+    // window caps bind regardless of identity and are unaffected.)
+    if (typeof tick === 'string' && tick.charAt(0) === '^') {
+        const named = resolveTickRef(policy.tickIds, tick);
+        if (named !== undefined) {
+            tick = named;
+        } else {
+            const identitySensitive =
+                (policy.maxPerAction && hasNamedKey(policy.maxPerAction[action])) ||
+                !!(policy.maxPerWindow && policy.maxPerWindow.perTick) ||
+                (policy.confirmAbove && hasNamedKey(policy.confirmAbove.perTick));
+            if (identitySensitive)
+                return deny('POLICY_UNRESOLVED_TICK',
+                    `${action} references token ${tick} by id, which this policy cannot resolve to a name; ` +
+                    `tick-scoped limits cannot bind it (declare it in policy.tickIds, or submit with ` +
+                    `compactTickers disabled)`,
+                    { action, tick },
+                    { action, tick, amount, destinations, needsConfirmation: false });
+        }
+    }
 
     const evaluation = { action, tick, amount, destinations, needsConfirmation: false };
 
@@ -210,7 +274,9 @@ module.exports = {
     AMOUNT_KEYS,
     TICK_KEYS,
     DESTINATION_KEYS,
+    GAS_TICK,
     ACTION_VALUE_FIELDS,
     UNBOUNDED_VALUE_ACTIONS,
     resolveValue,
+    resolveTickRef,
 };

@@ -681,6 +681,59 @@ describe('Validator: default-deny delimiter guard', function () {
     });
 });
 
+describe('Validator: VOTE binding-poll numeric fields', function () {
+
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    const base = { VERSION: 0, TICK: 'GOV', END_BLOCK: '900000', OPTIONS: 'yes,no' };
+
+    it('accepts a binding poll with valid DEPOSIT / CALLBACK_CONTRACT / GAS_ESCROW', function () {
+        const errors = v.validate('VOTE', { ...base, DEPOSIT: '10', CALLBACK_CONTRACT: '7', CALLBACK_METHOD: 'onResult', GAS_ESCROW: '5' });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('accepts CALLBACK_CONTRACT 0 (contract ACTION_INDEXes start at 0)', function () {
+        const errors = v.validate('VOTE', { ...base, CALLBACK_CONTRACT: '0', CALLBACK_METHOD: 'onResult' });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('rejects a non-numeric DEPOSIT', function () {
+        const errors = v.validate('VOTE', { ...base, DEPOSIT: 'lots' });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('rejects a negative DEPOSIT', function () {
+        const errors = v.validate('VOTE', { ...base, DEPOSIT: '-1' });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('rejects a negative GAS_ESCROW', function () {
+        const errors = v.validate('VOTE', { ...base, CALLBACK_CONTRACT: '7', CALLBACK_METHOD: 'onResult', GAS_ESCROW: '-5' });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('rejects a non-numeric GAS_ESCROW', function () {
+        const errors = v.validate('VOTE', { ...base, CALLBACK_CONTRACT: '7', CALLBACK_METHOD: 'onResult', GAS_ESCROW: 'plenty' });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('rejects a non-integer CALLBACK_CONTRACT', function () {
+        const errors = v.validate('VOTE', { ...base, CALLBACK_CONTRACT: '7.5', CALLBACK_METHOD: 'onResult' });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('rejects a negative CALLBACK_CONTRACT', function () {
+        const errors = v.validate('VOTE', { ...base, CALLBACK_CONTRACT: '-3', CALLBACK_METHOD: 'onResult' });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('rejects a non-numeric CALLBACK_CONTRACT', function () {
+        const errors = v.validate('VOTE', { ...base, CALLBACK_CONTRACT: 'seven', CALLBACK_METHOD: 'onResult' });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ENCRYPTION_METHOD VALIDATION
 // ─────────────────────────────────────────────────────────────────────────────

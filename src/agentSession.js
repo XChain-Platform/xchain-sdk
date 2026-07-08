@@ -33,8 +33,9 @@
  *
  * HONESTY NOTE: this is a client-side guardrail, not a security
  * boundary: whoever holds the WIF can bypass it with raw SDK calls.
- * The hard-enforcement upgrade path is a MuSig2 co-signer that refuses
- * to co-sign out-of-policy PSBTs (interface spec'd, not yet built).
+ * The hard-enforcement upgrade is the MuSig2 co-signer (src/cosigner/),
+ * which runs this same policy server-side and withholds its partial
+ * signature on any out-of-policy PSBT; see MuSig2AgentSession.
  *
  ********************************************************************/
 
@@ -71,6 +72,10 @@ class AgentSession extends WalletSession {
             maxPerAction:        policy.maxPerAction || null,
             maxPerWindow:        win,
             confirmAbove:        policy.confirmAbove || null,
+            // Resolves ^<id> wire-form tick references (see policyEvaluator). The
+            // client-side check usually sees pre-compaction names, but a caller
+            // may pass a ^id tick directly, and the co-signer daemon relies on it.
+            tickIds:             policy.tickIds || null,
             onPolicyViolation:   policy.onPolicyViolation || null,
         };
 

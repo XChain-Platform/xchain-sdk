@@ -405,6 +405,20 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', 'QUANTITY must be a positive number', { field, value }));
         }
 
+        // VOTE v0 binding-poll numeric fields. Consensus (indexer actions/vote.js)
+        // requires DEPOSIT and GAS_ESCROW to be non-negative amounts and
+        // CALLBACK_CONTRACT to be numeric (a contract ACTION_INDEX, resolved via
+        // parseInt); check the same shape client-side so a bad value fails before
+        // broadcast instead of producing an on-chain invalid action.
+        if (field === 'DEPOSIT' || field === 'GAS_ESCROW') {
+            if (!this.util.isNumeric(value) || Number(value) < 0)
+                errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be a non-negative number', { field, value, constraint: { min: 0 } }));
+        }
+        if (field === 'CALLBACK_CONTRACT') {
+            if (!/^[0-9]+$/.test(String(value)))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'CALLBACK_CONTRACT must be a non-negative integer (a contract ACTION_INDEX)', { field, value }));
+        }
+
         // METHOD validation (non-empty; delimiter safety via _checkDelimiters)
         if (field === 'METHOD') {
             if (typeof value !== 'string' || value.length === 0)
