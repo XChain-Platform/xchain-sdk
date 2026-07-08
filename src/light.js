@@ -218,6 +218,17 @@ async function verifyBalance(opts){
     if (!trusted) return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_PRE_COMMITMENT' }, base);
     if (_hx(proof.chain) !== _hx(cp.chain) || _hx(proof.network) !== _hx(cp.network))
         return Object.assign({ verified: false, amount: null, reason: 'PROOF_CHECKPOINT_CHAIN_MISMATCH' }, base);
+    // Bind the proof to the ACTUAL query. verifyBalanceProof only checks the proven
+    // key against balanceKey(chain, network, proof.address, proof.tick) -- the
+    // SERVER-echoed fields -- so on its own it proves internal consistency, not that
+    // the proof answers what was asked. Derive the expected key from the CALLER's
+    // opts.address/opts.tick (balanceKey does no normalization) and require the proof
+    // to prove exactly that key; otherwise a server could answer a query about
+    // address A with a genuinely-committed proof for a different address B and its
+    // real balance. (verifyAction guards the analogous case via ACTION_INDEX_MISMATCH.)
+    const expectedKey = M.toHex(M.balanceKey(cp.chain, cp.network, String(opts.address), String(opts.tick)));
+    if (!proof.smt_proof || _hx(proof.smt_proof.key) !== expectedKey)
+        return Object.assign({ verified: false, amount: null, reason: 'BALANCE_QUERY_MISMATCH' }, base);
     const v = verifyBalanceProof(proof, trusted, cp.chain, cp.network);
     return Object.assign({ verified: v.verified, amount: v.verified ? v.amount : null, reason: v.reason }, base);
 }

@@ -29,8 +29,16 @@ class ContractClient {
         if (!contractActionIndex && contractActionIndex !== 0)
             throw new SDKContractError('INVALID_CONTRACT_INDEX', 'contractActionIndex is required');
 
+        // Reject a truthy-but-non-numeric index (e.g. "abc") at construction rather
+        // than letting Number() coerce it to NaN and surface as a malformed
+        // `.../contract/NaN` request from every later call.
+        let idx = Number(contractActionIndex);
+        if (!Number.isInteger(idx) || idx < 0)
+            throw new SDKContractError('INVALID_CONTRACT_INDEX',
+                'contractActionIndex must be a non-negative integer (a contract ACTION_INDEX)');
+
         this.sdk = sdk;
-        this.contractActionIndex = Number(contractActionIndex);
+        this.contractActionIndex = idx;
         this._info = null;
     }
 

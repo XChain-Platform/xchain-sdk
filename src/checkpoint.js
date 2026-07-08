@@ -116,8 +116,11 @@ function verifyCheckpoint(checkpoint, validators){
         let pk  = String(s && s.pubkey || '').toLowerCase();
         let sig = String(s && s.sig || '');
         if (!pk || seen.has(pk) || !qualified.has(pk)) continue;
-        seen.add(pk);
-        if (verifySignature(canonical, sig, pk)){ validSigs++; validSigners.push(pk); }
+        // Only mark a pubkey "seen" once its signature actually verifies. Marking on
+        // first encounter would let a garbage-then-valid pair of entries for the same
+        // qualified validator suppress the real signature (order-dependent quorum
+        // under-count), which fails a legitimately-quorate checkpoint closed.
+        if (verifySignature(canonical, sig, pk)){ seen.add(pk); validSigs++; validSigners.push(pk); }
     }
 
     let valid;

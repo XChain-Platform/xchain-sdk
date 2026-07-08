@@ -251,6 +251,30 @@ describe('SPV Phase 4: sdk.light.verifyBalance end-to-end (signed checkpoint, mo
         assert.strictEqual(r.verified, false);
         assert.strictEqual(r.reason, 'LEAF_AMOUNT_MISMATCH');
     });
+
+    it('rejects a genuinely-committed proof for a DIFFERENT address than queried (query binding)', async function () {
+        const ADDR_B = '1AddrBbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+        // Server answers a query about ADDR_A with a valid, quorum-anchored proof for
+        // ADDR_B's real balance. Everything about the proof verifies internally; only
+        // the query binding catches the substitution.
+        const { proof, stateRoot } = buildBalanceProof(ADDR_B, TICK, '999999');
+        const { cp, validators } = makeSignedCheckpoint(stateRoot);
+        const fetchImpl = mockFetch([['/api/proof/balance/', { proof, checkpoint: cp }]]);
+        const r = await light.verifyBalance({ explorerUrl: 'https://x', coin: COIN, address: ADDR_A,
+            tick: TICK, atHeight: 100, validators, fetchImpl });
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'BALANCE_QUERY_MISMATCH');
+    });
+
+    it('rejects a genuinely-committed proof for a DIFFERENT tick than queried (query binding)', async function () {
+        const { proof, stateRoot } = buildBalanceProof(ADDR_A, 'OTHERTOKEN', '999999');
+        const { cp, validators } = makeSignedCheckpoint(stateRoot);
+        const fetchImpl = mockFetch([['/api/proof/balance/', { proof, checkpoint: cp }]]);
+        const r = await light.verifyBalance({ explorerUrl: 'https://x', coin: COIN, address: ADDR_A,
+            tick: TICK, atHeight: 100, validators, fetchImpl });
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'BALANCE_QUERY_MISMATCH');
+    });
 });
 
 describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
