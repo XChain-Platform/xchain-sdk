@@ -63,14 +63,20 @@ const TICK_FORBIDDEN_FIRST_CHAR = '^';
 // Characters forbidden in text fields (pipe = field separator, semicolon = command separator)
 const FORBIDDEN_TEXT_CHARS = ['|', ';'];
 
-// Free-text / list fields that are serialized verbatim into the pipe-delimited
-// action string and so must never carry a '|' or ';'. MEMO/DESCRIPTION/METHOD,
-// FILE NAME/TYPE/TITLE, and LIST ITEM are guarded by their own field-specific
-// branches; this set covers the rest (VOTE free-text fields + the allow/block
-// lists shared by ISSUE/ORDER/SWAP/DISPENSER). Values may be a string or an array.
-const DELIMITER_GUARDED_FIELDS = new Set([
-    'OPTIONS', 'QUESTION', 'CALLBACK_METHOD', 'CALLBACK_PARAMS', 'BALLOT', 'DELEGATE_TO',
-    'ALLOW_LIST', 'BLOCK_LIST',
+// Default-deny delimiter guard. Every field value is serialized verbatim into
+// the pipe-delimited action string (`ACTION|VERSION|F1|F2|...`), so NO field may
+// carry the '|' field separator or the ';' BATCH command separator, or it
+// corrupts the field layout (and ';' inside a BATCH injects a whole command).
+// `_checkDelimiters` enforces this on every field; the set below is the small,
+// principled exemption list: BATCH COMMAND legitimately holds both delimiters,
+// and the rest carry their own delimiter validation under a distinct error code
+// (tick-name / GATE_TICKER / per-element PARAMS), so they opt out here to avoid
+// double-reporting.
+const DELIMITER_EXEMPT_FIELDS = new Set([
+    'COMMAND',                                                          // BATCH sub-action carrier
+    'TICK', 'GIVE_TICK', 'GET_TICK', 'DIVIDEND_TICK', 'CALLBACK_TICK',  // own tick-name validation
+    'GATE_TICKER',                                                      // own |;./ check
+    'CONSTRUCTOR_PARAMS', 'PARAMS',                                     // own per-element check
 ]);
 
 // Valid FIAT currency codes. Must stay a byte-equal allow-list with the indexer's
@@ -173,6 +179,10 @@ class Validator {
             let value = fields[field];
             if (this._isEmpty(value)) continue;
 
+            // Default-deny delimiter guard, applied to every field before its
+            // type-specific validation (see DELIMITER_EXEMPT_FIELDS).
+            errors.push(...this._checkDelimiters(field, value));
+
             let fieldErrors = this._validateField(action, field, value, fields);
             errors.push(...fieldErrors);
         }
@@ -200,14 +210,10 @@ class Validator {
             }
         }
 
-        // MEMO validation
-        if (field === 'MEMO') {
-            errors.push(...this._validateTextContent(field, value));
-        }
+        // MEMO delimiter safety is handled by the default-deny _checkDelimiters guard.
 
-        // DESCRIPTION validation
+        // DESCRIPTION validation (delimiter safety via _checkDelimiters)
         if (field === 'DESCRIPTION') {
-            errors.push(...this._validateTextContent(field, value));
             if (String(value).length > MAX_DESC_LENGTH)
                 errors.push(this._error('INVALID_FIELD_VALUE', 'DESCRIPTION must be ' + MAX_DESC_LENGTH + ' characters or less', { field, value: String(value).length, constraint: { max: MAX_DESC_LENGTH } }));
         }
@@ -301,20 +307,12 @@ class Validator {
                     { field, value }));
         }
 
-        // FILE free-text fields (NAME, TYPE, TITLE) are serialized verbatim into the
-        // pipe-delimited action string. Guard them like every other text field: a '|'
-        // corrupts the field layout, and a ';' inside a BATCH injects a whole extra
-        // command (the indexer splits BATCH TX_DATA on ';'). MEMO/GATE_TICKER/KEY_HASH
-        // are already guarded above.
-        if (action === 'FILE' && (field === 'NAME' || field === 'TYPE' || field === 'TITLE')) {
-            errors.push(...this._validateTextContent(field, value));
-        }
+        // FILE NAME/TYPE/TITLE delimiter safety is handled by _checkDelimiters.
 
-        // MESSAGE content length validation
+        // MESSAGE content length validation (delimiter safety via _checkDelimiters)
         if (field === 'PLAINTEXT_MESSAGE' || field === 'ENCRYPTED_MESSAGE' || field === 'ENCRYPTION_KEY') {
             if (String(value).length > MAX_MESSAGE_LENGTH)
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be ' + MAX_MESSAGE_LENGTH + ' characters or less', { field, value: String(value).length, constraint: { max: MAX_MESSAGE_LENGTH } }));
-            errors.push(...this._validateTextContent(field, value));
         }
 
         // FEE_PREFERENCE validation (ADDRESS action)
@@ -335,36 +333,9 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', 'LIST TYPE must be 1 (TICK list) or 2 (ADDRESS list)', { field, value, constraint: { valid: [1, 2] } }));
         }
 
-        // LIST ITEM is a rest-field (roster entries) serialized verbatim into the
-        // pipe-delimited action string. Each item must be delimiter-clean: a '|'
-        // corrupts the item count, and a ';' inside a BATCH injects a whole extra
-        // command (the indexer splits BATCH TX_DATA on ';').
-        if (field === 'ITEM' && action === 'LIST') {
-            let items = Array.isArray(value) ? value : [value];
-            for (let i = 0; i < items.length; i++) {
-                if (this._isEmpty(items[i])) continue;
-                for (let ch of FORBIDDEN_TEXT_CHARS) {
-                    if (String(items[i]).includes(ch))
-                        errors.push(this._error('FORBIDDEN_CHARACTER',
-                            'ITEM[' + i + '] cannot contain ' + (ch === '|' ? 'pipe (|)' : 'semicolon (;)'),
-                            { field, index: i, value: items[i] }));
-                }
-            }
-        }
-
-        // Other free-text / list fields serialized verbatim into the pipe-delimited
-        // action string. Like MEMO/DESCRIPTION/FILE/LIST above, none may carry the
-        // '|' field delimiter or the ';' BATCH action delimiter, or they corrupt the
-        // field layout (and, inside a BATCH, inject a whole command). Covers the VOTE
-        // free-text set and the cross-action allow/block lists. Values may arrive as a
-        // string or an array (rest/list fields), so check each element.
-        if (DELIMITER_GUARDED_FIELDS.has(field)) {
-            let items = Array.isArray(value) ? value : [value];
-            for (let item of items) {
-                if (this._isEmpty(item)) continue;
-                errors.push(...this._validateTextContent(field, item));
-            }
-        }
+        // LIST ITEM (rest-field), VOTE free-text fields, and ALLOW_LIST/BLOCK_LIST
+        // delimiter safety are all handled by the default-deny _checkDelimiters guard
+        // (which iterates array/rest values element-by-element).
 
         // LIST EDIT validation
         if (field === 'EDIT') {
@@ -434,12 +405,10 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', 'QUANTITY must be a positive number', { field, value }));
         }
 
-        // METHOD validation (non-empty, no forbidden chars)
+        // METHOD validation (non-empty; delimiter safety via _checkDelimiters)
         if (field === 'METHOD') {
             if (typeof value !== 'string' || value.length === 0)
                 errors.push(this._error('INVALID_FIELD_VALUE', 'METHOD must be a non-empty string', { field, value }));
-            else
-                errors.push(...this._validateTextContent(field, value));
         }
 
         // CODE_ENCODING validation (base64 string, decoded-size limit)
@@ -549,10 +518,7 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', 'VALUE must be numeric', { field, value }));
         }
 
-        // MESSAGE field validation (BROADCAST)
-        if (field === 'MESSAGE' && action === 'BROADCAST') {
-            errors.push(...this._validateTextContent(field, value));
-        }
+        // BROADCAST MESSAGE delimiter safety is handled by _checkDelimiters.
 
         return errors;
     }
@@ -821,12 +787,23 @@ class Validator {
         return errors;
     }
 
-    _validateTextContent(field, value) {
+    // Default-deny delimiter guard. No serialized field value may contain the '|'
+    // field separator or the ';' BATCH command separator (see DELIMITER_EXEMPT_FIELDS
+    // for the handful that opt out). Handles string and array/rest-field values,
+    // checking each element, so a corrupted roster/allow-list entry is caught too.
+    _checkDelimiters(field, value) {
+        if (DELIMITER_EXEMPT_FIELDS.has(field)) return [];
         let errors = [];
-        let text = String(value);
-        for (let ch of FORBIDDEN_TEXT_CHARS) {
-            if (text.includes(ch))
-                errors.push(this._error('FORBIDDEN_CHARACTER', field + ' cannot contain ' + (ch === '|' ? 'pipe (|)' : 'semicolon (;)'), { field, value }));
+        let items = Array.isArray(value) ? value : [value];
+        for (let item of items) {
+            if (this._isEmpty(item)) continue;
+            let text = String(item);
+            for (let ch of FORBIDDEN_TEXT_CHARS) {
+                if (text.includes(ch))
+                    errors.push(this._error('FORBIDDEN_CHARACTER',
+                        field + ' cannot contain ' + (ch === '|' ? 'pipe (|)' : 'semicolon (;)'),
+                        { field, value: item }));
+            }
         }
         return errors;
     }

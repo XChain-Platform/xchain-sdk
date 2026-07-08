@@ -642,6 +642,45 @@ describe('Validator: allow/block-list delimiter guards', function () {
     });
 });
 
+describe('Validator: default-deny delimiter guard', function () {
+
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    // The guard is default-deny: a field with NO field-specific validation still
+    // cannot smuggle a delimiter. GAS_ESCROW/CALLBACK_CONTRACT had no validation
+    // of their own before the blanket guard.
+    it('rejects a pipe in a field that has no field-specific validation (GAS_ESCROW)', function () {
+        const errors = v.validate('VOTE', { VERSION: 0, TICK: 'GOV', END_BLOCK: '900000', OPTIONS: 'y,n', GAS_ESCROW: '5|9' });
+        expect(hasErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    it('rejects a pipe in CALLBACK_CONTRACT (previously unguarded)', function () {
+        const errors = v.validate('VOTE', { VERSION: 0, TICK: 'GOV', END_BLOCK: '900000', OPTIONS: 'y,n', CALLBACK_CONTRACT: '7|X' });
+        expect(hasErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    // BATCH COMMAND is the one field that legitimately carries both delimiters
+    // (it IS the ';'-joined, '|'-delimited sub-action string). It must NOT trip
+    // the guard.
+    it('exempts BATCH COMMAND (legitimately holds ; and |)', function () {
+        const errors = v.validate('BATCH', { VERSION: 0, COMMAND: 'SEND|0|FOO|1|addr;MINT|0|FOO|1' });
+        expect(hasNoErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    // Exempt fields keep their own distinct-code delimiter rejection (no
+    // double-reporting): TICK -> INVALID_TICK_NAME, CONSTRUCTOR_PARAMS -> INVALID_PARAM_VALUE.
+    it('a pipe in TICK still reports INVALID_TICK_NAME, not the generic guard', function () {
+        const errors = v.validate('ISSUE', { VERSION: 0, TICK: 'FO|O', MAX_SUPPLY: '100' });
+        expect(hasErrorCode(errors, 'INVALID_TICK_NAME')).to.be.true;
+    });
+
+    it('a pipe in a CONSTRUCTOR_PARAMS entry still reports INVALID_PARAM_VALUE', function () {
+        const errors = v.validate('DEPLOY', { VERSION: 1, GAS_LIMIT: '100', CODE_ENCODING: 'abc', CONSTRUCTOR_PARAMS: ['ok', 'ba|d'] });
+        expect(hasErrorCode(errors, 'INVALID_PARAM_VALUE')).to.be.true;
+    });
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ENCRYPTION_METHOD VALIDATION
 // ─────────────────────────────────────────────────────────────────────────────
