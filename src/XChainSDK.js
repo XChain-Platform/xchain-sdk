@@ -709,24 +709,40 @@ class XChainSDK {
     // string, splits off the ACTION + wire params, and asks the indexer (via the explorer proxy)
     // for the authoritative native fee + accept/reject verdict. A client should size the
     // FEE_DESTINATION output to `requiredFeeSats` and refuse to broadcast when
-    // `supported === false` or `valid === false`. See xchain-documentation/concepts/GAS.md.
+    // `supported === false` or `valid === false`. A `busy:true, retryable:true` quote (indexer
+    // admission cap) is retried once after a short delay (opts.busyRetryDelayMs, default 1s)
+    // before being returned. See xchain-documentation/concepts/GAS.md.
     async quoteNativeFee(actionData, opts = {}) {
-        let result = this.actions.createAction(actionData);
-        let parts  = String(result.actionString).split('|');
-        let action = parts.shift();
-        let quote  = await this._requireExplorer().getFeeQuote({
+        let result  = this.actions.createAction(actionData);
+        let parts   = String(result.actionString).split('|');
+        let action  = parts.shift();
+        let request = {
             action:        action,
             params:        parts,
             source:        opts.source,
             feeOutputSats: opts.feeOutputSats
-        });
+        };
+        let quote = await this._fetchFeeQuote(request);
+        // The indexer's admission cap answers `busy:true, retryable:true` under transient
+        // load; one short-delay retry rides that out before callers turn the (valid:false)
+        // busy quote into a hard NATIVE_FEE_INVALID refusal.
+        if (quote.busy === true && quote.retryable === true) {
+            let delayMs = opts.busyRetryDelayMs != null ? Number(opts.busyRetryDelayMs) : 1000;
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+            quote = await this._fetchFeeQuote(request);
+        }
+        quote.actionString = result.actionString;
+        return quote;
+    }
+
+    async _fetchFeeQuote(request) {
+        let quote = await this._requireExplorer().getFeeQuote(request);
         // An explorer that doesn't serve this coin can answer 200 with an HTML page or an
         // unrelated JSON body; treating that as a quote builds a doomed fee-forfeiting tx.
         if (!quote || typeof quote !== 'object' || Array.isArray(quote) || typeof quote.supported !== 'boolean') {
             let detail = (quote && typeof quote === 'object' && quote.error) ? String(quote.error) : 'not a quote object';
             throw new SDKExplorerError('EXPLORER_BAD_FEEQUOTE', 'Explorer returned a malformed native-fee quote (' + detail + '): refusing to size the fee output', { quote: typeof quote === 'string' ? quote.slice(0, 200) : quote });
         }
-        quote.actionString = result.actionString;
         return quote;
     }
 

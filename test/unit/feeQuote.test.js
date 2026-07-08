@@ -151,6 +151,49 @@ describe('Native-coin fee quote (client)', function () {
             expect(threw, 'expected estimateFees to throw').to.equal(true);
         });
 
+        // The indexer admission cap answers busy:true, retryable:true under transient load;
+        // quoteNativeFee retries once before callers surface a hard NATIVE_FEE_INVALID.
+        it('quoteNativeFee retries once on a busy/retryable quote and returns the retry result', async function () {
+            let sdk = makeSdk();
+            let calls = 0;
+            sdk.explorer.getFeeQuote = async () => (++calls === 1)
+                ? { supported: true, valid: false, busy: true, retryable: true, error: 'fee quote busy' }
+                : { supported: true, valid: true, requiredFeeSats: 2000, feeDestination: 'feeDest' };
+            let q = await sdk.quoteNativeFee({ action: 'ISSUE', params: { tick: 'NEWTICK', description: 'x' } }, { source: 'src1', busyRetryDelayMs: 1 });
+            expect(calls).to.equal(2);
+            expect(q).to.include({ valid: true, requiredFeeSats: 2000 });
+        });
+
+        it('quoteNativeFee retries only once: a still-busy retry is returned as-is', async function () {
+            let sdk = makeSdk();
+            let calls = 0;
+            sdk.explorer.getFeeQuote = async () => { calls++; return { supported: true, valid: false, busy: true, retryable: true, error: 'fee quote busy' }; };
+            let q = await sdk.quoteNativeFee({ action: 'ISSUE', params: { tick: 'NEWTICK', description: 'x' } }, { source: 'src1', busyRetryDelayMs: 1 });
+            expect(calls).to.equal(2);
+            expect(q).to.include({ valid: false, busy: true, retryable: true });
+        });
+
+        it('quoteNativeFee does not retry a non-busy invalid quote', async function () {
+            let sdk = makeSdk();
+            let calls = 0;
+            sdk.explorer.getFeeQuote = async () => { calls++; return { supported: true, valid: false, error: 'insufficient funds' }; };
+            let q = await sdk.quoteNativeFee({ action: 'SEND', params: { tick: 'T', amount: '1', destination: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh' } }, { source: 'src1', busyRetryDelayMs: 1 });
+            expect(calls).to.equal(1);
+            expect(q.valid).to.equal(false);
+        });
+
+        it('quoteNativeFee validates the retry response shape too', async function () {
+            let sdk = makeSdk();
+            let calls = 0;
+            sdk.explorer.getFeeQuote = async () => (++calls === 1)
+                ? { supported: true, valid: false, busy: true, retryable: true, error: 'fee quote busy' }
+                : '<!DOCTYPE html><html><body>502</body></html>';
+            let threw = false;
+            try { await sdk.quoteNativeFee({ action: 'ISSUE', params: { tick: 'NEWTICK', description: 'x' } }, { source: 'src1', busyRetryDelayMs: 1 }); }
+            catch (e) { threw = true; expect(e.code).to.equal('EXPLORER_BAD_FEEQUOTE'); }
+            expect(threw, 'expected quoteNativeFee to throw').to.equal(true);
+        });
+
         it('estimateFees without payFeeInNativeCoin adds no native output', async function () {
             let sdk = makeSdk();
             await sdk.estimateFees({ action: 'ISSUE', params: { tick: 'NEWTICK', description: 'x' } }, { pubkey: 'pk', change: 'src1' });
