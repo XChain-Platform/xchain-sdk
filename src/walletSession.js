@@ -48,6 +48,15 @@ class WalletSession {
         // UTXO cache for transaction chaining
         this._utxoCache = new UTXOCache();
 
+        // Serializes submit() calls from this session. The submits share one
+        // UTXO cache, and each does read-available -> broadcast -> mark-spent
+        // with a long async gap in the middle; two concurrent sends would both
+        // reserve the same UTXOs and one would double-spend. This tail promise
+        // chains each submit behind the previous, so concurrent callers queue
+        // safely instead of racing the cache. (Same idiom as x402's per-nonce
+        // mutex and the deposit-ledger lock.)
+        this._submitTail = Promise.resolve();
+
         // Default submit options
         this._defaultOpts = {
             waitForIndexer: opts.waitForIndexer !== undefined ? opts.waitForIndexer : true,
@@ -67,7 +76,19 @@ class WalletSession {
     // actionData     = { action, params }
     // encoderOpts    = override encoder options (optional)
     // submitOpts     = override submit options (optional)
+    //
+    // Submits are serialized per session (see _submitTail): if a caller fires
+    // several sends concurrently, they queue rather than racing the shared UTXO
+    // cache into a double-spend. A failed submit does not block the queue.
     async submit(actionData, encoderOpts = {}, submitOpts = {}) {
+        let run = this._submitTail.then(() => this._submitInner(actionData, encoderOpts, submitOpts));
+        // Advance the tail regardless of this submit's outcome so one failure
+        // (or rejection) never wedges every later send behind it.
+        this._submitTail = run.then(() => {}, () => {});
+        return run;
+    }
+
+    async _submitInner(actionData, encoderOpts = {}, submitOpts = {}) {
         // Lazy-load UTXOs if cache is empty and no explicit UTXOs provided
         if (!encoderOpts.utxos && !this._utxoCache.isLoaded()) {
             await this.refreshUTXOs();

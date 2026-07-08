@@ -736,6 +736,15 @@ class MessagingUtils {
         let authTag         = buf.subarray(offset + EPHEMERAL_PUBKEY_LEN + IV_LEN, offset + ECIES_OVERHEAD);
         let encrypted       = buf.subarray(offset + ECIES_OVERHEAD);
 
+        // Validate the attacker-supplied ephemeral point BEFORE it meets our private
+        // key. This is the same guard eciesEncrypt applies to the recipient pubkey,
+        // and decrypt is the side that actually matters for an invalid-curve attack
+        // (a crafted off-curve / small-subgroup ephemeral could leak private-key bits
+        // through an ECDH that doesn't self-validate). Node/OpenSSL rejects such
+        // points today, but this keeps the guarantee independent of the ECDH backend.
+        if (!ecc.isPoint(ephemeralPubkey))
+            throw new SDKMessagingError('INVALID_CIPHERTEXT', 'ECIES ephemeral public key is not a valid secp256k1 point.');
+
         let sharedSecret = version === KDF_VERSION_V1
             ? this._deriveEciesKey(recipientPrivateKey, ephemeralPubkey)
             : this._deriveECDHSecretLegacy(recipientPrivateKey, ephemeralPubkey);

@@ -59,7 +59,10 @@ describe('AgentSession (policy-bounded wallet)', () => {
     beforeEach(() => {
         tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-session-'));
         stateFile = path.join(tmpDir, 'usage.json');
-        submitStub = sinon.stub(WalletSession.prototype, 'submit')
+        // Stub the unlocked encode/sign/broadcast body both submit() paths funnel
+        // through (AgentSession.submit runs its policy check + record around
+        // super._submitInner under the shared serialization tail).
+        submitStub = sinon.stub(WalletSession.prototype, '_submitInner')
             .resolves({ txid: 'tx123', status: 'valid' });
     });
 
@@ -143,6 +146,25 @@ describe('AgentSession (policy-bounded wallet)', () => {
         await s.send({ tick: 'TOK', amount: '1' });
         await s.mint({ tick: 'TOK', amount: '1' });
         await expectDeny(() => s.send({ tick: 'TOK', amount: '1' }), 'POLICY_WINDOW_COUNT_EXCEEDED');
+    });
+
+    it('serializes concurrent submits so the window count cap cannot be bypassed', async () => {
+        // maxActions=2; fire three at once. The check (reads the window) and the
+        // record (writes it) must be atomic with the broadcast, or all three
+        // evaluate against the empty window and exceed the cap.
+        const s = mk({ maxPerWindow: { hours: 1, maxActions: 2 } });
+        const outcomes = await Promise.allSettled([
+            s.send({ tick: 'TOK', amount: '1' }),
+            s.send({ tick: 'TOK', amount: '1' }),
+            s.send({ tick: 'TOK', amount: '1' }),
+        ]);
+        const fulfilled = outcomes.filter((o) => o.status === 'fulfilled');
+        const rejected  = outcomes.filter((o) => o.status === 'rejected');
+        expect(fulfilled.length).to.equal(2);   // exactly the cap
+        expect(rejected.length).to.equal(1);
+        expect(rejected[0].reason).to.be.instanceOf(SDKPolicyError);
+        expect(rejected[0].reason.code).to.equal('POLICY_WINDOW_COUNT_EXCEEDED');
+        expect(submitStub.callCount).to.equal(2);   // only two actually broadcast
     });
 
     it('window usage survives a restart (new instance, same state file)', async () => {

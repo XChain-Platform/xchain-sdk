@@ -75,6 +75,19 @@ describe('MessagingUtils @crypto @regression', function () {
             expectCode(() => msg.eciesDecrypt(buf.toString('hex'), bob.wif), 'DECRYPTION_FAILED');
         });
 
+        it('rejects a crafted ciphertext whose ephemeral point is off-curve (invalid-curve guard)', function () {
+            const bob = keypair();
+            const buf = Buffer.from(msg.eciesEncrypt('secret', bob.publicKeyHex).ciphertext, 'hex');
+            // v1 layout: [version(1)][ephemeralPubkey(33)][iv(12)][authTag(16)][data].
+            // Overwrite the ephemeral pubkey with a compressed-looking non-point
+            // (prefix 0x02, x = 0xff..ff > field modulus). It must be rejected as an
+            // invalid ciphertext BEFORE reaching the ECDH, not surface as a generic
+            // GCM failure (and never touch our private key via an unchecked point).
+            buf.fill(0xff, 1, 1 + 33);
+            buf[1] = 0x02;
+            expectCode(() => msg.eciesDecrypt(buf.toString('hex'), bob.wif), 'INVALID_CIPHERTEXT');
+        });
+
         it('rejects empty plaintext, missing/short pubkey, short ciphertext, bad WIF', function () {
             const bob = keypair();
             expectCode(() => msg.eciesEncrypt('', bob.publicKeyHex), 'INVALID_MESSAGE');

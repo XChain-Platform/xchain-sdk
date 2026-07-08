@@ -162,6 +162,50 @@ describe('WalletSession', function () {
             assert.strictEqual(session._utxoCache.isLoaded(), true);
         });
 
+        it('serializes concurrent submits so they cannot reserve the same UTXO', async function () {
+            // Two UTXOs available; each submit spends utxo1 (per the stub below).
+            let sdk = makeSdk({
+                _requireEncoder: () => ({
+                    getUTXOs: async () => ({ utxos: [
+                        { txid: 'utxo1', vout: 0, value: 100000 },
+                        { txid: 'utxo2', vout: 0, value: 100000 }
+                    ] })
+                })
+            });
+            let session = new WalletSession(sdk, WIF_MAINNET, { waitForIndexer: false });
+
+            // Capture the UTXO set each submit was handed, holding the async gap
+            // open so a non-serialized implementation would let both reads race.
+            let seen = [];
+            submitStub.callsFake(async (actionData, encoderOpts) => {
+                seen.push((encoderOpts.utxos || []).map(u => u.txid + ':' + u.vout));
+                await new Promise(r => setTimeout(r, 20));
+                return { txid: 'tx', status: 'broadcast', spentInputs: [{ txid: 'utxo1', vout: 0 }] };
+            });
+
+            await Promise.all([
+                session.submit({ action: 'SEND', params: {} }),
+                session.submit({ action: 'SEND', params: {} })
+            ]);
+
+            // The first submit saw utxo1 available. Because submits serialize, the
+            // second ran only after the first marked utxo1 spent, so it must not
+            // have been offered utxo1 again (the double-spend this guard prevents).
+            assert.ok(seen[0].includes('utxo1:0'));
+            assert.ok(!seen[1].includes('utxo1:0'), 'second submit must not reuse the spent utxo1');
+        });
+
+        it('a failed submit does not wedge later submits in the queue', async function () {
+            let session = new WalletSession(makeSdk(), WIF_MAINNET, { waitForIndexer: false });
+            submitStub.onCall(0).rejects(new Error('broadcast failed'));
+            submitStub.onCall(1).resolves({ txid: 'tx2', status: 'broadcast', spentInputs: [] });
+
+            await assert.rejects(session.submit({ action: 'SEND', params: {} }), /broadcast failed/);
+            // The queue must still run the next submit rather than stall behind the failure.
+            let ok = await session.submit({ action: 'SEND', params: {} });
+            assert.strictEqual(ok.txid, 'tx2');
+        });
+
         it('does NOT refresh when caller provides explicit utxos', async function () {
             let getUTXOsCalled = false;
             let sdk = makeSdk({

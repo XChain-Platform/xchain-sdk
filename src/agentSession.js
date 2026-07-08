@@ -156,6 +156,21 @@ class AgentSession extends WalletSession {
     /* ── enforcement chokepoint ────────────────────────────────────── */
 
     async submit(actionData, encoderOpts = {}, submitOpts = {}) {
+        // The window-cap check (_evaluate reads the usage window) and the record
+        // (_recordUsage writes it) must be atomic with the broadcast, or two
+        // concurrent submits both evaluate against the same pre-record snapshot,
+        // both pass, and together exceed maxPerWindow (maxActions / per-tick caps)
+        // -- silently defeating the bounded-blast-radius the AgentSession exists
+        // to provide. Serialize the whole enforce+submit+record on the shared
+        // per-session tail (the parent's submit uses the same tail). We call the
+        // parent's UNLOCKED _submitInner inside, not super.submit, so we don't
+        // re-enqueue on the tail we already hold (which would deadlock).
+        let run = this._submitTail.then(() => this._enforceAndSubmit(actionData, encoderOpts, submitOpts));
+        this._submitTail = run.then(() => {}, () => {});
+        return run;
+    }
+
+    async _enforceAndSubmit(actionData, encoderOpts, submitOpts) {
         const evaluation = this._evaluate(actionData);
 
         if (evaluation.needsConfirmation) {
@@ -170,7 +185,7 @@ class AgentSession extends WalletSession {
                     { action: evaluation.action, tick: evaluation.tick, amount: evaluation.amount });
         }
 
-        const result = await super.submit(actionData, encoderOpts, submitOpts);
+        const result = await super._submitInner(actionData, encoderOpts, submitOpts);
         this._recordUsage(evaluation, result && result.txid);
 
         // Surface what was evaluated so callers (MCP write tools) can report
