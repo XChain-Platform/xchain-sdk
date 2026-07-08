@@ -48,6 +48,7 @@ const path   = require('path');
 const crypto = require('crypto');
 const { create, all } = require('mathjs');
 const { SDKX402Error } = require('./errors.js');
+const AuthUtils = require('./auth.js');
 
 const math = create(all, { number: 'BigNumber', precision: 64 });
 const bn   = (v) => math.bignumber(String(v));
@@ -62,6 +63,29 @@ const isPosNum = (v) => {
 };
 
 const X402_VERSION = 1;
+
+/* ── payer-signature binding ─────────────────────────────────────────────
+ * Every proof must prove the requester CONTROLS `payer`, otherwise anyone can
+ * name a token-holding / depositing address they do not own (free access /
+ * theft of another payer's prepaid credit) or replay a public invoice memo
+ * (front-run). The payer signs a fresh, server-issued challenge (the single-use
+ * invoice nonce for send; an HMAC-authenticated challenge token for
+ * dispenser/deposit) with its wallet key; the gateway verifies the Bitcoin
+ * message signature against the payer address. */
+
+// Sign `message` with `wif` so the signature verifies against `address`. The
+// message-signature header byte encodes the address type, so a p2pkh key must
+// sign in p2pkh mode, a bech32 key in p2wpkh mode, etc. Try each mode and keep
+// the one whose derived address matches; fall back to p2pkh.
+function signForAddress(auth, message, wif, address, network) {
+    for (const opts of [{}, { segwitNative: true }, { segwitRedeemScript: true }]) {
+        try {
+            const r = auth.signMessage(message, wif, Object.assign({ network }, opts));
+            if (r.address === address) return r.signature;
+        } catch (e) { /* try the next address type */ }
+    }
+    return auth.signMessage(message, wif, { network }).signature;
+}
 
 /* ── shared: action-string parsing ──────────────────────────────────── */
 
@@ -231,6 +255,82 @@ class X402Gateway {
         this.description         = o.description || 'Payment required';
         this._depositLocks       = new Map();
         this._sweepTimer         = null;
+
+        // Payer-signature binding. Default ON: the proof must carry a signature
+        // by `payer` over a fresh server-issued challenge, closing the
+        // self-declared-payer holes (free dispenser access, deposit-credit theft,
+        // send front-run). Pass requireSignature:false only for a trusted/legacy
+        // deployment that gates payer identity some other way.
+        this.requireSignature = o.requireSignature !== false;
+        this.network          = o.network || null;
+        if (this.requireSignature && !this.network)
+            throw new SDKX402Error('X402_CONFIG', 'network is required when requireSignature is enabled (used to verify payer message signatures); pass requireSignature:false to disable payer-signature binding');
+        this._auth = this.network ? new AuthUtils(this.network) : null;
+
+        // Stateless HMAC secret for dispenser/deposit challenge tokens. send binds
+        // to its single-use invoice nonce instead, so it needs no secret. A random
+        // per-process secret works but does not survive a restart or validate
+        // across nodes, so warn when a schemes-that-need-it gateway omits it.
+        this._challengeSecret = o.challengeSecret
+            ? (Buffer.isBuffer(o.challengeSecret) ? o.challengeSecret : Buffer.from(String(o.challengeSecret)))
+            : crypto.randomBytes(32);
+        if (this.requireSignature && !o.challengeSecret && (this.dispenser || this.deposit))
+            console.warn('x402: no challengeSecret set; using a random per-process secret. Dispenser/deposit challenges will not survive a restart or work across multiple nodes. Set challengeSecret in production.');
+        this.challengeTtlMs   = o.challengeTtlMs || 5 * 60 * 1000;
+        this._usedChallenges  = new Map();   // challenge nonce -> expiresAt (one-time-use replay guard)
+    }
+
+    /* ── payer-signature helpers ── */
+
+    // Issue an HMAC-authenticated, expiring challenge token bound to the scheme,
+    // coin and resource. Stateless: the MAC lets the gateway trust its own token
+    // on the retry without server-side issuance state.
+    _issueChallenge(scheme, resource) {
+        const body = { n: crypto.randomBytes(16).toString('hex'), exp: Date.now() + this.challengeTtlMs,
+                       s: scheme, c: this.coin, r: resource == null ? null : String(resource) };
+        const payload = Buffer.from(JSON.stringify(body)).toString('base64url');
+        const mac = crypto.createHmac('sha256', this._challengeSecret).update(payload).digest('hex');
+        return payload + '.' + mac;
+    }
+
+    // Validate a challenge token WITHOUT consuming it (MAC, expiry, scheme/coin/
+    // resource binding). Returns { ok, nonce, exp } or { ok:false, code }.
+    _checkChallenge(token, scheme, resource) {
+        if (typeof token !== 'string' || token.indexOf('.') < 0) return { ok: false, code: 'X402_CHALLENGE_MISSING' };
+        const dot = token.lastIndexOf('.');
+        const payload = token.slice(0, dot);
+        const mac = token.slice(dot + 1);
+        const expect = crypto.createHmac('sha256', this._challengeSecret).update(payload).digest('hex');
+        const a = Buffer.from(mac), b = Buffer.from(expect);
+        if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return { ok: false, code: 'X402_BAD_CHALLENGE' };
+        let body;
+        try { body = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')); }
+        catch (e) { return { ok: false, code: 'X402_BAD_CHALLENGE' }; }
+        if (body.s !== scheme || body.c !== this.coin) return { ok: false, code: 'X402_BAD_CHALLENGE' };
+        if ((body.r == null ? null : String(body.r)) !== (resource == null ? null : String(resource)))
+            return { ok: false, code: 'X402_CHALLENGE_RESOURCE_MISMATCH' };
+        if (!(Number(body.exp) > Date.now())) return { ok: false, code: 'X402_CHALLENGE_EXPIRED' };
+        return { ok: true, nonce: body.n, exp: Number(body.exp) };
+    }
+
+    // Consume a challenge nonce one time (replay guard). Prunes expired entries so
+    // the map stays bounded to the live TTL window.
+    _consumeChallenge(nonce, exp) {
+        const now = Date.now();
+        for (const [n, e] of this._usedChallenges) if (e <= now) this._usedChallenges.delete(n);
+        if (this._usedChallenges.has(nonce)) return { ok: false, code: 'X402_CHALLENGE_REPLAYED' };
+        this._usedChallenges.set(nonce, exp);
+        return { ok: true };
+    }
+
+    // Verify a Bitcoin message signature by `payer` over `message`.
+    _verifyPayerSignature(payer, message, signature) {
+        if (!this._auth) return { ok: false, code: 'X402_CONFIG' };
+        if (typeof signature !== 'string' || !signature) return { ok: false, code: 'X402_SIGNATURE_REQUIRED' };
+        let r;
+        try { r = this._auth.verifyOwnership(payer, message, signature); }
+        catch (e) { return { ok: false, code: 'X402_BAD_SIGNATURE' }; }
+        return r.valid ? { ok: true } : { ok: false, code: 'X402_BAD_SIGNATURE' };
     }
 
     /* ── challenge ── */
@@ -254,6 +354,8 @@ class X402Gateway {
                 tick: this.send.tick, amount: this.send.amount, payTo: this.send.payTo,
                 invoice: nonce, expiresAt: invoice.expiresAt,
                 minConfirmations: this.send.minConfirmations,
+                // send binds the payer signature to the single-use invoice nonce.
+                requireSignature: this.requireSignature,
             });
         }
         if (this.dispenser)
@@ -262,12 +364,17 @@ class X402Gateway {
                 holdTick: this.dispenser.holdTick, minBalance: this.dispenser.minBalance,
                 dispenserIndex: this.dispenser.dispenserIndex,
                 dispenserAddress: this.dispenser.dispenserAddress,
+                requireSignature: this.requireSignature,
+                // The payer signs this challenge to prove control of its address.
+                challenge: this.requireSignature ? this._issueChallenge('xchain-dispenser', resource) : undefined,
             });
         if (this.deposit)
             accepts.push({
                 scheme: 'xchain-deposit', coin: this.coin,
                 tick: this.deposit.tick, depositAddress: this.deposit.depositAddress,
                 pricePerCall: this.deposit.pricePerCall,
+                requireSignature: this.requireSignature,
+                challenge: this.requireSignature ? this._issueChallenge('xchain-deposit', resource) : undefined,
             });
         return { x402Version: X402_VERSION, error: this.description, resource: resource || null, accepts };
     }
@@ -286,8 +393,8 @@ class X402Gateway {
         if (!proof) return { ok: false, code: 'X402_NO_PROOF' };
         if (proof.coin && String(proof.coin).toUpperCase() !== this.coin)
             return { ok: false, code: 'X402_WRONG_COIN' };
-        if (proof.scheme === 'xchain-send' && this.send)            return this._verifySend(proof);
-        if (proof.scheme === 'xchain-dispenser' && this.dispenser)  return this._verifyDispenser(proof);
+        if (proof.scheme === 'xchain-send' && this.send)            return this._verifySend(proof, resource);
+        if (proof.scheme === 'xchain-dispenser' && this.dispenser)  return this._verifyDispenser(proof, resource);
         if (proof.scheme === 'xchain-deposit' && this.deposit)      return this._verifyDeposit(proof, resource);
         return { ok: false, code: 'X402_UNSUPPORTED_SCHEME' };
     }
@@ -354,6 +461,16 @@ class X402Gateway {
         const payer = String(proof.payer || '');
         if (!/^[0-9a-f]{32}$/.test(nonce)) return { ok: false, code: 'X402_BAD_INVOICE' };
         if (!payer) return { ok: false, code: 'X402_NO_PAYER' };
+
+        // Prove the requester controls `payer` by signing the single-use invoice
+        // nonce. Checked before any invoice state read so a mempool watcher who
+        // copies a public payer+memo (but lacks the key) cannot front-run the
+        // real payer's claim. The nonce is server-issued, fresh and single-use,
+        // so it doubles as the signing challenge.
+        if (this.requireSignature) {
+            const sig = this._verifyPayerSignature(payer, nonce, proof.payerSignature);
+            if (!sig.ok) return { ok: false, code: sig.code };
+        }
 
         const invoice = await this.store.get(nonce);
         if (!invoice) return { ok: false, code: 'X402_UNKNOWN_INVOICE' };
@@ -424,9 +541,23 @@ class X402Gateway {
         return null;
     }
 
-    async _verifyDispenser(proof) {
+    async _verifyDispenser(proof, resource) {
         const payer = String(proof.payer || '');
         if (!payer) return { ok: false, code: 'X402_NO_PAYER' };
+
+        // Prove control of `payer` (else anyone can name someone else's
+        // token-holding address and get free access). The payer signs a fresh,
+        // resource-bound challenge; the token is one-time-use so a captured
+        // (challenge, signature) pair cannot be replayed.
+        if (this.requireSignature) {
+            const ch = this._checkChallenge(proof.challenge, 'xchain-dispenser', resource);
+            if (!ch.ok) return { ok: false, code: ch.code };
+            const sig = this._verifyPayerSignature(payer, proof.challenge, proof.payerSignature);
+            if (!sig.ok) return { ok: false, code: sig.code };
+            const consumed = this._consumeChallenge(ch.nonce, ch.exp);
+            if (!consumed.ok) return { ok: false, code: consumed.code };
+        }
+
         const res = await this.explorer.getBalances(payer, { limit: 500 });
         const rows = (res && res.data) || [];
         for (const row of rows) {
@@ -452,6 +583,19 @@ class X402Gateway {
     async _verifyDeposit(proof, resource) {
         const payer = String(proof.payer || '');
         if (!payer) return { ok: false, code: 'X402_NO_PAYER' };
+
+        // Prove control of `payer` before debiting its ledger, else an attacker
+        // can name a real depositor and spend THAT depositor's prepaid credit.
+        // Consumed one-time so a captured proof cannot re-debit within the TTL.
+        if (this.requireSignature) {
+            const ch = this._checkChallenge(proof.challenge, 'xchain-deposit', resource);
+            if (!ch.ok) return { ok: false, code: ch.code };
+            const sig = this._verifyPayerSignature(payer, proof.challenge, proof.payerSignature);
+            if (!sig.ok) return { ok: false, code: sig.code };
+            const consumed = this._consumeChallenge(ch.nonce, ch.exp);
+            if (!consumed.ok) return { ok: false, code: consumed.code };
+        }
+
         const tail = this._depositLocks.get(payer) || Promise.resolve();
         const run = tail.then(async () => {
             const res = await this.explorer.getSends(this.deposit.depositAddress, 'destination', { limit: 100 });
@@ -575,6 +719,36 @@ class X402Client {
         this.maxAmount   = options.maxAmount !== undefined ? String(options.maxAmount) : null;
         this.retryDelayMs = options.retryDelayMs || 1500;
         this.maxRetries   = options.maxRetries || 40;
+        // Network for the payer message signature. Falls back to the SDK the
+        // session was built from.
+        this.network = options.network
+            || (this.session.sdk && this.session.sdk.options && this.session.sdk.options.network)
+            || null;
+        this._auth = new AuthUtils(this.network || undefined);
+    }
+
+    // Sign `message` with the session key so it verifies against the payer
+    // address. Throws (via signForAddress) if no network is resolvable.
+    _sign(message) {
+        return signForAddress(this._auth, message, this.session.wif, this.session.address, this.network || undefined);
+    }
+
+    // Build a signed dispenser/deposit proof header from a 402 `accepts` offer.
+    // The send scheme is handled inline by fetchUrl; dispenser/deposit are paid
+    // out of band (buy from the dispenser / deposit up front), so callers build
+    // their proof with this and attach it as the X-Payment header themselves.
+    static buildSignedProof(offer, session, opts = {}) {
+        if (!offer || !offer.scheme) throw new SDKX402Error('X402_CONFIG', 'a 402 accepts offer is required');
+        const network = opts.network
+            || (session.sdk && session.sdk.options && session.sdk.options.network) || undefined;
+        const auth = new AuthUtils(network);
+        const proof = { x402Version: X402_VERSION, scheme: offer.scheme, coin: offer.coin, payer: session.address };
+        if (offer.requireSignature) {
+            if (!offer.challenge) throw new SDKX402Error('X402_CONFIG', 'offer.challenge is required to sign a ' + offer.scheme + ' proof');
+            proof.challenge = offer.challenge;
+            proof.payerSignature = signForAddress(auth, offer.challenge, session.wif, session.address, network);
+        }
+        return Buffer.from(JSON.stringify(proof)).toString('base64url');
     }
 
     _pickScheme(accepts) {
@@ -600,10 +774,15 @@ class X402Client {
             { tick: offer.tick, amount: offer.amount, destination: offer.payTo, memo: offer.invoice },
             {}, zeroConf ? { waitForIndexer: false } : {});
 
-        const proof = Buffer.from(JSON.stringify({
+        // Prove control of the paying address by signing the single-use invoice
+        // nonce, so the gateway can bind the payment to us (and a mempool watcher
+        // who copied the public memo cannot front-run the claim).
+        const proofBody = {
             x402Version: X402_VERSION, scheme: 'xchain-send', coin: offer.coin,
             txid: payResult.txid, invoice: offer.invoice, payer: this.session.address,
-        })).toString('base64url');
+        };
+        if (offer.requireSignature) proofBody.payerSignature = this._sign(offer.invoice);
+        const proof = Buffer.from(JSON.stringify(proofBody)).toString('base64url');
 
         // Retry until the gateway sees the payment (mempool propagation +
         // decoder/explorer polling lag for 0-conf; a block for 1-conf).

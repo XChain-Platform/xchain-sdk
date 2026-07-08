@@ -171,10 +171,23 @@ class CoSigner {
         const accountScript = inp.witnessUtxo.script;
         for (let i = 0; i < psbt.txOutputs.length; i++) {
             const out = psbt.txOutputs[i];
-            // (a) OP_RETURN data carrier: carries the action, not value.
+            // (a) OP_RETURN data carrier: carries the action, not value. It MUST
+            //     carry zero value. An OP_RETURN output is provably unspendable,
+            //     so any satoshis assigned to it are burned. Exempting it without
+            //     a value check let a malicious agent assign value = the entire
+            //     input amount (and omit the change output), burning the whole
+            //     account balance behind a benign, in-policy action - exactly the
+            //     drain this gate exists to stop, just via destruction rather than
+            //     diversion. The value guard also neutralizes a decoy OP_RETURN of
+            //     a non-carrier shape (which the decoder's strict length===2 count
+            //     ignores) being used as a value sink.
             let decomp = null;
             try { decomp = bitcoin.script.decompile(out.script); } catch (e) { /* non-standard */ }
-            if (decomp && decomp[0] === bitcoin.opcodes.OP_RETURN) continue;
+            if (decomp && decomp[0] === bitcoin.opcodes.OP_RETURN) {
+                if (Number(out.value) > 0)
+                    return this._deny('OP_RETURN_CARRIES_VALUE', { index: i, value: out.value });
+                continue;
+            }
             // (b) Change back to the account we spend from stays under co-signer control.
             if (out.script.equals(accountScript)) continue;
             // (c) An operator-authorized native leg (COINPAY recipient / fee output).

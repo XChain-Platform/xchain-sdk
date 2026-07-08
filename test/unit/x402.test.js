@@ -82,8 +82,11 @@ describe('x402', () => {
     describe('X402Gateway', () => {
         let tmpDir, explorer;
 
+        // These tests exercise the scheme LOGIC with the payer-signature binding
+        // explicitly disabled (requireSignature:false). The binding itself is
+        // covered in its own describe block below, with real keys + a network.
         const mkGateway = (over) => new X402Gateway(Object.assign({
-            coin: 'TDOGE', explorer,
+            coin: 'TDOGE', explorer, requireSignature: false,
             send: { tick: 'TOK', amount: '5', payTo: 'gateAddr', minConfirmations: 1 },
             stateDir: tmpDir,
         }, over));
@@ -283,6 +286,140 @@ describe('x402', () => {
         });
     });
 
+    /* ── payer-signature binding (default: requireSignature ON) ─────── */
+
+    describe('X402Gateway payer-signature binding', () => {
+        const { ECPairFactory } = require('ecpair');
+        const ecc = require('@bitcoinerlab/secp256k1');
+        const { getNetwork } = require('../../src/networks.js');
+        const AuthUtils = require('../../src/auth.js');
+        const ECPair = ECPairFactory(ecc);
+
+        const NET = 'dogecoin-testnet';   // matches coin TDOGE
+        const netParams = getNetwork(NET);
+        const auth = new AuthUtils(NET);
+
+        // A real payer keypair + its p2pkh address (what signMessage derives).
+        const kp = ECPair.makeRandom({ network: netParams });
+        const WIF = kp.toWIF();
+        const PAYER = auth.signMessage('probe', WIF).address;   // p2pkh address for this key
+        // An unrelated attacker key (controls its OWN address, not PAYER's).
+        const attackerWif = ECPair.makeRandom({ network: netParams }).toWIF();
+
+        let tmpDir, explorer;
+        const mkGw = (over) => new X402Gateway(Object.assign({
+            coin: 'TDOGE', explorer, network: NET, challengeSecret: 'unit-test-secret',
+            stateDir: tmpDir,
+        }, over));
+
+        async function issueSend(gw) {
+            const rb = sinon.stub(require('crypto'), 'randomBytes').returns(Buffer.from('aa'.repeat(16), 'hex'));
+            try { return await gw.challengeBody('/r'); } finally { rb.restore(); }
+        }
+
+        beforeEach(() => {
+            tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'x402sig-'));
+            explorer = {
+                getSends:    sinon.stub().resolves({ data: [] }),
+                getMempool:  sinon.stub().resolves({ data: [] }),
+                getBalances: sinon.stub().resolves({ data: [] }),
+                getAddress:  sinon.stub().resolves({ info: { address_id: 3 } }),
+                getToken:    sinon.stub().resolves({ info: { tick_id: 7 } }),
+            };
+        });
+        afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+
+        it('requires a network when signature binding is on', () => {
+            expect(() => new X402Gateway({ coin: 'TDOGE', explorer, send: { tick: 'T', amount: '1', payTo: 'g' }, stateDir: tmpDir }))
+                .to.throw(/network is required/);
+        });
+
+        it('send: rejects an unsigned proof, then accepts one signed over the invoice nonce', async () => {
+            const gw = mkGw({ send: { tick: 'TOK', amount: '5', payTo: 'gateAddr', minConfirmations: 1 } });
+            await issueSend(gw);
+            explorer.getSends.resolves({ data: [{ source: PAYER, destination: 'gateAddr', tick: 'TOK', amount: '5', memo: NONCE, status: 'valid', tx_hash: 'txCC', block_index: 9 }] });
+
+            const unsigned = { x402Version: 1, scheme: 'xchain-send', coin: 'TDOGE', txid: 'txCC', invoice: NONCE, payer: PAYER };
+            expect((await gw.verify(unsigned)).code).to.equal('X402_SIGNATURE_REQUIRED');
+
+            const signed = Object.assign({}, unsigned, { payerSignature: auth.signMessage(NONCE, WIF).signature });
+            expect((await gw.verify(signed)).ok).to.equal(true);
+        });
+
+        it('send: rejects a signature from a different key (front-run defense)', async () => {
+            const gw = mkGw({ send: { tick: 'TOK', amount: '5', payTo: 'gateAddr', minConfirmations: 1 } });
+            await issueSend(gw);
+            explorer.getSends.resolves({ data: [{ source: PAYER, destination: 'gateAddr', tick: 'TOK', amount: '5', memo: NONCE, status: 'valid', tx_hash: 'txCC', block_index: 9 }] });
+            // Attacker copies the public payer+memo but signs with their own key.
+            const forged = { x402Version: 1, scheme: 'xchain-send', coin: 'TDOGE', txid: 'txCC', invoice: NONCE, payer: PAYER,
+                             payerSignature: auth.signMessage(NONCE, attackerWif).signature };
+            expect((await gw.verify(forged)).code).to.equal('X402_BAD_SIGNATURE');
+        });
+
+        it('dispenser: needs a valid challenge + payer signature; is one-time-use', async () => {
+            const gw = mkGw({ send: null, dispenser: { holdTick: 'ACCESS', minBalance: '1', dispenserIndex: 42 } });
+            explorer.getBalances.resolves({ data: [{ tick: 'ACCESS', amount: '5' }] });
+
+            // No challenge at all.
+            expect((await gw.verify({ x402Version: 1, scheme: 'xchain-dispenser', coin: 'TDOGE', payer: PAYER }, '/r')).code)
+                .to.equal('X402_CHALLENGE_MISSING');
+
+            // Proper flow: get the server challenge, sign it.
+            const body = await gw.challengeBody('/r');
+            const offer = body.accepts.find((a) => a.scheme === 'xchain-dispenser');
+            const proof = { x402Version: 1, scheme: 'xchain-dispenser', coin: 'TDOGE', payer: PAYER,
+                            challenge: offer.challenge, payerSignature: auth.signMessage(offer.challenge, WIF).signature };
+            expect((await gw.verify(proof, '/r')).ok).to.equal(true);
+            // Replay of the same challenge is refused.
+            expect((await gw.verify(proof, '/r')).code).to.equal('X402_CHALLENGE_REPLAYED');
+        });
+
+        it('dispenser: an attacker naming the victim address but signing their own key is rejected', async () => {
+            const gw = mkGw({ send: null, dispenser: { holdTick: 'ACCESS', minBalance: '1' } });
+            explorer.getBalances.resolves({ data: [{ tick: 'ACCESS', amount: '5' }] });
+            const body = await gw.challengeBody('/r');
+            const offer = body.accepts.find((a) => a.scheme === 'xchain-dispenser');
+            const forged = { x402Version: 1, scheme: 'xchain-dispenser', coin: 'TDOGE', payer: PAYER,
+                             challenge: offer.challenge, payerSignature: auth.signMessage(offer.challenge, attackerWif).signature };
+            expect((await gw.verify(forged, '/r')).code).to.equal('X402_BAD_SIGNATURE');
+        });
+
+        it('dispenser: a challenge issued for another resource does not verify', async () => {
+            const gw = mkGw({ send: null, dispenser: { holdTick: 'ACCESS', minBalance: '1' } });
+            explorer.getBalances.resolves({ data: [{ tick: 'ACCESS', amount: '5' }] });
+            const body = await gw.challengeBody('/other');
+            const offer = body.accepts.find((a) => a.scheme === 'xchain-dispenser');
+            const proof = { x402Version: 1, scheme: 'xchain-dispenser', coin: 'TDOGE', payer: PAYER,
+                            challenge: offer.challenge, payerSignature: auth.signMessage(offer.challenge, WIF).signature };
+            expect((await gw.verify(proof, '/r')).code).to.equal('X402_CHALLENGE_RESOURCE_MISMATCH');
+        });
+
+        it('deposit: unsigned proof cannot debit another payer; a signed one debits', async () => {
+            const gw = mkGw({ send: null, deposit: { tick: 'TOK', depositAddress: 'depAddr', pricePerCall: '4' } });
+            explorer.getSends.resolves({ data: [{ source: PAYER, destination: 'depAddr', tick: 'TOK', amount: '10', memo: '', status: 'valid', tx_hash: 'd1' }] });
+
+            const unsigned = { x402Version: 1, scheme: 'xchain-deposit', coin: 'TDOGE', payer: PAYER };
+            expect((await gw.verify(unsigned, '/r')).code).to.equal('X402_CHALLENGE_MISSING');
+
+            const body = await gw.challengeBody('/r');
+            const offer = body.accepts.find((a) => a.scheme === 'xchain-deposit');
+            const proof = { x402Version: 1, scheme: 'xchain-deposit', coin: 'TDOGE', payer: PAYER,
+                            challenge: offer.challenge, payerSignature: auth.signMessage(offer.challenge, WIF).signature };
+            expect((await gw.verify(proof, '/r')).ok).to.equal(true);
+        });
+
+        it('X402Client.buildSignedProof produces a dispenser proof the gateway accepts', async () => {
+            const gw = mkGw({ send: null, dispenser: { holdTick: 'ACCESS', minBalance: '1' } });
+            explorer.getBalances.resolves({ data: [{ tick: 'ACCESS', amount: '5' }] });
+            const body = await gw.challengeBody('/r');
+            const offer = body.accepts.find((a) => a.scheme === 'xchain-dispenser');
+            const session = { address: PAYER, wif: WIF, sdk: { options: { network: NET } } };
+            const header = X402Client.buildSignedProof(offer, session);
+            const proof = JSON.parse(Buffer.from(header, 'base64url').toString('utf8'));
+            expect((await gw.verify(proof, '/r')).ok).to.equal(true);
+        });
+    });
+
     /* ── client ────────────────────────────────────────────────────── */
 
     describe('X402Client', () => {
@@ -329,6 +466,51 @@ describe('x402', () => {
             const client = new X402Client({ session, fetch: mkFetch([402, 402, 402, 402]), retryDelayMs: 1, maxRetries: 2 });
             try { await client.fetchUrl('http://x/r'); throw new Error('nope'); }
             catch (e) { expect(e.code).to.equal('X402_PAYMENT_NOT_ACCEPTED'); }
+        });
+
+        it('signs the invoice for a requireSignature send offer and the gateway accepts it end-to-end', async () => {
+            const { ECPairFactory } = require('ecpair');
+            const ecc = require('@bitcoinerlab/secp256k1');
+            const { getNetwork } = require('../../src/networks.js');
+            const AuthUtils = require('../../src/auth.js');
+            const NET = 'dogecoin-testnet';
+            const netParams = getNetwork(NET);
+            const auth = new AuthUtils(NET);
+            const WIF = ECPairFactory(ecc).makeRandom({ network: netParams }).toWIF();
+            const PAYER = auth.signMessage('probe', WIF).address;
+
+            const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'x402e2e-'));
+            const explorer = {
+                getSends:    sinon.stub().resolves({ data: [{ source: PAYER, destination: 'gateAddr', tick: 'TOK', amount: '5', memo: NONCE, status: 'valid', tx_hash: 'txZZ', block_index: 3 }] }),
+                getMempool:  sinon.stub().resolves({ data: [] }),
+                getBalances: sinon.stub().resolves({ data: [] }),
+                getAddress:  sinon.stub().resolves({ info: { address_id: 3 } }),
+                getToken:    sinon.stub().resolves({ info: { tick_id: 7 } }),
+            };
+            const gw = new X402Gateway({ coin: 'TDOGE', explorer, network: NET, challengeSecret: 's',
+                send: { tick: 'TOK', amount: '5', payTo: 'gateAddr', minConfirmations: 1 }, stateDir: tmp });
+            try {
+                // Issue the invoice with a controlled nonce so the offer carries NONCE.
+                const rb = sinon.stub(require('crypto'), 'randomBytes').returns(Buffer.from('aa'.repeat(16), 'hex'));
+                let body; try { body = await gw.challengeBody('/r'); } finally { rb.restore(); }
+                const offer = body.accepts.find((a) => a.scheme === 'xchain-send');
+                expect(offer.requireSignature).to.equal(true);
+
+                // The client fetch loop: 402 (with our offer) then delegate the retry to gw.verify.
+                const session = { address: PAYER, wif: WIF, sdk: { options: { network: NET } },
+                                  send: sinon.stub().resolves({ txid: 'txZZ' }) };
+                let seen = 0;
+                const fetch = sinon.stub().callsFake(async (url, init) => {
+                    if (seen++ === 0) return { status: 402, json: async () => body, headers: {} };
+                    const hdr = init.headers['X-Payment'];
+                    const proof = X402Gateway.parseProofHeader(hdr);
+                    const result = await gw.verify(proof, '/r');
+                    return { status: result.ok ? 200 : 402, json: async () => body, headers: {} };
+                });
+                const client = new X402Client({ session, fetch, retryDelayMs: 1, maxRetries: 3 });
+                const res = await client.fetchUrl('http://x/r');
+                expect(res.status).to.equal(200);
+            } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
         });
     });
 

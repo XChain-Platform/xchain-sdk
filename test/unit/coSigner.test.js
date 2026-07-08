@@ -255,6 +255,47 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         expect(res.reason).to.equal('OUTPUT_OVER_CAP');
     });
 
+    // Anti-drain (burn variant): the OP_RETURN action carrier is exempt from the
+    // output gate because it "carries the action, not value" - but an OP_RETURN
+    // output is unspendable, so any satoshis on it are burned. A malicious agent
+    // could set value = the whole input amount (with NO change output) and burn
+    // the entire account balance behind a benign in-policy action. The carrier
+    // must therefore be value=0; a value-bearing OP_RETURN fails closed.
+    function buildOpReturnValuePsbt(acct, carrierValue, includeChange) {
+        const prevHash = crypto.randomBytes(32);
+        const txid = Buffer.from(prevHash).reverse().toString('hex');
+        const inner = bitcoin.script.compile([Buffer.from('SEND|0|TOK|1|1destX|m', 'utf8')]);
+        const cipher = crypto.createCipheriv('aes-128-ctr', txid.substr(0, 16), txid.substr(16, 16));
+        const obf = Buffer.concat([cipher.update(Buffer.concat([Buffer.from('XCHN'), inner])), cipher.final()]);
+        const psbt = new bitcoin.Psbt();
+        psbt.addInput({ hash: prevHash, index: 0, witnessUtxo: { script: acct.p2trScript, value: 100000 } });
+        // The action carrier, but loaded with native value instead of 0.
+        psbt.addOutput({ script: bitcoin.payments.embed({ data: [obf] }).output, value: carrierValue });
+        if (includeChange) psbt.addOutput({ script: acct.p2trScript, value: 100000 - carrierValue });
+        return psbt;
+    }
+
+    it('refuses a benign action that burns the balance into a value-bearing OP_RETURN', function () {
+        const acct = makeAccount();
+        // The entire input value routed into the OP_RETURN carrier, no change output.
+        const psbt = buildOpReturnValuePsbt(acct, 99000, false);
+        const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
+        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        expect(res.approved).to.equal(false);
+        expect(res.reason).to.equal('OP_RETURN_CARRIES_VALUE');
+        expect(res.sig, 'no partial signature is produced').to.equal(undefined);
+    });
+
+    it('still approves the normal zero-value OP_RETURN carrier with change to self', function () {
+        const acct = makeAccount();
+        const psbt = buildOpReturnValuePsbt(acct, 0, true);
+        const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
+        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        expect(res.approved).to.equal(true);
+    });
+
     // Multi-input: one authorization covering a tx that spends several aggregate
     // UTXOs, a partial signature per input, the budget charged once.
     function buildMultiInputPsbt(acct, n, scripts) {
