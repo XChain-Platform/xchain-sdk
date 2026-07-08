@@ -39,8 +39,17 @@ class UTXOCache {
             this._speculative = [];
         }
 
+        // Accept both response shapes ({utxos:[...]} or a bare [...]), and default
+        // to an empty set for anything else. getUTXOs returns undefined when the
+        // encoder's response body is empty/malformed (_rpc returns body.result,
+        // which is undefined for a result-less or empty body); reading `.utxos`
+        // off that undefined threw a cryptic TypeError before the intended `|| []`
+        // default could apply. Treat a malformed response as no-UTXOs (safe: the
+        // next refresh recovers) instead of crashing the refresh.
         let result = await encoder.getUTXOs(address);
-        this._utxos = result.utxos || result || [];
+        this._utxos = (result && Array.isArray(result.utxos)) ? result.utxos
+                    : Array.isArray(result) ? result
+                    : [];
         this._stale = false;
 
         // Confirmed UTXOs that we previously tracked as speculative can be removed

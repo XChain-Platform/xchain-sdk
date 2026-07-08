@@ -66,6 +66,30 @@ describe('UTXOCache', function () {
             assert.strictEqual(result[0].txid, 'bbbb');
         });
 
+        it('treats an undefined result as no-UTXOs instead of throwing (malformed response)', async function () {
+            // _rpc returns body.result, which is undefined for an empty/result-less
+            // encoder response; refresh must not crash on `result.utxos`.
+            let encoder = { getUTXOs: async () => undefined };
+            let result = await cache.refresh('addrX', encoder);
+            assert.deepStrictEqual(result, []);
+            assert.strictEqual(cache.hasAvailable(), false);
+            assert.strictEqual(cache.isLoaded(), true);
+        });
+
+        it('treats a null result as no-UTXOs', async function () {
+            let encoder = { getUTXOs: async () => null };
+            let result = await cache.refresh('addrY', encoder);
+            assert.deepStrictEqual(result, []);
+        });
+
+        it('treats an error-shaped object (no .utxos array) as no-UTXOs', async function () {
+            let encoder = { getUTXOs: async () => ({ error: 'boom' }) };
+            let result = await cache.refresh('addrZ', encoder);
+            assert.deepStrictEqual(result, []);
+            // getAvailable must not throw on a non-array cache.
+            assert.deepStrictEqual(cache.getAvailable(), []);
+        });
+
         it('resets state when address changes', async function () {
             let encoder1 = { getUTXOs: async () => ({ utxos: [{ txid: 'tx1', vout: 0, value: 1 }] }) };
             await cache.refresh('addr1', encoder1);
