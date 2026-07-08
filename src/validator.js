@@ -291,6 +291,15 @@ class Validator {
                     { field, value }));
         }
 
+        // FILE free-text fields (NAME, TYPE, TITLE) are serialized verbatim into the
+        // pipe-delimited action string. Guard them like every other text field: a '|'
+        // corrupts the field layout, and a ';' inside a BATCH injects a whole extra
+        // command (the indexer splits BATCH TX_DATA on ';'). MEMO/GATE_TICKER/KEY_HASH
+        // are already guarded above.
+        if (action === 'FILE' && (field === 'NAME' || field === 'TYPE' || field === 'TITLE')) {
+            errors.push(...this._validateTextContent(field, value));
+        }
+
         // MESSAGE content length validation
         if (field === 'PLAINTEXT_MESSAGE' || field === 'ENCRYPTED_MESSAGE' || field === 'ENCRYPTION_KEY') {
             if (String(value).length > MAX_MESSAGE_LENGTH)
@@ -314,6 +323,23 @@ class Validator {
         if (field === 'TYPE' && action === 'LIST') {
             if (!this.util.isValidValue(value, [1, 2]))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'LIST TYPE must be 1 (TICK list) or 2 (ADDRESS list)', { field, value, constraint: { valid: [1, 2] } }));
+        }
+
+        // LIST ITEM is a rest-field (roster entries) serialized verbatim into the
+        // pipe-delimited action string. Each item must be delimiter-clean: a '|'
+        // corrupts the item count, and a ';' inside a BATCH injects a whole extra
+        // command (the indexer splits BATCH TX_DATA on ';').
+        if (field === 'ITEM' && action === 'LIST') {
+            let items = Array.isArray(value) ? value : [value];
+            for (let i = 0; i < items.length; i++) {
+                if (this._isEmpty(items[i])) continue;
+                for (let ch of FORBIDDEN_TEXT_CHARS) {
+                    if (String(items[i]).includes(ch))
+                        errors.push(this._error('FORBIDDEN_CHARACTER',
+                            'ITEM[' + i + '] cannot contain ' + (ch === '|' ? 'pipe (|)' : 'semicolon (;)'),
+                            { field, index: i, value: items[i] }));
+                }
+            }
         }
 
         // LIST EDIT validation

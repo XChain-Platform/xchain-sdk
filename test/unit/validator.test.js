@@ -525,6 +525,67 @@ describe('Validator: LIST TYPE validation', function () {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// FREE-TEXT DELIMITER GUARDS (FILE NAME/TYPE/TITLE, LIST ITEM)
+//
+// These fields are serialized verbatim into the pipe-delimited action string.
+// An unescaped '|' corrupts the field layout; an unescaped ';' inside a BATCH
+// injects a whole extra command (the indexer splits BATCH TX_DATA on ';'), so
+// they must be rejected client-side exactly like MEMO/DESCRIPTION/TICK.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Validator: FILE free-text delimiter guards', function () {
+
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    it('accepts a normal FILE (name/type/title)', function () {
+        const errors = v.validate('FILE', { NAME: 'readme.txt', TYPE: 'text/plain', TITLE: 'My File' });
+        expect(hasNoErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    it('rejects a pipe in FILE NAME', function () {
+        const errors = v.validate('FILE', { NAME: 'evil|X', TYPE: 'text/plain', TITLE: 'ok' });
+        expect(hasErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    it('rejects a pipe in FILE TYPE', function () {
+        const errors = v.validate('FILE', { NAME: 'f', TYPE: 'text|plain', TITLE: 'ok' });
+        expect(hasErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    it('rejects a semicolon in FILE TITLE (BATCH command injection)', function () {
+        const errors = v.validate('FILE', { NAME: 'f', TYPE: 'text/plain', TITLE: 'ok;SEND|0|^1|9|addr' });
+        expect(hasErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+});
+
+describe('Validator: LIST ITEM delimiter guards', function () {
+
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    it('accepts delimiter-clean ITEM entries', function () {
+        const errors = v.validate('LIST', { TYPE: 1, ITEM: ['FOO', 'BAR'] });
+        expect(hasNoErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    it('rejects a pipe in a LIST ITEM entry', function () {
+        const errors = v.validate('LIST', { TYPE: 1, ITEM: ['GOOD', 'BAD|X'] });
+        expect(hasErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    it('rejects a semicolon in a LIST ITEM entry (BATCH command injection)', function () {
+        const errors = v.validate('LIST', { TYPE: 2, ITEM: ['addr;MINT|0|FOO|1'] });
+        expect(hasErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    it('rejects a pipe in a single (non-array) LIST ITEM value', function () {
+        const errors = v.validate('LIST', { TYPE: 1, ITEM: 'BAD|X' });
+        expect(hasErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ENCRYPTION_METHOD VALIDATION
 // ─────────────────────────────────────────────────────────────────────────────
 
