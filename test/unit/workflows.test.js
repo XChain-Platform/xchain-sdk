@@ -92,6 +92,23 @@ describe('Workflows', function () {
             assert.strictEqual(result.sends.length, 0);
         });
 
+        it('on a later-step failure, attaches partial results (prior txids) to the error', async function () {
+            let calls = 0;
+            const sdk = makeSdk({
+                send: async () => { calls++; if (calls === 2) throw new Error('node down'); return { txid: 'send_tx_' + calls }; }
+            });
+            const wf = new Workflows(sdk);
+            const distributions = [{ destination: 'a', amount: '1' }, { destination: 'b', amount: '2' }, { destination: 'c', amount: '3' }];
+            let err;
+            try { await wf.issueAndDistribute(FAKE_WIF, { tick: FAKE_TICK }, distributions); }
+            catch (e) { err = e; }
+            assert.ok(err, 'should throw');
+            assert.ok(err.partial, 'error must carry partial results');
+            assert.strictEqual(err.partial.issue.txid, 'issue_tx');    // ISSUE succeeded, not lost
+            assert.strictEqual(err.partial.sends.length, 1);           // first SEND succeeded, not lost
+            assert.strictEqual(err.partial.sends[0].txid, 'send_tx_1');
+        });
+
         it('passes tick from issueParams to each send', async function () {
             const captured = [];
             const sdk = makeSdk({
@@ -275,6 +292,24 @@ describe('Workflows', function () {
             ]);
             // indexed is null → contractActionIndex is null → deposits skipped
             assert.deepStrictEqual(result.deposits, []);
+        });
+
+        it('on a deposit failure, attaches the already-broadcast deploy to the error', async function () {
+            let calls = 0;
+            const sdk = makeSdk({
+                deposit: async () => { calls++; if (calls === 2) throw new Error('deposit failed'); return { txid: 'deposit_tx_' + calls }; }
+            });
+            const wf = new Workflows(sdk);
+            let err;
+            try {
+                await wf.deployAndFund(FAKE_WIF, { code: 'x' }, [
+                    { tick: 'A', quantity: '1' }, { tick: 'B', quantity: '2' }
+                ]);
+            } catch (e) { err = e; }
+            assert.ok(err && err.partial, 'error must carry partial results');
+            assert.strictEqual(err.partial.deploy.txid, 'deploy_tx');   // DEPLOY not lost
+            assert.strictEqual(err.partial.deposits.length, 1);         // first deposit not lost
+            assert.strictEqual(err.partial.deposits[0].txid, 'deposit_tx_1');
         });
 
         it('skips deposits when deploy result has no indexed field', async function () {

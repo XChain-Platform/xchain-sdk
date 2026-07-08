@@ -39,21 +39,18 @@ class Workflows {
     // Returns: { issue: <submitResult>, sends: [<submitResult>, ...] }
     async issueAndDistribute(wif, issueParams, distributions, opts = {}) {
         let session = this.sdk.session(wif, opts);
-
-        let issueResult = await session.issue(issueParams, {}, opts);
-
-        let sends = [];
-        for (let dist of distributions) {
-            let sendResult = await session.send({
-                tick:        issueParams.tick,
-                amount:      dist.amount,
-                destination: dist.destination,
-                memo:        dist.memo
-            }, {}, opts);
-            sends.push(sendResult);
-        }
-
-        return { issue: issueResult, sends };
+        return this._withPartial({ issue: null, sends: [] }, async (p) => {
+            p.issue = await session.issue(issueParams, {}, opts);
+            for (let dist of distributions) {
+                p.sends.push(await session.send({
+                    tick:        issueParams.tick,
+                    amount:      dist.amount,
+                    destination: dist.destination,
+                    memo:        dist.memo
+                }, {}, opts));
+            }
+            return p;
+        });
     }
 
     // Issue a token and immediately mint the initial supply.
@@ -66,14 +63,11 @@ class Workflows {
     // Returns: { issue: <submitResult>, mint: <submitResult> }
     async issueAndMint(wif, issueParams, mintParams, opts = {}) {
         let session = this.sdk.session(wif, opts);
-
-        let issueResult = await session.issue(issueParams, {}, opts);
-        let mintResult  = await session.mint({
-            tick: issueParams.tick,
-            ...mintParams
-        }, {}, opts);
-
-        return { issue: issueResult, mint: mintResult };
+        return this._withPartial({ issue: null, mint: null }, async (p) => {
+            p.issue = await session.issue(issueParams, {}, opts);
+            p.mint  = await session.mint({ tick: issueParams.tick, ...mintParams }, {}, opts);
+            return p;
+        });
     }
 
     // Create a dispenser: issue token (if needed), then create dispenser.
@@ -123,15 +117,12 @@ class Workflows {
     // Returns: { stake: <submitResult>, delegate: <submitResult>|null }
     async stakeAndDelegate(wif, stakeParams, delegateParams, opts = {}) {
         let session = this.sdk.session(wif, opts);
-
-        let stakeResult = await session.stake(stakeParams, {}, opts);
-        let delegateResult = null;
-
-        if (delegateParams) {
-            delegateResult = await session.delegate(delegateParams, {}, opts);
-        }
-
-        return { stake: stakeResult, delegate: delegateResult };
+        return this._withPartial({ stake: null, delegate: null }, async (p) => {
+            p.stake = await session.stake(stakeParams, {}, opts);
+            if (delegateParams)
+                p.delegate = await session.delegate(delegateParams, {}, opts);
+            return p;
+        });
     }
 
     // Stake to a contract and optionally delegate the signing key in one flow.
@@ -144,12 +135,12 @@ class Workflows {
     // Returns: { stake: <submitResult>, delegate: <submitResult>|null }
     async stakeToContractAndDelegate(wif, stakeParams, delegateParams, opts = {}) {
         let session = this.sdk.session(wif, opts);
-        let stakeResult = await session.stakeToContract(stakeParams, {}, opts);
-        let delegateResult = null;
-        if (delegateParams) {
-            delegateResult = await session.delegateForContract(delegateParams, {}, opts);
-        }
-        return { stake: stakeResult, delegate: delegateResult };
+        return this._withPartial({ stake: null, delegate: null }, async (p) => {
+            p.stake = await session.stakeToContract(stakeParams, {}, opts);
+            if (delegateParams)
+                p.delegate = await session.delegateForContract(delegateParams, {}, opts);
+            return p;
+        });
     }
 
     // Deploy a stakeable smart contract. Enforces presence of COOLDOWN_BLOCKS +
@@ -180,29 +171,28 @@ class Workflows {
     // Returns: { deploy: <submitResult>, deposits: [<submitResult>, ...] }
     async deployAndFund(wif, deployParams, deposits, opts = {}) {
         let session = this.sdk.session(wif, opts);
+        return this._withPartial({ deploy: null, deposits: [] }, async (p) => {
+            p.deploy = await session.deploy(deployParams, {}, opts);
 
-        let deployResult = await session.deploy(deployParams, {}, opts);
+            if (deposits && deposits.length > 0) {
+                // Use the action_index from the deploy result for the contract reference
+                let contractActionIndex = p.deploy.indexed
+                    ? p.deploy.indexed.action_index
+                    : null;
 
-        let depositResults = [];
-        if (deposits && deposits.length > 0) {
-            // Use the action_index from the deploy result for the contract reference
-            let contractActionIndex = deployResult.indexed
-                ? deployResult.indexed.action_index
-                : null;
-
-            if (contractActionIndex !== null) {
-                for (let dep of deposits) {
-                    let result = await session.deposit({
-                        contractActionIndex,
-                        tick:     dep.tick,
-                        quantity: dep.quantity
-                    }, {}, opts);
-                    depositResults.push(result);
+                if (contractActionIndex !== null) {
+                    for (let dep of deposits) {
+                        p.deposits.push(await session.deposit({
+                            contractActionIndex,
+                            tick:     dep.tick,
+                            quantity: dep.quantity
+                        }, {}, opts));
+                    }
                 }
             }
-        }
 
-        return { deploy: deployResult, deposits: depositResults };
+            return p;
+        });
     }
 
     // Deploy a smart contract, AUTO-SELECTING single-shot vs chunked, then optionally
@@ -237,48 +227,45 @@ class Workflows {
             ? chunkHelper.planDeploy(String(code), { gasLimit, constructorParams: ctor })
             : { single: true };
 
-        let chunkResults = [];
-        let deployResult;
-        if (plan.single) {
-            deployResult = await session.deploy(deployParams, {}, opts);
-        } else {
-            // Phase 1: each ordered base64 slice as its own DEPLOY v4 carrier, confirmed in turn so
-            // they are all on-chain (at lower action_index) before the assembling DEPLOY runs.
-            for (let i = 0; i < plan.parts.length; i++) {
-                let r = await session.deployChunk({
-                    codeHash:    plan.codeHash,
-                    chunkIndex:  i,
-                    totalChunks: plan.totalChunks,
-                    codePart:    plan.parts[i]
-                }, {}, opts);
-                chunkResults.push(r);
+        return this._withPartial({ deploy: null, chunks: [], deposits: [] }, async (p) => {
+            if (plan.single) {
+                p.deploy = await session.deploy(deployParams, {}, opts);
+            } else {
+                // Phase 1: each ordered base64 slice as its own DEPLOY v4 carrier, confirmed in turn so
+                // they are all on-chain (at lower action_index) before the assembling DEPLOY runs.
+                for (let i = 0; i < plan.parts.length; i++) {
+                    p.chunks.push(await session.deployChunk({
+                        codeHash:    plan.codeHash,
+                        chunkIndex:  i,
+                        totalChunks: plan.totalChunks,
+                        codePart:    plan.parts[i]
+                    }, {}, opts));
+                }
+                // Phase 2: assemble. CODE_HASH (no inline code) selects DEPLOY v2; staking → v3.
+                let assembleParams = {
+                    version:           hasStaking ? '3' : '2',
+                    codeHash:          plan.codeHash,
+                    gasLimit:          gasLimit,
+                    constructorParams: (ctor !== undefined) ? ctor : []
+                };
+                if (hasStaking) {
+                    assembleParams.cooldownBlocks   = cooldown;
+                    assembleParams.slashDestination = slashDst;
+                }
+                p.deploy = await session.deploy(assembleParams, {}, opts);
             }
-            // Phase 2: assemble. CODE_HASH (no inline code) selects DEPLOY v2; staking → v3.
-            let assembleParams = {
-                version:           hasStaking ? '3' : '2',
-                codeHash:          plan.codeHash,
-                gasLimit:          gasLimit,
-                constructorParams: (ctor !== undefined) ? ctor : []
-            };
-            if (hasStaking) {
-                assembleParams.cooldownBlocks   = cooldown;
-                assembleParams.slashDestination = slashDst;
-            }
-            deployResult = await session.deploy(assembleParams, {}, opts);
-        }
 
-        let depositResults = [];
-        if (deposits && deposits.length > 0) {
-            let contractActionIndex = deployResult.indexed ? deployResult.indexed.action_index : null;
-            if (contractActionIndex !== null) {
-                for (let dep of deposits) {
-                    let result = await session.deposit({ contractActionIndex, tick: dep.tick, quantity: dep.quantity }, {}, opts);
-                    depositResults.push(result);
+            if (deposits && deposits.length > 0) {
+                let contractActionIndex = p.deploy.indexed ? p.deploy.indexed.action_index : null;
+                if (contractActionIndex !== null) {
+                    for (let dep of deposits) {
+                        p.deposits.push(await session.deposit({ contractActionIndex, tick: dep.tick, quantity: dep.quantity }, {}, opts));
+                    }
                 }
             }
-        }
 
-        return { deploy: deployResult, chunks: chunkResults, deposits: depositResults };
+            return p;
+        });
     }
 
     // Distribute a dividend to all holders of a token.
@@ -346,57 +333,55 @@ class Workflows {
     // Returns: { file, link, tisFile?, describe? } (each a <submitResult>)
     async attachContent(wif, params, opts = {}) {
         let session = this.sdk.session(wif, opts);
+        return this._withPartial({ file: null, link: null }, async (p) => {
+            p.file = await session.file({
+                name:  params.file.name,
+                type:  params.file.type,
+                title: params.file.title,
+                memo:  params.file.memo
+            }, params.file.rawData !== undefined ? { rawData: params.file.rawData } : {}, opts);
 
-        let fileResult = await session.file({
-            name:  params.file.name,
-            type:  params.file.type,
-            title: params.file.title,
-            memo:  params.file.memo
-        }, params.file.rawData !== undefined ? { rawData: params.file.rawData } : {}, opts);
+            // The waiter resolves a TRANSACTION object on the polling path and a single-action
+            // object on the WS path; _actionIndexOf handles both shapes.
+            let fileActionIndex = this._actionIndexOf(p.file.indexed);
+            if (fileActionIndex === undefined || fileActionIndex === null)
+                throw new Error('attachContent: FILE action_index unavailable; submit with waitForIndexer enabled');
 
-        // The waiter resolves a TRANSACTION object on the polling path and a single-action
-        // object on the WS path; _actionIndexOf handles both shapes.
-        let fileActionIndex = this._actionIndexOf(fileResult.indexed);
-        if (fileActionIndex === undefined || fileActionIndex === null)
-            throw new Error('attachContent: FILE action_index unavailable; submit with waitForIndexer enabled');
+            p.link = await session.link(this.sdk.nft.attachContentParams({
+                coin:             params.coin,
+                fileActionIndex,
+                issueActionIndex: params.issueActionIndex,
+                memo:             params.memo
+            }), {}, opts);
 
-        let linkResult = await session.link(this.sdk.nft.attachContentParams({
-            coin:             params.coin,
-            fileActionIndex,
-            issueActionIndex: params.issueActionIndex,
-            memo:             params.memo
-        }), {}, opts);
+            if (!params.tis) return p;
 
-        let out = { file: fileResult, link: linkResult };
-        if (!params.tis) return out;
+            let { json } = this.sdk.nft.tisDocument({
+                tick:             params.tis.tick,
+                name:             params.tis.name,
+                description:      params.tis.description,
+                imageActionIndex: fileActionIndex,
+                imageType:        params.file.type,
+                imageName:        params.file.name
+            });
+            p.tisFile = await session.file({
+                name:  String(params.tis.tick).toUpperCase() + '.json',
+                type:  'application/json',
+                title: 'Token information'
+            }, { rawData: Buffer.from(json, 'utf8').toString('binary') }, opts);
+            let tisActionIndex = this._actionIndexOf(p.tisFile.indexed);
+            if (tisActionIndex === undefined || tisActionIndex === null)
+                throw new Error('attachContent: TIS FILE action_index unavailable; submit with waitForIndexer enabled');
 
-        let { json } = this.sdk.nft.tisDocument({
-            tick:             params.tis.tick,
-            name:             params.tis.name,
-            description:      params.tis.description,
-            imageActionIndex: fileActionIndex,
-            imageType:        params.file.type,
-            imageName:        params.file.name
+            // ISSUE v1 edits description; owner-only at the indexer.
+            p.describe = await session.issue({
+                version:     '1',
+                tick:        params.tis.tick,
+                description: 'action:' + String(tisActionIndex)
+            }, {}, opts);
+
+            return p;
         });
-        let tisFileResult = await session.file({
-            name:  String(params.tis.tick).toUpperCase() + '.json',
-            type:  'application/json',
-            title: 'Token information'
-        }, { rawData: Buffer.from(json, 'utf8').toString('binary') }, opts);
-        let tisActionIndex = this._actionIndexOf(tisFileResult.indexed);
-        if (tisActionIndex === undefined || tisActionIndex === null)
-            throw new Error('attachContent: TIS FILE action_index unavailable; submit with waitForIndexer enabled');
-
-        // ISSUE v1 edits description; owner-only at the indexer.
-        let describeResult = await session.issue({
-            version:     '1',
-            tick:        params.tis.tick,
-            description: 'action:' + String(tisActionIndex)
-        }, {}, opts);
-
-        out.tisFile  = tisFileResult;
-        out.describe = describeResult;
-        return out;
     }
 
     // Publish (or replace) a project's official-token roster: submit a TICK-type
@@ -419,24 +404,25 @@ class Workflows {
     // Returns: { list: <submitResult>, link: <submitResult> }
     async setRoster(wif, params, opts = {}) {
         let session = this.sdk.session(wif, opts);
-
         let listParams = params.edit
             ? this.sdk.project.rosterEditParams(params.edit)
             : this.sdk.project.rosterParams({ ticks: params.ticks });
-        let listResult = await session.list(listParams, {}, opts);
+        return this._withPartial({ list: null, link: null }, async (p) => {
+            p.list = await session.list(listParams, {}, opts);
 
-        let listActionIndex = this._actionIndexOf(listResult.indexed);
-        if (listActionIndex === undefined || listActionIndex === null)
-            throw new Error('setRoster: LIST action_index unavailable; submit with waitForIndexer enabled');
+            let listActionIndex = this._actionIndexOf(p.list.indexed);
+            if (listActionIndex === undefined || listActionIndex === null)
+                throw new Error('setRoster: LIST action_index unavailable; submit with waitForIndexer enabled');
 
-        let linkResult = await session.link(this.sdk.project.attestRosterParams({
-            coin:             params.coin,
-            listActionIndex,
-            issueActionIndex: params.issueActionIndex,
-            memo:             params.memo
-        }), {}, opts);
+            p.link = await session.link(this.sdk.project.attestRosterParams({
+                coin:             params.coin,
+                listActionIndex,
+                issueActionIndex: params.issueActionIndex,
+                memo:             params.memo
+            }), {}, opts);
 
-        return { list: listResult, link: linkResult };
+            return p;
+        });
     }
 
     // Governance (VOTE) submit recipes: build the VOTE params via sdk.voting.*,
@@ -468,6 +454,23 @@ class Workflows {
     async clearVoteDelegation(wif, params, opts = {}) {
         let session = this.sdk.session(wif, opts);
         return session.vote(this.sdk.voting.clearDelegationParams(params), {}, opts);
+    }
+
+    // Run a multi-step recipe whose steps broadcast independent, NON-atomic
+    // transactions. `partial` is a mutable accumulator the worker fills in as each
+    // step completes; on any throw (including a later step or a missing action_index),
+    // the results already broadcast are attached to the error as `err.partial` so the
+    // caller can reconcile instead of losing their txids. On success the worker's
+    // return value (normally `partial` itself) is returned unchanged.
+    async _withPartial(partial, worker) {
+        try {
+            return await worker(partial);
+        } catch (err) {
+            if (err && typeof err === 'object' && err.partial === undefined) {
+                try { err.partial = partial; } catch (e) { /* frozen/exotic error: leave it */ }
+            }
+            throw err;
+        }
     }
 
     // Extract an action_index from a submitAction `indexed` result, tolerating both
