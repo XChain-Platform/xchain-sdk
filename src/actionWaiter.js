@@ -70,6 +70,18 @@ class ActionWaiter {
             if (this.sdk.ws && this.sdk.ws.isConnected()) {
                 let handler = (msg) => {
                     if (msg && msg.data && msg.data.tx_hash === txid) {
+                        // Honor opts.actionIndex on the WS path too (the poll path
+                        // already narrows to it). A multi-action tx emits one
+                        // NEW_ACTION per action; without this filter a neighboring
+                        // action's event would settle the wait with the WRONG
+                        // action's status, defeating the actionIndex guard and
+                        // possibly masking the target action's rejection as success.
+                        // A non-matching (or action_index-less) event is ignored; the
+                        // target action's event, or the poll fallback, settles.
+                        if (opts.actionIndex !== undefined &&
+                            Number(msg.data.action_index) !== Number(opts.actionIndex)) {
+                            return;
+                        }
                         // Indexer status strings are prefixed, e.g. "invalid: insufficient funds (FEE)".
                         let invalid = typeof msg.data.status === 'string' && /^invalid/i.test(msg.data.status);
                         if (requireValid && invalid) {
