@@ -260,6 +260,52 @@ describe('CrossChainHelper', function () {
             }]);
             assert.deepStrictEqual(capturedEnc, { fee: 1000 });
         });
+
+        it('on partial failure, throws but preserves the successful leg txid', async function () {
+            let btcSdk = makeSdk('BTC');
+            btcSdk.session = () => ({ submit: async () => ({ submitted: true, txid: 'btc-broadcast-txid' }) });
+            let ltcSdk = makeSdk('LTC');
+            ltcSdk.session = () => ({ submit: async () => { throw new Error('LTC node unreachable'); } });
+            let helper = new CrossChainHelper({ BTC: btcSdk, LTC: ltcSdk });
+
+            try {
+                await helper.parallel([
+                    { chain: 'BTC', wif: 'w1', actionData: { action: 'SEND' } },
+                    { chain: 'LTC', wif: 'w2', actionData: { action: 'SEND' } }
+                ]);
+                assert.fail('should have thrown on partial failure');
+            } catch (e) {
+                assert.strictEqual(e.name, 'SDKActionError');
+                assert.strictEqual(e.code, 'CROSS_CHAIN_PARTIAL_FAILURE');
+                let results = e.details.results;
+                assert.strictEqual(results.length, 2);
+                // The BTC leg broadcast; its txid must survive the LTC failure.
+                assert.strictEqual(results[0].chain, 'BTC');
+                assert.strictEqual(results[0].ok, true);
+                assert.strictEqual(results[0].result.txid, 'btc-broadcast-txid');
+                assert.strictEqual(results[1].chain, 'LTC');
+                assert.strictEqual(results[1].ok, false);
+                assert.ok(results[1].error.includes('LTC node unreachable'));
+            }
+        });
+
+        it('an unknown chain throws before any leg broadcasts', async function () {
+            let broadcast = false;
+            let btcSdk = makeSdk('BTC');
+            btcSdk.session = () => ({ submit: async () => { broadcast = true; return { submitted: true }; } });
+            let helper = new CrossChainHelper({ BTC: btcSdk, LTC: makeSdk('LTC') });
+
+            try {
+                await helper.parallel([
+                    { chain: 'BTC', wif: 'w1', actionData: { action: 'SEND' } },
+                    { chain: 'DOGE', wif: 'w2', actionData: { action: 'SEND' } }   // not configured
+                ]);
+                assert.fail('should have thrown for unknown chain');
+            } catch (e) {
+                assert.strictEqual(e.name, 'SDKConfigError');
+            }
+            assert.strictEqual(broadcast, false, 'no leg should broadcast when a chain is unknown');
+        });
     });
 
     /*
@@ -276,6 +322,29 @@ describe('CrossChainHelper', function () {
             assert.strictEqual(results.length, 2);
             assert.strictEqual(results[0].txid, 'btctx');
             assert.strictEqual(results[1].txid, 'ltctx');
+        });
+
+        it('on partial failure, throws but preserves the confirmed leg', async function () {
+            let btcSdk = makeSdk('BTC');
+            let ltcSdk = makeSdk('LTC');
+            ltcSdk.waitForAction = async () => { throw new Error('timeout waiting for LTC'); };
+            let helper = new CrossChainHelper({ BTC: btcSdk, LTC: ltcSdk });
+
+            try {
+                await helper.waitForAll([
+                    { chain: 'BTC', txid: 'btctx' },
+                    { chain: 'LTC', txid: 'ltctx' }
+                ]);
+                assert.fail('should have thrown on partial wait failure');
+            } catch (e) {
+                assert.strictEqual(e.name, 'SDKActionError');
+                assert.strictEqual(e.code, 'CROSS_CHAIN_WAIT_PARTIAL_FAILURE');
+                let results = e.details.results;
+                assert.strictEqual(results[0].ok, true);
+                assert.strictEqual(results[0].result.txid, 'btctx');
+                assert.strictEqual(results[1].ok, false);
+                assert.ok(results[1].error.includes('timeout waiting for LTC'));
+            }
         });
     });
 

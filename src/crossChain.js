@@ -127,13 +127,24 @@ class CrossChainHelper {
     //   submitOpts:  {}     // optional
     // }, ...]
     //
-    // Returns: array of submitAction results (in same order as input)
+    // Returns: array of submitAction results (in same order as input) when every
+    // leg succeeds. These broadcasts are independent on-chain transactions, NOT an
+    // atomic set: if one leg fails after another has already broadcast, the
+    // successful leg's txid must not be lost. So resolve all chains up front (an
+    // unknown chain throws SDKConfigError BEFORE any broadcast), run the submits to
+    // completion with allSettled, and on any failure throw an SDKActionError whose
+    // `details.results` carries every leg's outcome (including the txids of legs
+    // that DID broadcast) so the caller can reconcile.
     async parallel(actions) {
-        return Promise.all(actions.map(a => {
-            let sdk = this._requireSDK(a.chain);
-            let session = sdk.session(a.wif, a.submitOpts);
-            return session.submit(a.actionData, a.encoderOpts || {}, a.submitOpts || {});
+        // Fail fast on config errors before broadcasting anything.
+        let plans = actions.map(a => ({ action: a, sdk: this._requireSDK(a.chain) }));
+
+        let settled = await Promise.allSettled(plans.map(({ action, sdk }) => {
+            let session = sdk.session(action.wif, action.submitOpts);
+            return session.submit(action.actionData, action.encoderOpts || {}, action.submitOpts || {});
         }));
+
+        return this._resolveSettled(settled, actions, 'CROSS_CHAIN_PARTIAL_FAILURE', 'actions');
     }
 
     // Wait for actions on multiple chains simultaneously.
@@ -141,12 +152,38 @@ class CrossChainHelper {
     // waits: [{ chain: 'BTC', txid: '...' }, { chain: 'LTC', txid: '...' }]
     // opts:  { timeout, pollInterval }
     //
-    // Returns: array of action objects from each chain's explorer
+    // Returns: array of action objects (in same order as input) when every wait
+    // succeeds. On a partial failure, throws an SDKActionError carrying every
+    // leg's outcome (see parallel) so the legs that DID confirm are not discarded.
     async waitForAll(waits, opts = {}) {
-        return Promise.all(waits.map(w => {
-            let sdk = this._requireSDK(w.chain);
-            return sdk.waitForAction(w.txid, opts);
+        let plans = waits.map(w => ({ wait: w, sdk: this._requireSDK(w.chain) }));
+
+        let settled = await Promise.allSettled(plans.map(({ wait, sdk }) =>
+            sdk.waitForAction(wait.txid, opts)));
+
+        return this._resolveSettled(settled, waits, 'CROSS_CHAIN_WAIT_PARTIAL_FAILURE', 'waits');
+    }
+
+    // Shared reducer for the multi-chain fan-outs. Returns the in-order value array
+    // when every leg fulfilled (unchanged contract); otherwise throws an
+    // SDKActionError with per-leg outcomes on `details.results` so no successful
+    // leg's result is silently dropped.
+    _resolveSettled(settled, items, code, noun) {
+        let failures = settled.filter(s => s.status === 'rejected');
+        if (failures.length === 0)
+            return settled.map(s => s.value);
+
+        let results = settled.map((s, i) => ({
+            chain:  items[i].chain,
+            ok:     s.status === 'fulfilled',
+            result: s.status === 'fulfilled' ? s.value : undefined,
+            error:  s.status === 'rejected' ? (s.reason && s.reason.message ? s.reason.message : String(s.reason)) : undefined
         }));
+
+        throw new SDKActionError(code,
+            failures.length + ' of ' + items.length + ' cross-chain ' + noun + ' failed; ' +
+            'see error.details.results for per-chain outcomes (successful legs may already be broadcast on-chain)',
+            { results });
     }
 
     // Get balances across all configured chains for a given address.
