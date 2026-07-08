@@ -11,3 +11,8 @@ on:
 jobs:
   ci:
     uses: XChain-Platform/.github/.github/workflows/ci-reusable.yml@master
+    with:
+      # Opt into the perf gate: the SDK's perf suite (Validator throughput) needs
+      # no infra, so it runs cleanly as a post-gate step. First adopter of run-perf.
+      run-perf: true
+      perf-script: "test:performance"
