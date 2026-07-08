@@ -585,6 +585,63 @@ describe('Validator: LIST ITEM delimiter guards', function () {
     });
 });
 
+describe('Validator: VOTE free-text delimiter guards', function () {
+
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    it('accepts a clean VOTE poll', function () {
+        const errors = v.validate('VOTE', { VERSION: 0, TICK: 'GOV', END_BLOCK: '900000', OPTIONS: 'yes,no', QUESTION: 'Adopt?' });
+        expect(hasNoErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    it('rejects a pipe in OPTIONS (field-layout corruption)', function () {
+        const errors = v.validate('VOTE', { VERSION: 0, TICK: 'GOV', END_BLOCK: '900000', OPTIONS: 'yes,no|EVIL' });
+        expect(hasErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    it('rejects a semicolon in OPTIONS (BATCH command injection)', function () {
+        const errors = v.validate('VOTE', { VERSION: 0, TICK: 'GOV', END_BLOCK: '900000', OPTIONS: 'yes,no;MINT|0|X|1' });
+        expect(hasErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    it('rejects a pipe in QUESTION', function () {
+        const errors = v.validate('VOTE', { VERSION: 0, TICK: 'GOV', END_BLOCK: '900000', OPTIONS: 'yes,no', QUESTION: 'a|b' });
+        expect(hasErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    it('rejects a pipe in a cast BALLOT', function () {
+        const errors = v.validate('VOTE', { VERSION: 1, POLL_REF: '5', BALLOT: '0|9' });
+        expect(hasErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+});
+
+describe('Validator: allow/block-list delimiter guards', function () {
+
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    it('accepts a clean ISSUE allow-list', function () {
+        const errors = v.validate('ISSUE', { VERSION: 0, TICK: 'FOO', MAX_SUPPLY: '100', ALLOW_LIST: ['addrA', 'addrB'] });
+        expect(hasNoErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    it('rejects a pipe in a string ALLOW_LIST', function () {
+        const errors = v.validate('ISSUE', { VERSION: 0, TICK: 'FOO', MAX_SUPPLY: '100', ALLOW_LIST: 'x|y' });
+        expect(hasErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    it('rejects a pipe in an array ALLOW_LIST entry', function () {
+        const errors = v.validate('ISSUE', { VERSION: 0, TICK: 'FOO', MAX_SUPPLY: '100', ALLOW_LIST: ['good', 'ba|d'] });
+        expect(hasErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    it('rejects a semicolon in a BLOCK_LIST entry', function () {
+        const errors = v.validate('ISSUE', { VERSION: 0, TICK: 'FOO', MAX_SUPPLY: '100', BLOCK_LIST: ['addr;SEND|0|x'] });
+        expect(hasErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ENCRYPTION_METHOD VALIDATION
 // ─────────────────────────────────────────────────────────────────────────────

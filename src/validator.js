@@ -63,6 +63,16 @@ const TICK_FORBIDDEN_FIRST_CHAR = '^';
 // Characters forbidden in text fields (pipe = field separator, semicolon = command separator)
 const FORBIDDEN_TEXT_CHARS = ['|', ';'];
 
+// Free-text / list fields that are serialized verbatim into the pipe-delimited
+// action string and so must never carry a '|' or ';'. MEMO/DESCRIPTION/METHOD,
+// FILE NAME/TYPE/TITLE, and LIST ITEM are guarded by their own field-specific
+// branches; this set covers the rest (VOTE free-text fields + the allow/block
+// lists shared by ISSUE/ORDER/SWAP/DISPENSER). Values may be a string or an array.
+const DELIMITER_GUARDED_FIELDS = new Set([
+    'OPTIONS', 'QUESTION', 'CALLBACK_METHOD', 'CALLBACK_PARAMS', 'BALLOT', 'DELEGATE_TO',
+    'ALLOW_LIST', 'BLOCK_LIST',
+]);
+
 // Valid FIAT currency codes. Must stay a byte-equal allow-list with the indexer's
 // config['FIATS'] keys (xchain-indexer/src/config.js), which is the on-chain arbiter
 // for PRICE FIAT_CODE. A subset here makes the SDK silently refuse a FIAT the protocol
@@ -339,6 +349,20 @@ class Validator {
                             'ITEM[' + i + '] cannot contain ' + (ch === '|' ? 'pipe (|)' : 'semicolon (;)'),
                             { field, index: i, value: items[i] }));
                 }
+            }
+        }
+
+        // Other free-text / list fields serialized verbatim into the pipe-delimited
+        // action string. Like MEMO/DESCRIPTION/FILE/LIST above, none may carry the
+        // '|' field delimiter or the ';' BATCH action delimiter, or they corrupt the
+        // field layout (and, inside a BATCH, inject a whole command). Covers the VOTE
+        // free-text set and the cross-action allow/block lists. Values may arrive as a
+        // string or an array (rest/list fields), so check each element.
+        if (DELIMITER_GUARDED_FIELDS.has(field)) {
+            let items = Array.isArray(value) ? value : [value];
+            for (let item of items) {
+                if (this._isEmpty(item)) continue;
+                errors.push(...this._validateTextContent(field, item));
             }
         }
 
