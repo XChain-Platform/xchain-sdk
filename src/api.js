@@ -85,12 +85,23 @@ async function startApi() {
     // API key enforcement for all methods except ping. Fails closed: without
     // a configured key, every non-ping method is rejected, never left open.
     app.use((req, res, next) => {
-        let method = req.body && req.body.method;
-        if (method && method.toLowerCase() !== 'ping') {
+        // A JSON-RPC batch arrives as an array of call objects; a single call as
+        // one object. express-json-rpc-router dispatches every element of an
+        // array body, so the gate must inspect ALL of them: require the key if
+        // ANY element is a non-ping method. Reading req.body.method off an array
+        // leaves it undefined, which would let a batch smuggle non-ping methods
+        // past this fail-closed check unauthenticated.
+        let calls = Array.isArray(req.body) ? req.body : [req.body];
+        let id = (Array.isArray(req.body) ? null : (req.body && req.body.id)) || null;
+        let needsAuth = calls.some(call => {
+            let method = call && call.method;
+            return method && method.toLowerCase() !== 'ping';
+        });
+        if (needsAuth) {
             let header = req.headers['authorization'];
             if (!SDK_API_KEY || !header || header !== 'Bearer ' + SDK_API_KEY) {
                 return res.status(401).json({
-                    jsonrpc: '2.0', id: req.body.id || null,
+                    jsonrpc: '2.0', id,
                     error: { code: -32001, message: 'Unauthorized' }
                 });
             }
