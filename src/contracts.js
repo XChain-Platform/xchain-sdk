@@ -111,6 +111,47 @@ class ContractUtils {
         return findFloatWarnings(sourceCode).map((w) => w.message);
     }
 
+    // The contract's exported callable method names (the `module.exports = { fn... }`
+    // surface). Acorn-only (no V8 / isolate); returns [] on unparseable source or
+    // when acorn is unavailable. SDK-local on purpose: this powers a client-side
+    // deploy nudge (a contract exporting `initialize` with no CONSTRUCTOR_PARAMS),
+    // so it must NOT edit the byte-identity-locked consensus lint-core. Mirrors that
+    // primitive's findExportsObject logic (same ES2020 pin) so the view matches.
+    getExportedMethodNames(sourceCode) {
+        let parser = loadAcorn();
+        let walker = loadAcornWalk();
+        if (!parser || !walker) return [];
+        let ast;
+        try {
+            ast = parser.parse(String(sourceCode), { ecmaVersion: 2020, sourceType: 'script', locations: false });
+        } catch (e) {
+            return [];
+        }
+        let obj = null;
+        walker.simple(ast, {
+            AssignmentExpression(node) {
+                if (obj) return;
+                let l = node.left;
+                if (l && l.type === 'MemberExpression' && !l.computed
+                    && l.object && l.object.type === 'Identifier' && l.object.name === 'module'
+                    && l.property && l.property.name === 'exports'
+                    && node.right && node.right.type === 'ObjectExpression')
+                    obj = node.right;
+            }
+        });
+        let names = [];
+        if (obj) {
+            for (let p of obj.properties) {
+                if (p.type !== 'Property' || p.computed) continue;
+                let key = p.key && (p.key.name || p.key.value);
+                let v = p.value;
+                if (key && v && (v.type === 'FunctionExpression' || v.type === 'ArrowFunctionExpression'))
+                    names.push(String(key));
+            }
+        }
+        return names;
+    }
+
     // Check if contract source is within the 64KB byte limit
     checkCodeSize(sourceCode) {
         let bytes = Buffer.byteLength(String(sourceCode), 'utf8');

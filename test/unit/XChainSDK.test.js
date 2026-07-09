@@ -284,6 +284,68 @@ describe('XChainSDK', function () {
         });
     });
 
+    describe('deploy pre-flight: constructor-params warning', function () {
+        const SRC_WITH_INIT = 'module.exports = { initialize: function (a) { xchain.state.set("owner", a); }, run: function () { return "1"; } };';
+        const SRC_NO_INIT   = 'module.exports = { run: function () { return "1"; } };';
+        const CTOR_RE = /exports initialize\(\) but no CONSTRUCTOR_PARAMS/;
+
+        function warned(spy, re) {
+            return spy.getCalls().some(c => re.test(String(c.args[0])));
+        }
+
+        afterEach(function () { sinon.restore(); });
+
+        it('getExportedMethodNames returns the exported callable surface, [] on unparseable', function () {
+            const c = makeSDK().contracts;
+            expect(c.getExportedMethodNames(SRC_WITH_INIT).sort()).to.deep.equal(['initialize', 'run']);
+            expect(c.getExportedMethodNames(SRC_NO_INIT)).to.deep.equal(['run']);
+            expect(c.getExportedMethodNames('function ( {')).to.deep.equal([]);
+        });
+
+        it('warns when the contract exports initialize() but no CONSTRUCTOR_PARAMS are provided', function () {
+            const sdk = makeSDK();
+            const spy = sinon.stub(console, 'warn');
+            sdk._preflightContractLint({ CODE: SRC_WITH_INIT }, 'warn');
+            expect(warned(spy, CTOR_RE)).to.be.true;
+        });
+
+        it('does not warn when CONSTRUCTOR_PARAMS are provided (UPPER or camelCase)', function () {
+            const sdk = makeSDK();
+            let spy = sinon.stub(console, 'warn');
+            sdk._preflightContractLint({ CODE: SRC_WITH_INIT, CONSTRUCTOR_PARAMS: ['0xabc'] }, 'warn');
+            expect(warned(spy, CTOR_RE)).to.be.false;
+            spy.restore();
+            spy = sinon.stub(console, 'warn');
+            sdk._preflightContractLint({ CODE: SRC_WITH_INIT, constructorParams: ['0xabc'] }, 'warn');
+            expect(warned(spy, CTOR_RE)).to.be.false;
+        });
+
+        it('treats an empty CONSTRUCTOR_PARAMS value ("" or []) as absent and still warns', function () {
+            const sdk = makeSDK();
+            let spy = sinon.stub(console, 'warn');
+            sdk._preflightContractLint({ CODE: SRC_WITH_INIT, CONSTRUCTOR_PARAMS: '' }, 'warn');
+            expect(warned(spy, CTOR_RE)).to.be.true;
+            spy.restore();
+            spy = sinon.stub(console, 'warn');
+            sdk._preflightContractLint({ CODE: SRC_WITH_INIT, CONSTRUCTOR_PARAMS: [] }, 'warn');
+            expect(warned(spy, CTOR_RE)).to.be.true;
+        });
+
+        it('does not warn when the contract has no initialize export', function () {
+            const sdk = makeSDK();
+            const spy = sinon.stub(console, 'warn');
+            sdk._preflightContractLint({ CODE: SRC_NO_INIT }, 'warn');
+            expect(warned(spy, CTOR_RE)).to.be.false;
+        });
+
+        it('skips the warning entirely when lint is off', function () {
+            const sdk = makeSDK();
+            const spy = sinon.stub(console, 'warn');
+            sdk._preflightContractLint({ CODE: SRC_WITH_INIT }, 'off');
+            expect(spy.called).to.be.false;
+        });
+    });
+
     describe('submitAction', function () {
 
         it('creates a LifecycleManager and delegates', async function () {

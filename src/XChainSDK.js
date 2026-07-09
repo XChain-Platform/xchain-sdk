@@ -526,6 +526,22 @@ class XChainSDK {
         const result = this.validateContract(code);
         for (const w of result.warnings)
             console.warn('DEPLOY lint warning: ' + w.message);
+
+        // Constructor footgun: a contract that exports `initialize` (a constructor)
+        // deployed with no CONSTRUCTOR_PARAMS runs no constructor, so it silently
+        // deploys uninitialized. Nudge the caller (never blocks). An empty value is
+        // still "provided" and runs a zero-arg initialize once DEPLOY_INIT_STRICT is
+        // live, so only a genuinely-absent field warns. Best-effort: detection never
+        // throws into the deploy path.
+        try {
+            const cp = params ? (params.CONSTRUCTOR_PARAMS !== undefined ? params.CONSTRUCTOR_PARAMS : params.constructorParams) : undefined;
+            const ctorParamsAbsent = cp === undefined || cp === null || cp === '' || (Array.isArray(cp) && cp.length === 0);
+            if (ctorParamsAbsent && this.contracts.getExportedMethodNames(code).includes('initialize'))
+                console.warn('DEPLOY warning: contract exports initialize() but no CONSTRUCTOR_PARAMS were provided; ' +
+                    'it will deploy uninitialized (and is rejected on-chain once the DEPLOY_INIT_STRICT flag-day activates). ' +
+                    'Pass constructorParams (an empty value runs a zero-arg initialize).');
+        } catch (e) { /* best-effort nudge; never block a deploy on it */ }
+
         if (result.valid) return;
 
         if (mode === 'warn') {
