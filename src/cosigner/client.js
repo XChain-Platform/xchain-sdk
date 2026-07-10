@@ -31,14 +31,40 @@
 
 'use strict';
 
+const crypto = require('crypto');
+const bitcoin = require('bitcoinjs-lib');
 const { secp256k1 } = require('@noble/curves/secp256k1');
 const MuSig2 = require('../musig2.js');
 const { SDKPolicyError } = require('../errors.js');
+const { taprootKeyPathSighash } = require('./coSigner.js');
 
 function toBytes(v, label) {
     if (v instanceof Uint8Array) return v;
     if (typeof v === 'string') return Buffer.from(v, 'hex');
     throw new Error(label + ' must be a hex string or Uint8Array');
+}
+
+/*
+ * Bind the co-signer's returned msg to the PSBT the agent actually submitted:
+ * recompute the BIP341 key-path sighash locally and refuse to sign anything
+ * else. A buggy/misconfigured co-signer then fails loudly HERE instead of the
+ * agent emitting a signature over the wrong message that later dies as an
+ * opaque network rejection. Throws SDKPolicyError on mismatch.
+ */
+function assertMsgMatchesPsbt(psbtHex, inputIndex, msg) {
+    let expected;
+    try {
+        const psbt = bitcoin.Psbt.fromHex(psbtHex);
+        expected = taprootKeyPathSighash(psbt, inputIndex, undefined);
+    } catch (e) {
+        throw new SDKPolicyError('COSIGNER_MSG_UNVERIFIABLE',
+            'cannot recompute the sighash for input ' + inputIndex + ' to verify the co-signer msg: ' + e.message);
+    }
+    const got = Buffer.from(msg);
+    if (expected.length !== got.length || !crypto.timingSafeEqual(expected, got))
+        throw new SDKPolicyError('COSIGNER_MSG_MISMATCH',
+            'co-signer msg is not the sighash of the submitted PSBT (input ' + inputIndex +
+            ': expected ' + expected.toString('hex') + ', got ' + got.toString('hex') + ')');
 }
 
 // Drive a CoSigner instance directly (no network). Useful for tests and
@@ -115,6 +141,8 @@ class CoSignerClient {
         // Combine: the co-signer derived the message from the PSBT and returned it;
         // we re-aggregate the nonces, build the same session, and add our partial.
         const msg = toBytes(res.msg, 'msg');
+        const idx = Number.isInteger(req.inputIndex) ? req.inputIndex : 0;
+        assertMsgMatchesPsbt(req.psbt, idx, msg);
         const coNonce = toBytes(res.publicNonce, 'publicNonce');
         const aggNonce = this.musig.aggregateNonces([agentNonce, coNonce]);
         const session  = this.musig.startSession(aggNonce, msg, this.publicKeys, this.tweaks);
@@ -164,6 +192,7 @@ class CoSignerClient {
             if (!agentNonce) throw new SDKPolicyError('COSIGNER_BAD_RESPONSE',
                 'co-signer returned a signature for an unrequested input ' + s.index);
             const msg     = toBytes(s.msg, 'msg');
+            assertMsgMatchesPsbt(req.psbt, s.index, msg);
             const coNonce = toBytes(s.publicNonce, 'publicNonce');
             const aggNonce = this.musig.aggregateNonces([agentNonce, coNonce]);
             const session  = this.musig.startSession(aggNonce, msg, this.publicKeys, this.tweaks);

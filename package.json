@@ -49,6 +49,7 @@
         "uglify-js": "^3.19.3"
     },
     "overrides": {
+        "decimal.js": "10.4.3",
         "qs": "^6.15.2",
         "serialize-javascript": "^7.0.5",
         "diff": "^8.0.4"

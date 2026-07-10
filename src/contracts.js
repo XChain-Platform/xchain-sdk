@@ -34,8 +34,9 @@ const abiCore = require('./contract/abi-core.js');
 
 // 64KB contract source code limit. Canonical value in
 // xchain-documentation/protocol/constants.js (MAX_CODE_SIZE), also enforced by
-// the SDK validator, the indexer (DEPLOY) and the VM isolate limit.
-const MAX_CODE_SIZE = 65536;
+// the indexer (DEPLOY) and the VM isolate limit. Imported from validator.js
+// (the parity-guarded SDK copy) so the two SDK entry points cannot diverge.
+const { MAX_CODE_SIZE } = require('./validator.js');
 
 // Lazy-loaded optional dependencies
 let acorn = null;
@@ -244,3 +245,7 @@ class ContractUtils {
 }
 
 module.exports = ContractUtils;
+
+// Re-export so parity/drift guards can assert this entry point rides the same
+// (validator-sourced) cap; see test/unit/protocolSizeCaps.test.js.
+module.exports.MAX_CODE_SIZE = MAX_CODE_SIZE;

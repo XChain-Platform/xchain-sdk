@@ -562,14 +562,25 @@ describe('MessagingUtils @crypto @regression', function () {
         });
 
         it('exposes coin/chain/block/txid fields from raw message', async function () {
+            // The explorer /messages contract emits the block time under
+            // `timestamp` (db.js aliases `b1.block_time as timestamp`), so the
+            // stub row mirrors the real producer shape.
             const explorer = { getMessages: async () => ([
-                { source: 'S', destination: 'D', coin: 'BTC', plaintext_message: 'hi', tx_hash: 'txabc', block_index: 10, block_time: 1700000000 }
+                { source: 'S', destination: 'D', coin: 'BTC', plaintext_message: 'hi', tx_hash: 'txabc', block_index: 10, timestamp: 1700000000 }
             ]) };
             const out = await msg.getMessages('D', {}, explorer);
             expect(out[0].coin).to.equal('BTC');
             expect(out[0].txid).to.equal('txabc');
             expect(out[0].block).to.equal(10);
             expect(out[0].timestamp).to.equal(1700000000);
+        });
+
+        it('falls back to a raw block_time column when no timestamp alias is present', async function () {
+            const explorer = { getMessages: async () => ([
+                { source: 'S', destination: 'D', plaintext_message: 'hi', block_time: 1700000001 }
+            ]) };
+            const out = await msg.getMessages('D', {}, explorer);
+            expect(out[0].timestamp).to.equal(1700000001);
         });
 
         it('passes limit/page/sortorder options to explorer.getMessages', async function () {

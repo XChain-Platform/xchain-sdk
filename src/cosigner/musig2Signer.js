@@ -38,15 +38,34 @@ bitcoin.initEccLib(ecc);
 
 function toBuf(v) { return Buffer.isBuffer(v) ? v : Buffer.from(v); }
 
+// Bech32 HRPs of the bitcoin family (main/test/regtest). Any other network is a
+// lower-unit-value chain where bitcoinjs's 5000 sat/vB "absurd fee" default
+// rejects ordinary fees.
+const BITCOIN_BECH32 = new Set(['bc', 'tb', 'bcrt']);
+
+/*
+ * Fee ceiling (sat/vB) applied before extractTransaction, mirroring
+ * wallet.js#_maxFeeRate so this signer stays a true drop-in for signPsbt:
+ * an explicit maximumFeeRate wins; the bitcoin family keeps bitcoinjs's
+ * default; every other network gets the raised 10,000,000 ceiling (real
+ * drain protection lives upstream in the encoder's MAX_FEE_RATE_KB cap).
+ */
+function _maxFeeRate(network, maximumFeeRate) {
+    if (Number.isFinite(maximumFeeRate) && maximumFeeRate > 0) return maximumFeeRate;
+    if (!network || BITCOIN_BECH32.has(network.bech32)) return null;
+    return 10000000;
+}
+
 /*
  * @param {object} config
  *   coSignerClient {CoSignerClient}  the agent-side round runner
  *   secretKey      {Uint8Array|hex}  the agent's 32-byte key (its MuSig2 half)
  *   network        {object}          bitcoinjs network for PSBT parsing (optional)
+ *   maximumFeeRate {number}          explicit sat/vB extraction ceiling (optional)
  * @returns {function} async (psbtHex) -> { txHex, txid, psbtHex }
  */
 function buildMuSig2Signer(config = {}) {
-    const { coSignerClient, secretKey, network } = config;
+    const { coSignerClient, secretKey, network, maximumFeeRate } = config;
     if (!coSignerClient || typeof coSignerClient.sign !== 'function')
         throw new Error('buildMuSig2Signer requires a CoSignerClient');
     if (!secretKey) throw new Error('buildMuSig2Signer requires the agent secretKey');
@@ -68,6 +87,8 @@ function buildMuSig2Signer(config = {}) {
             psbt.updateInput(s.index, { tapKeySig: toBuf(s.signature) });
             psbt.finalizeInput(s.index);
         }
+        const maxFeeRate = _maxFeeRate(network, maximumFeeRate);
+        if (maxFeeRate) psbt.setMaximumFeeRate(maxFeeRate);
         const tx = psbt.extractTransaction();
         return { txHex: tx.toHex(), txid: tx.getId(), psbtHex: psbt.toHex() };
     };

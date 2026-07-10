@@ -46,12 +46,11 @@ const MAX_MESSAGE_LENGTH = 1048576; // 1MB
 // (MAX_CODE_SIZE); kept equal by the cross-service regression suite.
 const MAX_CODE_SIZE      = 65536;
 
-// Max base64 bytes per DEPLOY v4 carrier CODE_PART (chunked deploy). Canonical source:
-// xchain-documentation/protocol/constants.js (MAX_DEPLOYCHUNK_PART_BYTES); kept
-// equal to the indexer's per-chunk cap by the cross-service regression suite.
-const MAX_DEPLOYCHUNK_PART_BYTES = 7800;
-// Max chunks one DEPLOY may assemble (canonical: constants.js MAX_DEPLOY_CHUNKS).
-const MAX_DEPLOY_CHUNKS = 16;
+// Chunked-DEPLOY caps (per-carrier CODE_PART budget + max chunks per assembly).
+// Single in-repo source of truth: chunkHelper.js, whose exported copies the
+// cross-service regression suite asserts against the canonical values in
+// xchain-documentation/protocol/constants.js.
+const { MAX_DEPLOYCHUNK_PART_BYTES, MAX_DEPLOY_CHUNKS } = require('./chunkHelper.js');
 
 // Allowed TICK characters: a-zA-Z0-9 and ~!@#$%^&*()_+-={}[]:<>.?
 // Must stay an exact match for the indexer's TICK_CHARACTERS (xchain-indexer
@@ -249,10 +248,17 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', 'FIAT_CODE must be one of: ' + VALID_FIAT_CODES.join(', '), { field, value, constraint: { valid: VALID_FIAT_CODES } }));
         }
 
-        // FIAT_AMOUNT format validation (X.XX)
+        // FIAT_AMOUNT format validation: a non-negative amount with at most 2
+        // decimal places, mirroring the indexer's consensus rule
+        // (xchain-indexer utility.isValidFiatFormat(2, ...); identical helper
+        // here, plus the explicit negative reject the indexer performs inside
+        // its isValidAmountFormat). The SDK must never be stricter than
+        // consensus: the old /^\d+\.\d{2}$/ regex demanded exactly two
+        // decimals, so every round price ("10", "1.5") was rejected and fiat-
+        // priced dispensers could not be created at whole/half price points.
         if (field === 'FIAT_AMOUNT') {
-            if (!this.util.isNumeric(value) || !/^\d+\.\d{2}$/.test(String(value)))
-                errors.push(this._error('INVALID_FIELD_VALUE', 'FIAT_AMOUNT must be in X.XX format', { field, value }));
+            if (!this.util.isNumeric(value) || String(value).startsWith('-') || !this.util.isValidFiatFormat(2, value))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'FIAT_AMOUNT must be a non-negative amount with at most 2 decimal places', { field, value }));
         }
 
         // COIN field validation

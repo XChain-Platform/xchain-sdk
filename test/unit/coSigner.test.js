@@ -113,14 +113,22 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         }
     });
 
-    it('still approves an explicit SIGHASH_ALL (0x01) request', function () {
+    it('rejects an explicit SIGHASH_ALL (0x01) request even though it commits to all outputs', function () {
+        // SIGHASH_ALL is output-safe (same commitment as SIGHASH_DEFAULT) but the
+        // witness-assembly side (musig2Signer.js) writes a bare 64-byte tapKeySig
+        // with no trailing sighash-flag byte, which BIP341 only permits for
+        // SIGHASH_DEFAULT. Approving ALL here would let the co-signer authorize a
+        // spend the rest of the pipeline cannot correctly finalize, so it is
+        // refused alongside the non-committing types.
         const acct = makeAccount();
         const psbt = buildSignablePsbt(acct, 'SEND|0|MYTOKEN|10|1destX|m');
         const agentMusig = new MuSig2();
         const agentNonce = agentMusig.generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
         const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce, inputIndex: 0, sighashType: 0x01 });
-        expect(res.approved).to.equal(true);
+        expect(res.approved, 'SIGHASH_ALL must not approve').to.not.equal(true);
+        expect(res.reason).to.equal('SIGHASH_TYPE_NOT_ALLOWED');
+        expect(res.sig, 'no partial signature is produced').to.equal(undefined);
     });
 
     it('derives the message from the PSBT, not the caller (no msg input is accepted)', function () {

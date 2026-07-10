@@ -513,6 +513,20 @@ describe('SPV Phase 5: validator-set proof + trustless quorum', function () {
         // dedup => numerator 30, 3·30 < 2·60 => false. Double-counting (60) would wrongly pass.
         assert.strictEqual(light.verifyCheckpointWithProvenSet(cp, proven).valid, false);
     });
+
+    it('verifyCheckpointWithProvenSet: a garbage-then-valid duplicate for one signer still PASSES (seen marked after verify)', function () {
+        const s1 = signer(), s2 = signer();
+        const proven = { validators: [{ pubkey: s1.pubkey, source: 'S1', weight: '10' },
+                                      { pubkey: s2.pubkey, source: 'S2', weight: '30' }], total: '40' };
+        const cp = signedCheckpoint([s1, s2]);                   // both needed: dropping S2 => 3·10 < 2·40
+        // The signature list is server-supplied (attacker-influenceable): prepend an
+        // INVALID entry for s2 ordered before its genuine one. Marking "seen" on first
+        // encounter would suppress the real signature and false-reject a quorate
+        // checkpoint; the hardened order (matching checkpoint.js#verifyCheckpoint)
+        // must count it.
+        cp.validator_signatures = [{ pubkey: s2.pubkey, sig: '00'.repeat(64) }].concat(cp.validator_signatures);
+        assert.strictEqual(light.verifyCheckpointWithProvenSet(cp, proven).valid, true);
+    });
 });
 
 describe('SPV D4: pinned launch trust root', function () {

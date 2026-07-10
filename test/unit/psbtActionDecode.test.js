@@ -50,6 +50,36 @@ describe('psbtActionDecode.decodeActionFromPsbt', function () {
         expect(r.params).to.deep.equal({ TICK: 'MYTOKEN', AMOUNT: '100', DESTINATION: '1abcDEST', MEMO: 'hello' });
     });
 
+    it('resolves documented on-chain aliases to the canonical action (decoder/indexer parity)', function () {
+        // Mirror of xchain-decoder ACTION_ALIASES / xchain-indexer actionAliases:
+        // a spec-following client may encode any of these leading tokens and the
+        // chain accepts them, so the co-signer must judge the canonical action.
+        const r = decodeActionFromPsbt(buildPsbt('TRANSFER|0|MYTOKEN|100|1abcDEST|hello'));
+        expect(r.ok).to.equal(true);
+        expect(r.action).to.equal('SEND');
+        expect(r.params).to.deep.equal({ TICK: 'MYTOKEN', AMOUNT: '100', DESTINATION: '1abcDEST', MEMO: 'hello' });
+        // Alias-decoded action feeds policy under its canonical name.
+        const v = evaluatePolicy({ allowedActions: new Set(['SEND']) }, { action: r.action, params: r.params });
+        expect(v.ok).to.equal(true);
+    });
+
+    it('refuses a non-canonical-case action name instead of upper-casing it (decoder-parity)', function () {
+        // XChainDecoder.js reads the raw action token WITHOUT case-folding it, so
+        // an on-chain "send|..." (lower-case) is treated as an unknown action and
+        // skipped, not silently matched to SEND. The co-signer must fail closed
+        // the same way, or it could authorize-and-sign a payload the arbiter/
+        // indexer read as no-action at all.
+        const r = decodeActionFromPsbt(buildPsbt('send|0|MYTOKEN|100|1abcDEST|hello'));
+        expect(r.ok).to.equal(false);
+        expect(r.reason).to.equal('UNKNOWN_ACTION');
+    });
+
+    it('refuses a non-canonical-case alias token the same way (decoder-parity)', function () {
+        const r = decodeActionFromPsbt(buildPsbt('transfer|0|MYTOKEN|100|1abcDEST|hello'));
+        expect(r.ok).to.equal(false);
+        expect(r.reason).to.equal('UNKNOWN_ACTION');
+    });
+
     it('decodes correctly when the encoder trimmed a trailing empty MEMO', function () {
         // formatSelector.serialize trims trailing empties: "SEND|0|TOK|5|dest"
         const r = decodeActionFromPsbt(buildPsbt('SEND|0|TOK|5|1destX'));

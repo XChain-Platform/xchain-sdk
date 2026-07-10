@@ -108,6 +108,25 @@ class Actions {
         }
         let selected = FormatSelector.select(actionName, fields, explicitVersion);
 
+        // [6b] DEPLOY stakeable formats (v1/v3) carry CONSTRUCTOR_PARAMS as a
+        // single plain field, unlike the rest-field ('...CONSTRUCTOR_PARAMS')
+        // v0/v2 formats. serialize() String()-joins an array pushed into a
+        // plain field, so ['alice','1000'] would silently reach the wire as
+        // one comma-joined segment ('alice,1000') and the indexer/VM would
+        // hand the contract constructor ONE corrupted arg on an immutable
+        // deploy. Fail loudly instead. Keyed off the selected format's field
+        // shape (plain vs rest), not hard-coded version numbers, so it stays
+        // correct if the format list evolves.
+        if (actionName === 'DEPLOY'
+            && Array.isArray(fields.CONSTRUCTOR_PARAMS) && fields.CONSTRUCTOR_PARAMS.length > 1
+            && selected.formatFields.includes('CONSTRUCTOR_PARAMS')) {
+            throw new SDKValidationError(
+                'INVALID_FIELD_VALUE',
+                'DEPLOY v' + selected.version + ' (stakeable) carries CONSTRUCTOR_PARAMS as a single wire field and accepts at most one entry; got ' + fields.CONSTRUCTOR_PARAMS.length + '. Pack multiple values into one param your constructor parses, or use a non-stakeable format (v0/v2).',
+                { field: 'CONSTRUCTOR_PARAMS', action: actionName, version: selected.version, count: fields.CONSTRUCTOR_PARAMS.length }
+            );
+        }
+
         // [7] Serialize to pipe-delimited string
         let actionString = FormatSelector.serialize(actionName, selected.version, fields);
 

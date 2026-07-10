@@ -458,10 +458,15 @@ function verifyCheckpointWithProvenSet(cp, provenOraclePublish){
     const countedSources = new Set(), seenPk = new Set(), weights = [];
     for (const sig of sigs){
         const pk = String(sig && sig.pubkey || '').toLowerCase();
-        if (seenPk.has(pk)) continue; seenPk.add(pk);
+        if (seenPk.has(pk)) continue;
         const src = pkToSource.get(pk);
         if (src === undefined) continue;                          // signer not in the proven set
         if (!checkpoint.verifySignature(canonical, String(sig && sig.sig || ''), pk)) continue;
+        // Only mark a pubkey "seen" once its signature actually verifies (matching
+        // checkpoint.js#verifyCheckpoint): marking on first encounter would let a
+        // garbage-then-valid pair of entries for the same proven signer suppress the
+        // real signature (order-dependent quorum under-count, false-reject).
+        seenPk.add(pk);
         if (countedSources.has(src)) continue; countedSources.add(src);   // source-dedupe
         weights.push(bySource.get(src));
     }

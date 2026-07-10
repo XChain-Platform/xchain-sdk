@@ -62,12 +62,17 @@ function toBytes(v, label) {
     throw new Error(label + ' must be a hex string or Uint8Array');
 }
 
-// Only SIGHASH_DEFAULT (0x00) and SIGHASH_ALL (0x01) commit to ALL outputs. The
-// NONE/SINGLE and ANYONECANPAY variants let a caller obtain a partial signature
-// over a message that does not bind the outputs the co-signer just gated, then
+// SIGHASH_DEFAULT (0x00) is the only type honored past this gate. SIGHASH_ALL
+// (0x01) also commits to ALL outputs and would be equally safe from the output-
+// gate's point of view, but the witness-assembly side (musig2Signer.js) writes
+// a bare 64-byte tapKeySig with no trailing sighash-flag byte, which BIP341
+// only permits for SIGHASH_DEFAULT; a non-default type here would sign
+// something the rest of the pipeline cannot correctly finalize. NONE/SINGLE
+// and ANYONECANPAY additionally let a caller obtain a partial signature over a
+// message that does not bind the outputs the co-signer just gated, then
 // reassemble a drain transaction that still verifies on-chain. `undefined`
 // defaults to SIGHASH_DEFAULT and is allowed.
-const ALLOWED_SIGHASH = new Set([bitcoin.Transaction.SIGHASH_DEFAULT, bitcoin.Transaction.SIGHASH_ALL]);
+const ALLOWED_SIGHASH = new Set([bitcoin.Transaction.SIGHASH_DEFAULT]);
 function sighashAllowed(hashType) {
     return hashType === undefined || ALLOWED_SIGHASH.has(hashType);
 }
@@ -80,7 +85,7 @@ function taprootKeyPathSighash(psbt, inputIndex, hashType) {
     // does not commit to every output. The process/_processMulti guards reject it
     // earlier with a clearer code; this also protects any other caller of this export.
     if (!sighashAllowed(hashType))
-        throw new Error('disallowed sighashType 0x' + Number(hashType).toString(16).padStart(2, '0') + ' (only SIGHASH_DEFAULT/SIGHASH_ALL commit to all outputs)');
+        throw new Error('disallowed sighashType 0x' + Number(hashType).toString(16).padStart(2, '0') + ' (only SIGHASH_DEFAULT is finalizable by this signer)');
     const ins = psbt.txInputs;
     if (inputIndex < 0 || inputIndex >= ins.length)
         throw new Error('inputIndex ' + inputIndex + ' out of range');
@@ -359,8 +364,8 @@ class CoSigner {
         const outDenial = this._checkOutputs(psbt, inputs[0].index);
         if (outDenial) return outDenial;
 
-        // Same sighash guard as process(): only SIGHASH_DEFAULT/SIGHASH_ALL commit
-        // to all outputs; anything else makes the output gate above bypassable.
+        // Same sighash guard as process(): only SIGHASH_DEFAULT is finalizable by
+        // this signer; anything else makes the output gate above bypassable.
         if (!sighashAllowed(req.sighashType))
             return this._deny('SIGHASH_TYPE_NOT_ALLOWED', { sighashType: req.sighashType });
 

@@ -50,11 +50,26 @@ const crypto         = require('crypto');
 const bitcoin        = require('bitcoinjs-lib');
 const FormatSelector = require('../formatSelector.js');
 
-// Mirror xchain-decoder/src/XChainDecoder.js:44-63.
+// Mirror xchain-decoder/src/XChainDecoder.js:44-63. The action-data cap is
+// imported from chunkHelper.js (the SDK's single parity-guarded copy) so the
+// co-signer's OVERSIZED gate cannot drift from the rest of the SDK.
 const MAGIC_WORD = Buffer.from('XCHN');
 const P2SH_TAG   = Buffer.from('p2sh');
 const P2WSH_TAG  = Buffer.from('p2wsh');
-const MAX_ACTION_DATA_LENGTH = 8192;
+const { MAX_ACTION_DATA_LENGTH } = require('../chunkHelper.js');
+
+// Documented on-chain action aliases, expanded BEFORE format lookup / policy.
+// Keep in lockstep with xchain-decoder/src/XChainDecoder.js ACTION_ALIASES and
+// xchain-indexer/src/actions.js actionAliases: a spec-following client may
+// encode any of these leading tokens and produce a valid on-chain payload, so
+// the co-signer must judge the canonical action, not refuse the alias.
+const ACTION_ALIASES = {
+    TRANSFER: 'SEND',
+    ADDR:     'ADDRESS',
+    DROP:     'AIRDROP',
+    CAST:     'BROADCAST',
+    MSG:      'MESSAGE',
+};
 
 // Repeated value-bearing fields mean a multi-output action (e.g. SEND v1/v2/v3).
 // The single-leg policy evaluator reads one tick/amount, so a flat dict would
@@ -137,7 +152,18 @@ function decodeActionFromPsbt(psbtOrHex, opts = {}) {
 
     const segments = actionString.split('|');
     if (segments.length < 2) return fail('MALFORMED_ACTION_STRING');
-    const action  = String(segments[0]).toUpperCase();
+    // Resolve documented aliases to the canonical action, exactly as the
+    // authoritative decoder/indexer do before validating/recording. Mirrors
+    // XChainDecoder.js:1384-1386: the raw action token is NOT case-folded
+    // before the alias/format lookup. ACTION_ALIASES and the formats.js
+    // table are both keyed by exact-case canonical names, so a non-canonical-
+    // case token (e.g. "send" instead of "SEND") matches neither, falls
+    // through to the UNKNOWN_ACTION failure below, and is refused - the same
+    // "no action" outcome the arbiter/indexer give it, instead of the
+    // co-signer silently upper-casing its way into signing a payload the
+    // rest of the protocol treats as unrecognized.
+    const rawAction = String(segments[0]);
+    const action  = ACTION_ALIASES[rawAction] ?? rawAction;
     const version = Number(segments[1]);
     if (!Number.isInteger(version) || version < 0) return fail('BAD_VERSION');
 
@@ -176,4 +202,6 @@ function decodeActionFromPsbt(psbtOrHex, opts = {}) {
     return { ok: true, action, version, params, actionString };
 }
 
-module.exports = { decodeActionFromPsbt };
+// MAX_ACTION_DATA_LENGTH re-exported so parity/drift guards can assert the
+// co-signer gate rides the shared (chunkHelper-sourced) cap.
+module.exports = { decodeActionFromPsbt, MAX_ACTION_DATA_LENGTH };

@@ -70,4 +70,65 @@ describe('CoSignerClient (agent side)', function () {
         expect(() => new CoSignerClient({ publicKeys: [1, 2] })).to.throw(/transport/);
         expect(() => new CoSignerClient({ transport: () => {} })).to.throw(/publicKeys/);
     });
+
+    // The client must bind the co-signer's returned msg to the PSBT it actually
+    // submitted (recomputed BIP341 key-path sighash), so a buggy/misconfigured
+    // co-signer fails loudly here instead of yielding a wrong-message signature
+    // that dies later as an opaque network rejection.
+    describe('msg-to-PSBT binding', function () {
+
+        // Wrap the in-process transport and tamper the returned msg(s).
+        function tamperedTransport(co, mutate) {
+            const real = inProcessTransport(co);
+            return async (body) => mutate(await real(body));
+        }
+
+        it('sign() throws COSIGNER_MSG_MISMATCH before signing when the returned msg is not the PSBT sighash', async function () {
+            const s = setup('SEND|0|TOK|5|1destX|m');
+            const co = new CoSigner({ secretKey: s.coSk, publicKeys: s.keys, tweaks: s.acct.tweaks,
+                policy: { allowedActions: new Set(['SEND']) } });
+            const client = new CoSignerClient({
+                transport: tamperedTransport(co, (res) => {
+                    if (res.approved) res.msg = crypto.randomBytes(32).toString('hex');
+                    return res;
+                }),
+                publicKeys: s.keys, tweaks: s.acct.tweaks });
+
+            let err;
+            try { await client.sign({ psbt: s.psbtHex, secretKey: s.agentSk }); }
+            catch (e) { err = e; }
+            expect(err).to.exist;
+            expect(err.code).to.equal('COSIGNER_MSG_MISMATCH');
+        });
+
+        it('signAll() throws COSIGNER_MSG_MISMATCH when any returned msg is not that input\'s PSBT sighash', async function () {
+            const s = setup('SEND|0|TOK|5|1destX|m');
+            const co = new CoSigner({ secretKey: s.coSk, publicKeys: s.keys, tweaks: s.acct.tweaks,
+                policy: { allowedActions: new Set(['SEND']) } });
+            const client = new CoSignerClient({
+                transport: tamperedTransport(co, (res) => {
+                    if (res.approved && Array.isArray(res.signatures))
+                        res.signatures[0].msg = crypto.randomBytes(32).toString('hex');
+                    return res;
+                }),
+                publicKeys: s.keys, tweaks: s.acct.tweaks });
+
+            let err;
+            try { await client.signAll({ psbt: s.psbtHex, secretKey: s.agentSk, inputIndexes: [0] }); }
+            catch (e) { err = e; }
+            expect(err).to.exist;
+            expect(err.code).to.equal('COSIGNER_MSG_MISMATCH');
+        });
+
+        it('signAll() still succeeds when the returned msgs match the submitted PSBT', async function () {
+            const s = setup('SEND|0|TOK|5|1destX|m');
+            const co = new CoSigner({ secretKey: s.coSk, publicKeys: s.keys, tweaks: s.acct.tweaks,
+                policy: { allowedActions: new Set(['SEND']) } });
+            const client = new CoSignerClient({ transport: inProcessTransport(co), publicKeys: s.keys, tweaks: s.acct.tweaks });
+
+            const out = await client.signAll({ psbt: s.psbtHex, secretKey: s.agentSk, inputIndexes: [0] });
+            expect(out.signatures).to.have.length(1);
+            expect(schnorr.verify(out.signatures[0].signature, out.signatures[0].msg, s.acct.aggregateXOnly)).to.equal(true);
+        });
+    });
 });

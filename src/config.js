@@ -52,7 +52,12 @@ var Config = {
             'ENCRYPTION_METHOD',
             'EXPIRATION',
             'FEE',
-            'FIAT_AMOUNT',
+            // FIAT_AMOUNT is deliberately NOT a NUMBER_FIELD: it is a fixed-
+            // display fiat price, and setNumberFormats' bignumber round-trip
+            // (notation 'fixed', no precision) strips trailing zeros
+            // ("10.00" -> "10", "1.50" -> "1.5"), destroying the X.XX display
+            // form the merchant supplied. The validator enforces the indexer-
+            // parity rule (<= 2 decimals) on the untouched value instead.
             'GET_AMOUNT',
             'GAS_LIMIT',
             'GIVE_AMOUNT',

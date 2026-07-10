@@ -400,7 +400,11 @@ describe('Validator: FIAT_AMOUNT validation', function () {
         expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
     });
 
-    it('rejects FIAT_AMOUNT with only one decimal place', function () {
+    // The rule mirrors the indexer's isValidFiatFormat(2, ...): at most 2
+    // decimals, not exactly 2. One-decimal and integer forms are consensus-
+    // valid (and are what a numeric round-trip produces for "10.50"/"10.00"),
+    // so the SDK must accept them too.
+    it('accepts FIAT_AMOUNT with only one decimal place (indexer parity)', function () {
         const errors = v.validate('DISPENSER', {
             GIVE_TICK:   'TOKEN',
             GIVE_AMOUNT: '10',
@@ -408,16 +412,38 @@ describe('Validator: FIAT_AMOUNT validation', function () {
             GET_AMOUNT:  '0.001',
             FIAT_AMOUNT: '10.0'
         });
-        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
     });
 
-    it('rejects FIAT_AMOUNT with no decimal part', function () {
+    it('accepts FIAT_AMOUNT with no decimal part (indexer parity)', function () {
         const errors = v.validate('DISPENSER', {
             GIVE_TICK:   'TOKEN',
             GIVE_AMOUNT: '10',
             GET_TICK:    'BTC',
             GET_AMOUNT:  '0.001',
             FIAT_AMOUNT: '10'
+        });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('rejects FIAT_AMOUNT with three decimal places', function () {
+        const errors = v.validate('DISPENSER', {
+            GIVE_TICK:   'TOKEN',
+            GIVE_AMOUNT: '10',
+            GET_TICK:    'BTC',
+            GET_AMOUNT:  '0.001',
+            FIAT_AMOUNT: '1.999'
+        });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('rejects a negative FIAT_AMOUNT', function () {
+        const errors = v.validate('DISPENSER', {
+            GIVE_TICK:   'TOKEN',
+            GIVE_AMOUNT: '10',
+            GET_TICK:    'BTC',
+            GET_AMOUNT:  '0.001',
+            FIAT_AMOUNT: '-1.00'
         });
         expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
     });

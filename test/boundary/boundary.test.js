@@ -373,16 +373,14 @@ describe('FIAT_AMOUNT format boundary', function () {
         expect(fiatErrors('999999.99')).to.have.length(0);
     });
 
-    it("rejects FIAT_AMOUNT '1.0' (only one decimal place)", function () {
-        let errs = fiatErrors('1.0');
-        expect(errs).to.have.length.greaterThan(0);
-        expect(errs[0].code).to.equal('INVALID_FIELD_VALUE');
+    // <= 2 decimals mirrors the indexer's isValidFiatFormat(2, ...): one-
+    // decimal and integer forms are consensus-valid, so the SDK accepts them.
+    it("accepts FIAT_AMOUNT '1.0' (one decimal place, indexer parity)", function () {
+        expect(fiatErrors('1.0')).to.have.length(0);
     });
 
-    it("rejects FIAT_AMOUNT '1' (no decimal places)", function () {
-        let errs = fiatErrors('1');
-        expect(errs).to.have.length.greaterThan(0);
-        expect(errs[0].code).to.equal('INVALID_FIELD_VALUE');
+    it("accepts FIAT_AMOUNT '1' (no decimal places, indexer parity)", function () {
+        expect(fiatErrors('1')).to.have.length(0);
     });
 
     it("rejects FIAT_AMOUNT '1.000' (three decimal places)", function () {

@@ -832,3 +832,99 @@ describe('Actions – edge cases', function () {
     });
 
 });
+
+
+// ---------------------------------------------------------------------------
+// DEPLOY stakeable formats: CONSTRUCTOR_PARAMS is a single wire field in
+// v1/v3, so a multi-element array must fail loudly instead of String()-
+// joining into one comma-corrupted constructor arg on an immutable deploy.
+// ---------------------------------------------------------------------------
+
+describe('Actions – DEPLOY stakeable CONSTRUCTOR_PARAMS guard', function () {
+
+    let actions;
+    beforeEach(function () { actions = createActions(); });
+
+    const CODE = 'contract Test {}';
+
+    it('rejects multi-element constructorParams on a v1 (stakeable) DEPLOY', function () {
+        expect(() => actions.createAction({
+            action: 'DEPLOY',
+            params: {
+                code: CODE, gasLimit: '100',
+                constructorParams: ['alice', '1000'],
+                cooldownBlocks: 50
+            }
+        })).to.throw(SDKValidationError, /at most one entry/);
+    });
+
+    it('accepts a single constructorParams entry on a v1 (stakeable) DEPLOY', function () {
+        let result = actions.createAction({
+            action: 'DEPLOY',
+            params: {
+                code: CODE, gasLimit: '100',
+                constructorParams: ['alice'],
+                cooldownBlocks: 50
+            }
+        });
+        expect(result.version).to.equal(1);
+        let parts = result.actionString.split('|');
+        expect(parts[4]).to.equal('alice');       // single CONSTRUCTOR_PARAMS field
+        expect(parts[5]).to.equal('50');          // COOLDOWN_BLOCKS follows intact
+    });
+
+    it('still expands multi-element constructorParams on a v0 (rest-field) DEPLOY', function () {
+        let result = actions.createAction({
+            action: 'DEPLOY',
+            params: {
+                code: CODE, gasLimit: '100',
+                constructorParams: ['alice', '1000']
+            }
+        });
+        expect(result.version).to.equal(0);
+        let parts = result.actionString.split('|');
+        expect(parts.slice(4)).to.deep.equal(['alice', '1000']); // separate segments
+    });
+});
+
+
+// ---------------------------------------------------------------------------
+// FIAT_AMOUNT end-to-end: the exact defect path was createAction's
+// setNumberFormats stripping trailing zeros ("10.00" -> "10") BEFORE a
+// validator regex that demanded exactly two decimals, so every round fiat
+// price was rejected. FIAT_AMOUNT is now excluded from numeric reformatting
+// and the validator mirrors the indexer's <= 2 decimals consensus rule.
+// ---------------------------------------------------------------------------
+
+describe('Actions – fiat-priced DISPENSER pipeline (round prices)', function () {
+
+    let actions;
+    beforeEach(function () { actions = createActions(); });
+
+    function fiatDispenser(fiatAmount) {
+        return actions.createAction({
+            action: 'DISPENSER',
+            params: {
+                giveTick: 'TOKEN', giveAmount: '10',
+                getTick: 'BTC', getAmount: '0.001',
+                fiatCode: 'USD', fiatAmount: fiatAmount
+            }
+        });
+    }
+
+    it("accepts round and half prices ('10.00', '1.50', '5.00', '0.50')", function () {
+        for (const price of ['10.00', '1.50', '5.00', '0.50']) {
+            let result = fiatDispenser(price);
+            // The fiat price reaches the wire untouched (no trailing-zero strip).
+            expect(result.actionString.split('|')).to.include(price);
+        }
+    });
+
+    it("still accepts a non-round price ('19.99')", function () {
+        expect(fiatDispenser('19.99').actionString.split('|')).to.include('19.99');
+    });
+
+    it("rejects a three-decimal price ('1.999')", function () {
+        expect(() => fiatDispenser('1.999')).to.throw(SDKValidationError);
+    });
+});

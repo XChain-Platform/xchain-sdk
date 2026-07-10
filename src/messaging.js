@@ -566,7 +566,10 @@ class MessagingUtils {
                     ? null : Number(msg.action_format),
                 txid:      msg.tx_hash || null,
                 block:     msg.block_index || null,
-                timestamp: msg.block_time || null
+                // The explorer /messages contract projects the block time as
+                // `timestamp` (db.js: `b1.block_time as timestamp`); accept the
+                // raw column name too for any non-explorer row source.
+                timestamp: msg.timestamp || msg.block_time || null
             };
 
             if (msg.plaintext_message) {

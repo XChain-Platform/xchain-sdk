@@ -28,17 +28,22 @@
 
 const crypto = require('crypto');
 
-// Canonical values: xchain-documentation/protocol/constants.js. Kept in lockstep
-// with the indexer + decoder by the cross-service regression suite.
+// Canonical values: xchain-documentation/protocol/constants.js. These are the
+// SDK's single in-repo copies (validator.js and psbtActionDecode.js import
+// them from here); test/unit/protocolSizeCaps.test.js pins them to the
+// canonical values so a one-sided bump fails locally.
 const MAX_ACTION_DATA_LENGTH      = 8192;
 const MAX_DEPLOYCHUNK_PART_BYTES  = 7800;
 const MAX_DEPLOY_CHUNKS           = 16;
-// OP_RETURN_PUSH_OVERHEAD = 3 bytes (OP_RETURN + OP_PUSHDATA1 + 1-byte length).
-// This holds for payloads up to 252 bytes. For payloads larger than 252 bytes
-// the push opcode becomes OP_PUSHDATA2 (4 bytes total overhead), but all DEPLOY
-// v4 slices are capped at MAX_DEPLOYCHUNK_PART_BYTES (7800) so the single-shot
-// fitsSingleDeploy() path is the only caller, and its budget is small enough
-// that the 3-byte figure is correct for that check.
+// Bytes added by the OP_PUSHDATA2 push prefix (1-byte opcode + 2-byte
+// little-endian length) when a 256..65535-byte payload is compiled into the
+// on-chain script. MAX_ACTION_DATA_LENGTH bounds the *compiled* push (payload
+// + push prefix, measured WITHOUT the OP_RETURN opcode), matching the
+// encoder's compiledPushSize() (byteLength + 3 for >255 bytes) and the
+// decoder's compiledDataLength (dl<=75?dl+1:dl<=255?dl+2:dl+3). The only
+// consumer is fitsSingleDeploy(), whose decisions matter near the 8192-byte
+// cap where the prefix is always OP_PUSHDATA2, so +3 is the exact overhead
+// there (a sub-256-byte payload trivially fits regardless of prefix class).
 const OP_RETURN_PUSH_OVERHEAD     = 3;
 
 // sha256 hex of the UTF-8 source: the chunk-group id AND the integrity check.
@@ -96,5 +101,6 @@ module.exports = {
     planDeploy,
     MAX_ACTION_DATA_LENGTH,
     MAX_DEPLOYCHUNK_PART_BYTES,
-    MAX_DEPLOY_CHUNKS
+    MAX_DEPLOY_CHUNKS,
+    OP_RETURN_PUSH_OVERHEAD
 };
