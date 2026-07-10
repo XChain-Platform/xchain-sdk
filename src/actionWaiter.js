@@ -113,7 +113,7 @@ class ActionWaiter {
                         // that entry only. This prevents a neighboring action's status from
                         // surfacing as the top-level result in multi-action transactions.
                         let targetActions = (opts.actionIndex !== undefined)
-                            ? actions.filter(a => a.action_index === opts.actionIndex)
+                            ? actions.filter(a => Number(a.action_index) === Number(opts.actionIndex))
                             : actions;
 
                         let invalid = targetActions.find(a => typeof a.status === 'string' && /^invalid/i.test(a.status));

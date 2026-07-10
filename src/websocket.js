@@ -23,6 +23,12 @@
 const WebSocket = require('ws');
 const { SDKExplorerError } = require('./errors.js');
 
+// WS event-envelope schema version this SDK build understands. The explorer
+// stamps every frame with `schema_version` (see xchain-explorer/src/ws/schema-version.js)
+// so consumers can gate their parsing instead of silently mis-parsing a
+// reshaped payload; keep this in sync with the explorer's WS_SCHEMA_VERSION.
+const WS_SCHEMA_VERSION = 1;
+
 // Network string -> explorer coin code, generated from the canonical coin
 // registry (same convention as explorer.js): a display prefix ('' mainnet,
 // 'T' testnet, 'R' regtest) prepended to the ticker (e.g. dogecoin-testnet -> TDOGE).
@@ -56,6 +62,7 @@ class WebSocketClient {
         this.intentionalClose   = false;
         this.reconnectAttempts  = 0;
         this.serverInfo         = null;
+        this._schemaWarned      = false;
         this.lastActionIndex    = 0;
         this.catchingUp         = false;
         this.nextId             = 1;
@@ -116,6 +123,7 @@ class WebSocketClient {
             this.ws.on('open', () => {
                 this.connected = true;
                 this.reconnectAttempts = 0;
+                this._schemaWarned = false;
                 this._startPing();
                 if (this.hooks.onWsConnect) {
                     try { this.hooks.onWsConnect({ url }); } catch (e) {}
@@ -256,6 +264,24 @@ class WebSocketClient {
     // ---- Internal methods ----
 
     _onMessage(msg) {
+        // Envelope schema gate: the server stamps every frame with schema_version.
+        // If it speaks a NEWER envelope schema than this SDK build understands,
+        // payload shapes may have changed; warn once per connection instead of
+        // silently mis-parsing (mirrors the explorer's own bundled browser client,
+        // src/content/js/xchain-ws.js). Do not fail closed: parsing continues.
+        if (msg.schema_version !== undefined && msg.schema_version > WS_SCHEMA_VERSION && !this._schemaWarned) {
+            this._schemaWarned = true;
+            const mismatch = { serverSchemaVersion: msg.schema_version, clientSchemaVersion: WS_SCHEMA_VERSION };
+            if (this.hooks.onWsSchemaMismatch) {
+                try { this.hooks.onWsSchemaMismatch(mismatch); } catch (e) {}
+            }
+            if (this._handlers['schema_mismatch']) {
+                for (const cb of this._handlers['schema_mismatch']) {
+                    try { cb(mismatch); } catch (e) {}
+                }
+            }
+        }
+
         // Track action indexes for catch-up
         if (msg.data) {
             if (msg.data.action_index) {
