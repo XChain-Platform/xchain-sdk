@@ -43,6 +43,23 @@ function sha256(file) {
     return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 }
 
+// A parity guard must never silently pass by skipping. When the sibling is
+// present we run; when it is absent we HARD-FAIL only where the sibling is
+// REQUIRED, i.e. the job that checks it out and sets XCHAIN_REQUIRE_SIBLINGS=1,
+// so the guard can never green-by-skip there (mirrors xchain-sync's
+// rollback-coverage requireSibling). We do NOT key on the generic CI flag:
+// the shared unit job sets CI=true without checking out siblings. Returns
+// false (caller should `return`) when it skipped; throws when required-but-missing.
+const SIBLING_REQUIRED = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
+function requireSibling(ctx, absPath) {
+    if (fs.existsSync(absPath)) return true;
+    if (SIBLING_REQUIRED)
+        throw new Error('parity guard cannot run: required sibling missing at ' + absPath +
+            ' (the job setting XCHAIN_REQUIRE_SIBLINGS=1 must check out the sibling repo)');
+    ctx.skip();
+    return false;
+}
+
 // One bad fixture per acorn-coverable rule + a float-warning fixture.
 const BAD_FIXTURES = [
     { name: 'banned-math',          rule: 'banned-math',         code: 'function f(){ return Math.sqrt(4); }' },
@@ -58,10 +75,9 @@ const GOOD_FIXTURE  = 'function init(){ return 1; } function add(a,b){ return a 
 describe('contract-lint parity + drift', function () {
 
     describe('drift guard (vendored copies byte-identical to xchain-vm)', function () {
-        const haveVM = fs.existsSync(VM_SRC_DIR);
         for (const f of VENDORED_FILES) {
             it('src/contract/' + f + ' matches xchain-vm/src/' + f, function () {
-                if (!haveVM) return this.skip();
+                if (!requireSibling(this, VM_SRC_DIR)) return;
                 const vendored = path.join(VENDORED_DIR, f);
                 const canonical = path.join(VM_SRC_DIR, f);
                 assert.strictEqual(
@@ -146,7 +162,7 @@ describe('contract-lint parity + drift', function () {
         it('the four templates emit zero Move-2 findings (low false-positive)', function () {
             const fs = require('fs');
             const dir = path.join(__dirname, '..', '..', '..', 'xchain-contracts');
-            if (!fs.existsSync(dir)) return this.skip();
+            if (!requireSibling(this, dir)) return;
             for (const name of ['escrow', 'vesting', 'crowdsale', 'amm']) {
                 const f = path.join(dir, name, name + '.js');
                 if (!fs.existsSync(f)) continue;
@@ -182,7 +198,14 @@ describe('contract-lint parity + drift', function () {
             : [];
 
         if (!haveTemplates || dirs.length === 0) {
-            it('xchain-contracts templates present', function () { this.skip(); });
+            it('xchain-contracts templates present', function () {
+                // Green-by-skip is only acceptable in a per-repo unit run; the
+                // job that checks out siblings must hard-fail on absence.
+                if (SIBLING_REQUIRED)
+                    throw new Error('template-parity guard cannot run: xchain-contracts templates missing at ' +
+                        CONTRACTS_DIR + ' with XCHAIN_REQUIRE_SIBLINGS=1');
+                this.skip();
+            });
         } else {
             for (const name of dirs) {
                 it(name + ' has no acorn-coverable lint errors', function () {
