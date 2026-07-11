@@ -439,4 +439,8 @@ class WebSocketClient {
     }
 }
 
+// Public surface: consumers compare/display the schema version this build
+// understands (e.g. against the server's `schema_version` frame stamp).
+WebSocketClient.WS_SCHEMA_VERSION = WS_SCHEMA_VERSION;
+
 module.exports = WebSocketClient;

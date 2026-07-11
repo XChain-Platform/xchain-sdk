@@ -117,6 +117,27 @@ describe('WebSocketClient', function () {
     });
 
     // -----------------------------------------------------------------
+    // Schema version surface
+    // -----------------------------------------------------------------
+
+    describe('WS_SCHEMA_VERSION', function () {
+
+        it('is exposed as a static on the client class', function () {
+            const WebSocketClient = require('../../src/websocket.js');
+            expect(WebSocketClient.WS_SCHEMA_VERSION).to.be.a('number');
+            expect(WebSocketClient.WS_SCHEMA_VERSION).to.equal(1);
+        });
+
+        it('matches the explorer sibling schema version when checked out (cross-repo drift guard)', function () {
+            const path = require('path');
+            const explorerSchema = path.join(__dirname, '..', '..', '..', 'xchain-explorer', 'src', 'ws', 'schema-version.js');
+            if (!require('fs').existsSync(explorerSchema)) return this.skip();
+            const WebSocketClient = require('../../src/websocket.js');
+            expect(require(explorerSchema).WS_SCHEMA_VERSION).to.equal(WebSocketClient.WS_SCHEMA_VERSION);
+        });
+    });
+
+    // -----------------------------------------------------------------
     // Connection
     // -----------------------------------------------------------------
 
