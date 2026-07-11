@@ -33,10 +33,24 @@
 // Build an LLM provider request envelope as a JSON string. The format
 // matches the provider's expected envelope (LLM spec §4): a top-level
 // JSON object with `prompt` (required) and optional `system`, `max_tokens`,
-// `format` ('text' | 'json_object'), `temperature`, `envelope_version`.
+// `format` ('text' | 'json_object'), `temperature`, `envelope_version`,
+// `fallback` ('any' | 'strict').
+//
+// This helper does the validation up-front (size vs the llm provider's
+// 8192-byte max_request_bytes, format enum, fallback enum) so the developer
+// gets a clear error before the on-chain ATTEST v0 (request) is emitted,
+// mirroring buildHttpGetPayload's fail-early contract below.
+const LLM_MAX_REQUEST_BYTES = 8192;
+
 function buildLlmEnvelope(opts){
     if (!opts || typeof opts.prompt !== 'string' || opts.prompt.length === 0){
         throw new Error('AttestationHelpers.llm: opts.prompt (non-empty string) is required');
+    }
+    if (opts.format !== undefined && opts.format !== 'text' && opts.format !== 'json_object'){
+        throw new Error('AttestationHelpers.llm: opts.format must be "text" or "json_object"');
+    }
+    if (opts.fallback !== undefined && opts.fallback !== 'any' && opts.fallback !== 'strict'){
+        throw new Error('AttestationHelpers.llm: opts.fallback must be "any" or "strict"');
     }
     let env = { prompt: opts.prompt };
     if (opts.system           !== undefined) env.system           = String(opts.system);
@@ -44,7 +58,12 @@ function buildLlmEnvelope(opts){
     if (opts.format           !== undefined) env.format           = String(opts.format);
     if (opts.temperature      !== undefined) env.temperature      = Number(opts.temperature);
     if (opts.envelopeVersion  !== undefined) env.envelope_version = Number(opts.envelopeVersion);
-    return JSON.stringify(env);
+    if (opts.fallback         !== undefined) env.fallback         = String(opts.fallback);
+    let json = JSON.stringify(env);
+    if (Buffer.byteLength(json, 'utf8') > LLM_MAX_REQUEST_BYTES){
+        throw new Error('AttestationHelpers.llm: envelope exceeds ' + LLM_MAX_REQUEST_BYTES + '-byte llm max_request_bytes');
+    }
+    return json;
 }
 
 // Validate + normalize an http_get URL. The provider only accepts

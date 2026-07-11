@@ -78,6 +78,38 @@ describe('AttestationHelpers.llm', function () {
         expect(parsed).to.not.have.property('max_tokens');
         expect(parsed).to.not.have.property('format');
         expect(parsed).to.not.have.property('temperature');
+        expect(parsed).to.not.have.property('fallback');
+    });
+
+    it('emits fallback "strict" when provided', function () {
+        const parsed = JSON.parse(Attestation.llm({ prompt: 'x', fallback: 'strict' }));
+        expect(parsed.fallback).to.equal('strict');
+    });
+
+    it('emits fallback "any" when provided', function () {
+        const parsed = JSON.parse(Attestation.llm({ prompt: 'x', fallback: 'any' }));
+        expect(parsed.fallback).to.equal('any');
+    });
+
+    it('throws when fallback is not "any" or "strict"', function () {
+        expect(() => Attestation.llm({ prompt: 'x', fallback: 'bogus' })).to.throw(/fallback/);
+    });
+
+    it('throws when format is not "text" or "json_object"', function () {
+        expect(() => Attestation.llm({ prompt: 'x', format: 'json' })).to.throw(/format/);
+    });
+
+    it('throws when envelope exceeds the 8192-byte llm max_request_bytes', function () {
+        const longPrompt = 'a'.repeat(8300);
+        expect(() => Attestation.llm({ prompt: longPrompt })).to.throw(/8192/);
+    });
+
+    it('accepts an envelope at exactly the 8192-byte cap', function () {
+        // Pad the prompt so the serialized envelope lands exactly at 8192 bytes.
+        const overhead = JSON.stringify({ prompt: '' }).length;
+        const prompt = 'a'.repeat(8192 - overhead);
+        expect(() => Attestation.llm({ prompt })).to.not.throw();
+        expect(Buffer.byteLength(Attestation.llm({ prompt }), 'utf8')).to.equal(8192);
     });
 
 });
