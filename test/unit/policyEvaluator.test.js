@@ -57,6 +57,34 @@ describe('policyEvaluator.evaluatePolicy', function () {
         expect(v.violation.details.destination).to.equal('c');
     });
 
+    it('rejects a negative amount before any cap can be bypassed', function () {
+        const policy = { allowedActions: new Set(['SEND']), maxPerAction: { SEND: { TOK: '10' } } };
+        const v = evaluatePolicy(policy, send({ tick: 'TOK', amount: '-1000000' }));
+        expect(v.ok).to.equal(false);
+        expect(v.violation.code).to.equal('POLICY_AMOUNT_INVALID');
+    });
+
+    it('rejects a negative amount that would poison the window total', function () {
+        const policy = { allowedActions: new Set(['SEND']), maxPerWindow: { hours: 24, perTick: { TOK: '100' } } };
+        const v = evaluatePolicy(policy, send({ tick: 'TOK', amount: '-1000000' }), { count: 1, perTick: { TOK: '0' } });
+        expect(v.ok).to.equal(false);
+        expect(v.violation.code).to.equal('POLICY_AMOUNT_INVALID');
+    });
+
+    it('rejects malformed amount strings (sign, exponent, hex, whitespace, trailing dot)', function () {
+        const policy = { allowedActions: new Set(['SEND']), maxPerAction: { SEND: { '*': '1000' } } };
+        for (const bad of ['1e5', '0x10', ' 5', '--5', '+5', '5.', 'NaN']) {
+            const v = evaluatePolicy(policy, send({ tick: 'TOK', amount: bad }));
+            expect(v.ok, `amount ${JSON.stringify(bad)} should be rejected`).to.equal(false);
+            expect(v.violation.code).to.equal('POLICY_AMOUNT_INVALID');
+        }
+    });
+
+    it('still allows a canonical non-negative decimal amount', function () {
+        const policy = { allowedActions: new Set(['SEND']), maxPerAction: { SEND: { TOK: '10' } } };
+        expect(evaluatePolicy(policy, send({ tick: 'TOK', amount: '9.5' })).ok).to.equal(true);
+    });
+
     it('enforces the per-action cap with exact decimal comparison (no epsilon)', function () {
         const policy = { allowedActions: new Set(['SEND']), maxPerAction: { SEND: { TOK: '10' } } };
         expect(evaluatePolicy(policy, send({ tick: 'TOK', amount: '10' })).ok).to.equal(true);     // == cap is allowed

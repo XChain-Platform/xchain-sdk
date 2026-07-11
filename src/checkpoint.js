@@ -107,7 +107,11 @@ function verifyCheckpoint(checkpoint, validators){
 
     let sigs = checkpoint.validator_signatures;
     if (typeof sigs === 'string'){
-        try { sigs = JSON.parse(sigs); } catch (e) { sigs = []; }
+        try { sigs = JSON.parse(sigs); } catch (e) {
+            console.warn('[checkpoint] malformed validator_signatures at checkpoint_seq ' +
+                          (checkpoint && checkpoint.checkpoint_seq) + '; treating as zero signatures (fail-closed):', e.message);
+            sigs = [];
+        }
     }
     if (!Array.isArray(sigs)) sigs = [];
 

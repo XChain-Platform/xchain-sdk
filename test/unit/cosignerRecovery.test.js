@@ -98,4 +98,32 @@ describe('cosigner/recovery buildRecoverySpend', function () {
         let e2; try { await buildRecoverySpend({ account: a.acct, leafName: 'agentRecovery', inputs: [], outputs, sign }); } catch (e) { e2 = e; }
         expect(e2).to.match(/inputs are required/);
     });
+
+    it('rejects outputs that exceed inputs (would burn nothing but be invalid)', async function () {
+        const a = account();
+        const inputs  = [{ txid: crypto.randomBytes(32).toString('hex'), vout: 0, value: 100000 }];
+        const outputs = [{ script: a.acct.output, value: 150000 }]; // > inputs
+        const sign = localPairSigner(a.acct.recovery.agentRecovery, [a.agent.sk, a.recovery.sk]);
+        let e; try { await buildRecoverySpend({ account: a.acct, leafName: 'agentRecovery', inputs, outputs, sign }); } catch (err) { e = err; }
+        expect(e).to.match(/exceed inputs/);
+    });
+
+    it('rejects an absurd fee-rate (silent fund-burn guard)', async function () {
+        const a = account();
+        // 1 BTC in, a dust output: the ~1 BTC remainder would be donated to miners.
+        const inputs  = [{ txid: crypto.randomBytes(32).toString('hex'), vout: 0, value: 100000000 }];
+        const outputs = [{ script: a.acct.output, value: 1000 }];
+        const sign = localPairSigner(a.acct.recovery.agentRecovery, [a.agent.sk, a.recovery.sk]);
+        let e; try { await buildRecoverySpend({ account: a.acct, leafName: 'agentRecovery', inputs, outputs, sign }); } catch (err) { e = err; }
+        expect(e).to.match(/exceeds the .* sat\/vB ceiling/);
+    });
+
+    it('allows an absurd fee-rate when acceptHighFee is set', async function () {
+        const a = account();
+        const inputs  = [{ txid: crypto.randomBytes(32).toString('hex'), vout: 0, value: 100000000 }];
+        const outputs = [{ script: a.acct.output, value: 1000 }];
+        const sign = localPairSigner(a.acct.recovery.agentRecovery, [a.agent.sk, a.recovery.sk]);
+        const out = await buildRecoverySpend({ account: a.acct, leafName: 'agentRecovery', inputs, outputs, sign, acceptHighFee: true });
+        expect(out.txHex).to.be.a('string');
+    });
 });

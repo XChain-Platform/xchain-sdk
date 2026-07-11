@@ -164,13 +164,14 @@ describe('ContractUtils', function () {
         it('returns valid=false when source contains __gas', function () {
             // This branch only fires if acorn is installed and parses successfully
             let result = utils.validate('var __gas = 5;');
-            if (result.valid === false && result.error && result.error.includes('__gas')) {
-                assert.ok(true);
-            } else if (result.valid === true) {
-                // acorn not installed path would not reach here; this is ok
-                assert.ok(true);
+            if (result.error && /acorn/i.test(result.error)) {
+                // acorn not installed: the reserved-identifier pre-check cannot run.
+                this.skip();
             }
-            // Either way no throw
+            // Parse path available: the __gas reservation must be rejected with a
+            // matching error. This fails if the client-side reservation check regresses.
+            assert.strictEqual(result.valid, false);
+            assert.ok(result.error && result.error.includes('__gas'));
         });
 
         it('returns valid=false for invalid JS syntax (when acorn available)', function () {

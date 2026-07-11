@@ -129,6 +129,20 @@ class Utility {
         return (value === null || value === undefined || value==='');
     }
 
+    // Mirrors xchain-indexer/src/utility.js safeToString: returns null for values
+    // that cannot be safely stringified (used to reject unsafe object amounts).
+    safeToString(val) {
+        if(val === null || val === undefined)
+            return null;
+        if(typeof val !== 'object')
+            return String(val);
+        if(mathjs.isBigNumber && mathjs.isBigNumber(val))
+            return mathjs.format(val, {notation: 'fixed'});
+        if(typeof val.toString !== 'function')
+            return null;
+        try { return String(val); } catch(e){ return null; }
+    }
+
     // Coerce a value to a full-precision bignumber (matches the indexer's
     // canonical bcnum). Returns a mathjs bignumber (NOT a JS double), so neither
     // this nor the bc* helpers below truncate amounts beyond 2^53 or past ~16
@@ -188,6 +202,12 @@ class Utility {
     }
 
     isValidAmountFormat(decimals, amount){
+        // Reject objects that can't be safely converted to string (mirrors indexer).
+        if(amount !== null && amount !== undefined && typeof amount === 'object' && this.safeToString(amount) === null)
+            return false;
+        // Reject negative amounts (mirrors the consensus-authoritative indexer guard).
+        if(String(amount).startsWith('-'))
+            return false;
         let divisible   = (parseInt(decimals)==0) ? false : true;
         let [int, sats] = String(amount).split('.');
         if(!divisible && this.isNumeric(int) && int==amount)

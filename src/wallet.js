@@ -391,15 +391,27 @@ class WalletUtils {
             // Try bech32 (P2WPKH / P2WSH)
             if (params.bech32) {
                 try {
+                    // fromBech32 (bitcoinjs 6.x) enforces BIP-350: v0 must be
+                    // bech32, v1+ must be bech32m, else it throws (caught below).
                     const decoded = bitcoin.address.fromBech32(address);
                     if (decoded.prefix === params.bech32) {
-                        if (decoded.data.length === 20) {
+                        // Classify by witness version + program length (BIP-141/350),
+                        // not by length alone. A Taproot address (v1, 32-byte program)
+                        // must not be mislabeled p2wsh, and no non-standard
+                        // version/length combination may be blessed as generically valid.
+                        if (decoded.version === 0 && decoded.data.length === 20) {
                             return { valid: true, type: 'p2wpkh', network: name, error: null };
                         }
-                        if (decoded.data.length === 32) {
+                        if (decoded.version === 0 && decoded.data.length === 32) {
                             return { valid: true, type: 'p2wsh', network: name, error: null };
                         }
-                        return { valid: true, type: 'bech32', network: name, error: null };
+                        if (decoded.version === 1 && decoded.data.length === 32) {
+                            return { valid: true, type: 'p2tr', network: name, error: null };
+                        }
+                        return {
+                            valid: false, type: null, network: null,
+                            error: `Unsupported witness program (version ${decoded.version}, ${decoded.data.length}-byte program).`
+                        };
                     }
                 } catch (e) { /* not bech32 for this network */ }
             }

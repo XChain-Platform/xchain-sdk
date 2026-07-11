@@ -131,6 +131,11 @@ function hasNamedKey(table) {
 // Exact decimal comparison via BigNumber methods. mathjs larger()/equal()
 // apply an epsilon tolerance, which is exactly wrong for policy caps.
 function gtDecimal(a, b) { return math.bignumber(String(a)).gt(math.bignumber(String(b))); }
+// Canonical non-negative decimal: digits, optional single fractional part. No
+// sign, no exponent, no whitespace, no hex. Rejects '-1', '+5', '1e5', '0x10',
+// ' 5', '5.', '', so a magnitude/sum gate can never be bypassed by a malformed
+// amount decoded off the wire.
+function isNonNegativeDecimal(a) { return /^\d+(\.\d+)?$/.test(String(a)); }
 function addDecimal(a, b) { return math.bignumber(String(a)).plus(math.bignumber(String(b))).toString(); }
 
 function deny(code, message, details, evaluation) {
@@ -200,6 +205,18 @@ function evaluatePolicy(policy, actionData, windowUsage) {
     }
 
     const evaluation = { action, tick, amount, destinations, needsConfirmation: false };
+
+    // Fail closed on non-canonical / negative amounts. Every amount gate below is
+    // a magnitude comparison (gtDecimal) or a running sum (addDecimal): a negative
+    // string sails past the per-action cap, LOWERS the projected window total, and
+    // once recorded permanently poisons the velocity window. The amount is decoded
+    // verbatim from the WIF holder's PSBT action string (psbtActionDecode.js) with
+    // no numeric validation, so it is attacker-controlled and must be validated
+    // here before any cap binds it. A canonical non-negative decimal only.
+    if (amount !== undefined && !isNonNegativeDecimal(amount))
+        return deny('POLICY_AMOUNT_INVALID',
+            `${action} amount ${amount} is not a canonical non-negative decimal`,
+            { action, tick, amount }, evaluation);
 
     if (!inCollection(policy.allowedActions, action))
         return deny('POLICY_ACTION_DENIED', `action ${action} is not in allowedActions`, { action }, evaluation);

@@ -125,6 +125,20 @@ async function buildRecoverySpend(cfg = {}) {
         tx.addOutput(script, o.value);
     }
 
+    // Fee reconciliation. This is the only SDK signing path that bypasses PSBT
+    // extraction and the encoder, so bitcoinjs's absurd-fee guard never runs here.
+    // Whole-account recovery moves the entire aggregate balance, so a mis-entered
+    // outputs[].value (satoshi/decimal confusion, a dropped digit, a forgotten
+    // change output) would silently donate the remainder to miners. Guard both
+    // directions before signing anything.
+    const totalIn  = inputs.reduce((s, i) => s + Number(i.value), 0);
+    const totalOut = outputs.reduce((s, o) => s + Number(o.value), 0);
+    const fee = totalIn - totalOut;
+    if (!Number.isFinite(fee))
+        throw new Error('recovery inputs/outputs carry a non-numeric value');
+    if (fee < 0)
+        throw new Error(`recovery outputs (${totalOut}) exceed inputs (${totalIn}): would be an invalid, unrelayable transaction`);
+
     // Every input spends the same account output (the prevout set the sighash
     // commits to). One tapleaf sighash + signature per input.
     const prevScripts = inputs.map(() => account.output);
@@ -140,6 +154,17 @@ async function buildRecoverySpend(cfg = {}) {
         // Tapscript-path witness: [signature, leafScript, controlBlock].
         tx.ins[i].witness = [sigBuf, leaf.script, leaf.controlBlock];
     }
+
+    // Absurd-fee ceiling (sat/vB), computed after the witnesses are attached so
+    // the vsize is accurate. Mirrors WalletUtils._maxFeeRate / bitcoinjs's 5000
+    // sat/vB default. Low-unit-value chains (e.g. DOGE) whose ordinary fee-rate
+    // exceeds this must pass an explicit cfg.maximumFeeRate, or set
+    // cfg.acceptHighFee to bypass the check entirely.
+    const maxFeeRate = (Number.isFinite(cfg.maximumFeeRate) && cfg.maximumFeeRate > 0)
+        ? cfg.maximumFeeRate : 5000;
+    const feeRate = fee / tx.virtualSize();
+    if (!cfg.acceptHighFee && feeRate > maxFeeRate)
+        throw new Error(`recovery fee-rate ${feeRate.toFixed(1)} sat/vB exceeds the ${maxFeeRate} sat/vB ceiling (fee ${fee} sat); pass cfg.maximumFeeRate or cfg.acceptHighFee if intentional`);
 
     return { txHex: tx.toHex(), txid: tx.getId() };
 }

@@ -151,6 +151,20 @@ describe('WalletUtils', function() {
             expect(result.type).to.equal('p2wpkh');
         });
 
+        it('classifies a Taproot (v1) address as p2tr, not p2wsh', function() {
+            bitcoin.initEccLib(ecc);
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const kp = wallet.generateKeyPair();
+            const internalPubkey = Buffer.from(kp.publicKey).slice(1, 33); // x-only
+            const { address } = bitcoin.payments.p2tr({
+                internalPubkey,
+                network: getNetwork('bitcoin-regtest')
+            });
+            const result = wallet.validateAddress(address);
+            expect(result.valid).to.be.true;
+            expect(result.type).to.equal('p2tr');
+        });
+
         it('should return valid:false for invalid address', function() {
             const wallet = new WalletUtils('bitcoin-regtest');
             const result = wallet.validateAddress('not-an-address');
