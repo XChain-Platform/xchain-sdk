@@ -1114,8 +1114,8 @@ class XChainSDK {
         return this._requireExplorer().getExecution(executionActionIndex);
     }
 
-    async getExecutions(contractActionIndex, opts) {
-        return this._requireExplorer().getExecutions(contractActionIndex, opts);
+    async getExecutions(query, type = 'contract', opts = {}) {
+        return this._requireExplorer().getExecutions(query, type, opts);
     }
 
     async getDeposits(query, type, opts) {

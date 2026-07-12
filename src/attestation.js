@@ -37,10 +37,15 @@
 // `fallback` ('any' | 'strict').
 //
 // This helper does the validation up-front (size vs the llm provider's
-// 8192-byte max_request_bytes, format enum, fallback enum) so the developer
-// gets a clear error before the on-chain ATTEST v0 (request) is emitted,
-// mirroring buildHttpGetPayload's fail-early contract below.
+// 8192-byte max_request_bytes, format enum, fallback enum, envelope_version
+// ceiling) so the developer gets a clear error before the on-chain ATTEST v0
+// (request) is emitted, mirroring buildHttpGetPayload's fail-early contract
+// below.
 const LLM_MAX_REQUEST_BYTES = 8192;
+// Must track the hub's published prompt_envelope_version (1 today). Any
+// opts.envelopeVersion above this ceiling is rejected before the envelope
+// is built.
+const LLM_MAX_ENVELOPE_VERSION = 1;
 
 function buildLlmEnvelope(opts){
     if (!opts || typeof opts.prompt !== 'string' || opts.prompt.length === 0){
@@ -52,12 +57,20 @@ function buildLlmEnvelope(opts){
     if (opts.fallback !== undefined && opts.fallback !== 'any' && opts.fallback !== 'strict'){
         throw new Error('AttestationHelpers.llm: opts.fallback must be "any" or "strict"');
     }
+    let envelopeVersion;
+    if (opts.envelopeVersion !== undefined){
+        envelopeVersion = Number(opts.envelopeVersion);
+        if (!Number.isFinite(envelopeVersion) || !Number.isInteger(envelopeVersion) ||
+            envelopeVersion <= 0 || envelopeVersion > LLM_MAX_ENVELOPE_VERSION){
+            throw new Error('AttestationHelpers.llm: opts.envelopeVersion must be a positive integer <= ' + LLM_MAX_ENVELOPE_VERSION);
+        }
+    }
     let env = { prompt: opts.prompt };
     if (opts.system           !== undefined) env.system           = String(opts.system);
     if (opts.maxTokens        !== undefined) env.max_tokens       = Number(opts.maxTokens);
     if (opts.format           !== undefined) env.format           = String(opts.format);
     if (opts.temperature      !== undefined) env.temperature      = Number(opts.temperature);
-    if (opts.envelopeVersion  !== undefined) env.envelope_version = Number(opts.envelopeVersion);
+    if (opts.envelopeVersion  !== undefined) env.envelope_version = envelopeVersion;
     if (opts.fallback         !== undefined) env.fallback         = String(opts.fallback);
     let json = JSON.stringify(env);
     if (Buffer.byteLength(json, 'utf8') > LLM_MAX_REQUEST_BYTES){

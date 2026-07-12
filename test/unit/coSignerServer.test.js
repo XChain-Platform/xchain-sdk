@@ -86,4 +86,30 @@ describe('co-signer HTTP sidecar', function () {
         expect(r.body.sig).to.be.a('string');
         expect(r.body.publicNonce).to.be.a('string');
     });
+
+    it('401s on a wrong token of the SAME length as the real one', async function () {
+        const wrong = 'sekret'.split('').reverse().join('');
+        expect(wrong.length).to.equal('sekret'.length);
+        const r = await post(port, '/cosign', { psbt: psbtHex, agentPublicNonce: agentNonce }, { authorization: 'Bearer ' + wrong });
+        expect(r.status).to.equal(401);
+        expect(r.body.reason).to.equal('UNAUTHORIZED');
+    });
+
+    it('401s on a wrong token of a DIFFERENT length', async function () {
+        const r = await post(port, '/cosign', { psbt: psbtHex, agentPublicNonce: agentNonce }, { authorization: 'Bearer short' });
+        expect(r.status).to.equal(401);
+        expect(r.body.reason).to.equal('UNAUTHORIZED');
+    });
+
+    it('401s on a malformed authorization header (no Bearer prefix)', async function () {
+        const r = await post(port, '/cosign', { psbt: psbtHex, agentPublicNonce: agentNonce }, { authorization: 'sekret' });
+        expect(r.status).to.equal(401);
+        expect(r.body.reason).to.equal('UNAUTHORIZED');
+    });
+
+    it('401s on a non-Bearer scheme', async function () {
+        const r = await post(port, '/cosign', { psbt: psbtHex, agentPublicNonce: agentNonce }, { authorization: 'Basic sekret' });
+        expect(r.status).to.equal(401);
+        expect(r.body.reason).to.equal('UNAUTHORIZED');
+    });
 });

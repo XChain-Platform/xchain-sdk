@@ -86,7 +86,7 @@ class ContractClient {
     // Get contract execution history
     async getExecutions(opts) {
         let explorer = this.sdk._requireExplorer();
-        return explorer.getExecutions(this.contractActionIndex, opts);
+        return explorer.getExecutions(this.contractActionIndex, 'contract', opts);
     }
 
     // Get contract token balances (all ticks or a specific tick)

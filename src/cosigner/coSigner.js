@@ -30,6 +30,12 @@
  *     constrain where the native coin goes, so only the OP_RETURN carrier,
  *     change back to the spent account, and operator-authorized outputs are
  *     allowed. This blocks a benign-action-with-drain-output craft.
+ *   - The miner FEE is reconciled too (_checkFee): the action string never
+ *     constrains the fee, so an omitted/undersized change output would hand the
+ *     whole account balance to miners as fee. The daemon computes
+ *     sum(inputs) - sum(outputs) from the mandatory witnessUtxos and refuses a
+ *     value-negative tx, the full burn (nothing returned to any output), or a
+ *     fee above the operator-set maxFeeSats cap.
  *   - Fail closed everywhere: any decode failure, policy denial, missing
  *     witnessUtxo, unauthorized output, or confirm-required (a headless
  *     daemon cannot prompt) returns { approved:false, reason } and signs nothing.
@@ -136,7 +142,41 @@ class CoSigner {
         // protocol-fee output). Everything NOT in this set, change-to-self, or the
         // OP_RETURN carrier is treated as a drain and refused (see _checkOutputs).
         this.allowedOutputs = this._normalizeAllowedOutputs(config.allowedOutputs || []);
+        // Anti-burn fee reconciliation (see _checkFee). maxFeeSats is an optional
+        // operator-set absolute cap (satoshis). It is the only bound that can
+        // safely be tightened past the always-on guards, because a legitimate fee
+        // fraction is chain-specific (a low-unit-value chain can pay ~all of a
+        // small input as fee), so no proportional default can tell a legitimate
+        // high fee from a drain without operator knowledge.
+        this.maxFeeSats = (config.maxFeeSats === undefined || config.maxFeeSats === null)
+            ? null : Number(config.maxFeeSats);
+        if (this.maxFeeSats !== null && (!Number.isFinite(this.maxFeeSats) || this.maxFeeSats < 0))
+            throw new Error('maxFeeSats must be a non-negative number');
         this.musig = new MuSig2();
+
+        // The account scriptPubKey this daemon actually spends from, derived once
+        // here rather than trusted from a caller-supplied witnessUtxo.script (see
+        // _checkPrevouts). Covers both the plain 2-of-2 key path (tweaks: []) and
+        // the tweaked 2-of-3 cooperative key path (tweaks from deriveMuSig2P2TR2of3
+        // .keyPath.tweaks). config.accountScript is an operator escape hatch for
+        // accounts outside key-path scope (e.g. script-path/recovery spends), not
+        // the default: prefer deriving it from publicKeys/tweaks.
+        if (config.accountScript) {
+            this.accountScript = Buffer.isBuffer(config.accountScript)
+                ? config.accountScript
+                : Buffer.from(config.accountScript, 'hex');
+        } else {
+            try {
+                const agg = this.musig.aggregateKeys(this.publicKeys, this.tweaks);
+                const p2tr = bitcoin.payments.p2tr({
+                    pubkey:  Buffer.from(agg.xOnlyPubkey),
+                    network: this.network || undefined,
+                });
+                this.accountScript = p2tr.output;
+            } catch (e) {
+                throw new Error('failed to derive the account scriptPubKey from publicKeys/tweaks: ' + e.message);
+            }
+        }
     }
 
     _deny(reason, detail) { return { approved: false, reason, detail: detail || null }; }
@@ -208,6 +248,70 @@ class CoSigner {
         return null;
     }
 
+    // Anti-burn gate: _checkOutputs blocks value DIVERSION, but the action string
+    // never constrains the miner FEE, so a malicious agent can still burn the whole
+    // account by omitting (or undersizing) the change output, leaving the entire
+    // remainder = sum(inputs) - sum(outputs) to miners behind a benign in-policy
+    // action. setMaximumFeeRate (musig2Signer.js/wallet.js) runs only on the
+    // attacker-controlled client, so the daemon reconciles the fee itself here from
+    // data it already holds: every input's witnessUtxo.value (mandatory for the
+    // sighash). Always-on, false-positive-free guards: fee uncomputable (an input
+    // has no witnessUtxo value), a value-negative (unrelayable) tx, and the
+    // canonical full burn where every satoshi becomes fee because no output
+    // returns any value (totalOut === 0). A tighter bound (e.g. catching an
+    // undersized dust-change drain, which is indistinguishable from a legitimate
+    // high fee without chain knowledge) needs the operator's maxFeeSats cap.
+    // Returns a denial object, or null when the fee is within bounds.
+    _checkFee(psbt) {
+        let totalIn = 0;
+        for (let i = 0; i < psbt.txInputs.length; i++) {
+            const wu = psbt.data.inputs[i] && psbt.data.inputs[i].witnessUtxo;
+            if (!wu || typeof wu.value !== 'number' || !Number.isFinite(wu.value))
+                return this._deny('CANNOT_CHECK_FEE', 'input ' + i + ' has no witnessUtxo value');
+            totalIn += wu.value;
+        }
+        let totalOut = 0;
+        for (const out of psbt.txOutputs) totalOut += Number(out.value);
+        const fee = totalIn - totalOut;
+        if (!Number.isFinite(fee))
+            return this._deny('CANNOT_CHECK_FEE', 'non-numeric input/output value');
+        if (fee < 0)
+            return this._deny('OUTPUTS_EXCEED_INPUTS', { totalIn, totalOut });
+        if (totalIn > 0 && totalOut === 0)
+            return this._deny('FEE_BURNS_ENTIRE_INPUT', { totalIn, fee });
+        if (this.maxFeeSats !== null && fee > this.maxFeeSats)
+            return this._deny('FEE_EXCEEDS_CAP', { fee, maxFeeSats: this.maxFeeSats });
+        return null;
+    }
+
+    // Anti-forgery gate: _checkOutputs/_checkFee both trust the caller-supplied
+    // witnessUtxo.script/value as ground truth for the account being spent, but
+    // never verify it actually IS this daemon's account before _recordBudget
+    // permanently consumes velocity-window budget. A caller could hand a
+    // witnessUtxo pointing at a foreign/attacker-chosen script, sail through
+    // the output/fee gates (which only ever compare against that same
+    // caller-supplied script), and drain budget with no real spend of the
+    // daemon's own account. Verify every witnessUtxo.script in `indices`
+    // against the daemon-derived this.accountScript BEFORE any budget is
+    // recorded. Keeps the existing CANNOT_CHECK_OUTPUTS denial for a missing
+    // witnessUtxo entirely. Returns a denial object, or null when every
+    // checked input's prevout is confirmed to be this account.
+    _checkPrevouts(psbt, indices) {
+        for (const idx of indices) {
+            const inp = psbt.data.inputs[idx];
+            if (!inp || !inp.witnessUtxo || !inp.witnessUtxo.script)
+                return this._deny('CANNOT_CHECK_OUTPUTS', 'signed input has no witnessUtxo');
+            const got = inp.witnessUtxo.script;
+            if (!got.equals(this.accountScript))
+                return this._deny('PREVOUT_NOT_OUR_ACCOUNT', {
+                    index:    idx,
+                    expected: this.accountScript.toString('hex'),
+                    got:      got.toString('hex'),
+                });
+        }
+        return null;
+    }
+
     /*
      * Decide and (if approved) partial-sign.
      *
@@ -251,11 +355,24 @@ class CoSigner {
 
         const idx = Number.isInteger(req.inputIndex) ? req.inputIndex : 0;
 
+        // 3b. Prevout gate: verify the input we're about to sign for actually
+        //     spends THIS account's derived scriptPubKey, not a caller-supplied
+        //     witnessUtxo pointing at a foreign script. Must run before any
+        //     budget consumption below.
+        const prevoutDenial = this._checkPrevouts(psbt, [idx]);
+        if (prevoutDenial) return prevoutDenial;
+
         // 4. Output gate: the action string doesn't constrain where the native coin
         //    goes, so refuse any output that isn't the data carrier, change-to-self,
         //    or operator-authorized. Blocks a benign-action / drain-output craft.
         const outDenial = this._checkOutputs(psbt, idx);
         if (outDenial) return outDenial;
+
+        // 4b. Fee gate: the output gate stops diversion but not a change-omission
+        //     burn that hands the whole account balance to miners as fee. Reconcile
+        //     sum(inputs) - sum(outputs) and refuse an out-of-bounds fee.
+        const feeDenial = this._checkFee(psbt);
+        if (feeDenial) return feeDenial;
 
         // 5. Reject any sighash type that does not commit to every output. A
         //    NONE/SINGLE/ANYONECANPAY partial would let the agent reassemble a
@@ -281,7 +398,7 @@ class CoSigner {
             });
         } catch (e) { return this._deny('SIGN_FAILED', e.message); }
 
-        // 7. Consume the budget on authorization (conservative: even if the agent
+        // 8. Consume the budget on authorization (conservative: even if the agent
         //    never completes the aggregate, the cap is already spent).
         this._recordBudget(psbt, verdict.evaluation);
 
@@ -360,9 +477,19 @@ class CoSigner {
             return this._deny('CONFIRMATION_REQUIRED',
                 { action: decoded.action, amount: verdict.evaluation.amount });
 
+        // Prevout gate: verify every input we're about to sign for actually spends
+        // THIS account's derived scriptPubKey, not a caller-supplied witnessUtxo
+        // pointing at a foreign script. Must run before any budget consumption below.
+        const prevoutDenial = this._checkPrevouts(psbt, inputs.map((it) => it.index));
+        if (prevoutDenial) return prevoutDenial;
+
         // Output gate, once (all signed inputs share accountScript by the check above).
         const outDenial = this._checkOutputs(psbt, inputs[0].index);
         if (outDenial) return outDenial;
+
+        // Fee gate, once for the whole tx (same change-omission burn defense as process()).
+        const feeDenial = this._checkFee(psbt);
+        if (feeDenial) return feeDenial;
 
         // Same sighash guard as process(): only SIGHASH_DEFAULT is finalizable by
         // this signer; anything else makes the output gate above bypassable.

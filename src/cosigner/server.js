@@ -28,6 +28,7 @@
 'use strict';
 
 const express = require('express');
+const { safeTokenEqual } = require('../utils/safeCompare.js');
 
 /*
  * Build an Express app exposing POST /cosign.
@@ -50,7 +51,7 @@ function createCoSignerApp(coSigner, opts = {}) {
         if (token) {
             const auth = req.get('authorization') || '';
             const got = auth.startsWith('Bearer ') ? auth.slice(7) : null;
-            if (got !== token) return res.status(401).json({ approved: false, reason: 'UNAUTHORIZED' });
+            if (!safeTokenEqual(got, token)) return res.status(401).json({ approved: false, reason: 'UNAUTHORIZED' });
         }
         const body = req.body || {};
         // Two shapes: single-input { agentPublicNonce, inputIndex? } or multi-input

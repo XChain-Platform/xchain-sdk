@@ -304,6 +304,59 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         expect(res.approved).to.equal(true);
     });
 
+    // Anti-drain (fee-burn variant): a zero-value OP_RETURN carrier with NO change
+    // output passes the output gate (nothing is diverted, nothing burned to
+    // OP_RETURN), yet the entire input value silently becomes miner fee. The fee
+    // gate reconciles sum(inputs) - sum(outputs) and refuses it.
+    it('refuses a benign action that burns the whole balance as miner fee (change omitted, always-on)', function () {
+        const acct = makeAccount();
+        const psbt = buildOpReturnValuePsbt(acct, 0, false); // zero-value carrier, no change: every sat to fee
+        const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
+        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        expect(res.approved).to.equal(false);
+        expect(res.reason).to.equal('FEE_BURNS_ENTIRE_INPUT');
+        expect(res.sig, 'no partial signature is produced').to.equal(undefined);
+    });
+
+    // An undersized change output (a 1-sat dust leg) is the same drain, but it is
+    // indistinguishable from a legitimate high fee without chain knowledge, so it
+    // takes the operator's absolute cap to catch.
+    it('refuses a fee-burn hidden behind a dust change output under an operator cap', function () {
+        const acct = makeAccount();
+        const psbt = buildOpReturnValuePsbt(acct, 0, false);
+        psbt.addOutput({ script: acct.p2trScript, value: 1 }); // 1-sat change, 99999 to fee
+        const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
+            policy: policy(), maxFeeSats: 50000 });
+        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        expect(res.approved).to.equal(false);
+        expect(res.reason).to.equal('FEE_EXCEEDS_CAP');
+    });
+
+    // An operator absolute cap (maxFeeSats) tightens the bound below the coarse
+    // proportional backstop.
+    it('refuses a fee above the operator maxFeeSats cap', function () {
+        const acct = makeAccount();
+        const psbt = buildSignablePsbt(acct, 'SEND|0|MYTOKEN|10|1destX|m'); // fee = 10000
+        const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
+            policy: policy(), maxFeeSats: 5000 });
+        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        expect(res.approved).to.equal(false);
+        expect(res.reason).to.equal('FEE_EXCEEDS_CAP');
+    });
+
+    it('approves a normal fee within both the fraction backstop and an operator cap', function () {
+        const acct = makeAccount();
+        const psbt = buildSignablePsbt(acct, 'SEND|0|MYTOKEN|10|1destX|m'); // fee = 10000
+        const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
+            policy: policy(), maxFeeSats: 20000 });
+        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        expect(res.approved).to.equal(true);
+    });
+
     // Multi-input: one authorization covering a tx that spends several aggregate
     // UTXOs, a partial signature per input, the budget charged once.
     function buildMultiInputPsbt(acct, n, scripts) {
@@ -360,6 +413,71 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const res = co.process({ psbt: psbt.toHex(), inputs: multiInputs(acct, 2) });
         expect(res.approved).to.equal(false);
         expect(res.reason).to.equal('MIXED_INPUT_SCRIPTS');
+    });
+
+    // Anti-forgery: a witnessUtxo.script that isn't the daemon's own derived
+    // account must be denied (PREVOUT_NOT_OUR_ACCOUNT), and denial must consume
+    // no velocity-window budget (see FINDING 1841 / coSigner.js _checkPrevouts).
+    it('denies a foreign witnessUtxo.script with PREVOUT_NOT_OUR_ACCOUNT, before _checkOutputs would otherwise pass it', function () {
+        const acct = makeAccount();
+        const foreignSk = crypto.randomBytes(32);
+        const foreignPk = secp256k1.getPublicKey(foreignSk, true);
+        const foreignAggAcct = makeAccount(); // an unrelated account's own aggregate script
+        const psbt = buildSignablePsbt(acct, 'SEND|0|TOK|1|1destX|m');
+        // Overwrite the witnessUtxo to point at a DIFFERENT (foreign) account's
+        // script, while everything else (action, change output) still looks benign
+        // to _checkOutputs/_checkFee because they only ever compare against the
+        // same caller-supplied script.
+        psbt.data.inputs[0].witnessUtxo.script = foreignAggAcct.p2trScript;
+        const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
+        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        expect(res.approved).to.equal(false);
+        expect(res.reason).to.equal('PREVOUT_NOT_OUR_ACCOUNT');
+        expect(res.detail.index).to.equal(0);
+        expect(res.detail.expected).to.equal(acct.p2trScript.toString('hex'));
+        expect(res.detail.got).to.equal(foreignAggAcct.p2trScript.toString('hex'));
+        void foreignPk;
+    });
+
+    it('a foreign-prevout denial does NOT consume velocity-window budget', function () {
+        const acct = makeAccount();
+        const foreignAggAcct = makeAccount();
+        const stateFile = path.join(os.tmpdir(), `cosigner-prevout-${crypto.randomBytes(6).toString('hex')}.json`);
+        const store = new WindowStore(stateFile, 24);
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
+            policy: policy({ maxPerWindow: { hours: 24, maxActions: 1 } }), windowStore: store });
+        try {
+            const before = store.snapshot();
+            const psbt = buildSignablePsbt(acct, 'SEND|0|TOK|1|1destX|m');
+            psbt.data.inputs[0].witnessUtxo.script = foreignAggAcct.p2trScript;
+            const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+            const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+            expect(res.approved).to.equal(false);
+            expect(res.reason).to.equal('PREVOUT_NOT_OUR_ACCOUNT');
+            const after = store.snapshot();
+            expect(after).to.deep.equal(before);   // no budget consumed
+
+            // Prove the window is still fully available: a genuine in-policy request
+            // against the real account still succeeds after the denial.
+            const good = buildSignablePsbt(acct, 'SEND|0|TOK|1|1destX|m');
+            const goodNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+            const goodRes = co.process({ psbt: good.toHex(), agentPublicNonce: goodNonce });
+            expect(goodRes.approved).to.equal(true);
+        } finally {
+            try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
+        }
+    });
+
+    it('multi-input: denies when every input uniformly carries a foreign script', function () {
+        const acct = makeAccount();
+        const foreignAggAcct = makeAccount();
+        const psbt = buildMultiInputPsbt(acct, 2, [foreignAggAcct.p2trScript, foreignAggAcct.p2trScript]);
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
+        const res = co.process({ psbt: psbt.toHex(), inputs: multiInputs(acct, 2) });
+        expect(res.approved).to.equal(false);
+        expect(res.reason).to.equal('PREVOUT_NOT_OUR_ACCOUNT');
+        expect(res.detail.index).to.equal(0);
     });
 });
 

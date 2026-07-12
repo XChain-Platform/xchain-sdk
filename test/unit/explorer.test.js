@@ -787,8 +787,8 @@ describe('ExplorerClient', function () {
             expect(r.action_index).to.equal(99);
         });
 
-        it('getExecutions with contractActionIndex returns result', async function () {
-            nock(BASE).get('/BTC/api/executions/42').reply(200, { total: 5, data: [] });
+        it('getExecutions with a query builds the filtered {query}/{type} path (default contract)', async function () {
+            nock(BASE).get('/BTC/api/executions/42/contract').reply(200, { total: 5, data: [] });
             const r = await client.getExecutions(42);
             expect(r.total).to.equal(5);
         });

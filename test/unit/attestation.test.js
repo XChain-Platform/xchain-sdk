@@ -99,6 +99,35 @@ describe('AttestationHelpers.llm', function () {
         expect(() => Attestation.llm({ prompt: 'x', format: 'json' })).to.throw(/format/);
     });
 
+    it('throws when envelopeVersion is above the ceiling', function () {
+        expect(() => Attestation.llm({ prompt: 'x', envelopeVersion: 2 })).to.throw(/envelopeVersion/i);
+    });
+
+    it('throws when envelopeVersion is NaN', function () {
+        expect(() => Attestation.llm({ prompt: 'x', envelopeVersion: NaN })).to.throw(/envelopeVersion/i);
+    });
+
+    it('throws when envelopeVersion is a non-numeric string', function () {
+        expect(() => Attestation.llm({ prompt: 'x', envelopeVersion: 'abc' })).to.throw(/envelopeVersion/i);
+    });
+
+    it('throws when envelopeVersion is 0', function () {
+        expect(() => Attestation.llm({ prompt: 'x', envelopeVersion: 0 })).to.throw(/envelopeVersion/i);
+    });
+
+    it('throws when envelopeVersion is negative', function () {
+        expect(() => Attestation.llm({ prompt: 'x', envelopeVersion: -1 })).to.throw(/envelopeVersion/i);
+    });
+
+    it('throws when envelopeVersion is fractional', function () {
+        expect(() => Attestation.llm({ prompt: 'x', envelopeVersion: 1.5 })).to.throw(/envelopeVersion/i);
+    });
+
+    it('omits envelope_version when envelopeVersion is undefined', function () {
+        const parsed = JSON.parse(Attestation.llm({ prompt: 'x', envelopeVersion: undefined }));
+        expect(parsed).to.not.have.property('envelope_version');
+    });
+
     it('throws when envelope exceeds the 8192-byte llm max_request_bytes', function () {
         const longPrompt = 'a'.repeat(8300);
         expect(() => Attestation.llm({ prompt: longPrompt })).to.throw(/8192/);

@@ -14,8 +14,37 @@ const bitcoin = require('bitcoinjs-lib');
 const { secp256k1, schnorr } = require('@noble/curves/secp256k1');
 const CoSigner = require('../../src/cosigner/coSigner.js');
 const CoSignerClient = require('../../src/cosigner/client.js');
-const { inProcessTransport } = CoSignerClient;
+const { inProcessTransport, httpTransport } = CoSignerClient;
 const { deriveMuSig2P2TR } = require('../../src/cosigner/account.js');
+
+describe('httpTransport (sidecar fault diagnosability)', function () {
+    it('maps a non-2xx proxy response to a tagged COSIGNER_TRANSPORT_ERROR', async function () {
+        const fakeFetch = async () => ({ ok: false, status: 502, json: async () => { throw new Error('should not be read'); } });
+        const t = httpTransport('http://127.0.0.1:9/cosign', { fetch: fakeFetch });
+        let err;
+        try { await t({ psbt: 'deadbeef' }); } catch (e) { err = e; }
+        expect(err).to.exist;
+        expect(err.code).to.equal('COSIGNER_TRANSPORT_ERROR');
+        expect(err.message).to.contain('502');
+    });
+
+    it('wraps an unparseable (non-JSON) 2xx body as COSIGNER_TRANSPORT_ERROR', async function () {
+        const fakeFetch = async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError('Unexpected token <'); } });
+        const t = httpTransport('http://127.0.0.1:9/cosign', { fetch: fakeFetch });
+        let err;
+        try { await t({ psbt: 'deadbeef' }); } catch (e) { err = e; }
+        expect(err).to.exist;
+        expect(err.code).to.equal('COSIGNER_TRANSPORT_ERROR');
+    });
+
+    it('returns the parsed body unchanged on a normal 2xx JSON response', async function () {
+        const fakeFetch = async () => ({ ok: true, status: 200, json: async () => ({ approved: true, sig: 'ab' }) });
+        const t = httpTransport('http://127.0.0.1:9/cosign', { fetch: fakeFetch });
+        const res = await t({ psbt: 'deadbeef' });
+        expect(res.approved).to.equal(true);
+        expect(res.sig).to.equal('ab');
+    });
+});
 
 // A 2-of-2 account + a PSBT spending it that carries `actionString` in an
 // obfuscated OP_RETURN (built like the encoder).

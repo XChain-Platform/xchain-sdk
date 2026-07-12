@@ -871,7 +871,7 @@ describe('XChainSDK', function () {
             { m: 'getContractBalance',    args: [42, 'TOKEN'] },
             { m: 'getAttestations',       args: ['addr1', 'address', {}] },
             { m: 'getExecution',          args: [99] },
-            { m: 'getExecutions',         args: [42, {}] },
+            { m: 'getExecutions',         args: [42, 'contract', {}] },
             { m: 'getDeposits',           args: ['addr1', 'address', {}] },
             { m: 'getWithdrawals',        args: ['addr1', 'address', {}] },
             { m: 'getStakes',             args: ['addr1', 'address', {}] },

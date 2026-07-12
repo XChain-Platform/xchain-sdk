@@ -26,6 +26,7 @@ const helmet     = require('helmet');
 const cors       = require('cors');
 const jsonRouter = require('express-json-rpc-router');
 const XChainSDK  = require('./XChainSDK');
+const { safeTokenEqual } = require('./utils/safeCompare.js');
 
 // Parse in .env config data
 dotenv.config();
@@ -99,7 +100,8 @@ async function startApi() {
         });
         if (needsAuth) {
             let header = req.headers['authorization'];
-            if (!SDK_API_KEY || !header || header !== 'Bearer ' + SDK_API_KEY) {
+            let got = (typeof header === 'string' && header.startsWith('Bearer ')) ? header.slice(7) : null;
+            if (!SDK_API_KEY || !safeTokenEqual(got, SDK_API_KEY)) {
                 return res.status(401).json({
                     jsonrpc: '2.0', id,
                     error: { code: -32001, message: 'Unauthorized' }

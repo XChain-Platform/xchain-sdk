@@ -825,8 +825,10 @@ export interface AttestationLlmOpts {
     format?: 'text' | 'json_object';
     /** Sampling temperature */
     temperature?: number;
-    /** Envelope version (default: current) */
+    /** Envelope version; must be a positive integer <= the hub's published ceiling (1 today) */
     envelopeVersion?: number;
+    /** Fallback behavior when the primary provider is unavailable: 'any' or 'strict' */
+    fallback?: 'any' | 'strict';
 }
 
 export interface AttestationRequestOpts {

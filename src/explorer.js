@@ -525,9 +525,14 @@ class ExplorerClient {
         return this._get('/execution/' + executionActionIndex);
     }
 
-    async getExecutions(contractActionIndex, opts = {}) {
-        if (contractActionIndex)
-            return this._get('/executions/' + contractActionIndex, opts);
+    // The explorer's filtered executions route is /executions/{QUERY}/{TYPE}
+    // (type in block|address|contract); the type segment is required, so a
+    // query-only path 404s. Thread type like the sibling helpers (getContracts,
+    // getContractStakes), defaulting to 'contract' (the common: list a contract's
+    // executions by its action index).
+    async getExecutions(query, type = 'contract', opts = {}) {
+        if (query)
+            return this._get('/executions/' + query + '/' + type, opts);
         return this._get('/executions', opts);
     }
 

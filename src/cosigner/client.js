@@ -84,7 +84,20 @@ function httpTransport(endpoint, opts = {}) {
     if (opts.token) headers.authorization = 'Bearer ' + opts.token;
     return async (body) => {
         const res = await fetchImpl(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
-        return res.json();
+        // A reverse proxy in front of the sidecar can answer 502/504 with an HTML
+        // error page; without this guard res.json() throws an opaque SyntaxError
+        // and a non-2xx JSON body would be mistaken for a normal result. Surface
+        // the transport fault distinctly from a policy denial, tagged with the
+        // endpoint + status so operators can tell them apart.
+        if (!res.ok)
+            throw new SDKPolicyError('COSIGNER_TRANSPORT_ERROR',
+                'co-signer sidecar ' + endpoint + ' returned HTTP ' + res.status);
+        try {
+            return await res.json();
+        } catch (e) {
+            throw new SDKPolicyError('COSIGNER_TRANSPORT_ERROR',
+                'co-signer sidecar ' + endpoint + ' returned an unparseable (non-JSON) response: ' + e.message);
+        }
     };
 }
 

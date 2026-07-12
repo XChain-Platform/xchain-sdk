@@ -16,7 +16,7 @@ function makeSdk(overrides = {}) {
     let explorer = {
         getContract:       async (idx) => ({ action_index: idx, tick: 'MYCON', source: 'addr1' }),
         getContractState:  async (idx, key) => key ? { value: 'stateVal' } : { key1: 'v1' },
-        getExecutions:     async (idx, opts) => ({ total: 2, data: [{ method: 'run' }] }),
+        getExecutions:     async (idx, type, opts) => ({ total: 2, data: [{ method: 'run' }] }),
         getContractBalance: async (idx, tick) => tick ? { tick, quantity: '1000' } : [{ tick: 'TOK', quantity: '500' }],
         getContractManifest: async (idx) => ({ permissions: ['SEND'], maxTakeBps: 250 }),
         ...overrides.explorer
