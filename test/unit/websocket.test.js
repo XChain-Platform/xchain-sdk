@@ -125,7 +125,7 @@ describe('WebSocketClient', function () {
         it('is exposed as a static on the client class', function () {
             const WebSocketClient = require('../../src/websocket.js');
             expect(WebSocketClient.WS_SCHEMA_VERSION).to.be.a('number');
-            expect(WebSocketClient.WS_SCHEMA_VERSION).to.equal(1);
+            expect(WebSocketClient.WS_SCHEMA_VERSION).to.equal(2);
         });
 
         it('matches the explorer sibling schema version when checked out (cross-repo drift guard)', function () {

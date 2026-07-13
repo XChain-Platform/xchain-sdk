@@ -154,9 +154,13 @@ describe('HubConnector', function () {
             await hub.getAllConfig();
             assert.strictEqual(hub.lastWatermark, 1000);
 
-            // Second: delta fetch (cursor=1000)
+            // Second: delta fetch. The cursor sent is watermark-1 (999), not the
+            // watermark itself: the hub's cursor is a strict `>` on whole-second time,
+            // so a row upserted in the same epoch-second as the watermark read would be
+            // excluded by `> 1000` forever. Overlapping one second re-delivers it; the
+            // merge is idempotent, so re-merging costs nothing.
             nock(HUB_BASE)
-                .post('/', body => body.params.since_updated_at === 1000)
+                .post('/', body => body.params.since_updated_at === 999)
                 .reply(200, {
                     jsonrpc: '2.0',
                     result: {
@@ -172,6 +176,44 @@ describe('HubConnector', function () {
             assert.ok(configs.bitcoin);
             assert.ok(configs.dogecoin);
             assert.strictEqual(hub.lastWatermark, 2000);
+        });
+
+        it('re-requests the boundary second so a same-second config write is not lost @regression', async function () {
+            // The hub filters with a strict `>` on WHOLE-SECOND time. A row upserted in
+            // the same epoch-second as the watermark read (here: second 1000, written
+            // after the hub computed MAX(updated_at)=1000) is excluded by `> 1000` and
+            // the watermark stays 1000, so under the old cursor it was NEVER delivered
+            // by delta and the SDK served the stale value until restart.
+            nock(HUB_BASE)
+                .post('/', body => body.params.since_updated_at === 0)
+                .reply(200, {
+                    jsonrpc: '2.0',
+                    result: { configs: FULL_CONFIGS, seq: 1, watermark: 1000 },
+                    id: 1
+                });
+
+            let hub = new HubConnector();
+            await hub.getAllConfig();
+            assert.strictEqual(hub.lastWatermark, 1000);
+
+            // The delta poll must ask from 999, so the second-1000 row is re-scanned.
+            let sentCursor = null;
+            nock(HUB_BASE)
+                .post('/', body => { sentCursor = body.params.since_updated_at; return true; })
+                .reply(200, {
+                    jsonrpc: '2.0',
+                    result: {
+                        configs: { bitcoin: { mainnet: { 'xchain-encoder': { host: 'late-write.test' } } } },
+                        seq: 2,
+                        watermark: 1000
+                    },
+                    id: 1
+                });
+
+            let configs = await hub.getAllConfig();
+            assert.strictEqual(sentCursor, 999, 'must overlap the boundary second, not send the watermark');
+            // The same-second write is delivered and merged rather than stranded.
+            assert.strictEqual(configs.bitcoin.mainnet['xchain-encoder'].host, 'late-write.test');
         });
 
         it('sends since_updated_at: 0 on first call', async function () {

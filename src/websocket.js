@@ -27,7 +27,7 @@ const { SDKExplorerError } = require('./errors.js');
 // stamps every frame with `schema_version` (see xchain-explorer/src/ws/schema-version.js)
 // so consumers can gate their parsing instead of silently mis-parsing a
 // reshaped payload; keep this in sync with the explorer's WS_SCHEMA_VERSION.
-const WS_SCHEMA_VERSION = 1;
+const WS_SCHEMA_VERSION = 2;
 
 // Network string -> explorer coin code, generated from the canonical coin
 // registry (same convention as explorer.js): a display prefix ('' mainnet,
@@ -298,7 +298,11 @@ class WebSocketClient {
         if (msg.type === 'WELCOME') {
             this.serverInfo = msg.data;
             if (this.lastActionIndex === 0 && msg.data && msg.data.latest_action_index) {
-                this.lastActionIndex = msg.data.latest_action_index;
+                // Coerce: under schema v2 BIGINT fields arrive as decimal strings, and a
+                // chain at index 0 sends "0", which is truthy where the numeric 0 was not.
+                // Without Number() that string would leak into lastActionIndex and back out
+                // as since_action_index on the next catch-up request.
+                this.lastActionIndex = Number(msg.data.latest_action_index);
             }
         }
 

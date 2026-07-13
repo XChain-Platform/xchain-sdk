@@ -41,6 +41,16 @@
 // ceiling) so the developer gets a clear error before the on-chain ATTEST v0
 // (request) is emitted, mirroring buildHttpGetPayload's fail-early contract
 // below.
+//
+// `maxTokens` is a CEILING, never a target, and it can only ever LOWER the
+// completion budget. The hub applies `Math.min(envelope.max_tokens, <governance
+// ceiling>)` (providers/llm.js), where the ceiling is governance-injected
+// (max_completion_tokens, default 1024). Asking for MORE than the governance
+// ceiling is silently clamped down to it: no error, no wire signal. So a value
+// above the ceiling is a no-op, and a value below it is a real reduction. The
+// SDK deliberately does not validate it against a number, because the ceiling is
+// governance config the SDK cannot see; treat it as "cap my spend at N", not as
+// "give me N tokens of output".
 const LLM_MAX_REQUEST_BYTES = 8192;
 // Must track the hub's published prompt_envelope_version (1 today). Any
 // opts.envelopeVersion above this ceiling is rejected before the envelope

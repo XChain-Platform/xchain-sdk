@@ -24,7 +24,11 @@ const { SDKHubError } = require('./errors.js');
 // Fold a getallconfigs delta (only the rows that changed since our cursor) into
 // the cached nested config map, mutating and returning `base`. The hub's configs
 // table is upsert-only (rows are never deleted), so applying successive deltas
-// reconstructs exactly the tree a full fetch would have produced.
+// reconstructs the tree a full fetch would have produced -- PROVIDED no row is
+// skipped by the cursor. That is not free: the hub's cursor is a strict `>` on
+// whole-second time, so getAllConfig deliberately re-requests the boundary second
+// (see the cursor comment there). This merge is idempotent, which is what makes
+// that overlap safe.
 function mergeConfigDelta(base, delta){
     for(let coin in delta){
         if(!base[coin]) base[coin] = {};
@@ -107,12 +111,23 @@ class HubConnector {
 
     // Fetch all configs from the hub via JSON-RPC (tries each endpoint in order)
     async getAllConfig() {
+        // Re-request the boundary second (cursor - 1), not the watermark itself. The
+        // hub's cursor is a strict `>` on WHOLE-SECOND time (UNIX_TIMESTAMP(updated_at)
+        // > ?), and its watermark is MAX(updated_at) in whole seconds. So a config row
+        // upserted within the SAME epoch-second W, but after the hub computed
+        // MAX(updated_at) = W, is excluded by `> W` forever and the returned watermark
+        // stays W: that row would never arrive by delta, and the SDK would serve the
+        // stale value until the process restarted. Overlapping by one second means the
+        // W-second rows are always re-delivered. mergeConfigDelta is an idempotent
+        // upsert (the configs table is never deleted from), so re-merging a row we
+        // already have is a no-op; the cost is one second of rows per poll.
+        let sinceCursor = this.lastWatermark > 0 ? Math.max(0, this.lastWatermark - 1) : 0;
         let payload = {
             jsonrpc: '2.0',
             method:  'getallconfigs',
             // Echo the high-water mark so the hub returns only rows changed since
             // our last poll; 0 requests the full tree (initial fetch / old hub).
-            params:  { since_updated_at: this.lastWatermark },
+            params:  { since_updated_at: sinceCursor },
             id:      1
         };
 
