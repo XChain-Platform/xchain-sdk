@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.14.0] - 2026-06-20
 
 ### Fixed
+- `src/XChainSDK.js`: the `onX()` subscription helpers discarded the promise from `ws.subscribe()`, so when the explorer never confirmed (503, dropped socket) the WS_TIMEOUT rejection was unhandled and terminated the host process ten seconds later; they now subscribe detached and warn instead.
 - `src/checkpoint.js`, `src/stake_weighted_quorum.js` (new): `verifyCheckpoint` now applies the `3·Σ > 2·S` stake-weighted quorum predicate when weighting is active, derived locally from `snapshot_block` + `network`, failing closed when no weight/source is supplied; the count-based path is unchanged below the flag-day.
 - `src/networks.js`: corrected Litecoin `dustThreshold` from `546` to `5460` litoshis for all three Litecoin networks; the previous value risked sub-dust outputs that nodes reject with `dust`.
 - `src/messaging.js`: encrypted `messaging.send()` (methods 1/2/3) no longer throws `NO_MATCHING_FORMAT`; `encryptionMethod` is no longer placed on action params (wire format v2 carries no method slot), and `getMessages()` now infers ECIES when an encrypted body has no method field.

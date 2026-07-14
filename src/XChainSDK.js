@@ -1354,12 +1354,48 @@ class XChainSDK {
         if (this.ws) this.ws.disconnect();
     }
 
+    // Fire-and-forget subscribe for the onX() helpers below.
+    //
+    // Those helpers are synchronous: they return an unsubscribe function, not a
+    // promise, so NOTHING is awaiting the SUBSCRIBED confirmation. But
+    // ws.subscribe() returns a promise that rejects with WS_TIMEOUT ten seconds
+    // later if the explorer never confirms (it is down, returning 503, or the
+    // socket dropped mid-handshake). With no consumer attached, that rejection
+    // is unhandled -- and an unhandled rejection terminates the host process on
+    // Node, which is how a transient explorer outage could take down a wallet's
+    // Electron main process or kill a test run outright.
+    //
+    // The caller genuinely cannot act on this: it holds an unsubscribe fn, not a
+    // promise. Losing the subscription is also self-healing, because the WS
+    // client replays its tracked subscriptions on reconnect (_resubscribe). So
+    // warn and carry on. Callers who DO want to await confirmation still can:
+    // ws.subscribe() keeps rejecting for them.
+    _subscribeDetached(ws, channels, params) {
+        try {
+            const pending = ws.subscribe(channels, params);
+            if (pending && typeof pending.catch === 'function') {
+                pending.catch((err) => {
+                    console.warn(
+                        'Subscription to [' + channels.join(', ') + '] was not confirmed: '
+                        + (err && err.message ? err.message : err)
+                        + ' (it will be replayed on reconnect)',
+                    );
+                });
+            }
+        } catch (err) {
+            console.warn(
+                'Subscription to [' + channels.join(', ') + '] failed: '
+                + (err && err.message ? err.message : err),
+            );
+        }
+    }
+
     // Listen for new blocks
     // Returns an unsubscribe function
     onBlock(callback) {
         const ws = this._requireWs();
         ws.on('NEW_BLOCK', callback);
-        ws.subscribe(['blocks']);
+        this._subscribeDetached(ws, ['blocks']);
         return () => {
             ws.off('NEW_BLOCK', callback);
             ws.unsubscribe(['blocks']);
@@ -1375,7 +1411,7 @@ class XChainSDK {
         if (opts && opts.types)    params.types    = opts.types;
         if (opts && opts.statuses) params.statuses = opts.statuses;
         if (opts && opts.ticks)    params.ticks    = opts.ticks;
-        ws.subscribe(['actions'], Object.keys(params).length > 0 ? params : undefined);
+        this._subscribeDetached(ws, ['actions'], Object.keys(params).length > 0 ? params : undefined);
         return () => {
             ws.off('NEW_ACTION', callback);
             ws.unsubscribe(['actions']);
@@ -1398,7 +1434,7 @@ class XChainSDK {
         if (opts && opts.types)    params.types    = opts.types;
         if (opts && opts.statuses) params.statuses = opts.statuses;
         if (opts && opts.snapshot) params.snapshot  = true;
-        ws.subscribe(['address'], params);
+        this._subscribeDetached(ws, ['address'], params);
 
         return () => {
             for (const t of types) ws.off(t, callback);
@@ -1411,7 +1447,7 @@ class XChainSDK {
     onToken(tick, callback) {
         const ws = this._requireWs();
         ws.on('TOKEN_UPDATE', callback);
-        ws.subscribe(['token'], { tick, snapshot: true });
+        this._subscribeDetached(ws, ['token'], { tick, snapshot: true });
         return () => {
             ws.off('TOKEN_UPDATE', callback);
             ws.unsubscribe(['token'], { tick });
@@ -1423,7 +1459,7 @@ class XChainSDK {
     onMarket(tick1, tick2, callback) {
         const ws = this._requireWs();
         ws.on('MARKET_UPDATE', callback);
-        ws.subscribe(['market'], { tick1, tick2, snapshot: true });
+        this._subscribeDetached(ws, ['market'], { tick1, tick2, snapshot: true });
         return () => {
             ws.off('MARKET_UPDATE', callback);
             ws.unsubscribe(['market'], { tick1, tick2 });
@@ -1438,7 +1474,7 @@ class XChainSDK {
         ws.on('DISPENSE', callback);
         ws.on('DISPENSER_CLOSED', callback);
         ws.on('DISPENSER_EXPIRED', callback);
-        ws.subscribe(['dispenser'], { action_index: actionIndex, snapshot: true });
+        this._subscribeDetached(ws, ['dispenser'], { action_index: actionIndex, snapshot: true });
         return () => {
             ws.off('DISPENSER_UPDATE', callback);
             ws.off('DISPENSE', callback);
@@ -1453,7 +1489,7 @@ class XChainSDK {
     onCoinpayRequired(address, callback) {
         const ws = this._requireWs();
         ws.on('COINPAY_REQUIRED', callback);
-        ws.subscribe(['address'], { address, types: ['COINPAY_REQUIRED'] });
+        this._subscribeDetached(ws, ['address'], { address, types: ['COINPAY_REQUIRED'] });
         return () => {
             ws.off('COINPAY_REQUIRED', callback);
             ws.unsubscribe(['address'], { address });
@@ -1467,7 +1503,7 @@ class XChainSDK {
         ws.on('ORDER_MATCH', callback);
         let params = { address, types: ['ORDER_MATCH'] };
         if (opts && opts.statuses) params.statuses = opts.statuses;
-        ws.subscribe(['address'], params);
+        this._subscribeDetached(ws, ['address'], params);
         return () => {
             ws.off('ORDER_MATCH', callback);
             ws.unsubscribe(['address'], { address });
@@ -1493,7 +1529,7 @@ class XChainSDK {
     onNetworkStats(callback) {
         const ws = this._requireWs();
         ws.on('NETWORK_STATS', callback);
-        ws.subscribe(['network']);
+        this._subscribeDetached(ws, ['network']);
         return () => {
             ws.off('NETWORK_STATS', callback);
             ws.unsubscribe(['network']);
