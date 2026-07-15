@@ -424,6 +424,10 @@ class Validator {
             if (!/^[0-9]+$/.test(String(value)))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'CALLBACK_CONTRACT must be a non-negative integer (a contract ACTION_INDEX)', { field, value }));
         }
+        if (field === 'CALLBACK_DELAY_BLOCKS') {
+            if (!/^[0-9]+$/.test(String(value)))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'CALLBACK_DELAY_BLOCKS must be a non-negative integer (blocks between finalize and the callback firing)', { field, value }));
+        }
 
         // METHOD validation (non-empty; delimiter safety via _checkDelimiters)
         if (field === 'METHOD') {
