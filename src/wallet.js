@@ -18,6 +18,11 @@
  *
  ********************************************************************/
 
+// Must load before any PSBT is parsed or signed: teaches bitcoinjs-lib and
+// bip174 to carry satoshi values above 2^53-1 as BigInt, so a PSBT the
+// encoder built around a >2^53-1-sat DOGE output can be signed, finalized,
+// and extracted here (; mirrors xchain-encoder/src/applyBufferutilsPatch.js).
+require('./applyBufferutilsPatch');
 const bitcoin = require('bitcoinjs-lib');
 const psbtutils = require('bitcoinjs-lib/src/psbt/psbtutils');
 const { ECPairFactory } = require('ecpair');
