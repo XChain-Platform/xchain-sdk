@@ -80,7 +80,7 @@ class HubConnector {
             this.urls = options.hubValidators.map(e => e.startsWith('http') ? e : 'http://' + e);
         } else {
             let hubUrl  = options.hubUrl || 'localhost';
-            let hubPort = options.hubPort || 8001;
+            let hubPort = options.hubPort || 10000;
             this.urls = [hubUrl.startsWith('http') ? hubUrl : 'http://' + hubUrl + ':' + hubPort];
         }
 

@@ -12,7 +12,7 @@ const assert = require('assert');
 const nock = require('nock');
 const HubConnector = require('../../src/hub.js');
 
-const HUB_BASE = 'http://localhost:8001';
+const HUB_BASE = 'http://localhost:10000';
 const HUB2_BASE = 'http://hub2.test:8001';
 
 // Full config tree returned by hub
@@ -36,10 +36,10 @@ describe('HubConnector', function () {
      */
 
     describe('constructor', function () {
-        it('defaults to localhost:8001', function () {
+        it('defaults to localhost:10000', function () {
             let hub = new HubConnector();
-            assert.strictEqual(hub.url, 'http://localhost:8001');
-            assert.deepStrictEqual(hub.urls, ['http://localhost:8001']);
+            assert.strictEqual(hub.url, 'http://localhost:10000');
+            assert.deepStrictEqual(hub.urls, ['http://localhost:10000']);
         });
 
         it('uses hubUrl + hubPort', function () {

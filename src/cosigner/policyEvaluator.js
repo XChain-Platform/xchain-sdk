@@ -260,14 +260,22 @@ function evaluatePolicy(policy, actionData, windowUsage) {
             return deny('POLICY_WINDOW_COUNT_EXCEEDED',
                 `window already holds ${usage.count} actions (max ${win.maxActions} per ${win.hours}h)`,
                 { action, count: usage.count, maxActions: win.maxActions }, evaluation);
-        if (win.perTick && amount !== undefined && tick !== undefined) {
+        // No `tick !== undefined` guard here: capFor falls through to the '*'
+        // entry exactly like the maxPerAction and confirmAbove gates, so an
+        // amount-bearing action whose tick did not resolve is still bound by a
+        // wildcard window cap (#2286; the old extra guard let such an action
+        // bypass the one amount ceiling a wildcard-only policy expresses).
+        // Undefined-tick entries are never accumulated by windowStore.snapshot()
+        // / _windowUsage(), so their usage reads 0 and the cap binds per-action.
+        if (win.perTick && amount !== undefined) {
             const cap = capFor(win.perTick, tick);
             if (cap !== undefined) {
-                const projected = addDecimal((usage.perTick && usage.perTick[tick]) || '0', amount);
+                const used = (tick !== undefined && usage.perTick && usage.perTick[tick]) || '0';
+                const projected = addDecimal(used, amount);
                 if (gtDecimal(projected, cap))
                     return deny('POLICY_WINDOW_AMOUNT_EXCEEDED',
-                        `${tick} window total would reach ${projected} (cap ${cap} per ${win.hours}h)`,
-                        { action, tick, amount, windowTotal: (usage.perTick && usage.perTick[tick]) || '0', cap }, evaluation);
+                        `${tick !== undefined ? tick : '(unresolved tick)'} window total would reach ${projected} (cap ${cap} per ${win.hours}h)`,
+                        { action, tick, amount, windowTotal: used, cap }, evaluation);
             }
         }
     }

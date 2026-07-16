@@ -117,6 +117,24 @@ describe('policyEvaluator.evaluatePolicy', function () {
         expect(v.violation.details.windowTotal).to.equal('95');
     });
 
+    // #2286: the window per-tick gate used to add a `tick !== undefined` guard its
+    // siblings (maxPerAction, confirmAbove) never had, so an amount-bearing action
+    // whose tick did not resolve bypassed a wildcard window cap - for a policy whose
+    // ONLY amount ceiling is maxPerWindow.perTick['*'], that action escaped every
+    // amount bound on the hard-enforcement path.
+    it('binds the wildcard window cap even when tick is undefined (parity with maxPerAction/confirmAbove)', function () {
+        const policy = { allowedActions: new Set(['SEND']), maxPerWindow: { hours: 24, perTick: { '*': '100' } } };
+        const v = evaluatePolicy(policy, send({ amount: '101' }), { count: 0, perTick: {} });
+        expect(v.ok).to.equal(false);
+        expect(v.violation.code).to.equal('POLICY_WINDOW_AMOUNT_EXCEEDED');
+        expect(v.violation.details.windowTotal).to.equal('0');
+        // Under the cap still passes (undefined-tick usage is never accumulated, reads 0).
+        expect(evaluatePolicy(policy, send({ amount: '99' }), { count: 0, perTick: {} }).ok).to.equal(true);
+        // A tick-SPECIFIC (non-wildcard) cap still does not bind an unresolved tick.
+        const scoped = { allowedActions: new Set(['SEND']), maxPerWindow: { hours: 24, perTick: { TOK: '100' } } };
+        expect(evaluatePolicy(scoped, send({ amount: '101' }), { count: 0, perTick: {} }).ok).to.equal(true);
+    });
+
     it('treats a missing window snapshot as an empty window', function () {
         const policy = { allowedActions: new Set(['SEND']), maxPerWindow: { hours: 24, maxActions: 1 } };
         expect(evaluatePolicy(policy, send({ amount: '1' })).ok).to.equal(true);   // count 0 + 1 <= 1

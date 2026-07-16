@@ -27,7 +27,7 @@ class EncoderClient {
 
     constructor(options = {}) {
         this.baseUrl = options.encoderUrl || 'localhost';
-        this.port    = options.encoderPort || 3000;
+        this.port    = options.encoderPort || 3003;
         this.timeout = options.timeout || 30000;
         this._pool   = options.pool || {};
 

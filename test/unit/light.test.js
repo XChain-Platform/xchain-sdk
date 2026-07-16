@@ -527,6 +527,48 @@ describe('SPV Phase 5: validator-set proof + trustless quorum', function () {
         cp.validator_signatures = [{ pubkey: s2.pubkey, sig: '00'.repeat(64) }].concat(cp.validator_signatures);
         assert.strictEqual(light.verifyCheckpointWithProvenSet(cp, proven).valid, true);
     });
+
+    // Finding #2280: the inline predicate this function once carried dropped the
+    // shared swq fail-closed guards; a blank-source snapshot collapsed to 1-of-N.
+    // Assert every guard against BOTH verifiers so they can never diverge again.
+    it('verifyCheckpointWithProvenSet: FAILS CLOSED on a blank-source snapshot (no 1-of-N collapse), matching checkpoint.verifyCheckpoint', function () {
+        const s1 = signer(), s2 = signer(), s3 = signer();
+        const validators = [{ pubkey: s1.pubkey, source: '', weight: '10' },
+                            { pubkey: s2.pubkey, source: '', weight: '10' },
+                            { pubkey: s3.pubkey, source: '', weight: '10' }];
+        // The authoring-side collapse commits total = w1 ('10'), so a single
+        // signature would clear 3*10 > 2*10 without the guard.
+        const proven = { validators, total: '10' };
+        const cp = signedCheckpoint([s1]);
+        assert.strictEqual(light.verifyCheckpointWithProvenSet(cp, proven).valid, false);
+        assert.strictEqual(checkpoint.verifyCheckpoint(cp, validators).valid, false);
+    });
+
+    it('verifyCheckpointWithProvenSet: FAILS CLOSED on a negative weight (verdict false, no throw)', function () {
+        const s1 = signer(), s2 = signer();
+        const proven = { validators: [{ pubkey: s1.pubkey, source: 'S1', weight: '10' },
+                                      { pubkey: s2.pubkey, source: 'S2', weight: '-5' }], total: '5' };
+        const cp = signedCheckpoint([s1, s2]);
+        assert.strictEqual(light.verifyCheckpointWithProvenSet(cp, proven).valid, false);
+    });
+
+    it('verifyCheckpointWithProvenSet: FAILS CLOSED on a truncated snapshot', function () {
+        const s1 = signer(), s2 = signer();
+        const validators = [{ pubkey: s1.pubkey, source: 'S1', weight: '10' },
+                            { pubkey: s2.pubkey, source: 'S2', weight: '30' }];
+        validators.truncated = true;
+        const cp = signedCheckpoint([s1, s2]);
+        assert.strictEqual(light.verifyCheckpointWithProvenSet(cp, { validators, total: '40' }).valid, false);
+    });
+
+    it('verifyCheckpointWithProvenSet: FAILS CLOSED when the committed __total__ disagrees with the proven set', function () {
+        const s1 = signer(), s2 = signer();
+        const proven = { validators: [{ pubkey: s1.pubkey, source: 'S1', weight: '10' },
+                                      { pubkey: s2.pubkey, source: 'S2', weight: '30' }],
+                         total: '15' };                          // committed denominator understates S=40
+        const cp = signedCheckpoint([s1, s2]);
+        assert.strictEqual(light.verifyCheckpointWithProvenSet(cp, proven).valid, false);
+    });
 });
 
 describe('SPV D4: pinned launch trust root', function () {

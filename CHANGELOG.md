@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - CoSigner now rejects any BIP341 `sighashType` other than `SIGHASH_DEFAULT`/`SIGHASH_ALL` in `process`/`_processMulti` (and defensively in `taprootKeyPathSighash`). Previously the type was honored verbatim from the request, so a `SIGHASH_NONE`/`SINGLE`/`ANYONECANPAY` partial over an in-policy PSBT could be reassembled into a drain transaction that still verified, bypassing the output gate.
 
+## [1.14.1] - 2026-07-16
+
+### Fixed
+- Light-client checkpoint verification re-applies the source-deduped stake-weighted quorum via shared swq.meetsStakeThreshold, restoring the blank-source fail-closed guard ().
+- Encoder and hub connector port defaults corrected to the servers' real binds (3003 / 10000) in code and tests ().
+- CoSigner policyEvaluator wildcard per-tick window cap now binds when the action carries no tick, matching maxPerAction/confirmAbove ().
+
+
 ## [1.14.0] - 2026-06-20
 
 ### Fixed

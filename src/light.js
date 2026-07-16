@@ -38,6 +38,7 @@
 const M          = require('./merkle.js');
 const checkpoint = require('./checkpoint.js');
 const pinned     = require('./pinnedCheckpoints.js');
+const swq        = require('./stake_weighted_quorum.js');
 
 function _fetch(impl){
     let f = impl || (typeof fetch === 'function' ? fetch : null);
@@ -442,38 +443,51 @@ async function verifyValidatorSet(opts){
 }
 
 // Pure: verify a checkpoint's quorum using a PROVEN validator set (from
-// verifyValidatorSet). Source-dedupes valid signers and checks 3·Σ > 2·S against the
-// committed total. Fully trustless: nothing here trusts a server-supplied set.
+// verifyValidatorSet). The verdict comes from the SINGLE shared predicate
+// (swq.meetsStakeThreshold), never a local re-implementation: an earlier inline
+// copy of the 3·Σ > 2·S math here silently dropped swq's blank-source,
+// negative-weight, and truncated-snapshot fail-closed guards, so a blank-source
+// snapshot (schema NOT NULL DEFAULT '') collapsed the threshold to 1-of-N.
+// The committed __total__ leaf is demoted to a cross-check against
+// swq.totalStake: a mismatch means the committed denominator disagrees with the
+// proven set and must never finalize. Fully trustless: nothing here trusts a
+// server-supplied set.
 function verifyCheckpointWithProvenSet(cp, provenOraclePublish){
-    const canonical = cp && checkpoint.canonicalCheckpoint(cp);
-    const bySource = new Map(), pkToSource = new Map();
-    for (const v of ((provenOraclePublish && provenOraclePublish.validators) || [])){
-        const s = String(v.source), pk = String(v.pubkey).toLowerCase();
-        pkToSource.set(pk, s);
-        if (!bySource.has(s)) bySource.set(s, String(v.weight));
+    const canonical  = cp && checkpoint.canonicalCheckpoint(cp);
+    const validators = (provenOraclePublish && provenOraclePublish.validators) || [];
+    const provenPks  = new Set();
+    for (const v of validators){
+        if (v && v.pubkey !== null && v.pubkey !== undefined) provenPks.add(String(v.pubkey).toLowerCase());
     }
     let sigs = cp && cp.validator_signatures;
     if (typeof sigs === 'string'){ try { sigs = JSON.parse(sigs); } catch (e){ sigs = []; } }
     if (!Array.isArray(sigs)) sigs = [];
-    const countedSources = new Set(), seenPk = new Set(), weights = [];
+    const seenPk = new Set(), validSigners = [];
     for (const sig of sigs){
         const pk = String(sig && sig.pubkey || '').toLowerCase();
         if (seenPk.has(pk)) continue;
-        const src = pkToSource.get(pk);
-        if (src === undefined) continue;                          // signer not in the proven set
+        if (!provenPks.has(pk)) continue;                         // signer not in the proven set
         if (!checkpoint.verifySignature(canonical, String(sig && sig.sig || ''), pk)) continue;
         // Only mark a pubkey "seen" once its signature actually verifies (matching
         // checkpoint.js#verifyCheckpoint): marking on first encounter would let a
         // garbage-then-valid pair of entries for the same proven signer suppress the
         // real signature (order-dependent quorum under-count, false-reject).
         seenPk.add(pk);
-        if (countedSources.has(src)) continue; countedSources.add(src);   // source-dedupe
-        weights.push(bySource.get(src));
+        validSigners.push(pk);
     }
-    const numerator = M.sumCanonicalAmounts(weights);
-    const total = M.canonicalAmount(String((provenOraclePublish && provenOraclePublish.total) || '0'));
-    const valid = _scaled(total) > 0n && 3n * _scaled(numerator) > 2n * _scaled(total);
-    return { valid, numerator, total };
+    let valid = swq.meetsStakeThreshold(validators, validSigners);
+    let total = '0';
+    if (valid){
+        // Cross-check the committed total against the proven set's deduped sum.
+        // totalStake throws on the malformed-snapshot cases meetsStakeThreshold
+        // already rejects, so a throw here (or a mismatch) fails CLOSED.
+        try {
+            total = M.canonicalAmount(String(swq.totalStake(validators)));
+            const committed = M.canonicalAmount(String((provenOraclePublish && provenOraclePublish.total) || '0'));
+            if (_scaled(total) !== _scaled(committed)) valid = false;
+        } catch (e){ valid = false; }
+    }
+    return { valid, total };
 }
 
 // Forward-following (spec §7.3): from a trusted BTC checkpoint, walk /checkpoints/range
