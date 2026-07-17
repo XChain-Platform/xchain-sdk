@@ -599,6 +599,47 @@ describe('XChainSDK', function () {
     });
 
     // -----------------------------------------------------------------------
+    // Explorer query re-exports 
+    // -----------------------------------------------------------------------
+
+    describe('explorer query re-exports', function () {
+
+        // Query/type-shaped explorer readers re-exported at the SDK top level
+        const queryMethods = ['getMempool', 'getOrderCancels', 'getSwapCancels', 'getDispenserCancels'];
+
+        for (const method of queryMethods) {
+            it(method + '() delegates to explorer.' + method, async function () {
+                const sdk = makeSDK();
+                const explorer = mockExplorer(sdk, { ok: true });
+                const result = await sdk[method]('query1', 'address', { limit: 5 });
+                expect(explorer[method].calledOnceWithExactly('query1', 'address', { limit: 5 })).to.be.true;
+                expect(result).to.deep.equal({ ok: true });
+            });
+        }
+
+        it('getNetwork() delegates to explorer.getNetwork', async function () {
+            const sdk = makeSDK();
+            const explorer = mockExplorer(sdk, { finality: { BTC: 6 } });
+            const result = await sdk.getNetwork({ verbose: true });
+            expect(explorer.getNetwork.calledOnceWithExactly({ verbose: true })).to.be.true;
+            expect(result).to.deep.equal({ finality: { BTC: 6 } });
+        });
+
+        it('throws EXPLORER_NOT_CONFIGURED when no explorer is wired', async function () {
+            const sdk = makeSDK();
+            sdk.explorer = null;
+            for (const method of [...queryMethods, 'getNetwork']) {
+                try {
+                    await sdk[method]('q', 'address');
+                    expect.fail(method + ' should throw');
+                } catch (e) {
+                    expect(e.code).to.equal('EXPLORER_NOT_CONFIGURED');
+                }
+            }
+        });
+    });
+
+    // -----------------------------------------------------------------------
     // Hub methods
     // -----------------------------------------------------------------------
 

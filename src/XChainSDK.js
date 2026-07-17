@@ -1010,6 +1010,11 @@ class XChainSDK {
         return this._requireExplorer().getDispenses(query, type, opts);
     }
 
+    // Dispenser lifecycle events (cancellations), type ∈ {block, address}.
+    async getDispenserCancels(query, type, opts) {
+        return this._requireExplorer().getDispenserCancels(query, type, opts);
+    }
+
     async getDividends(query, type, opts) {
         return this._requireExplorer().getDividends(query, type, opts);
     }
@@ -1042,6 +1047,11 @@ class XChainSDK {
         return this._requireExplorer().getOrders(query, type, opts);
     }
 
+    // Order lifecycle events (cancellations), type ∈ {block, address}.
+    async getOrderCancels(query, type, opts) {
+        return this._requireExplorer().getOrderCancels(query, type, opts);
+    }
+
     async getSends(query, type, opts) {
         return this._requireExplorer().getSends(query, type, opts);
     }
@@ -1052,6 +1062,11 @@ class XChainSDK {
 
     async getSwaps(query, type, opts) {
         return this._requireExplorer().getSwaps(query, type, opts);
+    }
+
+    // Swap lifecycle events (cancellations), type ∈ {block, address}.
+    async getSwapCancels(query, type, opts) {
+        return this._requireExplorer().getSwapCancels(query, type, opts);
     }
 
     // Completed swap matches (type 'block'; the explorer keys matches by block).
@@ -1326,6 +1341,17 @@ class XChainSDK {
     // ExplorerClient.getStatus for the full field list.
     async getStatus() {
         return this._requireExplorer().getStatus();
+    }
+
+    // Unconfirmed mempool actions, type ∈ {address, token}.
+    async getMempool(query, type, opts) {
+        return this._requireExplorer().getMempool(query, type, opts);
+    }
+
+    // Network-wide summary (chain heights, indexer status, peer counts,
+    // recommended finality confirmations). See ExplorerClient.getNetwork.
+    async getNetwork(opts) {
+        return this._requireExplorer().getNetwork(opts);
     }
 
     async search(query, type) {
