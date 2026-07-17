@@ -193,6 +193,23 @@ function buildServer(options = {}) {
         throw new Error('mcp wallet config requires both wif and policy (fail-closed)');
     if (wallet && wallet.policy.confirmAbove)
         throw new Error('confirmAbove is not supported in the MCP policy file (no human in this loop): use hard caps instead');
+    // The confirmAbove gate above removes the human-in-the-loop approval on the stated
+    // grounds that hard caps replace it, so require that a binding amount ceiling
+    // actually exists. Without this, a policy like { allowedActions: ['SEND'] } is
+    // accepted and every amount gate in policyEvaluator (maxPerAction / perTick) is
+    // skipped, leaving an LLM-driven submit_action able to SEND unbounded amounts to
+    // any destination. Mirror policyEvaluator's own hasAmountLimit test so the gate and
+    // the evaluator agree on what counts as a cap; maxPerWindow.maxActions is a COUNT
+    // cap, not an amount ceiling, and does not satisfy this.
+    if (wallet) {
+        const pol = wallet.policy;
+        const hasAmountCap = !!pol.maxPerAction
+            || !!(pol.maxPerWindow && pol.maxPerWindow.perTick);
+        if (!hasAmountCap)
+            throw new Error('mcp wallet policy must set a binding amount ceiling '
+                + '(maxPerAction or maxPerWindow.perTick): the MCP rail has no human in the loop, '
+                + 'so a policy with no spend ceiling is refused (fail-closed)');
+    }
 
     // One AgentSession per coin, lazily created: same key, per-network address,
     // per-address window state. Policy is shared across chains.

@@ -145,12 +145,30 @@ class AgentSession extends WalletSession {
         return { count: usage.entries.length, perTick, hours: this.policy.maxPerWindow ? this.policy.maxPerWindow.hours : null };
     }
 
+    // Append one window entry and persist. Returns the pushed entry (a live reference
+    // into this._usage) so the caller can patch its txid in once the broadcast lands.
     _recordUsage(evaluation, txid) {
         const usage = this._pruned();
-        usage.entries.push({
+        const entry = {
             t: Date.now(), action: evaluation.action,
             tick: evaluation.tick, amount: evaluation.amount, txid,
-        });
+        };
+        usage.entries.push(entry);
+        this._persistUsage(usage);
+        return entry;
+    }
+
+    // Patch the real txid into an entry recorded provisionally on authorization, after
+    // the broadcast succeeds. `entry` is a live reference inside this._usage (submits
+    // are serialized on _submitTail, so nothing re-prunes it between record and patch),
+    // so mutate it in place and re-persist. No-op when there is no txid to record.
+    _patchUsageTxid(entry, txid) {
+        if (!entry || !txid) return;
+        entry.txid = txid;
+        this._persistUsage(this._usage);
+    }
+
+    _persistUsage(usage) {
         fs.mkdirSync(path.dirname(this._stateFile), { recursive: true });
         const tmp = this._stateFile + '.tmp';
         fs.writeFileSync(tmp, JSON.stringify(usage));
@@ -190,8 +208,19 @@ class AgentSession extends WalletSession {
                     { action: evaluation.action, tick: evaluation.tick, amount: evaluation.amount });
         }
 
+        // Record the window entry on AUTHORIZATION, before the irreversible broadcast,
+        // then patch in the real txid on success. Mirrors coSigner._recordBudget /
+        // windowStore ("consume the budget on authorization"): _submitInner can throw
+        // AFTER the money has moved (a CONFIRMATION_TIMEOUT on the 120s indexer wait, a
+        // P2SH phase-2 failure, a lost broadcast ACK), and if usage were recorded only
+        // afterward that throw would leave the spend on-chain with the window un-consumed
+        // and the cap silently under-counting -- exactly the case a retrying agent hits.
+        // A pre-broadcast failure (createTx/signPsbt) conservatively burns budget too;
+        // that is the deliberate fail-closed trade the co-signer already makes, and it
+        // keeps this from being the one guardrail whose ceiling stops binding on error.
+        const entry = this._recordUsage(evaluation, null);
         const result = await super._submitInner(actionData, encoderOpts, submitOpts);
-        this._recordUsage(evaluation, result && result.txid);
+        this._patchUsageTxid(entry, result && result.txid);
 
         // Surface what was evaluated so callers (MCP write tools) can report
         // remaining budget without re-deriving policy state.
