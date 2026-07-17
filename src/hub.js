@@ -140,8 +140,20 @@ class HubConnector {
             try {
                 let response = await axios.post(url, payload, { timeout: this.timeout, headers });
                 if (response.data && response.data.result) {
+                    let result = response.data.result;
+                    // The hub returns its FAILURE payload through the same JSON-RPC
+                    // `result` member ({ error: "..." }, no configs), with no
+                    // JSON-RPC error member and a 2xx status, so it is indistinguishable
+                    // from success at the HTTP layer. Treat it as a failed endpoint:
+                    // record it and continue the failover loop, rather than caching the
+                    // error object AS the config tree (which then strands
+                    // extractServiceEndpoints with an empty map and no diagnostic).
+                    if (result && typeof result === 'object' && result.error && !result.configs) {
+                        lastError = new Error('hub returned error result: ' + result.error);
+                        continue;
+                    }
                     this._lastGoodIdx = idx;
-                    this.configs = this._applyConfigResult(response.data.result);
+                    this.configs = this._applyConfigResult(result);
                     this.lastFetch = Date.now();
                     return this.configs;
                 }
