@@ -47,6 +47,10 @@ var Config = {
             'COIN2_ACTION_INDEX',
             'COOLDOWN_BLOCKS',
             'DECIMALS',
+            // DEPOSIT / GAS_ESCROW are the VOTE v0 poll-creator XCHAIN escrow
+            // amounts; without canonicalization String(0.00000001) puts "1e-8"
+            // on the wire (deep-review 2026-07-17 F11 / ).
+            'DEPOSIT',
             'DISPENSER_ACTION_INDEX',
             'EDIT',
             'ENCRYPTION_METHOD',
@@ -59,6 +63,7 @@ var Config = {
             // form the merchant supplied. The validator enforces the indexer-
             // parity rule (<= 2 decimals) on the untouched value instead.
             'GET_AMOUNT',
+            'GAS_ESCROW',
             'GAS_LIMIT',
             'GIVE_AMOUNT',
             'GIVE_ESCROW',
