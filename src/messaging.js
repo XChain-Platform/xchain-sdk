@@ -336,6 +336,35 @@ class MessagingUtils {
     }
 
     /**
+     * Encrypt raw bytes using a shared secret (from ECDH key exchange).
+     * Counterpart to sessionEncrypt for binary payloads (no utf8 conversion).
+     *
+     * @param {Buffer} plaintext - Bytes to encrypt
+     * @param {string|Buffer} sharedSecret - 32-byte shared secret (hex or Buffer)
+     * @returns {{ ciphertext: string }} - Hex-encoded ciphertext (iv + authTag + encrypted)
+     */
+    sessionEncryptBytes(plaintext, sharedSecret) {
+        if (!Buffer.isBuffer(plaintext) || plaintext.length === 0)
+            throw new SDKMessagingError('INVALID_MESSAGE', 'Plaintext Buffer is required.');
+
+        let key = this._toBuffer(sharedSecret, 'sharedSecret');
+        return this._aesEncryptBytes(plaintext, key);
+    }
+
+    /**
+     * Decrypt a session ciphertext into raw bytes (no utf8 conversion).
+     * Counterpart to sessionEncryptBytes; preserves binary plaintexts.
+     *
+     * @param {string|Buffer} ciphertext - Hex-encoded ciphertext
+     * @param {string|Buffer} sharedSecret - 32-byte shared secret (hex or Buffer)
+     * @returns {{ plaintext: Buffer }}
+     */
+    sessionDecryptBytes(ciphertext, sharedSecret) {
+        let key = this._toBuffer(sharedSecret, 'sharedSecret');
+        return this._aesDecryptBytes(ciphertext, key);
+    }
+
+    /**
      * Encrypt a message with a pre-shared AES key.
      *
      * @param {string} plaintext
@@ -360,6 +389,35 @@ class MessagingUtils {
     aesDecrypt(ciphertext, sharedKey) {
         let key = this._normalizeKey(sharedKey);
         return this._aesDecrypt(ciphertext, key);
+    }
+
+    /**
+     * Encrypt raw bytes with a pre-shared AES key.
+     * Counterpart to aesEncrypt for binary payloads (no utf8 conversion).
+     *
+     * @param {Buffer} plaintext - Bytes to encrypt
+     * @param {string|Buffer} sharedKey - 32-byte key (hex or Buffer). If shorter, will be hashed to 32 bytes.
+     * @returns {{ ciphertext: string }} - Hex-encoded ciphertext (iv + authTag + encrypted)
+     */
+    aesEncryptBytes(plaintext, sharedKey) {
+        if (!Buffer.isBuffer(plaintext) || plaintext.length === 0)
+            throw new SDKMessagingError('INVALID_MESSAGE', 'Plaintext Buffer is required.');
+
+        let key = this._normalizeKey(sharedKey);
+        return this._aesEncryptBytes(plaintext, key);
+    }
+
+    /**
+     * Decrypt an AES ciphertext into raw bytes (no utf8 conversion).
+     * Counterpart to aesEncryptBytes; preserves binary plaintexts.
+     *
+     * @param {string|Buffer} ciphertext - Hex-encoded ciphertext
+     * @param {string|Buffer} sharedKey - Same key used for encryption
+     * @returns {{ plaintext: Buffer }}
+     */
+    aesDecryptBytes(ciphertext, sharedKey) {
+        let key = this._normalizeKey(sharedKey);
+        return this._aesDecryptBytes(ciphertext, key);
     }
 
     /**
@@ -389,8 +447,9 @@ class MessagingUtils {
      * @param {string} params.wif - Sender's WIF private key
      * @param {string} params.coin - Destination coin network (BTC, LTC, DOGE)
      * @param {string} params.destination - Recipient address
-     * @param {string|Buffer} params.message - Message content. A Buffer triggers binary
-     *                                          ECIES (no utf8 conversion), used for
+     * @param {string|Buffer} params.message - Message content. A Buffer triggers the
+     *                                          binary encrypt path (no utf8 conversion)
+     *                                          for ECIES, ECDH, and AES methods; used for
      *                                          gated-content key handoffs and other
      *                                          binary payloads.
      * @param {number} [params.method=1] - Encryption method (1=ECIES, 2=ECDH, 3=AES, null=plaintext)
@@ -449,14 +508,13 @@ class MessagingUtils {
 
         } else if (method === METHOD_ECDH) {
             // ECDH: requires a pre-derived shared secret
-            if (messageIsBytes)
-                throw new SDKMessagingError('INVALID_MESSAGE',
-                    'ECDH (method=2) does not yet support binary payloads; pass a string message.');
             if (!params.sharedSecret)
                 throw new SDKMessagingError('SHARED_SECRET_REQUIRED',
                     'Shared secret is required for ECDH encryption. Use deriveSharedSecret() first.');
 
-            let result = this.sessionEncrypt(params.message, params.sharedSecret);
+            let result = messageIsBytes
+                ? this.sessionEncryptBytes(params.message, params.sharedSecret)
+                : this.sessionEncrypt(params.message, params.sharedSecret);
             // v2 has no ENCRYPTION_METHOD slot (see ECIES branch above); the ECDH
             // session is established out-of-band via v0/v1 key exchange, so the
             // method stays off the wire.
@@ -464,14 +522,13 @@ class MessagingUtils {
 
         } else if (method === METHOD_AES) {
             // AES: requires a pre-shared key
-            if (messageIsBytes)
-                throw new SDKMessagingError('INVALID_MESSAGE',
-                    'AES (method=3) does not yet support binary payloads; pass a string message.');
             if (!params.sharedKey)
                 throw new SDKMessagingError('SHARED_KEY_REQUIRED',
                     'Shared key is required for AES encryption.');
 
-            let result = this.aesEncrypt(params.message, params.sharedKey);
+            let result = messageIsBytes
+                ? this.aesEncryptBytes(params.message, params.sharedKey)
+                : this.aesEncrypt(params.message, params.sharedKey);
             // v2 has no ENCRYPTION_METHOD slot (see ECIES branch above); the AES
             // shared key is distributed out-of-band, so the method stays off the wire.
             actionParams.encryptedMessage = result.ciphertext;
@@ -595,7 +652,8 @@ class MessagingUtils {
                 if (entry.text === null) {
                     let plaintext = await this._tryEcdhDecrypt(msg, address, opts.wif, explorer, pubkeyCache);
                     if (plaintext !== null) {
-                        entry.text   = plaintext;
+                        entry.bytes  = plaintext;
+                        entry.text   = plaintext.toString('utf8');
                         entry.method = METHOD_ECDH;  // correct the stamped-as-ECIES label
                     }
                 }
@@ -619,14 +677,15 @@ class MessagingUtils {
      * (the counterparty being whichever side of the message isn't the inbox
      * `address`), resolving the counterparty's pubkey on-chain. Tries the v1
      * HKDF derivation first, then the v0 legacy SHA256 secret. Returns the
-     * plaintext, or null when the pubkey is unresolvable or no key matches.
+     * plaintext Buffer (caller derives the utf8 view), or null when the
+     * pubkey is unresolvable or no key matches.
      *
      * @param {Object} msg            raw message row (needs source/destination/encrypted_message)
      * @param {string} address        the inbox address being read
      * @param {string} wif            our private key
      * @param {Object} explorer       explorer client for pubkey lookup
      * @param {Map<string,string|null>} pubkeyCache  per-call counterparty pubkey cache
-     * @returns {Promise<string|null>}
+     * @returns {Promise<Buffer|null>}
      */
     async _tryEcdhDecrypt(msg, address, wif, explorer, pubkeyCache) {
         let counterparty = msg.source === address ? msg.destination : msg.source;
@@ -643,7 +702,7 @@ class MessagingUtils {
         for (let legacy of [false, true]) {
             try {
                 let { sharedSecret } = this.deriveSharedSecret(wif, pubkey, { legacy });
-                let { plaintext } = this.sessionDecrypt(msg.encrypted_message, sharedSecret);
+                let { plaintext } = this.sessionDecryptBytes(msg.encrypted_message, sharedSecret);
                 return plaintext;
             } catch (err) {
                 // wrong derivation version or not an ECDH message; try the next
@@ -766,7 +825,25 @@ class MessagingUtils {
         return { ciphertext: ciphertext.toString('hex') };
     }
 
+    // Binary counterpart to _aesEncrypt: same envelope, no utf8 conversion.
+    _aesEncryptBytes(plaintext, key) {
+        let iv = crypto.randomBytes(IV_LEN);
+        let cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+        let encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+        let authTag = cipher.getAuthTag();
+
+        // Pack: iv(12) + authTag(16) + encrypted
+        let ciphertext = Buffer.concat([iv, authTag, encrypted]);
+        return { ciphertext: ciphertext.toString('hex') };
+    }
+
     _aesDecrypt(ciphertext, key) {
+        let { plaintext } = this._aesDecryptBytes(ciphertext, key);
+        return { plaintext: plaintext.toString('utf8') };
+    }
+
+    // Binary counterpart to _aesDecrypt: returns the raw plaintext Buffer.
+    _aesDecryptBytes(ciphertext, key) {
         if (!ciphertext)
             throw new SDKMessagingError('INVALID_CIPHERTEXT', 'Ciphertext is required.');
 
@@ -784,7 +861,7 @@ class MessagingUtils {
         try {
             let decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
             decipher.setAuthTag(authTag);
-            let plaintext = decipher.update(encrypted) + decipher.final('utf8');
+            let plaintext = Buffer.concat([decipher.update(encrypted), decipher.final()]);
             return { plaintext };
         } catch (err) {
             throw new SDKMessagingError('DECRYPTION_FAILED', `Decryption failed: ${err.message}`);

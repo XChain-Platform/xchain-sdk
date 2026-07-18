@@ -315,6 +315,75 @@ describe('MessagingUtils @crypto @regression', function () {
     // -----------------------------------------------------------------------
     //  High-level getMessages(): decryption integration
     // -----------------------------------------------------------------------
+    describe('ECDH/AES (bytes)', function () {
+
+        it('sessionEncryptBytes/sessionDecryptBytes round-trip arbitrary binary', function () {
+            const secret = crypto.randomBytes(32);
+            const payload = crypto.randomBytes(64);
+            const { ciphertext } = msg.sessionEncryptBytes(payload, secret);
+            const { plaintext } = msg.sessionDecryptBytes(ciphertext, secret);
+            expect(Buffer.isBuffer(plaintext)).to.equal(true);
+            expect(plaintext.equals(payload)).to.equal(true);
+        });
+
+        it('sessionEncryptBytes preserves non-utf8 bytes that string mode would corrupt', function () {
+            const secret = crypto.randomBytes(32);
+            const payload = Buffer.from([0xff, 0xfe, 0x00, 0x80, 0xc3, 0x28]);
+            const { ciphertext } = msg.sessionEncryptBytes(payload, secret);
+            expect(msg.sessionDecryptBytes(ciphertext, secret).plaintext.equals(payload)).to.equal(true);
+        });
+
+        it('sessionDecryptBytes output is utf8-compatible with sessionDecrypt for text payloads', function () {
+            const secret = crypto.randomBytes(32);
+            const { ciphertext } = msg.sessionEncryptBytes(Buffer.from('hello bytes', 'utf8'), secret);
+            expect(msg.sessionDecrypt(ciphertext, secret).plaintext).to.equal('hello bytes');
+        });
+
+        it('sessionEncryptBytes rejects strings and empty Buffers', function () {
+            const secret = crypto.randomBytes(32);
+            expectCode(() => msg.sessionEncryptBytes('a string', secret), 'INVALID_MESSAGE');
+            expectCode(() => msg.sessionEncryptBytes(Buffer.alloc(0), secret), 'INVALID_MESSAGE');
+        });
+
+        it('sessionDecryptBytes fails cleanly on wrong secret', function () {
+            const { ciphertext } = msg.sessionEncryptBytes(crypto.randomBytes(16), crypto.randomBytes(32));
+            expectCode(() => msg.sessionDecryptBytes(ciphertext, crypto.randomBytes(32)), 'DECRYPTION_FAILED');
+        });
+
+        it('aesEncryptBytes/aesDecryptBytes round-trip arbitrary binary', function () {
+            const key = crypto.randomBytes(32);
+            const payload = crypto.randomBytes(48);
+            const { ciphertext } = msg.aesEncryptBytes(payload, key);
+            const { plaintext } = msg.aesDecryptBytes(ciphertext, key);
+            expect(Buffer.isBuffer(plaintext)).to.equal(true);
+            expect(plaintext.equals(payload)).to.equal(true);
+        });
+
+        it('aesEncryptBytes hashes short keys to 32 bytes like aesEncrypt', function () {
+            const payload = crypto.randomBytes(20);
+            const { ciphertext } = msg.aesEncryptBytes(payload, 'password');
+            expect(msg.aesDecryptBytes(ciphertext, 'password').plaintext.equals(payload)).to.equal(true);
+        });
+
+        it('aesEncryptBytes rejects strings and empty Buffers', function () {
+            const key = crypto.randomBytes(32);
+            expectCode(() => msg.aesEncryptBytes('a string', key), 'INVALID_MESSAGE');
+            expectCode(() => msg.aesEncryptBytes(Buffer.alloc(0), key), 'INVALID_MESSAGE');
+        });
+
+        it('aesDecryptBytes fails cleanly on wrong key', function () {
+            const key = crypto.randomBytes(32);
+            const { ciphertext } = msg.aesEncryptBytes(crypto.randomBytes(16), key);
+            expectCode(() => msg.aesDecryptBytes(ciphertext, crypto.randomBytes(32)), 'DECRYPTION_FAILED');
+        });
+
+        it('aesDecrypt (string mode) still decrypts aesEncryptBytes text payloads', function () {
+            const key = crypto.randomBytes(32);
+            const { ciphertext } = msg.aesEncryptBytes(Buffer.from('text via bytes', 'utf8'), key);
+            expect(msg.aesDecrypt(ciphertext, key).plaintext).to.equal('text via bytes');
+        });
+    });
+
     describe('getMessages()', function () {
 
         function explorerReturning(rows, captured) {
@@ -664,15 +733,48 @@ describe('MessagingUtils @crypto @regression', function () {
                 .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('INVALID_MESSAGE'));
         });
 
-        it('throws INVALID_MESSAGE for binary payload with ECDH method', async function () {
-            const fakeSdk = {};
-            await msg.send({ wif: 'wif', coin: 'BTC', destination: 'addr', message: Buffer.from('x'), encoder: {}, method: 2, sharedSecret: 'aabb' }, fakeSdk)
-                .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('INVALID_MESSAGE'));
+        it('encrypts a binary payload with ECDH method (round-trips via sessionDecryptBytes)', async function () {
+            const crypto = require('crypto');
+            const secret = crypto.randomBytes(32).toString('hex');
+            const payload = crypto.randomBytes(33);
+            let sentParams = null;
+            const fakeSdk = {
+                createAction: async (data) => { sentParams = data.params; return { psbt: 'p', actionString: 'XC|MSG' }; },
+                wallet: {
+                    signPsbt:    () => ({ txHex: 'txhex', txid: 'txecdhbin' }),
+                    broadcastTx: async () => ({})
+                },
+                _requireEncoder: () => ({}),
+            };
+            const result = await msg.send(
+                { wif: 'wif', coin: 'BTC', destination: 'addr', message: payload, encoder: {}, method: 2, sharedSecret: secret },
+                fakeSdk
+            );
+            expect(result.txid).to.equal('txecdhbin');
+            const { plaintext } = msg.sessionDecryptBytes(sentParams.encryptedMessage, secret);
+            expect(plaintext.equals(payload)).to.equal(true);
         });
 
-        it('throws INVALID_MESSAGE for binary payload with AES method', async function () {
-            await msg.send({ wif: 'wif', coin: 'BTC', destination: 'addr', message: Buffer.from('x'), encoder: {}, method: 3, sharedKey: 'aabb' }, {})
-                .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('INVALID_MESSAGE'));
+        it('encrypts a binary payload with AES method (round-trips via aesDecryptBytes)', async function () {
+            const crypto = require('crypto');
+            const key = crypto.randomBytes(32).toString('hex');
+            const payload = Buffer.concat([Buffer.from([0x01, 0x00, 0xff]), crypto.randomBytes(30)]);
+            let sentParams = null;
+            const fakeSdk = {
+                createAction: async (data) => { sentParams = data.params; return { psbt: 'p', actionString: 'XC|MSG' }; },
+                wallet: {
+                    signPsbt:    () => ({ txHex: 'txhex', txid: 'txaesbin' }),
+                    broadcastTx: async () => ({})
+                },
+                _requireEncoder: () => ({}),
+            };
+            const result = await msg.send(
+                { wif: 'wif', coin: 'BTC', destination: 'addr', message: payload, encoder: {}, method: 3, sharedKey: key },
+                fakeSdk
+            );
+            expect(result.txid).to.equal('txaesbin');
+            const { plaintext } = msg.aesDecryptBytes(sentParams.encryptedMessage, key);
+            expect(plaintext.equals(payload)).to.equal(true);
         });
 
         it('throws SHARED_SECRET_REQUIRED for ECDH without sharedSecret', async function () {
