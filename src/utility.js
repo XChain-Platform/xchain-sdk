@@ -280,12 +280,6 @@ class Utility {
         this.addresses[address] = list;
     }
 
-    getDefaultExpiration(block_time){
-        let now = block_time;
-        let sec = this.bcmul(this.config['EXPIRATION_FEE_DEFAULT_DAYS'], 86400, 0);
-        return this.bcadd(now, sec, 0);
-    }
-
     setNumberFormats(data){
         for(let name of this.config['NUMBER_FIELDS']){
             let value = data[name];
