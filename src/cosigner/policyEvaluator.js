@@ -55,18 +55,28 @@ const GAS_TICK = 'XCHAIN';
 // generic amount/AMOUNT + tick/TICK pair. The cap must bind to what the signer
 // GIVES AWAY, so the two-leg trade actions use the GIVE leg. Without this the
 // amount pick returns undefined and every amount cap is silently skipped, leaving
-// DEPOSIT / WITHDRAW / ORDER / SWAP / DISPENSER uncapped. (SEND / DESTROY / STAKE /
-// MINT etc. carry AMOUNT and need no entry.)
+// DEPOSIT / WITHDRAW / ORDER / SWAP / DISPENSER / VOTE uncapped. (SEND / DESTROY /
+// STAKE / MINT etc. carry AMOUNT and need no entry.)
 const ACTION_VALUE_FIELDS = {
     DEPOSIT:   { amount: ['quantity', 'QUANTITY'],      tick: TICK_KEYS },
     WITHDRAW:  { amount: ['quantity', 'QUANTITY'],      tick: TICK_KEYS },
     ORDER:     { amount: ['giveAmount', 'GIVE_AMOUNT'], tick: ['giveTick', 'GIVE_TICK'] },
     SWAP:      { amount: ['giveAmount', 'GIVE_AMOUNT'], tick: ['giveTick', 'GIVE_TICK'] },
-    DISPENSER: { amount: ['giveAmount', 'GIVE_AMOUNT'], tick: ['giveTick', 'GIVE_TICK'] },
+    // The signer's fund exposure at creation is GIVE_ESCROW (the balance debited into the
+    // dispenser, indexer dispenser.js), NOT GIVE_AMOUNT (the per-trigger dispense quantity paid
+    // out of that escrow later). Binding the cap to GIVE_AMOUNT left every DISPENSER escrow
+    // uncapped; ownership dispensers carry no GIVE_ESCROW, so their cap correctly no-ops.
+    DISPENSER: { amount: ['giveEscrow', 'GIVE_ESCROW'], tick: ['giveTick', 'GIVE_TICK'] },
     // Capability STAKE (v1/v2) stakes the gas token with no TICK field; default the
     // tick so gas-scoped caps bind. Contract-targeted STAKE v3 carries TICK, which
     // pick() prefers over the default.
     STAKE:     { amount: AMOUNT_KEYS, tick: TICK_KEYS, tickDefault: GAS_TICK },
+    // VOTE v0 carries no AMOUNT field but DOES move funds: it escrows DEPOSIT + GAS_ESCROW
+    // TOGETHER, both denominated in the gas tick (VOTE.md). With no entry the generic pick
+    // returned undefined and every VOTE amount cap (per-action, per-window, confirmAbove) was
+    // silently skipped. Sum both escrowed legs and default the tick to the gas token (like
+    // STAKE) so a { maxPerAction: { VOTE } } policy actually binds.
+    VOTE:      { amountSum: [['deposit', 'DEPOSIT'], ['gasEscrow', 'GAS_ESCROW']], tick: TICK_KEYS, tickDefault: GAS_TICK },
 };
 
 // Actions whose value outflow the evaluator cannot bound from the action params
@@ -90,8 +100,22 @@ function resolveValue(action, params) {
     const spec = ACTION_VALUE_FIELDS[action];
     if (spec) {
         const tick = pick(params, spec.tick);
+        let amount;
+        if (spec.amountSum) {
+            // Several escrowed legs bound as one total (e.g. VOTE escrows DEPOSIT + GAS_ESCROW
+            // together). A missing leg counts as 0, but amount stays undefined only when EVERY
+            // leg is absent, so a single present leg still binds the cap.
+            let any = false, total = '0';
+            for (const keys of spec.amountSum) {
+                const v = pick(params, keys);
+                if (v !== undefined) { any = true; total = addDecimal(total, v); }
+            }
+            amount = any ? total : undefined;
+        } else {
+            amount = pick(params, spec.amount);
+        }
         return {
-            amount: pick(params, spec.amount),
+            amount,
             tick:   tick !== undefined ? tick : spec.tickDefault,
         };
     }

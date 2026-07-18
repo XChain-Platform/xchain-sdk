@@ -172,10 +172,31 @@ describe('policyEvaluator.evaluatePolicy', function () {
             expect(evaluatePolicy(policy, { action: 'DEPOSIT', params: { TICK: 'FOO', QUANTITY: '50' } }).ok).to.equal(true);
         });
 
-        it('caps ORDER/DISPENSER on the GIVE leg too', function () {
+        it('caps ORDER on GIVE_AMOUNT and DISPENSER on GIVE_ESCROW (its debited leg)', function () {
             const policy = { allowedActions: new Set(['ORDER', 'DISPENSER']), maxPerAction: { '*': {} , ORDER: { '*': '10' }, DISPENSER: { '*': '10' } } };
+            // ORDER escrows GIVE_AMOUNT.
             expect(evaluatePolicy(policy, { action: 'ORDER', params: { GIVE_TICK: 'FOO', GIVE_AMOUNT: '11' } }).ok).to.equal(false);
-            expect(evaluatePolicy(policy, { action: 'DISPENSER', params: { GIVE_TICK: 'FOO', GIVE_AMOUNT: '11' } }).ok).to.equal(false);
+            // DISPENSER's fund exposure at creation is GIVE_ESCROW (the balance debited into the
+            // dispenser), NOT GIVE_AMOUNT (the per-trigger payout from that escrow).
+            expect(evaluatePolicy(policy, { action: 'DISPENSER', params: { GIVE_TICK: 'FOO', GIVE_ESCROW: '11' } }).ok).to.equal(false);
+            expect(evaluatePolicy(policy, { action: 'DISPENSER', params: { GIVE_TICK: 'FOO', GIVE_ESCROW: '5' } }).ok).to.equal(true);
+            // A large GIVE_AMOUNT with NO escrow moves no funds at signing, so it must not be
+            // treated as the capped exposure (the pre-fix binding wrongly capped this figure).
+            expect(evaluatePolicy(policy, { action: 'DISPENSER', params: { GIVE_TICK: 'FOO', GIVE_AMOUNT: '1000000' } }).ok).to.equal(true);
+        });
+
+        // VOTE v0 carries no AMOUNT field but escrows DEPOSIT + GAS_ESCROW together, both in the
+        // gas tick; the cap must bind to their SUM with the tick defaulted to the gas token.
+        it('caps VOTE on DEPOSIT + GAS_ESCROW summed (gas-tick default)', function () {
+            const policy = { allowedActions: new Set(['VOTE']), maxPerAction: { VOTE: { [GAS_TICK]: '100' } } };
+            // 60 + 50 = 110 > 100 -> denied on the SUM (neither leg alone exceeds the cap).
+            const over = evaluatePolicy(policy, { action: 'VOTE', params: { DEPOSIT: '60', GAS_ESCROW: '50' } });
+            expect(over.ok).to.equal(false);
+            expect(over.violation.code).to.equal('POLICY_AMOUNT_EXCEEDED');
+            // 60 + 30 = 90 <= 100 -> allowed.
+            expect(evaluatePolicy(policy, { action: 'VOTE', params: { DEPOSIT: '60', GAS_ESCROW: '30' } }).ok).to.equal(true);
+            // A single present leg still binds (DEPOSIT only, no GAS_ESCROW): 150 > 100 -> denied.
+            expect(evaluatePolicy(policy, { action: 'VOTE', params: { DEPOSIT: '150' } }).ok).to.equal(false);
         });
 
         // Capability STAKE (v1/v2) debits the gas token but carries no TICK field;
