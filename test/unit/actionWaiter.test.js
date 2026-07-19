@@ -98,9 +98,11 @@ describe('ActionWaiter.waitForTxid WebSocket actionIndex filtering', function ()
 
     const TXID = 'bb'.repeat(32);
 
-    // Fake SDK with an event-emitting WS and an explorer whose poll never resolves
-    // (returns null), so the WS path is the only thing that can settle the wait.
-    function makeWsWaiter() {
+    // Fake SDK with an event-emitting WS. `txResult` is what the explorer poll
+    // returns (default null = poll never resolves). For a TARGETED wait the WS path
+    // settles directly, so the poll result is irrelevant; for an UNTARGETED wait the
+    // WS event triggers an authoritative poll, so the tx must be supplied there.
+    function makeWsWaiter(txResult = null) {
         const listeners = {};
         const ws = {
             isConnected: () => true,
@@ -108,7 +110,7 @@ describe('ActionWaiter.waitForTxid WebSocket actionIndex filtering', function ()
             off: (evt, fn) => { listeners[evt] = (listeners[evt] || []).filter(f => f !== fn); },
             emit:(evt, msg) => { (listeners[evt] || []).slice().forEach(fn => fn(msg)); },
         };
-        const sdk = { ws, _requireExplorer: () => ({ getTransaction: async () => null }) };
+        const sdk = { ws, _requireExplorer: () => ({ getTransaction: async () => txResult }) };
         return { waiter: new ActionWaiter(sdk), ws };
     }
 
@@ -131,11 +133,53 @@ describe('ActionWaiter.waitForTxid WebSocket actionIndex filtering', function ()
         assert.strictEqual(result.action_index, '2');
     });
 
-    it('without actionIndex, settles on the first matching tx_hash event (unchanged)', async function () {
-        const { waiter, ws } = makeWsWaiter();
+    it('without actionIndex, a WS event triggers an authoritative poll of the whole tx', async function () {
+        // Untargeted wait: the WS event is only a "tx is indexed" signal. The result
+        // reflects the FULL transaction read back through the explorer (all actions),
+        // not the single action the event carried.
+        const { waiter, ws } = makeWsWaiter({
+            tx_hash: TXID,
+            actions: [{ action: 'SEND', action_index: 0, status: 'valid' }],
+        });
         const p = waiter.waitForTxid(TXID, { timeout: 2000, pollInterval: 50 });
         ws.emit('NEW_ACTION', { data: { tx_hash: TXID, action_index: 0, status: 'valid' } });
         const result = await p;
         assert.strictEqual(result.status, 'valid');
+        assert.strictEqual(result.tx_hash, TXID);
+    });
+
+    it('without actionIndex, a valid sub-action WS event does NOT mask a sibling invalid action', async function () {
+        // The core multi-action fix: in a BATCH the WS emits one event per sub-action.
+        // A valid sub-action arriving first must NOT settle the wait as success while a
+        // sibling in the same tx is invalid. The WS event instead triggers a poll that
+        // sees the full action set and rejects, matching the poll path exactly.
+        const { waiter, ws } = makeWsWaiter({
+            tx_hash: TXID,
+            actions: [
+                { action: 'SEND', action_index: 0, status: 'valid' },
+                { action: 'MINT', action_index: 1, status: 'invalid: over max supply (AMOUNT)' },
+            ],
+        });
+        const p = waiter.waitForTxid(TXID, { timeout: 2000, pollInterval: 50 });
+        // The valid sub-action event arrives first. Pre-fix this settled success and
+        // masked the sibling rejection.
+        ws.emit('NEW_ACTION', { data: { tx_hash: TXID, action_index: 0, status: 'valid' } });
+        await assert.rejects(() => p, /ACTION_REJECTED|invalid/);
+    });
+
+    it('without actionIndex + requireValid:false, surfaces the whole-tx status, not the single event', async function () {
+        // requireValid off (delivery waiters): must still report the normalized
+        // whole-tx status from the poll, not the lone valid event's status.
+        const { waiter, ws } = makeWsWaiter({
+            tx_hash: TXID,
+            actions: [
+                { action: 'SEND', action_index: 0, status: 'valid' },
+                { action: 'EXECUTE', action_index: 1, status: 'reverted' },
+            ],
+        });
+        const p = waiter.waitForTxid(TXID, { timeout: 2000, pollInterval: 50, requireValid: false });
+        ws.emit('NEW_ACTION', { data: { tx_hash: TXID, action_index: 0, status: 'valid' } });
+        const result = await p;
+        assert.strictEqual(result.status, 'reverted');
     });
 });

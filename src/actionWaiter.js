@@ -66,38 +66,9 @@ class ActionWaiter {
                     { txid, timeout }));
             }, timeout);
 
-            // Try WebSocket fast path (if connected)
-            if (this.sdk.ws && this.sdk.ws.isConnected()) {
-                let handler = (msg) => {
-                    if (msg && msg.data && msg.data.tx_hash === txid) {
-                        // Honor opts.actionIndex on the WS path too (the poll path
-                        // already narrows to it). A multi-action tx emits one
-                        // NEW_ACTION per action; without this filter a neighboring
-                        // action's event would settle the wait with the WRONG
-                        // action's status, defeating the actionIndex guard and
-                        // possibly masking the target action's rejection as success.
-                        // A non-matching (or action_index-less) event is ignored; the
-                        // target action's event, or the poll fallback, settles.
-                        if (opts.actionIndex !== undefined &&
-                            Number(msg.data.action_index) !== Number(opts.actionIndex)) {
-                            return;
-                        }
-                        // Indexer status strings are prefixed, e.g. "invalid: insufficient funds (FEE)".
-                        let invalid = typeof msg.data.status === 'string' && /^invalid/i.test(msg.data.status);
-                        if (requireValid && invalid) {
-                            settle(new SDKActionError('ACTION_REJECTED',
-                                'Action was indexed but marked invalid: ' + msg.data.status,
-                                { txid, action: msg.data, reason: msg.data.status }));
-                        } else {
-                            settle(null, msg.data);
-                        }
-                    }
-                };
-                this.sdk.ws.on('NEW_ACTION', handler);
-                unsub = () => this.sdk.ws.off('NEW_ACTION', handler);
-            }
-
-            // Polling fallback (runs simultaneously with WebSocket)
+            // Polling fallback (runs simultaneously with WebSocket). Defined before
+            // the WS handler because the untargeted (whole-tx) WS path delegates to
+            // it: see the handler comment below.
             let poll = async () => {
                 if (settled) return;
                 try {
@@ -140,6 +111,49 @@ class ActionWaiter {
                     // 404 or network error; keep polling
                 }
             };
+
+            // Try WebSocket fast path (if connected). A live WS emits one NEW_ACTION
+            // per action in the tx.
+            if (this.sdk.ws && this.sdk.ws.isConnected()) {
+                let handler = (msg) => {
+                    if (!(msg && msg.data && msg.data.tx_hash === txid)) return;
+
+                    if (opts.actionIndex !== undefined) {
+                        // Targeted wait: this event must be the requested action. A
+                        // multi-action tx emits one NEW_ACTION per action; without
+                        // this filter a neighboring action's event would settle the
+                        // wait with the WRONG action's status, masking the target
+                        // action's rejection as success. A non-matching event is
+                        // ignored; the target action's event, or the poll fallback,
+                        // settles.
+                        if (Number(msg.data.action_index) !== Number(opts.actionIndex)) return;
+                        // Indexer status strings are prefixed, e.g. "invalid: insufficient funds (FEE)".
+                        let invalid = typeof msg.data.status === 'string' && /^invalid/i.test(msg.data.status);
+                        if (requireValid && invalid) {
+                            settle(new SDKActionError('ACTION_REJECTED',
+                                'Action was indexed but marked invalid: ' + msg.data.status,
+                                { txid, action: msg.data, reason: msg.data.status }));
+                        } else {
+                            settle(null, msg.data);
+                        }
+                        return;
+                    }
+
+                    // Untargeted (whole-tx) wait: a single NEW_ACTION event cannot
+                    // prove the WHOLE tx succeeded, because a multi-action tx (BATCH,
+                    // or any tx the lifecycle manager submits and waits on without an
+                    // actionIndex) emits one event per action and a sibling action may
+                    // be invalid. Settling success from one valid event here would
+                    // mask a sibling's rejection - the poll path, which evaluates the
+                    // FULL action set, would have rejected. So use the event only as a
+                    // signal that the tx is indexed and trigger an immediate
+                    // authoritative poll; poll() is idempotent (guards on `settled`),
+                    // so firing it once per sub-action event is safe.
+                    poll();
+                };
+                this.sdk.ws.on('NEW_ACTION', handler);
+                unsub = () => this.sdk.ws.off('NEW_ACTION', handler);
+            }
 
             // Start polling after a short initial delay (give WebSocket a chance first)
             setTimeout(() => {
