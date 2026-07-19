@@ -122,7 +122,7 @@ class Utility {
     }
 
     isInteger(value){
-        return value === +value && value === (value|0);
+        return Number.isInteger(+value);
     }
 
     isNull(value){
@@ -186,6 +186,8 @@ class Utility {
         let a = (!this.isNull(numA)) ? numA : 0;
         let b = (!this.isNull(numB)) ? numB : 0;
         let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
+        if(String(b) === '0' || b === 0)
+            return mathjs.format(mathjs.bignumber(0),{notation: 'fixed', precision: d});
         return mathjs.format(mathjs.divide(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d});
     }
 

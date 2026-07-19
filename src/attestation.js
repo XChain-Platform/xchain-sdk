@@ -48,9 +48,10 @@
 // (max_completion_tokens, default 1024). Asking for MORE than the governance
 // ceiling is silently clamped down to it: no error, no wire signal. So a value
 // above the ceiling is a no-op, and a value below it is a real reduction. The
-// SDK deliberately does not validate it against a number, because the ceiling is
-// governance config the SDK cannot see; treat it as "cap my spend at N", not as
-// "give me N tokens of output".
+// SDK validates that maxTokens is a positive integer and that temperature is
+// a finite number, but deliberately does not enforce any upper ceiling on
+// maxTokens, because the ceiling is governance config the SDK cannot see;
+// treat it as "cap my spend at N", not as "give me N tokens of output".
 const LLM_MAX_REQUEST_BYTES = 8192;
 // Must track the hub's published prompt_envelope_version (1 today). Any
 // opts.envelopeVersion above this ceiling is rejected before the envelope
@@ -75,11 +76,25 @@ function buildLlmEnvelope(opts){
             throw new Error('AttestationHelpers.llm: opts.envelopeVersion must be a positive integer <= ' + LLM_MAX_ENVELOPE_VERSION);
         }
     }
+    let maxTokens;
+    if (opts.maxTokens !== undefined){
+        maxTokens = Number(opts.maxTokens);
+        if (!Number.isInteger(maxTokens) || maxTokens <= 0){
+            throw new Error('AttestationHelpers.llm: opts.maxTokens must be a positive integer');
+        }
+    }
+    let temperature;
+    if (opts.temperature !== undefined){
+        temperature = Number(opts.temperature);
+        if (!Number.isFinite(temperature)){
+            throw new Error('AttestationHelpers.llm: opts.temperature must be a finite number');
+        }
+    }
     let env = { prompt: opts.prompt };
     if (opts.system           !== undefined) env.system           = String(opts.system);
-    if (opts.maxTokens        !== undefined) env.max_tokens       = Number(opts.maxTokens);
+    if (opts.maxTokens        !== undefined) env.max_tokens       = maxTokens;
     if (opts.format           !== undefined) env.format           = String(opts.format);
-    if (opts.temperature      !== undefined) env.temperature      = Number(opts.temperature);
+    if (opts.temperature      !== undefined) env.temperature      = temperature;
     if (opts.envelopeVersion  !== undefined) env.envelope_version = envelopeVersion;
     if (opts.fallback         !== undefined) env.fallback         = String(opts.fallback);
     let json = JSON.stringify(env);
@@ -101,6 +116,15 @@ function buildHttpGetPayload(opts){
     if (!/^https:\/\//i.test(url)){
         throw new Error('AttestationHelpers.httpGet: only https:// URLs are allowed');
     }
+    let parsed;
+    try {
+        parsed = new URL(url);
+    } catch (_err){
+        throw new Error('AttestationHelpers.httpGet: URL is not a valid https:// URL');
+    }
+    if (!parsed.host){
+        throw new Error('AttestationHelpers.httpGet: URL is not a valid https:// URL');
+    }
     if (Buffer.byteLength(url, 'utf8') > 2048){
         throw new Error('AttestationHelpers.httpGet: URL exceeds 2048-byte http_get max_request_bytes');
     }
@@ -111,10 +135,14 @@ function buildHttpGetPayload(opts){
 // (`{ redundancy, deadlineBlocks, feeTick, feeAmount }`). Kept here so the
 // helper layer is the single place defaults can change.
 //
-// feeTick/feeAmount (E1 paid attestations) travel as STRINGS; amounts are
-// arbitrary-precision decimals, never floats. v1 consensus accepts only
-// feeTick == 'XCHAIN'; the fields exist on the wire so multi-tick support
-// is a post-launch rule loosening, not a format change.
+// feeTick/feeAmount (E1 paid attestations) travel as STRINGS; feeAmount is a
+// non-negative decimal string with at most 8 decimal places (a practical
+// ceiling; the chain's true cap is min(8, gasDecimals)), never a float, and
+// feeTick is required when feeAmount is greater than 0. v1 consensus accepts
+// only feeTick == 'XCHAIN'; the fields exist on the wire so multi-tick support
+// is a post-launch rule loosening, not a format change. Validation of these
+// constraints happens downstream in the VM gateway; this helper intentionally
+// passes them through unchanged.
 //
 // Note: per-provider `max_response_bytes` is governance state on the
 // provider registry, not a per-request override. The VM gateway ignores

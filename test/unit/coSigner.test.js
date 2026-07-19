@@ -13,6 +13,11 @@ const fs      = require('fs');
 const os      = require('os');
 const path    = require('path');
 const crypto  = require('crypto');
+// Must load before bitcoinjs-lib is used to build a PSBT with BigInt output
+// values (large-satoshi / DOGE fixtures below): teaches bip174/bitcoinjs to
+// accept number|bigint, matching what applyBufferutilsPatch does process-wide
+// when the SDK's wallet.js is required in production.
+require('../../src/applyBufferutilsPatch.js');
 const bitcoin = require('bitcoinjs-lib');
 const { secp256k1, schnorr } = require('@noble/curves/secp256k1');
 const MuSig2     = require('../../src/musig2.js');
@@ -261,6 +266,132 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
         expect(res.approved).to.equal(false);
         expect(res.reason).to.equal('OUTPUT_OVER_CAP');
+    });
+
+    // Fund-key-safety fix: allowedOutputs.maxValue is the operator's bound on the
+    // SUM paid to one authorized destination, not a per-output limit. Without
+    // accumulation, N outputs to the same allow-listed script each pass the cap
+    // independently, letting a colluding agent move N x maxValue out of the
+    // account behind an otherwise in-policy action.
+    function buildMultiOutputPsbt(acct, outs) {
+        const prevHash = crypto.randomBytes(32);
+        const txid = Buffer.from(prevHash).reverse().toString('hex');
+        const inner = bitcoin.script.compile([Buffer.from('SEND|0|TOK|1|1destX|m', 'utf8')]);
+        const cipher = crypto.createCipheriv('aes-128-ctr', txid.substr(0, 16), txid.substr(16, 16));
+        const obf = Buffer.concat([cipher.update(Buffer.concat([Buffer.from('XCHN'), inner])), cipher.final()]);
+        const psbt = new bitcoin.Psbt();
+        const totalOut = outs.reduce((s, o) => s + o.value, 0);
+        psbt.addInput({ hash: prevHash, index: 0, witnessUtxo: { script: acct.p2trScript, value: totalOut + 50000 } });
+        psbt.addOutput({ script: bitcoin.payments.embed({ data: [obf] }).output, value: 0 });
+        psbt.addOutput({ script: acct.p2trScript, value: 50000 });   // change to self
+        for (const o of outs) psbt.addOutput({ script: o.script, value: o.value });
+        return psbt;
+    }
+
+    it('denies N outputs to the SAME allow-listed entry that each stay under maxValue but sum over it', function () {
+        const acct = makeAccount();
+        const fee = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(secp256k1.getPublicKey(crypto.randomBytes(32), true)) }).output;
+        // Two outputs at 3000 each, both under the 5000 cap individually, but
+        // 3000 + 3000 = 6000 > 5000 in aggregate.
+        const psbt = buildMultiOutputPsbt(acct, [{ script: fee, value: 3000 }, { script: fee, value: 3000 }]);
+        const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
+            policy: policy(), allowedOutputs: [{ script: fee, maxValue: 5000 }] });
+        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        expect(res.approved).to.equal(false);
+        expect(res.reason).to.equal('OUTPUT_OVER_CAP');
+    });
+
+    it('still allows a single legitimate authorized output at or under the cap (no regression)', function () {
+        const acct = makeAccount();
+        const fee = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(secp256k1.getPublicKey(crypto.randomBytes(32), true)) }).output;
+        const psbt = buildMultiOutputPsbt(acct, [{ script: fee, value: 5000 }]);
+        const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
+            policy: policy(), allowedOutputs: [{ script: fee, maxValue: 5000 }] });
+        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        expect(res.approved).to.equal(true);
+    });
+
+    it('allows multiple outputs to the same entry when their sum stays within the cap', function () {
+        const acct = makeAccount();
+        const fee = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(secp256k1.getPublicKey(crypto.randomBytes(32), true)) }).output;
+        const psbt = buildMultiOutputPsbt(acct, [{ script: fee, value: 2000 }, { script: fee, value: 2000 }]);
+        const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
+            policy: policy(), allowedOutputs: [{ script: fee, maxValue: 5000 }] });
+        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        expect(res.approved).to.equal(true);
+    });
+
+    it('keeps independent budgets per allow-list entry even if two entries somehow share a script', function () {
+        const acct = makeAccount();
+        const fee = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(secp256k1.getPublicKey(crypto.randomBytes(32), true)) }).output;
+        // Two allow-list entries pointing at the same script, each with maxValue
+        // 3000. A single output of 3000 must still match only ONE entry's budget
+        // (the first found), not be treated as satisfying both independently in a
+        // way that would let a second output of 3000 slip through unaccumulated.
+        const psbt = buildMultiOutputPsbt(acct, [{ script: fee, value: 3000 }, { script: fee, value: 3000 }]);
+        const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
+            policy: policy(), allowedOutputs: [{ script: fee, maxValue: 3000 }] });
+        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        expect(res.approved).to.equal(false);
+        expect(res.reason).to.equal('OUTPUT_OVER_CAP');
+    });
+
+    // Fund-key-safety fix: _checkFee must accept BigInt witnessUtxo/output values
+    // (the SDK's own applyBufferutilsPatch narrowU64 legitimately produces them
+    // above 2^53-1 sats, e.g. large DOGE UTXOs) and do exact BigInt arithmetic,
+    // not deny with CANNOT_CHECK_FEE.
+    it('accepts BigInt witnessUtxo values in the fee gate and reconciles the fee exactly', function () {
+        const acct = makeAccount();
+        const prevHash = crypto.randomBytes(32);
+        const txid = Buffer.from(prevHash).reverse().toString('hex');
+        const inner = bitcoin.script.compile([Buffer.from('SEND|0|TOK|1|1destX|m', 'utf8')]);
+        const cipher = crypto.createCipheriv('aes-128-ctr', txid.substr(0, 16), txid.substr(16, 16));
+        const obf = Buffer.concat([cipher.update(Buffer.concat([Buffer.from('XCHN'), inner])), cipher.final()]);
+        const big = 10_000_000_000_000_000n; // above 2^53-1
+        const psbt = new bitcoin.Psbt();
+        psbt.addInput({ hash: prevHash, index: 0, witnessUtxo: { script: acct.p2trScript, value: big } });
+        psbt.addOutput({ script: bitcoin.payments.embed({ data: [obf] }).output, value: 0 });
+        psbt.addOutput({ script: acct.p2trScript, value: big - 10000n });   // BigInt change too
+        const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
+        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        expect(res.approved).to.equal(true);
+    });
+
+    it('denies a BigInt-valued fee that exceeds maxFeeSats, computed exactly (no Number rounding)', function () {
+        const acct = makeAccount();
+        const prevHash = crypto.randomBytes(32);
+        const txid = Buffer.from(prevHash).reverse().toString('hex');
+        const inner = bitcoin.script.compile([Buffer.from('SEND|0|TOK|1|1destX|m', 'utf8')]);
+        const cipher = crypto.createCipheriv('aes-128-ctr', txid.substr(0, 16), txid.substr(16, 16));
+        const obf = Buffer.concat([cipher.update(Buffer.concat([Buffer.from('XCHN'), inner])), cipher.final()]);
+        const big = 10_000_000_000_000_000n;
+        const psbt = new bitcoin.Psbt();
+        psbt.addInput({ hash: prevHash, index: 0, witnessUtxo: { script: acct.p2trScript, value: big } });
+        psbt.addOutput({ script: bitcoin.payments.embed({ data: [obf] }).output, value: 0 });
+        psbt.addOutput({ script: acct.p2trScript, value: big - 1_000_000n });   // fee = 1,000,000 sats
+        const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
+            policy: policy(), maxFeeSats: 10000 });
+        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        expect(res.approved).to.equal(false);
+        expect(res.reason).to.equal('FEE_EXCEEDS_CAP');
+    });
+
+    it('still denies a fee exceeding a Number-typed maxFeeSats cap (no regression)', function () {
+        const acct = makeAccount();
+        const psbt = buildSignablePsbt(acct, 'SEND|0|TOK|1|1destX|m');
+        // buildSignablePsbt: input 100000, change 90000 -> fee 10000
+        const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
+            policy: policy(), maxFeeSats: 100 });
+        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        expect(res.approved).to.equal(false);
+        expect(res.reason).to.equal('FEE_EXCEEDS_CAP');
     });
 
     // Anti-drain (burn variant): the OP_RETURN action carrier is exempt from the

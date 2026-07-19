@@ -63,7 +63,10 @@ class MuSig2AgentSession extends AgentSession {
      *   coSigner (or these flat on opts):
      *     transport   {function}  body -> Promise<result> (inProcessTransport / httpTransport)
      *     publicKeys  {(hex|bytes)[]}  the [agent, daemon] key-path set INCLUDING this agent's key
-     *     network     {object}     bitcoinjs network for the aggregate address (optional)
+     *     network     {object}     bitcoinjs network for the aggregate address. Optional
+     *                 only if the SDK itself was constructed with a network (falls back
+     *                 to sdk.wallet.getBitcoinNetwork()); otherwise required. Never
+     *                 silently defaults to Bitcoin mainnet - throws COSIGNER_CONFIG.
      *     recovery    {hex|bytes}  optional operator-recovery pubkey. When set, the
      *                 account is a 2-of-3 tap tree {agent, daemon, recovery}: the hot
      *                 path stays agent+daemon key-path (tweaked), and either pairing
@@ -74,8 +77,22 @@ class MuSig2AgentSession extends AgentSession {
         const cfg = opts.coSigner || opts;
         const transport  = cfg.transport;
         const publicKeys = cfg.publicKeys;
-        const network    = cfg.network || null;
         const recovery   = cfg.recovery || null;
+
+        // Network for deriving the aggregate spending account. cfg.network wins
+        // when explicit; otherwise fall back to the SDK's own configured network
+        // (wallet.js:getBitcoinNetwork - the accessor documented specifically for
+        // this caller). An omitted network must NEVER silently resolve to
+        // bitcoinjs's Bitcoin-mainnet default (bitcoin.payments.p2tr treats
+        // `network: undefined` as mainnet): that would derive a bc1p... aggregate
+        // address, session identity, and change target on a chain the SDK is not
+        // even configured for. Fail closed instead.
+        const network = cfg.network || (sdk && sdk.wallet && typeof sdk.wallet.getBitcoinNetwork === 'function'
+            ? sdk.wallet.getBitcoinNetwork()
+            : null);
+        if (!network)
+            throw new SDKPolicyError('COSIGNER_CONFIG',
+                'MuSig2AgentSession requires a network: pass opts.coSigner.network, or construct the SDK with a network so sdk.wallet.getBitcoinNetwork() can supply one');
 
         if (typeof transport !== 'function')
             throw new SDKPolicyError('COSIGNER_CONFIG',

@@ -183,6 +183,10 @@ describe('MuSig2AgentSession', function () {
                     compressed:    true,
                 }),
                 deriveAddress: () => 'agentP2PKHaddr',
+                // MuSig2AgentSession falls back to this when opts.coSigner.network is
+                // omitted (fund-key-safety fix: no silent mainnet default). Match the
+                // account-derivation network the pre-fix tests implicitly relied on.
+                getBitcoinNetwork: () => bitcoin.networks.bitcoin,
             },
             tickResolver:    { resolveActionParams: async (a, p) => p },
             addressResolver: { resolveActionParams: async (a, p) => p },
@@ -214,6 +218,52 @@ describe('MuSig2AgentSession', function () {
             .to.throw(SDKPolicyError).with.property('code', 'COSIGNER_CONFIG');
         expect(() => new MuSig2AgentSession(sdk, 'WIF', { allowedActions: ['SEND'] }, { coSigner: { transport: () => {}, publicKeys: [s.agentPk] } }))
             .to.throw(SDKPolicyError).with.property('code', 'COSIGNER_CONFIG');
+    });
+
+    it('fails closed (COSIGNER_CONFIG) rather than silently deriving the aggregate account against Bitcoin mainnet when no network is available', function () {
+        const s = buildAccountAndPsbt(`SEND|0|TOK|5|${DEST}|m`);
+        const captured = { broadcasts: [], encodeCalls: 0 };
+        // No opts.coSigner.network AND the sdk has no getBitcoinNetwork accessor
+        // (or it returns falsy): must throw, never fall through to bitcoinjs's
+        // own `network: undefined` -> Bitcoin mainnet default.
+        const sdkNoAccessor = { wallet: { importWIF: () => ({
+            privateKey: Buffer.from(s.agentSk), publicKey: Buffer.from(s.agentPk),
+            publicKeyHex: Buffer.from(s.agentPk).toString('hex'), compressed: true }) } };
+        expect(() => new MuSig2AgentSession(sdkNoAccessor, 'WIF', { allowedActions: ['SEND'] },
+            { coSigner: { transport: () => {}, publicKeys: s.keys } }))
+            .to.throw(SDKPolicyError).with.property('code', 'COSIGNER_CONFIG');
+
+        const sdkNullNetwork = { wallet: Object.assign({}, sdkNoAccessor.wallet, { getBitcoinNetwork: () => null }) };
+        expect(() => new MuSig2AgentSession(sdkNullNetwork, 'WIF', { allowedActions: ['SEND'] },
+            { coSigner: { transport: () => {}, publicKeys: s.keys } }))
+            .to.throw(SDKPolicyError).with.property('code', 'COSIGNER_CONFIG');
+    });
+
+    it('falls back to sdk.wallet.getBitcoinNetwork() when opts.coSigner.network is omitted, and an explicit network still wins', function () {
+        const s = buildAccountAndPsbt(`SEND|0|TOK|5|${DEST}|m`);
+        const captured = { broadcasts: [], encodeCalls: 0 };
+        const LTC = { messagePrefix: 'Litecoin Signed Message:\n', bech32: 'ltc',
+            bip32: { public: 0x019da462, private: 0x019d9cfe },
+            pubKeyHash: 0x30, scriptHash: 0x32, wif: 0xb0 };
+        const co = new CoSigner({ secretKey: s.coSk, publicKeys: s.keys, tweaks: s.acct.tweaks,
+            policy: { allowedActions: new Set(['SEND']) } });
+        const transport = inProcessTransport(co);
+
+        const sdk = makeSdk(s, captured);
+        // Fallback path: no opts.coSigner.network, sdk supplies bitcoin.networks.bitcoin
+        // (matches how the accounts in this suite were derived, so addresses match).
+        const session = new MuSig2AgentSession(sdk, 'WIF',
+            { allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '100' } } },
+            { coSigner: { transport, publicKeys: s.keys } });
+        expect(session.address).to.equal(s.acct.address);
+
+        // Explicit path: opts.coSigner.network is honored even though the SDK
+        // would supply a different fallback (LTC != the sdk's bitcoin.networks.bitcoin).
+        const explicitAcct = deriveMuSig2P2TR(s.keys, LTC);
+        const explicitSession = new MuSig2AgentSession(sdk, 'WIF',
+            { allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '100' } } },
+            { coSigner: { transport, publicKeys: s.keys, network: LTC } });
+        expect(explicitSession.address).to.equal(explicitAcct.address);
     });
 
     it('fails closed when the agent key is not in the signer set', function () {

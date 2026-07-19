@@ -46,7 +46,11 @@
  * address-setup concern), not re-derived here. The 2-of-3 recovery tree is
  * a later slice. COINPAY/native-fee output legs are supported only when the
  * operator allow-lists them via config.allowedOutputs (default: none, so
- * plain token SEND/EXECUTE - OP_RETURN + change only - pass).
+ * plain token SEND - OP_RETURN + change only - passes). EXECUTE, DEPLOY
+ * v0/v2, and LIST use rest-field formats (`...PARAMS`) that
+ * decodeActionFromPsbt refuses outright (REST_FIELD_UNSUPPORTED) before any
+ * params are built; they are currently outside this co-signer's decodable
+ * scope and are denied at decode regardless of allowedActions.
  *
  ********************************************************************/
 
@@ -150,8 +154,8 @@ class CoSigner {
         // high fee from a drain without operator knowledge.
         this.maxFeeSats = (config.maxFeeSats === undefined || config.maxFeeSats === null)
             ? null : Number(config.maxFeeSats);
-        if (this.maxFeeSats !== null && (!Number.isFinite(this.maxFeeSats) || this.maxFeeSats < 0))
-            throw new Error('maxFeeSats must be a non-negative number');
+        if (this.maxFeeSats !== null && (!Number.isInteger(this.maxFeeSats) || this.maxFeeSats < 0))
+            throw new Error('maxFeeSats must be a non-negative integer');
         this.musig = new MuSig2();
 
         // The account scriptPubKey this daemon actually spends from, derived once
@@ -214,6 +218,13 @@ class CoSigner {
         if (!inp || !inp.witnessUtxo || !inp.witnessUtxo.script)
             return this._deny('CANNOT_CHECK_OUTPUTS', 'signed input has no witnessUtxo');
         const accountScript = inp.witnessUtxo.script;
+        // Running total PER allow-list entry, so N outputs matching the SAME
+        // entry are capped on their sum, not each independently (otherwise a
+        // repeated authorized output multiplies the operator's cap by N).
+        // Keyed on the entry object itself (not the script bytes) so two
+        // distinct entries never share a budget even if they somehow matched
+        // the same script.
+        const spent = new Map();
         for (let i = 0; i < psbt.txOutputs.length; i++) {
             const out = psbt.txOutputs[i];
             // (a) OP_RETURN data carrier: carries the action, not value. It MUST
@@ -238,8 +249,10 @@ class CoSigner {
             // (c) An operator-authorized native leg (COINPAY recipient / fee output).
             const match = this.allowedOutputs.find((a) => out.script.equals(a.script));
             if (match) {
-                if (match.maxValue !== null && out.value > match.maxValue)
-                    return this._deny('OUTPUT_OVER_CAP', { index: i, value: out.value, maxValue: match.maxValue });
+                const total = (spent.get(match) || 0) + Number(out.value);
+                spent.set(match, total);
+                if (match.maxValue !== null && total > match.maxValue)
+                    return this._deny('OUTPUT_OVER_CAP', { index: i, value: out.value, total, maxValue: match.maxValue });
                 continue;
             }
             // Anything else is an unauthorized native-coin drain.
@@ -262,25 +275,39 @@ class CoSigner {
     // undersized dust-change drain, which is indistinguishable from a legitimate
     // high fee without chain knowledge) needs the operator's maxFeeSats cap.
     // Returns a denial object, or null when the fee is within bounds.
+    // Values arrive as Number OR BigInt: applyBufferutilsPatch.js teaches
+    // bip174/bitcoinjs to carry satoshi values above 2^53-1 (e.g. large DOGE
+    // UTXOs) as BigInt (see narrowU64). The arithmetic below is done entirely
+    // in BigInt so a >2^53 value is neither rejected outright nor rounded.
+    _toU64(v) {
+        if (typeof v === 'bigint') return v;
+        if (typeof v === 'number' && Number.isInteger(v) && v >= 0) return BigInt(v);
+        return null;
+    }
+
     _checkFee(psbt) {
-        let totalIn = 0;
+        let totalIn = 0n;
         for (let i = 0; i < psbt.txInputs.length; i++) {
             const wu = psbt.data.inputs[i] && psbt.data.inputs[i].witnessUtxo;
-            if (!wu || typeof wu.value !== 'number' || !Number.isFinite(wu.value))
+            const v = wu ? this._toU64(wu.value) : null;
+            if (v === null)
                 return this._deny('CANNOT_CHECK_FEE', 'input ' + i + ' has no witnessUtxo value');
-            totalIn += wu.value;
+            totalIn += v;
         }
-        let totalOut = 0;
-        for (const out of psbt.txOutputs) totalOut += Number(out.value);
+        let totalOut = 0n;
+        for (const out of psbt.txOutputs) {
+            const v = this._toU64(out.value);
+            if (v === null)
+                return this._deny('CANNOT_CHECK_FEE', 'non-numeric or non-integral output value');
+            totalOut += v;
+        }
         const fee = totalIn - totalOut;
-        if (!Number.isFinite(fee))
-            return this._deny('CANNOT_CHECK_FEE', 'non-numeric input/output value');
-        if (fee < 0)
-            return this._deny('OUTPUTS_EXCEED_INPUTS', { totalIn, totalOut });
-        if (totalIn > 0 && totalOut === 0)
-            return this._deny('FEE_BURNS_ENTIRE_INPUT', { totalIn, fee });
-        if (this.maxFeeSats !== null && fee > this.maxFeeSats)
-            return this._deny('FEE_EXCEEDS_CAP', { fee, maxFeeSats: this.maxFeeSats });
+        if (fee < 0n)
+            return this._deny('OUTPUTS_EXCEED_INPUTS', { totalIn: totalIn.toString(), totalOut: totalOut.toString() });
+        if (totalIn > 0n && totalOut === 0n)
+            return this._deny('FEE_BURNS_ENTIRE_INPUT', { totalIn: totalIn.toString(), fee: fee.toString() });
+        if (this.maxFeeSats !== null && fee > BigInt(this.maxFeeSats))
+            return this._deny('FEE_EXCEEDS_CAP', { fee: fee.toString(), maxFeeSats: this.maxFeeSats });
         return null;
     }
 

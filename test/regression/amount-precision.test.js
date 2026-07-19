@@ -129,4 +129,19 @@ describe('Regression (#3735): bc* helpers preserve full precision', function () 
     expect(u().bcnum('text/plain').toString()).to.equal('0');
     expect(u().bcnum('Infinity').toString()).to.equal('0');
   });
+
+  it('bcdiv guards against a zero denominator instead of returning Infinity/NaN (#2392)', function () {
+    const out = u().bcdiv('1', '0', 64);
+    expect(out).to.equal('0.' + '0'.repeat(64));
+    expect(/infinity/i.test(out)).to.equal(false);
+    expect(/nan/i.test(out)).to.equal(false);
+    expect(u().bcdiv('1', 0, 8)).to.equal('0.00000000');
+    expect(u().getPrice('5', '0')).to.equal('0.' + '0'.repeat(64));
+  });
+
+  it('bcdiv/getPrice non-zero cases remain unaffected by the zero-denominator guard', function () {
+    const q = u().bcdiv('2', '7', 50);
+    expect(/^0\.\d{50}$/.test(q), `unexpected shape: ${q}`).to.equal(true);
+    expect(u().getPrice('1', '3', 64)).to.equal('0.' + '3'.repeat(64));
+  });
 });

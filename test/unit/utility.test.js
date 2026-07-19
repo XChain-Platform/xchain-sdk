@@ -42,3 +42,28 @@ describe('Utility.isValidAmountFormat (indexer parity)', function () {
         assert.strictEqual(utils.isValidAmountFormat(2, '1.123'), false);
     });
 });
+
+describe('Utility.isInteger (indexer parity, #2393)', function () {
+
+    let utils;
+
+    beforeEach(function () {
+        utils = new Utility();
+    });
+
+    it('accepts plain and numeric-string integers, including past int32 range', function () {
+        assert.strictEqual(utils.isInteger(5), true);
+        assert.strictEqual(utils.isInteger('5'), true);
+        assert.strictEqual(utils.isInteger(2147483648), true);  // int32 max + 1
+        assert.strictEqual(utils.isInteger(3000000000), true);  // beyond int32 range
+        assert.strictEqual(utils.isInteger(4294967295), true);  // uint32 max
+    });
+
+    it('rejects non-integers, non-numeric strings, NaN and Infinity', function () {
+        assert.strictEqual(utils.isInteger(5.5), false);
+        assert.strictEqual(utils.isInteger('5.5'), false);
+        assert.strictEqual(utils.isInteger('abc'), false);
+        assert.strictEqual(utils.isInteger(NaN), false);
+        assert.strictEqual(utils.isInteger(Infinity), false);
+    });
+});

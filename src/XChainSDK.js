@@ -1460,10 +1460,22 @@ class XChainSDK {
         if (opts && opts.types)    params.types    = opts.types;
         if (opts && opts.statuses) params.statuses = opts.statuses;
         if (opts && opts.snapshot) params.snapshot  = true;
+
+        // The explorer sends the requested initial-state frame as a
+        // top-level 'SNAPSHOT' type (not one of the `types` above), so it
+        // needs its own filtered handler or the frame is silently dropped.
+        const onSnapshot = (msg) => {
+            if (msg && msg.data && msg.data.channel === 'address' && msg.data.address === address){
+                callback(msg);
+            }
+        };
+        if (opts && opts.snapshot) ws.on('SNAPSHOT', onSnapshot);
+
         this._subscribeDetached(ws, ['address'], params);
 
         return () => {
             for (const t of types) ws.off(t, callback);
+            ws.off('SNAPSHOT', onSnapshot);
             ws.unsubscribe(['address'], { address });
         };
     }
@@ -1473,9 +1485,16 @@ class XChainSDK {
     onToken(tick, callback) {
         const ws = this._requireWs();
         ws.on('TOKEN_UPDATE', callback);
+        const onSnapshot = (msg) => {
+            if (msg && msg.data && msg.data.channel === 'token' && msg.data.tick === tick){
+                callback(msg);
+            }
+        };
+        ws.on('SNAPSHOT', onSnapshot);
         this._subscribeDetached(ws, ['token'], { tick, snapshot: true });
         return () => {
             ws.off('TOKEN_UPDATE', callback);
+            ws.off('SNAPSHOT', onSnapshot);
             ws.unsubscribe(['token'], { tick });
         };
     }
@@ -1485,9 +1504,17 @@ class XChainSDK {
     onMarket(tick1, tick2, callback) {
         const ws = this._requireWs();
         ws.on('MARKET_UPDATE', callback);
+        const onSnapshot = (msg) => {
+            if (msg && msg.data && msg.data.channel === 'market' &&
+                msg.data.tick1 === tick1 && msg.data.tick2 === tick2){
+                callback(msg);
+            }
+        };
+        ws.on('SNAPSHOT', onSnapshot);
         this._subscribeDetached(ws, ['market'], { tick1, tick2, snapshot: true });
         return () => {
             ws.off('MARKET_UPDATE', callback);
+            ws.off('SNAPSHOT', onSnapshot);
             ws.unsubscribe(['market'], { tick1, tick2 });
         };
     }
@@ -1500,12 +1527,20 @@ class XChainSDK {
         ws.on('DISPENSE', callback);
         ws.on('DISPENSER_CLOSED', callback);
         ws.on('DISPENSER_EXPIRED', callback);
+        const onSnapshot = (msg) => {
+            if (msg && msg.data && msg.data.channel === 'dispenser' &&
+                String(msg.data.action_index) === String(actionIndex)){
+                callback(msg);
+            }
+        };
+        ws.on('SNAPSHOT', onSnapshot);
         this._subscribeDetached(ws, ['dispenser'], { action_index: actionIndex, snapshot: true });
         return () => {
             ws.off('DISPENSER_UPDATE', callback);
             ws.off('DISPENSE', callback);
             ws.off('DISPENSER_CLOSED', callback);
             ws.off('DISPENSER_EXPIRED', callback);
+            ws.off('SNAPSHOT', onSnapshot);
             ws.unsubscribe(['dispenser'], { action_index: actionIndex });
         };
     }

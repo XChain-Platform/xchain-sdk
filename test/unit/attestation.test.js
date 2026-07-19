@@ -141,6 +141,35 @@ describe('AttestationHelpers.llm', function () {
         expect(Buffer.byteLength(Attestation.llm({ prompt }), 'utf8')).to.equal(8192);
     });
 
+    it('throws when maxTokens is non-numeric ("512 tokens" would otherwise NaN -> null on the wire)', function () {
+        expect(() => Attestation.llm({ prompt: 'x', maxTokens: '512 tokens' })).to.throw(/maxTokens/);
+    });
+
+    it('throws when maxTokens is negative', function () {
+        expect(() => Attestation.llm({ prompt: 'x', maxTokens: -5 })).to.throw(/maxTokens/);
+    });
+
+    it('throws when maxTokens is fractional', function () {
+        expect(() => Attestation.llm({ prompt: 'x', maxTokens: 100.5 })).to.throw(/maxTokens/);
+    });
+
+    it('throws when maxTokens is zero', function () {
+        expect(() => Attestation.llm({ prompt: 'x', maxTokens: 0 })).to.throw(/maxTokens/);
+    });
+
+    it('still accepts maxTokens as a numeric string', function () {
+        const parsed = JSON.parse(Attestation.llm({ prompt: 'x', maxTokens: '512' }));
+        expect(parsed.max_tokens).to.equal(512);
+    });
+
+    it('throws when temperature is non-numeric ("low" would otherwise NaN -> null on the wire)', function () {
+        expect(() => Attestation.llm({ prompt: 'x', temperature: 'low' })).to.throw(/temperature/);
+    });
+
+    it('throws when temperature is not finite', function () {
+        expect(() => Attestation.llm({ prompt: 'x', temperature: Infinity })).to.throw(/temperature/);
+    });
+
 });
 
 describe('AttestationHelpers.httpGet', function () {
@@ -173,6 +202,19 @@ describe('AttestationHelpers.httpGet', function () {
         const pad = 2048 - 20;
         const url = 'https://example.com/' + 'a'.repeat(pad);
         expect(() => Attestation.httpGet(url)).to.not.throw();
+    });
+
+    it('throws on a scheme-only URL with no host', function () {
+        expect(() => Attestation.httpGet('https://')).to.throw();
+    });
+
+    it('throws on an https URL containing a space in the authority', function () {
+        expect(() => Attestation.httpGet('https://exa mple.com/x')).to.throw();
+    });
+
+    it('returns the exact input string unchanged, not a normalized form', function () {
+        const url = 'https://example.com/x';
+        expect(Attestation.httpGet(url)).to.equal(url);
     });
 
 });

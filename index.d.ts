@@ -819,11 +819,11 @@ export interface AttestationLlmOpts {
     prompt: string;
     /** Optional system message */
     system?: string;
-    /** Maximum tokens in the response */
+    /** Maximum tokens in the response (positive integer; acts as a ceiling, not a target) */
     maxTokens?: number;
     /** Response format: 'text' (default) or 'json_object' */
     format?: 'text' | 'json_object';
-    /** Sampling temperature */
+    /** Sampling temperature (finite number) */
     temperature?: number;
     /** Envelope version; must be a positive integer <= the hub's published ceiling (1 today) */
     envelopeVersion?: number;
@@ -838,7 +838,7 @@ export interface AttestationRequestOpts {
     deadlineBlocks?: number;
     /** Tick used to pay the attestation fee (must be 'XCHAIN' for v1 consensus) */
     feeTick?: string;
-    /** Amount to pay the attestation provider (decimal string) */
+    /** Amount to pay the attestation provider (non-negative decimal string, at most 8 decimal places) */
     feeAmount?: string;
 }
 
