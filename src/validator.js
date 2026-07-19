@@ -42,9 +42,10 @@ const MAX_TICK_LENGTH    = 250;
 const MAX_DESC_LENGTH    = 250;
 const MAX_MESSAGE_LENGTH = 1048576; // 1MB
 // 64KB contract source code limit. Must match the indexer (DEPLOY) and the VM
-// isolate limit. Canonical source of truth: xchain-documentation/protocol/constants.js
-// (MAX_CODE_SIZE); kept equal by the cross-service regression suite.
-const MAX_CODE_SIZE      = 65536;
+// isolate limit. Vendored single source of truth: ./protocol/constants.js
+// (byte-identical to xchain-documentation/protocol/constants.js, MAX_CODE_SIZE);
+// kept equal by the cross-service regression suite.
+const MAX_CODE_SIZE      = require('./protocol/constants.js').MAX_CODE_SIZE;
 
 // Chunked-DEPLOY caps (per-carrier CODE_PART budget + max chunks per assembly).
 // Single in-repo source of truth: chunkHelper.js, whose exported copies the
@@ -81,9 +82,10 @@ const DELIMITER_EXEMPT_FIELDS = new Set([
 // Valid FIAT currency codes. Must stay a byte-equal allow-list with the indexer's
 // config['FIATS'] keys (xchain-indexer/src/config.js), which is the on-chain arbiter
 // for PRICE FIAT_CODE. A subset here makes the SDK silently refuse a FIAT the protocol
-// accepts (EUR/KRW were missing). The cross-service parity assertion in
+// accepts (EUR/KRW were missing). Vendored single source of truth:
+// ./protocol/constants.js (VALID_FIAT_CODES); the cross-service parity assertion in
 // xchain-e2e-test/test/regression/protocol-size-limits.regression.js guards this.
-const VALID_FIAT_CODES = ['USD', 'CAD', 'AUD', 'MXN', 'GBP', 'JPY', 'CNY', 'CHF', 'BRL', 'INR', 'EUR', 'KRW'];
+const VALID_FIAT_CODES = [...require('./protocol/constants.js').VALID_FIAT_CODES];
 
 // Valid coin identifiers (from the canonical coin registry).
 const VALID_COINS = [...require('./coins').ALLOWED_COINS];

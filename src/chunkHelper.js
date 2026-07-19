@@ -28,13 +28,15 @@
 
 const crypto = require('crypto');
 
-// Canonical values: xchain-documentation/protocol/constants.js. These are the
-// SDK's single in-repo copies (validator.js and psbtActionDecode.js import
-// them from here); test/unit/protocolSizeCaps.test.js pins them to the
-// canonical values so a one-sided bump fails locally.
-const MAX_ACTION_DATA_LENGTH      = 8192;
-const MAX_DEPLOYCHUNK_PART_BYTES  = 7800;
-const MAX_DEPLOY_CHUNKS           = 16;
+// Vendored single source of truth: ./protocol/constants.js (byte-identical to
+// xchain-documentation/protocol/constants.js). These are the SDK's single
+// in-repo entry point (validator.js and psbtActionDecode.js import them from
+// here); test/unit/protocolSizeCaps.test.js pins them to the canonical values so
+// a one-sided bump fails locally.
+const PROTO = require('./protocol/constants.js');
+const MAX_ACTION_DATA_LENGTH      = PROTO.MAX_ACTION_DATA_LENGTH;
+const MAX_DEPLOYCHUNK_PART_BYTES  = PROTO.MAX_DEPLOYCHUNK_PART_BYTES;
+const MAX_DEPLOY_CHUNKS           = PROTO.MAX_DEPLOY_CHUNKS;
 // Bytes added by the OP_PUSHDATA2 push prefix (1-byte opcode + 2-byte
 // little-endian length) when a 256..65535-byte payload is compiled into the
 // on-chain script. MAX_ACTION_DATA_LENGTH bounds the *compiled* push (payload
@@ -44,7 +46,7 @@ const MAX_DEPLOY_CHUNKS           = 16;
 // consumer is fitsSingleDeploy(), whose decisions matter near the 8192-byte
 // cap where the prefix is always OP_PUSHDATA2, so +3 is the exact overhead
 // there (a sub-256-byte payload trivially fits regardless of prefix class).
-const OP_RETURN_PUSH_OVERHEAD     = 3;
+const OP_RETURN_PUSH_OVERHEAD     = PROTO.OP_RETURN_PUSH_OVERHEAD;
 
 // sha256 hex of the UTF-8 source: the chunk-group id AND the integrity check.
 // Matches the indexer's crypto.createHash('sha256').update(code) (utf8 default).

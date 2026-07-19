@@ -1,84 +1,85 @@
 {
-    "name": "xchain-sdk",
-    "description": "xchain-sdk generates XChain Platform ACTION commands and encodes them into unsigned blockchain transactions as well as pulls data from the XChain APIs such as balances and transaction history.",
-    "version": "1.14.1",
-    "private": true,
-    "main": "index.js",
-    "types": "index.d.ts",
-    "license": "AGPL-3.0-or-later",
-    "comment:browser": "Browserify's resolver predates the package `exports` field, so it can't map @brandonblack/musig's './base_crypto' subpath to lib/base_crypto.js. Alias it to the concrete file for bundling only; Node still resolves the subpath via exports.",
-    "browser": {
-        "@brandonblack/musig/base_crypto": "@brandonblack/musig/lib/base_crypto.js"
-    },
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/XChain-platform/xchain-sdk.git"
-    },
-    "dependencies": {
-        "@bitcoinerlab/secp256k1": "^1.2.0",
-        "@brandonblack/musig": "0.0.1-alpha.1",
-        "@modelcontextprotocol/sdk": "^1.29.0",
-        "@noble/curves": "1.9.1",
-        "@noble/hashes": "^1.8.0",
-        "acorn": "8.16.0",
-        "acorn-walk": "8.3.5",
-        "astring": "1.9.0",
-        "axios": "^1.16.0",
-        "bitcoinjs-lib": "6.1.7",
-        "bitcoinjs-message": "^2.2.0",
-        "cors": "^2.8.5",
-        "dotenv": "^16.4.5",
-        "ecpair": "2.1.0",
-        "express": "^5.2.1",
-        "express-json-rpc-router": "^1.4.0",
-        "helmet": "^8.2.0",
-        "mathjs": "15.2.0",
-        "ws": "^8.21.0",
-        "zod": "^4.4.3"
-    },
-    "devDependencies": {
-        "@babel/core": "^7.29.0",
-        "@babel/preset-env": "^7.29.2",
-        "babelify": "^10.0.0",
-        "browserify": "^17.0.1",
-        "c8": "^11.0.0",
-        "chai": "^4.5.0",
-        "mocha": "^11.7.5",
-        "nock": "^14.0.0",
-        "sinon": "^21.0.3",
-        "uglify-js": "^3.19.3"
-    },
-    "overrides": {
-        "decimal.js": "10.4.3",
-        "qs": "^6.15.2",
-        "serialize-javascript": "^7.0.5",
-        "diff": "^8.0.4"
-    },
-    "scripts": {
-        "api": "node ./src/api.js",
-        "test": "mocha --timeout 5000 --recursive 'test/unit/**/*.test.js'",
-        "sync:templates": "node scripts/sync-templates.js",
-        "ci": "mocha --timeout 5000 --recursive 'test/unit/**/*.test.js' --exit && npm run ci:security && npm run ci:regression",
-        "ci:security": "mocha --timeout 10000 --recursive 'test/security/**/*.test.js' --exit",
-        "ci:regression": "mocha --timeout 30000 --recursive 'test/regression/**/*.test.js' --exit",
-        "coverage": "c8 --reporter=text --reporter=html --include 'src/**/*.js' mocha --timeout 5000 --recursive 'test/unit/**/*.test.js' --exit",
-        "test:smoke": "mocha --timeout 15000 --recursive 'test/smoke/**/*.test.js'",
-        "test:integration": "mocha --timeout 30000 --recursive 'test/integration/**/*.test.js'",
-        "test:boundary": "mocha --timeout 5000 --recursive 'test/boundary/**/*.test.js'",
-        "test:security": "mocha --timeout 10000 --recursive 'test/security/**/*.test.js'",
-        "test:regression": "mocha --timeout 30000 --recursive 'test/regression/**/*.test.js'",
-        "test:performance": "mocha --timeout 60000 --recursive 'test/performance/**/*.test.js'",
-        "test:fuzz": "mocha --timeout 0 --recursive 'test/fuzz/**/*.test.js'",
-        "test:chaos": "mocha --timeout 10000 --recursive 'test/chaos/**/*.test.js'",
-        "test:all": "mocha --timeout 0 --recursive test/",
-        "repl": "node src/repl.js",
-        "build": "npx browserify index.js -s XChainSDK -t [ babelify --presets [ @babel/preset-env ] --global ] | npx uglify-js --compress --mangle -o dist/xchain_sdk.min.js",
-        "build:dev": "npx browserify index.js -s XChainSDK -t [ babelify --presets [ @babel/preset-env ] --global ] -o dist/xchain_sdk.js"
-    },
-    "engines": {
-        "node": ">=22.0.0"
-    },
-    "bin": {
-        "xchain-mcp": "mcp/cli.js"
-    }
+  "name": "xchain-sdk",
+  "description": "xchain-sdk generates XChain Platform ACTION commands and encodes them into unsigned blockchain transactions as well as pulls data from the XChain APIs such as balances and transaction history.",
+  "version": "1.14.1",
+  "private": true,
+  "main": "index.js",
+  "types": "index.d.ts",
+  "license": "AGPL-3.0-or-later",
+  "comment:browser": "Browserify's resolver predates the package `exports` field, so it can't map @brandonblack/musig's './base_crypto' subpath to lib/base_crypto.js. Alias it to the concrete file for bundling only; Node still resolves the subpath via exports.",
+  "browser": {
+    "@brandonblack/musig/base_crypto": "@brandonblack/musig/lib/base_crypto.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/XChain-platform/xchain-sdk.git"
+  },
+  "dependencies": {
+    "@bitcoinerlab/secp256k1": "^1.2.0",
+    "@brandonblack/musig": "0.0.1-alpha.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@noble/curves": "1.9.1",
+    "@noble/hashes": "^1.8.0",
+    "acorn": "8.16.0",
+    "acorn-walk": "8.3.5",
+    "astring": "1.9.0",
+    "axios": "^1.16.0",
+    "bitcoinjs-lib": "6.1.7",
+    "bitcoinjs-message": "^2.2.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "ecpair": "2.1.0",
+    "express": "^5.2.1",
+    "express-json-rpc-router": "^1.4.0",
+    "helmet": "^8.2.0",
+    "mathjs": "15.2.0",
+    "ws": "^8.21.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@babel/preset-env": "^7.29.2",
+    "babelify": "^10.0.0",
+    "browserify": "^17.0.1",
+    "c8": "^11.0.0",
+    "chai": "^4.5.0",
+    "mocha": "^11.7.5",
+    "nock": "^14.0.0",
+    "sinon": "^21.0.3",
+    "uglify-js": "^3.19.3"
+  },
+  "overrides": {
+    "decimal.js": "10.4.3",
+    "qs": "^6.15.2",
+    "serialize-javascript": "^7.0.5",
+    "diff": "^8.0.4"
+  },
+  "scripts": {
+    "api": "node ./src/api.js",
+    "test": "mocha --timeout 5000 --recursive 'test/unit/**/*.test.js'",
+    "sync:templates": "node scripts/sync-templates.js",
+    "ci": "mocha --timeout 5000 --recursive 'test/unit/**/*.test.js' --exit && npm run ci:security && npm run ci:regression",
+    "ci:security": "mocha --timeout 10000 --recursive 'test/security/**/*.test.js' --exit",
+    "ci:regression": "mocha --timeout 30000 --recursive 'test/regression/**/*.test.js' --exit",
+    "coverage": "c8 --reporter=text --reporter=html --include 'src/**/*.js' mocha --timeout 5000 --recursive 'test/unit/**/*.test.js' --exit",
+    "test:smoke": "mocha --timeout 15000 --recursive 'test/smoke/**/*.test.js'",
+    "test:integration": "mocha --timeout 30000 --recursive 'test/integration/**/*.test.js'",
+    "test:boundary": "mocha --timeout 5000 --recursive 'test/boundary/**/*.test.js'",
+    "test:security": "mocha --timeout 10000 --recursive 'test/security/**/*.test.js'",
+    "test:regression": "mocha --timeout 30000 --recursive 'test/regression/**/*.test.js'",
+    "test:performance": "mocha --timeout 60000 --recursive 'test/performance/**/*.test.js'",
+    "test:fuzz": "mocha --timeout 0 --recursive 'test/fuzz/**/*.test.js'",
+    "test:chaos": "mocha --timeout 10000 --recursive 'test/chaos/**/*.test.js'",
+    "test:all": "mocha --timeout 0 --recursive test/",
+    "repl": "node src/repl.js",
+    "build": "npx browserify index.js -s XChainSDK -t [ babelify --presets [ @babel/preset-env ] --global ] | npx uglify-js --compress --mangle -o dist/xchain_sdk.min.js",
+    "build:dev": "npx browserify index.js -s XChainSDK -t [ babelify --presets [ @babel/preset-env ] --global ] -o dist/xchain_sdk.js",
+    "test:eval": "mocha --timeout 30000 --recursive 'test/eval/**/*.eval.js'"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "bin": {
+    "xchain-mcp": "mcp/cli.js"
+  }
 }

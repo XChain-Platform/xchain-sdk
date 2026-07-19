@@ -46,10 +46,11 @@ const DESTINATION_KEYS = ['destination', 'DESTINATION', 'destinations', 'DESTINA
 // The protocol gas token. Capability STAKE (v1/v2) debits this token but carries
 // no TICK field, so without this default a tick-scoped cap (maxPerAction.STAKE.XCHAIN)
 // never binds and only the '*' wildcard applies. Mirrors the consensus value in
-// xchain-indexer/src/config.js (config['GAS']); the canonical copy lives in
-// xchain-documentation/protocol/constants.js and the cross-service drift guard in
-// xchain-e2e-test asserts all three stay equal.
-const GAS_TICK = 'XCHAIN';
+// xchain-indexer/src/config.js (config['GAS']). Vendored single source of truth:
+// ../protocol/constants.js (byte-identical to xchain-documentation/protocol/
+// constants.js, GAS_TICK); the cross-service drift guard in xchain-e2e-test
+// asserts all three stay equal.
+const GAS_TICK = require('../protocol/constants.js').GAS_TICK;
 
 // Per-action value/tick fields for actions whose primary outflow is NOT the
 // generic amount/AMOUNT + tick/TICK pair. The cap must bind to what the signer
