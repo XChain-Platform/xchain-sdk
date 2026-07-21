@@ -1,0 +1,177 @@
+'use strict';
+
+// Copyright © 2025–2026 Dankest, LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+// decoder.describe unit suite: dedicated describers stay non-generic,
+// legacy {action, params} inputs keep working (wallet shim path),
+// ParsedAction BATCH commands render per-command, extended ctx
+// (ownAddresses/contacts) marks destinations, and the §3.5 hardening
+// pass covers every describer by construction.
+
+const { expect } = require('chai');
+const { parse } = require('../../../src/decoder/parse.js');
+const { describe: describeAction } = require('../../../src/decoder/describe.js');
+
+const GENERIC = /No plain-English summary is available/;
+
+describe('decoder.describe', function () {
+
+    it('SEND from a ParsedAction', function () {
+        const d = describeAction(parse('SEND|0|JDOG|1.5|bc1qabc|hi'));
+        expect(d.summary).to.equal('Send 1.5 JDOG to bc1qabc');
+        expect(d.details.map(x => x.label)).to.deep.equal(['Token', 'Amount', 'Destination', 'Memo']);
+        expect(d.warnings).to.deep.equal([]);
+    });
+
+    it('legacy {action, params} shape still works (wallet shim path)', function () {
+        const d = describeAction({ action: 'SEND', params: { TICK: 'JDOG', AMOUNT: '2', DESTINATION: 'x', MEMO: '' } });
+        expect(d.summary).to.equal('Send 2 JDOG to x');
+    });
+
+    it('createAction-style {action, fields} shape accepted', function () {
+        const d = describeAction({ action: 'MINT', fields: { TICK: 'JDOG', AMOUNT: '5' } });
+        expect(d.summary).to.match(/^Mint 5 JDOG/);
+    });
+
+    it('chainRegistry ctx adds the chain suffix', function () {
+        const registry = { get: () => ({ displayName: 'Bitcoin' }) };
+        const d = describeAction(parse('SEND|0|JDOG|1|a'), { chainId: 'btc', chainRegistry: registry });
+        expect(d.summary).to.include(' on Bitcoin ');
+    });
+
+    describe('dedicated describers are non-generic', function () {
+        const cases = {
+            'SEND|0|JDOG|1|a|m': /Send/,
+            'SWEEP|0|dest': /^Sweep /,
+            'ISSUE|0|TOK|1000': /^Create token TOK/,
+            'ISSUE|1|TOK|new desc': /^Update description/,
+            'ISSUE|6|TOK|42|SEND|10|0': /controller/i,
+            'MINT|0|JDOG|5': /^Mint /,
+            'DESTROY|0|JDOG|5': /^Destroy /,
+            'BROADCAST|0|hello': /^Broadcast /,
+            'DISPENSER|1|33': /^Cancel dispenser/,
+            'DIVIDEND|0|JDOG|GAS|1': /^Pay /,
+            'LIST|0|2|a1|a2': /^Create address list/,
+            'AIRDROP|0|JDOG|1|55': /^Airdrop /,
+            'ORDER|0|BTC|GIVE|10|0|BTC|GET|5|0': /^Create order/,
+            'ORDER|1|42': /^Cancel order/,
+            'SWAP|0|BTC|GIVE|10|0|BTC|GET|5|0': /^Create swap/,
+            'STAKE|1|100|aabb': /^Stake 100/,
+            'UNSTAKE|0|aabb': /^Unstake/,
+            'DELEGATE|0|aabb': /Rotate validator signing key/,
+            'DELEGATE|2|aabb': /Revoke validator signing key/,
+            'VOTE|1|55|2|note': /^Cast ballot/,
+            'VOTE|3|JDOG|addr9': /^Delegate JDOG voting power/,
+            'DEPLOY|0|aGVsbG8=|100000': /^Deploy smart contract/,
+            'DEPLOY|4|deadbeef|1|4|QUJD': /chunk 1 of 4/,
+            'EXECUTE|0|9|mint|alice': /^Call mint\(\) on contract #9/,
+            'DEPOSIT|0|7|JDOG|100': /^Deposit 100 JDOG into contract #7/,
+            'WITHDRAW|0|7|JDOG|100': /^Withdraw 100 JDOG from contract #7/,
+            'COINPAY|0|42': /settle order match #42/,
+            'COLLECT|0': /^Collect validator rewards/,
+            'MESSAGE|3|BTC|addr|hello': /^Send public message/,
+            'FILE|0|doc.txt|text/plain': /^Publish file doc.txt/,
+            'LINK|0|BTC|1|DOGE|2': /^Link BTC action #1 to DOGE action #2/,
+            'SLEEP|0|900000|JDOG': /until block 900000/,
+            'CALLBACK|0|JDOG': /callback redemption of JDOG/,
+            'PRICE|1|BTC|JDOG|USD|1.5': /^Publish price 1.5 USD for JDOG/,
+        };
+        for (const [wire, re] of Object.entries(cases)) {
+            it(wire.split('|').slice(0, 2).join(' v'), function () {
+                const parsed = parse(wire);
+                expect(parsed.ok, wire).to.equal(true);
+                const d = describeAction(parsed);
+                expect(d.summary).to.match(re);
+                expect(d.warnings.join('\n')).to.not.match(GENERIC);
+            });
+        }
+    });
+
+    it('unknown-to-describe actions get the generic fallback with all params listed', function () {
+        // ADDRESS v0 is the one remaining format without a dedicated
+        // describer; unknown future actions take the same path.
+        const d = describeAction({ action: 'FUTURE_ACTION', params: { SOME_FIELD: 'x' } });
+        expect(d.warnings.join(' ')).to.match(GENERIC);
+        expect(d.details.map(x => x.label)).to.include('Some field');
+    });
+
+    describe('BATCH', function () {
+        it('renders each parsed command and the non-atomicity warning', function () {
+            const d = describeAction(parse('BATCH|0|MINT|0|JDOG|5;SEND|0|JDOG|5|addr'));
+            expect(d.summary).to.match(/^Batch of 2 actions/);
+            expect(d.summary).to.include('1. Mint 5 JDOG');
+            expect(d.summary).to.include('2. Send 5 JDOG to addr');
+            expect(d.warnings.join(' ')).to.include('NOT atomic');
+        });
+
+        it('a failed sub-parse renders explicitly without hiding the rest', function () {
+            const d = describeAction(parse('BATCH|0|NOPE|0|x;MINT|0|JDOG|5'));
+            expect(d.summary).to.include('Command 1 could not be decoded (UNKNOWN_ACTION)');
+            expect(d.summary).to.include('2. Mint 5 JDOG');
+        });
+
+        it('legacy COMMANDS array shape still renders', function () {
+            const d = describeAction({
+                action: 'BATCH',
+                params: { COMMANDS: [{ action: 'MINT', params: { TICK: 'A', AMOUNT: '1' } }] },
+            });
+            expect(d.summary).to.match(/^Batch of 1 action/);
+        });
+    });
+
+    describe('extended ctx', function () {
+        it('ownAddresses marks a self-send destination', function () {
+            const d = describeAction(parse('SEND|0|JDOG|1|myaddr1'), { ownAddresses: ['myaddr1'] });
+            const dest = d.details.find(x => x.label === 'Destination');
+            expect(dest.value).to.equal('myaddr1 (your address)');
+        });
+
+        it('contacts marks a known destination', function () {
+            const d = describeAction(parse('SEND|0|JDOG|1|bobaddr'), { contacts: { bobaddr: 'Bob' } });
+            const dest = d.details.find(x => x.label === 'Destination');
+            expect(dest.value).to.equal('bobaddr (contact: Bob)');
+        });
+
+        it('both absent: values untouched (graceful degradation)', function () {
+            const d = describeAction(parse('SEND|0|JDOG|1|bobaddr'));
+            expect(d.details.find(x => x.label === 'Destination').value).to.equal('bobaddr');
+        });
+
+        it('tokenDecimals enables precision verification', function () {
+            const d = describeAction(parse('SEND|0|JDOG|1.123456789|a'), { tokenDecimals: { JDOG: 8 } });
+            expect(d.warnings.some(w => /more decimal places/.test(w))).to.equal(true);
+        });
+    });
+
+    describe('§3.5 adversarial fixtures', function () {
+        it('bidi override in MEMO is neutralized and flagged', function () {
+            const d = describeAction(parse('SEND|0|JDOG|1|addr|pay ‮evil‬ now'));
+            expect(JSON.stringify(d.details)).to.not.include('‮');
+            expect(d.warnings.some(w => /direction-control/.test(w))).to.equal(true);
+        });
+
+        it('zero-width in TICK-adjacent text is stripped and flagged', function () {
+            const d = describeAction({ action: 'SEND', params: { TICK: 'JD​OG', AMOUNT: '1', DESTINATION: 'a' } });
+            expect(d.details.find(x => x.label === 'Token').value).to.equal('JDOG');
+            expect(d.warnings.some(w => /zero-width/.test(w))).to.equal(true);
+        });
+
+        it('exponential AMOUNT is flagged, never prettified', function () {
+            const d = describeAction({ action: 'SEND', params: { TICK: 'JDOG', AMOUNT: '1e21', DESTINATION: 'a' } });
+            expect(d.details.find(x => x.label === 'Amount').value).to.equal('1e21');
+            expect(d.warnings.some(w => /exponential/.test(w))).to.equal(true);
+        });
+
+        it('multi-leg amounts are formatted per leg, no false junk flag', function () {
+            const d = describeAction(parse('SEND|1|JDOG|1|a|2|b|m'));
+            expect(d.warnings.some(w => /not a plain decimal/.test(w))).to.equal(false);
+        });
+
+        it('describe output is deduplicated and text-only', function () {
+            const d = describeAction(parse('SEND|0|JDOG|1|addr|<b>x</b>'));
+            // No HTML interpretation is decoder business; value passes as text.
+            expect(d.details.find(x => x.label === 'Memo').value).to.equal('<b>x</b>');
+        });
+    });
+});

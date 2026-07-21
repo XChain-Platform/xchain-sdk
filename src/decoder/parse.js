@@ -1,0 +1,327 @@
+/*********************************************************************
+ *
+ * Copyright © 2025–2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ **********************************************************************
+ *
+ * XChain Platform SDK - decoder.parse
+ *
+ * Canonical action-string parser: "ACTION|VERSION|F1|F2|..." in,
+ * structured ParsedAction out. Pure (no network, no vault), hardened
+ * for untrusted input: any dApp may feed this arbitrary strings, so
+ * the size gate runs BEFORE any split/alias/UTF-8 work and malformed
+ * input is a typed { ok:false } return, never a throw.
+ *
+ * Mirrors the on-chain extraction semantics (xchain-decoder
+ * parseTransaction / cosigner psbtActionDecode): case-sensitive action
+ * names, alias expansion before format lookup, trailing-empty-field
+ * fill exactly as FormatSelector.serialize trims.
+ *
+ ********************************************************************/
+
+'use strict';
+
+const formats        = require('../formats.js');
+const FormatSelector = require('../formatSelector.js');
+const Validator      = require('../validator.js');
+const Utility        = require('../utility.js');
+const { ACTION_ALIASES } = require('./aliases.js');
+const { MAX_ACTION_DATA_LENGTH } = require('../chunkHelper.js');
+
+// BATCH per-command-type caps. Vendored from the consensus arbiter
+// (xchain-indexer/src/actions/batch.js actionLimits); the conformance
+// unit test guards drift. BATCH:0 = nested BATCH categorically
+// forbidden (a parse failure, not a limit finding).
+const BATCH_ACTION_LIMITS = Object.freeze({
+    BATCH: 0,
+    MINT:  1,
+    ISSUE: 1,
+});
+
+// One shared validator instance for semantic findings (opts.validate).
+// Validator only needs the utility helpers; no per-parse state.
+const validator = new Validator(new Utility());
+
+function failure(code, detail) {
+    return { ok: false, code, detail: detail === undefined ? null : detail };
+}
+
+// Decode Buffer input as strict UTF-8; strings pass through.
+function toText(input) {
+    if (typeof input === 'string') return { text: input };
+    if (Buffer.isBuffer(input)) {
+        try {
+            return { text: new TextDecoder('utf-8', { fatal: true }).decode(input) };
+        } catch (e) {
+            return { error: failure('BAD_UTF8', e.message) };
+        }
+    }
+    return { error: failure('EMPTY', 'input must be a string or Buffer') };
+}
+
+// VERSION segment must be a non-negative integer token, matching the
+// on-chain decoder's Number()+isInteger gate (psbtActionDecode BAD_VERSION).
+function parseVersion(segment) {
+    if (segment === undefined || segment === '') return null;
+    const v = Number(segment);
+    if (!Number.isInteger(v) || v < 0) return null;
+    return v;
+}
+
+/*
+ * Map value segments onto a format's field list.
+ *
+ * - fieldNames[0] is always 'VERSION' and aligns with valueSegs[0].
+ * - The serializer trims trailing empty fields, so fewer segments than
+ *   fields is normal: pad the tail with ''.
+ * - A field name repeated in the format (multi-leg SEND v1/v2/v3,
+ *   AIRDROP v1-v3, DESTROY v1/v2) collects its slot values into an
+ *   array in slot order.
+ * - A rest-field ('...NAME', always terminal in formats.js) absorbs
+ *   every remaining segment as an array (possibly empty: compose emits
+ *   zero segments for an empty rest-field).
+ *
+ * Returns { params, rest } or { error }.
+ */
+function mapFields(fieldNames, valueSegs) {
+    const params = {};
+    let rest = null;
+
+    const restIndex = fieldNames.findIndex(f => FormatSelector.isRestField(f));
+    const fixedCount = restIndex === -1 ? fieldNames.length : restIndex;
+
+    if (restIndex === -1 && valueSegs.length > fieldNames.length) {
+        return { error: failure('FIELD_COUNT_MISMATCH',
+            valueSegs.length + ' values vs ' + fieldNames.length + ' fields') };
+    }
+    if (restIndex !== -1 && restIndex !== fieldNames.length - 1) {
+        // No such format exists today; fail closed if one ever does.
+        return { error: failure('MALFORMED_REST', fieldNames[restIndex]) };
+    }
+
+    const repeated = new Set();
+    const seen = new Set();
+    for (let i = 0; i < fixedCount; i++) {
+        const name = fieldNames[i];
+        if (name === 'VERSION') continue;
+        if (seen.has(name)) repeated.add(name); else seen.add(name);
+    }
+
+    for (let i = 0; i < fixedCount; i++) {
+        const name = fieldNames[i];
+        if (name === 'VERSION') continue;
+        const value = i < valueSegs.length ? valueSegs[i] : '';
+        if (repeated.has(name)) {
+            if (!Array.isArray(params[name])) params[name] = [];
+            params[name].push(value);
+        } else {
+            params[name] = value;
+        }
+    }
+
+    if (restIndex !== -1) {
+        const baseName = FormatSelector.baseFieldName(fieldNames[restIndex]);
+        rest = valueSegs.slice(fixedCount);
+        params[baseName] = rest;
+    }
+
+    return { params, rest };
+}
+
+// Canonical round-trippable string: canonical action name + the value
+// segments with the trailing-empty trim FormatSelector.serialize
+// applies (floor: ACTION|VERSION).
+function canonicalize(action, valueSegs) {
+    const parts = valueSegs.slice();
+    while (parts.length > 1 && parts[parts.length - 1] === '') parts.pop();
+    return [action, ...parts].join('|');
+}
+
+// Project multi-leg arrays to their first slot for validator input:
+// validator.js rules are single-leg shaped (TICK/AMOUNT scalars), and
+// findings are advisory - first-leg projection keeps them meaningful
+// without false-flagging legitimate multi-leg strings. Rest-field
+// arrays (ITEM/PARAMS/CONSTRUCTOR_PARAMS) pass through: the validator
+// handles those natively.
+function validatorFields(params, fieldNames) {
+    const restBases = new Set(fieldNames.filter(f => FormatSelector.isRestField(f))
+        .map(f => FormatSelector.baseFieldName(f)));
+    const projected = {};
+    for (const key of Object.keys(params)) {
+        const value = params[key];
+        projected[key] = (Array.isArray(value) && !restBases.has(key) && value.length > 0)
+            ? value[0]
+            : value;
+    }
+    return projected;
+}
+
+function runValidation(action, params, fieldNames, extraFindings) {
+    let findings = [];
+    try {
+        findings = validator.validate(action, validatorFields(params, fieldNames)) || [];
+    } catch (e) {
+        findings = [{ code: 'VALIDATOR_ERROR', message: e.message, details: {} }];
+    }
+    findings = findings.concat(extraFindings || []);
+    return { ok: findings.length === 0, findings };
+}
+
+/*
+ * decoder.parse - see file header.
+ *
+ * @param {string|Buffer} input  canonical action text "ACTION|VERSION|F1|..."
+ * @param {object} [opts]
+ * @param {boolean} [opts.validate=true]  attach validator.js semantic
+ *                  findings; they never flip ok=false
+ * @returns {object} ParsedAction { ok:true, action, rawAction, version,
+ *                   params, rest, commands, actionString, validation }
+ *                   or ParseFailure { ok:false, code, detail }
+ */
+function parse(input, opts = {}) {
+    const doValidate = opts.validate !== false;
+
+    if (input === undefined || input === null || input === '' ||
+        (Buffer.isBuffer(input) && input.length === 0))
+        return failure('EMPTY');
+
+    // Rule 1: input-size gate FIRST, on the raw input, before any
+    // split, alias lookup, regex, or UTF-8 work.
+    const rawLength = Buffer.isBuffer(input)
+        ? input.length
+        : Buffer.byteLength(String(input), 'utf8');
+    if (rawLength > MAX_ACTION_DATA_LENGTH)
+        return failure('TOO_LONG', rawLength + ' bytes > ' + MAX_ACTION_DATA_LENGTH);
+
+    const decoded = toText(input);
+    if (decoded.error) return decoded.error;
+    const text = decoded.text;
+    if (text === '') return failure('EMPTY');
+
+    return parseTopLevel(text, doValidate, false);
+}
+
+function parseTopLevel(text, doValidate, insideBatch) {
+    const segments = text.split('|');
+
+    // Rule 3: case-sensitive action names, alias table included -
+    // "send" matches neither and is UNKNOWN_ACTION, mirroring the
+    // on-chain decoder's no-case-fold lookup.
+    const rawAction = String(segments[0]);
+    const action = ACTION_ALIASES[rawAction] !== undefined ? ACTION_ALIASES[rawAction] : rawAction;
+    if (!Object.prototype.hasOwnProperty.call(formats, action))
+        return failure('UNKNOWN_ACTION', rawAction);
+
+    const version = parseVersion(segments[1]);
+    if (version === null || !formats[action][version])
+        return failure('UNKNOWN_VERSION', action + ' v' + String(segments[1]));
+
+    // Rule 8: BATCH sub-grammar. COMMAND is a SINGULAR terminal
+    // delimiter-exempt catch-all: the entire remaining tail, verbatim.
+    // The generic fixed-field mapping below would mis-slice it on '|',
+    // so BATCH branches before field mapping.
+    if (action === 'BATCH') {
+        if (insideBatch) return failure('NESTED_BATCH_FORBIDDEN');
+        return parseBatch(rawAction, version, segments, doValidate);
+    }
+
+    const fieldNames = FormatSelector.getFormatFields(action, version);
+    const valueSegs = segments.slice(1);
+    const mapped = mapFields(fieldNames, valueSegs);
+    if (mapped.error) return mapped.error;
+
+    const result = {
+        ok: true,
+        action,
+        rawAction: rawAction === action ? undefined : rawAction,
+        version,
+        params: mapped.params,
+        rest: mapped.rest,
+        commands: null,
+        actionString: canonicalize(action, valueSegs),
+        validation: null,
+    };
+    if (result.rawAction === undefined) delete result.rawAction;
+
+    if (doValidate)
+        result.validation = runValidation(action, mapped.params, fieldNames, []);
+
+    return result;
+}
+
+function parseBatch(rawAction, version, segments, doValidate) {
+    // 3-way top-level split: ACTION, VERSION, verbatim tail.
+    const tail = segments.slice(2).join('|');
+
+    // COMMAND absent entirely (BATCH|0) => validator finding, ok stays
+    // true; present-but-empty (BATCH|0|) => parse failure.
+    if (segments.length <= 2) {
+        const result = {
+            ok: true,
+            action: 'BATCH',
+            version,
+            params: { COMMAND: '' },
+            rest: null,
+            commands: [],
+            actionString: canonicalize('BATCH', segments.slice(1)),
+            validation: null,
+        };
+        if (doValidate)
+            result.validation = runValidation('BATCH', { COMMAND: '' }, ['VERSION', 'COMMAND'], []);
+        return result;
+    }
+    if (tail === '') return failure('EMPTY_BATCH');
+
+    const entries = tail.split(';');
+    const commands = [];
+    const counts = {};
+    for (const entry of entries) {
+        const sub = entry === ''
+            ? failure('EMPTY', 'empty BATCH command')
+            : parseTopLevel(entry, doValidate, true);
+        // A sub-entry that IS a BATCH flips the OUTER result: nested
+        // BATCH is categorically forbidden (indexer actionLimits
+        // BATCH:0), not a per-command recoverable failure.
+        if (sub.ok === false && sub.code === 'NESTED_BATCH_FORBIDDEN')
+            return failure('NESTED_BATCH_FORBIDDEN');
+        if (sub.ok) counts[sub.action] = (counts[sub.action] || 0) + 1;
+        commands.push(sub);
+    }
+
+    // Per-command-type caps -> validation finding, not a parse failure.
+    const extraFindings = [];
+    for (const a of Object.keys(counts)) {
+        const limit = BATCH_ACTION_LIMITS[a];
+        if (limit !== undefined && counts[a] > limit) {
+            extraFindings.push({
+                code: 'BATCH_LIMIT_EXCEEDED',
+                message: 'BATCH allows at most ' + limit + ' ' + a + ' command' + (limit === 1 ? '' : 's') + '; got ' + counts[a],
+                details: { action: a, limit, count: counts[a] },
+            });
+        }
+    }
+
+    const result = {
+        ok: true,
+        action: 'BATCH',
+        version,
+        params: { COMMAND: tail },
+        rest: null,
+        commands,
+        actionString: canonicalize('BATCH', segments.slice(1)),
+        validation: null,
+    };
+    if (doValidate)
+        result.validation = runValidation('BATCH', { COMMAND: tail }, ['VERSION', 'COMMAND'], extraFindings);
+    return result;
+}
+
+module.exports = { parse, BATCH_ACTION_LIMITS };

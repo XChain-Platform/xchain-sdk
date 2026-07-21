@@ -29,6 +29,7 @@ const WalletSession    = require('./src/walletSession.js');
 const AgentSession     = require('./src/agentSession.js');
 const MuSig2AgentSession = require('./src/cosigner/musig2AgentSession.js');
 const coSigner = require('./src/cosigner/index.js');
+const decoder  = require('./src/decoder/index.js');
 const { X402Gateway, X402Client, parseActionString: x402ParseActionString } = require('./src/x402.js');
 const AuthUtils        = require('./src/auth.js');
 const CrossChainHelper   = require('./src/crossChain.js');
@@ -59,7 +60,8 @@ const {
     SDKActionError,
     SDKMuSigError,
     SDKPolicyError,
-    SDKX402Error
+    SDKX402Error,
+    SDKPreflightError
 } = require('./src/errors.js');
 
 module.exports = {
@@ -71,6 +73,13 @@ module.exports = {
     WalletSession,
     AgentSession,
     MuSig2AgentSession,
+    // First-class decode library (parse/describe/decodeActionFromPsbt):
+    // also reachable as `sdk.decoder`.
+    decoder,
+    // Pre-flight finding-code registry + constants (schemaVersion, TTLs,
+    // certified error list): the wallet imports these rather than
+    // re-literaling any quantified value.
+    preflightConstants: require('./src/preflight/constants.js'),
     // MuSig2 co-signer toolkit (browser-safe): also reachable as `sdk.coSigner`.
     coSigner,
     CoSigner: coSigner.CoSigner,
@@ -112,6 +121,7 @@ module.exports = {
     SDKMuSigError,
     SDKPolicyError,
     SDKX402Error,
+    SDKPreflightError,
     // Default export for convenience
     default: XChainSDK
 };

@@ -332,6 +332,19 @@ class ExplorerClient {
         return this._get('/feequote?' + q.toString());
     }
 
+    // Validity-first pre-flight for one action . Proxies to the indexer's read-only
+    // `preflight`: "would the indexer accept this action?", decoupled from native-fee support.
+    // Returns { supported, valid, status, error, guardInert, feeExempt, denied, blockIndex,
+    //           blockTime }. `params` is the wire param array (without the ACTION name) or a
+    //           pre-joined pipe string. noRetry is honored (best-effort pre-flight callers).
+    async getPreflight({ action, params, source } = {}, opts = {}) {
+        let q = new URLSearchParams();
+        if (action !== undefined && action !== null) q.set('action', String(action));
+        if (params !== undefined && params !== null) q.set('params', Array.isArray(params) ? params.join('|') : String(params));
+        if (source !== undefined && source !== null) q.set('source', String(source));
+        return this._get('/preflight?' + q.toString(), opts);
+    }
+
     // Native-coin fee schedule + current oracle prices. Proxies to the indexer's `feeschedule`.
     async getFeeSchedule() {
         return this._get('/feeschedule');

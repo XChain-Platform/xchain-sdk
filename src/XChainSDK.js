@@ -39,6 +39,8 @@ const VoteHelpers    = require('./vote.js');
 const AttestationHelpers = require('./attestation.js');
 const CheckpointVerifier = require('./checkpoint.js');
 const LightClient        = require('./light.js');
+const Decoder            = require('./decoder/index.js');
+const Preflight          = require('./preflight/index.js');
 const MuSig2            = require('./musig2.js');
 const ActionWaiter      = require('./actionWaiter.js');
 const LifecycleManager  = require('./lifecycleManager.js');
@@ -125,6 +127,20 @@ class XChainSDK {
         // against a quorum-signed checkpoint's committed roots (merkle.js twin +
         // sdk.checkpoint). Nothing trusts the server's own verified/amount.
         this.light = LightClient;
+        // First-class decode library (spec: confirm-decode-preflight §3):
+        // `sdk.decoder.parse(actionString)` -> ParsedAction,
+        // `sdk.decoder.describe(parsed, ctx)` -> plain-English intent,
+        // `sdk.decoder.decodeActionFromPsbt(psbt)` -> fail-closed PSBT decode.
+        // Pure module (no network, no vault), hardened for untrusted input.
+        this.decoder = Decoder;
+
+        // Pre-flight engine (spec: confirm-decode-preflight §4). Predicts
+        // whether the indexer would reject an action BEFORE signing, via a
+        // server dry-run (Tier 1) plus a certified client matrix (Tier 2).
+        // `options.preflight` (default true -> 'enforce') sets the default
+        // mode; `sdk.preflight(actionData, opts)` runs a check on demand.
+        // Under 'enforce', a 'fail' verdict throws SDKPreflightError.
+        Preflight.attach(this, options.preflight === undefined ? true : options.preflight);
 
         // Service clients (initialized by _initClients or init)
         this.explorer = null;

@@ -133,6 +133,21 @@ class SDKX402Error extends SDKError {
     }
 }
 
+// Pre-flight verdict error (spec §4.2). Thrown under 'enforce' mode
+// when a pre-flight run returns verdict 'fail'; `.report` carries the
+// full PreflightReport so headless callers can inspect every finding.
+// The code is always 'PREFLIGHT_FAIL'; the report distinguishes the
+// specific findings. (Unparseable input throws SDKFormatError instead,
+// a distinct catchable class, so callers can tell "bad input" from
+// "would be rejected".)
+class SDKPreflightError extends SDKError {
+    constructor(message, report) {
+        super('PREFLIGHT_FAIL', message, { report });
+        this.name = 'SDKPreflightError';
+        this.report = report;
+    }
+}
+
 module.exports = {
     SDKError,
     SDKValidationError,
@@ -149,5 +164,6 @@ module.exports = {
     SDKMuSigError,
     SDKGatedFileError,
     SDKPolicyError,
-    SDKX402Error
+    SDKX402Error,
+    SDKPreflightError
 };

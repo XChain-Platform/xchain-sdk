@@ -58,18 +58,13 @@ const P2SH_TAG   = Buffer.from('p2sh');
 const P2WSH_TAG  = Buffer.from('p2wsh');
 const { MAX_ACTION_DATA_LENGTH } = require('../chunkHelper.js');
 
-// Documented on-chain action aliases, expanded BEFORE format lookup / policy.
-// Keep in lockstep with xchain-decoder/src/XChainDecoder.js ACTION_ALIASES and
-// xchain-indexer/src/actions.js actionAliases: a spec-following client may
-// encode any of these leading tokens and produce a valid on-chain payload, so
-// the co-signer must judge the canonical action, not refuse the alias.
-const ACTION_ALIASES = {
-    TRANSFER: 'SEND',
-    ADDR:     'ADDRESS',
-    DROP:     'AIRDROP',
-    CAST:     'BROADCAST',
-    MSG:      'MESSAGE',
-};
+// Documented on-chain action aliases, expanded BEFORE format lookup / policy:
+// a spec-following client may encode any of these leading tokens and produce a
+// valid on-chain payload, so the co-signer must judge the canonical action,
+// not refuse the alias. Single in-repo source (decoder/aliases.js),
+// manifest-conformance-guarded there.
+const { ACTION_ALIASES } = require('../decoder/aliases.js');
+const { parse: parseActionString } = require('../decoder/parse.js');
 
 // Repeated value-bearing fields mean a multi-output action (e.g. SEND v1/v2/v3).
 // The single-leg policy evaluator reads one tick/amount, so a flat dict would
@@ -183,23 +178,30 @@ function decodeActionFromPsbt(psbtOrHex, opts = {}) {
         }
     }
 
-    // Map fields -> segments. segments[0] is the action name; fieldNames[i]
-    // aligns with segments[1+i] (fieldNames[0]=='VERSION'==segments[1]). The
-    // encoder trims trailing empty fields (formatSelector.serialize), so fewer
-    // segments than fields is normal - pad the tail with ''. More segments than
-    // fields (and no rest-field) is malformed -> fail closed.
-    const valueSegs = segments.slice(1);
-    if (valueSegs.length > fieldNames.length) return fail('FIELD_COUNT_MISMATCH',
-        `${valueSegs.length} values vs ${fieldNames.length} fields`);
-
-    const params = {};
-    for (let i = 0; i < fieldNames.length; i++) {
-        const name = fieldNames[i];
-        if (name === 'VERSION') continue;
-        params[name] = (i < valueSegs.length) ? valueSegs[i] : '';
+    // BATCH: parse() understands the multi-command sub-grammar, but the
+    // single-leg policy evaluator cannot safely judge a command bundle, so
+    // the pre-re-base fail-closed behavior is preserved verbatim: a COMMAND
+    // tail with embedded '|' (every real sub-action has one) refuses with
+    // the same FIELD_COUNT_MISMATCH the flat field-mapper produced.
+    if (action === 'BATCH' && segments.length > 3) {
+        return fail('FIELD_COUNT_MISMATCH',
+            `${segments.length - 1} values vs ${fieldNames.length} fields`);
     }
 
-    return { ok: true, action, version, params, actionString };
+    // Field extraction delegates to the canonical decoder.parse() (
+    // re-base): same segment->field alignment, same trailing-empty padding,
+    // same FIELD_COUNT_MISMATCH refusal. The rest/multi-leg punts above make
+    // parse()'s array-valued shapes unreachable here, so params stays the
+    // flat single-leg dict the policy evaluator expects. The returned
+    // actionString stays the RAW decoded string (contract frozen: aliases
+    // are NOT rewritten in it), while action is the canonical name.
+    const parsed = parseActionString(actionString, { validate: false });
+    if (!parsed.ok) {
+        if (parsed.code === 'FIELD_COUNT_MISMATCH') return fail('FIELD_COUNT_MISMATCH', parsed.detail);
+        return fail('UNKNOWN_ACTION', `${action} v${version}`);
+    }
+
+    return { ok: true, action, version, params: parsed.params, actionString };
 }
 
 // MAX_ACTION_DATA_LENGTH re-exported so parity/drift guards can assert the

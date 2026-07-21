@@ -1,0 +1,130 @@
+/*********************************************************************
+ *
+ * Copyright © 2025–2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ **********************************************************************
+ *
+ * Pre-flight Tier-2: DISPENSER (open/edit/close) + DISPENSE (buy).
+ * Spec §4.4 rows; mirrors xchain-indexer src/actions/dispenser.js.
+ *
+ * DISPENSE is the row Tier 1 CANNOT validate (feeExempt: the handler
+ * never runs on the quote path, and the synthetic tx cannot carry the
+ * settlement outputs), and it MOVES NATIVE COIN - so the client tier
+ * is the only pre-sign protection: dispenser exists, resolved state
+ * is open (client lifecycle resolver, §7), and give-remaining covers
+ * the request.
+ *
+ ********************************************************************/
+
+'use strict';
+
+const { FINDING_CODES } = require('../constants.js');
+const numeric = require('../numeric.js');
+const { resolveDispenserState, resolveGiveRemaining } = require('../resolvers.js');
+
+async function checkDispenser(ctx) {
+    const version = String(ctx.parsed.version);
+    if (version === '0') {
+        // Open: flat hasBalance(GIVE_ESCROW), skipped when
+        // GIVE_OWNERSHIP=1 (dispenser.js). EXPIRATION is block TIME,
+        // not height - local warning only.
+        const giveTick = ctx.field('GIVE_TICK');
+        const escrow = ctx.field('GIVE_ESCROW');
+        const giveOwnership = ctx.field('GIVE_OWNERSHIP') === '1';
+        if (!giveOwnership && giveTick && escrow && ctx.source) {
+            const balance = await ctx.balance(ctx.source, giveTick);
+            if (balance === null) {
+                ctx.addUnverified(FINDING_CODES.BALANCE_INSUFFICIENT, 'balance lookup unavailable for ' + giveTick);
+            } else {
+                ctx.markRun(FINDING_CODES.BALANCE_INSUFFICIENT);
+                if (!numeric.gte(balance, escrow)) {
+                    ctx.addFinding(FINDING_CODES.BALANCE_INSUFFICIENT, 'error',
+                        `Balance of ${giveTick} (${balance}) does not cover the escrow (${escrow}).`,
+                        { tick: giveTick, balance, escrow });
+                }
+            }
+        }
+        ctx.addUnverified('DISPENSER_ORIGIN_STANDING',
+            'origin-standing / UTXO-freshness gate is server-side (and unreliable even on the quote path)');
+        return;
+    }
+
+    // v1 cancel / v2 edit: dispenser exists; owner is SOURCE or
+    // GET_ADDRESS (dispenser.js:298-302); live lifecycle resolved
+    // client-side (warning-max: the resolver reads event streams).
+    const idx = ctx.field('DISPENSER_ACTION_INDEX');
+    if (!idx) return;
+    const { found, state, dispenser } = await resolveDispenserState(ctx, idx);
+    ctx.markRun(FINDING_CODES.DISPENSER_NOT_FOUND);
+    if (found === undefined) {
+        ctx.addUnverified(FINDING_CODES.DISPENSER_NOT_FOUND, 'dispenser lookup unavailable');
+        return;
+    }
+    if (found === false) {
+        ctx.addFinding(FINDING_CODES.DISPENSER_NOT_FOUND, 'error',
+            `Dispenser #${idx} does not exist.`, { dispenserActionIndex: idx });
+        return;
+    }
+    if (state !== 'open') {
+        ctx.addFinding('DISPENSER_LIFECYCLE', 'warning',
+            `Dispenser #${idx} is ${state}; this ${ctx.parsed.version === 1 ? 'cancel' : 'edit'} will likely be rejected.`,
+            { dispenserActionIndex: idx, state });
+    }
+    if (ctx.source && dispenser) {
+        const owner = String(dispenser.source ?? dispenser.owner ?? '');
+        const getAddress = String(dispenser.get_address ?? dispenser.GET_ADDRESS ?? '');
+        if (owner && ctx.source !== owner && (!getAddress || ctx.source !== getAddress)) {
+            ctx.addFinding('DISPENSER_NOT_OWNER', 'warning',
+                `Source is neither the dispenser owner (${owner}) nor its GET_ADDRESS; the chain will reject this.`,
+                { dispenserActionIndex: idx, owner, getAddress });
+        }
+    }
+}
+
+async function checkDispense(ctx) {
+    // DISPENSE row (v3 addition): un-dry-runnable, moves native coin.
+    const idx = ctx.field('DISPENSER_ACTION_INDEX') || ctx.field('ACTION_INDEX');
+    if (!idx) {
+        ctx.addUnverified(FINDING_CODES.DISPENSER_NOT_FOUND, 'no dispenser reference in params');
+        return;
+    }
+    const { found, state, dispenser } = await resolveDispenserState(ctx, idx);
+    ctx.markRun(FINDING_CODES.DISPENSER_NOT_FOUND);
+    ctx.markRun(FINDING_CODES.DISPENSER_NOT_OPEN);
+    if (found === undefined) {
+        ctx.addUnverified(FINDING_CODES.DISPENSER_NOT_FOUND, 'dispenser lookup unavailable');
+        return;
+    }
+    if (found === false) {
+        ctx.addFinding(FINDING_CODES.DISPENSER_NOT_FOUND, 'error',
+            `Dispenser #${idx} does not exist.`, { dispenserActionIndex: idx });
+        return;
+    }
+    if (state !== 'open') {
+        ctx.addFinding(FINDING_CODES.DISPENSER_NOT_OPEN, 'error',
+            `Dispenser #${idx} is ${state}, not open. A dispense against it will fail AFTER your native coin moves.`,
+            { dispenserActionIndex: idx, state });
+    }
+
+    const remaining = await resolveGiveRemaining(ctx, dispenser, idx);
+    ctx.markRun(FINDING_CODES.DISPENSER_EMPTY);
+    const giveAmount = String(dispenser.give_amount ?? dispenser.GIVE_AMOUNT ?? '0');
+    if (remaining !== null && numeric.isPositive(giveAmount) && !numeric.gte(remaining, giveAmount)) {
+        ctx.addFinding(FINDING_CODES.DISPENSER_EMPTY, 'error',
+            `Dispenser #${idx} has ${remaining} remaining, less than one fill (${giveAmount}).`,
+            { dispenserActionIndex: idx, remaining, giveAmount });
+    }
+
+    ctx.addUnverified('DISPENSE_SETTLEMENT_MATCH',
+        'exact settlement-output matching is structural and unknowable before the transaction exists');
+}
+
+module.exports = { checkDispenser, checkDispense };
