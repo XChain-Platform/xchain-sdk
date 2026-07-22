@@ -111,5 +111,20 @@ describe('AddressResolver', function () {
             await r.resolveActionParams('SEND', input);
             expect(input.destination).to.equal(ADDR);
         });
+
+        it('does NOT compact DISPENSER GET_ADDRESS (decoder cannot resolve ^<id>) but still compacts ORACLE_ADDRESS', async function () {
+            const r = new AddressResolver(makeSdk({}, addressStub({ [ADDR]: 57, [ADDR2]: 58 })));
+            const out = await r.resolveActionParams('DISPENSER', { getAddress: ADDR, oracleAddress: ADDR2 });
+            expect(out.getAddress).to.equal(ADDR);        // delegate operating address kept in full
+            expect(out.oracleAddress).to.equal('^58');    // other DISPENSER address field still compacted
+        });
+
+        it('still compacts ORDER and SWAP GET_ADDRESS (the exemption is DISPENSER-scoped)', async function () {
+            const r = new AddressResolver(makeSdk({}, addressStub({ [ADDR]: 57 })));
+            const order = await r.resolveActionParams('ORDER', { getAddress: ADDR });
+            const swap  = await r.resolveActionParams('SWAP',  { getAddress: ADDR });
+            expect(order.getAddress).to.equal('^57');
+            expect(swap.getAddress).to.equal('^57');
+        });
     });
 });

@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Re-vendor `lint-core.js` and `metering.js` byte-identical to canonical xchain-vm ().
 - Re-embedded the crowdsale template via `sync:templates`, picking up the xchain-contracts saleDecimals validation from 794eae8 (; template-parity had been red since 2026-07-21).
+- Address-ref compaction is now action-aware (`SDK_COMPACTABLE_BY_ACTION`): a field can be compacted for one action and emitted in full for another.
+
+### Fixed
+- Delegated dispenser opens no longer compact `GET_ADDRESS` to its `^<id>` reference form; the full address is serialized so the decoder — which cannot resolve an `^<id>` into its own address id space — keys the dispenser on the real operating address and can match payments to it. Previously a default-compacted delegated dispenser opened keyed on the literal `^<id>` token and silently never dispensed. `ORDER`/`SWAP` `GET_ADDRESS` compaction is unchanged.
 
 ### Security
 - CoSigner now rejects any BIP341 `sighashType` other than `SIGHASH_DEFAULT`/`SIGHASH_ALL` in `process`/`_processMulti` (and defensively in `taprootKeyPathSighash`). Previously the type was honored verbatim from the request, so a `SIGHASH_NONE`/`SINGLE`/`ANYONECANPAY` partial over an in-policy PSBT could be reassembled into a drain transaction that still verified, bypassing the output gate.

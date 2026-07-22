@@ -28,20 +28,26 @@
  * Disable with `new XChainSDK({ compactAddresses: false })`.
  *
  * The SET of compactable fields comes from the SHARED, byte-identical field map
- * src/addressRefFields.js (the indexer keeps the authoritative copy). Only
- * SDK_COMPACTABLE (single-value, non-type-gated fields) is compacted here; the
- * indexer assigns ids for the FULL set, so the SDK-emitted `^<id>` set is always
- * a subset the indexer recognises. SOURCE is never in the map (it is the tx
- * sender, not a wire payload field) and so is never compacted.
+ * src/addressRefFields.js (the indexer keeps the authoritative copy). Compaction
+ * is gated per action by SDK_COMPACTABLE_BY_ACTION (single-value, non-type-gated,
+ * non-`noCompact` fields); the indexer assigns ids for the FULL set, so the
+ * SDK-emitted `^<id>` set is always a subset the indexer recognises. One field is
+ * held back even though the indexer ids it: DISPENSER.GET_ADDRESS is emitted as a
+ * full address (the decoder gates dispense detection on it and cannot resolve a
+ * `^<id>` ref), while ORDER/SWAP.GET_ADDRESS stay compacted. SOURCE is never in
+ * the map (it is the tx sender, not a wire payload field) and so is never compacted.
  *
  ********************************************************************/
 
-const { SDK_COMPACTABLE } = require('./addressRefFields.js');
+const { SDK_COMPACTABLE_BY_ACTION } = require('./addressRefFields.js');
 
-// Fields whose value references an EXISTING address and can therefore be
-// compacted to the `^<id>` wire form. Derived from the shared consensus map so
-// it can never drift from the indexer's accepted set.
-const ADDRESS_REF_FIELDS = SDK_COMPACTABLE;
+// Per-ACTION sets of fields whose value references an EXISTING address and can
+// therefore be compacted to the `^<id>` wire form. Derived from the shared
+// consensus map so it can never drift from the indexer's accepted set. Keyed by
+// action so a field can be compactable for one action yet held back for another
+// (DISPENSER.GET_ADDRESS is emitted as a full address; ORDER/SWAP.GET_ADDRESS are
+// compacted) — see the `noCompact` note in addressRefFields.js.
+const COMPACTABLE_BY_ACTION = SDK_COMPACTABLE_BY_ACTION;
 
 // Hard upper bound on a single compaction lookup. A reachable explorer answers
 // in well under this; the cap only matters for a host that accepts a connection
@@ -125,12 +131,17 @@ class AddressResolver {
     // compaction is disabled the params pass straight through.
     async resolveActionParams(action, params) {
         if (!this.enabled() || params === undefined || params === null) return params;
+        // Gate on THIS action's compactable fields, so a field held back for one
+        // action (DISPENSER.GET_ADDRESS) is not compacted just because another
+        // action compacts a same-named field. Unknown actions compact nothing.
+        let name = String(action || '').toUpperCase();
+        let compactable = COMPACTABLE_BY_ACTION[name] || [];
         let out = Object.assign({}, params);
         for (let key of Object.keys(out)) {
             // Map the (possibly camelCase) key to its canonical UPPER_SNAKE name
             // to test whether it is an address-reference field.
             let field = this.sdk.util.camelToUpperSnake(key);
-            if (!ADDRESS_REF_FIELDS.includes(field)) continue;
+            if (!compactable.includes(field)) continue;
             let val = out[key];
             if (val === undefined || val === null || Array.isArray(val)) continue;
             out[key] = await this.resolve(val);
