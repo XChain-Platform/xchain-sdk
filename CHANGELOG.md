@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Re-vendor `lint-core.js` and `metering.js` byte-identical to canonical xchain-vm ().
+- Re-embedded the crowdsale template via `sync:templates`, picking up the xchain-contracts saleDecimals validation from 794eae8 (; template-parity had been red since 2026-07-21).
 
 ### Security
 - CoSigner now rejects any BIP341 `sighashType` other than `SIGHASH_DEFAULT`/`SIGHASH_ALL` in `process`/`_processMulti` (and defensively in `taprootKeyPathSighash`). Previously the type was honored verbatim from the request, so a `SIGHASH_NONE`/`SINGLE`/`ANYONECANPAY` partial over an in-policy PSBT could be reassembled into a drain transaction that still verified, bypassing the output gate.
