@@ -497,4 +497,84 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             expect(spy.callCount).to.equal(0);
         });
     });
+
+    // -----------------------------------------------------------------
+    // : `statuses` must never be forwarded
+    // -----------------------------------------------------------------
+
+    describe('statuses filter is not advertised () @regression', function () {
+
+        // Records every SUBSCRIBE frame the SDK sends, so we assert on the
+        // wire params rather than on internals.
+        function recordingServer() {
+            return new Promise((resolve) => {
+                const sent = [];
+                const wss = new WebSocket.Server({ port: 0 }, () => {
+                    wss.on('connection', (ws) => {
+                        ws.send(JSON.stringify({
+                            type: 'WELCOME', chain: 'BTC', network: 'regtest',
+                            timestamp: Date.now(),
+                            data: { version: '1.0.0', server_time: Date.now(),
+                                    latest_block_index: 100, channels: [], types: [], features: [] }
+                        }));
+                        ws.on('message', (data) => {
+                            const msg = JSON.parse(data.toString());
+                            if (msg.action === 'subscribe') {
+                                sent.push(msg);
+                                ws.send(JSON.stringify({
+                                    type: 'SUBSCRIBED', id: msg.id, timestamp: Date.now(),
+                                    data: { channel: msg.channels[0], active_filters: {} }
+                                }));
+                            }
+                        });
+                    });
+                    resolve({ wss, port: wss.address().port, sent });
+                });
+            });
+        }
+
+        async function paramsFor(fn) {
+            const srv = await recordingServer();
+            const s = new XChainSDK({
+                network: 'bitcoin-regtest', explorerUrl: 'localhost', explorerPort: srv.port
+            });
+            await s.connectWs();
+            fn(s);
+            await new Promise((r) => setTimeout(r, 60));
+            s.stop();
+            await new Promise((r) => srv.wss.close(r));
+            return srv.sent.map((m) => m.params || {});
+        }
+
+        it('onAction drops statuses but keeps the filters the server honors', async function () {
+            const params = await paramsFor((s) => s.onAction(() => {}, {
+                types: ['SEND'], statuses: ['pending_coinpay'], ticks: ['PEPE']
+            }));
+            expect(params.length).to.be.greaterThan(0);
+            for (const p of params) expect(p).to.not.have.property('statuses');
+            const merged = Object.assign({}, ...params);
+            expect(merged.types).to.deep.equal(['SEND']);
+            expect(merged.ticks).to.deep.equal(['PEPE']);
+        });
+
+        it('onAddress drops statuses but keeps types', async function () {
+            const params = await paramsFor((s) => s.onAddress('1abc', () => {}, {
+                types: ['ORDER_MATCH'], statuses: ['open']
+            }));
+            expect(params.length).to.be.greaterThan(0);
+            for (const p of params) expect(p).to.not.have.property('statuses');
+            const merged = Object.assign({}, ...params);
+            expect(merged.types).to.deep.equal(['ORDER_MATCH']);
+        });
+
+        it('onOrderMatch drops statuses and still pins types to ORDER_MATCH', async function () {
+            const params = await paramsFor((s) => s.onOrderMatch('1abc', () => {}, {
+                statuses: ['filled']
+            }));
+            expect(params.length).to.be.greaterThan(0);
+            for (const p of params) expect(p).to.not.have.property('statuses');
+            const merged = Object.assign({}, ...params);
+            expect(merged.types).to.deep.equal(['ORDER_MATCH']);
+        });
+    });
 });

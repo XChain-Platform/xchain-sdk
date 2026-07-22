@@ -1451,7 +1451,14 @@ class XChainSDK {
         ws.on('NEW_ACTION', callback);
         let params = {};
         if (opts && opts.types)    params.types    = opts.types;
-        if (opts && opts.statuses) params.statuses = opts.statuses;
+        // `statuses` is deliberately NOT forwarded (). No explorer channel
+        // populates a per-event status: db.getActionsSince selects `NULL as status`,
+        // and every outbound frame (NEW_ACTION, lifecycle events incl. ORDER_MATCH,
+        // catch-up replay) derives its status from that row. Broadcaster._passesFilter
+        // only rejects when status is truthy, so the filter could never reject anything.
+        // The server matches this: it omits `statuses` from WELCOME features and from
+        // the SUBSCRIBED active_filters. Forwarding it let a caller rely on a silent
+        // no-op and believe it was receiving a filtered stream.
         if (opts && opts.ticks)    params.ticks    = opts.ticks;
         this._subscribeDetached(ws, ['actions'], Object.keys(params).length > 0 ? params : undefined);
         return () => {
@@ -1474,7 +1481,6 @@ class XChainSDK {
 
         let params = { address };
         if (opts && opts.types)    params.types    = opts.types;
-        if (opts && opts.statuses) params.statuses = opts.statuses;
         if (opts && opts.snapshot) params.snapshot  = true;
 
         // The explorer sends the requested initial-state frame as a
@@ -1579,7 +1585,6 @@ class XChainSDK {
         const ws = this._requireWs();
         ws.on('ORDER_MATCH', callback);
         let params = { address, types: ['ORDER_MATCH'] };
-        if (opts && opts.statuses) params.statuses = opts.statuses;
         this._subscribeDetached(ws, ['address'], params);
         return () => {
             ws.off('ORDER_MATCH', callback);

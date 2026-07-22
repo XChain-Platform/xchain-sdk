@@ -1595,10 +1595,10 @@ export declare class XChainSDK {
     onBlock(callback: (msg: any) => void): () => void;
 
     /** Subscribe to new actions with optional type/status/tick filters. */
-    onAction(callback: (msg: any) => void, opts?: { types?: string[]; statuses?: string[]; ticks?: string[] }): () => void;
+    onAction(callback: (msg: any) => void, opts?: { types?: string[]; ticks?: string[] }): () => void;
 
     /** Subscribe to all events touching an address (NEW_ACTION, ADDRESS_UPDATE, ORDER_MATCH, COINPAY_*, SWAP_MATCH, DISPENSE). */
-    onAddress(address: string, callback: (msg: any) => void, opts?: { types?: string[]; statuses?: string[]; snapshot?: boolean }): () => void;
+    onAddress(address: string, callback: (msg: any) => void, opts?: { types?: string[]; snapshot?: boolean }): () => void;
 
     /** Subscribe to updates for a token. */
     onToken(tick: string, callback: (msg: any) => void): () => void;
@@ -1613,7 +1613,7 @@ export declare class XChainSDK {
     onCoinpayRequired(address: string, callback: (msg: any) => void): () => void;
 
     /** Subscribe to ORDER_MATCH events on an address. */
-    onOrderMatch(address: string, callback: (msg: any) => void, opts?: { statuses?: string[] }): () => void;
+    onOrderMatch(address: string, callback: (msg: any) => void): () => void;
 
     /** Subscribe to network-statistics updates. */
     onNetworkStats(callback: (msg: any) => void): () => void;

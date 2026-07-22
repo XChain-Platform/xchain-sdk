@@ -992,11 +992,25 @@ describe('XChainSDK', function () {
             expect(sdk.ws.off.calledWith('NEW_BLOCK', cb)).to.be.true;
         });
 
+        // : the `statuses` key in this assertion pinned the BUG. The SDK
+        // forwarded a filter no explorer channel honors (getActionsSince selects
+        // `NULL as status`), so a caller believed it had a filtered stream and did
+        // not. The supported filters are asserted here; the dropped one below.
         it('onAction registers handler and subscribes with params when given', function () {
             sdk = makeSDKWithWs();
             const cb = sinon.spy();
+            const unsub = sdk.onAction(cb, { types: ['SEND'], ticks: ['TOKEN'] });
+            expect(sdk.ws.subscribe.firstCall.args[1]).to.deep.equal({ types: ['SEND'], ticks: ['TOKEN'] });
+            unsub();
+        });
+
+        it('onAction does not forward the unsupported statuses filter', function () {
+            sdk = makeSDKWithWs();
+            const cb = sinon.spy();
             const unsub = sdk.onAction(cb, { types: ['SEND'], statuses: ['valid'], ticks: ['TOKEN'] });
-            expect(sdk.ws.subscribe.firstCall.args[1]).to.deep.equal({ types: ['SEND'], statuses: ['valid'], ticks: ['TOKEN'] });
+            const params = sdk.ws.subscribe.firstCall.args[1];
+            expect(params).to.not.have.property('statuses');
+            expect(params).to.deep.equal({ types: ['SEND'], ticks: ['TOKEN'] });
             unsub();
         });
 
@@ -1053,8 +1067,24 @@ describe('XChainSDK', function () {
         it('onOrderMatch registers handler and subscribes', function () {
             sdk = makeSDKWithWs();
             const cb = sinon.spy();
+            const unsub = sdk.onOrderMatch('addr1', cb);
+            const params = sdk.ws.subscribe.firstCall.args[1];
+            expect(params.address).to.equal('addr1');
+            expect(params.types).to.deep.equal(['ORDER_MATCH']);
+            unsub();
+        });
+
+        // : this assertion previously pinned the BUG. It asserted that a
+        // caller-supplied `statuses` was forwarded, but no explorer channel ever
+        // populates a per-event status (getActionsSince selects `NULL as status`),
+        // so the filter could never reject anything and the caller silently got an
+        // unfiltered stream. The SDK no longer forwards it; the server likewise
+        // omits it from WELCOME features and SUBSCRIBED active_filters.
+        it('onOrderMatch does not forward the unsupported statuses filter', function () {
+            sdk = makeSDKWithWs();
+            const cb = sinon.spy();
             const unsub = sdk.onOrderMatch('addr1', cb, { statuses: ['pending'] });
-            expect(sdk.ws.subscribe.firstCall.args[1].statuses).to.deep.equal(['pending']);
+            expect(sdk.ws.subscribe.firstCall.args[1]).to.not.have.property('statuses');
             unsub();
         });
 

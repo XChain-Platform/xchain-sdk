@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- `statuses` WS filter dropped from `onAction`, `onAddress` and `onOrderMatch` (and from the typed surface): no explorer channel ever populated a per-event status, so it silently returned an unfiltered stream ().
+
 ### Added
 - Armed the three BTC-anchored activation copies (checkpoint commitment, EQUIV header, stake-weighted quorum) at BTC 961000, in lockstep with the indexer/hub twins.
 - `ContractUtils.parseAbi(source)`: fail-closed AST reader for the optional contract `abi` display-metadata block (protocol/Contract_ABI.md).
