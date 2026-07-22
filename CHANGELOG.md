@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Escrow, vesting, and crowdsale templates declare `abi` blocks (method summaries + `view` flags), re-embedded via `sync:templates`.
 - `hubApiKey` option (env fallback `HUB_API_KEY`) on the hub connector, required for `getallconfigs` against keyed hubs; public zero-config discovery should use the hub's `GET /api/v1/chain-registry` instead.
 
+### Changed
+- Re-vendor `lint-core.js` and `metering.js` byte-identical to canonical xchain-vm ().
+
 ### Security
 - CoSigner now rejects any BIP341 `sighashType` other than `SIGHASH_DEFAULT`/`SIGHASH_ALL` in `process`/`_processMulti` (and defensively in `taprootKeyPathSighash`). Previously the type was honored verbatim from the request, so a `SIGHASH_NONE`/`SINGLE`/`ANYONECANPAY` partial over an in-policy PSBT could be reassembled into a drain transaction that still verified, bypassing the output gate.
 
