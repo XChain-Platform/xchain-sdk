@@ -158,6 +158,35 @@ describe('SPV Phase 4: sdk.light pure verifiers', function () {
         assert.strictEqual(r.reason, 'SUBROOT_BIND_INVALID');
     });
 
+    it('verifyBalanceProof REJECTS a forged false-zero bound to an EMPTY sub-tree slot (slot pinning)', function () {
+        // ADDR_A genuinely holds 5 under the quorum-signed state_root.
+        const keyBuf = M.balanceKey(CHAIN, NET, ADDR_A, TICK);
+        const realStore = buildStore([[M.toHex(keyBuf), M.toHex(M.amountLeaf('5'))]]);
+        const realBalancesRoot = realStore.root, stakesRoot = EMPTY_ROOT;
+        const stateRoot = M.toHex(M.stateRoot({ balances_root: realBalancesRoot, stakes_root: stakesRoot }));
+
+        // Forge: bind against the ownership_root slot (index 2), which is the
+        // constant EMPTY_SMT_ROOT in state_root_version 1, and present a null
+        // leaf + amount "0" for ADDR_A. The siblings for slot 2 are derivable
+        // from the roots the server already serves.
+        const emptyRootHex = M.toHex(M.EMPTY_SMT_ROOT);
+        const emptyStore = buildStore([]);
+        const forged = {
+            chain: CHAIN, network: NET, height: 100, address: ADDR_A, tick: TICK,
+            amount: M.canonicalAmount('0'),
+            smt_proof: { key: M.toHex(keyBuf), leaf_value: null,
+                compressed: M.compressSmtProof(emptyStore.descend(emptyStore.root, keyBuf)) },
+            sub_root_path: M.stateRootProof({ balances_root: realBalancesRoot, stakes_root: stakesRoot }, 'ownership_root'),
+            balances_root: emptyRootHex, stakes_root: stakesRoot,
+            state_root: stateRoot, state_root_version: 1
+        };
+        // Sanity: the forged sub-path really targets slot 2 (the attack input).
+        assert.strictEqual(forged.sub_root_path.index, M.STATE_SUBTREES.indexOf('ownership_root'));
+        const r = light.verifyBalanceProof(forged, stateRoot, CHAIN, NET);
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'SUBROOT_SLOT_MISMATCH');
+    });
+
     it('verifyActionProof ACCEPTS a valid action inclusion proof (tx_index NULL)', function () {
         const { proof, blockMerkleRoot } = buildActionProof();
         const r = light.verifyActionProof(proof, blockMerkleRoot);

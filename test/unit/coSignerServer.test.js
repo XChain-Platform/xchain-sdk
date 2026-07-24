@@ -67,6 +67,16 @@ describe('co-signer HTTP sidecar', function () {
         expect(() => createCoSignerApp(null)).to.throw(/requires a CoSigner/);
     });
 
+    it('rejects construction with no token (fail-closed) unless allowUnauthenticated', function () {
+        const sk = crypto.randomBytes(32);
+        const pk = secp256k1.getPublicKey(sk, true);
+        const co = new CoSigner({ secretKey: sk, publicKeys: [pk, pk], policy: { allowedActions: new Set(['SEND']) } });
+        expect(() => createCoSignerApp(co)).to.throw(/requires a non-empty opts\.token/);
+        expect(() => createCoSignerApp(co, { token: '' })).to.throw(/requires a non-empty opts\.token/);
+        // Explicit escape hatch builds the (unauthenticated) app without throwing.
+        expect(() => createCoSignerApp(co, { allowUnauthenticated: true })).to.not.throw();
+    });
+
     it('401s without the bearer token', async function () {
         const r = await post(port, '/cosign', { psbt: psbtHex, agentPublicNonce: agentNonce });
         expect(r.status).to.equal(401);

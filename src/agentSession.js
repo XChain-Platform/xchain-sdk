@@ -147,12 +147,15 @@ class AgentSession extends WalletSession {
 
     // Append one window entry and persist. Returns the pushed entry (a live reference
     // into this._usage) so the caller can patch its txid in once the broadcast lands.
-    _recordUsage(evaluation, txid) {
+    _recordUsage(evaluation, txid, key) {
         const usage = this._pruned();
         const entry = {
             t: Date.now(), action: evaluation.action,
             tick: evaluation.tick, amount: evaluation.amount, txid,
         };
+        // Only stamp an idempotency key when one was supplied, so entries stay
+        // byte-identical to the legacy shape when the feature is unused.
+        if (key !== undefined && key !== null) entry.key = String(key);
         usage.entries.push(entry);
         this._persistUsage(usage);
         return entry;
@@ -218,8 +221,37 @@ class AgentSession extends WalletSession {
         // A pre-broadcast failure (createTx/signPsbt) conservatively burns budget too;
         // that is the deliberate fail-closed trade the co-signer already makes, and it
         // keeps this from being the one guardrail whose ceiling stops binding on error.
-        const entry = this._recordUsage(evaluation, null);
-        const result = await super._submitInner(actionData, encoderOpts, submitOpts);
+        // At-most-once on the automated rail. When the caller supplies a stable
+        // idempotencyKey, a retry after a post-broadcast throw is REFUSED rather
+        // than re-broadcast: _submitInner can throw after the tx already landed
+        // (CONFIRMATION_TIMEOUT on the indexer wait, a lost ACK), and a naive
+        // agent retry would otherwise build and pay a SECOND transaction. The
+        // refusal carries the prior txid (when known) so the agent can resume
+        // waiting on the existing payment instead of re-sending. Opt-in: absent a
+        // key, behavior is unchanged. Fail-closed and needs no indexer to hold.
+        const idempotencyKey = submitOpts && submitOpts.idempotencyKey;
+        if (idempotencyKey !== undefined && idempotencyKey !== null) {
+            const keyStr = String(idempotencyKey);
+            const prior = this._pruned().entries.find((e) => e.key === keyStr);
+            if (prior)
+                this._deny('POLICY_DUPLICATE_SUBMIT',
+                    `a submission with idempotencyKey ${keyStr} was already recorded` +
+                    (prior.txid ? ` (txid ${prior.txid})` : '') +
+                    '; not broadcasting again. Resume the existing payment instead of retrying.',
+                    { idempotencyKey: keyStr, txid: prior.txid || null });
+        }
+
+        const entry = this._recordUsage(evaluation, null, idempotencyKey);
+        let result;
+        try {
+            result = await super._submitInner(actionData, encoderOpts, submitOpts);
+        } catch (err) {
+            // A throw AFTER broadcast carries the txid (e.g. CONFIRMATION_TIMEOUT).
+            // Patch it onto the provisional entry so the audit record is not left
+            // with txid:null and a later duplicate-key refusal can return it.
+            if (err && err.details && err.details.txid) this._patchUsageTxid(entry, err.details.txid);
+            throw err;
+        }
         this._patchUsageTxid(entry, result && result.txid);
 
         // Surface what was evaluated so callers (MCP write tools) can report

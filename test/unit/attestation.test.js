@@ -204,6 +204,23 @@ describe('AttestationHelpers.httpGet', function () {
         expect(() => Attestation.httpGet(url)).to.not.throw();
     });
 
+    it('refuses private/loopback/metadata IP-literal hosts (SSRF guard)', function () {
+        expect(() => Attestation.httpGet('https://10.0.0.5/price')).to.throw(/SSRF/);
+        expect(() => Attestation.httpGet('https://127.0.0.1/x')).to.throw(/SSRF/);
+        expect(() => Attestation.httpGet('https://169.254.169.254/latest')).to.throw(/SSRF/);
+        expect(() => Attestation.httpGet('https://192.168.1.1/x')).to.throw(/SSRF/);
+        expect(() => Attestation.httpGet('https://[::1]/x')).to.throw(/SSRF/);
+    });
+
+    it('allowPrivate:true bypasses the IP-literal SSRF guard (regtest/e2e)', function () {
+        expect(Attestation.httpGet({ url: 'https://10.0.0.5/price', allowPrivate: true })).to.equal('https://10.0.0.5/price');
+    });
+
+    it('allows public IP literals and DNS hostnames (DNS not checked client-side)', function () {
+        expect(() => Attestation.httpGet('https://8.8.8.8/x')).to.not.throw();
+        expect(() => Attestation.httpGet('https://example.com/price')).to.not.throw();
+    });
+
     it('throws on a scheme-only URL with no host', function () {
         expect(() => Attestation.httpGet('https://')).to.throw();
     });

@@ -96,6 +96,15 @@ function verifyBalanceProof(proof, trustedStateRoot, chain, network){
         // ...and that balances_root must bind into the TRUSTED state_root via the
         // fixed 5-leaf sub-root path. A forged balances_root cannot bind here
         // (collision resistance), so the whole chain is anchored to the quorum.
+        //
+        // PIN the slot: the authoring side always builds the path for the
+        // balances_root slot (index 0). Without this check a server could bind
+        // against an EMPTY slot (2..4 are the constant EMPTY_SMT_ROOT in
+        // state_root_version 1), present leaf_value:null + amount:"0", and prove
+        // a false ZERO balance for an address that actually holds funds -- a
+        // solvency/censorship-denial primitive, not just liveness.
+        if (proof.sub_root_path.index !== M.STATE_SUBTREES.indexOf('balances_root'))
+            return _no('SUBROOT_SLOT_MISMATCH');
         if (!M.verifyFixedMerkleProof(trustedStateRoot, M.toBuf(proof.balances_root),
                                       proof.sub_root_path.index, proof.sub_root_path.siblings))
             return _no('SUBROOT_BIND_INVALID');
@@ -400,6 +409,12 @@ function verifyValidatorSetProof(proof, trustedStateRoot){
     try {
         if (!proof || !proof.sub_root_path || !proof.capabilities) return { verified: false, capabilities: {}, reason: 'MALFORMED_PROOF' };
         // 1. stakes_root binds into the trusted state_root (fixed 5-leaf top tree).
+        // PIN the slot to stakes_root (index 1) for the same reason as the
+        // balances path above: an unpinned index lets a server bind against an
+        // empty slot. Here it is currently blocked only incidentally (an empty
+        // sub-tree fails MEMBER_LEAF_MISMATCH downstream), so pin it explicitly.
+        if (proof.sub_root_path.index !== M.STATE_SUBTREES.indexOf('stakes_root'))
+            return { verified: false, capabilities: {}, reason: 'SUBROOT_SLOT_MISMATCH' };
         if (!M.verifyFixedMerkleProof(trustedStateRoot, M.toBuf(proof.stakes_root), proof.sub_root_path.index, proof.sub_root_path.siblings))
             return { verified: false, capabilities: {}, reason: 'SUBROOT_BIND_INVALID' };
         const out = {};

@@ -44,11 +44,21 @@ function toBuf(v) { return Buffer.isBuffer(v) ? v : Buffer.from(v); }
 const BITCOIN_BECH32 = new Set(['bc', 'tb', 'bcrt']);
 
 /*
- * Fee ceiling (sat/vB) applied before extractTransaction, mirroring
- * wallet.js#_maxFeeRate so this signer stays a true drop-in for signPsbt:
- * an explicit maximumFeeRate wins; the bitcoin family keeps bitcoinjs's
- * default; every other network gets the raised 10,000,000 ceiling (real
- * drain protection lives upstream in the encoder's MAX_FEE_RATE_KB cap).
+ * Fee ceiling (sat/vB) applied before extractTransaction, tracking
+ * wallet.js#_maxFeeRate so this signer stays a drop-in for signPsbt on a
+ * RESOLVED network: an explicit maximumFeeRate wins; the bitcoin family keeps
+ * bitcoinjs's 5000 sat/vB default; every other resolved network gets the
+ * raised 10,000,000 ceiling (real drain protection lives upstream in the
+ * encoder's MAX_FEE_RATE_KB cap).
+ *
+ * Deliberate divergence from wallet.js when NO network is supplied: wallet.js
+ * treats an unset network as non-bitcoin (raised ceiling), but this signer
+ * treats it as the conservative bitcoin default (null -> bitcoinjs's 5000
+ * sat/vB reject). BTC is the highest-unit-value chain, so defaulting an
+ * unconfigured signer to BTC protection is the safe choice and avoids silently
+ * accepting an absurd fee. A low-unit-value chain (e.g. DOGE) MUST pass its
+ * `network` (or an explicit maximumFeeRate) to sign ordinary high-rate fees;
+ * a musig2AgentSession test twin pins this no-network behavior intentionally.
  */
 function _maxFeeRate(network, maximumFeeRate) {
     if (Number.isFinite(maximumFeeRate) && maximumFeeRate > 0) return maximumFeeRate;

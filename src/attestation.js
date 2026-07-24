@@ -30,6 +30,47 @@
  *
  ********************************************************************/
 
+const net = require('net');
+
+// Deterministic, no-DNS SSRF gate for IP-literal hosts. Mirrors the hub
+// provider's isForbiddenAddress (xchain-hub/src/providers/http_get.js) so the
+// SDK helper rejects the same private/loopback/CGNAT/link-local/multicast
+// literals client-side, before an ATTEST request is emitted on-chain. DNS
+// hostnames are intentionally NOT resolved here (that stays the hub's job);
+// only IP literals are checked.
+function _isForbiddenAddress(addr){
+    let ip = String(addr).toLowerCase();
+    if (ip.startsWith('::ffff:')){
+        const rest = ip.slice(7);
+        if (net.isIPv4(rest)) ip = rest;
+        else return true;
+    }
+    if (net.isIPv4(ip)){
+        const o = ip.split('.').map(Number);
+        if (o[0] === 0)   return true;                             // 0.0.0.0/8
+        if (o[0] === 10)  return true;                             // 10/8 private
+        if (o[0] === 100 && o[1] >= 64 && o[1] <= 127) return true; // 100.64/10 CGNAT
+        if (o[0] === 127) return true;                             // loopback
+        if (o[0] === 169 && o[1] === 254) return true;             // link-local / metadata
+        if (o[0] === 172 && o[1] >= 16 && o[1] <= 31) return true; // 172.16/12 private
+        if (o[0] === 192 && o[1] === 0 && o[2] === 0) return true; // 192.0.0.0/24 reserved
+        if (o[0] === 192 && o[1] === 168) return true;             // 192.168/16 private
+        if (o[0] === 198 && (o[1] === 18 || o[1] === 19)) return true; // 198.18/15 benchmarking
+        if (o[0] >= 224) return true;                              // multicast/reserved/broadcast
+        return false;
+    }
+    if (net.isIPv6(ip)){
+        if (ip === '::' || ip === '::1') return true;              // unspecified / loopback
+        if (ip.startsWith('::')) return true;                      // v4-compatible / embedded
+        if (ip.startsWith('64:ff9b:')) return true;               // NAT64
+        if (/^f[cd]/.test(ip))   return true;                     // fc00::/7 unique-local
+        if (/^fe[89ab]/.test(ip)) return true;                    // fe80::/10 link-local
+        if (/^ff/.test(ip))      return true;                     // multicast
+        return false;
+    }
+    return true; // unparseable literal: fail closed
+}
+
 // Build an LLM provider request envelope as a JSON string. The format
 // matches the provider's expected envelope (LLM spec §4): a top-level
 // JSON object with `prompt` (required) and optional `system`, `max_tokens`,
@@ -104,12 +145,21 @@ function buildLlmEnvelope(opts){
     return json;
 }
 
-// Validate + normalize an http_get URL. The provider only accepts
-// https:// URLs and a per-provider max_request_bytes (default 2048).
-// This helper does the validation up-front so the developer gets a clear
-// error before the on-chain ATTEST v0 (request) is emitted.
+// Validate + normalize an http_get URL. The provider enforces three admission
+// gates and this helper mirrors all three up-front so the developer gets a
+// clear error before the on-chain ATTEST v0 (request) is emitted (and before
+// gas/fees are spent on a request every validator would reject):
+//   1. https:// only
+//   2. max_request_bytes (2048)
+//   3. IP-literal SSRF gate: private/loopback/CGNAT/link-local/multicast
+//      literals are refused (matching the hub's isForbiddenAddress). DNS
+//      hostnames are NOT resolved here -- the hub stays authoritative for
+//      those. Pass opts.allowPrivate:true to skip the literal check (mirrors
+//      the hub's ATTESTATION_HTTP_GET_ALLOW_PRIVATE=1 escape hatch for
+//      regtest/e2e).
 function buildHttpGetPayload(opts){
     let url = (typeof opts === 'string') ? opts : (opts && opts.url);
+    let allowPrivate = (typeof opts === 'object' && opts) ? opts.allowPrivate === true : false;
     if (!url || typeof url !== 'string'){
         throw new Error('AttestationHelpers.httpGet: opts.url (string) or string URL is required');
     }
@@ -127,6 +177,13 @@ function buildHttpGetPayload(opts){
     }
     if (Buffer.byteLength(url, 'utf8') > 2048){
         throw new Error('AttestationHelpers.httpGet: URL exceeds 2048-byte http_get max_request_bytes');
+    }
+    // Only IP-literal hosts are checked; DNS names pass through to the hub.
+    // URL.hostname keeps brackets around IPv6 literals ([::1]); strip them so
+    // net.isIP recognizes the literal.
+    let host = parsed.hostname.replace(/^\[|\]$/g, '');
+    if (!allowPrivate && net.isIP(host) && _isForbiddenAddress(host)){
+        throw new Error('AttestationHelpers.httpGet: refusing non-public address ' + host + ' (SSRF guard); pass { allowPrivate: true } for regtest/e2e');
     }
     return url;
 }

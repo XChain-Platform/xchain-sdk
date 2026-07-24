@@ -547,6 +547,36 @@ describe('Actions – pre-flight encoding validation', function () {
         }).to.not.throw();
     });
 
+    it('OP_RETURN boundary: a 75-byte action string passes, 76 bytes throws (compiled-push gate)', function () {
+        // BROADCAST message length tuned so the action string is exactly 75 then
+        // 76 bytes. 75 compiles to a 76-byte push (fits); 76 compiles to 78
+        // (OP_PUSHDATA1), which the encoder rejects. Pre-flight must agree.
+        expect(function () {
+            actions.createAction({ action: 'BROADCAST', params: { message: 'x'.repeat(61), value: '1' }, encoder: { encoding: 'OP_RETURN' } });
+        }).to.not.throw();
+        let err;
+        try {
+            actions.createAction({ action: 'BROADCAST', params: { message: 'x'.repeat(62), value: '1' }, encoder: { encoding: 'OP_RETURN' } });
+        } catch (e) { err = e; }
+        expect(err).to.be.instanceOf(SDKValidationError);
+        expect(err.code).to.equal('ENCODING_DATA_TOO_LARGE');
+        expect(err.details.dataBytes).to.equal(76);
+        expect(err.details.maxBytes).to.equal(75);
+    });
+
+    it('oversized-payload suggestion is network-aware: DOGE (non-segwit) gets P2SH, never P2WSH', function () {
+        function actionsFor(network) {
+            return new Actions({ config: config.getConfig(), util: new Utility(), options: { network } });
+        }
+        let big = 'y'.repeat(600); // > ENCODING_LIMITS.P2SH (476) -> default suggestion is P2WSH
+        let segwitErr, dogeErr;
+        try { actionsFor('litecoin-mainnet').createAction({ action: 'BROADCAST', params: { message: big, value: '1' }, encoder: { encoding: 'OP_RETURN' } }); } catch (e) { segwitErr = e; }
+        try { actionsFor('dogecoin-mainnet').createAction({ action: 'BROADCAST', params: { message: big, value: '1' }, encoder: { encoding: 'OP_RETURN' } }); } catch (e) { dogeErr = e; }
+        expect(segwitErr.details.suggestion).to.equal('P2WSH');
+        expect(dogeErr.details.suggestion).to.equal('P2SH');
+        expect(dogeErr.message).to.not.match(/P2WSH/);
+    });
+
     it('OP_RETURN with short data does NOT throw', function () {
         // "SEND|0|A|1|bc1q..." - very short, well within 76 bytes
         expect(function () {

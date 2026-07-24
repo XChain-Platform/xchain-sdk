@@ -217,6 +217,42 @@ describe('AgentSession (policy-bounded wallet)', () => {
         expect(seen).to.deep.equal(['POLICY_ACTION_DENIED']);
     });
 
+    /* ── idempotency key (at-most-once on retry) ───────────────────── */
+
+    it('refuses a repeat submit with the same idempotencyKey, carrying the prior txid', async () => {
+        const s = mk();
+        const r = await s.send({ tick: 'TOK', amount: '5' }, undefined, { idempotencyKey: 'k1' });
+        expect(r.txid).to.equal('tx123');
+        const err = await expectDeny(
+            () => s.send({ tick: 'TOK', amount: '5' }, undefined, { idempotencyKey: 'k1' }),
+            'POLICY_DUPLICATE_SUBMIT');
+        expect(err.details.txid).to.equal('tx123');
+        expect(submitStub.calledOnce).to.equal(true);   // second submit never broadcast
+    });
+
+    it('without an idempotencyKey, repeat submits both broadcast (unchanged behavior)', async () => {
+        const s = mk();
+        await s.send({ tick: 'TOK', amount: '1' });
+        await s.send({ tick: 'TOK', amount: '1' });
+        expect(submitStub.calledTwice).to.equal(true);
+    });
+
+    it('patches the txid from a post-broadcast throw so a later duplicate refusal can return it', async () => {
+        const s = mk();
+        // First submit throws AFTER broadcast, carrying the txid in err.details.
+        submitStub.onFirstCall().rejects(Object.assign(new Error('CONFIRMATION_TIMEOUT'),
+            { details: { txid: 'landed-tx' } }));
+        let thrown;
+        try { await s.send({ tick: 'TOK', amount: '2' }, undefined, { idempotencyKey: 'k2' }); }
+        catch (e) { thrown = e; }
+        expect(thrown).to.be.instanceOf(Error);           // original error re-thrown
+        // A retry with the same key is refused and returns the txid that landed.
+        const err = await expectDeny(
+            () => s.send({ tick: 'TOK', amount: '2' }, undefined, { idempotencyKey: 'k2' }),
+            'POLICY_DUPLICATE_SUBMIT');
+        expect(err.details.txid).to.equal('landed-tx');
+    });
+
     /* ── exports ───────────────────────────────────────────────────── */
 
     it('is exported from the SDK entry point with its error class', () => {

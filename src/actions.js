@@ -20,6 +20,7 @@
 
 const FormatSelector    = require('./formatSelector.js');
 const Validator         = require('./validator.js');
+const { getNetwork }    = require('./networks.js');
 const { SDKValidationError, SDKContractError } = require('./errors.js');
 
 // Encoding byte limits for pre-flight validation
@@ -30,6 +31,16 @@ const ENCODING_LIMITS = {
     P2WSH:      476   // 520 - 44 byte script overhead per chunk (MAX_SCRIPT_ELEMENT_SIZE bound)
 };
 
+// Compiled script-push length for a payload of `n` bytes. The on-chain
+// OP_RETURN payload is `bitcoin.script.compile([bytes])`, whose push prefix
+// grows with size: direct push (<=75B) adds 1, OP_PUSHDATA1 (76..255) adds 2,
+// OP_PUSHDATA2 (>255) adds 3. The encoder gates on THIS compiled length, so
+// the pre-flight must too: a bare byte-length check under-rejects at the
+// boundary and accepts action strings the encoder then throws RangeError on.
+function compiledPushSize(n) {
+    return n <= 75 ? n + 1 : n <= 255 ? n + 2 : n + 3;
+}
+
 
 class Actions {
 
@@ -38,6 +49,20 @@ class Actions {
         this.util      = sdk.util;
         this.actions   = this.util.getActions();
         this.validator = new Validator(this.util);
+        // Resolved network name, used only to keep oversized-payload encoding
+        // suggestions network-aware (non-segwit chains cannot use P2WSH). Absent
+        // on a bare {config, util} shim; treated as segwit-capable (unchanged).
+        this.network   = (sdk.options && sdk.options.network) || process.env.NETWORK || null;
+    }
+
+    // Whether the resolved network supports segwit encodings (P2WSH). Fails
+    // open to `true` when the network is unset or unrecognized so the common
+    // segwit path is unchanged; only a network explicitly marked
+    // supportsSegwit:false (e.g. DOGE) flips this to false.
+    _supportsSegwit() {
+        if (!this.network) return true;
+        try { return getNetwork(this.network).supportsSegwit !== false; }
+        catch (e) { return true; }
     }
 
     // Main entry point: create an action string from user input
@@ -154,12 +179,19 @@ class Actions {
         let dataBytes = Buffer.byteLength(actionString, 'utf8');
 
         if (encoding === 'OP_RETURN') {
-            if (dataBytes + 4 > 80) {
-                let suggestion = dataBytes <= ENCODING_LIMITS.P2SH ? 'P2SH' : 'P2WSH';
+            // Gate on the COMPILED push size (payload + push prefix + 4-byte
+            // magic), the exact quantity the encoder enforces. A 75-byte action
+            // string compiles to 76 (direct push) and fits; 76 bytes compiles to
+            // 78 (OP_PUSHDATA1) and the encoder rejects it. The action-string
+            // ceiling is therefore 75 bytes, not 76.
+            if (compiledPushSize(dataBytes) + 4 > 80) {
+                // Non-segwit chains (DOGE) cannot use P2WSH; suggest P2SH there.
+                let suggestion = dataBytes <= ENCODING_LIMITS.P2SH ? 'P2SH'
+                    : (this._supportsSegwit() ? 'P2WSH' : 'P2SH');
                 throw new SDKValidationError(
                     'ENCODING_DATA_TOO_LARGE',
-                    'ACTION string is ' + dataBytes + ' bytes but OP_RETURN supports max ' + ENCODING_LIMITS.OP_RETURN + ' bytes of data (80 - 4 byte magic word). Use ' + suggestion + ' or omit encoding for auto-selection.',
-                    { encoding, dataBytes, maxBytes: ENCODING_LIMITS.OP_RETURN, suggestion }
+                    'ACTION string is ' + dataBytes + ' bytes but OP_RETURN supports max 75 bytes of action data once compiled (80 - 4 byte magic word - push prefix). Use ' + suggestion + ' or omit encoding for auto-selection.',
+                    { encoding, dataBytes, maxBytes: 75, suggestion }
                 );
             }
         }

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- review review-round fixes: verifyBalanceProof pins the sub-root slot (false-zero proof closed), opt-in submit idempotency key, co-signer sidecar fails closed without a token, compiled-push OP_RETURN preflight, network-aware oversize suggestion, attestation SSRF gate, hub-envelope parity CI check, FAMILY_SLIP44 derivation tests.
+
 ### Removed
 - `statuses` WS filter dropped from `onAction`, `onAddress` and `onOrderMatch` (and from the typed surface): no explorer channel ever populated a per-event status, so it silently returned an unfiltered stream ().
 

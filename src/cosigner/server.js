@@ -35,13 +35,27 @@ const { safeTokenEqual } = require('../utils/safeCompare.js');
  *
  * @param {CoSigner} coSigner
  * @param {object} [opts]
- *   token  {string}  required bearer token; requests without it get 401
+ *   token  {string}  required bearer token; requests without it get 401.
+ *                    Construction THROWS when it is absent/empty unless
+ *                    allowUnauthenticated:true is passed (see below).
+ *   allowUnauthenticated {boolean}  test/dev-only escape hatch: run /cosign
+ *                    with no bearer gate. Emits a loud boot warning. Never set
+ *                    in production; the sidecar signs spending authority.
  * @returns {express.Express}
  */
 function createCoSignerApp(coSigner, opts = {}) {
     if (!coSigner || typeof coSigner.process !== 'function')
         throw new Error('createCoSignerApp requires a CoSigner instance');
     const token = opts.token || null;
+    // Fail CLOSED on a missing token: a misconfigured sidecar (unset
+    // COSIGNER_TOKEN) must not silently serve unauthenticated MuSig2 signatures.
+    // Mirrors the fail-closed auth gate in src/api.js. The gate is skippable
+    // only by a deliberate allowUnauthenticated:true (tests/regtest).
+    if (!token) {
+        if (opts.allowUnauthenticated !== true)
+            throw new Error('createCoSignerApp requires a non-empty opts.token (set COSIGNER_TOKEN), or pass { allowUnauthenticated: true } to run the endpoint deliberately unauthenticated');
+        console.warn('[cosigner] WARNING: /cosign is running UNAUTHENTICATED (allowUnauthenticated=true). Never do this in production; the sidecar signs spending authority.');
+    }
 
     const app = express();
     app.use(express.json({ limit: '256kb' }));
