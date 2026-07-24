@@ -99,7 +99,9 @@ describe('decoder.parse', function () {
         it('ACTION|VERSION floor parses', function () {
             const r = parse('COLLECT|0');
             expect(r.ok).to.equal(true);
-            expect(r.params).to.deep.equal({});
+            // COLLECT v0 gained an optional trailing AMOUNT ; the missing
+            // tail fills with an empty string like any short wire.
+            expect(r.params).to.deep.equal({ AMOUNT: '' });
         });
 
         it('canonicalization trims trailing empties like the serializer', function () {

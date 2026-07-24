@@ -45,7 +45,9 @@ var Formats = {
     },
 
     COLLECT: {
-        0: 'VERSION'
+        // AMOUNT is an OPTIONAL trailing partial-claim amount (, indexer gate
+        // PARTIAL_UNSTAKE_COLLECT): absent = claim the full unclaimed total.
+        0: 'VERSION|AMOUNT'
     },
 
     COINPAY: {
@@ -180,8 +182,11 @@ var Formats = {
     },
 
     UNSTAKE: {
-        0: 'VERSION|SIGNING_PUBKEY',
-        1: 'VERSION|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK'
+        // AMOUNT is an OPTIONAL trailing partial-unstake amount (, indexer gate
+        // PARTIAL_UNSTAKE_COLLECT): absent = full sweep, present = move only AMOUNT
+        // into cooldown (the residual stays staked).
+        0: 'VERSION|SIGNING_PUBKEY|AMOUNT',
+        1: 'VERSION|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK|AMOUNT'
     },
 
     WITHDRAW: {
