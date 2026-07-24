@@ -2248,12 +2248,32 @@ export interface X402ClientOptions {
     session: WalletSession | AgentSession;
     /** Fetch implementation (default: global fetch) */
     fetch?: typeof fetch;
-    /** Maximum token amount the client will auto-pay without throwing (decimal string) */
+    /**
+     * Maximum token amount the client will auto-pay without throwing (decimal string).
+     * Omitting it applies a conservative fail-closed default ceiling (base token units);
+     * an over-ceiling offer throws X402_PRICE_TOO_HIGH before any payment. Pass
+     * 'unbounded' or Infinity (or allowUnbounded: true) to disable the ceiling.
+     */
     maxAmount?: string | number | null;
+    /** Explicit opt-in to unbounded per-payment spending (disables the default ceiling). */
+    allowUnbounded?: boolean;
     /** Delay between retry attempts in ms (default: 1500) */
     retryDelayMs?: number;
     /** Maximum number of payment-verification retry attempts (default: 40) */
     maxRetries?: number;
+}
+
+/** Descriptor to adopt an already-broadcast payment on retry (from X402_PAYMENT_AMBIGUOUS details.resume). */
+export interface X402ResumeDescriptor {
+    invoice: string;
+    txid: string;
+    coin?: string;
+    requireSignature?: boolean;
+}
+
+export interface X402FetchOptions {
+    /** Adopt an in-flight payment instead of paying again (re-presents the given txid+invoice). */
+    resume?: X402ResumeDescriptor;
 }
 
 export declare class X402Client {
@@ -2264,9 +2284,13 @@ export declare class X402Client {
     /**
      * Fetch a URL, handling HTTP 402 automatically:
      * pays with the bound session and retries until the gateway accepts.
-     * @throws SDKX402Error on no usable scheme, price too high, or max retries exceeded.
+     * On any post-broadcast ambiguity (indexer timeout, or the retry budget
+     * exhausting without acceptance) it throws SDKX402Error('X402_PAYMENT_AMBIGUOUS')
+     * carrying details.txid and details.resume; pass that descriptor as
+     * opts.resume on a subsequent call to adopt the payment instead of paying twice.
+     * @throws SDKX402Error on no usable scheme, price too high, or ambiguous payment.
      */
-    fetchUrl(url: string, init?: RequestInit): Promise<Response>;
+    fetchUrl(url: string, init?: RequestInit, opts?: X402FetchOptions): Promise<Response>;
 }
 
 /**

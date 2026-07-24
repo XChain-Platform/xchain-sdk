@@ -28,7 +28,7 @@ const sinon  = require('sinon');
 const { expect } = require('chai');
 
 const { X402Gateway, X402Client, parseActionString } = require('../../src/x402.js');
-const { SDKX402Error, SDKPolicyError } = require('../../src/errors.js');
+const { SDKX402Error, SDKPolicyError, SDKActionError } = require('../../src/errors.js');
 
 const NONCE = 'a'.repeat(32);
 
@@ -461,11 +461,69 @@ describe('x402', () => {
             catch (e) { expect(e).to.be.instanceOf(SDKPolicyError); }
         });
 
-        it('gives up with X402_PAYMENT_NOT_ACCEPTED after maxRetries', async () => {
+        it('surfaces X402_PAYMENT_AMBIGUOUS carrying the txid after maxRetries (no silent re-pay)', async () => {
             const session = { address: 'p', send: sinon.stub().resolves({ txid: 't' }) };
             const client = new X402Client({ session, fetch: mkFetch([402, 402, 402, 402]), retryDelayMs: 1, maxRetries: 2 });
             try { await client.fetchUrl('http://x/r'); throw new Error('nope'); }
-            catch (e) { expect(e.code).to.equal('X402_PAYMENT_NOT_ACCEPTED'); }
+            catch (e) {
+                expect(e.code).to.equal('X402_PAYMENT_AMBIGUOUS');
+                expect(e.details.txid).to.equal('t');
+                expect(e.details.paid).to.equal(true);
+                expect(e.details.resume).to.include({ txid: 't', invoice: NONCE });
+            }
+        });
+
+        it('a post-broadcast send throw (CONFIRMATION_TIMEOUT) becomes X402_PAYMENT_AMBIGUOUS with the txid', async () => {
+            const timeout = new SDKActionError('CONFIRMATION_TIMEOUT', 'timed out', { txid: 'txLIMBO' });
+            const session = { address: 'p', send: sinon.stub().rejects(timeout) };
+            const client = new X402Client({ session, fetch: mkFetch([402]), retryDelayMs: 1 });
+            try { await client.fetchUrl('http://x/r'); throw new Error('nope'); }
+            catch (e) {
+                expect(e.code).to.equal('X402_PAYMENT_AMBIGUOUS');
+                expect(e.details.txid).to.equal('txLIMBO');
+                expect(e.details.resume.txid).to.equal('txLIMBO');
+            }
+        });
+
+        it('a pre-broadcast policy refusal (no txid) propagates unchanged', async () => {
+            const session = { address: 'p', send: sinon.stub().rejects(new SDKPolicyError('POLICY_AMOUNT_EXCEEDED', 'cap')) };
+            const client = new X402Client({ session, fetch: mkFetch([402]), maxAmount: '10', retryDelayMs: 1 });
+            try { await client.fetchUrl('http://x/r'); throw new Error('nope'); }
+            catch (e) { expect(e).to.be.instanceOf(SDKPolicyError); }
+        });
+
+        it('resume re-presents the existing payment without calling session.send again (no double-pay)', async () => {
+            const session = { address: 'payerAddr', send: sinon.stub().resolves({ txid: 'txNEW' }) };
+            // Gateway accepts on the first proof-bearing request.
+            const f = mkFetch([200]);
+            const client = new X402Client({ session, fetch: f, retryDelayMs: 1, maxRetries: 5 });
+            const res = await client.fetchUrl('http://x/r', {}, { resume: { invoice: NONCE, txid: 'txPRIOR', coin: 'TDOGE' } });
+            expect(res.status).to.equal(200);
+            expect(session.send.called).to.equal(false);            // never paid again
+            const hdrs = f.firstCall.args[1].headers;
+            const proof = JSON.parse(Buffer.from(hdrs['X-Payment'], 'base64url').toString('utf8'));
+            expect(proof).to.include({ txid: 'txPRIOR', invoice: NONCE });   // adopted the prior payment
+        });
+
+        it('default ceiling blocks an over-priced offer when no maxAmount is given', async () => {
+            const session = { address: 'p', send: sinon.stub().resolves({ txid: 't' }) };
+            const dear = { ...challenge, accepts: [{ ...challenge.accepts[0], amount: '100000' }] };
+            const f = sinon.stub().resolves({ status: 402, json: async () => dear, headers: {} });
+            const client = new X402Client({ session, fetch: f, retryDelayMs: 1 });
+            try { await client.fetchUrl('http://x/r'); throw new Error('nope'); }
+            catch (e) { expect(e.code).to.equal('X402_PRICE_TOO_HIGH'); }
+            expect(session.send.called).to.equal(false);
+        });
+
+        it('allowUnbounded opts out of the default ceiling and pays an expensive offer', async () => {
+            const session = { address: 'p', send: sinon.stub().resolves({ txid: 't' }) };
+            const dear = { ...challenge, accepts: [{ ...challenge.accepts[0], amount: '100000' }] };
+            let i = 0;
+            const f = sinon.stub().callsFake(async () => ({ status: [402, 200][Math.min(i++, 1)], json: async () => dear, headers: {} }));
+            const client = new X402Client({ session, fetch: f, allowUnbounded: true, retryDelayMs: 1, maxRetries: 3 });
+            const res = await client.fetchUrl('http://x/r');
+            expect(res.status).to.equal(200);
+            expect(session.send.calledOnce).to.equal(true);
         });
 
         it('signs the invoice for a requireSignature send offer and the gateway accepts it end-to-end', async () => {
