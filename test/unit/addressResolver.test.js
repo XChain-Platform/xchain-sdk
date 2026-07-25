@@ -92,11 +92,27 @@ describe('AddressResolver', function () {
 
     describe('resolveActionParams()', function () {
 
-        it('compacts a single-recipient SEND DESTINATION', async function () {
+        // : this test used to assert the OPPOSITE, and that is how the
+        // defect shipped. SEND declares DESTINATION multi:true, and
+        // xchain-indexer/src/actions/send.js is the one address-bearing handler
+        // with no resolveAddressRef call, so a compacted destination is rejected
+        // on chain as 'invalid: DESTINATION (format)'. Compaction only kicks in
+        // once an address HAS an id, and the first send to an address is what
+        // assigns it, so the first send to any address worked and every
+        // subsequent one failed with the fee spent and the tokens not moved.
+        it('never compacts a SEND DESTINATION, single-recipient or not', async function () {
             const r = new AddressResolver(makeSdk({}, addressStub({ [ADDR]: 57 })));
             const out = await r.resolveActionParams('SEND', { tick: 'JDOG', amount: '1', destination: ADDR });
-            expect(out.destination).to.equal('^57');
+            expect(out.destination).to.equal(ADDR);
             expect(out.tick).to.equal('JDOG');   // non-address field untouched
+        });
+
+        // The saving is still taken everywhere the indexer can resolve it, so
+        // this is a narrowing of SEND only, not a retreat from compaction.
+        it('still compacts MINT DESTINATION, which mint.js does resolve', async function () {
+            const r = new AddressResolver(makeSdk({}, addressStub({ [ADDR]: 57 })));
+            const out = await r.resolveActionParams('MINT', { tick: 'JDOG', amount: '1', destination: ADDR });
+            expect(out.destination).to.equal('^57');
         });
 
         it('leaves an array (multi-recipient) DESTINATION uncompacted', async function () {
