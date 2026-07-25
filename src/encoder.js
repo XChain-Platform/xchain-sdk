@@ -195,15 +195,26 @@ class EncoderClient {
     //
     // Returns: { psbt: <hex>, encoding: <string> }
     async createTx(params) {
-        if (!params.data)
-            throw new SDKEncoderError('MISSING_DATA', 'createTx requires data (ACTION string)');
+        // : `data` is optional. A transaction with no ACTION is a plain
+        // payment (the encoder's create_tx contract has always allowed it, and
+        // now omits the nulldata output entirely for it), which is exactly what
+        // sending a chain's own native coin is. Refusing it here forced callers
+        // to invent an action for a transaction that has none, and the wallet's
+        // native sends duly shipped a SEND the indexer rejects on every send.
+        // customOutputs must then carry the payment, or there is nothing to send.
+        if (!params.data && !params.rawData
+            && !(Array.isArray(params.customOutputs) && params.customOutputs.length))
+            throw new SDKEncoderError(
+                'MISSING_DATA',
+                'createTx requires data (ACTION string), rawData, or customOutputs (payment-only)',
+            );
         if (!params.pubkey)
             throw new SDKEncoderError('MISSING_PUBKEY', 'createTx requires pubkey');
 
         let rpcParams = {
-            data:   params.data,
             pubkey: params.pubkey
         };
+        if (params.data) rpcParams.data = params.data;
 
         // Map optional fields
         if (params.change !== undefined)           rpcParams.change = params.change;
