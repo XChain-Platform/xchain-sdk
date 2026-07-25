@@ -219,6 +219,52 @@ class EncoderClient {
         if (params.customOutputs !== undefined)    rpcParams.customOutputs = params.customOutputs;
         if (params.feeQuote !== undefined)         rpcParams.feeQuote = params.feeQuote;
 
+        // D-7: pre-select the funding UTXOs BY ADDRESS before create_tx. Left to
+        // its own devices (no `utxos` passed) the encoder resolves the funding set
+        // from `pubkey`, but the utxo-tracker keys strictly on an address it can run
+        // through bitcoin.address.toOutputScript and rejects a raw compressed pubkey
+        // with "has no matching Script", so every wallet-driven action that relies
+        // on encoder-side selection fails. Fetch the funding address's UTXO set here
+        // by address and hand it to create_tx, so the encoder selects over a valid
+        // set instead of falling into the pubkey lookup.
+        //
+        // The funding address is the address behind `pubkey`. Callers pass it as
+        // `sourceAddress` (SDK-side only, NOT forwarded on the create_tx wire: it is
+        // read from `params`, never copied into `rpcParams`). `change` is only a safe
+        // fallback when it equals the source (a self-send with change back to the
+        // spender); an explicit change to a DIFFERENT address must not drive the
+        // fetch, so it is used solely as a last resort. Skipped when the caller
+        // hand-selected utxos or gave neither address.
+        const fundingAddress = params.sourceAddress || rpcParams.change;
+        if (rpcParams.utxos === undefined && fundingAddress) {
+            const fetched = await this.getUTXOs(fundingAddress);
+            // Preserve the encoder's M-11 freshness protection: refuse to select
+            // from a view the tracker itself flags NOT synced. (Passing `utxos`
+            // otherwise bypasses the encoder's own sync gate, which only runs on
+            // its internal fetch path.) `sync` is absent on older trackers: fail
+            // open, matching the encoder half.
+            const sync = fetched && fetched.sync;
+            if (sync && typeof sync === 'object' && sync.synced === false) {
+                throw new SDKEncoderError(
+                    'UTXO_TRACKER_STALE',
+                    'utxo-tracker view is not synced; refusing to select utxos from it',
+                    { sync },
+                );
+            }
+            const fetchedUtxos = fetched && Array.isArray(fetched.utxos) ? fetched.utxos : [];
+            if (fetchedUtxos.length === 0) {
+                // A genuinely empty funding address. Surface a clean, caller-actionable
+                // error here rather than letting the encoder re-enter its broken pubkey
+                // fetch (which would throw the opaque "no matching Script").
+                throw new SDKEncoderError(
+                    'NO_UTXOS',
+                    'no spendable UTXOs found for the funding address',
+                    { address: fundingAddress },
+                );
+            }
+            rpcParams.utxos = fetchedUtxos;
+        }
+
         return this._rpc('create_tx', rpcParams);
     }
 

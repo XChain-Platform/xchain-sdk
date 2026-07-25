@@ -41,6 +41,18 @@ const TICK_FIELDS = ['TICK', 'DIVIDEND_TICK', 'GIVE_TICK', 'GET_TICK', 'CALLBACK
 // (spec §4.2 false-block invariant).
 const HARD_VALIDATOR_CODES = new Set(['FORBIDDEN_CHARACTER']);
 
+// D-9: the chain's NATIVE coin is not an XChain token, so it never appears in
+// the token table and the token-existence check below would flag it as "does
+// not exist" for any field that names it (a native-coin SEND, or a DEX order
+// giving/getting the native coin). Chain coin codes are the native ticker with
+// a network prefix (T=testnet, R=regtest, none=mainnet), e.g. RBTC/TBTC/BTC;
+// strip it to recover the bare ticker a native reference uses. Returns null for
+// non-native coin codes so nothing is skipped by accident.
+function nativeTickerFromCoin(coin) {
+    const m = /^[TR]?(BTC|LTC|DOGE)$/.exec(String(coin || '').toUpperCase());
+    return m ? m[1] : null;
+}
+
 async function runUniversal(ctx, opts = {}) {
     const { parsed } = ctx;
 
@@ -83,11 +95,14 @@ async function runUniversal(ctx, opts = {}) {
 
     // 3. Token exists, per referenced TICK (network-sourced: a hostile
     // explorer could fabricate a 404, so the error is overridable).
+    const nativeTicker = nativeTickerFromCoin(ctx.sdk && ctx.sdk.explorer && ctx.sdk.explorer.coin);
     for (const fieldName of TICK_FIELDS) {
         const v = ctx.params[fieldName];
         const ticks = Array.isArray(v) ? v : (v ? [v] : []);
         for (const tick of ticks) {
             if (!tick || parsed.action === 'ISSUE') continue;
+            // D-9: the native coin is not a token; don't flag it as non-existent.
+            if (nativeTicker && String(tick).trim().toUpperCase() === nativeTicker) continue;
             const token = await ctx.token(String(tick));
             if (token === null) {
                 ctx.addFinding(FINDING_CODES.TOKEN_NOT_FOUND, 'error',
