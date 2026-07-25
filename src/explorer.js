@@ -358,6 +358,36 @@ class ExplorerClient {
         return this._get('/feequote?' + q.toString());
     }
 
+    // Oracle usage fee quote for a Mode B dispenser . Proxies to the indexer's
+    // read-only `oraclefeequote`.
+    //
+    // A dispenser that names an ORACLE_ADDRESS pays the oracle operator up front, as a
+    // native-coin output, sized from the escrow the action adds (Counterparty parity).
+    // Call this before composing a DISPENSER v0 create or a v2 refill, then pass the
+    // amount as a customOutput to the oracle address:
+    //
+    //     const q = await explorer.getOracleFeeQuote({ oracleAddress, giveTick,
+    //                                                  fiatCode, giveEscrow });
+    //     if (q.valid && !q.belowDust)
+    //         customOutputs.push({ address: q.oracleAddress, value: q.requiredFeeSats });
+    //
+    // The indexer computes this from the same code path it validates with, so an output
+    // sized from the quote is accepted. Returns { valid, error, oracleAddress, blockTime,
+    // requiredFeeNative, requiredFeeSats, belowDust, note }. A dispenser whose oracle has
+    // published no effective price yet is rejected here and on chain: the oracle must have
+    // prices set, and PRICE v1 quotes only become effective 24h after publication.
+    async getOracleFeeQuote({ oracleAddress, giveCoin, giveTick, fiatCode, getCoin, giveEscrow, blockTime } = {}) {
+        let q = new URLSearchParams();
+        if (oracleAddress !== undefined && oracleAddress !== null) q.set('oracleAddress', String(oracleAddress));
+        if (giveCoin      !== undefined && giveCoin      !== null) q.set('giveCoin',      String(giveCoin));
+        if (giveTick      !== undefined && giveTick      !== null) q.set('giveTick',      String(giveTick));
+        if (fiatCode      !== undefined && fiatCode      !== null) q.set('fiatCode',      String(fiatCode));
+        if (getCoin       !== undefined && getCoin       !== null) q.set('getCoin',       String(getCoin));
+        if (giveEscrow    !== undefined && giveEscrow    !== null) q.set('giveEscrow',    String(giveEscrow));
+        if (blockTime     !== undefined && blockTime     !== null) q.set('blockTime',     String(blockTime));
+        return this._get('/oraclefeequote?' + q.toString());
+    }
+
     // Validity-first pre-flight for one action . Proxies to the indexer's read-only
     // `preflight`: "would the indexer accept this action?", decoupled from native-fee support.
     // Returns { supported, valid, status, error, guardInert, feeExempt, denied, blockIndex,
