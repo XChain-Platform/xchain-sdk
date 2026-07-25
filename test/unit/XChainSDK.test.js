@@ -605,7 +605,12 @@ describe('XChainSDK', function () {
     describe('explorer query re-exports', function () {
 
         // Query/type-shaped explorer readers re-exported at the SDK top level
-        const queryMethods = ['getMempool', 'getOrderCancels', 'getSwapCancels', 'getDispenserCancels'];
+        const queryMethods = [
+            'getMempool', 'getOrderCancels', 'getSwapCancels', 'getDispenserCancels',
+            'getOrderMatches', 'getOrderEdits', 'getOrderExpires',
+            'getSwapEdits', 'getSwapExpires',
+            'getDispenserCloses', 'getDispenserEdits', 'getDispenserExpires'
+        ];
 
         for (const method of queryMethods) {
             it(method + '() delegates to explorer.' + method, async function () {

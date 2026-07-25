@@ -1031,6 +1031,18 @@ class XChainSDK {
         return this._requireExplorer().getDispenserCancels(query, type, opts);
     }
 
+    async getDispenserCloses(query, type, opts) {
+        return this._requireExplorer().getDispenserCloses(query, type, opts);
+    }
+
+    async getDispenserExpires(query, type, opts) {
+        return this._requireExplorer().getDispenserExpires(query, type, opts);
+    }
+
+    async getDispenserEdits(query, type, opts) {
+        return this._requireExplorer().getDispenserEdits(query, type, opts);
+    }
+
     async getDividends(query, type, opts) {
         return this._requireExplorer().getDividends(query, type, opts);
     }
@@ -1068,6 +1080,19 @@ class XChainSDK {
         return this._requireExplorer().getOrderCancels(query, type, opts);
     }
 
+    async getOrderEdits(query, type, opts) {
+        return this._requireExplorer().getOrderEdits(query, type, opts);
+    }
+
+    async getOrderExpires(query, type, opts) {
+        return this._requireExplorer().getOrderExpires(query, type, opts);
+    }
+
+    // Completed order matches (auto-matched counter-orders; type 'block').
+    async getOrderMatches(query, type, opts) {
+        return this._requireExplorer().getOrderMatches(query, type, opts);
+    }
+
     async getSends(query, type, opts) {
         return this._requireExplorer().getSends(query, type, opts);
     }
@@ -1083,6 +1108,14 @@ class XChainSDK {
     // Swap lifecycle events (cancellations), type ∈ {block, address}.
     async getSwapCancels(query, type, opts) {
         return this._requireExplorer().getSwapCancels(query, type, opts);
+    }
+
+    async getSwapEdits(query, type, opts) {
+        return this._requireExplorer().getSwapEdits(query, type, opts);
+    }
+
+    async getSwapExpires(query, type, opts) {
+        return this._requireExplorer().getSwapExpires(query, type, opts);
     }
 
     // Completed swap matches (type 'block'; the explorer keys matches by block).
