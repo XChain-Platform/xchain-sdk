@@ -34,6 +34,7 @@
 'use strict';
 
 const { parse } = require('../decoder/parse.js');
+const Utility = require('../utility.js');
 const { SDKFormatError, SDKPreflightError } = require('../errors.js');
 const { REPORT_SCHEMA_VERSION, DEFAULT_TIMEOUT_MS, FINDING_CODES } = require('./constants.js');
 const { CheckContext } = require('./context.js');
@@ -82,13 +83,26 @@ function normalizeInput(actionData) {
     if (actionData && actionData.ok === true && actionData.action)
         return actionData; // already a ParsedAction
     if (actionData && actionData.action && VIRTUAL_ACTION_FIELDS[String(actionData.action).toUpperCase()])
-        return buildVirtual(String(actionData.action).toUpperCase(), actionData.params || actionData.fields || {});
+        return buildVirtual(String(actionData.action).toUpperCase(), normalizeParamKeys(actionData));
     if (actionData && actionData.action) {
         // { action, params } / createAction result: re-serialize through
         // the canonical parser so every downstream check reads one shape.
         const FormatSelector = require('../formatSelector.js');
-        const fields = actionData.params || actionData.fields || {};
+        const fields = normalizeParamKeys(actionData);
+        // createAction lets a caller FORCE a format version by putting
+        // `version` in params (STAKE v1 vs v2, ISSUE create vs edit), lifting
+        // it out and deleting it before serializing. Pre-flight only read a
+        // top-level `version`, so a params-level one stayed behind as a bogus
+        // VERSION field and broke select/serialize - an owner's ISSUE EDIT
+        // could not be pre-flighted at all. Same root cause as the camelCase
+        // gap above: this path re-implements createAction instead of reusing
+        // it, so every behaviour it forgets is a silent hole. Keep the two in
+        // lockstep until they can share one implementation.
         let version = actionData.version;
+        if (fields.VERSION !== undefined && fields.VERSION !== null && fields.VERSION !== '') {
+            if (version === undefined || version === null) version = fields.VERSION;
+            delete fields.VERSION;
+        }
         try {
             const sel = FormatSelector.select(String(actionData.action).toUpperCase(), fields, version);
             const str = FormatSelector.serialize(String(actionData.action).toUpperCase(), sel.version, fields);
@@ -99,6 +113,27 @@ function normalizeInput(actionData) {
             'Pre-flight could not derive an action string from the supplied object', { action: actionData.action });
     }
     throw new SDKFormatError('EMPTY', 'Pre-flight requires an action string or {action, params}');
+}
+
+/**
+ * Field names, the way createAction takes them.
+ *
+ *  re-implemented the {action, params} -> action-string path here
+ * without createAction's camelCase -> UPPER_SNAKE normalization, so the
+ * SAME object that composes fine ({action:'SEND', params:{tick, amount,
+ * destination}}) threw UNENCODABLE_INPUT out of pre-flight. §4.2 documents
+ * that exact shape as valid input, and a headless consumer under the
+ * default 'enforce' mode got an exception where it expected a verdict.
+ * Found the first time the §8.2 harness was actually run against a chain.
+ *
+ * Delegates to the same Utility.normalizeFields createAction uses rather
+ * than mapping keys again: two copies of a naming convention is how they
+ * drift apart in the first place. Already-UPPER_SNAKE keys pass through
+ * unchanged, so callers using the canonical shape are unaffected.
+ */
+function normalizeParamKeys(actionData) {
+    const raw = actionData.params || actionData.fields || {};
+    return new Utility().normalizeFields(raw);
 }
 
 function resolveMode(optMode, sdkDefault) {

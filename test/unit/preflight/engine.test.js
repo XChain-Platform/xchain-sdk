@@ -73,6 +73,45 @@ describe('pre-flight engine', function () {
             const r = await sdk.preflight({ action: 'SEND', params: { TICK: 'JDOG', AMOUNT: '1', DESTINATION: 'x' } }, { source: 's', preflight: 'local' });
             expect(r).to.have.property('verdict');
         });
+
+        // The case above used canonical UPPER_SNAKE keys, which is why this
+        // gap survived: createAction takes camelCase and normalizes it, so the
+        // very same object that composes fine threw UNENCODABLE_INPUT out of
+        // pre-flight. A headless consumer on the default 'enforce' mode got an
+        // exception where §4.2 promises a verdict. Caught the first time the
+        // §8.2 harness ran against a real chain.
+        it('accepts camelCase params, exactly as createAction does', async function () {
+            const sdk = mockSdk();
+            const r = await sdk.preflight(
+                { action: 'SEND', params: { tick: 'JDOG', amount: '1', destination: 'x' } },
+                { source: 's', preflight: 'local' },
+            );
+            expect(r).to.have.property('verdict');
+        });
+
+        // createAction lets a caller force a format version via params.version
+        // (ISSUE create vs edit, STAKE v1 vs v2). Pre-flight read only a
+        // top-level version, so a params-level one stayed behind as a bogus
+        // VERSION field and an owner's ISSUE EDIT could not be pre-flighted at
+        // all. Also found by the §8.2 harness on its first real run.
+        it('honours a version forced through params, as createAction does', async function () {
+            const sdk = mockSdk();
+            const r = await sdk.preflight(
+                { action: 'ISSUE', params: { tick: 'JDOG', version: 1, description: 'updated' } },
+                { source: 's', preflight: 'local' },
+            );
+            expect(r).to.have.property('verdict');
+        });
+
+        it('normalizes camelCase to the same report as UPPER_SNAKE', async function () {
+            const sdk = mockSdk();
+            const opts = { source: 's', preflight: 'local' };
+            const upper = await sdk.preflight({ action: 'SEND', params: { TICK: 'JDOG', AMOUNT: '1', DESTINATION: 'x' } }, opts);
+            const camel = await sdk.preflight({ action: 'SEND', params: { tick: 'JDOG', amount: '1', destination: 'x' } }, opts);
+            // Same action in two spellings must not produce two verdicts.
+            expect(camel.verdict).to.equal(upper.verdict);
+            expect(camel.checksRun).to.deep.equal(upper.checksRun);
+        });
     });
 
     describe('report shape (§4.2)', function () {
