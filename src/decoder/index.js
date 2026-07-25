@@ -34,12 +34,13 @@ const { describe } = require('./describe.js');
 const { actionDisplayLabel } = require('./actionDisplayLabel.js');
 const { ACTION_ALIASES } = require('./aliases.js');
 const hardening = require('./hardening.js');
-const { decodeActionFromPsbt } = require('../cosigner/psbtActionDecode.js');
+const { decodeActionFromPsbt, decodeActionStringFromPsbt } = require('../cosigner/psbtActionDecode.js');
 
 module.exports = {
     parse,
     describe,
     decodeActionFromPsbt,
+    decodeActionStringFromPsbt,
     actionDisplayLabel,
     ACTION_ALIASES,
     BATCH_ACTION_LIMITS,

@@ -11,7 +11,7 @@
 const { expect } = require('chai');
 const crypto  = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
-const { decodeActionFromPsbt } = require('../../src/cosigner/psbtActionDecode.js');
+const { decodeActionFromPsbt, decodeActionStringFromPsbt } = require('../../src/cosigner/psbtActionDecode.js');
 const { evaluatePolicy } = require('../../src/cosigner/policyEvaluator.js');
 
 // Build an OP_RETURN PSBT exactly the way xchain-encoder does, so the decoder
@@ -155,5 +155,62 @@ describe('psbtActionDecode.decodeActionFromPsbt', function () {
         const r = decodeActionFromPsbt(swapped);
         expect(r.ok).to.equal(false);
         expect(r.reason).to.equal('NO_MAGIC_WORD');
+    });
+});
+
+describe('psbtActionDecode.decodeActionStringFromPsbt (self-sign byte-match)', function () {
+    // The raw extractor is the correct primitive for the wallet's self-sign
+    // tamper check (composeActionForConfirm -> confirmChecks.checkActionByteMatch):
+    // the caller already holds the intended action string and only needs to
+    // prove the PSBT's OP_RETURN encodes exactly those bytes. It therefore does
+    // NOT apply the co-signer's rest/multi-leg policy gates.
+
+    it('recovers the exact bytes for a rest-field EXECUTE that the co-signer decoder refuses', function () {
+        // Regression for the confirm-modal "does not match what you approved"
+        // block: EXECUTE's format ends in ...PARAMS (a rest field), so the
+        // policy decoder fails closed even though the bytes are correct.
+        const s = 'EXECUTE|0|1632|ping';
+        expect(decodeActionFromPsbt(buildPsbt(s)).reason).to.equal('REST_FIELD_UNSUPPORTED');
+        const r = decodeActionStringFromPsbt(buildPsbt(s));
+        expect(r.ok).to.equal(true);
+        expect(r.actionString).to.equal(s);
+    });
+
+    it('recovers EXECUTE with variadic PARAMS byte-for-byte', function () {
+        const s = 'EXECUTE|0|1632|add|5|7';
+        const r = decodeActionStringFromPsbt(buildPsbt(s));
+        expect(r.ok).to.equal(true);
+        expect(r.actionString).to.equal(s);
+    });
+
+    it('recovers a rest-field LIST byte-for-byte', function () {
+        const s = 'LIST|0|1|JDOG|BRRR|TEST';
+        expect(decodeActionFromPsbt(buildPsbt(s)).reason).to.equal('REST_FIELD_UNSUPPORTED');
+        const r = decodeActionStringFromPsbt(buildPsbt(s));
+        expect(r.ok).to.equal(true);
+        expect(r.actionString).to.equal(s);
+    });
+
+    it('agrees with the policy decoder on a plain single-leg action (SEND)', function () {
+        const s = 'SEND|0|TOK|5|1destX';
+        const r = decodeActionStringFromPsbt(buildPsbt(s));
+        expect(r.ok).to.equal(true);
+        expect(r.actionString).to.equal(s);
+    });
+
+    it('still fails closed on a PSBT with no OP_RETURN', function () {
+        const p = new bitcoin.Psbt();
+        p.addInput({ hash: crypto.randomBytes(32), index: 0 });
+        p.addOutput({ address: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2', value: 1000 });
+        const r = decodeActionStringFromPsbt(p);
+        expect(r.ok).to.equal(false);
+        expect(r.reason).to.equal('NO_OP_RETURN');
+    });
+
+    it('still fails closed on the P2SH two-phase tag (params not in this PSBT)', function () {
+        // Encoder writes only the 'p2sh' tag after XCHN for the funding tx.
+        const r = decodeActionStringFromPsbt(buildPsbt('ignored', { rawBody: Buffer.from('p2sh') }));
+        expect(r.ok).to.equal(false);
+        expect(r.reason).to.equal('P2SH_P2WSH_UNSUPPORTED');
     });
 });

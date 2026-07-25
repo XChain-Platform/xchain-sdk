@@ -92,7 +92,16 @@ function deobfuscate(data, txidHex) {
  *   { ok:true,  action, version, params:{FIELD:value}, actionString }
  *   { ok:false, reason, detail }   (fail closed - the co-signer must refuse)
  */
-function decodeActionFromPsbt(psbtOrHex, opts = {}) {
+// Recover ONLY the raw inline OP_RETURN action-string bytes from a PSBT, exactly
+// as the encoder wrote them, with NO format/field/rest/multi-leg judgment. This
+// is the pure byte-recovery half shared by both public decoders (deobfuscate ->
+// magic word -> inline script push -> utf8). It fails closed on anything that is
+// not a single well-formed inline OP_RETURN action payload (no/multi OP_RETURN,
+// the P2SH/P2WSH two-phase tag, oversized, decompile or utf8 failure). Callers
+// that need policy judgment layer the format/rest/multi-leg gates on top.
+//
+// @returns { ok:true, actionString } | { ok:false, reason, detail }
+function extractInlineActionString(psbtOrHex, opts = {}) {
     let psbt;
     try {
         psbt = (typeof psbtOrHex === 'string')
@@ -144,6 +153,14 @@ function decodeActionFromPsbt(psbtOrHex, opts = {}) {
     let actionString;
     try { actionString = new TextDecoder('utf-8', { fatal: true }).decode(decompiled[0]); }
     catch (e) { return fail('NOT_UTF8'); }
+
+    return { ok: true, actionString };
+}
+
+function decodeActionFromPsbt(psbtOrHex, opts = {}) {
+    const extracted = extractInlineActionString(psbtOrHex, opts);
+    if (!extracted.ok) return extracted;
+    const { actionString } = extracted;
 
     const segments = actionString.split('|');
     if (segments.length < 2) return fail('MALFORMED_ACTION_STRING');
@@ -204,6 +221,29 @@ function decodeActionFromPsbt(psbtOrHex, opts = {}) {
     return { ok: true, action, version, params: parsed.params, actionString };
 }
 
+/*
+ * Recover ONLY the raw inline OP_RETURN action string from a PSBT, byte-for-
+ * byte as the encoder wrote it, applying NO format/field/rest/multi-leg gates.
+ *
+ * This is the correct primitive for a SELF-SIGN tamper check: the caller
+ * already holds the intended action string and only needs to prove the PSBT's
+ * OP_RETURN encodes exactly those bytes. Unlike decodeActionFromPsbt - whose
+ * fail-closed rest/multi-leg refusals exist to protect the co-signer's single-
+ * leg POLICY evaluator (which cannot judge multi-value shapes) - a pure byte
+ * comparison is safe and complete for EVERY action, including rest-field
+ * actions (EXECUTE '...PARAMS', LIST '...ITEM'). Using decodeActionFromPsbt for
+ * the self-sign byte-match wrongly rejected those actions as tampered even
+ * though the bytes were correct (xchain-wallet composeActionForConfirm ->
+ * confirmChecks.checkActionByteMatch).
+ *
+ * @param {bitcoin.Psbt|string} psbtOrHex  a bitcoinjs Psbt or its hex
+ * @param {object} [opts]   { network } for hex parsing
+ * @returns { ok:true, actionString } | { ok:false, reason, detail }
+ */
+function decodeActionStringFromPsbt(psbtOrHex, opts = {}) {
+    return extractInlineActionString(psbtOrHex, opts);
+}
+
 // MAX_ACTION_DATA_LENGTH re-exported so parity/drift guards can assert the
 // co-signer gate rides the shared (chunkHelper-sourced) cap.
-module.exports = { decodeActionFromPsbt, MAX_ACTION_DATA_LENGTH };
+module.exports = { decodeActionFromPsbt, decodeActionStringFromPsbt, MAX_ACTION_DATA_LENGTH };
