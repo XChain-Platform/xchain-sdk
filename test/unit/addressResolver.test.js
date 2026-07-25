@@ -112,11 +112,16 @@ describe('AddressResolver', function () {
             expect(input.destination).to.equal(ADDR);
         });
 
-        it('does NOT compact DISPENSER GET_ADDRESS (decoder cannot resolve ^<id>) but still compacts ORACLE_ADDRESS', async function () {
+        it('does NOT compact either DISPENSER address field (the decoder cannot resolve ^<id>)', async function () {
+            // GET_ADDRESS: the dispenser's operating key, which the decoder gates dispense
+            // detection on. ORACLE_ADDRESS: the payee of the PRICE v1 oracle usage fee,
+            // whose on-chain output the decoder must capture into transaction_outputs by
+            // reading this very field ; compacted, nothing is captured and the
+            // indexer rejects the create however much was actually paid .
             const r = new AddressResolver(makeSdk({}, addressStub({ [ADDR]: 57, [ADDR2]: 58 })));
             const out = await r.resolveActionParams('DISPENSER', { getAddress: ADDR, oracleAddress: ADDR2 });
-            expect(out.getAddress).to.equal(ADDR);        // delegate operating address kept in full
-            expect(out.oracleAddress).to.equal('^58');    // other DISPENSER address field still compacted
+            expect(out.getAddress).to.equal(ADDR);
+            expect(out.oracleAddress).to.equal(ADDR2);
         });
 
         it('still compacts ORDER and SWAP GET_ADDRESS (the exemption is DISPENSER-scoped)', async function () {
