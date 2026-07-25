@@ -681,16 +681,16 @@ describe('Actions – introspection', function () {
     beforeEach(function () { actions = createActions(); });
 
     // getActions()
-    it('getActions() returns an array of exactly 30 action names', function () {
+    it('getActions() returns an array of exactly 31 action names', function () {
         let list = actions.getActions();
         expect(list).to.be.an('array');
-        expect(list).to.have.length(30);
+        expect(list).to.have.length(31);
     });
 
     it('getActions() contains all expected action names', function () {
         let list = actions.getActions();
         let expected = [
-            'ADDRESS', 'AIRDROP', 'BATCH', 'BROADCAST', 'CALLBACK',
+            'ADDRESS', 'AIRDROP', 'BATCH', 'BET', 'BROADCAST', 'CALLBACK',
             'DESTROY', 'DISPENSER', 'DIVIDEND', 'FILE', 'ISSUE',
             'LINK', 'LIST', 'MESSAGE', 'MINT', 'ORDER',
             'SEND', 'SLEEP', 'SWAP', 'SWEEP'

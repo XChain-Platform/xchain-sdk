@@ -456,6 +456,44 @@ class Workflows {
         return session.vote(this.sdk.voting.clearDelegationParams(params), {}, opts);
     }
 
+    // Open a parimutuel betting market (BET v0). Returns the submit result plus
+    // the market's action index, which is the FEED_ACTION_INDEX every later bet,
+    // resolve, and cancel references. Markets are immutable from creation, so
+    // this index is a complete commitment to the market's terms: there is no
+    // edit path and nothing about the market can change under a bettor.
+    async openMarket(wif, params, opts = {}) {
+        let session = this.sdk.session(wif, opts);
+        let result  = await session.bet(this.sdk.betting.createMarketParams(params), {}, opts);
+        return { result, feedRef: this._actionIndexOf(result.indexed) };
+    }
+
+    // Place a bet on an existing market (BET v2). Bets are FINAL once placed:
+    // there is no cancel path, by design.
+    async placeBet(wif, params, opts = {}) {
+        let session = this.sdk.session(wif, opts);
+        return session.bet(this.sdk.betting.placeBetParams(params), {}, opts);
+    }
+
+    // Resolve a market to its winning outcome (BET v3). Oracle only, and only
+    // between the deadline and the end of the refund window.
+    async resolveMarket(wif, params, opts = {}) {
+        let session = this.sdk.session(wif, opts);
+        return session.bet(this.sdk.betting.resolveMarketParams(params), {}, opts);
+    }
+
+    // Cancel a market and refund every open bet in full (BET v1). Oracle only,
+    // available any time before the market resolves or expires. This is the
+    // honest exit for a postponed or voided event.
+    async cancelMarket(wif, params, opts = {}) {
+        let session = this.sdk.session(wif, opts);
+        return session.bet(this.sdk.betting.cancelMarketParams(params), {}, opts);
+    }
+
+    // Open a market and immediately place the oracle's own opening context in a
+    // single recipe is deliberately NOT offered: the oracle may not bet on its
+    // own market (BET.md format 2), so such a helper could only ever produce a
+    // rejected second transaction.
+
     // Run a multi-step recipe whose steps broadcast independent, NON-atomic
     // transactions. `partial` is a mutable accumulator the worker fills in as each
     // step completes; on any throw (including a later step or a missing action_index),

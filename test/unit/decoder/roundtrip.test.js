@@ -118,6 +118,10 @@ describe('decoder round-trip guarantee', function () {
             BROADCAST: 'BROADCAST|0|hello world',
             DIVIDEND:  'DIVIDEND|0|JDOG|GAS|1',
             AIRDROP:   'AIRDROP|0|JDOG|1|55',
+            // A place-bet: the only BET format a BATCH realistically carries, and
+            // the one whose OUTCOME/AMOUNT pair a nested-blob field shift would
+            // scramble into a cancel.
+            BET:       'BET|2|42|0|25.5',
             ORDER:     'ORDER|1|42',
             SWAP:      'SWAP|1|42',
             DISPENSER: 'DISPENSER|1|42',

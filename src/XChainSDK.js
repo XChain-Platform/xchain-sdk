@@ -36,6 +36,7 @@ const NftHelpers     = require('./nft.js');
 const ProjectHelpers = require('./project.js');
 const ControllerHelpers = require('./controller.js');
 const VoteHelpers    = require('./vote.js');
+const BettingHelpers = require('./betting.js');
 const AttestationHelpers = require('./attestation.js');
 const CheckpointVerifier = require('./checkpoint.js');
 const LightClient        = require('./light.js');
@@ -112,6 +113,15 @@ class XChainSDK {
         // Submit-flow recipes live on sdk.workflows (createPoll, castBallot,
         // delegateVote). Spec: protocol/actions/VOTE.md.
         this.voting     = new VoteHelpers();
+        // Betting (parimutuel markets) helpers: pure builders for BET v0
+        // (create market), v1 (cancel), v2 (place bet), v3 (resolve), plus the
+        // DETAILS market-definition schema, its base64 builder/parser, and a
+        // display-only payout projection. Composing OUTCOMES and DETAILS through
+        // createMarketParams is what keeps the two from disagreeing, which is a
+        // consensus rejection. No network. Submit-flow recipes live on
+        // sdk.workflows (openMarket, placeBet, resolveMarket, cancelMarket).
+        // Spec: protocol/actions/BET.md.
+        this.betting    = new BettingHelpers();
         // Attestation request/payload builders (http_get URL validation, LLM
         // envelope, request options). Exposed on the instance for parity with
         // messaging/gatedFile so dapps can `sdk.attestation.httpGet(url)` before
@@ -479,6 +489,15 @@ class XChainSDK {
     // sdk.voting.* or hand-roll them. v2 (finalize) is system-only. For a
     // signed+broadcast round-trip use sdk.createPoll / castBallot / delegateVote.
     async vote(params, encoder)             { return this.createAction({ action: 'VOTE', params, encoder }); }
+
+    // BET (parimutuel betting). Raw wrapper: the version is taken from
+    // params.version (0 create / 1 cancel / 2 place / 3 resolve). Build the
+    // params with sdk.betting.* so OUTCOMES and DETAILS are composed together
+    // and the version is pinned; auto-selection would otherwise read a resolve
+    // with no AMOUNT and a place-bet as neighbouring shapes. For a
+    // signed+broadcast round-trip use sdk.workflows.openMarket / placeBet /
+    // resolveMarket / cancelMarket.
+    async bet(params, encoder)              { return this.createAction({ action: 'BET', params, encoder }); }
 
     async stake(params, encoder)            { return this.createAction({ action: 'STAKE', params, encoder }); }
     async unstake(params, encoder)          { return this.createAction({ action: 'UNSTAKE', params, encoder }); }

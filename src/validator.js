@@ -95,6 +95,9 @@ const ACTION_REQUIRED_FIELDS = {
     ADDRESS:            [],
     AIRDROP:            ['TICK', 'AMOUNT', 'LIST_ACTION_INDEX'],
     BATCH:              ['COMMAND'],
+    // BET v0 (create). The other three formats reference an existing market by
+    // FEED_ACTION_INDEX and are exempted via ACTION_INDEX_FIELDS below.
+    BET:                ['LABEL', 'OUTCOMES', 'TICK', 'DEADLINE'],
     BROADCAST:          [],
     CALLBACK:           ['TICK'],
     COINPAY:            ['ORDER_MATCH_ACTION_INDEX'],
@@ -129,6 +132,7 @@ const ACTION_REQUIRED_FIELDS = {
 // Actions that have cancel/close/edit sub-operations via ACTION_INDEX reference
 // For these, the base required fields don't apply when an action index field is present
 const ACTION_INDEX_FIELDS = {
+    BET:       'FEED_ACTION_INDEX',
     BROADCAST: 'BROADCAST_ACTION_INDEX',
     DISPENSER: 'DISPENSER_ACTION_INDEX',
     ORDER:     'ORDER_ACTION_INDEX',
@@ -562,6 +566,9 @@ class Validator {
             case 'BATCH':
                 errors.push(...this._validateBatch(fields));
                 break;
+            case 'BET':
+                errors.push(...this._validateBet(fields));
+                break;
             case 'BROADCAST':
                 errors.push(...this._validateBroadcast(fields));
                 break;
@@ -644,6 +651,213 @@ class Validator {
         // Must have either MESSAGE or BROADCAST_ACTION_INDEX
         if (this._isEmpty(fields.MESSAGE) && this._isEmpty(fields.BROADCAST_ACTION_INDEX))
             errors.push(this._error('MISSING_REQUIRED_FIELD', 'BROADCAST requires MESSAGE or BROADCAST_ACTION_INDEX'));
+        return errors;
+    }
+
+    // BET-specific validation . Mirrors the consensus rules in
+    // xchain-documentation/protocol/actions/BET.md so a malformed market fails in
+    // the caller's hands instead of after paying a fee. Stateless only: whether
+    // the market is open, whether the tick has a `trade` controller, whether the
+    // bettor is the oracle, and gating-list membership are all indexer-owned.
+    //
+    // The three FEED_ACTION_INDEX formats are told apart by the fields present,
+    // matching the format table: cancel carries neither OUTCOME nor AMOUNT,
+    // resolve carries OUTCOME, place carries OUTCOME + AMOUNT.
+    _validateBet(fields) {
+        let errors = [];
+        const limits = require('./betting.js').BET_LIMITS;
+        const isCreate = this._isEmpty(fields.FEED_ACTION_INDEX);
+
+        if (isCreate) {
+            // LABEL length. Presence is handled by ACTION_REQUIRED_FIELDS.
+            if (!this._isEmpty(fields.LABEL) && String(fields.LABEL).length > limits.MAX_BET_LABEL_LENGTH)
+                errors.push(this._error('INVALID_FIELD_VALUE',
+                    'LABEL must be ' + limits.MAX_BET_LABEL_LENGTH + ' characters or less',
+                    { field: 'LABEL', value: String(fields.LABEL).length, constraint: { max: limits.MAX_BET_LABEL_LENGTH } }));
+
+            // OUTCOMES: 2..MAX entries, each non-empty, length-capped, and
+            // byte-unique after trim. Case variants are legal, so not checked.
+            if (!this._isEmpty(fields.OUTCOMES)) {
+                const labels = String(fields.OUTCOMES).split(',').map(o => o.trim());
+                if (labels.length < 2 || labels.length > limits.MAX_BET_OUTCOMES)
+                    errors.push(this._error('INVALID_FIELD_VALUE',
+                        'OUTCOMES must have between 2 and ' + limits.MAX_BET_OUTCOMES + ' comma-separated entries',
+                        { field: 'OUTCOMES', value: labels.length }));
+                if (labels.some(l => l === ''))
+                    errors.push(this._error('INVALID_FIELD_VALUE', 'OUTCOMES entries may not be empty', { field: 'OUTCOMES' }));
+                if (labels.some(l => l.length > limits.MAX_BET_OUTCOME_LENGTH))
+                    errors.push(this._error('INVALID_FIELD_VALUE',
+                        'each OUTCOMES entry must be ' + limits.MAX_BET_OUTCOME_LENGTH + ' characters or less',
+                        { field: 'OUTCOMES', constraint: { max: limits.MAX_BET_OUTCOME_LENGTH } }));
+                if (new Set(labels).size !== labels.length)
+                    errors.push(this._error('INVALID_FIELD_VALUE', 'OUTCOMES entries must be unique', { field: 'OUTCOMES' }));
+            }
+
+            // Betting is token-only: an empty TICK means native coin, which
+            // cannot be escrowed at parse. Presence is required above, so this
+            // only catches a whitespace-only tick.
+            if (!this._isEmpty(fields.TICK) && String(fields.TICK).trim() === '')
+                errors.push(this._error('INVALID_FIELD_VALUE',
+                    'TICK is required: betting is token-only and native coin is not supported',
+                    { field: 'TICK' }));
+
+            // FEE is a PERCENT of the pot (1.00 = 1%), at most 2 decimals.
+            if (!this._isEmpty(fields.FEE)) {
+                const fee = String(fields.FEE).trim();
+                if (!/^\d+(\.\d{1,2})?$/.test(fee))
+                    errors.push(this._error('INVALID_FIELD_VALUE',
+                        'FEE must be a non-negative number with at most 2 decimal places (a percent of the pot: 1.00 = 1%)',
+                        { field: 'FEE', value: fields.FEE }));
+                else if (Number(fee) > limits.MAX_FEED_FEE)
+                    errors.push(this._error('INVALID_FIELD_VALUE',
+                        'FEE must be at most ' + limits.MAX_FEED_FEE + ' percent',
+                        { field: 'FEE', value: fee, constraint: { max: limits.MAX_FEED_FEE } }));
+            }
+
+            // DEADLINE is a Unix timestamp. "In the future" is a block-time
+            // question the indexer owns; only the shape is checked here.
+            if (!this._isEmpty(fields.DEADLINE)) {
+                const dl = Number(fields.DEADLINE);
+                if (!Number.isInteger(dl) || dl <= 0)
+                    errors.push(this._error('INVALID_FIELD_VALUE',
+                        'DEADLINE must be a positive integer Unix timestamp',
+                        { field: 'DEADLINE', value: fields.DEADLINE }));
+            }
+
+            if (!this._isEmpty(fields.REFUND_WINDOW)) {
+                const rw = Number(fields.REFUND_WINDOW);
+                if (!Number.isInteger(rw) || rw < limits.MIN_BET_REFUND_WINDOW || rw > limits.MAX_BET_REFUND_WINDOW)
+                    errors.push(this._error('INVALID_FIELD_VALUE',
+                        'REFUND_WINDOW must be an integer between ' + limits.MIN_BET_REFUND_WINDOW +
+                        ' and ' + limits.MAX_BET_REFUND_WINDOW + ' seconds',
+                        { field: 'REFUND_WINDOW', value: fields.REFUND_WINDOW }));
+            }
+
+            if (!this._isEmpty(fields.MIN_AMOUNT)) {
+                if (!this.util.isNumeric(fields.MIN_AMOUNT) || Number(fields.MIN_AMOUNT) <= 0)
+                    errors.push(this._error('INVALID_FIELD_VALUE',
+                        'MIN_AMOUNT must be a positive amount',
+                        { field: 'MIN_AMOUNT', value: fields.MIN_AMOUNT }));
+            }
+
+            // The same list in both slots builds a market nobody can ever bet on.
+            if (!this._isEmpty(fields.ALLOW_LIST) && !this._isEmpty(fields.BLOCK_LIST) &&
+                String(fields.ALLOW_LIST).trim() === String(fields.BLOCK_LIST).trim())
+                errors.push(this._error('INVALID_FIELD_VALUE',
+                    'BLOCK_LIST must differ from ALLOW_LIST: the same list in both slots bars every address',
+                    { field: 'BLOCK_LIST', value: fields.BLOCK_LIST }));
+
+            // DETAILS: strict base64 of a JSON object, size- and depth-capped,
+            // with any `outcomes` key matching OUTCOMES byte-for-byte.
+            if (!this._isEmpty(fields.DETAILS))
+                errors.push(...this._validateBetDetails(String(fields.DETAILS), fields.OUTCOMES, limits));
+
+        } else {
+            // Lifecycle formats. FEED_ACTION_INDEX is the market reference.
+            if (!/^\d+$/.test(String(fields.FEED_ACTION_INDEX).trim()))
+                errors.push(this._error('INVALID_FIELD_VALUE',
+                    'FEED_ACTION_INDEX must be a numeric ACTION_INDEX',
+                    { field: 'FEED_ACTION_INDEX', value: fields.FEED_ACTION_INDEX }));
+
+            // OUTCOME is a zero-based index. Its upper bound depends on the
+            // market's outcome count, which is on-chain state, so only the
+            // non-negative-integer shape is checkable here.
+            if (!this._isEmpty(fields.OUTCOME) || fields.OUTCOME === 0 || fields.OUTCOME === '0') {
+                if (!/^\d+$/.test(String(fields.OUTCOME).trim()))
+                    errors.push(this._error('INVALID_FIELD_VALUE',
+                        'OUTCOME must be a zero-based integer index into the market OUTCOMES',
+                        { field: 'OUTCOME', value: fields.OUTCOME }));
+            }
+
+            if (!this._isEmpty(fields.AMOUNT)) {
+                if (!this.util.isNumeric(fields.AMOUNT) || Number(fields.AMOUNT) <= 0)
+                    errors.push(this._error('INVALID_FIELD_VALUE',
+                        'AMOUNT must be a positive stake',
+                        { field: 'AMOUNT', value: fields.AMOUNT }));
+            }
+
+            // A place-bet needs an outcome to stake on. Without this an AMOUNT
+            // with no OUTCOME selects format 1 (cancel) and silently becomes a
+            // different action than the caller meant.
+            if (!this._isEmpty(fields.AMOUNT) && this._isEmpty(fields.OUTCOME) &&
+                fields.OUTCOME !== 0 && fields.OUTCOME !== '0')
+                errors.push(this._error('MISSING_REQUIRED_FIELD',
+                    'BET place-bet requires OUTCOME alongside AMOUNT',
+                    { field: 'OUTCOME' }));
+        }
+
+        return errors;
+    }
+
+    // DETAILS shape rules, shared by the create path. Kept separate because the
+    // explorer and wallet render paths need the same checks against on-chain
+    // (therefore hostile) input; betting.js parseBetDetails is the throwing twin.
+    _validateBetDetails(details, outcomes, limits) {
+        let errors = [];
+
+        if (!/^[A-Za-z0-9+/]*={0,2}$/.test(details) || details.length % 4 !== 0) {
+            errors.push(this._error('INVALID_FIELD_VALUE',
+                'DETAILS must be strict base64 (A-Za-z0-9+/ with = padding, length a multiple of 4)',
+                { field: 'DETAILS' }));
+            return errors;
+        }
+
+        const buf = Buffer.from(details, 'base64');
+        if (buf.toString('base64') !== details) {
+            errors.push(this._error('INVALID_FIELD_VALUE',
+                'DETAILS is not canonical base64: it does not re-encode to itself',
+                { field: 'DETAILS' }));
+            return errors;
+        }
+        if (buf.length > limits.MAX_BET_DETAILS_LENGTH) {
+            errors.push(this._error('INVALID_FIELD_VALUE',
+                'DETAILS decodes to ' + buf.length + ' bytes, max ' + limits.MAX_BET_DETAILS_LENGTH,
+                { field: 'DETAILS', value: buf.length, constraint: { max: limits.MAX_BET_DETAILS_LENGTH } }));
+            return errors;
+        }
+
+        let parsed;
+        try {
+            parsed = JSON.parse(buf.toString('utf8'));
+        } catch (e) {
+            errors.push(this._error('INVALID_FIELD_VALUE', 'DETAILS must decode to parseable JSON', { field: 'DETAILS' }));
+            return errors;
+        }
+
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            errors.push(this._error('INVALID_FIELD_VALUE',
+                'DETAILS must decode to a JSON object, not an array or a bare value',
+                { field: 'DETAILS' }));
+            return errors;
+        }
+
+        const depth = (function walk(value, level) {
+            if (value === null || typeof value !== 'object') return level;
+            let max = level;
+            for (const key of Object.keys(value)) max = Math.max(max, walk(value[key], level + 1));
+            return max;
+        })(parsed, 1);
+        if (depth > limits.MAX_BET_DETAILS_DEPTH)
+            errors.push(this._error('INVALID_FIELD_VALUE',
+                'DETAILS nests ' + depth + ' levels deep, max ' + limits.MAX_BET_DETAILS_DEPTH,
+                { field: 'DETAILS', value: depth, constraint: { max: limits.MAX_BET_DETAILS_DEPTH } }));
+
+        // The cross-check that stops a market's human-readable outcomes drifting
+        // from the ones bets are actually settled against.
+        if (parsed.outcomes !== undefined && !this._isEmpty(outcomes)) {
+            const canonical = String(outcomes).split(',').map(o => o.trim());
+            if (!Array.isArray(parsed.outcomes)) {
+                errors.push(this._error('INVALID_FIELD_VALUE',
+                    'DETAILS.outcomes must be an array when present', { field: 'DETAILS' }));
+            } else {
+                const given = parsed.outcomes.map(o => String(o == null ? '' : o).trim());
+                if (given.length !== canonical.length || given.some((o, i) => o !== canonical[i]))
+                    errors.push(this._error('INVALID_FIELD_VALUE',
+                        'DETAILS.outcomes must match the OUTCOMES field exactly (same order, same count)',
+                        { field: 'DETAILS', outcomes: canonical, details: given }));
+            }
+        }
+
         return errors;
     }
 

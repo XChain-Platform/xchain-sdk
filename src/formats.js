@@ -37,6 +37,22 @@ var Formats = {
         0: 'VERSION|COMMAND'
     },
 
+    // Parimutuel betting markets . One self-contained action covers the
+    // whole lifecycle; BROADCAST plays no part in betting. There is deliberately
+    // no edit format: markets are immutable from creation, and the pre-bet fix
+    // path is cancel + recreate. Auto-selection distinguishes the three
+    // FEED_ACTION_INDEX formats by the fields present (cancel has neither
+    // OUTCOME nor AMOUNT, resolve has OUTCOME, place has both), but the compose
+    // helpers in betting.js pin the version explicitly rather than relying on it,
+    // because a resolve and a place-bet differing only by a missing AMOUNT is too
+    // sharp an edge to leave to inference.
+    BET: {
+        0: 'VERSION|LABEL|OUTCOMES|TICK|FEE|DEADLINE|REFUND_WINDOW|MIN_AMOUNT|ALLOW_LIST|BLOCK_LIST|DETAILS|MEMO',
+        1: 'VERSION|FEED_ACTION_INDEX|MEMO',
+        2: 'VERSION|FEED_ACTION_INDEX|OUTCOME|AMOUNT|MEMO',
+        3: 'VERSION|FEED_ACTION_INDEX|OUTCOME|MEMO'
+    },
+
     BROADCAST: {
         0: 'VERSION|MESSAGE|VALUE',
         1: 'VERSION|MESSAGE|VALUE|FEE|MEMO',

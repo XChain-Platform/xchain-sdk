@@ -270,6 +270,32 @@ class ExplorerClient {
         return this._get('/callbacks/' + query + '/' + type, opts);
     }
 
+    // Betting markets . type is one of block | address | source | token
+    // | status, matching the explorer route map. `source` filters by the market's
+    // oracle; `address` matches any participant.
+    async getBetFeeds(query, type, opts = {}) {
+        return this._get('/bet_feeds/' + query + '/' + type, opts);
+    }
+
+    // One market by its FEED_ACTION_INDEX: the feed row, per-outcome pool totals,
+    // bet counts, and the status timeline.
+    async getBetFeed(index, opts = {}) {
+        return this._get('/bet_feed/' + index, opts);
+    }
+
+    // Bets, type is one of block | address | feed | token | status.
+    async getBets(query, type, opts = {}) {
+        return this._get('/bets/' + query + '/' + type, opts);
+    }
+
+    // An oracle's track record: markets resolved / voided / cancelled / expired,
+    // fees earned, active markets. This is the v0 reputation system in full, and
+    // it is per-ADDRESS: an oracle can start fresh from a new address at any
+    // time, so an empty record means unknown, never safe (BET.md trust model).
+    async getOracleStats(address, opts = {}) {
+        return this._get('/oracle/' + address, opts);
+    }
+
     async getDestroys(query, type, opts = {}) {
         return this._get('/destroys/' + query + '/' + type, opts);
     }

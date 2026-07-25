@@ -218,6 +218,28 @@ class WebSocketClient {
         return this._sendWithResponse(id, msg);
     }
 
+    // Subscribe to one betting market's live events: bet placed, deadline latch
+    // (market closed), resolved, cancelled, expired. A market page uses this to
+    // keep pool totals and implied odds current, which matters because a
+    // parimutuel payout is only ever a projection until the market resolves.
+    // Returns the same SUBSCRIBED promise as subscribe(), so reconnect replay
+    // covers it automatically.
+    subscribeBetFeed(feedActionIndex, params) {
+        const index = String(feedActionIndex == null ? '' : feedActionIndex).trim();
+        if (!/^\d+$/.test(index))
+            throw new Error('subscribeBetFeed: feedActionIndex must be a numeric ACTION_INDEX, got ' + JSON.stringify(feedActionIndex));
+        return this.subscribe(['bet_feed:' + index], params);
+    }
+
+    // Stop following a betting market. Mirrors subscribeBetFeed's channel name
+    // exactly so the tracked-subscription filter in unsubscribe() matches.
+    unsubscribeBetFeed(feedActionIndex, params) {
+        const index = String(feedActionIndex == null ? '' : feedActionIndex).trim();
+        if (!/^\d+$/.test(index))
+            throw new Error('unsubscribeBetFeed: feedActionIndex must be a numeric ACTION_INDEX, got ' + JSON.stringify(feedActionIndex));
+        return this.unsubscribe(['bet_feed:' + index], params);
+    }
+
     // Unsubscribe from channels
     unsubscribe(channels, params) {
         const msg = { action: 'unsubscribe', channels };

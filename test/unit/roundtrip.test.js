@@ -351,6 +351,51 @@ describe('Round-trip: serialize then parse back', function () {
             params: { version: 1, pollRef: '12345', ballot: '0', memo: 'yea' },
             expectedVersion: 1,
             check: { POLL_REF: '12345', BALLOT: '0', MEMO: 'yea' }
+        },
+        {
+            // BET v0 = create a market. The widest format, and the one whose
+            // slot order a field insertion would shift; the three lifecycle
+            // formats are covered below.
+            name: 'BET v0 (create market)',
+            action: 'bet',
+            params: {
+                version: 0, label: 'Superbowl LX winner', outcomes: 'Chiefs,49ers',
+                tick: 'PEPECASH', fee: '1.00', deadline: '1770000000',
+                refundWindow: '604800', minAmount: '10', allowList: '4321',
+                blockList: '8765', memo: 'big game'
+            },
+            expectedVersion: 0,
+            check: {
+                LABEL: 'Superbowl LX winner', OUTCOMES: 'Chiefs,49ers', TICK: 'PEPECASH',
+                DEADLINE: '1770000000', REFUND_WINDOW: '604800',
+                ALLOW_LIST: '4321', BLOCK_LIST: '8765', MEMO: 'big game'
+            }
+        },
+        {
+            // BET v2 = place a bet. OUTCOME is a zero-based index, and outcome 0
+            // is the falsy value a lazy guard would drop.
+            name: 'BET v2 (place bet)',
+            action: 'bet',
+            params: { version: 2, feedActionIndex: '1234', outcome: '0', amount: '25.5', memo: 'chiefs' },
+            expectedVersion: 2,
+            check: { FEED_ACTION_INDEX: '1234', OUTCOME: '0', AMOUNT: '25.5', MEMO: 'chiefs' }
+        },
+        {
+            // BET v3 = resolve. Same leading fields as v2 minus AMOUNT, which is
+            // exactly why the compose helpers pin the version.
+            name: 'BET v3 (resolve market)',
+            action: 'bet',
+            params: { version: 3, feedActionIndex: '1234', outcome: '1', memo: 'final' },
+            expectedVersion: 3,
+            check: { FEED_ACTION_INDEX: '1234', OUTCOME: '1', MEMO: 'final' }
+        },
+        {
+            // BET v1 = cancel, refunding every open bet.
+            name: 'BET v1 (cancel market)',
+            action: 'bet',
+            params: { version: 1, feedActionIndex: '1234', memo: 'postponed' },
+            expectedVersion: 1,
+            check: { FEED_ACTION_INDEX: '1234', MEMO: 'postponed' }
         }
         // DEPLOY v4 (chunk carrier) is exercised by the indexer carrier unit test and the
         // chunked-deploy e2e test; DEPLOY is excluded from this round-trip harness (its

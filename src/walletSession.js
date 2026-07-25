@@ -184,6 +184,11 @@ class WalletSession {
     // system-only. See protocol/actions/VOTE.md.
     async vote(params, enc, opts)      { return this.submit({ action: 'VOTE', params }, enc, opts); }
 
+    // Betting: BET (create market / cancel / place bet / resolve). Build params
+    // with sdk.betting.*; the version rides in params.version. See
+    // protocol/actions/BET.md.
+    async bet(params, enc, opts)       { return this.submit({ action: 'BET', params }, enc, opts); }
+
     // Staking (BTC-only)
     async stake(params, enc, opts)            { return this.submit({ action: 'STAKE', params }, enc, opts); }
     async unstake(params, enc, opts)          { return this.submit({ action: 'UNSTAKE', params }, enc, opts); }

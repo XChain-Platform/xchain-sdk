@@ -70,6 +70,16 @@ var Config = {
             'LIST_ACTION_INDEX',
             'MAX_SUPPLY',
             'MAX_MINT',
+            // BET MIN_AMOUNT is an amount-class field at the wager tick's
+            // DECIMALS, so it falls under the wire-canonicalization contract in
+            // test/unit/wire-number-canonical.test.js: without it a market with a
+            // 0.00000001 minimum would put "1e-8" on the chain. The other BET
+            // numerics (FEED_ACTION_INDEX, OUTCOME, DEADLINE, REFUND_WINDOW) are
+            // small integers that String() never renders scientifically, so they
+            // are deliberately left out rather than added for symmetry.
+            // LOCKSTEP: xchain-indexer src/config.js NUMBER_FIELDS needs the same
+            // entry when P4 lands, or a non-SDK client's "1e-8" is stored verbatim.
+            'MIN_AMOUNT',
             'MINT_ADDRESS_MAX',
             'MINT_START_BLOCK',
             'MINT_STOP_BLOCK',
