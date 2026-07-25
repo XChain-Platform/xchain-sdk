@@ -228,14 +228,20 @@ class EncoderClient {
         // by address and hand it to create_tx, so the encoder selects over a valid
         // set instead of falling into the pubkey lookup.
         //
-        // The funding address is the address behind `pubkey`. Callers pass it as
-        // `sourceAddress` (SDK-side only, NOT forwarded on the create_tx wire: it is
-        // read from `params`, never copied into `rpcParams`). `change` is only a safe
-        // fallback when it equals the source (a self-send with change back to the
-        // spender); an explicit change to a DIFFERENT address must not drive the
-        // fetch, so it is used solely as a last resort. Skipped when the caller
-        // hand-selected utxos or gave neither address.
-        const fundingAddress = params.sourceAddress || rpcParams.change;
+        // The funding address is the address behind `pubkey`, and callers pass it
+        // as `sourceAddress` (SDK-side only, NOT forwarded on the create_tx wire:
+        // it is read from `params`, never copied into `rpcParams`).
+        //
+        // `change` is deliberately NOT a fallback here. It is only ever the same
+        // address in the self-send case, and the SDK has no way to tell that case
+        // apart from a change output pointed at someone else: `pubkey` is a raw
+        // compressed key, which is exactly what the tracker cannot resolve to a
+        // script (that is the bug this block exists to work around). Selecting a
+        // funding set from a change address that is not the spender hands
+        // create_tx UTXOs the signer cannot sign, so when no `sourceAddress` is
+        // given we leave the encoder on its own path rather than guess.
+        // Skipped when the caller hand-selected utxos or gave no source address.
+        const fundingAddress = params.sourceAddress;
         if (rpcParams.utxos === undefined && fundingAddress) {
             const fetched = await this.getUTXOs(fundingAddress);
             // Preserve the encoder's M-11 freshness protection: refuse to select
