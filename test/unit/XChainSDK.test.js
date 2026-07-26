@@ -630,10 +630,48 @@ describe('XChainSDK', function () {
             expect(result).to.deep.equal({ finality: { BTC: 6 } });
         });
 
+        // : explorer.js carried all four BET reads while the SDK top level
+        // carried none, and neither side's unit tests could see the hole - this
+        // suite mocks the ExplorerClient (so it only ever proves the client has
+        // the method), and consumers mock the SDK (so a mock has whatever the
+        // test defines). Every betting read in the wallet threw
+        // "sdk.getBetFeeds is unavailable" against a real stack. These assert the
+        // delegation itself, arguments included.
+        it('getBetFeeds() delegates to explorer.getBetFeeds', async function () {
+            const sdk = makeSDK();
+            const explorer = mockExplorer(sdk, { data: [] });
+            const result = await sdk.getBetFeeds('open', 'status', { limit: 5 });
+            expect(explorer.getBetFeeds.calledOnceWithExactly('open', 'status', { limit: 5 })).to.be.true;
+            expect(result).to.deep.equal({ data: [] });
+        });
+
+        it('getBetFeed() delegates with the feed index, not a query/type pair', async function () {
+            const sdk = makeSDK();
+            const explorer = mockExplorer(sdk, { action_index: '77' });
+            const result = await sdk.getBetFeed(77, { verbose: true });
+            expect(explorer.getBetFeed.calledOnceWithExactly(77, { verbose: true })).to.be.true;
+            expect(result).to.deep.equal({ action_index: '77' });
+        });
+
+        it('getBets() delegates to explorer.getBets', async function () {
+            const sdk = makeSDK();
+            const explorer = mockExplorer(sdk, { data: [] });
+            await sdk.getBets('1abc', 'address', { limit: 10 });
+            expect(explorer.getBets.calledOnceWithExactly('1abc', 'address', { limit: 10 })).to.be.true;
+        });
+
+        it('getOracleStats() delegates with a bare address', async function () {
+            const sdk = makeSDK();
+            const explorer = mockExplorer(sdk, { resolved: 3 });
+            await sdk.getOracleStats('1oracle', {});
+            expect(explorer.getOracleStats.calledOnceWithExactly('1oracle', {})).to.be.true;
+        });
+
         it('throws EXPLORER_NOT_CONFIGURED when no explorer is wired', async function () {
             const sdk = makeSDK();
             sdk.explorer = null;
-            for (const method of [...queryMethods, 'getNetwork']) {
+            for (const method of [...queryMethods, 'getNetwork',
+                'getBetFeeds', 'getBetFeed', 'getBets', 'getOracleStats']) {
                 try {
                     await sdk[method]('q', 'address');
                     expect.fail(method + ' should throw');

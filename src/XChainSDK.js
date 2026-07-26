@@ -1324,6 +1324,29 @@ class XChainSDK {
         return this._requireExplorer().getPolls(query, type, opts);
     }
 
+    // BET reads (§11.1). These proxies were missing while explorer.js already
+    // carried all four methods, and the gap was invisible to both sides' unit
+    // tests: the SDK suite exercises the ExplorerClient directly, and consumers
+    // mock the SDK, so a mock always has whatever the test defines. The result was
+    // that every betting read in the wallet threw "sdk.getBetFeeds is unavailable"
+    // at runtime, which only surfaced when the market browser was driven against a
+    // real stack.
+    async getBetFeeds(query, type, opts) {
+        return this._requireExplorer().getBetFeeds(query, type, opts);
+    }
+
+    async getBetFeed(feedIndex, opts) {
+        return this._requireExplorer().getBetFeed(feedIndex, opts);
+    }
+
+    async getBets(query, type, opts) {
+        return this._requireExplorer().getBets(query, type, opts);
+    }
+
+    async getOracleStats(address, opts) {
+        return this._requireExplorer().getOracleStats(address, opts);
+    }
+
     async getPoll(pollIndex, opts) {
         return this._requireExplorer().getPoll(pollIndex, opts);
     }
