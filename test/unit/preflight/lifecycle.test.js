@@ -36,6 +36,33 @@ describe('pre-flight lifecycle', function () {
             expect(runs).to.equal(2);
         });
 
+        //  / §4.7: two approval windows can share (chainId, actionString,
+        // source) yet carry DIFFERENT reservation deltas - the second window
+        // nets the first's approved-but-unbroadcast amount. If localDeltas were
+        // omitted from the key, the delta-carrying pre-flight would coalesce
+        // onto the un-netted producer and show a stale "Looks good".
+        it('different localDeltas do NOT collide (reservation netting)', async function () {
+            const c = new Coalescer();
+            let runs = 0;
+            const producer = () => { runs++; return Promise.resolve('v'); };
+            await Promise.all([
+                c.run({ chainId: 'btc', actionString: 'S', source: 's', localDeltas: [] }, producer),
+                c.run({ chainId: 'btc', actionString: 'S', source: 's', localDeltas: [{ tick: 'XCHAIN', amount: '600' }] }, producer),
+            ]);
+            expect(runs).to.equal(2);
+        });
+
+        it('identical localDeltas still share one producer', async function () {
+            const c = new Coalescer();
+            let runs = 0;
+            const producer = () => { runs++; return Promise.resolve('v'); };
+            await Promise.all([
+                c.run({ chainId: 'btc', actionString: 'S', source: 's', localDeltas: [{ tick: 'XCHAIN', amount: '600' }] }, producer),
+                c.run({ chainId: 'btc', actionString: 'S', source: 's', localDeltas: [{ tick: 'XCHAIN', amount: '600' }] }, producer),
+            ]);
+            expect(runs).to.equal(1);
+        });
+
         it('bypassCache always runs a fresh producer', async function () {
             const c = new Coalescer();
             let runs = 0;

@@ -242,6 +242,7 @@ async function runPreflight(sdk, actionData, opts = {}) {
 
     const report = await sdk._preflightCoalescer.run({
         chainId: chain, actionString: parsed.actionString, source: opts.source,
+        localDeltas: opts.localDeltas,
         signal: opts.signal, bypass: opts.bypassCache === true,
     }, producer);
 
