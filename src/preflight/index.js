@@ -61,9 +61,23 @@ function buildVirtual(action, fields) {
     };
 }
 
+// The compose core used to turn { action, params } into a wire string. Callers
+// inside the SDK hand in `sdk.actions`; the exported form is also called with
+// one argument, so fall back to a bare {config, util} shim, which is the shape
+// the Actions constructor already documents as supported.
+let _fallbackActions = null;
+function defaultActions() {
+    if (!_fallbackActions) {
+        const Actions = require('../actions.js');
+        _fallbackActions = new Actions({ config: {}, util: new Utility() });
+    }
+    return _fallbackActions;
+}
+
 // Normalize the accepted input forms into a ParsedAction. A raw string
 // that fails to parse throws SDKFormatError (documented distinct class).
-function normalizeInput(actionData) {
+function normalizeInput(actionData, actionsCore) {
+    const actions = actionsCore || defaultActions();
     if (typeof actionData === 'string' || Buffer.isBuffer(actionData)) {
         const s = String(actionData);
         const head = s.split('|')[0];
@@ -85,28 +99,22 @@ function normalizeInput(actionData) {
     if (actionData && actionData.action && VIRTUAL_ACTION_FIELDS[String(actionData.action).toUpperCase()])
         return buildVirtual(String(actionData.action).toUpperCase(), normalizeParamKeys(actionData));
     if (actionData && actionData.action) {
-        // { action, params } / createAction result: re-serialize through
-        // the canonical parser so every downstream check reads one shape.
-        const FormatSelector = require('../formatSelector.js');
-        const fields = normalizeParamKeys(actionData);
-        // createAction lets a caller FORCE a format version by putting
-        // `version` in params (STAKE v1 vs v2, ISSUE create vs edit), lifting
-        // it out and deleting it before serializing. Pre-flight only read a
-        // top-level `version`, so a params-level one stayed behind as a bogus
-        // VERSION field and broke select/serialize - an owner's ISSUE EDIT
-        // could not be pre-flighted at all. Same root cause as the camelCase
-        // gap above: this path re-implements createAction instead of reusing
-        // it, so every behaviour it forgets is a silent hole. Keep the two in
-        // lockstep until they can share one implementation.
-        let version = actionData.version;
-        if (fields.VERSION !== undefined && fields.VERSION !== null && fields.VERSION !== '') {
-            if (version === undefined || version === null) version = fields.VERSION;
-            delete fields.VERSION;
-        }
+        // { action, params } / createAction result: build the wire string with
+        // the SAME core createAction uses, then parse it, so every downstream
+        // check reads one shape.
+        //
+        // This path used to re-implement that core, and forgot a behaviour
+        // every time one was added over there: first camelCase -> UPPER_SNAKE
+        // normalization, then params-level VERSION lifting (which left a bogus
+        // VERSION field and made an owner's ISSUE EDIT un-pre-flightable), with
+        // LEGS normalization, LIST rest-fields, DEPLOY base64 and numeric
+        // casting all still missing when this was unified. `validate: false`
+        // is the one deliberate difference: pre-flight REPORTS bad fields as
+        // findings instead of throwing, so a headless caller still gets a
+        // verdict (spec §4.2).
         try {
-            const sel = FormatSelector.select(String(actionData.action).toUpperCase(), fields, version);
-            const str = FormatSelector.serialize(String(actionData.action).toUpperCase(), sel.version, fields);
-            const parsed = parse(str);
+            const composed = actions.composeActionString(actionData, { validate: false });
+            const parsed = parse(composed.actionString);
             if (parsed.ok) return parsed;
         } catch (e) { /* fall through to the throw below */ }
         throw new SDKFormatError('UNENCODABLE_INPUT',
@@ -208,7 +216,7 @@ async function runPreflight(sdk, actionData, opts = {}) {
     if (mode === false) return null;
 
     const started = nowMs();
-    const parsed = normalizeInput(actionData);
+    const parsed = normalizeInput(actionData, sdk.actions);
 
     const chain = opts.chain || opts.chainId || (sdk.config && sdk.config.network) || null;
     const timeoutMs = opts.timeoutMs || DEFAULT_TIMEOUT_MS;

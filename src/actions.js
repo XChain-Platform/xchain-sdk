@@ -65,16 +65,30 @@ class Actions {
         catch (e) { return true; }
     }
 
-    // Main entry point: create an action string from user input
-    // data = { action: 'SEND', params: { tick, amount, destination, memo }, encoder: { ... } }
-    createAction(data) {
+    /**
+     * The pure { action, params } -> wire-string core: steps [1] through [7],
+     * no network and no encoder. Shared with `sdk.preflight`, which used to
+     * re-implement a SUBSET of it and silently forgot a behaviour each time
+     * one was added here (camelCase normalization, then params-level VERSION
+     * lifting, and LEGS was next in line). Two copies of "how params become a
+     * wire string" is how a pre-flight verdict ends up describing a different
+     * action than the one that would broadcast.
+     *
+     * `validate` is the ONE deliberate difference between the two callers, and
+     * it is a parameter rather than a divergence: compose throws on invalid
+     * fields, pre-flight does not, because its contract is to REPORT problems
+     * as findings so a headless consumer still gets a verdict (spec §4.2).
+     *
+     * Accepts `fields` as an alias for `params`, the shape createAction's own
+     * result carries, so a result can be fed straight back in.
+     */
+    composeActionString(data, { validate = true } = {}) {
         // [1] Validate request structure
         if (!data || !data.action)
             throw new SDKValidationError('MISSING_ACTION', 'Request must include an action field');
 
         let actionName = String(data.action).toUpperCase();
-        let params     = data.params || {};
-        let encoder    = data.encoder || null;
+        let params     = data.params || data.fields || {};
 
         // [2] Validate ACTION type exists
         if (!this.actions.includes(actionName))
@@ -126,8 +140,9 @@ class Actions {
         // [4] Cast numeric fields
         fields = this.util.setNumberFormats(fields);
 
-        // [5] Validate fields against action-specific rules
-        this.validator.validateOrThrow(actionName, fields);
+        // [5] Validate fields against action-specific rules.
+        // Skipped for pre-flight: see the `validate` note on this method.
+        if (validate) this.validator.validateOrThrow(actionName, fields);
 
         // [6] Select optimal format version
         // Callers may force a specific version by passing `version` in params (e.g. STAKE v1 vs v2).
@@ -137,6 +152,11 @@ class Actions {
             explicitVersion = fields.VERSION;
             delete fields.VERSION;
         }
+        // A top-level `version` is the same request spelled the other way, and
+        // pre-flight callers spell it that way. Honoured here so both entry
+        // points read it identically; a params-level VERSION still wins.
+        if (explicitVersion === undefined && data.version !== undefined && data.version !== null && data.version !== '')
+            explicitVersion = data.version;
         let selected = FormatSelector.select(actionName, fields, explicitVersion);
 
         // [6b] DEPLOY stakeable formats (v1/v3) carry CONSTRUCTOR_PARAMS as a
@@ -161,22 +181,34 @@ class Actions {
         // [7] Serialize to pipe-delimited string
         let actionString = FormatSelector.serialize(actionName, selected.version, fields);
 
-        // [8] Pre-flight encoding validation (if encoder options provided)
-        if (encoder && encoder.encoding) {
-            this._validateEncoding(actionString, encoder);
-        }
-
-        // [9] Build result
-        let result = {
+        return {
             action:       actionName,
             version:      selected.version,
             actionString: actionString,
-            fields:       fields,
+            fields:       fields
+        };
+    }
+
+    // Main entry point: create an action string from user input
+    // data = { action: 'SEND', params: { tick, amount, destination, memo }, encoder: { ... } }
+    createAction(data) {
+        let composed = this.composeActionString(data);
+        let encoder  = data.encoder || null;
+
+        // [8] Pre-flight encoding validation (if encoder options provided)
+        if (encoder && encoder.encoding) {
+            this._validateEncoding(composed.actionString, encoder);
+        }
+
+        // [9] Build result
+        return {
+            action:       composed.action,
+            version:      composed.version,
+            actionString: composed.actionString,
+            fields:       composed.fields,
             encoding:     null,
             psbt:         null
         };
-
-        return result;
     }
 
     // Normalize each entry of the per-leg array in place of the caller's copy
