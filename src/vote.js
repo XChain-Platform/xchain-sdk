@@ -50,6 +50,7 @@ class VoteHelpers {
         tick, endBlock, options, maxSelections, tallyMode, weightMode,
         quorum, minVoters, minVoteBalance, decideThreshold, question, deposit,
         callbackContract, callbackMethod, callbackParams, callbackOn, gasEscrow,
+        callbackDelayBlocks,
     } = {}) {
         const ctx = 'voting.createPollParams';
         if (!isSet(tick))     throw new Error(`${ctx}: tick is required`);
@@ -111,6 +112,19 @@ class VoteHelpers {
             if (!CALLBACK_ON.includes(cbOn)) throw new Error(`${ctx}: callbackOn must be one of ${CALLBACK_ON.join(', ')}`);
             p.callbackOn = cbOn;
             if (isSet(gasEscrow)) p.gasEscrow = String(gasEscrow);
+            // Timelock between finalization and the callback firing. Honored
+            // only from the VOTE_CALLBACK_TIMELOCK flag-day; below it the
+            // indexer NULLS the field and still accepts the poll, so a caller
+            // that sets it early publishes a permanent poll whose delay does
+            // not exist. The activation check is the caller's (it needs the
+            // chain's block time); this builder only validates the shape.
+            if (isSet(callbackDelayBlocks)) {
+                const cbd = Number(callbackDelayBlocks);
+                if (!Number.isInteger(cbd) || cbd < 0) {
+                    throw new Error(`${ctx}: callbackDelayBlocks must be a non-negative integer`);
+                }
+                p.callbackDelayBlocks = String(cbd);
+            }
         }
         return p;
     }

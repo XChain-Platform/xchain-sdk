@@ -72,6 +72,27 @@ describe('VOTE governance helpers', function () {
             expect(p.gasEscrow).to.equal('5000');
         });
 
+        it('carries callbackDelayBlocks (the finalize -> callback timelock) on a binding poll', function () {
+            const p = v.createPollParams({
+                tick: 'GOVTOKEN', endBlock: 850000, options: ['YES', 'NO'],
+                callbackContract: 42, callbackMethod: 'releaseFunds', callbackDelayBlocks: 144,
+            });
+            expect(p.callbackDelayBlocks).to.equal('144');
+            // 0 is a meaningful value (fire in the finalization block itself),
+            // so it must survive rather than being dropped as falsy.
+            expect(v.createPollParams({
+                tick: 'G', endBlock: 1, options: ['A', 'B'],
+                callbackContract: 42, callbackMethod: 'm', callbackDelayBlocks: 0,
+            }).callbackDelayBlocks).to.equal('0');
+        });
+
+        it('ignores callbackDelayBlocks on an advisory poll (no callback contract)', function () {
+            const p = v.createPollParams({
+                tick: 'G', endBlock: 1, options: ['A', 'B'], callbackDelayBlocks: 144,
+            });
+            expect(p.callbackDelayBlocks).to.equal(undefined);
+        });
+
         it('enforces the key create-time rules', function () {
             expect(() => v.createPollParams({ endBlock: 1, options: ['A', 'B'] })).to.throw(/tick is required/);
             expect(() => v.createPollParams({ tick: 'G', options: ['A', 'B'] })).to.throw(/endBlock is required/);
@@ -82,6 +103,14 @@ describe('VOTE governance helpers', function () {
             expect(() => v.createPollParams({ tick: 'G', endBlock: 1, options: ['A', 'B'], weightMode: 'quadratic' })).to.throw(/minVoteBalance/);
             expect(() => v.createPollParams({ tick: 'G', endBlock: 1, options: ['A', 'B'], quorum: '2' })).to.throw(/quorum/);
             expect(() => v.createPollParams({ tick: 'G', endBlock: 1, options: ['A', 'B'], callbackContract: 42 })).to.throw(/callbackMethod is required/);
+            expect(() => v.createPollParams({
+                tick: 'G', endBlock: 1, options: ['A', 'B'],
+                callbackContract: 42, callbackMethod: 'm', callbackDelayBlocks: -1,
+            })).to.throw(/callbackDelayBlocks/);
+            expect(() => v.createPollParams({
+                tick: 'G', endBlock: 1, options: ['A', 'B'],
+                callbackContract: 42, callbackMethod: 'm', callbackDelayBlocks: 1.5,
+            })).to.throw(/callbackDelayBlocks/);
         });
     });
 
