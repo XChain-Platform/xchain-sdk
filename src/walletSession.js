@@ -189,13 +189,16 @@ class WalletSession {
     // protocol/actions/BET.md.
     async bet(params, enc, opts)       { return this.submit({ action: 'BET', params }, enc, opts); }
 
-    // Staking (BTC-only)
+    // Capability (validator) staking. The indexer coin-gates these versions
+    // to Bitcoin; the contract-targeted lane below is not gated .
     async stake(params, enc, opts)            { return this.submit({ action: 'STAKE', params }, enc, opts); }
     async unstake(params, enc, opts)          { return this.submit({ action: 'UNSTAKE', params }, enc, opts); }
     async delegate(params, enc, opts)         { return this.submit({ action: 'DELEGATE', params }, enc, opts); }
     async collect(params, enc, opts)          { return this.submit({ action: 'COLLECT', params }, enc, opts); }
 
-    // Contract-targeted staking (any token, BTC-only). VERSION is forced by the helper
+    // Contract-targeted staking (any token, ANY CHAIN - : STAKE v3 /
+    // UNSTAKE v1 / DELEGATE v1 dispatch ahead of the indexer's BTC gate).
+    // VERSION is forced by the helper
     // so callers can't accidentally route to capability staking. Pass
     // { AMOUNT, SIGNING_PUBKEY, TARGET_CONTRACT_INDEX, TICK } for stake;
     // { SIGNING_PUBKEY, TARGET_CONTRACT_INDEX, TICK } for unstake / delegate.
