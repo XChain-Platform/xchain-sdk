@@ -450,6 +450,92 @@ describe('Validator: FIAT_AMOUNT validation', function () {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PRICE v1 ORACLE PUBLISH (FIAT / VALUE / FEE)
+//
+// The user-run token oracle (PC-30). Its fiat field is named FIAT, not
+// FIAT_CODE, so it missed the allow-list check entirely until this suite;
+// VALUE fell through to BROADCAST's numeric-only rule and FEE was checked
+// for BROADCAST only. Each case below mirrors an indexer verdict in
+// xchain-indexer/src/actions/price.js _parseV1.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Validator: PRICE v1 oracle publish', function () {
+
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    function pub(over) {
+        return Object.assign({ COIN: 'BTC', TICK: 'PEPECASH', FIAT: 'USD', VALUE: '0.05' }, over);
+    }
+
+    it('accepts a well-formed publish', function () {
+        const errors = v.validate('PRICE', pub());
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('rejects an unsupported FIAT', function () {
+        const errors = v.validate('PRICE', pub({ FIAT: 'XXX' }));
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('accepts every supported FIAT code', function () {
+        Validator.VALID_FIAT_CODES.forEach((code) => {
+            const errors = v.validate('PRICE', pub({ FIAT: code }));
+            expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE'), code).to.be.true;
+        });
+    });
+
+    it('rejects a zero VALUE (a zero price is not a price)', function () {
+        const errors = v.validate('PRICE', pub({ VALUE: '0' }));
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('rejects a negative VALUE', function () {
+        const errors = v.validate('PRICE', pub({ VALUE: '-1' }));
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('rejects a VALUE with more than 8 decimal places', function () {
+        const errors = v.validate('PRICE', pub({ VALUE: '0.123456789' }));
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('accepts a VALUE at exactly 8 decimal places', function () {
+        const errors = v.validate('PRICE', pub({ VALUE: '0.00000001' }));
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('accepts an omitted FEE (the field is optional)', function () {
+        const errors = v.validate('PRICE', pub());
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('accepts a FEE inside [0, 1]', function () {
+        ['0', '0.01', '1'].forEach((fee) => {
+            const errors = v.validate('PRICE', pub({ FEE: fee }));
+            expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE'), fee).to.be.true;
+        });
+    });
+
+    it('rejects a FEE above 1 (a fee, not a percentage)', function () {
+        const errors = v.validate('PRICE', pub({ FEE: '1.5' }));
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('rejects a negative FEE', function () {
+        const errors = v.validate('PRICE', pub({ FEE: '-0.01' }));
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    // BROADCAST shares both field names and must keep its looser rules: its
+    // VALUE is an arbitrary numeric datum and its FEE is a percentage.
+    it('leaves BROADCAST VALUE and FEE on their own looser rules', function () {
+        const errors = v.validate('BROADCAST', { MESSAGE: 'hello', VALUE: '0.123456789', FEE: '5' });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // COIN FIELD VALIDATION (GIVE_COIN, GET_COIN)
 // ─────────────────────────────────────────────────────────────────────────────
 

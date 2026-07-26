@@ -254,6 +254,15 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', 'FIAT_CODE must be one of: ' + VALID_FIAT_CODES.join(', '), { field, value, constraint: { valid: VALID_FIAT_CODES } }));
         }
 
+        // FIAT validation (PRICE v1's fiat field is named FIAT, not FIAT_CODE).
+        // Same allow-list, same arbiter: the indexer rejects an unlisted code with
+        // 'invalid: FIAT (unsupported)' (actions/price.js), so catching it here
+        // saves a miner fee on a doomed publish.
+        if (field === 'FIAT' && action === 'PRICE') {
+            if (!VALID_FIAT_CODES.includes(String(value).toUpperCase()))
+                errors.push(this._error('INVALID_FIELD_VALUE', 'FIAT must be one of: ' + VALID_FIAT_CODES.join(', '), { field, value, constraint: { valid: VALID_FIAT_CODES } }));
+        }
+
         // FIAT_AMOUNT format validation: a non-negative amount with at most 2
         // decimal places, mirroring the indexer's consensus rule
         // (xchain-indexer utility.isValidFiatFormat(2, ...); identical helper
@@ -387,6 +396,14 @@ class Validator {
         if (field === 'FEE' && action === 'BROADCAST') {
             if (!this.util.isNumeric(value))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'FEE must be numeric (percentage)', { field, value }));
+        }
+
+        // FEE validation (PRICE v1: the oracle usage fee a dispenser opener pays
+        // this oracle, expressed as a fraction, 0.01 = 1%). Mirrors the indexer's
+        // consensus rule: optional, up to 18 decimals, 0 <= FEE <= 1.
+        if (field === 'FEE' && action === 'PRICE' && String(value).length > 0) {
+            if (!/^[0-9]+(\.[0-9]{1,18})?$/.test(String(value)) || Number(value) > 1)
+                errors.push(this._error('INVALID_FIELD_VALUE', 'FEE must be a fraction between 0 and 1 with at most 18 decimals', { field, value, constraint: { min: 0, max: 1 } }));
         }
 
         // Block number validation
@@ -546,6 +563,16 @@ class Validator {
         if (field === 'VALUE') {
             if (!this.util.isNumeric(value))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'VALUE must be numeric', { field, value }));
+        }
+
+        // VALUE validation (PRICE v1: the published token price in FIAT). Stricter
+        // than the generic numeric check above and matched to the indexer's
+        // 'invalid: VALUE (format)' rule: a positive decimal, at most 8 places.
+        // A zero or negative price is not a price, and a 9th decimal is silently
+        // unpublishable, so both are worth catching before the fee is spent.
+        if (field === 'VALUE' && action === 'PRICE') {
+            if (!/^[0-9]+(\.[0-9]{1,8})?$/.test(String(value)) || Number(value) <= 0)
+                errors.push(this._error('INVALID_FIELD_VALUE', 'VALUE must be a positive price with at most 8 decimal places', { field, value }));
         }
 
         // BROADCAST MESSAGE delimiter safety is handled by _checkDelimiters.
