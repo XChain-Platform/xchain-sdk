@@ -99,6 +99,79 @@ describe('pre-flight Tier-2 per-action matrix', function () {
         });
     });
 
+    // The flat fixtures above are a HEDGE for other explorer builds, and they
+    // are the only shape this suite used to know. The real /token/{tick}
+    // document is nested and carries none of those fields at the top level, so
+    // MINT_OVER_MAX, SUPPLY_EXCEEDED, AMOUNT_FORMAT_INVALID and NOT_OWNER could
+    // not fire against the live API at all - four certified error-capable
+    // checks silently passing everything. Captured from
+    // /RBTC/api/token/XCHAIN on the regtest explorer.
+    describe('MINT / ISSUE against the REAL nested token document', function () {
+        const realToken = (over = {}) => ({
+            info:   { coin: 'BTC', tick: 'JDOG', description: '', owner: 'someone-else', tick_id: 1, decimals: 0 },
+            mints:  { max: 100, address_max: 0, start_block: 0, stop_block: 0 },
+            supply: { current: '80', max: '100', decimals: 0 },
+            // Every one of these is a LOCK FLAG, never a value. A flat
+            // `max_mint` lookup must not be allowed to drift onto them.
+            locks:  { callback: false, description: false, max_mint: true, max_supply: true, mint: false, mint_supply: false, sleep: false },
+            market: { price: '0', floor: '0' },
+            lists:  { allow: null, block: null },
+            controllers: [], callback: null, open_polls: [], projects: [], registry: null,
+            ...over,
+        });
+
+        it('reads the per-tx cap from mints.max', async function () {
+            const r = await reportFor('MINT|0|JDOG|1000', { getToken: () => realToken() });
+            const f = r.findings.find(x => x.code === 'MINT_OVER_MAX');
+            expect(f, 'MINT_OVER_MAX must fire against the real document').to.not.equal(undefined);
+            expect(f.data.maxMint).to.equal('100');
+        });
+
+        it('reads supply headroom from supply.max and supply.current', async function () {
+            const r = await reportFor('MINT|0|JDOG|50', { getToken: () => realToken() });
+            const f = r.findings.find(x => x.code === 'SUPPLY_EXCEEDED');
+            expect(f, 'SUPPLY_EXCEEDED must fire against the real document').to.not.equal(undefined);
+            expect(f.data.headroom).to.equal('20');
+        });
+
+        // Top-level `supply` IS an object here. Stringifying it would put
+        // '[object Object]' into the numeric comparison.
+        it('never stringifies the nested supply object into the numeric path', async function () {
+            const r = await reportFor('MINT|0|JDOG|50', { getToken: () => realToken() });
+            const f = r.findings.find(x => x.code === 'SUPPLY_EXCEEDED');
+            expect(f.data.supply).to.equal('80');
+            expect(JSON.stringify(r.findings)).to.not.match(/object Object/);
+        });
+
+        it('reads decimals from the nested document (AMOUNT_FORMAT_INVALID is a hard block)', async function () {
+            const r = await reportFor('MINT|0|JDOG|1.5', { getToken: () => realToken() });
+            const f = r.findings.find(x => x.code === 'AMOUNT_FORMAT_INVALID');
+            expect(f, 'a fractional mint on a 0-decimal token must hard-block').to.not.equal(undefined);
+            expect(f.overridable).to.equal(false);
+        });
+
+        it('reads the owner from info.owner', async function () {
+            const r = await reportFor('ISSUE|1|JDOG|new desc', { getToken: () => realToken() });
+            expect(has(r, 'NOT_OWNER', 'error')).to.equal(true);
+        });
+
+        it('does not fire NOT_OWNER when info.owner is the caller', async function () {
+            const r = await reportFor('ISSUE|1|JDOG|new desc',
+                { getToken: () => realToken({ info: { tick: 'JDOG', owner: 'me', decimals: 0 } }) },
+                { source: 'me' });
+            expect(has(r, 'NOT_OWNER')).to.equal(false);
+        });
+
+        it('does not mistake a lock flag for a cap', async function () {
+            // mints.max absent, locks.max_mint true. Reading the lock would
+            // yield maxMint='true' and compare a number against it.
+            const tok = realToken({ mints: { address_max: 0, start_block: 0, stop_block: 0 } });
+            const r = await reportFor('MINT|0|JDOG|1000', { getToken: () => tok });
+            const f = r.findings.find(x => x.code === 'MINT_OVER_MAX');
+            expect(f, 'no cap is knowable, so no cap finding').to.equal(undefined);
+        });
+    });
+
     describe('SWEEP (empty is a valid no-op)', function () {
         it('never emits a balance error; state is unverified', async function () {
             const r = await reportFor('SWEEP|0|bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4', {});

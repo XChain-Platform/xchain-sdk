@@ -24,9 +24,42 @@
 const { FINDING_CODES } = require('../constants.js');
 const numeric = require('../numeric.js');
 
+/*
+ * Read a scalar off a token document, trying each candidate in order.
+ *
+ * Candidates may be DOTTED PATHS, because the explorer's `/token/{tick}`
+ * document is nested and none of the fields these checks want are at the top
+ * level:
+ *
+ *     { info:   { coin, tick, description, owner, tick_id, decimals },
+ *       mints:  { max, address_max, start_block, stop_block },
+ *       supply: { current, max, decimals },
+ *       locks:  { ..., max_mint, max_supply, ... },   <-- BOOLEANS, not values
+ *       market, lists, controllers, callback, ... }
+ *
+ * The flat names are kept after the paths as a hedge for other explorer
+ * builds, but they are the fallback now, not the expectation. Reading only
+ * flat names is what made MINT_OVER_MAX, SUPPLY_EXCEEDED and NOT_OWNER
+ * unable to fire at all against the real API - three certified error-capable
+ * Tier-2 checks that silently passed everything, which is indistinguishable
+ * from a check that ran and found nothing.
+ *
+ * Note `locks.max_mint` is a lock FLAG, not the cap; a flat `max_mint` lookup
+ * must never be allowed to drift onto it.
+ *
+ * Objects are rejected rather than stringified: top-level `supply` IS an
+ * object here, and String()-ing it yields '[object Object]', which would then
+ * flow into the numeric comparisons as garbage.
+ */
 function tokenField(token, names) {
     for (const n of names) {
-        if (token[n] !== undefined && token[n] !== null && token[n] !== '') return String(token[n]);
+        let v = token;
+        for (const part of n.split('.')) {
+            if (v === null || v === undefined || typeof v !== 'object') { v = undefined; break; }
+            v = v[part];
+        }
+        if (v === undefined || v === null || v === '' || typeof v === 'object') continue;
+        return String(v);
     }
     return null;
 }
@@ -49,7 +82,7 @@ async function checkMint(ctx) {
             'Mint amount is not positive.', { amount });
     }
 
-    const maxMint = tokenField(token, ['max_mint', 'MAX_MINT', 'maxMint']);
+    const maxMint = tokenField(token, ['mints.max', 'max_mint', 'MAX_MINT', 'maxMint']);
     ctx.markRun(FINDING_CODES.MINT_OVER_MAX);
     if (maxMint && amount && numeric.gt(amount, maxMint)) {
         ctx.addFinding(FINDING_CODES.MINT_OVER_MAX, 'error',
@@ -57,8 +90,8 @@ async function checkMint(ctx) {
             { tick, amount, maxMint });
     }
 
-    const maxSupply = tokenField(token, ['max_supply', 'MAX_SUPPLY', 'maxSupply']);
-    const supply = tokenField(token, ['supply', 'SUPPLY', 'current_supply', 'total_supply']);
+    const maxSupply = tokenField(token, ['supply.max', 'max_supply', 'MAX_SUPPLY', 'maxSupply']);
+    const supply = tokenField(token, ['supply.current', 'supply', 'SUPPLY', 'current_supply', 'total_supply']);
     ctx.markRun(FINDING_CODES.SUPPLY_EXCEEDED);
     if (maxSupply && supply !== null && amount) {
         const headroom = numeric.sub(maxSupply, supply);
@@ -70,7 +103,7 @@ async function checkMint(ctx) {
     }
 
     // Amount format vs the tick's decimals (vendored consensus rule).
-    const decimals = tokenField(token, ['decimals', 'DECIMALS']);
+    const decimals = tokenField(token, ['supply.decimals', 'info.decimals', 'decimals', 'DECIMALS']);
     if (decimals !== null && amount && !numeric.isValidAmountFormat(decimals, amount)) {
         ctx.addFinding(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'error',
             `Mint amount ${amount} is not a valid amount at ${decimals} decimals.`,

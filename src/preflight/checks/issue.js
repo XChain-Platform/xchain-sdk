@@ -39,7 +39,7 @@ async function checkIssue(ctx) {
     }
     if (token === null) return; // fresh create: nothing to gate
 
-    const owner = tokenField(token, ['owner', 'OWNER', 'owner_address', 'issuer']);
+    const owner = tokenField(token, ['info.owner', 'owner', 'OWNER', 'owner_address', 'issuer']);
     if (!ctx.source) {
         ctx.addUnverified(FINDING_CODES.NOT_OWNER, 'no source address supplied');
     } else if (owner && owner !== ctx.source) {
