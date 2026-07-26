@@ -293,6 +293,32 @@ export interface SendParams extends ActionParams {
     memo?: string;
 }
 
+/** One leg of a multi-destination SEND (wire formats v1/v2/v3) */
+export interface SendLeg {
+    /** Destination address for this leg */
+    destination: string;
+    /** Amount for this leg */
+    amount: number | string;
+    /** Ticker for this leg; may be hoisted to the top level when all legs share it */
+    tick?: string;
+    /** Per-leg memo (wire format v3); a single shared memo belongs at the top level */
+    memo?: string;
+}
+
+/**
+ * Multi-destination SEND. One entry per recipient; the format version is
+ * chosen from the legs (v1 shared tick, v2 per-leg tick, v3 per-leg memo).
+ * A flat {tick, amount, destination} map can only express a SINGLE leg.
+ */
+export interface MultiLegSendParams extends ActionParams {
+    /** One entry per recipient (at least one) */
+    legs: SendLeg[];
+    /** Ticker shared by every leg */
+    tick?: string;
+    /** Memo shared by every leg */
+    memo?: string;
+}
+
 export interface IssueParams extends ActionParams {
     /** Token ticker symbol to issue */
     tick: string;
@@ -622,7 +648,7 @@ export declare class BatchBuilder {
     add(action: string, params?: ActionParams): this;
 
     // Convenience methods, mirror XChainSDK convenience methods minus FILE and BATCH
-    send(params: SendParams | ActionParams): this;
+    send(params: SendParams | MultiLegSendParams | ActionParams): this;
     issue(params: IssueParams | ActionParams): this;
     mint(params: MintParams | ActionParams): this;
     destroy(params: DestroyParams | ActionParams): this;
@@ -1165,13 +1191,13 @@ export declare class XChainSDK {
      *  Convenience action methods
      */
 
-    send(params: SendParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
+    send(params: SendParams | MultiLegSendParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     issue(params: IssueParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     mint(params: MintParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     destroy(params: DestroyParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     order(params: OrderParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     /** Alias for `send()` */
-    transfer(params: SendParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
+    transfer(params: SendParams | MultiLegSendParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     broadcast(params: BroadcastParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     dispenser(params: DispenserParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     dividend(params: DividendParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
@@ -1988,7 +2014,7 @@ export declare class WalletSession {
     submit(actionData: { action: string; params: ActionParams }, encoderOpts?: Partial<EncoderOptions>, submitOpts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
 
     // Action convenience methods
-    send(params: SendParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    send(params: SendParams | MultiLegSendParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
     issue(params: IssueParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
     mint(params: MintParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
     destroy(params: DestroyParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;

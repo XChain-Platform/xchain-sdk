@@ -101,6 +101,19 @@ const result = await sdk.send({
 });
 console.log(result.actionString); // 'SEND|0|MYTOKEN|100|bc1q...|Payment'
 
+// Multi-destination SEND: one entry per recipient. The wire format version
+// is chosen from the legs (v1 shared tick, v2 per-leg tick, v3 per-leg memo).
+// A flat {tick, amount, destination} map can only ever express ONE leg, so
+// the SDK refuses one against a multi-leg format instead of repeating leg 1.
+const multi = await sdk.send({
+    tick: 'MYTOKEN',
+    legs: [
+        { amount: '100', destination: 'bc1qaddr1...' },
+        { amount: '250', destination: 'bc1qaddr2...' }
+    ]
+});
+console.log(multi.actionString); // 'SEND|1|MYTOKEN|100|bc1qaddr1...|250|bc1qaddr2...'
+
 // Full lifecycle: create, encode, sign, broadcast, wait for indexer
 const tx = await sdk.submitAction(
     { action: 'SEND', params: { tick: 'MYTOKEN', amount: '100', destination: 'bc1q...' } },

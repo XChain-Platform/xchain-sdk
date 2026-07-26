@@ -91,12 +91,17 @@ function parseVersion(segment) {
  *
  * Returns { params, rest } or { error }.
  */
-function mapFields(fieldNames, valueSegs) {
+function mapFields(fieldNames, valueSegs, group) {
     const params = {};
     let rest = null;
 
     const restIndex = fieldNames.findIndex(f => FormatSelector.isRestField(f));
     const fixedCount = restIndex === -1 ? fieldNames.length : restIndex;
+
+    // A repeated-field format carries N legs on the wire, not the two its
+    // format string spells out, so its length is derived from the segments.
+    if (group && restIndex === -1)
+        return mapRepeatedFields(group, valueSegs);
 
     if (restIndex === -1 && valueSegs.length > fieldNames.length) {
         return { error: failure('FIELD_COUNT_MISMATCH',
@@ -134,6 +139,51 @@ function mapFields(fieldNames, valueSegs) {
     }
 
     return { params, rest };
+}
+
+/*
+ * Map value segments of a repeated-field format (multi-leg SEND v1/v2/v3,
+ * DESTROY v1/v2, AIRDROP v1-v3) onto prefix | group * N | suffix.
+ *
+ * The leg count is whatever the segments imply: the smallest N whose full
+ * layout is long enough to hold them. That is exact rather than heuristic
+ * because the serializer only ever trims TRAILING empty segments, so a string
+ * with more segments than N legs would fill must belong to N+1 legs.
+ *
+ * Emits both shapes: params[GROUP_FIELD] as a slot-ordered array (the
+ * pre-existing contract) and `legs` as one object per leg, which is what
+ * FormatSelector.serialize takes back in.
+ */
+function mapRepeatedFields(group, valueSegs) {
+    const per = group.group.length;
+    const base = group.prefix.length + group.suffix.length;
+    let legCount = 1;
+    while (base + (legCount * per) < valueSegs.length) legCount++;
+
+    const total = base + (legCount * per);
+    const segs = valueSegs.slice();
+    while (segs.length < total) segs.push('');   // undo the serializer's trailing trim
+
+    const params = {};
+    let at = 0;
+    for (const name of group.prefix) {
+        if (name !== 'VERSION') params[name] = segs[at];
+        at++;
+    }
+    const legs = [];
+    for (let i = 0; i < legCount; i++) {
+        const leg = {};
+        for (const name of group.group) {
+            leg[name] = segs[at++];
+            if (!Array.isArray(params[name])) params[name] = [];
+            params[name].push(leg[name]);
+        }
+        legs.push(leg);
+    }
+    for (const name of group.suffix)
+        params[name] = segs[at++];
+
+    return { params, rest: null, legs };
 }
 
 // Canonical round-trippable string: canonical action name + the value
@@ -234,8 +284,11 @@ function parseTopLevel(text, doValidate, insideBatch) {
     }
 
     const fieldNames = FormatSelector.getFormatFields(action, version);
+    let group = null;
+    try { group = FormatSelector.getRepeatedGroup(action, version); }
+    catch (e) { return failure('UNSUPPORTED_REPEATED_FORMAT', e.message); }
     const valueSegs = segments.slice(1);
-    const mapped = mapFields(fieldNames, valueSegs);
+    const mapped = mapFields(fieldNames, valueSegs, group);
     if (mapped.error) return mapped.error;
 
     const result = {
@@ -250,6 +303,10 @@ function parseTopLevel(text, doValidate, insideBatch) {
         validation: null,
     };
     if (result.rawAction === undefined) delete result.rawAction;
+    // Multi-leg formats additionally expose the legs in the shape
+    // FormatSelector.serialize accepts, so parse -> edit -> re-serialize
+    // round-trips without the caller re-deriving the group layout.
+    if (mapped.legs) result.legs = mapped.legs;
 
     if (doValidate)
         result.validation = runValidation(action, mapped.params, fieldNames, []);

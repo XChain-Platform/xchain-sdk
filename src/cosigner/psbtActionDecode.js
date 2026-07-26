@@ -194,6 +194,15 @@ function decodeActionFromPsbt(psbtOrHex, opts = {}) {
             seen.add(f);
         }
     }
+    // Belt and braces: refuse ANY repeated per-leg group, not only ones that
+    // repeat a VALUE_FIELD. parse() returns array-valued params plus `legs`
+    // for those, which the flat single-leg evaluator would mis-read. Every
+    // format in the table today repeats TICK or AMOUNT and is already caught
+    // above; this keeps a future group shape from slipping through.
+    let repeated = null;
+    try { repeated = FormatSelector.getRepeatedGroup(action, version); }
+    catch (e) { return fail('MULTI_LEG_UNSUPPORTED', e.message); }
+    if (repeated) return fail('MULTI_LEG_UNSUPPORTED', repeated.group.join('|'));
 
     // BATCH: parse() understands the multi-command sub-grammar, but the
     // single-leg policy evaluator cannot safely judge a command bundle, so

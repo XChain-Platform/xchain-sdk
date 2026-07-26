@@ -441,8 +441,9 @@ describe('FormatSelector.serialize(): VERSION is auto-populated', function () {
     });
 
     it('correct version number appears for v3', function () {
+        // SEND v3 is a repeated-field format, so it is built from LEGS
         const result = FormatSelector.serialize('SEND', 3, {
-            TICK: 'TOKEN', AMOUNT: '1', DESTINATION: 'addr1'
+            LEGS: [{ TICK: 'TOKEN', AMOUNT: '1', DESTINATION: 'addr1' }]
         });
         const parts = result.split('|');
         expect(parts[1]).to.equal('3');

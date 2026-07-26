@@ -117,6 +117,12 @@ class Actions {
                 fields.ITEM = fields.ITEM.map(i => String(i));
         }
 
+        // [3e] LEGS (multi-destination SEND, multi-tick DESTROY/AIRDROP): each
+        // leg is its own field map, so it needs the same camelCase->UPPER_SNAKE
+        // and numeric normalization the top-level map gets. Mis-shaped entries
+        // pass through untouched for the validator to report.
+        fields = this._normalizeLegs(fields);
+
         // [4] Cast numeric fields
         fields = this.util.setNumberFormats(fields);
 
@@ -173,6 +179,17 @@ class Actions {
         return result;
     }
 
+    // Normalize each entry of the per-leg array in place of the caller's copy
+    _normalizeLegs(fields) {
+        let legs = fields[FormatSelector.LEGS_FIELD];
+        if (!Array.isArray(legs)) return fields;
+        fields[FormatSelector.LEGS_FIELD] = legs.map(leg => {
+            if (!leg || typeof leg !== 'object' || Array.isArray(leg)) return leg;
+            return this.util.setNumberFormats(this.util.normalizeFields(leg));
+        });
+        return fields;
+    }
+
     // Pre-flight validation of encoding choice against action string size
     _validateEncoding(actionString, encoder) {
         let encoding  = String(encoder.encoding).toUpperCase();
@@ -211,6 +228,7 @@ class Actions {
     validateAction(action, params) {
         let actionName = String(action).toUpperCase();
         let fields     = this.util.normalizeFields(params || {});
+        fields         = this._normalizeLegs(fields);
         fields         = this.util.setNumberFormats(fields);
         let errors     = this.validator.validate(actionName, fields);
         if (errors.length === 0)

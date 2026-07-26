@@ -20,8 +20,12 @@
 
 const formats = require('./formats.js');
 const config  = require('./config.js');
+const FormatSelector = require('./formatSelector.js');
 const { SDKValidationError, SDKContractError } = require('./errors.js');
 const { ADDRESS_REF_FIELDS } = require('./addressRefFields.js');
+
+// Caller-facing per-leg field of a repeated-field format (see formatSelector.js)
+const LEGS_FIELD = FormatSelector.LEGS_FIELD;
 
 // Flat set of address-bearing wire fields (excludes type-gated LIST.ITEM, validated
 // per list TYPE elsewhere). A ^<id> reference to an already-indexed address is valid
@@ -147,6 +151,69 @@ class Validator {
         this.config = config.getConfig();
     }
 
+    // The caller's per-leg array, or null when this is a flat single-leg call.
+    // Shape problems are reported by _validateLegsShape, not thrown here.
+    _legsOf(fields) {
+        let legs = fields[LEGS_FIELD];
+        if (!Array.isArray(legs) || legs.length === 0) return null;
+        if (!legs.every(leg => leg && typeof leg === 'object' && !Array.isArray(leg))) return null;
+        return legs;
+    }
+
+    // Tag a per-leg finding with its leg index so the caller can point at the
+    // offending recipient rather than the whole action
+    _withLeg(error, index) {
+        error.message = error.message + ' (leg ' + index + ')';
+        error.details = Object.assign({}, error.details, { leg: index });
+        return error;
+    }
+
+    /*
+     * LEGS shape rules. LEGS is the caller-side representation of a
+     * repeated-field format (multi-destination SEND, multi-tick
+     * DESTROY/AIRDROP); it is not a wire field, so its only job is to be a
+     * usable array of per-leg field maps. Whether a given format VERSION can
+     * carry these legs is FormatSelector's call, not the validator's.
+     */
+    _validateLegsShape(action, fields) {
+        let errors = [];
+        let legs   = fields[LEGS_FIELD];
+        if (legs === null || legs === undefined) return errors;
+
+        if (!Array.isArray(legs)) {
+            errors.push(this._error('INVALID_LEGS', LEGS_FIELD + ' must be an array of per-leg objects', { action, field: LEGS_FIELD }));
+            return errors;
+        }
+        if (legs.length === 0) {
+            errors.push(this._error('INVALID_LEGS', LEGS_FIELD + ' must contain at least one leg', { action, field: LEGS_FIELD }));
+            return errors;
+        }
+        for (let i = 0; i < legs.length; i++) {
+            let leg = legs[i];
+            if (!leg || typeof leg !== 'object' || Array.isArray(leg)) {
+                errors.push(this._error('INVALID_LEGS', LEGS_FIELD + '[' + i + '] must be an object of field values', { action, field: LEGS_FIELD, leg: i }));
+                continue;
+            }
+            for (let key in leg) {
+                if (Array.isArray(leg[key]) || (leg[key] !== null && typeof leg[key] === 'object'))
+                    errors.push(this._error('INVALID_LEGS', LEGS_FIELD + '[' + i + '].' + key + ' must be a single scalar value', { action, field: key, leg: i }));
+            }
+        }
+
+        // Multi-leg only makes sense for an action with a repeated-field
+        // format; anything else would silently drop every leg past the first.
+        if (legs.length > 1) {
+            let repeatable = Object.keys(formats[action] || {})
+                .some(v => FormatSelector.isRepeatedFormat(action, parseInt(v)));
+            if (!repeatable)
+                errors.push(this._error('INVALID_LEGS',
+                    action + ' has no multi-leg format version; ' + LEGS_FIELD + ' must contain exactly one leg',
+                    { action, field: LEGS_FIELD, legCount: legs.length }));
+        }
+
+        return errors;
+    }
+
     // Returns array of error objects. Empty array = valid.
     validate(action, fields) {
         let errors = [];
@@ -165,6 +232,11 @@ class Validator {
             return errors;
         }
 
+        // Multi-leg shape (LEGS): validated before the flat rules so a leg can
+        // satisfy a required field the top-level map does not carry.
+        let legs = this._legsOf(fields);
+        errors.push(...this._validateLegsShape(action, fields));
+
         // Check required fields (skip if this is a cancel/edit operation via action index)
         let actionIndexField = ACTION_INDEX_FIELDS[action];
         let isIndexOperation = actionIndexField && !this._isEmpty(fields[actionIndexField]);
@@ -172,6 +244,19 @@ class Validator {
         if (!isIndexOperation) {
             let required = ACTION_REQUIRED_FIELDS[action] || [];
             for (let field of required) {
+                // With legs, a required field is satisfied per leg: SEND legs
+                // each need AMOUNT/DESTINATION, while a shared TICK may sit at
+                // the top level (SEND v1) or inside every leg (v2/v3).
+                if (legs) {
+                    let missingIn = legs
+                        .map((leg, i) => (this._isEmpty(leg[field]) && this._isEmpty(fields[field])) ? i : -1)
+                        .filter(i => i !== -1);
+                    if (missingIn.length > 0)
+                        errors.push(this._error('MISSING_REQUIRED_FIELD',
+                            action + ' requires field: ' + field + ' (missing on leg ' + missingIn.join(', ') + ')',
+                            { action, field, legs: missingIn }));
+                    continue;
+                }
                 if (this._isEmpty(fields[field])) {
                     errors.push(this._error('MISSING_REQUIRED_FIELD',
                         action + ' requires field: ' + field,
@@ -182,6 +267,7 @@ class Validator {
 
         for (let field in fields) {
             let value = fields[field];
+            if (field === LEGS_FIELD) continue;   // shape-checked above, values checked per leg
             if (this._isEmpty(value)) continue;
 
             // Default-deny delimiter guard, applied to every field before its
@@ -190,6 +276,25 @@ class Validator {
 
             let fieldErrors = this._validateField(action, field, value, fields);
             errors.push(...fieldErrors);
+        }
+
+        // Per-leg field values: same rules as the flat map (delimiters, numeric
+        // and positive AMOUNT, ^TICK_ID references), applied to every leg, so a
+        // bad leg 2 cannot ride along on a valid leg 1.
+        if (legs) {
+            for (let i = 0; i < legs.length; i++) {
+                let leg    = legs[i];
+                let merged = Object.assign({}, fields, leg);
+                delete merged[LEGS_FIELD];
+                for (let field in leg) {
+                    let value = leg[field];
+                    if (this._isEmpty(value)) continue;
+                    for (let err of this._checkDelimiters(field, value))
+                        errors.push(this._withLeg(err, i));
+                    for (let err of this._validateField(action, field, value, merged))
+                        errors.push(this._withLeg(err, i));
+                }
+            }
         }
 
         let actionErrors = this._validateAction(action, fields);
