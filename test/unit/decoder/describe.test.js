@@ -75,7 +75,11 @@ describe('decoder.describe', function () {
             'LINK|0|BTC|1|DOGE|2': /^Link BTC action #1 to DOGE action #2/,
             'SLEEP|0|900000|JDOG': /until block 900000/,
             'CALLBACK|0|JDOG': /callback redemption of JDOG/,
-            'PRICE|1|BTC|JDOG|USD|1.5': /^Publish price 1.5 USD for JDOG/,
+            'PRICE|1|BTC|JDOG|USD|1.5': /^Publish oracle price 1 JDOG = 1.5 USD/,
+            'BET|0|Rain tomorrow|yes,no|JDOG|0.02|900000|86400': /^Open a betting market on JDOG/,
+            'BET|1|42': /^Cancel market 42 and refund every bet/,
+            'BET|2|42|1|10': /^Bet 10 on outcome 1 of market 42/,
+            'BET|3|42|1': /^Resolve market 42 to outcome 1/,
         };
         for (const [wire, re] of Object.entries(cases)) {
             it(wire.split('|').slice(0, 2).join(' v'), function () {
@@ -86,6 +90,76 @@ describe('decoder.describe', function () {
                 expect(d.warnings.join('\n')).to.not.match(GENERIC);
             });
         }
+    });
+
+    // : BET and PRICE were promoted from the wallet's local
+    // describer, which had moved ahead of this one. What makes them worth
+    // having is not the summary line but the irreversibilities they state,
+    // so those are pinned per format rather than left to a shape assertion.
+    describe('BET ( §11.3)', function () {
+        it('a placed bet states finality and the parimutuel share', function () {
+            const w = describeAction(parse('BET|2|42|1|10')).warnings.join('\n');
+            expect(w).to.include('Bets are final');
+            expect(w).to.include('parimutuel');
+        });
+
+        it('a resolve states that it is the payout decision, and final', function () {
+            const w = describeAction(parse('BET|3|42|1')).warnings.join('\n');
+            expect(w).to.include('splits the pot');
+            expect(w).to.include('cannot be undone');
+        });
+
+        it('a cancel states that every bet is refunded', function () {
+            expect(describeAction(parse('BET|1|42')).warnings.join('\n')).to.include('refunded in full');
+        });
+
+        it('market creation names the signer as the oracle', function () {
+            const d = describeAction(parse('BET|0|Rain tomorrow|yes,no|JDOG|0.02|900000|86400'));
+            expect(d.warnings.join('\n')).to.include('You are the oracle');
+            expect(d.details.find(x => x.label === 'Outcomes').value).to.equal('yes / no');
+        });
+
+        it('a single-outcome market is flagged', function () {
+            const d = describeAction(parse('BET|0|Rain tomorrow|yes|JDOG|0.02|900000|86400'));
+            expect(d.warnings.join('\n')).to.include('at least two outcomes');
+        });
+
+        it('the builder\'s camelCase output describes identically to the wire form', function () {
+            const camel = describeAction({ action: 'BET', params: { version: '2', feedActionIndex: '42', outcome: '1', amount: '10' } });
+            expect(camel.summary).to.equal(describeAction(parse('BET|2|42|1|10')).summary);
+        });
+    });
+
+    describe('PRICE (PC-30)', function () {
+        it('v1 states the 24h delay and the dispenser consequence', function () {
+            const w = describeAction(parse('PRICE|1|BTC|JDOG|USD|1.5')).warnings.join('\n');
+            expect(w).to.include('24 hours');
+            expect(w).to.include('Dispensers that name this address');
+        });
+
+        it('the wire FEE fraction is shown as both fraction and percent', function () {
+            const d = describeAction(parse('PRICE|1|BTC|JDOG|USD|1.5|0.02'));
+            expect(d.details.find(x => x.label === 'Oracle usage fee').value).to.equal('0.02 (2% of a dispenser\'s projected proceeds)');
+        });
+
+        it('a fee above 1 is called out as a rejection, not a percentage', function () {
+            const d = describeAction(parse('PRICE|1|BTC|JDOG|USD|1.5|2'));
+            expect(d.warnings.join('\n')).to.include('above 1 (100%)');
+        });
+
+        it('v0 is flagged as federation-only rather than summarized as signable', function () {
+            const d = describeAction(parse('PRICE|1|BTC|JDOG|USD|1.5'), {});
+            expect(d.summary).to.not.include('Validator price snapshot');
+            const v0 = describeAction({ action: 'PRICE', params: { VERSION: '0', COIN: 'BTC', FIAT: 'USD', VALUE: '1.5' } });
+            expect(v0.summary).to.match(/^Validator price snapshot/);
+            expect(v0.warnings.join('\n')).to.include('will reject this transaction');
+        });
+
+        it('the price row carries no currency suffix (the hardening pass amount-checks it)', function () {
+            const d = describeAction(parse('PRICE|1|BTC|JDOG|USD|1.5'));
+            expect(d.details.find(x => x.label === 'Price per unit').value).to.equal('1.5');
+            expect(d.warnings.join('\n')).to.not.match(/not a plain decimal/);
+        });
     });
 
     it('unknown-to-describe actions get the generic fallback with all params listed', function () {

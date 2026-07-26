@@ -20,9 +20,11 @@
  * consumer render the same {summary, details, warnings} contract.
  *
  * Dedicated describers: SEND, SWEEP, ISSUE (v0-v6), MINT, DESTROY,
- * BATCH, BROADCAST, DISPENSER, DIVIDEND, LIST, AIRDROP. Everything
- * else gets the generic fallback (which still names the action and
- * lists every parameter). Untrusted-input hardening (bidi/zero-width
+ * BATCH, BROADCAST, DISPENSER, DIVIDEND, LIST, AIRDROP, ORDER, SWAP,
+ * STAKE, UNSTAKE, DELEGATE, VOTE, DEPLOY, EXECUTE, DEPOSIT, WITHDRAW,
+ * COINPAY, COLLECT, MESSAGE, FILE, LINK, SLEEP, CALLBACK, PRICE, BET.
+ * Everything else gets the generic fallback (which still names the
+ * action and lists every parameter). Untrusted-input hardening (bidi/zero-width
  * neutralization, canonical amount flags, own-address/contact
  * marking) is applied centrally to the finished output - see
  * hardening.js and _harden() below.
@@ -92,6 +94,7 @@ function describe(parsed, ctx = {}) {
     else if (action === 'SLEEP') decoded = decodeSleep(p, chainSuffix);
     else if (action === 'CALLBACK') decoded = decodeCallback(p, chainSuffix);
     else if (action === 'PRICE') decoded = decodePrice(p, chainSuffix);
+    else if (action === 'BET') decoded = decodeBet(p, chainSuffix);
     else decoded = genericFallback(action, p, chainSuffix);
 
     return _harden(decoded, p, ctx);
@@ -377,7 +380,7 @@ function decodeAirdrop(p, chainSuffix) {
     }
 
     const summaryLine = drops
-        .map((d) => `${d.amount || '?'} ${d.tick || '?'} -> list${d.list ? ` #${d.list}` : ''}`)
+        .map((d) => `${d.amount || '?'} ${d.tick || '?'} → list${d.list ? ` #${d.list}` : ''}`)
         .join(', ');
     const summary = `Airdrop${chainSuffix}: ${summaryLine}`;
 
@@ -1325,21 +1328,199 @@ function decodeCallback(p, chainSuffix) {
     };
 }
 
-/* PRICE describer: v1 permissionless TOKEN/FIAT price oracle publish. */
+/*
+ * PRICE describer (wallet PC-30 version, promoted here by ).
+ * PRICE.md defines two versions and only one of them is authorable: v0
+ * is the validator federation's COIN/FIAT snapshot, PBFT-broadcast and
+ * not user-encodable, so a v0 reaching this describer came from a
+ * pasted or imported action and is flagged rather than summarized as
+ * something the user can sign.
+ *
+ * v1 is the permissionless user oracle: VERSION|COIN|TICK|FIAT|VALUE|FEE|MEMO.
+ * Two warnings ride on every v1 because they are the two things that
+ * surprise publishers, and both are properties of the protocol rather
+ * than of this particular publish: the quote is inert for 24h and
+ * cannot be retracted in that window, and dispensers pointing at this
+ * address will settle real money against it.
+ *
+ * Not the legacy BROADCAST v1/v2 "oracle" lane, which is a free-text
+ * feed with a percentage fee. They share the word and nothing else:
+ * only a PRICE v1 row can price a Mode B dispenser.
+ */
 function decodePrice(p, chainSuffix) {
-    const tick = str(p.TICK);
-    const fiat = str(p.FIAT);
+    const version = str(p.VERSION) || '1';
+    const coin = str(p.COIN).toUpperCase();
+    const tick = str(p.TICK).toUpperCase();
+    const fiat = str(p.FIAT).toUpperCase();
     const value = str(p.VALUE);
+    const fee = str(p.FEE);
+    const memo = str(p.MEMO);
+
+    if (version === '0') {
+        return {
+            summary: `Validator price snapshot${chainSuffix}`,
+            details: [
+                ...(coin ? [{ label: 'Coin', value: coin }] : []),
+                ...(fiat ? [{ label: 'Currency', value: fiat }] : []),
+                ...(value ? [{ label: 'Value', value }] : []),
+            ],
+            warnings: [
+                'PRICE v0 is published by the validator federation, not by a wallet. The network will reject this transaction.',
+            ],
+        };
+    }
+
+    // FEE is a fraction on the wire (0.01 = 1%); show both so a publisher
+    // who typed one and meant the other notices before signing.
+    const feePct = fee && Number.isFinite(Number(fee))
+        ? `${fee} (${(Number(fee) * 100).toFixed(2).replace(/\.?0+$/, '')}% of a dispenser's projected proceeds)`
+        : fee;
+
     return {
-        summary: `Publish price ${value || '?'} ${fiat || '?'} for ${tick || '?'}${chainSuffix}`,
+        summary: `Publish oracle price 1 ${tick || '?'} = ${value || '?'} ${fiat || '?'}${chainSuffix}`,
         details: [
-            { label: 'Token', value: tick },
-            { label: 'Fiat', value: fiat },
-            { label: 'Price', value: value },
-            ...(str(p.FEE) ? [{ label: 'Usage fee', value: `${str(p.FEE)}%` }] : []),
+            { label: 'Token', value: coin && tick ? `${coin}:${tick}` : tick },
+            { label: 'Currency', value: fiat },
+            // Bare number, with the currency on its own row above: the
+            // hardening pass amount-checks any "per unit" label, and a
+            // "1.5 USD" value would be flagged as not-a-plain-decimal.
+            { label: 'Price per unit', value },
+            ...(fee ? [{ label: 'Oracle usage fee', value: feePct }] : []),
+            ...(memo ? [{ label: 'Memo', value: memo }] : []),
         ],
         warnings: [
-            ...(!value || Number(value) <= 0 ? ['Price value is not positive.'] : []),
+            'This price takes effect 24 hours from now and cannot be changed or withdrawn before then. A correction is another publish, which also takes 24 hours.',
+            'Dispensers that name this address as their oracle will sell at this price once it takes effect.',
+            ...(!tick ? ['Token ticker is empty.'] : []),
+            ...(!fiat ? ['Currency is empty.'] : []),
+            ...(!value || Number(value) <= 0 ? ['Price is not a positive number.'] : []),
+            ...(fee && Number(fee) > 1
+                ? ['Oracle usage fee is above 1 (100%): the protocol will reject this transaction.']
+                : []),
+            ...(memo && /[|;]/.test(memo)
+                ? ['Memo contains | or ;: the protocol will reject this transaction.']
+                : []),
+        ],
+    };
+}
+
+/*
+ * BET describer ( §11.3 signing, promoted from the wallet by
+ * ). One action name over four formats, so the summary must name
+ * WHICH one is being signed: approving a resolve is not remotely the
+ * same act as approving a stake.
+ *
+ * Reads the wire spelling a ParsedAction carries, and tolerates the SDK
+ * builder's camelCase output so a caller describing what it just built
+ * (rather than what it parsed) still reads sensibly.
+ *
+ * The warnings are the irreversibilities, not lint. A bet cannot be
+ * cancelled, a resolve is the payout decision itself, and a cancel
+ * refunds and ends the market. Those are the facts a signer needs
+ * before approving, and exactly what a raw-hex screen would hide.
+ */
+function decodeBet(p, chainSuffix) {
+    const pick = (camel, upper) => {
+        const a = p[camel];
+        if (a !== undefined && a !== null && a !== '') return str(a);
+        const b = p[upper];
+        return (b === undefined || b === null) ? '' : str(b);
+    };
+
+    const version = pick('version', 'VERSION');
+    const feedRef = pick('feedActionIndex', 'FEED_ACTION_INDEX');
+    const outcome = pick('outcome', 'OUTCOME');
+    const memo = pick('memo', 'MEMO');
+    const memoWarn = memo && /[|;]/.test(memo)
+        ? ['Memo contains | or ;: the protocol will reject this transaction.']
+        : [];
+
+    // v2 place a bet
+    if (version === '2') {
+        const amount = pick('amount', 'AMOUNT');
+        return {
+            summary: `Bet ${amount || '?'} on outcome ${outcome || '?'} of market ${feedRef || '?'}${chainSuffix}`,
+            details: [
+                { label: 'Market', value: feedRef },
+                { label: 'Outcome', value: outcome },
+                { label: 'Stake', value: amount },
+                ...(memo ? [{ label: 'Memo', value: memo }] : []),
+            ],
+            warnings: [
+                'Bets are final. There is no cancel and no way to change your outcome once this is signed.',
+                'This is a parimutuel market, so your share is not fixed now: later bets change what a win pays.',
+                ...(!amount || Number(amount) <= 0 ? ['Stake is not positive.'] : []),
+                ...memoWarn,
+            ],
+        };
+    }
+
+    // v3 resolve a market
+    if (version === '3') {
+        return {
+            summary: `Resolve market ${feedRef || '?'} to outcome ${outcome || '?'}${chainSuffix}`,
+            details: [
+                { label: 'Market', value: feedRef },
+                { label: 'Winning outcome', value: outcome },
+                ...(memo ? [{ label: 'Memo', value: memo }] : []),
+            ],
+            warnings: [
+                'This pays out the market. Everyone backing this outcome splits the pot, everyone else loses their stake.',
+                'Resolving cannot be undone or corrected afterwards.',
+                ...memoWarn,
+            ],
+        };
+    }
+
+    // v1 cancel a market
+    if (version === '1') {
+        return {
+            summary: `Cancel market ${feedRef || '?'} and refund every bet${chainSuffix}`,
+            details: [
+                { label: 'Market', value: feedRef },
+                ...(memo ? [{ label: 'Memo', value: memo }] : []),
+            ],
+            warnings: [
+                'Every open bet is refunded in full and the market is over. This cannot be undone.',
+                ...memoWarn,
+            ],
+        };
+    }
+
+    // v0 create a market (also the fallback when VERSION is absent, since the
+    // create format is the only one carrying a label).
+    const label = pick('label', 'LABEL');
+    const outcomes = pick('outcomes', 'OUTCOMES');
+    const tick = pick('tick', 'TICK');
+    const fee = pick('fee', 'FEE');
+    const deadline = pick('deadline', 'DEADLINE');
+    const refundWindow = pick('refundWindow', 'REFUND_WINDOW');
+    const minAmount = pick('minAmount', 'MIN_AMOUNT');
+    const allowList = pick('allowList', 'ALLOW_LIST');
+    const blockList = pick('blockList', 'BLOCK_LIST');
+    const outcomeList = outcomes ? outcomes.split(',') : [];
+
+    return {
+        summary: `Open a betting market on ${tick || '?'}${chainSuffix}: ${label || '(untitled)'}`,
+        details: [
+            { label: 'Market', value: label },
+            { label: 'Outcomes', value: outcomeList.join(' / ') },
+            { label: 'Wager token', value: tick },
+            // Named to keep it distinct from the protocol's market duration fee,
+            // which is a different charge paid to a different party.
+            { label: 'Oracle fee (percent of pot)', value: fee ? `${fee}%` : '0%' },
+            { label: 'Betting closes', value: deadline },
+            { label: 'Refund window (seconds)', value: refundWindow },
+            ...(minAmount ? [{ label: 'Minimum bet', value: minAmount }] : []),
+            ...(allowList ? [{ label: 'Allow list', value: allowList }] : []),
+            ...(blockList ? [{ label: 'Block list', value: blockList }] : []),
+            ...(memo ? [{ label: 'Memo', value: memo }] : []),
+        ],
+        warnings: [
+            'Markets cannot be edited after this. To change any term you must cancel and create a new one.',
+            'You are the oracle: if you never resolve it, bettors are refunded after the refund window, and your address carries that record publicly.',
+            ...(outcomeList.length < 2 ? ['A market needs at least two outcomes.'] : []),
+            ...memoWarn,
         ],
     };
 }
