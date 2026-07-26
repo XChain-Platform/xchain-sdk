@@ -200,3 +200,51 @@ describe('chunkHelper @regression', function () {
         });
     });
 });
+
+// PC-38: the planner's PUBLIC surface. A signer that holds no raw key (a wallet
+// signing through a vault, a hardware device, an offline co-signer) cannot use
+// sdk.deployContract - that takes a WIF and drives its own session - so it has
+// to build the carrier + assembling actions on its own signing path. It still
+// needs consensus-exact chunk math, hence sdk.planDeploy. These pin the
+// passthrough so the public method can never drift from the internal helper.
+describe('sdk.planDeploy public surface (PC-38) @regression', function () {
+    const { XChainSDK } = require('../../index.js');
+    const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
+
+    it('matches chunkHelper.planDeploy for a single-shot source', function () {
+        const code = 'function main(){ return 1; }';
+        const opts = { gasLimit: 100000 };
+        expect(sdk.planDeploy(code, opts)).to.deep.equal(chunkHelper.planDeploy(code, opts));
+    });
+
+    it('matches chunkHelper.planDeploy for a chunked source', function () {
+        const code = 'x'.repeat(20000);
+        const opts = { gasLimit: 100000, constructorParams: ['a', 'b'] };
+        const viaSdk = sdk.planDeploy(code, opts);
+        expect(viaSdk).to.deep.equal(chunkHelper.planDeploy(code, opts));
+        expect(viaSdk.single).to.equal(false);
+        expect(viaSdk.parts.join('')).to.equal(
+            Buffer.from(code, 'utf8').toString('base64'),
+            'ordered concatenation must restore canonical base64 or the indexer rejects the assembly');
+    });
+
+    it('defaults opts and stringifies code (no throw on a bare call)', function () {
+        const plan = sdk.planDeploy('function main(){ return 1; }');
+        expect(plan.single).to.equal(true);
+        expect(plan.codeHash).to.match(/^[0-9a-f]{64}$/);
+    });
+
+    it('needs no network or key material (works on a bare SDK instance)', function () {
+        const offline = new XChainSDK({ network: 'bitcoin-regtest' });
+        expect(offline.planDeploy('x'.repeat(20000), {}).totalChunks).to.be.greaterThan(1);
+    });
+
+    it('the audited template library itself needs chunking (escrow > one action)', function () {
+        // Load-bearing for PC-38: sdk.scaffold('escrow') cannot be deployed by a
+        // single inline DEPLOY, so a wallet without a chunked lane cannot deploy
+        // the SDK's own audited templates.
+        const plan = sdk.planDeploy(sdk.scaffold('escrow'), { gasLimit: 100000 });
+        expect(plan.single).to.equal(false);
+        expect(plan.totalChunks).to.be.greaterThan(1);
+    });
+});

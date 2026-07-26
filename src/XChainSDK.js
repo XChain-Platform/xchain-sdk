@@ -53,6 +53,7 @@ const { publicDefaults } = require('./endpoints.js');
 const { SDKConfigError, SDKExplorerError, SDKContractError } = require('./errors.js');
 const { lintSource } = require('./contract/lint-core.js');
 const CONTRACT_SOURCES = require('./contract/templates.js');
+const chunkHelper = require('./chunkHelper.js');
 
 class XChainSDK {
 
@@ -539,6 +540,23 @@ class XChainSDK {
             templates: Object.keys(CONTRACT_SOURCES.templates || {}),
             patterns:  Object.keys(CONTRACT_SOURCES.patterns || {})
         };
+    }
+
+    // Plan a deploy WITHOUT signing: does this source fit one inline DEPLOY, or
+    // does it need chunking? Returns { codeHash, single, parts, totalChunks }
+    // (synchronous, no network, no key material, browser-safe).
+    //
+    // deployContract() is the batteries-included path, but it takes a WIF and
+    // drives its own session, so a signer that does NOT hold raw keys - a
+    // wallet signing through a vault, a hardware device, or an offline
+    // co-signer - cannot use it. Those callers need the same consensus-exact
+    // chunk math (MAX_ACTION_DATA_LENGTH / MAX_DEPLOYCHUNK_PART_BYTES /
+    // MAX_DEPLOY_CHUNKS and the base64 + push-prefix overhead) to build the
+    // carrier + assembling actions on their own signing path; re-deriving it
+    // caller-side would drift from consensus at the cap. Throws when the source
+    // needs more than MAX_DEPLOY_CHUNKS slices.
+    planDeploy(code, opts) {
+        return chunkHelper.planDeploy(String(code), opts || {});
     }
 
     // Lint params.CODE (raw source) before a DEPLOY action is built.
