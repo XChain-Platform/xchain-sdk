@@ -71,6 +71,18 @@ jobs:
       - name: Contract abi-core byte-identity vs canonical
         run: xchain-explorer/bin/sync-abi-core.sh --check
 
+      # Route contract : every explorer.<method>(query, '<type>') call
+      # must use a type that route actually accepts. Mock-based unit tests
+      # cannot see this - a stub answers to any type string - and the miss
+      # shipped a blanket false block on DISPENSE. The explorer checkout above
+      # is the route table, so REQUIRE_SIBLINGS turns the local skip into a
+      # hard failure here.
+      - name: Explorer route contract
+        working-directory: xchain-sdk
+        env:
+          XCHAIN_REQUIRE_SIBLINGS: "1"
+        run: npx mocha test/unit/explorer-route-contract.test.js
+
       # Pre-flight drift gate (confirm/decode/pre-flight spec §8.5). The Tier-2
       # checks in src/preflight/checks/ mirror validity logic that is
       # authoritative in xchain-indexer src/actions/*.js. The gate runs on BOTH
