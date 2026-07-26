@@ -71,6 +71,25 @@ jobs:
       - name: Contract abi-core byte-identity vs canonical
         run: xchain-explorer/bin/sync-abi-core.sh --check
 
+      # Pre-flight drift gate (confirm/decode/pre-flight spec §8.5). The Tier-2
+      # checks in src/preflight/checks/ mirror validity logic that is
+      # authoritative in xchain-indexer src/actions/*.js. The gate runs on BOTH
+      # repos deliberately: the indexer side catches a handler change that
+      # outruns the mirror, and this side catches a map edit made without a
+      # handler to justify it (refreshing a hash to silence the gate is exactly
+      # the move it exists to prevent, and it can only be seen from here).
+      - name: Check out the authoritative handlers (xchain-indexer)
+        uses: actions/checkout@v4
+        with:
+          repository: XChain-Platform/xchain-indexer
+          ssh-key: ${{ secrets.XCHAIN_INDEXER_DEPLOY_KEY }}
+          path: xchain-indexer
+
+      - name: Pre-flight <-> handler drift gate
+        env:
+          XCHAIN_INDEXER_PATH: ${{ github.workspace }}/xchain-indexer
+        run: node xchain-sdk/bin/check-preflight-drift.js
+
   # Coverage ratchet : re-run the unit suite under c8 and fail if line or
   # branch coverage drops below this repo's floor in bin/coverage-thresholds.json
   # (mirrored into the `coverage:check` npm script). Catches silent coverage

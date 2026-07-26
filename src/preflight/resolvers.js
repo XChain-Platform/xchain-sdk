@@ -14,16 +14,35 @@
  *
  * XChain Platform SDK - pre-flight client resolvers (spec §7)
  *
- * State reconstructable today from existing explorer endpoints:
- * dispenser live lifecycle (the enum matches the field  will
- * add, so the authoritative server value is drop-in later) and
- * DISPENSE give-remaining reconstruction.
+ * Dispenser live lifecycle and give-remaining, both read from the
+ * explorer's ACTION-DETAIL route (`/{COIN}/api/action/{index}`, SDK
+ * `explorer.getAction`). That route is the only one keyed by action
+ * index, and it is also the only one carrying the derived `state`
+ * block the indexer's own validity checks compare against:
+ *
+ *     state: { give_remaining, status, expiration, allow_list, block_list }
+ *
+ * `give_remaining` there is escrow PLUS every valid refill MINUS every
+ * dispense (xchain-explorer db.js), and `status` is the same value
+ * dispense.js gates on ("dispenser not open"), so both are read rather
+ * than reconstructed.
+ *
+ * These resolvers previously fanned out across /dispensers/,
+ * /dispenser_closes/, /dispenser_expires/, /dispenser_cancels/ and
+ * /dispenses/, keyed by `action_index` / `dispenser_action_index`.
+ * NONE of those routes accept those types (/dispensers/ takes block,
+ * address, source, destination, token, oracle; the lifecycle routes
+ * take block, address), so every one of those calls 404'd and every
+ * DISPENSE pre-flight reported a live dispenser as nonexistent - a
+ * blanket false block on the one action §4.4 says the client tier is
+ * the only pre-sign protection for. Unit mocks answered to the invented
+ * shape, so the suite stayed green over an API that does not exist;
+ * that is why the fixtures in the test suite now mirror a REAL captured
+ * payload.
  *
  ********************************************************************/
 
 'use strict';
-
-const numeric = require('./numeric.js');
 
 function rows(raw) {
     if (!raw) return [];
@@ -32,56 +51,64 @@ function rows(raw) {
     return [];
 }
 
+// The action route answers with the record itself, or wrapped in `data`.
+function actionRecord(raw) {
+    if (!raw) return null;
+    const rec = (raw.data && !Array.isArray(raw.data)) ? raw.data : raw;
+    if (Array.isArray(rec)) return rec[0] || null;
+    return (rec && typeof rec === 'object') ? rec : null;
+}
+
 /*
- * Resolve a dispenser's live lifecycle from its event streams.
- * Returns { state: 'open'|'cancelling'|'closed'|'expired'|null,
- *           dispenser } - null state when the dispenser itself is
- * unknown/unfetchable (caller distinguishes via `found`).
+ * Resolve a dispenser and its live lifecycle by action index.
+ *
+ * Returns { found, state, dispenser }:
+ *   found === undefined  the lookup itself was unavailable (unverified)
+ *   found === false      no such action, or it is not a DISPENSER
+ *   state  === null      it is a dispenser, but the route served no status
+ *                        (unknown, NOT "open" - callers must not read
+ *                        silence as a green light)
+ *
+ * `state` is passed through verbatim rather than mapped onto a fixed
+ * enum. The indexer gates on `status != 'open'` and keeps minting new
+ * terminal strings (`empty`, `max_dispenses_reached`), so anything-but-
+ * open is the rule that cannot go stale as those are added.
  */
 async function resolveDispenserState(ctx, dispenserActionIndex) {
     const idx = String(dispenserActionIndex);
-    const disp = await ctx.fetch('DISPENSER_LOOKUP', [idx], () =>
-        ctx.sdk.explorer.getDispensers(idx, 'action_index'));
-    if (!disp.ok) return { found: undefined, state: null, dispenser: null };
-    const dRows = rows(disp.value);
-    if (dRows.length === 0) return { found: false, state: null, dispenser: null };
-    const dispenser = dRows[0];
+    const res = await ctx.fetch('DISPENSER_LOOKUP', [idx], () =>
+        ctx.sdk.explorer.getAction(idx));
+    if (!res.ok) return { found: undefined, state: null, dispenser: null };
 
-    // Terminal events, most decisive first.
-    const closes = await ctx.fetch('DISPENSER_CLOSES', [idx], () =>
-        ctx.sdk.explorer.getDispenserCloses(idx, 'dispenser_action_index'));
-    if (closes.ok && rows(closes.value).length > 0)
-        return { found: true, state: 'closed', dispenser };
+    const record = actionRecord(res.value);
+    if (!record) return { found: false, state: null, dispenser: null };
+    if (String(record.action || '').toUpperCase() !== 'DISPENSER')
+        return { found: false, state: null, dispenser: null };
 
-    const expires = await ctx.fetch('DISPENSER_EXPIRES', [idx], () =>
-        ctx.sdk.explorer.getDispenserExpires(idx, 'dispenser_action_index'));
-    if (expires.ok && rows(expires.value).length > 0)
-        return { found: true, state: 'expired', dispenser };
-
-    const cancels = await ctx.fetch('DISPENSER_CANCELS', [idx], () =>
-        ctx.sdk.explorer.getDispenserCancels(idx, 'dispenser_action_index'));
-    if (cancels.ok && rows(cancels.value).length > 0)
-        return { found: true, state: 'cancelling', dispenser };
-
-    return { found: true, state: 'open', dispenser };
+    const status = String(record.state?.status ?? record.dispenser_status ?? '').toLowerCase();
+    return { found: true, state: status || null, dispenser: record };
 }
 
 /*
- * Reconstruct a dispenser's give-remaining from its dispense history:
- * escrow minus the sum of dispensed give-amounts.
+ * A dispenser's give-remaining, or null when it cannot be known.
+ *
+ * Read, never reconstructed. Reconstructing it from the opening
+ * GIVE_ESCROW minus dispenses looks reasonable and is wrong: a format-2
+ * DISPENSER_EDIT refills the escrow, and no endpoint exposes per-edit
+ * give_escrow (/dispenser_edits/ omits the column entirely), so the
+ * reconstruction can only ever run LOW. Running low here means
+ * DISPENSER_EMPTY at severity error on a DISPENSE, i.e. telling a user a
+ * purchase will fail when the chain would settle it - so when the
+ * derived figure is absent the honest answer is "unknown" and the caller
+ * declares the check unverified.
  */
 async function resolveGiveRemaining(ctx, dispenser, dispenserActionIndex) {
-    const idx = String(dispenserActionIndex);
-    const escrow = String(dispenser.give_escrow ?? dispenser.GIVE_ESCROW ?? dispenser.escrow ?? '0');
-    const res = await ctx.fetch('DISPENSER_DISPENSES', [idx], () =>
-        ctx.sdk.explorer.getDispenses(idx, 'dispenser_action_index'));
-    if (!res.ok) return null;
-    let dispensed = '0';
-    for (const row of rows(res.value)) {
-        const amt = row.give_amount ?? row.amount ?? row.give_quantity ?? '0';
-        dispensed = numeric.add(dispensed, String(amt));
-    }
-    return numeric.sub(escrow, dispensed);
+    const live = dispenser?.state?.give_remaining ?? dispenser?.give_remaining;
+    if (live !== undefined && live !== null) return String(live);
+    // Keep the argument in the signature: callers pass the index and a
+    // future authoritative field  may need its own lookup.
+    void dispenserActionIndex; void ctx;
+    return null;
 }
 
-module.exports = { resolveDispenserState, resolveGiveRemaining, rows };
+module.exports = { resolveDispenserState, resolveGiveRemaining, actionRecord, rows };

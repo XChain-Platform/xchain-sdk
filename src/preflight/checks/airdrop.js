@@ -26,7 +26,7 @@
 
 const { FINDING_CODES } = require('../constants.js');
 const numeric = require('../numeric.js');
-const { rows } = require('../resolvers.js');
+const { actionRecord } = require('../resolvers.js');
 
 async function checkAirdrop(ctx) {
     const amount = ctx.field('AMOUNT');
@@ -40,14 +40,19 @@ async function checkAirdrop(ctx) {
     }
 
     for (const idx of listIdxs) {
+        // By ACTION INDEX, which means the action-detail route: /lists/ is keyed
+        // by block or address only, so `getLists(idx, 'action_index')` 404'd and
+        // every AIRDROP naming a perfectly good list was told it did not exist.
+        // Same defect, same shape, as the dispenser resolvers (see resolvers.js).
         const res = await ctx.fetch('LIST_LOOKUP', [String(idx)], () =>
-            ctx.sdk.explorer.getLists(String(idx), 'action_index'));
+            ctx.sdk.explorer.getAction(String(idx)));
         ctx.markRun(FINDING_CODES.LIST_NOT_FOUND);
         if (!res.ok) {
             ctx.addUnverified(FINDING_CODES.LIST_NOT_FOUND, 'list lookup unavailable for #' + idx);
             continue;
         }
-        if (res.notFound || rows(res.value).length === 0) {
+        const record = actionRecord(res.value);
+        if (res.notFound || !record || String(record.action || '').toUpperCase() !== 'LIST') {
             ctx.addFinding(FINDING_CODES.LIST_NOT_FOUND, 'error',
                 `List #${idx} does not exist.`, { listActionIndex: String(idx) });
         }

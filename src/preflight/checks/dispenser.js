@@ -26,9 +26,29 @@
 
 'use strict';
 
-const { FINDING_CODES } = require('../constants.js');
+const { FINDING_CODES, MAX_REFILLS } = require('../constants.js');
 const numeric = require('../numeric.js');
 const { resolveDispenserState, resolveGiveRemaining } = require('../resolvers.js');
+
+/*
+ * PRICE v1 oracle usage fee . A Mode B dispenser - one naming an
+ * ORACLE_ADDRESS - pays the oracle operator up front, as a real native-coin
+ * OUTPUT inside the DISPENSER transaction, and the indexer rejects the open or
+ * refill when that output is missing or short of the tolerance band.
+ *
+ * Pre-flight cannot check it and never will: it is handed an action STRING,
+ * and the rule is about outputs that only exist once the encoder has built the
+ * transaction. The wallet enforces it at compose instead, hard-refusing an
+ * unquotable Mode B dispenser (core/src/sdk/oracleFeePreflight.js), which is
+ * the correct layer - it is also the layer that can size the output. Declaring
+ * it unverified here keeps a whole rejection class from reading as a clean
+ * pass on any surface that pre-flights without composing.
+ */
+function noteOracleFee(ctx, oracleAddress) {
+    if (!oracleAddress) return;
+    ctx.addUnverified(FINDING_CODES.DISPENSER_ORACLE_FEE,
+        'the oracle usage fee is an output-level rule; the wallet checks it at compose time');
+}
 
 async function checkDispenser(ctx) {
     const version = String(ctx.parsed.version);
@@ -60,12 +80,13 @@ async function checkDispenser(ctx) {
         }
         ctx.addUnverified('DISPENSER_ORIGIN_STANDING',
             'origin-standing / UTXO-freshness gate is server-side (and unreliable even on the quote path)');
+        noteOracleFee(ctx, ctx.field('ORACLE_ADDRESS'));
         return;
     }
 
     // v1 cancel / v2 edit: dispenser exists; owner is SOURCE or
-    // GET_ADDRESS (dispenser.js:298-302); live lifecycle resolved
-    // client-side (warning-max: the resolver reads event streams).
+    // GET_ADDRESS (dispenser.js:298-302); live lifecycle read from the
+    // action route's state block (warning-max).
     const idx = ctx.field('DISPENSER_ACTION_INDEX');
     if (!idx) return;
     const { found, state, dispenser } = await resolveDispenserState(ctx, idx);
@@ -79,7 +100,9 @@ async function checkDispenser(ctx) {
             `Dispenser #${idx} does not exist.`, { dispenserActionIndex: idx });
         return;
     }
-    if (state !== 'open') {
+    if (state === null) {
+        ctx.addUnverified('DISPENSER_LIFECYCLE', 'the lookup carried no dispenser status');
+    } else if (state !== 'open') {
         ctx.addFinding('DISPENSER_LIFECYCLE', 'warning',
             `Dispenser #${idx} is ${state}; this ${ctx.parsed.version === 1 ? 'cancel' : 'edit'} will likely be rejected.`,
             { dispenserActionIndex: idx, state });
@@ -93,6 +116,28 @@ async function checkDispenser(ctx) {
                 { dispenserActionIndex: idx, owner, getAddress });
         }
     }
+
+    // A v2 edit that tops up GIVE_ESCROW is a REFILL, and refills carry two
+    // rules a plain edit does not: the MAX_REFILLS cap  and, on a Mode
+    // B dispenser, the oracle usage fee on the amount being added .
+    if (version !== '2') return;
+    const topUp = ctx.field('GIVE_ESCROW');
+    if (!topUp || !numeric.isPositive(topUp)) return;
+
+    // The refill's oracle address is the DISPENSER's, not the edit's: a
+    // format-2 payload targets the dispenser by action index and never
+    // restates the oracle.
+    noteOracleFee(ctx, String(dispenser?.oracle_address ?? dispenser?.ORACLE_ADDRESS ?? ''));
+
+    // MAX_REFILLS is an §7 ENDPOINT GAP, not a check. Counting refills needs
+    // valid DISPENSER_EDIT rows carrying give_escrow > 0 (the indexer's own
+    // predicate, db.getDispenserRefillCount), and /dispenser_edits/ serves
+    // neither: it omits the give_escrow column and accepts only block/address,
+    // not a dispenser reference. Declared rather than approximated - a refill
+    // count that silently reads 0 would be a check that can never fire, which
+    // is indistinguishable from a passing one.
+    ctx.addUnverified(FINDING_CODES.DISPENSER_MAX_REFILLS,
+        `the ${MAX_REFILLS}-refill cap is not derivable client-side: /dispenser_edits/ exposes no give_escrow`);
 }
 
 async function checkDispense(ctx) {
@@ -114,7 +159,12 @@ async function checkDispense(ctx) {
             `Dispenser #${idx} does not exist.`, { dispenserActionIndex: idx });
         return;
     }
-    if (state !== 'open') {
+    // An unknown status is NOT an open one, but it is not grounds for an error
+    // either: this finding is the hard "your coin moves and then it fails"
+    // block, so it fires only on a status the route actually stated.
+    if (state === null) {
+        ctx.addUnverified(FINDING_CODES.DISPENSER_NOT_OPEN, 'the lookup carried no dispenser status');
+    } else if (state !== 'open') {
         ctx.addFinding(FINDING_CODES.DISPENSER_NOT_OPEN, 'error',
             `Dispenser #${idx} is ${state}, not open. A dispense against it will fail AFTER your native coin moves.`,
             { dispenserActionIndex: idx, state });
@@ -123,6 +173,10 @@ async function checkDispense(ctx) {
     const remaining = await resolveGiveRemaining(ctx, dispenser, idx);
     ctx.markRun(FINDING_CODES.DISPENSER_EMPTY);
     const giveAmount = String(dispenser.give_amount ?? dispenser.GIVE_AMOUNT ?? '0');
+    // Say so rather than let an unresolvable give-remaining read as headroom:
+    // markRun above has already claimed this check ran.
+    if (remaining === null)
+        ctx.addUnverified(FINDING_CODES.DISPENSER_EMPTY, 'give-remaining could not be resolved');
     if (remaining !== null && numeric.isPositive(giveAmount) && !numeric.gte(remaining, giveAmount)) {
         ctx.addFinding(FINDING_CODES.DISPENSER_EMPTY, 'error',
             `Dispenser #${idx} has ${remaining} remaining, less than one fill (${giveAmount}).`,

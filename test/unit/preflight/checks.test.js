@@ -19,6 +19,7 @@ function reportFor(wire, explorerSpec, opts = {}) {
 
 const codes = r => r.findings.map(f => f.code + ':' + f.severity);
 const has = (r, code, sev) => r.findings.some(f => f.code === code && (!sev || f.severity === sev));
+const unverified = (r, check) => (r.unverified || []).some(u => u.check === check);
 
 describe('pre-flight Tier-2 per-action matrix', function () {
 
@@ -107,57 +108,184 @@ describe('pre-flight Tier-2 per-action matrix', function () {
     });
 
     describe('AIRDROP (null AMOUNT is a warning, never an error)', function () {
+        // A LIST is resolved by ACTION INDEX, so the lookup is the action-detail
+        // route. /lists/ takes block or address only; keying it by action_index
+        // 404'd, which made every airdrop against a real list read as an airdrop
+        // against a missing one.
         it('null AMOUNT does not hard-block', async function () {
             const r = await reportFor('AIRDROP|0|JDOG||55', {
                 getToken: () => ({ tick: 'JDOG' }),
-                getLists: () => [{ action_index: 55 }],
+                getAction: () => ({ action: 'LIST', action_index: '55' }),
             });
             expect(r.findings.every(f => f.severity !== 'error')).to.equal(true);
             expect(has(r, 'AMOUNT_NOT_POSITIVE', 'warning')).to.equal(true);
         });
 
+        it('an existing list is not reported missing', async function () {
+            const r = await reportFor('AIRDROP|0|JDOG|1|55', {
+                getToken: () => ({ tick: 'JDOG' }),
+                getAction: () => ({ action: 'LIST', action_index: '55' }),
+            });
+            expect(has(r, 'LIST_NOT_FOUND')).to.equal(false);
+        });
+
         it('missing LIST is an error', async function () {
             const r = await reportFor('AIRDROP|0|JDOG|1|55', {
                 getToken: () => ({ tick: 'JDOG' }),
-                getLists: () => notFound(),
+                getAction: () => notFound(),
+            });
+            expect(has(r, 'LIST_NOT_FOUND', 'error')).to.equal(true);
+        });
+
+        it('an action index that is not a LIST is an error', async function () {
+            const r = await reportFor('AIRDROP|0|JDOG|1|55', {
+                getToken: () => ({ tick: 'JDOG' }),
+                getAction: () => ({ action: 'SEND', action_index: '55' }),
             });
             expect(has(r, 'LIST_NOT_FOUND', 'error')).to.equal(true);
         });
     });
+    // Fixtures below mirror a REAL payload captured from the regtest explorer
+    // (`/RBTC/api/action/3543`, an open XCHAIN dispenser), not an imagined
+    // shape. The previous fixtures invented `/dispensers/` + three lifecycle
+    // streams keyed by action index; no such routes exist, so the suite was
+    // green over an API that 404s in production and every live DISPENSE
+    // pre-flight answered "dispenser does not exist".
+    const dispenserAction = (over = {}, state = {}) => ({
+        action: 'DISPENSER',
+        action_index: '42',
+        source: 'me',
+        get_address: 'me',
+        give_coin: 'BTC',
+        give_tick: 'XCHAIN',
+        give_amount: '25',
+        give_escrow: '100',
+        get_amount: '5',
+        oracle_address: null,
+        status: 'valid',
+        ...over,
+        state: { give_remaining: '100', expiration: '1792923623', status: 'open', ...state },
+    });
 
     describe('DISPENSE (Tier 1 cannot validate; moves native coin)', function () {
+        it('an open, funded dispenser is not blocked', async function () {
+            const r = await reportFor('DISPENSE|0|42', {
+                getAction: () => dispenserAction(),
+            });
+            expect(has(r, 'DISPENSER_NOT_FOUND')).to.equal(false);
+            expect(has(r, 'DISPENSER_NOT_OPEN')).to.equal(false);
+            expect(has(r, 'DISPENSER_EMPTY')).to.equal(false);
+            expect(r.findings.every(f => f.severity !== 'error')).to.equal(true);
+        });
+
         it('dispenser not open is an error', async function () {
             const r = await reportFor('DISPENSE|0|42', {
-                getDispensers: () => [{ action_index: 42, give_amount: '1', give_escrow: '10' }],
-                getDispenserCloses: () => [{ block_index: 5 }],
-                getDispenserExpires: () => [],
-                getDispenserCancels: () => [],
-                getDispenses: () => [],
+                getAction: () => dispenserAction({}, { status: 'closed' }),
             });
             expect(has(r, 'DISPENSER_NOT_OPEN', 'error')).to.equal(true);
         });
 
-        it('open dispenser with headroom passes the dispense checks', async function () {
+        // The indexer keeps minting new terminal statuses (`empty`,
+        // `max_dispenses_reached` from the  caps). Gating on
+        // anything-but-open is what keeps this from going stale each time.
+        it('treats an unrecognised terminal status as not-open', async function () {
             const r = await reportFor('DISPENSE|0|42', {
-                getDispensers: () => [{ action_index: 42, give_amount: '1', give_escrow: '10' }],
-                getDispenserCloses: () => [],
-                getDispenserExpires: () => [],
-                getDispenserCancels: () => [],
-                getDispenses: () => [{ give_amount: '3' }],
+                getAction: () => dispenserAction({}, { status: 'max_dispenses_reached' }),
             });
-            expect(has(r, 'DISPENSER_NOT_OPEN')).to.equal(false);
-            expect(has(r, 'DISPENSER_EMPTY')).to.equal(false);
+            expect(has(r, 'DISPENSER_NOT_OPEN', 'error')).to.equal(true);
         });
 
         it('drained dispenser (remaining < one fill) is an error', async function () {
             const r = await reportFor('DISPENSE|0|42', {
-                getDispensers: () => [{ action_index: 42, give_amount: '5', give_escrow: '10' }],
-                getDispenserCloses: () => [],
-                getDispenserExpires: () => [],
-                getDispenserCancels: () => [],
-                getDispenses: () => [{ give_amount: '8' }],
+                getAction: () => dispenserAction({ give_amount: '25' }, { give_remaining: '10' }),
             });
             expect(has(r, 'DISPENSER_EMPTY', 'error')).to.equal(true);
+        });
+
+        // give_remaining on the action route already nets refills in
+        // (explorer db.js: escrow + refills - dispenses), which is precisely
+        // why it is read instead of rebuilt from the opening escrow.
+        it('honours a give_remaining ABOVE the opening escrow (refilled)', async function () {
+            const r = await reportFor('DISPENSE|0|42', {
+                getAction: () => dispenserAction({ give_escrow: '100' }, { give_remaining: '500' }),
+            });
+            expect(has(r, 'DISPENSER_EMPTY')).to.equal(false);
+        });
+
+        it('an action index that is not a dispenser does not exist', async function () {
+            const r = await reportFor('DISPENSE|0|42', {
+                getAction: () => ({ action: 'SEND', action_index: '42' }),
+            });
+            expect(has(r, 'DISPENSER_NOT_FOUND', 'error')).to.equal(true);
+        });
+
+        it('a 404 on the lookup is an authoritative "does not exist"', async function () {
+            const r = await reportFor('DISPENSE|0|42', { getAction: () => notFound() });
+            expect(has(r, 'DISPENSER_NOT_FOUND', 'error')).to.equal(true);
+        });
+
+        // Degradation, not a verdict: an unreachable explorer must never
+        // manufacture either a block or a pass (§4.2).
+        it('an unreachable explorer is unverified, never an error', async function () {
+            const r = await reportFor('DISPENSE|0|42', {
+                getAction: () => { throw new Error('explorer down'); },
+            });
+            expect(r.findings.every(f => f.severity !== 'error')).to.equal(true);
+            expect(unverified(r, 'DISPENSER_NOT_FOUND')).to.equal(true);
+        });
+
+        // Silence would read as headroom on an action that moves native coin.
+        it('declares status and give-remaining unverified when the state block is absent', async function () {
+            const r = await reportFor('DISPENSE|0|42', {
+                getAction: () => ({ action: 'DISPENSER', action_index: '42', give_amount: '25' }),
+            });
+            expect(has(r, 'DISPENSER_NOT_OPEN')).to.equal(false);
+            expect(has(r, 'DISPENSER_EMPTY')).to.equal(false);
+            expect(unverified(r, 'DISPENSER_NOT_OPEN')).to.equal(true);
+            expect(unverified(r, 'DISPENSER_EMPTY')).to.equal(true);
+        });
+    });
+
+    describe('DISPENSER refill ( cap +  oracle fee)', function () {
+        it('declares the refill cap unverified: no endpoint exposes per-edit escrow', async function () {
+            const r = await reportFor('DISPENSER|2|42|100', {
+                getAction: () => dispenserAction(),
+            });
+            expect(has(r, 'DISPENSER_MAX_REFILLS')).to.equal(false);
+            expect(unverified(r, 'DISPENSER_MAX_REFILLS')).to.equal(true);
+        });
+
+        it('an edit that does not top up escrow is not refill-checked at all', async function () {
+            const r = await reportFor('DISPENSER|2|42||1799999999', {
+                getAction: () => dispenserAction(),
+            });
+            expect(unverified(r, 'DISPENSER_MAX_REFILLS')).to.equal(false);
+        });
+
+        it('declares the oracle usage fee unverified on a Mode B open', async function () {
+            const r = await reportFor('DISPENSER|0|BTC|JDOG|1|0|100|BTC|BTC|1||USD||orc1', {});
+            expect(unverified(r, 'DISPENSER_ORACLE_FEE')).to.equal(true);
+        });
+
+        it('says nothing about an oracle fee on a Mode A dispenser', async function () {
+            const r = await reportFor('DISPENSER|0|BTC|JDOG|1|0|100|BTC|BTC|1||USD|1', {});
+            expect(unverified(r, 'DISPENSER_ORACLE_FEE')).to.equal(false);
+        });
+
+        // A v2 refill never restates the oracle, so it has to come off the
+        // dispenser being refilled.
+        it('declares the oracle fee unverified on a Mode B refill', async function () {
+            const r = await reportFor('DISPENSER|2|42|100', {
+                getAction: () => dispenserAction({ oracle_address: 'orc1' }),
+            });
+            expect(unverified(r, 'DISPENSER_ORACLE_FEE')).to.equal(true);
+        });
+
+        it('says nothing about an oracle fee when refilling a Mode A dispenser', async function () {
+            const r = await reportFor('DISPENSER|2|42|100', {
+                getAction: () => dispenserAction(),
+            });
+            expect(unverified(r, 'DISPENSER_ORACLE_FEE')).to.equal(false);
         });
     });
 

@@ -40,6 +40,15 @@ const ENCODING_LIMITS = Object.freeze({
 // Report schema (additive-only; pinned in the wallet bridge-spec).
 const REPORT_SCHEMA_VERSION = 1;
 
+// Dispenser refill cap (, indexer config.js MAX_REFILLS). A
+// format-2 DISPENSER_EDIT that tops up GIVE_ESCROW is a refill, and the
+// 6th is rejected once dispenser_caps_activation is live. The cap cannot
+// be CHECKED client-side (no endpoint exposes per-edit give_escrow, see
+// checks/dispenser.js), so this exists only to name the number in the
+// unverified declaration. The §8.5 drift gate over
+// src/actions/dispenser.js is what catches a change to it.
+const MAX_REFILLS = 5;
+
 // Lifecycle constants (spec §4.6).
 const DEFAULT_TIMEOUT_MS   = 4000;  // overall per-preflight budget
 const RECHECK_TIMEOUT_MS   = 2000;  // Approve-time re-check budget
@@ -87,6 +96,10 @@ const FINDING_CODES = Object.freeze({
     DISPENSER_LIFECYCLE: 'DISPENSER_LIFECYCLE',
     DISPENSER_NOT_OWNER_W: 'DISPENSER_NOT_OWNER',
     GIVE_NOT_BALANCE_MODE: 'GIVE_NOT_BALANCE_MODE',
+    DISPENSER_MAX_REFILLS: 'DISPENSER_MAX_REFILLS',
+    // Declared-unverified only (never a finding): the oracle usage fee is
+    // an OUTPUT-level rule, and pre-flight only ever sees an action string.
+    DISPENSER_ORACLE_FEE: 'DISPENSER_ORACLE_FEE',
 });
 
 /*
@@ -133,6 +146,7 @@ module.exports = {
     ENDPOINT_MEMO_TTL_MS,
     ENCODING_LIMITS,
     MAX_ACTION_DATA_LENGTH,
+    MAX_REFILLS,
     FINDING_CODES,
     TIER2_ERROR_CAPABLE,
     TIER1_DENYLIST,
