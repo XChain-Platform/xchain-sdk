@@ -64,9 +64,18 @@ async function checkBalanceCovers(ctx, verb) {
         }
         ctx.markRun(FINDING_CODES.BALANCE_INSUFFICIENT);
         if (!numeric.gte(balance, total)) {
+            // §4.7: say so when the shortfall comes from this wallet's own
+            // in-flight spends - "you have 400" reads as a stale balance when
+            // the chain still shows 1000, and the flag keeps the finding alive
+            // through the dryrun-valid downgrade.
+            const inFlight = ctx.deltaApplied(tick);
+            const netted = numeric.isPositive(inFlight);
             ctx.addFinding(FINDING_CODES.BALANCE_INSUFFICIENT, 'error',
-                `Balance of ${tick} (${balance}) does not cover the ${verb.toLowerCase()} total (${total}).`,
-                { tick, balance, total });
+                netted
+                    ? `Balance of ${tick} (${balance} after ${inFlight} already committed from this wallet) `
+                        + `does not cover the ${verb.toLowerCase()} total (${total}).`
+                    : `Balance of ${tick} (${balance}) does not cover the ${verb.toLowerCase()} total (${total}).`,
+                { tick, balance, total, ...(netted ? { localDeltaApplied: inFlight } : {}) });
         }
     }
 }

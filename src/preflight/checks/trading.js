@@ -53,9 +53,15 @@ async function checkGiveBalance(ctx, noun) {
         } else {
             ctx.markRun(FINDING_CODES.BALANCE_INSUFFICIENT);
             if (!numeric.gte(balance, giveAmount)) {
+                // §4.7 netting, same treatment as the SEND check.
+                const inFlight = ctx.deltaApplied(giveTick);
+                const netted = numeric.isPositive(inFlight);
                 ctx.addFinding(FINDING_CODES.BALANCE_INSUFFICIENT, 'error',
-                    `Balance of ${giveTick} (${balance}) does not cover the give amount (${giveAmount}).`,
-                    { tick: giveTick, balance, giveAmount });
+                    netted
+                        ? `Balance of ${giveTick} (${balance} after ${inFlight} already committed from this wallet) `
+                            + `does not cover the give amount (${giveAmount}).`
+                        : `Balance of ${giveTick} (${balance}) does not cover the give amount (${giveAmount}).`,
+                    { tick: giveTick, balance, giveAmount, ...(netted ? { localDeltaApplied: inFlight } : {}) });
             }
         }
     }

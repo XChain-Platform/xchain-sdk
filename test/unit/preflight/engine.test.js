@@ -155,6 +155,44 @@ describe('pre-flight engine', function () {
             expect(r.verdict).to.equal('fail');
         });
 
+        //  / §4.7. A dry-run says valid because the CONFIRMED balance
+        // covers the send; only the wallet knows another window already
+        // committed the same funds. Flattening that to info made the whole
+        // reservation ledger invisible in the verdict, so the second window of
+        // a live double-spend read "Looks good".
+        it('Tier-1 valid degrades a localDelta-derived shortfall to warning, not info', async function () {
+            const sdk = mockSdk({ explorerSpec: {
+                getToken: () => ({ tick: 'JDOG', divisible: 0 }),
+                getBalances: () => [{ tick: 'JDOG', amount: '1000' }],
+                getFeeQuote: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 5 }),
+            } });
+            const r = await sdk.preflight('SEND|0|JDOG|600|addr', {
+                source: 's', preflight: 'report', localDeltas: [{ tick: 'JDOG', amount: '600' }],
+            });
+            const bal = r.findings.find(f => f.code === 'BALANCE_INSUFFICIENT');
+            expect(bal.severity).to.equal('warning');
+            expect(bal._downgradedBy).to.equal('dryrun-valid-local-delta');
+            expect(bal.data.localDeltaApplied).to.equal('600');
+            expect(bal.message).to.contain('already committed from this wallet');
+            expect(r.verdict).to.equal('warn');       // NOT 'pass' - no clean "Looks good"
+        });
+
+        it('Tier-1 valid still flattens a shortfall with no localDeltas behind it', async function () {
+            // Same shape without the §4.7 netting: the client and the network
+            // disagree about confirmed state, and the network wins as before.
+            const sdk = mockSdk({ explorerSpec: {
+                getToken: () => ({ tick: 'JDOG', divisible: 0 }),
+                getBalances: () => [{ tick: 'JDOG', amount: '100' }],
+                getFeeQuote: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 5 }),
+            } });
+            const r = await sdk.preflight('SEND|0|JDOG|600|addr', { source: 's', preflight: 'report' });
+            const bal = r.findings.find(f => f.code === 'BALANCE_INSUFFICIENT');
+            expect(bal.severity).to.equal('info');
+            expect(bal._downgradedBy).to.equal('dryrun-valid');
+            expect(bal.data).to.not.have.property('localDeltaApplied');
+            expect(r.verdict).to.equal('pass');
+        });
+
         it('Tier-1 unavailable leaves Tier-2 errors standing', async function () {
             const sdk = mockSdk({ explorerSpec: {
                 getToken: () => notFound(),

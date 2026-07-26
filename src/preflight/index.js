@@ -163,6 +163,17 @@ function computeVerdict(findings) {
  *     downgrade to info (kept for diagnostics). Warnings stay.
  *   - Tier-1 invalid: authoritative fail. Add the DRYRUN_INVALID error.
  *   - no verdict: Tier-2 stands.
+ *
+ * §4.7 EXCEPTION . Tier-1 is authoritative about CONFIRMED chain
+ * state only. A finding computed from `localDeltas` - the caller's own
+ * reservations and unconfirmed committed spends - describes state the
+ * dry-run cannot see by construction: two approval windows spending the
+ * same balance both dry-run valid, because on-chain each is affordable.
+ * Flattening those to info made the whole reservation ledger inert in the
+ * verdict (the wallet showed "Looks good" on the second window of a live
+ * double-spend), so they degrade to WARNING instead: the network's pass
+ * still outranks a hard client error, but the user is not told the
+ * payment is clean when their own wallet has already committed the funds.
  */
 function applyTier1(findings, tier1) {
     if (!tier1) return findings;
@@ -171,8 +182,10 @@ function applyTier1(findings, tier1) {
             message: 'The network dry-run accepted this action.', data: {} });
         for (const f of findings) {
             if (f.severity === 'error' && f.source === 'client') {
-                f.severity = 'info';
-                f._downgradedBy = 'dryrun-valid';
+                const localOnly = !!(f.data && f.data.localDeltaApplied);
+                f.severity = localOnly ? 'warning' : 'info';
+                f._downgradedBy = localOnly ? 'dryrun-valid-local-delta' : 'dryrun-valid';
+                if (localOnly) delete f.overridable;   // warnings carry no override flag (§4.2)
             }
         }
     } else if (tier1.kind === 'verdict' && tier1.valid === false) {
