@@ -224,11 +224,18 @@ class WebSocketClient {
     // parimutuel payout is only ever a projection until the market resolves.
     // Returns the same SUBSCRIBED promise as subscribe(), so reconnect replay
     // covers it automatically.
+    // The channel NAME is bare and the market id rides in `params.action_index`.
+    // Sending a composite 'bet_feed:<index>' is what this helper used to do, and the
+    // server rejects it outright with `Unknown channel`: it validates the name
+    // against a fixed set before ever looking at the entity key
+    // (explorer ChannelManager: entity channels "require params"). Verified live
+    // 2026-07-26 against the running explorer, where the composite form failed
+    // every subscribe, so the whole channel was unreachable from the SDK.
     subscribeBetFeed(feedActionIndex, params) {
         const index = String(feedActionIndex == null ? '' : feedActionIndex).trim();
         if (!/^\d+$/.test(index))
             throw new Error('subscribeBetFeed: feedActionIndex must be a numeric ACTION_INDEX, got ' + JSON.stringify(feedActionIndex));
-        return this.subscribe(['bet_feed:' + index], params);
+        return this.subscribe(['bet_feed'], Object.assign({}, params, { action_index: index }));
     }
 
     // Stop following a betting market. Mirrors subscribeBetFeed's channel name
@@ -237,7 +244,11 @@ class WebSocketClient {
         const index = String(feedActionIndex == null ? '' : feedActionIndex).trim();
         if (!/^\d+$/.test(index))
             throw new Error('unsubscribeBetFeed: feedActionIndex must be a numeric ACTION_INDEX, got ' + JSON.stringify(feedActionIndex));
-        return this.unsubscribe(['bet_feed:' + index], params);
+        // Same shape as subscribeBetFeed, and it MUST stay identical: the
+        // tracked-subscription filter in unsubscribe() matches on the channel array
+        // and the params, so a mismatch here would leave the entry in
+        // `_subscriptions` and silently re-subscribe on the next reconnect.
+        return this.unsubscribe(['bet_feed'], Object.assign({}, params, { action_index: index }));
     }
 
     // Unsubscribe from channels

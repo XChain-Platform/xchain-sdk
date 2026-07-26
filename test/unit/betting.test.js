@@ -537,16 +537,32 @@ describe('BET client surfaces ', function () {
         ]);
     });
 
-    it('builds the bet_feed websocket channel and validates the index', function () {
+    it('builds the bet_feed websocket subscription the way the server accepts it', function () {
         const WebSocketClient = require('../../src/websocket.js');
         const sent = [];
         const client = Object.create(WebSocketClient.prototype);
-        client.subscribe = channels => { sent.push(['sub', channels]); };
-        client.unsubscribe = channels => { sent.push(['unsub', channels]); };
+        client.subscribe = (channels, params) => { sent.push(['sub', channels, params]); };
+        client.unsubscribe = (channels, params) => { sent.push(['unsub', channels, params]); };
 
         client.subscribeBetFeed(1234);
         client.unsubscribeBetFeed('1234');
-        expect(sent).to.deep.equal([['sub', ['bet_feed:1234']], ['unsub', ['bet_feed:1234']]]);
+
+        // BARE channel name, market id in params. This assertion previously pinned
+        // the composite form `['bet_feed:1234']`, which the explorer rejects with
+        // `Unknown channel` before it ever looks at the entity key: entity channels
+        // are validated against a fixed name set and take their key from params
+        // (ChannelManager). A mock-only test could assert either shape happily,
+        // which is exactly how the wrong one shipped; test/sdk/betWebsocket.sdk.test.js
+        // is the counterpart that talks to the real server.
+        expect(sent).to.deep.equal([
+            ['sub',   ['bet_feed'], { action_index: '1234' }],
+            ['unsub', ['bet_feed'], { action_index: '1234' }],
+        ]);
+
+        // Caller params survive alongside the id rather than being replaced.
+        sent.length = 0;
+        client.subscribeBetFeed(7, { types: ['BET'] });
+        expect(sent).to.deep.equal([['sub', ['bet_feed'], { types: ['BET'], action_index: '7' }]]);
 
         // A bad index would subscribe to a channel that never fires, and the
         // page would just sit there looking live.
