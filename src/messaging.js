@@ -78,6 +78,48 @@ const HKDF_INFO_ECDH  = Buffer.from('xchain-ecdh-session-v1', 'utf8');
 
 const HKDF_KEY_LEN = 32;        // AES-256 key
 
+/**
+ * HKDF-SHA256 (RFC 5869), extract-then-expand.
+ *
+ * Node's `crypto.hkdfSync` does the same thing, but it does NOT exist in the
+ * browser crypto shims the wallet's web / extension / desktop-renderer shells
+ * build against, where it throws "crypto2.hkdfSync is not a function". That
+ * killed every v1 encrypt AND decrypt in a browser - which is the whole
+ * messaging feature outside Node . HMAC-SHA256 is present in those
+ * shims, so the two RFC 5869 steps are done here instead: extract a PRK with
+ * the salt as the HMAC key, then expand it one 32-byte block at a time.
+ *
+ * The output is byte-identical to `crypto.hkdfSync('sha256', ...)`; a unit
+ * test pins that equality against the builtin wherever the builtin exists, so
+ * a browser-derived key and a Node-derived key can never diverge - they have
+ * to agree, or a message encrypted in one cannot be read in the other.
+ *
+ * @param {Buffer} ikm    input keying material (the raw ECDH product)
+ * @param {Buffer} salt   protocol salt
+ * @param {Buffer} info   per-method domain-separation label
+ * @param {number} length bytes of key material to produce
+ * @returns {Buffer}
+ */
+function hkdfSha256(ikm, salt, info, length) {
+    // Extract: PRK = HMAC(salt, ikm). RFC 5869 defines an all-zero salt of
+    // hash length when none is given; ours is always supplied.
+    const prk = crypto.createHmac('sha256', salt).update(ikm).digest();
+    // Expand: T(n) = HMAC(PRK, T(n-1) || info || n), concatenated and truncated.
+    const blocks = Math.ceil(length / 32);
+    if (blocks > 255) throw new SDKMessagingError('hkdfSha256: requested length exceeds RFC 5869 maximum');
+    let prev = Buffer.alloc(0);
+    const out = [];
+    for (let i = 1; i <= blocks; i++) {
+        prev = crypto.createHmac('sha256', prk)
+            .update(prev)
+            .update(info)
+            .update(Buffer.from([i]))
+            .digest();
+        out.push(prev);
+    }
+    return Buffer.concat(out).subarray(0, length);
+}
+
 
 class MessagingUtils {
 
@@ -590,6 +632,15 @@ class MessagingUtils {
 
         let rawMessages = await explorer.getMessages(address, queryType, paginationOpts);
 
+        // The explorer serves every list endpoint as `{ data: [...], total }`,
+        // and `_get` hands that body back untouched. Requiring a bare array here
+        // meant a real explorer response always failed the check and the inbox
+        // returned EMPTY - so a MESSAGE that is on-chain, valid and addressed to
+        // you was invisible in the wallet, silently . Accept both shapes:
+        // a bare array is what the unit-test doubles return.
+        if (rawMessages && !Array.isArray(rawMessages) && Array.isArray(rawMessages.data))
+            rawMessages = rawMessages.data;
+
         if (!rawMessages || !Array.isArray(rawMessages)) return [];
 
         let results = [];
@@ -760,9 +811,13 @@ class MessagingUtils {
     // guarantees cross-method domain separation (fix #3520).
     _hkdfFromEcdh(privateKey, publicKey, info) {
         let raw = this._ecdhProduct(privateKey, publicKey);
-        let derived = crypto.hkdfSync('sha256', raw, HKDF_SALT, info, HKDF_KEY_LEN);
-        // hkdfSync returns an ArrayBuffer; normalize to a Buffer.
-        return Buffer.from(derived);
+        return hkdfSha256(raw, HKDF_SALT, info, HKDF_KEY_LEN);
+    }
+
+    // Test-only handle on the module-private HKDF, so the suite can pin it
+    // against Node's builtin on arbitrary salt/info/length vectors.
+    _hkdfSha256Test(ikm, salt, info, length) {
+        return hkdfSha256(ikm, salt, info, length);
     }
 
     // v1 ECIES key (info = xchain-ecies-v1)

@@ -193,6 +193,52 @@ describe('MessagingUtils @crypto @regression', function () {
     // -----------------------------------------------------------------------
     describe('KDF v1 (HKDF-SHA256) versioning and domain separation', function () {
 
+        // : the derivation used to call crypto.hkdfSync, which does not
+        // exist in the browser crypto shims the wallet shells build against -
+        // it threw "crypto2.hkdfSync is not a function" and killed every v1
+        // encrypt and decrypt outside Node, i.e. messaging in the whole app.
+        // It is now RFC 5869 over createHmac, which those shims do provide.
+        // This pins the two to the same bytes wherever the builtin exists: a
+        // key derived in the browser and one derived in Node MUST agree, or a
+        // message encrypted in one cannot be read in the other.
+        it('[REGRESSION] derives byte-identically to the Node crypto.hkdfSync builtin', function () {
+            if (typeof crypto.hkdfSync !== 'function') this.skip();
+            const alice = keypair(), bob = keypair();
+            const product = msg._ecdhProduct(alice.privateKey, bob.publicKey);
+            const cases = [
+                ['xchain-messaging-kdf-v1', 'xchain-ecies-v1', 32],
+                ['xchain-messaging-kdf-v1', 'xchain-ecdh-session-v1', 32],
+                ['salt', 'info', 64],   // multi-block expand
+                ['', '', 16],           // empty salt/info, truncated output
+            ];
+            for (const [salt, info, len] of cases) {
+                const builtin = Buffer.from(crypto.hkdfSync(
+                    'sha256', product, Buffer.from(salt, 'utf8'), Buffer.from(info, 'utf8'), len,
+                ));
+                const ours = msg._hkdfSha256Test(
+                    product, Buffer.from(salt, 'utf8'), Buffer.from(info, 'utf8'), len,
+                );
+                expect(ours.length).to.equal(len);
+                expect(ours.toString('hex')).to.equal(builtin.toString('hex'));
+            }
+        });
+
+        it('[REGRESSION] the derivation does not depend on crypto.hkdfSync being present', function () {
+            // Simulates the browser shim: with the builtin removed, the ECIES
+            // key must still derive rather than throwing.
+            const original = crypto.hkdfSync;
+            // eslint-disable-next-line no-undefined
+            crypto.hkdfSync = undefined;
+            try {
+                const alice = keypair(), bob = keypair();
+                const key = msg._deriveEciesKey(alice.privateKey, bob.publicKey);
+                expect(Buffer.isBuffer(key)).to.equal(true);
+                expect(key.length).to.equal(32);
+            } finally {
+                crypto.hkdfSync = original;
+            }
+        });
+
         it('domain separation: same ECDH product derives DIFFERENT keys under ECIES vs ECDH-session', function () {
             // Identical private/public pair feeds both per-method derivations.
             // The distinct HKDF `info` labels MUST yield different keys.
@@ -401,6 +447,33 @@ describe('MessagingUtils @crypto @regression', function () {
             expect(out).to.have.length(1);
             expect(out[0].text).to.equal('open msg');
             expect(out[0].encrypted).to.equal(false);
+        });
+
+        // : the doubles above return a BARE ARRAY, but a real explorer
+        // serves `{ data: [...], total }` and the client hands that body back
+        // untouched. Requiring an array meant every live response was discarded
+        // and the inbox came back empty - an on-chain, valid MESSAGE addressed
+        // to you was invisible in the wallet, with no error anywhere. Found by
+        // sending a real regtest message that never arrived.
+        it('[REGRESSION] reads the live explorer envelope { data: [...] }, not just a bare array', async function () {
+            const explorer = explorerReturning({
+                total: 1,
+                data: [
+                    { source: 'A', destination: 'B', plaintext_message: 'open msg', tx_hash: 't', block_index: 1 }
+                ],
+            });
+            const out = await msg.getMessages('B', { type: 'received' }, explorer);
+            expect(out).to.have.length(1);
+            expect(out[0].text).to.equal('open msg');
+        });
+
+        it('[REGRESSION] still returns [] for a response that carries no rows either way', async function () {
+            expect(await msg.getMessages('B', { type: 'received' }, explorerReturning({ total: 0, data: [] })))
+                .to.have.length(0);
+            expect(await msg.getMessages('B', { type: 'received' }, explorerReturning(null)))
+                .to.have.length(0);
+            expect(await msg.getMessages('B', { type: 'received' }, explorerReturning({ error: 'nope' })))
+                .to.have.length(0);
         });
 
         it('decrypts a method-less v2 ECIES message (inferred method) when a wif is supplied', async function () {
