@@ -419,7 +419,8 @@ class XChainSDK {
                 dust:             data.encoder.dust,
                 unconfirmed:      data.encoder.unconfirmed,
                 compressedPubKey: data.encoder.compressedPubKey,
-                customOutputs:    data.encoder.customOutputs
+                customOutputs:    data.encoder.customOutputs,
+                attachPrevTx:     data.encoder.attachPrevTx
             });
             result.psbt     = txResult.psbt;
             result.encoding = txResult.encoding;

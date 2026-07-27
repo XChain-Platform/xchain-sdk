@@ -229,6 +229,11 @@ class EncoderClient {
         if (params.compressedPubKey !== undefined) rpcParams.compressedPubKey = params.compressedPubKey;
         if (params.customOutputs !== undefined)    rpcParams.customOutputs = params.customOutputs;
         if (params.feeQuote !== undefined)         rpcParams.feeQuote = params.feeQuote;
+        // : ask the encoder to attach each segwit input's full previous
+        // transaction. Only a hardware signer needs it (see the encoder's own
+        // note), and it costs a node round trip plus real PSBT weight per
+        // input, so it is opt-in per request rather than always-on.
+        if (params.attachPrevTx !== undefined)     rpcParams.attachPrevTx = params.attachPrevTx;
 
         // D-7: pre-select the funding UTXOs BY ADDRESS before create_tx. Left to
         // its own devices (no `utxos` passed) the encoder resolves the funding set

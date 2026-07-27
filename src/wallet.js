@@ -837,6 +837,21 @@ class WalletUtils {
                     `Input ${i}: PSBT missing both witnessUtxo and nonWitnessUtxo.`);
             }
 
+            // : report the full previous transaction whenever the PSBT
+            // carries one, even alongside a witnessUtxo. This used to be an
+            // else-if, so a PSBT carrying BOTH silently lost its prev tx - and
+            // a hardware signer cannot sign without it, because Ledger derives
+            // the outpoint it signs from those bytes rather than from the
+            // PSBT's own txid. Value and script still come from the witnessUtxo
+            // when present, so nothing that already worked changes; this only
+            // stops information the PSBT contains from being dropped.
+            if (nonWitnessUtxoHex === null && psbtInput.nonWitnessUtxo) {
+                nonWitnessUtxoHex = psbtInput.nonWitnessUtxo.toString('hex');
+                try {
+                    prevTxInfo = serializePrevTx(bitcoin.Transaction.fromBuffer(psbtInput.nonWitnessUtxo));
+                } catch { /* the witnessUtxo already gave us value + script */ }
+            }
+
             const scriptPubKeyHex = scriptPubKeyBuf
                 ? scriptPubKeyBuf.toString('hex')
                 : '';

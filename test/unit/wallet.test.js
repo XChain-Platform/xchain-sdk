@@ -388,6 +388,49 @@ describe('WalletUtils', function() {
             expect(out.address).to.match(/^bcrt1q/);
         });
 
+        // . A PSBT may legally carry BOTH fields for a segwit input, and
+        // the encoder now does exactly that on request, because a hardware
+        // signer cannot sign without the full previous transaction: Ledger
+        // takes the outpoint it signs from those bytes rather than from the
+        // PSBT's own txid. This used to be an else-if, so the prev tx was
+        // silently dropped whenever a witnessUtxo was present - which read from
+        // the outside as "the PSBT does not have one".
+        it('should report the prev tx for a segwit input carrying BOTH utxo fields', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const net = getNetwork('bitcoin-regtest');
+            const kp = wallet.generateKeyPair();
+            const recipient = wallet.generateKeyPair();
+            const inputScript = bitcoin.payments.p2wpkh({ pubkey: kp.publicKey, network: net }).output;
+            const outputScript = bitcoin.payments.p2wpkh({ pubkey: recipient.publicKey, network: net }).output;
+
+            const psbt = new bitcoin.Psbt({ network: net });
+            const prevTx = new bitcoin.Transaction();
+            prevTx.version = 2;
+            prevTx.addInput(Buffer.alloc(32), 0xffffffff, 0xffffffff, Buffer.from([0x51]));
+            prevTx.addOutput(inputScript, 100_000);
+            psbt.addInput({
+                hash: prevTx.getId(),
+                index: 0,
+                sequence: 0xfffffffd,
+                witnessUtxo: { script: inputScript, value: 100_000 },
+                nonWitnessUtxo: prevTx.toBuffer(),
+            });
+            psbt.addOutput({ script: outputScript, value: 90_000 });
+
+            const inp = wallet.decomposePsbt(psbt.toHex()).inputs[0];
+            // Both are reported. Value and script still come from the
+            // witnessUtxo, so nothing that already worked changes.
+            expect(inp.witnessUtxoScriptHex).to.equal(inputScript.toString('hex'));
+            expect(inp.nonWitnessUtxoHex).to.equal(prevTx.toBuffer().toString('hex'));
+            expect(inp.value).to.equal(100_000);
+            expect(inp.scriptType).to.equal('p2wpkh');
+            // And the parsed form, which is what the Trezor lane reads. It is
+            // gated on p2pkh there, so this is inert for that signer rather
+            // than a behaviour change to it.
+            expect(inp.prevTxInfo).to.be.an('object');
+            expect(inp.prevTxInfo.hash).to.equal(prevTx.getId());
+        });
+
         it('should decompose a P2PKH PSBT (dogecoin-regtest)', function() {
             const wallet = new WalletUtils('dogecoin-regtest');
             const net = getNetwork('dogecoin-regtest');
