@@ -585,4 +585,74 @@ describe('BET client surfaces ', function () {
             expect(s.workflows[name]).to.be.a('function', name);
     });
 
+    describe('projectFeedCreateFee (decision F duration pricing)', function () {
+        const DAY = 86400;
+        const days = n => Math.round(n * DAY);
+
+        it('matches the §10 value table', function () {
+            const b = new BettingHelpers();
+            // Quoted from the spec, and verified on-chain by the P6 E9 drill
+            // against fees.xchain_amount.
+            const table = [
+                [44,  '0.00000000'],   // inside the 90-day free window
+                [90,  '0.00000000'],   // the boundary itself is still free
+                [91,  '0.00550000'],
+                [120, '0.16500000'],
+                [365, '1.51250000'],
+                [730, '3.52000000']    // both maxima: 1y deadline + 1y refund window
+            ];
+            for (const [d, fee] of table)
+                expect(b.projectFeedCreateFee({ durationSeconds: days(d) }).fee, `${d} days`).to.equal(fee);
+        });
+
+        it('rounds the day count HALF-UP, never flooring', function () {
+            const b = new BettingHelpers();
+            // The consensus trap. On-chain the count is bcdiv(seconds, 86400, 0),
+            // which rounds half-up: 90.4 -> 90 (free), 90.5 -> 91 (charged). A
+            // projection that floored would call all three of these free and
+            // under-quote the user by a full day's fee.
+            expect(b.projectFeedCreateFee({ durationSeconds: days(90.4) }).free, '90.4 days').to.equal(true);
+            expect(b.projectFeedCreateFee({ durationSeconds: days(90.5) }).fee, '90.5 days').to.equal('0.00550000');
+            expect(b.projectFeedCreateFee({ durationSeconds: days(90.6) }).fee, '90.6 days').to.equal('0.00550000');
+        });
+
+        it('measures the feed\'s full life, not the deadline', function () {
+            const b = new BettingHelpers();
+            const blockTime = 1_700_000_000;
+            // A 90-day DEADLINE with a 3600s refund window is a 90-day life and
+            // free; the same deadline with a one-year window is not. Pricing off
+            // DEADLINE alone would call both free.
+            const short = b.projectFeedCreateFee({
+                deadline: blockTime + days(90) - 3600, refundWindow: 3600, blockTime });
+            expect(short.free, 'short refund window stays inside the free window').to.equal(true);
+
+            const long = b.projectFeedCreateFee({
+                deadline: blockTime + days(90), refundWindow: days(365), blockTime });
+            expect(long.days, 'life spans deadline + refund window').to.equal(455);
+            expect(long.fee, '(455 - 90) x 550 x 0.00001').to.equal('2.00750000');
+        });
+
+        it('reports the breakdown a wallet needs to explain the charge', function () {
+            const b = new BettingHelpers();
+            const p = b.projectFeedCreateFee({ durationSeconds: days(120) });
+            expect(p.days).to.equal(120);
+            expect(p.billableDays).to.equal(30);
+            expect(p.free).to.equal(false);
+            expect(p.durationSeconds).to.equal(days(120));
+        });
+
+        it('honours per-chain schedule overrides', function () {
+            const b = new BettingHelpers();
+            const p = b.projectFeedCreateFee({
+                durationSeconds: days(100), freeDays: 0, perDay: 1000, gasPrice: '0.001' });
+            expect(p.fee, '100 x 1000 x 0.001').to.equal('100.00000000');
+        });
+
+        it('rejects a market with no life and demands usable inputs', function () {
+            const b = new BettingHelpers();
+            expect(() => b.projectFeedCreateFee({ durationSeconds: 0 })).to.throw(/positive number of seconds/);
+            expect(() => b.projectFeedCreateFee({})).to.throw(/durationSeconds/);
+        });
+    });
+
 });

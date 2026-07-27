@@ -537,6 +537,65 @@ class BettingHelpers {
         };
     }
 
+    // Project what OPENING a market will cost, before the user signs it.
+    //
+    // Creation is duration-priced on the ORDER/DISPENSER expiration mechanism
+    // (spec decision F), measured on the feed's full pass-eligible life,
+    // `expire_at - BLOCK_TIME` -- NOT on DEADLINE. Short-lived markets, and
+    // anyone trying the system out, create for nothing:
+    //
+    //     fee = max(0, days - freeDays) x perDay x gasPrice
+    //
+    // THE TRAP THIS EXISTS TO AVOID: the on-chain day count is
+    // bcdiv(seconds, 86400, 0), which rounds HALF-UP rather than flooring. A
+    // projection that floors disagrees with the chain at every fractional-day
+    // boundary and quietly under-quotes by a whole day's fee (90.6 days is
+    // billed as 91, not 90). Half-up is spelled out below as floor(x + 0.5)
+    // rather than delegated to a rounding mode, so it cannot drift with mathjs
+    // configuration.
+    //
+    // Defaults are the shipped BTC/LTC/DOGE schedule. Pass overrides if a chain
+    // ever diverges; the caller can read them from the coin config.
+    projectFeedCreateFee({
+        deadline, refundWindow, blockTime, durationSeconds,
+        freeDays = 90, perDay = 550, gasPrice = '0.00001'
+    } = {}) {
+        const ctx = 'betting.projectFeedCreateFee';
+        const bn = mathjs.bignumber;
+
+        let secs;
+        if (isSet(durationSeconds)) {
+            secs = Number(durationSeconds);
+        } else {
+            for (const [name, v] of [['deadline', deadline], ['blockTime', blockTime]])
+                if (!isSet(v))
+                    fail('MISSING_REQUIRED_FIELD',
+                        `${ctx}: pass durationSeconds, or ${name} together with deadline/refundWindow/blockTime`,
+                        { field: name });
+            const window = isSet(refundWindow) ? Number(refundWindow) : BET_LIMITS.DEFAULT_BET_REFUND_WINDOW;
+            secs = (Number(deadline) + window) - Number(blockTime);
+        }
+
+        if (!Number.isFinite(secs) || secs <= 0)
+            fail('INVALID_FIELD_VALUE',
+                `${ctx}: the market's life must be a positive number of seconds (got ${secs})`,
+                { field: 'durationSeconds', value: secs });
+
+        // Half-up, matching bcdiv(seconds, 86400, 0) on-chain.
+        const days     = mathjs.floor(mathjs.add(mathjs.divide(bn(secs), bn(86400)), bn(0.5)));
+        const freeBn   = bn(Number(freeDays));
+        const billable = days.gt(freeBn) ? mathjs.subtract(days, freeBn) : bn(0);
+        const fee      = mathjs.multiply(mathjs.multiply(billable, bn(Number(perDay))), bn(String(gasPrice)));
+
+        return {
+            durationSeconds: secs,
+            days:            Number(mathjs.format(days, { notation: 'fixed', precision: 0 })),
+            billableDays:    Number(mathjs.format(billable, { notation: 'fixed', precision: 0 })),
+            free:            !billable.gt(bn(0)),
+            fee:             mathjs.format(fee, { notation: 'fixed', precision: 8 })
+        };
+    }
+
     _actionIndex(value, field, ctx) {
         if (!isSet(value))
             fail('MISSING_REQUIRED_FIELD', `${ctx}: ${field} is required`, { field });
