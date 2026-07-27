@@ -1926,6 +1926,12 @@ export interface SubmitActionOpts {
     pollInterval?: number;
     /** Reject if action status is 'invalid' (default: true) */
     requireValid?: boolean;
+    /** Explorer client the indexer wait polls instead of the SDK's own. */
+    explorer?: any;
+    /** Host/URL to build that explorer client from (with explorerPort); for isolated stacks. */
+    explorerUrl?: string;
+    /** Port for explorerUrl. */
+    explorerPort?: number;
     /** Progress callback: called at each lifecycle step */
     onProgress?: (step: string, data: any) => void;
 }
@@ -1956,6 +1962,17 @@ export interface WaitForActionOpts {
     pollInterval?: number;
     /** Reject if action status is 'invalid' (default: true) */
     requireValid?: boolean;
+    /**
+     * Explorer client to poll INSTEAD of this SDK's own. For isolated stacks
+     * whose explorer is not the one hub discovery advertises: without it the
+     * wait polls a stranger's explorer and always times out. An overridden wait
+     * skips the WebSocket fast path (it follows the other stack) and polls only.
+     */
+    explorer?: any;
+    /** Host/URL to build that explorer client from (with explorerPort). */
+    explorerUrl?: string;
+    /** Port for explorerUrl. */
+    explorerPort?: number;
 }
 
 export interface EstimateFeeResult {

@@ -1698,13 +1698,16 @@ class XChainSDK {
 
     // Wait for a transaction to be indexed by the explorer
     // Returns the action object when found, or rejects on timeout
-    // opts: { timeout, pollInterval, requireValid }
+    // opts: { timeout, pollInterval, requireValid, explorer | explorerUrl+explorerPort }
+    // The explorer override targets a stack other than the one this SDK
+    // discovered, for isolated venues with no colocated explorer .
     async waitForAction(txid, opts) {
         let waiter = new ActionWaiter(this);
         return waiter.waitForTxid(txid, opts);
     }
 
-    // Wait for a specific action_index to appear in the explorer
+    // Wait for a specific action_index to appear in the explorer.
+    // Same explorer override as waitForAction.
     async waitForActionIndex(actionIndex, opts) {
         let waiter = new ActionWaiter(this);
         return waiter.waitForActionIndex(actionIndex, opts);

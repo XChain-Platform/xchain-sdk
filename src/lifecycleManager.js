@@ -42,6 +42,9 @@ class LifecycleManager {
     //   strictStatus    - with requireValid, also refuse to ASSUME validity: reject
     //                     ACTION_STATUS_UNKNOWN when no indexer status could be read
     //                     for the action (default false; see actionWaiter, )
+    //   explorer        - explorer client the indexer wait polls instead of the SDK's
+    //   explorerUrl     - host/URL (with explorerPort) to build that client from;
+    //                     for isolated stacks with no colocated explorer 
     //   onProgress      - callback(step, data) for lifecycle step notifications
     //
     // Returns: {
@@ -49,7 +52,8 @@ class LifecycleManager {
     //   signed { txHex, txid, psbtHex }, spentInputs [{ txid, vout }]
     // }
     async submitAction(actionData, encoderOpts = {}, opts = {}) {
-        let { wif, waitForIndexer, timeout, pollInterval, requireValid, strictStatus, onProgress } = opts;
+        let { wif, waitForIndexer, timeout, pollInterval, requireValid, strictStatus, onProgress,
+              explorer, explorerUrl, explorerPort } = opts;
         if (!wif) throw new SDKConfigError('MISSING_WIF', 'submitAction requires opts.wif (WIF private key)');
         if (waitForIndexer === undefined) waitForIndexer = true;
 
@@ -171,12 +175,18 @@ class LifecycleManager {
         // Step 5: Wait for indexer confirmation
         if (waitForIndexer) {
             progress('waiting', { txid: finalTxid });
+            // The explorer override rides through to the waiter so an isolated
+            // venue is waited on where it is actually indexed, not on whatever
+            // explorer hub discovery advertised .
             let waiter = new ActionWaiter(this.sdk);
             let indexed = await waiter.waitForTxid(finalTxid, {
                 timeout:      timeout || 120000,
                 pollInterval: pollInterval || 2000,
                 requireValid: requireValid !== false,
-                strictStatus: strictStatus === true
+                strictStatus: strictStatus === true,
+                explorer:     explorer,
+                explorerUrl:  explorerUrl,
+                explorerPort: explorerPort
             });
             result.indexed = indexed;
             progress('confirmed', { txid: finalTxid, action: indexed });

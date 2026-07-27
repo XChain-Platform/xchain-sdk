@@ -38,8 +38,53 @@ function readStatus(action) {
 
 class ActionWaiter {
 
-    constructor(sdk) {
+    // opts.explorer     - an explorer client to poll INSTEAD of sdk.explorer
+    // opts.explorerUrl  - host/URL to build one from (with opts.explorerPort)
+    //
+    // Why: the waiter used to poll sdk.explorer unconditionally, and hub
+    // discovery points that at whatever explorer the shared stack advertises.
+    // On an ISOLATED regtest venue (its own node/decoder/indexer, no colocated
+    // explorer) every SDK-driven action then polls a stranger's explorer that
+    // will never see the transaction, and the whole run dies on
+    // CONFIRMATION_TIMEOUT with nothing wrong on-chain (, from the
+    //  A2 drill). Injecting the target lets one driver keep the shared
+    // SDK for encoding/broadcast while waiting on the venue that actually
+    // indexed the transaction.
+    constructor(sdk, opts = {}) {
         this.sdk = sdk;
+        this.explorer = ActionWaiter._buildExplorer(sdk, opts);
+    }
+
+    // Explorer override from { explorer } or { explorerUrl, explorerPort },
+    // or null when neither is supplied. Network/timeout default to the SDK's
+    // own so an override only changes the TARGET, never the coin prefix.
+    static _buildExplorer(sdk, opts) {
+        if (!opts) return null;
+        if (opts.explorer) return opts.explorer;
+        if (!opts.explorerUrl && !opts.explorerPort) return null;
+        const ExplorerClient = require('./explorer.js');
+        let sdkOpts = (sdk && sdk.options) || {};
+        return new ExplorerClient({
+            network:      opts.network      || sdkOpts.network || (sdk && sdk.network),
+            explorerUrl:  opts.explorerUrl  || 'localhost',
+            explorerPort: opts.explorerPort !== undefined ? parseInt(opts.explorerPort) : undefined,
+            timeout:      opts.explorerTimeout || sdkOpts.timeout
+        });
+    }
+
+    // Explorer this wait polls: per-call override, then the constructor
+    // override, then the SDK's own (which throws when unconfigured).
+    _resolveExplorer(opts) {
+        let perCall = ActionWaiter._buildExplorer(this.sdk, opts);
+        return perCall || this.explorer || this.sdk._requireExplorer();
+    }
+
+    // True when this wait reads an explorer other than the SDK's own. The
+    // SDK's WebSocket follows the SDK's explorer, so its events describe a
+    // DIFFERENT stack: a targeted wait could otherwise settle from a foreign
+    // event. Overridden waits poll only.
+    _explorerOverridden(opts) {
+        return !!(ActionWaiter._buildExplorer(this.sdk, opts) || this.explorer);
     }
 
     // Wait for a transaction (by tx_hash) to be indexed by the explorer
@@ -52,6 +97,12 @@ class ActionWaiter {
     //   actionIndex  - when supplied, status is resolved from that specific action
     //                  only, preventing a neighboring action's status from leaking
     //                  into the result (relevant for multi-action transactions)
+    //   explorer     - explorer client to poll instead of the SDK's own; or pass
+    //                  explorerUrl (+ explorerPort) to build one. Needed on
+    //                  isolated stacks whose explorer is not the one hub
+    //                  discovery advertises . An overridden wait skips
+    //                  the SDK WebSocket fast path (it follows the OTHER stack)
+    //                  and polls only.
     //   strictStatus - if true, requireValid also refuses to ASSUME validity: a wait
     //                  that could never read a status for the action rejects
     //                  ACTION_STATUS_UNKNOWN at the timeout instead of resolving.
@@ -70,6 +121,11 @@ class ActionWaiter {
         let pollInterval = opts.pollInterval || 2000;
         let requireValid = opts.requireValid !== false;
         let strictStatus = opts.strictStatus === true;
+        // Resolve ONCE, outside the poll loop: a per-call explorerUrl would
+        // otherwise build a fresh client (and a fresh keep-alive agent) on
+        // every poll tick.
+        let explorerTarget = this._resolveExplorer(opts);
+        let useWebSocket   = !this._explorerOverridden(opts);
 
         return new Promise((resolve, reject) => {
             let settled  = false;
@@ -113,7 +169,7 @@ class ActionWaiter {
             let poll = async () => {
                 if (settled) return;
                 try {
-                    let explorer = this.sdk._requireExplorer();
+                    let explorer = explorerTarget;
                     // The explorer transaction endpoint keys on type 'tx_hash' (not 'hash')
                     // and returns { tx_hash, block_index, actions: [{ action, status, ... }], ... }.
                     // Per-action status is prefixed, e.g. "valid" / "invalid: insufficient funds (FEE)".
@@ -188,7 +244,7 @@ class ActionWaiter {
 
             // Try WebSocket fast path (if connected). A live WS emits one NEW_ACTION
             // per action in the tx.
-            if (this.sdk.ws && this.sdk.ws.isConnected()) {
+            if (useWebSocket && this.sdk.ws && this.sdk.ws.isConnected()) {
                 let handler = (msg) => {
                     if (!(msg && msg.data && msg.data.tx_hash === txid)) return;
 
@@ -249,10 +305,12 @@ class ActionWaiter {
         });
     }
 
-    // Wait for a specific action_index to appear in the explorer
+    // Wait for a specific action_index to appear in the explorer.
+    // Accepts the same explorer / explorerUrl override as waitForTxid.
     async waitForActionIndex(actionIndex, opts = {}) {
         let timeout      = opts.timeout || 120000;
         let pollInterval = opts.pollInterval || 2000;
+        let explorerTarget = this._resolveExplorer(opts);
 
         return new Promise((resolve, reject) => {
             let settled = false;
@@ -277,7 +335,7 @@ class ActionWaiter {
             let poll = async () => {
                 if (settled) return;
                 try {
-                    let explorer = this.sdk._requireExplorer();
+                    let explorer = explorerTarget;
                     let result = await explorer.getAction(actionIndex);
                     if (result && result.action_index !== undefined) {
                         settle(null, result);
