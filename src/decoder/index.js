@@ -35,12 +35,17 @@ const { actionDisplayLabel } = require('./actionDisplayLabel.js');
 const { ACTION_ALIASES } = require('./aliases.js');
 const hardening = require('./hardening.js');
 const { decodeActionFromPsbt, decodeActionStringFromPsbt } = require('../cosigner/psbtActionDecode.js');
+// §5.3.2 companion to decodeActionFromPsbt: that one cross-checks an INLINE
+// OP_RETURN action, this one covers the chunk lanes it fails closed on.
+const { verifyCarrierScripts, REASONS: CARRIER_REASONS } = require('../carrier/verifyCarrierScripts.js');
 
 module.exports = {
     parse,
     describe,
     decodeActionFromPsbt,
     decodeActionStringFromPsbt,
+    verifyCarrierScripts,
+    CARRIER_REASONS,
     actionDisplayLabel,
     ACTION_ALIASES,
     BATCH_ACTION_LIMITS,
