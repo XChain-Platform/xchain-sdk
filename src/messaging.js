@@ -40,6 +40,14 @@ const METHOD_ECIES = 1;
 const METHOD_ECDH  = 2;
 const METHOD_AES   = 3;
 
+// Cap on distinct counterparty pubkey lookups per getMessages() sweep. Every
+// cache miss in the ECDH fallback is an explorer round-trip, so an inbox
+// stuffed with undecryptable messages from unique senders would otherwise fan
+// out one network request per sender. Once the budget is spent the sweep stops
+// resolving new counterparties and leaves those rows encrypted; callers that
+// genuinely need a wider sweep raise it with opts.maxPubkeyLookups.
+const ECDH_MAX_PUBKEY_LOOKUPS = 25;
+
 // -----------------------------------------------------------------------------
 //  ECDH key-derivation versioning (fix #3520)
 //
@@ -118,6 +126,21 @@ function hkdfSha256(ikm, salt, info, length) {
         out.push(prev);
     }
     return Buffer.concat(out).subarray(0, length);
+}
+
+/**
+ * Resolve a caller-supplied ECDH pubkey-lookup budget to a usable count.
+ * 0 disables the ECDH fallback's network lookups entirely and Infinity opts
+ * out of the cap; anything not a non-negative number falls back to the default
+ * so a bad option can never widen the budget.
+ *
+ * @param {*} value  opts.maxPubkeyLookups as supplied by the caller
+ * @returns {number}
+ */
+function normalizeLookupBudget(value) {
+    if (value === undefined || value === null) return ECDH_MAX_PUBKEY_LOOKUPS;
+    if (typeof value !== 'number' || Number.isNaN(value) || value < 0) return ECDH_MAX_PUBKEY_LOOKUPS;
+    return Math.floor(value);   // Infinity floors to Infinity, so "no cap" survives
 }
 
 
@@ -605,6 +628,11 @@ class MessagingUtils {
      * @param {number} [opts.limit] - Pagination limit
      * @param {number} [opts.page] - Pagination page
      * @param {string} [opts.sortorder] - Sort order
+     * @param {number} [opts.maxPubkeyLookups=25] - Cap on distinct counterparty
+     *        pubkey lookups the ECDH fallback may make for this call (per
+     *        explorer, so getAllMessages spends the budget once per chain).
+     *        Rows past the cap stay encrypted. 0 disables ECDH lookups,
+     *        Infinity removes the cap.
      * @param {Object} explorer - ExplorerClient instance
      * @returns {Promise<Array<{ from: string, to: string, text: string|null, bytes: Buffer|null, encrypted: boolean, method: number|null, txid: string, block: number, timestamp: number }>>}
      *
@@ -644,10 +672,14 @@ class MessagingUtils {
         if (!rawMessages || !Array.isArray(rawMessages)) return [];
 
         let results = [];
-        // Per-call cache of counterparty address -> resolved pubkey, so an
-        // inbox sweep with several ECDH messages from the same sender only
-        // hits the pubkey endpoint once.
-        let pubkeyCache = new Map();
+        // Per-call pubkey resolution state for the ECDH fallback. `cache` maps
+        // counterparty address -> resolved pubkey (null included, so an
+        // unresolvable sender costs one lookup no matter how many messages it
+        // sent), and `remaining` is the network-lookup budget for cache misses.
+        let pubkeyCache = {
+            cache: new Map(),
+            remaining: normalizeLookupBudget(opts.maxPubkeyLookups)
+        };
         for (let msg of rawMessages) {
             // MESSAGE v2 carries no ENCRYPTION_METHOD on the wire; absence implies
             // ECIES (1) by protocol. The indexer stamps 1 for v2 rows, but legacy
@@ -735,18 +767,24 @@ class MessagingUtils {
      * @param {string} address        the inbox address being read
      * @param {string} wif            our private key
      * @param {Object} explorer       explorer client for pubkey lookup
-     * @param {Map<string,string|null>} pubkeyCache  per-call counterparty pubkey cache
+     * @param {{cache: Map<string,string|null>, remaining: number}} pubkeyCache
+     *        per-call pubkey cache plus the remaining network-lookup budget
      * @returns {Promise<Buffer|null>}
      */
     async _tryEcdhDecrypt(msg, address, wif, explorer, pubkeyCache) {
         let counterparty = msg.source === address ? msg.destination : msg.source;
         if (!counterparty) return null;
 
-        let pubkey = pubkeyCache.get(counterparty);
+        let pubkey = pubkeyCache.cache.get(counterparty);
         if (pubkey === undefined) {
+            // Budget spent: give up on unseen counterparties for the rest of
+            // this sweep instead of paying an explorer round-trip per message.
+            // Already-cached senders keep decrypting normally.
+            if (pubkeyCache.remaining <= 0) return null;
+            pubkeyCache.remaining--;
             try { pubkey = await this.getPublicKey(counterparty, explorer); }
             catch (err) { pubkey = null; }
-            pubkeyCache.set(counterparty, pubkey);
+            pubkeyCache.cache.set(counterparty, pubkey);
         }
         if (!pubkey) return null;
 
