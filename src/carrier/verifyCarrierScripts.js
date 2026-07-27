@@ -156,9 +156,32 @@ function verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString, ne
 
     // [2] CONTENT. Chunks concatenate in the order the encoder emitted them,
     // which is the order the decoder reassembles them in.
+    //
+    // What they concatenate INTO is a compiled script, not the bare action:
+    // the encoder chunks `script.compile([action])` (plus a second push for a
+    // rawData payload), so the reassembled bytes carry the push prefix - 0x4c
+    // 0x9a ahead of a 154-byte SEND, for instance. The decoder strips it by
+    // decompiling the reassembly and reading push[0] (XChainDecoder.js), so
+    // that is what this mirrors. Comparing the raw concatenation to the action
+    // string instead made every real chunked action look tampered: it was
+    // PAYLOAD_MISMATCH for a correctly encoded three-recipient SEND on
+    // regtest, and the wallet's confirm surface refused to open .
+    // The fixtures here had the same gap in mirror image, which is why no test
+    // caught it - they compiled the chunks from the bare action bytes, a shape
+    // the encoder never emits.
     const carried = Buffer.concat(chunks);
+    let payload;
+    try {
+        const decompiled = bitcoin.script.decompile(carried);
+        payload = Array.isArray(decompiled) && Buffer.isBuffer(decompiled[0]) ? decompiled[0] : null;
+    } catch (e) { payload = null; }
+    // Not a decodable push: the chain would read no action out of these bytes
+    // at all, so this is a mismatch rather than a pass.
+    if (!payload)
+        return { ok: false, reason: REASONS.PAYLOAD_MISMATCH, checked: chunks.length };
+
     const intended = Buffer.from(String(actionString == null ? '' : actionString), 'utf8');
-    if (!carried.equals(intended))
+    if (!payload.equals(intended))
         return { ok: false, reason: REASONS.PAYLOAD_MISMATCH, checked: chunks.length };
 
     return { ok: true, reason: null, checked: chunks.length };

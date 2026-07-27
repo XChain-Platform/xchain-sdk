@@ -252,6 +252,15 @@ function decodeSend(p, chainSuffix) {
     const amount = str(p.AMOUNT);
     const dest = str(p.DESTINATION);
     const memo = str(p.MEMO);
+    // SEND v1/v2/v3 pay SEVERAL recipients from one action, so AMOUNT and
+    // DESTINATION arrive as arrays. Described leg by leg: the single-send
+    // wording below reads `firstStr` of each, which on a three-recipient send
+    // produced "Send 7 XCHAIN to <recipient 1>" - a headline naming ONE
+    // recipient and ONE amount for a transaction that pays three, on the
+    // screen whose job is to state what is being authorized. Found by driving
+    // a real multi-recipient send through the wallet on regtest .
+    const multi = decodeMultiSend(p, chainSuffix);
+    if (multi) return multi;
     return {
         summary: `Send ${firstStr(amount) || '?'} ${firstStr(tick) || '?'}${chainSuffix} to ${firstStr(dest) || '?'}`,
         details: [
@@ -268,6 +277,59 @@ function decodeSend(p, chainSuffix) {
                 ? ['Amount is not positive.']
                 : []),
             ...(!dest ? ['Destination is empty.'] : []),
+        ],
+    };
+}
+
+/**
+ * The multi-recipient half of decodeSend: null when this is an ordinary
+ * single-leg send, so the caller keeps its existing wording untouched.
+ *
+ * Totals are per TOKEN, because SEND v2 lets each leg carry its own tick, and
+ * a summary that added 7 XCHAIN to 3 PEPECREATURE would be worse than one that
+ * named a single leg. Amounts are summed as decimal strings via plain numeric
+ * addition only when every leg parses; otherwise the total is omitted rather
+ * than guessed, since a wrong total on a signing screen is the failure mode
+ * this whole path exists to prevent.
+ */
+function decodeMultiSend(p, chainSuffix) {
+    const dests = toArray(p.DESTINATION);
+    if (dests.length < 2) return null;
+    const amounts = toArray(p.AMOUNT);
+    const ticks = toArray(p.TICK);
+    const memos = toArray(p.MEMO);
+    // One TICK/MEMO covers every leg on v1/v3; v2 carries one per leg.
+    const tickAt = (i) => String(ticks.length > 1 ? (ticks[i] ?? '') : (ticks[0] ?? ''));
+    const memoAt = (i) => String(memos.length > 1 ? (memos[i] ?? '') : (memos[0] ?? ''));
+
+    /** @type {Map<string, number|null>} */
+    const totals = new Map();
+    for (let i = 0; i < dests.length; i++) {
+        const tick = tickAt(i) || '?';
+        const n = Number(amounts[i]);
+        const running = totals.has(tick) ? totals.get(tick) : 0;
+        totals.set(tick, running === null || !Number.isFinite(n) ? null : running + n);
+    }
+    const totalsText = [...totals.entries()]
+        .map(([tick, sum]) => (sum === null ? tick : `${sum} ${tick}`))
+        .join(', ');
+
+    return {
+        summary: `Send ${totalsText}${chainSuffix} to ${dests.length} recipients`,
+        details: dests.map((dest, i) => ({
+            label: `Recipient ${i + 1}`,
+            value: `${String(amounts[i] ?? '?')} ${tickAt(i) || '?'} to ${String(dest)}`
+                + (memoAt(i) ? ` (memo: "${memoAt(i)}")` : ''),
+        })),
+        warnings: [
+            ...(amounts.length !== dests.length
+                ? ['This send has a different number of amounts and recipients.']
+                : []),
+            ...(dests.some((d) => !String(d).trim()) ? ['A destination is empty.'] : []),
+            ...(amounts.some((a) => !(Number(a) > 0)) ? ['An amount is not positive.'] : []),
+            ...(memos.some((m) => /[|;]/.test(String(m)))
+                ? ['Memo contains | or ;: the protocol will reject this transaction.']
+                : []),
         ],
     };
 }

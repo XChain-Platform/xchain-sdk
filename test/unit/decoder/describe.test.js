@@ -25,6 +25,45 @@ describe('decoder.describe', function () {
         expect(d.warnings).to.deep.equal([]);
     });
 
+    // : a multi-recipient SEND (v1/v2/v3) must not be described as if it
+    // paid one person. Before this, the summary read `firstStr` of each
+    // repeated field, so a three-recipient send announced "Send 7 XCHAIN to
+    // <recipient 1>" on the signing screen while paying two more people; the
+    // other legs appeared only as a comma-joined "7, 3, 1" detail row. Caught
+    // by driving the real Send form against regtest.
+    describe('multi-recipient SEND', function () {
+        it('states the total and the recipient count, and itemises every leg', function () {
+            const d = describeAction(parse('SEND|1|XCHAIN|7|alice|3|bob|1|carol'));
+            expect(d.summary).to.equal('Send 11 XCHAIN to 3 recipients');
+            expect(d.details).to.deep.equal([
+                { label: 'Recipient 1', value: '7 XCHAIN to alice' },
+                { label: 'Recipient 2', value: '3 XCHAIN to bob' },
+                { label: 'Recipient 3', value: '1 XCHAIN to carol' },
+            ]);
+            expect(d.warnings).to.deep.equal([]);
+        });
+
+        it('totals PER TOKEN when the legs carry different ticks (v2)', function () {
+            const d = describeAction(parse('SEND|2|JDOG|5|alice|JDOG|2|bob|PEPE|4|carol'));
+            // One number across two tokens would be a confidently wrong total.
+            expect(d.summary).to.equal('Send 7 JDOG, 4 PEPE to 3 recipients');
+        });
+
+        it('keeps the single-recipient wording untouched', function () {
+            const d = describeAction(parse('SEND|0|JDOG|1.5|bc1qabc'));
+            expect(d.summary).to.equal('Send 1.5 JDOG to bc1qabc');
+        });
+
+        it('warns instead of guessing when a leg is malformed', function () {
+            const d = describeAction({
+                action: 'SEND',
+                params: { TICK: 'JDOG', AMOUNT: ['1', '0'], DESTINATION: ['a', 'b'] },
+            });
+            expect(d.summary).to.equal('Send 1 JDOG to 2 recipients');
+            expect(d.warnings).to.include('An amount is not positive.');
+        });
+    });
+
     it('legacy {action, params} shape still works (wallet shim path)', function () {
         const d = describeAction({ action: 'SEND', params: { TICK: 'JDOG', AMOUNT: '2', DESTINATION: 'x', MEMO: '' } });
         expect(d.summary).to.equal('Send 2 JDOG to x');
