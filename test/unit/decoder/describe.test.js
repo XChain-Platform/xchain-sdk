@@ -12,6 +12,7 @@
 const { expect } = require('chai');
 const { parse } = require('../../../src/decoder/parse.js');
 const { describe: describeAction } = require('../../../src/decoder/describe.js');
+const FORMATS = require('../../../src/formats.js');
 
 const GENERIC = /No plain-English summary is available/;
 
@@ -215,6 +216,81 @@ describe('decoder.describe', function () {
         it('tokenDecimals enables precision verification', function () {
             const d = describeAction(parse('SEND|0|JDOG|1.123456789|a'), { tokenDecimals: { JDOG: 8 } });
             expect(d.warnings.some(w => /more decimal places/.test(w))).to.equal(true);
+        });
+    });
+
+    // . The case list above is hand-maintained, so it can only prove
+    // what someone remembered to add; the confirm screen is the surface a
+    // user verifies intent on, and an action nobody thought to list there
+    // silently reaches a signer as "No plain-English summary is available".
+    // This enumerates formats.js instead, so adding an ACTION to the
+    // protocol without a describer fails here rather than on a sign screen.
+    describe('every ACTION in formats.js has a describer', function () {
+        for (const action of Object.keys(FORMATS)) {
+            it(action, function () {
+                for (const version of Object.keys(FORMATS[action])) {
+                    // Params empty on purpose: a describer must produce its
+                    // summary from the action + version alone, filling gaps
+                    // with "?" rather than deferring to the generic path.
+                    const d = describeAction({ action, params: { VERSION: version } });
+                    expect(d.warnings.join('\n'), `${action} v${version}`).to.not.match(GENERIC);
+                    expect(d.summary, `${action} v${version}`).to.be.a('string').and.not.equal('');
+                    expect(d.summary, `${action} v${version}`).to.not.match(/^Sign /);
+                }
+            });
+        }
+    });
+
+    describe('multi-destroy ', function () {
+        it('v1 lists every leg and keeps the irreversibility warning', function () {
+            const d = describeAction(parse('DESTROY|1|JDOG|5|PEPE|7|bye'));
+            expect(d.summary).to.equal('Destroy: 5 JDOG, 7 PEPE');
+            expect(d.warnings.join('\n')).to.include('irreversible');
+            expect(d.details.find(x => x.label === 'Memo').value).to.equal('bye');
+        });
+
+        it('v2 renders the per-leg memo, not a shared one', function () {
+            const d = describeAction(parse('DESTROY|2|JDOG|5|one|PEPE|7|two'));
+            expect(d.summary).to.equal('Destroy: 5 JDOG, 7 PEPE');
+            expect(d.details.filter(x => x.label.trim() === 'Memo').map(x => x.value))
+                .to.deep.equal(['one', 'two']);
+        });
+
+        it('a non-positive leg amount is flagged', function () {
+            const d = describeAction(parse('DESTROY|1|JDOG|5|PEPE|0|bye'));
+            expect(d.warnings.join('\n')).to.match(/amounts are not positive/);
+        });
+    });
+
+    describe('ADDRESS ', function () {
+        it('v0 names the options the action actually sets', function () {
+            const d = describeAction(parse('ADDRESS|0|1||2|'));
+            expect(d.summary).to.include('fees destroyed');
+            expect(d.summary).to.include('anyone may open a dispenser');
+            expect(d.warnings.join('\n')).to.include('burned permanently');
+        });
+
+        it('v0 with every option blank says so instead of implying a change', function () {
+            const d = describeAction(parse('ADDRESS|0||||'));
+            expect(d.summary).to.include('no options changed');
+            expect(d.warnings.join('\n')).to.include('sets no address options');
+        });
+
+        it('v0 flags a fee preference the indexer will reject', function () {
+            const d = describeAction(parse('ADDRESS|0|3|||'));
+            expect(d.warnings.join('\n')).to.match(/must be 0, 1 or 2/);
+        });
+
+        it('v1 bind states the symmetric transfer gate', function () {
+            const d = describeAction(parse('ADDRESS|1|42|transfer|10|0'));
+            expect(d.summary).to.equal('Bind this address to controller #42 (transfer)');
+            expect(d.warnings.join('\n')).to.include('BOTH sends from and sends to');
+        });
+
+        it('v1 unbind reads as an unbind, not a bind', function () {
+            const d = describeAction(parse('ADDRESS|1|42|transfer|10|1'));
+            expect(d.summary).to.equal('Unbind controller from this address (transfer)');
+            expect(d.warnings.join('\n')).to.include('after the cooldown elapses');
         });
     });
 

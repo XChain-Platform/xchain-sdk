@@ -105,6 +105,19 @@ describe('Native-coin fee quote (client)', function () {
             expect(outs.map(o => o.address)).to.have.members(['extra', 'feeDest']);
         });
 
+        // : DEPLOY/EXECUTE are priced from the indexer's gas schedule with no VM dry-run, so
+        // their quote is payable but carries NO verdict (valid:null). That must size the output
+        // like any other quote: refusing anything short of valid:true would re-block the actions
+        // on LTC/DOGE, where a native output is the only way to pay a protocol fee at all.
+        it('estimateFees sizes the output from a verdict-free (valid:null) static quote', async function () {
+            let sdk = makeSdk({ supported: true, valid: null, staticQuote: true, validated: false, requiredFeeSats: 1000100 });
+            let r = await sdk.estimateFees({ action: 'ISSUE', params: { tick: 'NEWTICK', description: 'x' } },
+                { payFeeInNativeCoin: true, pubkey: 'pk', change: 'src1' });
+            expect(sdk.encoder._seen.customOutputs).to.deep.equal([{ address: 'feeDest', value: 1000100 }]);
+            expect(r.nativeFeeQuote.valid).to.equal(null);
+            expect(r.nativeFeeQuote.staticQuote).to.equal(true);
+        });
+
         it('estimateFees refuses (throws) when the quote is unsupported', async function () {
             let sdk = makeSdk({ supported: false, valid: false, error: 'not supported' });
             let threw = false;
