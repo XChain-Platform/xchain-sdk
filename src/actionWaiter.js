@@ -21,6 +21,20 @@
 
 const { SDKActionError } = require('./errors.js');
 
+// Warn-once guard for an action the indexer exposes with no status at all.
+// Once per process: BET cancel/resolve legs hit this on every wait, and a
+// per-wait warning would drown the useful one.
+let warnedUnknownStatus = false;
+
+// A per-action status is only evidence when the indexer actually reported one.
+// null / undefined / '' mean "not recorded or not exposed", NOT "valid".
+function readStatus(action) {
+    if (!action) return null;
+    if (typeof action.status !== 'string') return null;
+    let status = action.status.trim();
+    return status === '' ? null : status;
+}
+
 
 class ActionWaiter {
 
@@ -38,16 +52,33 @@ class ActionWaiter {
     //   actionIndex  - when supplied, status is resolved from that specific action
     //                  only, preventing a neighboring action's status from leaking
     //                  into the result (relevant for multi-action transactions)
+    //   strictStatus - if true, requireValid also refuses to ASSUME validity: a wait
+    //                  that could never read a status for the action rejects
+    //                  ACTION_STATUS_UNKNOWN at the timeout instead of resolving.
+    //                  Off by default (an unreadable status is not evidence of a
+    //                  rejection), but the only fail-closed setting for a caller
+    //                  that must not mistake silence for success .
+    //
+    // The resolved result carries the read itself, not just its conclusion:
+    //   status              - normalized top-level status (see the poll comments)
+    //   statusKnown         - true only when EVERY action in the target set carried
+    //                         an explicit indexer status
+    //   statusSource        - 'indexer' when statusKnown, otherwise 'assumed'
+    //   statusUnknownActions- action_index values whose status could not be read
     async waitForTxid(txid, opts = {}) {
         let timeout      = opts.timeout || 120000;
         let pollInterval = opts.pollInterval || 2000;
         let requireValid = opts.requireValid !== false;
+        let strictStatus = opts.strictStatus === true;
 
         return new Promise((resolve, reject) => {
             let settled  = false;
             let timer    = null;
             let pollId   = null;
             let unsub    = null;
+            // Last result whose status could not be read; only used to explain a
+            // strictStatus timeout with the action that stayed silent.
+            let unknownResult = null;
 
             let settle = (err, result) => {
                 if (settled) return;
@@ -59,8 +90,18 @@ class ActionWaiter {
                 else resolve(result);
             };
 
-            // Timeout
+            // Timeout. A strictStatus wait that DID see the transaction but never
+            // read a status reports that specifically: the transaction is indexed,
+            // so "timed out waiting to be indexed" would send the caller hunting
+            // the wrong problem.
             timer = setTimeout(() => {
+                if (strictStatus && requireValid && unknownResult) {
+                    settle(new SDKActionError('ACTION_STATUS_UNKNOWN',
+                        'Transaction ' + txid + ' is indexed but the indexer reported no status for action(s) ' +
+                        JSON.stringify(unknownResult.statusUnknownActions) + '; refusing to assume valid',
+                        { txid, action: unknownResult, actions: unknownResult.statusUnknownActions }));
+                    return;
+                }
                 settle(new SDKActionError('CONFIRMATION_TIMEOUT',
                     'Timed out waiting for transaction ' + txid + ' to be indexed (' + timeout + 'ms)',
                     { txid, timeout }));
@@ -87,7 +128,15 @@ class ActionWaiter {
                             ? actions.filter(a => Number(a.action_index) === Number(opts.actionIndex))
                             : actions;
 
-                        let invalid = targetActions.find(a => typeof a.status === 'string' && /^invalid/i.test(a.status));
+                        // : an EMPTY target set is not a verdict. A targeted wait whose
+                        // action_index is not in the transaction (yet), or a transaction the
+                        // explorer returns before its action rows exist, used to fall through
+                        // the "no invalid found" branch and resolve reporting 'valid' - the
+                        // caller could not tell a rejection from a success. Keep polling; the
+                        // honest outcome when it never appears is the timeout above.
+                        if (targetActions.length === 0) return;
+
+                        let invalid = targetActions.find(a => { let s = readStatus(a); return s !== null && /^invalid/i.test(s); });
                         // Surface a normalized top-level status for callers/tests: the first
                         // action whose status is not 'valid'. This covers wire rejections
                         // ("invalid: ...") AND VM execution outcomes ('failed' / 'reverted' /
@@ -97,15 +146,40 @@ class ActionWaiter {
                         // "invalid:"; an indexed-but-failed execution is a successful
                         // SUBMISSION (the tx is on-chain and processed), so flows that wait on
                         // delivery (attestation callbacks, batch drivers) must not throw.
-                        let nonValid = targetActions.find(a => typeof a.status === 'string' && a.status !== 'valid');
-                        result.status = nonValid ? nonValid.status : 'valid';
+                        let nonValid = targetActions.find(a => { let s = readStatus(a); return s !== null && s !== 'valid'; });
+                        // Actions the indexer exposes with NO status (the indexer writes a parse
+                        // status onto the action's own typed row, and some legs - BET cancel and
+                        // resolve, for instance - write no row at all). 'valid' there is an
+                        // ASSUMPTION, so it is labelled as one rather than sold as a chain read.
+                        let unknown = targetActions.filter(a => readStatus(a) === null)
+                                                   .map(a => a.action_index);
+                        result.status              = nonValid ? nonValid.status : 'valid';
+                        result.statusKnown         = unknown.length === 0;
+                        result.statusSource        = result.statusKnown ? 'indexer' : 'assumed';
+                        result.statusUnknownActions = unknown;
+
                         if (requireValid && invalid) {
+                            let reason = readStatus(invalid);
                             settle(new SDKActionError('ACTION_REJECTED',
-                                'Action was indexed but marked invalid: ' + invalid.status,
-                                { txid, action: result, reason: invalid.status }));
-                        } else {
-                            settle(null, result);
+                                'Action was indexed but marked invalid: ' + reason,
+                                { txid, action: result, reason }));
+                            return;
                         }
+                        if (!result.statusKnown) {
+                            unknownResult = result;
+                            // A fail-closed caller waits out the window: the status may still
+                            // be written (indexer enrichment lags the transaction row), and
+                            // only the timeout can prove it never was.
+                            if (requireValid && strictStatus) return;
+                            if (!warnedUnknownStatus) {
+                                warnedUnknownStatus = true;
+                                console.warn('[xchain-sdk] the indexer reported no status for action(s) ' +
+                                    JSON.stringify(unknown) + ' of transaction ' + txid +
+                                    '; reporting status=valid is an ASSUMPTION (result.statusKnown=false). ' +
+                                    'Pass strictStatus:true to fail closed instead.');
+                            }
+                        }
+                        settle(null, result);
                     }
                 } catch (e) {
                     // 404 or network error; keep polling
@@ -127,14 +201,25 @@ class ActionWaiter {
                         // ignored; the target action's event, or the poll fallback,
                         // settles.
                         if (Number(msg.data.action_index) !== Number(opts.actionIndex)) return;
+                        // An event without a status settles NOTHING : resolving from
+                        // it would report success the indexer never claimed. Defer to the
+                        // authoritative poll, which reads the full action row.
+                        let eventStatus = readStatus(msg.data);
+                        if (eventStatus === null) { poll(); return; }
                         // Indexer status strings are prefixed, e.g. "invalid: insufficient funds (FEE)".
-                        let invalid = typeof msg.data.status === 'string' && /^invalid/i.test(msg.data.status);
-                        if (requireValid && invalid) {
+                        if (requireValid && /^invalid/i.test(eventStatus)) {
                             settle(new SDKActionError('ACTION_REJECTED',
-                                'Action was indexed but marked invalid: ' + msg.data.status,
-                                { txid, action: msg.data, reason: msg.data.status }));
+                                'Action was indexed but marked invalid: ' + eventStatus,
+                                { txid, action: msg.data, reason: eventStatus }));
                         } else {
-                            settle(null, msg.data);
+                            // Copy rather than mutate: the same event object is handed to every
+                            // other NEW_ACTION listener on this socket.
+                            settle(null, Object.assign({}, msg.data, {
+                                status:              eventStatus,
+                                statusKnown:         true,
+                                statusSource:        'indexer',
+                                statusUnknownActions: []
+                            }));
                         }
                         return;
                     }

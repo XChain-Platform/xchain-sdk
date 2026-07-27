@@ -39,6 +39,9 @@ class LifecycleManager {
     //   timeout         - ms to wait for indexer (default 120000)
     //   pollInterval    - ms between indexer polls (default 2000)
     //   requireValid    - reject if action status is 'invalid' (default true)
+    //   strictStatus    - with requireValid, also refuse to ASSUME validity: reject
+    //                     ACTION_STATUS_UNKNOWN when no indexer status could be read
+    //                     for the action (default false; see actionWaiter, )
     //   onProgress      - callback(step, data) for lifecycle step notifications
     //
     // Returns: {
@@ -46,7 +49,7 @@ class LifecycleManager {
     //   signed { txHex, txid, psbtHex }, spentInputs [{ txid, vout }]
     // }
     async submitAction(actionData, encoderOpts = {}, opts = {}) {
-        let { wif, waitForIndexer, timeout, pollInterval, requireValid, onProgress } = opts;
+        let { wif, waitForIndexer, timeout, pollInterval, requireValid, strictStatus, onProgress } = opts;
         if (!wif) throw new SDKConfigError('MISSING_WIF', 'submitAction requires opts.wif (WIF private key)');
         if (waitForIndexer === undefined) waitForIndexer = true;
 
@@ -172,7 +175,8 @@ class LifecycleManager {
             let indexed = await waiter.waitForTxid(finalTxid, {
                 timeout:      timeout || 120000,
                 pollInterval: pollInterval || 2000,
-                requireValid: requireValid !== false
+                requireValid: requireValid !== false,
+                strictStatus: strictStatus === true
             });
             result.indexed = indexed;
             progress('confirmed', { txid: finalTxid, action: indexed });

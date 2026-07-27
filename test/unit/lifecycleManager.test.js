@@ -388,6 +388,73 @@ describe('LifecycleManager', function () {
     });
 
     // -----------------------------------------------------------------------
+    //  submitAction(): a chain-REJECTED action must not look like a success
+    //  . These run the REAL ActionWaiter against a fake explorer, so
+    //  they pin the caller-visible contract end to end rather than a stub.
+    // -----------------------------------------------------------------------
+    describe('submitAction(): rejected actions ', function () {
+
+        // Fake explorer returning one canned transaction for every poll.
+        function explorerReturning(txResult) {
+            return { getTransaction: async () => txResult };
+        }
+
+        it('rejects with the indexer-recorded reason when the action is invalid', async function () {
+            const sdk = makeSdk({
+                ws: null,
+                _requireExplorer: () => explorerReturning({
+                    tx_hash: 'deadbeef',
+                    actions: [{ action: 'BET', action_index: 7, status: 'invalid: OUTCOME (range)' }],
+                }),
+            });
+            const lm = new LifecycleManager(sdk);
+            await assert.rejects(
+                () => lm.submitAction({ action: 'BET', params: {} }, {},
+                    { wif: FAKE_WIF, waitForIndexer: true, timeout: 3000, pollInterval: 50 }),
+                (err) => {
+                    assert.strictEqual(err.code, 'ACTION_REJECTED');
+                    assert.strictEqual(err.details.reason, 'invalid: OUTCOME (range)');
+                    return true;
+                });
+        });
+
+        it('reports whether the resolved status was read from the indexer or assumed', async function () {
+            const sdk = makeSdk({
+                ws: null,
+                _requireExplorer: () => explorerReturning({
+                    tx_hash: 'deadbeef',
+                    actions: [{ action: 'SEND', action_index: 7, status: 'valid' }],
+                }),
+            });
+            const lm = new LifecycleManager(sdk);
+            const result = await lm.submitAction({ action: 'SEND', params: {} }, {},
+                { wif: FAKE_WIF, waitForIndexer: true, timeout: 3000, pollInterval: 50 });
+            assert.strictEqual(result.indexed.status, 'valid');
+            assert.strictEqual(result.indexed.statusKnown, true);
+            assert.strictEqual(result.indexed.statusSource, 'indexer');
+        });
+
+        it('forwards strictStatus so a caller can fail closed on an unreadable status', async function () {
+            const sdk = makeSdk({
+                ws: null,
+                _requireExplorer: () => explorerReturning({
+                    tx_hash: 'deadbeef',
+                    // Status-less action row: the indexer wrote no typed row for this leg.
+                    actions: [{ action: 'BET', action_index: 7, status: null }],
+                }),
+            });
+            const lm = new LifecycleManager(sdk);
+            await assert.rejects(
+                () => lm.submitAction({ action: 'BET', params: {} }, {},
+                    { wif: FAKE_WIF, waitForIndexer: true, timeout: 1200, pollInterval: 50, strictStatus: true }),
+                (err) => {
+                    assert.strictEqual(err.code, 'ACTION_STATUS_UNKNOWN');
+                    return true;
+                });
+        });
+    });
+
+    // -----------------------------------------------------------------------
     //  _extractSpentInputs()
     // -----------------------------------------------------------------------
     describe('_extractSpentInputs()', function () {

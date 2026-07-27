@@ -430,7 +430,11 @@ class XChainSDK {
 
     // Submit an action through the full lifecycle: create, encode, sign, broadcast, wait.
     // actionData = { action, params }; encoderOpts = { pubkey, change, utxos, encoding, fee, ... };
-    // opts = { wif, waitForIndexer, timeout, pollInterval, requireValid, onProgress }.
+    // opts = { wif, waitForIndexer, timeout, pollInterval, requireValid, strictStatus, onProgress }.
+    // With waitForIndexer (default), a chain-REJECTED action REJECTS this call with
+    // SDKActionError ACTION_REJECTED carrying the indexer's reason; the resolved
+    // result's `indexed.statusKnown` says whether the status was read or assumed
+    // (strictStatus:true rejects rather than assume - see actionWaiter, ).
     async submitAction(actionData, encoderOpts, opts) {
         let mgr = new LifecycleManager(this);
         return mgr.submitAction(actionData, encoderOpts, opts);
@@ -778,7 +782,14 @@ class XChainSDK {
     // string, splits off the ACTION + wire params, and asks the indexer (via the explorer proxy)
     // for the authoritative native fee + accept/reject verdict. A client should size the
     // FEE_DESTINATION output to `requiredFeeSats` and refuse to broadcast when
-    // `supported === false` or `valid === false`. A `busy:true, retryable:true` quote (indexer
+    // `supported === false` or `valid === false`.
+    //
+    // `valid === null` is a third answer, not a failure: the VM actions (DEPLOY/EXECUTE) are
+    // priced from the indexer's gas schedule without a dry-run (`staticQuote:true`,
+    // `validated:false`), so the fee is authoritative but on-chain validity was never judged.
+    // Size the output and broadcast, but surface that the action itself is unverified: those two
+    // are otherwise unpayable on LTC/DOGE, which have no XCHAIN fee lane to fall back to.
+    // A `busy:true, retryable:true` quote (indexer
     // admission cap) is retried once after a short delay (opts.busyRetryDelayMs, default 1s)
     // before being returned. See xchain-documentation/concepts/GAS.md.
     async quoteNativeFee(actionData, opts = {}) {

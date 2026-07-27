@@ -91,6 +91,104 @@ describe('ActionWaiter.waitForTxid normalized status', function () {
     });
 });
 
+// : a wait must never report chain-confirmed success it did not read.
+// The waiter used to synthesize `status: 'valid'` from an EMPTY evidence set:
+// a targeted wait whose action_index matched nothing, a transaction the
+// explorer returned with no action rows, or an action row the explorer carries
+// with no status at all. Each of those resolved the promise reporting 'valid',
+// so a rejected action was indistinguishable from a successful one.
+describe('ActionWaiter.waitForTxid status honesty ', function () {
+
+    const TXID = 'cc'.repeat(32);
+
+    it('a targeted wait does not resolve valid when the target action is absent', async function () {
+        // Only action 0 is in the tx; the caller is waiting on action 1. The old
+        // filter produced an empty set, found no 'invalid', and resolved 'valid'.
+        const waiter = makeWaiter({
+            tx_hash: TXID,
+            actions: [{ action: 'SEND', action_index: 0, status: 'valid' }],
+        });
+        await assert.rejects(
+            () => waiter.waitForTxid(TXID, { timeout: 1200, pollInterval: 50, actionIndex: 1 }),
+            /CONFIRMATION_TIMEOUT|Timed out/);
+    });
+
+    it('a targeted wait still rejects on the target action own invalid status', async function () {
+        const waiter = makeWaiter({
+            tx_hash: TXID,
+            actions: [
+                { action: 'SEND', action_index: 0, status: 'valid' },
+                { action: 'BET',  action_index: 1, status: 'invalid: OUTCOME (range)' },
+            ],
+        });
+        await assert.rejects(
+            () => waiter.waitForTxid(TXID, { timeout: 2000, pollInterval: 50, actionIndex: 1 }),
+            (err) => {
+                assert.strictEqual(err.code, 'ACTION_REJECTED');
+                // The indexer-recorded reason must reach the caller verbatim.
+                assert.strictEqual(err.details.reason, 'invalid: OUTCOME (range)');
+                return true;
+            });
+    });
+
+    it('an indexed transaction with no action rows does not resolve valid', async function () {
+        const waiter = makeWaiter({ tx_hash: TXID, actions: [] });
+        await assert.rejects(
+            () => waiter.waitForTxid(TXID, { timeout: 1200, pollInterval: 50 }),
+            /CONFIRMATION_TIMEOUT|Timed out/);
+    });
+
+    it('flags an action the indexer reports without a status as unread, not confirmed', async function () {
+        // BET cancel/resolve (indexer bet.js: formats 1 and 3 write no typed row)
+        // reach the explorer with a NULL status. Reporting that as 'valid' is an
+        // assumption, so it must be labelled as one.
+        const waiter = makeWaiter({
+            tx_hash: TXID,
+            actions: [{ action: 'BET', action_index: 4, status: null }],
+        });
+        const result = await waiter.waitForTxid(TXID, { timeout: 2000, pollInterval: 50 });
+        assert.strictEqual(result.statusKnown, false, 'the status was never read from the indexer');
+        assert.strictEqual(result.statusSource, 'assumed');
+        assert.deepStrictEqual(result.statusUnknownActions, [4]);
+    });
+
+    it('labels a status it did read as indexer-sourced', async function () {
+        const waiter = makeWaiter({
+            tx_hash: TXID,
+            actions: [{ action: 'SEND', action_index: 0, status: 'valid' }],
+        });
+        const result = await waiter.waitForTxid(TXID, { timeout: 2000, pollInterval: 50 });
+        assert.strictEqual(result.status, 'valid');
+        assert.strictEqual(result.statusKnown, true);
+        assert.strictEqual(result.statusSource, 'indexer');
+    });
+
+    it('strictStatus rejects rather than assuming validity it could not read', async function () {
+        const waiter = makeWaiter({
+            tx_hash: TXID,
+            actions: [{ action: 'BET', action_index: 4, status: null }],
+        });
+        await assert.rejects(
+            () => waiter.waitForTxid(TXID, { timeout: 1200, pollInterval: 50, strictStatus: true }),
+            (err) => {
+                assert.strictEqual(err.code, 'ACTION_STATUS_UNKNOWN');
+                return true;
+            });
+    });
+
+    it('strictStatus with requireValid:false still resolves (delivery waiters)', async function () {
+        // strictStatus is an enforcement of requireValid, so turning validity
+        // enforcement off must not start throwing on an unreadable status.
+        const waiter = makeWaiter({
+            tx_hash: TXID,
+            actions: [{ action: 'BET', action_index: 4, status: null }],
+        });
+        const result = await waiter.waitForTxid(TXID,
+            { timeout: 2000, pollInterval: 50, strictStatus: true, requireValid: false });
+        assert.strictEqual(result.statusKnown, false);
+    });
+});
+
 // WebSocket fast-path: a live WS emits one NEW_ACTION per action. The handler
 // must honor opts.actionIndex the same way the poll path does, or a neighboring
 // action's event settles the wait with the wrong action's status.
@@ -164,6 +262,18 @@ describe('ActionWaiter.waitForTxid WebSocket actionIndex filtering', function ()
         // The valid sub-action event arrives first. Pre-fix this settled success and
         // masked the sibling rejection.
         ws.emit('NEW_ACTION', { data: { tx_hash: TXID, action_index: 0, status: 'valid' } });
+        await assert.rejects(() => p, /ACTION_REJECTED|invalid/);
+    });
+
+    it('a targeted event carrying NO status defers to the poll instead of settling ', async function () {
+        // The WS payload for some actions arrives without a status. Settling from it
+        // reported success the indexer never claimed; the poll reads the real row.
+        const { waiter, ws } = makeWsWaiter({
+            tx_hash: TXID,
+            actions: [{ action: 'BET', action_index: 1, status: 'invalid: OUTCOME (range)' }],
+        });
+        const p = waiter.waitForTxid(TXID, { timeout: 2000, pollInterval: 50, actionIndex: 1 });
+        ws.emit('NEW_ACTION', { data: { tx_hash: TXID, action_index: 1 } });
         await assert.rejects(() => p, /ACTION_REJECTED|invalid/);
     });
 
