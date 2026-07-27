@@ -23,7 +23,7 @@
     "acorn": "8.16.0",
     "acorn-walk": "8.3.5",
     "astring": "1.9.0",
-    "axios": "^1.16.0",
+    "axios": "^1.18.1",
     "bitcoinjs-lib": "6.1.7",
     "bitcoinjs-message": "^2.2.0",
     "cors": "^2.8.5",
@@ -49,10 +49,16 @@
     "uglify-js": "^3.19.3"
   },
   "overrides": {
+    "brace-expansion": "^5.0.8",
+    "minimatch": "^10.2.5",
+    "fast-uri": "^3.1.4",
     "decimal.js": "10.4.3",
     "qs": "^6.15.2",
     "serialize-javascript": "^7.0.5",
-    "diff": "^8.0.4"
+    "diff": "^8.0.4",
+    "js-yaml": "^4.3.0",
+    "form-data": "^4.0.6",
+    "shell-quote": "^1.9.0"
   },
   "scripts": {
     "api": "node ./src/api.js",
