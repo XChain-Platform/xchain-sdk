@@ -273,8 +273,18 @@ class ExplorerClient {
     // Betting markets . type is one of block | address | source | token
     // | status, matching the explorer route map. `source` filters by the market's
     // oracle; `address` matches any participant.
+    //
+    // The unfiltered branch is REQUIRED, not a convenience : the explorer
+    // registers `/bet_feeds` alongside `/bet_feeds/{QUERY}/{TYPE}`, and without
+    // this guard a caller asking for every market interpolates the literals and
+    // requests `/bet_feeds/null/null`, which 404s. That is what the wallet's "All
+    // markets" filter did on every click, and no unit test could see it because
+    // the SDK suite mocks this client and its consumers mock the SDK. Same shape
+    // as getPrices/getVotes.
     async getBetFeeds(query, type, opts = {}) {
-        return this._get('/bet_feeds/' + query + '/' + type, opts);
+        if (query)
+            return this._get('/bet_feeds/' + query + '/' + type, opts);
+        return this._get('/bet_feeds', opts);
     }
 
     // One market by its FEED_ACTION_INDEX: the feed row, per-outcome pool totals,
@@ -284,8 +294,14 @@ class ExplorerClient {
     }
 
     // Bets, type is one of block | address | feed | token | status.
+    // Unfiltered branch for the same reason as getBetFeeds above: the explorer
+    // registers a bare `/bets` route, and interpolating a null query 404s. Fixed
+    // in the same pass because it is the identical latent defect, not because a
+    // caller has hit it yet.
     async getBets(query, type, opts = {}) {
-        return this._get('/bets/' + query + '/' + type, opts);
+        if (query)
+            return this._get('/bets/' + query + '/' + type, opts);
+        return this._get('/bets', opts);
     }
 
     // An oracle's track record: markets resolved / voided / cancelled / expired,
