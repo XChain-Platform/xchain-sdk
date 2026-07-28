@@ -407,13 +407,19 @@ class ExplorerClient {
     // Validity-first pre-flight for one action . Proxies to the indexer's read-only
     // `preflight`: "would the indexer accept this action?", decoupled from native-fee support.
     // Returns { supported, valid, status, error, guardInert, feeExempt, denied, blockIndex,
-    //           blockTime }. `params` is the wire param array (without the ACTION name) or a
-    //           pre-joined pipe string. noRetry is honored (best-effort pre-flight callers).
-    async getPreflight({ action, params, source } = {}, opts = {}) {
+    //           blockTime, xchainFee, feeMode, feeTick, feeTokenBalance, feeAffordable }.
+    //           `params` is the wire param array (without the ACTION name) or a pre-joined
+    //           pipe string. noRetry is honored (best-effort pre-flight callers).
+    // `feeMode` ('xchain' | 'native', optional) states how the transaction being composed will
+    // settle the protocol fee; the verdict differs, because the XCHAIN mode debits the payer's
+    // balance and the native mode pays a coin output . Omit it to get the chain's own
+    // default mode (native on LTC/DOGE, the XCHAIN debit on BTC).
+    async getPreflight({ action, params, source, feeMode } = {}, opts = {}) {
         let q = new URLSearchParams();
         if (action !== undefined && action !== null) q.set('action', String(action));
         if (params !== undefined && params !== null) q.set('params', Array.isArray(params) ? params.join('|') : String(params));
         if (source !== undefined && source !== null) q.set('source', String(source));
+        if (feeMode !== undefined && feeMode !== null) q.set('feeMode', String(feeMode));
         return this._get('/preflight?' + q.toString(), opts);
     }
 

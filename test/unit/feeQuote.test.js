@@ -87,6 +87,28 @@ describe('Native-coin fee quote (client)', function () {
             expect(q).to.have.property('actionString');
         });
 
+        // : a client re-quoting a fee it composed earlier holds the exact bytes it is
+        // about to broadcast. Re-deriving them from the form params it started with would price
+        // a second, independently built action, so the same call takes the string directly.
+        it('quoteNativeFee accepts an already-formatted action string', async function () {
+            let sdk = makeSdk();
+            let composed = sdk.actions.createAction({ action: 'ISSUE', params: { tick: 'NEWTICK', description: 'x' } });
+            let q = await sdk.quoteNativeFee(composed.actionString, { source: 'src1' });
+            expect(sdk.explorer._seen.action).to.equal('ISSUE');
+            expect(sdk.explorer._seen.params).to.deep.equal(composed.actionString.split('|').slice(1));
+            expect(sdk.explorer._seen.source).to.equal('src1');
+            expect(q.actionString).to.equal(composed.actionString);
+        });
+
+        it('quoteNativeFee asks the same question either way (string or actionData)', async function () {
+            let fromData = makeSdk();
+            let actionData = { action: 'ISSUE', params: { tick: 'NEWTICK', description: 'x' } };
+            await fromData.quoteNativeFee(actionData);
+            let fromString = makeSdk();
+            await fromString.quoteNativeFee(fromData.actions.createAction(actionData).actionString);
+            expect(fromString.explorer._seen).to.deep.equal(fromData.explorer._seen);
+        });
+
         it('estimateFees({ payFeeInNativeCoin }) adds a FEE_DESTINATION output sized to the quote', async function () {
             let sdk = makeSdk();
             let r = await sdk.estimateFees({ action: 'ISSUE', params: { tick: 'NEWTICK', description: 'x' } }, { payFeeInNativeCoin: true, pubkey: 'pk', change: 'src1' });

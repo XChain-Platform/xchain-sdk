@@ -11,6 +11,13 @@
 //     is byte-identical.
 //   - alias table conformance vs the vendored action-manifest.
 //   - one BATCH fixture per permitted action type inside COMMAND.
+//
+// These vectors are composed locally, so they prove the SDK agrees with
+// ITSELF. The live counterpart, which proves it agrees with the CHAIN
+// (real encoder PSBTs and the wire bytes the indexer recovered off
+// confirmed transactions), is
+// xchain-e2e-test/test/sdk/decoderRoundtrip.sdk.test.js - run it against
+// a regtest venue with `npm run test:sdk:decoder`.
 
 const { expect } = require('chai');
 const fs = require('fs');

@@ -793,9 +793,18 @@ class XChainSDK {
     // A `busy:true, retryable:true` quote (indexer
     // admission cap) is retried once after a short delay (opts.busyRetryDelayMs, default 1s)
     // before being returned. See xchain-documentation/concepts/GAS.md.
+    //
+    // : `actionData` may also be an ALREADY-FORMATTED action string. A caller re-quoting a
+    // fee it composed earlier (the wallet's Approve-time re-check) holds the exact bytes it is
+    // about to broadcast, and re-deriving them from the form params it started with would price a
+    // second, independently built action: the same mirror-drift class as the VOTE params mirror.
+    // Same request either way, since the only thing this method ever wanted from `actionData` was
+    // the action string.
     async quoteNativeFee(actionData, opts = {}) {
-        let result  = this.actions.createAction(actionData);
-        let parts   = String(result.actionString).split('|');
+        let actionString = (typeof actionData === 'string')
+                         ? actionData
+                         : this.actions.createAction(actionData).actionString;
+        let parts   = String(actionString).split('|');
         let action  = parts.shift();
         let request = {
             action:        action,
@@ -812,7 +821,7 @@ class XChainSDK {
             await new Promise(resolve => setTimeout(resolve, delayMs));
             quote = await this._fetchFeeQuote(request);
         }
-        quote.actionString = result.actionString;
+        quote.actionString = actionString;
         return quote;
     }
 

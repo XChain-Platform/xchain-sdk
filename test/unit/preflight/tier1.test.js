@@ -30,6 +30,16 @@ describe('pre-flight Tier 1 classification', function () {
         expect(out.blockIndex).to.equal(100);
     });
 
+    // : /preflight echoes the fee its dry-run already computed, and Tier 1
+    // carries the raw response as `quote`, which is what lands on report.quote.
+    // A confirm screen reads the fee from there, so filtering it here would cost
+    // the caller an extra /feequote round-trip.
+    it('carries the echoed xchainFee through to the outcome quote', async function () {
+        const out = await tier1For('ISSUE|0|NEWTICK', { supported: true, valid: true, status: 'valid', xchainFee: '0.50000000', blockIndex: 100 });
+        expect(out.kind).to.equal('verdict');
+        expect(out.quote.xchainFee).to.equal('0.50000000');
+    });
+
     it('invalid verdict passes through with status/error', async function () {
         const out = await tier1For('SEND|0|JDOG|1|addr', { supported: true, valid: false, status: 'insufficient', error: 'balance' });
         expect(out.kind).to.equal('verdict');
