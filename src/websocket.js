@@ -20,8 +20,36 @@
  *
  ********************************************************************/
 
-const WebSocket = require('ws');
+const wsModule = require('ws');
 const { SDKExplorerError } = require('./errors.js');
+
+// Resolve the constructor across module-interop shapes. In Node, require('ws')
+// IS the class. In a browser bundle the `ws` specifier is aliased to an ESM
+// shim (xchain-wallet packages/core/src/shims/ws-browser.js), and the bundler
+// hands CommonJS consumers an interop wrapper around that ESM namespace rather
+// than the class itself, so prefer an explicit named/default export when the
+// module object is not directly constructible.
+const WebSocket = typeof wsModule === 'function'
+    ? wsModule
+    : ((wsModule && typeof wsModule.WebSocket === 'function' && wsModule.WebSocket)
+        || (wsModule && typeof wsModule.default === 'function' && wsModule.default)
+        || wsModule);
+
+// readyState values, spelled out rather than read off the module.
+//
+// : NEVER compare against WebSocket.OPEN here. Rollup/Vite wrap the ESM
+// browser shim with getAugmentedNamespace(), which copies only the namespace
+// KEYS (`default`, `WebSocket`) onto a constructible function. Static class
+// properties such as OPEN and CONNECTING are not namespace keys, so they are
+// dropped: in the wallet bundle `WebSocket.OPEN` evaluated to undefined, every
+// `readyState === WebSocket.OPEN` guard was permanently false, and _send()
+// silently dropped every frame on an open, healthy socket. Result: no
+// subscription was ever confirmed and every wallet notification channel was
+// dead, with a 10s "No response for request id" warning as the only symptom.
+// The readyState values are fixed by the WebSocket spec and by Node's `ws`, so
+// a literal is both correct and immune to how the module gets bundled.
+const WS_CONNECTING = 0;
+const WS_OPEN       = 1;
 
 // WS event-envelope schema version this SDK build understands. The explorer
 // stamps every frame with `schema_version` (see xchain-explorer/src/ws/schema-version.js)
@@ -88,7 +116,7 @@ class WebSocketClient {
     // Connect to the WebSocket server
     // Returns a Promise that resolves when the WELCOME message is received
     async connect() {
-        if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+        if (this.ws && (this.ws.readyState === WS_OPEN || this.ws.readyState === WS_CONNECTING)) {
             return this.serverInfo;
         }
 
@@ -202,7 +230,7 @@ class WebSocketClient {
 
     // Check if connected
     isConnected() {
-        return this.connected && this.ws && this.ws.readyState === WebSocket.OPEN;
+        return this.connected && this.ws && this.ws.readyState === WS_OPEN;
     }
 
     // Subscribe to channels with optional filters
@@ -380,7 +408,7 @@ class WebSocketClient {
     }
 
     _send(data) {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        if (this.ws && this.ws.readyState === WS_OPEN) {
             this.ws.send(JSON.stringify(data));
         }
     }
