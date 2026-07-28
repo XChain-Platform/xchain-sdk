@@ -165,15 +165,39 @@ describe('psbtActionDecode.decodeActionStringFromPsbt (self-sign byte-match)', f
     // prove the PSBT's OP_RETURN encodes exactly those bytes. It therefore does
     // NOT apply the co-signer's rest/multi-leg policy gates.
 
-    it('recovers the exact bytes for a rest-field EXECUTE that the co-signer decoder refuses', function () {
+    it('recovers the exact bytes for a rest-field LIST that the co-signer decoder refuses', function () {
         // Regression for the confirm-modal "does not match what you approved"
-        // block: EXECUTE's format ends in ...PARAMS (a rest field), so the
-        // policy decoder fails closed even though the bytes are correct.
-        const s = 'EXECUTE|0|1632|ping';
+        // block: LIST's format ends in ...ITEM (a rest field) and is NOT on the
+        // decoder's bounded-rest allowlist, so the policy decoder fails closed
+        // even though the bytes are correct. (EXECUTE used to stand in here; it
+        // is now admitted under a bounded parse, so a still-refused format is
+        // needed to keep testing the byte-recovery sibling's whole purpose.)
+        const s = 'LIST|0|my list|a|b|c';
         expect(decodeActionFromPsbt(buildPsbt(s)).reason).to.equal('REST_FIELD_UNSUPPORTED');
         const r = decodeActionStringFromPsbt(buildPsbt(s));
         expect(r.ok).to.equal(true);
         expect(r.actionString).to.equal(s);
+    });
+
+    it('now DECODES EXECUTE under the bounded rest parse, params as an array', function () {
+        // The envelope extension: EXECUTE's ...PARAMS is admitted because the
+        // value an EXECUTE moves is decided by the CONTRACT, never by the action
+        // string, so the evaluator classifies it UNBOUNDED and refuses it under
+        // any amount cap. Nothing can be under-counted because no amount cap is
+        // ever allowed to bind it.
+        const d = decodeActionFromPsbt(buildPsbt('EXECUTE|0|1632|add|5|7'));
+        expect(d.ok).to.equal(true);
+        expect(d.action).to.equal('EXECUTE');
+        expect(d.params.CONTRACT_ACTION_INDEX).to.equal('1632');
+        expect(d.params.METHOD).to.equal('add');
+        expect(d.params.PARAMS).to.deep.equal(['5', '7']);
+    });
+
+    it('refuses an EXECUTE whose PARAMS exceed the bound', function () {
+        const many = Array.from({ length: 40 }, (_, i) => String(i)).join('|');
+        const d = decodeActionFromPsbt(buildPsbt('EXECUTE|0|1632|spray|' + many));
+        expect(d.ok).to.equal(false);
+        expect(d.reason).to.equal('REST_FIELD_TOO_LONG');
     });
 
     it('recovers EXECUTE with variadic PARAMS byte-for-byte', function () {

@@ -328,3 +328,78 @@ describe('G17: fault and denial logging', function () {
         }
     });
 });
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Bounded rest-field EXECUTE decode (the envelope extension)
+ * ──────────────────────────────────────────────────────────────────────── */
+
+describe('bounded rest-field EXECUTE decode', function () {
+
+    const { decodeActionFromPsbt } = require('../../src/cosigner/psbtActionDecode.js');
+    const valueDerivability = require('../../src/cosigner/valueDerivability.js');
+
+    it('an agent behind a co-signer can now call a contract at all', function () {
+        // Before this, EXECUTE's only wire format ended in ...PARAMS and the
+        // decoder refused every rest field outright, so contract calls were
+        // outside the envelope regardless of what the policy allowed.
+        const acct = makeAccount();
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys,
+            policy: { allowedActions: new Set(['EXECUTE']), maxPerWindow: { hours: 24, maxActions: 10 } },
+            windowStore: {
+                snapshot: () => ({ count: 0, perTick: {} }),
+                record: () => {},
+            } });
+        const res = co.process({
+            psbt: buildPsbt(acct, 'EXECUTE|0|1632|add|5|7').toHex(),
+            inputs: [{ index: 0, agentPublicNonce: nonce(acct) }],
+        });
+        expect(res.approved).to.equal(true);
+    });
+
+    it('is refused whenever the policy carries ANY amount limit', function () {
+        // This is what makes the bounded parse safe. An EXECUTE's value is set by
+        // the CONTRACT's code, not the action string, so no amount cap could ever
+        // count it correctly - and rather than let one silently under-count, the
+        // action is refused outright while any cap is set.
+        const acct = makeAccount();
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys,
+            policy: { allowedActions: new Set(['EXECUTE']), maxPerAction: { SEND: { '*': '10' } } } });
+        const res = co.process({
+            psbt: buildPsbt(acct, 'EXECUTE|0|1632|add|5|7').toHex(),
+            inputs: [{ index: 0, agentPublicNonce: nonce(acct) }],
+        });
+        expect(res.approved).to.equal(false);
+        expect(res.reason).to.equal('POLICY_UNBOUNDED_ACTION');
+    });
+
+    it('rejects an amount cap naming EXECUTE at construction', function () {
+        // Every decodable EXECUTE format is value-by-reference, so such a cap
+        // could never bind - the same config error as maxPerAction.COINPAY.
+        const acct = makeAccount();
+        expect(() => new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys,
+            policy: { allowedActions: new Set(['EXECUTE']), maxPerAction: { EXECUTE: { '*': '10' } } } }))
+            .to.throw(/can never bind/);
+    });
+
+    it('still refuses every rest field that has NOT been analysed', function () {
+        // The allowlist is per (action, version); LIST's ...ITEM is not on it.
+        const acct = makeAccount();
+        const d = decodeActionFromPsbt(buildPsbt(acct, 'LIST|0|my list|a|b|c'));
+        expect(d.ok).to.equal(false);
+        expect(d.reason).to.equal('REST_FIELD_UNSUPPORTED');
+    });
+
+    it('bounds the params so one request cannot become unbounded work', function () {
+        const acct = makeAccount();
+        const many = Array.from({ length: 40 }, (_, i) => String(i)).join('|');
+        const d = decodeActionFromPsbt(buildPsbt(acct, 'EXECUTE|0|1632|spray|' + many));
+        expect(d.ok).to.equal(false);
+        expect(d.reason).to.equal('REST_FIELD_TOO_LONG');
+    });
+
+    it('EXECUTE is classified, and classified UNBOUNDED', function () {
+        const c = valueDerivability.classify('EXECUTE', 0, {});
+        expect(c.class).to.equal(valueDerivability.UNBOUNDED);
+        expect(c.byRef).to.equal(true);
+    });
+});

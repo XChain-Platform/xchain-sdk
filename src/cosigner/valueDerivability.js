@@ -55,6 +55,9 @@
 const Formats        = require('../formats.js');
 const FormatSelector = require('../formatSelector.js');
 const { ownLookup }  = require('./paramCharset.js');
+// The decoder's bounded rest-field allowlist, so decodableFormats() measures the
+// SAME surface the daemon actually reaches.
+const { BOUNDED_REST_FORMATS } = require('./psbtActionDecode.js');
 
 // The signing account can give up no token/native amount that the action
 // string does not already state. Covers pure config/authority/data actions and
@@ -158,6 +161,16 @@ const TABLE = {
     },
     DIVIDEND: {
         0: { class: UNBOUNDED },                              // AMOUNT per holder x an on-chain holder set the daemon cannot enumerate
+    },
+    EXECUTE: {
+        // The contract's CODE decides what an EXECUTE moves, not the action
+        // string: PARAMS are opaque method arguments and gas is metered by actual
+        // VM consumption. So its value is by-reference in the strongest sense,
+        // and refusing it under any amount limit is what makes the bounded rest
+        // parse safe (see BOUNDED_REST_FORMATS in psbtActionDecode.js). Being
+        // by-reference-only, an amount cap naming EXECUTE is also rejected at
+        // construction, exactly like COINPAY.
+        0: { class: UNBOUNDED, byRef: true },
     },
     FILE: {
         0: { class: NONE },
@@ -279,10 +292,16 @@ function decodableFormats() {
             let fields;
             try { fields = FormatSelector.getFormatFields(action, version); } catch (e) { continue; }
             if (!Array.isArray(fields) || fields[0] !== 'VERSION') continue;
+            const bounded = BOUNDED_REST_FORMATS.get(`${action} ${version}`) || null;
             let refused = false;
             const seen = new Set();
             for (const f of fields) {
-                if (FormatSelector.isRestField(f)) { refused = true; break; }
+                // Mirror the decoder: a rest field is refused unless this exact
+                // (action, version) is on its bounded allowlist.
+                if (FormatSelector.isRestField(f)) {
+                    if (!bounded || bounded.restField !== f) { refused = true; break; }
+                    continue;
+                }
                 if (VALUE_FIELDS.has(f)) {
                     if (seen.has(f)) { refused = true; break; }
                     seen.add(f);

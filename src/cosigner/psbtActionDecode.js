@@ -76,6 +76,41 @@ const { validateDecodedParams, ownLookup } = require('./paramCharset.js');
 // silently under-count the other legs - a policy bypass. Fail closed instead.
 const VALUE_FIELDS = new Set(['TICK', 'AMOUNT', 'DESTINATION']);
 
+/*
+ * BOUNDED REST-FIELD FORMATS
+ *
+ * A rest field ('...NAME') absorbs every remaining segment, so its arity is
+ * attacker-chosen. That is refused wholesale for good reason: if a rest field
+ * could carry VALUE-bearing entries, the single-leg evaluator would read one
+ * scalar and silently under-count the others, which is a policy bypass.
+ *
+ * The refusal is a blanket one though, and it cost the entire contract-call
+ * surface: EXECUTE's only wire format ends in `...PARAMS`, so an agent behind a
+ * co-signer could not call a contract AT ALL, whatever its policy said.
+ *
+ * A format may be admitted here only when its rest field provably cannot carry
+ * value the evaluator would need to count. For EXECUTE v0 that holds for a
+ * reason stronger than the rest field itself: the value an EXECUTE moves is
+ * decided by the CONTRACT'S CODE at the referenced CONTRACT_ACTION_INDEX, never
+ * by the action string, and gas is metered by actual VM consumption rather than
+ * declared. So the params are opaque method arguments, and the action is
+ * classified UNBOUNDED in valueDerivability.js - it is refused outright whenever
+ * the policy carries ANY amount limit. That is what makes under-counting
+ * impossible here: not a cleverer parse, but the fact that no amount cap is ever
+ * allowed to bind an action whose amount lives off-string.
+ *
+ * The parse is bounded regardless, so a crafted payload cannot turn one request
+ * into unbounded work (the same class of concern as G14).
+ */
+const MAX_REST_PARAMS = 32;
+const BOUNDED_REST_FORMATS = new Map([
+    ['EXECUTE 0', { restField: '...PARAMS', maxParams: MAX_REST_PARAMS }],
+]);
+
+function boundedRestFormat(action, version) {
+    return BOUNDED_REST_FORMATS.get(`${action} ${version}`) || null;
+}
+
 function fail(reason, detail) { return { ok: false, reason, detail: detail || null }; }
 
 // AES-128-CTR de-obfuscation, key/iv = first 16 / next 16 hex chars of the
@@ -194,9 +229,17 @@ function decodeActionFromPsbt(psbtOrHex, opts = {}) {
 
     // Reject variable-length (rest) fields and repeated value fields up front:
     // both are multi-value shapes the single-leg evaluator can't safely judge.
+    const bounded = boundedRestFormat(action, version);
     const seen = new Set();
     for (const f of fieldNames) {
-        if (FormatSelector.isRestField(f)) return fail('REST_FIELD_UNSUPPORTED', f);
+        // A rest field is refused unless this exact (action, version) has been
+        // analysed and admitted above, AND the rest field is the one that was
+        // analysed (a format revision that moved or renamed it must be re-read,
+        // not inherited).
+        if (FormatSelector.isRestField(f)) {
+            if (!bounded || bounded.restField !== f) return fail('REST_FIELD_UNSUPPORTED', f);
+            continue;
+        }
         if (VALUE_FIELDS.has(f)) {
             if (seen.has(f)) return fail('MULTI_LEG_UNSUPPORTED', f);
             seen.add(f);
@@ -237,6 +280,16 @@ function decodeActionFromPsbt(psbtOrHex, opts = {}) {
         return fail('UNKNOWN_ACTION', `${action} v${version}`);
     }
 
+    // Bound the admitted rest field's arity. parse() has already sliced the
+    // trailing segments into an array under the base name; cap how many we will
+    // carry so one crafted payload cannot expand into unbounded downstream work.
+    if (bounded) {
+        const base = FormatSelector.baseFieldName(bounded.restField);
+        const restValue = ownLookup(parsed.params, base);
+        if (Array.isArray(restValue) && restValue.length > bounded.maxParams)
+            return fail('REST_FIELD_TOO_LONG', `${base} has ${restValue.length} entries (max ${bounded.maxParams})`);
+    }
+
     // G1: charset-check every decoded param that becomes a lookup key downstream
     // (TICK and the per-leg *_TICK fields). A tick the protocol could never mint
     // has no legitimate reason to reach a policy table or the persisted window,
@@ -275,4 +328,8 @@ function decodeActionStringFromPsbt(psbtOrHex, opts = {}) {
 
 // MAX_ACTION_DATA_LENGTH re-exported so parity/drift guards can assert the
 // co-signer gate rides the shared (chunkHelper-sourced) cap.
-module.exports = { decodeActionFromPsbt, decodeActionStringFromPsbt, MAX_ACTION_DATA_LENGTH };
+// BOUNDED_REST_FORMATS is exported so valueDerivability.decodableFormats() can
+// mirror this decoder's gates exactly. If the two drift, the conformance tests
+// there fail rather than a format silently becoming reachable but unclassified.
+module.exports = { decodeActionFromPsbt, decodeActionStringFromPsbt, MAX_ACTION_DATA_LENGTH,
+                   BOUNDED_REST_FORMATS, MAX_REST_PARAMS };
