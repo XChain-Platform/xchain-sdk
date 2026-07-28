@@ -66,6 +66,11 @@ const { MAX_ACTION_DATA_LENGTH } = require('../chunkHelper.js');
 const { ACTION_ALIASES } = require('../decoder/aliases.js');
 const { parse: parseActionString } = require('../decoder/parse.js');
 
+// Decoded params are attacker-controlled and several of them become lookup
+// keys in the policy tables and the window store, so they are charset-checked
+// here, at the decode boundary, before anything downstream can key on them.
+const { validateDecodedParams, ownLookup } = require('./paramCharset.js');
+
 // Repeated value-bearing fields mean a multi-output action (e.g. SEND v1/v2/v3).
 // The single-leg policy evaluator reads one tick/amount, so a flat dict would
 // silently under-count the other legs - a policy bypass. Fail closed instead.
@@ -175,7 +180,10 @@ function decodeActionFromPsbt(psbtOrHex, opts = {}) {
     // co-signer silently upper-casing its way into signing a payload the
     // rest of the protocol treats as unrecognized.
     const rawAction = String(segments[0]);
-    const action  = ACTION_ALIASES[rawAction] ?? rawAction;
+    // Own-property read: a raw action token of 'constructor' / 'toString' would
+    // otherwise resolve to an inherited Object.prototype function and be carried
+    // forward as the "action" (same prototype-chain class as G1).
+    const action  = ownLookup(ACTION_ALIASES, rawAction) ?? rawAction;
     const version = Number(segments[1]);
     if (!Number.isInteger(version) || version < 0) return fail('BAD_VERSION');
 
@@ -204,15 +212,17 @@ function decodeActionFromPsbt(psbtOrHex, opts = {}) {
     catch (e) { return fail('MULTI_LEG_UNSUPPORTED', e.message); }
     if (repeated) return fail('MULTI_LEG_UNSUPPORTED', repeated.group.join('|'));
 
-    // BATCH: parse() understands the multi-command sub-grammar, but the
-    // single-leg policy evaluator cannot safely judge a command bundle, so
-    // the pre-re-base fail-closed behavior is preserved verbatim: a COMMAND
-    // tail with embedded '|' (every real sub-action has one) refuses with
-    // the same FIELD_COUNT_MISMATCH the flat field-mapper produced.
-    if (action === 'BATCH' && segments.length > 3) {
-        return fail('FIELD_COUNT_MISMATCH',
-            `${segments.length - 1} values vs ${fieldNames.length} fields`);
-    }
+    // BATCH bundles N sub-commands into one action. The evaluator judges a
+    // SINGLE leg - one action, one amount, one tick - so it cannot bound a
+    // bundle at all, and there is no version of it that it could.
+    //
+    // This used to be a segment-count heuristic (`segments.length > 3`), resting
+    // on the observation that every real sub-action contains a '|'. A
+    // three-segment BATCH therefore slipped through and reached the evaluator
+    // with no amount, no tick and no destination, so it was entirely uncapped
+    // whenever BATCH was in allowedActions (G18). Refuse it structurally: the
+    // action is what disqualifies it, not the shape of a particular payload.
+    if (action === 'BATCH') return fail('BATCH_UNSUPPORTED');
 
     // Field extraction delegates to the canonical decoder.parse() (
     // re-base): same segment->field alignment, same trailing-empty padding,
@@ -226,6 +236,16 @@ function decodeActionFromPsbt(psbtOrHex, opts = {}) {
         if (parsed.code === 'FIELD_COUNT_MISMATCH') return fail('FIELD_COUNT_MISMATCH', parsed.detail);
         return fail('UNKNOWN_ACTION', `${action} v${version}`);
     }
+
+    // G1: charset-check every decoded param that becomes a lookup key downstream
+    // (TICK and the per-leg *_TICK fields). A tick the protocol could never mint
+    // has no legitimate reason to reach a policy table or the persisted window,
+    // where it is a poison-pill: one approved action writes the entry, and every
+    // later request then dies accumulating it - a permanent remote freeze of a
+    // plain 2-of-2 account. Fail closed at the decode boundary instead.
+    const paramCheck = validateDecodedParams(parsed.params);
+    if (!paramCheck.ok)
+        return fail('PARAM_INVALID', `${paramCheck.field}=${paramCheck.value}`);
 
     return { ok: true, action, version, params: parsed.params, actionString };
 }

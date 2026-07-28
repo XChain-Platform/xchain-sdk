@@ -67,14 +67,15 @@ describe('cosigner/account deriveMuSig2P2TR', function () {
 
         const co = new CoSigner({ secretKey: coSk, publicKeys: keys, tweaks: acct.tweaks,
             policy: { allowedActions: new Set(['SEND']) } });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(true);
 
-        const msg = h2b(res.msg);
-        const aggNonce = agentMusig.aggregateNonces([agentNonce, h2b(res.publicNonce)]);
+        const only = res.signatures[0];
+        const msg = h2b(only.msg);
+        const aggNonce = agentMusig.aggregateNonces([agentNonce, h2b(only.publicNonce)]);
         const session  = agentMusig.startSession(aggNonce, msg, keys, acct.tweaks);
         const agentSig = agentMusig.partialSign({ secretKey: agentSk, publicNonce: agentNonce, sessionKey: session });
-        const finalSig = agentMusig.aggregateSignatures([agentSig, h2b(res.sig)], session);
+        const finalSig = agentMusig.aggregateSignatures([agentSig, h2b(only.sig)], session);
 
         // The output key embedded in the address == the key the signature verifies under.
         expect(schnorr.verify(finalSig, msg, acct.aggregateXOnly)).to.equal(true);

@@ -78,7 +78,7 @@ describe('co-signer HTTP sidecar', function () {
     });
 
     it('401s without the bearer token', async function () {
-        const r = await post(port, '/cosign', { psbt: psbtHex, agentPublicNonce: agentNonce });
+        const r = await post(port, '/cosign', { psbt: psbtHex, inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(r.status).to.equal(401);
         expect(r.body.reason).to.equal('UNAUTHORIZED');
     });
@@ -90,35 +90,38 @@ describe('co-signer HTTP sidecar', function () {
     });
 
     it('200 + approved:true for an authorized in-policy request', async function () {
-        const r = await post(port, '/cosign', { psbt: psbtHex, agentPublicNonce: agentNonce }, { authorization: 'Bearer sekret' });
+        const r = await post(port, '/cosign', { psbt: psbtHex, inputs: [{ index: 0, agentPublicNonce: agentNonce }] }, { authorization: 'Bearer sekret' });
         expect(r.status).to.equal(200);
         expect(r.body.approved).to.equal(true);
-        expect(r.body.sig).to.be.a('string');
-        expect(r.body.publicNonce).to.be.a('string');
+        // ONE response shape since the wire collapse: always a signatures array,
+        // even for a single input.
+        expect(r.body.signatures).to.have.length(1);
+        expect(r.body.signatures[0].sig).to.be.a('string');
+        expect(r.body.signatures[0].publicNonce).to.be.a('string');
     });
 
     it('401s on a wrong token of the SAME length as the real one', async function () {
         const wrong = 'sekret'.split('').reverse().join('');
         expect(wrong.length).to.equal('sekret'.length);
-        const r = await post(port, '/cosign', { psbt: psbtHex, agentPublicNonce: agentNonce }, { authorization: 'Bearer ' + wrong });
+        const r = await post(port, '/cosign', { psbt: psbtHex, inputs: [{ index: 0, agentPublicNonce: agentNonce }] }, { authorization: 'Bearer ' + wrong });
         expect(r.status).to.equal(401);
         expect(r.body.reason).to.equal('UNAUTHORIZED');
     });
 
     it('401s on a wrong token of a DIFFERENT length', async function () {
-        const r = await post(port, '/cosign', { psbt: psbtHex, agentPublicNonce: agentNonce }, { authorization: 'Bearer short' });
+        const r = await post(port, '/cosign', { psbt: psbtHex, inputs: [{ index: 0, agentPublicNonce: agentNonce }] }, { authorization: 'Bearer short' });
         expect(r.status).to.equal(401);
         expect(r.body.reason).to.equal('UNAUTHORIZED');
     });
 
     it('401s on a malformed authorization header (no Bearer prefix)', async function () {
-        const r = await post(port, '/cosign', { psbt: psbtHex, agentPublicNonce: agentNonce }, { authorization: 'sekret' });
+        const r = await post(port, '/cosign', { psbt: psbtHex, inputs: [{ index: 0, agentPublicNonce: agentNonce }] }, { authorization: 'sekret' });
         expect(r.status).to.equal(401);
         expect(r.body.reason).to.equal('UNAUTHORIZED');
     });
 
     it('401s on a non-Bearer scheme', async function () {
-        const r = await post(port, '/cosign', { psbt: psbtHex, agentPublicNonce: agentNonce }, { authorization: 'Basic sekret' });
+        const r = await post(port, '/cosign', { psbt: psbtHex, inputs: [{ index: 0, agentPublicNonce: agentNonce }] }, { authorization: 'Basic sekret' });
         expect(r.status).to.equal(401);
         expect(r.body.reason).to.equal('UNAUTHORIZED');
     });

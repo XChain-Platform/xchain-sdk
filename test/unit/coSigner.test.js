@@ -88,15 +88,18 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const agentNonce = agentMusig.generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
 
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce, inputIndex: 0 });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(true);
 
         // Agent finishes from the co-signer's nonce + message.
-        const msg = h2b(res.msg);
-        const aggNonce = agentMusig.aggregateNonces([agentNonce, h2b(res.publicNonce)]);
+        // ONE result shape since the wire collapse: a signatures array, even for
+        // a single input. CoSignerClient.sign() is where the unwrapping lives.
+        const only = res.signatures[0];
+        const msg = h2b(only.msg);
+        const aggNonce = agentMusig.aggregateNonces([agentNonce, h2b(only.publicNonce)]);
         const session  = agentMusig.startSession(aggNonce, msg, acct.keys, acct.tweaks);
         const agentSig = agentMusig.partialSign({ secretKey: acct.agentSk, publicNonce: agentNonce, sessionKey: session });
-        const finalSig = agentMusig.aggregateSignatures([agentSig, h2b(res.sig)], session);
+        const finalSig = agentMusig.aggregateSignatures([agentSig, h2b(only.sig)], session);
 
         expect(schnorr.verify(finalSig, msg, acct.aggKey)).to.equal(true);
     });
@@ -111,10 +114,10 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         // type that does not commit to the gated outputs. Each must be refused with
         // no partial signature produced.
         for (const bad of [0x02 /* NONE */, 0x03 /* SINGLE */, 0x81 /* ALL|ANYONECANPAY */, 0x83 /* SINGLE|ANYONECANPAY */]) {
-            const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce, inputIndex: 0, sighashType: bad });
+            const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }], sighashType: bad });
             expect(res.approved, 'sighashType 0x' + bad.toString(16) + ' must not approve').to.not.equal(true);
             expect(res.reason).to.equal('SIGHASH_TYPE_NOT_ALLOWED');
-            expect(res.sig, 'no partial signature is produced').to.equal(undefined);
+            expect(res.signatures, 'no partial signature is produced').to.equal(undefined);
         }
     });
 
@@ -130,10 +133,10 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const agentMusig = new MuSig2();
         const agentNonce = agentMusig.generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce, inputIndex: 0, sighashType: 0x01 });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }], sighashType: 0x01 });
         expect(res.approved, 'SIGHASH_ALL must not approve').to.not.equal(true);
         expect(res.reason).to.equal('SIGHASH_TYPE_NOT_ALLOWED');
-        expect(res.sig, 'no partial signature is produced').to.equal(undefined);
+        expect(res.signatures, 'no partial signature is produced').to.equal(undefined);
     });
 
     it('derives the message from the PSBT, not the caller (no msg input is accepted)', function () {
@@ -142,10 +145,10 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const agentMusig = new MuSig2();
         const agentNonce = agentMusig.generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         // The returned msg equals the independently-computed Taproot sighash.
         const expected = CoSigner.taprootKeyPathSighash(bitcoin.Psbt.fromHex(psbt.toHex()), 0).toString('hex');
-        expect(res.msg).to.equal(expected);
+        expect(res.signatures[0].msg).to.equal(expected);
     });
 
     it('denies (and signs nothing) when the amount exceeds a per-action cap', function () {
@@ -154,10 +157,10 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
             policy: policy({ maxPerAction: { SEND: { TOK: '50' } } }) });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(false);
         expect(res.reason).to.equal('POLICY_AMOUNT_EXCEEDED');
-        expect(res.sig).to.equal(undefined);
+        expect(res.signatures).to.equal(undefined);
     });
 
     it('denies an action that does not decode (no OP_RETURN) with a DECODE_ reason', function () {
@@ -167,7 +170,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         psbt.addOutput({ address: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2', value: 90000 });
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(false);
         expect(res.reason).to.equal('DECODE_NO_OP_RETURN');
     });
@@ -177,7 +180,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const psbt = buildSignablePsbt(acct, 'SEND|0|TOK|1|1destX|m', { noWitnessUtxo: true });
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(false);
         // The output gate needs the spent script too, so it refuses before the
         // sighash step would; either way nothing is signed.
@@ -190,7 +193,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
             policy: policy({ confirmAbove: { perTick: { '*': '50' } } }) });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(false);
         expect(res.reason).to.equal('CONFIRMATION_REQUIRED');
     });
@@ -198,14 +201,14 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
     it('enforces the server-side window cap across calls', function () {
         const acct = makeAccount();
         const stateFile = path.join(os.tmpdir(), `cosigner-test-${crypto.randomBytes(6).toString('hex')}.json`);
-        const store = new WindowStore(stateFile, 24);
+        const store = new WindowStore(stateFile, 24, null, { init: true });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
             policy: policy({ maxPerWindow: { hours: 24, maxActions: 1 } }), windowStore: store });
 
         const mk = () => {
             const psbt = buildSignablePsbt(acct, 'SEND|0|TOK|1|1destX|m');
             const nonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
-            return co.process({ psbt: psbt.toHex(), agentPublicNonce: nonce });
+            return co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: nonce }] });
         };
         try {
             expect(mk().approved).to.equal(true);                       // 1st consumes the window
@@ -240,7 +243,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const psbt = buildDrainPsbt(acct, attacker, 49000);
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(false);
         expect(res.reason).to.equal('UNAUTHORIZED_OUTPUT');
     });
@@ -252,7 +255,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
             policy: policy(), allowedOutputs: [{ script: fee, maxValue: 5000 }] });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(true);
     });
 
@@ -263,7 +266,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
             policy: policy(), allowedOutputs: [{ script: fee, maxValue: 5000 }] });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(false);
         expect(res.reason).to.equal('OUTPUT_OVER_CAP');
     });
@@ -297,7 +300,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
             policy: policy(), allowedOutputs: [{ script: fee, maxValue: 5000 }] });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(false);
         expect(res.reason).to.equal('OUTPUT_OVER_CAP');
     });
@@ -309,7 +312,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
             policy: policy(), allowedOutputs: [{ script: fee, maxValue: 5000 }] });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(true);
     });
 
@@ -320,7 +323,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
             policy: policy(), allowedOutputs: [{ script: fee, maxValue: 5000 }] });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(true);
     });
 
@@ -335,7 +338,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
             policy: policy(), allowedOutputs: [{ script: fee, maxValue: 3000 }] });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(false);
         expect(res.reason).to.equal('OUTPUT_OVER_CAP');
     });
@@ -358,7 +361,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         psbt.addOutput({ script: acct.p2trScript, value: big - 10000n });   // BigInt change too
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(true);
     });
 
@@ -377,7 +380,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
             policy: policy(), maxFeeSats: 10000 });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(false);
         expect(res.reason).to.equal('FEE_EXCEEDS_CAP');
     });
@@ -389,7 +392,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
             policy: policy(), maxFeeSats: 100 });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(false);
         expect(res.reason).to.equal('FEE_EXCEEDS_CAP');
     });
@@ -420,10 +423,10 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const psbt = buildOpReturnValuePsbt(acct, 99000, false);
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(false);
         expect(res.reason).to.equal('OP_RETURN_CARRIES_VALUE');
-        expect(res.sig, 'no partial signature is produced').to.equal(undefined);
+        expect(res.signatures, 'no partial signature is produced').to.equal(undefined);
     });
 
     it('still approves the normal zero-value OP_RETURN carrier with change to self', function () {
@@ -431,7 +434,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const psbt = buildOpReturnValuePsbt(acct, 0, true);
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(true);
     });
 
@@ -444,10 +447,10 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const psbt = buildOpReturnValuePsbt(acct, 0, false); // zero-value carrier, no change: every sat to fee
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(false);
         expect(res.reason).to.equal('FEE_BURNS_ENTIRE_INPUT');
-        expect(res.sig, 'no partial signature is produced').to.equal(undefined);
+        expect(res.signatures, 'no partial signature is produced').to.equal(undefined);
     });
 
     // An undersized change output (a 1-sat dust leg) is the same drain, but it is
@@ -460,7 +463,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
             policy: policy(), maxFeeSats: 50000 });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(false);
         expect(res.reason).to.equal('FEE_EXCEEDS_CAP');
     });
@@ -473,7 +476,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
             policy: policy(), maxFeeSats: 5000 });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(false);
         expect(res.reason).to.equal('FEE_EXCEEDS_CAP');
     });
@@ -484,7 +487,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
             policy: policy(), maxFeeSats: 20000 });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(true);
     });
 
@@ -522,7 +525,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
     it('multi-input: charges the window once for the whole tx', function () {
         const acct = makeAccount();
         const stateFile = path.join(os.tmpdir(), `cosigner-multi-${crypto.randomBytes(6).toString('hex')}.json`);
-        const store = new WindowStore(stateFile, 24);
+        const store = new WindowStore(stateFile, 24, null, { init: true });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
             policy: policy({ maxPerWindow: { hours: 24, maxActions: 1 } }), windowStore: store });
         try {
@@ -562,7 +565,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         psbt.data.inputs[0].witnessUtxo.script = foreignAggAcct.p2trScript;
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks, policy: policy() });
-        const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
         expect(res.approved).to.equal(false);
         expect(res.reason).to.equal('PREVOUT_NOT_OUR_ACCOUNT');
         expect(res.detail.index).to.equal(0);
@@ -575,7 +578,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const acct = makeAccount();
         const foreignAggAcct = makeAccount();
         const stateFile = path.join(os.tmpdir(), `cosigner-prevout-${crypto.randomBytes(6).toString('hex')}.json`);
-        const store = new WindowStore(stateFile, 24);
+        const store = new WindowStore(stateFile, 24, null, { init: true });
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
             policy: policy({ maxPerWindow: { hours: 24, maxActions: 1 } }), windowStore: store });
         try {
@@ -583,7 +586,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
             const psbt = buildSignablePsbt(acct, 'SEND|0|TOK|1|1destX|m');
             psbt.data.inputs[0].witnessUtxo.script = foreignAggAcct.p2trScript;
             const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
-            const res = co.process({ psbt: psbt.toHex(), agentPublicNonce: agentNonce });
+            const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
             expect(res.approved).to.equal(false);
             expect(res.reason).to.equal('PREVOUT_NOT_OUR_ACCOUNT');
             const after = store.snapshot();
@@ -593,7 +596,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
             // against the real account still succeeds after the denial.
             const good = buildSignablePsbt(acct, 'SEND|0|TOK|1|1destX|m');
             const goodNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
-            const goodRes = co.process({ psbt: good.toHex(), agentPublicNonce: goodNonce });
+            const goodRes = co.process({ psbt: good.toHex(), inputs: [{ index: 0, agentPublicNonce: goodNonce }] });
             expect(goodRes.approved).to.equal(true);
         } finally {
             try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
@@ -618,12 +621,12 @@ describe('WindowStore (fail-closed budget)', function () {
     afterEach(() => { try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ } });
 
     it('snapshots an empty window before any record', function () {
-        const s = new WindowStore(stateFile, 24);
+        const s = new WindowStore(stateFile, 24, null, { init: true });
         expect(s.snapshot()).to.deep.equal({ count: 0, perTick: {} });
     });
 
     it('accumulates per-tick totals and counts', function () {
-        const s = new WindowStore(stateFile, 24);
+        const s = new WindowStore(stateFile, 24, null, { init: true });
         s.record({ action: 'SEND', tick: 'TOK', amount: '5' });
         s.record({ action: 'SEND', tick: 'TOK', amount: '7' });
         const snap = s.snapshot();
@@ -633,17 +636,32 @@ describe('WindowStore (fail-closed budget)', function () {
 
     it('prunes entries older than the window', function () {
         let t = 1_000_000_000_000;
-        const s = new WindowStore(stateFile, 1, () => t);   // 1-hour window, injected clock
+        const s = new WindowStore(stateFile, 1, () => t, { init: true });   // 1-hour window, injected clock
         s.record({ action: 'SEND', tick: 'TOK', amount: '5' });
         t += 2 * 3600 * 1000;                               // advance 2h
-        // reload from disk so the in-memory cache doesn't mask pruning
-        const s2 = new WindowStore(stateFile, 1, () => t);
+        // reload from disk so the in-memory cache doesn't mask pruning. The store
+        // is a single-writer resource (G5), so the first handle must hand the lock
+        // over before a second one can open the same file.
+        s.release();
+        const s2 = new WindowStore(stateFile, 1, () => t, { init: true });
         expect(s2.snapshot().count).to.equal(0);
     });
 
     it('fails closed on a corrupt state file (never silently resets the budget)', function () {
         fs.writeFileSync(stateFile, '{ not valid json');
-        const s = new WindowStore(stateFile, 24);
-        expect(() => s.snapshot()).to.throw(/unreadable/);
+        // The store loads EAGERLY since G6, so a corrupt window is a startup
+        // failure the operator sees at boot rather than a surprise on the first
+        // co-sign request. init:true does not paper over it: the file exists, it
+        // is simply unreadable, and silently resetting it would re-open the budget.
+        expect(() => new WindowStore(stateFile, 24, null, { init: true })).to.throw(/unreadable/);
+    });
+
+    it('refuses to start when the state file is ABSENT (deletion is not a reset)', function () {
+        // Without init, a missing window is a hard error: treating it as empty
+        // made `rm window.json` a complete, silent budget reset (G6).
+        let err = null;
+        try { new WindowStore(stateFile, 24); } catch (e) { err = e; }
+        expect(err).to.not.equal(null);
+        expect(err.code).to.equal('WINDOW_STATE_MISSING');
     });
 });

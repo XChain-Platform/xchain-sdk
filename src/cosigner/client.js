@@ -84,20 +84,31 @@ function httpTransport(endpoint, opts = {}) {
     if (opts.token) headers.authorization = 'Bearer ' + opts.token;
     return async (body) => {
         const res = await fetchImpl(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
-        // A reverse proxy in front of the sidecar can answer 502/504 with an HTML
-        // error page; without this guard res.json() throws an opaque SyntaxError
-        // and a non-2xx JSON body would be mistaken for a normal result. Surface
-        // the transport fault distinctly from a policy denial, tagged with the
-        // endpoint + status so operators can tell them apart.
-        if (!res.ok)
+
+        // G13: read the BODY on a non-2xx before deciding what went wrong. The
+        // sidecar answers 401 UNAUTHORIZED, 400 BAD_REQUEST and 500 INTERNAL_ERROR
+        // with a documented `reason`, and throwing COSIGNER_TRANSPORT_ERROR without
+        // looking made all three indistinguishable from a dead sidecar - which is
+        // exactly the distinction an operator needs mid-incident (a rotated or
+        // mistyped token looked identical to a crashed daemon). Only a genuine
+        // network fault or a non-JSON body may collapse to the transport error; a
+        // reverse proxy answering 502 with an HTML page still lands there.
+        let parsed = null;
+        try { parsed = await res.json(); } catch (e) { parsed = null; }
+
+        if (!res.ok) {
+            if (parsed && typeof parsed.reason === 'string')
+                throw new SDKPolicyError(parsed.reason,
+                    'co-signer sidecar ' + endpoint + ' returned HTTP ' + res.status + ': ' + parsed.reason,
+                    parsed.detail ? { detail: parsed.detail } : {});
             throw new SDKPolicyError('COSIGNER_TRANSPORT_ERROR',
-                'co-signer sidecar ' + endpoint + ' returned HTTP ' + res.status);
-        try {
-            return await res.json();
-        } catch (e) {
-            throw new SDKPolicyError('COSIGNER_TRANSPORT_ERROR',
-                'co-signer sidecar ' + endpoint + ' returned an unparseable (non-JSON) response: ' + e.message);
+                'co-signer sidecar ' + endpoint + ' returned HTTP ' + res.status +
+                ' with no usable body (dead sidecar, or a proxy error page)');
         }
+        if (parsed === null)
+            throw new SDKPolicyError('COSIGNER_TRANSPORT_ERROR',
+                'co-signer sidecar ' + endpoint + ' returned an unparseable (non-JSON) response');
+        return parsed;
     };
 }
 
@@ -139,11 +150,13 @@ class CoSignerClient {
         // Round 1: agent nonce (secret nonce stays in this.musig).
         const agentNonce = this.musig.generateNonce({ publicKey: agentPub, secretKey });
 
-        // Ask the co-signer to authorize + partial-sign.
+        // Ask the co-signer to authorize + partial-sign. The wire carries exactly
+        // ONE request shape (the inputs array); the single-input convenience is
+        // this method's job, so the daemon keeps a single validation path.
+        const idx = Number.isInteger(req.inputIndex) ? req.inputIndex : 0;
         const res = await this.transport({
-            psbt:             req.psbt,
-            agentPublicNonce: Buffer.from(agentNonce).toString('hex'),
-            inputIndex:       Number.isInteger(req.inputIndex) ? req.inputIndex : 0,
+            psbt:   req.psbt,
+            inputs: [{ index: idx, agentPublicNonce: Buffer.from(agentNonce).toString('hex') }],
         });
 
         if (!res || res.approved !== true)
@@ -151,16 +164,25 @@ class CoSignerClient {
                 'co-signer refused to sign: ' + (res && res.reason ? res.reason : 'unknown'),
                 res && res.detail ? { detail: res.detail } : {});
 
+        // Unwrap the one-element signatures array back into the single-input
+        // result this method has always returned.
+        if (!Array.isArray(res.signatures) || res.signatures.length !== 1)
+            throw new SDKPolicyError('COSIGNER_BAD_RESPONSE',
+                'co-signer approved but did not return exactly one signature for a single-input request');
+        const sig0 = res.signatures[0];
+        if (sig0.index !== idx)
+            throw new SDKPolicyError('COSIGNER_BAD_RESPONSE',
+                'co-signer returned a signature for input ' + sig0.index + ', not the requested ' + idx);
+
         // Combine: the co-signer derived the message from the PSBT and returned it;
         // we re-aggregate the nonces, build the same session, and add our partial.
-        const msg = toBytes(res.msg, 'msg');
-        const idx = Number.isInteger(req.inputIndex) ? req.inputIndex : 0;
+        const msg = toBytes(sig0.msg, 'msg');
         assertMsgMatchesPsbt(req.psbt, idx, msg);
-        const coNonce = toBytes(res.publicNonce, 'publicNonce');
+        const coNonce = toBytes(sig0.publicNonce, 'publicNonce');
         const aggNonce = this.musig.aggregateNonces([agentNonce, coNonce]);
         const session  = this.musig.startSession(aggNonce, msg, this.publicKeys, this.tweaks);
         const agentSig = this.musig.partialSign({ secretKey, publicNonce: agentNonce, sessionKey: session });
-        const signature = this.musig.aggregateSignatures([agentSig, toBytes(res.sig, 'sig')], session);
+        const signature = this.musig.aggregateSignatures([agentSig, toBytes(sig0.sig, 'sig')], session);
 
         return { signature: Buffer.from(signature), msg: Buffer.from(msg), action: res.action };
     }

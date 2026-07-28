@@ -118,7 +118,8 @@ describe('CoSignerClient (agent side)', function () {
                 policy: { allowedActions: new Set(['SEND']) } });
             const client = new CoSignerClient({
                 transport: tamperedTransport(co, (res) => {
-                    if (res.approved) res.msg = crypto.randomBytes(32).toString('hex');
+                    // One wire result shape now: tamper inside the signatures array.
+                    if (res.approved) res.signatures[0].msg = crypto.randomBytes(32).toString('hex');
                     return res;
                 }),
                 publicKeys: s.keys, tweaks: s.acct.tweaks });

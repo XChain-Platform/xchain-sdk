@@ -42,9 +42,12 @@
  *
  * SCOPE (slice 3): key-path P2TR spend of a configured aggregate (the
  * 2-of-2 case; the deterministic signer is this co-signer, the agent is
- * the live signer). The taproot tweak is supplied at construction (an
- * address-setup concern), not re-derived here. The 2-of-3 recovery tree is
- * a later slice. COINPAY/native-fee output legs are supported only when the
+ * the live signer). The taproot tweak is DERIVED here from the participant
+ * public keys, never supplied: a raw tweak is an opaque commitment to a
+ * script tree the daemon cannot inspect, so accepting one lets whoever
+ * supplies it hide a unilateral spend path (see the constructor, G3). A
+ * 2-of-3 account is configured by naming recoveryPublicKey.
+ * COINPAY/native-fee output legs are supported only when the
  * operator allow-lists them via config.allowedOutputs (default: none, so
  * plain token SEND - OP_RETURN + change only - passes). EXECUTE, DEPLOY
  * v0/v2, and LIST use rest-field formats (`...PARAMS`) that
@@ -61,6 +64,8 @@ const ecc     = require('@bitcoinerlab/secp256k1');
 const MuSig2  = require('../musig2.js');
 const { evaluatePolicy } = require('./policyEvaluator.js');
 const { decodeActionFromPsbt } = require('./psbtActionDecode.js');
+const { deriveMuSig2P2TR2of3 } = require('./account.js');
+const { isCapInert } = require('./valueDerivability.js');
 
 // Taproot operations (p2tr derivation, key-path sighash) require an ECC backend.
 // initEccLib sets a bitcoinjs global; idempotent and safe to call on module load.
@@ -87,12 +92,43 @@ function sighashAllowed(hashType) {
     return hashType === undefined || ALLOWED_SIGHASH.has(hashType);
 }
 
+// The five standard single-recipient payment templates. Anything else - bare
+// multisig above all - is refused as an allowedOutputs entry (see
+// _normalizeAllowedOutputs, G7). Matching is structural, on the decompiled
+// script, so it cannot be fooled by an address encoding.
+function isStandardPaymentScript(script) {
+    if (!Buffer.isBuffer(script)) return false;
+    let d;
+    try { d = bitcoin.script.decompile(script); } catch (e) { return false; }
+    if (!d) return false;
+    const op = bitcoin.opcodes;
+    // P2PKH: OP_DUP OP_HASH160 <20> OP_EQUALVERIFY OP_CHECKSIG
+    if (d.length === 5 && d[0] === op.OP_DUP && d[1] === op.OP_HASH160 &&
+        Buffer.isBuffer(d[2]) && d[2].length === 20 &&
+        d[3] === op.OP_EQUALVERIFY && d[4] === op.OP_CHECKSIG) return true;
+    // P2SH: OP_HASH160 <20> OP_EQUAL
+    if (d.length === 3 && d[0] === op.OP_HASH160 &&
+        Buffer.isBuffer(d[1]) && d[1].length === 20 && d[2] === op.OP_EQUAL) return true;
+    // P2WPKH / P2WSH: OP_0 <20|32>
+    if (d.length === 2 && d[0] === op.OP_0 &&
+        Buffer.isBuffer(d[1]) && (d[1].length === 20 || d[1].length === 32)) return true;
+    // P2TR: OP_1 <32>
+    if (d.length === 2 && d[0] === op.OP_1 &&
+        Buffer.isBuffer(d[1]) && d[1].length === 32) return true;
+    return false;
+}
+
+// Default ceiling on both the requested and the PSBT-total input count (G14).
+// Comfortably above any realistic agent spend, far below the point where the
+// quadratic sighash work becomes a denial of service.
+const DEFAULT_MAX_COSIGN_INPUTS = 32;
+
 // BIP341 key-path sighash for one input, reconstructed from the PSBT. Requires a
 // witnessUtxo on EVERY input (the sighash commits to all prevouts); throws if any
 // is missing, so the caller fails closed rather than signing a half-known tx.
 function taprootKeyPathSighash(psbt, inputIndex, hashType) {
     // Defense in depth: never derive a signing message under a sighash type that
-    // does not commit to every output. The process/_processMulti guards reject it
+    // does not commit to every output. The process() sighash guard rejects it
     // earlier with a clearer code; this also protects any other caller of this export.
     if (!sighashAllowed(hashType))
         throw new Error('disallowed sighashType 0x' + Number(hashType).toString(16).padStart(2, '0') + ' (only SIGHASH_DEFAULT is finalizable by this signer)');
@@ -123,9 +159,13 @@ class CoSigner {
      *   publicKeys      {(Uint8Array|hex)[]}  full signer set incl. ours, in the agreed order
      *   policy          normalized policy (see policyEvaluator)
      *   windowStore     {WindowStore}  optional; required if policy.maxPerWindow is set
-     *   tweaks          {{tweak,xOnly}[]}  optional; the taproot tweak applied at address setup
+     *   recoveryPublicKey {Uint8Array|hex}  2-of-3 only: the operator-recovery party's key.
+     *                   The daemon derives the tap tree AND its own key-path tweak from
+     *                   [agent, daemon, recovery]; a raw tweak is never accepted (G3).
      *   network         bitcoinjs network (optional, for hex PSBT parsing)
      *   allowConfirmable {boolean}  default false; a headless daemon denies confirm-required actions
+     *   maxCosignInputs {number}  default 32; ceiling on BOTH the requested input
+     *                   count and the PSBT's total input count (G14)
      */
     constructor(config = {}) {
         this.secretKey  = toBytes(config.secretKey, 'secretKey');
@@ -139,8 +179,70 @@ class CoSigner {
         if (this.policy.maxPerWindow && !config.windowStore)
             throw new Error('policy.maxPerWindow requires a windowStore (server-side budget)');
         this.windowStore = config.windowStore || null;
-        this.tweaks = config.tweaks || [];
         this.network = config.network || null;
+
+        // G2: an amount cap keyed on an action whose every decodable format
+        // defines its value by ACTION_INDEX reference can never fire - the
+        // daemon cannot read the referenced object, so the amount is always
+        // undefined and every amount gate skips. Left alone that is a policy the
+        // operator believes is enforced and which is in fact decorative. Reject
+        // it here, at construction, rather than at sign time.
+        // maxPerAction is the only policy table keyed by ACTION (maxPerWindow.perTick
+        // and confirmAbove.perTick are keyed by tick), so it is the only place an
+        // action name can be written into an amount limit.
+        if (config.policy.maxPerAction) {
+            for (const action of Object.keys(config.policy.maxPerAction))
+                if (isCapInert(action))
+                    throw new Error(`policy.maxPerAction.${action} can never bind: every decodable ` +
+                        `${action} format defines its value by reference to an on-chain object the ` +
+                        `co-signer cannot read, so the cap would be silently inert. Remove the cap ` +
+                        `(the output gate + maxFeeSats bound ${action}), or disallow the action.`);
+        }
+
+        // G3: the taproot tweak is DERIVED here, never accepted from the caller.
+        // `tweak = taggedHash('TapTweak', internal || merkleRoot)` is an opaque
+        // 32 bytes: a daemon handed that value cannot tell which tap tree it
+        // commits to, so whoever supplies it chooses the tree. A compromised
+        // agent supplying a tweak computed over a tree containing
+        // `<agentPubkey> OP_CHECKSIG` yields exactly the funded address, passes
+        // every gate, and then spends the whole account unilaterally through a
+        // script path - no daemon, no policy, no window, and on-chain
+        // indistinguishable from a cooperative spend. So `tweaks` is gone as a
+        // configuration surface, and the 2-of-3 account is configured by naming
+        // the third PUBLIC KEY, which the daemon can verify by re-deriving the
+        // whole tree (and therefore the address) itself.
+        if (config.tweaks !== undefined && !(Array.isArray(config.tweaks) && config.tweaks.length === 0))
+            throw new Error('config.tweaks is not accepted: a supplied taproot tweak is an unverifiable ' +
+                'commitment to an arbitrary script tree (an agent-chosen tree grants the agent a ' +
+                'unilateral script-path spend). Configure a 2-of-3 account with recoveryPublicKey ' +
+                'instead, and the daemon derives the tree itself.');
+
+        this.recoveryPublicKey = config.recoveryPublicKey || null;
+        if (this.recoveryPublicKey) {
+            if (this.publicKeys.length !== 2)
+                throw new Error('recoveryPublicKey requires exactly the [agent, daemon] pair in publicKeys ' +
+                    '(the recovery key is the third party and is named separately)');
+            let tree;
+            try {
+                tree = deriveMuSig2P2TR2of3({
+                    agent:    this.publicKeys[0],
+                    daemon:   this.publicKeys[1],
+                    recovery: this.recoveryPublicKey,
+                }, this.network || undefined);
+            } catch (e) {
+                throw new Error('failed to derive the 2-of-3 tap tree from publicKeys/recoveryPublicKey: ' + e.message);
+            }
+            this.tweaks = tree.keyPath.tweaks;
+            this.tapTree = tree;
+        } else {
+            // Plain 2-of-2: the BIP-327 aggregate IS the taproot output key, with
+            // no tweak. That is hidden-leaf-safe by construction - producing a
+            // valid control block against an untweaked output key would need a
+            // discrete-log relation - precisely because the output key is a key
+            // aggregate with key coefficients no single participant can steer.
+            this.tweaks = [];
+            this.tapTree = null;
+        }
         this.allowConfirmable = config.allowConfirmable === true;
         // Operator-authorized non-change outputs (COINPAY native legs, the
         // protocol-fee output). Everything NOT in this set, change-to-self, or the
@@ -156,30 +258,41 @@ class CoSigner {
             ? null : Number(config.maxFeeSats);
         if (this.maxFeeSats !== null && (!Number.isInteger(this.maxFeeSats) || this.maxFeeSats < 0))
             throw new Error('maxFeeSats must be a non-negative integer');
+        // G14: the body-size limit bounds BYTES, not WORK. Sighash derivation
+        // re-copies every prevout script and value per signed input, so the cost is
+        // quadratic in the PSBT's input count, plus one deterministicSign each. A
+        // single crafted request could occupy the single-threaded sidecar for
+        // seconds and a modest stream of them is a sustained freeze - which, per the
+        // threat model, is permanently stuck funds on a plain 2-of-2. Cap both the
+        // requested count and the PSBT's TOTAL input count, since the sighash walks
+        // every input whether or not we sign it.
+        this.maxCosignInputs = (config.maxCosignInputs === undefined || config.maxCosignInputs === null)
+            ? DEFAULT_MAX_COSIGN_INPUTS : Number(config.maxCosignInputs);
+        if (!Number.isInteger(this.maxCosignInputs) || this.maxCosignInputs < 1)
+            throw new Error('maxCosignInputs must be a positive integer');
+
         this.musig = new MuSig2();
 
-        // The account scriptPubKey this daemon actually spends from, derived once
-        // here rather than trusted from a caller-supplied witnessUtxo.script (see
-        // _checkPrevouts). Covers both the plain 2-of-2 key path (tweaks: []) and
-        // the tweaked 2-of-3 cooperative key path (tweaks from deriveMuSig2P2TR2of3
-        // .keyPath.tweaks). config.accountScript is an operator escape hatch for
-        // accounts outside key-path scope (e.g. script-path/recovery spends), not
-        // the default: prefer deriving it from publicKeys/tweaks.
-        if (config.accountScript) {
-            this.accountScript = Buffer.isBuffer(config.accountScript)
-                ? config.accountScript
-                : Buffer.from(config.accountScript, 'hex');
-        } else {
-            try {
-                const agg = this.musig.aggregateKeys(this.publicKeys, this.tweaks);
-                const p2tr = bitcoin.payments.p2tr({
-                    pubkey:  Buffer.from(agg.xOnlyPubkey),
-                    network: this.network || undefined,
-                });
-                this.accountScript = p2tr.output;
-            } catch (e) {
-                throw new Error('failed to derive the account scriptPubKey from publicKeys/tweaks: ' + e.message);
-            }
+        // The account scriptPubKey this daemon actually spends from, derived ONLY
+        // from the participant keys, never trusted from a caller-supplied
+        // witnessUtxo.script (see _checkPrevouts). Covers both the plain 2-of-2 key
+        // path (no tweak) and the tweaked 2-of-3 cooperative key path, whose tweak
+        // this constructor derived above from the three participant keys.
+        //
+        // There is deliberately no `accountScript` config override. It had no
+        // consumer, its only effect was to WEAKEN the prevout gate (the one gate
+        // that proves the inputs being signed really belong to this account), and
+        // the best case for a wrong value was a liveness break. Tests derive the
+        // script exactly as production does.
+        try {
+            const agg = this.musig.aggregateKeys(this.publicKeys, this.tweaks);
+            const p2tr = bitcoin.payments.p2tr({
+                pubkey:  Buffer.from(agg.xOnlyPubkey),
+                network: this.network || undefined,
+            });
+            this.accountScript = p2tr.output;
+        } catch (e) {
+            throw new Error('failed to derive the account scriptPubKey from the participant keys: ' + e.message);
         }
     }
 
@@ -199,8 +312,32 @@ class CoSigner {
             } else {
                 throw new Error(`allowedOutputs[${i}] needs an address or script`);
             }
-            const maxValue = (o.maxValue === undefined || o.maxValue === null) ? null : Number(o.maxValue);
-            if (maxValue !== null && (!Number.isFinite(maxValue) || maxValue < 0))
+            // G7: entries MUST be standard single-recipient payment scripts. This
+            // gate is not only about tidiness - it is the only thing standing
+            // between the co-signer and ALTERNATE-CARRIER ACTION SMUGGLING. The
+            // authoritative decoder recognizes carrier shapes decodeActionFromPsbt
+            // never examines (bare 1-of-3 multisig, the P2SH/P2WSH two-phase
+            // reveal), so a transaction could carry a benign OP_RETURN action for
+            // the co-signer to approve and a DIFFERENT action in a second carrier
+            // for the chain to execute. Today that is impossible only because such
+            // a carrier is an output that is neither the OP_RETURN, nor change, nor
+            // allow-listed. Letting an operator allow-list a bare-multisig or
+            // otherwise non-standard script would hand that property away, and the
+            // anti-smuggling role is nowhere near obvious from the anti-drain code.
+            if (!isStandardPaymentScript(script))
+                throw new Error(`allowedOutputs[${i}] is not a standard single-recipient payment script ` +
+                    `(P2PKH, P2SH, P2WPKH, P2WSH or P2TR). Non-standard scripts - notably bare multisig - ` +
+                    `are also ALTERNATE ACTION CARRIERS the authoritative decoder reads but the co-signer ` +
+                    `does not, so allow-listing one would let a second, ungated action ride the same ` +
+                    `transaction.`);
+            // G7: an entry with no maxValue authorizes UNLIMITED per-tx value to
+            // that address, which is not a bound at all. Even with one, the
+            // cumulative ceiling across transactions is maxActions * maxValue (G12).
+            if (o.maxValue === undefined || o.maxValue === null)
+                throw new Error(`allowedOutputs[${i}] needs a maxValue: without one the entry authorizes ` +
+                    `unlimited native coin to that address on every approved transaction`);
+            const maxValue = Number(o.maxValue);
+            if (!Number.isFinite(maxValue) || maxValue < 0)
                 throw new Error(`allowedOutputs[${i}].maxValue must be a non-negative number`);
             return { script, maxValue };
         });
@@ -251,7 +388,8 @@ class CoSigner {
             if (match) {
                 const total = (spent.get(match) || 0) + Number(out.value);
                 spent.set(match, total);
-                if (match.maxValue !== null && total > match.maxValue)
+                // maxValue is mandatory since G7, so this is always a real bound.
+                if (total > match.maxValue)
                     return this._deny('OUTPUT_OVER_CAP', { index: i, value: out.value, total, maxValue: match.maxValue });
                 continue;
             }
@@ -342,16 +480,20 @@ class CoSigner {
     /*
      * Decide and (if approved) partial-sign.
      *
+     * ONE request shape (wire collapse, 2026-07-27). The legacy single-input
+     * form ({psbt, agentPublicNonce, inputIndex}) and its separate success body
+     * are gone: an `inputs` array with one element expresses exactly the same
+     * request, and two shapes meant two validation paths that every hardening
+     * fix had to be applied to twice. The single-input CONVENIENCE lives in
+     * CoSignerClient.sign(), which wraps before the wire and unwraps after it.
+     *
      * @param {object} req
-     *   psbt              {string} PSBT hex (or a bitcoin.Psbt)
-     *   agentPublicNonce  {Uint8Array|hex} the live signer's 66-byte public nonce
-     *   inputIndex        {number} the input this group signs (default 0)
-     *   sighashType       {number} optional; default SIGHASH_DEFAULT
-     *   inputs            [{index, agentPublicNonce}]  multi-input form (see _processMulti)
+     *   psbt         {string} PSBT hex (or a bitcoin.Psbt)
+     *   inputs       [{ index, agentPublicNonce }]  one entry per input to co-sign
+     *   sighashType  {number} optional; applies to every requested input
      * @returns {object}
      *   { approved:false, reason, detail }
-     *   { approved:true, publicNonce, sig, msg }            single-input
-     *   { approved:true, action, signatures:[...] }         multi-input (req.inputs)
+     *   { approved:true, action, signatures:[{ index, publicNonce, sig, msg }] }
      */
     process(req = {}) {
         let psbt;
@@ -362,123 +504,23 @@ class CoSigner {
         } catch (e) { return this._deny('PSBT_PARSE_FAILED', e.message); }
         if (!psbt) return this._deny('NO_PSBT');
 
-        // Multi-input request: one authorization, a partial sig per input.
-        if (Array.isArray(req.inputs)) return this._processMulti(psbt, req);
-
-        // 1. Recover the action FROM the PSBT (never trust the caller's claim).
-        const decoded = decodeActionFromPsbt(psbt, { network: this.network });
-        if (!decoded.ok) return this._deny('DECODE_' + decoded.reason, decoded.detail);
-
-        // 2. Policy, against the server-side window snapshot.
-        const windowUsage = this.windowStore ? this.windowStore.snapshot() : undefined;
-        const verdict = evaluatePolicy(this.policy,
-            { action: decoded.action, params: decoded.params }, windowUsage);
-        if (!verdict.ok) return this._deny(verdict.violation.code, verdict.violation.details);
-
-        // 3. Confirm-required actions: a headless daemon cannot prompt, so deny by default.
-        if (verdict.evaluation.needsConfirmation && !this.allowConfirmable)
-            return this._deny('CONFIRMATION_REQUIRED',
-                { action: decoded.action, amount: verdict.evaluation.amount });
-
-        const idx = Number.isInteger(req.inputIndex) ? req.inputIndex : 0;
-
-        // 3b. Prevout gate: verify the input we're about to sign for actually
-        //     spends THIS account's derived scriptPubKey, not a caller-supplied
-        //     witnessUtxo pointing at a foreign script. Must run before any
-        //     budget consumption below.
-        const prevoutDenial = this._checkPrevouts(psbt, [idx]);
-        if (prevoutDenial) return prevoutDenial;
-
-        // 4. Output gate: the action string doesn't constrain where the native coin
-        //    goes, so refuse any output that isn't the data carrier, change-to-self,
-        //    or operator-authorized. Blocks a benign-action / drain-output craft.
-        const outDenial = this._checkOutputs(psbt, idx);
-        if (outDenial) return outDenial;
-
-        // 4b. Fee gate: the output gate stops diversion but not a change-omission
-        //     burn that hands the whole account balance to miners as fee. Reconcile
-        //     sum(inputs) - sum(outputs) and refuse an out-of-bounds fee.
-        const feeDenial = this._checkFee(psbt);
-        if (feeDenial) return feeDenial;
-
-        // 5. Reject any sighash type that does not commit to every output. A
-        //    NONE/SINGLE/ANYONECANPAY partial would let the agent reassemble a
-        //    drain tx that still verifies, bypassing the output gate above.
-        if (!sighashAllowed(req.sighashType))
-            return this._deny('SIGHASH_TYPE_NOT_ALLOWED', { sighashType: req.sighashType });
-
-        // 6. Derive the message FROM the PSBT (never trust a caller-supplied sighash).
-        let msg;
-        try {
-            msg = taprootKeyPathSighash(psbt, idx, req.sighashType);
-        } catch (e) { return this._deny('CANNOT_DERIVE_SIGHASH', e.message); }
-
-        // 7. Stateless partial signature (the co-signer is the deterministic signer).
-        let det;
-        try {
-            det = this.musig.deterministicSign({
-                secretKey:         this.secretKey,
-                otherPublicNonces: [toBytes(req.agentPublicNonce, 'agentPublicNonce')],
-                publicKeys:        this.publicKeys,
-                tweaks:            this.tweaks,
-                msg,
-            });
-        } catch (e) { return this._deny('SIGN_FAILED', e.message); }
-
-        // 8. Consume the budget on authorization (conservative: even if the agent
-        //    never completes the aggregate, the cap is already spent).
-        this._recordBudget(psbt, verdict.evaluation);
-
-        return {
-            approved:    true,
-            publicNonce: Buffer.from(det.publicNonce).toString('hex'),
-            sig:         Buffer.from(det.sig).toString('hex'),
-            msg:         Buffer.from(msg).toString('hex'),
-            action:      decoded.action,
-        };
-    }
-
-    // Record one window entry for the whole tx (single authorization). The txid is
-    // fixed pre-signature for segwit/taproot inputs, so it is a stable audit key;
-    // best-effort (null if reconstruction fails). No-op without a window store.
-    _recordBudget(psbt, evaluation) {
-        if (!this.windowStore) return;
-        let txid = null;
-        try {
-            const tx = new bitcoin.Transaction();
-            tx.version  = psbt.version;
-            tx.locktime = psbt.locktime;
-            for (const ti of psbt.txInputs)  tx.addInput(ti.hash, ti.index, ti.sequence);
-            for (const to of psbt.txOutputs) tx.addOutput(to.script, to.value);
-            txid = tx.getId();
-        } catch (e) { /* audit txid is best-effort */ }
-        this.windowStore.record({
-            action: evaluation.action, tick: evaluation.tick, amount: evaluation.amount, txid,
-        });
-    }
-
-    /*
-     * Multi-input variant: ONE authorization (decode + policy + output gate +
-     * budget once) covering a tx that spends several UTXOs of the same aggregate
-     * account, then a partial signature per input (each over its own BIP341
-     * sighash, with the input's own agent nonce - never a reused nonce). Routed to
-     * automatically when req.inputs is present.
-     *
-     * @param {bitcoin.Psbt} psbt
-     * @param {object} req
-     *   inputs       [{ index, agentPublicNonce }]  one per input to co-sign
-     *   sighashType  optional
-     * @returns {object}
-     *   { approved:false, reason, detail }
-     *   { approved:true, action, signatures:[{ index, publicNonce, sig, msg }] }
-     */
-    _processMulti(psbt, req) {
         const inputs = req.inputs;
         if (!Array.isArray(inputs) || inputs.length === 0) return this._deny('NO_INPUTS_REQUESTED');
 
-        // Validate the requested set: in range, witnessUtxo present, no duplicates,
-        // and ALL spending the SAME account script (a mixed-account spend makes
-        // change-detection ambiguous - fail closed).
+        // G14, before ANY per-input work: cap the requested count and the PSBT's
+        // total input count. The second matters as much as the first, because the
+        // BIP341 sighash commits to every prevout, so a one-element request against
+        // a 5000-input PSBT still costs the full quadratic walk.
+        if (inputs.length > this.maxCosignInputs)
+            return this._deny('TOO_MANY_INPUTS',
+                { requested: inputs.length, max: this.maxCosignInputs });
+        if (psbt.txInputs.length > this.maxCosignInputs)
+            return this._deny('TOO_MANY_INPUTS',
+                { psbtInputs: psbt.txInputs.length, max: this.maxCosignInputs });
+
+        // 1. Validate the requested set: in range, witnessUtxo present, no
+        //    duplicates, and ALL spending the SAME account script (a mixed-account
+        //    spend makes change-detection ambiguous - fail closed).
         const seenIdx = new Set();
         let accountScript = null;
         for (const it of inputs) {
@@ -493,37 +535,64 @@ class CoSigner {
             else if (!wu.script.equals(accountScript)) return this._deny('MIXED_INPUT_SCRIPTS', { index: i });
         }
 
-        // Decode + policy + confirm, once for the whole tx.
+        // 2. Recover the action FROM the PSBT (never trust the caller's claim).
         const decoded = decodeActionFromPsbt(psbt, { network: this.network });
         if (!decoded.ok) return this._deny('DECODE_' + decoded.reason, decoded.detail);
+
+        // 3. Policy, against the server-side window snapshot. The decoded VERSION
+        //    is passed too: the evaluator needs the exact (action, version) to know
+        //    whether an amount cap can bind this format at all (G2) and whether the
+        //    format can honour allowedDestinations (G9).
         const windowUsage = this.windowStore ? this.windowStore.snapshot() : undefined;
         const verdict = evaluatePolicy(this.policy,
-            { action: decoded.action, params: decoded.params }, windowUsage);
+            { action: decoded.action, version: decoded.version, params: decoded.params }, windowUsage);
         if (!verdict.ok) return this._deny(verdict.violation.code, verdict.violation.details);
+
+        // 4. Confirm-required actions: a headless daemon cannot prompt, so deny by default.
         if (verdict.evaluation.needsConfirmation && !this.allowConfirmable)
             return this._deny('CONFIRMATION_REQUIRED',
                 { action: decoded.action, amount: verdict.evaluation.amount });
 
-        // Prevout gate: verify every input we're about to sign for actually spends
-        // THIS account's derived scriptPubKey, not a caller-supplied witnessUtxo
-        // pointing at a foreign script. Must run before any budget consumption below.
+        // 5. Prevout gate: verify every input we are about to sign for actually
+        //    spends THIS account's derived scriptPubKey, not a caller-supplied
+        //    witnessUtxo pointing at a foreign script. Must run before any budget
+        //    consumption below.
         const prevoutDenial = this._checkPrevouts(psbt, inputs.map((it) => it.index));
         if (prevoutDenial) return prevoutDenial;
 
-        // Output gate, once (all signed inputs share accountScript by the check above).
+        // 5b. Source gate (G16): the action's protocol SOURCE is the transaction's
+        //     first input - it is the address the chain attributes the action to,
+        //     and the txid that keys the OP_RETURN obfuscation. Nothing else here
+        //     requires input 0 to be an input we sign, so an agent could put a
+        //     foreign input at index 0 and this account's UTXO at index 1: the
+        //     daemon would decode, policy-check and permanently charge ITS window
+        //     for an action the chain credits to a different address, and the
+        //     window (which doubles as the approval audit log) would record spends
+        //     this account never made. Require input 0 to be one of ours.
+        const sourceDenial = this._checkSource(psbt, seenIdx);
+        if (sourceDenial) return sourceDenial;
+
+        // 6. Output gate: the action string does not constrain where the native coin
+        //    goes, so refuse any output that is not the data carrier, change-to-self,
+        //    or operator-authorized. Blocks a benign-action / drain-output craft.
+        //    Once, since all signed inputs share accountScript by the check above.
         const outDenial = this._checkOutputs(psbt, inputs[0].index);
         if (outDenial) return outDenial;
 
-        // Fee gate, once for the whole tx (same change-omission burn defense as process()).
+        // 7. Fee gate: the output gate stops diversion but not a change-omission
+        //    burn that hands the whole account balance to miners as fee.
         const feeDenial = this._checkFee(psbt);
         if (feeDenial) return feeDenial;
 
-        // Same sighash guard as process(): only SIGHASH_DEFAULT is finalizable by
-        // this signer; anything else makes the output gate above bypassable.
+        // 8. Reject any sighash type that does not commit to every output. A
+        //    NONE/SINGLE/ANYONECANPAY partial would let the agent reassemble a
+        //    drain tx that still verifies, bypassing the output gate above.
         if (!sighashAllowed(req.sighashType))
             return this._deny('SIGHASH_TYPE_NOT_ALLOWED', { sighashType: req.sighashType });
 
-        // One partial signature per input (own sighash + own nonce).
+        // 9. One partial signature per input, each over its OWN BIP341 sighash
+        //    derived from the PSBT, with that input's own agent nonce (never a
+        //    reused nonce).
         const signatures = [];
         for (const it of inputs) {
             let msg;
@@ -547,10 +616,51 @@ class CoSigner {
             });
         }
 
-        // Budget consumed ONCE for the tx (a per-input record would over-count).
+        // 10. Budget consumed ONCE for the tx, on authorization (a per-input record
+        //     would over-count; charging on authorization rather than broadcast is
+        //     conservative - an abandoned aggregate has still spent the cap).
         this._recordBudget(psbt, verdict.evaluation);
 
         return { approved: true, action: decoded.action, signatures };
+    }
+
+    // Source gate (G16). `signed` is the set of input indexes this request signs.
+    // Input 0 must be among them AND spend this account's script: the prevout gate
+    // proves the second for every signed input, so membership is the load-bearing
+    // half, and the script re-check keeps this correct if the gates are ever
+    // reordered.
+    _checkSource(psbt, signed) {
+        if (!signed.has(0))
+            return this._deny('SOURCE_NOT_OUR_ACCOUNT',
+                { detail: 'input 0 is the action\'s protocol source but is not one of the inputs being co-signed' });
+        const inp = psbt.data.inputs[0];
+        if (!inp || !inp.witnessUtxo || !inp.witnessUtxo.script)
+            return this._deny('SOURCE_NOT_OUR_ACCOUNT', { detail: 'input 0 has no witnessUtxo' });
+        if (!inp.witnessUtxo.script.equals(this.accountScript))
+            return this._deny('SOURCE_NOT_OUR_ACCOUNT', {
+                expected: this.accountScript.toString('hex'),
+                got:      inp.witnessUtxo.script.toString('hex'),
+            });
+        return null;
+    }
+
+    // Record one window entry for the whole tx (single authorization). The txid is
+    // fixed pre-signature for segwit/taproot inputs, so it is a stable audit key;
+    // best-effort (null if reconstruction fails). No-op without a window store.
+    _recordBudget(psbt, evaluation) {
+        if (!this.windowStore) return;
+        let txid = null;
+        try {
+            const tx = new bitcoin.Transaction();
+            tx.version  = psbt.version;
+            tx.locktime = psbt.locktime;
+            for (const ti of psbt.txInputs)  tx.addInput(ti.hash, ti.index, ti.sequence);
+            for (const to of psbt.txOutputs) tx.addOutput(to.script, to.value);
+            txid = tx.getId();
+        } catch (e) { /* audit txid is best-effort */ }
+        this.windowStore.record({
+            action: evaluation.action, tick: evaluation.tick, amount: evaluation.amount, txid,
+        });
     }
 }
 

@@ -52,6 +52,14 @@ const DESTINATION_KEYS = ['destination', 'DESTINATION', 'destinations', 'DESTINA
 // asserts all three stay equal.
 const GAS_TICK = require('../protocol/constants.js').GAS_TICK;
 
+// Format field lists, for the DESTINATION-carrying check (G9).
+const FormatSelector = require('../formatSelector.js');
+
+// Own-property lookup for every table keyed on a decoded param, and the
+// (action, version) value-derivability table an amount cap can actually bind.
+const { ownLookup } = require('./paramCharset.js');
+const valueDerivability = require('./valueDerivability.js');
+
 // Per-action value/tick fields for actions whose primary outflow is NOT the
 // generic amount/AMOUNT + tick/TICK pair. The cap must bind to what the signer
 // GIVES AWAY, so the two-leg trade actions use the GIVE leg. Without this the
@@ -75,9 +83,16 @@ const ACTION_VALUE_FIELDS = {
     // VOTE v0 carries no AMOUNT field but DOES move funds: it escrows DEPOSIT + GAS_ESCROW
     // TOGETHER, both denominated in the gas tick (VOTE.md). With no entry the generic pick
     // returned undefined and every VOTE amount cap (per-action, per-window, confirmAbove) was
-    // silently skipped. Sum both escrowed legs and default the tick to the gas token (like
-    // STAKE) so a { maxPerAction: { VOTE } } policy actually binds.
-    VOTE:      { amountSum: [['deposit', 'DEPOSIT'], ['gasEscrow', 'GAS_ESCROW']], tick: TICK_KEYS, tickDefault: GAS_TICK },
+    // silently skipped. Sum both escrowed legs.
+    //
+    // tickFixed, NOT tickDefault: VOTE v0's own TICK field names the GOVERNANCE token (the
+    // electorate and weight basis), which is a different token from the gas the deposit and
+    // callback escrow are actually denominated in. Preferring the decoded TICK - as a
+    // tickDefault does - bound the cap to the wrong denomination entirely: a
+    // maxPerWindow.perTick.XCHAIN ceiling never bound the gas the vote really spends, while
+    // the governance token's budget was consumed by spending that never touched it. The
+    // escrow is gas, always, so the tick is fixed and the decoded TICK is ignored here.
+    VOTE:      { amountSum: [['deposit', 'DEPOSIT'], ['gasEscrow', 'GAS_ESCROW']], tickFixed: GAS_TICK },
 };
 
 // Actions whose value outflow the evaluator cannot bound from the action params
@@ -90,17 +105,18 @@ const ACTION_VALUE_FIELDS = {
 const UNBOUNDED_VALUE_ACTIONS = new Set(['SWEEP', 'AIRDROP', 'DIVIDEND']);
 
 function pick(params, keys) {
-    for (const k of keys)
-        if (params && params[k] !== undefined && params[k] !== null && params[k] !== '')
-            return params[k];
+    for (const k of keys) {
+        const v = ownLookup(params, k);
+        if (v !== undefined && v !== null && v !== '') return v;
+    }
     return undefined;
 }
 
 // Resolve the (amount, tick) the caps should bind to for this action.
 function resolveValue(action, params) {
-    const spec = ACTION_VALUE_FIELDS[action];
+    const spec = ownLookup(ACTION_VALUE_FIELDS, action);
     if (spec) {
-        const tick = pick(params, spec.tick);
+        const tick = spec.tickFixed !== undefined ? spec.tickFixed : pick(params, spec.tick);
         let amount;
         if (spec.amountSum) {
             // Several escrowed legs bound as one total (e.g. VOTE escrows DEPOSIT + GAS_ESCROW
@@ -132,10 +148,19 @@ function inCollection(collection, value) {
     return false;
 }
 
+// Cap lookup keyed on a DECODED (attacker-chosen) tick. Both reads go through
+// ownLookup: a plain `table[tick]` with tick = 'constructor' / 'toString' /
+// 'valueOf' returns an inherited Object.prototype member, which is truthy and
+// !== undefined, so the wrong branch is taken and a function is then fed into
+// decimal comparison (G1). Own-property reads make every inherited name resolve
+// to "no cap configured", which is the truth.
 function capFor(table, tick) {
     if (!table) return undefined;
-    if (tick !== undefined && table[tick] !== undefined) return table[tick];
-    return table['*'];
+    if (tick !== undefined) {
+        const own = ownLookup(table, tick);
+        if (own !== undefined) return own;
+    }
+    return ownLookup(table, '*');
 }
 
 // Resolve a ^<id> wire-form tick reference to its name via the policy's
@@ -152,6 +177,23 @@ function resolveTickRef(tickIds, tick) {
 function hasNamedKey(table) {
     return !!table && Object.keys(table).some((k) => k !== '*');
 }
+
+// Does this (action, version) format carry a DESTINATION field at all? (G9)
+// Read from the format table rather than from the decoded params, so an action
+// that merely LEFT its optional destination empty is still recognized as
+// constrainable, while one whose format has no such field is not.
+function formatCarriesDestination(action, version) {
+    let fields;
+    try { fields = FormatSelector.getFormatFields(action, version); } catch (e) { return false; }
+    return Array.isArray(fields) && fields.some((f) => f === 'DESTINATION' || f === 'DESTINATIONS');
+}
+
+// Reserved window bucket for entries whose tick the evaluator could not resolve
+// (G8). '|' is the action-string FIELD SEPARATOR, so it can never appear in a
+// real tick: a tick containing one would corrupt the wire format itself. That
+// keeps the bucket outside the protocol's tick charset by construction, so no
+// token can ever collide with it.
+const UNRESOLVED_TICK_BUCKET = '|unresolved|';
 
 // Exact decimal comparison via BigNumber methods. mathjs larger()/equal()
 // apply an epsilon tolerance, which is exactly wrong for policy caps.
@@ -179,7 +221,10 @@ function deny(code, message, details, evaluation) {
  *     confirmAbove:        { perTick: { TICK|'*': thresholdString } } | null,
  *     tickIds:             { TICK: numericId } | null   (resolves ^<id> wire-form tick references),
  *   }
- * @param {object} actionData  { action, params } (params may use camelCase or UPPER_SNAKE)
+ * @param {object} actionData  { action, version?, params } (params may use camelCase or UPPER_SNAKE).
+ *   `version` is optional: when present (the co-signer daemon decodes it from the PSBT) the
+ *   value-derivability table is enforced, so an action whose outflow the evaluator cannot read
+ *   is denied instead of silently skipping every amount gate. See valueDerivability.js.
  * @param {object} [windowUsage]  current window snapshot, REQUIRED when policy.maxPerWindow is set:
  *   { count:number, perTick:{ TICK: totalString } }
  * @returns {object} verdict:
@@ -193,6 +238,9 @@ function evaluatePolicy(policy, actionData, windowUsage) {
     const data    = actionData || {};
     const action  = String(data.action || '').toUpperCase();
     const params  = data.params || {};
+    // Optional: present on the daemon path (decoded from the PSBT), absent on
+    // the AgentSession path. Gates the value-derivability check below.
+    const version = Number.isInteger(data.version) ? data.version : undefined;
     let { amount, tick } = resolveValue(action, params);
     const destRaw = pick(params, DESTINATION_KEYS);
     const destinations = destRaw === undefined ? []
@@ -216,7 +264,7 @@ function evaluatePolicy(policy, actionData, windowUsage) {
             tick = named;
         } else {
             const identitySensitive =
-                (policy.maxPerAction && hasNamedKey(policy.maxPerAction[action])) ||
+                (policy.maxPerAction && hasNamedKey(ownLookup(policy.maxPerAction, action))) ||
                 !!(policy.maxPerWindow && policy.maxPerWindow.perTick) ||
                 (policy.confirmAbove && hasNamedKey(policy.confirmAbove.perTick));
             if (identitySensitive)
@@ -247,6 +295,25 @@ function evaluatePolicy(policy, actionData, windowUsage) {
         return deny('POLICY_ACTION_DENIED', `action ${action} is not in allowedActions`, { action }, evaluation);
 
     if (policy.allowedDestinations) {
+        // G9: allowedDestinations binds only the action-string DESTINATION field,
+        // and only 6 of the 63 decodable formats carry one (SEND v0, MINT v0,
+        // MESSAGE v0-v3, SWEEP v0). For every other format the destination list is
+        // EMPTY and the membership loop below is vacuously satisfied - so every
+        // trade, dispenser, contract-escrow, staking and native-pay action sailed
+        // straight through a setting the operator reads as "this agent can only
+        // ever move value to these addresses". Deny what the setting cannot
+        // actually constrain, rather than passing it silently.
+        //
+        // Version-gated for the same reason as G2: DESTINATION is a property of the
+        // (action, version) FORMAT, so the check needs the version the daemon
+        // decodes from the PSBT. AgentSession, which usually has no version, keeps
+        // today's behaviour; the co-signer is the authoritative gate.
+        if (Number.isInteger(version) && version >= 0 && !formatCarriesDestination(action, version))
+            return deny('POLICY_DESTINATION_UNENFORCEABLE',
+                `${action} v${version} carries no DESTINATION field, so allowedDestinations cannot ` +
+                `constrain where it moves value; it cannot be signed while allowedDestinations is set ` +
+                `(remove the destination list, or disallow ${action})`,
+                { action, version }, evaluation);
         for (const d of destinations)
             if (!inCollection(policy.allowedDestinations, d))
                 return deny('POLICY_DESTINATION_DENIED',
@@ -259,19 +326,47 @@ function evaluatePolicy(policy, actionData, windowUsage) {
     // amount x an off-chain set) would slip past every cap, since those checks are
     // guarded by `amount !== undefined` against a scalar that doesn't represent the
     // real total. A count-only maxActions is not an amount limit and does not trip this.
-    if (UNBOUNDED_VALUE_ACTIONS.has(action)) {
-        const hasAmountLimit = !!policy.maxPerAction
-            || !!(policy.maxPerWindow && policy.maxPerWindow.perTick)
-            || !!policy.confirmAbove;
-        if (hasAmountLimit)
+    const hasAmountLimit = !!policy.maxPerAction
+        || !!(policy.maxPerWindow && policy.maxPerWindow.perTick)
+        || !!policy.confirmAbove;
+
+    if (UNBOUNDED_VALUE_ACTIONS.has(action) && hasAmountLimit)
+        return deny('POLICY_UNBOUNDED_ACTION',
+            `${action} moves an amount the policy cannot bound from the action alone; ` +
+            `it cannot be signed while an amount cap is set (remove the amount cap or disallow ${action})`,
+            { action }, evaluation);
+
+    // G2: the general form of the guard above. The named set catches the three
+    // actions that are unbounded by their very shape; this catches every OTHER
+    // format whose outflow the evaluator cannot read - the index-reference
+    // family (COINPAY/SWAP/ORDER/DISPENSER/BET/VOTE by ACTION_INDEX), the
+    // ownership escape hatches on ORDER/SWAP/DISPENSER/ISSUE, and anything new
+    // that nobody has classified yet. Before this, all of those resolved their
+    // amount to undefined and every amount gate below silently SKIPPED, so the
+    // operator's cap was decorative and no error said so.
+    //
+    // Only enforced when the version is known. The daemon always knows it (it
+    // decodes the version from the PSBT and passes it, and refuses to sign
+    // without one); AgentSession, the client-side guardrail, typically does not
+    // - the encoder auto-selects the format after the policy check - and a
+    // version-blind denial there would refuse ordinary multi-leg sends the
+    // daemon path never sees. The co-signer is the authoritative gate, which is
+    // exactly the split this spec draws between the two enforcement points.
+    if (hasAmountLimit && Number.isInteger(version) && version >= 0) {
+        const derivability = valueDerivability.classify(action, version, params);
+        if (derivability.class === valueDerivability.UNBOUNDED)
             return deny('POLICY_UNBOUNDED_ACTION',
-                `${action} moves an amount the policy cannot bound from the action alone; ` +
-                `it cannot be signed while an amount cap is set (remove the amount cap or disallow ${action})`,
-                { action }, evaluation);
+                derivability.blockedBy
+                    ? `${action} v${version} sets ${derivability.blockedBy}, which moves value no amount cap can ` +
+                      `express; it cannot be signed while an amount cap is set`
+                    : `${action} v${version} moves an amount the policy cannot bound from the action alone ` +
+                      `(it is defined by an on-chain object the co-signer cannot read); ` +
+                      `it cannot be signed while an amount cap is set (remove the amount cap or disallow ${action})`,
+                { action, version, blockedBy: derivability.blockedBy || undefined }, evaluation);
     }
 
     if (policy.maxPerAction && amount !== undefined) {
-        const cap = capFor(policy.maxPerAction[action], tick);
+        const cap = capFor(ownLookup(policy.maxPerAction, action), tick);
         if (cap !== undefined && gtDecimal(amount, cap))
             return deny('POLICY_AMOUNT_EXCEEDED',
                 `${action} amount ${amount} exceeds per-action cap ${cap}${tick ? ' for ' + tick : ''}`,
@@ -290,12 +385,21 @@ function evaluatePolicy(policy, actionData, windowUsage) {
         // amount-bearing action whose tick did not resolve is still bound by a
         // wildcard window cap (#2286; the old extra guard let such an action
         // bypass the one amount ceiling a wildcard-only policy expresses).
-        // Undefined-tick entries are never accumulated by windowStore.snapshot()
-        // / _windowUsage(), so their usage reads 0 and the cap binds per-action.
+        //
+        // G8: an unresolved tick reads its running total from a RESERVED BUCKET
+        // that the stores accumulate such entries under. Previously the used
+        // total for those was hard-coded to '0' - the stores skipped undefined-
+        // tick entries entirely - so the projected total was always
+        // `0 + amount` and a wildcard window cap bound each transaction
+        // INDEPENDENTLY, forever. That is a per-transaction cap wearing a
+        // window's name: COLLECT v0, UNSTAKE v0, capability STAKE before the gas
+        // default applies, and anything future with an amount but no TICK could
+        // repeat it without limit, bounded only by maxActions if set.
         if (win.perTick && amount !== undefined) {
             const cap = capFor(win.perTick, tick);
             if (cap !== undefined) {
-                const used = (tick !== undefined && usage.perTick && usage.perTick[tick]) || '0';
+                const bucket = tick !== undefined ? tick : UNRESOLVED_TICK_BUCKET;
+                const used = ownLookup(usage.perTick, bucket) || '0';
                 const projected = addDecimal(used, amount);
                 if (gtDecimal(projected, cap))
                     return deny('POLICY_WINDOW_AMOUNT_EXCEEDED',
@@ -329,4 +433,9 @@ module.exports = {
     UNBOUNDED_VALUE_ACTIONS,
     resolveValue,
     resolveTickRef,
+    valueDerivability,
+    formatCarriesDestination,
+    // Both window stores MUST accumulate unresolved-tick entries under this exact
+    // key, or a wildcard window cap silently degrades to a per-transaction cap (G8).
+    UNRESOLVED_TICK_BUCKET,
 };

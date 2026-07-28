@@ -94,11 +94,12 @@ describe('cosigner/account deriveMuSig2P2TR2of3 (recovery)', function () {
         const agent = key(), daemon = key(), recovery = key();
         const acct = deriveMuSig2P2TR2of3({ agent: agent.pk, daemon: daemon.pk, recovery: recovery.pk });
 
-        // Construct the co-signer (daemon) and client (agent) on the KEY-PATH set
-        // + tweak. This is the same 2-of-2 flow as the no-recovery case, only with
-        // a non-empty tweak - no co-signer code change.
+        // Construct the co-signer (daemon) and client (agent) on the KEY-PATH set.
+        // The daemon is given the recovery PUBLIC KEY and re-derives the tree (and
+        // therefore the tweak) itself; it never accepts a tweak from the caller,
+        // because an opaque tweak commits to a tree the daemon cannot inspect (G3).
         const co = new CoSigner({ secretKey: daemon.sk, publicKeys: acct.keyPath.publicKeys,
-            tweaks: acct.keyPath.tweaks, policy: { allowedActions: new Set(['SEND']) } });
+            recoveryPublicKey: recovery.pk, policy: { allowedActions: new Set(['SEND']) } });
         const client = new CoSignerClient({ transport: inProcessTransport(co),
             publicKeys: acct.keyPath.publicKeys, tweaks: acct.keyPath.tweaks });
 

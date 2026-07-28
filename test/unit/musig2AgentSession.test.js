@@ -341,7 +341,9 @@ describe('MuSig2AgentSession', function () {
         const value = 100000;
         const s = { agentSk, agentPk, psbtHex: psbtSpending(a3.output, `SEND|0|TOK|5|${DEST}|m`, { value }) };
 
-        const co = new CoSigner({ secretKey: daemonSk, publicKeys: a3.keyPath.publicKeys, tweaks: a3.keyPath.tweaks,
+        // The daemon derives the 2-of-3 tree from the recovery PUBLIC KEY; a raw
+        // tweak is not an accepted configuration surface (G3).
+        const co = new CoSigner({ secretKey: daemonSk, publicKeys: a3.keyPath.publicKeys, recoveryPublicKey: recPk,
             policy: { allowedActions: new Set(['SEND']) } });
         const captured = { broadcasts: [], encodeCalls: 0 };
         const session = new MuSig2AgentSession(makeSdk(s, captured), 'WIF',
