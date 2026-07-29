@@ -1436,4 +1436,69 @@ describe('Validator: FILE GATE_MIN_AMOUNT (PC-29)', function () {
         const errors = v.validate('SEND', { GATE_MIN_AMOUNT: '0' });
         expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
     });
+
+    // ── Shared vector fixture (spec section 6.5) ─────────────────────────────
+    // The tests above are this repo's own reading of the rules. These run the SAME
+    // vectors the indexer and the wallet run, from a byte-identical file, so the
+    // three implementations are pinned to one another rather than to three
+    // independently-written test suites that agree today by coincidence.
+    describe('shared GATE_MIN_AMOUNT vectors', function () {
+        const fs      = require('fs');
+        const path    = require('path');
+        const FIXTURE = path.join(__dirname, '../fixtures/gate-min-amount-vectors.json');
+        const vectors = JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
+
+        it('the fixture carries vectors in every section (it has not been emptied)', function () {
+            for (const key of ['format', 'divisibility', 'pack_threshold', 'handoff_required'])
+                expect(vectors[key], key).to.be.an('array').with.length.greaterThan(0);
+        });
+
+        for (const vec of vectors.format) {
+            it(`${vec.label}: ${JSON.stringify(vec.value)} is ${vec.valid ? 'accepted' : 'rejected'}`, function () {
+                expect(isRejected(vec.value)).to.equal(!vec.valid);
+            });
+        }
+
+        // The asymmetry the shared fixture exposed: setActionParams trims every action
+        // field on the indexer's way in, so a whitespace-padded threshold reaches
+        // consensus already trimmed and is ACCEPTED there, while this layer refuses to
+        // emit it. Pinned on both sides so the difference stays deliberate: closing it
+        // would mean changing the trim for every field of every action.
+        for (const vec of vectors.layer_asymmetry.sdk_rejects_indexer_normalizes) {
+            it(`${vec.label}: ${JSON.stringify(vec.value)} is rejected here, normalized by the indexer`, function () {
+                expect(isRejected(vec.value), 'the SDK must not emit it').to.be.true;
+                expect(isRejected(vec.normalizes_to), 'the trimmed form is what consensus sees').to.be.false;
+            });
+        }
+
+        // The division of labour, asserted rather than described: every divisibility
+        // vector is a well-formed decimal, so this stateless layer must pass ALL of
+        // them, including the ones the indexer rejects against the tick at that block.
+        for (const vec of vectors.divisibility) {
+            it(`divisibility is not this layer's call: ${vec.value} passes the format check`, function () {
+                expect(isRejected(vec.value)).to.be.false;
+            });
+        }
+
+        // Cross-repo byte identity. Skips (rather than fails) when a sibling checkout
+        // is absent, matching the repo's other sibling-conformance tests; CI sets
+        // XCHAIN_REQUIRE_SIBLINGS=1 so a missing sibling hard-fails there.
+        const SIBLINGS = [
+            ['xchain-indexer', 'test/fixtures/gate-min-amount-vectors.json'],
+            ['xchain-wallet',  'test/fixtures/gate-min-amount-vectors.json']
+        ];
+        const canonical = fs.readFileSync(FIXTURE);
+        SIBLINGS.forEach(([repo, rel]) => {
+            it(`the ${repo} copy is byte-identical`, function () {
+                const p = path.join(__dirname, '../../..', repo, rel);
+                if (!fs.existsSync(p)) {
+                    if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                        throw new Error('sibling ' + repo + ' fixture missing: ' + p);
+                    return this.skip();
+                }
+                expect(fs.readFileSync(p).equals(canonical),
+                    repo + ' fixture drifted from the canonical sdk copy').to.be.true;
+            });
+        });
+    });
 });
