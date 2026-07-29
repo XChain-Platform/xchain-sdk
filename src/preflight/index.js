@@ -231,7 +231,12 @@ async function runPreflight(sdk, actionData, opts = {}) {
         // concurrently against the shared timeout budget.
         const tier1Promise = mode === 'local'
             ? Promise.resolve({ kind: 'no-verdict', reason: 'local-only mode' })
-            : runTier1({ sdk, parsed, source: opts.source, signal: opts.signal, timeoutMs })
+            // `feeMode` rides through to the network dry run: the verdict differs
+            // between paying the protocol fee from an XCHAIN balance and paying it
+            // as a coin output, and a caller that has already chosen must not be
+            // judged against the chain default (see runTier1).
+            : runTier1({ sdk, parsed, source: opts.source, feeMode: opts.feeMode,
+                signal: opts.signal, timeoutMs })
                 .catch(e => ({ kind: 'unavailable', reason: e && e.message ? e.message : String(e) }));
 
         const tier2Promise = (async () => {
