@@ -36,6 +36,7 @@
 'use strict';
 
 const M          = require('./merkle.js');
+const SUB        = require('./state_subtree_activation.js');
 const checkpoint = require('./checkpoint.js');
 const pinned     = require('./pinnedCheckpoints.js');
 const swq        = require('./stake_weighted_quorum.js');
@@ -110,6 +111,108 @@ function verifyBalanceProof(proof, trustedStateRoot, chain, network){
             return _no('SUBROOT_BIND_INVALID');
         return { verified: true, amount, reason: null };
     } catch (e){ return _no('VERIFY_ERROR:' + (e && e.message)); }
+}
+
+// Verify a locked-balance (XCHAIN_ESC) proof binds to a TRUSTED state_root (SPV
+// sub-tree spec §3 Stage B). Returns { verified, amount, reason }.
+//
+// The locked leaf lives INSIDE balances_root, a second key domain beside the
+// spendable leaf, so this is verifyBalanceProof with the escrowKey derivation
+// and the same balances_root slot pin. The two domains cannot answer for each
+// other: each verifier derives its own key, so a spendable proof fed here (or
+// the reverse) fails KEY_MISMATCH.
+//
+// LIVENESS IS ENFORCED HERE, NOT TRUSTED FROM THE SERVER, and this is the one
+// place this verifier differs from the contract-state one. A reserved slot's
+// arming is visible server-side (the stored row carries the armed decision),
+// so there the server's refusal is the signal to respect; the escrow leaf has
+// no stored signal (an armed-but-idle domain and an inert one commit
+// byte-identical roots), so the SDK's own carrier of the activation maps
+// decides, and a proof whose height precedes the armed height is refused
+// whatever the server said. A below-arming non-inclusion would "verify" and
+// mean nothing (spec §4): zero-locked is only a real claim at armed heights.
+// The height check is strict-parse fail-closed: a garbage height reads as
+// not-armed, never as armed.
+function verifyLockedBalanceProof(proof, trustedStateRoot, chain, network){
+    try {
+        if (!proof || !proof.smt_proof || !proof.sub_root_path) return _no('MALFORMED_PROOF');
+        if (!SUB.isEscrowLockedLeafActive(proof.height, network, chain))
+            return _no('ESCROW_LEAF_NOT_COMMITTED');
+        // The proven key must be exactly escrowKey(chain, network, address, tick),
+        // with chain/network from the TRUSTED checkpoint, never the proof.
+        const keyBuf = M.escrowKey(chain, network, proof.address, proof.tick);
+        if (_hx(proof.smt_proof.key) !== M.toHex(keyBuf)) return _no('KEY_MISMATCH');
+        const leaf   = proof.smt_proof.leaf_value;
+        const amount = M.canonicalAmount(proof.amount);
+        if (leaf == null){
+            if (amount !== M.canonicalAmount('0')) return _no('NONINCLUSION_NONZERO_AMOUNT');
+        } else {
+            // amountLeaf, the SAME encoding the spendable leaf uses, so a client
+            // verifies both leaves of an (address, tick) the same way.
+            if (M.toHex(M.amountLeaf(amount)) !== _hx(leaf)) return _no('LEAF_AMOUNT_MISMATCH');
+        }
+        if (!M.verifyCompressedSmtProof(proof.balances_root, keyBuf, leaf, proof.smt_proof.compressed))
+            return _no('SMT_PROOF_INVALID');
+        // PIN the slot (balances_root, the same slot the spendable proof pins),
+        // for the same reason verifyBalanceProof does.
+        if (proof.sub_root_path.index !== M.STATE_SUBTREES.indexOf('balances_root'))
+            return _no('SUBROOT_SLOT_MISMATCH');
+        if (!M.verifyFixedMerkleProof(trustedStateRoot, M.toBuf(proof.balances_root),
+                                      proof.sub_root_path.index, proof.sub_root_path.siblings))
+            return _no('SUBROOT_BIND_INVALID');
+        return { verified: true, amount, reason: null };
+    } catch (e){ return _no('VERIFY_ERROR:' + (e && e.message)); }
+}
+
+// Verify a contract-state proof binds to a TRUSTED state_root (SPV sub-tree spec
+// §3 Stage A). Returns { verified, state_value, reason }.
+//
+// `state_value` is the RAW STORED STRING, not the JSON.parse'd form: the leaf is
+// leafHash over those exact bytes, so parsing before hashing would false-reject.
+// Callers parse AFTER verifying. A verified null means the key is not in the
+// committed tree, which covers both "never written" and "deleted": the commitment
+// itself does not distinguish them, so neither does this.
+//
+// THE CALLER MUST ESTABLISH THAT THE SLOT IS ARMED AT THIS HEIGHT. Nothing in a
+// proof can tell you: an armed-but-empty slot and an inert slot commit the
+// byte-identical EMPTY_SMT_ROOT (spec §2), so a non-inclusion result here means
+// "not in the committed tree" and NOT "this contract has no such key" unless the
+// slot is known to be live. Treating a below-arming non-inclusion as absence is
+// exactly the mistake spec §4 forbids; the server refuses to serve those heights
+// (CONTRACT_STATE_NOT_COMMITTED), and that refusal is the signal to respect.
+function verifyContractStateProof(proof, trustedStateRoot, chain, network){
+    const no = (reason) => ({ verified: false, state_value: null, reason: reason });
+    try {
+        if (!proof || !proof.smt_proof || !proof.sub_root_path) return no('MALFORMED_PROOF');
+        // The proven key must be exactly contractStateKey(chain, network, index, key),
+        // with chain/network from the TRUSTED checkpoint rather than the proof: a
+        // server must not be able to answer for one key with another key's proof.
+        const keyBuf = M.contractStateKey(chain, network, proof.contract_index, proof.state_key);
+        if (_hx(proof.smt_proof.key) !== M.toHex(keyBuf)) return no('KEY_MISMATCH');
+
+        const leaf = proof.smt_proof.leaf_value;
+        const val  = (proof.state_value == null) ? null : String(proof.state_value);
+        if (leaf == null){
+            if (val !== null) return no('NONINCLUSION_WITH_VALUE');
+        } else {
+            if (val === null) return no('INCLUSION_WITHOUT_VALUE');
+            // Binds the returned value to the committed leaf, so the server's
+            // `state_value` cannot lie about what the contract stored.
+            if (M.toHex(M.leafHash(val)) !== _hx(leaf)) return no('LEAF_VALUE_MISMATCH');
+        }
+        if (!M.verifyCompressedSmtProof(proof.contract_state_root, keyBuf, leaf, proof.smt_proof.compressed))
+            return no('SMT_PROOF_INVALID');
+        // PIN THE SLOT, for the same reason verifyBalanceProof does. Slots 2 and 3
+        // are the constant EMPTY_SMT_ROOT today, so without this a server could
+        // bind an EMPTY slot's path, hand back leaf_value:null, and "prove" that
+        // any key is absent from a contract that in fact holds it.
+        if (proof.sub_root_path.index !== M.STATE_SUBTREES.indexOf('contract_state_root'))
+            return no('SUBROOT_SLOT_MISMATCH');
+        if (!M.verifyFixedMerkleProof(trustedStateRoot, M.toBuf(proof.contract_state_root),
+                                      proof.sub_root_path.index, proof.sub_root_path.siblings))
+            return no('SUBROOT_BIND_INVALID');
+        return { verified: true, state_value: val, reason: null };
+    } catch (e){ return no('VERIFY_ERROR:' + (e && e.message)); }
 }
 
 // Verify a §5 action inclusion proof binds to a TRUSTED block_merkle_root.
@@ -538,6 +641,8 @@ async function followForward(opts){
 
 module.exports = {
     verifyBalanceProof,
+    verifyLockedBalanceProof,
+    verifyContractStateProof,
     verifyActionProof,
     verifyBalance,
     verifyAction,

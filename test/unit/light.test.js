@@ -187,6 +187,97 @@ describe('SPV Phase 4: sdk.light pure verifiers', function () {
         assert.strictEqual(r.reason, 'SUBROOT_SLOT_MISMATCH');
     });
 
+    // ---- verifyLockedBalanceProof (XCHAIN_ESC, SPV sub-tree spec §3 Stage B) ----
+    // A locked proof is a balance proof in a second key domain of the SAME
+    // balances_root, so the builder just swaps the key derivation. The extra
+    // rule under test is LIVENESS: the SDK's own activation carrier decides
+    // whether the domain is committed at the proof's height, whatever the
+    // server said, because no proof can tell (an armed-but-idle domain and an
+    // inert one commit byte-identical roots).
+    const SUBACT = require('../../src/state_subtree_activation.js');
+    const ESC_KEY = CHAIN + ':' + NET;
+    function armEsc() { SUBACT.ESCROW_LOCKED_LEAF_ACTIVATION[ESC_KEY] = 0; }
+    function disarmEsc() { delete SUBACT.ESCROW_LOCKED_LEAF_ACTIVATION[ESC_KEY]; }
+
+    function buildLockedProof(address, tick, amountStr) {
+        const keyBuf = M.escrowKey(CHAIN, NET, address, tick);
+        const present = amountStr !== '0';
+        const leaf = present ? M.toHex(M.amountLeaf(amountStr)) : null;
+        const store = buildStore(present ? [[M.toHex(keyBuf), leaf]] : []);
+        const balancesRoot = store.root, stakesRoot = EMPTY_ROOT;
+        const stateRoot = M.toHex(M.stateRoot({ balances_root: balancesRoot, stakes_root: stakesRoot }));
+        const siblings = store.descend(balancesRoot, keyBuf);
+        const sub = M.stateRootProof({ balances_root: balancesRoot, stakes_root: stakesRoot }, 'balances_root');
+        const proof = {
+            chain: CHAIN, network: NET, height: 100, address, tick,
+            amount: M.canonicalAmount(amountStr),
+            smt_proof: { key: M.toHex(keyBuf), leaf_value: leaf, compressed: M.compressSmtProof(siblings) },
+            sub_root_path: { index: sub.index, siblings: sub.siblings },
+            balances_root: balancesRoot, stakes_root: stakesRoot,
+            state_root: stateRoot, state_root_version: 2
+        };
+        return { proof, stateRoot };
+    }
+
+    it('verifyLockedBalanceProof ACCEPTS a valid membership proof at an armed height', function () {
+        armEsc();
+        try {
+            const { proof, stateRoot } = buildLockedProof(ADDR_A, TICK, '7');
+            const r = light.verifyLockedBalanceProof(proof, stateRoot, CHAIN, NET);
+            assert.strictEqual(r.verified, true, r.reason);
+            assert.strictEqual(r.amount, M.canonicalAmount('7'));
+        } finally { disarmEsc(); }
+    });
+
+    it('verifyLockedBalanceProof ACCEPTS zero-locked as non-inclusion at an armed height', function () {
+        armEsc();
+        try {
+            const { proof, stateRoot } = buildLockedProof(ADDR_Z, TICK, '0');
+            const r = light.verifyLockedBalanceProof(proof, stateRoot, CHAIN, NET);
+            assert.strictEqual(r.verified, true, r.reason);
+            assert.strictEqual(r.amount, M.canonicalAmount('0'));
+        } finally { disarmEsc(); }
+    });
+
+    it('verifyLockedBalanceProof REFUSES below the armed height, whatever the server served', function () {
+        // Map inert (the shipped default): a below-arming non-inclusion would
+        // "verify" against a root that never covered the domain and mean nothing.
+        const { proof, stateRoot } = buildLockedProof(ADDR_A, TICK, '7');
+        const r = light.verifyLockedBalanceProof(proof, stateRoot, CHAIN, NET);
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'ESCROW_LEAF_NOT_COMMITTED');
+    });
+
+    it('verifyLockedBalanceProof refuses a garbage height fail-closed (strict parse)', function () {
+        armEsc();
+        try {
+            const { proof, stateRoot } = buildLockedProof(ADDR_A, TICK, '7');
+            proof.height = '100abc';                    // coerces >= 0 under lax parsing
+            const r = light.verifyLockedBalanceProof(proof, stateRoot, CHAIN, NET);
+            assert.strictEqual(r.reason, 'ESCROW_LEAF_NOT_COMMITTED');
+        } finally { disarmEsc(); }
+    });
+
+    it('verifyLockedBalanceProof REJECTS a spendable-domain proof (KEY_MISMATCH both ways)', function () {
+        armEsc();
+        try {
+            const spend  = buildBalanceProof(ADDR_A, TICK, '5');
+            const locked = buildLockedProof(ADDR_A, TICK, '7');
+            assert.strictEqual(light.verifyLockedBalanceProof(spend.proof, spend.stateRoot, CHAIN, NET).reason, 'KEY_MISMATCH');
+            assert.strictEqual(light.verifyBalanceProof(locked.proof, locked.stateRoot, CHAIN, NET).reason, 'KEY_MISMATCH');
+        } finally { disarmEsc(); }
+    });
+
+    it('verifyLockedBalanceProof REJECTS a server lying about the locked amount', function () {
+        armEsc();
+        try {
+            const { proof, stateRoot } = buildLockedProof(ADDR_A, TICK, '7');
+            proof.amount = '1';                          // leaf still commits 7
+            const r = light.verifyLockedBalanceProof(proof, stateRoot, CHAIN, NET);
+            assert.strictEqual(r.reason, 'LEAF_AMOUNT_MISMATCH');
+        } finally { disarmEsc(); }
+    });
+
     it('verifyActionProof ACCEPTS a valid action inclusion proof (tx_index NULL)', function () {
         const { proof, blockMerkleRoot } = buildActionProof();
         const r = light.verifyActionProof(proof, blockMerkleRoot);
