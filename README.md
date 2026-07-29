@@ -33,7 +33,7 @@ Developer-facing SDK for generating XChain platform transactions and querying bl
 - **Batch builder**: fluent API: `await sdk.batch().send({...}).mint({...}).build()` (`build()` is async)
 - **Real-time events**: WebSocket streaming with `onBlock()`, `onAction()`, `onAddress()`, and more
 - **Encrypted messaging**: ECIES, ECDH, and AES encryption for MESSAGE actions; `messaging.send()` accepts a `Buffer` payload and `getMessages()` exposes `msg.bytes` for binary ECIES
-- **Token-gated file publishing**: `sdk.gatedFile.encryptFileBytes()` and `sdk.gatedFile.encryptPack()` produce AES-256-GCM ciphertext + key for FILE v1 gated content; key handoff as a compact 33-byte binary payload via `serializeKeyPayload()` / `parseKeyPayload()` (sent through ECIES in binary mode). See [Token-Gated Content](https://github.com/XChain-Platform/xchain-documentation/blob/master/protocol/TOKEN_GATED_CONTENT.md)
+- **Token-gated file publishing**: `sdk.gatedFile.encryptFileBytes()` and `sdk.gatedFile.encryptPack()` produce AES-256-GCM ciphertext + key for FILE v1 gated content; key handoff as a compact 33-byte binary payload via `serializeKeyPayload()` / `parseKeyPayload()` (sent through ECIES in binary mode). See [Token-Gated Content](https://docs.xchain.io/protocol/Token_Gated_Content.html)
 - **Attestation envelope helpers**: `AttestationHelpers.llm({...})` builds the JSON envelope a VM contract passes to `xchain.attestation.request(...)` with provider_id `'llm'`; `AttestationHelpers.httpGet({url})` validates the URL and returns the payload string for `'http_get'`; `AttestationHelpers.requestOptions({redundancy, deadlineBlocks})` builds the gateway options object. By design these are envelope builders only: there is no user-submittable ATTEST action. ATTEST v0 (request) and v1 (response) are VM-emitted: a contract calls `xchain.attestation.request(...)` and validators emit the on-chain attestation. So the SDK helps you shape the request a contract makes, and you read the results via `getAttestations()`. It does not (and cannot) encode an ATTEST action directly, the same way XCALL is VM-emission-only.
 - **Token-ownership trading helpers**: `ORDER`/`SWAP`/`DISPENSER` v0 carry `GIVE_OWNERSHIP` / `GET_OWNERSHIP` flags; `SWEEP` carries independent `ORDERS` / `SWAPS` / `DISPENSERS` flags (was a single `ESCROWS` flag)
 - **Contract-targeted staking**: `session.stakeToContract({ amount, signingPubkey, targetContractIndex, tick })`, `session.unstakeFromContract({...})`, and `session.delegateForContract({...})` emit STAKE v3 / UNSTAKE v1 / DELEGATE v1 against a smart contract deployed via DEPLOY v1 (with `COOLDOWN_BLOCKS` + `SLASH_DESTINATION`). High-level recipes: `sdk.deployStakeableContract()` and `sdk.stakeToContractAndDelegate()`
@@ -51,27 +51,27 @@ Developer-facing SDK for generating XChain platform transactions and querying bl
 
 ## Documentation
 
-Full SDK developer guide is available in the [xchain-documentation](https://github.com/XChain-Platform/xchain-documentation/tree/master/components/sdk) repository:
+Full SDK developer guide is published at [docs.xchain.io/components/sdk](https://docs.xchain.io/components/sdk/):
 
 | Document | Description |
 |---|---|
-| [README](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/README.md) | Overview, installation, usage modes |
-| [Configuration](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/CONFIGURATION.md) | Constructor options, env vars, hub discovery, retry, pooling, hooks |
-| [Actions](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/ACTIONS.md) | All 30 ACTION types: params, validation rules, format versions, examples |
-| [Transaction Lifecycle](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/LIFECYCLE.md) | submitAction, fee estimation, UTXO chaining, P2SH two-phase handling |
-| [Wallet Sessions](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/SESSIONS.md) | Bound wallet sessions, convenience methods, UTXO cache |
-| [Workflows](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/WORKFLOWS.md) | High-level recipes: issueAndDistribute, deployAndFund, stakeAndDelegate |
-| [Cross-Chain](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/CROSSCHAIN.md) | Multi-chain coordination: parallel actions, swaps, links |
-| [Explorer](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/EXPLORER.md) | All 40+ query methods: balances, tokens, transactions, markets |
-| [Encoder](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/ENCODER.md) | PSBT generation: encoding types, options, pre-flight validation, P2SH two-phase |
-| [Batch Builder](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/BATCH.md) | Fluent API for multi-action transactions |
-| [Contracts](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/CONTRACTS.md) | VM smart contract integration: deploy, execute, deposit, withdraw |
-| [WebSocket](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/WEBSOCKET.md) | Real-time event streaming: blocks, actions, addresses, markets |
-| [Wallet & Auth](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/WALLET.md) | Key management, PSBT signing, challenge-response verification |
-| [Messaging](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/MESSAGING.md) | ECIES/ECDH/AES encryption for MESSAGE actions |
-| [Format Selection](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/FORMAT_SELECTION.md) | How the SDK picks the optimal format version |
-| [Errors](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/ERRORS.md) | All error classes, codes, and troubleshooting |
-| [Examples](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/sdk/EXAMPLES.md) | End-to-end code examples |
+| [README](https://docs.xchain.io/components/sdk/) | Overview, installation, usage modes |
+| [Configuration](https://docs.xchain.io/components/sdk/CONFIGURATION.html) | Constructor options, env vars, hub discovery, retry, pooling, hooks |
+| [Actions](https://docs.xchain.io/components/sdk/ACTIONS.html) | All 30 ACTION types: params, validation rules, format versions, examples |
+| [Transaction Lifecycle](https://docs.xchain.io/components/sdk/LIFECYCLE.html) | submitAction, fee estimation, UTXO chaining, P2SH two-phase handling |
+| [Wallet Sessions](https://docs.xchain.io/components/sdk/SESSIONS.html) | Bound wallet sessions, convenience methods, UTXO cache |
+| [Workflows](https://docs.xchain.io/components/sdk/WORKFLOWS.html) | High-level recipes: issueAndDistribute, deployAndFund, stakeAndDelegate |
+| [Cross-Chain](https://docs.xchain.io/components/sdk/CROSSCHAIN.html) | Multi-chain coordination: parallel actions, swaps, links |
+| [Explorer](https://docs.xchain.io/components/sdk/EXPLORER.html) | All 40+ query methods: balances, tokens, transactions, markets |
+| [Encoder](https://docs.xchain.io/components/sdk/ENCODER.html) | PSBT generation: encoding types, options, pre-flight validation, P2SH two-phase |
+| [Batch Builder](https://docs.xchain.io/components/sdk/BATCH.html) | Fluent API for multi-action transactions |
+| [Contracts](https://docs.xchain.io/components/sdk/CONTRACTS.html) | VM smart contract integration: deploy, execute, deposit, withdraw |
+| [WebSocket](https://docs.xchain.io/components/sdk/WEBSOCKET.html) | Real-time event streaming: blocks, actions, addresses, markets |
+| [Wallet & Auth](https://docs.xchain.io/components/sdk/WALLET.html) | Key management, PSBT signing, challenge-response verification |
+| [Messaging](https://docs.xchain.io/components/sdk/MESSAGING.html) | ECIES/ECDH/AES encryption for MESSAGE actions |
+| [Format Selection](https://docs.xchain.io/components/sdk/Format_Selection.html) | How the SDK picks the optimal format version |
+| [Errors](https://docs.xchain.io/components/sdk/ERRORS.html) | All error classes, codes, and troubleshooting |
+| [Examples](https://docs.xchain.io/components/sdk/EXAMPLES.html) | End-to-end code examples |
 
 ## Quick Start
 
