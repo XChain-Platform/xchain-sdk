@@ -45,6 +45,15 @@ const MAX_DECIMALS       = 18;
 const MAX_TICK_LENGTH    = 250;
 const MAX_DESC_LENGTH    = 250;
 const MAX_MESSAGE_LENGTH = 1048576; // 1MB
+
+// PC-29 /  P9: wire bound on FILE.GATE_MIN_AMOUNT. Matches the indexer's
+// gated_files.gate_min_amount VARCHAR(40) exactly, and the reason it is a WIRE
+// rule rather than only a column width is that consensus validity must never
+// depend on what a DB does to an oversized value: if the column silently
+// truncated, two nodes with different DB modes could disagree about the
+// threshold. Rejecting at the format layer means the value that reaches storage
+// always fits.
+const MAX_GATE_MIN_AMOUNT_LENGTH = 40;
 // 64KB contract source code limit. Must match the indexer (DEPLOY) and the VM
 // isolate limit. Vendored single source of truth: ./protocol/constants.js
 // (byte-identical to xchain-documentation/protocol/constants.js, MAX_CODE_SIZE);
@@ -431,6 +440,50 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE',
                     'GATE_TICKER cannot contain |, ;, ., or /',
                     { field, value }));
+        }
+
+        // PC-29 /  P9: GATE_MIN_AMOUNT, the unlock threshold (spec §5.2).
+        //
+        // STATELESS checks only. Divisibility is deliberately NOT checked here: the
+        // bound is min(the gate tick's divisibility, THRESHOLD_SCALE), and a tick's
+        // divisibility is chain STATE at the FILE's block, which this validator does
+        // not have and must not guess at. The indexer is the arbiter for that half;
+        // duplicating a state-dependent rule here would only create a second, weaker
+        // opinion that disagrees at the boundary.
+        //
+        // Every rule below is a FORMAT rule, and each one exists because the value is
+        // consensus-visible and lands in a VARCHAR(40) column:
+        //   - strictly greater than zero: a zero threshold is not "no threshold", it
+        //     is a threshold nobody can fail, so every zero form is rejected rather
+        //     than silently meaning something different from an absent field
+        //   - digits and at most one '.', no sign characters: keeps it pipe-free and
+        //     unambiguous on the wire, and rules out '+1'/'-1'/'1e3' style forms
+        //   - no leading zeros unless the integer part is exactly '0': one value must
+        //     have one spelling, or two byte-different FILEs mean the same threshold
+        //   - non-empty fractional part when '.' is present: '1.' is not a number
+        //   - at most 40 characters: consensus validity must never depend on what a
+        //     DB does to an oversized value (the column would truncate it)
+        if (action === 'FILE' && field === 'GATE_MIN_AMOUNT') {
+            const raw = String(value);
+            if (raw !== '') {
+                const bad = (msg, extra) => errors.push(this._error('INVALID_FIELD_VALUE',
+                    'GATE_MIN_AMOUNT ' + msg, Object.assign({ field, value }, extra || {})));
+                if (raw.length > MAX_GATE_MIN_AMOUNT_LENGTH) {
+                    bad('must be at most ' + MAX_GATE_MIN_AMOUNT_LENGTH + ' characters',
+                        { constraint: { maxLength: MAX_GATE_MIN_AMOUNT_LENGTH } });
+                } else if (!/^\d+(\.\d+)?$/.test(raw)) {
+                    // Covers the sign, exponent, bare-point, empty-fraction and
+                    // multiple-point cases in one pass.
+                    bad('must be a decimal amount: digits with at most one "." and a ' +
+                        'non-empty fractional part, no sign or exponent');
+                } else if (/^0\d/.test(raw)) {
+                    bad('must not have leading zeros in the integer part');
+                } else if (!/[1-9]/.test(raw)) {
+                    // Every zero spelling: 0, 0.0, 0.000. Checked after shape so the
+                    // message is about the value rather than the syntax.
+                    bad('must be strictly greater than zero (omit the field for no threshold)');
+                }
+            }
         }
 
         // FILE NAME/TYPE/TITLE delimiter safety is handled by _checkDelimiters.

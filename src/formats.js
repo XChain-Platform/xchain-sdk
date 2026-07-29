@@ -120,8 +120,12 @@ var Formats = {
         0: 'VERSION|CONTRACT_ACTION_INDEX|METHOD|...PARAMS'
     },
 
+    // PC-29 /  P9: FILE format 0 gains an optional NINTH field,
+    // GATE_MIN_AMOUNT, the minimum balance of GATE_TICKER a recipient must hold to
+    // be given the decryption key. The eight-field form stays byte-identical, so
+    // every historical FILE replays unchanged; absent or empty means no threshold.
     FILE: {
-        0: 'VERSION|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH'
+        0: 'VERSION|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH|GATE_MIN_AMOUNT'
     },
 
     ISSUE: {

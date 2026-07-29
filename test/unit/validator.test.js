@@ -1352,3 +1352,88 @@ describe('Validator: address ^id reference', function () {
         expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PC-29 /  P9: FILE.GATE_MIN_AMOUNT (the unlock threshold)
+//
+// A ninth, optional FILE field. Every rule here is a FORMAT rule and every one
+// exists for a reason worth stating, because the value is consensus-visible and
+// lands in a VARCHAR(40): a value this validator lets through must be one the
+// indexer can store and compare without the DB changing it.
+//
+// Divisibility is deliberately absent. The real bound is
+// min(gate tick divisibility, THRESHOLD_SCALE), and divisibility is chain STATE
+// at the FILE's block, which a stateless validator does not have. The indexer is
+// the arbiter for that half; a guess here would be a second, weaker opinion that
+// disagrees at exactly the boundary the shared vectors exist to pin.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Validator: FILE GATE_MIN_AMOUNT (PC-29)', function () {
+
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    const bad = (value) => v.validate('FILE', { NAME: 'f.txt', TYPE: 'text/plain', GATE_MIN_AMOUNT: value });
+    const isRejected = (value) => !hasNoErrorCode(bad(value), 'INVALID_FIELD_VALUE');
+
+    it('accepts an absent or empty threshold (= no threshold)', function () {
+        expect(hasNoErrorCode(v.validate('FILE', { NAME: 'f.txt', TYPE: 'text/plain' }), 'INVALID_FIELD_VALUE')).to.be.true;
+        expect(isRejected(''), 'empty means no threshold, not an invalid one').to.be.false;
+    });
+
+    it('accepts ordinary decimal amounts', function () {
+        for (const ok of ['1', '100', '0.5', '0.00000001', '12345.6789', '1.0'])
+            expect(isRejected(ok), ok).to.be.false;
+    });
+
+    it('rejects every spelling of zero', function () {
+        // A zero threshold is not "no threshold"; it is a threshold nobody can fail.
+        // Letting it through would give one meaning two encodings.
+        for (const z of ['0', '0.0', '0.00000000'])
+            expect(isRejected(z), z).to.be.true;
+    });
+
+    it('rejects signs and exponents', function () {
+        for (const s of ['-1', '+1', '1e3', '1E3', '-0.5'])
+            expect(isRejected(s), s).to.be.true;
+    });
+
+    it('rejects malformed decimal shapes', function () {
+        for (const s of ['1.', '.5', '1.2.3', '1,5', '1 ', ' 1', 'abc', '1a'])
+            expect(isRejected(s), JSON.stringify(s)).to.be.true;
+    });
+
+    it('rejects leading zeros so one value has exactly one spelling', function () {
+        // '01' and '1' would otherwise be two byte-different FILEs meaning the same
+        // threshold, which the shared P1/P9 vectors treat as a defect.
+        for (const s of ['01', '007', '00.5'])
+            expect(isRejected(s), s).to.be.true;
+        expect(isRejected('0.5'), 'a single leading zero before the point is correct').to.be.false;
+    });
+
+    it('rejects a pipe, which would split the wire record', function () {
+        expect(isRejected('1|2')).to.be.true;
+    });
+
+    it('enforces the 40-character bound the storage column depends on', function () {
+        const forty = '1'.repeat(40);
+        expect(isRejected(forty), '40 is allowed').to.be.false;
+        expect(isRejected('1'.repeat(41)), '41 is not').to.be.true;
+        // The bound is a WIRE rule, not merely a column width: if an oversized value
+        // reached a VARCHAR(40) it could be silently truncated, and consensus validity
+        // would then depend on the DB's mode rather than on the bytes.
+        expect(isRejected('0.' + '1'.repeat(45))).to.be.true;
+    });
+
+    it('does NOT reject on divisibility, which is the indexer\'s call', function () {
+        // 30 decimal places is beyond any tick's divisibility, but this validator is
+        // stateless and must not pretend to know. It is a well-formed decimal, so it
+        // passes here and the indexer rejects it against the gate tick at that block.
+        expect(isRejected('0.' + '1'.repeat(30)), 'stateless layer must stay silent on divisibility').to.be.false;
+    });
+
+    it('applies only to FILE, not to other actions carrying a like-named field', function () {
+        const errors = v.validate('SEND', { GATE_MIN_AMOUNT: '0' });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+});
