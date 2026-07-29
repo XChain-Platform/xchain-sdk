@@ -284,6 +284,33 @@ describe('pre-flight engine', function () {
             expect(tokenFinding.severity).to.equal('error');
             expect(r.findings.some(f => f.code === 'DRYRUN_UNAVAILABLE')).to.equal(true);
         });
+
+        // . The case above has a dry-run that FAILS FAST; the one that
+        // bites in production is a dry-run that never answers at all (a cold
+        // verdict on a busy venue costs seconds against a 4000ms budget). An
+        // otherwise-clean action therefore passes on Tier 2 alone, and the ONLY
+        // thing in the report that says the network was never asked is this
+        // finding - a consumer that drops it shows a network approval that
+        // never happened, which is exactly what the wallet confirm surface did.
+        it('a dry-run that never answers still declares itself in the report', async function () {
+            const sdk = mockSdk({ explorerSpec: {
+                getToken: () => ({ tick: 'JDOG', divisible: 0 }),
+                getBalances: () => [{ tick: 'JDOG', amount: '100' }],
+                getFeeQuote: () => new Promise(() => {}),   // never resolves
+            } });
+            const r = await sdk.preflight('SEND|0|JDOG|5|' + A1,
+                { source: A2, preflight: 'report', timeoutMs: 200 });
+
+            // Verdict is a clean pass on client checks alone: nothing else in
+            // the report distinguishes it from a network-approved pass.
+            expect(r.verdict).to.equal('pass');
+            expect(r.findings.some(f => f.code === 'DRYRUN_VALID')).to.equal(false);
+
+            const unavailable = r.findings.find(f => f.code === 'DRYRUN_UNAVAILABLE');
+            expect(unavailable, 'unanswered dry-run must still be stated').to.not.equal(undefined);
+            expect(unavailable.source).to.equal('dryrun');
+            expect(unavailable.message).to.match(/timeout/i);
+        });
     });
 
     describe('severity/trust model (§4.2)', function () {
