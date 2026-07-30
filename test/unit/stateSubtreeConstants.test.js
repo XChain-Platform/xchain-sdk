@@ -62,7 +62,7 @@ function sha256File(p){ return crypto.createHash('sha256').update(fs.readFileSyn
 
 describe('SPV sub-tree activation constants: client export @regression', function(){
 
-    it('the maps carry EXACTLY the fleet-armed set, and NOTHING on mainnet or testnet', function(){
+    it('the maps carry EXACTLY the fleet-armed set, and NOTHING on mainnet', function(){
         // Arming is a fleet code change that deploys before the height is reached.
         // A height arriving via an SDK release alone would tell clients a slot is
         // live on a chain whose indexers still commit it EMPTY, so this pins the
@@ -71,13 +71,23 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         // height ride out to clients unnoticed).
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.ownership_root, {});
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.tokens_root, {});
-        assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.contract_state_root, { 'BTC:regtest': 10000 });
+        assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.contract_state_root,
+            { 'BTC:regtest': 10000, 'BTC:testnet': 146500 });
         assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_ACTIVATION, { 'BTC:regtest': 11200 });
-        // The launch guard: no production network may be armed in a client release.
+        // THE LAUNCH GUARD, and it is about MAINNET rather than about regtest.
+        // It read /:regtest$/ while regtest was the only armed network, which was
+        // the strictest form available then and the WRONG rule to keep: once the
+        // fleet armed BTC:testnet (2026-07-30), a client that refused to carry that
+        // height would report a live slot as inert, which §4 calls the same wrong
+        // answer as shipping no export at all. The client copy must EQUAL the
+        // fleet's. What must never ship armed in a client release is mainnet.
         for(const slot of SUB.RESERVED_SUBTREES)
             for(const key of Object.keys(SUB.STATE_SUBTREE_ACTIVATION[slot]))
-                assert.ok(/:regtest$/.test(key),
-                    slot + ' ships armed on a non-regtest chain (' + key + ') in a CLIENT release');
+                assert.ok(!/:mainnet$/.test(key),
+                    slot + ' ships armed on MAINNET (' + key + ') in a CLIENT release');
+        for(const key of Object.keys(SUB.ESCROW_LOCKED_LEAF_ACTIVATION))
+            assert.ok(!/:mainnet$/.test(key),
+                'the escrow leaf ships armed on MAINNET (' + key + ') in a CLIENT release');
     });
 
     it('the slot list matches this repo\'s merkle.STATE_SUBTREES tail', function(){
@@ -90,7 +100,10 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         for(const coin of ['BTC', 'LTC', 'DOGE'])
             for(const network of ['mainnet', 'testnet', 'regtest'])
                 for(const h of [0, 1, 962500, 3160000, 6335000, 999999999]){
-                    const armed = (coin === 'BTC' && network === 'regtest' && h >= 10000);
+                    // Derived from the map, not a hardcoded pair: with two heights
+                    // armed a hardcoded chain would assert "off" for a chain that is on.
+                    const threshold = SUB.STATE_SUBTREE_ACTIVATION.contract_state_root[coin + ':' + network];
+                    const armed = (threshold !== undefined) && h >= threshold;
                     for(const slot of SUB.RESERVED_SUBTREES)
                         assert.strictEqual(SUB.isSubtreeActive(slot, h, network, coin),
                             armed && slot === 'contract_state_root',
@@ -108,6 +121,16 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         // query path opens, then closes again. This is the check that would catch
         // an export accidentally frozen to "always inert".
         const map = SUB.STATE_SUBTREE_ACTIVATION.contract_state_root;
+        // SNAPSHOT AND RESTORE, never delete. This helper used to end in
+        // `delete map['BTC:regtest']`, which was indistinguishable from a restore
+        // while the map was empty and became a silent DISARM the moment a real
+        // height existed: every later test in the process would then read the
+        // chain as inert. That exact failure cost a debugging session at the
+        // Stage A arming and was fixed in four other files; this copy was missed,
+        // and the second armed height (BTC:testnet) made it worse still, since a
+        // delete here leaves a HALF-armed map behind.
+        const had   = Object.prototype.hasOwnProperty.call(map, 'BTC:regtest');
+        const prior = map['BTC:regtest'];
         try {
             map['BTC:regtest'] = 500;
             assert.strictEqual(SUB.isSubtreeActive('contract_state_root', 499, 'regtest', 'BTC'), false);
@@ -116,7 +139,13 @@ describe('SPV sub-tree activation constants: client export @regression', functio
             assert.strictEqual(SUB.stateRootVersion(499, 'regtest', 'BTC'), 1);
             assert.strictEqual(SUB.isSubtreeActive('contract_state_root', 500, 'regtest', 'LTC'), false,
                 'chain-local: arming BTC must not arm LTC for a client either');
-        } finally { delete map['BTC:regtest']; }
+        } finally {
+            if(had) map['BTC:regtest'] = prior; else delete map['BTC:regtest'];
+        }
+        // The assertion that catches a regression in the restore itself.
+        assert.strictEqual(map['BTC:regtest'], 10000, 'restored to the real armed height, not wiped');
+        assert.strictEqual(SUB.STATE_SUBTREE_ACTIVATION.contract_state_root['BTC:testnet'], 146500,
+            'the sibling armed height must survive a scratch-arm too');
     });
 
     it('GOLDEN: this repo\'s copy has not moved on its own', function(){
@@ -132,7 +161,11 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         // 2026-07-28 ( arming): contract_state_root ARMED on BTC:regtest at
         // 10000, the first height ever set in this file. Regtest only; mainnet and
         // testnet remain unarmed for every slot.
-        const GOLDEN = 'a358d3bddf866e5bb68bc742c9be12bd7fc72f12bd021b10c3f54116fec34bce';
+        // 2026-07-30 ( testnet arming): contract_state_root ARMED on
+        // BTC:testnet at 146500, above its 146000 collation height. BTC only of the
+        // three testnet chains (LTC:testnet is below its own collation height,
+        // DOGE:testnet has no follower). MAINNET still unarmed for every slot.
+        const GOLDEN = 'f5ba77b37587a028543642185c5d14c99324f230f37a53dfb4c1ddf060a64f33';
         const actual = sha256File(SELF);
         if(actual !== GOLDEN)
             assert.fail('src/state_subtree_activation.js changed (sha256 ' + actual + ').\n' +
