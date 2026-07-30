@@ -196,8 +196,19 @@ describe('SPV Phase 4: sdk.light pure verifiers', function () {
     // inert one commit byte-identical roots).
     const SUBACT = require('../../src/state_subtree_activation.js');
     const ESC_KEY = CHAIN + ':' + NET;
+    // BTC:regtest carries a REAL armed height now, so "disarm" must not DELETE the key:
+    // that silently wipes the fleet-armed set for every later test in the process, and
+    // it is the third place this trap has appeared across the two armings. Disarming
+    // instead pushes the threshold out of reach, which is inert at every height a test
+    // uses while leaving the key present, and the real value is put back afterwards.
+    const ESC_HAD   = Object.prototype.hasOwnProperty.call(SUBACT.ESCROW_LOCKED_LEAF_ACTIVATION, ESC_KEY);
+    const ESC_PRIOR = SUBACT.ESCROW_LOCKED_LEAF_ACTIVATION[ESC_KEY];
     function armEsc() { SUBACT.ESCROW_LOCKED_LEAF_ACTIVATION[ESC_KEY] = 0; }
-    function disarmEsc() { delete SUBACT.ESCROW_LOCKED_LEAF_ACTIVATION[ESC_KEY]; }
+    function disarmEsc() { SUBACT.ESCROW_LOCKED_LEAF_ACTIVATION[ESC_KEY] = Number.MAX_SAFE_INTEGER; }
+    after(function(){
+        if(ESC_HAD) SUBACT.ESCROW_LOCKED_LEAF_ACTIVATION[ESC_KEY] = ESC_PRIOR;
+        else delete SUBACT.ESCROW_LOCKED_LEAF_ACTIVATION[ESC_KEY];
+    });
 
     function buildLockedProof(address, tick, amountStr) {
         const keyBuf = M.escrowKey(CHAIN, NET, address, tick);

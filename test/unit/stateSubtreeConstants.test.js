@@ -72,7 +72,7 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.ownership_root, {});
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.tokens_root, {});
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.contract_state_root, { 'BTC:regtest': 10000 });
-        assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_ACTIVATION, {});
+        assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_ACTIVATION, { 'BTC:regtest': 11200 });
         // The launch guard: no production network may be armed in a client release.
         for(const slot of SUB.RESERVED_SUBTREES)
             for(const key of Object.keys(SUB.STATE_SUBTREE_ACTIVATION[slot]))
@@ -132,7 +132,7 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         // 2026-07-28 ( arming): contract_state_root ARMED on BTC:regtest at
         // 10000, the first height ever set in this file. Regtest only; mainnet and
         // testnet remain unarmed for every slot.
-        const GOLDEN = '1da11e99884bf57c116d16755190b54ffcc34ae725e9b9d5d0607d8fd560a288';
+        const GOLDEN = 'a358d3bddf866e5bb68bc742c9be12bd7fc72f12bd021b10c3f54116fec34bce';
         const actual = sha256File(SELF);
         if(actual !== GOLDEN)
             assert.fail('src/state_subtree_activation.js changed (sha256 ' + actual + ').\n' +
