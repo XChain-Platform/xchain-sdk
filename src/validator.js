@@ -544,9 +544,30 @@ class Validator {
         // produces a transaction the indexer rejects (e.g. STAKE/SEND require >0),
         // so fail client-side rather than emit a doomed action. The supply-cap
         // fields above legitimately accept 0 (disabled) and so are excluded here.
+        //
+        // ONE EXCEPTION, and it is the protocol's own convention rather than a
+        // loophole: a FIAT-priced DISPENSER carries GET_AMOUNT 0. Its coin price
+        // is not stored at all, it is derived at settlement from FIAT_AMOUNT and
+        // the validator price snapshot (DISPENSER.md examples 4/5;
+        // xchain-indexer dispense.js says so outright - "the GET_AMOUNT of 0
+        // that FIAT dispensers carry by convention"). The indexer checks only
+        // GET_AMOUNT's FORMAT for a DISPENSER and never its sign, so refusing a
+        // zero here was strictly stricter than the chain, and the effect was
+        // total: neither pricing mode could be composed, so the whole
+        // fiat/oracle dispenser feature was unreachable through any client
+        // using this validator - including the wallet's own Advanced options
+        // panel, which offers it. Found by the fiat dispenser e2e lane
+        // (wallet campaign D-143), which could not get past the form.
+        // Exactly ZERO, not merely non-positive: the convention is a zero
+        // placeholder standing in for "derived later", and a negative price is
+        // nonsense in either lane. Written the loose way first, and the unit
+        // case below caught it letting -1 through.
+        const fiatPricedDispenser = action === 'DISPENSER' && field === 'GET_AMOUNT'
+            && Number(value) === 0
+            && (!this._isEmpty(allFields?.FIAT_CODE) || !this._isEmpty(allFields?.ORACLE_ADDRESS));
         if (field === 'AMOUNT' || field === 'GIVE_AMOUNT' || field === 'GET_AMOUNT' ||
             field === 'GIVE_ESCROW' || field === 'CALLBACK_AMOUNT') {
-            if (this.util.isNumeric(value) && Number(value) <= 0)
+            if (!fiatPricedDispenser && this.util.isNumeric(value) && Number(value) <= 0)
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be a positive number', { field, value }));
         }
 

@@ -450,6 +450,80 @@ describe('Validator: FIAT_AMOUNT validation', function () {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// FIAT DISPENSER GET_AMOUNT = 0
+//
+// A fiat-priced dispenser does not store a coin price. It is derived at
+// SETTLEMENT from FIAT_AMOUNT and the validator price snapshot, so GET_AMOUNT is
+// 0 by protocol convention (DISPENSER.md examples 4/5; xchain-indexer
+// dispense.js names it outright - "the GET_AMOUNT of 0 that FIAT dispensers
+// carry by convention"). The indexer validates only GET_AMOUNT's FORMAT for a
+// DISPENSER and never its sign.
+//
+// The positive-amount rule used to apply to GET_AMOUNT unconditionally, which
+// made this SDK strictly stricter than the chain and had a total effect:
+// NEITHER fiat pricing mode could be composed, so the whole fiat/oracle
+// dispenser feature was unreachable through any client using this validator.
+// Found by the wallet's fiat dispenser e2e lane, which could not get past the
+// form (wallet campaign D-143).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Validator: FIAT dispenser GET_AMOUNT convention', function () {
+
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    const BASE = { GIVE_TICK: 'TOKEN', GIVE_AMOUNT: '10', GIVE_ESCROW: '100', GET_COIN: 'BTC' };
+
+    it('accepts GET_AMOUNT 0 on a validator-priced FIAT dispenser', function () {
+        const errors = v.validate('DISPENSER', {
+            ...BASE, GET_AMOUNT: '0', FIAT_CODE: 'USD', FIAT_AMOUNT: '3.00'
+        });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('accepts GET_AMOUNT 0 on a user-oracle dispenser, where FIAT_AMOUNT is ignored', function () {
+        const errors = v.validate('DISPENSER', {
+            ...BASE,
+            GET_AMOUNT:     '0',
+            FIAT_CODE:      'JPY',
+            ORACLE_ADDRESS: 'bc1qmr46t4ca5wh35k6mczdzrkepqw2d8ne9ryqz4c'
+        });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    // The exemption has to be NARROW or it becomes a hole: an ordinary
+    // coin-priced dispenser with a zero price would dispense for nothing.
+    it('still rejects GET_AMOUNT 0 on a dispenser with no fiat pricing at all', function () {
+        const errors = v.validate('DISPENSER', { ...BASE, GET_AMOUNT: '0' });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('still rejects a NEGATIVE GET_AMOUNT even on a FIAT dispenser', function () {
+        const errors = v.validate('DISPENSER', {
+            ...BASE, GET_AMOUNT: '-1', FIAT_CODE: 'USD', FIAT_AMOUNT: '3.00'
+        });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('still rejects a zero GIVE_AMOUNT on a FIAT dispenser: only the PRICE is derived', function () {
+        const errors = v.validate('DISPENSER', {
+            ...BASE, GIVE_AMOUNT: '0', GET_AMOUNT: '0', FIAT_CODE: 'USD', FIAT_AMOUNT: '3.00'
+        });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('does not leak the exemption to another action carrying GET_AMOUNT', function () {
+        // ORDER and SWAP both have GET_AMOUNT and neither has a fiat lane, so
+        // the FIAT_CODE guard must be action-scoped rather than field-scoped.
+        const errors = v.validate('ORDER', {
+            GIVE_TICK: 'TOKEN', GIVE_AMOUNT: '10', GET_COIN: 'BTC', GET_AMOUNT: '0',
+            FIAT_CODE: 'USD'
+        });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PRICE v1 ORACLE PUBLISH (FIAT / VALUE / FEE)
 //
 // The user-run token oracle (PC-30). Its fiat field is named FIAT, not
