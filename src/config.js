@@ -114,14 +114,25 @@ var Config = {
         ];
 
         // Programmable policy layer: the controller action classes a token (ISSUE v6) or
-        // account (ADDRESS v1) may bind. MUST stay in lockstep with the indexer's
-        // config CONTROLLER_ACTION_CLASSES (a cross-service regression pins it).
+        // account (ADDRESS v1) may BIND. The only field this list validates is
+        // ACTION_CLASS, which exists on those two formats and nowhere else, so the
+        // set it must mirror is the indexer's CONTROLLER_BINDABLE_CLASSES - NOT
+        // CONTROLLER_ACTION_CLASSES, which is the narrower ROUTING set (what an
+        // incoming action is mapped to). The two differ by `all`, and pinning to the
+        // routing set made every `all` bind unrepresentable through this SDK.
+        // `ownership` was in neither copy here: it gates a token's ownership deed-over
+        // (SWEEP OWNERSHIPS=1 routes to it), which is the class an issuer uses to make
+        // ownership non-sweepable to an unapproved destination.
+        // xchain-indexer/src/config.js is the authority; anything it accepts on a bind
+        // and this list refuses is a client-side dead end, not a protocol rule.
         config['ACTION_CLASSES'] = [
             'transfer',
             'trade',
             'burn',
             'mint',
-            'stake'
+            'stake',
+            'ownership',
+            'all'
         ];
 
         // Define stop check interval (default 5 seconds; override via STOP_CHECK_INTERVAL)

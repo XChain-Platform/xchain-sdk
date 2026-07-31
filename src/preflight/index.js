@@ -170,7 +170,9 @@ function computeVerdict(findings) {
  *   - Tier-1 valid: authoritative pass. Contradicting Tier-2 ERRORS
  *     downgrade to info (kept for diagnostics). Warnings stay.
  *   - Tier-1 invalid: authoritative fail. Add the DRYRUN_INVALID error.
- *   - no verdict: Tier-2 stands.
+ *   - no verdict: Tier-2 stands on PRECEDENCE, and the absence of a
+ *     network verdict is disclosed (DRYRUN_UNAVAILABLE), so a report
+ *     the network declined to judge is never presented as one it passed.
  *
  * §4.7 EXCEPTION . Tier-1 is authoritative about CONFIRMED chain
  * state only. A finding computed from `localDeltas` - the caller's own
@@ -204,6 +206,32 @@ function applyTier1(findings, tier1) {
     } else if (tier1.kind === 'unavailable') {
         findings.push({ code: FINDING_CODES.DRYRUN_UNAVAILABLE, severity: 'info', source: 'dryrun',
             message: 'The network dry-run was unavailable (' + tier1.reason + '); relying on client checks.', data: {} });
+    } else if (tier1.kind === 'no-verdict') {
+        // The network answered and DECLINED to judge: a controller-bound action
+        // whose guard the public dry-run refuses to enter (guardInert), a
+        // denylisted VM action, a fee-exempt reply that never ran the handler,
+        // or an unquotable one. "Tier-2 stands" is right about PRECEDENCE and
+        // was wrong about DISCLOSURE - pushing no finding at all left the report
+        // a clean pass, so a client rendered it identically to a network
+        // approval. That is the  regression in its second home: measured
+        // on a controller-bound token's SEND, whose confirm screen read "Looks
+        // good" on a transfer the chain then refused `controller (reverted)`.
+        // Same code as the unreachable case on purpose: every client already
+        // routes DRYRUN_UNAVAILABLE to its "not an approval" presentation, and a
+        // new code would leave each of them showing the old, wrong screen until
+        // it learned about it.
+        //
+        // 'local-only mode' arrives here too, and it is a different sentence:
+        // nothing declined anything, the caller asked for no network check. Both
+        // still owe the same disclosure, so they share the code and differ in
+        // the words - a message that called a deliberate opt-out a refusal would
+        // be the mirror of the bug being fixed.
+        const declined = tier1.reason !== 'local-only mode';
+        findings.push({ code: FINDING_CODES.DRYRUN_UNAVAILABLE, severity: 'info', source: 'dryrun',
+            message: (declined
+                ? 'The network declined to judge this action ('
+                : 'The network was not consulted (')
+                + tier1.reason + '); relying on client checks.', data: {} });
     }
     return findings;
 }

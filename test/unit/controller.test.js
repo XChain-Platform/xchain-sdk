@@ -39,13 +39,41 @@ describe('ControllerHelpers', function () {
         return sdk.actions.createAction({ action, params }).actionString;
     }
 
+    // The indexer's CONTROLLER_BINDABLE_CLASSES, which is what a BIND is
+    // validated against (xchain-indexer/src/config.js). Deliberately NOT
+    // CONTROLLER_ACTION_CLASSES: that is the narrower ROUTING set, and pinning
+    // the SDK to it left `all` - the catch-all a bind may target and no action
+    // ever routes to - unrepresentable by any client.
+    const BINDABLE = ['transfer', 'trade', 'burn', 'mint', 'stake', 'ownership', 'all'];
+
     describe('actionClasses()', function () {
-        it('returns the canonical class list matching the indexer', function () {
-            expect(controller.actionClasses()).to.deep.equal(['transfer', 'trade', 'burn', 'mint', 'stake']);
+        it('returns the canonical BINDABLE class list matching the indexer', function () {
+            expect(controller.actionClasses()).to.deep.equal(BINDABLE);
         });
         it('returns a fresh copy (callers cannot mutate the canonical list)', function () {
             controller.actionClasses().push('admin');
-            expect(controller.actionClasses()).to.deep.equal(['transfer', 'trade', 'burn', 'mint', 'stake']);
+            expect(controller.actionClasses()).to.deep.equal(BINDABLE);
+        });
+
+        // The two the list was missing, and the reason each matters. Asserted
+        // through the BUILDERS rather than the list, because the list is only
+        // the dropdown: `_assertActionClass` is what threw, so a fix that
+        // widened the list and not the guard would look right and still refuse.
+        it('can author an `all` bind, the catch-all the policy layer is built around', function () {
+            const wire = ser('ISSUE', controller.bindToken({ tick: 'MYTOKEN', controller: 42, actionClass: 'all' }));
+            expect(wire).to.equal('ISSUE|6|MYTOKEN|42|all||0');
+        });
+        it('can author an `ownership` bind, which gates the deed rather than the balances', function () {
+            const wire = ser('ISSUE', controller.bindToken({ tick: 'MYTOKEN', controller: 42, actionClass: 'ownership' }));
+            expect(wire).to.equal('ISSUE|6|MYTOKEN|42|ownership||0');
+        });
+        it('can drop them again, which a one-sided fix would leave stranded', function () {
+            expect(ser('ISSUE', controller.unbindToken({ tick: 'MYTOKEN', actionClass: 'all' })))
+                .to.equal('ISSUE|6|MYTOKEN||all||1');
+        });
+        it('still refuses a class the chain does not accept', function () {
+            expect(() => controller.bindToken({ tick: 'MYTOKEN', controller: 42, actionClass: 'admin' }))
+                .to.throw(/actionClass must be one of/);
         });
     });
 
