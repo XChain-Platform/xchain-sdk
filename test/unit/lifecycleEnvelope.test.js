@@ -56,7 +56,13 @@ function buildSignedTx() {
 
 // Fake SDK whose encoder returns an ENVELOPE PAIR, with every broadcast and signing
 // call recorded in one ordered trace so the sequence itself can be asserted.
-function makeEnvelopeSdk({ revealSignThrows = false, customSigner = null } = {}) {
+const RECOVERY = {
+    commitTxid: 'aa'.repeat(32), commitVout: 0, commitValue: 12345,
+    commitAddress: 'bcrt1pexample', internalPubkey: 'bb'.repeat(32),
+    tapleafHash: 'cc'.repeat(32), controlBlock: 'c1' + 'dd'.repeat(32), revealFee: 500,
+};
+
+function makeEnvelopeSdk({ revealSignThrows = false, revealBroadcastThrows = false, customSigner = null } = {}) {
     const signed = buildSignedTx();
     const trace = [];
 
@@ -64,9 +70,16 @@ function makeEnvelopeSdk({ revealSignThrows = false, customSigner = null } = {})
         createTx: async () => ({
             psbt:       signed.psbtHex,
             revealPsbt: signed.psbtHex,          // the pair, per §6
+            envelope:   RECOVERY,                // the §3.5 recovery record
             encoding:   'TAPROOT',
         }),
-        broadcastTx: async (hex) => { trace.push('broadcast:' + (hex === signed.txHex ? 'tx' : '?')); return { txid: signed.txid }; },
+        broadcastTx: async (hex) => {
+            trace.push('broadcast:' + (hex === signed.txHex ? 'tx' : '?'));
+            if (revealBroadcastThrows && trace.filter(t => t.startsWith('broadcast')).length === 2) {
+                throw new Error('node rejected the reveal');
+            }
+            return { txid: signed.txid };
+        },
         spendP2sh:   async () => { trace.push('spendP2sh'); return { psbt: signed.psbtHex }; },
     };
 
@@ -152,5 +165,30 @@ describe('Taproot envelope pair through the lifecycle ', function () {
         await submit(new LifecycleManager(sdk));
         assert.deepStrictEqual(trace, ['signCommit', 'broadcast:tx'],
             'no envelope signing on a lane that has no reveal');
+    });
+
+    it('hands the §3.5 recovery record to the caller BEFORE the commit is broadcast', async function () {
+        const { sdk, trace } = makeEnvelopeSdk();
+        const events = [];
+        await submit(new LifecycleManager(sdk), { onProgress: (stage, data) => events.push({ stage, data }) });
+        const i = events.findIndex(e => e.stage === 'envelope_recovery_record');
+        assert.ok(i >= 0, 'the record must be emitted at all: without it §3.5 cancel is impossible');
+        assert.deepStrictEqual(events[i].data.recovery, RECOVERY);
+        // and it must arrive while nothing is on chain
+        const broadcastIdx = events.findIndex(e => e.stage === 'broadcasting');
+        assert.ok(broadcastIdx === -1 || i < broadcastIdx,
+            'the record is worthless if it arrives after the commit is already broadcast');
+    });
+
+    it('a reveal REJECTED after the commit landed carries the recovery record out with the error', async function () {
+        const { sdk } = makeEnvelopeSdk({ revealBroadcastThrows: true });
+        await assert.rejects(() => submit(new LifecycleManager(sdk)), (err) => {
+            assert.strictEqual(err.code, 'ENVELOPE_REVEAL_BROADCAST_FAILED');
+            // losing these is losing the funds
+            assert.deepStrictEqual(err.details.recovery, RECOVERY);
+            assert.ok(err.details.commitTxid, 'the caller must know WHICH commit is stranded');
+            assert.ok(err.details.revealTxHex, 'so the broadcast can simply be retried');
+            return true;
+        });
     });
 });

@@ -126,6 +126,14 @@ class LifecycleManager {
         let revealSigned = null;
         if (encoded.revealPsbt) {
             revealSigned = this.sdk.wallet.signEnvelopeRevealPsbt(encoded.revealPsbt, wif);
+            // §3.5 requires {commit outpoint, internal key, tapleaf hash} to be
+            // durably persisted BEFORE the commit is broadcast, because the key-path
+            // cancel cannot be reconstructed without them and the funds are then
+            // stranded in an address nothing can re-derive. The SDK has no storage of
+            // its own, so it hands the encoder's recovery record to the caller HERE,
+            // at the last moment where nothing is on chain yet, and a caller that
+            // persists on this event satisfies the rule.
+            progress('envelope_recovery_record', { recovery: encoded.envelope || null });
         }
 
         // Step 4: Broadcast
@@ -140,7 +148,21 @@ class LifecycleManager {
         let finalTxidEnvelope = null;
         if (revealSigned) {
             progress('envelope_revealing', { commitTxid: signed.txid });
-            await encoder.broadcastTx(revealSigned.txHex);
+            try {
+                await encoder.broadcastTx(revealSigned.txHex);
+            } catch (err) {
+                // The commit is already on chain and the reveal is not. This is the
+                // one stranding path signing-first cannot remove, so it must never
+                // surface as a bare network error: carry the §3.5 recovery record and
+                // the signed reveal out with it, so the caller can retry the
+                // broadcast or run create_envelope_cancel_tx. Losing this object is
+                // losing the funds.
+                throw new SDKActionError('ENVELOPE_REVEAL_BROADCAST_FAILED',
+                    `commit ${signed.txid} is broadcast but the reveal was rejected: ${err && err.message ? err.message : err}. ` +
+                    'Retry the reveal broadcast, or cancel the commit via the key path using the recovery record.',
+                    { commitTxid: signed.txid, recovery: encoded.envelope || null,
+                      revealTxHex: revealSigned.txHex, cause: err });
+            }
             spentInputs = spentInputs.concat(this._extractSpentInputs(encoded.revealPsbt));
             finalTxidEnvelope = revealSigned.txid;
         }
