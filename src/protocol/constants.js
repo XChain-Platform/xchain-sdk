@@ -350,8 +350,14 @@ const ORACLE_DEVIATION_THRESHOLD = 0.05;
 // envelope's own push framing is NOT counted. That is deliberately a different
 // measurand from MAX_ACTION_DATA_LENGTH, which is framing-inclusive, and the
 // ~0.6% difference between them is a fleet-divergence line at edge sizes.
+// DERIVED FROM WEIGHT : the binding limit is Bitcoin Core's
+// MAX_STANDARD_TX_WEIGHT of 400,000 WU, not a round byte count. 400,000 payload
+// bytes build a 402,789 WU reveal, which is non-standard and unrelayable; the
+// true maxima are 397,228 (P2WPKH change) and 397,009 (P2TR change + floor pad).
+// 390,000 sits 7,050 WU under the limit in the worst reveal shape. Re-derive it
+// from the weight limit if it ever changes; do not pick a number.
 // Canonical source: xchain-documentation/protocol/constants.js.
-const ENVELOPE_MAX_PAYLOAD = 400000;
+const ENVELOPE_MAX_PAYLOAD = 390000;
 
 // ── FILE payload compression ( spec Part B) ────────────────────────────
 //

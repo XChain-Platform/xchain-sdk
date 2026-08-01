@@ -460,7 +460,7 @@ describe('CompressionUtils ( Part B)', function () {
         });
 
         it('the vector ceiling matches the vendored constant', function () {
-            assert.strictEqual(vectors._meta.ceiling.value, CONSTANTS.ENVELOPE_MAX_PAYLOAD || 400000);
+            assert.strictEqual(vectors._meta.ceiling.value, CONSTANTS.ENVELOPE_MAX_PAYLOAD || 390000);
         });
     });
 
