@@ -9,7 +9,7 @@
   "license": "AGPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "https://github.com/XChain-platform/xchain-sdk.git",
+    "url": "https://github.com/XChain-Platform/xchain-sdk.git",
     "directory": "mcp"
   },
   "comment:files": "Publish allowlist: the server is two files. README/LICENSE/package.json ship automatically.",

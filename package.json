@@ -23,7 +23,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/XChain-platform/xchain-sdk.git"
+    "url": "https://github.com/XChain-Platform/xchain-sdk.git"
   },
   "dependencies": {
     "@bitcoinerlab/secp256k1": "^1.2.0",
