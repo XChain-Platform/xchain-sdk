@@ -34,6 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - CoSigner now rejects any BIP341 `sighashType` other than `SIGHASH_DEFAULT`/`SIGHASH_ALL` in `process`/`_processMulti` (and defensively in `taprootKeyPathSighash`). Previously the type was honored verbatim from the request, so a `SIGHASH_NONE`/`SINGLE`/`ANYONECANPAY` partial over an in-policy PSBT could be reassembled into a drain transaction that still verified, bypassing the output gate.
 
+## [2.0.1] - 2026-08-01
+
+### Changed
+- README corrected for the npm registry release: install section added, code samples import `@dankest-llc/xchain-sdk`, version badge reads from npm.
+
 ## [1.14.1] - 2026-07-16
 
 ### Fixed
