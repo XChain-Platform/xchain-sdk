@@ -698,6 +698,72 @@ class WalletUtils {
      * @param {{ maximumFeeRate?: number }} [opts] - sat/vB fee ceiling override
      * @returns {{ txHex: string, txid: string, psbtHex: string }}
      */
+    /**
+     * Sign the REVEAL half of a Taproot envelope pair ( §3.2/§3.5, ).
+     *
+     * Distinct from signRevealPsbt, which signs a P2SH/P2WSH chunk-lane reveal with
+     * ECDSA and the xchain reveal finalizer. An envelope reveal is a BIP341
+     * script-path spend: it needs a Schnorr signature over the tapleaf and the
+     * standard taproot finalizer, so neither the key nor the finalizer from that
+     * path applies here.
+     *
+     * Signs input 0 only, because §3.5 pins the commit outpoint at input 0 and
+     * declares any additional reveal input the caller's own business; signing them
+     * with this key would be wrong whenever they are not this key's.
+     *
+     * @param {string} psbtHex - the revealPsbt hex returned alongside the commit
+     * @param {string} wif
+     * @param {{ maximumFeeRate?: number }} [opts] - sat/vB fee ceiling override
+     * @returns {{ txHex: string, txid: string, psbtHex: string }}
+     */
+    signEnvelopeRevealPsbt(psbtHex, wif, opts) {
+        if (!psbtHex || typeof psbtHex !== 'string') {
+            throw new SDKWalletError('INVALID_PSBT', 'PSBT hex string is required.');
+        }
+        if (!wif || typeof wif !== 'string') {
+            throw new SDKWalletError('INVALID_WIF', 'WIF private key is required.');
+        }
+
+        const net = this._resolveNet();
+        let keyPair;
+        try {
+            keyPair = ECPair.fromWIF(wif, net);
+        } catch (err) {
+            throw new SDKWalletError('INVALID_WIF', `Failed to import WIF: ${err.message}`);
+        }
+
+        let psbt;
+        try {
+            psbt = bitcoin.Psbt.fromHex(psbtHex, { network: net });
+        } catch (err) {
+            throw new SDKWalletError('INVALID_PSBT', `Failed to parse PSBT: ${err.message}`);
+        }
+
+        try {
+            psbt.signInput(0, {
+                publicKey: Buffer.from(keyPair.publicKey),
+                signSchnorr: (hash) => Buffer.from(ecc.signSchnorr(hash, keyPair.privateKey)),
+            });
+        } catch (err) {
+            throw new SDKWalletError('SIGN_FAILED', `Envelope reveal signing failed: ${err.message}`);
+        }
+
+        try {
+            psbt.finalizeAllInputs();
+        } catch (err) {
+            throw new SDKWalletError('FINALIZE_FAILED', `Envelope reveal finalization failed: ${err.message}`);
+        }
+
+        const maxFeeRate = this._maxFeeRate(opts);
+        if (maxFeeRate) psbt.setMaximumFeeRate(maxFeeRate);
+        const tx = psbt.extractTransaction();
+        return {
+            txHex: tx.toHex(),
+            txid: tx.getId(),
+            psbtHex: psbt.toHex(),
+        };
+    }
+
     signRevealPsbt(psbtHex, wif, opts) {
         if (!psbtHex || typeof psbtHex !== 'string') {
             throw new SDKWalletError('INVALID_PSBT', 'PSBT hex string is required.');

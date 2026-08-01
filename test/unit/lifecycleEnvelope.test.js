@@ -1,0 +1,156 @@
+// Copyright © 2025–2026 Dankest, LLC
+// Based on XChain Platform by Dankest, LLC – https://dankest.llc
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+// This file is part of XChain Platform. Licensed under the GNU Affero
+// General Public License v3.0 or later; see LICENSE.md. A commercial
+// license (without AGPL source-disclosure terms) is available -
+// contact legal@dankest.llc.
+//
+// ---------------------------------------------------------------------------
+// Unit: Taproot envelope pair through the action lifecycle ( §6, )
+//
+// A TAPROOT create_tx returns BOTH transactions from one call. Before  the
+// lifecycle signed the commit, broadcast it, then branched only on P2SH/P2WSH for a
+// second transaction: a TAPROOT response matched neither, so the commit went on
+// chain and the reveal was never signed or broadcast. The caller got a txid for a
+// transaction carrying no action, and the coin sat in a one-time P2TR output whose
+// only exit is the §3.5 key-path cancel, from state the SDK never persisted.
+//
+// The load-bearing property here is ORDERING, not merely "both get broadcast":
+// §6 requires the reveal to be signable BEFORE the commit is broadcast, because
+// discovering an unsignable reveal afterwards manufactures a stranded-funds event
+// rather than an error message. The 'nothing is broadcast' test below is the one
+// that actually pins that, so it is worth more than the happy path.
+// ---------------------------------------------------------------------------
+
+'use strict';
+
+const assert = require('assert');
+const LifecycleManager = require('../../src/lifecycleManager.js');
+
+const FAKE_WIF = 'L1rkA9mYRjVPVdvMuVbHRMX6SPHM7fNwCEfT3AV2qCGAmJ8wNfp';
+
+function buildSignedTx() {
+    const bitcoin = require('bitcoinjs-lib');
+    const ecc = require('@bitcoinerlab/secp256k1');
+    const { ECPairFactory } = require('ecpair');
+    bitcoin.initEccLib(ecc);
+    const ECPair = ECPairFactory(ecc);
+    const net = bitcoin.networks.regtest;
+    const kp = ECPair.makeRandom({ network: net });
+    const script = bitcoin.payments.p2wpkh({ pubkey: kp.publicKey, network: net }).output;
+    const prevTx = new bitcoin.Transaction();
+    prevTx.addInput(Buffer.alloc(32), 0xffffffff, 0xffffffff, Buffer.from([0x51]));
+    prevTx.addOutput(script, 100_000);
+    const psbt = new bitcoin.Psbt({ network: net });
+    psbt.addInput({ hash: prevTx.getId(), index: 0, sequence: 0xfffffffd,
+                    witnessUtxo: { script, value: 100_000 } });
+    psbt.addOutput({ script, value: 90_000 });
+    psbt.signAllInputs(kp);
+    psbt.finalizeAllInputs();
+    const tx = psbt.extractTransaction();
+    return { psbtHex: psbt.toHex(), txHex: tx.toHex(), txid: tx.getId() };
+}
+
+// Fake SDK whose encoder returns an ENVELOPE PAIR, with every broadcast and signing
+// call recorded in one ordered trace so the sequence itself can be asserted.
+function makeEnvelopeSdk({ revealSignThrows = false, customSigner = null } = {}) {
+    const signed = buildSignedTx();
+    const trace = [];
+
+    const encoder = {
+        createTx: async () => ({
+            psbt:       signed.psbtHex,
+            revealPsbt: signed.psbtHex,          // the pair, per §6
+            encoding:   'TAPROOT',
+        }),
+        broadcastTx: async (hex) => { trace.push('broadcast:' + (hex === signed.txHex ? 'tx' : '?')); return { txid: signed.txid }; },
+        spendP2sh:   async () => { trace.push('spendP2sh'); return { psbt: signed.psbtHex }; },
+    };
+
+    const sdk = {
+        _requireEncoder: () => encoder,
+        actions: { createAction: () => ({ actionString: 'XCHAIN|FILE|...', action: 'FILE', version: 0 }) },
+        tickResolver:    { resolveActionParams: async (a, p) => p },
+        addressResolver: { resolveActionParams: async (a, p) => p },
+        wallet: {
+            signPsbt: () => { trace.push('signCommit'); return { txHex: signed.txHex, txid: 'COMMITTXID', psbtHex: signed.psbtHex }; },
+            signRevealPsbt: () => { trace.push('signChunkReveal'); return { txHex: signed.txHex, txid: 'phase2txid', psbtHex: signed.psbtHex }; },
+            signEnvelopeRevealPsbt: () => {
+                trace.push('signEnvelopeReveal');
+                if (revealSignThrows) throw new Error('reveal is unsignable by this key');
+                return { txHex: signed.txHex, txid: 'REVEALTXID', psbtHex: signed.psbtHex };
+            },
+        },
+    };
+    return { sdk, trace, signed, customSigner };
+}
+
+const submit = (lm, opts = {}) => lm.submitAction(
+    { action: 'FILE', params: {} }, { pubkey: '03abc' },
+    Object.assign({ wif: FAKE_WIF, waitForIndexer: false }, opts));
+
+describe('Taproot envelope pair through the lifecycle ', function () {
+
+    it('signs BOTH halves before anything is broadcast, then commit -> reveal', async function () {
+        const { sdk, trace } = makeEnvelopeSdk();
+        await submit(new LifecycleManager(sdk));
+        // The whole safety argument is in this sequence.
+        assert.deepStrictEqual(trace, [
+            'signCommit',
+            'signEnvelopeReveal',      // BEFORE any broadcast (§6)
+            'broadcast:tx',            // commit
+            'broadcast:tx',            // reveal
+        ]);
+    });
+
+    it('an unsignable reveal broadcasts NOTHING (the stranded-funds case)', async function () {
+        const { sdk, trace } = makeEnvelopeSdk({ revealSignThrows: true });
+        await assert.rejects(() => submit(new LifecycleManager(sdk)));
+        assert.ok(!trace.some(t => t.startsWith('broadcast')),
+            'nothing may reach the chain when the reveal cannot be signed; trace was ' + JSON.stringify(trace));
+    });
+
+    it('returns the REVEAL txid as the action txid, not the commit (§3.1)', async function () {
+        const { sdk } = makeEnvelopeSdk();
+        const result = await submit(new LifecycleManager(sdk));
+        assert.strictEqual(result.txid, 'REVEALTXID');
+        assert.notStrictEqual(result.txid, 'COMMITTXID');
+    });
+
+    it('never takes the P2SH/P2WSH phase-2 path for an envelope', async function () {
+        const { sdk, trace } = makeEnvelopeSdk();
+        await submit(new LifecycleManager(sdk));
+        assert.ok(!trace.includes('spendP2sh'));
+        assert.ok(!trace.includes('signChunkReveal'));
+    });
+
+    it('refuses a custom signer for an envelope BEFORE broadcasting anything', async function () {
+        const { sdk, trace } = makeEnvelopeSdk();
+        await assert.rejects(
+            () => submit(new LifecycleManager(sdk), { signer: async () => ({ txHex: 'x', txid: 'y' }) }),
+            (e) => e.code === 'SIGNER_ENCODING_UNSUPPORTED');
+        assert.ok(!trace.some(t => t.startsWith('broadcast')), 'refusal must precede any broadcast');
+    });
+
+    it('tracks the reveal inputs too, so UTXO cache accounting is not half-done', async function () {
+        const { sdk } = makeEnvelopeSdk();
+        const result = await submit(new LifecycleManager(sdk));
+        assert.ok(Array.isArray(result.spentInputs));
+        assert.ok(result.spentInputs.length >= 2, 'commit and reveal inputs both counted');
+    });
+
+    it('a NON-envelope response is untouched by any of this', async function () {
+        const { sdk, trace } = makeEnvelopeSdk();
+        sdk._requireEncoder = () => ({
+            createTx:    async () => ({ psbt: buildSignedTx().psbtHex, encoding: 'OP_RETURN' }),
+            broadcastTx: async () => { trace.push('broadcast:tx'); return {}; },
+            spendP2sh:   async () => ({}),
+        });
+        await submit(new LifecycleManager(sdk));
+        assert.deepStrictEqual(trace, ['signCommit', 'broadcast:tx'],
+            'no envelope signing on a lane that has no reveal');
+    });
+});

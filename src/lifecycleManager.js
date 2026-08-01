@@ -104,9 +104,28 @@ class LifecycleManager {
             if (encoded.encoding === 'P2SH' || encoded.encoding === 'P2WSH')
                 throw new SDKActionError('SIGNER_ENCODING_UNSUPPORTED',
                     `custom signer cannot complete ${encoded.encoding} two-phase encoding`);
+            // : same reasoning for the Taproot envelope. Its reveal is a
+            // BIP341 script-path spend over the envelope leaf, which a custom
+            // signer that only reads the OP_RETURN carrier cannot produce. Refuse
+            // BEFORE anything is broadcast rather than commit and then discover it.
+            if (encoded.revealPsbt)
+                throw new SDKActionError('SIGNER_ENCODING_UNSUPPORTED',
+                    'custom signer cannot complete a TAPROOT envelope reveal (BIP341 script-path)');
             signed = await opts.signer(encoded.psbt, { encoding: encoded.encoding });
         } else {
             signed = this.sdk.wallet.signPsbt(encoded.psbt, wif);
+        }
+
+        // Step 3b ( §6 / ): a TAPROOT envelope comes back as a PAIR from
+        // this one call, and the ordering rule is not a nicety: "the reveal must be
+        // signable before the commit is broadcast; anything else manufactures a
+        // stranded-funds event, not an error message". Broadcasting the commit first
+        // and only then discovering the reveal cannot be signed leaves the coin in a
+        // one-time P2TR output whose sole exit is the §3.5 key-path cancel. So sign
+        // the reveal HERE, while nothing is on chain yet and a throw costs nothing.
+        let revealSigned = null;
+        if (encoded.revealPsbt) {
+            revealSigned = this.sdk.wallet.signEnvelopeRevealPsbt(encoded.revealPsbt, wif);
         }
 
         // Step 4: Broadcast
@@ -115,6 +134,16 @@ class LifecycleManager {
 
         // Extract spent inputs from the signed PSBT for UTXO cache tracking
         let spentInputs = this._extractSpentInputs(encoded.psbt);
+
+        // Step 4a: the envelope reveal, already signed above. The decoder indexes the
+        // REVEAL, so its txid is the action's identity (§3.1), not the commit's.
+        let finalTxidEnvelope = null;
+        if (revealSigned) {
+            progress('envelope_revealing', { commitTxid: signed.txid });
+            await encoder.broadcastTx(revealSigned.txHex);
+            spentInputs = spentInputs.concat(this._extractSpentInputs(encoded.revealPsbt));
+            finalTxidEnvelope = revealSigned.txid;
+        }
 
         // Step 4b: Handle P2SH/P2WSH two-phase encoding
         // If the encoder chose P2SH or P2WSH, we need a second transaction to spend the output
@@ -159,6 +188,10 @@ class LifecycleManager {
             // The indexer looks for the phase 2 transaction
             finalTxid = spendSigned.txid;
             signed = spendSigned;
+        }
+        if (finalTxidEnvelope) {                      // : the reveal IS the action
+            finalTxid = finalTxidEnvelope;
+            signed = revealSigned;
         }
 
         let result = {
