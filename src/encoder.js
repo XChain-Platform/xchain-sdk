@@ -53,8 +53,14 @@ class EncoderClient {
         let pool    = this._pool;
         let baseURL = this.baseUrl.startsWith('http') ? this.baseUrl : 'http://' + this.baseUrl + ':' + this.port;
         let isHttps = baseURL.startsWith('https');
+        // : an injected agent wins. The desktop wallet routes its
+        // traffic through a SOCKS5 proxy when the user turns on Tor routing,
+        // and that is expressed as pre-built agents because a SOCKS tunnel
+        // is a different way of opening the socket, not a pool tuning knob.
+        // http and https are separate because axios needs the matching one.
+        // Everything else keeps the pooled default, unchanged.
         let Agent   = isHttps ? require('https').Agent : require('http').Agent;
-        this._agent = new Agent({
+        this._agent = (isHttps ? pool.httpsAgent : pool.httpAgent) || new Agent({
             keepAlive:      pool.keepAlive !== undefined ? pool.keepAlive : true,
             keepAliveMsecs: pool.keepAliveMsecs || 1000,
             maxSockets:     pool.maxSockets || 10,
@@ -62,6 +68,7 @@ class EncoderClient {
         });
         this.client = axios.create({
             baseURL: baseURL,
+            proxy: false,
             timeout: this.timeout,
             headers: { 'Content-Type': 'application/json' },
             httpAgent:  isHttps ? undefined : this._agent,
