@@ -1,8 +1,19 @@
 {
-  "name": "xchain-sdk",
+  "name": "@dankest-llc/xchain-sdk",
   "description": "xchain-sdk generates XChain Platform ACTION commands and encodes them into unsigned blockchain transactions as well as pulls data from the XChain APIs such as balances and transaction history.",
   "version": "2.0.0",
-  "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
+  "comment:files": "Publish allowlist. Everything not listed (test/, coverage/, dist/, docs/, scripts/, bin/, mcp/, docker files) stays out of the tarball; mcp/ ships separately as the xchain-mcp package.",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "src/",
+    "NOTICE.md",
+    "SECURITY.md",
+    "CHANGELOG.md"
+  ],
   "main": "index.js",
   "types": "index.d.ts",
   "license": "AGPL-3.0-or-later",
@@ -85,8 +96,5 @@
   },
   "engines": {
     "node": ">=22.0.0"
-  },
-  "bin": {
-    "xchain-mcp": "mcp/cli.js"
   }
 }
