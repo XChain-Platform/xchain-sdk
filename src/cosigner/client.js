@@ -35,6 +35,7 @@ const crypto = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
 const { secp256k1 } = require('@noble/curves/secp256k1');
 const MuSig2 = require('../musig2.js');
+const { deriveEnvelopeCommit, classifyEnvelopeRole, envelopeScriptPathSighash } = require('./envelope.js');
 const { SDKPolicyError } = require('../errors.js');
 const { taprootKeyPathSighash } = require('./coSigner.js');
 
@@ -51,11 +52,19 @@ function toBytes(v, label) {
  * agent emitting a signature over the wrong message that later dies as an
  * opaque network rejection. Throws SDKPolicyError on mismatch.
  */
-function assertMsgMatchesPsbt(psbtHex, inputIndex, msg) {
+// `envelope` is the envelope context this round is signing under, when there is
+// one ( §3.9): a REVEAL's message is the BIP342 tapleaf sighash, not the
+// key-path one, so re-deriving it the old way would report every honest reveal
+// as a COSIGNER_MSG_MISMATCH. The leaf hash is computed HERE from the agent's
+// own copy of the envelope script, so this stays an independent check of the
+// daemon's message rather than a rubber stamp on whatever it returned.
+function assertMsgMatchesPsbt(psbtHex, inputIndex, msg, envelope) {
     let expected;
     try {
         const psbt = bitcoin.Psbt.fromHex(psbtHex);
-        expected = taprootKeyPathSighash(psbt, inputIndex, undefined);
+        expected = (envelope && envelope.role === 'reveal')
+            ? envelopeScriptPathSighash(psbt, inputIndex, undefined, envelope.commit.leafHash)
+            : taprootKeyPathSighash(psbt, inputIndex, undefined);
     } catch (e) {
         throw new SDKPolicyError('COSIGNER_MSG_UNVERIFIABLE',
             'cannot recompute the sighash for input ' + inputIndex + ' to verify the co-signer msg: ' + e.message);
@@ -129,6 +138,26 @@ class CoSignerClient {
         this.publicKeys = config.publicKeys;
         this.tweaks = config.tweaks || [];
         this.musig = new MuSig2();
+        // The account's aggregate x-only key: the envelope commit output's
+        // internal key. Derived here so the agent computes the leaf hash and
+        // the cancel tweak itself and never adopts the daemon's word for either.
+        this.aggregateXOnly = Buffer.from(this.musig.aggregateKeys(this.publicKeys, this.tweaks).xOnlyPubkey);
+    }
+
+    // Build this round's envelope context from the agent's OWN copy of the
+    // script, mirroring the daemon's derivation exactly (both call the same
+    // module). Returns null when the round is not an envelope round.
+    _envelopeContext(psbtHex, envelopeScript, network) {
+        if (!envelopeScript) return null;
+        const script = Buffer.isBuffer(envelopeScript) ? envelopeScript : Buffer.from(String(envelopeScript), 'hex');
+        const commit = deriveEnvelopeCommit({
+            internalXOnly: this.aggregateXOnly, envelopeScript: script, network: network || undefined,
+        });
+        const psbt = bitcoin.Psbt.fromHex(psbtHex, network ? { network } : undefined);
+        const role = classifyEnvelopeRole(psbt, commit);
+        if (!role) throw new SDKPolicyError('COSIGNER_CONFIG',
+            'the supplied envelope script neither funds nor spends this PSBT');
+        return { commit, role, script };
     }
 
     /*
@@ -146,6 +175,7 @@ class CoSignerClient {
     async sign(req = {}) {
         const secretKey = toBytes(req.secretKey, 'secretKey');
         const agentPub  = secp256k1.getPublicKey(secretKey, true);
+        const env = this._envelopeContext(req.psbt, req.envelopeScript, req.network);
 
         // Round 1: agent nonce (secret nonce stays in this.musig).
         const agentNonce = this.musig.generateNonce({ publicKey: agentPub, secretKey });
@@ -154,10 +184,10 @@ class CoSignerClient {
         // ONE request shape (the inputs array); the single-input convenience is
         // this method's job, so the daemon keeps a single validation path.
         const idx = Number.isInteger(req.inputIndex) ? req.inputIndex : 0;
-        const res = await this.transport({
+        const res = await this.transport(Object.assign({
             psbt:   req.psbt,
             inputs: [{ index: idx, agentPublicNonce: Buffer.from(agentNonce).toString('hex') }],
-        });
+        }, env ? { envelope: { script: env.script.toString('hex') } } : {}));
 
         if (!res || res.approved !== true)
             throw new SDKPolicyError(res && res.reason ? res.reason : 'COSIGNER_DENIED',
@@ -177,10 +207,16 @@ class CoSignerClient {
         // Combine: the co-signer derived the message from the PSBT and returned it;
         // we re-aggregate the nonces, build the same session, and add our partial.
         const msg = toBytes(sig0.msg, 'msg');
-        assertMsgMatchesPsbt(req.psbt, idx, msg);
+        assertMsgMatchesPsbt(req.psbt, idx, msg, env);
         const coNonce = toBytes(sig0.publicNonce, 'publicNonce');
         const aggNonce = this.musig.aggregateNonces([agentNonce, coNonce]);
-        const session  = this.musig.startSession(aggNonce, msg, this.publicKeys, this.tweaks);
+        // A cancel spends the commit output's KEY path, whose output key commits
+        // to the envelope leaf, so the session carries the derived tap tweak.
+        // Every other round (including a reveal, which signs the leaf's bare
+        // aggregate key) keeps this account's own tweaks.
+        const roundTweaks = (env && env.role === 'cancel')
+            ? [{ tweak: env.commit.tweak, xOnly: true }] : this.tweaks;
+        const session  = this.musig.startSession(aggNonce, msg, this.publicKeys, roundTweaks);
         const agentSig = this.musig.partialSign({ secretKey, publicNonce: agentNonce, sessionKey: session });
         const signature = this.musig.aggregateSignatures([agentSig, toBytes(sig0.sig, 'sig')], session);
 
@@ -204,6 +240,7 @@ class CoSignerClient {
     async signAll(req = {}) {
         const secretKey = toBytes(req.secretKey, 'secretKey');
         const agentPub  = secp256k1.getPublicKey(secretKey, true);
+        const env = this._envelopeContext(req.psbt, req.envelopeScript, req.network);
         const indexes = (Array.isArray(req.inputIndexes) && req.inputIndexes.length) ? req.inputIndexes : [0];
 
         // Round 1: a unique agent nonce per input (secret nonces stay in this.musig).
@@ -214,7 +251,8 @@ class CoSignerClient {
             return { index: i, agentPublicNonce: Buffer.from(n).toString('hex') };
         });
 
-        const res = await this.transport({ psbt: req.psbt, inputs });
+        const res = await this.transport(Object.assign({ psbt: req.psbt, inputs },
+            env ? { envelope: { script: env.script.toString('hex') } } : {}));
         if (!res || res.approved !== true)
             throw new SDKPolicyError(res && res.reason ? res.reason : 'COSIGNER_DENIED',
                 'co-signer refused to sign: ' + (res && res.reason ? res.reason : 'unknown'),
@@ -227,10 +265,12 @@ class CoSignerClient {
             if (!agentNonce) throw new SDKPolicyError('COSIGNER_BAD_RESPONSE',
                 'co-signer returned a signature for an unrequested input ' + s.index);
             const msg     = toBytes(s.msg, 'msg');
-            assertMsgMatchesPsbt(req.psbt, s.index, msg);
+            assertMsgMatchesPsbt(req.psbt, s.index, msg, env);
             const coNonce = toBytes(s.publicNonce, 'publicNonce');
             const aggNonce = this.musig.aggregateNonces([agentNonce, coNonce]);
-            const session  = this.musig.startSession(aggNonce, msg, this.publicKeys, this.tweaks);
+            const roundTweaks = (env && env.role === 'cancel')
+                ? [{ tweak: env.commit.tweak, xOnly: true }] : this.tweaks;
+            const session  = this.musig.startSession(aggNonce, msg, this.publicKeys, roundTweaks);
             const agentSig = this.musig.partialSign({ secretKey, publicNonce: agentNonce, sessionKey: session });
             const signature = this.musig.aggregateSignatures([agentSig, toBytes(s.sig, 'sig')], session);
             return { index: s.index, signature: Buffer.from(signature), msg: Buffer.from(msg) };

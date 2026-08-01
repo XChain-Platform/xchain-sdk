@@ -342,8 +342,52 @@ const PRICE_MAX = 10_000_000_000;
 // the ±band boundary). 0.05 = 5%.
 const ORACLE_DEVIATION_THRESHOLD = 0.05;
 
+// ── Taproot envelope ( spec Part A) ───────────────────────────────────
+//
+// Per-encoding payload ceiling (§4): the envelope gets its own, and every
+// legacy lane keeps MAX_ACTION_DATA_LENGTH. Measures the REASSEMBLED payload
+// byte length after concatenating the payload pushes, before parse; the
+// envelope's own push framing is NOT counted. That is deliberately a different
+// measurand from MAX_ACTION_DATA_LENGTH, which is framing-inclusive, and the
+// ~0.6% difference between them is a fleet-divergence line at edge sizes.
+// Canonical source: xchain-documentation/protocol/constants.js.
+const ENVELOPE_MAX_PAYLOAD = 400000;
+
+// ── FILE payload compression ( spec Part B) ────────────────────────────
+//
+// COMPRESSION is a trailing optional field on FILE v0:
+//   FILE|0|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH|GATE_MIN_AMOUNT|COMPRESSION
+// Empty/absent = raw (every historical FILE); '1' = deflate-raw.
+//
+// PRESENTATIONAL, NOT CONSENSUS (spec §5.5): FILE validity rules never inspect
+// rawData content, so an indexer that has never heard of this field produces
+// identical validity verdicts and identical state. That is also why the field
+// must NEVER be validated by anyone: shipped indexers silently ignore unknown
+// trailing fields, so a reader that rejected a malformed value would fork
+// validity across the fleet. Unknown/invalid codes degrade to serve-raw.
+const COMPRESSION_CODE_DEFLATE_RAW = '1';
+
+// Serve-side decompression ratio cap, enforced as a STREAMED abort (spec §5.5)
+// so a crafted payload cannot bomb a reader. 150:1 sits well under
+// deflate-raw's ~1032:1 theoretical maximum (a 1000:1 cap would guard nothing)
+// and well over real-world text ratios. No separate absolute output cap
+// exists: ENVELOPE_MAX_PAYLOAD makes ~60 MB the worst reachable inflation, so
+// one would be dead configuration. That bound is coupled to the envelope
+// ceiling: if it rises, revisit this ratio.
+const COMPRESSION_MAX_RATIO = 150;
+
+// Pre-compression input cap on rawData at the encoder (spec §5.2). The encoder
+// is a hard single-instance service ( lockfile guard), so compression is
+// async/streamed and bounded; this is the bound, applied to the bytes handed
+// in, before any compression attempt.
+const COMPRESSION_MAX_INPUT_BYTES = 16 * 1024 * 1024;
+
 module.exports = {
     MAX_ACTION_DATA_LENGTH,
+    ENVELOPE_MAX_PAYLOAD,
+    COMPRESSION_CODE_DEFLATE_RAW,
+    COMPRESSION_MAX_RATIO,
+    COMPRESSION_MAX_INPUT_BYTES,
     OP_RETURN_PUSH_OVERHEAD,
     MAX_CODE_SIZE,
     MAX_DEPLOY_CHUNKS,

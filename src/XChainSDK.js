@@ -32,6 +32,7 @@ const WalletUtils    = require('./wallet.js');
 const AuthUtils      = require('./auth.js');
 const MessagingUtils = require('./messaging.js');
 const GatedFileUtils = require('./gatedFile.js');
+const CompressionUtils = require('./compression.js');
 const NftHelpers     = require('./nft.js');
 const ProjectHelpers = require('./project.js');
 const ControllerHelpers = require('./controller.js');
@@ -91,6 +92,10 @@ class XChainSDK {
         this.auth       = new AuthUtils(network);
         this.messaging  = new MessagingUtils(network);
         this.gatedFile  = new GatedFileUtils();
+        // FILE payload compression ( Part B). Stateless, no network:
+        // deflate-raw compress/inflate with the fail-closed, ratio-bounded
+        // read path every serve layer shares.
+        this.compression = new CompressionUtils();
         // NFT helpers: pure builders for the NFT pattern (ISSUE with DECIMALS=0 +
         // LOCK_MAX_SUPPLY=1), collection child params, content-attach (LINK) params,
         // and the canonical isNft() classifier. No network. Submit-flow recipes that

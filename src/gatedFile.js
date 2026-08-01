@@ -260,6 +260,121 @@ class GatedFileUtils {
         }
         return out;
     }
+
+    /**
+     * Compress THEN encrypt a gated FILE payload ( spec §5.4).
+     *
+     * The ordering is not a preference, it is the only order that does
+     * anything: AES-256-GCM ciphertext is indistinguishable from random, so
+     * deflating it afterwards saves nothing (and usually costs a few bytes).
+     * The client inverts with decryptAndInflateFileBytes: decrypt, then
+     * inflate.
+     *
+     * The returned `compressionField` is what the caller MUST place in the
+     * FILE action's COMPRESSION field. Nothing downstream can derive it: the
+     * encoder sees only opaque ciphertext and is forbidden from setting the
+     * field on a gated FILE, precisely because on a gated FILE the field means
+     * "inflate after decrypt" rather than "inflate these bytes".
+     *
+     * Known side channel, documented rather than hidden: the on-chain
+     * ciphertext length reveals the plaintext's compressibility (a
+     * CRIME-family leak, low value against file storage but real). Callers
+     * whose compressibility is itself sensitive pass { compress: false }.
+     *
+     * @param {Buffer|string} plaintext - the ORIGINAL file bytes.
+     * @param {object} [options]
+     * @param {boolean} [options.compress=true] - opt out to encrypt raw bytes.
+     * @param {Buffer} [options.key] - reuse an existing pack key.
+     * @param {number} [options.maxRatio] - emit-time ratio guard override.
+     * @param {number} [options.maxInputBytes] - input cap override.
+     * @returns {Promise<{ciphertext: Buffer, key: Buffer, keyHash: string,
+     *                    compressionField: string, compressed: boolean,
+     *                    plaintextLength: number, encryptedLength: number}>}
+     */
+    async compressAndEncryptFileBytes(plaintext, options = {}) {
+        let CompressionUtils = require('./compression.js');
+        let compression = new CompressionUtils();
+
+        let plaintextBuf = Buffer.isBuffer(plaintext)
+            ? plaintext
+            : Buffer.from(plaintext == null ? '' : plaintext, 'utf8');
+
+        let compressed = false;
+        let compressionField = '';
+        let toEncrypt = plaintextBuf;
+
+        if (options.compress !== false) {
+            let attempt = await compression.compressIfSmaller(plaintextBuf, options);
+            compressed = attempt.compressed;
+            compressionField = attempt.compressionField;
+            toEncrypt = attempt.bytes;
+        }
+
+        let key = options.key;
+        let keyHash;
+        if (key === undefined || key === null) {
+            let generated = this.generateKey();
+            key = generated.key;
+            keyHash = generated.keyHash;
+        } else {
+            keyHash = crypto.createHash('sha256').update(key).digest('hex');
+        }
+
+        let ciphertext = this.encryptWithKey(toEncrypt, key);
+
+        return {
+            ciphertext,
+            key,
+            keyHash,
+            compressionField,
+            compressed,
+            plaintextLength: plaintextBuf.length,
+            encryptedLength: ciphertext.length
+        };
+    }
+
+    /**
+     * Decrypt THEN inflate a gated FILE payload (the inverse of
+     * compressAndEncryptFileBytes).
+     *
+     * Decryption failure THROWS (a wrong key or tampered ciphertext is a real
+     * error the caller must see). Inflation failure does NOT: COMPRESSION is
+     * sender-asserted and unverified, so a lying field must degrade to
+     * stored-form with an explicit indicator rather than crash the reader
+     * (spec §5.5). Partial output is never returned.
+     *
+     * @param {Buffer} ciphertext - [iv(12)][authTag(16)][encrypted]
+     * @param {Buffer} key - 32-byte symmetric key.
+     * @param {object} [options]
+     * @param {boolean|string} [options.compressed] - the FILE's COMPRESSION
+     *   field (or a boolean). Anything that is not the deflate-raw code is
+     *   treated as raw, so an unknown future code degrades safely.
+     * @param {number} [options.maxRatio]
+     * @returns {Promise<{bytes: Buffer, inflated: boolean, storedForm: boolean,
+     *                    error: string|null}>}
+     */
+    async decryptAndInflateFileBytes(ciphertext, key, options = {}) {
+        let CompressionUtils = require('./compression.js');
+        let compression = new CompressionUtils();
+
+        // Throws on GCM auth failure, by design.
+        let decrypted = this.decryptFileBytes(ciphertext, key);
+
+        let declared = options.compressed;
+        let wantsInflate = (declared === true) ||
+            (typeof declared === 'string' && declared === CompressionUtils.COMPRESSION_CODE_DEFLATE_RAW);
+
+        if (!wantsInflate)
+            return { bytes: decrypted, inflated: false, storedForm: false, error: null };
+
+        let result = await compression.inflate(decrypted, options);
+        return {
+            bytes: result.bytes,
+            inflated: result.inflated,
+            storedForm: result.storedForm,
+            error: result.error
+        };
+    }
 }
 
 

@@ -119,6 +119,18 @@ class SDKGatedFileError extends SDKError {
     }
 }
 
+// FILE payload compression ( Part B). Thrown for input-side failures
+// (oversized input, unusable bytes). Note what does NOT throw: a FAILED
+// INFLATE never throws out of the reader helpers, because COMPRESSION is
+// sender-asserted and unverified, so a lying field must degrade to serve-raw
+// (spec §5.5 fail-closed), never crash a reader.
+class SDKCompressionError extends SDKError {
+    constructor(code, message, details = {}) {
+        super(code, message, details);
+        this.name = 'SDKCompressionError';
+    }
+}
+
 class SDKPolicyError extends SDKError {
     constructor(code, message, details = {}) {
         super(code, message, details);
@@ -163,6 +175,7 @@ module.exports = {
     SDKActionError,
     SDKMuSigError,
     SDKGatedFileError,
+    SDKCompressionError,
     SDKPolicyError,
     SDKX402Error,
     SDKPreflightError

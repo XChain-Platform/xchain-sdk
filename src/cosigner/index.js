@@ -34,7 +34,11 @@ const CoSignerClient = require('./client.js');
 const { buildMuSig2Signer } = require('./musig2Signer.js');
 const { buildRecoverySpend, localPairSigner, tapleafHash } = require('./recovery.js');
 const { evaluatePolicy } = require('./policyEvaluator.js');
-const { decodeActionFromPsbt } = require('./psbtActionDecode.js');
+const { decodeActionFromPsbt, decodeEnvelopeAction } = require('./psbtActionDecode.js');
+const {
+    parseEnvelopeScript, deriveEnvelopeCommit, envelopeScriptPathSighash,
+    envelopeLeafFromPsbtInput, classifyEnvelopeRole, envelopeLeafHash,
+} = require('./envelope.js');
 
 module.exports = {
     // Service core: decode-from-PSBT -> policy -> partial sign (the daemon half).
@@ -55,4 +59,13 @@ module.exports = {
     // Shared primitives (same policy brain + PSBT decoder both halves use).
     evaluatePolicy,
     decodeActionFromPsbt,
+    // Taproot envelope ( §3.9): the derivations both halves share, so a
+    // caller building an envelope round never has to hand either side a tweak.
+    parseEnvelopeScript,
+    deriveEnvelopeCommit,
+    envelopeScriptPathSighash,
+    envelopeLeafFromPsbtInput,
+    classifyEnvelopeRole,
+    envelopeLeafHash,
+    decodeEnvelopeAction,
 };

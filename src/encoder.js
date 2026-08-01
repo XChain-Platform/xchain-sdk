@@ -183,7 +183,12 @@ class EncoderClient {
     //   change           - change address (defaults to pubkey on encoder side)
     //   utxos            - array of UTXO objects; null = auto-fetch from UTXO tracker
     //   rawData          - additional raw data to append (used by FILE action)
-    //   encoding         - force encoding: OP_RETURN, P2SH, P2WSH, MULTISIGN
+    //   encoding         - force encoding: OP_RETURN, P2SH, P2WSH, MULTISIGN,
+    //                      TAPROOT, or AUTO (smallest footprint the network and
+    //                      signer support; can return a commit/reveal PAIR)
+    //   compress         - FILE payload compression; omit for the encoder's
+    //                      default (ON), false to opt out
+    //   options          - { signerSupportsTapscript } for AUTO selection
     //   fee              - fixed fee in satoshis
     //   feePerKb         - fee rate in sat/KB for auto-calculation
     //   rbf              - enable Replace-by-Fee
@@ -234,6 +239,21 @@ class EncoderClient {
         // note), and it costs a node round trip plus real PSBT weight per
         // input, so it is opt-in per request rather than always-on.
         if (params.attachPrevTx !== undefined)     rpcParams.attachPrevTx = params.attachPrevTx;
+
+        //  Part B: transparent FILE payload compression. Tri-state on the
+        // wire - omitted takes the encoder's deployment default (ON), and an
+        // explicit false is the opt-out. Forwarded rather than defaulted here,
+        // because the SDK has no way to know what the encoder it is talking to
+        // was deployed with.
+        if (params.compress !== undefined)         rpcParams.compress = params.compress;
+
+        //  §6: per-call capabilities for encoding: "AUTO". Today the only
+        // key is signerSupportsTapscript, which AUTO needs before it will select
+        // the Taproot envelope: the reveal must be signable before the commit is
+        // broadcast, so an unaffirmed signer stays on P2WSH. The SDK does NOT
+        // default encoding to AUTO - that flips only in a major version, since
+        // AUTO can return a commit/reveal pair where callers expect one PSBT.
+        if (params.options !== undefined)          rpcParams.options = params.options;
 
         // D-7: pre-select the funding UTXOs BY ADDRESS before create_tx. Left to
         // its own devices (no `utxos` passed) the encoder resolves the funding set
