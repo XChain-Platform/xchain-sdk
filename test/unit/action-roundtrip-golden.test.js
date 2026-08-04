@@ -62,6 +62,22 @@ function resolveIndexerRoot() {
     return null;
 }
 
+// Deadline for the cross-repo sibling load below, in ms. A warm load measures
+// well under a second; anything past this is a broken venue, not a slow one.
+// Overridable so the regression that pins the failure attribution can force the
+// budget down instead of stalling a real gate for half a minute.
+const LOAD_BUDGET_MS = Number(process.env.XCHAIN_GOLDEN_LOAD_BUDGET_MS || 30000);
+
+// Test-only knob: synchronously stall the sibling load to stand in for a cold
+// venue checkout. Used by test/regression/goldenSiblingLoadAttribution.test.js;
+// unset (0) everywhere else, so it costs a real run nothing.
+function stallSiblingLoadIfForced() {
+    const ms = Number(process.env.XCHAIN_GOLDEN_FORCE_SLOW_LOAD_MS || 0);
+    if (!ms) return;
+    const until = Date.now() + ms;
+    while (Date.now() < until) { /* busy-wait: the real load is sync too */ }
+}
+
 // Build the indexer's positional parser (mirrors XChainIndexer.processTransaction).
 function buildIndexerParser(indexerRoot) {
     process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
@@ -113,13 +129,50 @@ describe('Action round-trip golden – SDK encoder byte-layout contract', functi
 
     describe('full round-trip against a live indexer parser (when sibling present)', function () {
         const indexerRoot = resolveIndexerRoot();
-        let parse = null;
+        let parse     = null;
+        let loadMs    = null;
+        let loadError = null;
+
         before(function () {
+            // . What this hook does is a CROSS-REPO require() sweep: the
+            // sibling xchain-indexer's src/utility.js plus every handler in its
+            // src/actions/ (~50 modules), none of them in this repo's module
+            // cache. On a cold venue checkout that has run past mocha's DEFAULT
+            // 5s hook timeout, and mocha attributes a hook failure to the FIRST
+            // test in the block, so the gate printed `"before all" hook for "the
+            // two vendored golden copies are byte-identical"` and sent an
+            // operator hunting a fixture drift that did not exist.
+            //
+            // The sweep is synchronous, so mocha's timer cannot interrupt it
+            // anyway: it can only fire late and mis-name it. So state the hook's
+            // timeout explicitly as "no mocha timer here", and let LOAD_BUDGET_MS
+            // own the deadline, reported under the load's own test name below.
+            this.timeout(0);
             if (!indexerRoot) {
                 this.skip(); // unit tier: no sibling indexer checkout
                 return;
             }
-            parse = buildIndexerParser(indexerRoot);
+            const startedAt = Date.now();
+            try {
+                stallSiblingLoadIfForced();
+                parse = buildIndexerParser(indexerRoot);
+            } catch (err) {
+                // Never rethrow: a throw here is reported against the first test
+                // in the block, which is the misattribution this item fixes.
+                loadError = err;
+            }
+            loadMs = Date.now() - startedAt;
+        });
+
+        it('the sibling xchain-indexer parser loads within its budget', function () {
+            if (!indexerRoot) this.skip();
+            const what = `the cross-repo load of ${indexerRoot} (src/utility.js plus every handler in src/actions/)`;
+            if (loadError)
+                expect.fail(`${what} threw after ${loadMs}ms: ${loadError.message}. ` +
+                            'This is a sibling-load failure, not a golden-fixture drift.');
+            expect(loadMs, `${what} took ${loadMs}ms, over its ${LOAD_BUDGET_MS}ms budget. ` +
+                           'The venue is slow to load the sibling repo; the fixtures are not drifted.')
+                .to.be.at.most(LOAD_BUDGET_MS);
         });
 
         it('the two vendored golden copies are byte-identical', function () {
