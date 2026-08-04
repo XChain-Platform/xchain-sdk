@@ -140,9 +140,19 @@ describe('Smoke: API server end-to-end', function () {
      *  Introspection via RPC
      */
 
-    it('get_actions returns 28 actions', async function () {
+    // The count here was a literal 28 and went stale the moment an action was
+    // added (BET and friends took it to 31). A smoke test over the RPC surface
+    // is checking that the whole registry survives the round trip, not what is
+    // in it, so compare against the library's own list: that still catches a
+    // truncated or lossy response, and it does not have to be edited every time
+    // the protocol gains an action.
+    it('get_actions returns the full action registry', async function () {
+        const XChainSDK = require('../../src/XChainSDK');
+        const expected = new XChainSDK({ network: 'bitcoin-regtest' }).getActions();
+
         let res = await rpc('get_actions');
-        expect(res.result).to.be.an('array').with.length(28);
+        expect(res.result).to.be.an('array');
+        expect(res.result).to.deep.equal(expected);
         expect(res.result).to.include('SEND');
         expect(res.result).to.include('ISSUE');
         expect(res.result).to.include('DEPLOY');
@@ -175,7 +185,11 @@ describe('Smoke: API server end-to-end', function () {
                 action: 'send',
                 params: {
                     tick: 'TOKEN' + i,
-                    amount: String(i * 100),
+                    // (i + 1), not i: the first request used to send AMOUNT "0",
+                    // which the validator rejects as not a positive number. That
+                    // made this concurrency test fail on a bad fixture rather
+                    // than on anything about concurrency.
+                    amount: String((i + 1) * 100),
                     destination: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh'
                 }
             }));

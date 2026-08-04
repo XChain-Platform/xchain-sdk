@@ -507,15 +507,28 @@ describe('HubConnector – network chaos', function () {
     });
 
     // (c) Hub returns null result
-    it('c) null result – getAllConfig returns null', async () => {
+    //
+    // This asserted `getAllConfig() === null` back when a single hub URL either
+    // answered or returned null. Multi-endpoint failover changed the contract:
+    // a null result is a failed endpoint, the loop moves to the next one, and
+    // when every endpoint is exhausted the call raises HUB_UNAVAILABLE rather
+    // than handing back a null the caller would have to re-check. A silent null
+    // is exactly what the failover exists to stop, so assert the refusal.
+    it('c) null result – getAllConfig exhausts the endpoints and throws HUB_UNAVAILABLE', async () => {
         nock(HUB_BASE)
             .post('/')
             .reply(200, { jsonrpc: '2.0', result: null, id: 1 });
 
         const hub = makeHub();
-        // response.data.result is null (falsy) → returns null from getAllConfig
-        const config = await hub.getAllConfig();
-        expect(config).to.equal(null);
+        let caught = null;
+        try {
+            await hub.getAllConfig();
+        } catch (err) {
+            caught = err;
+        }
+        expect(caught, 'a null result must not resolve silently').to.not.equal(null);
+        expect(caught.code).to.equal('HUB_UNAVAILABLE');
+        expect(caught.message).to.match(/no result/);
     });
 
     // (d) Hub unreachable (ECONNREFUSED)
