@@ -82,9 +82,14 @@ async function checkMint(ctx) {
             'Mint amount is not positive.', { amount });
     }
 
+    // mint.js (xchain-indexer) stores MAX_MINT as 0 when an ISSUE omits it,
+    // and treats 0 as "no per-tx cap" (guards with bcgt(MAX_MINT,0)) rather
+    // than a real zero-mint cap; mirror that here or every mint on a
+    // no-MAX_MINT token is flagged as exceeding a cap that doesn't exist.
     const maxMint = tokenField(token, ['mints.max', 'max_mint', 'MAX_MINT', 'maxMint']);
+    const maxMintCap = maxMint && numeric.isPositive(maxMint) ? maxMint : null;
     ctx.markRun(FINDING_CODES.MINT_OVER_MAX);
-    if (maxMint && amount && numeric.gt(amount, maxMint)) {
+    if (maxMintCap && amount && numeric.gt(amount, maxMintCap)) {
         ctx.addFinding(FINDING_CODES.MINT_OVER_MAX, 'error',
             `Mint amount ${amount} exceeds the per-transaction MAX_MINT ${maxMint} for ${tick}.`,
             { tick, amount, maxMint });
