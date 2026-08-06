@@ -132,8 +132,13 @@ class CoSignerClient {
     constructor(config = {}) {
         if (typeof config.transport !== 'function')
             throw new Error('CoSignerClient requires a transport function');
-        if (!Array.isArray(config.publicKeys) || config.publicKeys.length < 2)
-            throw new Error('CoSignerClient requires the full publicKeys set');
+        // EXACTLY two. sign()/signAll() aggregate exactly two partials (the agent's
+        // and the daemon's), so a three-key set derives and can FUND an aggregate
+        // address this client's only spend path can never sign for. N-of-N stays
+        // available on the generic MuSig2 primitives.
+        if (!Array.isArray(config.publicKeys) || config.publicKeys.length !== 2)
+            throw new Error('CoSignerClient requires exactly the [agent, daemon] publicKeys pair; '
+                + 'a 2-of-3 account names its third key separately as the recovery key');
         this.transport = config.transport;
         this.publicKeys = config.publicKeys;
         this.tweaks = config.tweaks || [];

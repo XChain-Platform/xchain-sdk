@@ -497,6 +497,48 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
         assert.strictEqual(r.reason, 'NOT_A_V3_ANCHOR');
     });
 
+    it('verifyAnchoredCheckpoint REJECTS roots the signature never covered', function () {
+        // A legitimately signed ROOTLESS checkpoint: with the version fields absent,
+        // canonicalCheckpoint omits the root suffix, so the quorum signs the legacy
+        // canonical. Republishing it as a buried v3 with attacker-chosen roots used to
+        // pass, because the old signature still verifies against that same canonical.
+        const signer = makeSigner();
+        const cp = {
+            chain: CHAIN, network: NET, block_index: 100, block_hash: 'c0'.repeat(32),
+            ledger_hash: 'a1'.repeat(32), actions_hash: 'b2'.repeat(32), contract_hash: 'c3'.repeat(32),
+            checkpoint_seq: 7, snapshot_block: 100,
+            state_root: null, state_root_version: null,
+            block_merkle_root: null, block_merkle_version: null, validator_signatures: []
+        };
+        const canonical = checkpoint.canonicalCheckpoint(cp);
+        cp.validator_signatures = [{ pubkey: signer.pubkeyHex, sig: crypto.sign(null, Buffer.from(canonical, 'utf8'), signer.privateKey).toString('hex') }];
+        const validators = [{ pubkey: signer.pubkeyHex, source: signer.pubkeyHex, weight: '100' }];
+        // The signature is genuine and the quorum is real.
+        assert.strictEqual(checkpoint.verifyCheckpoint(cp, validators).valid, true);
+
+        // Attack: graft roots on without the version fields, so the canonical (and
+        // therefore the signature that covers it) is unchanged.
+        cp.state_root = 'ff'.repeat(32);
+        cp.block_merkle_root = 'ee'.repeat(32);
+        const r = light.verifyAnchoredCheckpoint({ checkpoint: cp, validators, confirmations: 300, minDepth: 60 });
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'ROOTS_NOT_SIGNED');
+
+        // Supplying the versions too pulls the roots into the canonical, which the
+        // old signature no longer matches: the attack fails on quorum instead.
+        cp.state_root_version = 1; cp.block_merkle_version = 1;
+        const r2 = light.verifyAnchoredCheckpoint({ checkpoint: cp, validators, confirmations: 300, minDepth: 60 });
+        assert.strictEqual(r2.verified, false);
+        assert.strictEqual(r2.reason, 'CHECKPOINT_QUORUM_FAILED');
+    });
+
+    it('verifyAnchoredCheckpoint REJECTS a root that is not a 32-byte hex value', function () {
+        const { cp, validators } = makeSignedV3();
+        cp.state_root = 'not-a-root';
+        const r = light.verifyAnchoredCheckpoint({ checkpoint: cp, validators, confirmations: 300, minDepth: 60 });
+        assert.strictEqual(r.reason, 'MALFORMED_ROOT');
+    });
+
     it('fetchAnchoredCheckpoint picks the newest v3 anchor and verifies depth + quorum', async function () {
         const a = makeSignedV3(null, 1000);
         // an older, lower-seq anchor that should be ignored in favor of the newest

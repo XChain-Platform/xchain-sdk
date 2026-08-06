@@ -38,6 +38,7 @@
 const M          = require('./merkle.js');
 const SUB        = require('./state_subtree_activation.js');
 const checkpoint = require('./checkpoint.js');
+const ckptCommit = require('./checkpoint_commitment_activation.js');
 const pinned     = require('./pinnedCheckpoints.js');
 const swq        = require('./stake_weighted_quorum.js');
 
@@ -442,6 +443,12 @@ function anchorToCheckpoint(a){
     };
 }
 
+// Shapes the checkpoint canonical assumes for the committed SPV roots: a 32-byte
+// hex root and a non-negative integer version (both are stringified into the
+// signed bytes, so anything else signs a different string than it reads as).
+const ANCHOR_ROOT_RE    = /^[0-9a-f]{64}$/i;
+const ANCHOR_VERSION_RE = /^\d+$/;
+
 // Verify a DOGE-anchored checkpoint as a trust root. `checkpoint` is the normalized
 // object (parseAnchorV3 / anchorToCheckpoint), which MUST carry the v3 roots;
 // `confirmations` is the DOGE depth the caller obtained from its own DOGE source.
@@ -453,9 +460,26 @@ function verifyAnchoredCheckpoint(opts){
     const confirmations = Number(opts.confirmations);
     const safeConf = Number.isFinite(confirmations) ? confirmations : 0;
     if (!cp) return { verified: false, reason: 'NO_CHECKPOINT', checkpoint: null, confirmations: 0, minDepth, quorum: null, weighted: null };
+    const reject = (reason) => ({ verified: false, reason, checkpoint: cp, confirmations: safeConf, minDepth, quorum: null, weighted: null });
     // v3/v5 carry the committed roots; a rootless (v0/v4) anchor cannot serve SPV trust.
-    if (cp.state_root == null || cp.block_merkle_root == null)
-        return { verified: false, reason: 'NOT_A_V3_ANCHOR', checkpoint: cp, confirmations: safeConf, minDepth, quorum: null, weighted: null };
+    // Empty counts as absent: parseAnchorV3 maps a missing wire field to '', not null.
+    if (cp.state_root == null || cp.block_merkle_root == null
+        || String(cp.state_root) === '' || String(cp.block_merkle_root) === '')
+        return reject('NOT_A_V3_ANCHOR');
+    // The roots are only INSIDE the signed bytes when canonicalCheckpoint appends
+    // them, which needs commitment active and all four fields present (checkpoint.js
+    // §6.1). Accepting on root presence alone let a legitimately signed pre-activation
+    // rootless checkpoint be republished as a buried v3 carrying attacker-chosen roots:
+    // the original signature still verifies against the rootless canonical, and SPV
+    // adopts roots no validator ever signed. Mirror the append condition exactly.
+    if (!ckptCommit.isCheckpointCommitmentActive(cp.snapshot_block, cp.network)
+        || !ANCHOR_VERSION_RE.test(String(cp.state_root_version))
+        || !ANCHOR_VERSION_RE.test(String(cp.block_merkle_version)))
+        return reject('ROOTS_NOT_SIGNED');
+    // Syntax the canonical assumes: a 32-byte hex root. A value of another shape
+    // would sign one string and be consumed downstream as another.
+    if (!ANCHOR_ROOT_RE.test(String(cp.state_root)) || !ANCHOR_ROOT_RE.test(String(cp.block_merkle_root)))
+        return reject('MALFORMED_ROOT');
     const q = checkpoint.verifyCheckpoint(cp, opts.validators || []);
     const base = { checkpoint: cp, confirmations: safeConf, minDepth, quorum: q.quorum, weighted: q.weighted };
     if (!q.valid) return Object.assign({ verified: false, reason: 'CHECKPOINT_QUORUM_FAILED' }, base);

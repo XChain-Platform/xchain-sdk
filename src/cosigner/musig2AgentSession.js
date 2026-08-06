@@ -97,9 +97,13 @@ class MuSig2AgentSession extends AgentSession {
         if (typeof transport !== 'function')
             throw new SDKPolicyError('COSIGNER_CONFIG',
                 'MuSig2AgentSession requires a co-signer transport function (opts.coSigner.transport)');
-        if (!Array.isArray(publicKeys) || publicKeys.length < 2)
+        // EXACTLY two, in both modes: the session spends through CoSignerClient,
+        // which aggregates the agent's partial with the daemon's one and nothing
+        // more, so a larger set funds an address this path cannot spend.
+        if (!Array.isArray(publicKeys) || publicKeys.length !== 2)
             throw new SDKPolicyError('COSIGNER_CONFIG',
-                'MuSig2AgentSession requires the full publicKeys signer set (>= 2)');
+                'MuSig2AgentSession requires exactly the [agent, daemon] publicKeys pair '
+                + '(a 2-of-3 account names its third key separately via opts.coSigner.recovery)');
 
         // The agent's own key MUST be in the set, else its partial can never
         // aggregate to the account key. Fail closed at construction.

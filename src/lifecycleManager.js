@@ -21,6 +21,7 @@
 
 const ActionWaiter = require('./actionWaiter.js');
 const { SDKActionError, SDKConfigError } = require('./errors.js');
+const { reconcileEncoded } = require('./reconcileEncoded.js');
 
 
 class LifecycleManager {
@@ -42,6 +43,9 @@ class LifecycleManager {
     //   strictStatus    - with requireValid, also refuse to ASSUME validity: reject
     //                     ACTION_STATUS_UNKNOWN when no indexer status could be read
     //                     for the action (default false; see actionWaiter, )
+    //   maxFeeSats      - absolute miner-fee ceiling the encoder's answer must stay
+    //                     under (reconcileEncoded.js). Unset leaves only the
+    //                     always-on burn guards
     //   explorer        - explorer client the indexer wait polls instead of the SDK's
     //   explorerUrl     - host/URL (with explorerPort) to build that client from;
     //                     for isolated stacks with no colocated explorer 
@@ -89,6 +93,32 @@ class LifecycleManager {
         if (encoderOpts.customOutputs !== undefined)    txParams.customOutputs = encoderOpts.customOutputs;
 
         let encoded = await encoder.createTx(txParams);
+
+        // Step 2b: Reconcile the encoder's answer against what was submitted, BEFORE
+        // any signature exists. createTx is an RPC to a remote service that picks the
+        // inputs, the outputs and the fee; until this gate, nothing between that
+        // response and the sign call asked whether the transaction still spent the
+        // caller's coin where the caller asked. Fail-closed - it throws, so nothing
+        // is signed and nothing is broadcast. See reconcileEncoded.js.
+        const reconcileIntent = {
+            network:       this._reconcileNetwork(),
+            customOutputs: encoderOpts.customOutputs,
+            // Opt-in, and deliberately NOT defaulted from encoderOpts.fee: that field
+            // is a REQUESTED fixed fee, and an encoder that rounds up to a relay
+            // minimum is not misbehaving, so treating it as a ceiling would reject
+            // legitimate transactions. Without a cap the always-on guards still stand
+            // (negative fee, and the full burn where nothing comes back).
+            maxFeeSats:    opts.maxFeeSats,
+        };
+        reconcileEncoded(encoded.psbt, Object.assign({}, reconcileIntent, {
+            label: 'transaction',
+            // A two-phase action funds encoder-derived P2SH/P2WSH chunk outputs here;
+            // an envelope funds its one-shot P2TR commit.
+            phaseShapes: (encoded.encoding === 'P2SH' || encoded.encoding === 'P2WSH') ? ['p2sh', 'p2wsh']
+                : (encoded.revealPsbt ? ['p2tr'] : []),
+        }));
+        if (encoded.revealPsbt)
+            reconcileEncoded(encoded.revealPsbt, Object.assign({}, reconcileIntent, { label: 'envelope reveal' }));
 
         // Step 3: Sign the PSBT
         progress('signing', { encoding: encoded.encoding });
@@ -198,6 +228,11 @@ class LifecycleManager {
                 customOutputs:    encoderOpts.customOutputs
             });
 
+            // Phase 2 is a second encoder answer and gets the same gate as phase 1.
+            // It emits the customOutputs (which phase 1 funded without emitting), so
+            // it carries no further encoder-derived funding leg of its own.
+            reconcileEncoded(spendResult.psbt, Object.assign({}, reconcileIntent, { label: 'phase-2 reveal' }));
+
             // Phase-2 inputs are non-standard P2SH/P2WSH reveal inputs; they need
             // the custom finalizer, not the default single-sig finalizeAllInputs.
             let spendSigned = this.sdk.wallet.signRevealPsbt(spendResult.psbt, wif);
@@ -251,6 +286,14 @@ class LifecycleManager {
     }
 
     // Extract input references from an unsigned PSBT hex for UTXO cache tracking
+    // The bitcoinjs network the reconcile gate parses submitted addresses against.
+    // Undefined (bitcoinjs default) when the SDK was built without one: an address
+    // that then fails to parse authorizes nothing, so the gate stays fail-closed.
+    _reconcileNetwork() {
+        try { return this.sdk.wallet.getBitcoinNetwork(); }
+        catch (e) { return undefined; }
+    }
+
     _extractSpentInputs(psbtHex) {
         try {
             const bitcoin = require('bitcoinjs-lib');

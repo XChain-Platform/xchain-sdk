@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - review review-round fixes: verifyBalanceProof pins the sub-root slot (false-zero proof closed), opt-in submit idempotency key, co-signer sidecar fails closed without a token, compiled-push OP_RETURN preflight, network-aware oversize suggestion, attestation SSRF gate, hub-envelope parity CI check, FAMILY_SLIP44 derivation tests.
 
+### Security
+- MuSig2 key aggregation rejects a repeated participant key, which previously collapsed the policy threshold to a single signer ().
+- `verifyAnchoredCheckpoint` requires the committed roots to be inside the SIGNED canonical, closing a bypass that let a signed rootless checkpoint carry attacker-chosen SPV roots ().
+- `submitAction` reconciles every encoder-authored PSBT against the submitted intent before signing, blocking fund redirection and fee burn by a compromised encoder ().
+- `generateNonce` refuses to reuse a `sessionId` under different signing inputs, which reused the secret nonce and disclosed the private key ().
+- `CoSigner`, `CoSignerClient` and `MuSig2AgentSession` require exactly the two-key pair they can sign for, instead of funding aggregate addresses no spend path could ever unlock ().
+
 ### Removed
 - `statuses` WS filter dropped from `onAction`, `onAddress` and `onOrderMatch` (and from the typed surface): no explorer channel ever populated a per-event status, so it silently returned an unfiltered stream ().
 

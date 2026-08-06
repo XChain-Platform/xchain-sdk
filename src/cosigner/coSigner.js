@@ -178,8 +178,12 @@ class CoSigner {
     constructor(config = {}) {
         this.secretKey  = toBytes(config.secretKey, 'secretKey');
         if (this.secretKey.length !== 32) throw new Error('secretKey must be 32 bytes');
-        if (!Array.isArray(config.publicKeys) || config.publicKeys.length < 2)
-            throw new Error('publicKeys must list the full signer set (>= 2)');
+        // EXACTLY two: the daemon returns ONE partial and the agent aggregates it
+        // with its own, so a larger set funds an address the cooperative path can
+        // never spend. The 2-of-3 account names its third key as recoveryPublicKey.
+        if (!Array.isArray(config.publicKeys) || config.publicKeys.length !== 2)
+            throw new Error('publicKeys must be exactly the [agent, daemon] pair '
+                + '(a 2-of-3 account names its third key as recoveryPublicKey)');
         this.publicKeys = config.publicKeys;
         if (!config.policy || !config.policy.allowedActions)
             throw new Error('a normalized policy with allowedActions is required');

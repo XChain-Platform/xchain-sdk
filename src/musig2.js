@@ -201,14 +201,52 @@ function normalizePubkeys(pubkeys) {
     if (!Array.isArray(pubkeys) || pubkeys.length < 2)
         throw new SDKMuSigError('INVALID_INPUT',
             'publicKeys must be an array of at least 2 pubkeys');
-    return pubkeys.map((pk, i) => {
+    const keys = pubkeys.map((pk, i) => {
         if (typeof pk === 'string') return Buffer.from(pk, 'hex');
         if (pk instanceof Uint8Array) return pk;
         throw new SDKMuSigError('INVALID_INPUT',
             'publicKeys[' + i + '] must be hex string or Uint8Array');
     });
+    // Reject repeated participants: a duplicate collapses the policy threshold,
+    // since MuSig2([X,X]) aggregates to a key X alone can sign and a recovery
+    // key equal to a hot key turns its leaf into a unilateral spending path.
+    const seen = new Map();
+    keys.forEach((k, i) => {
+        const hex = Buffer.from(k).toString('hex').toLowerCase();
+        if (seen.has(hex))
+            throw new SDKMuSigError('INVALID_INPUT',
+                'publicKeys must be pairwise distinct: entries '
+                + seen.get(hex) + ' and ' + i + ' are the same key');
+        seen.set(hex, i);
+    });
+    return keys;
 }
 
+
+// Nonce sessions this process has already generated, keyed publicKey|sessionId and
+// valued by a digest of every input that determines the nonce.
+const _nonceSessions = new Map();
+
+// A sessionId is the caller's assertion that this nonce is fresh, and BIP327 derives
+// the SECRET nonce from it: the same sessionId with any different input yields the
+// same secret nonce over a different message, which discloses the private key. So a
+// reused sessionId is refused. A byte-identical repeat is allowed through, because it
+// reproduces the same nonce for the same message and can sign nothing the first call
+// could not - that is how a stateless co-signer retries. Only calls that PASS a
+// sessionId are tracked; omitting it leaves nonce entropy to the library's secure
+// random, where there is nothing to reuse.
+function guardSessionIdReuse(params) {
+    if (params.sessionId === undefined) return;
+    const part = (v) => (v === undefined || v === null ? '' : Buffer.from(v).toString('hex'));
+    const key = part(params.publicKey) + '|' + part(params.sessionId);
+    const inputs = [part(params.secretKey), part(params.xOnlyPublicKey), part(params.msg), part(params.extraInput)].join('|');
+    const seen = _nonceSessions.get(key);
+    if (seen !== undefined && seen !== inputs)
+        throw new SDKMuSigError('SESSION_ID_REUSED',
+            'this sessionId was already used to generate a nonce for this key under different signing inputs; '
+            + 'reusing a MuSig2 nonce across messages discloses the private key');
+    _nonceSessions.set(key, inputs);
+}
 
 /*
  * MuSig2 SDK wrapper.
@@ -282,6 +320,7 @@ class MuSig2 {
         if (params.sessionId !== undefined)      requireBytes(params.sessionId, 'sessionId', 32);
         if (params.xOnlyPublicKey !== undefined) requireBytes(params.xOnlyPublicKey, 'xOnlyPublicKey', 32);
         if (params.msg !== undefined)            requireBytes(params.msg, 'msg', 32);
+        guardSessionIdReuse(params);
         try {
             return _musig.nonceGen(params);
         } catch (e) {
