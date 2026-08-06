@@ -411,22 +411,14 @@ class XChainSDK {
 
         if (data.encoder && data.encoder.pubkey) {
             let encoder = this._requireEncoder();
-            let txResult = await encoder.createTx({
-                data:             result.actionString,
-                pubkey:           data.encoder.pubkey,
-                change:           data.encoder.change,
-                utxos:            data.encoder.utxos,
-                rawData:          data.encoder.rawData,
-                encoding:         data.encoder.encoding,
-                fee:              data.encoder.fee,
-                feePerKb:         data.encoder.feePerKb,
-                rbf:              data.encoder.rbf,
-                dust:             data.encoder.dust,
-                unconfirmed:      data.encoder.unconfirmed,
-                compressedPubKey: data.encoder.compressedPubKey,
-                customOutputs:    data.encoder.customOutputs,
-                attachPrevTx:     data.encoder.attachPrevTx
-            });
+            // Forward every optional createTx field through the ONE shared list
+            // (EncoderClient.CREATE_TX_OPTION_FIELDS), never a hand-copied subset:
+            // the hand-copied version had silently fallen behind createTx and was
+            // dropping feeQuote, compress, options and sourceAddress.
+            let txResult = await encoder.createTx(EncoderClient.pickCreateTxOptions(data.encoder, {
+                data:   result.actionString,
+                pubkey: data.encoder.pubkey
+            }));
             result.psbt     = txResult.psbt;
             result.encoding = txResult.encoding;
         }

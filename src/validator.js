@@ -828,17 +828,24 @@ class Validator {
         let issueCount = 0;
         let fileCount = 0;
 
-        for (let cmd of commands) {
+        for (let i = 0; i < commands.length; i++) {
+            let cmd = commands[i];
             let parts = cmd.split('|');
             let cmdAction = parts[0];
 
-            if (cmdAction === 'BATCH')
+            if (cmdAction === 'BATCH') {
                 errors.push(this._error('BATCH_CONSTRAINT', 'BATCH cannot contain nested BATCH actions'));
-            if (cmdAction === 'DEPLOY')
+                continue;                         // never descend into a forbidden child
+            }
+            if (cmdAction === 'DEPLOY') {
                 errors.push(this._error('BATCH_CONSTRAINT', 'BATCH cannot contain DEPLOY actions'));
+                continue;
+            }
             if (cmdAction === 'MINT') mintCount++;
             if (cmdAction === 'ISSUE') issueCount++;
             if (cmdAction === 'FILE') fileCount++;
+
+            errors.push(...this._validateBatchCommand(cmd, i));
         }
 
         if (mintCount > 1)
@@ -849,6 +856,43 @@ class Validator {
             errors.push(this._error('BATCH_CONSTRAINT', 'BATCH can contain at most 1 FILE action (one rawData per transaction)', { count: fileCount }));
 
         return errors;
+    }
+
+    // Validate ONE raw BATCH child command through the AUTHORITATIVE action path.
+    // The loop above only ever read parts[0] to count MINT/ISSUE/FILE, so a child
+    // like 'NOTREAL|0|x', or a real action carrying the wrong field count or an
+    // invalid value, passed validateAction untouched and got serialized, encoded
+    // and paid for before the chain rejected it. Rather than re-derive the
+    // per-action rules here (a second copy is exactly how this pre-check and the
+    // decoder drifted apart), run the child through decoder/parse, which owns the
+    // action name, alias, version, field-mapping and value rules.
+    //
+    // The require is deferred because decoder/parse.js requires THIS module at
+    // load time. By the time any BATCH is validated both halves are resolved, so
+    // deferring breaks the cycle instead of papering over it. Recursion is bounded:
+    // a BATCH child is rejected above and never reaches here, so a child parse can
+    // never re-enter _validateBatch.
+    _validateBatchCommand(cmd, index) {
+        const { parse } = require('./decoder/parse.js');
+        let res;
+        try {
+            res = parse(cmd, { validate: true });
+        } catch (e) {
+            return [this._error('BATCH_COMMAND_INVALID',
+                'BATCH command ' + index + ' could not be parsed: ' + e.message,
+                { index, command: cmd })];
+        }
+        if (!res || res.ok === false)
+            return [this._error('BATCH_COMMAND_INVALID',
+                'BATCH command ' + index + ' is not a valid action: ' +
+                    ((res && res.code) || 'PARSE_FAILED') + ((res && res.detail) ? ' (' + res.detail + ')' : ''),
+                { index, command: cmd, code: (res && res.code) || 'PARSE_FAILED' })];
+        // Carry the child's own findings up, tagged with its position so the
+        // caller can point at the offending command rather than the whole batch.
+        const findings = (res.validation && res.validation.findings) || [];
+        return findings.map(f => this._error(f.code,
+            'BATCH command ' + index + ' (' + res.action + '): ' + f.message,
+            Object.assign({ index, command: cmd }, f.details || {})));
     }
 
     // BROADCAST-specific validation

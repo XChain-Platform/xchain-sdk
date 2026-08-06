@@ -492,7 +492,18 @@ function verifyAnchoredCheckpoint(opts){
 // confirm its DOGE depth (caller supplies the tip via dogeTipHeight or getDogeTipHeight),
 // and verify it. Anchors are DOGE-only, so the list is served by the DOGE explorer;
 // each record's `chain` is the chain whose checkpoint it commits. Returns the
-// verifyAnchoredCheckpoint result plus { anchor, dogeTxid }.
+// verifyAnchoredCheckpoint result plus { anchor, dogeTxid, depthSource }.
+//
+// DEPTH IS TWO-TIER, like `validators` (module header). The trust-minimized tier
+// takes the anchor's DOGE inclusion height from the caller's own DOGE source
+// (dogeTxHeight, or getDogeTxHeight(txHash)) and IGNORES the explorer entirely.
+// The convenience tier falls back to the record's block_index_doge, which is the
+// EXPLORER's unverified claim about where its own anchor tx landed: a hostile
+// explorer names any height it likes and mints any depth it likes, so the
+// buried-anchor gate is forgeable on that tier and is a convenience, not a trust
+// boundary. `depthSource` on the result reports which tier ran ('caller' or
+// 'explorer'); pass requireTrustedDepth to refuse the convenience tier outright
+// (reason UNTRUSTED_DOGE_DEPTH) rather than accept a depth nobody proved.
 async function fetchAnchoredCheckpoint(opts){
     opts = opts || {};
     const f = _fetch(opts.fetchImpl);
@@ -513,11 +524,21 @@ async function fetchAnchoredCheckpoint(opts){
     const rec = rows[0];
     let tip = opts.dogeTipHeight;
     if (tip == null && typeof opts.getDogeTipHeight === 'function') tip = await opts.getDogeTipHeight();
-    const confirmations = (tip != null && rec.block_index_doge != null)
-        ? (Number(tip) - Number(rec.block_index_doge) + 1) : NaN;
+    // Inclusion height: caller's own DOGE source first, explorer claim only as fallback.
+    let txHeight = opts.dogeTxHeight;
+    if (txHeight == null && typeof opts.getDogeTxHeight === 'function')
+        txHeight = await opts.getDogeTxHeight(rec.tx_hash || null);
+    const depthSource  = (txHeight != null) ? 'caller' : 'explorer';
+    if (opts.requireTrustedDepth && depthSource !== 'caller')
+        return { verified: false, reason: 'UNTRUSTED_DOGE_DEPTH', checkpoint: anchorToCheckpoint(rec),
+                 anchor: rec, dogeTxid: rec.tx_hash || null, confirmations: 0, minDepth,
+                 quorum: null, weighted: null, depthSource };
+    const anchorHeight = (txHeight != null) ? txHeight : rec.block_index_doge;
+    const confirmations = (tip != null && anchorHeight != null)
+        ? (Number(tip) - Number(anchorHeight) + 1) : NaN;
     const res = verifyAnchoredCheckpoint({ checkpoint: anchorToCheckpoint(rec), validators: opts.validators,
         confirmations, minDepth });
-    return Object.assign({}, res, { anchor: rec, dogeTxid: rec.tx_hash || null });
+    return Object.assign({}, res, { anchor: rec, dogeTxid: rec.tx_hash || null, depthSource });
 }
 
 // ── Validator-set proof + forward-following (spec §7, Phase 5) ────────────────

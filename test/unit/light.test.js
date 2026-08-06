@@ -570,6 +570,43 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
         assert.strictEqual(r.checkpoint.checkpoint_seq, 7);
     });
 
+    // The explorer's block_index_doge is its own unverified claim about where its
+    // anchor tx landed, so a hostile explorer can mint any depth it wants and the
+    // buried-anchor gate proves nothing. These pin the caller-sourced height tier.
+    it('fetchAnchoredCheckpoint prefers the caller DOGE tx height over the explorer claim', async function () {
+        const a = makeSignedV3(null, 1000);
+        // Hostile explorer backdates its own anchor to fabricate a deep burial.
+        a.record.block_index_doge = 1;
+        const fetchImpl = async (url) => url.includes('/api/anchors/')
+            ? { ok: true, status: 200, json: async () => ({ data: [a.record] }) }
+            : { ok: false, status: 404, json: async () => ({}) };
+        const seen = [];
+        const r = await light.fetchAnchoredCheckpoint({ explorerUrl: 'https://x', dogeCoin: 'DOGE',
+            targetChain: CHAIN, validators: a.validators, dogeTipHeight: 1010, minDepth: 60, fetchImpl,
+            getDogeTxHeight: async (txid) => { seen.push(txid); return 1000; } });
+        assert.deepStrictEqual(seen, ['dd'.repeat(32)], 'the anchor txid must be handed to the caller lookup');
+        assert.strictEqual(r.depthSource, 'caller');
+        assert.strictEqual(r.confirmations, 11);                // 1010 - 1000 + 1, not the forged 1010
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'INSUFFICIENT_DOGE_DEPTH');
+    });
+
+    it('fetchAnchoredCheckpoint labels an explorer-sourced depth and requireTrustedDepth refuses it', async function () {
+        const a = makeSignedV3(null, 1000);
+        const fetchImpl = async (url) => url.includes('/api/anchors/')
+            ? { ok: true, status: 200, json: async () => ({ data: [a.record] }) }
+            : { ok: false, status: 404, json: async () => ({}) };
+        const base = { explorerUrl: 'https://x', dogeCoin: 'DOGE', targetChain: CHAIN,
+            validators: a.validators, dogeTipHeight: 1200, minDepth: 60, fetchImpl };
+        const loose = await light.fetchAnchoredCheckpoint(base);
+        assert.strictEqual(loose.verified, true, loose.reason);  // convenience tier unchanged
+        assert.strictEqual(loose.depthSource, 'explorer');
+        const strict = await light.fetchAnchoredCheckpoint(Object.assign({ requireTrustedDepth: true }, base));
+        assert.strictEqual(strict.verified, false);
+        assert.strictEqual(strict.reason, 'UNTRUSTED_DOGE_DEPTH');
+        assert.strictEqual(strict.depthSource, 'explorer');
+    });
+
     it('a DOGE-anchored checkpoint then binds a balance proof via trustedCheckpoint', async function () {
         const { proof, stateRoot } = buildBalanceProof(ADDR_A, TICK, '7');
         const a = makeSignedV3(stateRoot, 1000);

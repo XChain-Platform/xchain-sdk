@@ -24,6 +24,7 @@ const sinon       = require('sinon');
 const WebSocket   = require('ws');
 const WebSocketClient = require('../../src/websocket.js');
 const { SDKExplorerError } = require('../../src/errors.js');
+const { waitFor, waitForCalls } = require('../helpers/wait.js');
 
 // ---------------------------------------------------------------------------
 // Mock WebSocket Server
@@ -115,6 +116,19 @@ describe('WebSocketClient', function () {
         if (client) { client.disconnect(); client = null; }
         server.close(done);
     });
+
+    // Deterministic barrier for a NEGATIVE assertion (this handler must NOT
+    // fire). Nothing can be polled for an event that never happens, so send a
+    // frame that IS observably handled and wait for that: one socket delivers in
+    // order, so once the barrier lands the frame under test has already been
+    // dispatched or correctly dropped. A fixed sleep only made the race rarer.
+    async function barrier() {
+        const mark = sinon.spy();
+        client.on('BARRIER', mark);
+        server._lastClient.send(JSON.stringify({ type: 'BARRIER', data: {} }));
+        await waitForCalls(mark, 1, { message: 'barrier frame never arrived' });
+        client.off('BARRIER', mark);
+    }
 
     // -----------------------------------------------------------------
     // Schema version surface
@@ -290,8 +304,7 @@ describe('WebSocketClient', function () {
                 data: { block_index: 101 }
             }));
 
-            // Wait for message to be received
-            await new Promise(r => setTimeout(r, 50));
+            await waitForCalls(spy);
 
             expect(spy.calledOnce).to.be.true;
             expect(spy.firstCall.args[0].data.block_index).to.equal(101);
@@ -309,7 +322,7 @@ describe('WebSocketClient', function () {
                 type: 'NEW_BLOCK', data: { block_index: 101 }
             }));
 
-            await new Promise(r => setTimeout(r, 50));
+            await barrier();
 
             expect(spy.callCount).to.equal(0);
         });
@@ -322,9 +335,9 @@ describe('WebSocketClient', function () {
             client.once('NEW_BLOCK', spy);
 
             server._lastClient.send(JSON.stringify({ type: 'NEW_BLOCK', data: { block_index: 101 } }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitForCalls(spy);
             server._lastClient.send(JSON.stringify({ type: 'NEW_BLOCK', data: { block_index: 102 } }));
-            await new Promise(r => setTimeout(r, 50));
+            await barrier();                       // the second frame must NOT reach spy
 
             expect(spy.calledOnce).to.be.true;
         });
@@ -338,7 +351,7 @@ describe('WebSocketClient', function () {
 
             server._lastClient.send(JSON.stringify({ type: 'NEW_BLOCK', data: {} }));
             server._lastClient.send(JSON.stringify({ type: 'NEW_ACTION', data: {} }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitForCalls(spy, 2);
 
             expect(spy.callCount).to.equal(2);
         });
@@ -351,7 +364,8 @@ describe('WebSocketClient', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'NEW_ACTION', data: { action_index: 505 }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitFor(() => client.lastActionIndex === 505,
+                { message: 'lastActionIndex stayed at ' + client.lastActionIndex });
 
             expect(client.lastActionIndex).to.equal(505);
         });
@@ -406,13 +420,13 @@ describe('WebSocketClient', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'NEW_ACTION', catch_up: true, data: { action_index: 501 }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitFor(() => client.catchingUp === true, { message: 'catchingUp never set' });
             expect(client.catchingUp).to.be.true;
 
             server._lastClient.send(JSON.stringify({
                 type: 'CATCH_UP_COMPLETE', data: { events_replayed: 1, latest_action_index: 501 }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitFor(() => client.catchingUp === false, { message: 'catchingUp never cleared' });
             expect(client.catchingUp).to.be.false;
         });
     });
@@ -485,7 +499,12 @@ describe('WebSocketClient', function () {
 
             // Send garbage data; should be silently ignored
             server._lastClient.send('not valid json!!');
-            await new Promise(r => setTimeout(r, 50));
+            // A well-formed frame BEHIND the garbage: once it is handled the
+            // garbage has already been through the parser, in order, on one socket.
+            const after = sinon.spy();
+            client.on('NEW_BLOCK', after);
+            server._lastClient.send(JSON.stringify({ type: 'NEW_BLOCK', data: {} }));
+            await waitForCalls(after, 1, { message: 'the frame behind the garbage never arrived' });
             // Client should still be connected
             expect(client.isConnected()).to.be.true;
         });
@@ -509,8 +528,7 @@ describe('WebSocketClient', function () {
             });
             await client.connect();
             client.disconnect();
-            // Give close event time to propagate
-            await new Promise(r => setTimeout(r, 100));
+            await waitFor(() => disconnectSpy.called, { message: 'onWsDisconnect never fired' });
             expect(disconnectSpy.called).to.be.true;
         });
     });
@@ -572,8 +590,9 @@ describe('WebSocketClient', function () {
 
             // setBase while connected should trigger disconnect + reconnect
             client.setBase('127.0.0.1', s2.port);
-            // Give reconnect time
-            await new Promise(r => setTimeout(r, 300));
+            // Wait for the client to actually land on the second server, which is
+            // the thing this test is about; the old fixed 300ms asserted nothing.
+            await waitFor(() => !!s2.wss._lastClient, { message: 'client never reconnected to the second server' });
             s2.wss.close();
         });
     });
@@ -616,7 +635,6 @@ describe('WebSocketClient', function () {
 
             // Disconnect while request is pending
             client.disconnect();
-            await new Promise(r => setTimeout(r, 50));
             await p;
             expect(rejected).to.be.true;
         });
@@ -635,8 +653,11 @@ describe('WebSocketClient', function () {
             const id = 'myreq-1';
             const p = client._sendWithResponse(id, { action: 'test', id }, 5000);
 
+            // _sendWithResponse registers _pending[id] synchronously inside its
+            // Promise executor, so the only precondition is that registration,
+            // not an elapsed duration.
+            await waitFor(() => client._pending[id] !== undefined, { message: 'request was never registered as pending' });
             // Server sends an error response with the same id
-            await new Promise(r => setTimeout(r, 30));
             server._lastClient.send(JSON.stringify({
                 type: 'error',
                 id,
@@ -694,7 +715,7 @@ describe('WebSocketClient', function () {
             // Force close from server (not intentional from client); triggers _reconnect
             // which immediately sees reconnectAttempts >= maxReconnectAttempts and emits connection_lost
             server._lastClient.close();
-            await new Promise(r => setTimeout(r, 200));
+            await waitFor(() => lostFired, { message: 'connection_lost never fired' });
             expect(lostFired).to.be.true;
         });
 
@@ -737,8 +758,8 @@ describe('WebSocketClient', function () {
             });
             await c.connect();
 
-            // Wait for at least one ping to be sent
-            await new Promise(r => setTimeout(r, 150));
+            // Wait for the ping itself, not for three ping intervals.
+            await waitFor(() => pingCount > 0, { message: 'no ping was sent' });
             c.disconnect();
             expect(pingCount).to.be.greaterThan(0);
         });
@@ -793,7 +814,7 @@ describe('WebSocketClient', function () {
             // Force close from server (triggers reconnect)
             server._lastClient.close();
 
-            await new Promise(r => setTimeout(r, 500));
+            await waitFor(() => reconnectSpy.called, { timeout: 5000, message: 'onWsReconnect never fired' });
             expect(reconnectSpy.called).to.be.true;
 
             client.disconnect();
@@ -851,7 +872,8 @@ describe('WebSocketClient', function () {
                 type: 'CATCH_UP_COMPLETE',
                 data: { latest_action_index: 999, events_replayed: 5 }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitFor(() => client.lastActionIndex === 999,
+                { message: 'lastActionIndex stayed at ' + client.lastActionIndex });
             expect(client.lastActionIndex).to.equal(999);
         });
     });
@@ -924,7 +946,8 @@ describe('WebSocketClient', function () {
 
             // Call _resubscribe directly
             client._resubscribe();
-            await new Promise(r => setTimeout(r, 100));
+            await waitFor(() => received.filter(m => m.action === 'subscribe').length >= 2,
+                { message: 'the server never received both replayed subscribes' });
 
             const subscribeMsgs = received.filter(m => m.action === 'subscribe');
             expect(subscribeMsgs.length).to.be.greaterThanOrEqual(2);
@@ -945,7 +968,8 @@ describe('WebSocketClient', function () {
             });
 
             client._resubscribe();
-            await new Promise(r => setTimeout(r, 100));
+            await waitFor(() => received.filter(m => m.action === 'subscribe').length >= 1,
+                { message: 'the server never received the replayed subscribe' });
 
             const subscribeMsgs = received.filter(m => m.action === 'subscribe');
             expect(subscribeMsgs[0].params.since_action_index).to.equal(500);

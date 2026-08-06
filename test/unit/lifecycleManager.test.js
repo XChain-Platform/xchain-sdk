@@ -216,6 +216,46 @@ describe('LifecycleManager', function () {
             assert.deepStrictEqual(p.customOutputs, []);
         });
 
+        // "All" above meant all the fields this hand-written list happened to name,
+        // and the list had fallen behind createTx: attachPrevTx, feeQuote, compress,
+        // options and sourceAddress were dropped on the floor, so a submitAction
+        // caller lost its protocol-fee output, its FILE compression policy, its
+        // Taproot signer capability and its source-address UTXO selection in
+        // silence. This one is driven off the shared list, so it cannot go stale.
+        it('forwards EVERY field of the shared createTx option list', async function () {
+            const EncoderClient = require('../../src/encoder.js');
+            const captured = [];
+            const signed = buildSignedTx();
+            const sdk = makeSdk({}, {
+                createTx: async (p) => { captured.push(p); return { psbt: signed.psbtHex, encoding: 'OP_RETURN' }; }
+            });
+            const encoderOpts = { pubkey: '03pub' };
+            for (const key of EncoderClient.CREATE_TX_OPTION_FIELDS) encoderOpts[key] = 'set:' + key;
+            encoderOpts.encoding      = 'OP_RETURN';   // steers the two-phase branch
+            encoderOpts.customOutputs = [];            // read by the reconcile intent
+            const lm = new LifecycleManager(sdk);
+            await lm.submitAction({ action: 'SEND', params: {} }, encoderOpts,
+                { wif: FAKE_WIF, waitForIndexer: false });
+            const p = captured[0];
+            for (const key of EncoderClient.CREATE_TX_OPTION_FIELDS)
+                assert.deepStrictEqual(p[key], encoderOpts[key], key + ' must reach createTx');
+        });
+
+        it('omits optional encoderOpts fields the caller did not set', async function () {
+            const captured = [];
+            const signed = buildSignedTx();
+            const sdk = makeSdk({}, {
+                createTx: async (p) => { captured.push(p); return { psbt: signed.psbtHex, encoding: 'OP_RETURN' }; }
+            });
+            const lm = new LifecycleManager(sdk);
+            await lm.submitAction({ action: 'SEND', params: {} }, { pubkey: '03pub' },
+                { wif: FAKE_WIF, waitForIndexer: false });
+            // Absent and explicit-false are different wire meanings to createTx
+            // (compress is tri-state), so an unset field must not appear at all.
+            assert.strictEqual(Object.prototype.hasOwnProperty.call(captured[0], 'compress'), false);
+            assert.strictEqual(Object.prototype.hasOwnProperty.call(captured[0], 'feeQuote'), false);
+        });
+
         it('fires onProgress callbacks for each step', async function () {
             const steps = [];
             const sdk = makeSdk();

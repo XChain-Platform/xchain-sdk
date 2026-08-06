@@ -444,4 +444,30 @@ class EncoderClient {
 
 }
 
+// The optional createTx fields, named ONCE. Both high-level entry points
+// (sdk.createAction and LifecycleManager.submitAction) used to re-enumerate this
+// list by hand, and each had silently fallen behind createTx: feeQuote, compress,
+// options and sourceAddress were dropped on the floor, so a high-level caller lost
+// its protocol-fee output, its FILE compression policy, its Taproot signer
+// capability and its source-address UTXO selection with no error at all (a dropped
+// feeQuote mines a transaction protocol validation then rejects, burning the miner
+// fee). Adding a field to createTx means adding it here, and both callers get it.
+EncoderClient.CREATE_TX_OPTION_FIELDS = [
+    'change', 'utxos', 'rawData', 'encoding', 'fee', 'feePerKb', 'rbf', 'dust',
+    'unconfirmed', 'compressedPubKey', 'customOutputs', 'attachPrevTx',
+    'feeQuote', 'compress', 'options', 'sourceAddress'
+];
+
+// Copy the caller's SET createTx options onto `into` (a fresh object by default).
+// Undefined stays absent: createTx's own mapper reads absent and explicit-false as
+// different wire meanings (compress is tri-state), so copying undefined through
+// would change what the encoder is asked for.
+EncoderClient.pickCreateTxOptions = function (src, into) {
+    const out = into || {};
+    if (!src) return out;
+    for (const key of EncoderClient.CREATE_TX_OPTION_FIELDS)
+        if (src[key] !== undefined) out[key] = src[key];
+    return out;
+};
+
 module.exports = EncoderClient;

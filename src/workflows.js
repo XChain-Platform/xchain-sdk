@@ -227,6 +227,23 @@ class Workflows {
             ? chunkHelper.planDeploy(String(code), { gasLimit, constructorParams: ctor })
             : { single: true };
 
+        // Phase-2 params, built BEFORE Phase 1 so the assembler can be sized while
+        // no money has moved. CODE_HASH (no inline code) selects DEPLOY v2; staking → v3.
+        let assembleParams = null;
+        if (!plan.single) {
+            assembleParams = {
+                version:           hasStaking ? '3' : '2',
+                codeHash:          plan.codeHash,
+                gasLimit:          gasLimit,
+                constructorParams: (ctor !== undefined) ? ctor : []
+            };
+            if (hasStaking) {
+                assembleParams.cooldownBlocks   = cooldown;
+                assembleParams.slashDestination = slashDst;
+            }
+            this._assertAssemblerFits(assembleParams);
+        }
+
         return this._withPartial({ deploy: null, chunks: [], deposits: [] }, async (p) => {
             if (plan.single) {
                 p.deploy = await session.deploy(deployParams, {}, opts);
@@ -241,17 +258,7 @@ class Workflows {
                         codePart:    plan.parts[i]
                     }, {}, opts));
                 }
-                // Phase 2: assemble. CODE_HASH (no inline code) selects DEPLOY v2; staking → v3.
-                let assembleParams = {
-                    version:           hasStaking ? '3' : '2',
-                    codeHash:          plan.codeHash,
-                    gasLimit:          gasLimit,
-                    constructorParams: (ctor !== undefined) ? ctor : []
-                };
-                if (hasStaking) {
-                    assembleParams.cooldownBlocks   = cooldown;
-                    assembleParams.slashDestination = slashDst;
-                }
+                // Phase 2: assemble (params + size already pre-flighted above).
                 p.deploy = await session.deploy(assembleParams, {}, opts);
             }
 
@@ -493,6 +500,23 @@ class Workflows {
     // single recipe is deliberately NOT offered: the oracle may not bet on its
     // own market (BET.md format 2), so such a helper could only ever produce a
     // rejected second transaction.
+
+    // Throw unless the chunked deploy's Phase-2 assembler fits the compiled-action
+    // cap. planDeploy sizes only the INLINE DEPLOY, so an oversized constructor
+    // param (or staking field) survives planning and first surfaces at Phase 2,
+    // after every paid v4 carrier is already broadcast and confirmed: the money is
+    // gone and the contract can never assemble. Compose through the canonical
+    // action-string core so the measurement cannot drift from what would actually
+    // go on the wire, and gate on the same compiled-push quantity fitsSingleDeploy
+    // uses (payload + OP_PUSHDATA2 prefix, exact in the 8192-byte neighbourhood).
+    _assertAssemblerFits(assembleParams) {
+        let composed  = this.sdk.actions.composeActionString({ action: 'DEPLOY', params: Object.assign({}, assembleParams) });
+        let compiled  = Buffer.byteLength(composed.actionString, 'utf8') + chunkHelper.OP_RETURN_PUSH_OVERHEAD;
+        if (compiled > chunkHelper.MAX_ACTION_DATA_LENGTH)
+            throw new Error('Chunked deploy assembling DEPLOY v' + composed.version + ' compiles to ' + compiled
+                + ' bytes, exceeds MAX_ACTION_DATA_LENGTH (' + chunkHelper.MAX_ACTION_DATA_LENGTH
+                + '). Shrink constructorParams. No carrier actions were broadcast.');
+    }
 
     // Run a multi-step recipe whose steps broadcast independent, NON-atomic
     // transactions. `partial` is a mutable accumulator the worker fills in as each

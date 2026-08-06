@@ -23,6 +23,7 @@ const sinon       = require('sinon');
 const WebSocket   = require('ws');
 const { XChainSDK } = require('../../index.js');
 const { SDKConfigError } = require('../../src/errors.js');
+const { waitFor, waitForCalls } = require('../helpers/wait.js');
 
 // ---------------------------------------------------------------------------
 // Mock Server
@@ -96,6 +97,20 @@ describe('XChainSDK – WebSocket convenience methods', function () {
         server.close(done);
     });
 
+    // Deterministic barrier for a NEGATIVE assertion (this callback must NOT
+    // fire). There is no condition to poll for something that never happens, so
+    // send a frame that IS observably handled and wait for THAT: one socket
+    // delivers in order, so once the barrier lands the frame under test has
+    // already been dispatched (or correctly ignored). A fixed sleep only made
+    // the race less likely; this removes it.
+    async function barrier() {
+        const mark = sinon.spy();
+        const unsub = sdk.onBlock(mark);
+        server._lastClient.send(JSON.stringify({ type: 'NEW_BLOCK', data: { block_index: 0 } }));
+        await waitForCalls(mark, 1, { message: 'barrier NEW_BLOCK never arrived' });
+        unsub();
+    }
+
     // -----------------------------------------------------------------
     // Initialization
     // -----------------------------------------------------------------
@@ -144,7 +159,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'NEW_BLOCK', data: { block_index: 101 }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitForCalls(spy);
 
             expect(spy.calledOnce).to.be.true;
             expect(spy.firstCall.args[0].data.block_index).to.equal(101);
@@ -164,7 +179,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'NEW_ACTION', data: { action_index: 501, action: 'SEND' }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitForCalls(spy);
 
             expect(spy.calledOnce).to.be.true;
         });
@@ -180,7 +195,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'ADDRESS_UPDATE', data: { address: '1abc', balances: [] }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitForCalls(spy);
 
             expect(spy.calledOnce).to.be.true;
         });
@@ -193,7 +208,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'ORDER_MATCH', data: { action_index: 501 }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitForCalls(spy);
 
             expect(spy.calledOnce).to.be.true;
         });
@@ -206,7 +221,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'SNAPSHOT', data: { channel: 'address', address: '1abc', balances: [] }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitForCalls(spy);
 
             expect(spy.calledOnce).to.be.true;
             expect(spy.firstCall.args[0].type).to.equal('SNAPSHOT');
@@ -220,7 +235,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'SNAPSHOT', data: { channel: 'address', address: '1other', balances: [] }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await barrier();
 
             expect(spy.called).to.be.false;
         });
@@ -234,7 +249,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'SNAPSHOT', data: { channel: 'address', address: '1abc', balances: [] }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await barrier();
 
             expect(spy.called).to.be.false;
         });
@@ -250,7 +265,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'TOKEN_UPDATE', data: { tick: 'PEPE', supply: '100000' }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitForCalls(spy);
 
             expect(spy.calledOnce).to.be.true;
         });
@@ -263,7 +278,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'SNAPSHOT', data: { channel: 'token', tick: 'PEPE', supply: '100000' }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitForCalls(spy);
 
             expect(spy.calledOnce).to.be.true;
             expect(spy.firstCall.args[0].type).to.equal('SNAPSHOT');
@@ -277,7 +292,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'SNAPSHOT', data: { channel: 'token', tick: 'DOGE', supply: '1' }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await barrier();
 
             expect(spy.called).to.be.false;
         });
@@ -291,7 +306,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'SNAPSHOT', data: { channel: 'token', tick: 'PEPE', supply: '100000' }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await barrier();
 
             expect(spy.called).to.be.false;
         });
@@ -307,7 +322,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'MARKET_UPDATE', data: { tick1: 'PEPE', tick2: 'BTC', last_price: '0.00000020' }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitForCalls(spy);
 
             expect(spy.calledOnce).to.be.true;
         });
@@ -320,7 +335,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'SNAPSHOT', data: { channel: 'market', tick1: 'PEPE', tick2: 'BTC', last_price: '0.00000020' }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitForCalls(spy);
 
             expect(spy.calledOnce).to.be.true;
             expect(spy.firstCall.args[0].type).to.equal('SNAPSHOT');
@@ -334,7 +349,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'SNAPSHOT', data: { channel: 'market', tick1: 'DOGE', tick2: 'BTC', last_price: '1' }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await barrier();
 
             expect(spy.called).to.be.false;
         });
@@ -348,7 +363,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'SNAPSHOT', data: { channel: 'market', tick1: 'PEPE', tick2: 'BTC', last_price: '1' }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await barrier();
 
             expect(spy.called).to.be.false;
         });
@@ -367,7 +382,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'DISPENSE', data: { action_index: 501, dispenser_action_index: 12345 }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitForCalls(spy);
 
             expect(spy.callCount).to.equal(2);
         });
@@ -380,7 +395,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'SNAPSHOT', data: { channel: 'dispenser', action_index: 12345, give_remaining: '1000' }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitForCalls(spy);
 
             expect(spy.calledOnce).to.be.true;
             expect(spy.firstCall.args[0].type).to.equal('SNAPSHOT');
@@ -394,7 +409,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'SNAPSHOT', data: { channel: 'dispenser', action_index: '12345', give_remaining: '1000' }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitForCalls(spy);
 
             expect(spy.calledOnce).to.be.true;
         });
@@ -407,7 +422,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'SNAPSHOT', data: { channel: 'dispenser', action_index: 999, give_remaining: '1' }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await barrier();
 
             expect(spy.called).to.be.false;
         });
@@ -421,7 +436,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'SNAPSHOT', data: { channel: 'dispenser', action_index: 12345, give_remaining: '1000' }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await barrier();
 
             expect(spy.called).to.be.false;
         });
@@ -438,7 +453,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
                 type: 'COINPAY_REQUIRED',
                 data: { payer_address: '1bot', payee_address: '1seller', coin_amount: '0.01', expiration: 9999 }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitForCalls(spy);
 
             expect(spy.calledOnce).to.be.true;
             expect(spy.firstCall.args[0].data.coin_amount).to.equal('0.01');
@@ -455,7 +470,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'ORDER_MATCH', data: { action_index: 501, settlement_type: 'coinpay' }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitForCalls(spy);
 
             expect(spy.calledOnce).to.be.true;
         });
@@ -471,7 +486,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'NETWORK_STATS', data: { block_height: 101 }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await waitForCalls(spy);
 
             expect(spy.calledOnce).to.be.true;
         });
@@ -492,7 +507,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             server._lastClient.send(JSON.stringify({
                 type: 'NEW_BLOCK', data: { block_index: 101 }
             }));
-            await new Promise(r => setTimeout(r, 50));
+            await barrier();
 
             expect(spy.callCount).to.equal(0);
         });
@@ -540,7 +555,9 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             });
             await s.connectWs();
             fn(s);
-            await new Promise((r) => setTimeout(r, 60));
+            // Wait for the subscribe frame to REACH the recording server, rather
+            // than for a duration that is only usually long enough.
+            await waitFor(() => srv.sent.length > 0, { message: 'no subscribe frame reached the server' });
             s.stop();
             await new Promise((r) => srv.wss.close(r));
             return srv.sent.map((m) => m.params || {});

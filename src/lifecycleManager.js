@@ -20,6 +20,7 @@
  ********************************************************************/
 
 const ActionWaiter = require('./actionWaiter.js');
+const EncoderClient = require('./encoder.js');
 const { SDKActionError, SDKConfigError } = require('./errors.js');
 const { reconcileEncoded } = require('./reconcileEncoded.js');
 
@@ -79,18 +80,10 @@ class LifecycleManager {
             data:   createResult.actionString,
             pubkey: encoderOpts.pubkey
         };
-        // Map optional encoder fields
-        if (encoderOpts.change !== undefined)           txParams.change = encoderOpts.change;
-        if (encoderOpts.utxos !== undefined)            txParams.utxos = encoderOpts.utxos;
-        if (encoderOpts.rawData !== undefined)          txParams.rawData = encoderOpts.rawData;
-        if (encoderOpts.encoding !== undefined)         txParams.encoding = encoderOpts.encoding;
-        if (encoderOpts.fee !== undefined)              txParams.fee = encoderOpts.fee;
-        if (encoderOpts.feePerKb !== undefined)         txParams.feePerKb = encoderOpts.feePerKb;
-        if (encoderOpts.rbf !== undefined)              txParams.rbf = encoderOpts.rbf;
-        if (encoderOpts.dust !== undefined)             txParams.dust = encoderOpts.dust;
-        if (encoderOpts.unconfirmed !== undefined)      txParams.unconfirmed = encoderOpts.unconfirmed;
-        if (encoderOpts.compressedPubKey !== undefined) txParams.compressedPubKey = encoderOpts.compressedPubKey;
-        if (encoderOpts.customOutputs !== undefined)    txParams.customOutputs = encoderOpts.customOutputs;
+        // Map optional encoder fields through the ONE shared list, not a copy of it:
+        // this hand-written list had fallen behind createTx and was dropping
+        // attachPrevTx, feeQuote, compress, options and sourceAddress on the floor.
+        EncoderClient.pickCreateTxOptions(encoderOpts, txParams);
 
         let encoded = await encoder.createTx(txParams);
 

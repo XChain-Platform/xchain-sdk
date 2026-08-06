@@ -326,6 +326,23 @@ class FormatSelector {
         return length;
     }
 
+    // A caller-supplied VERSION as a non-negative integer, or null when the input
+    // is not that shape. VERSION is a non-negative integer on the wire, so the
+    // shape is checked BEFORE any coercion: a bare Number() reads true, [1],
+    // '0x1', '1e0', '1.0' and ' 1 ' all as version 1, and '' and [] as version 0.
+    // The format lookup in select() happens to bound the RESULT to a defined
+    // version, so nothing misbehaves today, but this SDK is published and the
+    // accepted shape of a public input should not be "whatever Number() salvages".
+    // A leading-zero string ('01') IS accepted: it cannot mean a different
+    // version, so rejecting it would only break callers for no gain.
+    static _canonicalVersion(value) {
+        if (typeof value === 'number')
+            return (Number.isInteger(value) && value >= 0) ? value : null;
+        if (typeof value === 'string')
+            return /^\d+$/.test(value) ? Number(value) : null;
+        return null;
+    }
+
     // Select the optimal format version for a given action and populated fields.
     // If `explicitVersion` is provided, that version is used unconditionally
     // (used by actions like STAKE where V1=new vs V2=top-up have identical
@@ -338,7 +355,14 @@ class FormatSelector {
 
         // Caller forced a specific version: validate and use it without auto-selection
         if (explicitVersion !== undefined && explicitVersion !== null) {
-            let v = Number(explicitVersion);
+            let v = FormatSelector._canonicalVersion(explicitVersion);
+            if (v === null)
+                throw new SDKFormatError(
+                    'INVALID_VERSION',
+                    'VERSION must be a non-negative integer or a decimal-integer string; got ' +
+                        typeof explicitVersion + ' ' + JSON.stringify(explicitVersion),
+                    { action, version: explicitVersion, availableVersions: Object.keys(formats[action]) }
+                );
             if (!formats[action][v])
                 throw new SDKFormatError(
                     'INVALID_VERSION',
