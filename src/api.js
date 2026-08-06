@@ -27,6 +27,16 @@ const cors       = require('cors');
 const jsonRouter = require('express-json-rpc-router');
 const XChainSDK  = require('./XChainSDK');
 const { safeTokenEqual } = require('./utils/safeCompare.js');
+// Request guards live in their own module so the shipped middleware has exactly
+// one implementation: this file starts listening at require time, so a unit test
+// can only reach the guards through src/apiGuards.js.
+const {
+    resolveMaxBatch,
+    resolveRateLimit,
+    resolveRateWindowMs,
+    batchCapMiddleware,
+    rateLimitMiddleware
+} = require('./apiGuards.js');
 
 // Parse in .env config data
 dotenv.config();
@@ -39,6 +49,11 @@ const SDK_API_PORT = process.env.SDK_API_PORT || 3005;
 const SDK_API_KEY  = process.env.SDK_API_KEY || '';
 if(!SDK_API_KEY)
     console.warn('WARNING: SDK_API_KEY is not set. All helper-API methods except ping will return 401. Set SDK_API_KEY to use the API.');
+// Batch-cap and rate-limit settings, parsed by the guard module (each one falls
+// back to a safe default on a junk value; see src/apiGuards.js).
+const SDK_API_MAX_BATCH      = resolveMaxBatch(process.env);
+const SDK_API_RATE_LIMIT     = resolveRateLimit(process.env);
+const SDK_API_RATE_WINDOW_MS = resolveRateWindowMs(process.env);
 const NETWORK      = process.env.NETWORK;
 const EXPLORER_URL = process.env.EXPLORER_URL;
 const EXPLORER_PORT = process.env.EXPLORER_PORT;
@@ -82,6 +97,20 @@ async function startApi() {
 
     // CORS disabled by default; set CORS_ORIGIN to allow a specific origin
     app.use(cors({ origin: process.env.CORS_ORIGIN || false }));
+
+    // Batch fan-out cap, BEFORE the auth gate and the router: capping ahead of
+    // the auth gate bounds the unauthenticated ping path too, and ahead of the
+    // router means nothing is dispatched before the count is known good. Why a
+    // byte-size limit is not enough: src/apiGuards.js.
+    app.use(batchCapMiddleware(SDK_API_MAX_BATCH));
+
+    // Per-credential (falling back to per-IP) request-rate limit, also ahead of
+    // the auth gate so an anonymous ping flood is bounded. The API key stops
+    // ANONYMOUS use; it does nothing about sustained traffic from a valid,
+    // shared or leaked credential, and the batch cap above bounds one request's
+    // fan-out rather than the request rate. The two are complementary and
+    // neither substitutes for the other.
+    app.use(rateLimitMiddleware({ limit: SDK_API_RATE_LIMIT, windowMs: SDK_API_RATE_WINDOW_MS }));
 
     // API key enforcement for all methods except ping. Fails closed: without
     // a configured key, every non-ping method is rejected, never left open.
