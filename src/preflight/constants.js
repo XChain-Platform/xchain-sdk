@@ -37,7 +37,11 @@ const ENCODING_LIMITS = Object.freeze({
     P2WSH:     476,
 });
 
-// Report schema (additive-only; pinned in the wallet bridge-spec).
+// Report schema version (additive-only by convention). The report is
+// consumed by the wallet PreflightPanel
+// (packages/core/src/shared/components/PreflightPanel.jsx), which reads
+// findings/severity/overridable/restricted/stateHeight/unverified and does
+// NOT read schemaVersion — the additive-only rule has no enforcement point.
 const REPORT_SCHEMA_VERSION = 1;
 
 // Dispenser refill cap (, indexer config.js MAX_REFILLS). A
