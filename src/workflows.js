@@ -21,6 +21,7 @@
 
 const WalletSession = require('./walletSession.js');
 const chunkHelper   = require('./chunkHelper.js');
+const Utility       = require('./utility.js');
 
 
 class Workflows {
@@ -158,7 +159,7 @@ class Workflows {
             throw new Error('deployStakeableContract: COOLDOWN_BLOCKS is required');
         if (!deployParams.SLASH_DESTINATION)
             throw new Error('deployStakeableContract: SLASH_DESTINATION is required');
-        return this.deployAndFund(wif, { VERSION: '1', ...deployParams }, deposits, opts);
+        return this.deployAndFund(wif, Utility.withForcedVersion('1', deployParams), deposits, opts);
     }
 
     // Deploy a smart contract and optionally deposit initial tokens.

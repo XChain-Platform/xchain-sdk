@@ -67,3 +67,38 @@ describe('Utility.isInteger (indexer parity, #2393)', function () {
         assert.strictEqual(utils.isInteger(Infinity), false);
     });
 });
+
+// : the version-locked helpers built `{ VERSION: '3', ...params }`, so the
+// spread landed after the forced value and a caller-supplied VERSION won. Lowercase
+// `version` won too, since normalizeFields upper-snakes both spellings onto one key.
+// The consequence was a silent misroute: stakeToContract({ VERSION: '1' }) serialized
+// STAKE|1 and dropped TARGET_CONTRACT_INDEX and TICK.
+describe('Utility.withForcedVersion (version-locked helpers)', function () {
+
+    let utils;
+
+    beforeEach(function () {
+        utils = new Utility();
+    });
+
+    it('forces its version over a caller VERSION in either spelling', function () {
+        assert.strictEqual(utils.withForcedVersion('3', { AMOUNT: '5' }).VERSION, '3');
+        assert.strictEqual(utils.withForcedVersion('3', {}).VERSION, '3');
+        assert.strictEqual(utils.withForcedVersion('3', { VERSION: '3', AMOUNT: '5' }).VERSION, '3');
+        assert.strictEqual(utils.withForcedVersion('3', { version: 3 }).VERSION, '3');
+    });
+
+    it('throws rather than route a MISMATCHED caller version', function () {
+        assert.throws(() => utils.withForcedVersion('3', { VERSION: '1' }), /forces VERSION 3/);
+        assert.throws(() => utils.withForcedVersion('3', { version: '1' }), /forces VERSION 3/);
+        assert.throws(() => utils.withForcedVersion('1', { Version: 4 }), /forces VERSION 1/);
+    });
+
+    it('carries every other param through untouched', function () {
+        let out = utils.withForcedVersion('3', { AMOUNT: '5', TARGET_CONTRACT_INDEX: 7, TICK: 'AAA' });
+        assert.strictEqual(out.AMOUNT, '5');
+        assert.strictEqual(out.TARGET_CONTRACT_INDEX, 7);
+        assert.strictEqual(out.TICK, 'AAA');
+        assert.strictEqual(Object.keys(out).length, 4);
+    });
+});

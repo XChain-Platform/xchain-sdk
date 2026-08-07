@@ -338,6 +338,24 @@ class Utility {
         return normalized;
     }
 
+    // Pin the wire VERSION a version-locked helper exists to force.
+    //
+    // The helpers used to build `{ VERSION: '3', ...params }`, so the spread
+    // landed AFTER the forced value and a caller-supplied VERSION won; lowercase
+    // `version` won too, since normalizeFields upper-snakes both spellings onto
+    // the same key. A caller could therefore serialize STAKE|1 out of the v3
+    // staking helper, dropping TARGET_CONTRACT_INDEX and TICK and routing assets
+    // into the wrong lane. Silently ignoring the caller's value would fix the
+    // routing and keep the surprise, so a MISMATCHED version throws instead
+    // ().
+    // Delegates to the module-level function so the call sites (walletSession,
+    // workflows) can reach it WITHOUT an sdk instance: they are handed a stub sdk
+    // in their own unit tests, and a helper that guards fund routing must not be
+    // the thing that needs wiring to work.
+    withForcedVersion(version, params) {
+        return withForcedVersion(version, params);
+    }
+
     getActions(){
         let actions = [];
         for(let action in formats)
@@ -369,5 +387,24 @@ class Utility {
 
 
 }
+
+// Pure, instance-free, and exported as a static so the version-locked helpers can
+// call it directly (see the instance method above for why that matters).
+function withForcedVersion(version, params) {
+    let out = {};
+    let supplied;
+    for (let key in (params || {})) {
+        // Same upper-snake normalization normalizeFields applies, so `version`,
+        // `Version` and `VERSION` are all caught rather than only the loud one.
+        if (key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase() === 'VERSION'){ supplied = params[key]; continue; }
+        out[key] = params[key];
+    }
+    if (supplied !== undefined && supplied !== null && String(supplied) !== String(version))
+        throw new Error(`this helper forces VERSION ${version} and will not route to VERSION ${supplied}; call the helper for that version instead`);
+    out.VERSION = String(version);
+    return out;
+}
+
+Utility.withForcedVersion = withForcedVersion;
 
 module.exports = Utility;

@@ -513,8 +513,11 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
         const canonical = checkpoint.canonicalCheckpoint(cp);
         cp.validator_signatures = [{ pubkey: signer.pubkeyHex, sig: crypto.sign(null, Buffer.from(canonical, 'utf8'), signer.privateKey).toString('hex') }];
         const validators = [{ pubkey: signer.pubkeyHex, source: signer.pubkeyHex, weight: '100' }];
-        // The signature is genuine and the quorum is real.
-        assert.strictEqual(checkpoint.verifyCheckpoint(cp, validators).valid, true);
+        // The signature is genuine and the quorum is real, but since  the base
+        // verifier ALSO refuses a rootless row once the commitment is active, so this
+        // attack is now blocked a layer earlier than the SPV checks below. Those checks
+        // stay asserted: they are the backstop if the row ever reaches them.
+        assert.strictEqual(checkpoint.verifyCheckpoint(cp, validators).valid, false);
 
         // Attack: graft roots on without the version fields, so the canonical (and
         // therefore the signature that covers it) is unchanged.

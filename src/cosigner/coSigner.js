@@ -87,6 +87,17 @@ function toBytes(v, label) {
 // message that does not bind the outputs the co-signer just gated, then
 // reassemble a drain transaction that still verifies on-chain. `undefined`
 // defaults to SIGHASH_DEFAULT and is allowed.
+// Parse an operator-supplied satoshi bound to an EXACT u64, or null if it cannot be
+// represented exactly. Accepts bigint, an integer Number, and a digit string, because
+// a config value above 2^53 can only reach us intact as one of the latter two.
+// Number() would silently round it, which is the whole defect ().
+function exactU64(v) {
+    if (typeof v === 'bigint') return v >= 0n ? v : null;
+    if (typeof v === 'number') return (Number.isInteger(v) && v >= 0) ? BigInt(v) : null;
+    if (typeof v === 'string' && /^\d+$/.test(v.trim())) return BigInt(v.trim());
+    return null;
+}
+
 const ALLOWED_SIGHASH = new Set([bitcoin.Transaction.SIGHASH_DEFAULT]);
 function sighashAllowed(hashType) {
     return hashType === undefined || ALLOWED_SIGHASH.has(hashType);
@@ -352,9 +363,13 @@ class CoSigner {
             if (o.maxValue === undefined || o.maxValue === null)
                 throw new Error(`allowedOutputs[${i}] needs a maxValue: without one the entry authorizes ` +
                     `unlimited native coin to that address on every approved transaction`);
-            const maxValue = Number(o.maxValue);
-            if (!Number.isFinite(maxValue) || maxValue < 0)
-                throw new Error(`allowedOutputs[${i}].maxValue must be a non-negative number`);
+            // BigInt, not Number: satoshi caps are u64, and Number(9007199254740993n)
+            // is 9007199254740992, so an output ONE unit above a >2^53 cap compared
+            // equal and was approved. The rest of this file already reconciles fees
+            // in BigInt for the same reason (see _toU64) ().
+            const maxValue = exactU64(o.maxValue);
+            if (maxValue === null)
+                throw new Error(`allowedOutputs[${i}].maxValue must be a non-negative integer (number, bigint, or digit string)`);
             return { script, maxValue };
         });
     }
@@ -418,19 +433,28 @@ class CoSigner {
                 if (this.maxFeeSats === null)
                     return this._deny('ENVELOPE_COMMIT_UNBOUNDED',
                         'an envelope commit prefunds the reveal fee, so maxFeeSats must be set to bound it');
-                if (Number(out.value) > this.maxFeeSats)
+                // Same exact-u64 comparison as the allowed-output caps below ():
+                // a value Number() cannot hold exactly must not be compared as a Number.
+                const commitValue = this._toU64(out.value);
+                if (commitValue === null || commitValue > BigInt(this.maxFeeSats))
                     return this._deny('OUTPUT_OVER_CAP',
-                        { index: i, value: out.value, maxValue: this.maxFeeSats, detail: 'envelope commit output' });
+                        { index: i, value: String(out.value), maxValue: this.maxFeeSats, detail: 'envelope commit output' });
                 continue;
             }
             // (c) An operator-authorized native leg (COINPAY recipient / fee output).
             const match = this.allowedOutputs.find((a) => out.script.equals(a.script));
             if (match) {
-                const total = (spent.get(match) || 0) + Number(out.value);
+                // Exact u64 arithmetic end to end (): a value this policy
+                // cannot represent exactly is refused rather than rounded into the cap.
+                const value = this._toU64(out.value);
+                if (value === null)
+                    return this._deny('OUTPUT_OVER_CAP',
+                        { index: i, value: String(out.value), maxValue: String(match.maxValue), detail: 'output value is not an exact non-negative integer' });
+                const total = (spent.get(match) || 0n) + value;
                 spent.set(match, total);
                 // maxValue is mandatory since G7, so this is always a real bound.
                 if (total > match.maxValue)
-                    return this._deny('OUTPUT_OVER_CAP', { index: i, value: out.value, total, maxValue: match.maxValue });
+                    return this._deny('OUTPUT_OVER_CAP', { index: i, value: String(out.value), total: String(total), maxValue: String(match.maxValue) });
                 continue;
             }
             // Anything else is an unauthorized native-coin drain.

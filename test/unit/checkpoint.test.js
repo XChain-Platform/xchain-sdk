@@ -31,12 +31,23 @@ function signHex(privateKey, payload) {
 }
 
 function makeCheckpoint(overrides = {}) {
-    return Object.assign({
+    let cp = Object.assign({
         chain: 'BTC', network: 'mainnet', block_index: 900123,
         block_hash: 'ab'.repeat(32), ledger_hash: 'cd'.repeat(32),
         actions_hash: 'ef'.repeat(32), contract_hash: '01'.repeat(32),
         checkpoint_seq: 417, snapshot_block: 900120
     }, overrides);
+    // regtest activates CHECKPOINT_COMMITMENT at 0, and once it is active the hub
+    // REFUSES to sign a rootless checkpoint rather than emit one (see the testnet
+    // threshold note in checkpoint_commitment_activation.js). A regtest fixture with
+    // no roots therefore models a row that cannot exist, so supply them by default;
+    // the rootless case is exercised deliberately by its own test below.
+    if (cp.network === 'regtest' && cp.state_root === undefined)
+        Object.assign(cp, {
+            state_root: 'aa'.repeat(32), state_root_version: 1,
+            block_merkle_root: 'bb'.repeat(32), block_merkle_version: 1
+        });
+    return cp;
 }
 
 describe('CheckpointVerifier (SDK)', function () {
@@ -225,6 +236,62 @@ describe('CheckpointVerifier - stake-weighted quorum (SDK)', function () {
         assert.strictEqual(result.valid, false);
     });
 
+    // : the gate used `.some`, so ONE weighted entry admitted a set
+    // whose other entries carried no weight. meetsStakeThreshold reads a missing
+    // weight as '0', so the unknown stake left the denominator while the weighted
+    // signer kept the numerator, and a lone signature cleared 3*100 > 2*100.
+    it('weighted regime fails closed when only SOME of the set carries a weight', function () {
+        let A = makeKeypair(), B = makeKeypair();
+        let cp = makeCheckpoint({ network: 'regtest' });
+        let canonical = Checkpoint.canonicalCheckpoint(cp);
+        let validators = [
+            { pubkey: A.pubkeyHex, source: 'srcA', weight: '100' },
+            { pubkey: B.pubkeyHex, source: 'srcB' }                                      // weight omitted
+        ];
+        cp.validator_signatures = signAll([A], canonical);
+        let result = Checkpoint.verifyCheckpoint(cp, validators);
+        assert.strictEqual(result.weighted, true);
+        assert.strictEqual(result.valid, false, 'an incomplete stake snapshot must not finalize');
+    });
+
+    it('weighted regime fails closed on a blank source or a negative weight', function () {
+        let A = makeKeypair(), B = makeKeypair();
+        let cp = makeCheckpoint({ network: 'regtest' });
+        let canonical = Checkpoint.canonicalCheckpoint(cp);
+        cp.validator_signatures = signAll([A], canonical);
+        let blankSource = [
+            { pubkey: A.pubkeyHex, source: 'srcA', weight: '100' },
+            { pubkey: B.pubkeyHex, source: '   ',  weight: '10' }
+        ];
+        assert.strictEqual(Checkpoint.verifyCheckpoint(cp, blankSource).valid, false, 'blank source');
+        let negative = [
+            { pubkey: A.pubkeyHex, source: 'srcA', weight: '100' },
+            { pubkey: B.pubkeyHex, source: 'srcB', weight: '-10' }
+        ];
+        assert.strictEqual(Checkpoint.verifyCheckpoint(cp, negative).valid, false, 'negative weight');
+    });
+
+    // : canonicalCheckpoint appends the commitment suffix only when all four
+    // fields are present, which is correct THERE (the bytes must match the hub), but it
+    // meant a rootless post-activation row fell back to the legacy preimage and its
+    // signatures verified against it. The verifier now refuses the row outright.
+    it('post-activation, a checkpoint missing its commitment roots fails closed', function () {
+        let A = makeKeypair(), B = makeKeypair(), C = makeKeypair();
+        for (let missing of ['state_root', 'block_merkle_root', 'state_root_version', 'block_merkle_version']) {
+            let cp = makeCheckpoint({ network: 'regtest' });
+            delete cp[missing];
+            let canonical = Checkpoint.canonicalCheckpoint(cp);
+            cp.validator_signatures = signAll([A, B, C], canonical);
+            let validators = vset([
+                { source: 'srcA', weight: 10, keys: [A] },
+                { source: 'srcB', weight: 10, keys: [B] },
+                { source: 'srcC', weight: 10, keys: [C] }
+            ]);
+            let result = Checkpoint.verifyCheckpoint(cp, validators);
+            assert.strictEqual(result.valid, false, 'missing ' + missing + ' must not verify');
+        }
+    });
+
     it('below the flag-day (mainnet) the count path is unchanged: weighted=false', function () {
         let keys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
         let cp = makeCheckpoint();                                                      // mainnet, inactive
@@ -247,9 +314,16 @@ describe('CheckpointVerifier - stake-weighted quorum (SDK)', function () {
 describe('CheckpointVerifier - EQUIV uniform header (SDK)', function () {
 
     function rawCanonical(cp) {
-        return ['XCHECKPOINT', cp.chain, cp.network, String(cp.block_index), cp.block_hash,
+        let raw = ['XCHECKPOINT', cp.chain, cp.network, String(cp.block_index), cp.block_hash,
             cp.ledger_hash, cp.actions_hash, cp.contract_hash,
             String(cp.checkpoint_seq), String(cp.snapshot_block)].join('|');
+        // The commitment suffix is part of the v0 raw that EQUIV wraps, and a regtest
+        // fixture now carries roots because a rootless one cannot exist. Mirror the
+        // production builder so this test still isolates the WRAPPING.
+        if (cp.state_root !== undefined)
+            raw += '|' + [String(cp.state_root).toLowerCase(), String(cp.state_root_version),
+                          String(cp.block_merkle_root).toLowerCase(), String(cp.block_merkle_version)].join('|');
+        return raw;
     }
 
     it('EQUIV active (regtest): the canonical is the v0 raw wrapped in the uniform header', function () {

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING** `X402Client.fetchUrl` no longer double-pays on retry: both post-broadcast leak paths now throw one `X402_PAYMENT_AMBIGUOUS` error carrying `details.txid`/`details.resume`, and `fetchUrl(url, init, { resume })` adopts the in-flight payment instead of broadcasting a new one (replaces the `X402_PAYMENT_NOT_ACCEPTED` throw) ().
 
 ### Fixed
+- Version-locked SDK helpers no longer let a caller override the version they force: `Utility.withForcedVersion` strips every spelling and throws on a mismatch, closing a silent misroute of staked assets ().
+- Weighted checkpoint verification requires a valid weight and nonblank source on EVERY validator entry; a partially-weighted set used to clear the stake predicate on a shrunken denominator ().
+- A checkpoint missing its commitment roots after activation is now rejected outright instead of verifying against the legacy rootless preimage ().
+- Co-signer output caps compare as exact u64: an output one satoshi above a cap larger than 2^53 used to be approved ().
 - review review-round fixes: verifyBalanceProof pins the sub-root slot (false-zero proof closed), opt-in submit idempotency key, co-signer sidecar fails closed without a token, compiled-push OP_RETURN preflight, network-aware oversize suggestion, attestation SSRF gate, hub-envelope parity CI check, FAMILY_SLIP44 derivation tests.
 
 ### Security
