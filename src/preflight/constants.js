@@ -129,7 +129,8 @@ const TIER2_ERROR_CAPABLE = Object.freeze({
 });
 
 // Tier-1 exclusions (spec §4.3): indexer FEE_QUOTE_DENYLIST mirror.
-// Kept in lockstep with xchain-indexer/src/actions.js:34.
+// Kept in lockstep with FEE_QUOTE_DENYLIST in xchain-indexer/src/actions.js, enforced by
+// bin/check-preflight-drift.js (named, not line-pinned: the line pin had already drifted).
 const TIER1_DENYLIST = Object.freeze(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
 
 // Fee-charging user actions (spec §4.4 "protocol-fee reality").
