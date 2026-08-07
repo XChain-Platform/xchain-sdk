@@ -204,7 +204,10 @@ describe('MuSig2AgentSession', function () {
             policy: Object.assign({ allowedActions: new Set(['SEND']) }, s.coPolicy) });
         const transport = inProcessTransport(co);
         return new MuSig2AgentSession(sdk, 'WIF',
-            Object.assign({ allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '100' } } }, localPolicy),
+            // allowUnkeyedSubmits preserves the pre- submit shape so these
+            // tests keep exercising the MuSig2 path rather than the new key requirement,
+            // which is covered in agentSession.test.js.
+            Object.assign({ allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '100' } }, allowUnkeyedSubmits: true }, localPolicy),
             { coSigner: { transport, publicKeys: s.keys } });
     }
 
@@ -347,7 +350,7 @@ describe('MuSig2AgentSession', function () {
             policy: { allowedActions: new Set(['SEND']) } });
         const captured = { broadcasts: [], encodeCalls: 0 };
         const session = new MuSig2AgentSession(makeSdk(s, captured), 'WIF',
-            { allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '100' } } },
+            { allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '100' } }, allowUnkeyedSubmits: true },
             { coSigner: { transport: inProcessTransport(co), publicKeys: [agentPk, daemonPk], recovery: recPk } });
 
         expect(session.address).to.equal(a3.address);

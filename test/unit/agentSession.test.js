@@ -42,8 +42,14 @@ describe('AgentSession (policy-bounded wallet)', () => {
 
     let tmpDir, stateFile, submitStub;
 
+    // allowUnbounded / allowUnkeyedSubmits are the explicit opt-outs added with
+    // . They are defaulted ON here so every test below keeps
+    // exercising the behavior it was written for; the new requirements get their
+    // own tests, which construct WITHOUT these flags.
     const mk = (policy) => new AgentSession(fakeSdk, 'WIF', Object.assign({
         allowedActions: ['SEND', 'MINT'],
+        allowUnbounded: true,
+        allowUnkeyedSubmits: true,
         stateFile,
     }, policy));
 
@@ -77,6 +83,51 @@ describe('AgentSession (policy-bounded wallet)', () => {
         expect(() => new AgentSession(fakeSdk, 'WIF', {})).to.throw(SDKPolicyError)
             .with.property('code', 'POLICY_INVALID');
         expect(() => new AgentSession(fakeSdk, 'WIF', { allowedActions: [] })).to.throw(SDKPolicyError);
+    });
+
+    // : an allowlist bounds WHICH actions run, never how much they move.
+    it('refuses construction with an allowlist but no spend ceiling', () => {
+        expect(() => new AgentSession(fakeSdk, 'WIF', { allowedActions: ['SEND'], stateFile }))
+            .to.throw(SDKPolicyError).with.property('code', 'POLICY_INVALID');
+        // Any one of the three ceilings satisfies it.
+        expect(() => new AgentSession(fakeSdk, 'WIF', { allowedActions: ['SEND'], stateFile, maxPerAction: { SEND: { TOK: '5' } } })).to.not.throw();
+        expect(() => new AgentSession(fakeSdk, 'WIF', { allowedActions: ['SEND'], stateFile, maxPerWindow: { hours: 1, perTick: { TOK: '5' } } })).to.not.throw();
+        expect(() => new AgentSession(fakeSdk, 'WIF', { allowedActions: ['SEND'], stateFile, confirmAbove: { handler: async () => true } })).to.not.throw();
+        // ...and running unbounded stays possible, but only as a typed opt-in.
+        expect(() => new AgentSession(fakeSdk, 'WIF', { allowedActions: ['SEND'], stateFile, allowUnbounded: true })).to.not.throw();
+    });
+
+    /* ── kill switch + idempotency () ──────────────── */
+
+    it('refuses a submit with no idempotencyKey, and accepts one with a key', async () => {
+        const s = new AgentSession(fakeSdk, 'WIF', { allowedActions: ['SEND'], stateFile, allowUnbounded: true });
+        await expectDeny(() => s.send({ tick: 'TOK', amount: '1', destination: 'dest' }), 'POLICY_IDEMPOTENCY_REQUIRED');
+        expect(submitStub.called).to.equal(false, 'refused before any broadcast');
+        await s.send({ tick: 'TOK', amount: '1', destination: 'dest' }, {}, { idempotencyKey: 'k1' });
+        expect(submitStub.calledOnce).to.equal(true);
+    });
+
+    it('pause() halts before evaluation or broadcast, and resume() restores', async () => {
+        const s = mk();
+        s.pause();
+        await expectDeny(() => s.send({ tick: 'TOK', amount: '1', destination: 'dest' }), 'POLICY_HALTED');
+        expect(submitStub.called).to.equal(false, 'a halted session must not broadcast');
+        s.resume();
+        await s.send({ tick: 'TOK', amount: '1', destination: 'dest' });
+        expect(submitStub.calledOnce).to.equal(true);
+    });
+
+    it('a kill-switch file dropped beside a RUNNING session halts it', async () => {
+        const halt = path.join(tmpDir, 'halt-flag');
+        const s = mk({ killSwitchFile: halt });
+        await s.send({ tick: 'TOK', amount: '1', destination: 'dest' });   // healthy first
+        expect(submitStub.calledOnce).to.equal(true);
+        fs.writeFileSync(halt, '');                                        // operator drops the flag
+        await expectDeny(() => s.send({ tick: 'TOK', amount: '1', destination: 'dest' }), 'POLICY_HALTED');
+        expect(submitStub.calledOnce).to.equal(true, 'no second broadcast after the halt');
+        fs.rmSync(halt);
+        await s.send({ tick: 'TOK', amount: '1', destination: 'dest' });   // and lifting it resumes
+        expect(submitStub.calledTwice).to.equal(true);
     });
 
     it('validates window hours and confirm handler at construction', () => {

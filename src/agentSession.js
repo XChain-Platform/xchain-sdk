@@ -66,6 +66,22 @@ class AgentSession extends WalletSession {
         if (policy.confirmAbove && typeof policy.confirmAbove.handler !== 'function')
             throw new SDKPolicyError('POLICY_INVALID', 'confirmAbove requires a handler function');
 
+        // BREAKING, and deliberately: a policy with an action allowlist but no
+        // monetary ceiling bounded nothing, so an automated agent could execute an
+        // allowed value-moving action without limit (). At least one
+        // enforceable ceiling is now required, and running without one is an
+        // explicit, auditable opt-in rather than the state a caller reaches by
+        // omission. Same shape the X402Client fail-closed change took (#3122):
+        // the default is safe, unbounded is a word someone had to type.
+        const hasCeiling = !!policy.maxPerAction
+            || !!(win && win.perTick)
+            || !!policy.confirmAbove;
+        if (!hasCeiling && policy.allowUnbounded !== true)
+            throw new SDKPolicyError('POLICY_INVALID',
+                'AgentSession requires at least one spend ceiling: maxPerAction, maxPerWindow.perTick, ' +
+                'or confirmAbove. An allowlist alone bounds WHICH actions run, never how much they move. ' +
+                'Set allowUnbounded: true to run without one.');
+
         this.policy = {
             allowedActions:      new Set(policy.allowedActions.map((a) => String(a).toUpperCase())),
             allowedDestinations: policy.allowedDestinations ? new Set(policy.allowedDestinations) : null,
@@ -77,12 +93,49 @@ class AgentSession extends WalletSession {
             // may pass a ^id tick directly, and the co-signer daemon relies on it.
             tickIds:             policy.tickIds || null,
             onPolicyViolation:   policy.onPolicyViolation || null,
+            allowUnbounded:      policy.allowUnbounded === true,
+            // Absent an idempotency key a retry after a lost ACK builds and pays a
+            // SECOND transaction, so the key is required on the automated rail rather
+            // than offered (). Same opt-in shape as allowUnbounded.
+            allowUnkeyedSubmits: policy.allowUnkeyedSubmits === true,
         };
+
+        // Operator kill switch (). Two halves, because they answer different
+        // questions: `pause()` stops THIS object, and the file stops a session the
+        // operator can no longer call into, which is the case that mattered - once an
+        // agent holding the WIF is running, killing the process was the only lever.
+        // Checked at the submit chokepoint, so a paused session refuses before any
+        // policy evaluation, budget consumption or broadcast.
+        this.paused = policy.paused === true;
+        this._killSwitchFile = policy.killSwitchFile || opts.killSwitchFile
+            || path.join(os.homedir(), '.xchain', `agent-halt-${this.address}`);
 
         // Window usage persists across restarts so a crash-loop can't reset caps.
         this._stateFile = policy.stateFile || opts.stateFile
             || path.join(os.homedir(), '.xchain', `agent-usage-${this.address}.json`);
         this._usage = null;   // lazy-loaded
+    }
+
+    /* ── kill switch ───────────────────────────────────────────────── */
+
+    // Stop / resume THIS session. The file half below covers the operator who
+    // cannot reach the object; these cover the caller who can.
+    pause()  { this.paused = true; }
+    resume() { this.paused = false; }
+
+    // Is a halt in force? The file is re-read on EVERY submit rather than cached:
+    // the point of the switch is that an operator can drop it beside a session
+    // that is already running, so a cached answer would defeat it. A read error
+    // other than "absent" halts too (fail-closed, matching _loadUsage).
+    _haltReason() {
+        if (this.paused) return 'this session is paused (resume() to continue)';
+        try {
+            fs.accessSync(this._killSwitchFile);
+        } catch (e) {
+            if (e && e.code === 'ENOENT') return null;
+            return `kill-switch file ${this._killSwitchFile} is unreadable (${e.code || 'error'})`;
+        }
+        return `kill-switch file ${this._killSwitchFile} is present`;
     }
 
     /* ── policy evaluation ─────────────────────────────────────────── */
@@ -197,6 +250,12 @@ class AgentSession extends WalletSession {
     }
 
     async _enforceAndSubmit(actionData, encoderOpts, submitOpts) {
+        // FIRST, before evaluation, budget consumption or any broadcast: a halted
+        // session must refuse without side effects ().
+        const halt = this._haltReason();
+        if (halt)
+            this._deny('POLICY_HALTED', `AgentSession is halted: ${halt}`, { killSwitchFile: this._killSwitchFile });
+
         const evaluation = this._evaluate(actionData);
 
         if (evaluation.needsConfirmation) {
@@ -230,6 +289,17 @@ class AgentSession extends WalletSession {
         // waiting on the existing payment instead of re-sending. Opt-in: absent a
         // key, behavior is unchanged. Fail-closed and needs no indexer to hold.
         const idempotencyKey = submitOpts && submitOpts.idempotencyKey;
+        // BREAKING (): the key is now REQUIRED rather than honoured when
+        // offered. Opt-in idempotency protects only the callers who already knew to
+        // ask, and the caller who does not know is exactly the automated agent that
+        // retries a timed-out submit and pays twice. Refusing here costs a caller one
+        // argument; the alternative costs a duplicate payment. allowUnkeyedSubmits
+        // restores the old behavior for a caller who has decided that is acceptable.
+        if ((idempotencyKey === undefined || idempotencyKey === null) && !this.policy.allowUnkeyedSubmits)
+            this._deny('POLICY_IDEMPOTENCY_REQUIRED',
+                'a spend-capable submit needs a stable submitOpts.idempotencyKey so a retry after a lost ' +
+                'acknowledgement is refused instead of paying twice. Set allowUnkeyedSubmits: true to opt out.',
+                { action: evaluation.action });
         if (idempotencyKey !== undefined && idempotencyKey !== null) {
             const keyStr = String(idempotencyKey);
             const prior = this._pruned().entries.find((e) => e.key === keyStr);
