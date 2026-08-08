@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `verifyBalanceProof`, `verifyLockedBalanceProof` and `verifyContractStateProof` take an optional expected-identity argument and refuse a valid proof answering a different key, closing the valid-proof-wrong-question hole the explorer's path double-decode exposed .
+
 ### Changed
 - **BREAKING** `AgentSession` safety controls are enforced rather than offered: the constructor requires at least one spend ceiling, a submit requires a stable `submitOpts.idempotencyKey`, and a new operator kill switch (`pause()`/`resume()` plus a `killSwitchFile` re-read on every submit) halts a running session before evaluation or broadcast; `allowUnbounded` / `allowUnkeyedSubmits` opt back out ().
 - **BREAKING** `X402Client` is now fail-closed on spend: omitting `maxAmount` applies a conservative default per-payment ceiling (over-ceiling offers throw `X402_PRICE_TOO_HIGH` before paying); unbounded spending is an explicit opt-in via `maxAmount: 'unbounded'`/`Infinity` or `allowUnbounded: true` ().

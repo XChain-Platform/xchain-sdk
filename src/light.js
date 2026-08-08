@@ -68,6 +68,31 @@ async function _json(f, url){
 }
 function _hx(x){ return String(x == null ? '' : x).toLowerCase(); }
 
+// Bind a proof to the question the CALLER asked, not merely to the one the server
+// echoed. Every verifier below re-derives its SMT key from fields carried IN the
+// proof (`address`/`tick`, `contract_index`/`state_key`), which proves the proof is
+// internally consistent and says nothing about whether it answers your request. A
+// server that returns a valid proof for a DIFFERENT key therefore verifies clean.
+//
+// That is not hypothetical: the explorer's contract-state route decoded its path
+// param a second time after Express had already decoded it, so a request for the
+// key `a%41b` was answered, validly and verifiably, for the key `aAb` (measured on
+// the live service 2026-08-06,  frontier). The corruption was upstream, but
+// nothing downstream could see it.
+//
+// `expected` is OPTIONAL so this stays backward compatible; callers that pass it
+// get the binding. Only the fields present are compared, each as a string, so a
+// numeric contract_index and its decimal spelling agree.
+function _expectedMismatch(expected, actual){
+    if (!expected) return null;
+    for (const field of Object.keys(expected)){
+        const want = expected[field];
+        if (want === undefined || want === null) continue;
+        if (String(want) !== String(actual[field])) return field;
+    }
+    return null;
+}
+
 // Default DOGE confirmation depth a cold-start anchor must be buried under before
 // it is trusted. DOGE blocks ~1 min and ANCHORs land ~daily, so a recent valid
 // anchor is normally far deeper than this; callers SHOULD set their own policy.
@@ -76,9 +101,12 @@ const DEFAULT_ANCHOR_MIN_DEPTH = 60;
 // Verify a §4.4 BalanceProof binds to a TRUSTED state_root (one already proven to
 // be in a quorum-signed checkpoint). chain/network come from the trusted
 // checkpoint, never the proof. Returns { verified, amount, reason }.
-function verifyBalanceProof(proof, trustedStateRoot, chain, network){
+function verifyBalanceProof(proof, trustedStateRoot, chain, network, expected){
     try {
         if (!proof || !proof.smt_proof || !proof.sub_root_path) return _no('MALFORMED_PROOF');
+        // Bind to the REQUESTED (address, tick) when the caller supplies it; the
+        // check below only proves the proof is self-consistent. See _expectedMismatch.
+        if (_expectedMismatch(expected, proof)) return _no('REQUESTED_IDENTITY_MISMATCH');
         // The proven key must be exactly balanceKey(chain, network, address, tick):
         // a server cannot answer for (A,T) with a proof for some other key.
         const keyBuf    = M.balanceKey(chain, network, proof.address, proof.tick);
@@ -134,9 +162,10 @@ function verifyBalanceProof(proof, trustedStateRoot, chain, network){
 // mean nothing (spec §4): zero-locked is only a real claim at armed heights.
 // The height check is strict-parse fail-closed: a garbage height reads as
 // not-armed, never as armed.
-function verifyLockedBalanceProof(proof, trustedStateRoot, chain, network){
+function verifyLockedBalanceProof(proof, trustedStateRoot, chain, network, expected){
     try {
         if (!proof || !proof.smt_proof || !proof.sub_root_path) return _no('MALFORMED_PROOF');
+        if (_expectedMismatch(expected, proof)) return _no('REQUESTED_IDENTITY_MISMATCH');
         if (!SUB.isEscrowLockedLeafActive(proof.height, network, chain))
             return _no('ESCROW_LEAF_NOT_COMMITTED');
         // The proven key must be exactly escrowKey(chain, network, address, tick),
@@ -181,10 +210,14 @@ function verifyLockedBalanceProof(proof, trustedStateRoot, chain, network){
 // slot is known to be live. Treating a below-arming non-inclusion as absence is
 // exactly the mistake spec §4 forbids; the server refuses to serve those heights
 // (CONTRACT_STATE_NOT_COMMITTED), and that refusal is the signal to respect.
-function verifyContractStateProof(proof, trustedStateRoot, chain, network){
+function verifyContractStateProof(proof, trustedStateRoot, chain, network, expected){
     const no = (reason) => ({ verified: false, state_value: null, reason: reason });
     try {
         if (!proof || !proof.smt_proof || !proof.sub_root_path) return no('MALFORMED_PROOF');
+        // Bind to the REQUESTED (contract_index, state_key) when the caller supplies
+        // it. Without this a server answers a different key with a valid proof, which
+        // is exactly what the explorer's double-decode did. See _expectedMismatch.
+        if (_expectedMismatch(expected, proof)) return no('REQUESTED_IDENTITY_MISMATCH');
         // The proven key must be exactly contractStateKey(chain, network, index, key),
         // with chain/network from the TRUSTED checkpoint rather than the proof: a
         // server must not be able to answer for one key with another key's proof.

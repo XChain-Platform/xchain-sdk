@@ -93,6 +93,30 @@ function buildBalanceProof(address, tick, amountStr) {
     return { proof, stateRoot };
 }
 
+// A Stage A contract-state proof + the committed state_root, mirroring the
+// balance builder above but in the contract_state_root slot (index 4).
+function buildContractStateProof(contractIndex, stateKey, valueStr) {
+    const keyBuf = M.contractStateKey(CHAIN, NET, contractIndex, stateKey);
+    const present = valueStr !== null;
+    const leaf = present ? M.toHex(M.leafHash(valueStr)) : null;
+    const store = buildStore(present ? [[M.toHex(keyBuf), leaf]] : []);
+    const csRoot = store.root, balancesRoot = EMPTY_ROOT, stakesRoot = EMPTY_ROOT;
+    const roots = { balances_root: balancesRoot, stakes_root: stakesRoot, contract_state_root: csRoot };
+    const stateRoot = M.toHex(M.stateRoot(roots));
+    const sub = M.stateRootProof(roots, 'contract_state_root');
+    const proof = {
+        chain: CHAIN, network: NET, height: 100,
+        contract_index: contractIndex, state_key: stateKey,
+        state_value: present ? valueStr : null,
+        smt_proof: { key: M.toHex(keyBuf), leaf_value: leaf,
+                     compressed: M.compressSmtProof(store.descend(csRoot, keyBuf)) },
+        sub_root_path: { index: sub.index, siblings: sub.siblings },
+        contract_state_root: csRoot, balances_root: balancesRoot, stakes_root: stakesRoot,
+        state_root: stateRoot, state_root_version: 2
+    };
+    return { proof, stateRoot };
+}
+
 // A §5 action inclusion proof + the committed block_merkle_root.
 function buildActionProof() {
     const rows = {
@@ -149,6 +173,61 @@ describe('SPV Phase 4: sdk.light pure verifiers', function () {
         assert.strictEqual(light.verifyBalanceProof(proof, stateRoot, CHAIN, NET).verified, true);  // sanity
         proof.address = ADDR_Z;                                 // smt_proof.key no longer matches
         assert.strictEqual(light.verifyBalanceProof(proof, stateRoot, CHAIN, NET).reason, 'KEY_MISMATCH');
+    });
+
+    // ---- binding a proof to the REQUESTED identity, not just the echoed one ----
+    // Every verifier re-derives its SMT key from fields carried IN the proof, so a
+    // valid proof for a DIFFERENT question passes. The explorer's contract-state
+    // double-decode made that happen for real ( frontier, 2026-08-06): a
+    // request for `a%41b` was answered, verifiably, for `aAb`.
+
+    it('verifyBalanceProof ACCEPTS a proof that matches the requested identity', function () {
+        const { proof, stateRoot } = buildBalanceProof(ADDR_A, TICK, '5');
+        const r = light.verifyBalanceProof(proof, stateRoot, CHAIN, NET, { address: ADDR_A, tick: TICK });
+        assert.strictEqual(r.verified, true, r.reason);
+    });
+
+    it('verifyBalanceProof REJECTS a wholly valid proof that answers a DIFFERENT address', function () {
+        // The server proves ADDR_Z's balance while the client asked about ADDR_A.
+        // Nothing in the proof is forged, which is precisely why the other checks pass.
+        const { proof, stateRoot } = buildBalanceProof(ADDR_Z, TICK, '0');
+        assert.strictEqual(light.verifyBalanceProof(proof, stateRoot, CHAIN, NET).verified, true,
+            'unbound verification must still accept it: that is the gap');
+        const r = light.verifyBalanceProof(proof, stateRoot, CHAIN, NET, { address: ADDR_A, tick: TICK });
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'REQUESTED_IDENTITY_MISMATCH');
+    });
+
+    it('verifyContractStateProof REJECTS a valid proof for the key the double-decode would have produced', function () {
+        // The exact production substitution: client asks `a%41b`, server answers `aAb`.
+        const { proof, stateRoot } = buildContractStateProof(7, 'aAb', '"v"');
+        assert.strictEqual(light.verifyContractStateProof(proof, stateRoot, CHAIN, NET).verified, true,
+            'the substituted proof is internally valid, which is the whole problem');
+        const bound = light.verifyContractStateProof(proof, stateRoot, CHAIN, NET,
+                                                     { contract_index: 7, state_key: 'a%41b' });
+        assert.strictEqual(bound.verified, false);
+        assert.strictEqual(bound.reason, 'REQUESTED_IDENTITY_MISMATCH');
+        // ...and the honest answer still verifies against the same expectation.
+        const honest = buildContractStateProof(7, 'a%41b', '"v"');
+        assert.strictEqual(light.verifyContractStateProof(honest.proof, honest.stateRoot, CHAIN, NET,
+                                                          { contract_index: 7, state_key: 'a%41b' }).verified, true);
+    });
+
+    it('verifyContractStateProof REJECTS a proof for a different CONTRACT, and compares index as a string', function () {
+        const { proof, stateRoot } = buildContractStateProof(8, 'owner', '"x"');
+        assert.strictEqual(light.verifyContractStateProof(proof, stateRoot, CHAIN, NET,
+                           { contract_index: 7 }).reason, 'REQUESTED_IDENTITY_MISMATCH');
+        // A numeric index and its decimal spelling are the same request.
+        assert.strictEqual(light.verifyContractStateProof(proof, stateRoot, CHAIN, NET,
+                           { contract_index: '8' }).verified, true);
+    });
+
+    it('the identity binding is OPT-IN and ignores absent fields, so existing callers are unaffected', function () {
+        const { proof, stateRoot } = buildBalanceProof(ADDR_A, TICK, '5');
+        for (const expected of [undefined, null, {}, { address: undefined }, { tick: null }]) {
+            assert.strictEqual(light.verifyBalanceProof(proof, stateRoot, CHAIN, NET, expected).verified, true,
+                'expected=' + JSON.stringify(expected) + ' must not change the verdict');
+        }
     });
 
     it('verifyBalanceProof REJECTS when bound to the WRONG state_root', function () {
