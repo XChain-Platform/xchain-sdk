@@ -504,6 +504,16 @@ export interface WithdrawParams extends ActionParams {
     quantity: number | string;
 }
 
+/**
+ * The explorer's list-response envelope. Every datatable-backed /api list route
+ * answers `{ data, total, runtime }`; the SDK passes it through unchanged.
+ */
+export interface ListEnvelope<T> {
+    data: T[];
+    total: number;
+    runtime?: string;
+}
+
 export interface ContractInfo {
     actionIndex: number;
     address: string;
@@ -1118,7 +1128,7 @@ export declare class ContractClient {
     /** Get contract state (all keys or a specific key) */
     getState(key?: string): Promise<ContractStateEntry | ContractStateEntry[]>;
     /** Get contract execution history */
-    getExecutions(opts?: QueryOptions): Promise<ExecutionInfo[]>;
+    getExecutions(opts?: QueryOptions): Promise<ListEnvelope<ExecutionInfo>>;
     /** Get contract token balances */
     getBalance(tick?: string): Promise<ContractBalanceEntry | ContractBalanceEntry[]>;
     /** Get the contract's declared permissions manifest (programmable policy layer) */
@@ -1416,7 +1426,7 @@ export declare class XChainSDK {
     getContractManifest(contractActionIndex: number | string): Promise<ContractManifest>;
 
     /** Get a list of contracts, optionally filtered by owner address */
-    getContracts(query?: string, type?: string, opts?: QueryOptions): Promise<ContractInfo[]>;
+    getContracts(query?: string, type?: string, opts?: QueryOptions): Promise<ListEnvelope<ContractInfo>>;
 
     /** Get contract state entries (all keys or a specific key) */
     getContractState(contractActionIndex: number | string, key?: string): Promise<ContractStateEntry | ContractStateEntry[]>;
@@ -1428,7 +1438,7 @@ export declare class XChainSDK {
     getExecution(executionActionIndex: number | string): Promise<ExecutionInfo>;
 
     /** Get execution history for a contract */
-    getExecutions(contractActionIndex?: number | string, opts?: QueryOptions): Promise<ExecutionInfo[]>;
+    getExecutions(contractActionIndex?: number | string, opts?: QueryOptions): Promise<ListEnvelope<ExecutionInfo>>;
 
     /** Get deposits for a contract */
     getDeposits(query: string, type: string, opts?: QueryOptions): Promise<any>;

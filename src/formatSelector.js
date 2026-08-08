@@ -369,9 +369,32 @@ class FormatSelector {
                     'Version ' + v + ' is not defined for ' + action,
                     { action, version: v, availableVersions: Object.keys(formats[action]) }
                 );
+            // No data loss on a PINNED version either (#3918). The auto-selection loop
+            // below refuses a version with no slot for a populated field; skipping that
+            // check here let STAKE v1 serialize away TARGET_CONTRACT_INDEX|TICK and
+            // misroute the stake. The caller pinned this version, so fail loudly rather
+            // than fall through to another one.
+            let pinnedFields = this.getFormatFields(action, v);
+            let pinnedSlots  = [...new Set(pinnedFields
+                .filter(f => !AUTO_FIELDS.includes(f))
+                .map(f => this.baseFieldName(f)))];
+            let dropped      = this.getPopulatedFields(fields)
+                .filter(f => f !== LEGS_FIELD)
+                .filter(f => !pinnedSlots.includes(f));
+            if (dropped.length)
+                throw new SDKFormatError(
+                    'NO_MATCHING_FORMAT',
+                    action + ' v' + v + ' has no slot for ' + dropped.join(', ') +
+                        '; serializing it would silently discard ' +
+                        (dropped.length === 1 ? 'that field' : 'those fields'),
+                    { action, version: v, fields: pinnedSlots, userFieldsNotInFormat: dropped }
+                );
+            // Legs are NOT re-checked here: a pinned version whose per-leg slots cannot
+            // carry them already throws downstream with the sharper "legs disagree"
+            // diagnostic, and preempting it would only blur the message.
             return {
                 version:         v,
-                formatFields:    this.getFormatFields(action, v),
+                formatFields:    pinnedFields,
                 estimatedLength: this.estimateLength(action, v, fields)
             };
         }

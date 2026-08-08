@@ -68,6 +68,20 @@ describe('reconcileEncoded (encoder-authored PSBT vs submitted intent)', functio
         assert.throws(() => reconcileEncoded(over, intent), (e) => e.code === 'OUTPUT_OVER_REQUESTED_VALUE');
     });
 
+    it('#3922: a string-valued cap is parsed exactly, not through a rounding Number() hop', function () {
+        // intent.customOutputs[].value may legitimately be a decimal string (the
+        // encoder's allowBig path). toU64(Number(v)) returned null for a string, which
+        // zeroed the cap and DENIED an honest reconcile; Number() alone would round a
+        // >2^53 cap. Both directions are asserted here.
+        const funding = payTo(), recipient = payTo();
+        const intent = { network: NET, customOutputs: [{ address: recipient.address, value: '20000' }] };
+        const ok = psbtHex(funding, [carrier(0), { script: recipient.script, value: 20000 }, { script: funding.script, value: 70000 }]);
+        assert.strictEqual(reconcileEncoded(ok, intent).fee, 10000n);
+
+        const over = psbtHex(funding, [carrier(0), { script: recipient.script, value: 90000 }]);
+        assert.throws(() => reconcileEncoded(over, intent), (e) => e.code === 'OUTPUT_OVER_REQUESTED_VALUE');
+    });
+
     it('caps repeated outputs to one authorized address on their SUM, not each alone', function () {
         const funding = payTo(), recipient = payTo();
         const intent = { network: NET, customOutputs: [{ address: recipient.address, value: 20000 }] };

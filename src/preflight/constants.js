@@ -133,10 +133,12 @@ const TIER2_ERROR_CAPABLE = Object.freeze({
 // bin/check-preflight-drift.js (named, not line-pinned: the line pin had already drifted).
 const TIER1_DENYLIST = Object.freeze(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
 
-// Fee-charging user actions (spec §4.4 "protocol-fee reality").
+// Fee-charging user actions (spec §4.4 "protocol-fee reality"). Membership mirrors
+// the indexer handlers that call createFeesObject, plus the gas-priced VM pair
+// (DEPLOY/EXECUTE). BET was missing for its whole life (#3893).
 const FEE_CHARGING_ACTIONS = Object.freeze([
     'ISSUE', 'SWEEP', 'DISPENSER', 'DIVIDEND', 'AIRDROP', 'CALLBACK',
-    'ORDER', 'SWAP', 'DEPLOY', 'EXECUTE',
+    'ORDER', 'SWAP', 'DEPLOY', 'EXECUTE', 'BET',
 ]);
 
 module.exports = {

@@ -22,9 +22,12 @@ const config  = require('./config.js');
 const formats = require('./formats.js');
 const mathjs  = require('mathjs');
 
-// Support BigInt in JSON stringify()
+// Support BigInt in JSON stringify(), as a QUOTED decimal string (#3921).
+// JSON.rawJSON emitted a bare numeric token, so JSON.parse rounded any satoshi value
+// above 2^53 straight back down. The encoder already parses the string form exactly
+// (validator.parseSatoshiAmount), and it is what xchain-indexer's jsonStringify pins.
 BigInt.prototype.toJSON = function(){
-    return JSON.rawJSON(this.toString());
+    return this.toString();
 };
 
 class Utility {

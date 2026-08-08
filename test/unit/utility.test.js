@@ -11,6 +11,26 @@
 const assert = require('assert');
 const Utility = require('../../src/utility.js');
 
+describe('BigInt JSON encoding (#3921)', function () {
+
+    it('stringifies a BigInt as a QUOTED decimal token', function () {
+        // JSON.rawJSON emitted a bare number, which JSON.parse then rounded.
+        assert.strictEqual(JSON.stringify({ v: 9007199254740993n }), '{"v":"9007199254740993"}');
+    });
+
+    it('survives a stringify/parse round trip above 2^53 with no koinu lost', function () {
+        const v = 12000000000000000000n;
+        const back = JSON.parse(JSON.stringify({ v }));
+        assert.strictEqual(typeof back.v, 'string');
+        assert.strictEqual(BigInt(back.v), v);
+    });
+
+    it('is exact at the first value Number cannot represent', function () {
+        const back = JSON.parse(JSON.stringify({ v: 9007199254740993n }));
+        assert.strictEqual(BigInt(back.v), 9007199254740993n);
+    });
+});
+
 describe('Utility.isValidAmountFormat (indexer parity)', function () {
 
     let utils;

@@ -823,3 +823,7 @@ class CoSigner {
 
 module.exports = CoSigner;
 module.exports.taprootKeyPathSighash = taprootKeyPathSighash;
+// Exported rather than copied: exactU64 is what rejects a non-integer or negative
+// satoshi bound, and a duplicated twin is where the Number() rounding this parser
+// exists to prevent creeps back in (#3869).
+module.exports.exactU64 = exactU64;

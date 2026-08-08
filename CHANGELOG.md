@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING** `X402Client.fetchUrl` no longer double-pays on retry: both post-broadcast leak paths now throw one `X402_PAYMENT_AMBIGUOUS` error carrying `details.txid`/`details.resume`, and `fetchUrl(url, init, { resume })` adopts the in-flight payment instead of broadcasting a new one (replaces the `X402_PAYMENT_NOT_ACCEPTED` throw) ().
 
 ### Fixed
+- BigInt satoshi values serialize as quoted decimal strings, converging on the form the encoder parses and the indexer already pins ().
+- buildRecoverySpend reconciles inputs and outputs in exact u64, so an account above 2^53 satoshi can no longer defeat its own whole-account anti-burn guard ().
+- Explicit action versions run the serializer no-data-loss check instead of bypassing it, closing a silent field-drop on version-pinned actions ().
+- Structurally corrupt velocity-window rows fail closed on load rather than being quarantined while spend limits reopen ().
+- Stake-weighted quorum rejects a validator entry with a missing or non-numeric weight instead of lowering the quorum denominator ().
+- Hardware-signing decomposition handles DOGE-scale values above 2^53 without rounding ().
+- FEE_CHARGING_ACTIONS includes BET, restoring the NATIVE_FEE_FORFEIT warning it silently dropped ().
+- The WebSocket ticks subscription filter no longer silently no-ops on the actions channel ().
+- getContracts and both getExecutions declarations return a list envelope, matching what Explorer actually emits ().
+- The preflight drift gate covers fee classification and VM gas inputs ().
+- Corrected a protocol-constants header that claimed a cross-repo tripwire which does not exist ().
 - Version-locked SDK helpers no longer let a caller override the version they force: `Utility.withForcedVersion` strips every spelling and throws on a mismatch, closing a silent misroute of staked assets ().
 - Weighted checkpoint verification requires a valid weight and nonblank source on EVERY validator entry; a partially-weighted set used to clear the stake predicate on a shrunken denominator ().
 - A checkpoint missing its commitment roots after activation is now rejected outright instead of verifying against the legacy rootless preimage ().

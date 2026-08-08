@@ -1101,17 +1101,28 @@ describe('XChainSDK', function () {
             sdk = makeSDKWithWs();
             const cb = sinon.spy();
             const unsub = sdk.onAction(cb, { types: ['SEND'], ticks: ['TOKEN'] });
-            expect(sdk.ws.subscribe.firstCall.args[1]).to.deep.equal({ types: ['SEND'], ticks: ['TOKEN'] });
+            expect(sdk.ws.subscribe.firstCall.args[1]).to.deep.equal({ types: ['SEND'] });
             unsub();
         });
 
-        it('onAction does not forward the unsupported statuses filter', function () {
+        it('onAction does not forward the unsupported statuses or ticks filters', function () {
+            // #3860: ticks joins statuses as a filter no action frame can honor -
+            // getActionsSince selects no tick column, so it never narrows anything.
             sdk = makeSDKWithWs();
             const cb = sinon.spy();
             const unsub = sdk.onAction(cb, { types: ['SEND'], statuses: ['valid'], ticks: ['TOKEN'] });
             const params = sdk.ws.subscribe.firstCall.args[1];
             expect(params).to.not.have.property('statuses');
-            expect(params).to.deep.equal({ types: ['SEND'], ticks: ['TOKEN'] });
+            expect(params).to.not.have.property('ticks');
+            expect(params).to.deep.equal({ types: ['SEND'] });
+            unsub();
+        });
+
+        it('#3860: onAction with only a ticks filter subscribes with no params at all', function () {
+            sdk = makeSDKWithWs();
+            const cb = sinon.spy();
+            const unsub = sdk.onAction(cb, { ticks: ['TOKEN'] });
+            expect(sdk.ws.subscribe.firstCall.args[1]).to.equal(undefined);
             unsub();
         });
 

@@ -126,4 +126,40 @@ describe('cosigner/recovery buildRecoverySpend', function () {
         const out = await buildRecoverySpend({ account: a.acct, leafName: 'agentRecovery', inputs, outputs, sign, acceptHighFee: true });
         expect(out.txHex).to.be.a('string');
     });
+
+    it('#3869/#3923: a >2^53 output overspend is caught, not rounded into a zero fee', async function () {
+        // Under Number(), 9007199254740992 and 9007199254740993 compare EQUAL, so the
+        // fee read 0, the guard passed, and the function signed an unrelayable tx while
+        // the sighash committed to the true (overspending) values.
+        const a = account();
+        const inputs  = [{ txid: crypto.randomBytes(32).toString('hex'), vout: 0, value: 9007199254740992n }];
+        const outputs = [{ script: a.acct.output, value: 9007199254740993n }];
+        const sign = localPairSigner(a.acct.recovery.agentRecovery, [a.agent.sk, a.recovery.sk]);
+        let e; try { await buildRecoverySpend({ account: a.acct, leafName: 'agentRecovery', inputs, outputs, sign }); } catch (err) { e = err; }
+        expect(e, 'an overspend above 2^53 must throw').to.exist;
+        expect(e).to.match(/exceed inputs/);
+    });
+
+    it('#3869: the same >2^53 magnitude with a sane fee still signs', async function () {
+        // The exactness guard must not become a ceiling on legitimate DOGE-scale value.
+        const a = account();
+        const inputs  = [{ txid: crypto.randomBytes(32).toString('hex'), vout: 0, value: 9007199254740993n }];
+        const outputs = [{ script: a.acct.output, value: 9007199254740993n - 20000n }];
+        const sign = localPairSigner(a.acct.recovery.agentRecovery, [a.agent.sk, a.recovery.sk]);
+        const out = await buildRecoverySpend({ account: a.acct, leafName: 'agentRecovery', inputs, outputs, sign });
+        expect(out.txHex).to.be.a('string');
+        expect(out.txid).to.be.a('string');
+    });
+
+    it('#3869: a fractional or negative satoshi value is refused outright', async function () {
+        const a = account();
+        const sign = localPairSigner(a.acct.recovery.agentRecovery, [a.agent.sk, a.recovery.sk]);
+        const txid = crypto.randomBytes(32).toString('hex');
+        let e; try {
+            await buildRecoverySpend({ account: a.acct, leafName: 'agentRecovery',
+                inputs: [{ txid, vout: 0, value: 100000.5 }],
+                outputs: [{ script: a.acct.output, value: 90000 }], sign });
+        } catch (err) { e = err; }
+        expect(e).to.match(/non-integer or negative/);
+    });
 });

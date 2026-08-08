@@ -563,15 +563,19 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             return srv.sent.map((m) => m.params || {});
         }
 
-        it('onAction drops statuses but keeps the filters the server honors', async function () {
+        it('onAction drops statuses and ticks but keeps the filters the server honors', async function () {
             const params = await paramsFor((s) => s.onAction(() => {}, {
                 types: ['SEND'], statuses: ['pending_coinpay'], ticks: ['PEPE']
             }));
             expect(params.length).to.be.greaterThan(0);
-            for (const p of params) expect(p).to.not.have.property('statuses');
+            for (const p of params) {
+                expect(p).to.not.have.property('statuses');
+                // #3860: no action frame carries a tick, so a forwarded ticks filter
+                // would promise a stream that never narrows.
+                expect(p).to.not.have.property('ticks');
+            }
             const merged = Object.assign({}, ...params);
             expect(merged.types).to.deep.equal(['SEND']);
-            expect(merged.ticks).to.deep.equal(['PEPE']);
         });
 
         it('onAddress drops statuses but keeps types', async function () {

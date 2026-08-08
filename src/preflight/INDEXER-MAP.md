@@ -45,6 +45,25 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
 
+### 2026-08-08 - what the gate covers, stated honestly (#3934)
+
+The hash rows above cover per-handler files under `src/actions/` only. On top
+of them `bin/check-preflight-drift.js` now compares four things by VALUE:
+
+- `FEE_QUOTE_DENYLIST` == `TIER1_DENYLIST` (#3833)
+- `FEE_QUOTE_STATIC` is a subset of `TIER1_DENYLIST` (#3831)
+- no action is both indexer-`FEE_QUOTE_EXEMPT` and SDK-`FEE_CHARGING_ACTIONS`
+  (#3934; the omission that let BET ship with no forfeiture disclosure, #3893)
+- `GAS_SCHEDULE` agrees between `xchain-indexer/src/coins/<C>.js` and this
+  SDK's own copy, for BTC/LTC/DOGE
+
+NOT covered, deliberately: that every indexer handler calling
+`createFeesObject` appears in `FEE_CHARGING_ACTIONS` (that set is a call-site
+property, not a literal, so it needs an AST walk); `classifyFeeQuoteAction`'s
+normalize/deny-before-exempt ordering; and `_staticProtocolFee`'s arithmetic.
+Gating those means hashing a function body, which is the anchor-scoped hashing
+this file's own rationale rejects for financial logic.
+
 ### 2026-07-26 - `dispenser.js` (`aac9038`..HEAD), `dispense.js` (`bbaaeeb`..HEAD)
 
 First real firing of this gate. It went red because it was never wired into

@@ -48,6 +48,17 @@ function toU64(v) {
     return null;
 }
 
+// Same, plus the decimal-STRING form (#3922). A caller-supplied cap in
+// intent.customOutputs may legitimately arrive as a string (that is what the
+// encoder's parseSatoshiAmount allowBig path exists for), and the Number() hop that
+// used to precede toU64 rounded it away above 2^53. Mirrors cosigner exactU64.
+function exactU64(v) {
+    if (typeof v === 'bigint') return v >= 0n ? v : null;
+    if (typeof v === 'number') return (Number.isInteger(v) && v >= 0) ? BigInt(v) : null;
+    if (typeof v === 'string' && /^\d+$/.test(v.trim())) return BigInt(v.trim());
+    return null;
+}
+
 // The output script an input spends, from whichever UTXO form the PSBT carries.
 // bitcoinjs needs one of the two to sign at all, so an input with neither cannot
 // be signed and the fail-closed path below is not a false positive.
@@ -168,7 +179,7 @@ function reconcileEncoded(psbtHex, intent) {
         if (!out || out.address == null) continue;
         const script = scriptForAddress(out.address, intent.network);
         if (!script) continue;
-        const value = toU64(Number(out.value));
+        const value = exactU64(out.value);
         const existing = authorized.find((a) => a.script.equals(script));
         if (existing) existing.maxValue += (value === null ? 0n : value);
         else authorized.push({ script, maxValue: (value === null ? 0n : value), spent: 0n });

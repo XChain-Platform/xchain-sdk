@@ -64,7 +64,8 @@ function serializePrevTx(tx) {
             sequence: inp.sequence >>> 0,
         })),
         bin_outputs: tx.outs.map((out) => ({
-            amount: String(Number(out.value)),
+            // String(bigint) is exact; the Number() hop rounded above 2^53 (#3922).
+            amount: String(out.value),
             script_pubkey: out.script.toString('hex'),
         })),
     };
@@ -819,6 +820,9 @@ class WalletUtils {
      * and amounts in a form a caller can translate into any vendor's
      * input/output envelope without touching bitcoinjs-lib.
      *
+     * A satoshi value is a Number when exactly representable and an exact decimal
+     * STRING above 2^53-1 (#3922), matching applyBufferutilsPatch's own contract.
+     *
      * The wallet tracks BIP32 derivation paths out-of-band (on its own
      * Address records), so the returned shape deliberately omits
      * derivation info; callers pair `inputs[i]` with the matching
@@ -833,7 +837,7 @@ class WalletUtils {
      *     prevTxHash: string,
      *     prevTxIndex: number,
      *     sequence: number,
-     *     value: number,
+     *     value: (number|string|null),
      *     scriptPubKeyHex: string,
      *     scriptType: string,
      *     sighashType: (number|null),
@@ -848,7 +852,7 @@ class WalletUtils {
      *     address: (string|null),
      *     scriptPubKeyHex: string,
      *     scriptType: string,
-     *     value: number,
+     *     value: (number|string),
      *   }>
      * }}
      */
@@ -881,7 +885,11 @@ class WalletUtils {
             let prevTxInfo = null;
 
             if (psbtInput.witnessUtxo) {
-                value = Number(psbtInput.witnessUtxo.value);
+                // Widen ONLY above 2^53, matching applyBufferutilsPatch's own contract:
+                // a Number stays a Number, a BigInt becomes an exact decimal string
+                // rather than a rounded double (#3922).
+                value = typeof psbtInput.witnessUtxo.value === 'bigint'
+                    ? String(psbtInput.witnessUtxo.value) : psbtInput.witnessUtxo.value;
                 scriptPubKeyBuf = psbtInput.witnessUtxo.script;
                 witnessUtxoScriptHex = scriptPubKeyBuf.toString('hex');
             } else if (psbtInput.nonWitnessUtxo) {
@@ -890,7 +898,7 @@ class WalletUtils {
                     const prevTx = bitcoin.Transaction.fromBuffer(psbtInput.nonWitnessUtxo);
                     const out = prevTx.outs[txInput.index];
                     if (out) {
-                        value = Number(out.value);
+                        value = typeof out.value === 'bigint' ? String(out.value) : out.value;
                         scriptPubKeyBuf = out.script;
                     }
                     prevTxInfo = serializePrevTx(prevTx);
@@ -976,7 +984,7 @@ class WalletUtils {
                 address,
                 scriptPubKeyHex,
                 scriptType,
-                value: Number(txOut.value),
+                value: typeof txOut.value === 'bigint' ? String(txOut.value) : txOut.value,
             });
         }
 

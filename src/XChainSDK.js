@@ -1570,7 +1570,12 @@ class XChainSDK {
         // The server matches this: it omits `statuses` from WELCOME features and from
         // the SUBSCRIBED active_filters. Forwarding it let a caller rely on a silent
         // no-op and believe it was receiving a filtered stream.
-        if (opts && opts.ticks)    params.ticks    = opts.ticks;
+        // `ticks` is deliberately NOT forwarded either (#3860). No action frame carries a
+        // tick field: db.getActionsSince selects no tick/give_tick/get_tick column, so
+        // Broadcaster._passesFilter's `if (tick && ...)` never fires on the actions
+        // channel, the only one a ticks filter can attach to. Forwarding it let a caller
+        // believe in a stream that never narrows; the server now reports it under
+        // `ignored_filters`.
         this._subscribeDetached(ws, ['actions'], Object.keys(params).length > 0 ? params : undefined);
         return () => {
             ws.off('NEW_ACTION', callback);
