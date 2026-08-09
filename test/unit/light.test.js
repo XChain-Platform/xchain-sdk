@@ -909,6 +909,16 @@ describe('SPV D4: pinned launch trust root', function () {
         assert.strictEqual(pinned.getPinnedCheckpoint(null), null);
     });
 
+    // A consumer holding only an SDK INSTANCE (the reference wallet holds `sdk`,
+    // never the module namespace) must be able to ask which trust tier a verify
+    // call will take, off the same object it calls verify on. Re-exported rather
+    // than copied, so there is one registry and no second copy to drift.
+    it('sdk.light re-exports the registry accessors, and they ARE the registry', function () {
+        assert.strictEqual(light.getPinnedCheckpoint, pinned.getPinnedCheckpoint);
+        assert.strictEqual(light.getPinnedValidators, pinned.getPinnedValidators);
+        assert.strictEqual(light.getPinnedCheckpoint('BTC'), null);
+    });
+
     it('verifyBalance uses the PINNED set and never fetches the explorer /verify endpoint', async function () {
         const { proof, stateRoot } = buildBalanceProof(ADDR_A, TICK, '42');
         const s = makeSigner();

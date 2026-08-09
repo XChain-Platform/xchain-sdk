@@ -717,6 +717,13 @@ async function followForward(opts){
     return { trusted, adopted, reason: null, stoppedAt: null };
 }
 
+// Re-export the pinned-registry accessors so `sdk.light` is a COMPLETE SPV
+// surface. A consumer that holds only an SDK instance (the reference wallet
+// holds `sdk`, never the module namespace) otherwise cannot ask which trust
+// tier a call will take: whether a pinned launch root covers this coin, or the
+// call falls through to the explorer's /verify convenience path. That question
+// decides how loudly a quorum failure should be reported, so the answer has to
+// be reachable from the same object the verify calls are made on.
 module.exports = {
     verifyBalanceProof,
     verifyLockedBalanceProof,
@@ -731,5 +738,7 @@ module.exports = {
     verifyValidatorSetProof,
     verifyValidatorSet,
     verifyCheckpointWithProvenSet,
-    followForward
+    followForward,
+    getPinnedCheckpoint: pinned.getPinnedCheckpoint,
+    getPinnedValidators: pinned.getPinnedValidators
 };
