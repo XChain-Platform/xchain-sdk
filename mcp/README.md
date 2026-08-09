@@ -1,6 +1,6 @@
 # xchain-mcp
 
-Model Context Protocol (MCP) stdio server for the [XChain Platform](https://xchain.io). Gives MCP clients (Claude Code, Claude Desktop, or any MCP-capable agent) tools to read XChain state on Bitcoin, Litecoin and Dogecoin (mainnet, testnet and local regtest), and, optionally, to submit policy-gated XChain actions.
+Model Context Protocol (MCP) stdio server for the [XChain Platform](https://xchain.io/). Gives MCP clients (Claude Code, Claude Desktop, or any MCP-capable agent) tools to read XChain state on Bitcoin, Litecoin and Dogecoin (mainnet, testnet and local regtest), and, optionally, to submit policy-gated XChain actions.
 
 Backed by [`@dankest-llc/xchain-sdk`](https://www.npmjs.com/package/@dankest-llc/xchain-sdk). Full documentation: <https://docs.xchain.io/ai-agents/mcp-quickstart>.
 

@@ -22,7 +22,7 @@
 const ActionWaiter = require('./actionWaiter.js');
 const EncoderClient = require('./encoder.js');
 const { SDKActionError, SDKConfigError } = require('./errors.js');
-const { reconcileEncoded } = require('./reconcileEncoded.js');
+const { reconcileEncoded, psbtPrevouts } = require('./reconcileEncoded.js');
 
 
 class LifecycleManager {
@@ -47,6 +47,10 @@ class LifecycleManager {
     //   maxFeeSats      - absolute miner-fee ceiling the encoder's answer must stay
     //                     under (reconcileEncoded.js). Unset leaves only the
     //                     always-on burn guards
+    //   maxPhaseFundingSats - absolute ceiling on the TOTAL value the encoder may put
+    //                     into a phase's shaped funding legs . maxFeeSats
+    //                     does not cover them, because a funding output counts as
+    //                     output value, not as fee
     //   explorer        - explorer client the indexer wait polls instead of the SDK's
     //   explorerUrl     - host/URL (with explorerPort) to build that client from;
     //                     for isolated stacks with no colocated explorer 
@@ -96,22 +100,46 @@ class LifecycleManager {
         const reconcileIntent = {
             network:       this._reconcileNetwork(),
             customOutputs: encoderOpts.customOutputs,
+            // The caller's own change destination, submitted intent like customOutputs.
+            // Named explicitly because a P2SH change address is shape-identical to a
+            // chunk funding leg  and must not be pinned as one.
+            changeAddresses: encoderOpts.change,
+            // A reveal spends only the encoder-derived leg, so it has no funding
+            // script of its own for rule (b) to authorize change against; the encoder
+            // sends that change to `change || <the caller identity's default address>`,
+            // and both halves of that are submitted intent.
+            callerIdentities: encoderOpts.pubkey,
             // Opt-in, and deliberately NOT defaulted from encoderOpts.fee: that field
             // is a REQUESTED fixed fee, and an encoder that rounds up to a relay
             // minimum is not misbehaving, so treating it as a ceiling would reject
             // legitimate transactions. Without a cap the always-on guards still stand
             // (negative fee, and the full burn where nothing comes back).
             maxFeeSats:    opts.maxFeeSats,
+            // Opt-in ceiling on the encoder-derived funding legs . Those
+            // outputs are authorized by SHAPE, and maxFeeSats cannot bound them: a
+            // parked output raises totalOut, which lowers the computed fee. The legs
+            // are dust-scale prefunding for the next phase, so a caller that sets this
+            // sets a small number.
+            maxPhaseFundingSats: opts.maxPhaseFundingSats,
         };
-        reconcileEncoded(encoded.psbt, Object.assign({}, reconcileIntent, {
+        const phase1 = reconcileEncoded(encoded.psbt, Object.assign({}, reconcileIntent, {
             label: 'transaction',
             // A two-phase action funds encoder-derived P2SH/P2WSH chunk outputs here;
             // an envelope funds its one-shot P2TR commit.
             phaseShapes: (encoded.encoding === 'P2SH' || encoded.encoding === 'P2WSH') ? ['p2sh', 'p2wsh']
                 : (encoded.revealPsbt ? ['p2tr'] : []),
+            // An envelope answers with BOTH transactions, so its commit leg is pinned
+            // to what the reveal actually spends rather than left on shape alone. A
+            // reveal whose prevouts cannot be read yields null here, which authorizes
+            // nothing: taproot script-path signing needs witnessUtxo, so a legitimate
+            // reveal always carries them.
+            phaseSpends: encoded.revealPsbt ? (psbtPrevouts(encoded.revealPsbt) || []) : null,
         }));
         if (encoded.revealPsbt)
-            reconcileEncoded(encoded.revealPsbt, Object.assign({}, reconcileIntent, { label: 'envelope reveal' }));
+            reconcileEncoded(encoded.revealPsbt, Object.assign({}, reconcileIntent, {
+                label: 'envelope reveal',
+                requiredSpends: phase1.phaseFunding,
+            }));
 
         // Step 3: Sign the PSBT
         progress('signing', { encoding: encoded.encoding });
@@ -223,8 +251,14 @@ class LifecycleManager {
 
             // Phase 2 is a second encoder answer and gets the same gate as phase 1.
             // It emits the customOutputs (which phase 1 funded without emitting), so
-            // it carries no further encoder-derived funding leg of its own.
-            reconcileEncoded(spendResult.psbt, Object.assign({}, reconcileIntent, { label: 'phase-2 reveal' }));
+            // it carries no further encoder-derived funding leg of its own. It also
+            // has to spend back every leg phase 1 paid on shape alone : a
+            // chunk phase 2 does not reveal is both undecodable and value the encoder
+            // kept, so an unspent leg aborts here instead of being signed away.
+            reconcileEncoded(spendResult.psbt, Object.assign({}, reconcileIntent, {
+                label: 'phase-2 reveal',
+                requiredSpends: phase1.phaseFunding,
+            }));
 
             // Phase-2 inputs are non-standard P2SH/P2WSH reveal inputs; they need
             // the custom finalizer, not the default single-sig finalizeAllInputs.

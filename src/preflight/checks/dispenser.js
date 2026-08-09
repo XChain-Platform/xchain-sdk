@@ -43,6 +43,14 @@ const { resolveDispenserState, resolveGiveRemaining } = require('../resolvers.js
  * the correct layer - it is also the layer that can size the output. Declaring
  * it unverified here keeps a whole rejection class from reading as a clean
  * pass on any surface that pre-flights without composing.
+ *
+ *  changed what TIER 1 does with the same rule, not what Tier 2 can see:
+ * a read-only dry run has no transaction and therefore no outputs, so the
+ * output half could only ever fail there, and it demanded the very amount the
+ * refused quote existed to compute. The quote path now checks the knowable half
+ * (the oracle has an effective price, valued against a validator price) and
+ * skips the impossible one, so a Mode B dispenser gets a real verdict instead
+ * of a structural refusal. This declaration is what remains the gap.
  */
 function noteOracleFee(ctx, oracleAddress) {
     if (!oracleAddress) return;

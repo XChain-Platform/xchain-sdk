@@ -89,6 +89,9 @@ function makeEnvelopeSdk({ revealSignThrows = false, revealBroadcastThrows = fal
         tickResolver:    { resolveActionParams: async (a, p) => p },
         addressResolver: { resolveActionParams: async (a, p) => p },
         wallet: {
+            // The reconcile gate parses submitted addresses against this, so a fake
+            // that omits it silently reconciles regtest intent against mainnet.
+            getBitcoinNetwork: () => require('bitcoinjs-lib').networks.regtest,
             signPsbt: () => { trace.push('signCommit'); return { txHex: signed.txHex, txid: 'COMMITTXID', psbtHex: signed.psbtHex }; },
             signRevealPsbt: () => { trace.push('signChunkReveal'); return { txHex: signed.txHex, txid: 'phase2txid', psbtHex: signed.psbtHex }; },
             signEnvelopeRevealPsbt: () => {
@@ -153,6 +156,66 @@ describe('Taproot envelope pair through the lifecycle ', function () {
         const result = await submit(new LifecycleManager(sdk));
         assert.ok(Array.isArray(result.spentInputs));
         assert.ok(result.spentInputs.length >= 2, 'commit and reveal inputs both counted');
+    });
+
+    it('a p2tr leg the reveal never spends aborts BEFORE anything is broadcast ', async function () {
+        // Rule (d) used to authorize the commit leg on script shape alone, so a
+        // hostile encoder could add a second, correctly shaped P2TR output only it can
+        // spend and the SDK would sign it. The commit and its reveal arrive from one
+        // createTx call, so the reveal's inputs decide which leg is real.
+        const bitcoin = require('bitcoinjs-lib');
+        const crypto = require('crypto');
+        const { sdk, trace, signed } = makeEnvelopeSdk();
+        const net = bitcoin.networks.regtest;
+        const fundingScript = bitcoin.Psbt.fromHex(signed.psbtHex).data.inputs[0].witnessUtxo.script;
+        const shapedP2tr = () => bitcoin.script.compile([bitcoin.opcodes.OP_1, crypto.randomBytes(32)]);
+        const commitLeg = shapedP2tr(), parked = shapedP2tr();
+
+        const commit = new bitcoin.Psbt({ network: net });
+        commit.addInput({ hash: 'aa'.repeat(32), index: 0, witnessUtxo: { script: fundingScript, value: 100_000 } });
+        commit.addOutput({ script: commitLeg, value: 8_000 });
+        commit.addOutput({ script: parked,    value: 85_000 });     // the theft
+        const reveal = new bitcoin.Psbt({ network: net });
+        reveal.addInput({ hash: 'bb'.repeat(32), index: 0, witnessUtxo: { script: commitLeg, value: 8_000 } });
+        reveal.addOutput({ script: fundingScript, value: 7_500 });
+
+        sdk._requireEncoder = () => ({
+            createTx:    async () => ({ psbt: commit.toHex(), revealPsbt: reveal.toHex(), envelope: RECOVERY, encoding: 'TAPROOT' }),
+            broadcastTx: async () => { trace.push('broadcast:tx'); return {}; },
+            spendP2sh:   async () => ({}),
+        });
+        await assert.rejects(() => submit(new LifecycleManager(sdk)), (e) => e.code === 'PHASE_FUNDING_UNSPENT');
+        assert.deepStrictEqual(trace, [], 'nothing may be signed or broadcast once the commit fails to reconcile');
+    });
+
+    it('the same pair WITHOUT the parked leg goes all the way through', async function () {
+        // The other half of the pin: a legitimate commit still reconciles, so the
+        // rejection above is the encoder misbehaving rather than the gate being blind.
+        const bitcoin = require('bitcoinjs-lib');
+        const crypto = require('crypto');
+        const { sdk, trace, signed } = makeEnvelopeSdk();
+        const net = bitcoin.networks.regtest;
+        const fundingScript = bitcoin.Psbt.fromHex(signed.psbtHex).data.inputs[0].witnessUtxo.script;
+        const commitLeg = bitcoin.script.compile([bitcoin.opcodes.OP_1, crypto.randomBytes(32)]);
+
+        const commit = new bitcoin.Psbt({ network: net });
+        commit.addInput({ hash: 'aa'.repeat(32), index: 0, witnessUtxo: { script: fundingScript, value: 100_000 } });
+        commit.addOutput({ script: commitLeg, value: 8_000 });
+        commit.addOutput({ script: fundingScript, value: 90_000 });
+        const reveal = new bitcoin.Psbt({ network: net });
+        reveal.addInput({ hash: 'bb'.repeat(32), index: 0, witnessUtxo: { script: commitLeg, value: 8_000 } });
+        reveal.addOutput({ script: fundingScript, value: 7_500 });
+
+        sdk._requireEncoder = () => ({
+            createTx:    async () => ({ psbt: commit.toHex(), revealPsbt: reveal.toHex(), envelope: RECOVERY, encoding: 'TAPROOT' }),
+            broadcastTx: async () => { trace.push('broadcast:tx'); return {}; },
+            spendP2sh:   async () => ({}),
+        });
+        await new LifecycleManager(sdk).submitAction(
+            { action: 'FILE', params: {} },
+            { pubkey: '03abc', change: bitcoin.address.fromOutputScript(fundingScript, net) },
+            { wif: FAKE_WIF, waitForIndexer: false });
+        assert.deepStrictEqual(trace, ['signCommit', 'signEnvelopeReveal', 'broadcast:tx', 'broadcast:tx']);
     });
 
     it('a NON-envelope response is untouched by any of this', async function () {

@@ -23,6 +23,15 @@
  * self-send restriction and no amount floor exist in the handlers -
  * do not invent them (false-block invariant).
  *
+ * The gated-key handoff became CONDITIONAL at the PC-29 flag-day
+ * : a gated pack compels a MESSAGE only when the recipient's
+ * POST-SEND balance reaches the pack's threshold (or the pack has no
+ * threshold at all). That strictly narrows an existing rejection, and
+ * deciding it needs the destination's pre-send balance snapshotted at
+ * (BLOCK_INDEX, ACTION_INDEX) plus the tick's pack thresholds, neither
+ * of which pre-flight can read - so it stays a declared-unverified
+ * aspect, now named as conditional rather than blanket.
+ *
  ********************************************************************/
 
 'use strict';
@@ -83,7 +92,8 @@ async function checkBalanceCovers(ctx, verb) {
 async function checkSend(ctx) {
     await checkBalanceCovers(ctx, 'Send');
     ctx.addUnverified('SEND_RESTRICTIONS',
-        'sleep state, allow/block lists, controller-guard outcome, and gated-key handoff are server-side only');
+        'sleep state, allow/block lists, controller-guard outcome, and the conditional gated-key handoff '
+        + '(required only when the recipient\'s post-send balance reaches a pack threshold) are server-side only');
 }
 
 async function checkDestroy(ctx) {

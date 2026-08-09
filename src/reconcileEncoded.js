@@ -105,6 +105,14 @@ function isOpReturn(script) {
 // them as the payload needs, so they cannot be pinned by address or by count. What
 // they can be pinned to is shape: a plain payment to an arbitrary P2PKH/P2WPKH
 // recipient - the drain this gate exists to stop - is not one of these.
+//
+// Shape ALONE is not an authorization, though . A hostile encoder controls
+// which p2sh/p2wsh/p2tr it emits, so shape by itself lets it park arbitrary value in
+// a script only it can spend, and the maxFeeSats ceiling does not bound that: a
+// parked output is counted in totalOut, so it lowers the computed fee rather than
+// raising it. Every shaped output therefore also has to clear a value pin: the
+// companion PSBT that spends it (`phaseSpends`), the later phase that spends it back
+// (`requiredSpends`), or the caller's `maxPhaseFundingSats` ceiling.
 const PHASE_SHAPES = {
     // OP_HASH160 <20> OP_EQUAL
     p2sh:  (d) => d.length === 3 && d[0] === bitcoin.opcodes.OP_HASH160 && Buffer.isBuffer(d[1]) && d[1].length === 20 && d[2] === bitcoin.opcodes.OP_EQUAL,
@@ -122,6 +130,34 @@ function matchesPhaseShape(script, shapes) {
     return shapes.some((name) => PHASE_SHAPES[name] && PHASE_SHAPES[name](decompiled));
 }
 
+// The prevouts a PSBT spends, as { script, value } in input order. Used to pin a
+// funding leg to the companion transaction that consumes it: an envelope commit and
+// its reveal arrive from ONE encoder answer, so the reveal's inputs are readable
+// before the commit is signed. Returns null when any input carries no UTXO data,
+// because a partial list would silently weaken the pin it feeds.
+function psbtPrevouts(psbtHex) {
+    let psbt;
+    try { psbt = bitcoin.Psbt.fromHex(psbtHex); } catch (e) { return null; }
+    const out = [];
+    for (let i = 0; i < psbt.txInputs.length; i++) {
+        const script = inputScript(psbt, i);
+        const value = inputValue(psbt, i);
+        if (!script || value === null) return null;
+        out.push({ script, value });
+    }
+    return out;
+}
+
+// Consume one { script, value } match out of a prevout list, so N identical legs
+// need N distinct spends rather than being satisfied by the same one N times.
+function takeMatch(pool, script, value) {
+    if (!pool) return false;
+    const i = pool.findIndex((p) => !p.taken && p.script.equals(script) && p.value === value);
+    if (i < 0) return false;
+    pool[i].taken = true;
+    return true;
+}
+
 // Resolve a submitted customOutput address to its script. An address the local
 // network cannot parse authorizes nothing (it is not silently trusted): the output
 // it was meant to authorize then falls through to UNRECONCILED_OUTPUT.
@@ -130,16 +166,58 @@ function scriptForAddress(address, network) {
     catch (e) { return null; }
 }
 
+// Destinations that belong to the caller's own submitted identity. A phase whose
+// only input is an encoder-derived leg (an envelope reveal, a chunk reveal) has no
+// funding script to return change to, so rule (b) cannot authorize its change output
+// and the caller's identity is the only pin left. Both default address types are
+// admitted because a bare pubkey is address-type-ambiguous and both are the caller's
+// own money either way; anything that is neither an address nor a pubkey yields
+// nothing, so the output falls through to UNRECONCILED_OUTPUT.
+function callerScripts(identity, network) {
+    if (typeof identity !== 'string' || !identity.length) return [];
+    const direct = scriptForAddress(identity, network);
+    if (direct) return [direct];
+    if (!/^(0[23][0-9a-fA-F]{64}|04[0-9a-fA-F]{128})$/.test(identity)) return [];
+    const pubkey = Buffer.from(identity, 'hex');
+    const out = [];
+    for (const build of [bitcoin.payments.p2wpkh, bitcoin.payments.p2pkh]) {
+        try { out.push(build({ pubkey, network: network || undefined }).output); } catch (e) { /* not derivable here */ }
+    }
+    return out;
+}
+
 /*
  * @param {string} psbtHex          the encoder's answer, unsigned
  * @param {object} intent
  *   network        {object}   bitcoinjs network, for parsing submitted addresses
  *   customOutputs  {Array}    [{ address, value }] exactly as submitted, or null
+ *   changeAddresses {Array}   change destinations the caller itself submitted. Same
+ *                             standing as change back to an input script, and it has
+ *                             to be stated: a submitted P2SH change address is
+ *                             shape-identical to a chunk leg, so without this it
+ *                             would be mistaken for one
+ *   callerIdentities {Array}  the caller's own `pubkey` identity (address or raw
+ *                             pubkey hex), whose default-type scripts a reveal with
+ *                             no wallet input of its own returns change to
  *   maxFeeSats     {number}   absolute fee ceiling from the caller, or null
  *   phaseShapes    {string[]} script shapes this phase's encoder-derived funding
  *                             legs may take ('p2sh' / 'p2wsh' / 'p2tr'), empty or
  *                             absent for a plain single-phase action
+ *   phaseSpends    {Array}    prevouts of the companion PSBT that consumes this
+ *                             phase's funding legs (psbtPrevouts of the envelope
+ *                             reveal). When set, a shaped output is authorized only
+ *                             if that companion provably spends it
+ *   requiredSpends {Array}    funding legs an EARLIER phase paid out that this PSBT
+ *                             must consume as inputs, so value the SDK authorized by
+ *                             shape is proven to come back rather than stay parked
+ *   maxPhaseFundingSats       absolute ceiling on the TOTAL value across this PSBT's
+ *                  {number}   shaped funding legs, or null. maxFeeSats does not
+ *                             bound them, so this is the caller's only value cap on
+ *                             a phase-1 leg no companion PSBT can pin yet
  *   label          {string}   which PSBT this is, for the error message
+ *
+ * Returns { fee, totalIn, totalOut, phaseFunding }, where phaseFunding is the list of
+ * shaped legs this PSBT paid, ready to hand to the next phase as requiredSpends.
  */
 function reconcileEncoded(psbtHex, intent) {
     intent = intent || {};
@@ -161,6 +239,7 @@ function reconcileEncoded(psbtHex, intent) {
     // the SDK cannot predict the change script otherwise, since `pubkey` may be a
     // raw key and the encoder picks the scheme.
     const fundingScripts = [];
+    const spent = [];
     let totalIn = 0n;
     let feeComputable = true;
     for (let i = 0; i < psbt.txInputs.length; i++) {
@@ -169,8 +248,22 @@ function reconcileEncoded(psbtHex, intent) {
         fundingScripts.push(script);
         const value = inputValue(psbt, i);
         if (value === null) feeComputable = false; else totalIn += value;
+        spent.push({ script, value });
     }
     if (!fundingScripts.length) return deny('UNRECONCILABLE_PSBT', 'the encoder returned a transaction with no inputs');
+
+    // Recovery pin . An earlier phase paid funding legs this gate could only
+    // authorize by shape; this phase is the transaction that is supposed to spend them
+    // back. A leg missing from these inputs is value the encoder kept, so refuse here
+    // rather than sign a reveal that abandons it. False-positive-free: every chunk
+    // output has to be revealed for the payload to decode at all, so a legitimate
+    // reveal always consumes the full set.
+    for (const leg of (Array.isArray(intent.requiredSpends) ? intent.requiredSpends : [])) {
+        if (!takeMatch(spent, leg.script, leg.value))
+            return deny('PHASE_FUNDING_UNSPENT',
+                { script: leg.script.toString('hex'), value: String(leg.value),
+                  detail: 'an earlier phase funded this shaped output and this transaction does not spend it back' });
+    }
 
     // Submitted customOutputs, summed per address: N outputs to the same authorized
     // address are capped on their total, or a repeated output multiplies the cap.
@@ -185,8 +278,26 @@ function reconcileEncoded(psbtHex, intent) {
         else authorized.push({ script, maxValue: (value === null ? 0n : value), spent: 0n });
     }
 
+    const changeScripts = [];
+    for (const addr of (Array.isArray(intent.changeAddresses) ? intent.changeAddresses : [intent.changeAddresses])) {
+        if (addr == null) continue;
+        const script = scriptForAddress(addr, intent.network);
+        if (script) changeScripts.push(script);
+    }
+    for (const id of (Array.isArray(intent.callerIdentities) ? intent.callerIdentities : [intent.callerIdentities])) {
+        for (const script of callerScripts(id, intent.network)) changeScripts.push(script);
+    }
+
     let totalOut = 0n;
     const phaseShapes = Array.isArray(intent.phaseShapes) ? intent.phaseShapes : [];
+    // Companion pin: the prevouts of the PSBT that consumes this phase's legs, if one
+    // exists yet. `null` (absent) and `[]` (a companion with no readable prevouts) are
+    // different answers, and the second one must authorize nothing.
+    const phaseSpends = Array.isArray(intent.phaseSpends)
+        ? intent.phaseSpends.map((p) => ({ script: p.script, value: p.value }))
+        : null;
+    const phaseFunding = [];
+    let phaseFundingTotal = 0n;
     for (let i = 0; i < psbt.txOutputs.length; i++) {
         const out = psbt.txOutputs[i];
         const value = toU64(out.value);
@@ -200,8 +311,13 @@ function reconcileEncoded(psbtHex, intent) {
             if (value > 0n) return deny('OP_RETURN_CARRIES_VALUE', { index: i, value: String(value) });
             continue;
         }
-        // (b) Change back to a script we are spending from.
+        // (b) Change back to a script we are spending from, or to the change address
+        //     the caller submitted. Both stay under the caller's control, and the
+        //     second has to be checked BEFORE the shape rule: a submitted P2SH change
+        //     address decompiles identically to a chunk funding leg, so classifying it
+        //     as one would demand the next phase spend it back.
         if (fundingScripts.some((s) => out.script.equals(s))) continue;
+        if (changeScripts.some((s) => out.script.equals(s))) continue;
         // (c) An output the caller itself asked for, capped at what it asked for.
         const match = authorized.find((a) => a.script.equals(out.script));
         if (match) {
@@ -211,17 +327,39 @@ function reconcileEncoded(psbtHex, intent) {
                     { index: i, value: String(value), total: String(match.spent), requested: String(match.maxValue) });
             continue;
         }
-        // (d) An encoder-derived funding leg for this phase. Authorized by shape,
-        //     since the script is the encoder's to derive and a chunked payload
-        //     emits as many of them as it needs. Residual, deliberately stated: a
-        //     hostile encoder can still park value in a script of the right shape,
-        //     bounded by maxFeeSats when the caller sets one.
-        if (matchesPhaseShape(out.script, phaseShapes)) continue;
+        // (d) An encoder-derived funding leg for this phase. Shape gets it this far
+        //     only: the script is the encoder's to derive and a chunked payload emits
+        //     as many of them as it needs, so neither address nor count can pin it.
+        //     Value is pinned separately, by whichever of the two mechanisms this
+        //     phase has , and a leg that clears neither is a park.
+        if (matchesPhaseShape(out.script, phaseShapes)) {
+            // Where a companion PSBT already exists (the envelope pair comes back
+            // from one createTx call), the leg must be exactly what that companion
+            // spends. Value parked in a shaped script the reveal never touches fails
+            // here, before the commit is signed.
+            if (phaseSpends && !takeMatch(phaseSpends, out.script, value))
+                return deny('PHASE_FUNDING_UNSPENT',
+                    { index: i, value: String(value), script: out.script.toString('hex'),
+                      detail: 'the companion transaction for this phase does not spend this funding leg' });
+            phaseFunding.push({ script: out.script, value });
+            phaseFundingTotal += value;
+            continue;
+        }
         // Anything else is value leaving for a destination nobody asked for.
         return deny('UNRECONCILED_OUTPUT', { index: i, value: String(value), script: out.script.toString('hex') });
     }
 
-    if (!feeComputable) return { fee: null, totalIn: null, totalOut };
+    // Phase-1 of a chunked action has no companion PSBT yet (spendP2sh is only
+    // callable once phase 1 is on chain), so the recovery pin above is detection after
+    // the fact. This opt-in ceiling is the caller's prevention for that window. It is
+    // separate from maxFeeSats because a parked output is not fee: the legs prefund
+    // the next phase and are dust-scale, so a cap here is a small number.
+    const maxPhaseFunding = exactU64(intent.maxPhaseFundingSats);
+    if (intent.maxPhaseFundingSats != null && maxPhaseFunding !== null && phaseFundingTotal > maxPhaseFunding)
+        return deny('PHASE_FUNDING_OVER_CAP',
+            { total: String(phaseFundingTotal), legs: phaseFunding.length, maxPhaseFundingSats: String(maxPhaseFunding) });
+
+    if (!feeComputable) return { fee: null, totalIn: null, totalOut, phaseFunding };
 
     // (e) Fee. The action string never constrains the miner fee, so an encoder can
     //     drain the balance by omitting or undersizing change and leaving the
@@ -235,11 +373,15 @@ function reconcileEncoded(psbtHex, intent) {
     if (totalIn > 0n && totalOut === 0n)
         return deny('FULL_BURN_FEE', { totalIn: String(totalIn), detail: 'every satoshi would go to miners' });
     const fee = totalIn - totalOut;
-    const maxFee = toU64(Number(intent.maxFeeSats));
+    // Caller-supplied cap, parsed exactly (#3869 residual, ): the Number() hop
+    // that used to precede toU64 rounded a >2^53 cap, which both slackens and
+    // false-positives the comparison. exactU64 also keeps the decimal-STRING form the
+    // encoder's allowBig path emits.
+    const maxFee = exactU64(intent.maxFeeSats);
     if (intent.maxFeeSats != null && maxFee !== null && fee > maxFee)
         return deny('FEE_OVER_CAP', { fee: String(fee), maxFeeSats: String(maxFee) });
 
-    return { fee, totalIn, totalOut };
+    return { fee, totalIn, totalOut, phaseFunding };
 }
 
-module.exports = { reconcileEncoded };
+module.exports = { reconcileEncoded, psbtPrevouts };

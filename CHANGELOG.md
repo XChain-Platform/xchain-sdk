@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Pre-flight warns on a non-canonical `^<id>` address reference and declares a well-formed one unverified, mirroring the chain's new unresolvable-reference rejection .
+- `npm run ci` runs the pre-flight drift gate, which still skips clean without a sibling indexer checkout .
 - `verifyBalanceProof`, `verifyLockedBalanceProof` and `verifyContractStateProof` take an optional expected-identity argument and refuse a valid proof answering a different key, closing the valid-proof-wrong-question hole the explorer's path double-decode exposed .
 
 ### Changed
@@ -18,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - BigInt satoshi values serialize as quoted decimal strings, converging on the form the encoder parses and the indexer already pins ().
 - buildRecoverySpend reconciles inputs and outputs in exact u64, so an account above 2^53 satoshi can no longer defeat its own whole-account anti-burn guard ().
+- reconcileEncoded parses the caller's maxFeeSats cap in exact u64, so a cap above 2^53 no longer rounds and false-denies an honest fee ( residual, ).
 - Explicit action versions run the serializer no-data-loss check instead of bypassing it, closing a silent field-drop on version-pinned actions ().
 - Structurally corrupt velocity-window rows fail closed on load rather than being quarantined while spend limits reopen ().
 - Stake-weighted quorum rejects a validator entry with a missing or non-numeric weight instead of lowering the quorum denominator ().

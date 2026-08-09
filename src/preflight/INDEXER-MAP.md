@@ -4,15 +4,17 @@ The Tier-2 client checks in `checks/` mirror validity logic that lives
 authoritatively in `xchain-indexer/src/actions/*.js`. When an indexer
 handler's validity logic changes, the corresponding client check can
 silently drift out of ground-truth, so the drift gate
-(`bin/check-preflight-drift.js`, wired into CI) fails when any mapped
-indexer handler's SHA-256 changes without a matching update here.
+(`bin/check-preflight-drift.js`, run by `npm run ci` here and by the CI
+job on both repos) fails when any mapped indexer handler's SHA-256
+changes without a matching update here.
 
 To resolve a drift-gate failure: re-read the changed handler, update the
 client check (or confirm no client-visible logic changed), then refresh
 the hash below and re-run `node bin/check-preflight-drift.js`.
 
 Ground-truthed against HEAD 2026-07-20; `dispenser.js` and `dispense.js`
-re-reviewed against HEAD 2026-07-26 (see the review log below). Hashes
+re-reviewed against HEAD 2026-07-26, and nine handlers re-reviewed
+against HEAD 2026-08-08 (see the review log below). Hashes
 are of the indexer handler source files, resolved via
 `XCHAIN_INDEXER_PATH` or the sibling `../xchain-indexer` checkout. The
 gate SKIPS (does not fail) when no indexer checkout is present, so
@@ -25,16 +27,16 @@ HEAD hashes.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send.js` | `a3ec6399d49d37f3f66fc8038a20748d9a2cb5a30f25e82c9017bee1fdf570f8` |
+| `checks/send.js` (SEND) | `src/actions/send.js` | `80248c76b126f2dffcd60e48b1efa29a27a87d9ceb1d424fe9b9ec7a0e70b94d` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `effe81706519b936fc59a6f3313ee54851830f3fcd5e68fb918e5972df53092a` |
-| `checks/mint.js` | `src/actions/mint.js` | `d7f3d36f024c7a654018b1f62ce5a510508a2386ca998c8829d023a5d1ef4de1` |
-| `checks/issue.js` | `src/actions/issue.js` | `936fb032d45cac17c51019dc57f4a7c96642c92d9760e471102e41b7fd72294e` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `71d2d477a7eb5a192d260526c684ad825bda9c272b6369f27078fda3f6b5deab` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `4db2fe92083e788efa95aa73f7a19658c4a29861d24f73309d69be9f2263625f` |
-| `checks/trading.js` (ORDER) | `src/actions/order.js` | `b00096b9f9c8d4cd077d64cd3132ed8ba6754721c736020f73ab3534547f8b33` |
-| `checks/trading.js` (SWAP) | `src/actions/swap.js` | `31090210670f290d6cf60f49939bc0f46a526f747bf9dd1354dec1030b3cd80f` |
-| `checks/airdrop.js` | `src/actions/airdrop.js` | `e8aa4a881f6c9b9518db75042b6adfc0d52978ff75153ae9e3feba10437444e9` |
-| `checks/dividend.js` | `src/actions/dividend.js` | `0a4f60e890b806f33039065927706720c48477e2c39ec538f6eb1126ff4ed64b` |
+| `checks/mint.js` | `src/actions/mint.js` | `e628fdb52ea17c9ae21671f1a1af4cf6cd75818c99c15753c763bf16fdedbf62` |
+| `checks/issue.js` | `src/actions/issue.js` | `d17904a409625a5dd1a238f9568e4ec1deb070fc2ae010837212a66da6d292bf` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `7bca355a41eeca8f0b374561371d7047721f1c9b16f5ce55ab7406b5235b188e` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `2e4030e8e6d2ffa640eac4b4e56b4e039527ee2075694cc8cb765d43ad829a5c` |
+| `checks/trading.js` (ORDER) | `src/actions/order.js` | `5de3d605bfcfe1e4fbc4b0a6a6a59bf50cd8c26c1c44c29958222ac5b2bf6256` |
+| `checks/trading.js` (SWAP) | `src/actions/swap.js` | `8aa0582811749af3ff31ef37ba0793fe6ae061dc401ffb75e9a4291a1863b3cb` |
+| `checks/airdrop.js` | `src/actions/airdrop.js` | `959a75a5ed2c958990aa99265421c569bf731e06182d9a255992ce3c136298aa` |
+| `checks/dividend.js` | `src/actions/dividend.js` | `44bf41e12afcb78717cf6705aedaaa1a3a3940cc34462be1ba5c605b74e72941` |
 | `checks/batch.js` | `src/actions/batch.js` | `58269829cb68f5065256544ba134fda0f1dc00491653d25b4b330f1ec035ef64` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
@@ -44,6 +46,73 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-08-08 - nine handlers, mostly one rule 
+
+The gate's second real firing, and it had been red on master for two weeks
+unread. Cause is in the wiring, not the map: the gate ran only in CI, so a
+local `npm test` never showed it, and it is now step one of `npm run ci`
+(still skipping clean when there is no sibling checkout). Verified against
+COMMITTED state on both sides before anything was refreshed.
+
+Nine handlers, one dominant rule. ** caret-ref strict activation** turns
+an unresolvable wire `^<id>` address reference into a hard
+`invalid: <FIELD> (unresolvable ^id)` at/after each chain's flag-day
+(`caret_ref_strict_activation.js`; regtest armed from genesis, mainnet on the
+ train). It lands on `mint.js` DESTINATION, `issue.js` TRANSFER and
+TRANSFER_SUPPLY, `order.js` and `swap.js` GET_ADDRESS, and `dispenser.js`
+GET_ADDRESS and ORACLE_ADDRESS. Client-visible, and partly client-decidable,
+so it is mirrored as a new universal check (`preflight/universal.js`,
+`CARET_REF_UNRESOLVABLE`):
+
+- A **non-canonical** id (`^0`, `^007`, `^abc`, bare `^`) fails the indexer's
+  own `CANONICAL_CARET_ID` and can never resolve on any node, so the client
+  knows the verdict with no lookup and says so.
+- A **dangling but well-formed** id is the same rejection with no local
+  evidence: the explorer maps address -> id and nothing maps the inverse, so
+  it is declared unverified rather than guessed at.
+- **Warning, never an error**, including the decidable half. Three call sites
+  had no follow-up format check before  (DISPENSER.ORACLE_ADDRESS on a
+  non-oracle dispenser, ISSUE.TRANSFER/TRANSFER_SUPPLY on the genesis path,
+  DEPLOY.SLASH_DESTINATION below its own flag-day), so those actions are still
+  ACCEPTED below the activation height, and pre-flight has no chain height to
+  gate on. A hard client error would false-block them.
+- The scoped field set is DERIVED from the shared `addressRefFields.js`
+  consensus map (single-value, non-type-gated), not listed again. That
+  derivation is exact today, and the two excluded shapes are excluded for
+  reasons that also make them wrong to flag: SEND.DESTINATION is `multi` and
+  `send.js` is the one address-bearing handler that never resolves at all
+  , and LIST.ITEM holds an address only when the list TYPE says so.
+
+The rest, none of which moves a client check:
+
+- **`send.js` conditional gated handoff (PC-29 / ).** A gated pack now
+  compels a key-handoff MESSAGE only when the recipient's POST-SEND balance
+  reaches the pack threshold, instead of every send of a gated tick requiring
+  one. Deciding it needs the destination's pre-send balance at
+  (BLOCK_INDEX, ACTION_INDEX) and the tick's pack thresholds, neither
+  reachable from an action string, and it strictly NARROWS an existing
+  rejection. The `SEND_RESTRICTIONS` declaration now names it as conditional.
+- **`issue.js` LOCK_NULL_PRIOR_UNSET .** An absent/NULL prior lock
+  reads as unset rather than falling through to "locked", resolved once per
+  action so the gate cannot differ field to field. Another narrowing, already
+  inside `ISSUE_LOCK_RATCHETS`.
+- **`dispenser.js` FEE_PROBE oracle fee .** Changes the DRY-RUN half
+  only: a read-only quote has no outputs, so the output half of
+  `validateOracleFee` could only ever fail there while demanding the amount
+  the refused quote existed to compute. Tier 1 now answers for a Mode B
+  dispenser instead of refusing. Tier 2 still cannot see outputs, so
+  `DISPENSER_ORACLE_FEE` stays the declared gap; its rationale comment records
+  what changed underneath it.
+- **`getList(..., BLOCK_INDEX)` ( list-edit resolution)** in
+  `dividend.js`, `airdrop.js` and `dispense.js`: list membership resolves at
+  the processing block instead of live. Membership was already server-side and
+  declared unverified on all three; no verdict the client can see moves.
+- **`mint.js` / `issue.js` / `order.js` / `swap.js` / `dividend.js` residue:**
+  per-tick memoization of `isActionAllowed`, destination-balance batching, and
+  comment trims. No verdicts.
+- **`airdrop.js`:** comment trims plus the controller-guard reserve ordering,
+  both already covered by `AIRDROP_TOTAL_VS_BALANCE`. No verdicts.
 
 ### 2026-08-08 - what the gate covers, stated honestly (#3934)
 

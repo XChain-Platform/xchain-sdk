@@ -2,6 +2,8 @@
   "name": "@dankest-llc/xchain-sdk",
   "description": "xchain-sdk generates XChain Platform ACTION commands and encodes them into unsigned blockchain transactions as well as pulls data from the XChain APIs such as balances and transaction history.",
   "version": "2.0.2",
+  "comment:homepage": "The npm package page links wherever this points, and it points at the platform site (: xchain.io's deep-link backlinks 301 away to tokenscan.io, so operator-controlled touchpoints are what still build its authority).",
+  "homepage": "https://xchain.io/",
   "publishConfig": {
     "access": "public"
   },
@@ -76,7 +78,9 @@
     "test": "mocha --timeout 5000 --recursive 'test/unit/**/*.test.js'",
     "sync:templates": "node scripts/sync-templates.js",
     "cosigner:init-window": "node scripts/cosigner-init-window.js",
-    "ci": "mocha --timeout 5000 --recursive 'test/unit/**/*.test.js' --exit && npm run ci:security && npm run ci:regression",
+    "comment:ci:drift": "Pre-flight <-> indexer-handler drift gate (spec 8.5). Runs FIRST because it costs milliseconds and answers what the suites structurally cannot: whether the Tier-2 mirrors still match the handlers they mirror. SKIPS clean with no sibling xchain-indexer checkout, so a single-repo clone is unaffected. It was CI-only until , so a local `npm run ci` never showed it and it sat red on master unread for two weeks.",
+    "ci:drift": "node bin/check-preflight-drift.js",
+    "ci": "npm run ci:drift && mocha --timeout 5000 --recursive 'test/unit/**/*.test.js' --exit && npm run ci:security && npm run ci:regression",
     "ci:security": "mocha --timeout 10000 --recursive 'test/security/**/*.test.js' --exit",
     "ci:regression": "mocha --timeout 30000 --recursive 'test/regression/**/*.test.js' --exit",
     "coverage": "c8 --reporter=text --reporter=html --include 'src/**/*.js' mocha --timeout 5000 --recursive 'test/unit/**/*.test.js' --exit",

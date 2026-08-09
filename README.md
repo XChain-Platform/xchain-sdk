@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/coverage-unit%20%7C%20integration%20%7C%20boundary%20%7C%20fuzz%20%7C%20chaos%20%7C%20smoke%20%7C%20security%20%7C%20regression%20%7C%20performance-brightgreen" alt="Coverage">
 </p>
 
-Developer-facing SDK for generating XChain platform transactions and querying blockchain data.
+Developer-facing SDK for the [XChain Platform](https://xchain.io/): generate XChain transactions and query blockchain data.
 
 ## Features
 

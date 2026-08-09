@@ -220,6 +220,13 @@ function main() {
             'Re-read each handler, update the matching checks/ module (or confirm no client-visible\n' +
             'change), then refresh the hash in src/preflight/INDEXER-MAP.md:\n');
         for (const d of drift) console.error(`  ${d.handler}\n    was ${d.expected}\n    now ${d.actual}`);
+        // Now that `npm run ci` runs this locally , the first suspect for a LOCAL
+        // red is the sibling's uncommitted work rather than a real handler change: this
+        // hashes the WORKING TREE, and two of the four handlers in the gate's first firing
+        // were nothing else. CI checks out HEAD and never sees it.
+        console.error('\nRunning locally? Confirm against COMMITTED state first - this hashes the sibling\n'
+            + 'working tree, so an uncommitted edit over there reports as drift:\n'
+            + '  git -C ../xchain-indexer status --short src/actions/');
         failed = 1;
     }
 

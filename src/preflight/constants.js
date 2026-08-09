@@ -49,6 +49,13 @@ const REPORT_SCHEMA_VERSION = 1;
 // src/actions/dispenser.js is what catches a change to it.
 const MAX_REFILLS = 5;
 
+// Canonical `^<id>` address-reference id, byte-for-byte the indexer's
+// CANONICAL_CARET_ID (xchain-indexer src/db.js). Anything else - `^0`, `^007`,
+// `^0x10`, `^abc`, a bare `^` - cannot resolve on ANY node, so at/after the
+//  flag-day it is a hard `invalid: <FIELD> (unresolvable ^id)` reject.
+// The §8.5 drift gate over the mapped handlers is what catches a change to it.
+const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
+
 // Lifecycle constants (spec §4.6).
 const DEFAULT_TIMEOUT_MS   = 4000;  // overall per-preflight budget
 const RECHECK_TIMEOUT_MS   = 2000;  // Approve-time re-check budget
@@ -97,6 +104,7 @@ const FINDING_CODES = Object.freeze({
     DISPENSER_NOT_OWNER_W: 'DISPENSER_NOT_OWNER',
     GIVE_NOT_BALANCE_MODE: 'GIVE_NOT_BALANCE_MODE',
     DISPENSER_MAX_REFILLS: 'DISPENSER_MAX_REFILLS',
+    CARET_REF_UNRESOLVABLE: 'CARET_REF_UNRESOLVABLE',
     // Declared-unverified only (never a finding): the oracle usage fee is
     // an OUTPUT-level rule, and pre-flight only ever sees an action string.
     DISPENSER_ORACLE_FEE: 'DISPENSER_ORACLE_FEE',
@@ -150,6 +158,7 @@ module.exports = {
     ENCODING_LIMITS,
     MAX_ACTION_DATA_LENGTH,
     MAX_REFILLS,
+    CANONICAL_CARET_ID,
     FINDING_CODES,
     TIER2_ERROR_CAPABLE,
     TIER1_DENYLIST,
