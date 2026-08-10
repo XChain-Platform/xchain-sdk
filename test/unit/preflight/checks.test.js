@@ -170,6 +170,18 @@ describe('pre-flight Tier-2 per-action matrix', function () {
             const f = r.findings.find(x => x.code === 'MINT_OVER_MAX');
             expect(f, 'no cap is knowable, so no cap finding').to.equal(undefined);
         });
+
+        it('mints.max of 0 (ISSUE omitted MAX_MINT) is not a zero cap', async function () {
+            // xchain-indexer stores MAX_MINT as 0 when an ISSUE omits it and
+            // treats 0 as "no per-tx cap" (mint.js bcgt(MAX_MINT,0) guard).
+            // A token issued via the wallet's ISSUE quick-form regularly
+            // lands here (see xchain-wallet IssueTokenForm.jsx, no MAX_MINT
+            // field): every real mint on it must not be flagged as over-cap.
+            const tok = realToken({ mints: { max: 0, address_max: 0, start_block: 0, stop_block: 0 } });
+            const r = await reportFor('MINT|0|JDOG|1000', { getToken: () => tok });
+            const f = r.findings.find(x => x.code === 'MINT_OVER_MAX');
+            expect(f, 'MAX_MINT=0 means uncapped, not a zero-mint cap').to.equal(undefined);
+        });
     });
 
     describe('SWEEP (empty is a valid no-op)', function () {
