@@ -130,6 +130,17 @@ function buildLlmEnvelope(opts){
         if (!Number.isFinite(temperature)){
             throw new Error('AttestationHelpers.llm: opts.temperature must be a finite number');
         }
+        // Mirror the hub's FIXED [0,2] admission gate (providers/llm.js). Unlike
+        // the max_tokens ceiling above, that bound is a constant rather than
+        // governance-injected, so the SDK can enforce it and still be right.
+        // Without it an out-of-range value builds a valid envelope, pays for the
+        // on-chain ATTEST v0 request, and is then refused by every validator's
+        // fetch, so the round never reaches quorum and expires. The tighter
+        // per-vendor bound stays the hub's job: it depends on the block-anchored
+        // pinned model the SDK cannot see.
+        if (temperature < 0 || temperature > 2){
+            throw new Error('AttestationHelpers.llm: opts.temperature must be a number in [0, 2]');
+        }
     }
     let env = { prompt: opts.prompt };
     if (opts.system           !== undefined) env.system           = String(opts.system);

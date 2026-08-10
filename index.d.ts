@@ -859,7 +859,7 @@ export interface AttestationLlmOpts {
     maxTokens?: number;
     /** Response format: 'text' (default) or 'json_object' */
     format?: 'text' | 'json_object';
-    /** Sampling temperature (finite number) */
+    /** Sampling temperature; a finite number in [0, 2] (the hub refuses the rest) */
     temperature?: number;
     /** Envelope version; must be a positive integer <= the hub's published ceiling (1 today) */
     envelopeVersion?: number;

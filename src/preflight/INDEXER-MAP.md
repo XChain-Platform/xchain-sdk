@@ -35,7 +35,7 @@ HEAD hashes.
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `2e4030e8e6d2ffa640eac4b4e56b4e039527ee2075694cc8cb765d43ad829a5c` |
 | `checks/trading.js` (ORDER) | `src/actions/order.js` | `5de3d605bfcfe1e4fbc4b0a6a6a59bf50cd8c26c1c44c29958222ac5b2bf6256` |
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `8aa0582811749af3ff31ef37ba0793fe6ae061dc401ffb75e9a4291a1863b3cb` |
-| `checks/airdrop.js` | `src/actions/airdrop.js` | `959a75a5ed2c958990aa99265421c569bf731e06182d9a255992ce3c136298aa` |
+| `checks/airdrop.js` | `src/actions/airdrop.js` | `81f82e180a015cbe0bdd5b7a0529d989938795c601742ee7b239445337ded01b` |
 | `checks/dividend.js` | `src/actions/dividend.js` | `44bf41e12afcb78717cf6705aedaaa1a3a3940cc34462be1ba5c605b74e72941` |
 | `checks/batch.js` | `src/actions/batch.js` | `58269829cb68f5065256544ba134fda0f1dc00491653d25b4b330f1ec035ef64` |
 
@@ -193,3 +193,30 @@ cannot cover. It now prefers the explorer's live `state.give_remaining`
 (escrow + refills - dispenses) and, on the fallback path, adds refills back
 in; when the edit stream is unreachable it reports unverified rather than a
 number it knows is low.
+
+### 2026-08-10 - AIRDROP recipient membership became set-backed ()
+
+`src/actions/airdrop.js` changed and the gate correctly demanded a paired
+review. The diff converts `recipients` and `approved` from arrays to `Set`s and
+switches three `.length` reads to `.size`, because membership was tested with
+`Array.indexOf` per recipient on the synchronous per-block path for a list the
+indexer's own mapper comments as carrying thousands of addresses.
+
+No verdict the client can see moves, and the reasons are specific rather than
+"it is only a refactor":
+
+- Membership resolution here is server-side and already declared unverified,
+  the same standing this file records for the  `getList(..., BLOCK_INDEX)`
+  change across `dividend.js`, `airdrop.js` and `dispense.js`.
+- The counts feeding `AIRDROP_TOTAL_VS_BALANCE` are unchanged. `recipients` is
+  reassigned to the deduped `approved` before any length read, so DEBIT and both
+  fee branches already saw a deduped count; a `Set` yields the identical count.
+- Credit ordering is unchanged, which matters because this is a consensus path.
+  A `Set` was chosen over the object-keyed idiom `dividend.js` uses precisely
+  because `Set` guarantees insertion order.
+
+Not covered by this entry, and deliberately left alone by the fixing lane: the
+same loop still does `recipientAllowList.includes` and `recipientBlockList.includes`
+per recipient, the same O(n x m) shape. Registered as . When that lands
+it will move this hash again and needs its own line here, but it is the same
+argument: server-side membership, already unverified.

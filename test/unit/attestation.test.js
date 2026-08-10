@@ -170,6 +170,19 @@ describe('AttestationHelpers.llm', function () {
         expect(() => Attestation.llm({ prompt: 'x', temperature: Infinity })).to.throw(/temperature/);
     });
 
+    // The hub's llm.fetch refuses anything outside [0,2], so an envelope the
+    // SDK accepted here would buy an on-chain request every validator then
+    // rejects: quorum never forms and the round expires.
+    it('throws when temperature falls outside the hub-admissible [0, 2]', function () {
+        expect(() => Attestation.llm({ prompt: 'x', temperature: -0.5 })).to.throw(/\[0, 2\]/);
+        expect(() => Attestation.llm({ prompt: 'x', temperature: 5 })).to.throw(/\[0, 2\]/);
+    });
+
+    it('accepts both ends of the admissible temperature range', function () {
+        expect(JSON.parse(Attestation.llm({ prompt: 'x', temperature: 0 })).temperature).to.equal(0);
+        expect(JSON.parse(Attestation.llm({ prompt: 'x', temperature: 2 })).temperature).to.equal(2);
+    });
+
 });
 
 describe('AttestationHelpers.httpGet', function () {
