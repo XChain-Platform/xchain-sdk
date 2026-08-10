@@ -27,8 +27,10 @@ const CoSignerClient = require('../../src/cosigner/client.js');
 const WindowStore = require('../../src/cosigner/windowStore.js');
 const {
     parseEnvelopeScript, deriveEnvelopeCommit, envelopeLeafHash,
-    envelopeScriptPathSighash, classifyEnvelopeRole,
+    envelopeScriptPathSighash, classifyEnvelopeRole, envelopeRoundTweaks,
 } = require('../../src/cosigner/envelope.js');
+const { deriveMuSig2P2TR2of3 } = require('../../src/cosigner/account.js');
+const { buildRecoverySpend, localPairSigner } = require('../../src/cosigner/recovery.js');
 const { decodeEnvelopeAction } = require('../../src/cosigner/psbtActionDecode.js');
 
 bitcoin.initEccLib(ecc);
@@ -134,6 +136,89 @@ function runRound(acct, co, psbt, envelopeScript, inputIndex = 0) {
         psbt: psbt.toHex(), secretKey: acct.agentSk, inputIndex,
         envelopeScript: envelopeScript ? envelopeScript.toString('hex') : undefined,
     });
+}
+
+// --- 2-of-3 fixtures  -------------------------------------------
+// A 2-of-3 account: the agent+daemon key path is BIP341-tweaked by the account's
+// own recovery tree, so every envelope derivation has to stay on the UNTWEAKED
+// cooperative aggregate, and the commit tree has to carry the recovery leaves.
+
+function make2of3() {
+    const agentSk = crypto.randomBytes(32), coSk = crypto.randomBytes(32), recSk = crypto.randomBytes(32);
+    const agentPk = Buffer.from(secp256k1.getPublicKey(agentSk, true));
+    const coPk    = Buffer.from(secp256k1.getPublicKey(coSk, true));
+    const recPk   = Buffer.from(secp256k1.getPublicKey(recSk, true));
+    const account = deriveMuSig2P2TR2of3({ agent: agentPk, daemon: coPk, recovery: recPk });
+    const co = new CoSigner({
+        secretKey: coSk, publicKeys: account.keyPath.publicKeys, recoveryPublicKey: recPk,
+        policy: { allowedActions: new Set(['FILE']) }, maxFeeSats: 50000,
+    });
+    return { agentSk, coSk, recSk, agentPk, coPk, recPk, account, co,
+             keys: account.keyPath.publicKeys };
+}
+
+function client3(a3, extra = {}) {
+    return new CoSignerClient(Object.assign({
+        transport: CoSignerClient.inProcessTransport(a3.co),
+        publicKeys: a3.keys, recoveryPublicKey: a3.recPk,
+    }, extra));
+}
+
+// The envelope of a 2-of-3, derived the way both halves derive it: internal key
+// and leaf key are the untweaked cooperative aggregate, tree carries the
+// account's two recovery leaves alongside the envelope leaf.
+function envelopeFor3(a3, rawLen = 1200) {
+    const script = buildEnvelopeScript(a3.account.internalXOnly, ACTION, crypto.randomBytes(rawLen));
+    const commit = deriveEnvelopeCommit({
+        internalXOnly: a3.account.internalXOnly, envelopeScript: script,
+        recoveryLeaves: a3.account.recovery,
+    });
+    return { script, commit };
+}
+
+function commitPsbt3(a3, commit) {
+    const psbt = new bitcoin.Psbt();
+    psbt.addInput({ hash: crypto.randomBytes(32), index: 0,
+        witnessUtxo: { script: a3.account.output, value: 100000 } });
+    psbt.addOutput({ script: commit.output, value: 20000 });
+    psbt.addOutput({ script: a3.account.output, value: 70000 });
+    return psbt;
+}
+
+function revealPsbt3(a3, commit) {
+    const psbt = new bitcoin.Psbt();
+    psbt.addInput({ hash: crypto.randomBytes(32), index: 0,
+        witnessUtxo: { script: commit.output, value: 20000 },
+        tapInternalKey: a3.account.internalXOnly,
+        tapLeafScript: [{ leafVersion: LEAF_VERSION, script: commit.script, controlBlock: commit.controlBlock }] });
+    psbt.addOutput({ script: a3.account.output, value: 15000 });
+    return psbt;
+}
+
+function cancelPsbt3(a3, commit) {
+    const psbt = new bitcoin.Psbt();
+    psbt.addInput({ hash: crypto.randomBytes(32), index: 0,
+        witnessUtxo: { script: commit.output, value: 20000 },
+        tapInternalKey: a3.account.internalXOnly, tapMerkleRoot: commit.merkleRoot });
+    psbt.addOutput({ script: a3.account.output, value: 15000 });
+    return psbt;
+}
+
+// Independently recompute the taproot output key a control block proves a path
+// to: exactly what a validating node does, so this checks the merkle path
+// rather than re-running the same derivation and calling it agreement.
+function outputKeyFromControlBlock(controlBlock, leafScript) {
+    const internal = controlBlock.subarray(1, 33);
+    let node = envelopeLeafHash(leafScript);
+    for (let i = 33; i < controlBlock.length; i += 32) {
+        const sib = controlBlock.subarray(i, i + 32);
+        node = Buffer.compare(node, sib) < 0
+            ? bitcoin.crypto.taggedHash('TapBranch', Buffer.concat([node, sib]))
+            : bitcoin.crypto.taggedHash('TapBranch', Buffer.concat([sib, node]));
+    }
+    const tweak = bitcoin.crypto.taggedHash('TapTweak', Buffer.concat([internal, node]));
+    const point = ecc.xOnlyPointAddTweak(internal, tweak);
+    return { xOnly: Buffer.from(point.xOnlyPubkey), parity: point.parity };
 }
 
 describe(' co-signer: Taproot envelope composition', function () {
@@ -410,20 +495,23 @@ describe(' co-signer: Taproot envelope composition', function () {
             expect(out.reason).to.equal('ENVELOPE_NOT_COMMITTED');
         });
 
-        it('refuses envelope work on a 2-of-3 account rather than improvising a tap tree', function () {
-            const acct = makeAccount();
-            const recovery = secp256k1.getPublicKey(crypto.randomBytes(32), true);
-            const co = new CoSigner({
-                secretKey: acct.coSk, publicKeys: acct.keys,
-                recoveryPublicKey: recovery,
-                policy: { allowedActions: new Set(['FILE']) }, maxFeeSats: 50000,
+        it('refuses an envelope leaf keyed on the account OUTPUT key instead of the cooperative aggregate', function () {
+            // The plausible wrong choice on a 2-of-3: its account output key is
+            // tap-tweaked, and a leaf keyed on it could never be co-signed as a
+            // no-tweak reveal. The daemon must refuse rather than sign under it.
+            const a3 = make2of3();
+            const script = buildEnvelopeScript(a3.co.aggregateXOnly, ACTION, crypto.randomBytes(100));
+            const commit = deriveEnvelopeCommit({
+                internalXOnly: a3.co.aggregateXOnly, envelopeScript: script,
             });
-            // Derive the envelope against THIS daemon's aggregate so the refusal
-            // is about the account shape, not about a key mismatch.
-            const script = buildEnvelopeScript(co.aggregateXOnly, ACTION, crypto.randomBytes(100));
-            const commit = deriveEnvelopeCommit({ internalXOnly: co.aggregateXOnly, envelopeScript: script });
-            const out = request(acct, co, buildCommitPsbt(acct, commit), script.toString('hex'));
-            expect(out.reason).to.equal('ENVELOPE_UNSUPPORTED_ACCOUNT');
+            const out = a3.co.process({
+                psbt: commitPsbt3(a3, commit).toHex(),
+                envelope: { script: script.toString('hex') },
+                inputs: [{ index: 0, agentPublicNonce: Buffer.from(
+                    new MuSig2().generateNonce({ publicKey: a3.agentPk, secretKey: a3.agentSk })).toString('hex') }],
+            });
+            expect(out.approved).to.equal(false);
+            expect(out.reason).to.equal('ENVELOPE_SCRIPT_INVALID');
         });
 
         it('refuses a reveal whose output drains somewhere other than the account', function () {
@@ -505,6 +593,231 @@ describe(' co-signer: Taproot envelope composition', function () {
                 store.release();
                 try { fs.unlinkSync(p); } catch (e) { /* best effort */ }
             }
+        });
+    });
+});
+
+// : the envelope surface on a 2-of-3 account. The decision this suite
+// pins is that a commit output of a 2-of-3 keeps the two-of-three property -
+// its tree carries the account's own recovery leaves next to the envelope leaf -
+// rather than stranding the prefunded reveal fee behind a lost co-signer.
+describe(' co-signer: the envelope on a 2-of-3 account', function () {
+
+    describe('the composed commit tree', function () {
+        it('puts the envelope leaf and both account recovery leaves in one tree', function () {
+            const a3 = make2of3();
+            const { script, commit } = envelopeFor3(a3);
+            const leafAR = a3.account.recovery.agentRecovery.script;
+            const leafDR = a3.account.recovery.daemonRecovery.script;
+
+            // The address is a plain bitcoinjs p2tr over the declared shape:
+            // [ envelope , [ agentRecovery , daemonRecovery ] ], internal key =
+            // the untweaked cooperative aggregate.
+            const ref = bitcoin.payments.p2tr({
+                internalPubkey: a3.account.internalXOnly,
+                scriptTree: [{ output: script }, [{ output: leafAR }, { output: leafDR }]],
+            });
+            expect(commit.output.equals(ref.output)).to.equal(true);
+            expect(commit.address).to.equal(ref.address);
+            // The recovery leaves are the ACCOUNT's own leaves, byte for byte:
+            // no new key material, and the operator's recovery pair is unchanged.
+            expect(commit.recovery.agentRecovery.script.equals(leafAR)).to.equal(true);
+            expect(commit.recovery.daemonRecovery.script.equals(leafDR)).to.equal(true);
+        });
+
+        it('gives the hot reveal path the short control block and recovery the long one', function () {
+            const a3 = make2of3();
+            const { commit } = envelopeFor3(a3);
+            expect(commit.controlBlock).to.have.length(65);            // depth 1
+            expect(commit.recovery.agentRecovery.controlBlock).to.have.length(97);   // depth 2
+            expect(commit.recovery.daemonRecovery.controlBlock).to.have.length(97);
+        });
+
+        it('every leaf control block proves a real path to the commit output key', function () {
+            const a3 = make2of3();
+            const { script, commit } = envelopeFor3(a3);
+            const leaves = [
+                [commit.controlBlock, script],
+                [commit.recovery.agentRecovery.controlBlock, commit.recovery.agentRecovery.script],
+                [commit.recovery.daemonRecovery.controlBlock, commit.recovery.daemonRecovery.script],
+            ];
+            for (const [cb, leafScript] of leaves) {
+                const got = outputKeyFromControlBlock(cb, leafScript);
+                expect(got.xOnly.equals(commit.outputXOnly)).to.equal(true);
+                expect(got.parity).to.equal(cb[0] & 1);
+                expect(cb.subarray(1, 33).equals(a3.account.internalXOnly)).to.equal(true);
+            }
+        });
+
+        it('keeps leafHash the TAPLEAF hash once the tree has more than one leaf', function () {
+            const a3 = make2of3();
+            const { script, commit } = envelopeFor3(a3);
+            // On the single-leaf 2-of-2 tree these coincide; here they must not,
+            // and the reveal sighash needs the leaf hash, never the root.
+            expect(commit.leafHash.equals(envelopeLeafHash(script))).to.equal(true);
+            expect(commit.leafHash.equals(commit.merkleRoot)).to.equal(false);
+        });
+
+        it('refuses a recovery pair that is not two distinct leaves', function () {
+            const a3 = make2of3();
+            const script = buildEnvelopeScript(a3.account.internalXOnly, ACTION, null);
+            const dup = a3.account.recovery.agentRecovery;
+            expect(() => deriveEnvelopeCommit({
+                internalXOnly: a3.account.internalXOnly, envelopeScript: script,
+                recoveryLeaves: { agentRecovery: dup, daemonRecovery: dup },
+            })).to.throw(/distinct/);
+            expect(() => deriveEnvelopeCommit({
+                internalXOnly: a3.account.internalXOnly, envelopeScript: script,
+                recoveryLeaves: { agentRecovery: dup },
+            })).to.throw(/daemonRecovery/);
+        });
+    });
+
+    describe('all three envelope rounds complete on a 2-of-3', function () {
+        it('commits under the account key path (the tap-tweaked 2-of-3 output key)', async function () {
+            const a3 = make2of3();
+            const { script, commit } = envelopeFor3(a3);
+            const out = await client3(a3).sign({
+                psbt: commitPsbt3(a3, commit).toHex(), secretKey: a3.agentSk,
+                envelopeScript: script.toString('hex'),
+            });
+            expect(out.action).to.equal('FILE');
+            expect(schnorr.verify(out.signature, out.msg, a3.account.outputXOnly)).to.equal(true);
+        });
+
+        it('reveals under the leaf key with NO tweak, not under the account tweak', async function () {
+            // The regression this pins: the daemon used to fall through to the
+            // ACCOUNT's tweaks on a reveal, which is empty on a 2-of-2 (so the bug
+            // was invisible) but is the 2-of-3 key-path tweak here - a signature
+            // under a key the leaf's OP_CHECKSIG does not name.
+            const a3 = make2of3();
+            const { script, commit } = envelopeFor3(a3);
+            const psbt = revealPsbt3(a3, commit);
+            const out = await client3(a3).sign({
+                psbt: psbt.toHex(), secretKey: a3.agentSk, envelopeScript: script.toString('hex'),
+            });
+            const expectedMsg = envelopeScriptPathSighash(
+                bitcoin.Psbt.fromHex(psbt.toHex()), 0, undefined, commit.leafHash);
+            expect(Buffer.from(out.msg).equals(expectedMsg)).to.equal(true);
+            expect(schnorr.verify(out.signature, out.msg, a3.account.internalXOnly)).to.equal(true);
+            // ... and emphatically NOT under the account's tweaked output key.
+            expect(schnorr.verify(out.signature, out.msg, a3.account.outputXOnly)).to.equal(false);
+        });
+
+        it('cancels under the commit output key, tweaked by the three-leaf root', async function () {
+            const a3 = make2of3();
+            const { script, commit } = envelopeFor3(a3);
+            const out = await client3(a3).sign({
+                psbt: cancelPsbt3(a3, commit).toHex(), secretKey: a3.agentSk,
+                envelopeScript: script.toString('hex'),
+            });
+            expect(schnorr.verify(out.signature, out.msg, commit.outputXOnly)).to.equal(true);
+        });
+
+        it('names the round it approved, same as on a 2-of-2', function () {
+            const a3 = make2of3();
+            const { script, commit } = envelopeFor3(a3);
+            const nonce = () => Buffer.from(new MuSig2().generateNonce(
+                { publicKey: a3.agentPk, secretKey: a3.agentSk })).toString('hex');
+            const ask = (psbt) => a3.co.process({ psbt: psbt.toHex(),
+                envelope: { script: script.toString('hex') },
+                inputs: [{ index: 0, agentPublicNonce: nonce() }] });
+            expect(ask(commitPsbt3(a3, commit)).envelopeRole).to.equal('commit');
+            expect(ask(revealPsbt3(a3, commit)).envelopeRole).to.equal('reveal');
+            expect(ask(cancelPsbt3(a3, commit)).envelopeRole).to.equal('cancel');
+        });
+    });
+
+    describe('the property the composition exists for', function () {
+        it('lets agent+recovery sweep a commit output the daemon can no longer co-sign', async function () {
+            const a3 = make2of3();
+            const { commit } = envelopeFor3(a3);
+            const leaf = commit.recovery.agentRecovery;
+            // The daemon is gone: no cancel, no reveal. The operator spends the
+            // stranded commit through the leaf the commit tree carries, with the
+            // SAME recovery pair the account uses.
+            const { txHex } = await buildRecoverySpend({
+                account: commit, leafName: 'agentRecovery',
+                inputs:  [{ txid: crypto.randomBytes(32).toString('hex'), vout: 0, value: 20000 }],
+                outputs: [{ script: a3.account.output, value: 19000 }],
+                sign:    localPairSigner(leaf, [a3.agentSk, a3.recSk]),
+            });
+            const tx = bitcoin.Transaction.fromHex(txHex);
+            const w = tx.ins[0].witness;
+            expect(w).to.have.length(3);
+            expect(w[1].equals(leaf.script)).to.equal(true);
+            expect(w[2].equals(leaf.controlBlock)).to.equal(true);
+            const sighash = tx.hashForWitnessV1(0, [commit.output], [20000],
+                bitcoin.Transaction.SIGHASH_DEFAULT, envelopeLeafHash(leaf.script));
+            expect(schnorr.verify(w[0], sighash, leaf.aggregateXOnly)).to.equal(true);
+        });
+
+        it('would strand that same output if the leaves were left out (what the old refusal meant)', function () {
+            const a3 = make2of3();
+            const script = buildEnvelopeScript(a3.account.internalXOnly, ACTION, null);
+            const bare = deriveEnvelopeCommit({
+                internalXOnly: a3.account.internalXOnly, envelopeScript: script,
+            });
+            // A single-leaf commit tree has no recovery path at all: the operator
+            // pair has nothing to spend through, which is the freeze the 2-of-3
+            // exists to prevent.
+            expect(bare.recovery).to.equal(null);
+            expect(bare.output.equals(envelopeFor3(a3).commit.output)).to.equal(false);
+        });
+    });
+
+    describe('both halves derive the tree, neither is told it', function () {
+        it('makes a 2-of-2-shaped client and a 2-of-3 daemon disagree rather than half-agree', async function () {
+            const a3 = make2of3();
+            const { script, commit } = envelopeFor3(a3);
+            // A client that forgot its recovery key composes the single-leaf tree,
+            // so the commit output it would fund is not the one the daemon derives.
+            const naive = new CoSignerClient({
+                transport: CoSignerClient.inProcessTransport(a3.co),
+                publicKeys: a3.keys, tweaks: a3.account.keyPath.tweaks,
+            });
+            let err = null;
+            try {
+                await naive.sign({ psbt: commitPsbt3(a3, commit).toHex(), secretKey: a3.agentSk,
+                    envelopeScript: script.toString('hex') });
+            } catch (e) { err = e; }
+            expect(err).to.not.equal(null);
+            // It fails on its OWN derivation (the leaf key it computes is the
+            // tweaked output key), before anything reaches the daemon.
+            expect(err.message).to.match(/different key|neither funds nor spends/);
+        });
+
+        it('rejects a client whose configured tweaks disagree with the derived tree', function () {
+            const a3 = make2of3();
+            expect(() => client3(a3, { tweaks: [] })).to.throw(/does not match the tweak derived/);
+            expect(() => client3(a3, { tweaks: a3.account.keyPath.tweaks })).to.not.throw();
+        });
+
+        it('derives the key-path tweak itself when the client is given no tweaks', function () {
+            const a3 = make2of3();
+            const c = client3(a3);
+            expect(c.aggregateXOnly.equals(a3.account.outputXOnly)).to.equal(true);
+            expect(c.internalXOnly.equals(a3.account.internalXOnly)).to.equal(true);
+        });
+    });
+
+    describe('the 2-of-2 account is untouched', function () {
+        it('still derives a single-leaf commit tree with leafHash === merkleRoot', function () {
+            const acct = makeAccount();
+            const { commit } = commitFor(acct);
+            expect(commit.recovery).to.equal(null);
+            expect(commit.leafHash.equals(commit.merkleRoot)).to.equal(true);
+            expect(commit.controlBlock).to.have.length(33);
+        });
+
+        it('selects the same tweak set the inline conditional used to', function () {
+            const accountTweaks = [{ tweak: crypto.randomBytes(32), xOnly: true }];
+            const commit = { tweak: crypto.randomBytes(32) };
+            expect(envelopeRoundTweaks(null, accountTweaks)).to.equal(accountTweaks);
+            expect(envelopeRoundTweaks({ role: 'commit', commit }, accountTweaks)).to.equal(accountTweaks);
+            expect(envelopeRoundTweaks({ role: 'reveal', commit }, accountTweaks)).to.deep.equal([]);
+            expect(envelopeRoundTweaks({ role: 'cancel', commit }, accountTweaks))
+                .to.deep.equal([{ tweak: commit.tweak, xOnly: true }]);
         });
     });
 });

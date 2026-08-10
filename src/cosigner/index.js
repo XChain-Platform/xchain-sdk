@@ -38,6 +38,7 @@ const { decodeActionFromPsbt, decodeEnvelopeAction } = require('./psbtActionDeco
 const {
     parseEnvelopeScript, deriveEnvelopeCommit, envelopeScriptPathSighash,
     envelopeLeafFromPsbtInput, classifyEnvelopeRole, envelopeLeafHash,
+    envelopeRoundTweaks,
 } = require('./envelope.js');
 
 module.exports = {
@@ -67,5 +68,6 @@ module.exports = {
     envelopeLeafFromPsbtInput,
     classifyEnvelopeRole,
     envelopeLeafHash,
+    envelopeRoundTweaks,
     decodeEnvelopeAction,
 };

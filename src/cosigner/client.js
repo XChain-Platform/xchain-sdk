@@ -35,7 +35,10 @@ const crypto = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
 const { secp256k1 } = require('@noble/curves/secp256k1');
 const MuSig2 = require('../musig2.js');
-const { deriveEnvelopeCommit, classifyEnvelopeRole, envelopeScriptPathSighash } = require('./envelope.js');
+const {
+    deriveEnvelopeCommit, classifyEnvelopeRole, envelopeScriptPathSighash, envelopeRoundTweaks,
+} = require('./envelope.js');
+const { deriveMuSig2P2TR2of3 } = require('./account.js');
 const { SDKPolicyError } = require('../errors.js');
 const { taprootKeyPathSighash } = require('./coSigner.js');
 
@@ -43,6 +46,16 @@ function toBytes(v, label) {
     if (v instanceof Uint8Array) return v;
     if (typeof v === 'string') return Buffer.from(v, 'hex');
     throw new Error(label + ' must be a hex string or Uint8Array');
+}
+
+// Compare two MuSig2 tweak lists by value (bytes + the xOnly flag).
+function tweaksMatch(a, b) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((t, i) => {
+        const u = b[i];
+        if (!t || !u || Boolean(t.xOnly) !== Boolean(u.xOnly)) return false;
+        return Buffer.from(t.tweak).equals(Buffer.from(u.tweak));
+    });
 }
 
 /*
@@ -128,6 +141,10 @@ class CoSignerClient {
      *   transport   {function}  body -> Promise<result> (see inProcessTransport/httpTransport)
      *   publicKeys  {(Uint8Array|hex)[]}  full signer set, agreed order (must match the co-signer)
      *   tweaks      {Array}  optional; must match the co-signer (deriveMuSig2P2TR -> []).
+     *   recoveryPublicKey {Uint8Array|hex}  2-of-3 only: the operator-recovery party's
+     *                key, the SAME value the daemon is configured with. The client
+     *                re-derives the tap tree from it so it composes the identical
+     *                envelope commit tree  and can cross-check `tweaks`.
      */
     constructor(config = {}) {
         if (typeof config.transport !== 'function')
@@ -143,10 +160,44 @@ class CoSignerClient {
         this.publicKeys = config.publicKeys;
         this.tweaks = config.tweaks || [];
         this.musig = new MuSig2();
-        // The account's aggregate x-only key: the envelope commit output's
-        // internal key. Derived here so the agent computes the leaf hash and
-        // the cancel tweak itself and never adopts the daemon's word for either.
+        // The account's OUTPUT key (post-tweak): what a key-path signature verifies under.
         this.aggregateXOnly = Buffer.from(this.musig.aggregateKeys(this.publicKeys, this.tweaks).xOnlyPubkey);
+        // The UNTWEAKED cooperative aggregate: the envelope commit output's
+        // internal key and its leaf's OP_CHECKSIG key, in both account shapes.
+        // Derived here so the agent computes the leaf hash and the cancel tweak
+        // itself and never adopts the daemon's word for either.
+        this.internalXOnly = Buffer.from(this.musig.aggregateKeys(this.publicKeys, []).xOnlyPubkey);
+
+        // 2-of-3: re-derive the account tap tree so the commit tree this client
+        // composes carries the same two recovery leaves the daemon's does. Named
+        // by PUBLIC KEY rather than handed over as leaf scripts, for the same
+        // reason the daemon takes a key (G3): a supplied leaf is a tree the
+        // client cannot check, and a mismatched tree means a commit output the
+        // daemon will refuse (or, worse, one only half the parties can reach).
+        this.recoveryPublicKey = config.recoveryPublicKey || null;
+        this.recoveryLeaves = null;
+        if (this.recoveryPublicKey) {
+            let tree;
+            try {
+                tree = deriveMuSig2P2TR2of3({
+                    agent: this.publicKeys[0], daemon: this.publicKeys[1], recovery: this.recoveryPublicKey,
+                });
+            } catch (e) {
+                throw new Error('failed to derive the 2-of-3 tap tree from publicKeys/recoveryPublicKey: ' + e.message);
+            }
+            this.recoveryLeaves = tree.recovery;
+            // The key-path tweak is a property of that same tree, so a `tweaks`
+            // that disagrees with it is a misconfiguration that would otherwise
+            // surface as an unspendable address or an opaque signature failure.
+            const derived = tree.keyPath.tweaks;
+            if (config.tweaks === undefined) {
+                this.tweaks = derived;
+                this.aggregateXOnly = Buffer.from(this.musig.aggregateKeys(this.publicKeys, this.tweaks).xOnlyPubkey);
+            } else if (!tweaksMatch(this.tweaks, derived)) {
+                throw new Error('config.tweaks does not match the tweak derived from '
+                    + 'publicKeys + recoveryPublicKey; drop tweaks and let the client derive it');
+            }
+        }
     }
 
     // Build this round's envelope context from the agent's OWN copy of the
@@ -156,7 +207,10 @@ class CoSignerClient {
         if (!envelopeScript) return null;
         const script = Buffer.isBuffer(envelopeScript) ? envelopeScript : Buffer.from(String(envelopeScript), 'hex');
         const commit = deriveEnvelopeCommit({
-            internalXOnly: this.aggregateXOnly, envelopeScript: script, network: network || undefined,
+            internalXOnly:  this.internalXOnly,
+            envelopeScript: script,
+            recoveryLeaves: this.recoveryLeaves,
+            network:        network || undefined,
         });
         const psbt = bitcoin.Psbt.fromHex(psbtHex, network ? { network } : undefined);
         const role = classifyEnvelopeRole(psbt, commit);
@@ -215,12 +269,9 @@ class CoSignerClient {
         assertMsgMatchesPsbt(req.psbt, idx, msg, env);
         const coNonce = toBytes(sig0.publicNonce, 'publicNonce');
         const aggNonce = this.musig.aggregateNonces([agentNonce, coNonce]);
-        // A cancel spends the commit output's KEY path, whose output key commits
-        // to the envelope leaf, so the session carries the derived tap tweak.
-        // Every other round (including a reveal, which signs the leaf's bare
-        // aggregate key) keeps this account's own tweaks.
-        const roundTweaks = (env && env.role === 'cancel')
-            ? [{ tweak: env.commit.tweak, xOnly: true }] : this.tweaks;
+        // One shared definition of which tweaks each round signs under, so the
+        // two halves cannot drift apart (envelope.js).
+        const roundTweaks = envelopeRoundTweaks(env, this.tweaks);
         const session  = this.musig.startSession(aggNonce, msg, this.publicKeys, roundTweaks);
         const agentSig = this.musig.partialSign({ secretKey, publicNonce: agentNonce, sessionKey: session });
         const signature = this.musig.aggregateSignatures([agentSig, toBytes(sig0.sig, 'sig')], session);
@@ -273,8 +324,7 @@ class CoSignerClient {
             assertMsgMatchesPsbt(req.psbt, s.index, msg, env);
             const coNonce = toBytes(s.publicNonce, 'publicNonce');
             const aggNonce = this.musig.aggregateNonces([agentNonce, coNonce]);
-            const roundTweaks = (env && env.role === 'cancel')
-                ? [{ tweak: env.commit.tweak, xOnly: true }] : this.tweaks;
+            const roundTweaks = envelopeRoundTweaks(env, this.tweaks);
             const session  = this.musig.startSession(aggNonce, msg, this.publicKeys, roundTweaks);
             const agentSig = this.musig.partialSign({ secretKey, publicNonce: agentNonce, sessionKey: session });
             const signature = this.musig.aggregateSignatures([agentSig, toBytes(s.sig, 'sig')], session);

@@ -145,7 +145,11 @@ class MuSig2AgentSession extends AgentSession {
         this.address = account.address;
         this.musig2Account = account;
 
-        const client = new CoSignerClient({ transport, publicKeys: signingKeys, tweaks: signingTweaks });
+        // The recovery key goes to the client too: it is what lets the agent
+        // compose the same envelope commit tree the daemon does .
+        const client = new CoSignerClient(Object.assign(
+            { transport, publicKeys: signingKeys, tweaks: signingTweaks },
+            recovery ? { recoveryPublicKey: recovery } : {}));
         this._musig2Signer = buildMuSig2Signer({ coSignerClient: client, secretKey: keyInfo.privateKey, network });
     }
 

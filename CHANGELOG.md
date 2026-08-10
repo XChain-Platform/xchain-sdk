@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-flight warns on a non-canonical `^<id>` address reference and declares a well-formed one unverified, mirroring the chain's new unresolvable-reference rejection .
 - `npm run ci` runs the pre-flight drift gate, which still skips clean without a sibling indexer checkout .
 - `verifyBalanceProof`, `verifyLockedBalanceProof` and `verifyContractStateProof` take an optional expected-identity argument and refuse a valid proof answering a different key, closing the valid-proof-wrong-question hole the explorer's path double-decode exposed .
+- Taproot envelopes work on 2-of-3 co-signer accounts: the commit tree carries the account's own two recovery leaves beside the envelope leaf, so a commit output keeps the two-of-three property instead of being refused .
+- `CoSignerClient` accepts `recoveryPublicKey` and derives the 2-of-3 tap tree itself, cross-checking any `tweaks` it was also handed .
 
 ### Changed
 - **BREAKING** `AgentSession` safety controls are enforced rather than offered: the constructor requires at least one spend ceiling, a submit requires a stable `submitOpts.idempotencyKey`, and a new operator kill switch (`pause()`/`resume()` plus a `killSwitchFile` re-read on every submit) halts a running session before evaluation or broadcast; `allowUnbounded` / `allowUnkeyedSubmits` opt back out ().
@@ -18,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING** `X402Client.fetchUrl` no longer double-pays on retry: both post-broadcast leak paths now throw one `X402_PAYMENT_AMBIGUOUS` error carrying `details.txid`/`details.resume`, and `fetchUrl(url, init, { resume })` adopts the in-flight payment instead of broadcasting a new one (replaces the `X402_PAYMENT_NOT_ACCEPTED` throw) ().
 
 ### Fixed
+- An envelope reveal signs the leaf's untweaked aggregate explicitly instead of falling through to the account's key-path tweaks, which was a wrong-key signature on any tweaked account .
 - BigInt satoshi values serialize as quoted decimal strings, converging on the form the encoder parses and the indexer already pins ().
 - buildRecoverySpend reconciles inputs and outputs in exact u64, so an account above 2^53 satoshi can no longer defeat its own whole-account anti-burn guard ().
 - reconcileEncoded parses the caller's maxFeeSats cap in exact u64, so a cap above 2^53 no longer rounds and false-denies an honest fee ( residual, ).

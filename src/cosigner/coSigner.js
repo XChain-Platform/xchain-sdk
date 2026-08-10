@@ -140,6 +140,7 @@ const DEFAULT_MAX_COSIGN_INPUTS = 32;
 // independently and neither has to trust the other's tweak (the G3 property).
 const {
     deriveEnvelopeCommit, classifyEnvelopeRole, envelopeScriptPathSighash,
+    envelopeRoundTweaks,
 } = require('./envelope.js');
 
 // BIP341 key-path sighash for one input, reconstructed from the PSBT. Requires a
@@ -314,10 +315,15 @@ class CoSigner {
                 network: this.network || undefined,
             });
             this.accountScript = p2tr.output;
-            // Kept for the envelope surface: the commit output is
-            // p2tr(internal = this aggregate, tree = {envelope leaf}), so the
-            // internal key is the account's own aggregate key.
+            // The account's OUTPUT key: the bare aggregate on a 2-of-2, the
+            // tap-tweaked key on a 2-of-3. What a key-path signature verifies under.
             this.aggregateXOnly = Buffer.from(agg.xOnlyPubkey);
+            // The UNTWEAKED cooperative aggregate MuSig2(agent, daemon), which is
+            // the envelope commit tree's internal key and its leaf's OP_CHECKSIG
+            // key in BOTH account shapes . On a 2-of-2 it is the same
+            // bytes as aggregateXOnly; on a 2-of-3 it is the account tap tree's
+            // internal key, so a reveal stays a no-tweak session either way.
+            this.internalXOnly = Buffer.from(this.musig.aggregateKeys(this.publicKeys, []).xOnlyPubkey);
         } catch (e) {
             throw new Error('failed to derive the account scriptPubKey from the participant keys: ' + e.message);
         }
@@ -613,20 +619,25 @@ class CoSigner {
         //     account's own aggregate key, and reads the ACTION it is being
         //     asked to approve straight out of it. The role is DERIVED from the
         //     PSBT, never taken from the request.
+        //     A 2-of-3 account composes its own two recovery leaves into the
+        //     commit tree alongside the envelope leaf (, tree shape and
+        //     rationale in envelope.js). Nothing is improvised: the leaves are
+        //     re-derived here from the same three participant public keys that
+        //     produced the account, so the commit output keeps the same
+        //     two-of-three property the account has rather than stranding the
+        //     prefunded reveal fee behind a lost co-signer.
         let env = null;
         if (req.envelope) {
-            if (this.tweaks.length)
-                return this._deny('ENVELOPE_UNSUPPORTED_ACCOUNT',
-                    'the envelope surface supports the plain 2-of-2 key-path account only; a 2-of-3 ' +
-                    'account would have to compose its recovery leaves with the envelope leaf in one ' +
-                    'tap tree, which is a tree-design decision this daemon must not improvise');
             let script;
             try { script = Buffer.isBuffer(req.envelope.script) ? req.envelope.script : Buffer.from(String(req.envelope.script), 'hex'); }
             catch (e) { return this._deny('ENVELOPE_SCRIPT_INVALID', 'envelope.script is not hex'); }
             let commit;
             try {
                 commit = deriveEnvelopeCommit({
-                    internalXOnly: this.aggregateXOnly, envelopeScript: script, network: this.network || undefined,
+                    internalXOnly:  this.internalXOnly,
+                    envelopeScript: script,
+                    recoveryLeaves: this.tapTree ? this.tapTree.recovery : null,
+                    network:        this.network || undefined,
                 });
             } catch (e) { return this._deny('ENVELOPE_SCRIPT_INVALID', e.message); }
             const role = classifyEnvelopeRole(psbt, commit);
@@ -726,10 +737,12 @@ class CoSigner {
         //        under TapTweak(aggregate || leafHash), because the commit
         //        output key commits to the leaf. That tweak is DERIVED from the
         //        script above, never accepted from the caller (G3).
+        //    The three shapes are selected EXPLICITLY rather than by falling
+        //    through to this.tweaks: a reveal signs the leaf's bare aggregate, so
+        //    on a 2-of-3 (where this.tweaks is the account's key-path tweak) the
+        //    fall-through produced a signature under the wrong key .
         const signatures = [];
-        const envTweaks = (env && env.role === 'cancel')
-            ? [{ tweak: env.commit.tweak, xOnly: true }]
-            : this.tweaks;
+        const envTweaks = envelopeRoundTweaks(env, this.tweaks);
         for (const it of inputs) {
             let msg;
             try {
