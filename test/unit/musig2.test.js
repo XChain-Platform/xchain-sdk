@@ -41,8 +41,39 @@ describe('MuSig2', function () {
             expect(() => musig.aggregateKeys('not an array')).to.throw(/must be an array/);
         });
 
+        it('aggregateKeys throws when a participant key repeats', function () {
+            // A repeated key collapses the threshold to one signer, so the
+            // 2-of-2, the 2-of-3 recovery leaves, and the daemon policy all
+            // depend on this rejection.
+            const dup = h('02'.padEnd(66, '0'));
+            expect(() => musig.aggregateKeys([dup, dup])).to.throw(/pairwise distinct/);
+            expect(() => musig.aggregateKeys([dup, h('03'.padEnd(66, '0')), dup]))
+                .to.throw(/pairwise distinct/);
+            // Hex and Uint8Array forms of the same key are the same participant.
+            expect(() => musig.aggregateKeys([dup, '02'.padEnd(66, '0')]))
+                .to.throw(/pairwise distinct/);
+        });
+
         it('aggregateKeys throws on bad pubkey element', function () {
             expect(() => musig.aggregateKeys([h('02'.padEnd(66, '0')), 12345])).to.throw(/hex string or Uint8Array/);
+        });
+
+        it('generateNonce refuses to reuse a sessionId across different signing inputs', function () {
+            // BIP327 derives the SECRET nonce from the sessionId, so the same
+            // sessionId over a different message reuses the secret nonce and
+            // discloses the private key.
+            const sk = crypto.randomBytes(32);
+            const pk = Buffer.from(secp256k1.getPublicKey(sk, true));
+            const sessionId = crypto.randomBytes(32);
+            const msgA = crypto.randomBytes(32), msgB = crypto.randomBytes(32);
+            musig.generateNonce({ publicKey: pk, secretKey: sk, sessionId, msg: msgA });
+            expect(() => musig.generateNonce({ publicKey: pk, secretKey: sk, sessionId, msg: msgB }))
+                .to.throw(/sessionId was already used/);
+            // A byte-identical repeat regenerates the same nonce for the same
+            // message and signs nothing new, so it is allowed through.
+            expect(() => musig.generateNonce({ publicKey: pk, secretKey: sk, sessionId, msg: msgA })).to.not.throw();
+            // Omitting the sessionId leaves entropy to the library; nothing to reuse.
+            expect(() => musig.generateNonce({ publicKey: pk, secretKey: sk, msg: msgB })).to.not.throw();
         });
 
         it('generateNonce rejects params that are not objects', function () {

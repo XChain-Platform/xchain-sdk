@@ -70,7 +70,10 @@ describe('co-signer HTTP sidecar', function () {
     it('rejects construction with no token (fail-closed) unless allowUnauthenticated', function () {
         const sk = crypto.randomBytes(32);
         const pk = secp256k1.getPublicKey(sk, true);
-        const co = new CoSigner({ secretKey: sk, publicKeys: [pk, pk], policy: { allowedActions: new Set(['SEND']) } });
+        // Two DISTINCT participants: CoSigner now rejects a repeated key, so a
+        // [pk, pk] fixture never reaches the token gate this test is about.
+        const otherPk = secp256k1.getPublicKey(crypto.randomBytes(32), true);
+        const co = new CoSigner({ secretKey: sk, publicKeys: [pk, otherPk], policy: { allowedActions: new Set(['SEND']) } });
         expect(() => createCoSignerApp(co)).to.throw(/requires a non-empty opts\.token/);
         expect(() => createCoSignerApp(co, { token: '' })).to.throw(/requires a non-empty opts\.token/);
         // Explicit escape hatch builds the (unauthenticated) app without throwing.

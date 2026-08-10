@@ -97,6 +97,39 @@ const XCALL_MAX_RETURN_BYTES = 1024;
 // forward to the next block in (snapshot_block, call_id) order. Never dropped.
 const XCALL_MAX_CALLS_PER_BLOCK = 25;
 
+// ── ATTEST expiry sweep ─────────────────────────────────────────────────────
+// Deterministic per-block cap on the ATTEST v0 deadline-expiry sweep ().
+// Each expired request synthesizes an ATTEST v2 action that flips the request to
+// 'expired' and fires its callback, so an unbounded sweep lets a single block
+// inherit an arbitrary backlog: one block's processing time (and its actions
+// rows) becomes a function of how many requests happened to expire at once,
+// which an attacker controls by batching requests with a common deadline.
+//
+// Overflow carries forward to the next block rather than being dropped: the
+// selection is ordered (deadline_block ASC, action_index ASC), a TOTAL order
+// because action_index is unique, so the same requests expire in the same order
+// on every node, just spread across more blocks. Mirrors the XCALL sibling cap
+// above in both value and carry-forward semantics.
+//
+// CONSENSUS-VISIBLE: the cap decides which block an expiry lands in, which moves
+// actions rows, the contract hash and the checkpoint preimage. It ships ungated
+// under the  batch because the fleet-wide replay recomputes all of it.
+const ATTEST_MAX_EXPIRIES_PER_BLOCK = 25;
+
+// ── Token-gated content (PC-29) ─────────────────────────────────────────────
+// Fixed fractional scale for comparing FILE.GATE_MIN_AMOUNT thresholds against a
+// holder's balance. The wallet scales both sides to this many fractional digits
+// as BigInt (packages/core THRESHOLD_SCALE); the indexer compares with mathjs
+// bignumber. A threshold carrying MORE decimal places than this is
+// unrepresentable on the wallet side, so the two implementations would disagree
+// on the last digit for values neither considers malformed. The indexer therefore
+// bounds a threshold's decimal places at min(gate tick divisibility,
+// THRESHOLD_SCALE) rather than at divisibility alone.
+//
+// Cross-repo twin: xchain-wallet packages/core THRESHOLD_SCALE. These two must
+// move together or the disagreement returns.
+const THRESHOLD_SCALE = 18;
+
 // ── Chunked DEPLOY (DEPLOY v4 carriers + DEPLOY v2/v3 assemble) ─────────────
 // A contract whose base64(code) exceeds the single-tx budget is split across
 // ordered DEPLOY v4 carrier actions and reassembled by a DEPLOY v2/v3 keyed on
@@ -291,9 +324,11 @@ const VALID_FIAT_CODES = ['USD', 'CAD', 'AUD', 'MXN', 'GBP', 'JPY', 'CNY', 'CHF'
 const GAS_TICK = 'XCHAIN';
 
 // ── Oracle federation (xchain-hub) ───────────────────────────────────────────
-// Canonical source: xchain-hub/src/constants.js. Mirrored here byte-identical,
-// same as XCALL_MAX_HOPS above, so a hub-side edit or a consumer re-declaring
-// either literal has a cross-repo tripwire.
+// Canonical source: xchain-hub/src/constants.js. UNLIKE XCALL_MAX_HOPS above, these
+// two are NOT in the GOLDEN set of test/unit/xcall-constants-cross-repo.test.js; the
+// guard that diffs this copy against the canonical lives in xchain-hub/test/unit
+// (#3886, corrected here per #3888), so a drift reddens hub CI rather than this
+// repo's. Nothing here reads either one - they are re-exports for consumers.
 
 // Coarse global sanity ceiling on an ingested price_snapshots value (pre-scale,
 // covers pairs like BTC/KRW up to ~$7M BTC with headroom); rejects
@@ -309,8 +344,58 @@ const PRICE_MAX = 10_000_000_000;
 // the ±band boundary). 0.05 = 5%.
 const ORACLE_DEVIATION_THRESHOLD = 0.05;
 
+// ── Taproot envelope ( spec Part A) ───────────────────────────────────
+//
+// Per-encoding payload ceiling (§4): the envelope gets its own, and every
+// legacy lane keeps MAX_ACTION_DATA_LENGTH. Measures the REASSEMBLED payload
+// byte length after concatenating the payload pushes, before parse; the
+// envelope's own push framing is NOT counted. That is deliberately a different
+// measurand from MAX_ACTION_DATA_LENGTH, which is framing-inclusive, and the
+// ~0.6% difference between them is a fleet-divergence line at edge sizes.
+// DERIVED FROM WEIGHT : the binding limit is Bitcoin Core's
+// MAX_STANDARD_TX_WEIGHT of 400,000 WU, not a round byte count. 400,000 payload
+// bytes build a 402,789 WU reveal, which is non-standard and unrelayable; the
+// true maxima are 397,228 (P2WPKH change) and 397,009 (P2TR change + floor pad).
+// 390,000 sits 7,050 WU under the limit in the worst reveal shape. Re-derive it
+// from the weight limit if it ever changes; do not pick a number.
+// Canonical source: xchain-documentation/protocol/constants.js.
+const ENVELOPE_MAX_PAYLOAD = 390000;
+
+// ── FILE payload compression ( spec Part B) ────────────────────────────
+//
+// COMPRESSION is a trailing optional field on FILE v0:
+//   FILE|0|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH|GATE_MIN_AMOUNT|COMPRESSION
+// Empty/absent = raw (every historical FILE); '1' = deflate-raw.
+//
+// PRESENTATIONAL, NOT CONSENSUS (spec §5.5): FILE validity rules never inspect
+// rawData content, so an indexer that has never heard of this field produces
+// identical validity verdicts and identical state. That is also why the field
+// must NEVER be validated by anyone: shipped indexers silently ignore unknown
+// trailing fields, so a reader that rejected a malformed value would fork
+// validity across the fleet. Unknown/invalid codes degrade to serve-raw.
+const COMPRESSION_CODE_DEFLATE_RAW = '1';
+
+// Serve-side decompression ratio cap, enforced as a STREAMED abort (spec §5.5)
+// so a crafted payload cannot bomb a reader. 150:1 sits well under
+// deflate-raw's ~1032:1 theoretical maximum (a 1000:1 cap would guard nothing)
+// and well over real-world text ratios. No separate absolute output cap
+// exists: ENVELOPE_MAX_PAYLOAD makes ~60 MB the worst reachable inflation, so
+// one would be dead configuration. That bound is coupled to the envelope
+// ceiling: if it rises, revisit this ratio.
+const COMPRESSION_MAX_RATIO = 150;
+
+// Pre-compression input cap on rawData at the encoder (spec §5.2). The encoder
+// is a hard single-instance service ( lockfile guard), so compression is
+// async/streamed and bounded; this is the bound, applied to the bytes handed
+// in, before any compression attempt.
+const COMPRESSION_MAX_INPUT_BYTES = 16 * 1024 * 1024;
+
 module.exports = {
     MAX_ACTION_DATA_LENGTH,
+    ENVELOPE_MAX_PAYLOAD,
+    COMPRESSION_CODE_DEFLATE_RAW,
+    COMPRESSION_MAX_RATIO,
+    COMPRESSION_MAX_INPUT_BYTES,
     OP_RETURN_PUSH_OVERHEAD,
     MAX_CODE_SIZE,
     MAX_DEPLOY_CHUNKS,
@@ -324,6 +409,8 @@ module.exports = {
     XCALL_MAX_DEADLINE_BLOCKS,
     XCALL_MAX_RETURN_BYTES,
     XCALL_MAX_CALLS_PER_BLOCK,
+    ATTEST_MAX_EXPIRIES_PER_BLOCK,
+    THRESHOLD_SCALE,
     STAKE_WEIGHTED_QUORUM_ACTIVATION,
     EQUIV_HEADER_ACTIVATION,
     STATE_COMMITMENT_ACTIVATION,

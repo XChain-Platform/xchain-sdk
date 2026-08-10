@@ -20,6 +20,17 @@
  * isDistributed callback freeze, and TICK reserved tables are
  * internal; TICK charset mirrors as warning only.
  *
+ * Two lock-side movements since, both server-side and both already
+ * inside the ISSUE_LOCK_RATCHETS declaration: LOCK_NULL_PRIOR_UNSET
+ *  makes an absent prior read as UNSET rather than locked,
+ * which strictly narrows the "(locked)" rejection, and it is resolved
+ * once per action so the gate cannot differ field to field. The
+ * TRANSFER / TRANSFER_SUPPLY `^<id>` rejection added at the 
+ * flag-day is covered by the universal address-ref check, which is
+ * where it belongs: it is the same rule on five other actions, and
+ * ISSUE's genesis path skips the isCryptoAddress checks that used to
+ * be the only thing catching it.
+ *
  ********************************************************************/
 
 'use strict';

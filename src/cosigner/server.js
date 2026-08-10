@@ -104,7 +104,15 @@ function createCoSignerApp(coSigner, opts = {}) {
 
         let result;
         try {
-            result = coSigner.process({ psbt: body.psbt, inputs: body.inputs, sighashType: body.sighashType });
+            // `envelope` ( §3.9) is forwarded verbatim when present: the
+            // daemon validates it (grammar, own-key commitment, and whether the
+            // PSBT actually funds or spends it), so nothing here needs to judge
+            // it, and forwarding an absent field must stay a no-op for every
+            // ordinary request.
+            result = coSigner.process({
+                psbt: body.psbt, inputs: body.inputs, sighashType: body.sighashType,
+                envelope: body.envelope,
+            });
         } catch (e) {
             // CoSigner.process is fail-closed by return value; a throw here is an
             // unexpected internal fault. Surface as a denial, never as a sign.

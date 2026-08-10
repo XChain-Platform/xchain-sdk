@@ -93,6 +93,30 @@ function buildBalanceProof(address, tick, amountStr) {
     return { proof, stateRoot };
 }
 
+// A Stage A contract-state proof + the committed state_root, mirroring the
+// balance builder above but in the contract_state_root slot (index 4).
+function buildContractStateProof(contractIndex, stateKey, valueStr) {
+    const keyBuf = M.contractStateKey(CHAIN, NET, contractIndex, stateKey);
+    const present = valueStr !== null;
+    const leaf = present ? M.toHex(M.leafHash(valueStr)) : null;
+    const store = buildStore(present ? [[M.toHex(keyBuf), leaf]] : []);
+    const csRoot = store.root, balancesRoot = EMPTY_ROOT, stakesRoot = EMPTY_ROOT;
+    const roots = { balances_root: balancesRoot, stakes_root: stakesRoot, contract_state_root: csRoot };
+    const stateRoot = M.toHex(M.stateRoot(roots));
+    const sub = M.stateRootProof(roots, 'contract_state_root');
+    const proof = {
+        chain: CHAIN, network: NET, height: 100,
+        contract_index: contractIndex, state_key: stateKey,
+        state_value: present ? valueStr : null,
+        smt_proof: { key: M.toHex(keyBuf), leaf_value: leaf,
+                     compressed: M.compressSmtProof(store.descend(csRoot, keyBuf)) },
+        sub_root_path: { index: sub.index, siblings: sub.siblings },
+        contract_state_root: csRoot, balances_root: balancesRoot, stakes_root: stakesRoot,
+        state_root: stateRoot, state_root_version: 2
+    };
+    return { proof, stateRoot };
+}
+
 // A §5 action inclusion proof + the committed block_merkle_root.
 function buildActionProof() {
     const rows = {
@@ -151,6 +175,61 @@ describe('SPV Phase 4: sdk.light pure verifiers', function () {
         assert.strictEqual(light.verifyBalanceProof(proof, stateRoot, CHAIN, NET).reason, 'KEY_MISMATCH');
     });
 
+    // ---- binding a proof to the REQUESTED identity, not just the echoed one ----
+    // Every verifier re-derives its SMT key from fields carried IN the proof, so a
+    // valid proof for a DIFFERENT question passes. The explorer's contract-state
+    // double-decode made that happen for real ( frontier, 2026-08-06): a
+    // request for `a%41b` was answered, verifiably, for `aAb`.
+
+    it('verifyBalanceProof ACCEPTS a proof that matches the requested identity', function () {
+        const { proof, stateRoot } = buildBalanceProof(ADDR_A, TICK, '5');
+        const r = light.verifyBalanceProof(proof, stateRoot, CHAIN, NET, { address: ADDR_A, tick: TICK });
+        assert.strictEqual(r.verified, true, r.reason);
+    });
+
+    it('verifyBalanceProof REJECTS a wholly valid proof that answers a DIFFERENT address', function () {
+        // The server proves ADDR_Z's balance while the client asked about ADDR_A.
+        // Nothing in the proof is forged, which is precisely why the other checks pass.
+        const { proof, stateRoot } = buildBalanceProof(ADDR_Z, TICK, '0');
+        assert.strictEqual(light.verifyBalanceProof(proof, stateRoot, CHAIN, NET).verified, true,
+            'unbound verification must still accept it: that is the gap');
+        const r = light.verifyBalanceProof(proof, stateRoot, CHAIN, NET, { address: ADDR_A, tick: TICK });
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'REQUESTED_IDENTITY_MISMATCH');
+    });
+
+    it('verifyContractStateProof REJECTS a valid proof for the key the double-decode would have produced', function () {
+        // The exact production substitution: client asks `a%41b`, server answers `aAb`.
+        const { proof, stateRoot } = buildContractStateProof(7, 'aAb', '"v"');
+        assert.strictEqual(light.verifyContractStateProof(proof, stateRoot, CHAIN, NET).verified, true,
+            'the substituted proof is internally valid, which is the whole problem');
+        const bound = light.verifyContractStateProof(proof, stateRoot, CHAIN, NET,
+                                                     { contract_index: 7, state_key: 'a%41b' });
+        assert.strictEqual(bound.verified, false);
+        assert.strictEqual(bound.reason, 'REQUESTED_IDENTITY_MISMATCH');
+        // ...and the honest answer still verifies against the same expectation.
+        const honest = buildContractStateProof(7, 'a%41b', '"v"');
+        assert.strictEqual(light.verifyContractStateProof(honest.proof, honest.stateRoot, CHAIN, NET,
+                                                          { contract_index: 7, state_key: 'a%41b' }).verified, true);
+    });
+
+    it('verifyContractStateProof REJECTS a proof for a different CONTRACT, and compares index as a string', function () {
+        const { proof, stateRoot } = buildContractStateProof(8, 'owner', '"x"');
+        assert.strictEqual(light.verifyContractStateProof(proof, stateRoot, CHAIN, NET,
+                           { contract_index: 7 }).reason, 'REQUESTED_IDENTITY_MISMATCH');
+        // A numeric index and its decimal spelling are the same request.
+        assert.strictEqual(light.verifyContractStateProof(proof, stateRoot, CHAIN, NET,
+                           { contract_index: '8' }).verified, true);
+    });
+
+    it('the identity binding is OPT-IN and ignores absent fields, so existing callers are unaffected', function () {
+        const { proof, stateRoot } = buildBalanceProof(ADDR_A, TICK, '5');
+        for (const expected of [undefined, null, {}, { address: undefined }, { tick: null }]) {
+            assert.strictEqual(light.verifyBalanceProof(proof, stateRoot, CHAIN, NET, expected).verified, true,
+                'expected=' + JSON.stringify(expected) + ' must not change the verdict');
+        }
+    });
+
     it('verifyBalanceProof REJECTS when bound to the WRONG state_root', function () {
         const { proof } = buildBalanceProof(ADDR_A, TICK, '5');
         const r = light.verifyBalanceProof(proof, 'ff'.repeat(32), CHAIN, NET);
@@ -185,6 +264,108 @@ describe('SPV Phase 4: sdk.light pure verifiers', function () {
         const r = light.verifyBalanceProof(forged, stateRoot, CHAIN, NET);
         assert.strictEqual(r.verified, false);
         assert.strictEqual(r.reason, 'SUBROOT_SLOT_MISMATCH');
+    });
+
+    // ---- verifyLockedBalanceProof (XCHAIN_ESC, SPV sub-tree spec §3 Stage B) ----
+    // A locked proof is a balance proof in a second key domain of the SAME
+    // balances_root, so the builder just swaps the key derivation. The extra
+    // rule under test is LIVENESS: the SDK's own activation carrier decides
+    // whether the domain is committed at the proof's height, whatever the
+    // server said, because no proof can tell (an armed-but-idle domain and an
+    // inert one commit byte-identical roots).
+    const SUBACT = require('../../src/state_subtree_activation.js');
+    const ESC_KEY = CHAIN + ':' + NET;
+    // BTC:regtest carries a REAL armed height now, so "disarm" must not DELETE the key:
+    // that silently wipes the fleet-armed set for every later test in the process, and
+    // it is the third place this trap has appeared across the two armings. Disarming
+    // instead pushes the threshold out of reach, which is inert at every height a test
+    // uses while leaving the key present, and the real value is put back afterwards.
+    const ESC_HAD   = Object.prototype.hasOwnProperty.call(SUBACT.ESCROW_LOCKED_LEAF_ACTIVATION, ESC_KEY);
+    const ESC_PRIOR = SUBACT.ESCROW_LOCKED_LEAF_ACTIVATION[ESC_KEY];
+    function armEsc() { SUBACT.ESCROW_LOCKED_LEAF_ACTIVATION[ESC_KEY] = 0; }
+    function disarmEsc() { SUBACT.ESCROW_LOCKED_LEAF_ACTIVATION[ESC_KEY] = Number.MAX_SAFE_INTEGER; }
+    after(function(){
+        if(ESC_HAD) SUBACT.ESCROW_LOCKED_LEAF_ACTIVATION[ESC_KEY] = ESC_PRIOR;
+        else delete SUBACT.ESCROW_LOCKED_LEAF_ACTIVATION[ESC_KEY];
+    });
+
+    function buildLockedProof(address, tick, amountStr) {
+        const keyBuf = M.escrowKey(CHAIN, NET, address, tick);
+        const present = amountStr !== '0';
+        const leaf = present ? M.toHex(M.amountLeaf(amountStr)) : null;
+        const store = buildStore(present ? [[M.toHex(keyBuf), leaf]] : []);
+        const balancesRoot = store.root, stakesRoot = EMPTY_ROOT;
+        const stateRoot = M.toHex(M.stateRoot({ balances_root: balancesRoot, stakes_root: stakesRoot }));
+        const siblings = store.descend(balancesRoot, keyBuf);
+        const sub = M.stateRootProof({ balances_root: balancesRoot, stakes_root: stakesRoot }, 'balances_root');
+        const proof = {
+            chain: CHAIN, network: NET, height: 100, address, tick,
+            amount: M.canonicalAmount(amountStr),
+            smt_proof: { key: M.toHex(keyBuf), leaf_value: leaf, compressed: M.compressSmtProof(siblings) },
+            sub_root_path: { index: sub.index, siblings: sub.siblings },
+            balances_root: balancesRoot, stakes_root: stakesRoot,
+            state_root: stateRoot, state_root_version: 2
+        };
+        return { proof, stateRoot };
+    }
+
+    it('verifyLockedBalanceProof ACCEPTS a valid membership proof at an armed height', function () {
+        armEsc();
+        try {
+            const { proof, stateRoot } = buildLockedProof(ADDR_A, TICK, '7');
+            const r = light.verifyLockedBalanceProof(proof, stateRoot, CHAIN, NET);
+            assert.strictEqual(r.verified, true, r.reason);
+            assert.strictEqual(r.amount, M.canonicalAmount('7'));
+        } finally { disarmEsc(); }
+    });
+
+    it('verifyLockedBalanceProof ACCEPTS zero-locked as non-inclusion at an armed height', function () {
+        armEsc();
+        try {
+            const { proof, stateRoot } = buildLockedProof(ADDR_Z, TICK, '0');
+            const r = light.verifyLockedBalanceProof(proof, stateRoot, CHAIN, NET);
+            assert.strictEqual(r.verified, true, r.reason);
+            assert.strictEqual(r.amount, M.canonicalAmount('0'));
+        } finally { disarmEsc(); }
+    });
+
+    it('verifyLockedBalanceProof REFUSES below the armed height, whatever the server served', function () {
+        // Map inert (the shipped default): a below-arming non-inclusion would
+        // "verify" against a root that never covered the domain and mean nothing.
+        const { proof, stateRoot } = buildLockedProof(ADDR_A, TICK, '7');
+        const r = light.verifyLockedBalanceProof(proof, stateRoot, CHAIN, NET);
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'ESCROW_LEAF_NOT_COMMITTED');
+    });
+
+    it('verifyLockedBalanceProof refuses a garbage height fail-closed (strict parse)', function () {
+        armEsc();
+        try {
+            const { proof, stateRoot } = buildLockedProof(ADDR_A, TICK, '7');
+            proof.height = '100abc';                    // coerces >= 0 under lax parsing
+            const r = light.verifyLockedBalanceProof(proof, stateRoot, CHAIN, NET);
+            assert.strictEqual(r.reason, 'ESCROW_LEAF_NOT_COMMITTED');
+        } finally { disarmEsc(); }
+    });
+
+    it('verifyLockedBalanceProof REJECTS a spendable-domain proof (KEY_MISMATCH both ways)', function () {
+        armEsc();
+        try {
+            const spend  = buildBalanceProof(ADDR_A, TICK, '5');
+            const locked = buildLockedProof(ADDR_A, TICK, '7');
+            assert.strictEqual(light.verifyLockedBalanceProof(spend.proof, spend.stateRoot, CHAIN, NET).reason, 'KEY_MISMATCH');
+            assert.strictEqual(light.verifyBalanceProof(locked.proof, locked.stateRoot, CHAIN, NET).reason, 'KEY_MISMATCH');
+        } finally { disarmEsc(); }
+    });
+
+    it('verifyLockedBalanceProof REJECTS a server lying about the locked amount', function () {
+        armEsc();
+        try {
+            const { proof, stateRoot } = buildLockedProof(ADDR_A, TICK, '7');
+            proof.amount = '1';                          // leaf still commits 7
+            const r = light.verifyLockedBalanceProof(proof, stateRoot, CHAIN, NET);
+            assert.strictEqual(r.reason, 'LEAF_AMOUNT_MISMATCH');
+        } finally { disarmEsc(); }
     });
 
     it('verifyActionProof ACCEPTS a valid action inclusion proof (tx_index NULL)', function () {
@@ -395,6 +576,51 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
         assert.strictEqual(r.reason, 'NOT_A_V3_ANCHOR');
     });
 
+    it('verifyAnchoredCheckpoint REJECTS roots the signature never covered', function () {
+        // A legitimately signed ROOTLESS checkpoint: with the version fields absent,
+        // canonicalCheckpoint omits the root suffix, so the quorum signs the legacy
+        // canonical. Republishing it as a buried v3 with attacker-chosen roots used to
+        // pass, because the old signature still verifies against that same canonical.
+        const signer = makeSigner();
+        const cp = {
+            chain: CHAIN, network: NET, block_index: 100, block_hash: 'c0'.repeat(32),
+            ledger_hash: 'a1'.repeat(32), actions_hash: 'b2'.repeat(32), contract_hash: 'c3'.repeat(32),
+            checkpoint_seq: 7, snapshot_block: 100,
+            state_root: null, state_root_version: null,
+            block_merkle_root: null, block_merkle_version: null, validator_signatures: []
+        };
+        const canonical = checkpoint.canonicalCheckpoint(cp);
+        cp.validator_signatures = [{ pubkey: signer.pubkeyHex, sig: crypto.sign(null, Buffer.from(canonical, 'utf8'), signer.privateKey).toString('hex') }];
+        const validators = [{ pubkey: signer.pubkeyHex, source: signer.pubkeyHex, weight: '100' }];
+        // The signature is genuine and the quorum is real, but since  the base
+        // verifier ALSO refuses a rootless row once the commitment is active, so this
+        // attack is now blocked a layer earlier than the SPV checks below. Those checks
+        // stay asserted: they are the backstop if the row ever reaches them.
+        assert.strictEqual(checkpoint.verifyCheckpoint(cp, validators).valid, false);
+
+        // Attack: graft roots on without the version fields, so the canonical (and
+        // therefore the signature that covers it) is unchanged.
+        cp.state_root = 'ff'.repeat(32);
+        cp.block_merkle_root = 'ee'.repeat(32);
+        const r = light.verifyAnchoredCheckpoint({ checkpoint: cp, validators, confirmations: 300, minDepth: 60 });
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'ROOTS_NOT_SIGNED');
+
+        // Supplying the versions too pulls the roots into the canonical, which the
+        // old signature no longer matches: the attack fails on quorum instead.
+        cp.state_root_version = 1; cp.block_merkle_version = 1;
+        const r2 = light.verifyAnchoredCheckpoint({ checkpoint: cp, validators, confirmations: 300, minDepth: 60 });
+        assert.strictEqual(r2.verified, false);
+        assert.strictEqual(r2.reason, 'CHECKPOINT_QUORUM_FAILED');
+    });
+
+    it('verifyAnchoredCheckpoint REJECTS a root that is not a 32-byte hex value', function () {
+        const { cp, validators } = makeSignedV3();
+        cp.state_root = 'not-a-root';
+        const r = light.verifyAnchoredCheckpoint({ checkpoint: cp, validators, confirmations: 300, minDepth: 60 });
+        assert.strictEqual(r.reason, 'MALFORMED_ROOT');
+    });
+
     it('fetchAnchoredCheckpoint picks the newest v3 anchor and verifies depth + quorum', async function () {
         const a = makeSignedV3(null, 1000);
         // an older, lower-seq anchor that should be ignored in favor of the newest
@@ -424,6 +650,43 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
             targetChain: CHAIN, validators: a.validators, dogeTipHeight: 1200, minDepth: 60, fetchImpl });
         assert.strictEqual(r.verified, true, r.reason);
         assert.strictEqual(r.checkpoint.checkpoint_seq, 7);
+    });
+
+    // The explorer's block_index_doge is its own unverified claim about where its
+    // anchor tx landed, so a hostile explorer can mint any depth it wants and the
+    // buried-anchor gate proves nothing. These pin the caller-sourced height tier.
+    it('fetchAnchoredCheckpoint prefers the caller DOGE tx height over the explorer claim', async function () {
+        const a = makeSignedV3(null, 1000);
+        // Hostile explorer backdates its own anchor to fabricate a deep burial.
+        a.record.block_index_doge = 1;
+        const fetchImpl = async (url) => url.includes('/api/anchors/')
+            ? { ok: true, status: 200, json: async () => ({ data: [a.record] }) }
+            : { ok: false, status: 404, json: async () => ({}) };
+        const seen = [];
+        const r = await light.fetchAnchoredCheckpoint({ explorerUrl: 'https://x', dogeCoin: 'DOGE',
+            targetChain: CHAIN, validators: a.validators, dogeTipHeight: 1010, minDepth: 60, fetchImpl,
+            getDogeTxHeight: async (txid) => { seen.push(txid); return 1000; } });
+        assert.deepStrictEqual(seen, ['dd'.repeat(32)], 'the anchor txid must be handed to the caller lookup');
+        assert.strictEqual(r.depthSource, 'caller');
+        assert.strictEqual(r.confirmations, 11);                // 1010 - 1000 + 1, not the forged 1010
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'INSUFFICIENT_DOGE_DEPTH');
+    });
+
+    it('fetchAnchoredCheckpoint labels an explorer-sourced depth and requireTrustedDepth refuses it', async function () {
+        const a = makeSignedV3(null, 1000);
+        const fetchImpl = async (url) => url.includes('/api/anchors/')
+            ? { ok: true, status: 200, json: async () => ({ data: [a.record] }) }
+            : { ok: false, status: 404, json: async () => ({}) };
+        const base = { explorerUrl: 'https://x', dogeCoin: 'DOGE', targetChain: CHAIN,
+            validators: a.validators, dogeTipHeight: 1200, minDepth: 60, fetchImpl };
+        const loose = await light.fetchAnchoredCheckpoint(base);
+        assert.strictEqual(loose.verified, true, loose.reason);  // convenience tier unchanged
+        assert.strictEqual(loose.depthSource, 'explorer');
+        const strict = await light.fetchAnchoredCheckpoint(Object.assign({ requireTrustedDepth: true }, base));
+        assert.strictEqual(strict.verified, false);
+        assert.strictEqual(strict.reason, 'UNTRUSTED_DOGE_DEPTH');
+        assert.strictEqual(strict.depthSource, 'explorer');
     });
 
     it('a DOGE-anchored checkpoint then binds a balance proof via trustedCheckpoint', async function () {
@@ -644,6 +907,16 @@ describe('SPV D4: pinned launch trust root', function () {
             assert.strictEqual(pinned.getPinnedValidators(coin), null, coin);
         }
         assert.strictEqual(pinned.getPinnedCheckpoint(null), null);
+    });
+
+    // A consumer holding only an SDK INSTANCE (the reference wallet holds `sdk`,
+    // never the module namespace) must be able to ask which trust tier a verify
+    // call will take, off the same object it calls verify on. Re-exported rather
+    // than copied, so there is one registry and no second copy to drift.
+    it('sdk.light re-exports the registry accessors, and they ARE the registry', function () {
+        assert.strictEqual(light.getPinnedCheckpoint, pinned.getPinnedCheckpoint);
+        assert.strictEqual(light.getPinnedValidators, pinned.getPinnedValidators);
+        assert.strictEqual(light.getPinnedCheckpoint('BTC'), null);
     });
 
     it('verifyBalance uses the PINNED set and never fetches the explorer /verify endpoint', async function () {

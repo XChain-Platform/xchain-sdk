@@ -55,6 +55,62 @@ describe('pre-flight constants + registry', function () {
             }
         });
 
+        // #3934: the gate's two by-VALUE seams, driven against SYNTHETIC fixtures so the
+        // suite stays hermetic (the live sibling is a moving target, per the note above).
+        describe('by-value seams (#3934)', function () {
+            const fs = require('fs');
+            const os = require('os');
+            const { checkFeeQuoteSeam, checkGasSchedules } = require('../../../bin/check-preflight-drift.js');
+
+            let root;
+            const sdkCoin = (c) => path.join(__dirname, '..', '..', '..', 'src', 'coins', c + '.js');
+
+            function fakeIndexer({ exempt, gasOverrides }) {
+                root = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-gate-'));
+                fs.mkdirSync(path.join(root, 'src', 'coins'), { recursive: true });
+                fs.writeFileSync(path.join(root, 'src', 'actions.js'),
+                    "const FEE_QUOTE_DENYLIST = new Set(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);\n"
+                    + "const FEE_QUOTE_STATIC = new Set(['DEPLOY', 'EXECUTE']);\n"
+                    + 'const FEE_QUOTE_EXEMPT = new Set([' + exempt.map((a) => "'" + a + "'").join(', ') + ']);\n');
+                for (const c of ['BTC', 'LTC', 'DOGE']) {
+                    const real = require(sdkCoin(c));
+                    const schedule = Object.assign({}, real.GAS_SCHEDULE, (gasOverrides || {})[c] || {});
+                    fs.writeFileSync(path.join(root, 'src', 'coins', c + '.js'),
+                        'module.exports = { GAS_SCHEDULE: ' + JSON.stringify(schedule) + ' };\n');
+                }
+                return root;
+            }
+
+            afterEach(function () {
+                if (root) fs.rmSync(root, { recursive: true, force: true });
+                root = null;
+            });
+
+            it('passes when the fixtures agree with the SDK', function () {
+                const r = fakeIndexer({ exempt: ['COINPAY', 'DISPENSE'] });
+                expect(checkFeeQuoteSeam(r)).to.equal(0);
+                expect(checkGasSchedules(r)).to.equal(0);
+            });
+
+            it('fails when an action is both indexer-EXEMPT and SDK fee-charging', function () {
+                // The exact #3893 shape, inverted: a forfeiture warning for an action
+                // that charges nothing. BET is in FEE_CHARGING_ACTIONS.
+                const r = fakeIndexer({ exempt: ['COINPAY', 'BET'] });
+                expect(checkFeeQuoteSeam(r)).to.equal(1);
+            });
+
+            it('fails when a coin GAS_SCHEDULE value drifts', function () {
+                const r = fakeIndexer({ exempt: ['COINPAY'], gasOverrides: { DOGE: { VM_STATE_WRITE: 999999 } } });
+                expect(checkGasSchedules(r)).to.equal(1);
+            });
+
+            it('fails CLOSED when a coin module carries no GAS_SCHEDULE at all', function () {
+                const r = fakeIndexer({ exempt: ['COINPAY'] });
+                require('fs').writeFileSync(path.join(r, 'src', 'coins', 'LTC.js'), 'module.exports = {};\n');
+                expect(checkGasSchedules(r)).to.equal(1);
+            });
+        });
+
         it('every checks/ action module is mapped (or intentionally misc-only)', function () {
             // Guard against adding a certified check without a drift-map entry.
             const { parseMap } = require('../../../bin/check-preflight-drift.js');

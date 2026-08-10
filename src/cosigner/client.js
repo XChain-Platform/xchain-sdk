@@ -35,6 +35,10 @@ const crypto = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
 const { secp256k1 } = require('@noble/curves/secp256k1');
 const MuSig2 = require('../musig2.js');
+const {
+    deriveEnvelopeCommit, classifyEnvelopeRole, envelopeScriptPathSighash, envelopeRoundTweaks,
+} = require('./envelope.js');
+const { deriveMuSig2P2TR2of3 } = require('./account.js');
 const { SDKPolicyError } = require('../errors.js');
 const { taprootKeyPathSighash } = require('./coSigner.js');
 
@@ -44,6 +48,16 @@ function toBytes(v, label) {
     throw new Error(label + ' must be a hex string or Uint8Array');
 }
 
+// Compare two MuSig2 tweak lists by value (bytes + the xOnly flag).
+function tweaksMatch(a, b) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((t, i) => {
+        const u = b[i];
+        if (!t || !u || Boolean(t.xOnly) !== Boolean(u.xOnly)) return false;
+        return Buffer.from(t.tweak).equals(Buffer.from(u.tweak));
+    });
+}
+
 /*
  * Bind the co-signer's returned msg to the PSBT the agent actually submitted:
  * recompute the BIP341 key-path sighash locally and refuse to sign anything
@@ -51,11 +65,19 @@ function toBytes(v, label) {
  * agent emitting a signature over the wrong message that later dies as an
  * opaque network rejection. Throws SDKPolicyError on mismatch.
  */
-function assertMsgMatchesPsbt(psbtHex, inputIndex, msg) {
+// `envelope` is the envelope context this round is signing under, when there is
+// one ( §3.9): a REVEAL's message is the BIP342 tapleaf sighash, not the
+// key-path one, so re-deriving it the old way would report every honest reveal
+// as a COSIGNER_MSG_MISMATCH. The leaf hash is computed HERE from the agent's
+// own copy of the envelope script, so this stays an independent check of the
+// daemon's message rather than a rubber stamp on whatever it returned.
+function assertMsgMatchesPsbt(psbtHex, inputIndex, msg, envelope) {
     let expected;
     try {
         const psbt = bitcoin.Psbt.fromHex(psbtHex);
-        expected = taprootKeyPathSighash(psbt, inputIndex, undefined);
+        expected = (envelope && envelope.role === 'reveal')
+            ? envelopeScriptPathSighash(psbt, inputIndex, undefined, envelope.commit.leafHash)
+            : taprootKeyPathSighash(psbt, inputIndex, undefined);
     } catch (e) {
         throw new SDKPolicyError('COSIGNER_MSG_UNVERIFIABLE',
             'cannot recompute the sighash for input ' + inputIndex + ' to verify the co-signer msg: ' + e.message);
@@ -119,16 +141,82 @@ class CoSignerClient {
      *   transport   {function}  body -> Promise<result> (see inProcessTransport/httpTransport)
      *   publicKeys  {(Uint8Array|hex)[]}  full signer set, agreed order (must match the co-signer)
      *   tweaks      {Array}  optional; must match the co-signer (deriveMuSig2P2TR -> []).
+     *   recoveryPublicKey {Uint8Array|hex}  2-of-3 only: the operator-recovery party's
+     *                key, the SAME value the daemon is configured with. The client
+     *                re-derives the tap tree from it so it composes the identical
+     *                envelope commit tree  and can cross-check `tweaks`.
      */
     constructor(config = {}) {
         if (typeof config.transport !== 'function')
             throw new Error('CoSignerClient requires a transport function');
-        if (!Array.isArray(config.publicKeys) || config.publicKeys.length < 2)
-            throw new Error('CoSignerClient requires the full publicKeys set');
+        // EXACTLY two. sign()/signAll() aggregate exactly two partials (the agent's
+        // and the daemon's), so a three-key set derives and can FUND an aggregate
+        // address this client's only spend path can never sign for. N-of-N stays
+        // available on the generic MuSig2 primitives.
+        if (!Array.isArray(config.publicKeys) || config.publicKeys.length !== 2)
+            throw new Error('CoSignerClient requires exactly the [agent, daemon] publicKeys pair; '
+                + 'a 2-of-3 account names its third key separately as the recovery key');
         this.transport = config.transport;
         this.publicKeys = config.publicKeys;
         this.tweaks = config.tweaks || [];
         this.musig = new MuSig2();
+        // The account's OUTPUT key (post-tweak): what a key-path signature verifies under.
+        this.aggregateXOnly = Buffer.from(this.musig.aggregateKeys(this.publicKeys, this.tweaks).xOnlyPubkey);
+        // The UNTWEAKED cooperative aggregate: the envelope commit output's
+        // internal key and its leaf's OP_CHECKSIG key, in both account shapes.
+        // Derived here so the agent computes the leaf hash and the cancel tweak
+        // itself and never adopts the daemon's word for either.
+        this.internalXOnly = Buffer.from(this.musig.aggregateKeys(this.publicKeys, []).xOnlyPubkey);
+
+        // 2-of-3: re-derive the account tap tree so the commit tree this client
+        // composes carries the same two recovery leaves the daemon's does. Named
+        // by PUBLIC KEY rather than handed over as leaf scripts, for the same
+        // reason the daemon takes a key (G3): a supplied leaf is a tree the
+        // client cannot check, and a mismatched tree means a commit output the
+        // daemon will refuse (or, worse, one only half the parties can reach).
+        this.recoveryPublicKey = config.recoveryPublicKey || null;
+        this.recoveryLeaves = null;
+        if (this.recoveryPublicKey) {
+            let tree;
+            try {
+                tree = deriveMuSig2P2TR2of3({
+                    agent: this.publicKeys[0], daemon: this.publicKeys[1], recovery: this.recoveryPublicKey,
+                });
+            } catch (e) {
+                throw new Error('failed to derive the 2-of-3 tap tree from publicKeys/recoveryPublicKey: ' + e.message);
+            }
+            this.recoveryLeaves = tree.recovery;
+            // The key-path tweak is a property of that same tree, so a `tweaks`
+            // that disagrees with it is a misconfiguration that would otherwise
+            // surface as an unspendable address or an opaque signature failure.
+            const derived = tree.keyPath.tweaks;
+            if (config.tweaks === undefined) {
+                this.tweaks = derived;
+                this.aggregateXOnly = Buffer.from(this.musig.aggregateKeys(this.publicKeys, this.tweaks).xOnlyPubkey);
+            } else if (!tweaksMatch(this.tweaks, derived)) {
+                throw new Error('config.tweaks does not match the tweak derived from '
+                    + 'publicKeys + recoveryPublicKey; drop tweaks and let the client derive it');
+            }
+        }
+    }
+
+    // Build this round's envelope context from the agent's OWN copy of the
+    // script, mirroring the daemon's derivation exactly (both call the same
+    // module). Returns null when the round is not an envelope round.
+    _envelopeContext(psbtHex, envelopeScript, network) {
+        if (!envelopeScript) return null;
+        const script = Buffer.isBuffer(envelopeScript) ? envelopeScript : Buffer.from(String(envelopeScript), 'hex');
+        const commit = deriveEnvelopeCommit({
+            internalXOnly:  this.internalXOnly,
+            envelopeScript: script,
+            recoveryLeaves: this.recoveryLeaves,
+            network:        network || undefined,
+        });
+        const psbt = bitcoin.Psbt.fromHex(psbtHex, network ? { network } : undefined);
+        const role = classifyEnvelopeRole(psbt, commit);
+        if (!role) throw new SDKPolicyError('COSIGNER_CONFIG',
+            'the supplied envelope script neither funds nor spends this PSBT');
+        return { commit, role, script };
     }
 
     /*
@@ -146,6 +234,7 @@ class CoSignerClient {
     async sign(req = {}) {
         const secretKey = toBytes(req.secretKey, 'secretKey');
         const agentPub  = secp256k1.getPublicKey(secretKey, true);
+        const env = this._envelopeContext(req.psbt, req.envelopeScript, req.network);
 
         // Round 1: agent nonce (secret nonce stays in this.musig).
         const agentNonce = this.musig.generateNonce({ publicKey: agentPub, secretKey });
@@ -154,10 +243,10 @@ class CoSignerClient {
         // ONE request shape (the inputs array); the single-input convenience is
         // this method's job, so the daemon keeps a single validation path.
         const idx = Number.isInteger(req.inputIndex) ? req.inputIndex : 0;
-        const res = await this.transport({
+        const res = await this.transport(Object.assign({
             psbt:   req.psbt,
             inputs: [{ index: idx, agentPublicNonce: Buffer.from(agentNonce).toString('hex') }],
-        });
+        }, env ? { envelope: { script: env.script.toString('hex') } } : {}));
 
         if (!res || res.approved !== true)
             throw new SDKPolicyError(res && res.reason ? res.reason : 'COSIGNER_DENIED',
@@ -177,10 +266,13 @@ class CoSignerClient {
         // Combine: the co-signer derived the message from the PSBT and returned it;
         // we re-aggregate the nonces, build the same session, and add our partial.
         const msg = toBytes(sig0.msg, 'msg');
-        assertMsgMatchesPsbt(req.psbt, idx, msg);
+        assertMsgMatchesPsbt(req.psbt, idx, msg, env);
         const coNonce = toBytes(sig0.publicNonce, 'publicNonce');
         const aggNonce = this.musig.aggregateNonces([agentNonce, coNonce]);
-        const session  = this.musig.startSession(aggNonce, msg, this.publicKeys, this.tweaks);
+        // One shared definition of which tweaks each round signs under, so the
+        // two halves cannot drift apart (envelope.js).
+        const roundTweaks = envelopeRoundTweaks(env, this.tweaks);
+        const session  = this.musig.startSession(aggNonce, msg, this.publicKeys, roundTweaks);
         const agentSig = this.musig.partialSign({ secretKey, publicNonce: agentNonce, sessionKey: session });
         const signature = this.musig.aggregateSignatures([agentSig, toBytes(sig0.sig, 'sig')], session);
 
@@ -204,6 +296,7 @@ class CoSignerClient {
     async signAll(req = {}) {
         const secretKey = toBytes(req.secretKey, 'secretKey');
         const agentPub  = secp256k1.getPublicKey(secretKey, true);
+        const env = this._envelopeContext(req.psbt, req.envelopeScript, req.network);
         const indexes = (Array.isArray(req.inputIndexes) && req.inputIndexes.length) ? req.inputIndexes : [0];
 
         // Round 1: a unique agent nonce per input (secret nonces stay in this.musig).
@@ -214,7 +307,8 @@ class CoSignerClient {
             return { index: i, agentPublicNonce: Buffer.from(n).toString('hex') };
         });
 
-        const res = await this.transport({ psbt: req.psbt, inputs });
+        const res = await this.transport(Object.assign({ psbt: req.psbt, inputs },
+            env ? { envelope: { script: env.script.toString('hex') } } : {}));
         if (!res || res.approved !== true)
             throw new SDKPolicyError(res && res.reason ? res.reason : 'COSIGNER_DENIED',
                 'co-signer refused to sign: ' + (res && res.reason ? res.reason : 'unknown'),
@@ -227,10 +321,11 @@ class CoSignerClient {
             if (!agentNonce) throw new SDKPolicyError('COSIGNER_BAD_RESPONSE',
                 'co-signer returned a signature for an unrequested input ' + s.index);
             const msg     = toBytes(s.msg, 'msg');
-            assertMsgMatchesPsbt(req.psbt, s.index, msg);
+            assertMsgMatchesPsbt(req.psbt, s.index, msg, env);
             const coNonce = toBytes(s.publicNonce, 'publicNonce');
             const aggNonce = this.musig.aggregateNonces([agentNonce, coNonce]);
-            const session  = this.musig.startSession(aggNonce, msg, this.publicKeys, this.tweaks);
+            const roundTweaks = envelopeRoundTweaks(env, this.tweaks);
+            const session  = this.musig.startSession(aggNonce, msg, this.publicKeys, roundTweaks);
             const agentSig = this.musig.partialSign({ secretKey, publicNonce: agentNonce, sessionKey: session });
             const signature = this.musig.aggregateSignatures([agentSig, toBytes(s.sig, 'sig')], session);
             return { index: s.index, signature: Buffer.from(signature), msg: Buffer.from(msg) };

@@ -26,6 +26,7 @@
 const assert = require('assert');
 const EventEmitter = require('events');
 const ActionWaiter = require('../../src/actionWaiter.js');
+const { waitFor } = require('../helpers/wait.js');
 
 const TXID = 'aa'.repeat(32);
 
@@ -150,8 +151,10 @@ describe('ActionWaiter explorer target injection ', function () {
         const { sdk } = sharedOnlySdk({ ws });
         const waiter = new ActionWaiter(sdk);
         const p = waiter.waitForTxid(TXID, { timeout: 2000, pollInterval: 50, actionIndex: 0 });
-        // Give the promise body a tick to attach the listener.
-        await new Promise(r => setTimeout(r, 20));
+        // Wait for the listener to actually be attached, which is the condition
+        // the next line asserts; the old fixed 20ms was that same wait, guessed at.
+        await waitFor(() => ws.listenerCount('NEW_ACTION') === 1,
+            { message: 'the waiter never attached its NEW_ACTION listener' });
         assert.strictEqual(ws.listenerCount('NEW_ACTION'), 1);
         ws.emit('NEW_ACTION', { data: { tx_hash: TXID, action_index: 0, status: 'valid' } });
         const result = await p;

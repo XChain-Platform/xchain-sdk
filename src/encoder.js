@@ -53,8 +53,14 @@ class EncoderClient {
         let pool    = this._pool;
         let baseURL = this.baseUrl.startsWith('http') ? this.baseUrl : 'http://' + this.baseUrl + ':' + this.port;
         let isHttps = baseURL.startsWith('https');
+        // : an injected agent wins. The desktop wallet routes its
+        // traffic through a SOCKS5 proxy when the user turns on Tor routing,
+        // and that is expressed as pre-built agents because a SOCKS tunnel
+        // is a different way of opening the socket, not a pool tuning knob.
+        // http and https are separate because axios needs the matching one.
+        // Everything else keeps the pooled default, unchanged.
         let Agent   = isHttps ? require('https').Agent : require('http').Agent;
-        this._agent = new Agent({
+        this._agent = (isHttps ? pool.httpsAgent : pool.httpAgent) || new Agent({
             keepAlive:      pool.keepAlive !== undefined ? pool.keepAlive : true,
             keepAliveMsecs: pool.keepAliveMsecs || 1000,
             maxSockets:     pool.maxSockets || 10,
@@ -62,6 +68,7 @@ class EncoderClient {
         });
         this.client = axios.create({
             baseURL: baseURL,
+            proxy: false,
             timeout: this.timeout,
             headers: { 'Content-Type': 'application/json' },
             httpAgent:  isHttps ? undefined : this._agent,
@@ -183,7 +190,12 @@ class EncoderClient {
     //   change           - change address (defaults to pubkey on encoder side)
     //   utxos            - array of UTXO objects; null = auto-fetch from UTXO tracker
     //   rawData          - additional raw data to append (used by FILE action)
-    //   encoding         - force encoding: OP_RETURN, P2SH, P2WSH, MULTISIGN
+    //   encoding         - force encoding: OP_RETURN, P2SH, P2WSH, MULTISIGN,
+    //                      TAPROOT, or AUTO (smallest footprint the network and
+    //                      signer support; can return a commit/reveal PAIR)
+    //   compress         - FILE payload compression; omit for the encoder's
+    //                      default (ON), false to opt out
+    //   options          - { signerSupportsTapscript } for AUTO selection
     //   fee              - fixed fee in satoshis
     //   feePerKb         - fee rate in sat/KB for auto-calculation
     //   rbf              - enable Replace-by-Fee
@@ -234,6 +246,21 @@ class EncoderClient {
         // note), and it costs a node round trip plus real PSBT weight per
         // input, so it is opt-in per request rather than always-on.
         if (params.attachPrevTx !== undefined)     rpcParams.attachPrevTx = params.attachPrevTx;
+
+        //  Part B: transparent FILE payload compression. Tri-state on the
+        // wire - omitted takes the encoder's deployment default (ON), and an
+        // explicit false is the opt-out. Forwarded rather than defaulted here,
+        // because the SDK has no way to know what the encoder it is talking to
+        // was deployed with.
+        if (params.compress !== undefined)         rpcParams.compress = params.compress;
+
+        //  §6: per-call capabilities for encoding: "AUTO". Today the only
+        // key is signerSupportsTapscript, which AUTO needs before it will select
+        // the Taproot envelope: the reveal must be signable before the commit is
+        // broadcast, so an unaffirmed signer stays on P2WSH. The SDK does NOT
+        // default encoding to AUTO - that flips only in a major version, since
+        // AUTO can return a commit/reveal pair where callers expect one PSBT.
+        if (params.options !== undefined)          rpcParams.options = params.options;
 
         // D-7: pre-select the funding UTXOs BY ADDRESS before create_tx. Left to
         // its own devices (no `utxos` passed) the encoder resolves the funding set
@@ -416,5 +443,31 @@ class EncoderClient {
     }
 
 }
+
+// The optional createTx fields, named ONCE. Both high-level entry points
+// (sdk.createAction and LifecycleManager.submitAction) used to re-enumerate this
+// list by hand, and each had silently fallen behind createTx: feeQuote, compress,
+// options and sourceAddress were dropped on the floor, so a high-level caller lost
+// its protocol-fee output, its FILE compression policy, its Taproot signer
+// capability and its source-address UTXO selection with no error at all (a dropped
+// feeQuote mines a transaction protocol validation then rejects, burning the miner
+// fee). Adding a field to createTx means adding it here, and both callers get it.
+EncoderClient.CREATE_TX_OPTION_FIELDS = [
+    'change', 'utxos', 'rawData', 'encoding', 'fee', 'feePerKb', 'rbf', 'dust',
+    'unconfirmed', 'compressedPubKey', 'customOutputs', 'attachPrevTx',
+    'feeQuote', 'compress', 'options', 'sourceAddress'
+];
+
+// Copy the caller's SET createTx options onto `into` (a fresh object by default).
+// Undefined stays absent: createTx's own mapper reads absent and explicit-false as
+// different wire meanings (compress is tri-state), so copying undefined through
+// would change what the encoder is asked for.
+EncoderClient.pickCreateTxOptions = function (src, into) {
+    const out = into || {};
+    if (!src) return out;
+    for (const key of EncoderClient.CREATE_TX_OPTION_FIELDS)
+        if (src[key] !== undefined) out[key] = src[key];
+    return out;
+};
 
 module.exports = EncoderClient;

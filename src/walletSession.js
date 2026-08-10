@@ -27,6 +27,7 @@
 
 const UTXOCache        = require('./utxoCache.js');
 const LifecycleManager = require('./lifecycleManager.js');
+const Utility          = require('./utility.js');
 const { SDKWalletError } = require('./errors.js');
 
 
@@ -198,18 +199,19 @@ class WalletSession {
 
     // Contract-targeted staking (any token, ANY CHAIN - : STAKE v3 /
     // UNSTAKE v1 / DELEGATE v1 dispatch ahead of the indexer's BTC gate).
-    // VERSION is forced by the helper
+    // VERSION is forced by the helper (withForcedVersion, which throws rather
+    // than route a caller-supplied version)
     // so callers can't accidentally route to capability staking. Pass
     // { AMOUNT, SIGNING_PUBKEY, TARGET_CONTRACT_INDEX, TICK } for stake;
     // { SIGNING_PUBKEY, TARGET_CONTRACT_INDEX, TICK } for unstake / delegate.
-    async stakeToContract(params, enc, opts)     { return this.submit({ action: 'STAKE',    params: { VERSION: '3', ...params } }, enc, opts); }
-    async unstakeFromContract(params, enc, opts) { return this.submit({ action: 'UNSTAKE',  params: { VERSION: '1', ...params } }, enc, opts); }
-    async delegateForContract(params, enc, opts) { return this.submit({ action: 'DELEGATE', params: { VERSION: '1', ...params } }, enc, opts); }
+    async stakeToContract(params, enc, opts)     { return this.submit({ action: 'STAKE',    params: Utility.withForcedVersion('3', params) }, enc, opts); }
+    async unstakeFromContract(params, enc, opts) { return this.submit({ action: 'UNSTAKE',  params: Utility.withForcedVersion('1', params) }, enc, opts); }
+    async delegateForContract(params, enc, opts) { return this.submit({ action: 'DELEGATE', params: Utility.withForcedVersion('1', params) }, enc, opts); }
 
     // VM / Smart Contracts
     async deploy(params, enc, opts)      { return this.submit({ action: 'DEPLOY', params }, enc, opts); }
     // One base64 code slice of a chunked deploy. DEPLOY v4 carrier (see sdk.deployContract / chunkHelper).
-    async deployChunk(params, enc, opts) { return this.submit({ action: 'DEPLOY', params: { VERSION: '4', ...params } }, enc, opts); }
+    async deployChunk(params, enc, opts) { return this.submit({ action: 'DEPLOY', params: Utility.withForcedVersion('4', params) }, enc, opts); }
     async execute(params, enc, opts)   { return this.submit({ action: 'EXECUTE', params }, enc, opts); }
     async deposit(params, enc, opts)   { return this.submit({ action: 'DEPOSIT', params }, enc, opts); }
     async withdraw(params, enc, opts)  { return this.submit({ action: 'WITHDRAW', params }, enc, opts); }

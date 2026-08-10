@@ -282,6 +282,64 @@ describe('XChainSDK', function () {
             expect(result.encoding).to.equal('OP_RETURN');
             expect(sdk.encoder.createTx.calledOnce).to.be.true;
         });
+
+        // The forwarding list used to be hand-copied here and had fallen behind
+        // createTx: feeQuote, compress, options and sourceAddress were dropped
+        // silently, so a high-level caller lost its protocol-fee output, its FILE
+        // compression policy, its Taproot signer capability and its source-address
+        // UTXO selection with no error to tell it so.
+        it('forwards EVERY optional encoder field to encoder.createTx', async function () {
+            const EncoderClient = require('../../src/encoder.js');
+            const sdk = makeSDK();
+            mockEncoder(sdk, { psbt: 'aabbcc', encoding: 'OP_RETURN' });
+            const encoderOpts = { pubkey: 'mypubkey' };
+            // A distinguishable value per optional field, whatever the list holds today.
+            for (const key of EncoderClient.CREATE_TX_OPTION_FIELDS) encoderOpts[key] = 'set:' + key;
+            await sdk.createAction({
+                action: 'SEND',
+                params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' },
+                encoder: encoderOpts
+            });
+            const sent = sdk.encoder.createTx.firstCall.args[0];
+            for (const key of EncoderClient.CREATE_TX_OPTION_FIELDS)
+                expect(sent[key], key + ' must reach createTx').to.equal('set:' + key);
+            expect(sent.pubkey).to.equal('mypubkey');
+            expect(sent.data).to.be.a('string');
+        });
+
+        it('omits optional encoder fields the caller did not set (absent is not false)', async function () {
+            const sdk = makeSDK();
+            mockEncoder(sdk, { psbt: 'aabbcc', encoding: 'OP_RETURN' });
+            await sdk.createAction({
+                action: 'SEND',
+                params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' },
+                encoder: { pubkey: 'mypubkey' }
+            });
+            const sent = sdk.encoder.createTx.firstCall.args[0];
+            // createTx reads absent and explicit-false as different wire meanings
+            // (compress is tri-state), so an unset field must not appear at all.
+            expect(Object.prototype.hasOwnProperty.call(sent, 'compress')).to.equal(false);
+            expect(Object.prototype.hasOwnProperty.call(sent, 'feeQuote')).to.equal(false);
+        });
+
+        // Drift guard: the shared list is the ONLY place the optional set is named,
+        // so it has to stay equal to what createTx's own mapper actually reads.
+        it('the shared option list covers every optional field createTx maps', function () {
+            const fs = require('fs');
+            const path = require('path');
+            const EncoderClient = require('../../src/encoder.js');
+            const src = fs.readFileSync(path.join(__dirname, '../../src/encoder.js'), 'utf8');
+            const start = src.indexOf('async createTx(params)');
+            // Stop at the next method, or spendP2sh's own params leak into the scan.
+            const end = src.indexOf('\n    async ', start + 1);
+            const body = src.slice(start, end);
+            const read = new Set();
+            for (const m of body.matchAll(/params\.([A-Za-z_$][\w$]*)/g)) read.add(m[1]);
+            read.delete('data'); read.delete('pubkey');   // required, set explicitly by each caller
+            const listed = new Set(EncoderClient.CREATE_TX_OPTION_FIELDS);
+            const missing = [...read].filter(k => !listed.has(k));
+            expect(missing, 'createTx reads these but the shared list drops them: ' + missing.join(', ')).to.deep.equal([]);
+        });
     });
 
     describe('deploy pre-flight: constructor-params warning', function () {
@@ -1043,17 +1101,28 @@ describe('XChainSDK', function () {
             sdk = makeSDKWithWs();
             const cb = sinon.spy();
             const unsub = sdk.onAction(cb, { types: ['SEND'], ticks: ['TOKEN'] });
-            expect(sdk.ws.subscribe.firstCall.args[1]).to.deep.equal({ types: ['SEND'], ticks: ['TOKEN'] });
+            expect(sdk.ws.subscribe.firstCall.args[1]).to.deep.equal({ types: ['SEND'] });
             unsub();
         });
 
-        it('onAction does not forward the unsupported statuses filter', function () {
+        it('onAction does not forward the unsupported statuses or ticks filters', function () {
+            // #3860: ticks joins statuses as a filter no action frame can honor -
+            // getActionsSince selects no tick column, so it never narrows anything.
             sdk = makeSDKWithWs();
             const cb = sinon.spy();
             const unsub = sdk.onAction(cb, { types: ['SEND'], statuses: ['valid'], ticks: ['TOKEN'] });
             const params = sdk.ws.subscribe.firstCall.args[1];
             expect(params).to.not.have.property('statuses');
-            expect(params).to.deep.equal({ types: ['SEND'], ticks: ['TOKEN'] });
+            expect(params).to.not.have.property('ticks');
+            expect(params).to.deep.equal({ types: ['SEND'] });
+            unsub();
+        });
+
+        it('#3860: onAction with only a ticks filter subscribes with no params at all', function () {
+            sdk = makeSDKWithWs();
+            const cb = sinon.spy();
+            const unsub = sdk.onAction(cb, { ticks: ['TOKEN'] });
+            expect(sdk.ws.subscribe.firstCall.args[1]).to.equal(undefined);
             unsub();
         });
 

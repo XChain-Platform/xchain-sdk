@@ -62,17 +62,24 @@ describe('OP_RETURN pre-flight encoding boundary', function () {
         actions = createActions();
     });
 
-    it('accepts a SEND action string of exactly 76 bytes with OP_RETURN encoding', function () {
+    // The ceiling used to be read as 76 bytes (80 - 4 magic), which ignored the
+    // push prefix: a 76-byte payload compiles to an OP_PUSHDATA1 push of 78, and
+    // 78 + 4 is over 80, so the encoder rejected on the wire what this pre-flight
+    // had waved through.  moved the pre-flight onto the COMPILED push size,
+    // putting the real ceiling at 75. 76 is now the first rejected length, which
+    // is the boundary worth pinning here.
+    it('rejects a SEND action string of exactly 76 bytes with OP_RETURN encoding', function () {
         let params = makeSendOfLength(76);
-        let result = actions.createAction({
-            action: 'SEND',
-            params,
-            encoder: { encoding: 'OP_RETURN' }
+        expect(function () {
+            actions.createAction({
+                action: 'SEND',
+                params,
+                encoder: { encoding: 'OP_RETURN' }
+            });
+        }).to.throw().and.satisfy(function (err) {
+            // 76 payload + 2-byte OP_PUSHDATA1 prefix + 4 magic = 82 > 80.
+            return err.code === 'ENCODING_DATA_TOO_LARGE' && err.details.maxBytes === 75;
         });
-        let byteLen = Buffer.byteLength(result.actionString, 'utf8');
-        expect(byteLen).to.equal(76, 'action string must be exactly 76 bytes');
-        // No throw means the test passes:just confirm the result is a string
-        expect(result.actionString).to.be.a('string');
     });
 
     it('rejects a SEND action string of 77 bytes with OP_RETURN encoding (ENCODING_DATA_TOO_LARGE)', function () {

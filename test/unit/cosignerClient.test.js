@@ -100,6 +100,16 @@ describe('CoSignerClient (agent side)', function () {
         expect(() => new CoSignerClient({ transport: () => {} })).to.throw(/publicKeys/);
     });
 
+    it('rejects a signer set larger than the pair it can actually sign for', function () {
+        // sign()/signAll() aggregate exactly two partials, so a three-key set would
+        // derive and fund an aggregate address this client can never spend.
+        const key = () => Buffer.from(secp256k1.getPublicKey(crypto.randomBytes(32), true));
+        const three = [key(), key(), key()];
+        expect(() => new CoSignerClient({ transport: () => {}, publicKeys: three })).to.throw(/exactly the \[agent, daemon\]/);
+        expect(() => new CoSigner({ secretKey: crypto.randomBytes(32), publicKeys: three, policy: { allowedActions: new Set(['SEND']) } }))
+            .to.throw(/exactly the \[agent, daemon\]/);
+    });
+
     // The client must bind the co-signer's returned msg to the PSBT it actually
     // submitted (recomputed BIP341 key-path sighash), so a buggy/misconfigured
     // co-signer fails loudly here instead of yielding a wrong-message signature

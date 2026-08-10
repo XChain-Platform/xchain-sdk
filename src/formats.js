@@ -120,8 +120,18 @@ var Formats = {
         0: 'VERSION|CONTRACT_ACTION_INDEX|METHOD|...PARAMS'
     },
 
+    // PC-29 /  P9: FILE format 0 gains an optional NINTH field,
+    // GATE_MIN_AMOUNT, the minimum balance of GATE_TICKER a recipient must hold to
+    // be given the decryption key. The eight-field form stays byte-identical, so
+    // every historical FILE replays unchanged; absent or empty means no threshold.
+    //
+    //  Part B: a TENTH field, COMPRESSION, follows the same trailing-field
+    // precedent. Empty/absent = raw (every historical FILE), '1' = deflate-raw.
+    // It is PRESENTATIONAL, never consensus (spec §5.5): it tells a reader how to
+    // reconstruct the original bytes and never affects validity anywhere. For a
+    // token-gated FILE it means inflate-AFTER-decrypt, client-side only.
     FILE: {
-        0: 'VERSION|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH'
+        0: 'VERSION|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH|GATE_MIN_AMOUNT|COMPRESSION'
     },
 
     ISSUE: {

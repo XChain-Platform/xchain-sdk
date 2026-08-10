@@ -63,7 +63,7 @@ const bitcoin = require('bitcoinjs-lib');
 const ecc     = require('@bitcoinerlab/secp256k1');
 const MuSig2  = require('../musig2.js');
 const { evaluatePolicy } = require('./policyEvaluator.js');
-const { decodeActionFromPsbt } = require('./psbtActionDecode.js');
+const { decodeActionFromPsbt, decodeEnvelopeAction } = require('./psbtActionDecode.js');
 const { deriveMuSig2P2TR2of3 } = require('./account.js');
 const { isCapInert } = require('./valueDerivability.js');
 
@@ -87,6 +87,17 @@ function toBytes(v, label) {
 // message that does not bind the outputs the co-signer just gated, then
 // reassemble a drain transaction that still verifies on-chain. `undefined`
 // defaults to SIGHASH_DEFAULT and is allowed.
+// Parse an operator-supplied satoshi bound to an EXACT u64, or null if it cannot be
+// represented exactly. Accepts bigint, an integer Number, and a digit string, because
+// a config value above 2^53 can only reach us intact as one of the latter two.
+// Number() would silently round it, which is the whole defect ().
+function exactU64(v) {
+    if (typeof v === 'bigint') return v >= 0n ? v : null;
+    if (typeof v === 'number') return (Number.isInteger(v) && v >= 0) ? BigInt(v) : null;
+    if (typeof v === 'string' && /^\d+$/.test(v.trim())) return BigInt(v.trim());
+    return null;
+}
+
 const ALLOWED_SIGHASH = new Set([bitcoin.Transaction.SIGHASH_DEFAULT]);
 function sighashAllowed(hashType) {
     return hashType === undefined || ALLOWED_SIGHASH.has(hashType);
@@ -122,6 +133,15 @@ function isStandardPaymentScript(script) {
 // Comfortably above any realistic agent spend, far below the point where the
 // quadratic sighash work becomes a denial of service.
 const DEFAULT_MAX_COSIGN_INPUTS = 32;
+
+//  §3.9: the Taproot envelope needs a tap-tweaked key path, a script
+// path, and an action read out of a leaf script. All three derive from public
+// bytes in cosigner/envelope.js, so the daemon and the agent compute them
+// independently and neither has to trust the other's tweak (the G3 property).
+const {
+    deriveEnvelopeCommit, classifyEnvelopeRole, envelopeScriptPathSighash,
+    envelopeRoundTweaks,
+} = require('./envelope.js');
 
 // BIP341 key-path sighash for one input, reconstructed from the PSBT. Requires a
 // witnessUtxo on EVERY input (the sighash commits to all prevouts); throws if any
@@ -170,8 +190,12 @@ class CoSigner {
     constructor(config = {}) {
         this.secretKey  = toBytes(config.secretKey, 'secretKey');
         if (this.secretKey.length !== 32) throw new Error('secretKey must be 32 bytes');
-        if (!Array.isArray(config.publicKeys) || config.publicKeys.length < 2)
-            throw new Error('publicKeys must list the full signer set (>= 2)');
+        // EXACTLY two: the daemon returns ONE partial and the agent aggregates it
+        // with its own, so a larger set funds an address the cooperative path can
+        // never spend. The 2-of-3 account names its third key as recoveryPublicKey.
+        if (!Array.isArray(config.publicKeys) || config.publicKeys.length !== 2)
+            throw new Error('publicKeys must be exactly the [agent, daemon] pair '
+                + '(a 2-of-3 account names its third key as recoveryPublicKey)');
         this.publicKeys = config.publicKeys;
         if (!config.policy || !config.policy.allowedActions)
             throw new Error('a normalized policy with allowedActions is required');
@@ -291,6 +315,15 @@ class CoSigner {
                 network: this.network || undefined,
             });
             this.accountScript = p2tr.output;
+            // The account's OUTPUT key: the bare aggregate on a 2-of-2, the
+            // tap-tweaked key on a 2-of-3. What a key-path signature verifies under.
+            this.aggregateXOnly = Buffer.from(agg.xOnlyPubkey);
+            // The UNTWEAKED cooperative aggregate MuSig2(agent, daemon), which is
+            // the envelope commit tree's internal key and its leaf's OP_CHECKSIG
+            // key in BOTH account shapes . On a 2-of-2 it is the same
+            // bytes as aggregateXOnly; on a 2-of-3 it is the account tap tree's
+            // internal key, so a reveal stays a no-tweak session either way.
+            this.internalXOnly = Buffer.from(this.musig.aggregateKeys(this.publicKeys, []).xOnlyPubkey);
         } catch (e) {
             throw new Error('failed to derive the account scriptPubKey from the participant keys: ' + e.message);
         }
@@ -336,9 +369,13 @@ class CoSigner {
             if (o.maxValue === undefined || o.maxValue === null)
                 throw new Error(`allowedOutputs[${i}] needs a maxValue: without one the entry authorizes ` +
                     `unlimited native coin to that address on every approved transaction`);
-            const maxValue = Number(o.maxValue);
-            if (!Number.isFinite(maxValue) || maxValue < 0)
-                throw new Error(`allowedOutputs[${i}].maxValue must be a non-negative number`);
+            // BigInt, not Number: satoshi caps are u64, and Number(9007199254740993n)
+            // is 9007199254740992, so an output ONE unit above a >2^53 cap compared
+            // equal and was approved. The rest of this file already reconciles fees
+            // in BigInt for the same reason (see _toU64) ().
+            const maxValue = exactU64(o.maxValue);
+            if (maxValue === null)
+                throw new Error(`allowedOutputs[${i}].maxValue must be a non-negative integer (number, bigint, or digit string)`);
             return { script, maxValue };
         });
     }
@@ -350,11 +387,17 @@ class CoSigner {
     // account's coin to themselves. Permit only: the OP_RETURN data carrier, change
     // back to the account we spend from, and operator-authorized outputs. Anything
     // else fails closed. Returns a denial object, or null when every output is safe.
-    _checkOutputs(psbt, idx) {
+    // `env` is the envelope context when this request is part of an envelope
+    // (null otherwise). It changes exactly two things: on a COMMIT the single
+    // commit output is authorized (it is the only way to fund an envelope at
+    // all), and on a REVEAL/CANCEL "change back to self" means the ACCOUNT
+    // script rather than the input's own script, which is the one-shot commit
+    // output and must never be treated as a safe place to return value to.
+    _checkOutputs(psbt, idx, env) {
         const inp = psbt.data.inputs[idx];
         if (!inp || !inp.witnessUtxo || !inp.witnessUtxo.script)
             return this._deny('CANNOT_CHECK_OUTPUTS', 'signed input has no witnessUtxo');
-        const accountScript = inp.witnessUtxo.script;
+        const accountScript = env ? this.accountScript : inp.witnessUtxo.script;
         // Running total PER allow-list entry, so N outputs matching the SAME
         // entry are capped on their sum, not each independently (otherwise a
         // repeated authorized output multiplies the operator's cap by N).
@@ -362,6 +405,7 @@ class CoSigner {
         // distinct entries never share a budget even if they somehow matched
         // the same script.
         const spent = new Map();
+        let commitOutputsSeen = 0;
         for (let i = 0; i < psbt.txOutputs.length; i++) {
             const out = psbt.txOutputs[i];
             // (a) OP_RETURN data carrier: carries the action, not value. It MUST
@@ -383,14 +427,40 @@ class CoSigner {
             }
             // (b) Change back to the account we spend from stays under co-signer control.
             if (out.script.equals(accountScript)) continue;
+            // (b2) The envelope commit output on a COMMIT request. Its value is
+            //      the reveal's prefunded miner fee plus one dust change, so it
+            //      leaves the account for good and is bounded by maxFeeSats:
+            //      without that cap an "envelope" is an unbounded drain wearing
+            //      a commit output's shape. Exactly one is authorized; a second
+            //      would be a second, ungated envelope on the same transaction.
+            if (env && env.role === 'commit' && out.script.equals(env.commit.output)) {
+                if (commitOutputsSeen++ > 0)
+                    return this._deny('UNAUTHORIZED_OUTPUT', { index: i, detail: 'more than one envelope commit output' });
+                if (this.maxFeeSats === null)
+                    return this._deny('ENVELOPE_COMMIT_UNBOUNDED',
+                        'an envelope commit prefunds the reveal fee, so maxFeeSats must be set to bound it');
+                // Same exact-u64 comparison as the allowed-output caps below ():
+                // a value Number() cannot hold exactly must not be compared as a Number.
+                const commitValue = this._toU64(out.value);
+                if (commitValue === null || commitValue > BigInt(this.maxFeeSats))
+                    return this._deny('OUTPUT_OVER_CAP',
+                        { index: i, value: String(out.value), maxValue: this.maxFeeSats, detail: 'envelope commit output' });
+                continue;
+            }
             // (c) An operator-authorized native leg (COINPAY recipient / fee output).
             const match = this.allowedOutputs.find((a) => out.script.equals(a.script));
             if (match) {
-                const total = (spent.get(match) || 0) + Number(out.value);
+                // Exact u64 arithmetic end to end (): a value this policy
+                // cannot represent exactly is refused rather than rounded into the cap.
+                const value = this._toU64(out.value);
+                if (value === null)
+                    return this._deny('OUTPUT_OVER_CAP',
+                        { index: i, value: String(out.value), maxValue: String(match.maxValue), detail: 'output value is not an exact non-negative integer' });
+                const total = (spent.get(match) || 0n) + value;
                 spent.set(match, total);
                 // maxValue is mandatory since G7, so this is always a real bound.
                 if (total > match.maxValue)
-                    return this._deny('OUTPUT_OVER_CAP', { index: i, value: out.value, total, maxValue: match.maxValue });
+                    return this._deny('OUTPUT_OVER_CAP', { index: i, value: String(out.value), total: String(total), maxValue: String(match.maxValue) });
                 continue;
             }
             // Anything else is an unauthorized native-coin drain.
@@ -461,16 +531,23 @@ class CoSigner {
     // recorded. Keeps the existing CANNOT_CHECK_OUTPUTS denial for a missing
     // witnessUtxo entirely. Returns a denial object, or null when every
     // checked input's prevout is confirmed to be this account.
-    _checkPrevouts(psbt, indices) {
+    // `expectedScript` defaults to this account's script. An envelope reveal or
+    // cancel spends the COMMIT output instead, which is not the account script
+    // but is derived by this daemon from the account's own aggregate key plus a
+    // leaf it has parsed and read the action out of, so it is equally proven to
+    // belong to this account. Passing it explicitly keeps the gate a real check
+    // in both cases rather than something the envelope path skips.
+    _checkPrevouts(psbt, indices, expectedScript) {
+        const expected = expectedScript || this.accountScript;
         for (const idx of indices) {
             const inp = psbt.data.inputs[idx];
             if (!inp || !inp.witnessUtxo || !inp.witnessUtxo.script)
                 return this._deny('CANNOT_CHECK_OUTPUTS', 'signed input has no witnessUtxo');
             const got = inp.witnessUtxo.script;
-            if (!got.equals(this.accountScript))
+            if (!got.equals(expected))
                 return this._deny('PREVOUT_NOT_OUR_ACCOUNT', {
                     index:    idx,
-                    expected: this.accountScript.toString('hex'),
+                    expected: expected.toString('hex'),
                     got:      got.toString('hex'),
                 });
         }
@@ -535,29 +612,85 @@ class CoSigner {
             else if (!wu.script.equals(accountScript)) return this._deny('MIXED_INPUT_SCRIPTS', { index: i });
         }
 
+        // 1b. Envelope context ( §3.9). Present only when the caller
+        //     supplies the envelope SCRIPT; the script is not a trust transfer
+        //     the way a raw tweak would be (G3), because this daemon parses it,
+        //     matches it against the §3.2 grammar, checks it commits to this
+        //     account's own aggregate key, and reads the ACTION it is being
+        //     asked to approve straight out of it. The role is DERIVED from the
+        //     PSBT, never taken from the request.
+        //     A 2-of-3 account composes its own two recovery leaves into the
+        //     commit tree alongside the envelope leaf (, tree shape and
+        //     rationale in envelope.js). Nothing is improvised: the leaves are
+        //     re-derived here from the same three participant public keys that
+        //     produced the account, so the commit output keeps the same
+        //     two-of-three property the account has rather than stranding the
+        //     prefunded reveal fee behind a lost co-signer.
+        let env = null;
+        if (req.envelope) {
+            let script;
+            try { script = Buffer.isBuffer(req.envelope.script) ? req.envelope.script : Buffer.from(String(req.envelope.script), 'hex'); }
+            catch (e) { return this._deny('ENVELOPE_SCRIPT_INVALID', 'envelope.script is not hex'); }
+            let commit;
+            try {
+                commit = deriveEnvelopeCommit({
+                    internalXOnly:  this.internalXOnly,
+                    envelopeScript: script,
+                    recoveryLeaves: this.tapTree ? this.tapTree.recovery : null,
+                    network:        this.network || undefined,
+                });
+            } catch (e) { return this._deny('ENVELOPE_SCRIPT_INVALID', e.message); }
+            const role = classifyEnvelopeRole(psbt, commit);
+            // No role means the PSBT neither funds this envelope nor spends its
+            // commit: the script would be decoration, and the action it declares
+            // would be one the transaction never carries.
+            if (!role) return this._deny('ENVELOPE_NOT_COMMITTED',
+                'this PSBT neither creates nor spends the commit output this envelope script derives');
+            env = { commit, role, script };
+        }
+
         // 2. Recover the action FROM the PSBT (never trust the caller's claim).
-        const decoded = decodeActionFromPsbt(psbt, { network: this.network });
+        //    On a COMMIT the action is not in the transaction at all: it lives in
+        //    the leaf the commit output COMMITS to, so it is read from the script
+        //    whose hash this daemon just matched against an output. On a
+        //    REVEAL/CANCEL the leaf is in the PSBT and decodeActionFromPsbt finds
+        //    it there.
+        const decoded = (env && (env.role === 'commit' || env.role === 'cancel'))
+            ? decodeEnvelopeAction(env.script)
+            : decodeActionFromPsbt(psbt, { network: this.network });
         if (!decoded.ok) return this._deny('DECODE_' + decoded.reason, decoded.detail);
 
         // 3. Policy, against the server-side window snapshot. The decoded VERSION
         //    is passed too: the evaluator needs the exact (action, version) to know
         //    whether an amount cap can bind this format at all (G2) and whether the
         //    format can honour allowedDestinations (G9).
+        //
+        //    A CANCEL is the one request that skips policy, because it publishes
+        //    NO ACTION AT ALL: it spends an unrevealed commit back to the
+        //    account, so there is nothing for policy to authorize, and the
+        //    output gate below is what bounds where the value goes. Gating it on
+        //    policy would mean that tightening a policy (or retiring an action
+        //    from allowedActions) permanently strands whatever sits in an
+        //    unrevealed commit, turning a recovery path into a way to lose funds.
         const windowUsage = this.windowStore ? this.windowStore.snapshot() : undefined;
-        const verdict = evaluatePolicy(this.policy,
-            { action: decoded.action, version: decoded.version, params: decoded.params }, windowUsage);
-        if (!verdict.ok) return this._deny(verdict.violation.code, verdict.violation.details);
+        let verdict = { ok: true, evaluation: {} };
+        if (!env || env.role !== 'cancel') {
+            verdict = evaluatePolicy(this.policy,
+                { action: decoded.action, version: decoded.version, params: decoded.params }, windowUsage);
+            if (!verdict.ok) return this._deny(verdict.violation.code, verdict.violation.details);
 
-        // 4. Confirm-required actions: a headless daemon cannot prompt, so deny by default.
-        if (verdict.evaluation.needsConfirmation && !this.allowConfirmable)
-            return this._deny('CONFIRMATION_REQUIRED',
-                { action: decoded.action, amount: verdict.evaluation.amount });
+            // 4. Confirm-required actions: a headless daemon cannot prompt, so deny by default.
+            if (verdict.evaluation.needsConfirmation && !this.allowConfirmable)
+                return this._deny('CONFIRMATION_REQUIRED',
+                    { action: decoded.action, amount: verdict.evaluation.amount });
+        }
 
         // 5. Prevout gate: verify every input we are about to sign for actually
         //    spends THIS account's derived scriptPubKey, not a caller-supplied
         //    witnessUtxo pointing at a foreign script. Must run before any budget
         //    consumption below.
-        const prevoutDenial = this._checkPrevouts(psbt, inputs.map((it) => it.index));
+        const prevoutDenial = this._checkPrevouts(psbt, inputs.map((it) => it.index),
+            env && env.role !== 'commit' ? env.commit.output : null);
         if (prevoutDenial) return prevoutDenial;
 
         // 5b. Source gate (G16): the action's protocol SOURCE is the transaction's
@@ -569,14 +702,15 @@ class CoSigner {
         //     for an action the chain credits to a different address, and the
         //     window (which doubles as the approval audit log) would record spends
         //     this account never made. Require input 0 to be one of ours.
-        const sourceDenial = this._checkSource(psbt, seenIdx);
+        const sourceDenial = this._checkSource(psbt, seenIdx,
+            env && env.role !== 'commit' ? env.commit.output : null);
         if (sourceDenial) return sourceDenial;
 
         // 6. Output gate: the action string does not constrain where the native coin
         //    goes, so refuse any output that is not the data carrier, change-to-self,
         //    or operator-authorized. Blocks a benign-action / drain-output craft.
         //    Once, since all signed inputs share accountScript by the check above.
-        const outDenial = this._checkOutputs(psbt, inputs[0].index);
+        const outDenial = this._checkOutputs(psbt, inputs[0].index, env);
         if (outDenial) return outDenial;
 
         // 7. Fee gate: the output gate stops diversion but not a change-omission
@@ -593,10 +727,29 @@ class CoSigner {
         // 9. One partial signature per input, each over its OWN BIP341 sighash
         //    derived from the PSBT, with that input's own agent nonce (never a
         //    reused nonce).
+        //    Three message/tweak shapes now exist, all derived here:
+        //      - ordinary spend, and an envelope COMMIT: key-path sighash under
+        //        this account's own tweaks (empty for the 2-of-2);
+        //      - envelope REVEAL: the BIP342 tapleaf sighash, signed under the
+        //        BARE aggregate, because the leaf's OP_CHECKSIG key IS the
+        //        aggregate (no tweak);
+        //      - envelope CANCEL: the ordinary key-path sighash, but signed
+        //        under TapTweak(aggregate || leafHash), because the commit
+        //        output key commits to the leaf. That tweak is DERIVED from the
+        //        script above, never accepted from the caller (G3).
+        //    The three shapes are selected EXPLICITLY rather than by falling
+        //    through to this.tweaks: a reveal signs the leaf's bare aggregate, so
+        //    on a 2-of-3 (where this.tweaks is the account's key-path tweak) the
+        //    fall-through produced a signature under the wrong key .
         const signatures = [];
+        const envTweaks = envelopeRoundTweaks(env, this.tweaks);
         for (const it of inputs) {
             let msg;
-            try { msg = taprootKeyPathSighash(psbt, it.index, req.sighashType); }
+            try {
+                msg = (env && env.role === 'reveal')
+                    ? envelopeScriptPathSighash(psbt, it.index, req.sighashType, env.commit.leafHash)
+                    : taprootKeyPathSighash(psbt, it.index, req.sighashType);
+            }
             catch (e) { return this._deny('CANNOT_DERIVE_SIGHASH', e.message); }
             let det;
             try {
@@ -604,7 +757,7 @@ class CoSigner {
                     secretKey:         this.secretKey,
                     otherPublicNonces: [toBytes(it.agentPublicNonce, 'agentPublicNonce')],
                     publicKeys:        this.publicKeys,
-                    tweaks:            this.tweaks,
+                    tweaks:            envTweaks,
                     msg,
                 });
             } catch (e) { return this._deny('SIGN_FAILED', e.message); }
@@ -619,9 +772,19 @@ class CoSigner {
         // 10. Budget consumed ONCE for the tx, on authorization (a per-input record
         //     would over-count; charging on authorization rather than broadcast is
         //     conservative - an abandoned aggregate has still spent the cap).
-        this._recordBudget(psbt, verdict.evaluation);
+        //
+        //     An envelope is TWO transactions carrying ONE action, so it is
+        //     charged once, at the commit: that is the transaction that spends
+        //     account value, and the reveal only spends the commit output the
+        //     window already paid for. Charging both would silently halve every
+        //     budget for envelope-carried actions while looking correct. A
+        //     CANCEL is charged nothing for the same reason and one more: it
+        //     returns funds to the account, and making recovery cost budget
+        //     would let an agent exhaust its own window by cancelling.
+        if (!env || env.role === 'commit') this._recordBudget(psbt, verdict.evaluation);
 
-        return { approved: true, action: decoded.action, signatures };
+        return { approved: true, action: decoded.action, signatures,
+                 envelopeRole: env ? env.role : undefined };
     }
 
     // Source gate (G16). `signed` is the set of input indexes this request signs.
@@ -629,16 +792,23 @@ class CoSigner {
     // proves the second for every signed input, so membership is the load-bearing
     // half, and the script re-check keeps this correct if the gates are ever
     // reordered.
-    _checkSource(psbt, signed) {
+    // `expectedScript` mirrors _checkPrevouts: an envelope REVEAL or CANCEL has
+    // the commit outpoint at input 0 by construction (§3.5 pins it there, and
+    // the decoder's recognition depends on it), so the script to expect is the
+    // commit's. The gate itself is unchanged in force: input 0 must still be one
+    // of the inputs we sign, and must still spend a script this daemon derived
+    // rather than one the caller named.
+    _checkSource(psbt, signed, expectedScript) {
+        const expected = expectedScript || this.accountScript;
         if (!signed.has(0))
             return this._deny('SOURCE_NOT_OUR_ACCOUNT',
                 { detail: 'input 0 is the action\'s protocol source but is not one of the inputs being co-signed' });
         const inp = psbt.data.inputs[0];
         if (!inp || !inp.witnessUtxo || !inp.witnessUtxo.script)
             return this._deny('SOURCE_NOT_OUR_ACCOUNT', { detail: 'input 0 has no witnessUtxo' });
-        if (!inp.witnessUtxo.script.equals(this.accountScript))
+        if (!inp.witnessUtxo.script.equals(expected))
             return this._deny('SOURCE_NOT_OUR_ACCOUNT', {
-                expected: this.accountScript.toString('hex'),
+                expected: expected.toString('hex'),
                 got:      inp.witnessUtxo.script.toString('hex'),
             });
         return null;
@@ -666,3 +836,7 @@ class CoSigner {
 
 module.exports = CoSigner;
 module.exports.taprootKeyPathSighash = taprootKeyPathSighash;
+// Exported rather than copied: exactU64 is what rejects a non-integer or negative
+// satoshi bound, and a duplicated twin is where the Number() rounding this parser
+// exists to prevent creeps back in (#3869).
+module.exports.exactU64 = exactU64;

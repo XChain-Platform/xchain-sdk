@@ -47,6 +47,138 @@ function parseMap(mapPath) {
     return rows;
 }
 
+/* The fee-quote seam, which the hash rows above structurally cannot cover ().
+ *
+ * Every mapped row is a per-handler file under src/actions/, so the row regex carries a
+ * literal `src/actions/` prefix and can never match the TOP-LEVEL src/actions.js. That is the
+ * file defining FEE_QUOTE_DENYLIST and FEE_QUOTE_STATIC, and until now the only thing binding
+ * them to the SDK's TIER1_DENYLIST was a hand-written comment, which had already drifted
+ * ().
+ *
+ * Compared by VALUE rather than by hash on purpose. Hashing all of actions.js would fire on
+ * every unrelated edit to a large file, and anchor-scoped hashing can silently lose coverage
+ * when a marker moves, which is the worse failure for financial logic. The invariant that
+ * actually matters is not "actions.js is unchanged", it is that the two lists agree, so check
+ * exactly that and fail closed when either literal cannot be read.
+ */
+function parseStringSet(text, name, where) {
+    // const NAME = new Set([...]) | Object.freeze([...]) | [...]
+    const re = new RegExp('const\\s+' + name + '\\s*=\\s*(?:new Set\\(|Object\\.freeze\\()?\\s*\\[([^\\]]*)\\]', 'g');
+    const hits = [];
+    let m;
+    while ((m = re.exec(text)) !== null) hits.push(m[1]);
+    if (hits.length !== 1) {
+        throw new Error(`drift-gate: expected exactly one ${name} declaration in ${where}, found ${hits.length}. `
+            + 'That literal is what this gate compares; find where it moved before editing this check.');
+    }
+    return [...new Set([...hits[0].matchAll(/['"]([A-Z_]+)['"]/g)].map((x) => x[1]))].sort();
+}
+
+function checkFeeQuoteSeam(indexerRoot) {
+    const actionsPath = path.join(indexerRoot, 'src', 'actions.js');
+    if (!fs.existsSync(actionsPath)) {
+        console.error('drift-gate: xchain-indexer/src/actions.js not found; it defines the fee-quote lists this gate pins.');
+        return 1;
+    }
+    const indexerSrc = fs.readFileSync(actionsPath, 'utf8');
+    const sdkSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'preflight', 'constants.js'), 'utf8');
+
+    const denylist = parseStringSet(indexerSrc, 'FEE_QUOTE_DENYLIST', 'xchain-indexer/src/actions.js');
+    const staticSet = parseStringSet(indexerSrc, 'FEE_QUOTE_STATIC', 'xchain-indexer/src/actions.js');
+    const tier1 = parseStringSet(sdkSrc, 'TIER1_DENYLIST', 'src/preflight/constants.js');
+    const exempt = parseStringSet(indexerSrc, 'FEE_QUOTE_EXEMPT', 'xchain-indexer/src/actions.js');
+    const feeCharging = parseStringSet(sdkSrc, 'FEE_CHARGING_ACTIONS', 'src/preflight/constants.js');
+
+    let failed = 0;
+    // FEE_CHARGING_ACTIONS drives the NATIVE_FEE_FORFEIT disclosure (#3934). Only this
+    // direction is checkable by value: the reverse ("every fee-charging handler is
+    // listed") is not a literal on the indexer side, it is the set of handlers calling
+    // createFeesObject, which needs a call-site walk this gate does not do. BET was
+    // missing from the SDK list for its whole life and nothing caught it (#3893).
+    const contradictory = feeCharging.filter((a) => exempt.includes(a));
+    if (contradictory.length) {
+        console.error('drift-gate: FEE_CHARGING_ACTIONS claims a protocol fee for indexer-EXEMPT action(s): '
+            + contradictory.join(', ') + '\n'
+            + '  The NATIVE_FEE_FORFEIT warning would be shown for an action that charges nothing.');
+        failed = 1;
+    }
+    if (denylist.join(',') !== tier1.join(',')) {
+        console.error('drift-gate: TIER1_DENYLIST no longer mirrors the indexer FEE_QUOTE_DENYLIST.\n'
+            + `  indexer FEE_QUOTE_DENYLIST: ${denylist.join(', ')}\n`
+            + `  sdk     TIER1_DENYLIST:     ${tier1.join(', ')}\n`
+            + '  Tier 1 would start dry-running an action the indexer refuses to quote, or stop\n'
+            + '  short-circuiting one it does. Update src/preflight/constants.js to match.');
+        failed = 1;
+    }
+    // runTier1 returns early on TIER1_DENYLIST, which is the ONLY reason its no-verdict branch
+    // cannot swallow a static valid:null quote and drop its priced fee (). That
+    // reachability argument holds only while STATIC stays inside the denylist.
+    const escaped = staticSet.filter((a) => !tier1.includes(a));
+    if (escaped.length) {
+        console.error('drift-gate: FEE_QUOTE_STATIC action(s) outside TIER1_DENYLIST: ' + escaped.join(', ') + '\n'
+            + '  These now reach runTier1\'s endpoint call, whose no-verdict branch returns without\n'
+            + '  attaching the quote, so the  gas-schedule fee would be silently dropped.');
+        failed = 1;
+    }
+    if (!failed) {
+        console.log(`drift-gate: fee-quote seam in sync (denylist ${tier1.length} action(s), `
+            + `${staticSet.length} static-quoted, all denylisted; ${feeCharging.length} fee-charging, `
+            + 'none indexer-exempt).');
+    }
+    return failed;
+}
+
+/* GAS_SCHEDULE parity across the three coins (#3934).
+ *
+ * The SDK carries its OWN copy of each coin definition, and the gas schedule is what
+ * prices every fee the pre-flight quotes. Compared as parsed key/value MAPS rather than
+ * as text, so formatting and comment edits do not fire. The coin modules are pure data
+ * (no requires, no env reads), so loading them here has no side effects; a module that
+ * cannot be loaded, or that carries no GAS_SCHEDULE, fails CLOSED - same contract as
+ * parseStringSet, because "could not read it" must never read as "it agrees".
+ */
+const GAS_SCHEDULE_COINS = ['BTC', 'LTC', 'DOGE'];
+
+function loadGasSchedule(absPath) {
+    const resolved = require.resolve(absPath);
+    delete require.cache[resolved];
+    const mod = require(resolved);
+    const schedule = mod && mod.GAS_SCHEDULE;
+    if (!schedule || typeof schedule !== 'object')
+        throw new Error(`drift-gate: no GAS_SCHEDULE object in ${absPath}`);
+    return schedule;
+}
+
+function checkGasSchedules(indexerRoot) {
+    let failed = 0;
+    for (const coin of GAS_SCHEDULE_COINS) {
+        const indexerPath = path.join(indexerRoot, 'src', 'coins', coin + '.js');
+        const sdkPath = path.join(__dirname, '..', 'src', 'coins', coin + '.js');
+        let a, b;
+        try {
+            a = loadGasSchedule(indexerPath);
+            b = loadGasSchedule(sdkPath);
+        } catch (e) {
+            console.error((e && e.message ? e.message : String(e))
+                + `\n  ${coin} gas schedules could not be compared; fix the read rather than skipping the coin.`);
+            failed = 1;
+            continue;
+        }
+        const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].sort();
+        const diffs = keys.filter((k) => String(a[k]) !== String(b[k]));
+        if (diffs.length) {
+            console.error(`drift-gate: ${coin} GAS_SCHEDULE differs between xchain-indexer and this SDK:`);
+            for (const k of diffs)
+                console.error(`  ${k}: indexer ${a[k] === undefined ? '(absent)' : a[k]} vs sdk ${b[k] === undefined ? '(absent)' : b[k]}`);
+            console.error('  The pre-flight would quote a fee the indexer does not charge (or vice versa).');
+            failed = 1;
+        }
+    }
+    if (!failed)
+        console.log(`drift-gate: GAS_SCHEDULE in sync across ${GAS_SCHEDULE_COINS.join('/')}.`);
+    return failed;
+}
+
 function main() {
     const mapPath = path.join(__dirname, '..', 'src', 'preflight', 'INDEXER-MAP.md');
     if (!fs.existsSync(mapPath)) {
@@ -74,21 +206,50 @@ function main() {
         if (actual !== hash) drift.push({ handler, expected: hash, actual });
     }
 
+    // Report every independent check before exiting, never on the first failure: handler-hash
+    // drift and a fee-quote seam break have different causes and different fixes, and exiting
+    // on the first one would let unrelated stale hashes hide a live seam break behind them.
+    let failed = 0;
+
     if (missing.length) {
         console.error('drift-gate: mapped handler(s) not found in the checkout:\n  ' + missing.join('\n  '));
-        process.exit(1);
+        failed = 1;
     }
     if (drift.length) {
         console.error('drift-gate: indexer validity logic changed without a paired pre-flight review.\n' +
             'Re-read each handler, update the matching checks/ module (or confirm no client-visible\n' +
             'change), then refresh the hash in src/preflight/INDEXER-MAP.md:\n');
         for (const d of drift) console.error(`  ${d.handler}\n    was ${d.expected}\n    now ${d.actual}`);
-        process.exit(1);
+        // Now that `npm run ci` runs this locally , the first suspect for a LOCAL
+        // red is the sibling's uncommitted work rather than a real handler change: this
+        // hashes the WORKING TREE, and two of the four handlers in the gate's first firing
+        // were nothing else. CI checks out HEAD and never sees it.
+        console.error('\nRunning locally? Confirm against COMMITTED state first - this hashes the sibling\n'
+            + 'working tree, so an uncommitted edit over there reports as drift:\n'
+            + '  git -C ../xchain-indexer status --short src/actions/');
+        failed = 1;
     }
+
+    // parseStringSet throws when a literal cannot be read exactly once; that is the fail-closed
+    // path, so report it as a gate failure rather than an uncaught stack trace.
+    try {
+        if (checkFeeQuoteSeam(root)) failed = 1;
+    } catch (e) {
+        console.error(e && e.message ? e.message : String(e));
+        failed = 1;
+    }
+    try {
+        if (checkGasSchedules(root)) failed = 1;
+    } catch (e) {
+        console.error(e && e.message ? e.message : String(e));
+        failed = 1;
+    }
+
+    if (failed) process.exit(1);
 
     console.log(`drift-gate: ${rows.length} mapped handler(s) in sync.`);
     process.exit(0);
 }
 
 if (require.main === module) main();
-module.exports = { resolveIndexerRoot, parseMap };
+module.exports = { resolveIndexerRoot, parseMap, parseStringSet, checkFeeQuoteSeam, checkGasSchedules };

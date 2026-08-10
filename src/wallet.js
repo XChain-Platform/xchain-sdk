@@ -64,7 +64,8 @@ function serializePrevTx(tx) {
             sequence: inp.sequence >>> 0,
         })),
         bin_outputs: tx.outs.map((out) => ({
-            amount: String(Number(out.value)),
+            // String(bigint) is exact; the Number() hop rounded above 2^53 (#3922).
+            amount: String(out.value),
             script_pubkey: out.script.toString('hex'),
         })),
     };
@@ -698,6 +699,72 @@ class WalletUtils {
      * @param {{ maximumFeeRate?: number }} [opts] - sat/vB fee ceiling override
      * @returns {{ txHex: string, txid: string, psbtHex: string }}
      */
+    /**
+     * Sign the REVEAL half of a Taproot envelope pair ( §3.2/§3.5, ).
+     *
+     * Distinct from signRevealPsbt, which signs a P2SH/P2WSH chunk-lane reveal with
+     * ECDSA and the xchain reveal finalizer. An envelope reveal is a BIP341
+     * script-path spend: it needs a Schnorr signature over the tapleaf and the
+     * standard taproot finalizer, so neither the key nor the finalizer from that
+     * path applies here.
+     *
+     * Signs input 0 only, because §3.5 pins the commit outpoint at input 0 and
+     * declares any additional reveal input the caller's own business; signing them
+     * with this key would be wrong whenever they are not this key's.
+     *
+     * @param {string} psbtHex - the revealPsbt hex returned alongside the commit
+     * @param {string} wif
+     * @param {{ maximumFeeRate?: number }} [opts] - sat/vB fee ceiling override
+     * @returns {{ txHex: string, txid: string, psbtHex: string }}
+     */
+    signEnvelopeRevealPsbt(psbtHex, wif, opts) {
+        if (!psbtHex || typeof psbtHex !== 'string') {
+            throw new SDKWalletError('INVALID_PSBT', 'PSBT hex string is required.');
+        }
+        if (!wif || typeof wif !== 'string') {
+            throw new SDKWalletError('INVALID_WIF', 'WIF private key is required.');
+        }
+
+        const net = this._resolveNet();
+        let keyPair;
+        try {
+            keyPair = ECPair.fromWIF(wif, net);
+        } catch (err) {
+            throw new SDKWalletError('INVALID_WIF', `Failed to import WIF: ${err.message}`);
+        }
+
+        let psbt;
+        try {
+            psbt = bitcoin.Psbt.fromHex(psbtHex, { network: net });
+        } catch (err) {
+            throw new SDKWalletError('INVALID_PSBT', `Failed to parse PSBT: ${err.message}`);
+        }
+
+        try {
+            psbt.signInput(0, {
+                publicKey: Buffer.from(keyPair.publicKey),
+                signSchnorr: (hash) => Buffer.from(ecc.signSchnorr(hash, keyPair.privateKey)),
+            });
+        } catch (err) {
+            throw new SDKWalletError('SIGN_FAILED', `Envelope reveal signing failed: ${err.message}`);
+        }
+
+        try {
+            psbt.finalizeAllInputs();
+        } catch (err) {
+            throw new SDKWalletError('FINALIZE_FAILED', `Envelope reveal finalization failed: ${err.message}`);
+        }
+
+        const maxFeeRate = this._maxFeeRate(opts);
+        if (maxFeeRate) psbt.setMaximumFeeRate(maxFeeRate);
+        const tx = psbt.extractTransaction();
+        return {
+            txHex: tx.toHex(),
+            txid: tx.getId(),
+            psbtHex: psbt.toHex(),
+        };
+    }
+
     signRevealPsbt(psbtHex, wif, opts) {
         if (!psbtHex || typeof psbtHex !== 'string') {
             throw new SDKWalletError('INVALID_PSBT', 'PSBT hex string is required.');
@@ -753,6 +820,9 @@ class WalletUtils {
      * and amounts in a form a caller can translate into any vendor's
      * input/output envelope without touching bitcoinjs-lib.
      *
+     * A satoshi value is a Number when exactly representable and an exact decimal
+     * STRING above 2^53-1 (#3922), matching applyBufferutilsPatch's own contract.
+     *
      * The wallet tracks BIP32 derivation paths out-of-band (on its own
      * Address records), so the returned shape deliberately omits
      * derivation info; callers pair `inputs[i]` with the matching
@@ -767,7 +837,7 @@ class WalletUtils {
      *     prevTxHash: string,
      *     prevTxIndex: number,
      *     sequence: number,
-     *     value: number,
+     *     value: (number|string|null),
      *     scriptPubKeyHex: string,
      *     scriptType: string,
      *     sighashType: (number|null),
@@ -782,7 +852,7 @@ class WalletUtils {
      *     address: (string|null),
      *     scriptPubKeyHex: string,
      *     scriptType: string,
-     *     value: number,
+     *     value: (number|string),
      *   }>
      * }}
      */
@@ -815,7 +885,11 @@ class WalletUtils {
             let prevTxInfo = null;
 
             if (psbtInput.witnessUtxo) {
-                value = Number(psbtInput.witnessUtxo.value);
+                // Widen ONLY above 2^53, matching applyBufferutilsPatch's own contract:
+                // a Number stays a Number, a BigInt becomes an exact decimal string
+                // rather than a rounded double (#3922).
+                value = typeof psbtInput.witnessUtxo.value === 'bigint'
+                    ? String(psbtInput.witnessUtxo.value) : psbtInput.witnessUtxo.value;
                 scriptPubKeyBuf = psbtInput.witnessUtxo.script;
                 witnessUtxoScriptHex = scriptPubKeyBuf.toString('hex');
             } else if (psbtInput.nonWitnessUtxo) {
@@ -824,7 +898,7 @@ class WalletUtils {
                     const prevTx = bitcoin.Transaction.fromBuffer(psbtInput.nonWitnessUtxo);
                     const out = prevTx.outs[txInput.index];
                     if (out) {
-                        value = Number(out.value);
+                        value = typeof out.value === 'bigint' ? String(out.value) : out.value;
                         scriptPubKeyBuf = out.script;
                     }
                     prevTxInfo = serializePrevTx(prevTx);
@@ -910,7 +984,7 @@ class WalletUtils {
                 address,
                 scriptPubKeyHex,
                 scriptType,
-                value: Number(txOut.value),
+                value: typeof txOut.value === 'bigint' ? String(txOut.value) : txOut.value,
             });
         }
 

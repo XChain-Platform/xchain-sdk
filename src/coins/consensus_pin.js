@@ -36,16 +36,39 @@ module.exports = {
         // Armed in a coordinated release (plan Phase 6). null = skip verification.
         mainnet: null,
 
+        // REGENERATED 2026-07-28 ( batch, ): folding `wireFormat` into
+        // consensusSubset() changes every hash by construction. Every service that
+        // bundles these must ship the SAME new values in one wave; a straggler
+        // fail-closes on verifyConsensusPin() rather than forking, which is the
+        // designed behavior but halts that node until it is updated.
+        //
+        // BTC REGENERATED 2026-07-31 : minStandardTxNonWitnessSize 65 -> 82,
+        // the relay-policy floor Bitcoin Core actually enforces. It lives in the `net`
+        // block, which consensusSubset() hashes whole, so a pure policy correction
+        // still moves the pin and still needs the one-wave rollout above. LTC and DOGE
+        // are unchanged and re-verified against the canonical files.
+        //
+        // REGENERATED 2026-08-06 (): folding `firstBlock` into
+        // consensusSubset() changes every hash by construction, same one-wave rollout
+        // rule as the wireFormat fold above. Mainnet stays null (Phase 6 arms it).
+        //
+        // REGENERATED 2026-08-10 (fresh testnet genesis, operator): testnet
+        // `firstBlock` moved to just under the live tip on all three chains
+        // (BTC 138000 -> 147500, LTC 4765000 -> 4855000, DOGE 64800000 -> 67815000),
+        // wiping the old testnet chain state. firstBlock is in consensusSubset, so
+        // all three testnet hashes move and the one-wave rule above applies in full.
+        // Regtest and mainnet are untouched, and their hashes were re-verified
+        // against the canonical files as unchanged by this edit.
         testnet: {
-            BTC:  '211086b82b345092a8ce18ca08ab945a6b294c59efa5588c70eacdb5ee515e62',
-            LTC:  '7e4cc52a609606024d1ea8d26c743957e195c660b0bb749e523f4cbdcc82baf8',
-            DOGE: 'd61706332ddcb921b4bb3d0a9f077119426405692fc118eaba8d1a6a9ecb28d0',
+            BTC:  '1e45a958ff9eb6a88be8684e3801b57e7afcfc9031f7761e4f4b1dcf1c8d42a9',
+            LTC:  '888818a874d6d8acb3363355089f0de601c355b63fc8431a44ef666f91615202',
+            DOGE: 'ea3ee0d1407959f3cb59e4baf66b50dfc2ada9962351e578d7c6d8586e6ff905',
         },
 
         regtest: {
-            BTC:  'd900b05a7df14595ff4a2be4bbd9505a661f0c6cef4237f1e00aace3b2397f0e',
-            LTC:  '769d91cad98ea674494290ac680bb1c0ddb8bcd3b75cbffa131365bf97811db1',
-            DOGE: '3de84c0bf6478e985f0ea0cc0ece155cf2780f0e932c3f6e063d3f01bfc38197',
+            BTC:  '24e6a363e5a36285574dea357328a997fdee5762ef812d8947eacf69c51afc24',
+            LTC:  '5ad03b383d873d309640e75dfefa2787a5806cb8a84ee46f4cc7fb25ca7f808b',
+            DOGE: '019220a461e34c99fcf5cbf107673f13d3f2a57d2a20e16a0323ed44c81edd11',
         },
     },
 };

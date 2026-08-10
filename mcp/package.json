@@ -1,0 +1,41 @@
+{
+  "name": "xchain-mcp",
+  "description": "Model Context Protocol (MCP) stdio server for the XChain Platform: read chain/token/balance data on BTC, LTC and DOGE (mainnet/testnet/regtest), and optionally submit policy-gated actions, backed by the XChain SDK.",
+  "version": "2.0.0",
+  "comment:homepage": "The npm package page links wherever this points, and it points at the platform site .",
+  "homepage": "https://xchain.io/",
+  "main": "server.js",
+  "bin": {
+    "xchain-mcp": "cli.js"
+  },
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/XChain-Platform/xchain-sdk.git",
+    "directory": "mcp"
+  },
+  "comment:files": "Publish allowlist: the server is two files. README/LICENSE/package.json ship automatically.",
+  "files": [
+    "cli.js",
+    "server.js"
+  ],
+  "keywords": [
+    "mcp",
+    "modelcontextprotocol",
+    "xchain",
+    "bitcoin",
+    "litecoin",
+    "dogecoin"
+  ],
+  "dependencies": {
+    "@dankest-llc/xchain-sdk": "^2.0.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
+  },
+  "scripts": {
+    "start": "node cli.js"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

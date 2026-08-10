@@ -36,7 +36,9 @@
 'use strict';
 
 const M          = require('./merkle.js');
+const SUB        = require('./state_subtree_activation.js');
 const checkpoint = require('./checkpoint.js');
+const ckptCommit = require('./checkpoint_commitment_activation.js');
 const pinned     = require('./pinnedCheckpoints.js');
 const swq        = require('./stake_weighted_quorum.js');
 
@@ -66,6 +68,31 @@ async function _json(f, url){
 }
 function _hx(x){ return String(x == null ? '' : x).toLowerCase(); }
 
+// Bind a proof to the question the CALLER asked, not merely to the one the server
+// echoed. Every verifier below re-derives its SMT key from fields carried IN the
+// proof (`address`/`tick`, `contract_index`/`state_key`), which proves the proof is
+// internally consistent and says nothing about whether it answers your request. A
+// server that returns a valid proof for a DIFFERENT key therefore verifies clean.
+//
+// That is not hypothetical: the explorer's contract-state route decoded its path
+// param a second time after Express had already decoded it, so a request for the
+// key `a%41b` was answered, validly and verifiably, for the key `aAb` (measured on
+// the live service 2026-08-06,  frontier). The corruption was upstream, but
+// nothing downstream could see it.
+//
+// `expected` is OPTIONAL so this stays backward compatible; callers that pass it
+// get the binding. Only the fields present are compared, each as a string, so a
+// numeric contract_index and its decimal spelling agree.
+function _expectedMismatch(expected, actual){
+    if (!expected) return null;
+    for (const field of Object.keys(expected)){
+        const want = expected[field];
+        if (want === undefined || want === null) continue;
+        if (String(want) !== String(actual[field])) return field;
+    }
+    return null;
+}
+
 // Default DOGE confirmation depth a cold-start anchor must be buried under before
 // it is trusted. DOGE blocks ~1 min and ANCHORs land ~daily, so a recent valid
 // anchor is normally far deeper than this; callers SHOULD set their own policy.
@@ -74,9 +101,12 @@ const DEFAULT_ANCHOR_MIN_DEPTH = 60;
 // Verify a §4.4 BalanceProof binds to a TRUSTED state_root (one already proven to
 // be in a quorum-signed checkpoint). chain/network come from the trusted
 // checkpoint, never the proof. Returns { verified, amount, reason }.
-function verifyBalanceProof(proof, trustedStateRoot, chain, network){
+function verifyBalanceProof(proof, trustedStateRoot, chain, network, expected){
     try {
         if (!proof || !proof.smt_proof || !proof.sub_root_path) return _no('MALFORMED_PROOF');
+        // Bind to the REQUESTED (address, tick) when the caller supplies it; the
+        // check below only proves the proof is self-consistent. See _expectedMismatch.
+        if (_expectedMismatch(expected, proof)) return _no('REQUESTED_IDENTITY_MISMATCH');
         // The proven key must be exactly balanceKey(chain, network, address, tick):
         // a server cannot answer for (A,T) with a proof for some other key.
         const keyBuf    = M.balanceKey(chain, network, proof.address, proof.tick);
@@ -110,6 +140,113 @@ function verifyBalanceProof(proof, trustedStateRoot, chain, network){
             return _no('SUBROOT_BIND_INVALID');
         return { verified: true, amount, reason: null };
     } catch (e){ return _no('VERIFY_ERROR:' + (e && e.message)); }
+}
+
+// Verify a locked-balance (XCHAIN_ESC) proof binds to a TRUSTED state_root (SPV
+// sub-tree spec §3 Stage B). Returns { verified, amount, reason }.
+//
+// The locked leaf lives INSIDE balances_root, a second key domain beside the
+// spendable leaf, so this is verifyBalanceProof with the escrowKey derivation
+// and the same balances_root slot pin. The two domains cannot answer for each
+// other: each verifier derives its own key, so a spendable proof fed here (or
+// the reverse) fails KEY_MISMATCH.
+//
+// LIVENESS IS ENFORCED HERE, NOT TRUSTED FROM THE SERVER, and this is the one
+// place this verifier differs from the contract-state one. A reserved slot's
+// arming is visible server-side (the stored row carries the armed decision),
+// so there the server's refusal is the signal to respect; the escrow leaf has
+// no stored signal (an armed-but-idle domain and an inert one commit
+// byte-identical roots), so the SDK's own carrier of the activation maps
+// decides, and a proof whose height precedes the armed height is refused
+// whatever the server said. A below-arming non-inclusion would "verify" and
+// mean nothing (spec §4): zero-locked is only a real claim at armed heights.
+// The height check is strict-parse fail-closed: a garbage height reads as
+// not-armed, never as armed.
+function verifyLockedBalanceProof(proof, trustedStateRoot, chain, network, expected){
+    try {
+        if (!proof || !proof.smt_proof || !proof.sub_root_path) return _no('MALFORMED_PROOF');
+        if (_expectedMismatch(expected, proof)) return _no('REQUESTED_IDENTITY_MISMATCH');
+        if (!SUB.isEscrowLockedLeafActive(proof.height, network, chain))
+            return _no('ESCROW_LEAF_NOT_COMMITTED');
+        // The proven key must be exactly escrowKey(chain, network, address, tick),
+        // with chain/network from the TRUSTED checkpoint, never the proof.
+        const keyBuf = M.escrowKey(chain, network, proof.address, proof.tick);
+        if (_hx(proof.smt_proof.key) !== M.toHex(keyBuf)) return _no('KEY_MISMATCH');
+        const leaf   = proof.smt_proof.leaf_value;
+        const amount = M.canonicalAmount(proof.amount);
+        if (leaf == null){
+            if (amount !== M.canonicalAmount('0')) return _no('NONINCLUSION_NONZERO_AMOUNT');
+        } else {
+            // amountLeaf, the SAME encoding the spendable leaf uses, so a client
+            // verifies both leaves of an (address, tick) the same way.
+            if (M.toHex(M.amountLeaf(amount)) !== _hx(leaf)) return _no('LEAF_AMOUNT_MISMATCH');
+        }
+        if (!M.verifyCompressedSmtProof(proof.balances_root, keyBuf, leaf, proof.smt_proof.compressed))
+            return _no('SMT_PROOF_INVALID');
+        // PIN the slot (balances_root, the same slot the spendable proof pins),
+        // for the same reason verifyBalanceProof does.
+        if (proof.sub_root_path.index !== M.STATE_SUBTREES.indexOf('balances_root'))
+            return _no('SUBROOT_SLOT_MISMATCH');
+        if (!M.verifyFixedMerkleProof(trustedStateRoot, M.toBuf(proof.balances_root),
+                                      proof.sub_root_path.index, proof.sub_root_path.siblings))
+            return _no('SUBROOT_BIND_INVALID');
+        return { verified: true, amount, reason: null };
+    } catch (e){ return _no('VERIFY_ERROR:' + (e && e.message)); }
+}
+
+// Verify a contract-state proof binds to a TRUSTED state_root (SPV sub-tree spec
+// §3 Stage A). Returns { verified, state_value, reason }.
+//
+// `state_value` is the RAW STORED STRING, not the JSON.parse'd form: the leaf is
+// leafHash over those exact bytes, so parsing before hashing would false-reject.
+// Callers parse AFTER verifying. A verified null means the key is not in the
+// committed tree, which covers both "never written" and "deleted": the commitment
+// itself does not distinguish them, so neither does this.
+//
+// THE CALLER MUST ESTABLISH THAT THE SLOT IS ARMED AT THIS HEIGHT. Nothing in a
+// proof can tell you: an armed-but-empty slot and an inert slot commit the
+// byte-identical EMPTY_SMT_ROOT (spec §2), so a non-inclusion result here means
+// "not in the committed tree" and NOT "this contract has no such key" unless the
+// slot is known to be live. Treating a below-arming non-inclusion as absence is
+// exactly the mistake spec §4 forbids; the server refuses to serve those heights
+// (CONTRACT_STATE_NOT_COMMITTED), and that refusal is the signal to respect.
+function verifyContractStateProof(proof, trustedStateRoot, chain, network, expected){
+    const no = (reason) => ({ verified: false, state_value: null, reason: reason });
+    try {
+        if (!proof || !proof.smt_proof || !proof.sub_root_path) return no('MALFORMED_PROOF');
+        // Bind to the REQUESTED (contract_index, state_key) when the caller supplies
+        // it. Without this a server answers a different key with a valid proof, which
+        // is exactly what the explorer's double-decode did. See _expectedMismatch.
+        if (_expectedMismatch(expected, proof)) return no('REQUESTED_IDENTITY_MISMATCH');
+        // The proven key must be exactly contractStateKey(chain, network, index, key),
+        // with chain/network from the TRUSTED checkpoint rather than the proof: a
+        // server must not be able to answer for one key with another key's proof.
+        const keyBuf = M.contractStateKey(chain, network, proof.contract_index, proof.state_key);
+        if (_hx(proof.smt_proof.key) !== M.toHex(keyBuf)) return no('KEY_MISMATCH');
+
+        const leaf = proof.smt_proof.leaf_value;
+        const val  = (proof.state_value == null) ? null : String(proof.state_value);
+        if (leaf == null){
+            if (val !== null) return no('NONINCLUSION_WITH_VALUE');
+        } else {
+            if (val === null) return no('INCLUSION_WITHOUT_VALUE');
+            // Binds the returned value to the committed leaf, so the server's
+            // `state_value` cannot lie about what the contract stored.
+            if (M.toHex(M.leafHash(val)) !== _hx(leaf)) return no('LEAF_VALUE_MISMATCH');
+        }
+        if (!M.verifyCompressedSmtProof(proof.contract_state_root, keyBuf, leaf, proof.smt_proof.compressed))
+            return no('SMT_PROOF_INVALID');
+        // PIN THE SLOT, for the same reason verifyBalanceProof does. Slots 2 and 3
+        // are the constant EMPTY_SMT_ROOT today, so without this a server could
+        // bind an EMPTY slot's path, hand back leaf_value:null, and "prove" that
+        // any key is absent from a contract that in fact holds it.
+        if (proof.sub_root_path.index !== M.STATE_SUBTREES.indexOf('contract_state_root'))
+            return no('SUBROOT_SLOT_MISMATCH');
+        if (!M.verifyFixedMerkleProof(trustedStateRoot, M.toBuf(proof.contract_state_root),
+                                      proof.sub_root_path.index, proof.sub_root_path.siblings))
+            return no('SUBROOT_BIND_INVALID');
+        return { verified: true, state_value: val, reason: null };
+    } catch (e){ return no('VERIFY_ERROR:' + (e && e.message)); }
 }
 
 // Verify a §5 action inclusion proof binds to a TRUSTED block_merkle_root.
@@ -339,6 +476,12 @@ function anchorToCheckpoint(a){
     };
 }
 
+// Shapes the checkpoint canonical assumes for the committed SPV roots: a 32-byte
+// hex root and a non-negative integer version (both are stringified into the
+// signed bytes, so anything else signs a different string than it reads as).
+const ANCHOR_ROOT_RE    = /^[0-9a-f]{64}$/i;
+const ANCHOR_VERSION_RE = /^\d+$/;
+
 // Verify a DOGE-anchored checkpoint as a trust root. `checkpoint` is the normalized
 // object (parseAnchorV3 / anchorToCheckpoint), which MUST carry the v3 roots;
 // `confirmations` is the DOGE depth the caller obtained from its own DOGE source.
@@ -350,9 +493,26 @@ function verifyAnchoredCheckpoint(opts){
     const confirmations = Number(opts.confirmations);
     const safeConf = Number.isFinite(confirmations) ? confirmations : 0;
     if (!cp) return { verified: false, reason: 'NO_CHECKPOINT', checkpoint: null, confirmations: 0, minDepth, quorum: null, weighted: null };
+    const reject = (reason) => ({ verified: false, reason, checkpoint: cp, confirmations: safeConf, minDepth, quorum: null, weighted: null });
     // v3/v5 carry the committed roots; a rootless (v0/v4) anchor cannot serve SPV trust.
-    if (cp.state_root == null || cp.block_merkle_root == null)
-        return { verified: false, reason: 'NOT_A_V3_ANCHOR', checkpoint: cp, confirmations: safeConf, minDepth, quorum: null, weighted: null };
+    // Empty counts as absent: parseAnchorV3 maps a missing wire field to '', not null.
+    if (cp.state_root == null || cp.block_merkle_root == null
+        || String(cp.state_root) === '' || String(cp.block_merkle_root) === '')
+        return reject('NOT_A_V3_ANCHOR');
+    // The roots are only INSIDE the signed bytes when canonicalCheckpoint appends
+    // them, which needs commitment active and all four fields present (checkpoint.js
+    // §6.1). Accepting on root presence alone let a legitimately signed pre-activation
+    // rootless checkpoint be republished as a buried v3 carrying attacker-chosen roots:
+    // the original signature still verifies against the rootless canonical, and SPV
+    // adopts roots no validator ever signed. Mirror the append condition exactly.
+    if (!ckptCommit.isCheckpointCommitmentActive(cp.snapshot_block, cp.network)
+        || !ANCHOR_VERSION_RE.test(String(cp.state_root_version))
+        || !ANCHOR_VERSION_RE.test(String(cp.block_merkle_version)))
+        return reject('ROOTS_NOT_SIGNED');
+    // Syntax the canonical assumes: a 32-byte hex root. A value of another shape
+    // would sign one string and be consumed downstream as another.
+    if (!ANCHOR_ROOT_RE.test(String(cp.state_root)) || !ANCHOR_ROOT_RE.test(String(cp.block_merkle_root)))
+        return reject('MALFORMED_ROOT');
     const q = checkpoint.verifyCheckpoint(cp, opts.validators || []);
     const base = { checkpoint: cp, confirmations: safeConf, minDepth, quorum: q.quorum, weighted: q.weighted };
     if (!q.valid) return Object.assign({ verified: false, reason: 'CHECKPOINT_QUORUM_FAILED' }, base);
@@ -365,7 +525,18 @@ function verifyAnchoredCheckpoint(opts){
 // confirm its DOGE depth (caller supplies the tip via dogeTipHeight or getDogeTipHeight),
 // and verify it. Anchors are DOGE-only, so the list is served by the DOGE explorer;
 // each record's `chain` is the chain whose checkpoint it commits. Returns the
-// verifyAnchoredCheckpoint result plus { anchor, dogeTxid }.
+// verifyAnchoredCheckpoint result plus { anchor, dogeTxid, depthSource }.
+//
+// DEPTH IS TWO-TIER, like `validators` (module header). The trust-minimized tier
+// takes the anchor's DOGE inclusion height from the caller's own DOGE source
+// (dogeTxHeight, or getDogeTxHeight(txHash)) and IGNORES the explorer entirely.
+// The convenience tier falls back to the record's block_index_doge, which is the
+// EXPLORER's unverified claim about where its own anchor tx landed: a hostile
+// explorer names any height it likes and mints any depth it likes, so the
+// buried-anchor gate is forgeable on that tier and is a convenience, not a trust
+// boundary. `depthSource` on the result reports which tier ran ('caller' or
+// 'explorer'); pass requireTrustedDepth to refuse the convenience tier outright
+// (reason UNTRUSTED_DOGE_DEPTH) rather than accept a depth nobody proved.
 async function fetchAnchoredCheckpoint(opts){
     opts = opts || {};
     const f = _fetch(opts.fetchImpl);
@@ -386,11 +557,21 @@ async function fetchAnchoredCheckpoint(opts){
     const rec = rows[0];
     let tip = opts.dogeTipHeight;
     if (tip == null && typeof opts.getDogeTipHeight === 'function') tip = await opts.getDogeTipHeight();
-    const confirmations = (tip != null && rec.block_index_doge != null)
-        ? (Number(tip) - Number(rec.block_index_doge) + 1) : NaN;
+    // Inclusion height: caller's own DOGE source first, explorer claim only as fallback.
+    let txHeight = opts.dogeTxHeight;
+    if (txHeight == null && typeof opts.getDogeTxHeight === 'function')
+        txHeight = await opts.getDogeTxHeight(rec.tx_hash || null);
+    const depthSource  = (txHeight != null) ? 'caller' : 'explorer';
+    if (opts.requireTrustedDepth && depthSource !== 'caller')
+        return { verified: false, reason: 'UNTRUSTED_DOGE_DEPTH', checkpoint: anchorToCheckpoint(rec),
+                 anchor: rec, dogeTxid: rec.tx_hash || null, confirmations: 0, minDepth,
+                 quorum: null, weighted: null, depthSource };
+    const anchorHeight = (txHeight != null) ? txHeight : rec.block_index_doge;
+    const confirmations = (tip != null && anchorHeight != null)
+        ? (Number(tip) - Number(anchorHeight) + 1) : NaN;
     const res = verifyAnchoredCheckpoint({ checkpoint: anchorToCheckpoint(rec), validators: opts.validators,
         confirmations, minDepth });
-    return Object.assign({}, res, { anchor: rec, dogeTxid: rec.tx_hash || null });
+    return Object.assign({}, res, { anchor: rec, dogeTxid: rec.tx_hash || null, depthSource });
 }
 
 // ── Validator-set proof + forward-following (spec §7, Phase 5) ────────────────
@@ -536,8 +717,17 @@ async function followForward(opts){
     return { trusted, adopted, reason: null, stoppedAt: null };
 }
 
+// Re-export the pinned-registry accessors so `sdk.light` is a COMPLETE SPV
+// surface. A consumer that holds only an SDK instance (the reference wallet
+// holds `sdk`, never the module namespace) otherwise cannot ask which trust
+// tier a call will take: whether a pinned launch root covers this coin, or the
+// call falls through to the explorer's /verify convenience path. That question
+// decides how loudly a quorum failure should be reported, so the answer has to
+// be reachable from the same object the verify calls are made on.
 module.exports = {
     verifyBalanceProof,
+    verifyLockedBalanceProof,
+    verifyContractStateProof,
     verifyActionProof,
     verifyBalance,
     verifyAction,
@@ -548,5 +738,7 @@ module.exports = {
     verifyValidatorSetProof,
     verifyValidatorSet,
     verifyCheckpointWithProvenSet,
-    followForward
+    followForward,
+    getPinnedCheckpoint: pinned.getPinnedCheckpoint,
+    getPinnedValidators: pinned.getPinnedValidators
 };

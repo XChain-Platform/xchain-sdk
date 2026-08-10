@@ -19,7 +19,7 @@
  * (R*-prefixed regtest coins default to localhost services; the standard
  * SDK env vars EXPLORER_URL / ENCODER_URL / HUB_API_HOST etc. override).
  *
- * Claude Code:    claude mcp add xchain -- npx -y xchain-sdk-mcp
+ * Claude Code:    claude mcp add xchain -- npx -y xchain-mcp
  * Claude Desktop: { "mcpServers": { "xchain": { "command": "xchain-mcp" } } }
  *
  ********************************************************************/

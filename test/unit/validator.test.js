@@ -450,6 +450,80 @@ describe('Validator: FIAT_AMOUNT validation', function () {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// FIAT DISPENSER GET_AMOUNT = 0
+//
+// A fiat-priced dispenser does not store a coin price. It is derived at
+// SETTLEMENT from FIAT_AMOUNT and the validator price snapshot, so GET_AMOUNT is
+// 0 by protocol convention (DISPENSER.md examples 4/5; xchain-indexer
+// dispense.js names it outright - "the GET_AMOUNT of 0 that FIAT dispensers
+// carry by convention"). The indexer validates only GET_AMOUNT's FORMAT for a
+// DISPENSER and never its sign.
+//
+// The positive-amount rule used to apply to GET_AMOUNT unconditionally, which
+// made this SDK strictly stricter than the chain and had a total effect:
+// NEITHER fiat pricing mode could be composed, so the whole fiat/oracle
+// dispenser feature was unreachable through any client using this validator.
+// Found by the wallet's fiat dispenser e2e lane, which could not get past the
+// form (wallet campaign D-143).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Validator: FIAT dispenser GET_AMOUNT convention', function () {
+
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    const BASE = { GIVE_TICK: 'TOKEN', GIVE_AMOUNT: '10', GIVE_ESCROW: '100', GET_COIN: 'BTC' };
+
+    it('accepts GET_AMOUNT 0 on a validator-priced FIAT dispenser', function () {
+        const errors = v.validate('DISPENSER', {
+            ...BASE, GET_AMOUNT: '0', FIAT_CODE: 'USD', FIAT_AMOUNT: '3.00'
+        });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('accepts GET_AMOUNT 0 on a user-oracle dispenser, where FIAT_AMOUNT is ignored', function () {
+        const errors = v.validate('DISPENSER', {
+            ...BASE,
+            GET_AMOUNT:     '0',
+            FIAT_CODE:      'JPY',
+            ORACLE_ADDRESS: 'bc1qmr46t4ca5wh35k6mczdzrkepqw2d8ne9ryqz4c'
+        });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    // The exemption has to be NARROW or it becomes a hole: an ordinary
+    // coin-priced dispenser with a zero price would dispense for nothing.
+    it('still rejects GET_AMOUNT 0 on a dispenser with no fiat pricing at all', function () {
+        const errors = v.validate('DISPENSER', { ...BASE, GET_AMOUNT: '0' });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('still rejects a NEGATIVE GET_AMOUNT even on a FIAT dispenser', function () {
+        const errors = v.validate('DISPENSER', {
+            ...BASE, GET_AMOUNT: '-1', FIAT_CODE: 'USD', FIAT_AMOUNT: '3.00'
+        });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('still rejects a zero GIVE_AMOUNT on a FIAT dispenser: only the PRICE is derived', function () {
+        const errors = v.validate('DISPENSER', {
+            ...BASE, GIVE_AMOUNT: '0', GET_AMOUNT: '0', FIAT_CODE: 'USD', FIAT_AMOUNT: '3.00'
+        });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('does not leak the exemption to another action carrying GET_AMOUNT', function () {
+        // ORDER and SWAP both have GET_AMOUNT and neither has a fiat lane, so
+        // the FIAT_CODE guard must be action-scoped rather than field-scoped.
+        const errors = v.validate('ORDER', {
+            GIVE_TICK: 'TOKEN', GIVE_AMOUNT: '10', GET_COIN: 'BTC', GET_AMOUNT: '0',
+            FIAT_CODE: 'USD'
+        });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PRICE v1 ORACLE PUBLISH (FIAT / VALUE / FEE)
 //
 // The user-run token oracle (PC-30). Its fiat field is named FIAT, not
@@ -1350,5 +1424,155 @@ describe('Validator: address ^id reference', function () {
     it('still rejects a malformed full address in DESTINATION', function () {
         const errors = v.validate('SEND', { TICK: 'JDOG', AMOUNT: '1', DESTINATION: 'not-an-address!!' });
         expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PC-29 /  P9: FILE.GATE_MIN_AMOUNT (the unlock threshold)
+//
+// A ninth, optional FILE field. Every rule here is a FORMAT rule and every one
+// exists for a reason worth stating, because the value is consensus-visible and
+// lands in a VARCHAR(40): a value this validator lets through must be one the
+// indexer can store and compare without the DB changing it.
+//
+// Divisibility is deliberately absent. The real bound is
+// min(gate tick divisibility, THRESHOLD_SCALE), and divisibility is chain STATE
+// at the FILE's block, which a stateless validator does not have. The indexer is
+// the arbiter for that half; a guess here would be a second, weaker opinion that
+// disagrees at exactly the boundary the shared vectors exist to pin.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Validator: FILE GATE_MIN_AMOUNT (PC-29)', function () {
+
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    const bad = (value) => v.validate('FILE', { NAME: 'f.txt', TYPE: 'text/plain', GATE_MIN_AMOUNT: value });
+    const isRejected = (value) => !hasNoErrorCode(bad(value), 'INVALID_FIELD_VALUE');
+
+    it('accepts an absent or empty threshold (= no threshold)', function () {
+        expect(hasNoErrorCode(v.validate('FILE', { NAME: 'f.txt', TYPE: 'text/plain' }), 'INVALID_FIELD_VALUE')).to.be.true;
+        expect(isRejected(''), 'empty means no threshold, not an invalid one').to.be.false;
+    });
+
+    it('accepts ordinary decimal amounts', function () {
+        for (const ok of ['1', '100', '0.5', '0.00000001', '12345.6789', '1.0'])
+            expect(isRejected(ok), ok).to.be.false;
+    });
+
+    it('rejects every spelling of zero', function () {
+        // A zero threshold is not "no threshold"; it is a threshold nobody can fail.
+        // Letting it through would give one meaning two encodings.
+        for (const z of ['0', '0.0', '0.00000000'])
+            expect(isRejected(z), z).to.be.true;
+    });
+
+    it('rejects signs and exponents', function () {
+        for (const s of ['-1', '+1', '1e3', '1E3', '-0.5'])
+            expect(isRejected(s), s).to.be.true;
+    });
+
+    it('rejects malformed decimal shapes', function () {
+        for (const s of ['1.', '.5', '1.2.3', '1,5', '1 ', ' 1', 'abc', '1a'])
+            expect(isRejected(s), JSON.stringify(s)).to.be.true;
+    });
+
+    it('rejects leading zeros so one value has exactly one spelling', function () {
+        // '01' and '1' would otherwise be two byte-different FILEs meaning the same
+        // threshold, which the shared P1/P9 vectors treat as a defect.
+        for (const s of ['01', '007', '00.5'])
+            expect(isRejected(s), s).to.be.true;
+        expect(isRejected('0.5'), 'a single leading zero before the point is correct').to.be.false;
+    });
+
+    it('rejects a pipe, which would split the wire record', function () {
+        expect(isRejected('1|2')).to.be.true;
+    });
+
+    it('enforces the 40-character bound the storage column depends on', function () {
+        const forty = '1'.repeat(40);
+        expect(isRejected(forty), '40 is allowed').to.be.false;
+        expect(isRejected('1'.repeat(41)), '41 is not').to.be.true;
+        // The bound is a WIRE rule, not merely a column width: if an oversized value
+        // reached a VARCHAR(40) it could be silently truncated, and consensus validity
+        // would then depend on the DB's mode rather than on the bytes.
+        expect(isRejected('0.' + '1'.repeat(45))).to.be.true;
+    });
+
+    it('does NOT reject on divisibility, which is the indexer\'s call', function () {
+        // 30 decimal places is beyond any tick's divisibility, but this validator is
+        // stateless and must not pretend to know. It is a well-formed decimal, so it
+        // passes here and the indexer rejects it against the gate tick at that block.
+        expect(isRejected('0.' + '1'.repeat(30)), 'stateless layer must stay silent on divisibility').to.be.false;
+    });
+
+    it('applies only to FILE, not to other actions carrying a like-named field', function () {
+        const errors = v.validate('SEND', { GATE_MIN_AMOUNT: '0' });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    // ── Shared vector fixture (spec section 6.5) ─────────────────────────────
+    // The tests above are this repo's own reading of the rules. These run the SAME
+    // vectors the indexer and the wallet run, from a byte-identical file, so the
+    // three implementations are pinned to one another rather than to three
+    // independently-written test suites that agree today by coincidence.
+    describe('shared GATE_MIN_AMOUNT vectors', function () {
+        const fs      = require('fs');
+        const path    = require('path');
+        const FIXTURE = path.join(__dirname, '../fixtures/gate-min-amount-vectors.json');
+        const vectors = JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
+
+        it('the fixture carries vectors in every section (it has not been emptied)', function () {
+            for (const key of ['format', 'divisibility', 'pack_threshold', 'handoff_required'])
+                expect(vectors[key], key).to.be.an('array').with.length.greaterThan(0);
+        });
+
+        for (const vec of vectors.format) {
+            it(`${vec.label}: ${JSON.stringify(vec.value)} is ${vec.valid ? 'accepted' : 'rejected'}`, function () {
+                expect(isRejected(vec.value)).to.equal(!vec.valid);
+            });
+        }
+
+        // The asymmetry the shared fixture exposed: setActionParams trims every action
+        // field on the indexer's way in, so a whitespace-padded threshold reaches
+        // consensus already trimmed and is ACCEPTED there, while this layer refuses to
+        // emit it. Pinned on both sides so the difference stays deliberate: closing it
+        // would mean changing the trim for every field of every action.
+        for (const vec of vectors.layer_asymmetry.sdk_rejects_indexer_normalizes) {
+            it(`${vec.label}: ${JSON.stringify(vec.value)} is rejected here, normalized by the indexer`, function () {
+                expect(isRejected(vec.value), 'the SDK must not emit it').to.be.true;
+                expect(isRejected(vec.normalizes_to), 'the trimmed form is what consensus sees').to.be.false;
+            });
+        }
+
+        // The division of labour, asserted rather than described: every divisibility
+        // vector is a well-formed decimal, so this stateless layer must pass ALL of
+        // them, including the ones the indexer rejects against the tick at that block.
+        for (const vec of vectors.divisibility) {
+            it(`divisibility is not this layer's call: ${vec.value} passes the format check`, function () {
+                expect(isRejected(vec.value)).to.be.false;
+            });
+        }
+
+        // Cross-repo byte identity. Skips (rather than fails) when a sibling checkout
+        // is absent, matching the repo's other sibling-conformance tests; CI sets
+        // XCHAIN_REQUIRE_SIBLINGS=1 so a missing sibling hard-fails there.
+        const SIBLINGS = [
+            ['xchain-indexer', 'test/fixtures/gate-min-amount-vectors.json'],
+            ['xchain-wallet',  'test/fixtures/gate-min-amount-vectors.json']
+        ];
+        const canonical = fs.readFileSync(FIXTURE);
+        SIBLINGS.forEach(([repo, rel]) => {
+            it(`the ${repo} copy is byte-identical`, function () {
+                const p = path.join(__dirname, '../../..', repo, rel);
+                if (!fs.existsSync(p)) {
+                    if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                        throw new Error('sibling ' + repo + ' fixture missing: ' + p);
+                    return this.skip();
+                }
+                expect(fs.readFileSync(p).equals(canonical),
+                    repo + ' fixture drifted from the canonical sdk copy').to.be.true;
+            });
+        });
     });
 });

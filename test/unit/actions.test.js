@@ -70,14 +70,42 @@ describe('Actions – all 19 ACTION types', function () {
     });
 
     // BATCH
+    // The child commands carry REAL addresses: BATCH children are now validated
+    // through the authoritative action path, so the old 'addr1'/'addr2'
+    // placeholders are rejected the same way a chain would reject them.
     it('BATCH produces correct actionString', function () {
-        let cmd = 'SEND|0|TOKEN|100|addr1;SEND|0|TOKEN|200|addr2';
+        let cmd = 'SEND|0|TOKEN|100|' + ADDR + ';SEND|0|TOKEN|200|' + ADDR;
         let result = actions.createAction({
             action: 'BATCH',
             params: { command: cmd }
         });
         expect(result.actionString).to.match(/^BATCH\|/);
         expect(result.actionString).to.include(cmd);
+    });
+
+    // A raw COMMAND string used to be counted, never parsed: only parts[0] was
+    // read, so an unknown action or a bad field value was serialized, encoded
+    // and paid for before the chain rejected it.
+    it('BATCH REJECTS a child command naming an unknown action', function () {
+        expect(() => actions.createAction({
+            action: 'BATCH',
+            params: { command: 'NOTREAL|0|x' }
+        })).to.throw(SDKValidationError, /BATCH command 0 is not a valid action: UNKNOWN_ACTION/);
+    });
+
+    it('BATCH REJECTS a child command with an invalid field value', function () {
+        expect(() => actions.createAction({
+            action: 'BATCH',
+            params: { command: 'SEND|0|TOKEN|100|' + ADDR + ';SEND|0|TOKEN|-5|' + ADDR }
+        })).to.throw(SDKValidationError, /BATCH command 1 \(SEND\): AMOUNT must be a positive number/);
+    });
+
+    it('BATCH still accepts compacted ^id ticker and address references', function () {
+        let result = actions.createAction({
+            action: 'BATCH',
+            params: { command: 'SEND|0|^12|100|^7' }
+        });
+        expect(result.actionString).to.include('SEND|0|^12|100|^7');
     });
 
     // BROADCAST

@@ -284,6 +284,96 @@ describe('pre-flight engine', function () {
             expect(tokenFinding.severity).to.equal('error');
             expect(r.findings.some(f => f.code === 'DRYRUN_UNAVAILABLE')).to.equal(true);
         });
+
+        // . The case above has a dry-run that FAILS FAST; the one that
+        // bites in production is a dry-run that never answers at all (a cold
+        // verdict on a busy venue costs seconds against a 4000ms budget). An
+        // otherwise-clean action therefore passes on Tier 2 alone, and the ONLY
+        // thing in the report that says the network was never asked is this
+        // finding - a consumer that drops it shows a network approval that
+        // never happened, which is exactly what the wallet confirm surface did.
+        it('a dry-run that never answers still declares itself in the report', async function () {
+            const sdk = mockSdk({ explorerSpec: {
+                getToken: () => ({ tick: 'JDOG', divisible: 0 }),
+                getBalances: () => [{ tick: 'JDOG', amount: '100' }],
+                getFeeQuote: () => new Promise(() => {}),   // never resolves
+            } });
+            const r = await sdk.preflight('SEND|0|JDOG|5|' + A1,
+                { source: A2, preflight: 'report', timeoutMs: 200 });
+
+            // Verdict is a clean pass on client checks alone: nothing else in
+            // the report distinguishes it from a network-approved pass.
+            expect(r.verdict).to.equal('pass');
+            expect(r.findings.some(f => f.code === 'DRYRUN_VALID')).to.equal(false);
+
+            const unavailable = r.findings.find(f => f.code === 'DRYRUN_UNAVAILABLE');
+            expect(unavailable, 'unanswered dry-run must still be stated').to.not.equal(undefined);
+            expect(unavailable.source).to.equal('dryrun');
+            expect(unavailable.message).to.match(/timeout/i);
+        });
+
+        // The SECOND home of , found by driving a controller-bound token
+        // in a browser: the network was reached, answered promptly, and
+        // DECLINED to judge. `/feequote` and `/preflight` refuse to enter a
+        // controller guard on the public path (GUARD_INERT ->
+        // FEE_QUOTE_CONTROLLER_UNSUPPORTED, xchain-indexer
+        // utility._invokeController), because running caller-influenced VM code
+        // there would hand an unauthenticated endpoint an unmetered compute
+        // primitive. classifyQuote calls that `no-verdict`, and applyTier1 used
+        // to push NOTHING for it - so the report was a clean pass, and the
+        // wallet's confirm screen read "Looks good" on a SEND the chain then
+        // recorded `invalid: controller (reverted)`.
+        //
+        // The same branch covers the other three no-verdict reasons
+        // (denylisted VM actions, fee-exempt replies, unquotable ones), which
+        // were all silent in exactly the same way.
+        it('a dry-run that DECLINES to judge declares itself too', async function () {
+            const sdk = mockSdk({ explorerSpec: {
+                getToken: () => ({ tick: 'JDOG', divisible: 0 }),
+                getBalances: () => [{ tick: 'JDOG', amount: '100' }],
+                // The feequote shape: the sentinel rides in `error` with
+                // supported:false, exactly as computeFeeQuote returns it.
+                getFeeQuote: () => ({
+                    supported: false, valid: false,
+                    error: 'native fee pre-flight not supported for a controller-bound SEND '
+                        + '(pay the fee in XCHAIN); FEE_QUOTE_CONTROLLER_UNSUPPORTED',
+                }),
+            } });
+            const r = await sdk.preflight('SEND|0|JDOG|5|' + A1,
+                { source: A2, preflight: 'report' });
+
+            // Same shape as the unanswered case: a Tier-2-only pass. The
+            // difference a consumer must be able to see is that the network
+            // never approved it.
+            expect(r.verdict).to.equal('pass');
+            expect(r.findings.some(f => f.code === 'DRYRUN_VALID')).to.equal(false);
+
+            const declined = r.findings.find(f => f.code === 'DRYRUN_UNAVAILABLE');
+            expect(declined, 'a declined dry-run must still be stated').to.not.equal(undefined);
+            expect(declined.severity).to.equal('info');
+            expect(declined.source).to.equal('dryrun');
+            // Named as declined rather than unreachable: the reason is the half
+            // that tells a reader the venue is fine and this action is special.
+            expect(declined.message).to.match(/declined/i);
+            expect(declined.message).to.match(/guardInert/i);
+        });
+
+        // A guard-inert reply on the /preflight shape, which carries the
+        // boolean instead of the string sentinel. Two endpoints, one
+        // classification: a fix that only covered the feequote spelling would
+        // leave the modern path silent.
+        it('the /preflight guardInert boolean declares itself as well', async function () {
+            const sdk = mockSdk({ explorerSpec: {
+                getToken: () => ({ tick: 'JDOG', divisible: 0 }),
+                getBalances: () => [{ tick: 'JDOG', amount: '100' }],
+                getFeeQuote: () => ({ supported: true, valid: null, guardInert: true, blockIndex: 11 }),
+            } });
+            const r = await sdk.preflight('SEND|0|JDOG|5|' + A1,
+                { source: A2, preflight: 'report' });
+            const declined = r.findings.find(f => f.code === 'DRYRUN_UNAVAILABLE');
+            expect(declined, 'a guardInert reply must still be stated').to.not.equal(undefined);
+            expect(declined.message).to.match(/declined/i);
+        });
     });
 
     describe('severity/trust model (§4.2)', function () {

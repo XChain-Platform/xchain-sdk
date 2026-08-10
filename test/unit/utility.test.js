@@ -11,6 +11,26 @@
 const assert = require('assert');
 const Utility = require('../../src/utility.js');
 
+describe('BigInt JSON encoding (#3921)', function () {
+
+    it('stringifies a BigInt as a QUOTED decimal token', function () {
+        // JSON.rawJSON emitted a bare number, which JSON.parse then rounded.
+        assert.strictEqual(JSON.stringify({ v: 9007199254740993n }), '{"v":"9007199254740993"}');
+    });
+
+    it('survives a stringify/parse round trip above 2^53 with no koinu lost', function () {
+        const v = 12000000000000000000n;
+        const back = JSON.parse(JSON.stringify({ v }));
+        assert.strictEqual(typeof back.v, 'string');
+        assert.strictEqual(BigInt(back.v), v);
+    });
+
+    it('is exact at the first value Number cannot represent', function () {
+        const back = JSON.parse(JSON.stringify({ v: 9007199254740993n }));
+        assert.strictEqual(BigInt(back.v), 9007199254740993n);
+    });
+});
+
 describe('Utility.isValidAmountFormat (indexer parity)', function () {
 
     let utils;
@@ -65,5 +85,40 @@ describe('Utility.isInteger (indexer parity, #2393)', function () {
         assert.strictEqual(utils.isInteger('abc'), false);
         assert.strictEqual(utils.isInteger(NaN), false);
         assert.strictEqual(utils.isInteger(Infinity), false);
+    });
+});
+
+// : the version-locked helpers built `{ VERSION: '3', ...params }`, so the
+// spread landed after the forced value and a caller-supplied VERSION won. Lowercase
+// `version` won too, since normalizeFields upper-snakes both spellings onto one key.
+// The consequence was a silent misroute: stakeToContract({ VERSION: '1' }) serialized
+// STAKE|1 and dropped TARGET_CONTRACT_INDEX and TICK.
+describe('Utility.withForcedVersion (version-locked helpers)', function () {
+
+    let utils;
+
+    beforeEach(function () {
+        utils = new Utility();
+    });
+
+    it('forces its version over a caller VERSION in either spelling', function () {
+        assert.strictEqual(utils.withForcedVersion('3', { AMOUNT: '5' }).VERSION, '3');
+        assert.strictEqual(utils.withForcedVersion('3', {}).VERSION, '3');
+        assert.strictEqual(utils.withForcedVersion('3', { VERSION: '3', AMOUNT: '5' }).VERSION, '3');
+        assert.strictEqual(utils.withForcedVersion('3', { version: 3 }).VERSION, '3');
+    });
+
+    it('throws rather than route a MISMATCHED caller version', function () {
+        assert.throws(() => utils.withForcedVersion('3', { VERSION: '1' }), /forces VERSION 3/);
+        assert.throws(() => utils.withForcedVersion('3', { version: '1' }), /forces VERSION 3/);
+        assert.throws(() => utils.withForcedVersion('1', { Version: 4 }), /forces VERSION 1/);
+    });
+
+    it('carries every other param through untouched', function () {
+        let out = utils.withForcedVersion('3', { AMOUNT: '5', TARGET_CONTRACT_INDEX: 7, TICK: 'AAA' });
+        assert.strictEqual(out.AMOUNT, '5');
+        assert.strictEqual(out.TARGET_CONTRACT_INDEX, 7);
+        assert.strictEqual(out.TICK, 'AAA');
+        assert.strictEqual(Object.keys(out).length, 4);
     });
 });

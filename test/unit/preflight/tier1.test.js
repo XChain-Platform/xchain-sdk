@@ -146,3 +146,45 @@ describe('pre-flight Tier 1 classification', function () {
         });
     });
 });
+
+// The fee mode reaches the network dry run (found live on regtest).
+//
+// /preflight answers for the CHAIN'S DEFAULT mode when `feeMode` is absent, so
+// a Bitcoin action whose author opted into paying the protocol fee in coin was
+// judged against their XCHAIN balance instead. Measured on the venue: the same
+// endpoint, same action, same source answers `invalid: insufficient funds
+// (FEE)` with no feeMode and `valid` with `feeMode=native`. The user that hits
+// it is exactly the one the native lane exists for - somebody with no XCHAIN -
+// and what they are shown is "Will likely fail" with Approve disabled behind
+// "Sign anyway", which is the override that teaches people to click through
+// real refusals.
+describe('pre-flight Tier 1 fee mode', function () {
+
+    function sdkCapturing(seen) {
+        return {
+            explorer: {
+                getPreflight: async (args) => { seen.push(args); return { supported: true, valid: true, status: 'valid' }; },
+                getFeeQuote: async (args) => { seen.push(args); return { supported: true, valid: true, status: 'valid' }; },
+            },
+        };
+    }
+
+    it('passes feeMode to the dry run when the caller states one', async function () {
+        const seen = [];
+        const parsed = parse('ISSUE|0|NEWTICK', { validate: false });
+        await runTier1({ sdk: sdkCapturing(seen), parsed, source: 's', feeMode: 'native', timeoutMs: 1000 });
+        expect(seen).to.have.lengthOf(1);
+        expect(seen[0].feeMode).to.equal('native');
+    });
+
+    // An `undefined` key would serialize into the query string as the literal
+    // "undefined", which the endpoint rejects as an invalid feeMode - so the
+    // absent case has to be absent, not undefined.
+    it('omits the key entirely when the caller states nothing', async function () {
+        const seen = [];
+        const parsed = parse('ISSUE|0|NEWTICK', { validate: false });
+        await runTier1({ sdk: sdkCapturing(seen), parsed, source: 's', timeoutMs: 1000 });
+        expect(seen).to.have.lengthOf(1);
+        expect(Object.prototype.hasOwnProperty.call(seen[0], 'feeMode')).to.equal(false);
+    });
+});

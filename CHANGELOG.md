@@ -7,12 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Pre-flight warns on a non-canonical `^<id>` address reference and declares a well-formed one unverified, mirroring the chain's new unresolvable-reference rejection .
+- `npm run ci` runs the pre-flight drift gate, which still skips clean without a sibling indexer checkout .
+- `verifyBalanceProof`, `verifyLockedBalanceProof` and `verifyContractStateProof` take an optional expected-identity argument and refuse a valid proof answering a different key, closing the valid-proof-wrong-question hole the explorer's path double-decode exposed .
+- Taproot envelopes work on 2-of-3 co-signer accounts: the commit tree carries the account's own two recovery leaves beside the envelope leaf, so a commit output keeps the two-of-three property instead of being refused .
+- `CoSignerClient` accepts `recoveryPublicKey` and derives the 2-of-3 tap tree itself, cross-checking any `tweaks` it was also handed .
+
 ### Changed
+- **BREAKING** `AgentSession` safety controls are enforced rather than offered: the constructor requires at least one spend ceiling, a submit requires a stable `submitOpts.idempotencyKey`, and a new operator kill switch (`pause()`/`resume()` plus a `killSwitchFile` re-read on every submit) halts a running session before evaluation or broadcast; `allowUnbounded` / `allowUnkeyedSubmits` opt back out ().
 - **BREAKING** `X402Client` is now fail-closed on spend: omitting `maxAmount` applies a conservative default per-payment ceiling (over-ceiling offers throw `X402_PRICE_TOO_HIGH` before paying); unbounded spending is an explicit opt-in via `maxAmount: 'unbounded'`/`Infinity` or `allowUnbounded: true` ().
 - **BREAKING** `X402Client.fetchUrl` no longer double-pays on retry: both post-broadcast leak paths now throw one `X402_PAYMENT_AMBIGUOUS` error carrying `details.txid`/`details.resume`, and `fetchUrl(url, init, { resume })` adopts the in-flight payment instead of broadcasting a new one (replaces the `X402_PAYMENT_NOT_ACCEPTED` throw) ().
 
 ### Fixed
+- An envelope reveal signs the leaf's untweaked aggregate explicitly instead of falling through to the account's key-path tweaks, which was a wrong-key signature on any tweaked account .
+- BigInt satoshi values serialize as quoted decimal strings, converging on the form the encoder parses and the indexer already pins ().
+- buildRecoverySpend reconciles inputs and outputs in exact u64, so an account above 2^53 satoshi can no longer defeat its own whole-account anti-burn guard ().
+- reconcileEncoded parses the caller's maxFeeSats cap in exact u64, so a cap above 2^53 no longer rounds and false-denies an honest fee ( residual, ).
+- Explicit action versions run the serializer no-data-loss check instead of bypassing it, closing a silent field-drop on version-pinned actions ().
+- Structurally corrupt velocity-window rows fail closed on load rather than being quarantined while spend limits reopen ().
+- Stake-weighted quorum rejects a validator entry with a missing or non-numeric weight instead of lowering the quorum denominator ().
+- Hardware-signing decomposition handles DOGE-scale values above 2^53 without rounding ().
+- FEE_CHARGING_ACTIONS includes BET, restoring the NATIVE_FEE_FORFEIT warning it silently dropped ().
+- The WebSocket ticks subscription filter no longer silently no-ops on the actions channel ().
+- getContracts and both getExecutions declarations return a list envelope, matching what Explorer actually emits ().
+- The preflight drift gate covers fee classification and VM gas inputs ().
+- Corrected a protocol-constants header that claimed a cross-repo tripwire which does not exist ().
+- Version-locked SDK helpers no longer let a caller override the version they force: `Utility.withForcedVersion` strips every spelling and throws on a mismatch, closing a silent misroute of staked assets ().
+- Weighted checkpoint verification requires a valid weight and nonblank source on EVERY validator entry; a partially-weighted set used to clear the stake predicate on a shrunken denominator ().
+- A checkpoint missing its commitment roots after activation is now rejected outright instead of verifying against the legacy rootless preimage ().
+- Co-signer output caps compare as exact u64: an output one satoshi above a cap larger than 2^53 used to be approved ().
 - review review-round fixes: verifyBalanceProof pins the sub-root slot (false-zero proof closed), opt-in submit idempotency key, co-signer sidecar fails closed without a token, compiled-push OP_RETURN preflight, network-aware oversize suggestion, attestation SSRF gate, hub-envelope parity CI check, FAMILY_SLIP44 derivation tests.
+
+### Security
+- MuSig2 key aggregation rejects a repeated participant key, which previously collapsed the policy threshold to a single signer ().
+- `verifyAnchoredCheckpoint` requires the committed roots to be inside the SIGNED canonical, closing a bypass that let a signed rootless checkpoint carry attacker-chosen SPV roots ().
+- `submitAction` reconciles every encoder-authored PSBT against the submitted intent before signing, blocking fund redirection and fee burn by a compromised encoder ().
+- `generateNonce` refuses to reuse a `sessionId` under different signing inputs, which reused the secret nonce and disclosed the private key ().
+- `CoSigner`, `CoSignerClient` and `MuSig2AgentSession` require exactly the two-key pair they can sign for, instead of funding aggregate addresses no spend path could ever unlock ().
 
 ### Removed
 - `statuses` WS filter dropped from `onAction`, `onAddress` and `onOrderMatch` (and from the typed surface): no explorer channel ever populated a per-event status, so it silently returned an unfiltered stream ().
@@ -33,6 +65,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 - CoSigner now rejects any BIP341 `sighashType` other than `SIGHASH_DEFAULT`/`SIGHASH_ALL` in `process`/`_processMulti` (and defensively in `taprootKeyPathSighash`). Previously the type was honored verbatim from the request, so a `SIGHASH_NONE`/`SINGLE`/`ANYONECANPAY` partial over an in-policy PSBT could be reassembled into a drain transaction that still verified, bypassing the output gate.
+
+## [2.0.2] - 2026-08-02
+
+### Fixed
+- Browser and mobile bundles no longer reach for a Node filesystem: the regtest full-node sidecar is skipped unless one is present, instead of throwing on every launch.
+- Taproot envelope reveals complete the commit/reveal pair rather than stranding the commit, and a failed reveal carries its recovery record out.
+
+## [2.0.1] - 2026-08-01
+
+### Changed
+- README corrected for the npm registry release: install section added, code samples import `@dankest-llc/xchain-sdk`, version badge reads from npm.
 
 ## [1.14.1] - 2026-07-16
 

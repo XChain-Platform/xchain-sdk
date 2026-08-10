@@ -17,13 +17,15 @@
  * Checks that apply to every action: validator semantic findings
  * (locally-provable; the delimiter/format subset hard-blocks),
  * encoding-fits-carrier, token existence for every referenced TICK,
- * and the native-fee forfeiture notice for fee-charging actions.
+ * the `^<id>` address-reference shape, and the native-fee forfeiture
+ * notice for fee-charging actions.
  *
  ********************************************************************/
 
 'use strict';
 
-const { FINDING_CODES, ENCODING_LIMITS, FEE_CHARGING_ACTIONS } = require('./constants.js');
+const { FINDING_CODES, ENCODING_LIMITS, FEE_CHARGING_ACTIONS, CANONICAL_CARET_ID } = require('./constants.js');
+const { ADDRESS_REF_FIELDS } = require('../addressRefFields.js');
 const numeric = require('./numeric.js');
 
 // Wire fields that reference a TICK whose existence is checkable.
@@ -40,6 +42,73 @@ const TICK_FIELDS = ['TICK', 'DIVIDEND_TICK', 'GIVE_TICK', 'GET_TICK', 'CALLBACK
 // non-overridable error the indexer would accept is a CI failure
 // (spec §4.2 false-block invariant).
 const HARD_VALIDATOR_CODES = new Set(['FORBIDDEN_CHARACTER']);
+
+/*
+ * The address fields whose handler RESOLVES a `^<id>` reference and states a
+ * verdict on it (xchain-indexer db.resolveAddressRefChecked, ).
+ *
+ * Derived from the shared consensus map rather than listed again, because the
+ * derivation is exact: every single-value, non-type-gated address field in
+ * ADDRESS_REF_FIELDS has a resolveAddressRefChecked call site today, and the
+ * two excluded shapes are excluded for reasons that also make them wrong to
+ * flag here. SEND.DESTINATION is `multi` and send.js is the one address-bearing
+ * handler with NO resolve call at all, so a `^id` there is rejected on format
+ * in both eras ; LIST.ITEM is `listType` and only holds an address when
+ * the list TYPE says so, which pre-flight cannot decide from the wire alone.
+ * `noCompact` fields (DISPENSER.GET_ADDRESS / ORACLE_ADDRESS) ARE included: the
+ * SDK never emits them compacted, but the indexer still resolves a caller's.
+ */
+const CARET_RESOLVED_FIELDS = (() => {
+    const map = {};
+    for (const action of Object.keys(ADDRESS_REF_FIELDS)) {
+        map[action] = ADDRESS_REF_FIELDS[action]
+            .filter((spec) => !spec.multi && !spec.listType)
+            .map((spec) => spec.field);
+    }
+    return map;
+})();
+
+/*
+ * `^<id>` address references ( flag-day).
+ *
+ * Two verdicts, and the split is the whole point. A NON-CANONICAL id can never
+ * resolve on any node, so the client knows the outcome without asking anyone:
+ * at/after the flag-day the handler rejects `invalid: <FIELD> (unresolvable
+ * ^id)`, and below it the field falls through to the handler's own
+ * isCryptoAddress check. A well-formed id that is simply DANGLING is the same
+ * rejection with no local evidence: the explorer exposes address -> id
+ * (/address/{addr}.info.address_id, which is how addressResolver.js compacts)
+ * and nothing exposes the inverse, so the client cannot tell a live id from a
+ * dead one and says so instead of guessing.
+ *
+ * Warning, never an error, even for the non-canonical case. Three call sites
+ * had no follow-up format check before  (DISPENSER.ORACLE_ADDRESS on a
+ * non-oracle dispenser, ISSUE.TRANSFER/TRANSFER_SUPPLY on the genesis path,
+ * DEPLOY.SLASH_DESTINATION below its own flag-day), so those actions are still
+ * ACCEPTED below the activation height on mainnet/testnet. A non-overridable
+ * client error would false-block them (spec §4.2 false-block invariant), and
+ * pre-flight has no chain height to gate on.
+ */
+function checkAddressRefs(ctx) {
+    const fields = CARET_RESOLVED_FIELDS[ctx.parsed.action] || [];
+    if (!fields.length) return;
+    ctx.markRun(FINDING_CODES.CARET_REF_UNRESOLVABLE);
+    for (const field of fields) {
+        const value = ctx.params[field];
+        if (value === undefined || value === null || Array.isArray(value)) continue;
+        const str = String(value);
+        if (str.charAt(0) !== '^') continue;
+        if (!CANONICAL_CARET_ID.test(str.substring(1))) {
+            ctx.addFinding(FINDING_CODES.CARET_REF_UNRESOLVABLE, 'warning',
+                `${field} is the address reference ${str}, which is not a canonical ^<id> and can never resolve. `
+                + 'The chain rejects it as an unresolvable reference.',
+                { field, value: str });
+            continue;
+        }
+        ctx.addUnverified(FINDING_CODES.CARET_REF_UNRESOLVABLE,
+            'a well-formed ^<id> address reference cannot be resolved client-side: no endpoint maps an id back to its address');
+    }
+}
 
 // D-9: the chain's NATIVE coin is not an XChain token, so it never appears in
 // the token table and the token-existence check below would flag it as "does
@@ -111,7 +180,10 @@ async function runUniversal(ctx, opts = {}) {
         }
     }
 
-    // 4. Native-fee forfeiture notice: fee-charging actions on chains
+    // 4. `^<id>` address references (local; no network).
+    checkAddressRefs(ctx);
+
+    // 5. Native-fee forfeiture notice: fee-charging actions on chains
     // with mandatory native fees forfeit the native output if the
     // action is invalid. Always shown for fee-charging actions
     // (warning; the highest-cost failure mode, spec §4.2).
@@ -124,4 +196,4 @@ async function runUniversal(ctx, opts = {}) {
     return ctx;
 }
 
-module.exports = { runUniversal, TICK_FIELDS, HARD_VALIDATOR_CODES, numeric };
+module.exports = { runUniversal, TICK_FIELDS, HARD_VALIDATOR_CODES, CARET_RESOLVED_FIELDS, numeric };

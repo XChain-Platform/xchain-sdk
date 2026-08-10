@@ -47,6 +47,17 @@ function mergeConfigDelta(base, delta){
 }
 
 // Network string → hub config keys mapping
+// Per-request axios options carrying the injected agents . The hub
+// has several URLs and they can differ in scheme, so the choice is made per
+// URL rather than once per client.
+function agentOptsFor(url, pool){
+    if(!pool) return { proxy: false };
+    let isHttps = String(url).startsWith('https');
+    let agent = isHttps ? pool.httpsAgent : pool.httpAgent;
+    if(!agent) return { proxy: false };
+    return isHttps ? { proxy: false, httpsAgent: agent } : { proxy: false, httpAgent: agent };
+}
+
 const NETWORK_MAP = {
     'bitcoin-mainnet':   { coin: 'bitcoin',  network: 'mainnet' },
     'bitcoin-testnet':   { coin: 'bitcoin',  network: 'testnet' },
@@ -64,6 +75,13 @@ class HubConnector {
 
     constructor(options = {}) {
         this.timeout = options.timeout || 5000;
+
+        // : the hub client posts through bare `axios.post`, with no
+        // pooled client of its own, so it needs the injected agents handed to
+        // it explicitly. Missing this would have left hub traffic going direct
+        // while explorer and encoder traffic was proxied, which is the worst
+        // of both: the toggle looks like it works and one lane still leaks.
+        this._pool = options.pool || {};
 
         // Optional hub API key: getallconfigs is in the hub's sensitive-read
         // tier (its response carries service DB credentials) and 401s without
@@ -138,7 +156,7 @@ class HubConnector {
             let idx = (this._lastGoodIdx + i) % this.urls.length;
             let url = this.urls[idx];
             try {
-                let response = await axios.post(url, payload, { timeout: this.timeout, headers });
+                let response = await axios.post(url, payload, { timeout: this.timeout, headers, ...agentOptsFor(url, this._pool) });
                 if (response.data && response.data.result) {
                     let result = response.data.result;
                     // The hub returns its FAILURE payload through the same JSON-RPC
@@ -220,7 +238,7 @@ class HubConnector {
             let idx = (this._lastGoodIdx + i) % this.urls.length;
             let url = this.urls[idx];
             try {
-                let response = await axios.post(url, payload, { timeout: this.timeout });
+                let response = await axios.post(url, payload, { timeout: this.timeout, ...agentOptsFor(url, this._pool) });
                 if(response.data && response.data.result){
                     this._lastGoodIdx = idx;
                     return true;
@@ -247,7 +265,7 @@ class HubConnector {
             let idx = (this._lastGoodIdx + i) % this.urls.length;
             let url = this.urls[idx];
             try {
-                let response = await axios.post(url, payload, { timeout: this.timeout });
+                let response = await axios.post(url, payload, { timeout: this.timeout, ...agentOptsFor(url, this._pool) });
                 let result = response.data && response.data.result;
                 if(result && Array.isArray(result.thresholds)){
                     this._lastGoodIdx = idx;

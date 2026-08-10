@@ -46,12 +46,22 @@ const { FINDING_CODES, TIER1_DENYLIST } = require('./constants.js');
 /*
  * Run Tier 1 for a parsed action.
  *
+ * `feeMode` ('xchain' | 'native', optional) states how the transaction being
+ * composed will settle the protocol fee. It MATTERS, and omitting it was a real
+ * defect: /preflight answers for the chain's DEFAULT mode when it is absent, so
+ * a Bitcoin action whose author opted into paying the fee in coin was judged
+ * against their XCHAIN balance - and a payer with no XCHAIN (exactly the user
+ * the native lane exists for) was told "invalid: insufficient funds (FEE)" for
+ * an action the same endpoint calls valid when asked in the right mode.
+ * Measured on regtest before this was threaded through. Omit it to keep the
+ * chain default (native on LTC/DOGE, the XCHAIN debit on BTC).
+ *
  * @returns {object} outcome
  *   { kind: 'verdict', valid, status, error, quote, blockIndex }
  *   { kind: 'no-verdict', reason }   // fell through to Tier 2 only
  *   { kind: 'unavailable', reason }  // DRYRUN_UNAVAILABLE + Tier 2
  */
-async function runTier1({ sdk, parsed, source, signal, timeoutMs }) {
+async function runTier1({ sdk, parsed, source, feeMode, signal, timeoutMs }) {
     const action = parsed.action;
 
     if (TIER1_DENYLIST.includes(action))
@@ -66,6 +76,9 @@ async function runTier1({ sdk, parsed, source, signal, timeoutMs }) {
             action,
             params: paramsToWire(parsed),
             source,
+            // Passed only when the caller stated one: an undefined key would be
+            // serialized into the query as the string "undefined".
+            ...(feeMode ? { feeMode } : {}),
         }), signal, timeoutMs);
     } catch (e) {
         return { kind: 'unavailable', reason: e && e.message ? e.message : String(e) };

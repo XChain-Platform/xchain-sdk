@@ -45,6 +45,15 @@ const MAX_DECIMALS       = 18;
 const MAX_TICK_LENGTH    = 250;
 const MAX_DESC_LENGTH    = 250;
 const MAX_MESSAGE_LENGTH = 1048576; // 1MB
+
+// PC-29 /  P9: wire bound on FILE.GATE_MIN_AMOUNT. Matches the indexer's
+// gated_files.gate_min_amount VARCHAR(40) exactly, and the reason it is a WIRE
+// rule rather than only a column width is that consensus validity must never
+// depend on what a DB does to an oversized value: if the column silently
+// truncated, two nodes with different DB modes could disagree about the
+// threshold. Rejecting at the format layer means the value that reaches storage
+// always fits.
+const MAX_GATE_MIN_AMOUNT_LENGTH = 40;
 // 64KB contract source code limit. Must match the indexer (DEPLOY) and the VM
 // isolate limit. Vendored single source of truth: ./protocol/constants.js
 // (byte-identical to xchain-documentation/protocol/constants.js, MAX_CODE_SIZE);
@@ -433,6 +442,50 @@ class Validator {
                     { field, value }));
         }
 
+        // PC-29 /  P9: GATE_MIN_AMOUNT, the unlock threshold (spec §5.2).
+        //
+        // STATELESS checks only. Divisibility is deliberately NOT checked here: the
+        // bound is min(the gate tick's divisibility, THRESHOLD_SCALE), and a tick's
+        // divisibility is chain STATE at the FILE's block, which this validator does
+        // not have and must not guess at. The indexer is the arbiter for that half;
+        // duplicating a state-dependent rule here would only create a second, weaker
+        // opinion that disagrees at the boundary.
+        //
+        // Every rule below is a FORMAT rule, and each one exists because the value is
+        // consensus-visible and lands in a VARCHAR(40) column:
+        //   - strictly greater than zero: a zero threshold is not "no threshold", it
+        //     is a threshold nobody can fail, so every zero form is rejected rather
+        //     than silently meaning something different from an absent field
+        //   - digits and at most one '.', no sign characters: keeps it pipe-free and
+        //     unambiguous on the wire, and rules out '+1'/'-1'/'1e3' style forms
+        //   - no leading zeros unless the integer part is exactly '0': one value must
+        //     have one spelling, or two byte-different FILEs mean the same threshold
+        //   - non-empty fractional part when '.' is present: '1.' is not a number
+        //   - at most 40 characters: consensus validity must never depend on what a
+        //     DB does to an oversized value (the column would truncate it)
+        if (action === 'FILE' && field === 'GATE_MIN_AMOUNT') {
+            const raw = String(value);
+            if (raw !== '') {
+                const bad = (msg, extra) => errors.push(this._error('INVALID_FIELD_VALUE',
+                    'GATE_MIN_AMOUNT ' + msg, Object.assign({ field, value }, extra || {})));
+                if (raw.length > MAX_GATE_MIN_AMOUNT_LENGTH) {
+                    bad('must be at most ' + MAX_GATE_MIN_AMOUNT_LENGTH + ' characters',
+                        { constraint: { maxLength: MAX_GATE_MIN_AMOUNT_LENGTH } });
+                } else if (!/^\d+(\.\d+)?$/.test(raw)) {
+                    // Covers the sign, exponent, bare-point, empty-fraction and
+                    // multiple-point cases in one pass.
+                    bad('must be a decimal amount: digits with at most one "." and a ' +
+                        'non-empty fractional part, no sign or exponent');
+                } else if (/^0\d/.test(raw)) {
+                    bad('must not have leading zeros in the integer part');
+                } else if (!/[1-9]/.test(raw)) {
+                    // Every zero spelling: 0, 0.0, 0.000. Checked after shape so the
+                    // message is about the value rather than the syntax.
+                    bad('must be strictly greater than zero (omit the field for no threshold)');
+                }
+            }
+        }
+
         // FILE NAME/TYPE/TITLE delimiter safety is handled by _checkDelimiters.
 
         // MESSAGE content length validation (delimiter safety via _checkDelimiters)
@@ -491,9 +544,30 @@ class Validator {
         // produces a transaction the indexer rejects (e.g. STAKE/SEND require >0),
         // so fail client-side rather than emit a doomed action. The supply-cap
         // fields above legitimately accept 0 (disabled) and so are excluded here.
+        //
+        // ONE EXCEPTION, and it is the protocol's own convention rather than a
+        // loophole: a FIAT-priced DISPENSER carries GET_AMOUNT 0. Its coin price
+        // is not stored at all, it is derived at settlement from FIAT_AMOUNT and
+        // the validator price snapshot (DISPENSER.md examples 4/5;
+        // xchain-indexer dispense.js says so outright - "the GET_AMOUNT of 0
+        // that FIAT dispensers carry by convention"). The indexer checks only
+        // GET_AMOUNT's FORMAT for a DISPENSER and never its sign, so refusing a
+        // zero here was strictly stricter than the chain, and the effect was
+        // total: neither pricing mode could be composed, so the whole
+        // fiat/oracle dispenser feature was unreachable through any client
+        // using this validator - including the wallet's own Advanced options
+        // panel, which offers it. Found by the fiat dispenser e2e lane
+        // (wallet campaign D-143), which could not get past the form.
+        // Exactly ZERO, not merely non-positive: the convention is a zero
+        // placeholder standing in for "derived later", and a negative price is
+        // nonsense in either lane. Written the loose way first, and the unit
+        // case below caught it letting -1 through.
+        const fiatPricedDispenser = action === 'DISPENSER' && field === 'GET_AMOUNT'
+            && Number(value) === 0
+            && (!this._isEmpty(allFields?.FIAT_CODE) || !this._isEmpty(allFields?.ORACLE_ADDRESS));
         if (field === 'AMOUNT' || field === 'GIVE_AMOUNT' || field === 'GET_AMOUNT' ||
             field === 'GIVE_ESCROW' || field === 'CALLBACK_AMOUNT') {
-            if (this.util.isNumeric(value) && Number(value) <= 0)
+            if (!fiatPricedDispenser && this.util.isNumeric(value) && Number(value) <= 0)
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be a positive number', { field, value }));
         }
 
@@ -754,17 +828,24 @@ class Validator {
         let issueCount = 0;
         let fileCount = 0;
 
-        for (let cmd of commands) {
+        for (let i = 0; i < commands.length; i++) {
+            let cmd = commands[i];
             let parts = cmd.split('|');
             let cmdAction = parts[0];
 
-            if (cmdAction === 'BATCH')
+            if (cmdAction === 'BATCH') {
                 errors.push(this._error('BATCH_CONSTRAINT', 'BATCH cannot contain nested BATCH actions'));
-            if (cmdAction === 'DEPLOY')
+                continue;                         // never descend into a forbidden child
+            }
+            if (cmdAction === 'DEPLOY') {
                 errors.push(this._error('BATCH_CONSTRAINT', 'BATCH cannot contain DEPLOY actions'));
+                continue;
+            }
             if (cmdAction === 'MINT') mintCount++;
             if (cmdAction === 'ISSUE') issueCount++;
             if (cmdAction === 'FILE') fileCount++;
+
+            errors.push(...this._validateBatchCommand(cmd, i));
         }
 
         if (mintCount > 1)
@@ -775,6 +856,43 @@ class Validator {
             errors.push(this._error('BATCH_CONSTRAINT', 'BATCH can contain at most 1 FILE action (one rawData per transaction)', { count: fileCount }));
 
         return errors;
+    }
+
+    // Validate ONE raw BATCH child command through the AUTHORITATIVE action path.
+    // The loop above only ever read parts[0] to count MINT/ISSUE/FILE, so a child
+    // like 'NOTREAL|0|x', or a real action carrying the wrong field count or an
+    // invalid value, passed validateAction untouched and got serialized, encoded
+    // and paid for before the chain rejected it. Rather than re-derive the
+    // per-action rules here (a second copy is exactly how this pre-check and the
+    // decoder drifted apart), run the child through decoder/parse, which owns the
+    // action name, alias, version, field-mapping and value rules.
+    //
+    // The require is deferred because decoder/parse.js requires THIS module at
+    // load time. By the time any BATCH is validated both halves are resolved, so
+    // deferring breaks the cycle instead of papering over it. Recursion is bounded:
+    // a BATCH child is rejected above and never reaches here, so a child parse can
+    // never re-enter _validateBatch.
+    _validateBatchCommand(cmd, index) {
+        const { parse } = require('./decoder/parse.js');
+        let res;
+        try {
+            res = parse(cmd, { validate: true });
+        } catch (e) {
+            return [this._error('BATCH_COMMAND_INVALID',
+                'BATCH command ' + index + ' could not be parsed: ' + e.message,
+                { index, command: cmd })];
+        }
+        if (!res || res.ok === false)
+            return [this._error('BATCH_COMMAND_INVALID',
+                'BATCH command ' + index + ' is not a valid action: ' +
+                    ((res && res.code) || 'PARSE_FAILED') + ((res && res.detail) ? ' (' + res.detail + ')' : ''),
+                { index, command: cmd, code: (res && res.code) || 'PARSE_FAILED' })];
+        // Carry the child's own findings up, tagged with its position so the
+        // caller can point at the offending command rather than the whole batch.
+        const findings = (res.validation && res.validation.findings) || [];
+        return findings.map(f => this._error(f.code,
+            'BATCH command ' + index + ' (' + res.action + '): ' + f.message,
+            Object.assign({ index, command: cmd }, f.details || {})));
     }
 
     // BROADCAST-specific validation

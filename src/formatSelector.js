@@ -326,6 +326,23 @@ class FormatSelector {
         return length;
     }
 
+    // A caller-supplied VERSION as a non-negative integer, or null when the input
+    // is not that shape. VERSION is a non-negative integer on the wire, so the
+    // shape is checked BEFORE any coercion: a bare Number() reads true, [1],
+    // '0x1', '1e0', '1.0' and ' 1 ' all as version 1, and '' and [] as version 0.
+    // The format lookup in select() happens to bound the RESULT to a defined
+    // version, so nothing misbehaves today, but this SDK is published and the
+    // accepted shape of a public input should not be "whatever Number() salvages".
+    // A leading-zero string ('01') IS accepted: it cannot mean a different
+    // version, so rejecting it would only break callers for no gain.
+    static _canonicalVersion(value) {
+        if (typeof value === 'number')
+            return (Number.isInteger(value) && value >= 0) ? value : null;
+        if (typeof value === 'string')
+            return /^\d+$/.test(value) ? Number(value) : null;
+        return null;
+    }
+
     // Select the optimal format version for a given action and populated fields.
     // If `explicitVersion` is provided, that version is used unconditionally
     // (used by actions like STAKE where V1=new vs V2=top-up have identical
@@ -338,16 +355,46 @@ class FormatSelector {
 
         // Caller forced a specific version: validate and use it without auto-selection
         if (explicitVersion !== undefined && explicitVersion !== null) {
-            let v = Number(explicitVersion);
+            let v = FormatSelector._canonicalVersion(explicitVersion);
+            if (v === null)
+                throw new SDKFormatError(
+                    'INVALID_VERSION',
+                    'VERSION must be a non-negative integer or a decimal-integer string; got ' +
+                        typeof explicitVersion + ' ' + JSON.stringify(explicitVersion),
+                    { action, version: explicitVersion, availableVersions: Object.keys(formats[action]) }
+                );
             if (!formats[action][v])
                 throw new SDKFormatError(
                     'INVALID_VERSION',
                     'Version ' + v + ' is not defined for ' + action,
                     { action, version: v, availableVersions: Object.keys(formats[action]) }
                 );
+            // No data loss on a PINNED version either (#3918). The auto-selection loop
+            // below refuses a version with no slot for a populated field; skipping that
+            // check here let STAKE v1 serialize away TARGET_CONTRACT_INDEX|TICK and
+            // misroute the stake. The caller pinned this version, so fail loudly rather
+            // than fall through to another one.
+            let pinnedFields = this.getFormatFields(action, v);
+            let pinnedSlots  = [...new Set(pinnedFields
+                .filter(f => !AUTO_FIELDS.includes(f))
+                .map(f => this.baseFieldName(f)))];
+            let dropped      = this.getPopulatedFields(fields)
+                .filter(f => f !== LEGS_FIELD)
+                .filter(f => !pinnedSlots.includes(f));
+            if (dropped.length)
+                throw new SDKFormatError(
+                    'NO_MATCHING_FORMAT',
+                    action + ' v' + v + ' has no slot for ' + dropped.join(', ') +
+                        '; serializing it would silently discard ' +
+                        (dropped.length === 1 ? 'that field' : 'those fields'),
+                    { action, version: v, fields: pinnedSlots, userFieldsNotInFormat: dropped }
+                );
+            // Legs are NOT re-checked here: a pinned version whose per-leg slots cannot
+            // carry them already throws downstream with the sharper "legs disagree"
+            // diagnostic, and preempting it would only blur the message.
             return {
                 version:         v,
-                formatFields:    this.getFormatFields(action, v),
+                formatFields:    pinnedFields,
                 estimatedLength: this.estimateLength(action, v, fields)
             };
         }

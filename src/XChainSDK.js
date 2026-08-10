@@ -32,6 +32,7 @@ const WalletUtils    = require('./wallet.js');
 const AuthUtils      = require('./auth.js');
 const MessagingUtils = require('./messaging.js');
 const GatedFileUtils = require('./gatedFile.js');
+const CompressionUtils = require('./compression.js');
 const NftHelpers     = require('./nft.js');
 const ProjectHelpers = require('./project.js');
 const ControllerHelpers = require('./controller.js');
@@ -91,6 +92,10 @@ class XChainSDK {
         this.auth       = new AuthUtils(network);
         this.messaging  = new MessagingUtils(network);
         this.gatedFile  = new GatedFileUtils();
+        // FILE payload compression ( Part B). Stateless, no network:
+        // deflate-raw compress/inflate with the fail-closed, ratio-bounded
+        // read path every serve layer shares.
+        this.compression = new CompressionUtils();
         // NFT helpers: pure builders for the NFT pattern (ISSUE with DECIMALS=0 +
         // LOCK_MAX_SUPPLY=1), collection child params, content-attach (LINK) params,
         // and the canonical isNft() classifier. No network. Submit-flow recipes that
@@ -406,22 +411,14 @@ class XChainSDK {
 
         if (data.encoder && data.encoder.pubkey) {
             let encoder = this._requireEncoder();
-            let txResult = await encoder.createTx({
-                data:             result.actionString,
-                pubkey:           data.encoder.pubkey,
-                change:           data.encoder.change,
-                utxos:            data.encoder.utxos,
-                rawData:          data.encoder.rawData,
-                encoding:         data.encoder.encoding,
-                fee:              data.encoder.fee,
-                feePerKb:         data.encoder.feePerKb,
-                rbf:              data.encoder.rbf,
-                dust:             data.encoder.dust,
-                unconfirmed:      data.encoder.unconfirmed,
-                compressedPubKey: data.encoder.compressedPubKey,
-                customOutputs:    data.encoder.customOutputs,
-                attachPrevTx:     data.encoder.attachPrevTx
-            });
+            // Forward every optional createTx field through the ONE shared list
+            // (EncoderClient.CREATE_TX_OPTION_FIELDS), never a hand-copied subset:
+            // the hand-copied version had silently fallen behind createTx and was
+            // dropping feeQuote, compress, options and sourceAddress.
+            let txResult = await encoder.createTx(EncoderClient.pickCreateTxOptions(data.encoder, {
+                data:   result.actionString,
+                pubkey: data.encoder.pubkey
+            }));
             result.psbt     = txResult.psbt;
             result.encoding = txResult.encoding;
         }
@@ -1573,7 +1570,12 @@ class XChainSDK {
         // The server matches this: it omits `statuses` from WELCOME features and from
         // the SUBSCRIBED active_filters. Forwarding it let a caller rely on a silent
         // no-op and believe it was receiving a filtered stream.
-        if (opts && opts.ticks)    params.ticks    = opts.ticks;
+        // `ticks` is deliberately NOT forwarded either (#3860). No action frame carries a
+        // tick field: db.getActionsSince selects no tick/give_tick/get_tick column, so
+        // Broadcaster._passesFilter's `if (tick && ...)` never fires on the actions
+        // channel, the only one a ticks filter can attach to. Forwarding it let a caller
+        // believe in a stream that never narrows; the server now reports it under
+        // `ignored_filters`.
         this._subscribeDetached(ws, ['actions'], Object.keys(params).length > 0 ? params : undefined);
         return () => {
             ws.off('NEW_ACTION', callback);

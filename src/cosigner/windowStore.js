@@ -200,6 +200,28 @@ class WindowStore {
             err.code = 'WINDOW_STATE_CORRUPT';
             throw err;
         }
+        // Fail CLOSED on a structurally bad ROW, not just a bad file (#3920). _pruned's
+        // `e.t >= cutoff` silently drops a row with a non-finite t (undefined >= n is
+        // false), and snapshot() quarantines an unaddable amount out of perTick: both
+        // LOWER a consumed budget, which is the wrong direction.
+        for (let i = 0; i < parsed.entries.length; i++) {
+            const e = parsed.entries[i];
+            let bad = null;
+            if (!e || typeof e !== 'object') bad = 'is not an object';
+            else if (!Number.isFinite(e.t)) bad = 'has a non-finite timestamp';
+            else if (e.amount !== undefined) {
+                // A count-only row (amount undefined) is legitimate and stays allowed.
+                try { addDecimal('0', e.amount); }
+                catch (err) { bad = 'has an unaddable amount (' + err.message + ')'; }
+            }
+            if (bad) {
+                const err = new Error(`co-signer window state at ${this._stateFile} entry ${i} ${bad}; ` +
+                    `such a row is silently dropped from the window, which re-opens spending budget. ` +
+                    `Inspect and repair the file deliberately rather than letting it reset.`);
+                err.code = 'WINDOW_STATE_CORRUPT';
+                throw err;
+            }
+        }
         this._applyClockGuards(parsed);
         this._usage = parsed;
         return this._usage;
@@ -257,8 +279,10 @@ class WindowStore {
     // The accumulate is ALSO wrapped: an entry that cannot be added (a legacy
     // poisoned row written before this fix, or any future shape surprise) is
     // quarantined and reported, never allowed to throw the whole daemon down.
-    // It still counts toward `count`, so quarantining can only ever tighten the
-    // budget, never loosen it.
+    // It still counts toward `count`, so quarantining tightens the count cap - but it
+    // LOOSENS the per-tick cap, since the un-added amount never reaches perTick, which
+    // is why _load now refuses such a row outright (#3920). Kept here as belt-and-
+    // braces for a file written by an older build.
     snapshot() {
         const usage = this._pruned();
         const perTick = Object.create(null);
@@ -301,6 +325,17 @@ class WindowStore {
             this._fault('the host clock moved BACKWARD while the daemon was running ' +
                 `(${Math.round((newest - now) / 1000)}s); the rolling window trusts wall-clock time`,
                 { newest, now });
+        // Never write a row this store's own loader would refuse to read back (#3920):
+        // after the load-time guard, an unaddable amount would become a refusal to start.
+        if (amount !== undefined) {
+            try { addDecimal('0', amount); }
+            catch (err) {
+                const e = new Error(`co-signer window store refuses to record an unaddable amount ` +
+                    `(${err.message}); the row would make the next load fail closed`);
+                e.code = 'WINDOW_STATE_CORRUPT';
+                throw e;
+            }
+        }
         usage.entries.push({ t: now, action, tick, amount, txid });
         usage.lastSeen = Math.max(now, Number.isFinite(usage.lastSeen) ? usage.lastSeen : now);
         this._persist(usage);

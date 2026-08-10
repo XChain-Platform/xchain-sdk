@@ -271,6 +271,34 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         expect(res.reason).to.equal('OUTPUT_OVER_CAP');
     });
 
+    // : caps and output values were compared as Numbers, and
+    // Number(9007199254740993n) is 9007199254740992, so an output ONE satoshi above a
+    // >2^53 cap compared EQUAL to it and was approved. Reachable on a low-unit-value
+    // chain (large DOGE amounts are exactly why applyBufferutilsPatch carries u64 as
+    // BigInt). Both sides are exact BigInt now.
+    it('denies an output one satoshi above a cap larger than 2^53', function () {
+        const acct = makeAccount();
+        const dest = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(secp256k1.getPublicKey(crypto.randomBytes(32), true)) }).output;
+        const cap  = 9007199254740992n;            // 2^53, the exact point Number stops counting
+        const over = cap + 1n;
+        const prevHash = crypto.randomBytes(32);
+        const txid = Buffer.from(prevHash).reverse().toString('hex');
+        const inner = bitcoin.script.compile([Buffer.from('SEND|0|TOK|1|1destX|m', 'utf8')]);
+        const cipher = crypto.createCipheriv('aes-128-ctr', txid.substr(0, 16), txid.substr(16, 16));
+        const obf = Buffer.concat([cipher.update(Buffer.concat([Buffer.from('XCHN'), inner])), cipher.final()]);
+        const psbt = new bitcoin.Psbt();
+        psbt.addInput({ hash: prevHash, index: 0, witnessUtxo: { script: acct.p2trScript, value: over + 51000n } });
+        psbt.addOutput({ script: bitcoin.payments.embed({ data: [obf] }).output, value: 0 });
+        psbt.addOutput({ script: acct.p2trScript, value: 50000 });
+        psbt.addOutput({ script: dest, value: over });
+        const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
+            policy: policy(), allowedOutputs: [{ script: dest, maxValue: cap.toString() }] });
+        const res = co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
+        expect(res.approved).to.equal(false);
+        expect(res.reason).to.equal('OUTPUT_OVER_CAP');
+    });
+
     // Fund-key-safety fix: allowedOutputs.maxValue is the operator's bound on the
     // SUM paid to one authorized destination, not a per-output limit. Without
     // accumulation, N outputs to the same allow-listed script each pass the cap

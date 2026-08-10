@@ -799,6 +799,29 @@ describe('ExplorerClient', function () {
             expect(r.total).to.equal(0);
         });
 
+        it('#3899: getContracts/getExecutions answer the list ENVELOPE, and index.d.ts says so', async function () {
+            // The explorer's datatable routes answer { data, total, runtime } and the SDK
+            // passes it through. index.d.ts used to declare a bare array, so a TS caller
+            // wrote .map() on the envelope and threw at runtime. Pin both halves: the wire
+            // shape, and the declaration that is supposed to describe it.
+            nock(BASE).get('/BTC/api/contracts').reply(200, { total: 1, data: [{ action_index: 7 }], runtime: '3ms' });
+            const contracts = await client.getContracts(null, 'address');
+            expect(contracts).to.have.property('data').that.is.an('array');
+            expect(contracts).to.have.property('total');
+            expect(Array.isArray(contracts)).to.equal(false);
+
+            nock(BASE).get('/BTC/api/executions').reply(200, { total: 2, data: [{ method: 'run' }], runtime: '1ms' });
+            const executions = await client.getExecutions(null);
+            expect(executions).to.have.property('data').that.is.an('array');
+            expect(Array.isArray(executions)).to.equal(false);
+
+            const dts = require('fs').readFileSync(require('path').join(__dirname, '../../index.d.ts'), 'utf8');
+            expect(dts, 'ListEnvelope must be declared').to.match(/export interface ListEnvelope<T> \{/);
+            expect(dts).to.match(/getContracts\(query\?: string, type\?: string, opts\?: QueryOptions\): Promise<ListEnvelope<ContractInfo>>;/);
+            expect(dts).to.match(/getExecutions\(contractActionIndex\?: number \| string, opts\?: QueryOptions\): Promise<ListEnvelope<ExecutionInfo>>;/);
+            expect(dts, 'the ContractClient mirror delegates straight through').to.match(/getExecutions\(opts\?: QueryOptions\): Promise<ListEnvelope<ExecutionInfo>>;/);
+        });
+
         it('getDeposits returns result', async function () {
             nock(BASE).get('/BTC/api/deposits/addr1/address').reply(200, { total: 1, data: [] });
             const r = await client.getDeposits('addr1', 'address');

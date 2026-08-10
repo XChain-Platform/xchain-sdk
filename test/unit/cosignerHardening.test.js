@@ -153,22 +153,87 @@ describe('G1: decoded params are untrusted input', function () {
         expect(verdict.violation.details.cap).to.equal('10');
     });
 
-    it('quarantines an unaccumulable legacy entry instead of throwing on every request', function () {
-        // A window written before the fix can already hold a poisoned row. The
-        // store must report it and keep serving, never fail every later request.
+    it('#3920: an unaccumulable legacy entry now fails the LOAD closed, not just quarantine', function () {
+        // Superseded contract: this used to assert the store kept serving and merely
+        // quarantined the row. Quarantining keeps it in `count` but drops its amount
+        // from perTick, which LOOSENS the per-tick cap policyEvaluator enforces - the
+        // one direction this file must never fail in. Refuse the file instead.
         const stateFile = tmpStateFile('legacy');
         fs.writeFileSync(stateFile, JSON.stringify({ entries: [
             { t: Date.now(), action: 'SEND', tick: 'TOK', amount: 'not-a-number' },
             { t: Date.now(), action: 'SEND', tick: 'TOK', amount: '7' },
         ] }));
+        let store, err;
+        try {
+            store = new WindowStore(stateFile, 24, null, { onFault: () => {} });
+        } catch (e) { err = e; }
+        try {
+            expect(err, 'the poisoned row must be refused').to.exist;
+            expect(err.code).to.equal('WINDOW_STATE_CORRUPT');
+            expect(err.message).to.match(/entry 0 has an unaddable amount/);
+        } finally {
+            if (store) store.release();
+            try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
+            try { fs.unlinkSync(stateFile + '.lock'); } catch (e) { /* ignore */ }
+        }
+    });
+
+    it('#3920: a row with a non-finite timestamp is refused (it would be pruned away silently)', function () {
+        // _pruned filters on `e.t >= cutoff`; undefined >= n is false, so the row
+        // vanishes from both count and perTick, handing back spent budget.
+        const stateFile = tmpStateFile('nofinite-t');
+        fs.writeFileSync(stateFile, JSON.stringify({ entries: [
+            { t: Date.now(), action: 'SEND', tick: 'TOK', amount: '7' },
+            { action: 'SEND', tick: 'TOK', amount: '7' },
+        ] }));
+        let store, err;
+        try {
+            store = new WindowStore(stateFile, 24, null, { onFault: () => {} });
+        } catch (e) { err = e; }
+        try {
+            expect(err).to.exist;
+            expect(err.code).to.equal('WINDOW_STATE_CORRUPT');
+            expect(err.message).to.match(/entry 1 has a non-finite timestamp/);
+        } finally {
+            if (store) store.release();
+            try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
+            try { fs.unlinkSync(stateFile + '.lock'); } catch (e) { /* ignore */ }
+        }
+    });
+
+    it('#3920: a count-only row (no amount) is legitimate and still loads', function () {
+        const stateFile = tmpStateFile('countonly');
+        fs.writeFileSync(stateFile, JSON.stringify({ entries: [
+            { t: Date.now(), action: 'SEND' },
+            { t: Date.now(), action: 'SEND', tick: 'TOK', amount: '7' },
+        ] }));
+        const store = new WindowStore(stateFile, 24, null, { onFault: () => {} });
+        try {
+            const snap = store.snapshot();
+            expect(snap.count).to.equal(2);
+            expect(snap.perTick.TOK).to.equal('7');
+            expect(store.quarantined()).to.have.length(0);
+        } finally {
+            store.release();
+            try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
+        }
+    });
+
+    it('#3920: a future-dated finite timestamp is still CLAMPED, never rejected', function () {
+        // The clock guard deliberately keeps such a row (dropping it would loosen the
+        // budget); the new row guard must not turn that clamp into a refusal.
+        const stateFile = tmpStateFile('future-t');
+        const future = Date.now() + 86400000;
+        fs.writeFileSync(stateFile, JSON.stringify({ entries: [
+            { t: future, action: 'SEND', tick: 'TOK', amount: '7' },
+        ] }));
         const faults = [];
         const store = new WindowStore(stateFile, 24, null, { onFault: (m) => faults.push(m) });
         try {
             const snap = store.snapshot();
-            expect(snap.count).to.equal(2);          // still counted, so the budget only tightens
+            expect(snap.count).to.equal(1);
             expect(snap.perTick.TOK).to.equal('7');
-            expect(store.quarantined()).to.have.length(1);
-            expect(faults).to.have.length(1);
+            expect(faults.join(' ')).to.match(/clamped/);
         } finally {
             store.release();
             try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }

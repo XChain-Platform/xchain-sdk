@@ -72,7 +72,14 @@ describe('VM Actions – DEPLOY', function () {
         expect(result.fields.CODE_ENCODING).to.equal(
             Buffer.from('module.exports = {}', 'utf8').toString('base64')
         );
-        expect(result.fields.GAS_LIMIT).to.equal(100000);
+        // '100000', not 100000: GAS_LIMIT is a NUMBER_FIELD, and setNumberFormats
+        // canonicalizes every numeric field to its full-precision fixed-notation
+        // wire string (JS doubles truncate supplies over 2^53 and emit scientific
+        // notation for small decimals, both of which corrupt the ACTION string).
+        // The value is what matters, so assert the wire form and the magnitude.
+        expect(result.fields.GAS_LIMIT).to.equal('100000');
+        expect(Number(result.fields.GAS_LIMIT)).to.equal(100000);
+        expect(result.actionString).to.include('|100000');
         expect(result.fields.CODE).to.be.undefined;
     });
 
@@ -647,7 +654,13 @@ describe('ContractUtils', function () {
         it('rejects syntax errors', function () {
             let result = utils.validate('function( { broken');
             expect(result.valid).to.be.false;
-            expect(result.error).to.include('Syntax error');
+            // The wording comes from lint-core.js, which is vendored
+            // byte-identical from xchain-vm and is the consensus linter: the
+            // unparseable-code rule reports "unsupported syntax (ES<n> maximum)"
+            // and carries acorn's own message. Assert that, not the older
+            // SDK-local "Syntax error" text, so this file cannot drift from the
+            // linter that actually decides.
+            expect(result.error).to.include('unsupported syntax');
         });
 
         it('rejects __gas usage', function () {
@@ -665,10 +678,14 @@ describe('ContractUtils', function () {
         it('returns float warnings', function () {
             let result = utils.validate('var x = 0.5; module.exports = function() { return x; }');
             expect(result.valid).to.be.true;
-            if (result.warnings) {
-                expect(result.warnings.length).to.be.greaterThan(0);
-                expect(result.warnings[0]).to.include('Float');
-            }
+            // Same vendored-linter rule as above: the float-literal warning reads
+            // "WARNING: decimal number literal (0.5) detected at line N".
+            // The unconditional length check matters as much as the text: with
+            // `if (result.warnings)` alone this test passed on a build that
+            // emitted no warning at all.
+            expect(result.warnings).to.be.an('array');
+            expect(result.warnings.length).to.be.greaterThan(0);
+            expect(result.warnings[0]).to.include('decimal number literal');
         });
 
         it('rejects non-string input', function () {
@@ -907,11 +924,21 @@ describe('BatchBuilder – VM actions', function () {
         expect(result.actionString).to.include('WITHDRAW|0|42|TOKEN|250');
     });
 
-    it('rejects DEPLOY in BATCH', function () {
-        expect(() => sdk.batch()
-            .add('DEPLOY', { code: 'x', gasLimit: 100000 })
-            .build()
-        ).to.throw(SDKValidationError, /DEPLOY/);
+    // build() is async, so a synchronous expect(...).to.throw() never sees the
+    // BATCH_CONSTRAINT: it inspected a returned promise, found no throw, and
+    // failed while the rule was working perfectly. Await the rejection instead.
+    it('rejects DEPLOY in BATCH', async function () {
+        let caught = null;
+        try {
+            await sdk.batch()
+                .add('DEPLOY', { code: 'x', gasLimit: 100000 })
+                .build();
+        } catch (err) {
+            caught = err;
+        }
+        expect(caught, 'DEPLOY in a BATCH must be refused').to.be.instanceOf(SDKValidationError);
+        expect(caught.code).to.equal('BATCH_CONSTRAINT');
+        expect(caught.message).to.match(/DEPLOY/);
     });
 });
 
@@ -981,12 +1008,27 @@ describe('VM Actions – encoding pre-flight', function () {
     let actions;
     beforeEach(function () { actions = createActions(); });
 
-    it('DEPLOY rejects OP_RETURN encoding (too large)', function () {
+    // This used to deploy a 40-byte one-liner and expect OP_RETURN to refuse it.
+    // That held while CODE went on the wire as hex (2x): 40 bytes became 80
+    // characters and blew the limit on its own. afd7f93 switched the encoding to
+    // base64 (1.33x, and delimiter-safe), so the same one-liner now serializes to
+    // 72 bytes and legitimately fits. Both halves of that are worth pinning: a
+    // contract of any real size still cannot use OP_RETURN, and a trivial one can.
+    it('DEPLOY rejects OP_RETURN encoding for a contract of any real size', function () {
         expect(() => actions.createAction({
+            action: 'DEPLOY',
+            params: { code: SIMPLE_CONTRACT, gasLimit: 100000 },
+            encoder: { encoding: 'OP_RETURN' }
+        })).to.throw(SDKValidationError, /OP_RETURN/);
+    });
+
+    it('DEPLOY of a one-liner fits OP_RETURN now that CODE is base64', function () {
+        let result = actions.createAction({
             action: 'DEPLOY',
             params: { code: 'module.exports = function() { return 1; }', gasLimit: 100000 },
             encoder: { encoding: 'OP_RETURN' }
-        })).to.throw(SDKValidationError, /OP_RETURN/);
+        });
+        expect(Buffer.byteLength(result.actionString, 'utf8')).to.be.at.most(75);
     });
 
     it('DEPLOY accepts P2SH encoding', function () {

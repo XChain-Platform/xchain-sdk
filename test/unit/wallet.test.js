@@ -353,6 +353,52 @@ describe('WalletUtils', function() {
             expect(() => wallet.decomposePsbt('deadbeef')).to.throw(/Failed to parse PSBT/);
         });
 
+        it('#3922: a >2^53 satoshi value survives decomposition exactly, as a decimal string', function() {
+            // applyBufferutilsPatch hands these back as BigInt; Number() rounded them
+            // straight into the hardware-signer envelope. Values at or below 2^53-1 keep
+            // their Number type (asserted by every other case in this describe).
+            const wallet = new WalletUtils('dogecoin-mainnet');
+            const net = getNetwork('dogecoin-mainnet');
+            const kp = wallet.generateKeyPair();
+            const recipient = wallet.generateKeyPair();
+            const inputScript = bitcoin.payments.p2wpkh({ pubkey: kp.publicKey, network: net }).output;
+            const outputScript = bitcoin.payments.p2wpkh({ pubkey: recipient.publicKey, network: net }).output;
+
+            const IN  = 9007199254740993n;   // 2^53 + 1: the first value a double cannot hold
+            const OUT = 9007199254740991n;
+            const psbtHex = buildTestPsbt(net, [
+                { prevOutScript: inputScript, value: IN, useWitnessUtxo: true },
+            ], [
+                { script: outputScript, value: OUT },
+            ]);
+
+            const decomposed = wallet.decomposePsbt(psbtHex);
+            expect(decomposed.inputs[0].value).to.equal('9007199254740993');
+            expect(BigInt(decomposed.inputs[0].value)).to.equal(IN);
+            // OUT is exactly representable, so it stays on the Number fast path.
+            expect(decomposed.outputs[0].value).to.equal(9007199254740991);
+        });
+
+        it('#3922: serializePrevTx carries a >2^53 prev-output amount without rounding', function() {
+            const wallet = new WalletUtils('dogecoin-mainnet');
+            const net = getNetwork('dogecoin-mainnet');
+            const kp = wallet.generateKeyPair();
+            const recipient = wallet.generateKeyPair();
+            const inputScript = bitcoin.payments.p2wpkh({ pubkey: kp.publicKey, network: net }).output;
+            const outputScript = bitcoin.payments.p2wpkh({ pubkey: recipient.publicKey, network: net }).output;
+
+            const psbtHex = buildTestPsbt(net, [
+                { prevOutScript: inputScript, value: 9007199254740993n, useWitnessUtxo: false },
+            ], [
+                { script: outputScript, value: 1000 },
+            ]);
+
+            const decomposed = wallet.decomposePsbt(psbtHex);
+            const prevTxInfo = decomposed.inputs[0].prevTxInfo;
+            expect(prevTxInfo.bin_outputs[0].amount).to.equal('9007199254740993');
+            expect(decomposed.inputs[0].value).to.equal('9007199254740993');
+        });
+
         it('should decompose a P2WPKH PSBT (bitcoin-regtest)', function() {
             const wallet = new WalletUtils('bitcoin-regtest');
             const net = getNetwork('bitcoin-regtest');

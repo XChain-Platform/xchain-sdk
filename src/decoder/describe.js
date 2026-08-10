@@ -1462,13 +1462,22 @@ function decodeFile(p, chainSuffix) {
     const type = str(p.TYPE);
     const title = str(p.TITLE);
     const gate = str(p.GATE_TICKER);
+    // PC-29: the unlock threshold. Surfaced in the summary as well as the details
+    // because it changes who can read the file, which is the single thing a signer
+    // is deciding about here; burying it in a details row would let the most
+    // consequential field of a gated publish go unread.
+    const minAmount = str(p.GATE_MIN_AMOUNT);
+    const gateText = gate
+        ? ` (gated by ${gate}${minAmount ? `, min ${minAmount}` : ''})`
+        : '';
     return {
-        summary: `Publish file ${name || '?'}${chainSuffix}${gate ? ` (gated by ${gate})` : ''}`,
+        summary: `Publish file ${name || '?'}${chainSuffix}${gateText}`,
         details: [
             { label: 'Name', value: name },
             { label: 'Type', value: type },
             ...(title ? [{ label: 'Title', value: title }] : []),
             ...(gate ? [{ label: 'Gate token', value: gate }] : []),
+            ...(minAmount ? [{ label: 'Minimum balance to unlock', value: `${minAmount}${gate ? ` ${gate}` : ''}` }] : []),
             ...(str(p.ENCRYPTION_METHOD) ? [{ label: 'Encryption', value: str(p.ENCRYPTION_METHOD) }] : []),
         ],
         warnings: [

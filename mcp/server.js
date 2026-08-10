@@ -32,7 +32,19 @@
 
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { z } = require('zod');
-const { version: SDK_VERSION } = require('../package.json');
+const { version: SDK_VERSION } = require('./package.json');
+
+// The SDK class, resolved for both lives this file leads: installed from npm
+// (xchain-mcp depends on @dankest-llc/xchain-sdk, so the named deep require
+// wins) and in-repo under xchain-sdk/mcp/ (no installed copy of the package
+// exists, so fall back to the sibling source tree). Deep require on purpose:
+// the server needs only the class, not index.js and its REPL/ws baggage.
+let XChainSDKClass;
+try {
+    XChainSDKClass = require('@dankest-llc/xchain-sdk/src/XChainSDK.js');
+} catch {
+    XChainSDKClass = require('../src/XChainSDK.js');
+}
 
 // Explorer-style coin prefixes → SDK network strings. Mainnet/testnet default
 // to the public *.xchain.io hosts (SDK zero-config); R* regtest prefixes
@@ -56,7 +68,7 @@ function buildServer(options = {}) {
     // sdkFactory(network) → XChainSDK-compatible instance. Lazily created and
     // cached per coin so listing tools never opens a connection.
     const sdkFactory = options.sdkFactory
-        || ((network) => new (require('../src/XChainSDK.js'))({ network }));
+        || ((network) => new XChainSDKClass({ network }));
     const fetchImpl = options.fetch || (typeof fetch === 'function' ? fetch : null);
     const sdks = new Map();
     const sdkFor = (coin) => {

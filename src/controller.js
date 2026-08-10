@@ -29,10 +29,19 @@
  *
  ********************************************************************/
 
-// The native action classes a token/account may gate. Must match the indexer's
-// CONTROLLER_ACTION_CLASSES (xchain-indexer/src/config.js) and the SDK config
-// ACTION_CLASSES (the validator's source) byte-for-byte.
-const ACTION_CLASSES = ['transfer', 'trade', 'burn', 'mint', 'stake'];
+// The action classes a token/account may BIND a guard to. Must match the
+// indexer's CONTROLLER_BINDABLE_CLASSES (xchain-indexer/src/config.js) and the
+// SDK config ACTION_CLASSES (the validator's source) byte-for-byte.
+//
+// BINDABLE, not routable, and the distinction is the whole point of the list:
+// CONTROLLER_ACTION_CLASSES is what an incoming action is MAPPED to, while a
+// bind may also target `all` - the catch-all that gates every class, present and
+// future, whenever no class-specific controller covers one (most-specific wins).
+// This list was the routing set minus `ownership`, so the two classes an issuer
+// most often wants - `all` for a blanket policy, `ownership` to stop a token's
+// deed being swept to an unapproved address - could not be authored through any
+// SDK client at all: `_assertActionClass` threw before a wire string existed.
+const ACTION_CLASSES = ['transfer', 'trade', 'burn', 'mint', 'stake', 'ownership', 'all'];
 
 class ControllerHelpers {
 
@@ -45,7 +54,7 @@ class ControllerHelpers {
     //
     // tick          - the token TICK to gate (required)
     // controller    - ACTION_INDEX of the deployed guard contract (required)
-    // actionClass   - which class to gate: transfer|trade|burn|mint|stake (required)
+    // actionClass   - which class to gate: transfer|trade|burn|mint|stake|ownership|all (required)
     // cooldownBlocks - (optional) drop-cooldown committed at bind (≥ 0)
     // memo          - (optional)
     //

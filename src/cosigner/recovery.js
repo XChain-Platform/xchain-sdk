@@ -35,6 +35,10 @@
 const bitcoin = require('bitcoinjs-lib');
 const ecc     = require('@bitcoinerlab/secp256k1');
 const MuSig2  = require('../musig2.js');
+const { exactU64 } = require('./coSigner.js');
+// Teach bitcoinjs to serialize a satoshi value above 2^53 (#3869). Idempotent via
+// the module cache; without it a BigInt output value throws at write time.
+require('../applyBufferutilsPatch');
 
 bitcoin.initEccLib(ecc);
 
@@ -131,12 +135,23 @@ async function buildRecoverySpend(cfg = {}) {
     // outputs[].value (satoshi/decimal confusion, a dropped digit, a forgotten
     // change output) would silently donate the remainder to miners. Guard both
     // directions before signing anything.
-    const totalIn  = inputs.reduce((s, i) => s + Number(i.value), 0);
-    const totalOut = outputs.reduce((s, o) => s + Number(o.value), 0);
+    // Satoshi values are u64: Number() rounds above 2^53, so a >90M-DOGE account
+    // reconciled here compared EQUAL to a short-changed output set, while the sighash
+    // below commits to the unrounded values (#3869, mirrors coSigner._toU64 / #3788).
+    let totalIn = 0n;
+    for (const i of inputs) {
+        const v = exactU64(i.value);
+        if (v === null) throw new Error('recovery inputs carry a non-integer or negative value');
+        totalIn += v;
+    }
+    let totalOut = 0n;
+    for (const o of outputs) {
+        const v = exactU64(o.value);
+        if (v === null) throw new Error('recovery outputs carry a non-integer or negative value');
+        totalOut += v;
+    }
     const fee = totalIn - totalOut;
-    if (!Number.isFinite(fee))
-        throw new Error('recovery inputs/outputs carry a non-numeric value');
-    if (fee < 0)
+    if (fee < 0n)
         throw new Error(`recovery outputs (${totalOut}) exceed inputs (${totalIn}): would be an invalid, unrelayable transaction`);
 
     // Every input spends the same account output (the prevout set the sighash
@@ -162,9 +177,13 @@ async function buildRecoverySpend(cfg = {}) {
     // cfg.acceptHighFee to bypass the check entirely.
     const maxFeeRate = (Number.isFinite(cfg.maximumFeeRate) && cfg.maximumFeeRate > 0)
         ? cfg.maximumFeeRate : 5000;
-    const feeRate = fee / tx.virtualSize();
-    if (!cfg.acceptHighFee && feeRate > maxFeeRate)
-        throw new Error(`recovery fee-rate ${feeRate.toFixed(1)} sat/vB exceeds the ${maxFeeRate} sat/vB ceiling (fee ${fee} sat); pass cfg.maximumFeeRate or cfg.acceptHighFee if intentional`);
+    // Compare in BigInt; flooring the rate only ever TIGHTENS the ceiling, the safe
+    // direction for an anti-burn guard (a no-op on the 5000 default).
+    const vsize = BigInt(tx.virtualSize());
+    if (!cfg.acceptHighFee && fee > BigInt(Math.floor(maxFeeRate)) * vsize) {
+        const shown = (Number(fee) / tx.virtualSize()).toFixed(1);
+        throw new Error(`recovery fee-rate ${shown} sat/vB exceeds the ${maxFeeRate} sat/vB ceiling (fee ${fee} sat); pass cfg.maximumFeeRate or cfg.acceptHighFee if intentional`);
+    }
 
     return { txHex: tx.toHex(), txid: tx.getId() };
 }

@@ -692,3 +692,120 @@ describe('FormatSelector: explicit version + rest fields', function () {
         expect(withParams).to.be.greaterThan(without);
     });
 });
+
+// ---------------------------------------------------------------------------
+// #3918: a PINNED version obeys the same no-data-loss rule as auto-selection.
+// STAKE v3 alone carries TARGET_CONTRACT_INDEX|TICK; pinning v1 used to serialize
+// those routing fields away and stake to the wrong destination, silently.
+// ---------------------------------------------------------------------------
+
+describe('FormatSelector.select(): a pinned version never silently drops a field (#3918)', function () {
+
+    const STAKE_ROUTED = {
+        AMOUNT: '100', SIGNING_PUBKEY: 'aa'.repeat(32),
+        TARGET_CONTRACT_INDEX: '42', TICK: 'XCHAIN',
+    };
+
+    it('STAKE v1 has no slot for TARGET_CONTRACT_INDEX/TICK, so pinning it throws', function () {
+        expect(() => FormatSelector.select('STAKE', STAKE_ROUTED, 1))
+            .to.throw(SDKFormatError, /has no slot for/);
+    });
+
+    it('the error is NO_MATCHING_FORMAT and names the dropped fields in its detail', function () {
+        try {
+            FormatSelector.select('STAKE', STAKE_ROUTED, 1);
+            expect.fail('should have thrown');
+        } catch (e) {
+            expect(e.code).to.equal('NO_MATCHING_FORMAT');
+            expect(e.details.userFieldsNotInFormat).to.include('TARGET_CONTRACT_INDEX');
+            expect(e.details.userFieldsNotInFormat).to.include('TICK');
+            expect(e.details.version).to.equal(1);
+        }
+    });
+
+    it('UNSTAKE v0 is the same shape of defect and throws too', function () {
+        expect(() => FormatSelector.select('UNSTAKE', {
+            AMOUNT: '5', SIGNING_PUBKEY: 'bb'.repeat(32),
+            TARGET_CONTRACT_INDEX: '7', TICK: 'XCHAIN',
+        }, 0)).to.throw(SDKFormatError, /has no slot for/);
+    });
+
+    it('STAKE v1 and v2 (identical field lists) still both select for a fitting payload', function () {
+        const fitting = { AMOUNT: '100', SIGNING_PUBKEY: 'aa'.repeat(32) };
+        expect(FormatSelector.select('STAKE', fitting, 1).version).to.equal(1);
+        expect(FormatSelector.select('STAKE', fitting, 2).version).to.equal(2);
+    });
+
+    it('auto-selection (no pin) still finds STAKE v3 for the routed payload', function () {
+        expect(FormatSelector.select('STAKE', STAKE_ROUTED).version).to.equal(3);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// select() - explicit VERSION shape
+//
+// VERSION is a non-negative integer on the wire. The old code ran a bare
+// Number() over whatever the caller passed, which read true, [1], '0x1', '1e0',
+// '1.0' and ' 1 ' as version 1, and '' and [] as version 0. The format lookup
+// bounded the RESULT to a defined version so nothing misbehaved, but this SDK
+// is published and the accepted shape of a public input should not be whatever
+// Number() manages to salvage.
+// ---------------------------------------------------------------------------
+
+describe('FormatSelector.select(): explicit VERSION must be a canonical integer', function () {
+
+    const ACCEPTED = [
+        ['integer number', 1, 1],
+        ['zero', 0, 0],
+        ['decimal-integer string', '1', 1],
+        ['zero string', '0', 0],
+        // A leading zero cannot mean a different version, so rejecting it would
+        // only break callers for no gain.
+        ['leading-zero string', '01', 1],
+    ];
+
+    for (const [label, input, expected] of ACCEPTED) {
+        it('accepts a ' + label, function () {
+            const r = FormatSelector.select('SEND', { TICK: 'T', AMOUNT: '1', DESTINATION: 'd' }, input);
+            expect(r.version).to.equal(expected);
+        });
+    }
+
+    const REJECTED = [
+        ['boolean true', true],
+        ['hex string', '0x1'],
+        ['exponent string', '1e0'],
+        ['decimal-point string', '1.0'],
+        ['whitespace-padded string', ' 1 '],
+        ['empty string', ''],
+        ['array', [1]],
+        ['empty array', []],
+        ['object', {}],
+        ['fractional number', 1.5],
+        ['negative number', -1],
+        ['NaN', NaN],
+    ];
+
+    for (const [label, input] of REJECTED) {
+        it('rejects a ' + label + ' with INVALID_VERSION', function () {
+            expect(() => FormatSelector.select('SEND', { TICK: 'T', AMOUNT: '1', DESTINATION: 'd' }, input))
+                .to.throw(SDKFormatError, /VERSION must be a non-negative integer/);
+        });
+    }
+
+    it('still rejects a well-shaped version the action does not define', function () {
+        expect(() => FormatSelector.select('SEND', { TICK: 'T', AMOUNT: '1', DESTINATION: 'd' }, 99))
+            .to.throw(SDKFormatError, /Version 99 is not defined for SEND/);
+    });
+
+    it('the error names the value it refused, so the caller can see what it sent', function () {
+        try {
+            FormatSelector.select('SEND', { TICK: 'T', AMOUNT: '1', DESTINATION: 'd' }, '0x1');
+            expect.fail('should have thrown');
+        } catch (e) {
+            expect(e.code).to.equal('INVALID_VERSION');
+            expect(e.message).to.include('"0x1"');
+            expect(e.details.version).to.equal('0x1');
+        }
+    });
+});

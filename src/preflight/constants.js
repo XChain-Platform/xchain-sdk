@@ -37,7 +37,11 @@ const ENCODING_LIMITS = Object.freeze({
     P2WSH:     476,
 });
 
-// Report schema (additive-only; pinned in the wallet bridge-spec).
+// Report schema version (additive-only by convention). The report is
+// consumed by the wallet PreflightPanel
+// (packages/core/src/shared/components/PreflightPanel.jsx), which reads
+// findings/severity/overridable/restricted/stateHeight/unverified and does
+// NOT read schemaVersion — the additive-only rule has no enforcement point.
 const REPORT_SCHEMA_VERSION = 1;
 
 // Dispenser refill cap (, indexer config.js MAX_REFILLS). A
@@ -48,6 +52,13 @@ const REPORT_SCHEMA_VERSION = 1;
 // unverified declaration. The §8.5 drift gate over
 // src/actions/dispenser.js is what catches a change to it.
 const MAX_REFILLS = 5;
+
+// Canonical `^<id>` address-reference id, byte-for-byte the indexer's
+// CANONICAL_CARET_ID (xchain-indexer src/db.js). Anything else - `^0`, `^007`,
+// `^0x10`, `^abc`, a bare `^` - cannot resolve on ANY node, so at/after the
+//  flag-day it is a hard `invalid: <FIELD> (unresolvable ^id)` reject.
+// The §8.5 drift gate over the mapped handlers is what catches a change to it.
+const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
 
 // Lifecycle constants (spec §4.6).
 const DEFAULT_TIMEOUT_MS   = 4000;  // overall per-preflight budget
@@ -97,6 +108,7 @@ const FINDING_CODES = Object.freeze({
     DISPENSER_NOT_OWNER_W: 'DISPENSER_NOT_OWNER',
     GIVE_NOT_BALANCE_MODE: 'GIVE_NOT_BALANCE_MODE',
     DISPENSER_MAX_REFILLS: 'DISPENSER_MAX_REFILLS',
+    CARET_REF_UNRESOLVABLE: 'CARET_REF_UNRESOLVABLE',
     // Declared-unverified only (never a finding): the oracle usage fee is
     // an OUTPUT-level rule, and pre-flight only ever sees an action string.
     DISPENSER_ORACLE_FEE: 'DISPENSER_ORACLE_FEE',
@@ -129,13 +141,16 @@ const TIER2_ERROR_CAPABLE = Object.freeze({
 });
 
 // Tier-1 exclusions (spec §4.3): indexer FEE_QUOTE_DENYLIST mirror.
-// Kept in lockstep with xchain-indexer/src/actions.js:34.
+// Kept in lockstep with FEE_QUOTE_DENYLIST in xchain-indexer/src/actions.js, enforced by
+// bin/check-preflight-drift.js (named, not line-pinned: the line pin had already drifted).
 const TIER1_DENYLIST = Object.freeze(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
 
-// Fee-charging user actions (spec §4.4 "protocol-fee reality").
+// Fee-charging user actions (spec §4.4 "protocol-fee reality"). Membership mirrors
+// the indexer handlers that call createFeesObject, plus the gas-priced VM pair
+// (DEPLOY/EXECUTE). BET was missing for its whole life (#3893).
 const FEE_CHARGING_ACTIONS = Object.freeze([
     'ISSUE', 'SWEEP', 'DISPENSER', 'DIVIDEND', 'AIRDROP', 'CALLBACK',
-    'ORDER', 'SWAP', 'DEPLOY', 'EXECUTE',
+    'ORDER', 'SWAP', 'DEPLOY', 'EXECUTE', 'BET',
 ]);
 
 module.exports = {
@@ -147,6 +162,7 @@ module.exports = {
     ENCODING_LIMITS,
     MAX_ACTION_DATA_LENGTH,
     MAX_REFILLS,
+    CANONICAL_CARET_ID,
     FINDING_CODES,
     TIER2_ERROR_CAPABLE,
     TIER1_DENYLIST,

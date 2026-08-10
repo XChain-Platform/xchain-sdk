@@ -49,10 +49,20 @@
 const crypto         = require('crypto');
 const bitcoin        = require('bitcoinjs-lib');
 const FormatSelector = require('../formatSelector.js');
+const { envelopeLeafFromPsbtInput, parseEnvelopeScript } = require('./envelope.js');
+const { ENVELOPE_MAX_PAYLOAD } = require('../protocol/constants.js');
 
 // Mirror xchain-decoder/src/XChainDecoder.js:44-63. The action-data cap is
 // imported from chunkHelper.js (the SDK's single parity-guarded copy) so the
 // co-signer's OVERSIZED gate cannot drift from the rest of the SDK.
+//
+// These carrier constants are re-declared rather than imported because the
+// arbiter is service-bound (see the file header), so they are pinned instead by
+// test/unit/cosignerRoundtripConformance.test.js, which decodes the SHARED
+// encoder->decoder roundtrip-conformance fixture through this module. If the
+// encoder/decoder ever changes the magic word, the P2SH/P2WSH tags or the
+// key/IV derivation, the regenerated fixture stops decoding here and that test
+// fails, instead of hardware co-signer decode silently breaking in the field.
 const MAGIC_WORD = Buffer.from('XCHN');
 const P2SH_TAG   = Buffer.from('p2sh');
 const P2WSH_TAG  = Buffer.from('p2wsh');
@@ -115,11 +125,19 @@ function fail(reason, detail) { return { ok: false, reason, detail: detail || nu
 
 // AES-128-CTR de-obfuscation, key/iv = first 16 / next 16 hex chars of the
 // first input's txid. Verbatim from XChainDecoder.removeObfuscation (and the
-// inverse of XChainEncoder.obfuscate).
+// inverse of XChainEncoder.obfuscate). The derivation lives in this one frozen
+// descriptor so the conformance test can assert against the code that actually
+// runs rather than against a second copy of the offsets.
+const OBFUSCATION = Object.freeze({
+    algorithm: 'aes-128-ctr',
+    keyOffset: 0,  keyLength: 16,
+    ivOffset:  16, ivLength:  16,
+});
+
 function deobfuscate(data, txidHex) {
-    const key = txidHex.substr(0, 16);
-    const iv  = txidHex.substr(16, 16);
-    const d   = crypto.createDecipheriv('aes-128-ctr', key, iv);
+    const key = txidHex.substr(OBFUSCATION.keyOffset, OBFUSCATION.keyLength);
+    const iv  = txidHex.substr(OBFUSCATION.ivOffset,  OBFUSCATION.ivLength);
+    const d   = crypto.createDecipheriv(OBFUSCATION.algorithm, key, iv);
     return Buffer.concat([d.update(data), d.final()]);
 }
 
@@ -197,11 +215,111 @@ function extractInlineActionString(psbtOrHex, opts = {}) {
     return { ok: true, actionString };
 }
 
-function decodeActionFromPsbt(psbtOrHex, opts = {}) {
-    const extracted = extractInlineActionString(psbtOrHex, opts);
-    if (!extracted.ok) return extracted;
-    const { actionString } = extracted;
+/*
+ * Recover the action-string bytes from a Taproot ENVELOPE reveal PSBT
+ * ( §3.9 delta c). The envelope carries the action in input 0's tapleaf
+ * script instead of an OP_RETURN, and carries it RAW (§3.3: there is no
+ * deobfuscation step for the envelope, and none is possible - the key would be
+ * the commit txid, which the commit output's own contents determine).
+ *
+ * The refusals below mirror the authoritative decoder's §3.8 arbitration
+ * exactly, because a co-signer that read an action the chain will not execute
+ * (or missed one it will) is the whole failure mode this decoder exists to
+ * avoid: an envelope anywhere other than input 0, more than one envelope
+ * input, or an envelope mixed with any OP_RETURN carrier is NOT an action.
+ *
+ * @returns { ok:true, actionString } | { ok:false, reason, detail }
+ */
+function extractEnvelopeActionString(psbt) {
+    if (!psbt || !psbt.data || !Array.isArray(psbt.data.inputs) || psbt.data.inputs.length === 0)
+        return fail('NO_INPUTS');
 
+    const envelopeIndexes = [];
+    for (let i = 0; i < psbt.data.inputs.length; i++) {
+        if (envelopeLeafFromPsbtInput(psbt.data.inputs[i])) envelopeIndexes.push(i);
+    }
+    if (envelopeIndexes.length === 0) return fail('NO_ENVELOPE');
+    // Both are deterministic no-action outcomes on chain (§3.8), so they must be
+    // refusals here rather than a decode of whichever one we happened to find.
+    if (envelopeIndexes.length > 1) return fail('MULTI_ENVELOPE');
+    if (envelopeIndexes[0] !== 0) return fail('ENVELOPE_NOT_INPUT_ZERO');
+
+    // Mixed carriers are no-action on chain. Any OP_RETURN output at all is
+    // refused here rather than only an XCHN-magic one: the co-signer's job is to
+    // be a strict subset of the decoder, and refusing more is always safe.
+    for (const out of psbt.txOutputs) {
+        let decomp;
+        try { decomp = bitcoin.script.decompile(out.script); } catch (e) { continue; }
+        if (decomp && decomp.length >= 1 && decomp[0] === bitcoin.opcodes.OP_RETURN)
+            return fail('ENVELOPE_MIXED_CARRIER');
+    }
+
+    const leaf = envelopeLeafFromPsbtInput(psbt.data.inputs[0]);
+    if (leaf.payload.length > ENVELOPE_MAX_PAYLOAD) return fail('OVERSIZED');
+
+    // The payload is the compiled data stream: the action-string push, then the
+    // rawData push. Identical to what the decoder decompiles (XChainDecoder.js:
+    // `dataBuffer = envelopeInputs[0].payload`, feeding the shared decompile).
+    let decompiled;
+    try { decompiled = bitcoin.script.decompile(leaf.payload); }
+    catch (e) { return fail('INNER_DECOMPILE_FAILED', e.message); }
+    if (!decompiled || decompiled.length === 0 || !Buffer.isBuffer(decompiled[0]))
+        return fail('INNER_DECOMPILE_FAILED');
+
+    let actionString;
+    try { actionString = new TextDecoder('utf-8', { fatal: true }).decode(decompiled[0]); }
+    catch (e) { return fail('NOT_UTF8'); }
+
+    return { ok: true, actionString, envelope: leaf };
+}
+
+function decodeActionFromPsbt(psbtOrHex, opts = {}) {
+    // An envelope reveal carries no OP_RETURN action at all, so route on the
+    // shape of the PSBT rather than on a caller-supplied flag. The inline path
+    // is unchanged for every other transaction.
+    let psbtObj = null;
+    if (typeof psbtOrHex !== 'string') psbtObj = psbtOrHex;
+    else {
+        try { psbtObj = bitcoin.Psbt.fromHex(psbtOrHex, opts.network ? { network: opts.network } : undefined); }
+        catch (e) { return fail('PSBT_PARSE_FAILED', e.message); }
+    }
+    const carriesEnvelope = psbtObj && psbtObj.data && Array.isArray(psbtObj.data.inputs)
+        && psbtObj.data.inputs.some((inp) => !!envelopeLeafFromPsbtInput(inp));
+
+    const extracted = carriesEnvelope
+        ? extractEnvelopeActionString(psbtObj)
+        : extractInlineActionString(psbtOrHex, opts);
+    if (!extracted.ok) return extracted;
+    return judgeActionString(extracted.actionString);
+}
+
+/*
+ * Decode the action an envelope LEAF SCRIPT declares, with no transaction in
+ * hand. This is the commit-side half of  §3.9 delta (c): at commit time
+ * the action is not in the transaction at all, only the hash of the leaf that
+ * carries it is, so the daemon reads it from the script whose hash it has
+ * already matched against a commit output. Runs the identical judgment as
+ * every other route.
+ */
+function decodeEnvelopeAction(script) {
+    const parsed = parseEnvelopeScript(script);
+    if (!parsed) return fail('ENVELOPE_SCRIPT_INVALID');
+    if (parsed.payload.length > ENVELOPE_MAX_PAYLOAD) return fail('OVERSIZED');
+    let decompiled;
+    try { decompiled = bitcoin.script.decompile(parsed.payload); }
+    catch (e) { return fail('INNER_DECOMPILE_FAILED', e.message); }
+    if (!decompiled || decompiled.length === 0 || !Buffer.isBuffer(decompiled[0]))
+        return fail('INNER_DECOMPILE_FAILED');
+    let actionString;
+    try { actionString = new TextDecoder('utf-8', { fatal: true }).decode(decompiled[0]); }
+    catch (e) { return fail('NOT_UTF8'); }
+    return judgeActionString(actionString);
+}
+
+// The single judgment path shared by the inline, envelope-reveal and
+// envelope-commit routes: format lookup, rest/multi-leg refusals, BATCH,
+// param extraction and charset validation.
+function judgeActionString(actionString) {
     const segments = actionString.split('|');
     if (segments.length < 2) return fail('MALFORMED_ACTION_STRING');
     // Resolve documented aliases to the canonical action, exactly as the
@@ -331,5 +449,11 @@ function decodeActionStringFromPsbt(psbtOrHex, opts = {}) {
 // BOUNDED_REST_FORMATS is exported so valueDerivability.decodableFormats() can
 // mirror this decoder's gates exactly. If the two drift, the conformance tests
 // there fail rather than a format silently becoming reachable but unclassified.
-module.exports = { decodeActionFromPsbt, decodeActionStringFromPsbt, MAX_ACTION_DATA_LENGTH,
-                   BOUNDED_REST_FORMATS, MAX_REST_PARAMS };
+// MAGIC_WORD / P2SH_TAG / P2WSH_TAG / OBFUSCATION are exported for the
+// roundtrip-conformance guard, which pins them against the shared
+// encoder->decoder fixture; nothing in the signing path should read them.
+module.exports = { decodeActionFromPsbt, decodeActionStringFromPsbt, extractEnvelopeActionString,
+                   decodeEnvelopeAction,
+                   MAX_ACTION_DATA_LENGTH, ENVELOPE_MAX_PAYLOAD,
+                   BOUNDED_REST_FORMATS, MAX_REST_PARAMS,
+                   MAGIC_WORD, P2SH_TAG, P2WSH_TAG, OBFUSCATION };
