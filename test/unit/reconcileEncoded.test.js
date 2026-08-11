@@ -367,3 +367,108 @@ describe('reconcileEncoded caller-identity change ', function () {
                       (e) => e.code === 'UNRECONCILED_OUTPUT');
     });
 });
+
+// ---------------------------------------------------------------------------
+// : an input is not proof the signer owns it.
+//
+// Rule (b) read "the destination is also an input" as "the destination stays
+// under the signer's control". That holds only for inputs the WIF owns. The
+// encoder's answer is UNSIGNED, so an input already carrying a signature was
+// contributed by somebody else - and it HAS to be pre-signed to be there, since
+// the default lifecycle signs and finalizes every input and would otherwise fail
+// finalization. A hostile encoder therefore attached its own pre-signed input,
+// pointed the wallet-funded remainder at that input's script, and rule (b) waved
+// the drain through as change.
+// ---------------------------------------------------------------------------
+
+const ECPairFactory = require('ecpair').default || require('ecpair').ECPairFactory;
+const ECPair = ECPairFactory(ecc);
+
+// A wallet-funded PSBT that also carries one FOREIGN input, signed by a key that
+// is not the wallet's, exactly as a hostile encoder would return it.
+function psbtWithForeignInput(funding, outputs, foreignValue) {
+    const foreignKey = ECPair.makeRandom({ network: NET });
+    const foreign = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(foreignKey.publicKey), network: NET });
+    const psbt = new bitcoin.Psbt({ network: NET });
+    psbt.addInput({ hash: 'aa'.repeat(32), index: 0, witnessUtxo: { script: funding.script, value: 100000 } });
+    psbt.addInput({ hash: 'ee'.repeat(32), index: 0, witnessUtxo: { script: foreign.output, value: foreignValue } });
+    for (const out of outputs(foreign)) psbt.addOutput(out);
+    psbt.signInput(1, foreignKey);                                // the attacker signs its OWN input
+    return { hex: psbt.toHex(), foreign };
+}
+
+describe('reconcileEncoded foreign-input change ()', function () {
+
+    it('REJECTS the drain: wallet value sent to a PRE-SIGNED foreign input\'s script', function () {
+        const funding = payTo();
+        const { hex, foreign } = psbtWithForeignInput(
+            funding, (f) => [carrier(0), { script: f.output, value: 99000 }], 1000);
+        assert.throws(() => reconcileEncoded(hex, { network: NET }),
+                      (e) => e.code === 'UNRECONCILED_OUTPUT'
+                          && e.details.detail.script === foreign.output.toString('hex'));
+    });
+
+    it('still authorizes change back to an UNSIGNED input script, with a foreign input present', function () {
+        // The foreign input funds and is spent; it just cannot authorize a destination.
+        const funding = payTo();
+        const { hex } = psbtWithForeignInput(
+            funding, () => [carrier(0), { script: funding.script, value: 99000 }], 1000);
+        assert.strictEqual(reconcileEncoded(hex, { network: NET }).fee, 2000n);
+    });
+
+    it('a foreign input the caller ALSO submitted as change is still authorized', function () {
+        // The pin is on how the destination was proven, not on who else spends it:
+        // a script the caller named itself stays authorized by rule (b)'s siblings.
+        const funding = payTo();
+        const { hex, foreign } = psbtWithForeignInput(
+            funding, (f) => [carrier(0), { script: f.output, value: 99000 }], 1000);
+        assert.strictEqual(reconcileEncoded(hex, { network: NET, changeAddresses: foreign.address }).fee, 2000n);
+    });
+
+    it('denies a PSBT whose every input is already signed, with its own reason', function () {
+        const foreignKey = ECPair.makeRandom({ network: NET });
+        const foreign = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(foreignKey.publicKey), network: NET });
+        const psbt = new bitcoin.Psbt({ network: NET });
+        psbt.addInput({ hash: 'ee'.repeat(32), index: 0, witnessUtxo: { script: foreign.output, value: 100000 } });
+        psbt.addOutput({ script: foreign.output, value: 99000 });
+        psbt.signInput(0, foreignKey);
+        assert.throws(() => reconcileEncoded(psbt.toHex(), { network: NET }),
+                      (e) => e.code === 'NO_SIGNER_OWNED_INPUT');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// : a cap that will not parse is not "no cap".
+//
+// Both enforcement sites carried `&& parsed !== null`, so a typo'd ceiling
+// silently removed the bound the caller believed it had set. Every sibling
+// exactU64 caller (coSigner.js, recovery.js) fails closed on the same null.
+// ---------------------------------------------------------------------------
+
+describe('reconcileEncoded malformed caps fail closed ()', function () {
+
+    const MALFORMED = [-1, 1.5, '5o00', '', 'abc', NaN, -1n, {}];
+
+    it('DENIES a malformed maxFeeSats instead of dropping the fee ceiling', function () {
+        const funding = payTo();
+        const hex = psbtHex(funding, [carrier(0), { script: funding.script, value: 90000 }]);
+        for (const bad of MALFORMED)
+            assert.throws(() => reconcileEncoded(hex, { network: NET, maxFeeSats: bad }),
+                          (e) => e.code === 'MALFORMED_FEE_CAP', 'maxFeeSats=' + String(bad));
+        // null/undefined still mean "no cap", which is a different answer from a typo.
+        assert.strictEqual(reconcileEncoded(hex, { network: NET, maxFeeSats: null }).fee, 10000n);
+        assert.strictEqual(reconcileEncoded(hex, { network: NET }).fee, 10000n);
+        assert.strictEqual(reconcileEncoded(hex, { network: NET, maxFeeSats: 10000 }).fee, 10000n);
+    });
+
+    it('DENIES a malformed maxPhaseFundingSats instead of dropping the leg ceiling', function () {
+        const funding = payTo();
+        const hex = psbtHex(funding, [{ script: shapedP2wsh(), value: 90000 }]);
+        const intent = { network: NET, phaseShapes: ['p2wsh'] };
+        for (const bad of MALFORMED)
+            assert.throws(() => reconcileEncoded(hex, Object.assign({ maxPhaseFundingSats: bad }, intent)),
+                          (e) => e.code === 'MALFORMED_PHASE_FUNDING_CAP', 'maxPhaseFundingSats=' + String(bad));
+        assert.doesNotThrow(() => reconcileEncoded(hex, Object.assign({ maxPhaseFundingSats: null }, intent)));
+        assert.doesNotThrow(() => reconcileEncoded(hex, Object.assign({ maxPhaseFundingSats: 90000 }, intent)));
+    });
+});

@@ -51,6 +51,9 @@ const Workflows         = require('./workflows.js');
 const TickResolver      = require('./tickResolver.js');
 const AddressResolver   = require('./addressResolver.js');
 const { publicDefaults } = require('./endpoints.js');
+// The pre-sign intent gate. estimateFees hands back a signable encoder-authored PSBT,
+// so it runs the same reconciliation submitAction does ().
+const { reconcileEncoded, psbtPrevouts } = require('./reconcileEncoded.js');
 const { SDKConfigError, SDKExplorerError, SDKContractError } = require('./errors.js');
 const { lintSource } = require('./contract/lint-core.js');
 const CONTRACT_SOURCES = require('./contract/templates.js');
@@ -731,7 +734,12 @@ class XChainSDK {
 
     // Estimate fees for an action without signing or broadcasting.
     // Returns { fee, inputTotal, outputTotal, encoding, psbt, actionString }
-    // The returned PSBT can be signed directly to skip a second encode call.
+    // The ONE PSBT this returns can be signed directly to skip a second encode call: it
+    // has already cleared the same fail-closed reconcileEncoded intent gate submitAction
+    // applies before IT signs, so the encoder cannot swap outputs or drop change on this
+    // path (). Throws SDKActionError rather than returning a PSBT it cannot
+    // account for. An envelope's reveal leg is deliberately NOT returned (see below);
+    // signing one goes through submitAction, which reconciles both legs.
     //
     // Native-coin protocol fee (opt-in via encoderOpts.payFeeInNativeCoin): pay the XCHAIN
     // protocol fee in BTC/LTC/DOGE at the USD-equivalent by adding a FEE_DESTINATION output.
@@ -769,6 +777,40 @@ class XChainSDK {
             compressedPubKey: encoderOpts.compressedPubKey,
             customOutputs:    customOutputs
         });
+
+        // An envelope answers as a PAIR, and the reveal is what pins the commit's
+        // funding leg below. Take it off the result and keep it LOCAL: this method
+        // hands back one signable PSBT, and a second one riding along in the return
+        // value would be a signable PSBT that nothing here reconciles - exactly the
+        // hole  is about, reopened one field over. Callers that need to sign
+        // a reveal go through submitAction, which gates commit and reveal separately.
+        let revealPsbt = feeResult.revealPsbt;
+        delete feeResult.revealPsbt;
+
+        // The returned PSBT is documented as directly signable, and the encoder that
+        // authored it is a REMOTE service, so it gets the SAME fail-closed intent gate
+        // LifecycleManager.submitAction applies before it signs. Without this the
+        // blessed estimate-then-sign fast path was the one signing route in the SDK
+        // with no reconciliation on it, and a compromised encoder could swap outputs
+        // or drop change on it (). Fail-closed: reconcileEncoded throws, so
+        // the single PSBT this method returns is one it could account for in full.
+        let reconcileNetwork;
+        try { reconcileNetwork = this.wallet.getBitcoinNetwork(); } catch (e) { reconcileNetwork = undefined; }
+        reconcileEncoded(feeResult.psbt, {
+            network:             reconcileNetwork,
+            customOutputs:       customOutputs,
+            changeAddresses:     encoderOpts.change,
+            callerIdentities:    encoderOpts.pubkey,
+            maxFeeSats:          encoderOpts.maxFeeSats,
+            maxPhaseFundingSats: encoderOpts.maxPhaseFundingSats,
+            label:               'fee estimate',
+            // Single-phase only: an estimate carries phase 1 (plus an envelope's reveal
+            // when the encoder answered as a pair), never a chunked action's phase 2.
+            phaseShapes: (feeResult.encoding === 'P2SH' || feeResult.encoding === 'P2WSH') ? ['p2sh', 'p2wsh']
+                : (revealPsbt ? ['p2tr'] : []),
+            phaseSpends: revealPsbt ? (psbtPrevouts(revealPsbt) || []) : null,
+        });
+
         feeResult.actionString = result.actionString;
         feeResult.action       = result.action;
         feeResult.version      = result.version;

@@ -212,6 +212,9 @@ async function fetchAndVerifyCheckpoint(explorerUrl, coin, blockIndex, fetchImpl
 module.exports = {
     canonicalCheckpoint,
     verifySignature,
+    // Exported so light.js#verifyCheckpointWithProvenSet enforces THIS predicate
+    // rather than a second copy that can drift from it ().
+    commitmentMissing,
     verifyCheckpoint,
     fetchAndVerifyCheckpoint
 };

@@ -649,6 +649,14 @@ async function verifyValidatorSet(opts){
 // proven set and must never finalize. Fully trustless: nothing here trusts a
 // server-supplied set.
 function verifyCheckpointWithProvenSet(cp, provenOraclePublish){
+    // Post-activation a checkpoint MUST carry all four commitment fields, or
+    // canonicalCheckpoint falls back to the legacy ROOTLESS preimage and the whole root
+    // suffix drops out of the signed bytes. An explorer could then attach an
+    // attacker-chosen state_root, omit a sibling field, and have rootless signatures
+    // still verify - a root no validator ever signed, which followForward would adopt
+    // and verifyBalance would trust. checkpoint.verifyCheckpoint already rejects this
+    // (); the same predicate, not a copy of it, has to hold here ().
+    if (checkpoint.commitmentMissing(cp)) return { valid: false, total: '0' };
     const canonical  = cp && checkpoint.canonicalCheckpoint(cp);
     const validators = (provenOraclePublish && provenOraclePublish.validators) || [];
     const provenPks  = new Set();

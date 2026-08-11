@@ -382,15 +382,26 @@ class EncoderClient {
 
     // Estimate fee for a transaction without signing or broadcasting.
     // Calls create_tx and returns the PSBT along with fee information.
-    // The returned PSBT can optionally be signed directly to avoid a second encode call.
+    //
+    // BOTH PSBTs returned HERE are ungated: this client is a thin RPC layer with no
+    // submitted intent to reconcile against, so they are the encoder's unchecked answer.
+    // Sign only via XChainSDK.estimateFees, which runs the commit through
+    // reconcileEncoded and drops the reveal rather than hand back a leg it did not
+    // gate, or via LifecycleManager.submitAction, which gates both ().
+    // Signing a raw estimateFee answer trusts the remote encoder.
     //
     // Required: same as createTx (data, pubkey)
-    // Returns: { psbt, encoding, fee, inputTotal, outputTotal }
+    // Returns: { psbt, encoding, revealPsbt?, fee, inputTotal, outputTotal }
     async estimateFee(params) {
         let result = await this.createTx(params);
 
         // Parse PSBT to compute fee from inputs vs outputs
         let feeInfo = { psbt: result.psbt, encoding: result.encoding };
+        // A TAPROOT envelope answers as a PAIR, and the reveal is what pins the commit's
+        // funding leg for the caller-side reconcile gate. Dropping it here left that gate
+        // unable to tell a legitimate commit leg from parked value (). It is a
+        // gate input, not an extra thing to sign: estimateFees consumes it and deletes it.
+        if (result.revealPsbt) feeInfo.revealPsbt = result.revealPsbt;
         try {
             const bitcoin = require('bitcoinjs-lib');
             let psbt = bitcoin.Psbt.fromHex(result.psbt);

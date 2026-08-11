@@ -48,10 +48,15 @@ function buildSignedTx() {
     psbt.addInput({ hash: prevTx.getId(), index: 0, sequence: 0xfffffffd,
                     witnessUtxo: { script, value: 100_000 } });
     psbt.addOutput({ script, value: 90_000 });
+    // The encoder answers UNSIGNED, and reconcileEncoded no longer reads a PRE-SIGNED
+    // input's script as a signer-owned change destination (), so the mock has
+    // to hand back the pre-signature hex. The signing below exists only to produce a
+    // broadcastable txHex/txid for the broadcast mock.
+    const unsignedHex = psbt.toHex();
     psbt.signAllInputs(kp);
     psbt.finalizeAllInputs();
     const tx = psbt.extractTransaction();
-    return { psbtHex: psbt.toHex(), txHex: tx.toHex(), txid: tx.getId() };
+    return { psbtHex: unsignedHex, txHex: tx.toHex(), txid: tx.getId() };
 }
 
 // Fake SDK whose encoder returns an ENVELOPE PAIR, with every broadcast and signing

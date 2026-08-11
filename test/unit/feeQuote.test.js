@@ -64,6 +64,26 @@ describe('Native-coin fee quote (client)', function () {
     });
 
     describe('XChainSDK', function () {
+
+        // A REAL encoder-shaped answer: one unsigned input, a zero-value carrier, and
+        // change back to the funding script. estimateFees now runs the same fail-closed
+        // reconcile gate submitAction does (), so a placeholder string is no
+        // longer a usable stand-in for what the encoder returns.
+        function estimatePsbtHex() {
+            const bitcoin = require('bitcoinjs-lib');
+            const ecc = require('@bitcoinerlab/secp256k1');
+            const { ECPairFactory } = require('ecpair');
+            bitcoin.initEccLib(ecc);
+            const net = bitcoin.networks.regtest;
+            const kp = ECPairFactory(ecc).makeRandom({ network: net });
+            const script = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(kp.publicKey), network: net }).output;
+            const psbt = new bitcoin.Psbt({ network: net });
+            psbt.addInput({ hash: 'aa'.repeat(32), index: 0, witnessUtxo: { script, value: 100000 } });
+            psbt.addOutput({ script: bitcoin.script.compile([bitcoin.opcodes.OP_RETURN, Buffer.from('58434841494e', 'hex')]), value: 0 });
+            psbt.addOutput({ script, value: 99000 });
+            return psbt.toHex();
+        }
+
         function makeSdk(quote) {
             let sdk = new XChainSDK({ network: 'bitcoin-regtest' });
             sdk.explorer = {
@@ -72,7 +92,7 @@ describe('Native-coin fee quote (client)', function () {
             };
             sdk.encoder = {
                 _seen: null,
-                estimateFee: async function (params) { this._seen = params; return { fee: 1000, encoding: 'OP_RETURN', psbt: 'deadbeef' }; }
+                estimateFee: async function (params) { this._seen = params; return { fee: 1000, encoding: 'OP_RETURN', psbt: estimatePsbtHex() }; }
             };
             return sdk;
         }

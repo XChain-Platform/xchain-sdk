@@ -54,6 +54,24 @@ function mockExplorer(sdk, returnVal = {}) {
     return explorer;
 }
 
+// A REAL encoder-shaped answer: one unsigned input, a zero-value carrier, and change
+// back to the funding script. estimateFees now runs the same fail-closed reconcile gate
+// submitAction does (), so a placeholder string is no longer a usable stand-in.
+function estimatePsbtHex() {
+    const bitcoin = require('bitcoinjs-lib');
+    const ecc = require('@bitcoinerlab/secp256k1');
+    const { ECPairFactory } = require('ecpair');
+    bitcoin.initEccLib(ecc);
+    const net = bitcoin.networks.regtest;
+    const kp = ECPairFactory(ecc).makeRandom({ network: net });
+    const script = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(kp.publicKey), network: net }).output;
+    const psbt = new bitcoin.Psbt({ network: net });
+    psbt.addInput({ hash: 'aa'.repeat(32), index: 0, witnessUtxo: { script, value: 100000 } });
+    psbt.addOutput({ script: bitcoin.script.compile([bitcoin.opcodes.OP_RETURN, Buffer.from('58434841494e', 'hex')]), value: 0 });
+    psbt.addOutput({ script, value: 99000 });
+    return psbt.toHex();
+}
+
 // Patch all encoder methods
 function mockEncoder(sdk, returnVal = {}) {
     const encoder = sdk.encoder;
@@ -573,7 +591,7 @@ describe('XChainSDK', function () {
 
         it('estimateFees builds actionString and calls encoder.estimateFee', async function () {
             const sdk = makeSDK();
-            mockEncoder(sdk, { psbt: 'xx', encoding: 'OP_RETURN', fee: 1000 });
+            mockEncoder(sdk, { psbt: estimatePsbtHex(), encoding: 'OP_RETURN', fee: 1000 });
             const result = await sdk.estimateFees(
                 { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
                 { pubkey: 'mypub' }
@@ -582,9 +600,111 @@ describe('XChainSDK', function () {
             expect(result.actionString).to.be.a('string');
         });
 
+        // . estimateFees hands back a PSBT the SDK docs say can be signed and
+        // broadcast directly, so it has to clear the same fail-closed intent gate
+        // submitAction applies. Before this it was the one signing route with none.
+        it('estimateFees REFUSES an encoder answer that diverts value to a destination nobody asked for', async function () {
+            const bitcoin = require('bitcoinjs-lib');
+            const ecc = require('@bitcoinerlab/secp256k1');
+            const { ECPairFactory } = require('ecpair');
+            bitcoin.initEccLib(ecc);
+            const net = bitcoin.networks.regtest;
+            const ECPair = ECPairFactory(ecc);
+            const mine = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(ECPair.makeRandom({ network: net }).publicKey), network: net }).output;
+            const theirs = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(ECPair.makeRandom({ network: net }).publicKey), network: net }).output;
+            const psbt = new bitcoin.Psbt({ network: net });
+            psbt.addInput({ hash: 'aa'.repeat(32), index: 0, witnessUtxo: { script: mine, value: 100000 } });
+            psbt.addOutput({ script: bitcoin.script.compile([bitcoin.opcodes.OP_RETURN, Buffer.from('58434841494e', 'hex')]), value: 0 });
+            psbt.addOutput({ script: theirs, value: 99000 });        // the drain
+
+            const sdk = makeSDK();
+            mockEncoder(sdk, { psbt: psbt.toHex(), encoding: 'OP_RETURN', fee: 1000 });
+            let err = null;
+            try {
+                await sdk.estimateFees(
+                    { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
+                    { pubkey: 'mypub' }
+                );
+            } catch (e) { err = e; }
+            expect(err, 'estimateFees must fail closed on an unaccountable output').to.be.ok;
+            expect(err.code).to.equal('UNRECONCILED_OUTPUT');
+        });
+
+        // , second half. The envelope reveal reaches estimateFees so the commit's
+        // funding leg can be pinned to what actually spends it, but it is a GATE INPUT: the
+        // gate above never reconciles it, so returning it would hand back a second signable
+        // PSBT nothing checked - the same hole one field over.
+        it('estimateFees consumes an envelope reveal as the phase pin and never returns it', async function () {
+            const bitcoin = require('bitcoinjs-lib');
+            const ecc = require('@bitcoinerlab/secp256k1');
+            const { ECPairFactory } = require('ecpair');
+            bitcoin.initEccLib(ecc);
+            const net = bitcoin.networks.regtest;
+            const ECPair = ECPairFactory(ecc);
+            const script = () => bitcoin.payments.p2wpkh({ pubkey: Buffer.from(ECPair.makeRandom({ network: net }).publicKey), network: net }).output;
+            const mine = script();
+            const leg  = bitcoin.script.compile([bitcoin.opcodes.OP_1, Buffer.from('bb'.repeat(32), 'hex')]);
+
+            const commit = new bitcoin.Psbt({ network: net });
+            commit.addInput({ hash: 'aa'.repeat(32), index: 0, witnessUtxo: { script: mine, value: 100000 } });
+            commit.addOutput({ script: bitcoin.script.compile([bitcoin.opcodes.OP_RETURN, Buffer.from('58434841494e', 'hex')]), value: 0 });
+            commit.addOutput({ script: leg, value: 50000 });
+            commit.addOutput({ script: mine, value: 49000 });
+
+            // A reveal that pays a stranger. The commit reconciles either way, so this is
+            // only safe because the reveal does not leave the method.
+            const reveal = new bitcoin.Psbt({ network: net });
+            reveal.addInput({ hash: 'cc'.repeat(32), index: 0, witnessUtxo: { script: leg, value: 50000 } });
+            reveal.addOutput({ script: script(), value: 49000 });
+
+            const sdk = makeSDK();
+            mockEncoder(sdk, { psbt: commit.toHex(), encoding: 'TAPROOT', revealPsbt: reveal.toHex(), fee: 1000 });
+            const result = await sdk.estimateFees(
+                { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
+                { pubkey: 'mypub' }
+            );
+            expect(result.psbt, 'the gated commit is still returned').to.equal(commit.toHex());
+            expect(result.revealPsbt, 'an ungated reveal must never reach the caller').to.equal(undefined);
+        });
+
+        // The pin the reveal exists for: a shaped leg the companion transaction does not
+        // spend is value parked in a script only the encoder controls.
+        it('estimateFees REFUSES an envelope commit whose funding leg the reveal never spends', async function () {
+            const bitcoin = require('bitcoinjs-lib');
+            const ecc = require('@bitcoinerlab/secp256k1');
+            const { ECPairFactory } = require('ecpair');
+            bitcoin.initEccLib(ecc);
+            const net = bitcoin.networks.regtest;
+            const ECPair = ECPairFactory(ecc);
+            const mine = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(ECPair.makeRandom({ network: net }).publicKey), network: net }).output;
+            const leg  = bitcoin.script.compile([bitcoin.opcodes.OP_1, Buffer.from('bb'.repeat(32), 'hex')]);
+
+            const commit = new bitcoin.Psbt({ network: net });
+            commit.addInput({ hash: 'aa'.repeat(32), index: 0, witnessUtxo: { script: mine, value: 100000 } });
+            commit.addOutput({ script: bitcoin.script.compile([bitcoin.opcodes.OP_RETURN, Buffer.from('58434841494e', 'hex')]), value: 0 });
+            commit.addOutput({ script: leg, value: 50000 });      // parked
+            commit.addOutput({ script: mine, value: 49000 });
+
+            const reveal = new bitcoin.Psbt({ network: net });
+            reveal.addInput({ hash: 'cc'.repeat(32), index: 0, witnessUtxo: { script: leg, value: 1000 } });
+            reveal.addOutput({ script: mine, value: 800 });
+
+            const sdk = makeSDK();
+            mockEncoder(sdk, { psbt: commit.toHex(), encoding: 'TAPROOT', revealPsbt: reveal.toHex(), fee: 1000 });
+            let err = null;
+            try {
+                await sdk.estimateFees(
+                    { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
+                    { pubkey: 'mypub' }
+                );
+            } catch (e) { err = e; }
+            expect(err, 'a parked funding leg must fail closed').to.be.ok;
+            expect(err.code).to.equal('PHASE_FUNDING_UNSPENT');
+        });
+
         it('estimateFees with payFeeInNativeCoin calls quoteNativeFee', async function () {
             const sdk = makeSDK();
-            mockEncoder(sdk, { psbt: 'xx', encoding: 'OP_RETURN', fee: 1000 });
+            mockEncoder(sdk, { psbt: estimatePsbtHex(), encoding: 'OP_RETURN', fee: 1000 });
             mockExplorer(sdk, { supported: true, valid: true, requiredFeeSats: 5000, feeDestination: 'feeaddr', actionString: 'SEND|...' });
             const result = await sdk.estimateFees(
                 { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
@@ -595,7 +715,7 @@ describe('XChainSDK', function () {
 
         it('estimateFees throws when native fee unsupported', async function () {
             const sdk = makeSDK();
-            mockEncoder(sdk, { psbt: 'xx', encoding: 'OP_RETURN', fee: 1000 });
+            mockEncoder(sdk, { psbt: estimatePsbtHex(), encoding: 'OP_RETURN', fee: 1000 });
             mockExplorer(sdk, { supported: false, valid: false, error: 'unsupported' });
             try {
                 await sdk.estimateFees(
@@ -610,7 +730,7 @@ describe('XChainSDK', function () {
 
         it('estimateFees throws when native fee invalid', async function () {
             const sdk = makeSDK();
-            mockEncoder(sdk, { psbt: 'xx', encoding: 'OP_RETURN', fee: 1000 });
+            mockEncoder(sdk, { psbt: estimatePsbtHex(), encoding: 'OP_RETURN', fee: 1000 });
             mockExplorer(sdk, { supported: true, valid: false, error: 'stale price' });
             try {
                 await sdk.estimateFees(

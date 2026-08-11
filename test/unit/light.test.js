@@ -861,6 +861,40 @@ describe('SPV Phase 5: validator-set proof + trustless quorum', function () {
         const cp = signedCheckpoint([s1, s2]);
         assert.strictEqual(light.verifyCheckpointWithProvenSet(cp, proven).valid, false);
     });
+
+    // . canonicalCheckpoint appends the root suffix only when ALL FOUR
+    // commitment fields are present, so a post-activation checkpoint missing one of
+    // them is signed over the legacy ROOTLESS preimage. That let an explorer attach
+    // an attacker-chosen state_root, drop a sibling field, and have rootless
+    // signatures still verify: a root no validator signed, which followForward adopts
+    // and verifyBalance then trusts. checkpoint.verifyCheckpoint has rejected this
+    // since ; this verifier did not.
+    it('verifyCheckpointWithProvenSet: REJECTS a post-activation checkpoint carrying a root but missing a sibling commitment field', function () {
+        for (const missing of ['block_merkle_root', 'state_root_version', 'block_merkle_version']) {
+            const s1 = signer(), s2 = signer();
+            const proven = { validators: [{ pubkey: s1.pubkey, source: 'S1', weight: '10' },
+                                          { pubkey: s2.pubkey, source: 'S2', weight: '30' }], total: '40' };
+            const cp = signedCheckpoint([s1, s2]);
+            delete cp[missing];
+            cp.state_root = 'ff'.repeat(32);                      // the attacker's chosen root
+            // Re-sign over what canonicalCheckpoint now emits: the rootless preimage,
+            // which is exactly what a straggler validator would have signed.
+            const rootless = checkpoint.canonicalCheckpoint(cp);
+            assert.ok(!rootless.includes('ff'.repeat(32)), 'the root suffix must be absent for ' + missing);
+            cp.validator_signatures = [s1, s2].map(s => ({ pubkey: s.pubkey,
+                sig: crypto.sign(null, Buffer.from(rootless, 'utf8'), s.privateKey).toString('hex') }));
+            const r = light.verifyCheckpointWithProvenSet(cp, proven);
+            assert.strictEqual(r.valid, false, 'missing ' + missing + ' must not verify');
+            assert.strictEqual(r.total, '0');
+        }
+    });
+
+    it('verifyCheckpointWithProvenSet: still PASSES when all four commitment fields are present', function () {
+        const s1 = signer(), s2 = signer();
+        const proven = { validators: [{ pubkey: s1.pubkey, source: 'S1', weight: '10' },
+                                      { pubkey: s2.pubkey, source: 'S2', weight: '30' }], total: '40' };
+        assert.strictEqual(light.verifyCheckpointWithProvenSet(signedCheckpoint([s1, s2]), proven).valid, true);
+    });
 });
 
 describe('SPV D4: pinned launch trust root', function () {

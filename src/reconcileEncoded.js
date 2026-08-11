@@ -92,6 +92,21 @@ function inputValue(psbt, i) {
     return null;
 }
 
+// Does this input already carry a signature? The encoder's answer is UNSIGNED (see
+// the psbtHex param below), so a signature on an input at gate time was contributed
+// by somebody other than the local WIF, which makes that input's script foreign
+// rather than signer-owned. It has to be pre-signed to be there at all: the default
+// lifecycle path signs and finalizes every input, so an input the WIF cannot sign
+// would fail finalization instead of broadcasting.
+function inputPresigned(psbt, i) {
+    const data = psbt.data.inputs[i];
+    if (!data) return false;
+    return !!(data.finalScriptSig || data.finalScriptWitness
+        || (Array.isArray(data.partialSig) && data.partialSig.length)
+        || (Array.isArray(data.tapScriptSig) && data.tapScriptSig.length)
+        || data.tapKeySig);
+}
+
 function isOpReturn(script) {
     try {
         const decompiled = bitcoin.script.decompile(script);
@@ -233,11 +248,12 @@ function reconcileEncoded(psbtHex, intent) {
     try { psbt = bitcoin.Psbt.fromHex(psbtHex); }
     catch (e) { return deny('UNRECONCILABLE_PSBT', 'the encoder response is not a decodable PSBT: ' + (e && e.message)); }
 
-    // Funding scripts: change returning to a script we are already spending FROM
-    // stays under the signer's control, whichever address scheme the encoder chose.
+    // Funding scripts: change returning to an UNSIGNED script we are already spending
+    // FROM stays under the signer's control, whichever address scheme the encoder chose.
     // Reading them out of the PSBT is what makes this rule false-positive-free -
     // the SDK cannot predict the change script otherwise, since `pubkey` may be a
-    // raw key and the encoder picks the scheme.
+    // raw key and the encoder picks the scheme. The unsigned qualifier is load-bearing
+    // and is the whole of ; see the per-input note below.
     const fundingScripts = [];
     const spent = [];
     let totalIn = 0n;
@@ -245,12 +261,24 @@ function reconcileEncoded(psbtHex, intent) {
     for (let i = 0; i < psbt.txInputs.length; i++) {
         const script = inputScript(psbt, i);
         if (!script) return deny('UNRECONCILABLE_PSBT', 'input ' + i + ' carries no witnessUtxo or nonWitnessUtxo, so its funding script cannot be established');
-        fundingScripts.push(script);
+        // Rule (b) below reads "spending FROM it" as proof the destination stays under
+        // the signer's control, and that only holds for inputs the WIF owns. A hostile
+        // encoder can attach its OWN pre-signed input and point the wallet-funded
+        // remainder at that input's script, which rule (b) would then wave through as
+        // change while signAllInputs/finalizeAllInputs completes the drain. A pre-signed
+        // input is provably not ours here, so it funds and it is spent, but it never
+        // authorizes a change destination.
+        if (!inputPresigned(psbt, i)) fundingScripts.push(script);
         const value = inputValue(psbt, i);
         if (value === null) feeComputable = false; else totalIn += value;
         spent.push({ script, value });
     }
-    if (!fundingScripts.length) return deny('UNRECONCILABLE_PSBT', 'the encoder returned a transaction with no inputs');
+    // Counted on the PSBT, not on fundingScripts: an all-pre-signed transaction has
+    // inputs but no signer-owned one, and it is denied below with its own reason
+    // rather than mislabelled as input-less.
+    if (!psbt.txInputs.length) return deny('UNRECONCILABLE_PSBT', 'the encoder returned a transaction with no inputs');
+    if (!fundingScripts.length) return deny('NO_SIGNER_OWNED_INPUT',
+        'every input in the encoder response already carries a signature, so none of them is the local signer\'s');
 
     // Recovery pin . An earlier phase paid funding legs this gate could only
     // authorize by shape; this phase is the transaction that is supposed to spend them
@@ -311,8 +339,10 @@ function reconcileEncoded(psbtHex, intent) {
             if (value > 0n) return deny('OP_RETURN_CARRIES_VALUE', { index: i, value: String(value) });
             continue;
         }
-        // (b) Change back to a script we are spending from, or to the change address
-        //     the caller submitted. Both stay under the caller's control, and the
+        // (b) Change back to an UNSIGNED script we are spending from (see the input
+        //     loop: a pre-signed input is foreign and never reaches fundingScripts),
+        //     or to the change address the caller submitted. Both stay under the
+        //     caller's control, and the
         //     second has to be checked BEFORE the shape rule: a submitted P2SH change
         //     address decompiles identically to a chunk funding leg, so classifying it
         //     as one would demand the next phase spend it back.
@@ -355,7 +385,15 @@ function reconcileEncoded(psbtHex, intent) {
     // separate from maxFeeSats because a parked output is not fee: the legs prefund
     // the next phase and are dust-scale, so a cap here is a small number.
     const maxPhaseFunding = exactU64(intent.maxPhaseFundingSats);
-    if (intent.maxPhaseFundingSats != null && maxPhaseFunding !== null && phaseFundingTotal > maxPhaseFunding)
+    // A cap that will not parse is a cap that cannot be enforced, and skipping the
+    // comparison would silently remove the bound the caller believes it set - worse
+    // than passing no cap at all, because the caller thinks it is protected. Fail
+    // closed here, like every sibling exactU64 caller (coSigner.js, recovery.js).
+    if (intent.maxPhaseFundingSats != null && maxPhaseFunding === null)
+        return deny('MALFORMED_PHASE_FUNDING_CAP',
+            { maxPhaseFundingSats: String(intent.maxPhaseFundingSats),
+              detail: 'maxPhaseFundingSats must be a non-negative integer (number, bigint, or digit string); the cap cannot be enforced as given' });
+    if (intent.maxPhaseFundingSats != null && phaseFundingTotal > maxPhaseFunding)
         return deny('PHASE_FUNDING_OVER_CAP',
             { total: String(phaseFundingTotal), legs: phaseFunding.length, maxPhaseFundingSats: String(maxPhaseFunding) });
 
@@ -378,7 +416,13 @@ function reconcileEncoded(psbtHex, intent) {
     // false-positives the comparison. exactU64 also keeps the decimal-STRING form the
     // encoder's allowBig path emits.
     const maxFee = exactU64(intent.maxFeeSats);
-    if (intent.maxFeeSats != null && maxFee !== null && fee > maxFee)
+    // Same fail-closed rule as the phase-funding cap above: an unparseable ceiling
+    // is denied, never treated as no ceiling.
+    if (intent.maxFeeSats != null && maxFee === null)
+        return deny('MALFORMED_FEE_CAP',
+            { maxFeeSats: String(intent.maxFeeSats),
+              detail: 'maxFeeSats must be a non-negative integer (number, bigint, or digit string); the cap cannot be enforced as given' });
+    if (intent.maxFeeSats != null && fee > maxFee)
         return deny('FEE_OVER_CAP', { fee: String(fee), maxFeeSats: String(maxFee) });
 
     return { fee, totalIn, totalOut, phaseFunding };
