@@ -38,6 +38,7 @@ const {
     resolveRateLimit,
     resolveRateWindowMs
 } = require('../../src/apiGuards.js');
+const { waitFor } = require('../helpers/wait.js');
 
 function buildApp(limit, windowMs) {
     const app = express();
@@ -106,8 +107,10 @@ describe('API request-rate limit', function () {
         await withServer(app, async (send) => {
             assert.strictEqual((await send()).status, 200);
             assert.strictEqual((await send()).status, 429);
-            await new Promise((r) => setTimeout(r, 60));   // the window itself IS the wait here
-            assert.strictEqual((await send()).status, 200);
+            // Poll the real signal - the window rolling over - instead of sleeping
+            // a fixed span past it: keep requesting until the caller is let through.
+            await waitFor(async () => (await send()).status === 200,
+                { message: 'the rate-limit window should roll over and allow the caller again' });
         });
     });
 
@@ -127,8 +130,13 @@ describe('API request-rate limit', function () {
         const app = buildApp(5, 20);
         await withServer(app, async (send) => {
             await send({ authorization: 'Bearer k1' });
-            await new Promise((r) => setTimeout(r, 40));
-            await send({ authorization: 'Bearer k2' });
+            // The limiter prunes expired buckets on every request (before the limit
+            // check), so poll the real effect: keep sending k2 until k1's window has
+            // lapsed and the prune drops it, rather than sleeping a fixed span.
+            await waitFor(async () => {
+                await send({ authorization: 'Bearer k2' });
+                return app._rateBuckets.size === 1;
+            }, { message: 'the expired k1 bucket must be pruned once its window passes' });
             assert.strictEqual(app._rateBuckets.size, 1, 'the expired k1 bucket must be gone');
         });
     });
