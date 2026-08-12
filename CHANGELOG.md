@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING** `X402Client.fetchUrl` no longer double-pays on retry: both post-broadcast leak paths now throw one `X402_PAYMENT_AMBIGUOUS` error carrying `details.txid`/`details.resume`, and `fetchUrl(url, init, { resume })` adopts the in-flight payment instead of broadcasting a new one (replaces the `X402_PAYMENT_NOT_ACCEPTED` throw) ().
 
 ### Fixed
+- CORS_ORIGIN is now a comma-separated allowlist instead of being echoed back verbatim to every origin .
 - An envelope reveal signs the leaf's untweaked aggregate explicitly instead of falling through to the account's key-path tweaks, which was a wrong-key signature on any tweaked account .
 - BigInt satoshi values serialize as quoted decimal strings, converging on the form the encoder parses and the indexer already pins ().
 - buildRecoverySpend reconciles inputs and outputs in exact u64, so an account above 2^53 satoshi can no longer defeat its own whole-account anti-burn guard ().
