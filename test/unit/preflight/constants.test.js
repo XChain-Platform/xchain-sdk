@@ -60,14 +60,33 @@ describe('pre-flight constants + registry', function () {
         describe('by-value seams (#3934)', function () {
             const fs = require('fs');
             const os = require('os');
-            const { checkFeeQuoteSeam, checkGasSchedules } = require('../../../bin/check-preflight-drift.js');
+            const { checkFeeQuoteSeam, checkConfigConstants, checkGasSchedules } = require('../../../bin/check-preflight-drift.js');
 
             let root;
             const sdkCoin = (c) => path.join(__dirname, '..', '..', '..', 'src', 'coins', c + '.js');
 
-            function fakeIndexer({ exempt, gasOverrides }) {
+            // The handler basenames a passing fixture must carry, derived from the SDK list
+            // rather than typed out again: the gate now reads the fee-charging set off the
+            // indexer's createFeesObject call sites, and DEPLOY/EXECUTE charge off the gas
+            // schedule instead, so they have no handler here ().
+            const feeCallers = constants.FEE_CHARGING_ACTIONS
+                .filter((a) => a !== 'DEPLOY' && a !== 'EXECUTE')
+                .map((a) => a.toLowerCase());
+
+            function fakeIndexer({ exempt, gasOverrides, callers, maxRefills }) {
                 root = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-gate-'));
                 fs.mkdirSync(path.join(root, 'src', 'coins'), { recursive: true });
+                fs.mkdirSync(path.join(root, 'src', 'actions'), { recursive: true });
+                for (const name of (callers || feeCallers)) {
+                    fs.writeFileSync(path.join(root, 'src', 'actions', name + '.js'),
+                        'let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);\n');
+                }
+                // A handler that charges nothing, so the walk is proven to select rather than
+                // to sweep the directory.
+                fs.writeFileSync(path.join(root, 'src', 'actions', 'send.js'),
+                    '// createFeesObject is named here in prose only; SEND charges no protocol fee.\n');
+                fs.writeFileSync(path.join(root, 'src', 'config.js'),
+                    "config['MAX_REFILLS'] = " + (maxRefills === undefined ? constants.MAX_REFILLS : maxRefills) + ';\n');
                 fs.writeFileSync(path.join(root, 'src', 'actions.js'),
                     "const FEE_QUOTE_DENYLIST = new Set(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);\n"
                     + "const FEE_QUOTE_STATIC = new Set(['DEPLOY', 'EXECUTE']);\n"
@@ -89,7 +108,40 @@ describe('pre-flight constants + registry', function () {
             it('passes when the fixtures agree with the SDK', function () {
                 const r = fakeIndexer({ exempt: ['COINPAY', 'DISPENSE'] });
                 expect(checkFeeQuoteSeam(r)).to.equal(0);
+                expect(checkConfigConstants(r)).to.equal(0);
                 expect(checkGasSchedules(r)).to.equal(0);
+            });
+
+            // : the direction the BET omission actually took. An indexer handler
+            // charges a fee and the SDK list does not know, so NATIVE_FEE_FORFEIT is withheld.
+            it('fails when a fee-charging handler is missing from FEE_CHARGING_ACTIONS', function () {
+                const r = fakeIndexer({ exempt: ['COINPAY'], callers: feeCallers.filter((c) => c !== 'bet') });
+                expect(checkFeeQuoteSeam(r)).to.equal(1);
+            });
+
+            it('fails when FEE_CHARGING_ACTIONS lists an action no handler charges for', function () {
+                const r = fakeIndexer({ exempt: ['COINPAY'], callers: feeCallers.concat('coinpay') });
+                expect(checkFeeQuoteSeam(r)).to.equal(1);
+            });
+
+            it('fails CLOSED when the call-site walk finds no caller at all', function () {
+                const r = fakeIndexer({ exempt: ['COINPAY'], callers: [] });
+                // "found none" must never read as "nothing charges a fee"; it throws, and
+                // main() reports the throw as a gate failure.
+                expect(() => checkFeeQuoteSeam(r)).to.throw(/createFeesObject/);
+            });
+
+            // : the cap lives in indexer config.js, which no mapped handler hash
+            // covers, because dispenser.js only reads it by symbol.
+            it('fails when MAX_REFILLS drifts from the indexer config value', function () {
+                const r = fakeIndexer({ exempt: ['COINPAY'], maxRefills: constants.MAX_REFILLS + 1 });
+                expect(checkConfigConstants(r)).to.equal(1);
+            });
+
+            it('fails CLOSED when the indexer MAX_REFILLS literal cannot be read exactly once', function () {
+                const r = fakeIndexer({ exempt: ['COINPAY'] });
+                fs.writeFileSync(path.join(r, 'src', 'config.js'), '// the cap moved somewhere else\n');
+                expect(() => checkConfigConstants(r)).to.throw(/exactly one/);
             });
 
             it('fails when an action is both indexer-EXEMPT and SDK fee-charging', function () {

@@ -29,13 +29,13 @@ HEAD hashes.
 |---|---|---|
 | `checks/send.js` (SEND) | `src/actions/send.js` | `80248c76b126f2dffcd60e48b1efa29a27a87d9ceb1d424fe9b9ec7a0e70b94d` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `effe81706519b936fc59a6f3313ee54851830f3fcd5e68fb918e5972df53092a` |
-| `checks/mint.js` | `src/actions/mint.js` | `e628fdb52ea17c9ae21671f1a1af4cf6cd75818c99c15753c763bf16fdedbf62` |
-| `checks/issue.js` | `src/actions/issue.js` | `d17904a409625a5dd1a238f9568e4ec1deb070fc2ae010837212a66da6d292bf` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `7bca355a41eeca8f0b374561371d7047721f1c9b16f5ce55ab7406b5235b188e` |
+| `checks/mint.js` | `src/actions/mint.js` | `2e2890591651c454ed0bd026475756c6ad4c34df44988b50124d3baaa08a4e2a` |
+| `checks/issue.js` | `src/actions/issue.js` | `46ccf8e8c29f9149d29850cf99a669afc64c2a211030d99c71faaf2269dcb912` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `3ddd5c80c1ff7e09a98530c01f594e70f42270c6345c535f5bdb9c8dd7f552fe` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `2e4030e8e6d2ffa640eac4b4e56b4e039527ee2075694cc8cb765d43ad829a5c` |
 | `checks/trading.js` (ORDER) | `src/actions/order.js` | `5de3d605bfcfe1e4fbc4b0a6a6a59bf50cd8c26c1c44c29958222ac5b2bf6256` |
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `8aa0582811749af3ff31ef37ba0793fe6ae061dc401ffb75e9a4291a1863b3cb` |
-| `checks/airdrop.js` | `src/actions/airdrop.js` | `81f82e180a015cbe0bdd5b7a0529d989938795c601742ee7b239445337ded01b` |
+| `checks/airdrop.js` | `src/actions/airdrop.js` | `ba4dcca76a1b533233f0a6d6d6613713a3d9d68543ede80624f6f49bb33e3753` |
 | `checks/dividend.js` | `src/actions/dividend.js` | `44bf41e12afcb78717cf6705aedaaa1a3a3940cc34462be1ba5c605b74e72941` |
 | `checks/batch.js` | `src/actions/batch.js` | `58269829cb68f5065256544ba134fda0f1dc00491653d25b4b330f1ec035ef64` |
 
@@ -133,6 +133,13 @@ normalize/deny-before-exempt ordering; and `_staticProtocolFee`'s arithmetic.
 Gating those means hashing a function body, which is the anchor-scoped hashing
 this file's own rationale rejects for financial logic.
 
+> Partly superseded by the 2026-08-11 entry below: the `createFeesObject`
+> coverage direction is now checked, and it needed a file-level call-site walk
+> rather than the function-body hash this paragraph assumed. `_staticProtocolFee`'s
+> arithmetic is bound too, though the conclusion here holds for it: gating it from
+> this gate would need a body hash, so it is bound in the indexer instead, by a
+> parity test over the one helper all four fee sites now call.
+
 ### 2026-07-26 - `dispenser.js` (`aac9038`..HEAD), `dispense.js` (`bbaaeeb`..HEAD)
 
 First real firing of this gate. It went red because it was never wired into
@@ -220,3 +227,93 @@ same loop still does `recipientAllowList.includes` and `recipientBlockList.inclu
 per recipient, the same O(n x m) shape. Registered as . When that lands
 it will move this hash again and needs its own line here, but it is the same
 argument: server-side membership, already unverified.
+
+### 2026-08-11 - three proxies replaced by the value they stood in for ()
+
+No handler moved. One shared cause: a mapped handler hash was standing in for
+something it structurally cannot cover (a value read by symbol, a set that is not a
+literal, an arithmetic expression), so each is now bound to its authoritative source
+instead. The first two are gate legs; the third is bound in the indexer, because the
+thing it stands in for cannot be read from outside that repo.
+
+- **Fee-charging coverage is bidirectional (#4471).** `checkFeeQuoteSeam` now
+  derives the fee-charging set by walking `xchain-indexer/src/actions/*.js` for
+  `createFeesObject` callers, unions the gas-priced `DEPLOY`/`EXECUTE` pair, and
+  asserts set-equality against `FEE_CHARGING_ACTIONS`. Only the exempt-contradiction
+  direction was bound before, which is the direction BET's omission did NOT trip
+  (#3893). The 2026-08-08 entry declined this on the grounds that it needs an AST
+  walk and therefore a function-body hash; that was wrong on both counts. Charging
+  a fee is a per-FILE property here (a handler either calls the helper or does
+  not), and the gate already reads every one of those files, so a comment-stripped
+  text walk answers it exactly. An empty walk fails CLOSED, and the basename ->
+  action mapping holds for all nine current callers (airdrop, bet, callback,
+  dispenser, dividend, issue, order, swap, sweep); a future handler whose basename
+  is not its action name surfaces as a named CI red, not as silent drift.
+- **`MAX_REFILLS` is compared by value (#4472).** The SDK comment claimed the
+  `src/actions/dispenser.js` hash caught a change to the refill cap. It does not:
+  the cap is `config['MAX_REFILLS']` in `xchain-indexer/src/config.js` and the
+  handler only reads it by symbol, so the cap can move with every mapped hash
+  unchanged. New `checkConfigConstants` leg compares the two literals by value and
+  fails closed if either cannot be read exactly once; the false comment in
+  `src/preflight/constants.js` now names the real source and the real check.
+
+- **Static VM fee arithmetic is bound on the indexer side (#4470).**
+  `_staticProtocolFee` reproduced, by inspection only, the acceptance arithmetic of
+  `deploy.js` / `deploy_chunk.js` / `execute.js`, and none of those three is a mapped
+  row here. A term added to one and not the others would have quoted a client a
+  native output the handler then refuses. Fixed where the arithmetic lives rather
+  than here: the four sites now call one pure `util.vmGasCost(schedule, family,
+  bytes)`, and `xchain-indexer/test/unit/vmGasParity.test.js` drives the static quote
+  and the handler-side call from identical DEPLOY v0/v1, v2/v3, v4 and EXECUTE
+  fixtures, then scans all four sources so no site can re-inline a `VM_` gas key.
+  Deliberately NOT a gate leg: nothing this gate reads from the outside proves two
+  arithmetic expressions agree, and hashing those three handler bodies is the
+  anchor-scoped hashing this file's own rationale rejects for financial logic.
+
+Still NOT covered, and unchanged by this entry: `classifyFeeQuoteAction`'s
+normalize/deny-before-exempt ordering.
+
+### 2026-08-12 - `mint.js`, `issue.js`, `dispenser.js`, `airdrop.js` 
+
+Four rows moved at once, by two indexer commits, and the four verdicts differ.
+Recorded per handler rather than as one refresh, because "the gate went red and
+the hashes were updated" is exactly the non-review this file exists to prevent.
+
+- **`mint.js` - client check CHANGED .** The handler now skips the
+  MAX_SUPPLY ceiling when no positive cap is declared, gated on
+  `UNCAPPED_MAX_SUPPLY_ZERO`: MAX_SUPPLY is stored as 0 when an ISSUE omits it and
+  0 is the UNCAPPED sentinel, so the old comparison made an uncapped token
+  unmintable. `checks/mint.js` had the mirror-image defect and it was live, not
+  theoretical: `tokenField` returns STRINGS and `'0'` is truthy, so the headroom
+  path ran with maxSupply=0, computed a NEGATIVE headroom, and raised
+  SUPPLY_EXCEEDED (a certified error-capable, network-class code) on every mint of
+  an uncapped token. At/after the flag-day that is a false block of a valid action,
+  which spec §4.2 forbids. Now guarded with `numeric.isPositive`, the same shape the
+  MAX_MINT cap two lines above already used, and the uncapped case is DECLARED
+  unverified rather than dropped, because below the flag-day the handler still
+  rejects and pre-flight has no height to tell the eras apart.
+- **`issue.js` - no client change needed .** The same exemption lands on
+  three cross-checks (MINT_SUPPLY > MAX_SUPPLY, the cumulative MINT_SUPPLY cap, and
+  MINT_ADDRESS_MAX > MAX_SUPPLY). `checks/issue.js` mirrors NONE of the three: it
+  carries only the MAX_SUPPLY amount-format check and the NOT_OWNER guard. A
+  loosening with no client counterpart cannot false-block, so the correct paired
+  action is this note. If any of those three is ever mirrored client-side, the
+  uncapped exemption has to come with it.
+- **`dispenser.js` - client check ADDED ().** A new client-visible
+  rejection: a format-2 edit of an ownership dispenser that supplies GIVE_ESCROW is
+  `invalid: GIVE_ESCROW (must be empty when GIVE_OWNERSHIP=1)`, gated with the
+  dispenser-family cohort. The create-time half of this rule was already in
+  `validator.js`, but that path is authoring-only and guarded on an EMPTY
+  DISPENSER_ACTION_INDEX; an edit targets the dispenser by index and never restates
+  GIVE_OWNERSHIP, so only a state lookup can see it. Added to `checks/dispenser.js`
+  as DISPENSER_OWNERSHIP_ESCROW, ahead of the refill early-return because the
+  handler guards with `isNull` and not `isPositive`, so a supplied zero still
+  trips it while the refill path ignores it. WARNING, never an error, for the
+  activation reason above. This row was already stale before  opened: the
+  pin matched `94f1a8f~1`, so the SDK lane had been unpushable independently.
+- **`airdrop.js` - no client change needed .** Allow/block membership
+  moved from array `includes` to `Set.has`, which the 2026-08-08 entry at the top of
+  this file predicted would move this hash. The handler's own comment states the
+  approved set is unchanged, and the diff bears that out: same `recipients`
+  iteration, same insertion order, an empty list stays truthy as a Set exactly as it
+  was as an array. Performance only, no verdict moves, nothing to mirror.

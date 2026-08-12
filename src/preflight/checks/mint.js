@@ -97,9 +97,25 @@ async function checkMint(ctx) {
 
     const maxSupply = tokenField(token, ['supply.max', 'max_supply', 'MAX_SUPPLY', 'maxSupply']);
     const supply = tokenField(token, ['supply.current', 'supply', 'SUPPLY', 'current_supply', 'total_supply']);
+    // MAX_SUPPLY=0 is the UNCAPPED sentinel, exactly as MAX_MINT=0 is above, and it
+    // needs its own guard for a reason the MAX_MINT case does not expose: tokenField
+    // returns strings, and '0' is TRUTHY, so this ran with maxSupply=0 and a NEGATIVE
+    // headroom, turning every mint on an uncapped token into an error. At/after the
+    // UNCAPPED_MAX_SUPPLY_ZERO flag-day the chain accepts exactly those mints
+    // (xchain-indexer src/actions/mint.js, ), so the finding false-blocked a
+    // valid action, which spec §4.2 forbids.
+    //
+    // Declared unverified rather than dropped: BELOW the flag-day the handler still
+    // rejects them ('invalid: mint exceeds MAX_SUPPLY'), and pre-flight has no chain
+    // height to tell the two eras apart, so silence would read as "checked, fine".
+    const supplyCap = maxSupply && numeric.isPositive(maxSupply) ? maxSupply : null;
     ctx.markRun(FINDING_CODES.SUPPLY_EXCEEDED);
-    if (maxSupply && supply !== null && amount) {
-        const headroom = numeric.sub(maxSupply, supply);
+    if (maxSupply && !supplyCap) {
+        ctx.addUnverified(FINDING_CODES.SUPPLY_EXCEEDED,
+            `${tick} declares MAX_SUPPLY=0 (uncapped); whether a mint is accepted depends on the `
+            + 'UNCAPPED_MAX_SUPPLY_ZERO activation height, which pre-flight cannot read');
+    } else if (supplyCap && supply !== null && amount) {
+        const headroom = numeric.sub(supplyCap, supply);
         if (numeric.gt(amount, headroom)) {
             ctx.addFinding(FINDING_CODES.SUPPLY_EXCEEDED, 'error',
                 `Mint amount ${amount} exceeds the remaining supply headroom ${headroom} for ${tick}.`,

@@ -49,8 +49,11 @@ const REPORT_SCHEMA_VERSION = 1;
 // 6th is rejected once dispenser_caps_activation is live. The cap cannot
 // be CHECKED client-side (no endpoint exposes per-edit give_escrow, see
 // checks/dispenser.js), so this exists only to name the number in the
-// unverified declaration. The §8.5 drift gate over
-// src/actions/dispenser.js is what catches a change to it.
+// unverified declaration. The authoritative value is config['MAX_REFILLS']
+// in xchain-indexer/src/config.js, which src/actions/dispenser.js only READS
+// by symbol, so that handler's mapped hash never moves when the cap does;
+// checkConfigConstants in bin/check-preflight-drift.js is what catches a
+// change to it, by value ().
 const MAX_REFILLS = 5;
 
 // Canonical `^<id>` address-reference id, byte-for-byte the indexer's
@@ -108,6 +111,10 @@ const FINDING_CODES = Object.freeze({
     DISPENSER_NOT_OWNER_W: 'DISPENSER_NOT_OWNER',
     GIVE_NOT_BALANCE_MODE: 'GIVE_NOT_BALANCE_MODE',
     DISPENSER_MAX_REFILLS: 'DISPENSER_MAX_REFILLS',
+    // Warning-only, so deliberately absent from TIER2_ERROR_CAPABLE: the chain
+    // gates this on the dispenser-family cohort and pre-flight has no height,
+    // so an error would false-block a legal pre-activation edit (spec §4.2).
+    DISPENSER_OWNERSHIP_ESCROW: 'DISPENSER_OWNERSHIP_ESCROW',
     CARET_REF_UNRESOLVABLE: 'CARET_REF_UNRESOLVABLE',
     // Declared-unverified only (never a finding): the oracle usage fee is
     // an OUTPUT-level rule, and pre-flight only ever sees an action string.

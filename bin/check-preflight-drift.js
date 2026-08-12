@@ -74,6 +74,48 @@ function parseStringSet(text, name, where) {
     return [...new Set([...hits[0].matchAll(/['"]([A-Z_]+)['"]/g)].map((x) => x[1]))].sort();
 }
 
+/* The reverse fee-charging direction, read from indexer CALL SITES ().
+ *
+ * On the indexer side there is no fee-charging literal to compare against: charging a
+ * protocol fee IS calling createFeesObject from a handler under src/actions/. So the set is
+ * derived from the handlers themselves, which makes the call sites the source of truth and
+ * leaves no second list to drift. The gas-priced VM pair is the one exception: DEPLOY and
+ * EXECUTE charge off GAS_SCHEDULE, never through createFeesObject, so they are named here.
+ *
+ * Comments and string bodies are stripped first, so a prose mention of the helper cannot
+ * enrol an action. An empty walk fails CLOSED: "found no callers" must never read as "no
+ * action charges a fee", the same contract parseStringSet holds.
+ */
+const GAS_PRICED_ACTIONS = ['DEPLOY', 'EXECUTE'];
+
+function stripCommentsAndStrings(src) {
+    return src
+        .replace(/\/\*[\s\S]*?\*\//g, ' ')
+        .replace(/\/\/[^\n]*/g, ' ')
+        .replace(/(['"`])(?:\\.|(?!\1)[^\\])*\1/g, '""');
+}
+
+function deriveFeeChargingActions(indexerRoot) {
+    const dir = path.join(indexerRoot, 'src', 'actions');
+    let entries;
+    try {
+        entries = fs.readdirSync(dir);
+    } catch (e) {
+        throw new Error(`drift-gate: could not read ${dir} to derive the fee-charging set `
+            + `(${e && e.message ? e.message : String(e)}). Fix the read rather than skipping the check.`);
+    }
+    const callers = entries
+        .filter((f) => f.endsWith('.js'))
+        .filter((f) => /\bcreateFeesObject\s*\(/.test(stripCommentsAndStrings(fs.readFileSync(path.join(dir, f), 'utf8'))))
+        .map((f) => path.basename(f, '.js').toUpperCase());
+    if (callers.length === 0) {
+        throw new Error('drift-gate: no handler under xchain-indexer/src/actions/ calls createFeesObject. '
+            + 'That is how a protocol fee is charged, so an empty walk means this check stopped working, '
+            + 'not that nothing charges a fee; fix the walk before trusting a green gate.');
+    }
+    return [...new Set([...callers, ...GAS_PRICED_ACTIONS])].sort();
+}
+
 function checkFeeQuoteSeam(indexerRoot) {
     const actionsPath = path.join(indexerRoot, 'src', 'actions.js');
     if (!fs.existsSync(actionsPath)) {
@@ -90,11 +132,9 @@ function checkFeeQuoteSeam(indexerRoot) {
     const feeCharging = parseStringSet(sdkSrc, 'FEE_CHARGING_ACTIONS', 'src/preflight/constants.js');
 
     let failed = 0;
-    // FEE_CHARGING_ACTIONS drives the NATIVE_FEE_FORFEIT disclosure (#3934). Only this
-    // direction is checkable by value: the reverse ("every fee-charging handler is
-    // listed") is not a literal on the indexer side, it is the set of handlers calling
-    // createFeesObject, which needs a call-site walk this gate does not do. BET was
-    // missing from the SDK list for its whole life and nothing caught it (#3893).
+    // FEE_CHARGING_ACTIONS drives the NATIVE_FEE_FORFEIT disclosure (#3934). Both directions
+    // are bound now: this one by value against the indexer's EXEMPT literal, the other by the
+    // call-site walk below () - the direction the BET omission needed (#3893).
     const contradictory = feeCharging.filter((a) => exempt.includes(a));
     if (contradictory.length) {
         console.error('drift-gate: FEE_CHARGING_ACTIONS claims a protocol fee for indexer-EXEMPT action(s): '
@@ -120,11 +160,79 @@ function checkFeeQuoteSeam(indexerRoot) {
             + '  attaching the quote, so the  gas-schedule fee would be silently dropped.');
         failed = 1;
     }
+    const derived = deriveFeeChargingActions(indexerRoot);
+    const unlisted = derived.filter((a) => !feeCharging.includes(a));
+    const orphaned = feeCharging.filter((a) => !derived.includes(a));
+    if (unlisted.length || orphaned.length) {
+        console.error('drift-gate: FEE_CHARGING_ACTIONS no longer matches the indexer handlers that charge a fee.');
+        if (unlisted.length)
+            console.error('  charges a protocol fee, missing from the SDK list: ' + unlisted.join(', ') + '\n'
+                + '    The NATIVE_FEE_FORFEIT disclosure would be withheld for it, exactly as it was for BET (#3893).');
+        if (orphaned.length)
+            console.error('  in the SDK list with no indexer caller: ' + orphaned.join(', ') + '\n'
+                + '    Either the handler stopped charging, or it was renamed and the basename no longer\n'
+                + '    matches its action name; reconcile src/preflight/constants.js against the handler.');
+        failed = 1;
+    }
     if (!failed) {
         console.log(`drift-gate: fee-quote seam in sync (denylist ${tier1.length} action(s), `
             + `${staticSet.length} static-quoted, all denylisted; ${feeCharging.length} fee-charging, `
-            + 'none indexer-exempt).');
+            + 'none indexer-exempt, all matching the indexer call sites).');
     }
+    return failed;
+}
+
+/* Indexer CONFIG caps this SDK mirrors as literals ().
+ *
+ * A cap defined in xchain-indexer/src/config.js is invisible to every hash row above: the row
+ * regex carries a literal src/actions/ prefix, and the handler enforcing the cap reads it by
+ * symbol (this.config['MAX_REFILLS']), so the handler's hash does not move when the cap does.
+ * A mapped handler hash is a proxy for the value, and this is the class of value it cannot
+ * stand in for.
+ *
+ * Compared by VALUE for the same reason the fee-quote lists are, and fails CLOSED when either
+ * literal cannot be read exactly once.
+ */
+const CONFIG_CAPS = [
+    { name: 'MAX_REFILLS', why: 'the SDK names this cap in its DISPENSER_MAX_REFILLS unverified declaration' },
+];
+
+function parseIntLiteral(text, re, what, where) {
+    const hits = [...text.matchAll(re)].map((m) => m[1]);
+    if (hits.length !== 1) {
+        throw new Error(`drift-gate: expected exactly one ${what} in ${where}, found ${hits.length}. `
+            + 'That literal is what this gate compares; find where it moved before editing this check.');
+    }
+    return Number(hits[0]);
+}
+
+function checkConfigConstants(indexerRoot) {
+    const configPath = path.join(indexerRoot, 'src', 'config.js');
+    if (!fs.existsSync(configPath)) {
+        console.error('drift-gate: xchain-indexer/src/config.js not found; it defines the caps this gate pins.');
+        return 1;
+    }
+    const configSrc = fs.readFileSync(configPath, 'utf8');
+    const sdkSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'preflight', 'constants.js'), 'utf8');
+
+    let failed = 0;
+    for (const { name, why } of CONFIG_CAPS) {
+        const indexerValue = parseIntLiteral(configSrc,
+            new RegExp("config\\[['\"]" + name + "['\"]\\]\\s*=\\s*(\\d+)", 'g'),
+            `config['${name}'] assignment`, 'xchain-indexer/src/config.js');
+        const sdkValue = parseIntLiteral(sdkSrc,
+            new RegExp('const\\s+' + name + '\\s*=\\s*(\\d+)', 'g'),
+            `const ${name} declaration`, 'src/preflight/constants.js');
+        if (indexerValue !== sdkValue) {
+            console.error(`drift-gate: ${name} differs between xchain-indexer and this SDK:\n`
+                + `  indexer src/config.js: ${indexerValue}\n`
+                + `  sdk     src/preflight/constants.js: ${sdkValue}\n`
+                + `  ${why}, so it would state a cap the network does not enforce.`);
+            failed = 1;
+        }
+    }
+    if (!failed)
+        console.log(`drift-gate: indexer config cap(s) in sync (${CONFIG_CAPS.map((c) => c.name).join(', ')}).`);
     return failed;
 }
 
@@ -239,6 +347,12 @@ function main() {
         failed = 1;
     }
     try {
+        if (checkConfigConstants(root)) failed = 1;
+    } catch (e) {
+        console.error(e && e.message ? e.message : String(e));
+        failed = 1;
+    }
+    try {
         if (checkGasSchedules(root)) failed = 1;
     } catch (e) {
         console.error(e && e.message ? e.message : String(e));
@@ -252,4 +366,7 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { resolveIndexerRoot, parseMap, parseStringSet, checkFeeQuoteSeam, checkGasSchedules };
+module.exports = {
+    resolveIndexerRoot, parseMap, parseStringSet, deriveFeeChargingActions,
+    checkFeeQuoteSeam, checkConfigConstants, checkGasSchedules,
+};

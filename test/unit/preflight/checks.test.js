@@ -219,6 +219,38 @@ describe('pre-flight Tier-2 per-action matrix', function () {
             const f = r.findings.find(x => x.code === 'MINT_OVER_MAX');
             expect(f, 'MAX_MINT=0 means uncapped, not a zero-mint cap').to.equal(undefined);
         });
+
+        // The MAX_SUPPLY twin of the case above, and the sharper one: '0' is a
+        // truthy STRING, so the headroom path ran with maxSupply=0 and produced a
+        // NEGATIVE headroom, making every mint on an uncapped token an error. At/after
+        // the UNCAPPED_MAX_SUPPLY_ZERO flag-day the chain accepts exactly these mints
+        // (xchain-indexer src/actions/mint.js, ), so the finding is a false
+        // block of a valid action, which spec §4.2 forbids.
+        it('supply.max of 0 (ISSUE omitted MAX_SUPPLY) is uncapped, not a zero ceiling', async function () {
+            const tok = realToken({ supply: { current: '80', max: '0', decimals: 0 } });
+            const r = await reportFor('MINT|0|JDOG|50', { getToken: () => tok });
+            const f = r.findings.find(x => x.code === 'SUPPLY_EXCEEDED');
+            expect(f, 'MAX_SUPPLY=0 means uncapped, not a zero supply ceiling').to.equal(undefined);
+        });
+
+        // Guards the fix from being written as "skip whenever the numbers look odd":
+        // a real positive cap must still block, headroom and all.
+        it('still enforces a real positive supply cap', async function () {
+            const r = await reportFor('MINT|0|JDOG|50', { getToken: () => realToken() });
+            const f = r.findings.find(x => x.code === 'SUPPLY_EXCEEDED');
+            expect(f, 'a declared cap must still fire').to.not.equal(undefined);
+            expect(f.data.headroom).to.equal('20');
+        });
+
+        // The uncapped case must be DECLARED, not silently dropped: below the
+        // flag-day the chain still rejects these mints, and a client that says
+        // nothing is indistinguishable from one that checked and approved.
+        it('declares the uncapped supply ceiling as unverified rather than passing silently', async function () {
+            const tok = realToken({ supply: { current: '80', max: '0', decimals: 0 } });
+            const r = await reportFor('MINT|0|JDOG|50', { getToken: () => tok });
+            expect(unverified(r, 'SUPPLY_EXCEEDED'),
+                'an uncapped token must declare the ceiling unverified').to.equal(true);
+        });
     });
 
     describe('SWEEP (empty is a valid no-op)', function () {
@@ -408,6 +440,54 @@ describe('pre-flight Tier-2 per-action matrix', function () {
                 getAction: () => dispenserAction(),
             });
             expect(unverified(r, 'DISPENSER_ORACLE_FEE')).to.equal(false);
+        });
+    });
+
+    // An ownership dispenser never holds balance escrow, on edit as on create.
+    // The create-time half is authoring-only and already lives in validator.js;
+    // an EDIT never restates GIVE_OWNERSHIP, so only a state lookup can see it
+    // (xchain-indexer src/actions/dispenser.js, ).
+    describe('DISPENSER ownership-escrow edit ()', function () {
+        it('warns when an edit tops up escrow on an ownership dispenser', async function () {
+            const r = await reportFor('DISPENSER|2|42|100', {
+                getAction: () => dispenserAction({ give_ownership: 1 }),
+            });
+            expect(has(r, 'DISPENSER_OWNERSHIP_ESCROW', 'warning'),
+                'an ownership dispenser cannot take escrow on edit').to.equal(true);
+        });
+
+        // Activation-gated on the chain (dispenser-family cohort) and pre-flight
+        // has no height, so this can never be a hard block: spec §4.2.
+        it('never hard-blocks on it', async function () {
+            const r = await reportFor('DISPENSER|2|42|100', {
+                getAction: () => dispenserAction({ give_ownership: 1 }),
+            });
+            const f = r.findings.find(x => x.code === 'DISPENSER_OWNERSHIP_ESCROW');
+            expect(f.severity).to.not.equal('error');
+        });
+
+        // The handler guards with isNull, NOT isPositive, so a supplied zero is
+        // still a supplied GIVE_ESCROW and still rejected. The refill path below
+        // returns early on non-positive, which is why this sits ahead of it.
+        it('fires on a supplied GIVE_ESCROW of 0, which the refill path ignores', async function () {
+            const r = await reportFor('DISPENSER|2|42|0', {
+                getAction: () => dispenserAction({ give_ownership: 1 }),
+            });
+            expect(has(r, 'DISPENSER_OWNERSHIP_ESCROW', 'warning')).to.equal(true);
+        });
+
+        it('says nothing on an ordinary (non-ownership) dispenser refill', async function () {
+            const r = await reportFor('DISPENSER|2|42|100', {
+                getAction: () => dispenserAction(),
+            });
+            expect(has(r, 'DISPENSER_OWNERSHIP_ESCROW')).to.equal(false);
+        });
+
+        it('says nothing when the edit supplies no GIVE_ESCROW at all', async function () {
+            const r = await reportFor('DISPENSER|2|42||1799999999', {
+                getAction: () => dispenserAction({ give_ownership: 1 }),
+            });
+            expect(has(r, 'DISPENSER_OWNERSHIP_ESCROW')).to.equal(false);
         });
     });
 

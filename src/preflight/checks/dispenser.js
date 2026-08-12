@@ -130,6 +130,31 @@ async function checkDispenser(ctx) {
     // B dispenser, the oracle usage fee on the amount being added .
     if (version !== '2') return;
     const topUp = ctx.field('GIVE_ESCROW');
+
+    // An ownership dispenser never holds balance escrow, on edit as on create.
+    // The create-time half is authoring-only (validator.js, GIVE_OWNERSHIP is on
+    // the wire there); an EDIT targets the dispenser by action index and never
+    // restates the flag, so only this state lookup can see it. Without the rule
+    // the edit debited GIVE_ESCROW while both terminal paths credit nothing back,
+    // stranding the balance (xchain-indexer src/actions/dispenser.js, ).
+    //
+    // Ahead of the refill early-return below on purpose: the handler guards with
+    // isNull, not isPositive, so a supplied GIVE_ESCROW of 0 is still supplied and
+    // still rejected, while the refill path ignores it as a non-top-up.
+    //
+    // Warning, never an error. The chain gates this on the dispenser-family
+    // cohort, and pre-flight has no chain height, so a hard block would false-block
+    // a legal pre-activation edit (spec §4.2), the same reasoning as the `^id`
+    // rule in universal.js.
+    const ownershipDispenser = String(dispenser?.give_ownership ?? dispenser?.GIVE_OWNERSHIP ?? '0') === '1';
+    ctx.markRun(FINDING_CODES.DISPENSER_OWNERSHIP_ESCROW);
+    if (ownershipDispenser && topUp !== null && topUp !== undefined && topUp !== '') {
+        ctx.addFinding(FINDING_CODES.DISPENSER_OWNERSHIP_ESCROW, 'warning',
+            `Dispenser #${idx} is an ownership dispenser (GIVE_OWNERSHIP=1), which cannot hold escrow; `
+            + 'the chain rejects an edit that supplies GIVE_ESCROW.',
+            { dispenserActionIndex: idx, giveEscrow: topUp });
+    }
+
     if (!topUp || !numeric.isPositive(topUp)) return;
 
     // The refill's oracle address is the DISPENSER's, not the edit's: a
