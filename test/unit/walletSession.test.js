@@ -174,19 +174,28 @@ describe('WalletSession', function () {
             });
             let session = new WalletSession(sdk, WIF_MAINNET, { waitForIndexer: false });
 
-            // Capture the UTXO set each submit was handed, holding the async gap
-            // open so a non-serialized implementation would let both reads race.
+            // Capture the UTXO set each submit was handed, holding the FIRST submit
+            // open inside submitAction until the test observes it there, then
+            // releasing it. This keeps the async gap open deterministically (no
+            // sleep): a non-serialized implementation would let the second submit
+            // read UTXOs while the first is parked, and it would see utxo1 too.
             let seen = [];
+            let firstEntered, releaseFirst;
+            const firstIn   = new Promise(r => { firstEntered = r; });
+            const firstGate = new Promise(r => { releaseFirst = r; });
             submitStub.callsFake(async (actionData, encoderOpts) => {
                 seen.push((encoderOpts.utxos || []).map(u => u.txid + ':' + u.vout));
-                await new Promise(r => setTimeout(r, 20));
+                if (seen.length === 1) { firstEntered(); await firstGate; }
                 return { txid: 'tx', status: 'broadcast', spentInputs: [{ txid: 'utxo1', vout: 0 }] };
             });
 
-            await Promise.all([
+            const all = Promise.all([
                 session.submit({ action: 'SEND', params: {} }),
                 session.submit({ action: 'SEND', params: {} })
             ]);
+            await firstIn;      // first submit is parked inside submitAction, holding utxo1
+            releaseFirst();     // let it finish; a serialized queue only now starts the second
+            await all;
 
             // The first submit saw utxo1 available. Because submits serialize, the
             // second ran only after the first marked utxo1 spent, so it must not

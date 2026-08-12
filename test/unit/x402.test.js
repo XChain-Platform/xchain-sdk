@@ -29,6 +29,7 @@ const { expect } = require('chai');
 
 const { X402Gateway, X402Client, parseActionString } = require('../../src/x402.js');
 const { SDKX402Error, SDKPolicyError, SDKActionError } = require('../../src/errors.js');
+const { waitFor } = require('../helpers/wait.js');
 
 const NONCE = 'a'.repeat(32);
 
@@ -236,8 +237,14 @@ describe('x402', () => {
             explorer.getMempool.resolves({ data: [{ tx_hash: 'txEE', source: 'payerAddr', action: 'SEND', data: `SEND|0|TOK|5|gateAddr|${NONCE}` }] });
             explorer.getSends.resolves({ data: [] });
             await gw2.verify(proof({ txid: 'txEE' }));
-            await new Promise((r) => setTimeout(r, 5));
-            await gw2.sweep();
+            // Poll the real state transition instead of sleeping past the 1ms window:
+            // sweep repeatedly until the unconfirmed grant is marked failed. Once the
+            // window lapses a single sweep flips it (and fires the hook exactly once,
+            // since it is then no longer provisional).
+            await waitFor(async () => {
+                await gw2.sweep();
+                return (await gw2.store.get(NONCE)).status === 'failed_0conf';
+            }, { message: 'provisional grant should fail once the confirm window elapses' });
             expect((await gw2.store.get(NONCE)).status).to.equal('failed_0conf');
             expect(failed).to.deep.equal([NONCE]);
             fs.rmSync(tmpDir + '2', { recursive: true, force: true });
