@@ -41,6 +41,7 @@ const checkpoint = require('./checkpoint.js');
 const ckptCommit = require('./checkpoint_commitment_activation.js');
 const pinned     = require('./pinnedCheckpoints.js');
 const swq        = require('./stake_weighted_quorum.js');
+const srb        = require('./snapshot_reorg_buffer.js');
 
 function _fetch(impl){
     let f = impl || (typeof fetch === 'function' ? fetch : null);
@@ -735,8 +736,19 @@ async function followForward(opts){
         const steps = (rangeBody && rangeBody.checkpoints) || [];
         for (const next of steps){
             // Prove the signer set at next.snapshot_block against the current trusted state_root.
+            //
+            // : the checkpoint DECLARES the raw height the signing hub was handed, but
+            // that hub resolved its oracle_publish set through CapabilitySnapshot, which buries
+            // every height by CANONICAL_REORG_BUFFER first (tip stake state is not reorg-safe).
+            // Proving the set at the declared height therefore proves a DIFFERENT set than the
+            // one that signed whenever a validator's stake activated or deactivated inside
+            // (snapshot_block - 6, snapshot_block], and a light client on that boundary either
+            // rejects a valid checkpoint or counts a signer the hub never had. Bury by the same
+            // shared constant. Flag-day gated (INERT on mainnet/testnet), so below the gate the
+            // declared height is used verbatim and already-anchored checkpoints read as before.
+            const setBlock = srb.buriedSnapshotBlock(next.snapshot_block, next.network);
             const vs = await verifyValidatorSet({ explorerUrl: opts.explorerUrl, btcCoin,
-                snapshotBlock: next.snapshot_block, trustedStateRoot: _hx(trusted.state_root), fetchImpl: f });
+                snapshotBlock: setBlock, trustedStateRoot: _hx(trusted.state_root), fetchImpl: f });
             if (!vs.verified) return { trusted, adopted, reason: 'VALIDATOR_SET_UNVERIFIED@' + next.block_index, stoppedAt: next.block_index };
             const q = verifyCheckpointWithProvenSet(next, vs.capabilities.oracle_publish);
             if (!q.valid) return { trusted, adopted, reason: 'QUORUM_FAILED@' + next.block_index, stoppedAt: next.block_index };

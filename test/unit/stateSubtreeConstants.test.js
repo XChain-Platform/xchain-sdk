@@ -74,6 +74,16 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.contract_state_root,
             { 'BTC:regtest': 10000, 'BTC:testnet': 146500 });
         assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_ACTIVATION, { 'BTC:regtest': 11200 });
+        // THE SHADOW MAPS ARE PINNED TOO, and they were not until . A
+        // shadow commits nothing, which is exactly why it looked safe to leave
+        // unasserted here; the cost showed up on 2026-08-11, when the escrow
+        // window opened on BTC:testnet and every assertion in this file stayed
+        // green except the GOLDEN pin, which then rode into HEAD stale. A client
+        // still READS these maps (isEscrowLockedLeafShadowActive is exported), so
+        // an unreviewed entry is a client-visible change either way.
+        assert.deepStrictEqual(SUB.STATE_SUBTREE_SHADOW,
+            { ownership_root: {}, tokens_root: {}, contract_state_root: {} });
+        assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_SHADOW, { 'BTC:testnet': 148000 });
         // THE LAUNCH GUARD, and it is about MAINNET rather than about regtest.
         // It read /:regtest$/ while regtest was the only armed network, which was
         // the strictest form available then and the WRONG rule to keep: once the
@@ -88,6 +98,44 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         for(const key of Object.keys(SUB.ESCROW_LOCKED_LEAF_ACTIVATION))
             assert.ok(!/:mainnet$/.test(key),
                 'the escrow leaf ships armed on MAINNET (' + key + ') in a CLIENT release');
+        // The mainnet guard covers the shadow maps as well. A mainnet shadow
+        // commits nothing either, but it is still a chain nobody has approved
+        // appearing in a client release, and the guard is worthless if the
+        // easiest way to add a mainnet key is the one it does not look at.
+        for(const slot of SUB.RESERVED_SUBTREES)
+            for(const key of Object.keys(SUB.STATE_SUBTREE_SHADOW[slot]))
+                assert.ok(!/:mainnet$/.test(key),
+                    slot + ' ships SHADOWING on MAINNET (' + key + ') in a CLIENT release');
+        for(const key of Object.keys(SUB.ESCROW_LOCKED_LEAF_SHADOW))
+            assert.ok(!/:mainnet$/.test(key),
+                'the escrow leaf ships SHADOWING on MAINNET (' + key + ') in a CLIENT release');
+    });
+
+    it('the escrow shadow window opens exactly at 148000 on BTC:testnet, and arms nothing', function(){
+        // The boundary a client acts on, driven rather than inferred from the map.
+        assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(147999, 'testnet', 'BTC'), false);
+        assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(148000, 'testnet', 'BTC'), true);
+        // A SHADOW IS NOT AN ARMING, and this is the assertion that says so. If
+        // these two ever answer true together, a client would accept a
+        // locked-balance proof for a height whose balances_root does not cover
+        // the XCHAIN_ESC domain, which is the §4 mistake this file exists to
+        // prevent. stateRootVersion must not move across the window either:
+        // Stage A is already armed on BTC:testnet at 146500, so 2 on both sides.
+        assert.strictEqual(SUB.isEscrowLockedLeafActive(148000, 'testnet', 'BTC'), false);
+        assert.strictEqual(SUB.isEscrowLockedLeafActive(999999999, 'testnet', 'BTC'), false);
+        assert.strictEqual(SUB.stateRootVersion(147999, 'testnet', 'BTC'), 2);
+        assert.strictEqual(SUB.stateRootVersion(148000, 'testnet', 'BTC'), 2);
+        // Chain-local, on both axes: no other coin and no other network opens.
+        for(const coin of ['BTC', 'LTC', 'DOGE'])
+            for(const network of ['mainnet', 'testnet', 'regtest'])
+                assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(148000, network, coin),
+                    coin === 'BTC' && network === 'testnet',
+                    'escrow shadow leaked to ' + coin + '/' + network);
+        // A window below the chain's own first indexed block (147500, after the
+        // 2026-08-10 re-genesis) would never open at all, so the height is not
+        // merely reviewed, it is reachable.
+        assert.ok(SUB.ESCROW_LOCKED_LEAF_SHADOW['BTC:testnet'] > 147500,
+            'the shadow window must start above BTC:testnet\'s first indexed block');
     });
 
     it('the slot list matches this repo\'s merkle.STATE_SUBTREES tail', function(){
@@ -165,7 +213,18 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         // BTC:testnet at 146500, above its 146000 collation height. BTC only of the
         // three testnet chains (LTC:testnet is below its own collation height,
         // DOGE:testnet has no follower). MAINNET still unarmed for every slot.
-        const GOLDEN = 'f5ba77b37587a028543642185c5d14c99324f230f37a53dfb4c1ddf060a64f33';
+        // 2026-08-11 (/ Stage B shadow): ESCROW_LOCKED_LEAF_SHADOW
+        // opened on BTC:testnet at 148000. A SHADOW, not an arming: nothing is
+        // committed, balances_root stays byte-identical to v1, and every
+        // locked-balance proof stays refused because ESCROW_LOCKED_LEAF_ACTIVATION
+        // is what both gates read and it did not move.
+        // 2026-08-12 : this pin was the ONLY thing that caught the line
+        // above, and it caught it one commit late, so it landed red at HEAD. The
+        // shadow maps had no assertion of their own in this file, which is why the
+        // exact-set tripwire stayed green through a real map change; that hole is
+        // closed in the first test above, and this pin is now the SECOND line of
+        // defence it was always meant to be rather than the only one.
+        const GOLDEN = 'd03e327ab0a4ff9cd33dc0a1426f12bf432a11944bc67fbb38f2bde8244cf57d';
         const actual = sha256File(SELF);
         if(actual !== GOLDEN)
             assert.fail('src/state_subtree_activation.js changed (sha256 ' + actual + ').\n' +
