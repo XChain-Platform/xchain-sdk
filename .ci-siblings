@@ -1,3 +1,35 @@
+# Repos the SDK suite needs checked out BESIDE it on the CI venue.
+#
+# Declaring a sibling here is what makes its cross-repo guards actually run. An
+# UNdeclared sibling is not a neutral omission: every guard written against it
+# resolves with existsSync, calls this.skip(), and the gate still prints PASS,
+# so the run reports green having exercised none of them. Measured 2026-08-12,
+# that gap was ~36 guards (test-host ran 3444 passing / 40 pending where a full
+# local checkout runs 3515 / 4). See test/unit/sibling-coverage.test.js, which
+# reports the surface this file leaves uncovered, and  for the same
+# lesson applied to a sibling that is declared but missing.
+#
+# ci-dispatch.sh ships each of these at its origin/master (falling back to local
+# HEAD) and REFUSES the push if one is not a checkout beside this repo, so a
+# declared sibling can never be silently absent.
+
+# Drift gate (§8.5) over the mapped indexer handlers.
 xchain-indexer
+# Contract template parity (escrow, vesting, crowdsale, amm).
 xchain-contracts
+# Co-signer decode parity against the authoritative decoder.
 xchain-decoder
+# Vendored coins-registry byte-identity: BTC/LTC/DOGE/index/consensus_pin.
+xchain-hub
+# abi-core drift and the typed explorer-route contract.
+xchain-explorer
+# Consensus reference-impl parity and the canonical action map.
+xchain-documentation
+# The vendored roundtrip-conformance fixture.
+xchain-encoder
+# lint-core and metering vendored-copy parity.
+xchain-vm
+# Cross-repo consensus-constant byte-identity.
+xchain-sync
+# BIP44 derivation-path parity and the XCALL constant copy.
+xchain-wallet
