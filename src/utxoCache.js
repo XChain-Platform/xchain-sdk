@@ -83,12 +83,10 @@ class UTXOCache {
         this._speculative.push(utxo);
     }
 
-    // Check if cache has data (not stale)
     isLoaded() {
         return !this._stale;
     }
 
-    // Check if there are available UTXOs
     hasAvailable() {
         return this.getAvailable().length > 0;
     }
@@ -101,7 +99,6 @@ class UTXOCache {
         this._stale = true;
     }
 
-    // Get the address this cache is tracking
     get address() {
         return this._address;
     }

@@ -36,9 +36,7 @@ const {
 // Note: nock.disableNetConnect is set inside each describe block, not globally,
 // to avoid interfering with other test files (e.g. smoke tests using real HTTP).
 
-// ---------------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------------
 
 function makeExplorer(extraOpts = {}) {
     return new ExplorerClient(Object.assign({
@@ -71,9 +69,7 @@ const ENCODER_BASE   = 'http://chaos.test:3000';
 const HUB_BASE       = 'http://chaos.test:8001';
 const COIN_PATH      = '/BTC/api';
 
-// ---------------------------------------------------------------------------
 // 1. EXPLORER CHAOS (12 tests)
-// ---------------------------------------------------------------------------
 
 describe('ExplorerClient – network chaos', function () {
     this.timeout(5000);
@@ -293,9 +289,7 @@ describe('ExplorerClient – network chaos', function () {
 
 });
 
-// ---------------------------------------------------------------------------
 // 2. ENCODER CHAOS (10 tests)
-// ---------------------------------------------------------------------------
 
 describe('EncoderClient – network chaos', function () {
     this.timeout(5000);
@@ -465,9 +459,7 @@ describe('EncoderClient – network chaos', function () {
 
 });
 
-// ---------------------------------------------------------------------------
 // 3. HUB CHAOS (6 tests)
-// ---------------------------------------------------------------------------
 
 describe('HubConnector – network chaos', function () {
     this.timeout(5000);

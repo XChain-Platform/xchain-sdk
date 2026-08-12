@@ -26,9 +26,7 @@ const WebSocketClient = require('../../src/websocket.js');
 const { SDKExplorerError } = require('../../src/errors.js');
 const { waitFor, waitForCalls } = require('../helpers/wait.js');
 
-// ---------------------------------------------------------------------------
 // Mock WebSocket Server
-// ---------------------------------------------------------------------------
 
 function createMockServer(opts) {
     opts = opts || {};
@@ -98,9 +96,7 @@ function createClient(port) {
     });
 }
 
-// ---------------------------------------------------------------------------
 // Tests
-// ---------------------------------------------------------------------------
 
 describe('WebSocketClient', function () {
 
@@ -130,9 +126,7 @@ describe('WebSocketClient', function () {
         client.off('BARRIER', mark);
     }
 
-    // -----------------------------------------------------------------
     // Schema version surface
-    // -----------------------------------------------------------------
 
     describe('WS_SCHEMA_VERSION', function () {
 
@@ -151,9 +145,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // Connection
-    // -----------------------------------------------------------------
 
     describe('connection', function () {
 
@@ -202,9 +194,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // Coin prefix
-    // -----------------------------------------------------------------
 
     describe('coin prefix', function () {
 
@@ -228,9 +218,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // Subscribe
-    // -----------------------------------------------------------------
 
     describe('subscribe', function () {
 
@@ -251,9 +239,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // Unsubscribe
-    // -----------------------------------------------------------------
 
     describe('unsubscribe', function () {
 
@@ -267,9 +253,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // List subscriptions
-    // -----------------------------------------------------------------
 
     describe('listSubscriptions', function () {
 
@@ -282,9 +266,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // Event handlers
-    // -----------------------------------------------------------------
 
     describe('event handlers', function () {
 
@@ -412,9 +394,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // Lifecycle hooks
-    // -----------------------------------------------------------------
 
     describe('hooks', function () {
 
@@ -448,9 +428,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // Catch-up tracking
-    // -----------------------------------------------------------------
 
     describe('catch-up', function () {
 
@@ -472,9 +450,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // connect() when already connected (short-circuit)
-    // -----------------------------------------------------------------
 
     describe('connect when already connected', function () {
 
@@ -489,9 +465,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // readyHook
-    // -----------------------------------------------------------------
 
     describe('readyHook in connect', function () {
 
@@ -510,9 +484,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // HTTP base URL → ws scheme conversion
-    // -----------------------------------------------------------------
 
     describe('http(s) base URL scheme conversion', function () {
 
@@ -528,9 +500,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // Invalid JSON message (silent skip)
-    // -----------------------------------------------------------------
 
     describe('invalid JSON message', function () {
 
@@ -551,9 +521,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // onWsDisconnect hook
-    // -----------------------------------------------------------------
 
     describe('onWsDisconnect hook', function () {
 
@@ -574,9 +542,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // setBase
-    // -----------------------------------------------------------------
 
     describe('setBase', function () {
 
@@ -638,9 +604,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // _sendWithResponse timeout
-    // -----------------------------------------------------------------
 
     describe('_sendWithResponse timeout', function () {
 
@@ -659,9 +623,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // _rejectAllPending: rejects pending on disconnect
-    // -----------------------------------------------------------------
 
     describe('_rejectAllPending', function () {
 
@@ -681,9 +643,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // Pending response error type
-    // -----------------------------------------------------------------
 
     describe('pending response with error type', function () {
 
@@ -715,9 +675,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // _onMessage WELCOME when lastActionIndex = 0
-    // -----------------------------------------------------------------
 
     describe('WELCOME with lastActionIndex=0', function () {
 
@@ -763,9 +721,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // _emit and connection_lost event
-    // -----------------------------------------------------------------
 
     describe('_emit and connection_lost', function () {
 
@@ -802,9 +758,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // _startPing fires
-    // -----------------------------------------------------------------
 
     describe('_startPing', function () {
 
@@ -832,9 +786,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // onWsReconnect hook + _resubscribe
-    // -----------------------------------------------------------------
 
     describe('reconnect and resubscribe', function () {
 
@@ -889,9 +841,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // subscribe with params
-    // -----------------------------------------------------------------
 
     describe('subscribe with params', function () {
 
@@ -905,9 +855,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // unsubscribe with params filtering
-    // -----------------------------------------------------------------
 
     describe('unsubscribe with params', function () {
 
@@ -925,9 +873,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // latest_action_index from message data
-    // -----------------------------------------------------------------
 
     describe('latest_action_index tracking', function () {
 
@@ -945,9 +891,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // _send when not connected (no-op)
-    // -----------------------------------------------------------------
 
     describe('_send when not connected', function () {
 
@@ -964,9 +908,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // WebSocket constructor throw (sync URL error)
-    // -----------------------------------------------------------------
 
     describe('WebSocket constructor sync throw', function () {
 
@@ -992,9 +934,7 @@ describe('WebSocketClient', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // _resubscribe: direct unit test
-    // -----------------------------------------------------------------
 
     describe('_resubscribe', function () {
 

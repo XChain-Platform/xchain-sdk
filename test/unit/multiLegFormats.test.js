@@ -16,7 +16,7 @@
  *
  * SEND v1/v2/v3, DESTROY v1/v2 and AIRDROP v1-v3 REPEAT field names, and
  * the wire accepts N repetitions of the group even though formats.js
- * spells out the canonical two. Before  the serializer walked the
+ * spells out the canonical two. Earlier, the serializer walked the
  * format field list against a FLAT field map, so every repetition read
  * the same fields[NAME] and leg 2 echoed leg 1: a well-formed action that
  * paid one recipient twice, with no error anywhere.
@@ -65,11 +65,9 @@ function buildSend(params) {
 }
 
 
-// ===========================================================================
 // Group derivation
-// ===========================================================================
 
-describe(' FormatSelector.getRepeatedGroup()', function () {
+describe('FormatSelector.getRepeatedGroup()', function () {
 
     for (const key of Object.keys(REPEATED)) {
         const [action, version] = key.split('|');
@@ -106,11 +104,9 @@ describe(' FormatSelector.getRepeatedGroup()', function () {
 });
 
 
-// ===========================================================================
 // The loud refusal: a flat map against a repeated-field format
-// ===========================================================================
 
-describe(' serialize() refuses a flat field map on a repeated format', function () {
+describe('serialize() refuses a flat field map on a repeated format', function () {
 
     it('SEND v1 fed flat fields throws instead of echoing leg 1', function () {
         let err = null;
@@ -157,11 +153,9 @@ describe(' serialize() refuses a flat field map on a repeated format', function 
 });
 
 
-// ===========================================================================
 // Per-leg expansion
-// ===========================================================================
 
-describe(' serialize() expands LEGS positionally', function () {
+describe('serialize() expands LEGS positionally', function () {
 
     it('SEND v1 emits two DISTINCT legs under one shared TICK and MEMO', function () {
         const out = FormatSelector.serialize('SEND', 1, {
@@ -272,11 +266,9 @@ describe(' serialize() expands LEGS positionally', function () {
 });
 
 
-// ===========================================================================
 // Version selection
-// ===========================================================================
 
-describe(' select() with legs', function () {
+describe('select() with legs', function () {
 
     it('one leg picks the single-leg v0 (shortest)', function () {
         const sel = FormatSelector.select('SEND', { LEGS: [{ TICK: 'AAA', AMOUNT: 5, DESTINATION: ADDR_A }] });
@@ -343,11 +335,9 @@ describe(' select() with legs', function () {
 });
 
 
-// ===========================================================================
 // Validator rules
-// ===========================================================================
 
-describe(' validator rules for LEGS', function () {
+describe('validator rules for LEGS', function () {
 
     const validator = new Validator(new Utility());
 
@@ -414,11 +404,9 @@ describe(' validator rules for LEGS', function () {
 });
 
 
-// ===========================================================================
 // createAction end to end
-// ===========================================================================
 
-describe(' createAction() with legs', function () {
+describe('createAction() with legs', function () {
 
     it('accepts camelCase leg keys and normalizes per-leg amounts', function () {
         const res = buildSend({
@@ -463,11 +451,9 @@ describe(' createAction() with legs', function () {
 });
 
 
-// ===========================================================================
 // Round trip through decoder.parse (mirrors the indexer's leg extraction)
-// ===========================================================================
 
-describe(' multi-leg round trip', function () {
+describe('multi-leg round trip', function () {
 
     // Intended legs per SEND version, for 1..4 legs. The parse side must
     // recover exactly these, once each, in order.
@@ -534,11 +520,9 @@ describe(' multi-leg round trip', function () {
 });
 
 
-// ===========================================================================
 // Conformance with the indexer's leg extraction (the consensus arbiter)
-// ===========================================================================
 
-describe(' indexer leg-extraction conformance', function () {
+describe('indexer leg-extraction conformance', function () {
 
     /*
      * Vendored index arithmetic from xchain-indexer/src/actions/send.js
@@ -608,7 +592,7 @@ describe(' indexer leg-extraction conformance', function () {
     }
 
     it('the pre-fix flat serialization would have paid one address twice', function () {
-        // What serialize() emitted before  for flat SEND v1 params
+        // What serialize() emitted before the fix, for flat SEND v1 params
         const preFix = 'SEND|1|XCHAIN|5|' + ADDR_A + '|5|' + ADDR_A + '|hi';
         const sends = indexerSends(preFix);
         expect(sends).to.have.length(2);

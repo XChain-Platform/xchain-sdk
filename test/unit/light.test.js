@@ -179,10 +179,10 @@ describe('SPV Phase 4: sdk.light pure verifiers', function () {
         assert.strictEqual(light.verifyBalanceProof(proof, stateRoot, CHAIN, NET).reason, 'KEY_MISMATCH');
     });
 
-    // ---- binding a proof to the REQUESTED identity, not just the echoed one ----
+    // binding a proof to the REQUESTED identity, not just the echoed one
     // Every verifier re-derives its SMT key from fields carried IN the proof, so a
     // valid proof for a DIFFERENT question passes. The explorer's contract-state
-    // double-decode made that happen for real ( frontier, 2026-08-06): a
+    // double-decode made that happen for real (frontier, 2026-08-06): a
     // request for `a%41b` was answered, verifiably, for `aAb`.
 
     it('verifyBalanceProof ACCEPTS a proof that matches the requested identity', function () {
@@ -211,7 +211,7 @@ describe('SPV Phase 4: sdk.light pure verifiers', function () {
                                                      { contract_index: 7, state_key: 'a%41b' });
         assert.strictEqual(bound.verified, false);
         assert.strictEqual(bound.reason, 'REQUESTED_IDENTITY_MISMATCH');
-        // ...and the honest answer still verifies against the same expectation.
+        //...and the honest answer still verifies against the same expectation.
         const honest = buildContractStateProof(7, 'a%41b', '"v"');
         assert.strictEqual(light.verifyContractStateProof(honest.proof, honest.stateRoot, CHAIN, NET,
                                                           { contract_index: 7, state_key: 'a%41b' }).verified, true);
@@ -270,7 +270,7 @@ describe('SPV Phase 4: sdk.light pure verifiers', function () {
         assert.strictEqual(r.reason, 'SUBROOT_SLOT_MISMATCH');
     });
 
-    // ---- verifyLockedBalanceProof (XCHAIN_ESC, SPV sub-tree spec §3 Stage B) ----
+    // verifyLockedBalanceProof (XCHAIN_ESC, SPV sub-tree spec §3 Stage B)
     // A locked proof is a balance proof in a second key domain of the SAME
     // balances_root, so the builder just swaps the key derivation. The extra
     // rule under test is LIVENESS: the SDK's own activation carrier decides
@@ -491,7 +491,7 @@ describe('SPV Phase 4: sdk.light.verifyBalance end-to-end (signed checkpoint, mo
     });
 
     // The response's `height` field is NOT hashed into the Merkle proof, so it is a free
-    // label a drifted or hostile explorer can set at will. Until  the binding
+    // label a drifted or hostile explorer can set at will. The binding
     // to cp.block_index was enforced only on the trustedCheckpoint branch, so a genuine
     // old proof relabelled with a fresh height verified with false age metadata.
     it('rejects a server-served proof whose height does not match the served checkpoint', async function () {
@@ -650,7 +650,7 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
         const canonical = checkpoint.canonicalCheckpoint(cp);
         cp.validator_signatures = [{ pubkey: signer.pubkeyHex, sig: crypto.sign(null, Buffer.from(canonical, 'utf8'), signer.privateKey).toString('hex') }];
         const validators = [{ pubkey: signer.pubkeyHex, source: signer.pubkeyHex, weight: '100' }];
-        // The signature is genuine and the quorum is real, but since  the base
+        // The signature is genuine and the quorum is real, but the base
         // verifier ALSO refuses a rootless row once the commitment is active, so this
         // attack is now blocked a layer earlier than the SPV checks below. Those checks
         // stay asserted: they are the backstop if the row ever reaches them.
@@ -920,13 +920,13 @@ describe('SPV Phase 5: validator-set proof + trustless quorum', function () {
         assert.strictEqual(light.verifyCheckpointWithProvenSet(cp, proven).valid, false);
     });
 
-    // . canonicalCheckpoint appends the root suffix only when ALL FOUR
+    // canonicalCheckpoint appends the root suffix only when ALL FOUR
     // commitment fields are present, so a post-activation checkpoint missing one of
     // them is signed over the legacy ROOTLESS preimage. That let an explorer attach
     // an attacker-chosen state_root, drop a sibling field, and have rootless
     // signatures still verify: a root no validator signed, which followForward adopts
     // and verifyBalance then trusts. checkpoint.verifyCheckpoint has rejected this
-    // since ; this verifier did not.
+    // for some time; this verifier did not.
     it('verifyCheckpointWithProvenSet: REJECTS a post-activation checkpoint carrying a root but missing a sibling commitment field', function () {
         for (const missing of ['block_merkle_root', 'state_root_version', 'block_merkle_version']) {
             const s1 = signer(), s2 = signer();
@@ -1120,7 +1120,7 @@ describe('SPV §7.3: rotation-aware pinned path (followForward)', function () {
             block_merkle_version: 1, validator_signatures: [] };
     }
 
-    // ── the followForward primitive itself (previously untested) ──────────────
+    // ── the followForward primitive itself (previously untested)
 
     it('followForward adopts a rotated checkpoint proven against the trusted stakes_root', async function () {
         const s1 = rsigner();

@@ -90,10 +90,10 @@ function toBytes(v, label) {
 // Parse an operator-supplied satoshi bound to an EXACT u64, or null if it cannot be
 // represented exactly. Accepts bigint, an integer Number, and a digit string, because
 // a config value above 2^53 can only reach us intact as one of the latter two.
-// Number() would silently round it, which is the whole defect ().
+// Number() would silently round it, which is the whole defect.
 //
-// SAFE integer, not merely integer (). A Number above 2^53-1 arrives here
-// ALREADY rounded, so accepting it would launder a lossy value into a cap this file
+// SAFE integer, not merely integer. A Number above 2^53-1 arrives here ALREADY
+// rounded, so accepting it would launder a lossy value into a cap this file
 // then compares exactly - the same defect one step later. Such a cap must be a
 // bigint or a digit string; callers fail closed on the null.
 function exactU64(v) {
@@ -139,7 +139,7 @@ function isStandardPaymentScript(script) {
 // quadratic sighash work becomes a denial of service.
 const DEFAULT_MAX_COSIGN_INPUTS = 32;
 
-//  §3.9: the Taproot envelope needs a tap-tweaked key path, a script
+// §3.9: the Taproot envelope needs a tap-tweaked key path, a script
 // path, and an action read out of a leaf script. All three derive from public
 // bytes in cosigner/envelope.js, so the daemon and the agent compute them
 // independently and neither has to trust the other's tweak (the G3 property).
@@ -283,7 +283,7 @@ class CoSigner {
         // fraction is chain-specific (a low-unit-value chain can pay ~all of a
         // small input as fee), so no proportional default can tell a legitimate
         // high fee from a drain without operator knowledge.
-        // Parsed with exactU64, not Number() (). Both enforcement sites
+        // Parsed with exactU64, not Number(). Both enforcement sites
         // below compare in BigInt, so a Number() hop rounded the cap BEFORE it was
         // enforced and the daemon could approve a fee above what the operator set.
         // This is the same parse allowedOutputs[].maxValue already uses; the cap is
@@ -330,7 +330,7 @@ class CoSigner {
             this.aggregateXOnly = Buffer.from(agg.xOnlyPubkey);
             // The UNTWEAKED cooperative aggregate MuSig2(agent, daemon), which is
             // the envelope commit tree's internal key and its leaf's OP_CHECKSIG
-            // key in BOTH account shapes . On a 2-of-2 it is the same
+            // key in BOTH account shapes. On a 2-of-2 it is the same
             // bytes as aggregateXOnly; on a 2-of-3 it is the account tap tree's
             // internal key, so a reveal stays a no-tweak session either way.
             this.internalXOnly = Buffer.from(this.musig.aggregateKeys(this.publicKeys, []).xOnlyPubkey);
@@ -382,7 +382,7 @@ class CoSigner {
             // BigInt, not Number: satoshi caps are u64, and Number(9007199254740993n)
             // is 9007199254740992, so an output ONE unit above a >2^53 cap compared
             // equal and was approved. The rest of this file already reconciles fees
-            // in BigInt for the same reason (see _toU64) ().
+            // in BigInt for the same reason (see _toU64).
             const maxValue = exactU64(o.maxValue);
             if (maxValue === null)
                 throw new Error(`allowedOutputs[${i}].maxValue must be a non-negative integer (number, bigint, or digit string)`);
@@ -449,7 +449,7 @@ class CoSigner {
                 if (this.maxFeeSats === null)
                     return this._deny('ENVELOPE_COMMIT_UNBOUNDED',
                         'an envelope commit prefunds the reveal fee, so maxFeeSats must be set to bound it');
-                // Same exact-u64 comparison as the allowed-output caps below ():
+                // Same exact-u64 comparison as the allowed-output caps below:
                 // a value Number() cannot hold exactly must not be compared as a Number.
                 const commitValue = this._toU64(out.value);
                 if (commitValue === null || commitValue > this.maxFeeSats)
@@ -460,7 +460,7 @@ class CoSigner {
             // (c) An operator-authorized native leg (COINPAY recipient / fee output).
             const match = this.allowedOutputs.find((a) => out.script.equals(a.script));
             if (match) {
-                // Exact u64 arithmetic end to end (): a value this policy
+                // Exact u64 arithmetic end to end: a value this policy
                 // cannot represent exactly is refused rather than rounded into the cap.
                 const value = this._toU64(out.value);
                 if (value === null)
@@ -622,7 +622,7 @@ class CoSigner {
             else if (!wu.script.equals(accountScript)) return this._deny('MIXED_INPUT_SCRIPTS', { index: i });
         }
 
-        // 1b. Envelope context ( §3.9). Present only when the caller
+        // 1b. Envelope context (§3.9). Present only when the caller
         //     supplies the envelope SCRIPT; the script is not a trust transfer
         //     the way a raw tweak would be (G3), because this daemon parses it,
         //     matches it against the §3.2 grammar, checks it commits to this
@@ -630,7 +630,7 @@ class CoSigner {
         //     asked to approve straight out of it. The role is DERIVED from the
         //     PSBT, never taken from the request.
         //     A 2-of-3 account composes its own two recovery leaves into the
-        //     commit tree alongside the envelope leaf (, tree shape and
+        //     commit tree alongside the envelope leaf (tree shape and
         //     rationale in envelope.js). Nothing is improvised: the leaves are
         //     re-derived here from the same three participant public keys that
         //     produced the account, so the commit output keeps the same
@@ -750,7 +750,7 @@ class CoSigner {
         //    The three shapes are selected EXPLICITLY rather than by falling
         //    through to this.tweaks: a reveal signs the leaf's bare aggregate, so
         //    on a 2-of-3 (where this.tweaks is the account's key-path tweak) the
-        //    fall-through produced a signature under the wrong key .
+        //    fall-through produced a signature under the wrong key.
         const signatures = [];
         const envTweaks = envelopeRoundTweaks(env, this.tweaks);
         for (const it of inputs) {
@@ -848,5 +848,5 @@ module.exports = CoSigner;
 module.exports.taprootKeyPathSighash = taprootKeyPathSighash;
 // Exported rather than copied: exactU64 is what rejects a non-integer or negative
 // satoshi bound, and a duplicated twin is where the Number() rounding this parser
-// exists to prevent creeps back in (#3869).
+// exists to prevent creeps back in.
 module.exports.exactU64 = exactU64;

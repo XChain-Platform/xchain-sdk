@@ -21,7 +21,7 @@
 // Must load before any PSBT is parsed or signed: teaches bitcoinjs-lib and
 // bip174 to carry satoshi values above 2^53-1 as BigInt, so a PSBT the
 // encoder built around a >2^53-1-sat DOGE output can be signed, finalized,
-// and extracted here (; mirrors xchain-encoder/src/applyBufferutilsPatch.js).
+// and extracted here (mirrors xchain-encoder/src/applyBufferutilsPatch.js).
 require('./applyBufferutilsPatch');
 const bitcoin = require('bitcoinjs-lib');
 const psbtutils = require('bitcoinjs-lib/src/psbt/psbtutils');
@@ -64,7 +64,7 @@ function serializePrevTx(tx) {
             sequence: inp.sequence >>> 0,
         })),
         bin_outputs: tx.outs.map((out) => ({
-            // String(bigint) is exact; the Number() hop rounded above 2^53 (#3922).
+            // String(bigint) is exact; the Number() hop rounds above 2^53.
             amount: String(out.value),
             script_pubkey: out.script.toString('hex'),
         })),
@@ -690,17 +690,7 @@ class WalletUtils {
     }
 
     /**
-     * Sign + finalize a P2SH/P2WSH reveal PSBT (phase 2 of large-action
-     * encoding). Every input is a data-carrying reveal input, so each is
-     * finalized with the custom XChain finalizer rather than the default.
-     *
-     * @param {string} psbtHex - phase-2 PSBT hex from encoder.spendP2sh
-     * @param {string} wif
-     * @param {{ maximumFeeRate?: number }} [opts] - sat/vB fee ceiling override
-     * @returns {{ txHex: string, txid: string, psbtHex: string }}
-     */
-    /**
-     * Sign the REVEAL half of a Taproot envelope pair ( §3.2/§3.5, ).
+     * Sign the REVEAL half of a Taproot envelope pair (envelope spec §3.2/§3.5).
      *
      * Distinct from signRevealPsbt, which signs a P2SH/P2WSH chunk-lane reveal with
      * ECDSA and the xchain reveal finalizer. An envelope reveal is a BIP341
@@ -765,6 +755,16 @@ class WalletUtils {
         };
     }
 
+    /**
+     * Sign + finalize a P2SH/P2WSH reveal PSBT (phase 2 of large-action
+     * encoding). Every input is a data-carrying reveal input, so each is
+     * finalized with the custom XChain finalizer rather than the default.
+     *
+     * @param {string} psbtHex - phase-2 PSBT hex from encoder.spendP2sh
+     * @param {string} wif
+     * @param {{ maximumFeeRate?: number }} [opts] - sat/vB fee ceiling override
+     * @returns {{ txHex: string, txid: string, psbtHex: string }}
+     */
     signRevealPsbt(psbtHex, wif, opts) {
         if (!psbtHex || typeof psbtHex !== 'string') {
             throw new SDKWalletError('INVALID_PSBT', 'PSBT hex string is required.');
@@ -821,7 +821,7 @@ class WalletUtils {
      * input/output envelope without touching bitcoinjs-lib.
      *
      * A satoshi value is a Number when exactly representable and an exact decimal
-     * STRING above 2^53-1 (#3922), matching applyBufferutilsPatch's own contract.
+     * STRING above 2^53-1, matching applyBufferutilsPatch's own contract.
      *
      * The wallet tracks BIP32 derivation paths out-of-band (on its own
      * Address records), so the returned shape deliberately omits
@@ -887,7 +887,7 @@ class WalletUtils {
             if (psbtInput.witnessUtxo) {
                 // Widen ONLY above 2^53, matching applyBufferutilsPatch's own contract:
                 // a Number stays a Number, a BigInt becomes an exact decimal string
-                // rather than a rounded double (#3922).
+                // rather than a rounded double.
                 value = typeof psbtInput.witnessUtxo.value === 'bigint'
                     ? String(psbtInput.witnessUtxo.value) : psbtInput.witnessUtxo.value;
                 scriptPubKeyBuf = psbtInput.witnessUtxo.script;
@@ -911,8 +911,8 @@ class WalletUtils {
                     `Input ${i}: PSBT missing both witnessUtxo and nonWitnessUtxo.`);
             }
 
-            // : report the full previous transaction whenever the PSBT
-            // carries one, even alongside a witnessUtxo. This used to be an
+            // Report the full previous transaction whenever the PSBT carries one,
+            // even alongside a witnessUtxo. This used to be an
             // else-if, so a PSBT carrying BOTH silently lost its prev tx - and
             // a hardware signer cannot sign without it, because Ledger derives
             // the outpoint it signs from those bytes rather than from the

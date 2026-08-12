@@ -31,7 +31,7 @@ const numeric = require('../numeric.js');
 const { resolveDispenserState, resolveGiveRemaining } = require('../resolvers.js');
 
 /*
- * PRICE v1 oracle usage fee . A Mode B dispenser - one naming an
+ * PRICE v1 oracle usage fee. A Mode B dispenser - one naming an
  * ORACLE_ADDRESS - pays the oracle operator up front, as a real native-coin
  * OUTPUT inside the DISPENSER transaction, and the indexer rejects the open or
  * refill when that output is missing or short of the tolerance band.
@@ -44,8 +44,8 @@ const { resolveDispenserState, resolveGiveRemaining } = require('../resolvers.js
  * it unverified here keeps a whole rejection class from reading as a clean
  * pass on any surface that pre-flights without composing.
  *
- *  changed what TIER 1 does with the same rule, not what Tier 2 can see:
- * a read-only dry run has no transaction and therefore no outputs, so the
+ * A later change altered what TIER 1 does with the same rule, not what Tier 2
+ * can see: a read-only dry run has no transaction and therefore no outputs, so the
  * output half could only ever fail there, and it demanded the very amount the
  * refused quote existed to compute. The quote path now checks the knowable half
  * (the oracle has an effective price, valued against a validator price) and
@@ -126,8 +126,8 @@ async function checkDispenser(ctx) {
     }
 
     // A v2 edit that tops up GIVE_ESCROW is a REFILL, and refills carry two
-    // rules a plain edit does not: the MAX_REFILLS cap  and, on a Mode
-    // B dispenser, the oracle usage fee on the amount being added .
+    // rules a plain edit does not: the MAX_REFILLS cap and, on a Mode
+    // B dispenser, the oracle usage fee on the amount being added.
     if (version !== '2') return;
     const topUp = ctx.field('GIVE_ESCROW');
 
@@ -136,7 +136,7 @@ async function checkDispenser(ctx) {
     // the wire there); an EDIT targets the dispenser by action index and never
     // restates the flag, so only this state lookup can see it. Without the rule
     // the edit debited GIVE_ESCROW while both terminal paths credit nothing back,
-    // stranding the balance (xchain-indexer src/actions/dispenser.js, ).
+    // stranding the balance (xchain-indexer src/actions/dispenser.js).
     //
     // Ahead of the refill early-return below on purpose: the handler guards with
     // isNull, not isPositive, so a supplied GIVE_ESCROW of 0 is still supplied and

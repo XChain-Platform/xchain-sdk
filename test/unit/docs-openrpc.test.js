@@ -1,7 +1,7 @@
-//  doctrine test-coverage program: unit coverage for the docs component
-// (docs/openrpc.build.js -> docs/openrpc.json), the published contract for the
-// SDK's JSON-RPC surface. Pins the generated artifact's shape without invoking
-// the side-effecting build script.
+// Unit coverage for the docs component (docs/openrpc.build.js ->
+// docs/openrpc.json), the published contract for the SDK's JSON-RPC surface.
+// Pins the generated artifact's shape without invoking the side-effecting
+// build script.
 
 const assert = require('assert');
 const doc = require('../../docs/openrpc.json');

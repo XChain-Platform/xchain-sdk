@@ -82,7 +82,7 @@ describe('pre-flight Tier-2 per-action matrix', function () {
             expect(has(r, 'TOKEN_NOT_FOUND')).to.equal(false); // ISSUE excluded from token-exists
         });
 
-        // MAX_SUPPLY fractional precision at the decimals CONSENSUS uses ().
+        // MAX_SUPPLY fractional precision at the decimals CONSENSUS uses.
         // ISSUE v0 is VERSION|TICK|MAX_SUPPLY|MAX_MINT|DECIMALS|...
         it('a fractional MAX_SUPPLY on a CREATE with DECIMALS 0 is an error', async function () {
             const r = await reportFor('ISSUE|0|NEWTOK|1.5||0', { getToken: () => notFound() });
@@ -224,7 +224,7 @@ describe('pre-flight Tier-2 per-action matrix', function () {
         // truthy STRING, so the headroom path ran with maxSupply=0 and produced a
         // NEGATIVE headroom, making every mint on an uncapped token an error. At/after
         // the UNCAPPED_MAX_SUPPLY_ZERO flag-day the chain accepts exactly these mints
-        // (xchain-indexer src/actions/mint.js, ), so the finding is a false
+        // (xchain-indexer src/actions/mint.js), so the finding is a false
         // block of a valid action, which spec §4.2 forbids.
         it('supply.max of 0 (ISSUE omitted MAX_SUPPLY) is uncapped, not a zero ceiling', async function () {
             const tok = realToken({ supply: { current: '80', max: '0', decimals: 0 } });
@@ -340,7 +340,7 @@ describe('pre-flight Tier-2 per-action matrix', function () {
         });
 
         // The indexer keeps minting new terminal statuses (`empty`,
-        // `max_dispenses_reached` from the  caps). Gating on
+        // `max_dispenses_reached` from the refill caps). Gating on
         // anything-but-open is what keeps this from going stale each time.
         it('treats an unrecognised terminal status as not-open', async function () {
             const r = await reportFor('DISPENSE|0|42', {
@@ -400,7 +400,7 @@ describe('pre-flight Tier-2 per-action matrix', function () {
         });
     });
 
-    describe('DISPENSER refill ( cap +  oracle fee)', function () {
+    describe('DISPENSER refill (refill cap + oracle fee)', function () {
         it('declares the refill cap unverified: no endpoint exposes per-edit escrow', async function () {
             const r = await reportFor('DISPENSER|2|42|100', {
                 getAction: () => dispenserAction(),
@@ -446,8 +446,8 @@ describe('pre-flight Tier-2 per-action matrix', function () {
     // An ownership dispenser never holds balance escrow, on edit as on create.
     // The create-time half is authoring-only and already lives in validator.js;
     // an EDIT never restates GIVE_OWNERSHIP, so only a state lookup can see it
-    // (xchain-indexer src/actions/dispenser.js, ).
-    describe('DISPENSER ownership-escrow edit ()', function () {
+    // (xchain-indexer src/actions/dispenser.js).
+    describe('DISPENSER ownership-escrow edit', function () {
         it('warns when an edit tops up escrow on an ownership dispenser', async function () {
             const r = await reportFor('DISPENSER|2|42|100', {
                 getAction: () => dispenserAction({ give_ownership: 1 }),
@@ -516,7 +516,7 @@ describe('pre-flight Tier-2 per-action matrix', function () {
     });
 
     describe('native-fee forfeiture disclosure (FEE_CHARGING_ACTIONS)', function () {
-        it('#3893: BET warns about native-fee forfeiture like every other fee-charging action', async function () {
+        it('BET warns about native-fee forfeiture like every other fee-charging action', async function () {
             // bet.js calls createFeesObject and takes the paymentMode === 'native'
             // branch, so a BET paid in native coin forfeits it exactly as ORDER does.
             const r = await reportFor('BET|2|42|1|100|memo', {});

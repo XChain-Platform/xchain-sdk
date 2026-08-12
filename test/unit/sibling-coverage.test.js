@@ -13,7 +13,7 @@
 // sibling with existsSync and calls this.skip() when it is absent. That is the
 // right behaviour for a single-repo checkout, and it is invisible: mocha reports
 // a skipped test as `pending`, the suite still exits 0, and the push gate prints
-// PASS. Measured on test-host 2026-08-12, the venue ran 3444 passing / 40 pending
+// PASS. Measured on a CI venue, the run reported 3444 passing / 40 pending
 // where a full local checkout runs 3515 / 4, so ~36 vendored-copy guards had
 // silently not run and nothing in the output said so.
 //

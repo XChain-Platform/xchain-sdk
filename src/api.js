@@ -99,7 +99,7 @@ async function startApi() {
     // CORS disabled by default. CORS_ORIGIN is a comma-separated ALLOWLIST, not a
     // single origin: handing `cors` the raw string echoes it back verbatim to every
     // caller, which is a multi-value header no browser accepts. See
-    // src/corsOrigin.js .
+    // src/corsOrigin.js.
     app.use(cors({ origin: parseCorsOrigin(process.env.CORS_ORIGIN) }));
 
     // Batch fan-out cap, BEFORE the auth gate and the router: capping ahead of

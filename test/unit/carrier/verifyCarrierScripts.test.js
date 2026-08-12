@@ -55,7 +55,7 @@ function psbtWith(scripts) {
 // of a 154-byte action) and the decoder strips it by decompiling the
 // reassembly. These fixtures used to slice the raw action string, which the
 // encoder never emits - so they agreed with a verifier that could not accept a
-// single real transaction .
+// single real transaction.
 function compiledPayload(action) {
     return bitcoin.script.compile([Buffer.from(action, 'utf8')]);
 }
@@ -128,7 +128,7 @@ describe('carrier-script verification (§5.3.2)', function () {
         });
     });
 
-    // : the shape a real encoder emits, pinned end to end.
+    // The shape a real encoder emits, pinned end to end.
     //
     // Observed on the BTC regtest stack for a three-recipient SEND: 154 action
     // bytes, one P2SH carrier, and a redeem script whose leading push is 156

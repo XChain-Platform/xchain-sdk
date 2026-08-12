@@ -30,7 +30,7 @@ describe('pre-flight Tier 1 classification', function () {
         expect(out.blockIndex).to.equal(100);
     });
 
-    // : /preflight echoes the fee its dry-run already computed, and Tier 1
+    // /preflight echoes the fee its dry-run already computed, and Tier 1
     // carries the raw response as `quote`, which is what lands on report.quote.
     // A confirm screen reads the fee from there, so filtering it here would cost
     // the caller an extra /feequote round-trip.
@@ -102,7 +102,7 @@ describe('pre-flight Tier 1 classification', function () {
         expect(out.kind).to.equal('unavailable');
     });
 
-    describe(' /preflight endpoint preference', function () {
+    describe('/preflight endpoint preference', function () {
         it('prefers getPreflight when the explorer exposes it', async function () {
             let usedPreflight = false, usedFeeQuote = false;
             const sdk = { explorer: {

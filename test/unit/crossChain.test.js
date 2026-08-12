@@ -30,10 +30,6 @@ function makeSdk(coin, overrides = {}) {
 
 describe('CrossChainHelper', function () {
 
-    /*
-     *  Constructor
-     */
-
     describe('constructor', function () {
         it('constructs with 2 SDKs', function () {
             let helper = new CrossChainHelper({ BTC: makeSdk('BTC'), LTC: makeSdk('LTC') });
@@ -94,10 +90,6 @@ describe('CrossChainHelper', function () {
         });
     });
 
-    /*
-     *  _requireSDK()
-     */
-
     describe('_requireSDK()', function () {
         let helper;
         beforeEach(function () {
@@ -125,10 +117,6 @@ describe('CrossChainHelper', function () {
             }
         });
     });
-
-    /*
-     *  createSwap()
-     */
 
     describe('createSwap()', function () {
         it('calls session.swap on the give chain', async function () {
@@ -172,10 +160,6 @@ describe('CrossChainHelper', function () {
         });
     });
 
-    /*
-     *  link()
-     */
-
     describe('link()', function () {
         it('submits link on coin1 by default', async function () {
             let capturedParams;
@@ -212,10 +196,6 @@ describe('CrossChainHelper', function () {
             assert.strictEqual(usedChain, 'LTC');
         });
     });
-
-    /*
-     *  parallel()
-     */
 
     describe('parallel()', function () {
         it('runs all actions and returns results in order', async function () {
@@ -308,10 +288,6 @@ describe('CrossChainHelper', function () {
         });
     });
 
-    /*
-     *  waitForAll()
-     */
-
     describe('waitForAll()', function () {
         it('waits for actions on multiple chains', async function () {
             let helper = new CrossChainHelper({ BTC: makeSdk('BTC'), LTC: makeSdk('LTC') });
@@ -347,10 +323,6 @@ describe('CrossChainHelper', function () {
             }
         });
     });
-
-    /*
-     *  getAllBalances()
-     */
 
     describe('getAllBalances()', function () {
         it('returns balances keyed by chain', async function () {

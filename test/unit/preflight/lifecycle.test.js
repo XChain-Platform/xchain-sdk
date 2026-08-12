@@ -36,7 +36,7 @@ describe('pre-flight lifecycle', function () {
             expect(runs).to.equal(2);
         });
 
-        //  / §4.7: two approval windows can share (chainId, actionString,
+        // §4.7: two approval windows can share (chainId, actionString,
         // source) yet carry DIFFERENT reservation deltas - the second window
         // nets the first's approved-but-unbroadcast amount. If localDeltas were
         // omitted from the key, the delta-carrying pre-flight would coalesce

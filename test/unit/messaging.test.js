@@ -28,9 +28,7 @@ describe('MessagingUtils @crypto @regression', function () {
     let msg;
     beforeEach(function () { msg = new MessagingUtils(NETWORK); });
 
-    // -----------------------------------------------------------------------
-    //  ECIES (method 1): string payloads
-    // -----------------------------------------------------------------------
+    // ECIES (method 1): string payloads
     describe('ECIES (string)', function () {
 
         it('round-trips a plaintext message', function () {
@@ -118,9 +116,7 @@ describe('MessagingUtils @crypto @regression', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  ECIES (method 1): binary payloads (gated-content key handoff)
-    // -----------------------------------------------------------------------
+    // ECIES (method 1): binary payloads (gated-content key handoff)
     describe('ECIES (bytes)', function () {
 
         it('round-trips a 33-byte binary key handoff intact', function () {
@@ -145,9 +141,7 @@ describe('MessagingUtils @crypto @regression', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  ECDH (method 2): session communication
-    // -----------------------------------------------------------------------
+    // ECDH (method 2): session communication
     describe('ECDH', function () {
 
         it('generateSessionKey returns a 33-byte compressed pubkey', function () {
@@ -188,12 +182,10 @@ describe('MessagingUtils @crypto @regression', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  KDF versioning + cross-method domain separation (fix #3520)
-    // -----------------------------------------------------------------------
+    // KDF versioning + cross-method domain separation
     describe('KDF v1 (HKDF-SHA256) versioning and domain separation', function () {
 
-        // : the derivation used to call crypto.hkdfSync, which does not
+        // The derivation used to call crypto.hkdfSync, which does not
         // exist in the browser crypto shims the wallet shells build against -
         // it threw "crypto2.hkdfSync is not a function" and killed every v1
         // encrypt and decrypt outside Node, i.e. messaging in the whole app.
@@ -269,7 +261,7 @@ describe('MessagingUtils @crypto @regression', function () {
 
         it('still decrypts a legacy (v0, no version byte, bare-SHA256) ECIES blob', function () {
             // Build a legacy blob by hand: [ephemeralPubkey(33)][iv][authTag][data]
-            // keyed by SHA256(raw ecdh product), exactly the pre-#3520 layout.
+            // keyed by SHA256(raw ecdh product), exactly the legacy layout.
             const bob = keypair();
             const ephemeral = keypair();
             const legacyKey = msg._deriveECDHSecretLegacy(ephemeral.privateKey, bob.publicKey);
@@ -309,9 +301,7 @@ describe('MessagingUtils @crypto @regression', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  AES (method 3): pre-shared key
-    // -----------------------------------------------------------------------
+    // AES (method 3): pre-shared key
     describe('AES', function () {
 
         it('round-trips with a 32-byte key', function () {
@@ -358,9 +348,7 @@ describe('MessagingUtils @crypto @regression', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  High-level getMessages(): decryption integration
-    // -----------------------------------------------------------------------
+    // High-level getMessages(): decryption integration
     describe('ECDH/AES (bytes)', function () {
 
         it('sessionEncryptBytes/sessionDecryptBytes round-trip arbitrary binary', function () {
@@ -449,7 +437,7 @@ describe('MessagingUtils @crypto @regression', function () {
             expect(out[0].encrypted).to.equal(false);
         });
 
-        // : the doubles above return a BARE ARRAY, but a real explorer
+        // the doubles above return a BARE ARRAY, but a real explorer
         // serves `{ data: [...], total }` and the client hands that body back
         // untouched. Requiring an array meant every live response was discarded
         // and the inbox came back empty - an on-chain, valid MESSAGE addressed
@@ -589,13 +577,11 @@ describe('MessagingUtils @crypto @regression', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  getMessages(): ECDH pubkey-lookup budget 
+    //  getMessages(): ECDH pubkey-lookup budget
     //
     //  Each ECDH-fallback cache miss is an explorer round-trip, so an inbox
     //  full of undecryptable messages from unique senders must not fan out one
     //  request per message.
-    // -----------------------------------------------------------------------
     describe('getMessages(): ECDH pubkey-lookup cap', function () {
 
         // `count` rows, each from a distinct sender, carrying a blob that is
@@ -730,9 +716,7 @@ describe('MessagingUtils @crypto @regression', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  ECIES binary: error paths
-    // -----------------------------------------------------------------------
+    // ECIES binary: error paths
     describe('ECIES bytes: additional error paths', function () {
 
         it('throws INVALID_WIF on bad WIF in eciesDecryptBytes', function () {
@@ -750,9 +734,7 @@ describe('MessagingUtils @crypto @regression', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  deriveSharedSecret(): error paths
-    // -----------------------------------------------------------------------
+    // deriveSharedSecret(): error paths
     describe('deriveSharedSecret(): error paths', function () {
 
         it('throws INVALID_WIF on bad WIF', function () {
@@ -767,9 +749,7 @@ describe('MessagingUtils @crypto @regression', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  getPublicKey()
-    // -----------------------------------------------------------------------
+    // getPublicKey()
     describe('getPublicKey()', function () {
 
         it('throws INVALID_ADDRESS for missing address', async function () {
@@ -801,9 +781,7 @@ describe('MessagingUtils @crypto @regression', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  getMessages(): encrypted_message without wif (sets encrypted=true)
-    // -----------------------------------------------------------------------
+    // getMessages(): encrypted_message without wif (sets encrypted=true)
     describe('getMessages(): encrypted without wif', function () {
 
         it('marks entry encrypted=true and leaves text=null when encrypted_message present but no wif', async function () {
@@ -865,9 +843,7 @@ describe('MessagingUtils @crypto @regression', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  send(): validation guards (does not need real network calls)
-    // -----------------------------------------------------------------------
+    // send(): validation guards (does not need real network calls)
     describe('send(): validation guards', function () {
 
         it('throws INVALID_WIF when wif is missing', async function () {

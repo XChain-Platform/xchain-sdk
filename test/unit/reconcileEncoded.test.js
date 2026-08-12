@@ -71,7 +71,7 @@ describe('reconcileEncoded (encoder-authored PSBT vs submitted intent)', functio
         assert.throws(() => reconcileEncoded(over, intent), (e) => e.code === 'OUTPUT_OVER_REQUESTED_VALUE');
     });
 
-    it('#3922: a string-valued cap is parsed exactly, not through a rounding Number() hop', function () {
+    it('a string-valued cap is parsed exactly, not through a rounding Number() hop', function () {
         // intent.customOutputs[].value may legitimately be a decimal string (the
         // encoder's allowBig path). toU64(Number(v)) returned null for a string, which
         // zeroed the cap and DENIED an honest reconcile; Number() alone would round a
@@ -121,7 +121,7 @@ describe('reconcileEncoded (encoder-authored PSBT vs submitted intent)', functio
         assert.strictEqual(reconcileEncoded(hex, { network: NET }).fee, 10000n);
     });
 
-    it(': a >2^53 fee cap is compared exactly, not through a rounding Number() hop', function () {
+    it('a >2^53 fee cap is compared exactly, not through a rounding Number() hop', function () {
         // DOGE has no supply cap, so a fee this size is reachable rather than
         // hypothetical. Number('9007199254740993') is 9007199254740992, so the cap
         // arrived one satoshi SHORT of what the caller set and an honest fee landing
@@ -160,7 +160,7 @@ describe('reconcileEncoded (encoder-authored PSBT vs submitted intent)', functio
         assert.throws(() => reconcileEncoded(drain, { network: NET, phaseShapes: ['p2sh', 'p2wsh'] }), (e) => e.code === 'UNRECONCILED_OUTPUT');
     });
 
-    it('a submitted P2SH change address is change, not a funding leg ', function () {
+    it('a submitted P2SH change address is change, not a funding leg', function () {
         // It decompiles identically to a chunk output, so without the submitted-change
         // rule it would be classified as a leg and the next phase would be required to
         // spend it back - a false positive on an address the caller chose.
@@ -190,7 +190,7 @@ describe('reconcileEncoded (encoder-authored PSBT vs submitted intent)', functio
 });
 
 // ---------------------------------------------------------------------------
-// : shape alone is not an authorization.
+// Shape alone is not an authorization.
 //
 // Rule (d) let any p2sh/p2wsh/p2tr output through on shape, and the maxFeeSats
 // ceiling never bounded it: a parked output raises totalOut, which LOWERS the
@@ -217,7 +217,7 @@ function spendingPsbt(prevouts, outputs) {
     return psbt.toHex();
 }
 
-describe('reconcileEncoded funding-leg pins ', function () {
+describe('reconcileEncoded funding-leg pins', function () {
 
     it('psbtPrevouts reads what a PSBT spends, and refuses a partial answer', function () {
         const leg = { script: shapedP2tr(), value: 7000n };
@@ -342,7 +342,7 @@ describe('reconcileEncoded funding-leg pins ', function () {
     });
 });
 
-describe('reconcileEncoded caller-identity change ', function () {
+describe('reconcileEncoded caller-identity change', function () {
 
     it('authorizes a reveal change output against the caller identity that has no funding script', function () {
         // An envelope or chunk reveal spends ONLY the encoder-derived leg, so rule (b)
@@ -369,7 +369,7 @@ describe('reconcileEncoded caller-identity change ', function () {
 });
 
 // ---------------------------------------------------------------------------
-// : an input is not proof the signer owns it.
+// An input is not proof the signer owns it.
 //
 // Rule (b) read "the destination is also an input" as "the destination stays
 // under the signer's control". That holds only for inputs the WIF owns. The
@@ -397,7 +397,7 @@ function psbtWithForeignInput(funding, outputs, foreignValue) {
     return { hex: psbt.toHex(), foreign };
 }
 
-describe('reconcileEncoded foreign-input change ()', function () {
+describe('reconcileEncoded foreign-input change', function () {
 
     it('REJECTS the drain: wallet value sent to a PRE-SIGNED foreign input\'s script', function () {
         const funding = payTo();
@@ -438,20 +438,20 @@ describe('reconcileEncoded foreign-input change ()', function () {
 });
 
 // ---------------------------------------------------------------------------
-// : a cap that will not parse is not "no cap".
+// A cap that will not parse is not "no cap".
 //
 // Both enforcement sites carried `&& parsed !== null`, so a typo'd ceiling
 // silently removed the bound the caller believed it had set. Every sibling
 // exactU64 caller (coSigner.js, recovery.js) fails closed on the same null.
 // ---------------------------------------------------------------------------
 
-describe('reconcileEncoded malformed caps fail closed ()', function () {
+describe('reconcileEncoded malformed caps fail closed', function () {
 
-    // : an UNSAFE integer Number belongs on this list. It looks exact to
+    // An UNSAFE integer Number belongs on this list. It looks exact to
     // Number.isInteger, but JavaScript rounded it before exactU64 ever saw it, so
     // accepting it laundered a lossy value into a cap the fee is then compared
     // against exactly. A cap that large has to arrive as a bigint or digit string,
-    // and the  case above proves both of those forms still pass intact.
+    // and the >2^53 fee-cap case above proves both of those forms still pass intact.
     const MALFORMED = [-1, 1.5, '5o00', '', 'abc', NaN, -1n, {},
                        Number.MAX_SAFE_INTEGER + 1, 9007199254740993];
 

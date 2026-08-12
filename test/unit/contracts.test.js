@@ -19,10 +19,6 @@ describe('ContractUtils', function () {
         utils = new ContractUtils();
     });
 
-    /*
-     *  encode()
-     */
-
     describe('encode()', function () {
         it('base64-encodes a simple JS string', function () {
             let b64 = utils.encode('hello');
@@ -60,10 +56,6 @@ describe('ContractUtils', function () {
         });
     });
 
-    /*
-     *  decode()
-     */
-
     describe('decode()', function () {
         it('decodes a valid base64 string', function () {
             let b64 = Buffer.from('world', 'utf8').toString('base64');
@@ -100,10 +92,6 @@ describe('ContractUtils', function () {
         });
     });
 
-    /*
-     *  checkCodeSize()
-     */
-
     describe('checkCodeSize()', function () {
         it('returns withinLimit=true for small code', function () {
             let result = utils.checkCodeSize('let x = 1;');
@@ -131,10 +119,6 @@ describe('ContractUtils', function () {
             assert.ok(result.withinLimit);
         });
     });
-
-    /*
-     *  validate()
-     */
 
     describe('validate()', function () {
         it('returns valid=true for valid JS', function () {
@@ -198,10 +182,6 @@ describe('ContractUtils', function () {
         });
     });
 
-    /*
-     *  checkFloatUsage()
-     */
-
     describe('checkFloatUsage()', function () {
         it('returns empty array for integer-only code', function () {
             let warnings = utils.checkFloatUsage('var x = 1;');
@@ -222,10 +202,6 @@ describe('ContractUtils', function () {
             assert.ok(Array.isArray(warnings));
         });
     });
-
-    /*
-     *  _countForStatements()
-     */
 
     describe('_countForStatements()', function () {
         it('counts zero for empty code', function () {
@@ -249,10 +225,6 @@ describe('ContractUtils', function () {
             assert.strictEqual(count, 0);
         });
     });
-
-    /*
-     *  suggestGasLimit()
-     */
 
     describe('suggestGasLimit()', function () {
         it('returns a number above minimum base for trivial code', function () {

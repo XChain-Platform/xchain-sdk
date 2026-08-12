@@ -8,7 +8,6 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// ─────────────────────────────────────────────────────────────────────────────
 // Scaffold sources DRIFT + verdict guard.
 //
 // sdk.scaffold() returns sources embedded at build time (src/contract/templates.js,
@@ -16,7 +15,6 @@
 // canonical xchain-contracts repo, or authors scaffold stale code. The drift guard
 // (sha256 of the base64-decoded embed vs the canonical file) catches a stale embed.
 // Skipped when the sibling xchain-contracts checkout is absent.
-// ─────────────────────────────────────────────────────────────────────────────
 
 const assert = require('assert');
 const crypto = require('crypto');

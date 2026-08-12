@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// P3 slice 2: the MuSig2-backed agent submit path. Covers the signer adapter
+// The MuSig2-backed agent submit path. Covers the signer adapter
 // (single-input key-path spend, multi-input fail-closed) and MuSig2AgentSession
 // wiring (aggregate spending account, local policy pre-flight, co-signer as the
 // authoritative gate). The encoder + broadcast are mocked; everything from the
@@ -204,14 +204,14 @@ describe('MuSig2AgentSession', function () {
             policy: Object.assign({ allowedActions: new Set(['SEND']) }, s.coPolicy) });
         const transport = inProcessTransport(co);
         return new MuSig2AgentSession(sdk, 'WIF',
-            // allowUnkeyedSubmits preserves the pre- submit shape so these
+            // allowUnkeyedSubmits preserves the earlier unkeyed submit shape so these
             // tests keep exercising the MuSig2 path rather than the new key requirement,
             // which is covered in agentSession.test.js.
             Object.assign({ allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '100' } }, allowUnkeyedSubmits: true }, localPolicy),
             { coSigner: { transport, publicKeys: s.keys } });
     }
 
-    /* ── construction ─────────────────────────────────────────────── */
+    // construction
 
     it('requires a transport and the full publicKeys set', function () {
         const s = buildAccountAndPsbt(`SEND|0|TOK|5|${DEST}|m`);
@@ -287,7 +287,7 @@ describe('MuSig2AgentSession', function () {
         expect(session.musig2Account.address).to.equal(s.acct.address);
     });
 
-    /* ── submit path ──────────────────────────────────────────────── */
+    // submit path
 
     it('submits an in-policy action and broadcasts a valid aggregate-signed tx', async function () {
         const s = buildAccountAndPsbt(`SEND|0|TOK|5|${DEST}|m`);

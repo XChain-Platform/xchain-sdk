@@ -14,7 +14,7 @@
 
 'use strict';
 
-// ─── Performance: SDK hot-path throughput ─────────────────────────────────────
+// Performance: SDK hot-path throughput
 //
 // validate() and setNumberFormats() run on every action a dapp builds, often in
 // tight loops (batch builders, order books). These are throughput SANITY checks:

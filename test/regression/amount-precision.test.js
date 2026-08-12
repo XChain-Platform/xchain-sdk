@@ -14,7 +14,7 @@
 
 'use strict';
 
-// ─── Regression: amount full-precision in setNumberFormats (fe9161e) ──────────
+// Regression: amount full-precision in setNumberFormats (fe9161e)
 //
 // Commit fe9161e ("preserve full precision for divisible (18-dp) amounts").
 // setNumberFormats casts NUMBER_FIELDS to their wire form. The bug was using
@@ -84,7 +84,7 @@ describe('Regression (fe9161e): amount full-precision wire formatting', function
   });
 });
 
-// ─── Regression: bcnum + bc* helpers preserve full precision (no JS double) ────
+// Regression: bcnum + bc* helpers preserve full precision (no JS double)
 //
 // bcnum used parseFloat/parseInt, and every bc* wrapper re-funnelled its
 // already-correct fixed-notation result back through bcnum, throwing the
@@ -94,7 +94,7 @@ describe('Regression (fe9161e): amount full-precision wire formatting', function
 // returns a full-precision bignumber (matching the indexer) and the wrappers
 // return the fixed string directly.
 
-describe('Regression (#3735): bc* helpers preserve full precision', function () {
+describe('Regression: bc* helpers preserve full precision', function () {
 
   it('getPrice("1","3",64) yields a 64-digit price string, not a ~16-digit double', function () {
     const out = u().getPrice('1', '3', 64);
@@ -130,7 +130,7 @@ describe('Regression (#3735): bc* helpers preserve full precision', function () 
     expect(u().bcnum('Infinity').toString()).to.equal('0');
   });
 
-  it('bcdiv guards against a zero denominator instead of returning Infinity/NaN (#2392)', function () {
+  it('bcdiv guards against a zero denominator instead of returning Infinity/NaN', function () {
     const out = u().bcdiv('1', '0', 64);
     expect(out).to.equal('0.' + '0'.repeat(64));
     expect(/infinity/i.test(out)).to.equal(false);

@@ -15,9 +15,7 @@ const sinon = require('sinon');
 const LifecycleManager = require('../../src/lifecycleManager.js');
 const ActionWaiter = require('../../src/actionWaiter.js');
 
-// ---------------------------------------------------------------------------
-//  Helpers: minimal fake SDK and collaborators
-// ---------------------------------------------------------------------------
+// Helpers: minimal fake SDK and collaborators
 
 // A valid signed P2WPKH tx hex that bitcoinjs-lib can parse (so
 // _extractSpentInputs works without a real PSBT). We build it using
@@ -71,7 +69,7 @@ function buildSignedTx() {
     psbt.addInput({ hash: prevTx.getId(), index: 0, sequence: 0xfffffffd, witnessUtxo: { script: inputScript, value: 100_000 } });
     psbt.addOutput({ script: inputScript, value: 90_000 });
     // The encoder answers UNSIGNED, and reconcileEncoded no longer reads a PRE-SIGNED
-    // input's script as a signer-owned change destination (), so the mock has
+    // input's script as a signer-owned change destination, so the mock has
     // to hand back the pre-signature hex. The signing below exists only to produce a
     // broadcastable txHex/txid for the broadcast mock.
     const unsignedHex = psbt.toHex();
@@ -122,17 +120,13 @@ function makeSdk(overrides = {}, encoderOverrides = {}) {
     return Object.assign({}, defaultSdk, overrides);
 }
 
-// ---------------------------------------------------------------------------
-//  Tests
-// ---------------------------------------------------------------------------
+// Tests
 
 describe('LifecycleManager', function () {
 
     afterEach(() => sinon.restore());
 
-    // -----------------------------------------------------------------------
-    //  Constructor
-    // -----------------------------------------------------------------------
+    // Constructor
     describe('constructor', function () {
         it('stores the sdk reference', function () {
             const sdk = makeSdk();
@@ -141,9 +135,7 @@ describe('LifecycleManager', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  submitAction(): missing WIF
-    // -----------------------------------------------------------------------
+    // submitAction(): missing WIF
     describe('submitAction(): missing WIF', function () {
         it('throws SDKConfigError MISSING_WIF when wif is absent', async function () {
             const sdk = makeSdk();
@@ -168,9 +160,7 @@ describe('LifecycleManager', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  submitAction(): happy path, waitForIndexer=false
-    // -----------------------------------------------------------------------
+    // submitAction(): happy path, waitForIndexer=false
     describe('submitAction(): waitForIndexer=false', function () {
         it('returns result with txid, actionString, encoding without waiting', async function () {
             const sdk = makeSdk();
@@ -277,9 +267,7 @@ describe('LifecycleManager', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  submitAction(): P2SH two-phase path
-    // -----------------------------------------------------------------------
+    // submitAction(): P2SH two-phase path
     describe('submitAction(): P2SH two-phase encoding', function () {
         it('runs phase-2 when encoding is P2SH, broadcasts twice, returns phase-2 txid', async function () {
             const steps = [];
@@ -389,9 +377,7 @@ describe('LifecycleManager', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  submitAction(): waitForIndexer=true
-    // -----------------------------------------------------------------------
+    // submitAction(): waitForIndexer=true
     describe('submitAction(): waitForIndexer=true', function () {
         it('waits for indexer and populates result.indexed', async function () {
             const indexedAction = { action: 'SEND', status: 'valid', tx_hash: 'fakeid' };
@@ -432,12 +418,10 @@ describe('LifecycleManager', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  submitAction(): a chain-REJECTED action must not look like a success
-    //  . These run the REAL ActionWaiter against a fake explorer, so
-    //  they pin the caller-visible contract end to end rather than a stub.
-    // -----------------------------------------------------------------------
-    describe('submitAction(): rejected actions ', function () {
+    // submitAction(): a chain-REJECTED action must not look like a success.
+    // These run the REAL ActionWaiter against a fake explorer, so they pin the
+    // caller-visible contract end to end rather than a stub.
+    describe('submitAction(): rejected actions', function () {
 
         // Fake explorer returning one canned transaction for every poll.
         function explorerReturning(txResult) {
@@ -499,9 +483,7 @@ describe('LifecycleManager', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  _extractSpentInputs()
-    // -----------------------------------------------------------------------
+    // _extractSpentInputs()
     describe('_extractSpentInputs()', function () {
         it('returns array of {txid, vout} objects from a valid PSBT hex', function () {
             const sdk = makeSdk();

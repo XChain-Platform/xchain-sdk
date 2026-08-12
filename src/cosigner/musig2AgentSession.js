@@ -146,7 +146,7 @@ class MuSig2AgentSession extends AgentSession {
         this.musig2Account = account;
 
         // The recovery key goes to the client too: it is what lets the agent
-        // compose the same envelope commit tree the daemon does .
+        // compose the same envelope commit tree the daemon does.
         const client = new CoSignerClient(Object.assign(
             { transport, publicKeys: signingKeys, tweaks: signingTweaks },
             recovery ? { recoveryPublicKey: recovery } : {}));

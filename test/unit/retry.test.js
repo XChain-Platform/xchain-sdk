@@ -23,15 +23,11 @@ const EncoderClient  = require('../../src/encoder.js');
 const { withRetry, isRetryable, getDelay, DEFAULTS } = require('../../src/retry.js');
 
 
-// ---------------------------------------------------------------------------
 // Section 1: Retry utility unit tests
-// ---------------------------------------------------------------------------
 
 describe('retry utility', () => {
 
-    // -----------------------------------------------------------------------
     // isRetryable
-    // -----------------------------------------------------------------------
 
     describe('isRetryable()', () => {
 
@@ -74,9 +70,7 @@ describe('retry utility', () => {
     });
 
 
-    // -----------------------------------------------------------------------
     // getDelay
-    // -----------------------------------------------------------------------
 
     describe('getDelay()', () => {
 
@@ -85,7 +79,7 @@ describe('retry utility', () => {
             let delay = getDelay(0, config);
             expect(delay).to.be.a('number').and.to.be.at.least(0);
             // With 25% jitter the minimum possible is 100 * 1 * 0.75 = 75, but
-            // Math.max(0, ...) is used so just verify it is non-negative and > 0 on average.
+            // Math.max(0,...) is used so just verify it is non-negative and > 0 on average.
             // Use a looser check: delay should be > 0 (statistically always true for baseDelay=100)
             expect(delay).to.be.greaterThan(0);
         });
@@ -114,9 +108,7 @@ describe('retry utility', () => {
     });
 
 
-    // -----------------------------------------------------------------------
     // withRetry
-    // -----------------------------------------------------------------------
 
     describe('withRetry()', () => {
 
@@ -187,9 +179,7 @@ describe('retry utility', () => {
 });
 
 
-// ---------------------------------------------------------------------------
 // Section 2: Explorer retry integration tests
-// ---------------------------------------------------------------------------
 
 describe('ExplorerClient retry integration', () => {
 
@@ -286,9 +276,7 @@ describe('ExplorerClient retry integration', () => {
 });
 
 
-// ---------------------------------------------------------------------------
 // Section 3: Encoder retry integration tests
-// ---------------------------------------------------------------------------
 
 describe('EncoderClient retry integration', () => {
 
@@ -365,9 +353,7 @@ describe('EncoderClient retry integration', () => {
 });
 
 
-// ---------------------------------------------------------------------------
 // Section 4: Request hook tests
-// ---------------------------------------------------------------------------
 
 describe('request hooks - ExplorerClient', () => {
 
@@ -548,7 +534,7 @@ describe('request hooks - EncoderClient', () => {
 
 });
 
-// ─── Pure retry helpers (parseRetryAfter / getRetryAfterDelay / getDelay) ──
+// Pure retry helpers (parseRetryAfter / getRetryAfterDelay / getDelay) ──
 // getDelay / DEFAULTS are already imported at the top of this file; only pull in
 // the helpers not already bound here.
 const { parseRetryAfter, getRetryAfterDelay } = require('../../src/retry.js');

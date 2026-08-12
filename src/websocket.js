@@ -37,7 +37,7 @@ const WebSocket = typeof wsModule === 'function'
 
 // readyState values, spelled out rather than read off the module.
 //
-// : NEVER compare against WebSocket.OPEN here. Rollup/Vite wrap the ESM
+// NEVER compare against WebSocket.OPEN here. Rollup/Vite wrap the ESM
 // browser shim with getAugmentedNamespace(), which copies only the namespace
 // KEYS (`default`, `WebSocket`) onto a constructible function. Static class
 // properties such as OPEN and CONNECTING are not namespace keys, so they are
@@ -94,7 +94,7 @@ class WebSocketClient {
         // The catch-up cursor is the exact decimal STRING the v2 wire carries, or null
         // when unseeded. Number() rounded it above 2^53 and the rounded value went back
         // out as since_action_index, so a reconnect asked for rows after an action that
-        // had never been delivered (). null rather than 0 so an unseeded cursor
+        // had never been delivered. null rather than 0 so an unseeded cursor
         // is distinguishable from a chain sitting at index "0".
         this.lastActionIndex    = null;
         this.catchingUp         = false;
@@ -118,7 +118,6 @@ class WebSocketClient {
         this._readyHook         = options.readyHook || null;
     }
 
-    // Connect to the WebSocket server
     // Returns a Promise that resolves when the WELCOME message is received
     async connect() {
         if (this.ws && (this.ws.readyState === WS_OPEN || this.ws.readyState === WS_CONNECTING)) {
@@ -233,12 +232,10 @@ class WebSocketClient {
         }
     }
 
-    // Check if connected
     isConnected() {
         return this.connected && this.ws && this.ws.readyState === WS_OPEN;
     }
 
-    // Subscribe to channels with optional filters
     // Returns a Promise resolved by the SUBSCRIBED confirmation
     subscribe(channels, params) {
         const id  = 'sub-' + (this.nextId++);
@@ -284,7 +281,6 @@ class WebSocketClient {
         return this.unsubscribe(['bet_feed'], Object.assign({}, params, { action_index: index }));
     }
 
-    // Unsubscribe from channels
     unsubscribe(channels, params) {
         const msg = { action: 'unsubscribe', channels };
         if (params) msg.params = params;
@@ -298,26 +294,22 @@ class WebSocketClient {
         this._send(msg);
     }
 
-    // List active subscriptions
     // Returns a Promise resolved by SUBSCRIPTION_LIST response
     listSubscriptions() {
         const id = 'list-' + (this.nextId++);
         return this._sendWithResponse(id, { action: 'list_subscriptions', id });
     }
 
-    // Register an event handler
     on(eventType, callback) {
         if (!this._handlers[eventType]) this._handlers[eventType] = [];
         this._handlers[eventType].push(callback);
     }
 
-    // Remove an event handler
     off(eventType, callback) {
         if (!this._handlers[eventType]) return;
         this._handlers[eventType] = this._handlers[eventType].filter(cb => cb !== callback);
     }
 
-    // Register a one-time event handler
     once(eventType, callback) {
         const wrapper = (msg) => {
             this.off(eventType, wrapper);
@@ -327,7 +319,7 @@ class WebSocketClient {
     }
 
 
-    // ---- Internal methods ----
+    // Internal methods
 
     _onMessage(msg) {
         // Envelope schema gate: the server stamps every frame with schema_version.

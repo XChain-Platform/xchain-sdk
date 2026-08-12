@@ -37,7 +37,7 @@ var Formats = {
         0: 'VERSION|COMMAND'
     },
 
-    // Parimutuel betting markets . One self-contained action covers the
+    // Parimutuel betting markets. One self-contained action covers the
     // whole lifecycle; BROADCAST plays no part in betting. There is deliberately
     // no edit format: markets are immutable from creation, and the pre-bet fix
     // path is cancel + recreate. Auto-selection distinguishes the three
@@ -61,7 +61,7 @@ var Formats = {
     },
 
     COLLECT: {
-        // AMOUNT is an OPTIONAL trailing partial-claim amount (, indexer gate
+        // AMOUNT is an OPTIONAL trailing partial-claim amount (indexer gate
         // PARTIAL_UNSTAKE_COLLECT): absent = claim the full unclaimed total.
         0: 'VERSION|AMOUNT'
     },
@@ -120,12 +120,12 @@ var Formats = {
         0: 'VERSION|CONTRACT_ACTION_INDEX|METHOD|...PARAMS'
     },
 
-    // PC-29 /  P9: FILE format 0 gains an optional NINTH field,
-    // GATE_MIN_AMOUNT, the minimum balance of GATE_TICKER a recipient must hold to
-    // be given the decryption key. The eight-field form stays byte-identical, so
-    // every historical FILE replays unchanged; absent or empty means no threshold.
+    // PC-29: FILE format 0 gains an optional NINTH field, GATE_MIN_AMOUNT, the
+    // minimum balance of GATE_TICKER a recipient must hold to be given the
+    // decryption key. The eight-field form stays byte-identical, so every
+    // historical FILE replays unchanged; absent or empty means no threshold.
     //
-    //  Part B: a TENTH field, COMPRESSION, follows the same trailing-field
+    // A TENTH field, COMPRESSION, follows the same trailing-field
     // precedent. Empty/absent = raw (every historical FILE), '1' = deflate-raw.
     // It is PRESENTATIONAL, never consensus (spec §5.5): it tells a reader how to
     // reconstruct the original bytes and never affects validity anywhere. For a
@@ -208,7 +208,7 @@ var Formats = {
     },
 
     UNSTAKE: {
-        // AMOUNT is an OPTIONAL trailing partial-unstake amount (, indexer gate
+        // AMOUNT is an OPTIONAL trailing partial-unstake amount (indexer gate
         // PARTIAL_UNSTAKE_COLLECT): absent = full sweep, present = move only AMOUNT
         // into cooldown (the residual stays staked).
         0: 'VERSION|SIGNING_PUBKEY|AMOUNT',

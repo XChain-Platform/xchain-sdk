@@ -60,7 +60,7 @@ module.exports = {
     // Shared primitives (same policy brain + PSBT decoder both halves use).
     evaluatePolicy,
     decodeActionFromPsbt,
-    // Taproot envelope ( §3.9): the derivations both halves share, so a
+    // Taproot envelope (§3.9): the derivations both halves share, so a
     // caller building an envelope round never has to hand either side a tweak.
     parseEnvelopeScript,
     deriveEnvelopeCommit,

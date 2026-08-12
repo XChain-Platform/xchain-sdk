@@ -1,8 +1,7 @@
-//  doctrine test-coverage program: unit coverage for the SDK's copy of
-// src/applyBufferutilsPatch.js. The SDK patches bitcoinjs bufferutils so 64-bit
-// amount fields round-trip through a BigInt-safe path (values above 2^53 would
-// otherwise silently corrupt on the wire). Exercises the patched read/write and
-// varint helpers.
+// Unit coverage for the SDK's copy of src/applyBufferutilsPatch.js. The SDK
+// patches bitcoinjs bufferutils so 64-bit amount fields round-trip through a
+// BigInt-safe path (values above 2^53 would otherwise silently corrupt on the
+// wire). Exercises the patched read/write and varint helpers.
 
 const assert = require('assert');
 const bufferutils = require('../../src/applyBufferutilsPatch.js');

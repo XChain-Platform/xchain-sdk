@@ -1,4 +1,4 @@
-//  doctrine test-coverage program: coverage for the scripts component
+// Coverage for the scripts component
 // (scripts/sync-templates.js). It self-executes main() on load (reads the
 // contract template sources, base64-encodes them, and writes a generated
 // module), so running it here would mutate the tree. This pins its structural

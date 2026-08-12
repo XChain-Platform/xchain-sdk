@@ -61,9 +61,7 @@ function nonce(acct) {
     return new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
 }
 
-/* ────────────────────────────────────────────────────────────────────────
- * G14 - bound the WORK, not just the bytes
- * ──────────────────────────────────────────────────────────────────────── */
+// G14: bound the WORK, not just the bytes.
 
 describe('G14: input-count cap', function () {
 
@@ -118,9 +116,7 @@ describe('G14: input-count cap', function () {
     });
 });
 
-/* ────────────────────────────────────────────────────────────────────────
- * accountScript override removal
- * ──────────────────────────────────────────────────────────────────────── */
+// accountScript override removal.
 
 describe('accountScript override is gone', function () {
 
@@ -156,9 +152,7 @@ describe('accountScript override is gone', function () {
     });
 });
 
-/* ────────────────────────────────────────────────────────────────────────
- * G13 - non-200 reasons must reach the SDK caller
- * ──────────────────────────────────────────────────────────────────────── */
+// G13: non-200 reasons must reach the SDK caller.
 
 describe('G13: client-visible error codes', function () {
 
@@ -216,9 +210,7 @@ describe('G13: client-visible error codes', function () {
     });
 });
 
-/* ────────────────────────────────────────────────────────────────────────
- * G17 - faults and denials must be visible to the operator
- * ──────────────────────────────────────────────────────────────────────── */
+// G17: faults and denials must be visible to the operator.
 
 describe('G17: fault and denial logging', function () {
 
@@ -329,9 +321,7 @@ describe('G17: fault and denial logging', function () {
     });
 });
 
-/* ────────────────────────────────────────────────────────────────────────
- * Bounded rest-field EXECUTE decode (the envelope extension)
- * ──────────────────────────────────────────────────────────────────────── */
+// Bounded rest-field EXECUTE decode (the envelope extension).
 
 describe('bounded rest-field EXECUTE decode', function () {
 

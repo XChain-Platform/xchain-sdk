@@ -25,9 +25,7 @@ const { XChainSDK } = require('../../index.js');
 const { SDKConfigError } = require('../../src/errors.js');
 const { waitFor, waitForCalls } = require('../helpers/wait.js');
 
-// ---------------------------------------------------------------------------
 // Mock Server
-// ---------------------------------------------------------------------------
 
 function createMockServer() {
     return new Promise((resolve) => {
@@ -72,9 +70,7 @@ function createMockServer() {
     });
 }
 
-// ---------------------------------------------------------------------------
 // Tests
-// ---------------------------------------------------------------------------
 
 describe('XChainSDK – WebSocket convenience methods', function () {
 
@@ -111,9 +107,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
         unsub();
     }
 
-    // -----------------------------------------------------------------
     // Initialization
-    // -----------------------------------------------------------------
 
     describe('initialization', function () {
 
@@ -145,9 +139,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // Convenience methods
-    // -----------------------------------------------------------------
 
     describe('onBlock', function () {
 
@@ -492,9 +484,7 @@ describe('XChainSDK – WebSocket convenience methods', function () {
         });
     });
 
-    // -----------------------------------------------------------------
     // Unsubscribe function
-    // -----------------------------------------------------------------
 
     describe('unsubscribe return value', function () {
 
@@ -513,11 +503,9 @@ describe('XChainSDK – WebSocket convenience methods', function () {
         });
     });
 
-    // -----------------------------------------------------------------
-    // : `statuses` must never be forwarded
-    // -----------------------------------------------------------------
+    // `statuses` must never be forwarded
 
-    describe('statuses filter is not advertised () @regression', function () {
+    describe('statuses filter is not advertised @regression', function () {
 
         // Records every SUBSCRIBE frame the SDK sends, so we assert on the
         // wire params rather than on internals.

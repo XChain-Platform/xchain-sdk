@@ -8,9 +8,9 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// Adversarial coverage for the co-signer gaps G6, G7, G8, G9, G16, G18, G19
-// and the wire collapse (claude/specs/musig2-cosigner-interface.md, stage 2).
-// Every case below fails against the code as it stood before its gap was closed.
+// Adversarial coverage for the co-signer hardening gaps G6, G7, G8, G9, G16,
+// G18, G19 and the wire collapse. Every case below fails against the code as
+// it stood before its gap was closed.
 
 const { expect } = require('chai');
 const fs      = require('fs');
@@ -88,9 +88,7 @@ function tmpStateFile(tag) {
     return path.join(os.tmpdir(), `cosigner2-${tag}-${crypto.randomBytes(6).toString('hex')}.json`);
 }
 
-/* ────────────────────────────────────────────────────────────────────────
- * Wire collapse - one request shape, one response shape
- * ──────────────────────────────────────────────────────────────────────── */
+// Wire collapse: one request shape, one response shape.
 
 describe('wire collapse: a single request/response shape', function () {
 
@@ -129,9 +127,7 @@ describe('wire collapse: a single request/response shape', function () {
     });
 });
 
-/* ────────────────────────────────────────────────────────────────────────
- * G16 - the action's protocol source must be an input we sign
- * ──────────────────────────────────────────────────────────────────────── */
+// G16: the action's protocol source must be an input we sign.
 
 describe('G16: source gate', function () {
 
@@ -201,9 +197,7 @@ describe('G16: source gate', function () {
     });
 });
 
-/* ────────────────────────────────────────────────────────────────────────
- * G18 - BATCH is refused structurally
- * ──────────────────────────────────────────────────────────────────────── */
+// G18: BATCH is refused structurally.
 
 describe('G18: BATCH refusal', function () {
 
@@ -239,9 +233,7 @@ describe('G18: BATCH refusal', function () {
     });
 });
 
-/* ────────────────────────────────────────────────────────────────────────
- * G7 - allowedOutputs shape and mandatory maxValue
- * ──────────────────────────────────────────────────────────────────────── */
+// G7: allowedOutputs shape and mandatory maxValue.
 
 describe('G7: allowedOutputs must be standard payment scripts with a cap', function () {
 
@@ -294,9 +286,7 @@ describe('G7: allowedOutputs must be standard payment scripts with a cap', funct
     });
 });
 
-/* ────────────────────────────────────────────────────────────────────────
- * G8 - a wildcard window cap must accumulate for unresolved ticks
- * ──────────────────────────────────────────────────────────────────────── */
+// G8: a wildcard window cap must accumulate for unresolved ticks.
 
 describe('G8: unresolved-tick window accumulation', function () {
 
@@ -352,9 +342,7 @@ describe('G8: unresolved-tick window accumulation', function () {
     });
 });
 
-/* ────────────────────────────────────────────────────────────────────────
- * G9 - allowedDestinations must not be a silent no-op
- * ──────────────────────────────────────────────────────────────────────── */
+// G9: allowedDestinations must not be a silent no-op.
 
 describe('G9: allowedDestinations enforceability', function () {
 
@@ -406,9 +394,7 @@ describe('G9: allowedDestinations enforceability', function () {
     });
 });
 
-/* ────────────────────────────────────────────────────────────────────────
- * G6 - the window file's absence is not an empty window
- * ──────────────────────────────────────────────────────────────────────── */
+// G6: the window file's absence is not an empty window.
 
 describe('G6: window-store durability', function () {
 
@@ -464,9 +450,7 @@ describe('G6: window-store durability', function () {
     });
 });
 
-/* ────────────────────────────────────────────────────────────────────────
- * G19 - the rolling window trusts the wall clock
- * ──────────────────────────────────────────────────────────────────────── */
+// G19: the rolling window trusts the wall clock.
 
 describe('G19: clock guards', function () {
 

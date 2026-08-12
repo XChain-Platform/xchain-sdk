@@ -42,10 +42,10 @@ describe('AgentSession (policy-bounded wallet)', () => {
 
     let tmpDir, stateFile, submitStub;
 
-    // allowUnbounded / allowUnkeyedSubmits are the explicit opt-outs added with
-    // . They are defaulted ON here so every test below keeps
-    // exercising the behavior it was written for; the new requirements get their
-    // own tests, which construct WITHOUT these flags.
+    // allowUnbounded / allowUnkeyedSubmits are explicit opt-outs, defaulted ON
+    // here so every test below keeps exercising the behavior it was written
+    // for; the new requirements get their own tests, which construct WITHOUT
+    // these flags.
     const mk = (policy) => new AgentSession(fakeSdk, 'WIF', Object.assign({
         allowedActions: ['SEND', 'MINT'],
         allowUnbounded: true,
@@ -77,7 +77,7 @@ describe('AgentSession (policy-bounded wallet)', () => {
         fs.rmSync(tmpDir, { recursive: true, force: true });
     });
 
-    /* ── construction ──────────────────────────────────────────────── */
+    // construction
 
     it('refuses construction without allowedActions (fail-closed)', () => {
         expect(() => new AgentSession(fakeSdk, 'WIF', {})).to.throw(SDKPolicyError)
@@ -85,7 +85,7 @@ describe('AgentSession (policy-bounded wallet)', () => {
         expect(() => new AgentSession(fakeSdk, 'WIF', { allowedActions: [] })).to.throw(SDKPolicyError);
     });
 
-    // : an allowlist bounds WHICH actions run, never how much they move.
+    // An allowlist bounds WHICH actions run, never how much they move.
     it('refuses construction with an allowlist but no spend ceiling', () => {
         expect(() => new AgentSession(fakeSdk, 'WIF', { allowedActions: ['SEND'], stateFile }))
             .to.throw(SDKPolicyError).with.property('code', 'POLICY_INVALID');
@@ -97,7 +97,7 @@ describe('AgentSession (policy-bounded wallet)', () => {
         expect(() => new AgentSession(fakeSdk, 'WIF', { allowedActions: ['SEND'], stateFile, allowUnbounded: true })).to.not.throw();
     });
 
-    /* ── kill switch + idempotency () ──────────────── */
+    // kill switch + idempotency
 
     it('refuses a submit with no idempotencyKey, and accepts one with a key', async () => {
         const s = new AgentSession(fakeSdk, 'WIF', { allowedActions: ['SEND'], stateFile, allowUnbounded: true });
@@ -135,7 +135,7 @@ describe('AgentSession (policy-bounded wallet)', () => {
         expect(() => mk({ confirmAbove: { perTick: { '*': '1' } } })).to.throw(SDKPolicyError);
     });
 
-    /* ── action + destination gates ────────────────────────────────── */
+    // action + destination gates
 
     it('allows an allowlisted action through and attaches the policy report', async () => {
         const s = mk();
@@ -163,7 +163,7 @@ describe('AgentSession (policy-bounded wallet)', () => {
             'POLICY_DESTINATION_DENIED');
     });
 
-    /* ── amount caps ───────────────────────────────────────────────── */
+    // amount caps
 
     it('enforces per-action caps with tick-specific and wildcard entries', async () => {
         const s = mk({ maxPerAction: { SEND: { TOK: '100', '*': '10' } } });
@@ -181,7 +181,7 @@ describe('AgentSession (policy-bounded wallet)', () => {
             'POLICY_AMOUNT_EXCEEDED');
     });
 
-    /* ── windows + persistence ─────────────────────────────────────── */
+    // windows + persistence
 
     it('accumulates window usage and denies once the per-tick window cap would be crossed', async () => {
         const s = mk({ maxPerWindow: { hours: 24, perTick: { TOK: '10' } } });
@@ -245,7 +245,7 @@ describe('AgentSession (policy-bounded wallet)', () => {
         expect(submitStub.called).to.equal(false);
     });
 
-    /* ── confirmation + observer hooks ─────────────────────────────── */
+    // confirmation + observer hooks
 
     it('asks for confirmation above the threshold and honors the answer', async () => {
         const handler = sinon.stub();
@@ -268,7 +268,7 @@ describe('AgentSession (policy-bounded wallet)', () => {
         expect(seen).to.deep.equal(['POLICY_ACTION_DENIED']);
     });
 
-    /* ── idempotency key (at-most-once on retry) ───────────────────── */
+    // idempotency key (at-most-once on retry)
 
     it('refuses a repeat submit with the same idempotencyKey, carrying the prior txid', async () => {
         const s = mk();
@@ -304,7 +304,7 @@ describe('AgentSession (policy-bounded wallet)', () => {
         expect(err.details.txid).to.equal('landed-tx');
     });
 
-    /* ── exports ───────────────────────────────────────────────────── */
+    // exports
 
     it('is exported from the SDK entry point with its error class', () => {
         const sdkIndex = require('../../index.js');

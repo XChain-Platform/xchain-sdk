@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-//  §3.9: MuSig2 co-signer composition with the Taproot envelope. Three
+// MuSig2 co-signer composition with the Taproot envelope (§3.9). Three
 // deltas, all exercised here against real Schnorr verification rather than
 // against the daemon's own say-so:
 //   (a) tap-tweaked key path for the cancel of a tree-committed output,
@@ -138,7 +138,7 @@ function runRound(acct, co, psbt, envelopeScript, inputIndex = 0) {
     });
 }
 
-// --- 2-of-3 fixtures  -------------------------------------------
+// 2-of-3 fixtures.
 // A 2-of-3 account: the agent+daemon key path is BIP341-tweaked by the account's
 // own recovery tree, so every envelope derivation has to stay on the UNTWEAKED
 // cooperative aggregate, and the commit tree has to carry the recovery leaves.
@@ -221,7 +221,7 @@ function outputKeyFromControlBlock(controlBlock, leafScript) {
     return { xOnly: Buffer.from(point.xOnlyPubkey), parity: point.parity };
 }
 
-describe(' co-signer: Taproot envelope composition', function () {
+describe('co-signer: Taproot envelope composition', function () {
 
     describe('grammar mirror (strict subset of the authoritative decoder)', function () {
         it('parses a well-formed envelope and recovers the exact payload', function () {
@@ -597,11 +597,11 @@ describe(' co-signer: Taproot envelope composition', function () {
     });
 });
 
-// : the envelope surface on a 2-of-3 account. The decision this suite
-// pins is that a commit output of a 2-of-3 keeps the two-of-three property -
-// its tree carries the account's own recovery leaves next to the envelope leaf -
+// The envelope surface on a 2-of-3 account. The decision this suite
+// pins is that a commit output of a 2-of-3 keeps the two-of-three property,
+// its tree carries the account's own recovery leaves next to the envelope leaf,
 // rather than stranding the prefunded reveal fee behind a lost co-signer.
-describe(' co-signer: the envelope on a 2-of-3 account', function () {
+describe('co-signer: the envelope on a 2-of-3 account', function () {
 
     describe('the composed commit tree', function () {
         it('puts the envelope leaf and both account recovery leaves in one tree', function () {
@@ -828,7 +828,7 @@ describe(' co-signer: the envelope on a 2-of-3 account', function () {
 // the same request succeed on one deployment and fail on another, which is the
 // kind of divergence that only shows up in production. So drive it over real
 // HTTP once, end to end, through the shipped sidecar.
-describe(' co-signer: the envelope survives the wire', function () {
+describe('co-signer: the envelope survives the wire', function () {
     const http = require('http');
     const { createCoSignerApp } = require('../../src/cosigner/server.js');
     const { createHostedCoSignerApp } = require('../../src/cosigner/hostedServer.js');
@@ -913,12 +913,12 @@ describe(' co-signer: the envelope survives the wire', function () {
     });
 });
 
-//  S5: the SDK must be able to REACH the encoder's new surface. It does
+// The SDK must be able to REACH the encoder's new surface. It does
 // not default to it (AUTO can return a commit/reveal pair where callers expect
 // one PSBT, so that flip belongs to a major version), but a caller that wants
 // the smallest footprint, or wants to opt out of compression, must be able to
 // say so through the SDK rather than dropping to raw JSON-RPC.
-describe(' S5: SDK create_tx passthrough', function () {
+describe('SDK create_tx passthrough', function () {
     const EncoderClient = require('../../src/encoder.js');
 
     function clientCapturing(captured) {

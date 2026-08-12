@@ -45,7 +45,7 @@ const HARD_VALIDATOR_CODES = new Set(['FORBIDDEN_CHARACTER']);
 
 /*
  * The address fields whose handler RESOLVES a `^<id>` reference and states a
- * verdict on it (xchain-indexer db.resolveAddressRefChecked, ).
+ * verdict on it (xchain-indexer db.resolveAddressRefChecked).
  *
  * Derived from the shared consensus map rather than listed again, because the
  * derivation is exact: every single-value, non-type-gated address field in
@@ -53,7 +53,7 @@ const HARD_VALIDATOR_CODES = new Set(['FORBIDDEN_CHARACTER']);
  * two excluded shapes are excluded for reasons that also make them wrong to
  * flag here. SEND.DESTINATION is `multi` and send.js is the one address-bearing
  * handler with NO resolve call at all, so a `^id` there is rejected on format
- * in both eras ; LIST.ITEM is `listType` and only holds an address when
+ * in both eras; LIST.ITEM is `listType` and only holds an address when
  * the list TYPE says so, which pre-flight cannot decide from the wire alone.
  * `noCompact` fields (DISPENSER.GET_ADDRESS / ORACLE_ADDRESS) ARE included: the
  * SDK never emits them compacted, but the indexer still resolves a caller's.
@@ -69,7 +69,7 @@ const CARET_RESOLVED_FIELDS = (() => {
 })();
 
 /*
- * `^<id>` address references ( flag-day).
+ * `^<id>` address references (caret-ref strict-activation flag-day).
  *
  * Two verdicts, and the split is the whole point. A NON-CANONICAL id can never
  * resolve on any node, so the client knows the outcome without asking anyone:
@@ -82,7 +82,7 @@ const CARET_RESOLVED_FIELDS = (() => {
  * dead one and says so instead of guessing.
  *
  * Warning, never an error, even for the non-canonical case. Three call sites
- * had no follow-up format check before  (DISPENSER.ORACLE_ADDRESS on a
+ * had no follow-up format check before this activation (DISPENSER.ORACLE_ADDRESS on a
  * non-oracle dispenser, ISSUE.TRANSFER/TRANSFER_SUPPLY on the genesis path,
  * DEPLOY.SLASH_DESTINATION below its own flag-day), so those actions are still
  * ACCEPTED below the activation height on mainnet/testnet. A non-overridable

@@ -8,7 +8,6 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// ─────────────────────────────────────────────────────────────────────────────
 // Contract-lint PARITY + DRIFT guard.
 //
 // The SDK's contract linter MUST match the indexer's deploy-time validator, or
@@ -24,7 +23,6 @@
 // step) lives in xchain-vm's suite, where isolated-vm is available; because the
 // vendored files are proven byte-identical here, that check transitively covers
 // the SDK.
-// ─────────────────────────────────────────────────────────────────────────────
 
 const assert = require('assert');
 const crypto = require('crypto');

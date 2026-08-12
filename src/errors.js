@@ -119,7 +119,7 @@ class SDKGatedFileError extends SDKError {
     }
 }
 
-// FILE payload compression ( Part B). Thrown for input-side failures
+// FILE payload compression. Thrown for input-side failures
 // (oversized input, unusable bytes). Note what does NOT throw: a FAILED
 // INFLATE never throws out of the reader helpers, because COMPRESSION is
 // sender-asserted and unverified, so a lying field must degrade to serve-raw

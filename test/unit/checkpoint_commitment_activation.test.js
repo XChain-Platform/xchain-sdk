@@ -1,8 +1,7 @@
-//  doctrine test-coverage program: unit coverage for the SDK's copy of
-// src/checkpoint_commitment_activation.js (byte-identical twin of the
-// hub/indexer/explorer/sync copies). The SDK verifier must gate the SIGNED
-// checkpoint preimage on the same BTC-anchored snapshot_block era, so this pins
-// the threshold map and the gate function.
+// Unit coverage for the SDK's copy of src/checkpoint_commitment_activation.js
+// (byte-identical twin of the hub/indexer/explorer/sync copies). The SDK
+// verifier must gate the SIGNED checkpoint preimage on the same BTC-anchored
+// snapshot_block era, so this pins the threshold map and the gate function.
 
 const assert = require('assert');
 const {
@@ -12,10 +11,10 @@ const {
 describe('checkpoint_commitment_activation', function () {
     it('regtest is armed from genesis; testnet and mainnet are pinned flag-days', function () {
         assert.strictEqual(CHECKPOINT_COMMITMENT_ACTIVATION.regtest, 0);
-        //  lead 0e418c8c: testnet was 0, which made the hub commit the SPV
-        // root suffix from testnet genesis before the indexer had roots to sign,
-        // so it refused to sign every testnet checkpoint. Now armed at the first
-        // BTC-testnet anchor past all three STATE_COMMITMENT testnet thresholds.
+        // testnet was 0, which made the hub commit the SPV root suffix from
+        // testnet genesis before the indexer had roots to sign, so it refused
+        // to sign every testnet checkpoint. Now armed at the first BTC-testnet
+        // anchor past all three STATE_COMMITMENT testnet thresholds.
         assert.strictEqual(CHECKPOINT_COMMITMENT_ACTIVATION.testnet, 146000);
         // Pin the exact ARMED mainnet flag-day (BTC anchor ~2026-08-04). A loose
         // `> 0` let a one-sided edit of any vendored copy pass green while moving
@@ -30,7 +29,7 @@ describe('checkpoint_commitment_activation', function () {
         assert.strictEqual(isCheckpointCommitmentActive(t - 1, 'mainnet'), false);
     });
 
-    it('testnet arms at 146000, off one block below ( keying-skew fix)', function () {
+    it('testnet arms at 146000, off one block below', function () {
         assert.strictEqual(isCheckpointCommitmentActive(146000, 'testnet'), true);
         assert.strictEqual(isCheckpointCommitmentActive(145999, 'testnet'), false);
     });

@@ -68,10 +68,10 @@ class AgentSession extends WalletSession {
 
         // BREAKING, and deliberately: a policy with an action allowlist but no
         // monetary ceiling bounded nothing, so an automated agent could execute an
-        // allowed value-moving action without limit (). At least one
+        // allowed value-moving action without limit. At least one
         // enforceable ceiling is now required, and running without one is an
         // explicit, auditable opt-in rather than the state a caller reaches by
-        // omission. Same shape the X402Client fail-closed change took (#3122):
+        // omission. Same shape the X402Client fail-closed change took:
         // the default is safe, unbounded is a word someone had to type.
         const hasCeiling = !!policy.maxPerAction
             || !!(win && win.perTick)
@@ -96,11 +96,11 @@ class AgentSession extends WalletSession {
             allowUnbounded:      policy.allowUnbounded === true,
             // Absent an idempotency key a retry after a lost ACK builds and pays a
             // SECOND transaction, so the key is required on the automated rail rather
-            // than offered (). Same opt-in shape as allowUnbounded.
+            // than offered. Same opt-in shape as allowUnbounded.
             allowUnkeyedSubmits: policy.allowUnkeyedSubmits === true,
         };
 
-        // Operator kill switch (). Two halves, because they answer different
+        // Operator kill switch. Two halves, because they answer different
         // questions: `pause()` stops THIS object, and the file stops a session the
         // operator can no longer call into, which is the case that mattered - once an
         // agent holding the WIF is running, killing the process was the only lever.
@@ -251,7 +251,7 @@ class AgentSession extends WalletSession {
 
     async _enforceAndSubmit(actionData, encoderOpts, submitOpts) {
         // FIRST, before evaluation, budget consumption or any broadcast: a halted
-        // session must refuse without side effects ().
+        // session must refuse without side effects.
         const halt = this._haltReason();
         if (halt)
             this._deny('POLICY_HALTED', `AgentSession is halted: ${halt}`, { killSwitchFile: this._killSwitchFile });
@@ -289,7 +289,7 @@ class AgentSession extends WalletSession {
         // waiting on the existing payment instead of re-sending. Opt-in: absent a
         // key, behavior is unchanged. Fail-closed and needs no indexer to hold.
         const idempotencyKey = submitOpts && submitOpts.idempotencyKey;
-        // BREAKING (): the key is now REQUIRED rather than honoured when
+        // BREAKING: the key is now REQUIRED rather than honoured when
         // offered. Opt-in idempotency protects only the callers who already knew to
         // ask, and the caller who does not know is exactly the automated agent that
         // retries a timed-out submit and pays twice. Refusing here costs a caller one

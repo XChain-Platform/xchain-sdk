@@ -37,9 +37,7 @@ function hasErrorCode(errors, code) {
     return errors.some(e => e.code === code);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // TICK NAME VALIDATION
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: TICK name validation (ISSUE action)', function () {
 
@@ -156,9 +154,7 @@ describe('Validator: TICK name validation (ISSUE action)', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // MEMO / DESCRIPTION VALIDATION
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: MEMO validation', function () {
 
@@ -236,9 +232,7 @@ describe('Validator: DESCRIPTION validation', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // DECIMALS VALIDATION
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: DECIMALS validation', function () {
 
@@ -268,9 +262,7 @@ describe('Validator: DECIMALS validation', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // MAX_SUPPLY VALIDATION
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: MAX_SUPPLY validation', function () {
 
@@ -287,7 +279,7 @@ describe('Validator: MAX_SUPPLY validation', function () {
         expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
     });
 
-    // . The bound was applied to split('.')[0], and BigInt('-0') is 0n, so
+    // The bound was applied to split('.')[0], and BigInt('-0') is 0n, so
     // every negative whose integer part is zero cleared the nonnegative check and was
     // serialized into an ISSUE the indexer refuses outright (its amount-format check
     // rejects a leading '-'), spending the fee for a guaranteed-invalid transaction.
@@ -317,7 +309,7 @@ describe('Validator: MAX_SUPPLY validation', function () {
         expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
     });
 
-    // Fractional precision (). The ceiling check reads split('.')[0] only, so an
+    // Fractional precision. The ceiling check reads split('.')[0] only, so an
     // over-precise MAX_SUPPLY cleared the SDK and was then refused on-chain as
     // 'invalid: MAX_SUPPLY (format)' with the miner fee already paid. What the OFFLINE
     // validator may assert about it is bounded by what it can know: the indexer measures
@@ -361,9 +353,7 @@ describe('Validator: MAX_SUPPLY validation', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // LOCK FIELD VALIDATION
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: lock field validation', function () {
 
@@ -411,9 +401,7 @@ describe('Validator: lock field validation', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // FIAT_CODE VALIDATION
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: FIAT_CODE validation', function () {
 
@@ -446,9 +434,7 @@ describe('Validator: FIAT_CODE validation', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // FIAT_AMOUNT VALIDATION
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: FIAT_AMOUNT validation', function () {
 
@@ -467,7 +453,7 @@ describe('Validator: FIAT_AMOUNT validation', function () {
         expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
     });
 
-    // The rule mirrors the indexer's isValidFiatFormat(2, ...): at most 2
+    // The rule mirrors the indexer's isValidFiatFormat(2,...): at most 2
     // decimals, not exactly 2. One-decimal and integer forms are consensus-
     // valid (and are what a numeric round-trip produces for "10.50"/"10.00"),
     // so the SDK must accept them too.
@@ -516,7 +502,6 @@ describe('Validator: FIAT_AMOUNT validation', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // FIAT DISPENSER GET_AMOUNT = 0
 //
 // A fiat-priced dispenser does not store a coin price. It is derived at
@@ -531,8 +516,7 @@ describe('Validator: FIAT_AMOUNT validation', function () {
 // NEITHER fiat pricing mode could be composed, so the whole fiat/oracle
 // dispenser feature was unreachable through any client using this validator.
 // Found by the wallet's fiat dispenser e2e lane, which could not get past the
-// form (wallet campaign D-143).
-// ─────────────────────────────────────────────────────────────────────────────
+// form.
 
 describe('Validator: FIAT dispenser GET_AMOUNT convention', function () {
 
@@ -590,7 +574,6 @@ describe('Validator: FIAT dispenser GET_AMOUNT convention', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // PRICE v1 ORACLE PUBLISH (FIAT / VALUE / FEE)
 //
 // The user-run token oracle (PC-30). Its fiat field is named FIAT, not
@@ -598,7 +581,6 @@ describe('Validator: FIAT dispenser GET_AMOUNT convention', function () {
 // VALUE fell through to BROADCAST's numeric-only rule and FEE was checked
 // for BROADCAST only. Each case below mirrors an indexer verdict in
 // xchain-indexer/src/actions/price.js _parseV1.
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: PRICE v1 oracle publish', function () {
 
@@ -676,9 +658,7 @@ describe('Validator: PRICE v1 oracle publish', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // COIN FIELD VALIDATION (GIVE_COIN, GET_COIN)
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: COIN field validation', function () {
 
@@ -720,9 +700,7 @@ describe('Validator: COIN field validation', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // FEE_PREFERENCE VALIDATION
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: FEE_PREFERENCE validation', function () {
 
@@ -747,9 +725,7 @@ describe('Validator: FEE_PREFERENCE validation', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // LIST TYPE VALIDATION
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: LIST TYPE validation', function () {
 
@@ -777,14 +753,12 @@ describe('Validator: LIST TYPE validation', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // FREE-TEXT DELIMITER GUARDS (FILE NAME/TYPE/TITLE, LIST ITEM)
 //
 // These fields are serialized verbatim into the pipe-delimited action string.
 // An unescaped '|' corrupts the field layout; an unescaped ';' inside a BATCH
 // injects a whole extra command (the indexer splits BATCH TX_DATA on ';'), so
 // they must be rejected client-side exactly like MEMO/DESCRIPTION/TICK.
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: FILE free-text delimiter guards', function () {
 
@@ -987,11 +961,9 @@ describe('Validator: VOTE binding-poll numeric fields', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // VOTE PER-VERSION REQUIRED FIELDS
 // VOTE's anchors are version-split, so they live in _validateVote rather than in
 // the flat ACTION_REQUIRED_FIELDS table. Field lists track vote.md's Formats section.
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: VOTE per-version required fields', function () {
 
@@ -1067,7 +1039,7 @@ describe('Validator: VOTE per-version required fields', function () {
 
     // A payload carrying NEITHER discriminator is still auto-selected, not refused:
     // the selector sorts fitting formats by length and v1 is the shortest, so these
-    // two used to serialize a bare `VOTE|1` the indexer refuses ().
+    // two used to serialize a bare `VOTE|1` the indexer refuses.
     it('rejects a wholly empty VOTE instead of serializing VOTE|1', function () {
         const errors = v.validate('VOTE', {});
         const missing = errors.filter(e => e.code === 'MISSING_REQUIRED_FIELD').map(e => e.details.field);
@@ -1095,13 +1067,11 @@ describe('Validator: VOTE per-version required fields', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DELEGATE PER-VERSION REQUIRED FIELDS ()
+// DELEGATE PER-VERSION REQUIRED FIELDS
 // DELEGATE carried an empty ACTION_REQUIRED_FIELDS entry, so sdk.delegate({}) built
 // and paid for `DELEGATE|0` that the indexer refuses as SIGNING_PUBKEY (required).
 // The flat table cannot express these: the rotate flavors carry NEW_SIGNING_PUBKEY
 // and the revoke flavors SIGNING_PUBKEY, with no field common to all four.
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: DELEGATE per-version required fields', function () {
 
@@ -1164,9 +1134,7 @@ describe('Validator: DELEGATE per-version required fields', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // ENCRYPTION_METHOD VALIDATION
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: ENCRYPTION_METHOD validation', function () {
 
@@ -1208,9 +1176,7 @@ describe('Validator: ENCRYPTION_METHOD validation', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // REQUIRED FIELDS
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: required field enforcement', function () {
 
@@ -1248,7 +1214,6 @@ describe('Validator: required field enforcement', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // DISPENSER create-mode required fields
 //
 // Covers both dispenser lanes per DISPENSER.md §Formats v0:
@@ -1257,7 +1222,6 @@ describe('Validator: required field enforcement', function () {
 //                 is empty (the primary §40.7.1 lane). The validator
 //                 previously required GET_TICK unconditionally, which made
 //                 the coin-paid lane unreachable through createAction.
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: DISPENSER create required fields', function () {
 
@@ -1307,9 +1271,7 @@ describe('Validator: DISPENSER create required fields', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // BATCH CONSTRAINTS
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: BATCH constraints', function () {
 
@@ -1348,9 +1310,7 @@ describe('Validator: BATCH constraints', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // ACTION-INDEX OPERATIONS SKIP REQUIRED FIELDS
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: action-index operations skip required fields', function () {
 
@@ -1368,9 +1328,7 @@ describe('Validator: action-index operations skip required fields', function () 
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // validateOrThrow
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: validateOrThrow', function () {
 
@@ -1437,9 +1395,7 @@ describe('Validator: validateOrThrow', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // ADDRESS VALIDATION (DESTINATION)
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: address validation', function () {
 
@@ -1474,9 +1430,7 @@ describe('Validator: address validation', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // UNKNOWN ACTION
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: unknown action', function () {
 
@@ -1489,9 +1443,7 @@ describe('Validator: unknown action', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // FIELD-LEVEL VALIDATION: COOLDOWN_BLOCKS / VALUE / DEPLOY / DISPENSER ownership
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: field + cross-field constraints', function () {
 
@@ -1557,9 +1509,7 @@ describe('Validator: field + cross-field constraints', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // CONTROLLER BIND/UNBIND VALIDATION (ISSUE v6 / ADDRESS v1, programmable policy)
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: controller bind/unbind (ISSUE v6 / ADDRESS v1)', function () {
 
@@ -1640,9 +1590,7 @@ describe('Validator: controller bind/unbind (ISSUE v6 / ADDRESS v1)', function (
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // ADDRESS ^id REFERENCE VALIDATION (address compaction)
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: address ^id reference', function () {
 
@@ -1671,8 +1619,7 @@ describe('Validator: address ^id reference', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PC-29 /  P9: FILE.GATE_MIN_AMOUNT (the unlock threshold)
+// PC-29: FILE.GATE_MIN_AMOUNT (the unlock threshold)
 //
 // A ninth, optional FILE field. Every rule here is a FORMAT rule and every one
 // exists for a reason worth stating, because the value is consensus-visible and
@@ -1684,7 +1631,6 @@ describe('Validator: address ^id reference', function () {
 // at the FILE's block, which a stateless validator does not have. The indexer is
 // the arbiter for that half; a guess here would be a second, weaker opinion that
 // disagrees at exactly the boundary the shared vectors exist to pin.
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Validator: FILE GATE_MIN_AMOUNT (PC-29)', function () {
 
@@ -1755,7 +1701,7 @@ describe('Validator: FILE GATE_MIN_AMOUNT (PC-29)', function () {
         expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
     });
 
-    // ── Shared vector fixture (spec section 6.5) ─────────────────────────────
+    // ── Shared vector fixture (spec section 6.5)
     // The tests above are this repo's own reading of the rules. These run the SAME
     // vectors the indexer and the wallet run, from a byte-identical file, so the
     // three implementations are pinned to one another rather than to three

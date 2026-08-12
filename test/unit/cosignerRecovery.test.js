@@ -127,7 +127,7 @@ describe('cosigner/recovery buildRecoverySpend', function () {
         expect(out.txHex).to.be.a('string');
     });
 
-    it('#3869/#3923: a >2^53 output overspend is caught, not rounded into a zero fee', async function () {
+    it('a >2^53 output overspend is caught, not rounded into a zero fee', async function () {
         // Under Number(), 9007199254740992 and 9007199254740993 compare EQUAL, so the
         // fee read 0, the guard passed, and the function signed an unrelayable tx while
         // the sighash committed to the true (overspending) values.
@@ -140,7 +140,7 @@ describe('cosigner/recovery buildRecoverySpend', function () {
         expect(e).to.match(/exceed inputs/);
     });
 
-    it('#3869: the same >2^53 magnitude with a sane fee still signs', async function () {
+    it('the same >2^53 magnitude with a sane fee still signs', async function () {
         // The exactness guard must not become a ceiling on legitimate DOGE-scale value.
         const a = account();
         const inputs  = [{ txid: crypto.randomBytes(32).toString('hex'), vout: 0, value: 9007199254740993n }];
@@ -151,7 +151,7 @@ describe('cosigner/recovery buildRecoverySpend', function () {
         expect(out.txid).to.be.a('string');
     });
 
-    it('#3869: a fractional or negative satoshi value is refused outright', async function () {
+    it('a fractional or negative satoshi value is refused outright', async function () {
         const a = account();
         const sign = localPairSigner(a.acct.recovery.agentRecovery, [a.agent.sk, a.recovery.sk]);
         const txid = crypto.randomBytes(32).toString('hex');

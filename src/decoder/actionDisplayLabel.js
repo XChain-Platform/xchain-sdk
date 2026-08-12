@@ -23,7 +23,7 @@
  * kind for the on-chain LINK action.
  *
  * Promoted from xchain-wallet packages/core/src/shared/utils/
- * actionDisplayLabel.js ; the wallet re-exports this copy.
+ * actionDisplayLabel.js; the wallet re-exports this copy.
  *
  ********************************************************************/
 

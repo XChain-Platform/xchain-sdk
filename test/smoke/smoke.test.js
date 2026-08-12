@@ -61,9 +61,7 @@ describe('Smoke: API server end-to-end', function () {
         return response.data;
     }
 
-    /*
-     *  Basic connectivity
-     */
+    // Basic connectivity
 
     it('ping returns success', async function () {
         let res = await rpc('ping');
@@ -71,9 +69,7 @@ describe('Smoke: API server end-to-end', function () {
         expect(res.error).to.be.undefined;
     });
 
-    /*
-     *  Action creation via RPC
-     */
+    // Action creation via RPC
 
     it('create_action produces valid SEND', async function () {
         let res = await rpc('create_action', {
@@ -110,9 +106,7 @@ describe('Smoke: API server end-to-end', function () {
         expect(res.error).to.exist;
     });
 
-    /*
-     *  Validation via RPC
-     */
+    // Validation via RPC
 
     it('validate_action returns valid for good input', async function () {
         let res = await rpc('validate_action', {
@@ -136,9 +130,7 @@ describe('Smoke: API server end-to-end', function () {
         expect(res.result.errors.length).to.be.greaterThan(0);
     });
 
-    /*
-     *  Introspection via RPC
-     */
+    // Introspection via RPC
 
     // The count here was a literal 28 and went stale the moment an action was
     // added (BET and friends took it to 31). A smoke test over the RPC surface
@@ -174,9 +166,7 @@ describe('Smoke: API server end-to-end', function () {
         expect(res.result).to.include('MEMO');
     });
 
-    /*
-     *  Multiple rapid requests
-     */
+    // Multiple rapid requests
 
     it('handles 10 concurrent requests without errors', async function () {
         let promises = [];
@@ -201,9 +191,7 @@ describe('Smoke: API server end-to-end', function () {
         }
     });
 
-    /*
-     *  Unknown method
-     */
+    // Unknown method
 
     it('returns JSON-RPC error for unknown method', async function () {
         let res = await rpc('nonexistent_method');

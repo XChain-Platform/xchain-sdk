@@ -126,10 +126,9 @@ describe('pre-flight engine', function () {
 
         // The three cases above were each fixed one at a time, because
         // pre-flight re-implemented a SUBSET of createAction's params ->
-        // wire-string core. The cases below pin the unification itself
-        // ( follow-up): both entry points now call
-        // Actions.composeActionString, so a behaviour added there cannot
-        // reach one caller and not the other.
+        // wire-string core. The cases below pin the unification itself:
+        // both entry points now call Actions.composeActionString, so a
+        // behaviour added there cannot reach one caller and not the other.
         describe('shares ONE compose core with createAction', function () {
 
             // The anti-drift assertion. Everything else here is a symptom;
@@ -150,7 +149,7 @@ describe('pre-flight engine', function () {
                 });
             });
 
-            // LEGS landed in createAction ( multi-leg SEND) while the
+            // LEGS landed in createAction (multi-leg SEND) while the
             // duplicate path was still live, so it is the behaviour that was
             // next in line to be silently forgotten. It is exercised here as
             // the concrete instance of the general property above.
@@ -163,7 +162,7 @@ describe('pre-flight engine', function () {
                 };
                 const viaPreflight = normalizeInput(input, core).actionString;
                 expect(viaPreflight).to.equal(core.createAction(input).actionString);
-                // Both legs must actually reach the wire; the bug  fixed
+                // Both legs must actually reach the wire; the bug this fixed
                 // re-emitted leg 1 twice, which is well-formed and wrong.
                 expect(viaPreflight).to.contain(A1);
                 expect(viaPreflight).to.contain(A2);
@@ -235,7 +234,7 @@ describe('pre-flight engine', function () {
             expect(r.verdict).to.equal('fail');
         });
 
-        //  / §4.7. A dry-run says valid because the CONFIRMED balance
+        // §4.7. A dry-run says valid because the CONFIRMED balance
         // covers the send; only the wallet knows another window already
         // committed the same funds. Flattening that to info made the whole
         // reservation ledger invisible in the verdict, so the second window of
@@ -285,7 +284,7 @@ describe('pre-flight engine', function () {
             expect(r.findings.some(f => f.code === 'DRYRUN_UNAVAILABLE')).to.equal(true);
         });
 
-        // . The case above has a dry-run that FAILS FAST; the one that
+        // The case above has a dry-run that FAILS FAST; the one that
         // bites in production is a dry-run that never answers at all (a cold
         // verdict on a busy venue costs seconds against a 4000ms budget). An
         // otherwise-clean action therefore passes on Tier 2 alone, and the ONLY
@@ -312,7 +311,7 @@ describe('pre-flight engine', function () {
             expect(unavailable.message).to.match(/timeout/i);
         });
 
-        // The SECOND home of , found by driving a controller-bound token
+        // A second case of an undeclared dry-run, found by driving a controller-bound token
         // in a browser: the network was reached, answered promptly, and
         // DECLINED to judge. `/feequote` and `/preflight` refuse to enter a
         // controller guard on the public path (GUARD_INERT ->

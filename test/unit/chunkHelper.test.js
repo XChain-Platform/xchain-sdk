@@ -157,7 +157,7 @@ describe('chunkHelper @regression', function () {
             expect(() => planDeploy(HUGE, { gasLimit: 100000 })).to.throw(/MAX_DEPLOY_CHUNKS/);
         });
 
-        // ── The headline: the plan's slices pass the indexer's exact integrity gate ──
+        // The headline: the plan's slices pass the indexer's exact integrity gate.
         it('plan output passes the indexer assembly+verify (SDK↔indexer parity)', function () {
             const plan = planDeploy(MID, { gasLimit: 100000 });
             // The indexer concats the v4 carriers in chunk order, base64-decodes, rejects
@@ -174,7 +174,7 @@ describe('chunkHelper @regression', function () {
         });
     });
 
-    // ── Size invariants: the constants must keep chunked deploy encodable + capable ──
+    // Size invariants: the constants must keep chunked deploy encodable + capable.
     // These constants are duplicated across docs/constants.js, the decoder, the encoder
     // and here; if MAX_DEPLOYCHUNK_PART_BYTES is bumped past the action cap, every v4
     // carrier fails to encode, and if the chunk budget shrinks below base64(MAX_CODE_SIZE)

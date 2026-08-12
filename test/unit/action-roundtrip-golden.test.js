@@ -13,7 +13,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * SDK-encoder <-> indexer-parser byte-level field-layout contract .
+ * SDK-encoder <-> indexer-parser byte-level field-layout contract.
  *
  * The encoder is a byte-blind transport: nothing in the manifest conformance
  * system asserts that an SDK-serialized ACTION's byte layout is the exact
@@ -134,7 +134,7 @@ describe('Action round-trip golden – SDK encoder byte-layout contract', functi
         let loadError = null;
 
         before(function () {
-            // . What this hook does is a CROSS-REPO require() sweep: the
+            // What this hook does is a CROSS-REPO require() sweep: the
             // sibling xchain-indexer's src/utility.js plus every handler in its
             // src/actions/ (~50 modules), none of them in this repo's module
             // cache. On a cold venue checkout that has run past mocha's DEFAULT

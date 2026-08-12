@@ -55,9 +55,9 @@ describe('pre-flight constants + registry', function () {
             }
         });
 
-        // #3934: the gate's two by-VALUE seams, driven against SYNTHETIC fixtures so the
+        // The gate's two by-VALUE seams, driven against SYNTHETIC fixtures so the
         // suite stays hermetic (the live sibling is a moving target, per the note above).
-        describe('by-value seams (#3934)', function () {
+        describe('by-value seams', function () {
             const fs = require('fs');
             const os = require('os');
             const { checkFeeQuoteSeam, checkConfigConstants, checkGasSchedules } = require('../../../bin/check-preflight-drift.js');
@@ -68,7 +68,7 @@ describe('pre-flight constants + registry', function () {
             // The handler basenames a passing fixture must carry, derived from the SDK list
             // rather than typed out again: the gate now reads the fee-charging set off the
             // indexer's createFeesObject call sites, and DEPLOY/EXECUTE charge off the gas
-            // schedule instead, so they have no handler here ().
+            // schedule instead, so they have no handler here.
             const feeCallers = constants.FEE_CHARGING_ACTIONS
                 .filter((a) => a !== 'DEPLOY' && a !== 'EXECUTE')
                 .map((a) => a.toLowerCase());
@@ -112,7 +112,7 @@ describe('pre-flight constants + registry', function () {
                 expect(checkGasSchedules(r)).to.equal(0);
             });
 
-            // : the direction the BET omission actually took. An indexer handler
+            // The direction the BET omission actually took. An indexer handler
             // charges a fee and the SDK list does not know, so NATIVE_FEE_FORFEIT is withheld.
             it('fails when a fee-charging handler is missing from FEE_CHARGING_ACTIONS', function () {
                 const r = fakeIndexer({ exempt: ['COINPAY'], callers: feeCallers.filter((c) => c !== 'bet') });
@@ -131,7 +131,7 @@ describe('pre-flight constants + registry', function () {
                 expect(() => checkFeeQuoteSeam(r)).to.throw(/createFeesObject/);
             });
 
-            // : the cap lives in indexer config.js, which no mapped handler hash
+            // The cap lives in indexer config.js, which no mapped handler hash
             // covers, because dispenser.js only reads it by symbol.
             it('fails when MAX_REFILLS drifts from the indexer config value', function () {
                 const r = fakeIndexer({ exempt: ['COINPAY'], maxRefills: constants.MAX_REFILLS + 1 });
@@ -145,7 +145,7 @@ describe('pre-flight constants + registry', function () {
             });
 
             it('fails when an action is both indexer-EXEMPT and SDK fee-charging', function () {
-                // The exact #3893 shape, inverted: a forfeiture warning for an action
+                // The exact BET-forfeiture shape, inverted: a forfeiture warning for an action
                 // that charges nothing. BET is in FEE_CHARGING_ACTIONS.
                 const r = fakeIndexer({ exempt: ['COINPAY', 'BET'] });
                 expect(checkFeeQuoteSeam(r)).to.equal(1);

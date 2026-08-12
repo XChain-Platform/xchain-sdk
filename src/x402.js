@@ -72,14 +72,14 @@ const isPosNum = (v) => {
 
 const X402_VERSION = 1;
 
-/* ── payer-signature binding ─────────────────────────────────────────────
- * Every proof must prove the requester CONTROLS `payer`, otherwise anyone can
- * name a token-holding / depositing address they do not own (free access /
- * theft of another payer's prepaid credit) or replay a public invoice memo
- * (front-run). The payer signs a fresh, server-issued challenge (the single-use
- * invoice nonce for send; an HMAC-authenticated challenge token for
- * dispenser/deposit) with its wallet key; the gateway verifies the Bitcoin
- * message signature against the payer address. */
+// Payer-signature binding.
+// Every proof must prove the requester CONTROLS `payer`, otherwise anyone can
+// name a token-holding / depositing address they do not own (free access /
+// theft of another payer's prepaid credit) or replay a public invoice memo
+// (front-run). The payer signs a fresh, server-issued challenge (the single-use
+// invoice nonce for send; an HMAC-authenticated challenge token for
+// dispenser/deposit) with its wallet key; the gateway verifies the Bitcoin
+// message signature against the payer address.
 
 // Sign `message` with `wif` so the signature verifies against `address`. The
 // message-signature header byte encodes the address type, so a p2pkh key must
@@ -95,7 +95,7 @@ function signForAddress(auth, message, wif, address, network) {
     return auth.signMessage(message, wif, { network }).signature;
 }
 
-/* ── shared: action-string parsing ──────────────────────────────────── */
+// Shared: action-string parsing.
 
 // Wire layout (verified against FormatSelector.serialize): pipe-joined with
 // the action name first, e.g. SEND|0|TICK|AMOUNT|DESTINATION|MEMO.
@@ -138,7 +138,7 @@ function parseActionString(text) {
     return { action, version, outputs };
 }
 
-/* ── invoice store (single-node, file-backed) ───────────────────────── */
+// Invoice store (single-node, file-backed).
 
 class FileInvoiceStore {
     constructor(dir) {
@@ -215,7 +215,7 @@ class FileInvoiceStore {
     }
 }
 
-/* ── gateway (server side) ──────────────────────────────────────────── */
+// Gateway (server side).
 
 class X402Gateway {
 
@@ -288,7 +288,7 @@ class X402Gateway {
         this._usedChallenges  = new Map();   // challenge nonce -> expiresAt (one-time-use replay guard)
     }
 
-    /* ── payer-signature helpers ── */
+    // Payer-signature helpers.
 
     // Issue an HMAC-authenticated, expiring challenge token bound to the scheme,
     // coin and resource. Stateless: the MAC lets the gateway trust its own token
@@ -341,7 +341,7 @@ class X402Gateway {
         return r.valid ? { ok: true } : { ok: false, code: 'X402_BAD_SIGNATURE' };
     }
 
-    /* ── challenge ── */
+    // Challenge.
 
     async challengeBody(resource) {
         const accepts = [];
@@ -387,7 +387,7 @@ class X402Gateway {
         return { x402Version: X402_VERSION, error: this.description, resource: resource || null, accepts };
     }
 
-    /* ── verification ── */
+    // Verification.
 
     static parseProofHeader(header) {
         try {
@@ -630,7 +630,7 @@ class X402Gateway {
         return run;
     }
 
-    /* ── provisional sweeper ── */
+    // Provisional sweeper.
 
     // Re-check provisional_0conf grants: promote on confirmation, mark failed
     // (+ notify the operator) once the window closes without one.
@@ -668,7 +668,7 @@ class X402Gateway {
     }
     stopSweeper() { if (this._sweepTimer) { clearInterval(this._sweepTimer); this._sweepTimer = null; } }
 
-    /* ── HTTP adapters ── */
+    // HTTP adapters.
 
     static buildResponseHeader(result) {
         return Buffer.from(JSON.stringify({
@@ -713,7 +713,7 @@ class X402Gateway {
     }
 }
 
-/* ── client side ────────────────────────────────────────────────────── */
+// Client side.
 
 class X402Client {
 

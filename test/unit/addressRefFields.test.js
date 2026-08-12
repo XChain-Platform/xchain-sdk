@@ -1,9 +1,9 @@
-//  doctrine test-coverage program: unit coverage for src/addressRefFields.js.
-// This is the canonical map of which ACTION params carry an ADDRESS value (a
-// consensus surface: it decides which values become ^id references). The SDK
-// only compacts the unconditional single-value fields (SDK_COMPACTABLE, a
-// strict subset), and must never emit a ^id the indexer would not assign. Pins
-// that derivation and the exclusion of multi-value / type-gated fields.
+// Unit coverage for src/addressRefFields.js, the canonical map of which
+// ACTION params carry an ADDRESS value (a consensus surface: it decides which
+// values become ^id references). The SDK only compacts the unconditional
+// single-value fields (SDK_COMPACTABLE, a strict subset), and must never emit
+// a ^id the indexer would not assign. Pins that derivation and the exclusion
+// of multi-value / type-gated fields.
 
 const assert = require('assert');
 const { ADDRESS_REF_FIELDS, SDK_COMPACTABLE, SDK_COMPACTABLE_BY_ACTION } = require('../../src/addressRefFields.js');
@@ -33,7 +33,7 @@ describe('addressRefFields', function () {
         assert.ok(SDK_COMPACTABLE.includes('DESTINATION'));
     });
 
-    // . The flat SDK_COMPACTABLE assertion above is fine on its own, but
+    // The flat SDK_COMPACTABLE assertion above is fine on its own, but
     // nothing checked what each ACTION ends up allowed to compact, and that gap
     // shipped a real defect: SEND declares DESTINATION multi:true, yet the
     // per-action set was derived from the flat NAME set, so MINT/MESSAGE/SWEEP's

@@ -38,7 +38,6 @@ class WalletSession {
 
         this.sdk = sdk;
 
-        // Import key and derive address
         let keyInfo    = sdk.wallet.importWIF(wif);
         this.wif       = wif;
         this.pubkey    = keyInfo.publicKeyHex;
@@ -58,7 +57,6 @@ class WalletSession {
         // mutex and the deposit-ledger lock.)
         this._submitTail = Promise.resolve();
 
-        // Default submit options
         this._defaultOpts = {
             waitForIndexer: opts.waitForIndexer !== undefined ? opts.waitForIndexer : true,
             timeout:        opts.timeout || 120000,
@@ -191,13 +189,13 @@ class WalletSession {
     async bet(params, enc, opts)       { return this.submit({ action: 'BET', params }, enc, opts); }
 
     // Capability (validator) staking. The indexer coin-gates these versions
-    // to Bitcoin; the contract-targeted lane below is not gated .
+    // to Bitcoin; the contract-targeted lane below is not gated.
     async stake(params, enc, opts)            { return this.submit({ action: 'STAKE', params }, enc, opts); }
     async unstake(params, enc, opts)          { return this.submit({ action: 'UNSTAKE', params }, enc, opts); }
     async delegate(params, enc, opts)         { return this.submit({ action: 'DELEGATE', params }, enc, opts); }
     async collect(params, enc, opts)          { return this.submit({ action: 'COLLECT', params }, enc, opts); }
 
-    // Contract-targeted staking (any token, ANY CHAIN - : STAKE v3 /
+    // Contract-targeted staking (any token, ANY CHAIN - STAKE v3 /
     // UNSTAKE v1 / DELEGATE v1 dispatch ahead of the indexer's BTC gate).
     // VERSION is forced by the helper (withForcedVersion, which throws rather
     // than route a caller-supplied version)

@@ -1,5 +1,4 @@
-/*********************************************************************
- *
+/*
  * Copyright © 2025–2026 Dankest, LLC
  * Based on XChain Platform by Dankest, LLC – https://dankest.llc
  *
@@ -9,27 +8,17 @@
  * General Public License v3.0 or later; see LICENSE.md. A commercial
  * license (without AGPL source-disclosure terms) is available -
  * contact legal@dankest.llc.
- *
- **********************************************************************
- *
- * XChain Platform SDK - Convenience Methods & BatchBuilder Tests
- *
- * Tests for:
- *   - Module entry point exports
- *   - Convenience action methods on XChainSDK
- *   - BatchBuilder fluent API, validation, and independence
- *
- ********************************************************************/
+ */
+
+// Convenience methods and BatchBuilder tests: module entry point exports,
+// convenience action methods on XChainSDK, and the BatchBuilder fluent API,
+// validation, and independence.
 
 'use strict';
 
 const { expect } = require('chai');
 
 const ADDR = 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh';
-
-// ---------------------------------------------------------------------------
-// 1. Module entry point
-// ---------------------------------------------------------------------------
 
 describe('Module entry point', () => {
 
@@ -74,10 +63,6 @@ describe('Module entry point', () => {
     });
 
 });
-
-// ---------------------------------------------------------------------------
-// 2. Convenience action methods
-// ---------------------------------------------------------------------------
 
 describe('Convenience action methods', () => {
 
@@ -191,16 +176,12 @@ describe('Convenience action methods', () => {
 
 });
 
-// ---------------------------------------------------------------------------
-// 3. BatchBuilder
-// ---------------------------------------------------------------------------
-
 describe('BatchBuilder', () => {
 
     const { XChainSDK, BatchBuilder, SDKValidationError } = require('../../index.js');
     const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
 
-    // --- Basic building ---
+    // Basic building
 
     it('build() produces a BATCH action with semicolon-joined commands', async () => {
         const result = await sdk.batch()
@@ -240,7 +221,7 @@ describe('BatchBuilder', () => {
         expect(result.action).to.equal('BATCH');
     });
 
-    // --- Chaining ---
+    // Chaining
 
     it('all chain methods return the builder instance', () => {
         const builder = sdk.batch();
@@ -277,7 +258,7 @@ describe('BatchBuilder', () => {
         expect(builder.length).to.equal(0);
     });
 
-    // --- Validation ---
+    // Validation
 
     it('empty batch .build() throws SDKValidationError with code BATCH_EMPTY', async () => {
         try {
@@ -336,7 +317,7 @@ describe('BatchBuilder', () => {
         }
     });
 
-    // --- Sub-action validation ---
+    // Sub-action validation
 
     it('batch with invalid sub-action params (SEND missing tick) throws SDKValidationError', async () => {
         try {
@@ -358,7 +339,7 @@ describe('BatchBuilder', () => {
         expect(result.actionString).to.be.a('string').and.to.have.length.above(0);
     });
 
-    // --- Builder independence ---
+    // Builder independence
 
     it('two BatchBuilders from same SDK do not interfere with each other', async () => {
         const builderA = sdk.batch().send({ tick: 'A', amount: '1', destination: ADDR });

@@ -14,7 +14,7 @@
 
 'use strict';
 
-// ─── Security: untrusted action/field input + endpoint transport ──────────────
+// Security: untrusted action/field input + endpoint transport
 //
 // Validator.validate(action, fields) is the SDK's gate between dapp-supplied
 // (often user-supplied) action data and the on-chain ACTION string. Its contract

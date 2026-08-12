@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * : the registry must not reach for a filesystem that is not there.
+ * The registry must not reach for a filesystem that is not there.
  *
  * The regtest FULLNODE sidecar is a file on a developer's disk. This module is
  * also bundled into browsers - the wallet's web, extension and both mobile
@@ -34,7 +34,7 @@ const assert = require('assert');
 
 const coins = require('../../src/coins');
 
-describe('coin registry without a filesystem ', function(){
+describe('coin registry without a filesystem', function(){
 
     // Capture console.log around a call, since the defect's whole visible
     // symptom was a log line rather than a thrown error.

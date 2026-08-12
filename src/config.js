@@ -49,7 +49,7 @@ var Config = {
             'DECIMALS',
             // DEPOSIT / GAS_ESCROW are the VOTE v0 poll-creator XCHAIN escrow
             // amounts; without canonicalization String(0.00000001) puts "1e-8"
-            // on the wire (deep-review 2026-07-17 F11 / ).
+            // on the wire.
             'DEPOSIT',
             'DISPENSER_ACTION_INDEX',
             'EDIT',

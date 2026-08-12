@@ -8,10 +8,9 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// ---------------------------------------------------------------------------
-// Unit: Taproot envelope pair through the action lifecycle ( §6, )
+// Unit: Taproot envelope pair through the action lifecycle (§6)
 //
-// A TAPROOT create_tx returns BOTH transactions from one call. Before  the
+// A TAPROOT create_tx returns BOTH transactions from one call. The earlier
 // lifecycle signed the commit, broadcast it, then branched only on P2SH/P2WSH for a
 // second transaction: a TAPROOT response matched neither, so the commit went on
 // chain and the reveal was never signed or broadcast. The caller got a txid for a
@@ -23,7 +22,6 @@
 // discovering an unsignable reveal afterwards manufactures a stranded-funds event
 // rather than an error message. The 'nothing is broadcast' test below is the one
 // that actually pins that, so it is worth more than the happy path.
-// ---------------------------------------------------------------------------
 
 'use strict';
 
@@ -49,7 +47,7 @@ function buildSignedTx() {
                     witnessUtxo: { script, value: 100_000 } });
     psbt.addOutput({ script, value: 90_000 });
     // The encoder answers UNSIGNED, and reconcileEncoded no longer reads a PRE-SIGNED
-    // input's script as a signer-owned change destination (), so the mock has
+    // input's script as a signer-owned change destination, so the mock has
     // to hand back the pre-signature hex. The signing below exists only to produce a
     // broadcastable txHex/txid for the broadcast mock.
     const unsignedHex = psbt.toHex();
@@ -113,7 +111,7 @@ const submit = (lm, opts = {}) => lm.submitAction(
     { action: 'FILE', params: {} }, { pubkey: '03abc' },
     Object.assign({ wif: FAKE_WIF, waitForIndexer: false }, opts));
 
-describe('Taproot envelope pair through the lifecycle ', function () {
+describe('Taproot envelope pair through the lifecycle', function () {
 
     it('signs BOTH halves before anything is broadcast, then commit -> reveal', async function () {
         const { sdk, trace } = makeEnvelopeSdk();
@@ -163,7 +161,7 @@ describe('Taproot envelope pair through the lifecycle ', function () {
         assert.ok(result.spentInputs.length >= 2, 'commit and reveal inputs both counted');
     });
 
-    it('a p2tr leg the reveal never spends aborts BEFORE anything is broadcast ', async function () {
+    it('a p2tr leg the reveal never spends aborts BEFORE anything is broadcast', async function () {
         // Rule (d) used to authorize the commit leg on script shape alone, so a
         // hostile encoder could add a second, correctly shaped P2TR output only it can
         // spend and the SDK would sign it. The commit and its reveal arrive from one

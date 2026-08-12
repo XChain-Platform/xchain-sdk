@@ -22,7 +22,7 @@ const config  = require('./config.js');
 const formats = require('./formats.js');
 const mathjs  = require('mathjs');
 
-// Support BigInt in JSON stringify(), as a QUOTED decimal string (#3921).
+// Support BigInt in JSON stringify(), as a QUOTED decimal string.
 // JSON.rawJSON emitted a bare numeric token, so JSON.parse rounded any satoshi value
 // above 2^53 straight back down. The encoder already parses the string form exactly
 // (validator.parseSatoshiAmount), and it is what xchain-indexer's jsonStringify pins.
@@ -69,10 +69,8 @@ class Utility {
     }
 
     logError(error, info){
-        // let file  = '/XChainIndexer/error.log';
-        // fs.appendFileSync(file, error);
         console.error('logError: ' + error, info);
-        // DEBUG: Throw exception on any error
+        // Deliberately fatal: every logged error is also rethrown.
         this.throwError(error);
     }
 
@@ -216,7 +214,7 @@ class Utility {
         let divisible   = (parseInt(decimals)==0) ? false : true;
         let parts       = String(amount).split('.');
         let [int, sats] = parts;
-        //<MULTI-DOT-REJECT> (item 4310): reject an amount carrying more than one decimal
+        //<MULTI-DOT-REJECT> reject an amount carrying more than one decimal
         // point. Destructuring keeps only the first two segments, so "1.2.3" reads as
         // int="1"/sats="2" and clears the divisible branch below, letting the SDK build an
         // amount the consensus-authoritative indexer would choke on. Mirrors the identical
@@ -226,7 +224,7 @@ class Utility {
         //</MULTI-DOT-REJECT>
         if(!divisible && this.isNumeric(int) && int==amount)
             return true;
-        //<FRACTIONAL-PRECISION-CAP> (item 5346): an amount must not carry more fractional
+        //<FRACTIONAL-PRECISION-CAP> an amount must not carry more fractional
         // digits than the tick's decimals. This mirrors the consensus-authoritative cap in
         // xchain-indexer/src/utility.js so the SDK rejects over-precise amounts client-side
         // before they are submitted. Parity is asserted in test/unit/utility.test.js.
@@ -358,8 +356,7 @@ class Utility {
     // the same key. A caller could therefore serialize STAKE|1 out of the v3
     // staking helper, dropping TARGET_CONTRACT_INDEX and TICK and routing assets
     // into the wrong lane. Silently ignoring the caller's value would fix the
-    // routing and keep the surprise, so a MISMATCHED version throws instead
-    // ().
+    // routing and keep the surprise, so a MISMATCHED version throws instead.
     // Delegates to the module-level function so the call sites (walletSession,
     // workflows) can reach it WITHOUT an sdk instance: they are handed a stub sdk
     // in their own unit tests, and a helper that guards fund routing must not be

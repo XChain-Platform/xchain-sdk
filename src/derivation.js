@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * XChain Platform SDK - HD derivation contract (review item 2760)
+ * XChain Platform SDK - HD derivation contract
  *
  * Advisory, documentation-only anchor for the wallet<->backend coin-type
  * parity contract. The SDK performs no HD derivation itself, so this data is

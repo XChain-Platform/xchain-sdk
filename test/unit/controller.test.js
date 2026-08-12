@@ -1,5 +1,4 @@
-/*********************************************************************
- *
+/*
  * Copyright © 2025–2026 Dankest, LLC
  * Based on XChain Platform by Dankest, LLC – https://dankest.llc
  *
@@ -9,16 +8,12 @@
  * General Public License v3.0 or later; see LICENSE.md. A commercial
  * license (without AGPL source-disclosure terms) is available -
  * contact legal@dankest.llc.
- *
- **********************************************************************
- *
- * XChain Platform SDK - ControllerHelpers Tests
- *
- * Asserts the bind/unbind builders serialize through createAction to the EXACT
- * ISSUE v6 / ADDRESS v1 wire strings the indexer parses, and that validateAction
- * accepts the clean shapes and rejects the malformed ones.
- *
- ********************************************************************/
+ */
+
+// ControllerHelpers tests: asserts the bind/unbind builders serialize through
+// createAction to the EXACT ISSUE v6 / ADDRESS v1 wire strings the indexer
+// parses, and that validateAction accepts the clean shapes and rejects the
+// malformed ones.
 
 'use strict';
 

@@ -67,8 +67,8 @@ describe('Native-coin fee quote (client)', function () {
 
         // A REAL encoder-shaped answer: one unsigned input, a zero-value carrier, and
         // change back to the funding script. estimateFees now runs the same fail-closed
-        // reconcile gate submitAction does (), so a placeholder string is no
-        // longer a usable stand-in for what the encoder returns.
+        // reconcile gate submitAction does, so a placeholder string is no longer a
+        // usable stand-in for what the encoder returns.
         function estimatePsbtHex() {
             const bitcoin = require('bitcoinjs-lib');
             const ecc = require('@bitcoinerlab/secp256k1');
@@ -107,7 +107,7 @@ describe('Native-coin fee quote (client)', function () {
             expect(q).to.have.property('actionString');
         });
 
-        // : a client re-quoting a fee it composed earlier holds the exact bytes it is
+        // A client re-quoting a fee it composed earlier holds the exact bytes it is
         // about to broadcast. Re-deriving them from the form params it started with would price
         // a second, independently built action, so the same call takes the string directly.
         it('quoteNativeFee accepts an already-formatted action string', async function () {
@@ -147,7 +147,7 @@ describe('Native-coin fee quote (client)', function () {
             expect(outs.map(o => o.address)).to.have.members(['extra', 'feeDest']);
         });
 
-        // : DEPLOY/EXECUTE are priced from the indexer's gas schedule with no VM dry-run, so
+        // DEPLOY/EXECUTE are priced from the indexer's gas schedule with no VM dry-run, so
         // their quote is payable but carries NO verdict (valid:null). That must size the output
         // like any other quote: refusing anything short of valid:true would re-block the actions
         // on LTC/DOGE, where a native output is the only way to pay a protocol fee at all.

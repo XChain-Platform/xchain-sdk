@@ -10,14 +10,14 @@ on:
 
 jobs:
   ci:
-    uses: XChain-Platform/.github/.github/workflows/ci-reusable.yml@aae44352361242d334234593c39d88be007d2ed3 # pin: XChain-Platform/.github @ master 2026-07-08; bump deliberately 
+    uses: XChain-Platform/.github/.github/workflows/ci-reusable.yml@aae44352361242d334234593c39d88be007d2ed3 # pin: XChain-Platform/.github @ master 2026-07-08; bump deliberately
     with:
       # Opt into the perf gate: the SDK's perf suite (Validator throughput) needs
       # no infra, so it runs cleanly as a post-gate step. First adopter of run-perf.
       run-perf: true
       perf-script: "test:performance"
 
-  # Cross-repo drift guards (SD-1 / ): this repo vendors the canonical
+  # Cross-repo drift guards (SD-1): this repo vendors the canonical
   # coin registry from xchain-hub, and per-repo CI cannot see sibling repos, so
   # a drifted vendored copy previously shipped green (the byte-identity checks
   # ran only in the monorepo's manual bin/ci-all.sh). This job recreates the
@@ -71,7 +71,7 @@ jobs:
       - name: Contract abi-core byte-identity vs canonical
         run: xchain-explorer/bin/sync-abi-core.sh --check
 
-      # Route contract : every explorer.<method>(query, '<type>') call
+      # Route contract: every explorer.<method>(query, '<type>') call
       # must use a type that route actually accepts. Mock-based unit tests
       # cannot see this - a stub answers to any type string - and the miss
       # shipped a blanket false block on DISPENSE. The explorer checkout above
@@ -102,7 +102,7 @@ jobs:
           XCHAIN_INDEXER_PATH: ${{ github.workspace }}/xchain-indexer
         run: node xchain-sdk/bin/check-preflight-drift.js
 
-  # Coverage ratchet : re-run the unit suite under c8 and fail if line or
+  # Coverage ratchet: re-run the unit suite under c8 and fail if line or
   # branch coverage drops below this repo's floor in bin/coverage-thresholds.json
   # (mirrored into the `coverage:check` npm script). Catches silent coverage
   # regression the pass/fail gate cannot see: a change that keeps every test green

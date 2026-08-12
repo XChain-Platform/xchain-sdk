@@ -383,7 +383,7 @@ function evaluatePolicy(policy, actionData, windowUsage) {
         // No `tick !== undefined` guard here: capFor falls through to the '*'
         // entry exactly like the maxPerAction and confirmAbove gates, so an
         // amount-bearing action whose tick did not resolve is still bound by a
-        // wildcard window cap (#2286; the old extra guard let such an action
+        // wildcard window cap (the old extra guard let such an action
         // bypass the one amount ceiling a wildcard-only policy expresses).
         //
         // G8: an unresolved tick reads its running total from a RESERVED BUCKET

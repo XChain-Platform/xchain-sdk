@@ -24,9 +24,7 @@ const { expect } = require('chai');
 const FormatSelector = require('../../src/formatSelector.js');
 const { SDKFormatError } = require('../../src/errors.js');
 
-// ---------------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------------
 
 /**
  * Build a fields object from an array of key names, all set to a short
@@ -39,15 +37,11 @@ function fields(...keys) {
 }
 
 
-// ===========================================================================
 // select() - basic selection for each action type
-// ===========================================================================
 
 describe('FormatSelector.select(): basic action-type selection', function () {
 
-    // -------------------------------------------------------------------------
     // SEND
-    // -------------------------------------------------------------------------
     describe('SEND', function () {
 
         it('selects v0 for TICK + AMOUNT + DESTINATION', function () {
@@ -66,9 +60,7 @@ describe('FormatSelector.select(): basic action-type selection', function () {
 
     });
 
-    // -------------------------------------------------------------------------
     // ISSUE
-    // -------------------------------------------------------------------------
     describe('ISSUE', function () {
 
         it('selects v1 (shortest) for TICK + DESCRIPTION', function () {
@@ -120,9 +112,7 @@ describe('FormatSelector.select(): basic action-type selection', function () {
 
     });
 
-    // -------------------------------------------------------------------------
     // ORDER
-    // -------------------------------------------------------------------------
     describe('ORDER', function () {
 
         it('selects v1 for ORDER_ACTION_INDEX only', function () {
@@ -141,9 +131,7 @@ describe('FormatSelector.select(): basic action-type selection', function () {
 
     });
 
-    // -------------------------------------------------------------------------
     // SWAP
-    // -------------------------------------------------------------------------
     describe('SWAP', function () {
 
         it('selects v1 for SWAP_ACTION_INDEX', function () {
@@ -154,9 +142,7 @@ describe('FormatSelector.select(): basic action-type selection', function () {
 
     });
 
-    // -------------------------------------------------------------------------
     // DISPENSER
-    // -------------------------------------------------------------------------
     describe('DISPENSER', function () {
 
         it('selects v1 for DISPENSER_ACTION_INDEX', function () {
@@ -167,9 +153,7 @@ describe('FormatSelector.select(): basic action-type selection', function () {
 
     });
 
-    // -------------------------------------------------------------------------
     // SLEEP
-    // -------------------------------------------------------------------------
     describe('SLEEP', function () {
 
         it('selects v0 for RESUME_BLOCK only', function () {
@@ -186,9 +170,7 @@ describe('FormatSelector.select(): basic action-type selection', function () {
 
     });
 
-    // -------------------------------------------------------------------------
     // BROADCAST
-    // -------------------------------------------------------------------------
     describe('BROADCAST', function () {
 
         it('selects v0 for MESSAGE + VALUE', function () {
@@ -209,9 +191,7 @@ describe('FormatSelector.select(): basic action-type selection', function () {
 });
 
 
-// ===========================================================================
 // select() - picks the smallest (shortest) format
-// ===========================================================================
 
 describe('FormatSelector.select(): picks the smallest format', function () {
 
@@ -235,9 +215,7 @@ describe('FormatSelector.select(): picks the smallest format', function () {
 });
 
 
-// ===========================================================================
 // select() - return structure
-// ===========================================================================
 
 describe('FormatSelector.select(): return structure', function () {
 
@@ -266,9 +244,7 @@ describe('FormatSelector.select(): return structure', function () {
 });
 
 
-// ===========================================================================
 // select() - error cases
-// ===========================================================================
 
 describe('FormatSelector.select(): error cases', function () {
 
@@ -335,9 +311,7 @@ describe('FormatSelector.select(): error cases', function () {
 });
 
 
-// ===========================================================================
 // serialize() - basic serialization
-// ===========================================================================
 
 describe('FormatSelector.serialize(): basic serialization', function () {
 
@@ -377,9 +351,7 @@ describe('FormatSelector.serialize(): basic serialization', function () {
 });
 
 
-// ===========================================================================
 // serialize() - trailing empty fields are trimmed
-// ===========================================================================
 
 describe('FormatSelector.serialize(): trailing empty fields are trimmed', function () {
 
@@ -418,9 +390,7 @@ describe('FormatSelector.serialize(): trailing empty fields are trimmed', functi
 });
 
 
-// ===========================================================================
 // serialize() - VERSION is auto-populated
-// ===========================================================================
 
 describe('FormatSelector.serialize(): VERSION is auto-populated', function () {
 
@@ -452,9 +422,7 @@ describe('FormatSelector.serialize(): VERSION is auto-populated', function () {
 });
 
 
-// ===========================================================================
 // serialize() - empty / missing fields become empty strings between pipes
-// ===========================================================================
 
 describe('FormatSelector.serialize(): empty / missing fields become empty strings', function () {
 
@@ -495,9 +463,7 @@ describe('FormatSelector.serialize(): empty / missing fields become empty string
 });
 
 
-// ===========================================================================
 // getFormatFields()
-// ===========================================================================
 
 describe('FormatSelector.getFormatFields()', function () {
 
@@ -538,9 +504,7 @@ describe('FormatSelector.getFormatFields()', function () {
 });
 
 
-// ===========================================================================
 // getPopulatedFields()
-// ===========================================================================
 
 describe('FormatSelector.getPopulatedFields()', function () {
 
@@ -592,9 +556,7 @@ describe('FormatSelector.getPopulatedFields()', function () {
 });
 
 
-// ===========================================================================
 // estimateLength()
-// ===========================================================================
 
 describe('FormatSelector.estimateLength()', function () {
 
@@ -649,7 +611,7 @@ describe('FormatSelector.estimateLength()', function () {
 
 });
 
-// ─── Explicit version + rest-field handling ──────────────────────────────────
+// Explicit version + rest-field handling
 describe('FormatSelector: explicit version + rest fields', function () {
 
     it('honours a valid explicit version', function () {
@@ -693,11 +655,9 @@ describe('FormatSelector: explicit version + rest fields', function () {
     });
 });
 
-// ---------------------------------------------------------------------------
 // #3918: a PINNED version obeys the same no-data-loss rule as auto-selection.
 // STAKE v3 alone carries TARGET_CONTRACT_INDEX|TICK; pinning v1 used to serialize
 // those routing fields away and stake to the wrong destination, silently.
-// ---------------------------------------------------------------------------
 
 describe('FormatSelector.select(): a pinned version never silently drops a field (#3918)', function () {
 
@@ -741,7 +701,6 @@ describe('FormatSelector.select(): a pinned version never silently drops a field
     });
 });
 
-// ---------------------------------------------------------------------------
 // select() - explicit VERSION shape
 //
 // VERSION is a non-negative integer on the wire. The old code ran a bare
@@ -750,7 +709,6 @@ describe('FormatSelector.select(): a pinned version never silently drops a field
 // bounded the RESULT to a defined version so nothing misbehaved, but this SDK
 // is published and the accepted shape of a public input should not be whatever
 // Number() manages to salvage.
-// ---------------------------------------------------------------------------
 
 describe('FormatSelector.select(): explicit VERSION must be a canonical integer', function () {
 

@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// : pin the co-signer's PSBT decode path to the SHARED encoder<->decoder
+// Pins the co-signer's PSBT decode path to the SHARED encoder<->decoder
 // roundtrip-conformance fixture.
 //
 // psbtActionDecode.js re-declares the carrier constants (the XCHN magic word,
@@ -71,7 +71,7 @@ const opReturnCases = fixture.cases.filter(c => c.encoding === 'OP_RETURN');
 const acceptedCases = opReturnCases.filter(c => c.expected.gate === 'accepted');
 const droppedCases  = opReturnCases.filter(c => c.expected.gate === 'dropped');
 
-describe('co-signer PSBT decode vs the shared roundtrip-conformance fixture ', function () {
+describe('co-signer PSBT decode vs the shared roundtrip-conformance fixture', function () {
 
     it('the fixture actually carries the OP_RETURN shapes this guard needs', function () {
         // Guards the guard: a regenerated fixture that lost its inline cases
@@ -86,7 +86,7 @@ describe('co-signer PSBT decode vs the shared roundtrip-conformance fixture ', f
         expect(MAGIC_WORD.toString('utf8')).to.equal(fixture.magicWord);
     });
 
-    /* ── the carrier chain, driven by encoder-produced bytes ───────────── */
+    // The carrier chain, driven by encoder-produced bytes.
 
     for (const c of acceptedCases) {
         it(`decodes the encoder's bytes for: ${c.name}`, function () {
@@ -134,7 +134,7 @@ describe('co-signer PSBT decode vs the shared roundtrip-conformance fixture ', f
         expect(marker.equals(P2SH_TAG) || marker.equals(P2WSH_TAG)).to.equal(true);
     });
 
-    /* ── derivation-drift sentinels ────────────────────────────────────── */
+    // Derivation-drift sentinels.
 
     describe('drift sentinels', function () {
         const sample = acceptedCases[0];

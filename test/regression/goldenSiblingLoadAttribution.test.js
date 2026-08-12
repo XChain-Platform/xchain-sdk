@@ -14,7 +14,7 @@
 
 'use strict';
 
-// ─── Regression : a slow sibling load must name itself ──────────────
+// Regression: a slow sibling load must name itself
 //
 // test/unit/action-roundtrip-golden.test.js loads the sibling xchain-indexer in
 // a `before` hook: src/utility.js plus every handler in src/actions/. That ran
@@ -65,7 +65,7 @@ function runGoldenSuite(env) {
     return JSON.parse(out.slice(start));
 }
 
-describe('Regression : the golden suite blames the sibling load, not the fixtures', function () {
+describe('Regression: the golden suite blames the sibling load, not the fixtures', function () {
     this.timeout(60000); // a child mocha run, plus the forced stall
 
     const indexerRoot = resolveIndexerRoot();

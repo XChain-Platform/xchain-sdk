@@ -83,7 +83,6 @@ describe('networks', function() {
             expect(getNetwork('litecoin-mainnet').supportsSegwit).to.be.true;
         });
 
-        // Verify WIF bytes match known values
         it('should have correct WIF bytes', function() {
             expect(getNetwork('bitcoin-mainnet').wif).to.equal(0x80);
             expect(getNetwork('bitcoin-testnet').wif).to.equal(0xef);

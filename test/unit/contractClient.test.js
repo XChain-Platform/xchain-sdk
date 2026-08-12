@@ -32,10 +32,6 @@ function makeSdk(overrides = {}) {
 
 describe('ContractClient', function () {
 
-    /*
-     *  Constructor
-     */
-
     describe('constructor', function () {
         it('stores sdk and contractActionIndex', function () {
             let sdk = makeSdk();
@@ -75,10 +71,6 @@ describe('ContractClient', function () {
         });
     });
 
-    /*
-     *  call()
-     */
-
     describe('call()', function () {
         it('delegates to sdk.execute with correct params', async function () {
             let sdk = makeSdk();
@@ -98,10 +90,6 @@ describe('ContractClient', function () {
         });
     });
 
-    /*
-     *  deposit()
-     */
-
     describe('deposit()', function () {
         it('delegates to sdk.deposit with correct params', async function () {
             let sdk = makeSdk();
@@ -114,10 +102,6 @@ describe('ContractClient', function () {
         });
     });
 
-    /*
-     *  withdraw()
-     */
-
     describe('withdraw()', function () {
         it('delegates to sdk.withdraw with correct params', async function () {
             let sdk = makeSdk();
@@ -129,10 +113,6 @@ describe('ContractClient', function () {
             assert.strictEqual(result.params.quantity, '50');
         });
     });
-
-    /*
-     *  getInfo()
-     */
 
     describe('getInfo()', function () {
         it('fetches and caches contract info', async function () {
@@ -157,10 +137,6 @@ describe('ContractClient', function () {
         });
     });
 
-    /*
-     *  getState()
-     */
-
     describe('getState()', function () {
         it('returns state for a specific key', async function () {
             let sdk = makeSdk();
@@ -177,10 +153,6 @@ describe('ContractClient', function () {
         });
     });
 
-    /*
-     *  getExecutions()
-     */
-
     describe('getExecutions()', function () {
         it('returns execution history', async function () {
             let sdk = makeSdk();
@@ -190,10 +162,6 @@ describe('ContractClient', function () {
             assert.strictEqual(result.data[0].method, 'run');
         });
     });
-
-    /*
-     *  getBalance()
-     */
 
     describe('getBalance()', function () {
         it('returns balance for a specific tick', async function () {
@@ -213,10 +181,6 @@ describe('ContractClient', function () {
         });
     });
 
-    /*
-     *  getManifest()
-     */
-
     describe('getManifest()', function () {
         it('delegates to explorer.getContractManifest with the bound index', async function () {
             let capturedIdx;
@@ -231,10 +195,6 @@ describe('ContractClient', function () {
             assert.deepStrictEqual(m, { permissions: ['MINT'], maxTakeBps: 100 });
         });
     });
-
-    /*
-     *  parseManifest() (static normalizer)
-     */
 
     describe('parseManifest()', function () {
         it('parses a permissions JSON string and numeric max_take_bps', function () {

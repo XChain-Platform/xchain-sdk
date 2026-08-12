@@ -22,11 +22,11 @@
  *
  * Two lock-side movements since, both server-side and both already
  * inside the ISSUE_LOCK_RATCHETS declaration: LOCK_NULL_PRIOR_UNSET
- *  makes an absent prior read as UNSET rather than locked,
+ * makes an absent prior read as UNSET rather than locked,
  * which strictly narrows the "(locked)" rejection, and it is resolved
  * once per action so the gate cannot differ field to field. The
- * TRANSFER / TRANSFER_SUPPLY `^<id>` rejection added at the 
- * flag-day is covered by the universal address-ref check, which is
+ * TRANSFER / TRANSFER_SUPPLY `^<id>` rejection added at the caret-ref
+ * strict-activation flag-day is covered by the universal address-ref check, which is
  * where it belongs: it is the same rule on five other actions, and
  * ISSUE's genesis path skips the isCryptoAddress checks that used to
  * be the only thing catching it.
@@ -39,7 +39,7 @@ const { FINDING_CODES } = require('../constants.js');
 const numeric = require('../numeric.js');
 const { tokenField } = require('./mint.js');
 
-// MAX_SUPPLY fractional precision, measured at the decimals CONSENSUS uses (#4314).
+// MAX_SUPPLY fractional precision, measured at the decimals CONSENSUS uses.
 //
 // The static validator range-checks `split('.')[0]` and throws the fraction away, so
 // MAX_SUPPLY=1.5 with DECIMALS=0 cleared the SDK and was then refused on-chain as

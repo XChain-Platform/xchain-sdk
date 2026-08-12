@@ -15,7 +15,7 @@
  **********************************************************************
  *
  * Regenerator for action-roundtrip-golden.json (the SDK-encoder <->
- * indexer-parser byte-level field-layout contract, item ).
+ * indexer-parser byte-level field-layout contract).
  *
  * Run it only from a full monorepo checkout (needs both xchain-sdk and a
  * sibling xchain-indexer). It drives the live SDK encoder to serialize each

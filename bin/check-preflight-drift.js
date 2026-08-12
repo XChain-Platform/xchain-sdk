@@ -47,13 +47,12 @@ function parseMap(mapPath) {
     return rows;
 }
 
-/* The fee-quote seam, which the hash rows above structurally cannot cover ().
+/* The fee-quote seam, which the hash rows above structurally cannot cover.
  *
  * Every mapped row is a per-handler file under src/actions/, so the row regex carries a
  * literal `src/actions/` prefix and can never match the TOP-LEVEL src/actions.js. That is the
  * file defining FEE_QUOTE_DENYLIST and FEE_QUOTE_STATIC, and until now the only thing binding
- * them to the SDK's TIER1_DENYLIST was a hand-written comment, which had already drifted
- * ().
+ * them to the SDK's TIER1_DENYLIST was a hand-written comment, which had already drifted.
  *
  * Compared by VALUE rather than by hash on purpose. Hashing all of actions.js would fire on
  * every unrelated edit to a large file, and anchor-scoped hashing can silently lose coverage
@@ -74,7 +73,7 @@ function parseStringSet(text, name, where) {
     return [...new Set([...hits[0].matchAll(/['"]([A-Z_]+)['"]/g)].map((x) => x[1]))].sort();
 }
 
-/* The reverse fee-charging direction, read from indexer CALL SITES ().
+/* The reverse fee-charging direction, read from indexer CALL SITES.
  *
  * On the indexer side there is no fee-charging literal to compare against: charging a
  * protocol fee IS calling createFeesObject from a handler under src/actions/. So the set is
@@ -132,9 +131,9 @@ function checkFeeQuoteSeam(indexerRoot) {
     const feeCharging = parseStringSet(sdkSrc, 'FEE_CHARGING_ACTIONS', 'src/preflight/constants.js');
 
     let failed = 0;
-    // FEE_CHARGING_ACTIONS drives the NATIVE_FEE_FORFEIT disclosure (#3934). Both directions
+    // FEE_CHARGING_ACTIONS drives the NATIVE_FEE_FORFEIT disclosure. Both directions
     // are bound now: this one by value against the indexer's EXEMPT literal, the other by the
-    // call-site walk below () - the direction the BET omission needed (#3893).
+    // call-site walk below, the direction the BET omission needed.
     const contradictory = feeCharging.filter((a) => exempt.includes(a));
     if (contradictory.length) {
         console.error('drift-gate: FEE_CHARGING_ACTIONS claims a protocol fee for indexer-EXEMPT action(s): '
@@ -151,13 +150,13 @@ function checkFeeQuoteSeam(indexerRoot) {
         failed = 1;
     }
     // runTier1 returns early on TIER1_DENYLIST, which is the ONLY reason its no-verdict branch
-    // cannot swallow a static valid:null quote and drop its priced fee (). That
+    // cannot swallow a static valid:null quote and drop its priced fee. That
     // reachability argument holds only while STATIC stays inside the denylist.
     const escaped = staticSet.filter((a) => !tier1.includes(a));
     if (escaped.length) {
         console.error('drift-gate: FEE_QUOTE_STATIC action(s) outside TIER1_DENYLIST: ' + escaped.join(', ') + '\n'
             + '  These now reach runTier1\'s endpoint call, whose no-verdict branch returns without\n'
-            + '  attaching the quote, so the  gas-schedule fee would be silently dropped.');
+            + '  attaching the quote, so the gas-schedule fee would be silently dropped.');
         failed = 1;
     }
     const derived = deriveFeeChargingActions(indexerRoot);
@@ -167,7 +166,7 @@ function checkFeeQuoteSeam(indexerRoot) {
         console.error('drift-gate: FEE_CHARGING_ACTIONS no longer matches the indexer handlers that charge a fee.');
         if (unlisted.length)
             console.error('  charges a protocol fee, missing from the SDK list: ' + unlisted.join(', ') + '\n'
-                + '    The NATIVE_FEE_FORFEIT disclosure would be withheld for it, exactly as it was for BET (#3893).');
+                + '    The NATIVE_FEE_FORFEIT disclosure would be withheld for it, exactly as it was for BET.');
         if (orphaned.length)
             console.error('  in the SDK list with no indexer caller: ' + orphaned.join(', ') + '\n'
                 + '    Either the handler stopped charging, or it was renamed and the basename no longer\n'
@@ -182,7 +181,7 @@ function checkFeeQuoteSeam(indexerRoot) {
     return failed;
 }
 
-/* Indexer CONFIG caps this SDK mirrors as literals ().
+/* Indexer CONFIG caps this SDK mirrors as literals.
  *
  * A cap defined in xchain-indexer/src/config.js is invisible to every hash row above: the row
  * regex carries a literal src/actions/ prefix, and the handler enforcing the cap reads it by
@@ -236,7 +235,7 @@ function checkConfigConstants(indexerRoot) {
     return failed;
 }
 
-/* GAS_SCHEDULE parity across the three coins (#3934).
+/* GAS_SCHEDULE parity across the three coins.
  *
  * The SDK carries its OWN copy of each coin definition, and the gas schedule is what
  * prices every fee the pre-flight quotes. Compared as parsed key/value MAPS rather than
@@ -328,7 +327,7 @@ function main() {
             'Re-read each handler, update the matching checks/ module (or confirm no client-visible\n' +
             'change), then refresh the hash in src/preflight/INDEXER-MAP.md:\n');
         for (const d of drift) console.error(`  ${d.handler}\n    was ${d.expected}\n    now ${d.actual}`);
-        // Now that `npm run ci` runs this locally , the first suspect for a LOCAL
+        // Now that `npm run ci` runs this locally, the first suspect for a LOCAL
         // red is the sibling's uncommitted work rather than a real handler change: this
         // hashes the WORKING TREE, and two of the four handlers in the gate's first firing
         // were nothing else. CI checks out HEAD and never sees it.

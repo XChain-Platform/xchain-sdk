@@ -1,5 +1,4 @@
-/*********************************************************************
- *
+/*
  * Copyright © 2025–2026 Dankest, LLC
  * Based on XChain Platform by Dankest, LLC – https://dankest.llc
  *
@@ -9,23 +8,20 @@
  * General Public License v3.0 or later; see LICENSE.md. A commercial
  * license (without AGPL source-disclosure terms) is available -
  * contact legal@dankest.llc.
- *
- **********************************************************************
- *
- * CORS_ORIGIN is an ALLOWLIST, and the load-bearing assertions are the ones
- * that drive the real `cors` middleware rather than reading parseCorsOrigin's
- * return value.
- *
- * The defect this guards against is not a crash, it is a header that LOOKS
- * configured: handed a String, `cors` echoes it verbatim to every caller, so
- * `CORS_ORIGIN="a,b"` answers `Access-Control-Allow-Origin: a,b` to a, to b,
- * and to a hostile origin alike. No browser accepts a multi-value ACAO, so
- * every listed shell is blocked while `curl -D -` shows a populated header.
- * Asserting on the parse function alone would not have caught that; asserting
- * on what a caller receives is the only thing that does. Twin of the encoder,
- * hub, indexer, tracker and sync suites .
- *
- **********************************************************************/
+ */
+
+// CORS_ORIGIN is an ALLOWLIST, and the load-bearing assertions are the ones
+// that drive the real `cors` middleware rather than reading parseCorsOrigin's
+// return value.
+//
+// The defect this guards against is not a crash, it is a header that LOOKS
+// configured: handed a String, `cors` echoes it verbatim to every caller, so
+// `CORS_ORIGIN="a,b"` answers `Access-Control-Allow-Origin: a,b` to a, to b,
+// and to a hostile origin alike. No browser accepts a multi-value ACAO, so
+// every listed shell is blocked while `curl -D -` shows a populated header.
+// Asserting on the parse function alone would not have caught that; asserting
+// on what a caller receives is the only thing that does. Twin of the encoder,
+// hub, indexer, tracker and sync suites.
 
 'use strict'
 

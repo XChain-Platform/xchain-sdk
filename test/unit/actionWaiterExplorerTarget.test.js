@@ -10,14 +10,14 @@
  *
  **********************************************************************
  *
- * : the ActionWaiter's explorer target must be injectable.
+ * The ActionWaiter's explorer target must be injectable.
  *
  * The waiter used to poll sdk.explorer unconditionally, so every SDK-driven
  * action against an ISOLATED regtest venue (its own node/decoder/indexer, no
  * colocated explorer) polled the SHARED explorer hub discovery advertised and
- * died on CONFIRMATION_TIMEOUT with a perfectly good transaction on chain
- * ( A2 drill). These pin the override, its precedence, and the WebSocket
- * suppression that keeps a foreign stack's events from settling the wait.
+ * died on CONFIRMATION_TIMEOUT with a perfectly good transaction on chain.
+ * These pin the override, its precedence, and the WebSocket suppression that
+ * keeps a foreign stack's events from settling the wait.
  *
  ********************************************************************/
 
@@ -53,7 +53,7 @@ function venueExplorer(counter) {
     };
 }
 
-describe('ActionWaiter explorer target injection ', function () {
+describe('ActionWaiter explorer target injection', function () {
 
     it('without an override the shared explorer is polled and the wait times out', async function () {
         const { sdk, calls } = sharedOnlySdk();

@@ -98,7 +98,7 @@ function verifySignature(payload, sigHex, pubkeyHex){
 // Does one validator entry carry the stake fields the weighted regime requires?
 // Blank source and missing weight are BOTH disqualifying: meetsStakeThreshold
 // fails closed on the former but silently reads the latter as '0', so the
-// weight check has to live here (). A negative weight is rejected
+// weight check has to live here. A negative weight is rejected
 // there and again here, since a caller reaching this gate should never see one.
 // Is the commitment active for this checkpoint while a required field is absent?
 // True means the row cannot be verified at all: the canonical it would be checked
@@ -135,7 +135,7 @@ function verifyCheckpoint(checkpoint, validators){
     // (the canonical bytes must stay identical to the hub, indexer and explorer), but it
     // means a ROOTLESS post-flag-day row silently falls back to the legacy preimage and
     // its signatures then verify against it. Structural rejection therefore lives here,
-    // in the verifier, where failing closed masks nothing ().
+    // in the verifier, where failing closed masks nothing.
     if (commitmentMissing(checkpoint))
         return { valid: false, validSigs: 0, quorum: quorum, weighted: weighted, canonical: canonical };
 
@@ -213,7 +213,7 @@ module.exports = {
     canonicalCheckpoint,
     verifySignature,
     // Exported so light.js#verifyCheckpointWithProvenSet enforces THIS predicate
-    // rather than a second copy that can drift from it ().
+    // rather than a second copy that can drift from it.
     commitmentMissing,
     verifyCheckpoint,
     fetchAndVerifyCheckpoint

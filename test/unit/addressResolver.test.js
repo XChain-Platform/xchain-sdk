@@ -92,7 +92,7 @@ describe('AddressResolver', function () {
 
     describe('resolveActionParams()', function () {
 
-        // : this test used to assert the OPPOSITE, and that is how the
+        // This test used to assert the OPPOSITE, and that is how the
         // defect shipped. SEND declares DESTINATION multi:true, and
         // xchain-indexer/src/actions/send.js is the one address-bearing handler
         // with no resolveAddressRef call, so a compacted destination is rejected
@@ -132,8 +132,8 @@ describe('AddressResolver', function () {
             // GET_ADDRESS: the dispenser's operating key, which the decoder gates dispense
             // detection on. ORACLE_ADDRESS: the payee of the PRICE v1 oracle usage fee,
             // whose on-chain output the decoder must capture into transaction_outputs by
-            // reading this very field ; compacted, nothing is captured and the
-            // indexer rejects the create however much was actually paid .
+            // reading this very field; compacted, nothing is captured and the
+            // indexer rejects the create however much was actually paid.
             const r = new AddressResolver(makeSdk({}, addressStub({ [ADDR]: 57, [ADDR2]: 58 })));
             const out = await r.resolveActionParams('DISPENSER', { getAddress: ADDR, oracleAddress: ADDR2 });
             expect(out.getAddress).to.equal(ADDR);

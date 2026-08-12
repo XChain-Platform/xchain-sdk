@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-//  SDK passthrough: a PSBT the encoder built around a satoshi value
+// SDK passthrough: a PSBT the encoder built around a satoshi value
 // above Number.MAX_SAFE_INTEGER (2^53-1, ~90.07M DOGE) must parse, sign,
 // finalize, and extract here with the value carried bit-exact (BigInt).
 // src/applyBufferutilsPatch.js (loaded by src/wallet.js) provides the
@@ -22,7 +22,7 @@ const { getNetwork } = require('../../src/networks.js');
 const BIG_IN = 12000000000000000000n;  // 1.2e19 sats, > 2^53-1, < u64 max
 const BIG_OUT = 11000000000000000001n; // exact odd value: rounds if ever a Number
 
-describe(': signing PSBTs with >2^53-1-sat values', function () {
+describe('signing PSBTs with >2^53-1-sat values', function () {
 
     it('signs, finalizes, and extracts a segwit input/output above 2^53-1 bit-exact', function () {
         const wallet = new WalletUtils('bitcoin-regtest');

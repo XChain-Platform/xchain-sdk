@@ -8,7 +8,6 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// ---------------------------------------------------------------------------
 // Ticker NAME vs TICK_ID (^N) equivalence across every ticker-bearing ACTION.
 //
 // A token may be referenced by its full name (TOKENA) or by its numeric id with
@@ -17,7 +16,6 @@
 // structurally identical action strings differing ONLY in the token reference.
 // (The indexer-side proof that both resolve to the same token lives in
 // xchain-indexer/test/unit/db.queries.test.js.)
-// ---------------------------------------------------------------------------
 
 const { expect } = require('chai');
 const { XChainSDK } = require('../../index.js');

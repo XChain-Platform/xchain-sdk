@@ -10,8 +10,8 @@
  *
  **********************************************************************
  *
- * The client-facing sub-tree activation constants (SPV sub-tree spec §3 Stage A
- * item 7,  stage A3).
+ * The client-facing sub-tree activation constants (SPV sub-tree spec §3,
+ * Stage A).
  *
  * WHY THE SDK CARRIES THESE AT ALL. No proof can tell a client whether an
  * extension slot is live: an armed-but-empty slot and an inert slot commit the
@@ -74,7 +74,7 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.contract_state_root,
             { 'BTC:regtest': 10000, 'BTC:testnet': 146500 });
         assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_ACTIVATION, { 'BTC:regtest': 11200 });
-        // THE SHADOW MAPS ARE PINNED TOO, and they were not until . A
+        // THE SHADOW MAPS ARE PINNED TOO, and they were not until A
         // shadow commits nothing, which is exactly why it looked safe to leave
         // unasserted here; the cost showed up on 2026-08-11, when the escrow
         // window opened on BTC:testnet and every assertion in this file stayed
@@ -200,25 +200,25 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         // Layer 1. A bump anywhere must be a coordinated four-repo change; this
         // pin makes a one-sided edit HERE fail even with no siblings on disk.
         // Updating it is the deliberate step that says "yes, all four moved".
-        // 2026-07-28 ( B2): the explorer became the fourth carrier (its
+        // 2026-07-28 (B2): the explorer became the fourth carrier (its
         // locked-balance proof endpoint refuses below the escrow leaf's armed
         // height, and only this map can tell it where that is) and the
         // ESCROW_LOCKED_LEAF comment block was refreshed to the built design.
-        // 2026-07-28 ( B3): ESCROW_LOCKED_LEAF_SHADOW + its armed-wins
+        // 2026-07-28 (B3): ESCROW_LOCKED_LEAF_SHADOW + its armed-wins
         // predicate landed for the §7 shadow window.
-        // 2026-07-28 ( arming): contract_state_root ARMED on BTC:regtest at
+        // 2026-07-28 (arming): contract_state_root ARMED on BTC:regtest at
         // 10000, the first height ever set in this file. Regtest only; mainnet and
         // testnet remain unarmed for every slot.
-        // 2026-07-30 ( testnet arming): contract_state_root ARMED on
+        // 2026-07-30 (testnet arming): contract_state_root ARMED on
         // BTC:testnet at 146500, above its 146000 collation height. BTC only of the
         // three testnet chains (LTC:testnet is below its own collation height,
         // DOGE:testnet has no follower). MAINNET still unarmed for every slot.
-        // 2026-08-11 (/ Stage B shadow): ESCROW_LOCKED_LEAF_SHADOW
+        // 2026-08-11 (Stage B shadow): ESCROW_LOCKED_LEAF_SHADOW
         // opened on BTC:testnet at 148000. A SHADOW, not an arming: nothing is
         // committed, balances_root stays byte-identical to v1, and every
         // locked-balance proof stays refused because ESCROW_LOCKED_LEAF_ACTIVATION
         // is what both gates read and it did not move.
-        // 2026-08-12 : this pin was the ONLY thing that caught the line
+        // 2026-08-12: this pin was the ONLY thing that caught the line
         // above, and it caught it one commit late, so it landed red at HEAD. The
         // shadow maps had no assertion of their own in this file, which is why the
         // exact-set tripwire stayed green through a real map change; that hole is

@@ -62,7 +62,7 @@ describe('Utility.isValidAmountFormat (indexer parity)', function () {
         assert.strictEqual(utils.isValidAmountFormat(2, '1.123'), false);
     });
 
-    // Multi-dot reject (item 4310): destructuring the split dropped every segment past the
+    // Multi-dot reject: destructuring the split dropped every segment past the
     // second, so "1.2.3" read as int="1"/sats="2" and cleared the divisible branch.
     it('rejects multi-dot amounts (parity with the indexer guard)', function () {
         assert.strictEqual(utils.isValidAmountFormat(8, '1.2.3'), false);
@@ -96,7 +96,7 @@ describe('Utility.isInteger (indexer parity, #2393)', function () {
     });
 });
 
-// : the version-locked helpers built `{ VERSION: '3', ...params }`, so the
+// the version-locked helpers built `{ VERSION: '3',...params }`, so the
 // spread landed after the forced value and a caller-supplied VERSION won. Lowercase
 // `version` won too, since normalizeFields upper-snakes both spellings onto one key.
 // The consequence was a silent misroute: stakeToContract({ VERSION: '1' }) serialized

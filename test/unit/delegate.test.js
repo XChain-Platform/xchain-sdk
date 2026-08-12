@@ -25,7 +25,7 @@ describe('DELEGATE raw wrapper refuses commands the consumer rejects', function 
 
     // The empty payload auto-selects the shortest fitting format, v0, and used to
     // serialize a bare `DELEGATE|0` the indexer refuses as SIGNING_PUBKEY
-    // (required), with the miner fee already spent ().
+    // (required), with the miner fee already spent.
     it('refuses a wholly empty delegate instead of building DELEGATE|0', async function () {
         let err = null;
         try { await sdk.delegate({}); } catch (e) { err = e; }

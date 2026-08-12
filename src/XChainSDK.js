@@ -52,7 +52,7 @@ const TickResolver      = require('./tickResolver.js');
 const AddressResolver   = require('./addressResolver.js');
 const { publicDefaults } = require('./endpoints.js');
 // The pre-sign intent gate. estimateFees hands back a signable encoder-authored PSBT,
-// so it runs the same reconciliation submitAction does ().
+// so it runs the same reconciliation submitAction does.
 const { reconcileEncoded, psbtPrevouts } = require('./reconcileEncoded.js');
 const { SDKConfigError, SDKExplorerError, SDKContractError } = require('./errors.js');
 const { lintSource } = require('./contract/lint-core.js');
@@ -95,7 +95,7 @@ class XChainSDK {
         this.auth       = new AuthUtils(network);
         this.messaging  = new MessagingUtils(network);
         this.gatedFile  = new GatedFileUtils();
-        // FILE payload compression ( Part B). Stateless, no network:
+        // FILE payload compression. Stateless, no network:
         // deflate-raw compress/inflate with the fail-closed, ratio-bounded
         // read path every serve layer shares.
         this.compression = new CompressionUtils();
@@ -435,7 +435,7 @@ class XChainSDK {
     // With waitForIndexer (default), a chain-REJECTED action REJECTS this call with
     // SDKActionError ACTION_REJECTED carrying the indexer's reason; the resolved
     // result's `indexed.statusKnown` says whether the status was read or assumed
-    // (strictStatus:true rejects rather than assume - see actionWaiter, ).
+    // (strictStatus:true rejects rather than assume - see actionWaiter).
     async submitAction(actionData, encoderOpts, opts) {
         let mgr = new LifecycleManager(this);
         return mgr.submitAction(actionData, encoderOpts, opts);
@@ -737,7 +737,7 @@ class XChainSDK {
     // The ONE PSBT this returns can be signed directly to skip a second encode call: it
     // has already cleared the same fail-closed reconcileEncoded intent gate submitAction
     // applies before IT signs, so the encoder cannot swap outputs or drop change on this
-    // path (). Throws SDKActionError rather than returning a PSBT it cannot
+    // path. Throws SDKActionError rather than returning a PSBT it cannot
     // account for. An envelope's reveal leg is deliberately NOT returned (see below);
     // signing one goes through submitAction, which reconciles both legs.
     //
@@ -781,9 +781,10 @@ class XChainSDK {
         // An envelope answers as a PAIR, and the reveal is what pins the commit's
         // funding leg below. Take it off the result and keep it LOCAL: this method
         // hands back one signable PSBT, and a second one riding along in the return
-        // value would be a signable PSBT that nothing here reconciles - exactly the
-        // hole  is about, reopened one field over. Callers that need to sign
-        // a reveal go through submitAction, which gates commit and reveal separately.
+        // value would be a signable PSBT that nothing here reconciles - the same gap
+        // the pre-sign intent gate above closes, reopened one field over. Callers that
+        // need to sign a reveal go through submitAction, which gates commit and reveal
+        // separately.
         let revealPsbt = feeResult.revealPsbt;
         delete feeResult.revealPsbt;
 
@@ -792,7 +793,7 @@ class XChainSDK {
         // LifecycleManager.submitAction applies before it signs. Without this the
         // blessed estimate-then-sign fast path was the one signing route in the SDK
         // with no reconciliation on it, and a compromised encoder could swap outputs
-        // or drop change on it (). Fail-closed: reconcileEncoded throws, so
+        // or drop change on it. Fail-closed: reconcileEncoded throws, so
         // the single PSBT this method returns is one it could account for in full.
         let reconcileNetwork;
         try { reconcileNetwork = this.wallet.getBitcoinNetwork(); } catch (e) { reconcileNetwork = undefined; }
@@ -833,7 +834,7 @@ class XChainSDK {
     // admission cap) is retried once after a short delay (opts.busyRetryDelayMs, default 1s)
     // before being returned. See xchain-documentation/concepts/GAS.md.
     //
-    // : `actionData` may also be an ALREADY-FORMATTED action string. A caller re-quoting a
+    // `actionData` may also be an ALREADY-FORMATTED action string. A caller re-quoting a
     // fee it composed earlier (the wallet's Approve-time re-check) holds the exact bytes it is
     // about to broadcast, and re-deriving them from the form params it started with would price a
     // second, independently built action: the same mirror-drift class as the VOTE params mirror.
@@ -978,7 +979,6 @@ class XChainSDK {
         let network = this.options.network || process.env.NETWORK;
         if (!network) throw new SDKConfigError('NETWORK_NOT_CONFIGURED', 'Network is required for cross-chain message queries.');
 
-        // Determine network tier (mainnet/testnet/regtest)
         let tier = network.split('-')[1]; // 'mainnet', 'testnet', or 'regtest'
         let chains = [
             { network: 'bitcoin-' + tier,  chain: 'BTC' },
@@ -986,7 +986,6 @@ class XChainSDK {
             { network: 'dogecoin-' + tier,  chain: 'DOGE' }
         ];
 
-        // Create explorer clients for each chain reusing the same server
         let explorers = chains.map(({ network: net, chain }) => {
             let client = new ExplorerClient({
                 network:      net,
@@ -1604,7 +1603,7 @@ class XChainSDK {
         ws.on('NEW_ACTION', callback);
         let params = {};
         if (opts && opts.types)    params.types    = opts.types;
-        // `statuses` is deliberately NOT forwarded (). No explorer channel
+        // `statuses` is deliberately NOT forwarded. No explorer channel
         // populates a per-event status: db.getActionsSince selects `NULL as status`,
         // and every outbound frame (NEW_ACTION, lifecycle events incl. ORDER_MATCH,
         // catch-up replay) derives its status from that row. Broadcaster._passesFilter
@@ -1612,7 +1611,7 @@ class XChainSDK {
         // The server matches this: it omits `statuses` from WELCOME features and from
         // the SUBSCRIBED active_filters. Forwarding it let a caller rely on a silent
         // no-op and believe it was receiving a filtered stream.
-        // `ticks` is deliberately NOT forwarded either (#3860). No action frame carries a
+        // `ticks` is deliberately NOT forwarded either. No action frame carries a
         // tick field: db.getActionsSince selects no tick/give_tick/get_tick column, so
         // Broadcaster._passesFilter's `if (tick && ...)` never fires on the actions
         // channel, the only one a ticks filter can attach to. Forwarding it let a caller
@@ -1754,7 +1753,7 @@ class XChainSDK {
     // Returns the action object when found, or rejects on timeout
     // opts: { timeout, pollInterval, requireValid, explorer | explorerUrl+explorerPort }
     // The explorer override targets a stack other than the one this SDK
-    // discovered, for isolated venues with no colocated explorer .
+    // discovered, for isolated venues with no colocated explorer.
     async waitForAction(txid, opts) {
         let waiter = new ActionWaiter(this);
         return waiter.waitForTxid(txid, opts);

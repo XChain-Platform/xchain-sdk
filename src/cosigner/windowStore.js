@@ -200,7 +200,7 @@ class WindowStore {
             err.code = 'WINDOW_STATE_CORRUPT';
             throw err;
         }
-        // Fail CLOSED on a structurally bad ROW, not just a bad file (#3920). _pruned's
+        // Fail CLOSED on a structurally bad ROW, not just a bad file. _pruned's
         // `e.t >= cutoff` silently drops a row with a non-finite t (undefined >= n is
         // false), and snapshot() quarantines an unaddable amount out of perTick: both
         // LOWER a consumed budget, which is the wrong direction.
@@ -281,7 +281,7 @@ class WindowStore {
     // quarantined and reported, never allowed to throw the whole daemon down.
     // It still counts toward `count`, so quarantining tightens the count cap - but it
     // LOOSENS the per-tick cap, since the un-added amount never reaches perTick, which
-    // is why _load now refuses such a row outright (#3920). Kept here as belt-and-
+    // is why _load now refuses such a row outright. Kept here as belt-and-
     // braces for a file written by an older build.
     snapshot() {
         const usage = this._pruned();
@@ -325,7 +325,7 @@ class WindowStore {
             this._fault('the host clock moved BACKWARD while the daemon was running ' +
                 `(${Math.round((newest - now) / 1000)}s); the rolling window trusts wall-clock time`,
                 { newest, now });
-        // Never write a row this store's own loader would refuse to read back (#3920):
+        // Never write a row this store's own loader would refuse to read back:
         // after the load-time guard, an unaddable amount would become a refusal to start.
         if (amount !== undefined) {
             try { addDecimal('0', amount); }

@@ -262,7 +262,7 @@ class GatedFileUtils {
     }
 
     /**
-     * Compress THEN encrypt a gated FILE payload ( spec §5.4).
+     * Compress THEN encrypt a gated FILE payload (spec §5.4).
      *
      * The ordering is not a preference, it is the only order that does
      * anything: AES-256-GCM ciphertext is indistinguishable from random, so

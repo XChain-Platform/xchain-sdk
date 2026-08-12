@@ -434,7 +434,7 @@ describe('WalletUtils', function() {
             expect(out.address).to.match(/^bcrt1q/);
         });
 
-        // . A PSBT may legally carry BOTH fields for a segwit input, and
+        // A PSBT may legally carry BOTH fields for a segwit input, and
         // the encoder now does exactly that on request, because a hardware
         // signer cannot sign without the full previous transaction: Ledger
         // takes the outpoint it signs from those bytes rather than from the

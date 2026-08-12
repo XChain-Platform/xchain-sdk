@@ -28,7 +28,7 @@ const Validator     = require('../../src/validator.js');
 const FormatSelector = require('../../src/formatSelector.js');
 const { SDKError, SDKValidationError, SDKFormatError } = require('../../src/errors.js');
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
+// helpers
 
 function createActions() {
     let sdk = { config: config.getConfig(), util: new Utility() };
@@ -56,7 +56,7 @@ function assertCleanError(e) {
     expect(e.name, 'error name must start with SDK').to.match(/^SDK/);
 }
 
-// ─── Group 1: Garbage types for the action field ──────────────────────────────
+// Group 1: Garbage types for the action field
 
 describe('Fuzz – Group 1: Garbage types for action field', function() {
 
@@ -143,7 +143,7 @@ describe('Fuzz – Group 1: Garbage types for action field', function() {
 
 });
 
-// ─── Group 2: Garbage types for SEND param fields ────────────────────────────
+// Group 2: Garbage types for SEND param fields
 
 describe('Fuzz – Group 2: Garbage types for SEND param fields', function() {
 
@@ -209,7 +209,7 @@ describe('Fuzz – Group 2: Garbage types for SEND param fields', function() {
 
 });
 
-// ─── Group 3: Extreme string lengths ─────────────────────────────────────────
+// Group 3: Extreme string lengths
 
 describe('Fuzz – Group 3: Extreme string lengths', function() {
 
@@ -297,7 +297,7 @@ describe('Fuzz – Group 3: Extreme string lengths', function() {
 
 });
 
-// ─── Group 4: Unicode and special characters ──────────────────────────────────
+// Group 4: Unicode and special characters
 
 describe('Fuzz – Group 4: Unicode and special characters in MEMO', function() {
 
@@ -351,7 +351,7 @@ describe('Fuzz – Group 4: Unicode and special characters in MEMO', function() 
 
 });
 
-// ─── Group 5: Prototype pollution attempts ────────────────────────────────────
+// Group 5: Prototype pollution attempts
 
 describe('Fuzz – Group 5: Prototype pollution attempts', function() {
 
@@ -422,7 +422,7 @@ describe('Fuzz – Group 5: Prototype pollution attempts', function() {
 
 });
 
-// ─── Group 6: Validator with garbage inputs ───────────────────────────────────
+// Group 6: Validator with garbage inputs
 
 describe('Fuzz – Group 6: Validator with garbage inputs', function() {
 
@@ -555,7 +555,7 @@ describe('Fuzz – Group 6: Validator with garbage inputs', function() {
 
 });
 
-// ─── Group 7: FormatSelector with garbage inputs ──────────────────────────────
+// Group 7: FormatSelector with garbage inputs
 
 describe('Fuzz – Group 7: FormatSelector with garbage inputs', function() {
 
@@ -640,7 +640,7 @@ describe('Fuzz – Group 7: FormatSelector with garbage inputs', function() {
 
 });
 
-// ─── Group 8: Rapid-fire random actions ──────────────────────────────────────
+// Group 8: Rapid-fire random actions
 
 describe('Fuzz – Group 8: Rapid-fire random actions', function() {
 

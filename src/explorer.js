@@ -57,10 +57,10 @@ class ExplorerClient {
         let pool   = this._pool;
         let baseURL = this.baseUrl.startsWith('http') ? this.baseUrl : 'http://' + this.baseUrl + ':' + this.port;
         let isHttps = baseURL.startsWith('https');
-        // : an injected agent wins. The desktop wallet routes its
-        // traffic through a SOCKS5 proxy when the user turns on Tor routing,
-        // and that is expressed as pre-built agents because a SOCKS tunnel
-        // is a different way of opening the socket, not a pool tuning knob.
+        // An injected agent wins. The desktop wallet routes its traffic
+        // through a SOCKS5 proxy when the user turns on Tor routing, and
+        // that is expressed as pre-built agents because a SOCKS tunnel is a
+        // different way of opening the socket, not a pool tuning knob.
         // http and https are separate because axios needs the matching one.
         // Everything else keeps the pooled default, unchanged.
         let Agent  = isHttps ? require('https').Agent : require('http').Agent;
@@ -277,11 +277,11 @@ class ExplorerClient {
         return this._get('/callbacks/' + query + '/' + type, opts);
     }
 
-    // Betting markets . type is one of block | address | source | token
+    // Betting markets. type is one of block | address | source | token
     // | status, matching the explorer route map. `source` filters by the market's
     // oracle; `address` matches any participant.
     //
-    // The unfiltered branch is REQUIRED, not a convenience : the explorer
+    // The unfiltered branch is REQUIRED, not a convenience: the explorer
     // registers `/bet_feeds` alongside `/bet_feeds/{QUERY}/{TYPE}`, and without
     // this guard a caller asking for every market interpolates the literals and
     // requests `/bet_feeds/null/null`, which 404s. That is what the wallet's "All
@@ -381,7 +381,7 @@ class ExplorerClient {
         return this._get('/feequote?' + q.toString());
     }
 
-    // Oracle usage fee quote for a Mode B dispenser . Proxies to the indexer's
+    // Oracle usage fee quote for a Mode B dispenser. Proxies to the indexer's
     // read-only `oraclefeequote`.
     //
     // A dispenser that names an ORACLE_ADDRESS pays the oracle operator up front, as a
@@ -411,7 +411,7 @@ class ExplorerClient {
         return this._get('/oraclefeequote?' + q.toString());
     }
 
-    // Validity-first pre-flight for one action . Proxies to the indexer's read-only
+    // Validity-first pre-flight for one action. Proxies to the indexer's read-only
     // `preflight`: "would the indexer accept this action?", decoupled from native-fee support.
     // Returns { supported, valid, status, error, guardInert, feeExempt, denied, blockIndex,
     //           blockTime, xchainFee, feeMode, feeTick, feeTokenBalance, feeAffordable }.
@@ -419,7 +419,7 @@ class ExplorerClient {
     //           pipe string. noRetry is honored (best-effort pre-flight callers).
     // `feeMode` ('xchain' | 'native', optional) states how the transaction being composed will
     // settle the protocol fee; the verdict differs, because the XCHAIN mode debits the payer's
-    // balance and the native mode pays a coin output . Omit it to get the chain's own
+    // balance and the native mode pays a coin output. Omit it to get the chain's own
     // default mode (native on LTC/DOGE, the XCHAIN debit on BTC).
     async getPreflight({ action, params, source, feeMode } = {}, opts = {}) {
         let q = new URLSearchParams();

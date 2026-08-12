@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// BET (parimutuel betting) SDK surface,  P5.
+// BET (parimutuel betting) SDK surface.
 //
 // Two things are under test and they fail differently. The COMPOSE half must put
 // exactly the right bytes in exactly the right slots: BET has three formats that
@@ -50,7 +50,7 @@ function fieldsOf(actionString) {
     return actionString.split('|').slice(1);
 }
 
-describe('BET formats ', function () {
+describe('BET formats', function () {
 
     it('registers all four formats with the field order BET.md declares', function () {
         expect(formats.BET[0]).to.equal(
@@ -69,7 +69,7 @@ describe('BET formats ', function () {
 
 });
 
-describe('BET compose ', function () {
+describe('BET compose', function () {
 
     it('composes a create with every field populated, in slot order', async function () {
         const s = sdk();
@@ -160,7 +160,7 @@ describe('BET compose ', function () {
 
 });
 
-describe('BET client-side validation mirrors the consensus rules ', function () {
+describe('BET client-side validation mirrors the consensus rules', function () {
 
     const b = new BettingHelpers();
 
@@ -273,7 +273,7 @@ describe('BET client-side validation mirrors the consensus rules ', function () 
 
 });
 
-describe('BET DETAILS market definition ', function () {
+describe('BET DETAILS market definition', function () {
 
     const b = new BettingHelpers();
 
@@ -409,7 +409,7 @@ describe('BET DETAILS market definition ', function () {
 
 });
 
-describe('BET action-level validation ', function () {
+describe('BET action-level validation', function () {
 
     it('accepts a well-formed create and rejects the documented violations', function () {
         const s = sdk();
@@ -457,7 +457,7 @@ describe('BET action-level validation ', function () {
 
 });
 
-describe('BET payout projection ', function () {
+describe('BET payout projection', function () {
 
     const b = new BettingHelpers();
 
@@ -514,7 +514,7 @@ describe('BET payout projection ', function () {
 
 });
 
-describe('BET client surfaces ', function () {
+describe('BET client surfaces', function () {
 
     it('exposes the explorer read endpoints on the route paths the explorer registers', async function () {
         const s = sdk();

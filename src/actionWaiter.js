@@ -46,10 +46,9 @@ class ActionWaiter {
     // On an ISOLATED regtest venue (its own node/decoder/indexer, no colocated
     // explorer) every SDK-driven action then polls a stranger's explorer that
     // will never see the transaction, and the whole run dies on
-    // CONFIRMATION_TIMEOUT with nothing wrong on-chain (, from the
-    //  A2 drill). Injecting the target lets one driver keep the shared
-    // SDK for encoding/broadcast while waiting on the venue that actually
-    // indexed the transaction.
+    // CONFIRMATION_TIMEOUT with nothing wrong on-chain. Injecting the target
+    // lets one driver keep the shared SDK for encoding/broadcast while
+    // waiting on the venue that actually indexed the transaction.
     constructor(sdk, opts = {}) {
         this.sdk = sdk;
         this.explorer = ActionWaiter._buildExplorer(sdk, opts);
@@ -100,7 +99,7 @@ class ActionWaiter {
     //   explorer     - explorer client to poll instead of the SDK's own; or pass
     //                  explorerUrl (+ explorerPort) to build one. Needed on
     //                  isolated stacks whose explorer is not the one hub
-    //                  discovery advertises . An overridden wait skips
+    //                  discovery advertises. An overridden wait skips
     //                  the SDK WebSocket fast path (it follows the OTHER stack)
     //                  and polls only.
     //   strictStatus - if true, requireValid also refuses to ASSUME validity: a wait
@@ -108,7 +107,7 @@ class ActionWaiter {
     //                  ACTION_STATUS_UNKNOWN at the timeout instead of resolving.
     //                  Off by default (an unreadable status is not evidence of a
     //                  rejection), but the only fail-closed setting for a caller
-    //                  that must not mistake silence for success .
+    //                  that must not mistake silence for success.
     //
     // The resolved result carries the read itself, not just its conclusion:
     //   status              - normalized top-level status (see the poll comments)
@@ -184,7 +183,7 @@ class ActionWaiter {
                             ? actions.filter(a => Number(a.action_index) === Number(opts.actionIndex))
                             : actions;
 
-                        // : an EMPTY target set is not a verdict. A targeted wait whose
+                        // An EMPTY target set is not a verdict. A targeted wait whose
                         // action_index is not in the transaction (yet), or a transaction the
                         // explorer returns before its action rows exist, used to fall through
                         // the "no invalid found" branch and resolve reporting 'valid' - the
@@ -257,7 +256,7 @@ class ActionWaiter {
                         // ignored; the target action's event, or the poll fallback,
                         // settles.
                         if (Number(msg.data.action_index) !== Number(opts.actionIndex)) return;
-                        // An event without a status settles NOTHING : resolving from
+                        // An event without a status settles NOTHING: resolving from
                         // it would report success the indexer never claimed. Defer to the
                         // authoritative poll, which reads the full action row.
                         let eventStatus = readStatus(msg.data);

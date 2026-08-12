@@ -25,10 +25,10 @@ describe('decoder.describe', function () {
         expect(d.warnings).to.deep.equal([]);
     });
 
-    // : a multi-recipient SEND (v1/v2/v3) must not be described as if it
-    // paid one person. Before this, the summary read `firstStr` of each
-    // repeated field, so a three-recipient send announced "Send 7 XCHAIN to
-    // <recipient 1>" on the signing screen while paying two more people; the
+    // A multi-recipient SEND (v1/v2/v3) must not be described as if it paid
+    // one person. Before this, the summary read `firstStr` of each repeated
+    // field, so a three-recipient send announced "Send 7 XCHAIN to
+    // <recipient 1>" on the signing screen while paying two more people: the
     // other legs appeared only as a comma-joined "7, 3, 1" detail row. Caught
     // by driving the real Send form against regtest.
     describe('multi-recipient SEND', function () {
@@ -132,11 +132,11 @@ describe('decoder.describe', function () {
         }
     });
 
-    // : BET and PRICE were promoted from the wallet's local
-    // describer, which had moved ahead of this one. What makes them worth
-    // having is not the summary line but the irreversibilities they state,
-    // so those are pinned per format rather than left to a shape assertion.
-    describe('BET ( §11.3)', function () {
+    // BET and PRICE were promoted from the wallet's local describer, which
+    // had moved ahead of this one. What makes them worth having is not the
+    // summary line but the irreversibilities they state, so those are pinned
+    // per format rather than left to a shape assertion.
+    describe('BET (§11.3)', function () {
         it('a placed bet states finality and the parimutuel share', function () {
             const w = describeAction(parse('BET|2|42|1|10')).warnings.join('\n');
             expect(w).to.include('Bets are final');
@@ -258,9 +258,9 @@ describe('decoder.describe', function () {
         });
     });
 
-    // . The case list above is hand-maintained, so it can only prove
-    // what someone remembered to add; the confirm screen is the surface a
-    // user verifies intent on, and an action nobody thought to list there
+    // The case list above is hand-maintained, so it can only prove what
+    // someone remembered to add; the confirm screen is the surface a user
+    // verifies intent on, and an action nobody thought to list there
     // silently reaches a signer as "No plain-English summary is available".
     // This enumerates formats.js instead, so adding an ACTION to the
     // protocol without a describer fails here rather than on a sign screen.
@@ -280,7 +280,7 @@ describe('decoder.describe', function () {
         }
     });
 
-    describe('multi-destroy ', function () {
+    describe('multi-destroy', function () {
         it('v1 lists every leg and keeps the irreversibility warning', function () {
             const d = describeAction(parse('DESTROY|1|JDOG|5|PEPE|7|bye'));
             expect(d.summary).to.equal('Destroy: 5 JDOG, 7 PEPE');
@@ -301,7 +301,7 @@ describe('decoder.describe', function () {
         });
     });
 
-    describe('ADDRESS ', function () {
+    describe('ADDRESS', function () {
         it('v0 names the options the action actually sets', function () {
             const d = describeAction(parse('ADDRESS|0|1||2|'));
             expect(d.summary).to.include('fees destroyed');

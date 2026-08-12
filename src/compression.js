@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * FILE payload compression ( spec Part B).
+ * FILE payload compression (spec Part B).
  *
  * Wire contract:
  *   FILE|0|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH|GATE_MIN_AMOUNT|COMPRESSION
@@ -55,7 +55,7 @@ class CompressionUtils {
      * Compress payload bytes with deflate-raw, asynchronously.
      *
      * Async by requirement, not preference: the encoder that consumes this is
-     * a hard single-instance service ( lockfile guard), so a synchronous
+     * a hard single-instance service (lockfile guard), so a synchronous
      * deflate on the request path would block every other caller for the
      * duration. There is deliberately no *Sync sibling exported.
      *

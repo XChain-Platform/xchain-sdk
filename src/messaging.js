@@ -48,8 +48,7 @@ const METHOD_AES   = 3;
 // genuinely need a wider sweep raise it with opts.maxPubkeyLookups.
 const ECDH_MAX_PUBKEY_LOOKUPS = 25;
 
-// -----------------------------------------------------------------------------
-//  ECDH key-derivation versioning (fix #3520)
+//  ECDH key-derivation versioning.
 //
 //  Legacy (v0) derivation was a bare SHA256(raw_ecdh_product) with no HKDF and
 //  no domain separation: the SAME raw ECDH product produced the SAME AES key
@@ -69,7 +68,6 @@ const ECDH_MAX_PUBKEY_LOOKUPS = 25;
 //  out-of-band, so deriveSharedSecret() now derives the v1 HKDF secret by
 //  default; the legacy secret stays reachable via the `legacy` option for any
 //  pre-existing session that must still interoperate.
-// -----------------------------------------------------------------------------
 const KDF_VERSION_V0 = 0;       // bare SHA256(raw ecdh product), no domain sep
 const KDF_VERSION_V1 = 1;       // HKDF-SHA256 with per-method info label
 
@@ -93,7 +91,7 @@ const HKDF_KEY_LEN = 32;        // AES-256 key
  * browser crypto shims the wallet's web / extension / desktop-renderer shells
  * build against, where it throws "crypto2.hkdfSync is not a function". That
  * killed every v1 encrypt AND decrypt in a browser - which is the whole
- * messaging feature outside Node . HMAC-SHA256 is present in those
+ * messaging feature outside Node. HMAC-SHA256 is present in those
  * shims, so the two RFC 5869 steps are done here instead: extract a PRK with
  * the salt as the HMAC key, then expand it one 32-byte block at a time.
  *
@@ -344,7 +342,7 @@ class MessagingUtils {
      * @param {string} wif - Your WIF private key
      * @param {string|Buffer} theirPublicKey - Other party's public key (hex or Buffer)
      * @param {Object} [opts={}]
-     * @param {boolean} [opts.legacy=false] - Derive the pre-#3520 bare-SHA256
+     * @param {boolean} [opts.legacy=false] - Derive the legacy bare-SHA256
      *        secret instead of v1 HKDF. Use ONLY to interoperate with a session
      *        established under the legacy derivation.
      * @returns {{ sharedSecret: string }} - Hex-encoded 32-byte shared secret
@@ -664,7 +662,7 @@ class MessagingUtils {
         // and `_get` hands that body back untouched. Requiring a bare array here
         // meant a real explorer response always failed the check and the inbox
         // returned EMPTY - so a MESSAGE that is on-chain, valid and addressed to
-        // you was invisible in the wallet, silently . Accept both shapes:
+        // you was invisible in the wallet, silently. Accept both shapes:
         // a bare array is what the unit-test doubles return.
         if (rawMessages && !Array.isArray(rawMessages) && Array.isArray(rawMessages.data))
             rawMessages = rawMessages.data;
@@ -846,7 +844,7 @@ class MessagingUtils {
 
     // v1 KDF: HKDF-SHA256 over the raw ECDH product with a fixed protocol salt
     // and a per-method `info` label. The differing `info` per method is what
-    // guarantees cross-method domain separation (fix #3520).
+    // guarantees cross-method domain separation.
     _hkdfFromEcdh(privateKey, publicKey, info) {
         let raw = this._ecdhProduct(privateKey, publicKey);
         return hkdfSha256(raw, HKDF_SALT, info, HKDF_KEY_LEN);

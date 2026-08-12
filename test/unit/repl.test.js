@@ -1,7 +1,6 @@
-//  doctrine test-coverage program: unit coverage for src/repl.js. The
-// developer REPL entry point must load without opening an interactive session
-// as a side effect (importing it is safe; only startREPL() drops into repl).
-// Pins the exported contract.
+// Unit coverage for src/repl.js. The developer REPL entry point must load
+// without opening an interactive session as a side effect (importing it is
+// safe; only startREPL() drops into repl). Pins the exported contract.
 
 const assert = require('assert');
 const mod = require('../../src/repl.js');

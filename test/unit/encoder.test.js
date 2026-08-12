@@ -29,10 +29,6 @@ describe('EncoderClient', function () {
         nock.cleanAll();
     });
 
-    /*
-     *  createTx
-     */
-
     describe('createTx', function () {
         it('sends correct JSON-RPC payload', async function () {
             nock(BASE)
@@ -132,10 +128,6 @@ describe('EncoderClient', function () {
         });
     });
 
-    /*
-     *  spendP2sh
-     */
-
     describe('spendP2sh', function () {
         it('sends correct payload with empty data', async function () {
             nock(BASE)
@@ -181,10 +173,6 @@ describe('EncoderClient', function () {
         });
     });
 
-    /*
-     *  ping
-     */
-
     describe('ping', function () {
         it('returns success result', async function () {
             nock(BASE)
@@ -195,10 +183,6 @@ describe('EncoderClient', function () {
             expect(result.status).to.equal('success');
         });
     });
-
-    /*
-     *  Error handling
-     */
 
     describe('error handling', function () {
         it('wraps HTTP errors', async function () {
@@ -224,10 +208,6 @@ describe('EncoderClient', function () {
         });
     });
 
-    /*
-     *  RPC ID incrementing
-     */
-
     describe('RPC ID', function () {
         it('increments with each call', async function () {
             let ids = [];
@@ -242,10 +222,6 @@ describe('EncoderClient', function () {
             expect(ids[1]).to.be.greaterThan(ids[0]);
         });
     });
-
-    /*
-     *  broadcastTx
-     */
 
     describe('broadcastTx', function () {
         it('sends broadcast_tx RPC with tx_hex', async function () {
@@ -280,10 +256,6 @@ describe('EncoderClient', function () {
             }
         });
     });
-
-    /*
-     *  getUTXOs
-     */
 
     describe('getUTXOs', function () {
         it('sends get_utxos RPC with address', async function () {
@@ -320,10 +292,6 @@ describe('EncoderClient', function () {
         });
     });
 
-    /*
-     *  estimateFee
-     */
-
     describe('estimateFee', function () {
         it('returns feeInfo with fee=null and parseError when psbt is garbage', async function () {
             nock(BASE)
@@ -338,7 +306,6 @@ describe('EncoderClient', function () {
         });
 
         it('returns feeInfo with computed fee from a valid PSBT', async function () {
-            // Build a minimal valid PSBT using bitcoinjs-lib
             const bitcoin = require('bitcoinjs-lib');
             const ecc = require('@bitcoinerlab/secp256k1');
             const { ECPairFactory } = require('ecpair');
@@ -383,10 +350,6 @@ describe('EncoderClient', function () {
             }
         });
     });
-
-    /*
-     *  spendP2sh optional params
-     */
 
     describe('spendP2sh optional params', function () {
         it('passes encoding, rawData, compressedPubKey, change, fee, feePerKb, rbf, dust, unconfirmed', async function () {
@@ -434,7 +397,7 @@ describe('EncoderClient', function () {
             await client.spendP2sh({ pubkey: 'pub', p2shHash: 'h', p2shHex: 'x', data: 'MYACTION' });
         });
 
-        // #5352: the native-fee protocol-fee output rides customOutputs and must
+        // The native-fee protocol-fee output rides customOutputs and must
         // reach create_tx on the reveal (phase 2); previously spendP2sh dropped it.
         it('maps customOutputs into the create_tx params', async function () {
             const feeOutputs = [{ address: 'mfees5pa2HwNBonk5vG23aDWkN9fuDJib4', value: 10678 }];
@@ -451,10 +414,6 @@ describe('EncoderClient', function () {
             });
         });
     });
-
-    /*
-     *  setBase
-     */
 
     describe('setBase', function () {
         it('no-ops when both url and port are falsy', function () {
@@ -483,10 +442,6 @@ describe('EncoderClient', function () {
             expect(client.port).to.equal(4000);
         });
     });
-
-    /*
-     *  hooks
-     */
 
     describe('hooks', function () {
         afterEach(function () {
@@ -591,10 +546,6 @@ describe('EncoderClient', function () {
         });
     });
 
-    /*
-     *  readyHook
-     */
-
     describe('readyHook', function () {
         afterEach(function () {
             sinon.restore();
@@ -618,10 +569,6 @@ describe('EncoderClient', function () {
         });
     });
 
-    /*
-     *  retry=false disables retries
-     */
-
     describe('retry=false', function () {
         it('does not retry when retry is false', async function () {
             const hooked = new EncoderClient({
@@ -644,10 +591,6 @@ describe('EncoderClient', function () {
             }
         });
     });
-
-    /*
-     *  ECONNABORTED timeout error
-     */
 
     describe('timeout errors', function () {
         afterEach(function () {
@@ -675,10 +618,6 @@ describe('EncoderClient', function () {
         });
     });
 
-    /*
-     *  estimateFee: nonWitnessUtxo path (legacy inputs)
-     */
-
     describe('estimateFee nonWitnessUtxo', function () {
         afterEach(function () {
             sinon.restore();
@@ -695,7 +634,6 @@ describe('EncoderClient', function () {
             const kp = ECPair.makeRandom({ network: net });
             const p2pkh = bitcoin.payments.p2pkh({ pubkey: kp.publicKey, network: net });
 
-            // Build a funding tx
             const fundTx = new bitcoin.Transaction();
             fundTx.addInput(Buffer.alloc(32), 0, 0xffffffff, Buffer.from([0x51]));
             fundTx.addOutput(p2pkh.output, 200000);
@@ -721,10 +659,6 @@ describe('EncoderClient', function () {
         });
     });
 
-    /*
-     *  HTTPS base URL
-     */
-
     describe('HTTPS base URL', function () {
         it('builds client with https agent when url starts with https', function () {
             const hooked = new EncoderClient({
@@ -734,10 +668,6 @@ describe('EncoderClient', function () {
             expect(hooked.client.defaults.baseURL).to.equal('https://encoder.example.com');
         });
     });
-
-    /*
-     *  Public methods
-     */
 
     describe('public methods', function () {
         it('has 9 public methods', function () {
@@ -755,10 +685,6 @@ describe('EncoderClient', function () {
             expect(methods).to.include('getFeeTiers');
         });
     });
-
-    /*
-     *  health
-     */
 
     describe('health', function () {
         it('calls the health RPC and returns tracker status fields', async function () {
@@ -794,10 +720,6 @@ describe('EncoderClient', function () {
             expect(result.tracker_lag).to.equal(null);
         });
     });
-
-    /*
-     *  getFeeTiers
-     */
 
     describe('getFeeTiers', function () {
         it('calls estimate_fee RPC and returns low/medium/high tiers', async function () {

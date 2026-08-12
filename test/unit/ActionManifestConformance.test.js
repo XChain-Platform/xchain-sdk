@@ -13,7 +13,7 @@
 // via the SDK. The authoritative set lives in
 // xchain-documentation/protocol/action-manifest.json (vendored here).
 //
-// The guard asserts the SDK Formats match the manifest at TWO depths :
+// The guard asserts the SDK Formats match the manifest at TWO depths:
 //   1. ACTION level: Formats keys equal the manifest userEncodable slice.
 //   2. VERSION level: each Formats[ACTION] version set equals that action's
 //      manifest userEncodableVersions array.

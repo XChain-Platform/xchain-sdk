@@ -66,7 +66,7 @@ function tweaksMatch(a, b) {
  * opaque network rejection. Throws SDKPolicyError on mismatch.
  */
 // `envelope` is the envelope context this round is signing under, when there is
-// one ( §3.9): a REVEAL's message is the BIP342 tapleaf sighash, not the
+// one (§3.9): a REVEAL's message is the BIP342 tapleaf sighash, not the
 // key-path one, so re-deriving it the old way would report every honest reveal
 // as a COSIGNER_MSG_MISMATCH. The leaf hash is computed HERE from the agent's
 // own copy of the envelope script, so this stays an independent check of the
@@ -144,7 +144,7 @@ class CoSignerClient {
      *   recoveryPublicKey {Uint8Array|hex}  2-of-3 only: the operator-recovery party's
      *                key, the SAME value the daemon is configured with. The client
      *                re-derives the tap tree from it so it composes the identical
-     *                envelope commit tree  and can cross-check `tweaks`.
+     *                envelope commit tree and can cross-check `tweaks`.
      */
     constructor(config = {}) {
         if (typeof config.transport !== 'function')

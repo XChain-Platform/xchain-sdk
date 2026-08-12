@@ -36,7 +36,7 @@ const bitcoin = require('bitcoinjs-lib');
 const ecc     = require('@bitcoinerlab/secp256k1');
 const MuSig2  = require('../musig2.js');
 const { exactU64 } = require('./coSigner.js');
-// Teach bitcoinjs to serialize a satoshi value above 2^53 (#3869). Idempotent via
+// Teach bitcoinjs to serialize a satoshi value above 2^53. Idempotent via
 // the module cache; without it a BigInt output value throws at write time.
 require('../applyBufferutilsPatch');
 
@@ -137,7 +137,7 @@ async function buildRecoverySpend(cfg = {}) {
     // directions before signing anything.
     // Satoshi values are u64: Number() rounds above 2^53, so a >90M-DOGE account
     // reconciled here compared EQUAL to a short-changed output set, while the sighash
-    // below commits to the unrounded values (#3869, mirrors coSigner._toU64 / #3788).
+    // below commits to the unrounded values (mirrors coSigner._toU64 / exactU64).
     let totalIn = 0n;
     for (const i of inputs) {
         const v = exactU64(i.value);

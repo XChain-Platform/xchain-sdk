@@ -393,7 +393,6 @@ export interface SweepParams extends ActionParams {
 export interface BroadcastParams extends ActionParams {
     /** Timestamp of the broadcast */
     timestamp: number | string;
-    /** Value field */
     value?: number | string;
     /** Feed label */
     feed_name?: string;

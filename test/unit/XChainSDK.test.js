@@ -16,9 +16,7 @@ const sinon   = require('sinon');
 const XChainSDK = require('../../src/XChainSDK.js');
 const { SDKConfigError } = require('../../src/errors.js');
 
-// ---------------------------------------------------------------------------
-//  Helpers
-// ---------------------------------------------------------------------------
+// Helpers
 
 // Env vars the SDK reads: clear them so tests are deterministic
 const ENV_KEYS = ['NETWORK', 'EXPLORER_URL', 'EXPLORER_PORT', 'ENCODER_URL',
@@ -56,7 +54,7 @@ function mockExplorer(sdk, returnVal = {}) {
 
 // A REAL encoder-shaped answer: one unsigned input, a zero-value carrier, and change
 // back to the funding script. estimateFees now runs the same fail-closed reconcile gate
-// submitAction does (), so a placeholder string is no longer a usable stand-in.
+// submitAction does, so a placeholder string is no longer a usable stand-in.
 function estimatePsbtHex() {
     const bitcoin = require('bitcoinjs-lib');
     const ecc = require('@bitcoinerlab/secp256k1');
@@ -86,9 +84,7 @@ function mockEncoder(sdk, returnVal = {}) {
     return encoder;
 }
 
-// ---------------------------------------------------------------------------
-//  Tests
-// ---------------------------------------------------------------------------
+// Tests
 
 describe('XChainSDK', function () {
 
@@ -105,9 +101,7 @@ describe('XChainSDK', function () {
         }
     });
 
-    // -----------------------------------------------------------------------
     // Constructor / init
-    // -----------------------------------------------------------------------
 
     describe('constructor', function () {
 
@@ -150,9 +144,7 @@ describe('XChainSDK', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
     // init()
-    // -----------------------------------------------------------------------
 
     describe('init()', function () {
 
@@ -205,9 +197,7 @@ describe('XChainSDK', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
     // stop()
-    // -----------------------------------------------------------------------
 
     describe('stop()', function () {
 
@@ -233,9 +223,7 @@ describe('XChainSDK', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
     // _requireExplorer / _requireEncoder / _requireWs
-    // -----------------------------------------------------------------------
 
     describe('guards', function () {
 
@@ -275,9 +263,7 @@ describe('XChainSDK', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
     // ACTION methods
-    // -----------------------------------------------------------------------
 
     describe('createAction', function () {
 
@@ -464,9 +450,7 @@ describe('XChainSDK', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
     // Convenience action methods (all delegate to createAction)
-    // -----------------------------------------------------------------------
 
     describe('convenience action methods', function () {
         const methods = [
@@ -493,9 +477,7 @@ describe('XChainSDK', function () {
         }
     });
 
-    // -----------------------------------------------------------------------
     // contract() / session() / batch()
-    // -----------------------------------------------------------------------
 
     describe('contract()', function () {
         it('returns a ContractClient instance', function () {
@@ -541,9 +523,7 @@ describe('XChainSDK', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
     // Workflow methods
-    // -----------------------------------------------------------------------
 
     describe('workflow methods', function () {
         const workflowMethods = [
@@ -562,9 +542,7 @@ describe('XChainSDK', function () {
         }
     });
 
-    // -----------------------------------------------------------------------
     // Encoder methods
-    // -----------------------------------------------------------------------
 
     describe('encoder methods', function () {
 
@@ -600,7 +578,7 @@ describe('XChainSDK', function () {
             expect(result.actionString).to.be.a('string');
         });
 
-        // . estimateFees hands back a PSBT the SDK docs say can be signed and
+        // estimateFees hands back a PSBT the SDK docs say can be signed and
         // broadcast directly, so it has to clear the same fail-closed intent gate
         // submitAction applies. Before this it was the one signing route with none.
         it('estimateFees REFUSES an encoder answer that diverts value to a destination nobody asked for', async function () {
@@ -630,7 +608,7 @@ describe('XChainSDK', function () {
             expect(err.code).to.equal('UNRECONCILED_OUTPUT');
         });
 
-        // , second half. The envelope reveal reaches estimateFees so the commit's
+        // Second half of the same rule. The envelope reveal reaches estimateFees so the commit's
         // funding leg can be pinned to what actually spends it, but it is a GATE INPUT: the
         // gate above never reconciles it, so returning it would hand back a second signable
         // PSBT nothing checked - the same hole one field over.
@@ -744,9 +722,7 @@ describe('XChainSDK', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
     // quoteNativeFee
-    // -----------------------------------------------------------------------
 
     describe('quoteNativeFee', function () {
 
@@ -762,9 +738,7 @@ describe('XChainSDK', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
     // getFeeSchedule
-    // -----------------------------------------------------------------------
 
     describe('getFeeSchedule', function () {
 
@@ -776,9 +750,7 @@ describe('XChainSDK', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // Explorer query re-exports 
-    // -----------------------------------------------------------------------
+    // Explorer query re-exports
 
     describe('explorer query re-exports', function () {
 
@@ -808,7 +780,7 @@ describe('XChainSDK', function () {
             expect(result).to.deep.equal({ finality: { BTC: 6 } });
         });
 
-        // : explorer.js carried all four BET reads while the SDK top level
+        // explorer.js carried all four BET reads while the SDK top level
         // carried none, and neither side's unit tests could see the hole - this
         // suite mocks the ExplorerClient (so it only ever proves the client has
         // the method), and consumers mock the SDK (so a mock has whatever the
@@ -860,9 +832,7 @@ describe('XChainSDK', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
     // Hub methods
-    // -----------------------------------------------------------------------
 
     describe('hub methods', function () {
 
@@ -911,9 +881,7 @@ describe('XChainSDK', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
     // Wallet convenience methods
-    // -----------------------------------------------------------------------
 
     describe('wallet methods', function () {
 
@@ -990,9 +958,7 @@ describe('XChainSDK', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
     // Auth convenience methods
-    // -----------------------------------------------------------------------
 
     describe('auth methods', function () {
 
@@ -1026,9 +992,7 @@ describe('XChainSDK', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
     // Messaging convenience methods
-    // -----------------------------------------------------------------------
 
     describe('messaging methods', function () {
 
@@ -1083,9 +1047,7 @@ describe('XChainSDK', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
     // Explorer passthrough methods
-    // -----------------------------------------------------------------------
 
     describe('explorer passthrough methods', function () {
         // All these methods just call _requireExplorer().<method>(args)
@@ -1163,9 +1125,7 @@ describe('XChainSDK', function () {
         }
     });
 
-    // -----------------------------------------------------------------------
     // WebSocket convenience methods
-    // -----------------------------------------------------------------------
 
     describe('WebSocket methods', function () {
 
@@ -1213,7 +1173,7 @@ describe('XChainSDK', function () {
             expect(sdk.ws.off.calledWith('NEW_BLOCK', cb)).to.be.true;
         });
 
-        // : the `statuses` key in this assertion pinned the BUG. The SDK
+        // The `statuses` key in this assertion pinned the BUG. The SDK
         // forwarded a filter no explorer channel honors (getActionsSince selects
         // `NULL as status`), so a caller believed it had a filtered stream and did
         // not. The supported filters are asserted here; the dropped one below.
@@ -1306,7 +1266,7 @@ describe('XChainSDK', function () {
             unsub();
         });
 
-        // : this assertion previously pinned the BUG. It asserted that a
+        // This assertion previously pinned the BUG. It asserted that a
         // caller-supplied `statuses` was forwarded, but no explorer channel ever
         // populates a per-event status (getActionsSince selects `NULL as status`),
         // so the filter could never reject anything and the caller silently got an
@@ -1345,9 +1305,7 @@ describe('XChainSDK', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
     // _applyEndpoints: creates clients when they don't exist
-    // -----------------------------------------------------------------------
 
     describe('_applyEndpoints', function () {
 
@@ -1419,9 +1377,7 @@ describe('XChainSDK', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
     // start(): polling loop that stops when stopFlag is set
-    // -----------------------------------------------------------------------
 
     describe('start()', function () {
 
@@ -1436,9 +1392,7 @@ describe('XChainSDK', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
     // _isDowngrade: warns only once per service
-    // -----------------------------------------------------------------------
 
     describe('_isDowngrade', function () {
 

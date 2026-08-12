@@ -101,7 +101,7 @@ describe('psbtActionDecode.decodeActionFromPsbt', function () {
         expect(v.violation.code).to.equal('POLICY_AMOUNT_EXCEEDED');
     });
 
-    /* ── fail-closed paths (a refusal to sign is always safe) ──────────── */
+    // fail-closed paths (a refusal to sign is always safe)
 
     it('fails closed on a PSBT with no inputs', function () {
         const psbt = new bitcoin.Psbt();

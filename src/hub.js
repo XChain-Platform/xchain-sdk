@@ -47,7 +47,7 @@ function mergeConfigDelta(base, delta){
 }
 
 // Network string → hub config keys mapping
-// Per-request axios options carrying the injected agents . The hub
+// Per-request axios options carrying the injected agents. The hub
 // has several URLs and they can differ in scheme, so the choice is made per
 // URL rather than once per client.
 function agentOptsFor(url, pool){
@@ -76,7 +76,7 @@ class HubConnector {
     constructor(options = {}) {
         this.timeout = options.timeout || 5000;
 
-        // : the hub client posts through bare `axios.post`, with no
+        // The hub client posts through bare `axios.post`, with no
         // pooled client of its own, so it needs the injected agents handed to
         // it explicitly. Missing this would have left hub traffic going direct
         // while explorer and encoder traffic was proxied, which is the worst

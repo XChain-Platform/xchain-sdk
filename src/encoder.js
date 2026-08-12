@@ -53,10 +53,10 @@ class EncoderClient {
         let pool    = this._pool;
         let baseURL = this.baseUrl.startsWith('http') ? this.baseUrl : 'http://' + this.baseUrl + ':' + this.port;
         let isHttps = baseURL.startsWith('https');
-        // : an injected agent wins. The desktop wallet routes its
-        // traffic through a SOCKS5 proxy when the user turns on Tor routing,
-        // and that is expressed as pre-built agents because a SOCKS tunnel
-        // is a different way of opening the socket, not a pool tuning knob.
+        // An injected agent wins. The desktop wallet routes its traffic
+        // through a SOCKS5 proxy when the user turns on Tor routing, and
+        // that is expressed as pre-built agents because a SOCKS tunnel is a
+        // different way of opening the socket, not a pool tuning knob.
         // http and https are separate because axios needs the matching one.
         // Everything else keeps the pooled default, unchanged.
         let Agent   = isHttps ? require('https').Agent : require('http').Agent;
@@ -207,7 +207,7 @@ class EncoderClient {
     //
     // Returns: { psbt: <hex>, encoding: <string> }
     async createTx(params) {
-        // : `data` is optional. A transaction with no ACTION is a plain
+        // `data` is optional. A transaction with no ACTION is a plain
         // payment (the encoder's create_tx contract has always allowed it, and
         // now omits the nulldata output entirely for it), which is exactly what
         // sending a chain's own native coin is. Refusing it here forced callers
@@ -241,20 +241,20 @@ class EncoderClient {
         if (params.compressedPubKey !== undefined) rpcParams.compressedPubKey = params.compressedPubKey;
         if (params.customOutputs !== undefined)    rpcParams.customOutputs = params.customOutputs;
         if (params.feeQuote !== undefined)         rpcParams.feeQuote = params.feeQuote;
-        // : ask the encoder to attach each segwit input's full previous
+        // Ask the encoder to attach each segwit input's full previous
         // transaction. Only a hardware signer needs it (see the encoder's own
         // note), and it costs a node round trip plus real PSBT weight per
         // input, so it is opt-in per request rather than always-on.
         if (params.attachPrevTx !== undefined)     rpcParams.attachPrevTx = params.attachPrevTx;
 
-        //  Part B: transparent FILE payload compression. Tri-state on the
+        // Transparent FILE payload compression. Tri-state on the
         // wire - omitted takes the encoder's deployment default (ON), and an
         // explicit false is the opt-out. Forwarded rather than defaulted here,
         // because the SDK has no way to know what the encoder it is talking to
         // was deployed with.
         if (params.compress !== undefined)         rpcParams.compress = params.compress;
 
-        //  §6: per-call capabilities for encoding: "AUTO". Today the only
+        // Per-call capabilities for encoding: "AUTO". Today the only
         // key is signerSupportsTapscript, which AUTO needs before it will select
         // the Taproot envelope: the reveal must be signable before the commit is
         // broadcast, so an unaffirmed signer stays on P2WSH. The SDK does NOT
@@ -387,7 +387,7 @@ class EncoderClient {
     // submitted intent to reconcile against, so they are the encoder's unchecked answer.
     // Sign only via XChainSDK.estimateFees, which runs the commit through
     // reconcileEncoded and drops the reveal rather than hand back a leg it did not
-    // gate, or via LifecycleManager.submitAction, which gates both ().
+    // gate, or via LifecycleManager.submitAction, which gates both.
     // Signing a raw estimateFee answer trusts the remote encoder.
     //
     // Required: same as createTx (data, pubkey)
@@ -399,7 +399,7 @@ class EncoderClient {
         let feeInfo = { psbt: result.psbt, encoding: result.encoding };
         // A TAPROOT envelope answers as a PAIR, and the reveal is what pins the commit's
         // funding leg for the caller-side reconcile gate. Dropping it here left that gate
-        // unable to tell a legitimate commit leg from parked value (). It is a
+        // unable to tell a legitimate commit leg from parked value. It is a
         // gate input, not an extra thing to sign: estimateFees consumes it and deletes it.
         if (result.revealPsbt) feeInfo.revealPsbt = result.revealPsbt;
         try {

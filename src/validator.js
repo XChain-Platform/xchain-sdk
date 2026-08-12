@@ -39,14 +39,13 @@ const ADDRESS_REF_FIELD_SET = (() => {
     return s;
 })();
 
-// Maximum values
 const MAX_SUPPLY_CEILING = 1000000000000000000000; // 1 sextillion
 const MAX_DECIMALS       = 18;
 const MAX_TICK_LENGTH    = 250;
 const MAX_DESC_LENGTH    = 250;
 const MAX_MESSAGE_LENGTH = 1048576; // 1MB
 
-// PC-29 /  P9: wire bound on FILE.GATE_MIN_AMOUNT. Matches the indexer's
+// PC-29: wire bound on FILE.GATE_MIN_AMOUNT. Matches the indexer's
 // gated_files.gate_min_amount VARCHAR(40) exactly, and the reason it is a WIRE
 // rule rather than only a column width is that consensus validity must never
 // depend on what a DB does to an oversized value: if the column silently
@@ -318,7 +317,6 @@ class Validator {
     _validateField(action, field, value, allFields) {
         let errors = [];
 
-        // TICK validation
         if (field === 'TICK' || field === 'GIVE_TICK' || field === 'GET_TICK' ||
             field === 'DIVIDEND_TICK' || field === 'CALLBACK_TICK') {
             if (action === 'ISSUE' && field === 'TICK') {
@@ -340,7 +338,6 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', 'DESCRIPTION must be ' + MAX_DESC_LENGTH + ' characters or less', { field, value: String(value).length, constraint: { max: MAX_DESC_LENGTH } }));
         }
 
-        // DECIMALS validation
         if (field === 'DECIMALS') {
             if (!Number.isInteger(Number(value)) || Number(value) < 0 || Number(value) > MAX_DECIMALS)
                 errors.push(this._error('INVALID_FIELD_VALUE', 'DECIMALS must be an integer between 0 and ' + MAX_DECIMALS, { field, value, constraint: { min: 0, max: MAX_DECIMALS, type: 'integer' } }));
@@ -354,7 +351,7 @@ class Validator {
                 // BigInt('-0') is 0n, so a negative supply cleared `bigVal < 0n` and was
                 // serialized into an ISSUE the indexer then refuses (its amount-format
                 // validator rejects any amount starting with '-') after the fee is spent.
-                // Positive-fraction handling is deliberately untouched ().
+                // Positive-fraction handling is deliberately untouched.
                 let raw    = String(value).trim();
                 let bigVal = BigInt(raw.split('.')[0]);
                 if (raw.startsWith('-') || bigVal < 0n || bigVal > BigInt('1000000000000000000000'))
@@ -366,7 +363,7 @@ class Validator {
             // range-checks split('.')[0] and throws the fraction away, so MAX_SUPPLY=1.5 with
             // DECIMALS=0 cleared the SDK while the indexer refuses it as
             // 'invalid: MAX_SUPPLY (format)' (issue.js fieldList['AMOUNT'] -> isValidAmountFormat)
-            // after the miner fee is already spent ().
+            // after the miner fee is already spent.
             //
             // Only the part decidable OFFLINE is decided here. issue.js:258 resolves
             // tick_decimals from the TOKEN ROW and falls back to the wire DECIMALS only when the
@@ -388,7 +385,6 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', 'MAX_SUPPLY cannot carry more than ' + MAX_DECIMALS + ' fractional digits', { field, value, constraint: { maxFractionalDigits: MAX_DECIMALS } }));
         }
 
-        // Lock field validation
         if (this.config['LOCK_FIELDS'].includes(field)) {
             if (!this.util.isValidLockValue(value))
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be 0 or 1', { field, value, constraint: { valid: [0, 1] } }));
@@ -396,7 +392,6 @@ class Validator {
         // NOTE: ISSUE v6 / ADDRESS v1 controller field checks (CONTROLLER / ACTION_CLASS /
         // UNBIND / COOLDOWN_BLOCKS) live in the consolidated block further down (~line 419).
 
-        // FIAT_CODE validation
         if (field === 'FIAT_CODE') {
             if (!VALID_FIAT_CODES.includes(String(value).toUpperCase()))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'FIAT_CODE must be one of: ' + VALID_FIAT_CODES.join(', '), { field, value, constraint: { valid: VALID_FIAT_CODES } }));
@@ -424,7 +419,6 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', 'FIAT_AMOUNT must be a non-negative amount with at most 2 decimal places', { field, value }));
         }
 
-        // COIN field validation
         if (field === 'COIN' || field === 'GIVE_COIN' || field === 'GET_COIN' || field === 'COIN1' || field === 'COIN2') {
             if (!VALID_COINS.includes(String(value).toUpperCase()))
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be one of: ' + VALID_COINS.join(', '), { field, value, constraint: { valid: VALID_COINS } }));
@@ -476,7 +470,7 @@ class Validator {
                     { field, value }));
         }
 
-        // PC-29 /  P9: GATE_MIN_AMOUNT, the unlock threshold (spec §5.2).
+        // PC-29: GATE_MIN_AMOUNT, the unlock threshold (spec §5.2).
         //
         // STATELESS checks only. Divisibility is deliberately NOT checked here: the
         // bound is min(the gate tick's divisibility, THRESHOLD_SCALE), and a tick's
@@ -540,7 +534,6 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', 'DISPENSER_PREFERENCE must be 1 (owner only) or 2 (anyone)', { field, value, constraint: { valid: [1, 2] } }));
         }
 
-        // LIST TYPE validation
         if (field === 'TYPE' && action === 'LIST') {
             if (!this.util.isValidValue(value, [1, 2]))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'LIST TYPE must be 1 (TICK list) or 2 (ADDRESS list)', { field, value, constraint: { valid: [1, 2] } }));
@@ -550,7 +543,6 @@ class Validator {
         // delimiter safety are all handled by the default-deny _checkDelimiters guard
         // (which iterates array/rest values element-by-element).
 
-        // LIST EDIT validation
         if (field === 'EDIT') {
             if (!this.util.isValidValue(value, [1, 2]))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'EDIT must be 1 (ADD) or 2 (REMOVE)', { field, value, constraint: { valid: [1, 2] } }));
@@ -591,7 +583,7 @@ class Validator {
         // fiat/oracle dispenser feature was unreachable through any client
         // using this validator - including the wallet's own Advanced options
         // panel, which offers it. Found by the fiat dispenser e2e lane
-        // (wallet campaign D-143), which could not get past the form.
+        // which could not get past the form.
         // Exactly ZERO, not merely non-positive: the convention is a zero
         // placeholder standing in for "derived later", and a negative price is
         // nonsense in either lane. Written the loose way first, and the unit
@@ -619,7 +611,6 @@ class Validator {
                 errors.push(this._error('INVALID_FIELD_VALUE', 'FEE must be a fraction between 0 and 1 with at most 18 decimals', { field, value, constraint: { min: 0, max: 1 } }));
         }
 
-        // Block number validation
         if (field === 'RESUME_BLOCK' || field === 'CALLBACK_BLOCK' ||
             field === 'MINT_START_BLOCK' || field === 'MINT_STOP_BLOCK') {
             if (!this.util.isNumeric(value))
@@ -772,7 +763,6 @@ class Validator {
             }
         }
 
-        // VALUE validation (BROADCAST)
         if (field === 'VALUE') {
             if (!this.util.isNumeric(value))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'VALUE must be numeric', { field, value }));
@@ -858,7 +848,6 @@ class Validator {
         return errors;
     }
 
-    // BATCH-specific validation
     _validateBatch(fields) {
         let errors = [];
         if (this._isEmpty(fields.COMMAND)) return errors;
@@ -935,7 +924,6 @@ class Validator {
             Object.assign({ index, command: cmd }, f.details || {})));
     }
 
-    // BROADCAST-specific validation
     _validateBroadcast(fields) {
         let errors = [];
         // Must have either MESSAGE or BROADCAST_ACTION_INDEX
@@ -944,7 +932,7 @@ class Validator {
         return errors;
     }
 
-    // BET-specific validation . Mirrors the consensus rules in
+    // BET-specific validation. Mirrors the consensus rules in
     // xchain-documentation/protocol/actions/BET.md so a malformed market fails in
     // the caller's hands instead of after paying a fee. Stateless only: whether
     // the market is open, whether the tick has a `trade` controller, whether the
@@ -1197,7 +1185,6 @@ class Validator {
         return errors;
     }
 
-    // DISPENSER-specific validation
     _validateDispenser(fields) {
         let errors = [];
         // If not a cancel/edit (no DISPENSER_ACTION_INDEX), full create requires
@@ -1228,7 +1215,6 @@ class Validator {
         return errors;
     }
 
-    // ORDER-specific validation
     _validateOrder(fields) {
         let errors = [];
         if (this._isEmpty(fields.ORDER_ACTION_INDEX)) {
@@ -1254,7 +1240,6 @@ class Validator {
         return errors;
     }
 
-    // SWAP-specific validation
     _validateSwap(fields) {
         let errors = [];
         if (this._isEmpty(fields.SWAP_ACTION_INDEX)) {
@@ -1275,7 +1260,6 @@ class Validator {
         return errors;
     }
 
-    // LIST-specific validation
     _validateList(fields) {
         let errors = [];
         // LIST v0 (create) requires TYPE; LIST v1 (edit) requires EDIT + LIST_ACTION_INDEX
@@ -1307,7 +1291,7 @@ class Validator {
         // returns a version for that payload: it sorts the fitting formats by
         // serialized length, and v1 is the shortest, so `sdk.vote({})` built and paid
         // for a bare `VOTE|1` the indexer refuses as 'invalid: POLL_REF (format)'
-        // (). Asking select() also keeps this from drifting when a format
+        // Asking select() also keeps this from drifting when a format
         // is added or removed. A payload no format can carry throws NO_MATCHING_FORMAT
         // at serialization with its own diagnostic, so nothing is asserted here.
         let version = this._isEmpty(fields.VERSION) ? null : Number(fields.VERSION);
@@ -1348,7 +1332,7 @@ class Validator {
     // the revoke flavors (v2/v3) carry SIGNING_PUBKEY, so no field is common to all
     // four. An empty payload therefore auto-selected v0 and serialized `DELEGATE|0`,
     // which the indexer refuses as 'invalid: SIGNING_PUBKEY (required)' with the miner
-    // fee already spent (). Field lists track src/formats.js and
+    // fee already spent. Field lists track src/formats.js and
     // xchain-indexer/src/actions/delegate.js.
     _validateDelegate(fields) {
         let errors = [];
@@ -1400,7 +1384,6 @@ class Validator {
         if (!TICK_REGEX.test(name))
             errors.push(this._error('INVALID_TICK_NAME', 'TICK name contains invalid characters', { value, allowed: 'a-zA-Z0-9~!@#$%^&*()_+-={}[]:<>.?' }));
 
-        // Check for forbidden characters
         for (let ch of FORBIDDEN_TEXT_CHARS) {
             if (name.includes(ch))
                 errors.push(this._error('INVALID_TICK_NAME', 'TICK name cannot contain ' + (ch === '|' ? 'pipe (|)' : 'semicolon (;)'), { value }));

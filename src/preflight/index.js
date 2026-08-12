@@ -126,7 +126,7 @@ function normalizeInput(actionData, actionsCore) {
 /**
  * Field names, the way createAction takes them.
  *
- *  re-implemented the {action, params} -> action-string path here
+ * This path re-implements the {action, params} -> action-string mapping
  * without createAction's camelCase -> UPPER_SNAKE normalization, so the
  * SAME object that composes fine ({action:'SEND', params:{tick, amount,
  * destination}}) threw UNENCODABLE_INPUT out of pre-flight. §4.2 documents
@@ -174,7 +174,7 @@ function computeVerdict(findings) {
  *     network verdict is disclosed (DRYRUN_UNAVAILABLE), so a report
  *     the network declined to judge is never presented as one it passed.
  *
- * §4.7 EXCEPTION . Tier-1 is authoritative about CONFIRMED chain
+ * §4.7 EXCEPTION. Tier-1 is authoritative about CONFIRMED chain
  * state only. A finding computed from `localDeltas` - the caller's own
  * reservations and unconfirmed committed spends - describes state the
  * dry-run cannot see by construction: two approval windows spending the
@@ -213,7 +213,7 @@ function applyTier1(findings, tier1) {
         // or an unquotable one. "Tier-2 stands" is right about PRECEDENCE and
         // was wrong about DISCLOSURE - pushing no finding at all left the report
         // a clean pass, so a client rendered it identically to a network
-        // approval. That is the  regression in its second home: measured
+        // approval. That is the same regression in its second home: measured
         // on a controller-bound token's SEND, whose confirm screen read "Looks
         // good" on a transfer the chain then refused `controller (reverted)`.
         // Same code as the unreachable case on purpose: every client already

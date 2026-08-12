@@ -8,18 +8,17 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-//  / : `pool.httpAgent` / `pool.httpsAgent` are the SDK's
-// only injection point for a caller that opens sockets differently, and
-// the wallet's Tor toggle is built entirely on top of it: the desktop
-// shell hands these three clients SOCKS5 agents and the user is told
-// their traffic is anonymised.
+// `pool.httpAgent` / `pool.httpsAgent` are the SDK's only injection point
+// for a caller that opens sockets differently, and the wallet's Tor toggle
+// is built entirely on top of it: the desktop shell hands these three
+// clients SOCKS5 agents and the user is told their traffic is anonymised.
 //
 // It had NO test. That is the wrong thing to leave uncovered, because
 // every way it can break is silent. An agent dropped on one client, or
 // landed in the slot for the scheme the base URL is not, leaves that
 // lane connecting DIRECTLY while the toggle still reads "on" and every
-// request still succeeds - which is the exact misrepresentation 
-// exists to close, reintroduced one client at a time.
+// request still succeeds - which is the exact misrepresentation this
+// suite exists to close, reintroduced one client at a time.
 //
 // So each assertion below is about WHICH socket-opener ends up in force,
 // and the http/https pairs are asserted separately because axios reads

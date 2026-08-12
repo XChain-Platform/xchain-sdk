@@ -271,7 +271,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         expect(res.reason).to.equal('OUTPUT_OVER_CAP');
     });
 
-    // : caps and output values were compared as Numbers, and
+    // Caps and output values were compared as Numbers, and
     // Number(9007199254740993n) is 9007199254740992, so an output ONE satoshi above a
     // >2^53 cap compared EQUAL to it and was approved. Reachable on a low-unit-value
     // chain (large DOGE amounts are exactly why applyBufferutilsPatch carries u64 as
@@ -425,13 +425,13 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         expect(res.reason).to.equal('FEE_EXCEEDS_CAP');
     });
 
-    // : the cap itself was parsed with Number() while both sites that
+    // The cap itself was parsed with Number() while both sites that
     // enforce it compare in BigInt, so a >2^53 cap was ROUNDED before enforcement.
     // The chosen cap rounds UP - Number('9007199254740995') is 9007199254740996 -
     // which is the direction that LOOSENS the guard: a fee one satoshi above the
     // operator's real cap compared within the rounded one and was approved. Both
     // directions are asserted, since a cap rounding the other way false-denies.
-    describe('maxFeeSats is parsed as an exact u64 ()', function () {
+    describe('maxFeeSats is parsed as an exact u64', function () {
         const CAP = 9007199254740995n;   // above 2^53; Number() rounds it UP to ...996
         const IN  = 18014398509481984n;  // 2^54, comfortably above any fee below
 
@@ -475,7 +475,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
 
         // A cap that cannot be represented exactly is refused at construction rather
         // than rounded into the guard, matching allowedOutputs[].maxValue. The bare
-        // Number form of a >2^53 cap has ALREADY lost precision (), so it
+        // Number form of a >2^53 cap has ALREADY lost precision, so it
         // is rejected too: such a cap must arrive as a bigint or a digit string.
         for (const bad of [9007199254740993, 1.5, -1, 'abc', {}, NaN])
             it(`refuses a maxFeeSats of ${String(bad)} at construction`, function () {
@@ -639,7 +639,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
 
     // Anti-forgery: a witnessUtxo.script that isn't the daemon's own derived
     // account must be denied (PREVOUT_NOT_OUR_ACCOUNT), and denial must consume
-    // no velocity-window budget (see FINDING 1841 / coSigner.js _checkPrevouts).
+    // no velocity-window budget (see coSigner.js _checkPrevouts).
     it('denies a foreign witnessUtxo.script with PREVOUT_NOT_OUR_ACCOUNT, before _checkOutputs would otherwise pass it', function () {
         const acct = makeAccount();
         const foreignSk = crypto.randomBytes(32);

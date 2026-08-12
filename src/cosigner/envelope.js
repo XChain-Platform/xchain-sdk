@@ -13,7 +13,7 @@
  **********************************************************************
  *
  * XChain Platform SDK - Taproot envelope support for the MuSig2 co-signer
- * ( spec §3.9)
+ * (envelope grammar, §3.9)
  *
  * The shipped co-signer signs ONE shape: a BIP341 key-path spend of an
  * untweaked MuSig2 aggregate, with the action read from an inline OP_RETURN.
@@ -45,7 +45,7 @@
  * rejections, same never-throws contract. It must never recognize an envelope
  * the chain would not, nor read a different payload out of one.
  *
- * --- The commit tree of a 2-of-3 account  ---
+ * --- The commit tree of a 2-of-3 account ---
  *
  * A 2-of-3 account exists so a lost party never freezes funds. A commit output
  * HOLDS FUNDS: it carries the reveal's prefunded miner fee plus a dust change
@@ -188,7 +188,7 @@ function normalizeRecoveryLeaves(recovery) {
  *   recoveryLeaves {object}  optional; a 2-of-3 account's `recovery`
  *                  ({ agentRecovery, daemonRecovery } from deriveMuSig2P2TR2of3),
  *                  composed into the same tree as the envelope leaf (see the
- *                  module header, ). Omit for a plain 2-of-2 account.
+ *                  module header). Omit for a plain 2-of-2 account.
  *   network        {object}  bitcoinjs network
  * @returns {object} { leafHash, merkleRoot, tweak, output, address, controlBlock,
  *                     outputXOnly, payload, script, recovery }
@@ -204,7 +204,7 @@ function deriveEnvelopeCommit(args = {}) {
     if (!Buffer.isBuffer(internalXOnly) || internalXOnly.length !== 32)
         throw new Error('deriveEnvelopeCommit requires a 32-byte x-only internal key');
     const parsed = parseEnvelopeScript(envelopeScript);
-    if (!parsed) throw new Error('envelope script does not match the  §3.2 grammar');
+    if (!parsed) throw new Error('envelope script does not match the §3.2 grammar');
     // The leaf spends under OP_CHECKSIG against this key, so an envelope whose
     // checksig key is not our aggregate is somebody else's envelope: signing it
     // would be signing under a key we do not control the other half of.
@@ -339,7 +339,7 @@ function classifyEnvelopeRole(psbt, commit) {
  *
  *   reveal  -> NO tweak: the leaf's OP_CHECKSIG key IS the untweaked
  *              cooperative aggregate, so an account tweak here signs under a key
- *              the leaf does not name (the 2-of-3 bug, ; invisible on a
+ *              the leaf does not name (a 2-of-3-only bug, invisible on a
  *              2-of-2 only because its account tweaks are empty).
  *   cancel  -> the commit output's own TapTweak, derived from the script.
  *   commit  -> an ordinary key-path spend of the ACCOUNT, so the account tweaks.

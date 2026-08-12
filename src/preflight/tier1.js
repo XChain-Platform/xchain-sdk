@@ -16,10 +16,10 @@
  *
  * Wraps the explorer dry-run endpoint (indexer -> _dryRunAction: the
  * REAL handler in a forced-rollback transaction) and classifies its
- * response per spec §4.3. Prefers the  validity-first
+ * response per spec §4.3. Prefers the validity-first
  * `/preflight` endpoint (verdict decoupled from native-fee support,
  * guardInert surfaced as a boolean); falls back to `/feequote` when
- * the explorer predates  (404). The load-bearing rule: several
+ * the explorer predates the `/preflight` endpoint (404). The load-bearing rule: several
  * response shapes are NOT validity verdicts and must fall through to
  * Tier 2 exclusively, never becoming a `dryrun` finding:
  *
@@ -125,7 +125,7 @@ async function runTier1({ sdk, parsed, source, feeMode, signal, timeoutMs }) {
     };
 }
 
-// Prefer the  validity-first /preflight endpoint; fall back to
+// Prefer the validity-first /preflight endpoint; fall back to
 // /feequote when the explorer predates it (404) or lacks the method.
 // The classification above handles both response shapes uniformly.
 async function callEndpoint(sdk, args) {

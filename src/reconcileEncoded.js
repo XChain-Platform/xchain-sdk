@@ -48,17 +48,17 @@ function toU64(v) {
     return null;
 }
 
-// Same, plus the decimal-STRING form (#3922). A caller-supplied cap in
-// intent.customOutputs may legitimately arrive as a string (that is what the
-// encoder's parseSatoshiAmount allowBig path exists for), and the Number() hop that
-// used to precede toU64 rounded it away above 2^53. Mirrors cosigner exactU64.
+// Same, plus the decimal-STRING form. A caller-supplied cap in intent.customOutputs
+// may legitimately arrive as a string (that is what the encoder's parseSatoshiAmount
+// allowBig path exists for), and the Number() hop that used to precede toU64 rounded
+// it away above 2^53. Mirrors cosigner exactU64.
 //
-// SAFE integer, not merely integer (). A Number above 2^53-1 has ALREADY
-// lost precision before this function sees it, so BigInt-converting it launders a
-// rounded value into a cap that is then compared exactly - the very defect the
-// bigint and digit-string branches exist to avoid. A cap that large must arrive as
-// one of those two forms; a bare Number is refused, and every caller fails closed
-// on the null (see MALFORMED_FEE_CAP / MALFORMED_PHASE_FUNDING_CAP, ).
+// SAFE integer, not merely integer. A Number above 2^53-1 has ALREADY lost precision
+// before this function sees it, so BigInt-converting it launders a rounded value into
+// a cap that is then compared exactly, the very defect the bigint and digit-string
+// branches exist to avoid. A cap that large must arrive as one of those two forms; a
+// bare Number is refused, and every caller fails closed on the null (see
+// MALFORMED_FEE_CAP / MALFORMED_PHASE_FUNDING_CAP).
 function exactU64(v) {
     if (typeof v === 'bigint') return v >= 0n ? v : null;
     if (typeof v === 'number') return (Number.isSafeInteger(v) && v >= 0) ? BigInt(v) : null;
@@ -128,7 +128,7 @@ function isOpReturn(script) {
 // they can be pinned to is shape: a plain payment to an arbitrary P2PKH/P2WPKH
 // recipient - the drain this gate exists to stop - is not one of these.
 //
-// Shape ALONE is not an authorization, though . A hostile encoder controls
+// Shape ALONE is not an authorization, though. A hostile encoder controls
 // which p2sh/p2wsh/p2tr it emits, so shape by itself lets it park arbitrary value in
 // a script only it can spend, and the maxFeeSats ceiling does not bound that: a
 // parked output is counted in totalOut, so it lowers the computed fee rather than
@@ -259,8 +259,8 @@ function reconcileEncoded(psbtHex, intent) {
     // FROM stays under the signer's control, whichever address scheme the encoder chose.
     // Reading them out of the PSBT is what makes this rule false-positive-free -
     // the SDK cannot predict the change script otherwise, since `pubkey` may be a
-    // raw key and the encoder picks the scheme. The unsigned qualifier is load-bearing
-    // and is the whole of ; see the per-input note below.
+    // raw key and the encoder picks the scheme. The unsigned qualifier is load-bearing;
+    // see the per-input note below.
     const fundingScripts = [];
     const spent = [];
     let totalIn = 0n;
@@ -287,7 +287,7 @@ function reconcileEncoded(psbtHex, intent) {
     if (!fundingScripts.length) return deny('NO_SIGNER_OWNED_INPUT',
         'every input in the encoder response already carries a signature, so none of them is the local signer\'s');
 
-    // Recovery pin . An earlier phase paid funding legs this gate could only
+    // Recovery pin. An earlier phase paid funding legs this gate could only
     // authorize by shape; this phase is the transaction that is supposed to spend them
     // back. A leg missing from these inputs is value the encoder kept, so refuse here
     // rather than sign a reveal that abandons it. False-positive-free: every chunk
@@ -368,7 +368,7 @@ function reconcileEncoded(psbtHex, intent) {
         //     only: the script is the encoder's to derive and a chunked payload emits
         //     as many of them as it needs, so neither address nor count can pin it.
         //     Value is pinned separately, by whichever of the two mechanisms this
-        //     phase has , and a leg that clears neither is a park.
+        //     phase has, and a leg that clears neither is a park.
         if (matchesPhaseShape(out.script, phaseShapes)) {
             // Where a companion PSBT already exists (the envelope pair comes back
             // from one createTx call), the leg must be exactly what that companion
@@ -418,7 +418,7 @@ function reconcileEncoded(psbtHex, intent) {
     if (totalIn > 0n && totalOut === 0n)
         return deny('FULL_BURN_FEE', { totalIn: String(totalIn), detail: 'every satoshi would go to miners' });
     const fee = totalIn - totalOut;
-    // Caller-supplied cap, parsed exactly (#3869 residual, ): the Number() hop
+    // Caller-supplied cap, parsed exactly: the Number() hop
     // that used to precede toU64 rounded a >2^53 cap, which both slackens and
     // false-positives the comparison. exactU64 also keeps the decimal-STRING form the
     // encoder's allowBig path emits.

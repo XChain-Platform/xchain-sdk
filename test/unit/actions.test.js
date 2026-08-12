@@ -39,9 +39,7 @@ function createActions() {
 }
 
 
-// ---------------------------------------------------------------------------
 // Section 1: All 19 ACTION types - basic smoke tests
-// ---------------------------------------------------------------------------
 
 describe('Actions – all 19 ACTION types', function () {
 
@@ -292,9 +290,7 @@ describe('Actions – all 19 ACTION types', function () {
 });
 
 
-// ---------------------------------------------------------------------------
 // Section 2: Format version selection
-// ---------------------------------------------------------------------------
 
 describe('Actions – format version selection', function () {
 
@@ -388,9 +384,7 @@ describe('Actions – format version selection', function () {
 });
 
 
-// ---------------------------------------------------------------------------
 // Section 3: Result structure
-// ---------------------------------------------------------------------------
 
 describe('Actions – createAction result structure', function () {
 
@@ -441,9 +435,7 @@ describe('Actions – createAction result structure', function () {
 });
 
 
-// ---------------------------------------------------------------------------
 // Section 4: Error cases
-// ---------------------------------------------------------------------------
 
 describe('Actions – error cases', function () {
 
@@ -500,9 +492,7 @@ describe('Actions – error cases', function () {
 });
 
 
-// ---------------------------------------------------------------------------
 // Section 5: Pre-flight encoding validation
-// ---------------------------------------------------------------------------
 
 describe('Actions – pre-flight encoding validation', function () {
 
@@ -619,9 +609,7 @@ describe('Actions – pre-flight encoding validation', function () {
 });
 
 
-// ---------------------------------------------------------------------------
 // Section 6: validateAction() dry-run
-// ---------------------------------------------------------------------------
 
 describe('Actions – validateAction() dry-run', function () {
 
@@ -699,9 +687,7 @@ describe('Actions – validateAction() dry-run', function () {
 });
 
 
-// ---------------------------------------------------------------------------
 // Section 7: Introspection methods
-// ---------------------------------------------------------------------------
 
 describe('Actions – introspection', function () {
 
@@ -786,9 +772,7 @@ describe('Actions – introspection', function () {
 });
 
 
-// ---------------------------------------------------------------------------
 // Section 8: Edge cases and additional coverage
-// ---------------------------------------------------------------------------
 
 describe('Actions – edge cases', function () {
 
@@ -892,11 +876,9 @@ describe('Actions – edge cases', function () {
 });
 
 
-// ---------------------------------------------------------------------------
 // DEPLOY stakeable formats: CONSTRUCTOR_PARAMS is a single wire field in
 // v1/v3, so a multi-element array must fail loudly instead of String()-
 // joining into one comma-corrupted constructor arg on an immutable deploy.
-// ---------------------------------------------------------------------------
 
 describe('Actions – DEPLOY stakeable CONSTRUCTOR_PARAMS guard', function () {
 
@@ -946,13 +928,11 @@ describe('Actions – DEPLOY stakeable CONSTRUCTOR_PARAMS guard', function () {
 });
 
 
-// ---------------------------------------------------------------------------
 // FIAT_AMOUNT end-to-end: the exact defect path was createAction's
 // setNumberFormats stripping trailing zeros ("10.00" -> "10") BEFORE a
 // validator regex that demanded exactly two decimals, so every round fiat
 // price was rejected. FIAT_AMOUNT is now excluded from numeric reformatting
 // and the validator mirrors the indexer's <= 2 decimals consensus rule.
-// ---------------------------------------------------------------------------
 
 describe('Actions – fiat-priced DISPENSER pipeline (round prices)', function () {
 
@@ -987,11 +967,9 @@ describe('Actions – fiat-priced DISPENSER pipeline (round prices)', function (
     });
 });
 
-// ---------------------------------------------------------------------------
-// : partial unstake / partial claim (trailing optional AMOUNT)
-// ---------------------------------------------------------------------------
+// Partial unstake / partial claim (trailing optional AMOUNT)
 
-describe('Actions –  partial unstake/claim optional AMOUNT', function () {
+describe('Actions – partial unstake/claim optional AMOUNT', function () {
 
     const PK = 'a'.repeat(64);
     let actions;

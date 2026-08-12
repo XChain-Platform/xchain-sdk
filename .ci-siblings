@@ -4,10 +4,10 @@
 # UNdeclared sibling is not a neutral omission: every guard written against it
 # resolves with existsSync, calls this.skip(), and the gate still prints PASS,
 # so the run reports green having exercised none of them. Measured 2026-08-12,
-# that gap was ~36 guards (test-host ran 3444 passing / 40 pending where a full
-# local checkout runs 3515 / 4). See test/unit/sibling-coverage.test.js, which
-# reports the surface this file leaves uncovered, and  for the same
-# lesson applied to a sibling that is declared but missing.
+# that gap was ~36 guards (a partial CI checkout ran 3444 passing / 40 pending
+# where a full local checkout runs 3515 / 4). See test/unit/sibling-coverage.test.js,
+# which reports the surface this file leaves uncovered; the same gap applies
+# to a sibling that is declared but missing.
 #
 # ci-dispatch.sh ships each of these at its origin/master (falling back to local
 # HEAD) and REFUSES the push if one is not a checkout beside this repo, so a

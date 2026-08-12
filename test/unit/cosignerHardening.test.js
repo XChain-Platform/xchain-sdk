@@ -8,11 +8,11 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// Adversarial coverage for the co-signer gaps G1, G2, G3 and G5
-// (claude/specs/musig2-cosigner-interface.md). The pre-existing 142 tests
-// exercise the happy path and the DESIGNED denials, which is exactly why an
-// adversarial read found these behind a green suite. Every case below fails
-// against the code as it stood before the gap was closed.
+// Adversarial coverage for the co-signer hardening gaps G1, G2, G3 and G5.
+// The pre-existing 142 tests exercise the happy path and the DESIGNED
+// denials, which is exactly why an adversarial read found these behind a
+// green suite. Every case below fails against the code as it stood before
+// the gap was closed.
 
 const { expect } = require('chai');
 const fs      = require('fs');
@@ -68,9 +68,7 @@ function tmpStateFile(tag) {
     return path.join(os.tmpdir(), `cosigner-${tag}-${crypto.randomBytes(6).toString('hex')}.json`);
 }
 
-/* ────────────────────────────────────────────────────────────────────────
- * G1 - an attacker-chosen TICK must not poison the daemon
- * ──────────────────────────────────────────────────────────────────────── */
+// G1: an attacker-chosen TICK must not poison the daemon.
 
 describe('G1: decoded params are untrusted input', function () {
 
@@ -153,7 +151,7 @@ describe('G1: decoded params are untrusted input', function () {
         expect(verdict.violation.details.cap).to.equal('10');
     });
 
-    it('#3920: an unaccumulable legacy entry now fails the LOAD closed, not just quarantine', function () {
+    it('an unaccumulable legacy entry now fails the LOAD closed, not just quarantine', function () {
         // Superseded contract: this used to assert the store kept serving and merely
         // quarantined the row. Quarantining keeps it in `count` but drops its amount
         // from perTick, which LOOSENS the per-tick cap policyEvaluator enforces - the
@@ -178,7 +176,7 @@ describe('G1: decoded params are untrusted input', function () {
         }
     });
 
-    it('#3920: a row with a non-finite timestamp is refused (it would be pruned away silently)', function () {
+    it('a row with a non-finite timestamp is refused (it would be pruned away silently)', function () {
         // _pruned filters on `e.t >= cutoff`; undefined >= n is false, so the row
         // vanishes from both count and perTick, handing back spent budget.
         const stateFile = tmpStateFile('nofinite-t');
@@ -201,7 +199,7 @@ describe('G1: decoded params are untrusted input', function () {
         }
     });
 
-    it('#3920: a count-only row (no amount) is legitimate and still loads', function () {
+    it('a count-only row (no amount) is legitimate and still loads', function () {
         const stateFile = tmpStateFile('countonly');
         fs.writeFileSync(stateFile, JSON.stringify({ entries: [
             { t: Date.now(), action: 'SEND' },
@@ -219,7 +217,7 @@ describe('G1: decoded params are untrusted input', function () {
         }
     });
 
-    it('#3920: a future-dated finite timestamp is still CLAMPED, never rejected', function () {
+    it('a future-dated finite timestamp is still CLAMPED, never rejected', function () {
         // The clock guard deliberately keeps such a row (dropping it would loosen the
         // budget); the new row guard must not turn that clamp into a refusal.
         const stateFile = tmpStateFile('future-t');
@@ -241,9 +239,7 @@ describe('G1: decoded params are untrusted input', function () {
     });
 });
 
-/* ────────────────────────────────────────────────────────────────────────
- * G2 - amount caps must not silently no-op
- * ──────────────────────────────────────────────────────────────────────── */
+// G2: amount caps must not silently no-op.
 
 describe('G2: value-derivability allowlist', function () {
 
@@ -381,9 +377,7 @@ describe('G2: value-derivability allowlist', function () {
     });
 });
 
-/* ────────────────────────────────────────────────────────────────────────
- * G3 - a supplied taproot tweak is an unverifiable commitment
- * ──────────────────────────────────────────────────────────────────────── */
+// G3: a supplied taproot tweak is an unverifiable commitment.
 
 describe('G3: tap-tree provenance', function () {
 
@@ -450,9 +444,7 @@ describe('G3: tap-tree provenance', function () {
     });
 });
 
-/* ────────────────────────────────────────────────────────────────────────
- * G5 - single writer is a safety property
- * ──────────────────────────────────────────────────────────────────────── */
+// G5: single writer is a safety property.
 
 describe('G5: window-store single-writer lock', function () {
 

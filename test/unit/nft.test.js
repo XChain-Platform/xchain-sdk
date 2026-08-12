@@ -10,11 +10,8 @@
  * license (without AGPL source-disclosure terms) is available -
  * contact legal@dankest.llc.
  *
- **********************************************************************
- *
  * XChain Platform SDK - NftHelpers Tests
- *
- ********************************************************************/
+ */
 
 'use strict';
 

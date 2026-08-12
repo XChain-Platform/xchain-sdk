@@ -25,8 +25,9 @@
  * at the callback. Re-parse numeric/boolean context inside the callback with
  * parseInt / parseFloat / JSON.parse. See the ATTEST spec §Effects.
  *
- * Spec: claude/reports/specs/2026-05-24_external-attestation-framework.md
- * LLM:  claude/reports/specs/2026-05-24_llm-attestation-provider.md
+ * Builds and validates the request envelopes for the two built-in attestation
+ * providers (LLM prompts and https:// GET requests) before they are submitted
+ * on-chain as an ATTEST v0 request.
  *
  ********************************************************************/
 

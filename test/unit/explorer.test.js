@@ -31,10 +31,6 @@ describe('ExplorerClient', function () {
         nock.cleanAll();
     });
 
-    /*
-     *  fileRawUrl
-     */
-
     describe('fileRawUrl()', function () {
         it('builds the absolute raw FILE URL for the configured explorer', function () {
             expect(client.fileRawUrl(123)).to.equal('http://explorer.test:8080/BTC/api/file/123/raw');
@@ -51,10 +47,6 @@ describe('ExplorerClient', function () {
             expect(c.fileRawUrl('7', 'doge')).to.equal('https://explorer.xchain.io/RDOGE/api/file/7/raw');
         });
     });
-
-    /*
-     *  Coin prefix derivation
-     */
 
     describe('coin prefix', function () {
         const cases = {
@@ -78,10 +70,6 @@ describe('ExplorerClient', function () {
             expect(c.coin).to.equal('BTC');
         });
     });
-
-    /*
-     *  URL construction
-     */
 
     describe('URL construction', function () {
         it('getBalances hits /{COIN}/api/balances/{address}', async function () {
@@ -262,10 +250,6 @@ describe('ExplorerClient', function () {
         });
     });
 
-    /*
-     *  Contract permissions manifest (programmable policy layer)
-     */
-
     describe('getContractManifest()', function () {
         it('normalizes a snake_case manifest (permissions JSON string + max_take_bps)', async function () {
             nock(BASE).get('/BTC/api/contract/42').reply(200, { action_index: 42, permissions: '["SEND","MINT"]', max_take_bps: 300 });
@@ -283,10 +267,6 @@ describe('ExplorerClient', function () {
             expect(m).to.deep.equal({ permissions: null, maxTakeBps: null });
         });
     });
-
-    /*
-     *  Pagination params
-     */
 
     describe('pagination', function () {
         it('passes page, limit, sortorder as query params', async function () {
@@ -307,10 +287,6 @@ describe('ExplorerClient', function () {
             expect(result).to.have.property('data');
         });
     });
-
-    /*
-     *  Error handling
-     */
 
     describe('error handling', function () {
         it('wraps HTTP 404 as SDKExplorerError', async function () {
@@ -347,10 +323,6 @@ describe('ExplorerClient', function () {
         });
     });
 
-    /*
-     *  setBase
-     */
-
     describe('setBase', function () {
         it('no-ops when both url and port are falsy', function () {
             const origClient = client.client;
@@ -379,10 +351,6 @@ describe('ExplorerClient', function () {
         });
     });
 
-    /*
-     *  readyHook
-     */
-
     describe('readyHook', function () {
         afterEach(function () {
             sinon.restore();
@@ -402,10 +370,6 @@ describe('ExplorerClient', function () {
             expect(hookCalled).to.be.true;
         });
     });
-
-    /*
-     *  hooks
-     */
 
     describe('hooks', function () {
         afterEach(function () {
@@ -459,10 +423,6 @@ describe('ExplorerClient', function () {
         });
     });
 
-    /*
-     *  Timeout error
-     */
-
     describe('timeout errors', function () {
         afterEach(function () {
             sinon.restore();
@@ -488,10 +448,6 @@ describe('ExplorerClient', function () {
         });
     });
 
-    /*
-     *  HTTPS base URL
-     */
-
     describe('HTTPS base URL', function () {
         it('builds client with https agent when url starts with https', function () {
             const c = new ExplorerClient({
@@ -501,10 +457,6 @@ describe('ExplorerClient', function () {
             expect(c.client.defaults.baseURL).to.equal('https://explorer.xchain.io');
         });
     });
-
-    /*
-     *  Balance & Address Methods (direct calls)
-     */
 
     describe('balance & address methods', function () {
         it('getAddress returns result', async function () {
@@ -544,10 +496,6 @@ describe('ExplorerClient', function () {
         });
     });
 
-    /*
-     *  Token methods (direct calls)
-     */
-
     describe('token methods', function () {
         it('getTokens returns result', async function () {
             nock(BASE).get('/BTC/api/tokens/addr1/address').reply(200, { total: 3, data: [] });
@@ -561,10 +509,6 @@ describe('ExplorerClient', function () {
             expect(r.total).to.equal(1);
         });
     });
-
-    /*
-     *  Transaction & History methods (direct calls)
-     */
 
     describe('transaction & history methods', function () {
         it('getAction returns result', async function () {
@@ -591,10 +535,6 @@ describe('ExplorerClient', function () {
             expect(r.total).to.equal(5);
         });
     });
-
-    /*
-     *  ACTION-specific methods: direct calls (a representative sample)
-     */
 
     describe('action-specific methods', function () {
         const pairs = [
@@ -665,10 +605,6 @@ describe('ExplorerClient', function () {
         });
     });
 
-    /*
-     *  Fee methods (direct calls)
-     */
-
     describe('fee methods', function () {
         it('getFeeQuote returns result', async function () {
             nock(BASE)
@@ -704,10 +640,6 @@ describe('ExplorerClient', function () {
         });
     });
 
-    /*
-     *  Price methods (direct calls)
-     */
-
     describe('price methods', function () {
         it('getPrices with query returns result', async function () {
             nock(BASE).get('/BTC/api/prices/addr1/address').reply(200, { total: 1, data: [] });
@@ -733,10 +665,6 @@ describe('ExplorerClient', function () {
             expect(r).to.have.property('data');
         });
     });
-
-    /*
-     *  Contract / VM methods (direct calls)
-     */
 
     describe('contract/VM methods', function () {
         it('getContract returns result', async function () {
@@ -799,7 +727,7 @@ describe('ExplorerClient', function () {
             expect(r.total).to.equal(0);
         });
 
-        it('#3899: getContracts/getExecutions answer the list ENVELOPE, and index.d.ts says so', async function () {
+        it('getContracts/getExecutions answer the list ENVELOPE, and index.d.ts says so', async function () {
             // The explorer's datatable routes answer { data, total, runtime } and the SDK
             // passes it through. index.d.ts used to declare a bare array, so a TS caller
             // wrote .map() on the envelope and threw at runtime. Pin both halves: the wire
@@ -835,10 +763,6 @@ describe('ExplorerClient', function () {
         });
     });
 
-    /*
-     *  Attestation methods (direct calls)
-     */
-
     describe('attestation methods', function () {
         it('getAttestations with query returns result', async function () {
             nock(BASE).get('/BTC/api/attestations/addr1/address').reply(200, { total: 1, data: [] });
@@ -852,10 +776,6 @@ describe('ExplorerClient', function () {
             expect(r.total).to.equal(0);
         });
     });
-
-    /*
-     *  VOTE governance methods (polls, poll results, ballots)
-     */
 
     describe('VOTE governance methods', function () {
         it('getPolls with query hits /{COIN}/api/polls/{query}/{type}', async function () {
@@ -896,15 +816,13 @@ describe('ExplorerClient', function () {
         });
     });
 
-    /*
-     *  BET reads ( P5). The unfiltered branches are : without them a
-     *  caller asking for EVERY market or EVERY bet interpolates the literals and
-     *  requests `/bet_feeds/null/null`, which the explorer 404s. The wallet's
-     *  "All markets" filter did exactly that on every click, and it survived a
-     *  green suite on both sides because the SDK suite mocks this client and the
-     *  wallet suite mocks the SDK. Only a live browser run caught it, so the URLs
-     *  are pinned here where a unit test can.
-     */
+    // BET reads. Without the unfiltered branches, a caller asking for EVERY
+    // market or EVERY bet interpolates the literals and requests
+    // `/bet_feeds/null/null`, which the explorer 404s. The wallet's "All
+    // markets" filter did exactly that on every click, and it survived a
+    // green suite on both sides because the SDK suite mocks this client and
+    // the wallet suite mocks the SDK. Only a live browser run caught it, so
+    // the URLs are pinned here where a unit test can.
     describe('betting reads', function () {
         it('getBetFeeds with query hits /{COIN}/api/bet_feeds/{query}/{type}', async function () {
             nock(BASE).get('/BTC/api/bet_feeds/open/status').reply(200, { total: 1, data: [{ action_index: 7 }] });
@@ -946,10 +864,6 @@ describe('ExplorerClient', function () {
         });
     });
 
-    /*
-     *  Market methods: additional coverage
-     */
-
     describe('market methods', function () {
         it('getMarkets with tick returns result', async function () {
             nock(BASE).get('/BTC/api/markets/TOKEN').reply(200, { data: [] });
@@ -982,10 +896,6 @@ describe('ExplorerClient', function () {
         });
     });
 
-    /*
-     *  Staking methods: additional
-     */
-
     describe('staking methods', function () {
         it('getContractUnstakes without query returns result', async function () {
             nock(BASE).get('/BTC/api/contract_unstakes').reply(200, { total: 0, data: [] });
@@ -1006,10 +916,6 @@ describe('ExplorerClient', function () {
         });
     });
 
-    /*
-     *  Utility methods: additional
-     */
-
     describe('utility methods', function () {
         it('getStatus returns result', async function () {
             nock(BASE).get('/BTC/api/status').reply(200, { status: 'ok' });
@@ -1029,10 +935,6 @@ describe('ExplorerClient', function () {
             expect(r.height).to.equal(100);
         });
     });
-
-    /*
-     *  gatedFile: getGatedFileRaw
-     */
 
     describe('getGatedFileRaw', function () {
         it('returns Buffer from arraybuffer response', async function () {
@@ -1079,10 +981,6 @@ describe('ExplorerClient', function () {
             expect(onError.calledOnce).to.be.true;
         });
     });
-
-    /*
-     *  search: error handling path
-     */
 
     describe('search error handling', function () {
         it('wraps HTTP error in search path', async function () {
@@ -1160,10 +1058,6 @@ describe('ExplorerClient', function () {
         });
     });
 
-    /*
-     *  _buildParams: additional params coverage
-     */
-
     describe('_buildParams additional params', function () {
         it('passes start, length, tick, txid, blockIndex params', async function () {
             nock(BASE)
@@ -1176,10 +1070,6 @@ describe('ExplorerClient', function () {
             expect(r).to.have.property('data');
         });
     });
-
-    /*
-     *  All public methods exist
-     */
 
     describe('public methods', function () {
         const methods = [
@@ -1217,10 +1107,10 @@ describe('ExplorerClient', function () {
         }
 
         it('has 118 public methods', function () {
-            // 113 = 112 + getPreflight ( validity-first pre-flight proxy).
-            // 117 = 113 + the four BET reads ( P5): getBetFeeds, getBetFeed,
+            // 113 = 112 + getPreflight (validity-first pre-flight proxy).
+            // 117 = 113 + the four BET reads: getBetFeeds, getBetFeed,
             // getBets, getOracleStats.
-            // 118 = 117 + getOracleFeeQuote ( dispenser oracle usage fee).
+            // 118 = 117 + getOracleFeeQuote (dispenser oracle usage fee).
             let publicMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
             expect(publicMethods).to.have.length(118);

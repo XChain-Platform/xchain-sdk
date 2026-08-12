@@ -15,7 +15,7 @@
  * XChain Platform SDK - decoder.describe
  *
  * Plain-English action describer, promoted from the wallet
- * (packages/core/src/decoder/actionDecoder.js) per . Pure
+ * (packages/core/src/decoder/actionDecoder.js). Pure
  * function (no vault, no network); both wallet shells and any SDK
  * consumer render the same {summary, details, warnings} contract.
  *
@@ -25,9 +25,9 @@
  * WITHDRAW, COINPAY, COLLECT, MESSAGE, FILE, LINK, SLEEP, CALLBACK,
  * PRICE, BET - i.e. every ACTION in formats.js, which
  * `test/unit/decoder/describe.test.js` enumerates rather than trusting
- * this list (: the confirm screen is where a user verifies intent
+ * this list: the confirm screen is where a user verifies intent
  * before signing, so a missing case there is a coverage hole on the
- * security surface, not a cosmetic gap).
+ * security surface, not a cosmetic gap.
  *
  * A future action added to formats.js with no case here gets the generic
  * fallback (which still names the action and lists every parameter) and
@@ -258,7 +258,7 @@ function decodeSend(p, chainSuffix) {
     // produced "Send 7 XCHAIN to <recipient 1>" - a headline naming ONE
     // recipient and ONE amount for a transaction that pays three, on the
     // screen whose job is to state what is being authorized. Found by driving
-    // a real multi-recipient send through the wallet on regtest .
+    // a real multi-recipient send through the wallet on regtest.
     const multi = decodeMultiSend(p, chainSuffix);
     if (multi) return multi;
     return {
@@ -391,10 +391,10 @@ function decodeMint(p, chainSuffix) {
  * multi-destroy (repeating TICK/AMOUNT, v2 adding a per-leg MEMO), which
  * arrive from parse() as parallel arrays.
  *
- * : the multi lanes used to fall through to the generic describer,
- * so the single most irreversible action in the protocol reached a
- * signing screen as "No plain-English summary is available" the moment it
- * burned more than one token. They are described leg by leg now.
+ * The multi lanes used to fall through to the generic describer, so the
+ * single most irreversible action in the protocol reached a signing screen
+ * as "No plain-English summary is available" the moment it burned more
+ * than one token. They are described leg by leg now.
  */
 function decodeDestroy(p, chainSuffix) {
     const version = str(p.VERSION);
@@ -1538,7 +1538,7 @@ function decodeCallback(p, chainSuffix) {
 }
 
 /*
- * PRICE describer (wallet PC-30 version, promoted here by ).
+ * PRICE describer (wallet PC-30 version, promoted here).
  * PRICE.md defines two versions and only one of them is authorable: v0
  * is the validator federation's COIN/FIAT snapshot, PBFT-broadcast and
  * not user-encodable, so a v0 reaching this describer came from a
@@ -1614,8 +1614,8 @@ function decodePrice(p, chainSuffix) {
 }
 
 /*
- * BET describer ( §11.3 signing, promoted from the wallet by
- * ). One action name over four formats, so the summary must name
+ * BET describer (§11.3 signing, promoted from the wallet). One action
+ * name over four formats, so the summary must name
  * WHICH one is being signed: approving a resolve is not remotely the
  * same act as approving a stake.
  *

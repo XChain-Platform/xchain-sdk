@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-//  /  byte-level wire contract: no NUMBER_FIELDS value may ever
+// Byte-level wire contract: no NUMBER_FIELDS value may ever
 // leave the SDK in JS scientific notation ("1e-8"). Every current parser
 // (mathjs) tolerates it, but the literal is stored verbatim and a future
 // strict-decimal validator tier would reject it, which is a consensus split.
@@ -36,7 +36,7 @@ const SCI_CASES = [
     ['2.5E-7',    '0.00000025'],           // uppercase exponent
 ];
 
-describe('wire number canonicalization contract ', function () {
+describe('wire number canonicalization contract', function () {
 
     it('NUMBER_FIELDS covers the VOTE escrow amounts DEPOSIT and GAS_ESCROW', function () {
         expect(cfg.NUMBER_FIELDS).to.include('DEPOSIT');

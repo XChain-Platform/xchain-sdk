@@ -52,9 +52,7 @@ module.exports = {
 const LARGE_CONTRACT = 'x'.repeat(65537); // exceeds 64KB
 
 
-// ===========================================================================
 // Section 1: DEPLOY action
-// ===========================================================================
 
 describe('VM Actions – DEPLOY', function () {
 
@@ -180,9 +178,7 @@ describe('VM Actions – DEPLOY', function () {
 });
 
 
-// ===========================================================================
 // Section 2: EXECUTE action
-// ===========================================================================
 
 describe('VM Actions – EXECUTE', function () {
 
@@ -278,9 +274,7 @@ describe('VM Actions – EXECUTE', function () {
 });
 
 
-// ===========================================================================
 // Section 3: DEPOSIT action
-// ===========================================================================
 
 describe('VM Actions – DEPOSIT', function () {
 
@@ -341,9 +335,7 @@ describe('VM Actions – DEPOSIT', function () {
 });
 
 
-// ===========================================================================
 // Section 4: WITHDRAW action
-// ===========================================================================
 
 describe('VM Actions – WITHDRAW', function () {
 
@@ -383,9 +375,7 @@ describe('VM Actions – WITHDRAW', function () {
 });
 
 
-// ===========================================================================
 // Section 5: FormatSelector – rest-field handling
-// ===========================================================================
 
 describe('FormatSelector – rest-field support', function () {
 
@@ -482,9 +472,7 @@ describe('FormatSelector – rest-field support', function () {
 });
 
 
-// ===========================================================================
 // Section 6: Validator – VM action rules
-// ===========================================================================
 
 describe('Validator – VM action rules', function () {
 
@@ -601,9 +589,7 @@ describe('Validator – VM action rules', function () {
 });
 
 
-// ===========================================================================
 // Section 7: ContractUtils
-// ===========================================================================
 
 describe('ContractUtils', function () {
 
@@ -736,9 +722,7 @@ describe('ContractUtils', function () {
 });
 
 
-// ===========================================================================
 // Section 8: ContractClient
-// ===========================================================================
 
 describe('ContractClient', function () {
 
@@ -796,9 +780,7 @@ describe('ContractClient', function () {
 });
 
 
-// ===========================================================================
 // Section 9: Module exports
-// ===========================================================================
 
 describe('VM module exports', function () {
 
@@ -837,9 +819,7 @@ describe('VM module exports', function () {
 });
 
 
-// ===========================================================================
 // Section 10: XChainSDK convenience methods
-// ===========================================================================
 
 describe('XChainSDK – VM convenience methods', function () {
 
@@ -889,9 +869,7 @@ describe('XChainSDK – VM convenience methods', function () {
 });
 
 
-// ===========================================================================
 // Section 11: BatchBuilder – VM action integration
-// ===========================================================================
 
 describe('BatchBuilder – VM actions', function () {
 
@@ -943,9 +921,7 @@ describe('BatchBuilder – VM actions', function () {
 });
 
 
-// ===========================================================================
 // Section 12: Round-trip tests
-// ===========================================================================
 
 describe('VM Actions – round-trip serialize → verify', function () {
 
@@ -999,9 +975,7 @@ describe('VM Actions – round-trip serialize → verify', function () {
 });
 
 
-// ===========================================================================
 // Section 13: Encoding pre-flight validation
-// ===========================================================================
 
 describe('VM Actions – encoding pre-flight', function () {
 
@@ -1051,9 +1025,7 @@ describe('VM Actions – encoding pre-flight', function () {
 });
 
 
-// ===========================================================================
 // Section 14: Introspection – getActionFields / getActionFormats
-// ===========================================================================
 
 describe('VM Actions – introspection', function () {
 

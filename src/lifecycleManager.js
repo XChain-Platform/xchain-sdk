@@ -43,17 +43,17 @@ class LifecycleManager {
     //   requireValid    - reject if action status is 'invalid' (default true)
     //   strictStatus    - with requireValid, also refuse to ASSUME validity: reject
     //                     ACTION_STATUS_UNKNOWN when no indexer status could be read
-    //                     for the action (default false; see actionWaiter, )
+    //                     for the action (default false; see actionWaiter)
     //   maxFeeSats      - absolute miner-fee ceiling the encoder's answer must stay
     //                     under (reconcileEncoded.js). Unset leaves only the
     //                     always-on burn guards
     //   maxPhaseFundingSats - absolute ceiling on the TOTAL value the encoder may put
-    //                     into a phase's shaped funding legs . maxFeeSats
+    //                     into a phase's shaped funding legs. maxFeeSats
     //                     does not cover them, because a funding output counts as
     //                     output value, not as fee
     //   explorer        - explorer client the indexer wait polls instead of the SDK's
     //   explorerUrl     - host/URL (with explorerPort) to build that client from;
-    //                     for isolated stacks with no colocated explorer 
+    //                     for isolated stacks with no colocated explorer
     //   onProgress      - callback(step, data) for lifecycle step notifications
     //
     // Returns: {
@@ -69,7 +69,7 @@ class LifecycleManager {
         let encoder = this.sdk._requireEncoder();
         let progress = onProgress || (() => {});
 
-        // Step 1: Create and validate action string. Compact ticker names AND
+        // Create and validate action string. Compact ticker names AND
         // addresses to their `^<id>` wire form first (on by default; each
         // resolveActionParams returns the params unchanged when compaction is
         // disabled or an id can't be resolved).
@@ -78,7 +78,6 @@ class LifecycleManager {
         resolvedParams = await this.sdk.addressResolver.resolveActionParams(actionData.action, resolvedParams);
         let createResult = this.sdk.actions.createAction(Object.assign({}, actionData, { params: resolvedParams }));
 
-        // Step 2: Encode to PSBT
         progress('encoding', { actionString: createResult.actionString });
         let txParams = {
             data:   createResult.actionString,
@@ -91,7 +90,7 @@ class LifecycleManager {
 
         let encoded = await encoder.createTx(txParams);
 
-        // Step 2b: Reconcile the encoder's answer against what was submitted, BEFORE
+        // Reconcile the encoder's answer against what was submitted, BEFORE
         // any signature exists. createTx is an RPC to a remote service that picks the
         // inputs, the outputs and the fee; until this gate, nothing between that
         // response and the sign call asked whether the transaction still spent the
@@ -102,7 +101,7 @@ class LifecycleManager {
             customOutputs: encoderOpts.customOutputs,
             // The caller's own change destination, submitted intent like customOutputs.
             // Named explicitly because a P2SH change address is shape-identical to a
-            // chunk funding leg  and must not be pinned as one.
+            // chunk funding leg and must not be pinned as one.
             changeAddresses: encoderOpts.change,
             // A reveal spends only the encoder-derived leg, so it has no funding
             // script of its own for rule (b) to authorize change against; the encoder
@@ -115,7 +114,7 @@ class LifecycleManager {
             // legitimate transactions. Without a cap the always-on guards still stand
             // (negative fee, and the full burn where nothing comes back).
             maxFeeSats:    opts.maxFeeSats,
-            // Opt-in ceiling on the encoder-derived funding legs . Those
+            // Opt-in ceiling on the encoder-derived funding legs. Those
             // outputs are authorized by SHAPE, and maxFeeSats cannot bound them: a
             // parked output raises totalOut, which lowers the computed fee. The legs
             // are dust-scale prefunding for the next phase, so a caller that sets this
@@ -141,7 +140,6 @@ class LifecycleManager {
                 requiredSpends: phase1.phaseFunding,
             }));
 
-        // Step 3: Sign the PSBT
         progress('signing', { encoding: encoded.encoding });
         let signed;
         if (typeof opts.signer === 'function') {
@@ -155,7 +153,7 @@ class LifecycleManager {
             if (encoded.encoding === 'P2SH' || encoded.encoding === 'P2WSH')
                 throw new SDKActionError('SIGNER_ENCODING_UNSUPPORTED',
                     `custom signer cannot complete ${encoded.encoding} two-phase encoding`);
-            // : same reasoning for the Taproot envelope. Its reveal is a
+            // Same reasoning for the Taproot envelope. Its reveal is a
             // BIP341 script-path spend over the envelope leaf, which a custom
             // signer that only reads the OP_RETURN carrier cannot produce. Refuse
             // BEFORE anything is broadcast rather than commit and then discover it.
@@ -167,7 +165,7 @@ class LifecycleManager {
             signed = this.sdk.wallet.signPsbt(encoded.psbt, wif);
         }
 
-        // Step 3b ( §6 / ): a TAPROOT envelope comes back as a PAIR from
+        // A TAPROOT envelope comes back as a PAIR from
         // this one call, and the ordering rule is not a nicety: "the reveal must be
         // signable before the commit is broadcast; anything else manufactures a
         // stranded-funds event, not an error message". Broadcasting the commit first
@@ -187,14 +185,13 @@ class LifecycleManager {
             progress('envelope_recovery_record', { recovery: encoded.envelope || null });
         }
 
-        // Step 4: Broadcast
         progress('broadcasting', { txid: signed.txid });
         await encoder.broadcastTx(signed.txHex);
 
         // Extract spent inputs from the signed PSBT for UTXO cache tracking
         let spentInputs = this._extractSpentInputs(encoded.psbt);
 
-        // Step 4a: the envelope reveal, already signed above. The decoder indexes the
+        // The envelope reveal, already signed above. The decoder indexes the
         // REVEAL, so its txid is the action's identity (§3.1), not the commit's.
         let finalTxidEnvelope = null;
         if (revealSigned) {
@@ -218,8 +215,6 @@ class LifecycleManager {
             finalTxidEnvelope = revealSigned.txid;
         }
 
-        // Step 4b: Handle P2SH/P2WSH two-phase encoding
-        // If the encoder chose P2SH or P2WSH, we need a second transaction to spend the output
         let finalTxid = signed.txid;
         if (encoded.encoding === 'P2SH' || encoded.encoding === 'P2WSH') {
             progress('p2sh_spending', { phase1Txid: signed.txid });
@@ -252,7 +247,7 @@ class LifecycleManager {
             // Phase 2 is a second encoder answer and gets the same gate as phase 1.
             // It emits the customOutputs (which phase 1 funded without emitting), so
             // it carries no further encoder-derived funding leg of its own. It also
-            // has to spend back every leg phase 1 paid on shape alone : a
+            // has to spend back every leg phase 1 paid on shape alone: a
             // chunk phase 2 does not reveal is both undecodable and value the encoder
             // kept, so an unspent leg aborts here instead of being signed away.
             reconcileEncoded(spendResult.psbt, Object.assign({}, reconcileIntent, {
@@ -273,7 +268,7 @@ class LifecycleManager {
             finalTxid = spendSigned.txid;
             signed = spendSigned;
         }
-        if (finalTxidEnvelope) {                      // : the reveal IS the action
+        if (finalTxidEnvelope) {                      // the reveal IS the action
             finalTxid = finalTxidEnvelope;
             signed = revealSigned;
         }
@@ -289,12 +284,11 @@ class LifecycleManager {
             indexed:      null
         };
 
-        // Step 5: Wait for indexer confirmation
         if (waitForIndexer) {
             progress('waiting', { txid: finalTxid });
             // The explorer override rides through to the waiter so an isolated
             // venue is waited on where it is actually indexed, not on whatever
-            // explorer hub discovery advertised .
+            // explorer hub discovery advertised.
             let waiter = new ActionWaiter(this.sdk);
             let indexed = await waiter.waitForTxid(finalTxid, {
                 timeout:      timeout || 120000,

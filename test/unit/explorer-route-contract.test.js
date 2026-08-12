@@ -11,8 +11,8 @@
 // Route contract: every `explorer.<method>(query, '<type>')` call in this repo
 // must use a query TYPE the explorer route actually accepts.
 //
-// This exists because of . The pre-flight dispenser resolvers looked
-// dispensers up with `getDispensers(idx, 'action_index')` and their lifecycle
+// This exists because the pre-flight dispenser resolvers looked dispensers
+// up with `getDispensers(idx, 'action_index')` and their lifecycle
 // with `getDispenserCloses(idx, 'dispenser_action_index')`. Neither type is on
 // either route: /dispensers/ takes block, address, source, destination, token,
 // oracle, and the lifecycle routes take block, address. Every one of those

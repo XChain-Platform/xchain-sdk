@@ -29,7 +29,8 @@
  * of band (a pinned launch set / a prior self-verified set); the convenience
  * path lets the explorer's verify endpoint supply it.
  *
- * Spec: claude/reports/SPV-LIGHT-CLIENT-SPEC.md §4.4, §5, §7, §8.
+ * SPV light client: verifies balances, actions, and validator sets against
+ * quorum-signed checkpoints (spec §4.4, §5, §7, §8).
  *
  ********************************************************************/
 
@@ -78,7 +79,7 @@ function _hx(x){ return String(x == null ? '' : x).toLowerCase(); }
 // That is not hypothetical: the explorer's contract-state route decoded its path
 // param a second time after Express had already decoded it, so a request for the
 // key `a%41b` was answered, validly and verifiably, for the key `aAb` (measured on
-// the live service 2026-08-06,  frontier). The corruption was upstream, but
+// the live service 2026-08-06). The corruption was upstream, but
 // nothing downstream could see it.
 //
 // `expected` is OPTIONAL so this stays backward compatible; callers that pass it
@@ -370,7 +371,7 @@ async function verifyBalance(opts){
     // Number(cp.block_index) for the SAME cp it returns, so a divergence is a drifted
     // or hostile explorer relabelling a genuine old proof with a fresher height. The
     // trustedCheckpoint branch has always enforced this; the server-served branch did
-    // not, which let stale state pass as current ().
+    // not, which let stale state pass as current.
     if (Number(proof.height) !== Number(cp.block_index))
         return Object.assign({ verified: false, amount: null, reason: 'PROOF_HEIGHT_MISMATCH' }, base);
     // Enforce the request's lower bound. /proof/balance?height=H is defined as the
@@ -429,8 +430,8 @@ async function verifyAction(opts){
                    tx_index: (proof.tx_index == null) ? null : Number(proof.tx_index),
                    checkpoint: cp, quorum: q.quorum, weighted: q.weighted };
     if (!q.valid) return Object.assign({ verified: false, reason: 'CHECKPOINT_QUORUM_FAILED' }, base);
-    // Bind the served proof to the served checkpoint in the server-served branch too
-    // (); actionProof emits height as Number(cp.block_index) for that same cp.
+    // Bind the served proof to the served checkpoint in the server-served branch too;
+    // actionProof emits height as Number(cp.block_index) for that same cp.
     if (Number(proof.height) !== Number(cp.block_index))
         return Object.assign({ verified: false, reason: 'PROOF_HEIGHT_MISMATCH' }, base);
     const trusted = _hx(cp.block_merkle_root);
@@ -676,8 +677,8 @@ function verifyCheckpointWithProvenSet(cp, provenOraclePublish){
     // suffix drops out of the signed bytes. An explorer could then attach an
     // attacker-chosen state_root, omit a sibling field, and have rootless signatures
     // still verify - a root no validator ever signed, which followForward would adopt
-    // and verifyBalance would trust. checkpoint.verifyCheckpoint already rejects this
-    // (); the same predicate, not a copy of it, has to hold here ().
+    // and verifyBalance would trust. checkpoint.verifyCheckpoint already rejects this;
+    // the same predicate, not a copy of it, has to hold here.
     if (checkpoint.commitmentMissing(cp)) return { valid: false, total: '0' };
     const canonical  = cp && checkpoint.canonicalCheckpoint(cp);
     const validators = (provenOraclePublish && provenOraclePublish.validators) || [];
@@ -737,7 +738,7 @@ async function followForward(opts){
         for (const next of steps){
             // Prove the signer set at next.snapshot_block against the current trusted state_root.
             //
-            // : the checkpoint DECLARES the raw height the signing hub was handed, but
+            // The checkpoint DECLARES the raw height the signing hub was handed, but
             // that hub resolved its oracle_publish set through CapabilitySnapshot, which buries
             // every height by CANONICAL_REORG_BUFFER first (tip stake state is not reorg-safe).
             // Proving the set at the declared height therefore proves a DIFFERENT set than the

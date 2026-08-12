@@ -102,7 +102,7 @@ async function checkMint(ctx) {
     // returns strings, and '0' is TRUTHY, so this ran with maxSupply=0 and a NEGATIVE
     // headroom, turning every mint on an uncapped token into an error. At/after the
     // UNCAPPED_MAX_SUPPLY_ZERO flag-day the chain accepts exactly those mints
-    // (xchain-indexer src/actions/mint.js, ), so the finding false-blocked a
+    // (xchain-indexer src/actions/mint.js), so the finding false-blocked a
     // valid action, which spec §4.2 forbids.
     //
     // Declared unverified rather than dropped: BELOW the flag-day the handler still

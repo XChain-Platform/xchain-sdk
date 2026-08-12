@@ -12,9 +12,9 @@
  *
  **********************************************************************
  * Regression: a subscription the explorer never confirms must not take
- * the host process down .
+ * the host process down.
  *
- * The onX() helpers (onBlock, onAddress, ...) are synchronous: they return
+ * The onX() helpers (onBlock, onAddress,...) are synchronous: they return
  * an unsubscribe function, so nothing awaits ws.subscribe()'s SUBSCRIBED
  * confirmation. But subscribe() rejects with WS_TIMEOUT ten seconds later
  * when the explorer is down (503) or the socket drops mid-handshake. With
@@ -40,7 +40,7 @@ function rejectingWs(err) {
     };
 }
 
-describe('WS subscribe: detached rejections ', () => {
+describe('WS subscribe: detached rejections', () => {
     let unhandled;
     let onUnhandled;
 

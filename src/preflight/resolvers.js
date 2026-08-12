@@ -106,7 +106,7 @@ async function resolveGiveRemaining(ctx, dispenser, dispenserActionIndex) {
     const live = dispenser?.state?.give_remaining ?? dispenser?.give_remaining;
     if (live !== undefined && live !== null) return String(live);
     // Keep the argument in the signature: callers pass the index and a
-    // future authoritative field  may need its own lookup.
+    // future authoritative field may need its own lookup.
     void dispenserActionIndex; void ctx;
     return null;
 }

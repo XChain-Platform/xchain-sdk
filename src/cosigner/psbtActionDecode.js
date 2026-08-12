@@ -217,7 +217,7 @@ function extractInlineActionString(psbtOrHex, opts = {}) {
 
 /*
  * Recover the action-string bytes from a Taproot ENVELOPE reveal PSBT
- * ( §3.9 delta c). The envelope carries the action in input 0's tapleaf
+ * (§3.9 delta c). The envelope carries the action in input 0's tapleaf
  * script instead of an OP_RETURN, and carries it RAW (§3.3: there is no
  * deobfuscation step for the envelope, and none is possible - the key would be
  * the commit txid, which the commit output's own contents determine).
@@ -295,7 +295,7 @@ function decodeActionFromPsbt(psbtOrHex, opts = {}) {
 
 /*
  * Decode the action an envelope LEAF SCRIPT declares, with no transaction in
- * hand. This is the commit-side half of  §3.9 delta (c): at commit time
+ * hand. This is the commit-side half of the §3.9 delta (c): at commit time
  * the action is not in the transaction at all, only the hash of the leaf that
  * carries it is, so the daemon reads it from the script whose hash it has
  * already matched against a commit output. Runs the identical judgment as
@@ -385,8 +385,8 @@ function judgeActionString(actionString) {
     // action is what disqualifies it, not the shape of a particular payload.
     if (action === 'BATCH') return fail('BATCH_UNSUPPORTED');
 
-    // Field extraction delegates to the canonical decoder.parse() (
-    // re-base): same segment->field alignment, same trailing-empty padding,
+    // Field extraction delegates to the canonical decoder.parse():
+    // same segment->field alignment, same trailing-empty padding,
     // same FIELD_COUNT_MISMATCH refusal. The rest/multi-leg punts above make
     // parse()'s array-valued shapes unreachable here, so params stays the
     // flat single-leg dict the policy evaluator expects. The returned

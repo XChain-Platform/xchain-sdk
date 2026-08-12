@@ -17,9 +17,7 @@ const Actions = require('../../src/actions.js');
 const Utility = require('../../src/utility.js');
 const config = require('../../src/config.js');
 
-// ---------------------------------------------------------------------------
-//  Helpers
-// ---------------------------------------------------------------------------
+// Helpers
 
 /**
  * Build a minimal fake SDK whose sdk.session() returns a stubbed WalletSession.
@@ -49,17 +47,13 @@ function makeSdk(sessionMethods = {}) {
 const FAKE_WIF = 'L1rkA9mYRjVPVdvMuVbHRMX6SPHM7fNwCEfT3AV2qCGAmJ8wNfp';
 const FAKE_TICK = 'TOKEN';
 
-// ---------------------------------------------------------------------------
-//  Tests
-// ---------------------------------------------------------------------------
+// Tests
 
 describe('Workflows', function () {
 
     afterEach(() => sinon.restore());
 
-    // -----------------------------------------------------------------------
-    //  Constructor
-    // -----------------------------------------------------------------------
+    // Constructor
     describe('constructor', function () {
         it('stores the sdk reference', function () {
             const sdk = makeSdk();
@@ -68,9 +62,7 @@ describe('Workflows', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  issueAndDistribute()
-    // -----------------------------------------------------------------------
+    // issueAndDistribute()
     describe('issueAndDistribute()', function () {
         it('issues then sends to each recipient', async function () {
             const sdk = makeSdk();
@@ -125,9 +117,7 @@ describe('Workflows', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  issueAndMint()
-    // -----------------------------------------------------------------------
+    // issueAndMint()
     describe('issueAndMint()', function () {
         it('calls issue then mint, merging tick', async function () {
             const sdk = makeSdk();
@@ -153,9 +143,7 @@ describe('Workflows', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  createDispenser()
-    // -----------------------------------------------------------------------
+    // createDispenser()
     describe('createDispenser()', function () {
         it('calls session.dispenser and returns result', async function () {
             const sdk = makeSdk();
@@ -165,9 +153,7 @@ describe('Workflows', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  createOrder()
-    // -----------------------------------------------------------------------
+    // createOrder()
     describe('createOrder()', function () {
         it('calls session.order and returns result', async function () {
             const sdk = makeSdk();
@@ -177,9 +163,7 @@ describe('Workflows', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  cancelOrder()
-    // -----------------------------------------------------------------------
+    // cancelOrder()
     describe('cancelOrder()', function () {
         it('calls session.order with orderActionIndex', async function () {
             const orderCalls = [];
@@ -193,9 +177,7 @@ describe('Workflows', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  stakeAndDelegate()
-    // -----------------------------------------------------------------------
+    // stakeAndDelegate()
     describe('stakeAndDelegate()', function () {
         it('stakes then delegates when delegateParams is provided', async function () {
             const sdk = makeSdk();
@@ -225,9 +207,7 @@ describe('Workflows', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  stakeToContractAndDelegate()
-    // -----------------------------------------------------------------------
+    // stakeToContractAndDelegate()
     describe('stakeToContractAndDelegate()', function () {
         it('stakes to contract and delegates when delegateParams provided', async function () {
             const sdk = makeSdk();
@@ -253,9 +233,7 @@ describe('Workflows', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  deployAndFund()
-    // -----------------------------------------------------------------------
+    // deployAndFund()
     describe('deployAndFund()', function () {
         it('deploys with no deposits: returns empty deposits array', async function () {
             const sdk = makeSdk();
@@ -341,9 +319,7 @@ describe('Workflows', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  deployStakeableContract()
-    // -----------------------------------------------------------------------
+    // deployStakeableContract()
     describe('deployStakeableContract()', function () {
         it('delegates to deployAndFund with VERSION forced to "1"', async function () {
             const deployAndFundCalls = [];
@@ -407,9 +383,7 @@ describe('Workflows', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  distributeDividend()
-    // -----------------------------------------------------------------------
+    // distributeDividend()
     describe('distributeDividend()', function () {
         it('calls session.dividend and returns result', async function () {
             const sdk = makeSdk();
@@ -422,9 +396,7 @@ describe('Workflows', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    //  attachContent() (optional on-chain TIS authoring legs)
-    // -----------------------------------------------------------------------
+    // attachContent() (optional on-chain TIS authoring legs)
     describe('attachContent()', function () {
         const NftHelpers = require('../../src/nft.js');
 
@@ -478,10 +450,10 @@ describe('Workflows', function () {
             assert.strictEqual(tisUpload.params.name, 'ART1.json');
             assert.strictEqual(tisUpload.params.type, 'application/json');
             const doc = JSON.parse(Buffer.from(tisUpload.enc.rawData, 'binary').toString('utf8'));
-            // ...whose images[] data_ref points at the artwork upload (action 101)
+            //...whose images[] data_ref points at the artwork upload (action 101)
             assert.strictEqual(doc.images[0].data_ref, 'action:101');
             assert.strictEqual(doc.tick, 'ART1');
-            // ...and ISSUE v1 points the token's DESCRIPTION at the doc (action 102)
+            //...and ISSUE v1 points the token's DESCRIPTION at the doc (action 102)
             assert.strictEqual(calls.issues.length, 1);
             assert.deepStrictEqual(calls.issues[0], {
                 version: '1', tick: 'art1', description: 'action:102',
@@ -491,14 +463,12 @@ describe('Workflows', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
     //  deployContract() - chunked assembler pre-flight
     //
     //  planDeploy sizes only the INLINE DEPLOY. Without a Phase-2 pre-flight an
     //  oversized constructor param is only discovered AFTER every paid v4
     //  carrier is on chain, so the fees are spent on a deploy that can never
     //  assemble. These pin the pre-flight to the exact composed assembler.
-    // -----------------------------------------------------------------------
     describe('deployContract() chunked assembler pre-flight', function () {
         // Fake SDK carrying a REAL Actions instance, because the pre-flight
         // measures the canonical composed action string, not an estimate.

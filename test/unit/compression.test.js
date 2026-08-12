@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * FILE payload compression ( spec Part B), SDK side.
+ * FILE payload compression (spec Part B), SDK side.
  *
  * What this suite pins:
  *  1. the deflate-raw golden pair INFLATES to the pinned plaintext, and the
@@ -44,7 +44,7 @@ const CONSTANTS = require('../../src/protocol/constants.js');
 
 const sha256 = (b) => crypto.createHash('sha256').update(b).digest('hex');
 
-describe('CompressionUtils ( Part B)', function () {
+describe('CompressionUtils (Part B)', function () {
     let compression;
     let gatedFile;
 
@@ -396,10 +396,8 @@ describe('CompressionUtils ( Part B)', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
     // Golden vectors (sibling-gated on the documentation checkout, matching
     // the cross-repo skip convention used by the conformance suites).
-    // -----------------------------------------------------------------------
     describe('golden vectors', function () {
         const DOCS = process.env.XCHAIN_DOCUMENTATION_DIR ||
             path.join(__dirname, '..', '..', '..', 'xchain-documentation');

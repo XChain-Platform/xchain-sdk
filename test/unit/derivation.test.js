@@ -8,17 +8,15 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// ─────────────────────────────────────────────────────────────────────────────
 // FAMILY_SLIP44 shape + cross-repo drift guard.
 //
 // src/derivation.js is the backend-side anchor for the wallet<->backend
-// coin-type parity contract (review item 2760). This suite pins its shape and
-// values, and drift-guards each coin type against the wallet HD descriptors at
+// coin-type parity contract. This suite pins its shape and values, and
+// drift-guards each coin type against the wallet HD descriptors at
 // xchain-wallet/packages/core/src/registry/descriptors/{bitcoin,litecoin,
 // dogecoin}.js (the m/44'/N' purpose path). When the sibling wallet checkout is
 // absent the drift guard skips, unless XCHAIN_REQUIRE_SIBLINGS=1 (the job that
 // checks out siblings), where it hard-fails rather than green-by-skip.
-// ─────────────────────────────────────────────────────────────────────────────
 
 'use strict';
 

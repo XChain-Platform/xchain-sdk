@@ -21,7 +21,6 @@
 // HTTP status codes that are considered transient (worth retrying)
 const RETRYABLE_STATUS_CODES = [429, 502, 503, 504];
 
-// Default retry configuration
 const DEFAULTS = {
     maxRetries:    3,
     baseDelay:     1000,   // 1 second
@@ -34,13 +33,10 @@ const DEFAULTS = {
 function isRetryable(err) {
     // Network errors (ECONNRESET, ECONNREFUSED, timeout)
     if (!err.response) {
-        // Timeout
         if (err.code === 'ECONNABORTED') return true;
-        // Network errors
         if (err.code === 'ECONNRESET' || err.code === 'ECONNREFUSED' || err.code === 'EPIPE') return true;
         return false;
     }
-    // HTTP status codes
     return RETRYABLE_STATUS_CODES.includes(err.response.status);
 }
 
@@ -48,10 +44,8 @@ function isRetryable(err) {
 // Supports: integer seconds ("120") or HTTP-date ("Wed, 21 Oct 2015 07:28:00 GMT")
 function parseRetryAfter(value) {
     if (!value) return null;
-    // Integer seconds
     let seconds = parseInt(value, 10);
     if (!isNaN(seconds) && seconds >= 0) return seconds * 1000;
-    // HTTP-date
     let date = new Date(value);
     if (!isNaN(date.getTime())) {
         let ms = date.getTime() - Date.now();
@@ -70,7 +64,6 @@ function getRetryAfterDelay(err) {
 // Calculate delay with exponential backoff + jitter
 // If the error has a Retry-After header, use that instead
 function getDelay(attempt, config, err) {
-    // Respect Retry-After header if present
     let retryAfter = getRetryAfterDelay(err);
     if (retryAfter !== null) {
         return Math.min(retryAfter, config.maxDelay);
@@ -101,7 +94,6 @@ async function withRetry(fn, config = {}, onRetry = null) {
         } catch (err) {
             lastError = err;
 
-            // Don't retry if not retryable or if this was the last attempt
             if (attempt >= opts.maxRetries || !isRetryable(err)) {
                 throw err;
             }

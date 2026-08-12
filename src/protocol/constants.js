@@ -64,7 +64,7 @@ const VM_MAX_CALL_DEPTH = 4;
 // caller's own gas budget. Enforced by the VM and the indexer in lockstep.
 const VM_MIN_CALL_GAS = 5000;
 
-// ── Cross-CHAIN contract calls (emit.crossExecute / XCALL) ──────────────────
+// Cross-CHAIN contract calls (emit.crossExecute / XCALL).
 // Enforced by the VM at emit time and re-validated host-side by the indexer
 // (processEmission + actions/xcall.js); the target chain re-validates the
 // signed dispatch row before injecting. See protocol/Cross_Chain_Calls.md.
@@ -97,8 +97,8 @@ const XCALL_MAX_RETURN_BYTES = 1024;
 // forward to the next block in (snapshot_block, call_id) order. Never dropped.
 const XCALL_MAX_CALLS_PER_BLOCK = 25;
 
-// ── ATTEST expiry sweep ─────────────────────────────────────────────────────
-// Deterministic per-block cap on the ATTEST v0 deadline-expiry sweep ().
+// ATTEST expiry sweep.
+// Deterministic per-block cap on the ATTEST v0 deadline-expiry sweep.
 // Each expired request synthesizes an ATTEST v2 action that flips the request to
 // 'expired' and fires its callback, so an unbounded sweep lets a single block
 // inherit an arbitrary backlog: one block's processing time (and its actions
@@ -113,10 +113,10 @@ const XCALL_MAX_CALLS_PER_BLOCK = 25;
 //
 // CONSENSUS-VISIBLE: the cap decides which block an expiry lands in, which moves
 // actions rows, the contract hash and the checkpoint preimage. It ships ungated
-// under the  batch because the fleet-wide replay recomputes all of it.
+// because the fleet-wide replay recomputes all of it.
 const ATTEST_MAX_EXPIRIES_PER_BLOCK = 25;
 
-// ── Token-gated content (PC-29) ─────────────────────────────────────────────
+// Token-gated content (PC-29).
 // Fixed fractional scale for comparing FILE.GATE_MIN_AMOUNT thresholds against a
 // holder's balance. The wallet scales both sides to this many fractional digits
 // as BigInt (packages/core THRESHOLD_SCALE); the indexer compares with mathjs
@@ -130,7 +130,7 @@ const ATTEST_MAX_EXPIRIES_PER_BLOCK = 25;
 // move together or the disagreement returns.
 const THRESHOLD_SCALE = 18;
 
-// ── Chunked DEPLOY (DEPLOY v4 carriers + DEPLOY v2/v3 assemble) ─────────────
+// Chunked DEPLOY (DEPLOY v4 carriers + DEPLOY v2/v3 assemble).
 // A contract whose base64(code) exceeds the single-tx budget is split across
 // ordered DEPLOY v4 carrier actions and reassembled by a DEPLOY v2/v3 keyed on
 // the CODE_HASH. Enforced by the indexer (deploy_chunk + deploy assembly) and
@@ -148,11 +148,11 @@ const MAX_DEPLOY_CHUNKS = 16;
 // larger part (belt-and-suspenders; the decoder already drops oversize pushes).
 const MAX_DEPLOYCHUNK_PART_BYTES = 7800;
 
-// ── Stake-weighted quorum (STAKE_WEIGHTED_QUORUM / WI-1) ────────────────────
+// Stake-weighted quorum (STAKE_WEIGHTED_QUORUM / WI-1).
 // Consensus-critical activation: at/above this BTC-anchored snapshot_block the
 // federation quorum becomes stake-WEIGHTED (signers' summed source stake must
 // exceed 2/3 of total active snapshot stake) instead of count-based (2f+1 of the
-// pubkey COUNT). Spec: claude/reports/2026-06-14_cross-chain-quorum-security-spec.md.
+// pubkey COUNT).
 //
 // Keyed on the BTC `snapshot_block` carried by every settlement/checkpoint
 // canonical (NOT each chain's local processing height) so the hub and the BTC,
@@ -240,7 +240,7 @@ const STATE_COMMITMENT_ACTIVATION = {
 // (2026-07-07; BTC anchor ~2026-08-04), not a disabled placeholder.
 const CHECKPOINT_COMMITMENT_ACTIVATION = {
     mainnet: 961000,      // ARMED 2026-07-07: BTC anchor ~2026-08-04; deploy hub + ALL indexers (+ sdk/explorer/sync copies) before this height
-    testnet: 146000,      // ARMED 2026-07-22 ( lead 0e418c8c): first BTC-testnet anchor past all three STATE_COMMITMENT testnet thresholds; was 0, which forced the SPV root suffix from testnet genesis before the indexer computes roots, so the hub refused to sign every testnet checkpoint
+    testnet: 146000,      // ARMED 2026-07-22: first BTC-testnet anchor past all three STATE_COMMITMENT testnet thresholds; was 0, which forced the SPV root suffix from testnet genesis before the indexer computes roots, so the hub refused to sign every testnet checkpoint
     regtest: 0,
 };
 
@@ -267,7 +267,7 @@ const ANCHOR_REWARD_ACTIVATION = {
 // by the hub and re-derived by the indexer (never from the wire). Changing it is itself a flag-day.
 const ANCHOR_REWARD_AMOUNT = '10.00000000';
 
-// ARCHIVE_REWARD_ACTIVATION (archive-reward re-derivation, ): the flag-day at/above which the
+// ARCHIVE_REWARD_ACTIVATION (archive-reward re-derivation): the flag-day at/above which the
 // anchor_archive reward stops riding the key-authenticated `pushvalidatorrewards` rail and is instead
 // DERIVED by every indexer from the on-chain ANCHOR v6 bytes (the v1 archive anchor plus the same
 // PUBLISHER + 2f+1 XANCPUB attestation tail as v4/v5, attested over an 'anchor_archive' canonical
@@ -277,7 +277,7 @@ const ANCHOR_REWARD_AMOUNT = '10.00000000';
 // ANCHOR_REWARD_ACTIVATION; kept byte-identical to the local copies in
 // xchain-{hub,indexer}/src/anchor_reward_activation.js by the cross-service regression suite.
 const ARCHIVE_REWARD_ACTIVATION = {
-    mainnet: 963000,      // ARMED 2026-07-16 , RE-PINNED 2026-08-12  off 969500 onto the  pre-freeze train boundary (tip 959,853 on 07-27 at ~144 blocks/day + 21d); deploy every consumer before this era
+    mainnet: 963000,      // ARMED 2026-07-16, RE-PINNED 2026-08-12 off 969500 onto the pre-freeze train boundary (tip 959,853 on 07-27 at ~144 blocks/day + 21d); deploy every consumer before this era
     testnet: 0,
     regtest: 0,
 };
@@ -323,12 +323,12 @@ const VALID_FIAT_CODES = ['USD', 'CAD', 'AUD', 'MXN', 'GBP', 'JPY', 'CNY', 'CHF'
 // field). The cross-service parity test asserts indexer === SDK === this value.
 const GAS_TICK = 'XCHAIN';
 
-// ── Oracle federation (xchain-hub) ───────────────────────────────────────────
+// Oracle federation (xchain-hub).
 // Canonical source: xchain-hub/src/constants.js. UNLIKE XCALL_MAX_HOPS above, these
 // two are NOT in the GOLDEN set of test/unit/xcall-constants-cross-repo.test.js; the
-// guard that diffs this copy against the canonical lives in xchain-hub/test/unit
-// (#3886, corrected here per #3888), so a drift reddens hub CI rather than this
-// repo's. Nothing here reads either one - they are re-exports for consumers.
+// guard that diffs this copy against the canonical lives in xchain-hub/test/unit, so a
+// drift reddens hub CI rather than this repo's. Nothing here reads either one; they
+// are re-exports for consumers.
 
 // Coarse global sanity ceiling on an ingested price_snapshots value (pre-scale,
 // covers pairs like BTC/KRW up to ~$7M BTC with headroom); rejects
@@ -344,7 +344,7 @@ const PRICE_MAX = 10_000_000_000;
 // the ±band boundary). 0.05 = 5%.
 const ORACLE_DEVIATION_THRESHOLD = 0.05;
 
-// ── Taproot envelope ( spec Part A) ───────────────────────────────────
+// Taproot envelope (spec Part A).
 //
 // Per-encoding payload ceiling (§4): the envelope gets its own, and every
 // legacy lane keeps MAX_ACTION_DATA_LENGTH. Measures the REASSEMBLED payload
@@ -352,7 +352,7 @@ const ORACLE_DEVIATION_THRESHOLD = 0.05;
 // envelope's own push framing is NOT counted. That is deliberately a different
 // measurand from MAX_ACTION_DATA_LENGTH, which is framing-inclusive, and the
 // ~0.6% difference between them is a fleet-divergence line at edge sizes.
-// DERIVED FROM WEIGHT : the binding limit is Bitcoin Core's
+// DERIVED FROM WEIGHT: the binding limit is Bitcoin Core's
 // MAX_STANDARD_TX_WEIGHT of 400,000 WU, not a round byte count. 400,000 payload
 // bytes build a 402,789 WU reveal, which is non-standard and unrelayable; the
 // true maxima are 397,228 (P2WPKH change) and 397,009 (P2TR change + floor pad).
@@ -361,7 +361,7 @@ const ORACLE_DEVIATION_THRESHOLD = 0.05;
 // Canonical source: xchain-documentation/protocol/constants.js.
 const ENVELOPE_MAX_PAYLOAD = 390000;
 
-// ── FILE payload compression ( spec Part B) ────────────────────────────
+// FILE payload compression (spec Part B).
 //
 // COMPRESSION is a trailing optional field on FILE v0:
 //   FILE|0|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH|GATE_MIN_AMOUNT|COMPRESSION
@@ -385,9 +385,9 @@ const COMPRESSION_CODE_DEFLATE_RAW = '1';
 const COMPRESSION_MAX_RATIO = 150;
 
 // Pre-compression input cap on rawData at the encoder (spec §5.2). The encoder
-// is a hard single-instance service ( lockfile guard), so compression is
-// async/streamed and bounded; this is the bound, applied to the bytes handed
-// in, before any compression attempt.
+// is a hard single-instance service (a lockfile guard enforces it), so
+// compression is async/streamed and bounded; this is the bound, applied to the
+// bytes handed in, before any compression attempt.
 const COMPRESSION_MAX_INPUT_BYTES = 16 * 1024 * 1024;
 
 module.exports = {

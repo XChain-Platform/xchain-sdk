@@ -50,9 +50,7 @@ function makeSendOfLength(targetBytes) {
 }
 
 
-// ---------------------------------------------------------------------------
 // Section 1: OP_RETURN pre-flight encoding (6 tests)
-// ---------------------------------------------------------------------------
 
 describe('OP_RETURN pre-flight encoding boundary', function () {
 
@@ -65,7 +63,7 @@ describe('OP_RETURN pre-flight encoding boundary', function () {
     // The ceiling used to be read as 76 bytes (80 - 4 magic), which ignored the
     // push prefix: a 76-byte payload compiles to an OP_PUSHDATA1 push of 78, and
     // 78 + 4 is over 80, so the encoder rejected on the wire what this pre-flight
-    // had waved through.  moved the pre-flight onto the COMPILED push size,
+    // had waved through. The pre-flight was moved onto the COMPILED push size,
     // putting the real ceiling at 75. 76 is now the first rejected length, which
     // is the boundary worth pinning here.
     it('rejects a SEND action string of exactly 76 bytes with OP_RETURN encoding', function () {
@@ -147,9 +145,7 @@ describe('OP_RETURN pre-flight encoding boundary', function () {
 });
 
 
-// ---------------------------------------------------------------------------
-// Section 2:TICK name length boundary (4 tests)
-// ---------------------------------------------------------------------------
+// Section 2: TICK name length boundary (4 tests)
 
 describe('TICK name length boundary', function () {
 
@@ -190,9 +186,7 @@ describe('TICK name length boundary', function () {
 });
 
 
-// ---------------------------------------------------------------------------
-// Section 3:DECIMALS boundary (4 tests)
-// ---------------------------------------------------------------------------
+// Section 3: DECIMALS boundary (4 tests)
 
 describe('DECIMALS boundary', function () {
 
@@ -231,9 +225,7 @@ describe('DECIMALS boundary', function () {
 });
 
 
-// ---------------------------------------------------------------------------
-// Section 4:MAX_SUPPLY boundary (4 tests)
-// ---------------------------------------------------------------------------
+// Section 4: MAX_SUPPLY boundary (4 tests)
 
 describe('MAX_SUPPLY boundary', function () {
 
@@ -271,9 +263,7 @@ describe('MAX_SUPPLY boundary', function () {
 });
 
 
-// ---------------------------------------------------------------------------
-// Section 5:DESCRIPTION length boundary (3 tests)
-// ---------------------------------------------------------------------------
+// Section 5: DESCRIPTION length boundary (3 tests)
 
 describe('DESCRIPTION length boundary', function () {
 
@@ -308,9 +298,7 @@ describe('DESCRIPTION length boundary', function () {
 });
 
 
-// ---------------------------------------------------------------------------
-// Section 6:MESSAGE length boundary (3 tests)
-// ---------------------------------------------------------------------------
+// Section 6: MESSAGE length boundary (3 tests)
 
 describe('MESSAGE (PLAINTEXT_MESSAGE) length boundary', function () {
 
@@ -347,9 +335,7 @@ describe('MESSAGE (PLAINTEXT_MESSAGE) length boundary', function () {
 });
 
 
-// ---------------------------------------------------------------------------
-// Section 7:FIAT_AMOUNT format boundary (5 tests)
-// ---------------------------------------------------------------------------
+// Section 7: FIAT_AMOUNT format boundary (5 tests)
 
 describe('FIAT_AMOUNT format boundary', function () {
 
@@ -399,9 +385,7 @@ describe('FIAT_AMOUNT format boundary', function () {
 });
 
 
-// ---------------------------------------------------------------------------
-// Section 8:Address length boundary (4 tests)
-// ---------------------------------------------------------------------------
+// Section 8: Address length boundary (4 tests)
 
 describe('Address (DESTINATION) length boundary', function () {
 
@@ -446,9 +430,7 @@ describe('Address (DESTINATION) length boundary', function () {
 });
 
 
-// ---------------------------------------------------------------------------
-// Section 9:Lock field boundary (3 tests)
-// ---------------------------------------------------------------------------
+// Section 9: Lock field boundary (3 tests)
 
 describe('Lock field boundary', function () {
 

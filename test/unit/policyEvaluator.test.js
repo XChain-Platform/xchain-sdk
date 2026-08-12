@@ -117,7 +117,7 @@ describe('policyEvaluator.evaluatePolicy', function () {
         expect(v.violation.details.windowTotal).to.equal('95');
     });
 
-    // #2286: the window per-tick gate used to add a `tick !== undefined` guard its
+    // The window per-tick gate used to add a `tick !== undefined` guard its
     // siblings (maxPerAction, confirmAbove) never had, so an amount-bearing action
     // whose tick did not resolve bypassed a wildcard window cap - for a policy whose
     // ONLY amount ceiling is maxPerWindow.perTick['*'], that action escaped every

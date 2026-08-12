@@ -46,7 +46,7 @@ const { SDK_COMPACTABLE_BY_ACTION } = require('./addressRefFields.js');
 // consensus map so it can never drift from the indexer's accepted set. Keyed by
 // action so a field can be compactable for one action yet held back for another
 // (DISPENSER.GET_ADDRESS is emitted as a full address; ORDER/SWAP.GET_ADDRESS are
-// compacted) — see the `noCompact` note in addressRefFields.js.
+// compacted); see the `noCompact` note in addressRefFields.js.
 const COMPACTABLE_BY_ACTION = SDK_COMPACTABLE_BY_ACTION;
 
 // Hard upper bound on a single compaction lookup. A reachable explorer answers

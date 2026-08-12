@@ -25,8 +25,8 @@
  * or removing a field here changes which values become consensus-relevant ids,
  * so it is a wire-format-level change, never a routine edit.
  *
- * A byte-identical copy lives at xchain-sdk/src/addressRefFields.js; a
- * conformance test diffs the two. The SDK only COMPACTS the unconditional
+ * A byte-identical copy lives in xchain-indexer; a conformance test diffs the
+ * two. The SDK only COMPACTS the unconditional
  * single-value fields (see SDK_COMPACTABLE), a strict subset, while the indexer
  * must register ids for the FULL set (including multi-value SEND destinations
  * and type-gated LIST items). The invariant is SDK-compacted ⊆ indexer-assigned:
@@ -42,9 +42,9 @@
  *    register a dead dispenser that never matches a payment.
  *  - DISPENSER.ORACLE_ADDRESS (`noCompact`): a Mode B dispenser pays its PRICE v1
  *    oracle operator up front as a real native-coin output, and the indexer rejects
- *    the create when that output is missing (validateOracleFee, ). The indexer
+ *    the create when that output is missing (validateOracleFee). The indexer
  *    only sees outputs the DECODER persisted, and the decoder captures the oracle
- *    output by reading ORACLE_ADDRESS out of this payload  - so a compacted
+ *    output by reading ORACLE_ADDRESS out of this payload - so a compacted
  *    reference means no capture, and the create is rejected however much was paid.
  *
  * The SDK therefore emits the full address for both; the per-action compactable sets
@@ -103,7 +103,7 @@ const SDK_COMPACTABLE = (() => {
 // a field is compactable for an action only if that action declares it
 // single-value, non-type-gated and not `noCompact`.
 //
-// : this used to be derived from the FLAT SDK_COMPACTABLE name set minus
+// This used to be derived from the FLAT SDK_COMPACTABLE name set minus
 // the action's `noCompact` fields, which silently defeated `multi`. SEND
 // declares {field:'DESTINATION', multi:true} and is correctly kept out of the
 // flat set by SEND. But MINT/MESSAGE/SWEEP each declare a single-value

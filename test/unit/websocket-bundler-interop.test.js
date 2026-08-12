@@ -11,14 +11,14 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Regression tests for : WebSocketClient under a browser bundler's
+ * Regression tests for WebSocketClient under a browser bundler's
  * module-interop wrapper for `ws`.
  *
  * The wallet's browser builds alias the `ws` specifier to an ESM shim
  * (xchain-wallet/packages/core/src/shims/ws-browser.js). Rollup/Vite then hand
  * this CommonJS module an interop wrapper produced by getAugmentedNamespace(),
  * which copies only the ESM namespace KEYS (`default`, `WebSocket`) onto a
- * constructible function. Static class properties (OPEN, CONNECTING, ...) are
+ * constructible function. Static class properties (OPEN, CONNECTING,...) are
  * not namespace keys, so they are silently dropped.
  *
  * Before the fix, websocket.js compared `readyState === WebSocket.OPEN`. With
@@ -36,9 +36,7 @@
 const { expect } = require('chai');
 const RealWs     = require('ws');
 
-// ---------------------------------------------------------------------------
 // Bundler interop simulation
-// ---------------------------------------------------------------------------
 
 // Rollup's getAugmentedNamespace(), reproduced in behaviour: a constructible
 // function wrapper that carries the namespace keys and nothing else.
@@ -94,9 +92,7 @@ function loadClientWithWsModule(wsExports) {
     }
 }
 
-// ---------------------------------------------------------------------------
 // Mock server: WELCOME on connect, SUBSCRIBED for every subscribe frame
-// ---------------------------------------------------------------------------
 
 function createMockServer() {
     return new Promise((resolve) => {
@@ -124,11 +120,9 @@ function createMockServer() {
     });
 }
 
-// ---------------------------------------------------------------------------
 // Tests
-// ---------------------------------------------------------------------------
 
-describe('WebSocketClient bundler interop ', function () {
+describe('WebSocketClient bundler interop', function () {
 
     let server, port, client;
 

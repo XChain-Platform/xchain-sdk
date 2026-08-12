@@ -41,10 +41,10 @@ const ENCODING_LIMITS = Object.freeze({
 // consumed by the wallet PreflightPanel
 // (packages/core/src/shared/components/PreflightPanel.jsx), which reads
 // findings/severity/overridable/restricted/stateHeight/unverified and does
-// NOT read schemaVersion — the additive-only rule has no enforcement point.
+// NOT read schemaVersion: the additive-only rule has no enforcement point.
 const REPORT_SCHEMA_VERSION = 1;
 
-// Dispenser refill cap (, indexer config.js MAX_REFILLS). A
+// Dispenser refill cap (indexer config.js MAX_REFILLS). A
 // format-2 DISPENSER_EDIT that tops up GIVE_ESCROW is a refill, and the
 // 6th is rejected once dispenser_caps_activation is live. The cap cannot
 // be CHECKED client-side (no endpoint exposes per-edit give_escrow, see
@@ -53,13 +53,13 @@ const REPORT_SCHEMA_VERSION = 1;
 // in xchain-indexer/src/config.js, which src/actions/dispenser.js only READS
 // by symbol, so that handler's mapped hash never moves when the cap does;
 // checkConfigConstants in bin/check-preflight-drift.js is what catches a
-// change to it, by value ().
+// change to it, by value.
 const MAX_REFILLS = 5;
 
 // Canonical `^<id>` address-reference id, byte-for-byte the indexer's
 // CANONICAL_CARET_ID (xchain-indexer src/db.js). Anything else - `^0`, `^007`,
 // `^0x10`, `^abc`, a bare `^` - cannot resolve on ANY node, so at/after the
-//  flag-day it is a hard `invalid: <FIELD> (unresolvable ^id)` reject.
+// caret-ref strict-activation flag-day it is a hard `invalid: <FIELD> (unresolvable ^id)` reject.
 // The §8.5 drift gate over the mapped handlers is what catches a change to it.
 const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
 
@@ -154,7 +154,7 @@ const TIER1_DENYLIST = Object.freeze(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
 
 // Fee-charging user actions (spec §4.4 "protocol-fee reality"). Membership mirrors
 // the indexer handlers that call createFeesObject, plus the gas-priced VM pair
-// (DEPLOY/EXECUTE). BET was missing for its whole life (#3893).
+// (DEPLOY/EXECUTE). BET was missing for its whole life.
 const FEE_CHARGING_ACTIONS = Object.freeze([
     'ISSUE', 'SWEEP', 'DISPENSER', 'DIVIDEND', 'AIRDROP', 'CALLBACK',
     'ORDER', 'SWAP', 'DEPLOY', 'EXECUTE', 'BET',

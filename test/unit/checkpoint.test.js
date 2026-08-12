@@ -236,7 +236,7 @@ describe('CheckpointVerifier - stake-weighted quorum (SDK)', function () {
         assert.strictEqual(result.valid, false);
     });
 
-    // : the gate used `.some`, so ONE weighted entry admitted a set
+    // The gate used to use `.some`, so ONE weighted entry admitted a set
     // whose other entries carried no weight. meetsStakeThreshold reads a missing
     // weight as '0', so the unknown stake left the denominator while the weighted
     // signer kept the numerator, and a lone signature cleared 3*100 > 2*100.
@@ -271,7 +271,7 @@ describe('CheckpointVerifier - stake-weighted quorum (SDK)', function () {
         assert.strictEqual(Checkpoint.verifyCheckpoint(cp, negative).valid, false, 'negative weight');
     });
 
-    // : canonicalCheckpoint appends the commitment suffix only when all four
+    // canonicalCheckpoint appends the commitment suffix only when all four
     // fields are present, which is correct THERE (the bytes must match the hub), but it
     // meant a rootless post-activation row fell back to the legacy preimage and its
     // signatures verified against it. The verifier now refuses the row outright.

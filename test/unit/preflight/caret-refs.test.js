@@ -3,9 +3,9 @@
 // Copyright © 2025–2026 Dankest, LLC
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// `^<id>` address-reference row of the universal matrix ( /
-// ). The indexer resolves a wire ^<id> and, at/after the
-// flag-day, hard-rejects one that does not resolve; this asserts the
+// `^<id>` address-reference row of the universal matrix. The indexer
+// resolves a wire ^<id> and, at/after the flag-day, hard-rejects one
+// that does not resolve; this asserts the
 // client mirror says the knowable half out loud and declares the
 // unknowable half rather than guessing at it.
 
@@ -34,7 +34,7 @@ const unverified = (r) => (r.unverified || []).some((u) => u.check === CODE);
 
 const ADDR = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4';
 
-describe('pre-flight universal: ^<id> address references ', function () {
+describe('pre-flight universal: ^<id> address references', function () {
 
     describe('non-canonical ids (locally decidable)', function () {
         // Each of these fails the indexer's own CANONICAL_CARET_ID, so it cannot

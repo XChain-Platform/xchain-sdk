@@ -191,7 +191,7 @@ function createHostedCoSignerApp(opts = {}) {
         try {
             result = tenant.coSigner.process({
                 psbt: body.psbt, inputs: body.inputs, sighashType: body.sighashType,
-                //  §3.9, forwarded verbatim exactly as the single-tenant
+                // §3.9, forwarded verbatim exactly as the single-tenant
                 // sidecar does. Dropping it here would not be a hole (the daemon
                 // fails closed on an envelope it was not given) but it would make
                 // the same request succeed on one surface and fail on the other.

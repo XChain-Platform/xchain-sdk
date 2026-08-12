@@ -10,15 +10,14 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// Carrier-script verification for the P2SH / P2WSH chunk lanes
-// (confirm/decode/pre-flight spec §5.3.2, closing the §1 residual).
+// Carrier-script verification for the P2SH / P2WSH chunk lanes.
 //
 // An inline OP_RETURN action can be read back out of the PSBT and compared
 // to what the caller asked for (`decodeActionFromPsbt`). A chunked action
 // cannot: its payload lives in redeem scripts that exist only inside the
 // encoder, and the commit outputs are just hashes of them. So the one
 // encoding that carries the LARGEST payloads was also the one the wallet
-// had to take on trust, and §1 recorded that as residual encoder trust.
+// had to take on trust.
 //
 // The encoder now returns those scripts (`carrierScripts`). Verification is
 // therefore a check, not a re-derivation - deliberately, because a second
@@ -116,10 +115,10 @@ function verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString, ne
     if (!CHUNK_ENCODINGS.includes(enc))
         return { ok: true, reason: REASONS.NOT_CHUNKED, checked: 0 };
 
-    // A chunked encoding with no scripts is the pre- encoder, or a
-    // stripped response. Fail closed: this is exactly the case that used to
-    // be silently trusted, so treating "cannot check" as "fine" would
-    // reintroduce the gap it exists to close.
+    // A chunked encoding with no scripts is an encoder that predates
+    // carrier-script support, or a stripped response. Fail closed: this is
+    // exactly the case that used to be silently trusted, so treating
+    // "cannot check" as "fine" would reintroduce the gap it exists to close.
     if (!Array.isArray(carrierScripts) || !carrierScripts.length)
         return { ok: false, reason: REASONS.SCRIPTS_MISSING, checked: 0 };
 
@@ -165,7 +164,7 @@ function verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString, ne
     // that is what this mirrors. Comparing the raw concatenation to the action
     // string instead made every real chunked action look tampered: it was
     // PAYLOAD_MISMATCH for a correctly encoded three-recipient SEND on
-    // regtest, and the wallet's confirm surface refused to open .
+    // regtest, and the wallet's confirm surface refused to open.
     // The fixtures here had the same gap in mirror image, which is why no test
     // caught it - they compiled the chunks from the bare action bytes, a shape
     // the encoder never emits.

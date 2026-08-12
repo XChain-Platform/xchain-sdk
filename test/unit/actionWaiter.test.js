@@ -91,13 +91,13 @@ describe('ActionWaiter.waitForTxid normalized status', function () {
     });
 });
 
-// : a wait must never report chain-confirmed success it did not read.
+// A wait must never report chain-confirmed success it did not read.
 // The waiter used to synthesize `status: 'valid'` from an EMPTY evidence set:
 // a targeted wait whose action_index matched nothing, a transaction the
 // explorer returned with no action rows, or an action row the explorer carries
 // with no status at all. Each of those resolved the promise reporting 'valid',
 // so a rejected action was indistinguishable from a successful one.
-describe('ActionWaiter.waitForTxid status honesty ', function () {
+describe('ActionWaiter.waitForTxid status honesty', function () {
 
     const TXID = 'cc'.repeat(32);
 
@@ -265,7 +265,7 @@ describe('ActionWaiter.waitForTxid WebSocket actionIndex filtering', function ()
         await assert.rejects(() => p, /ACTION_REJECTED|invalid/);
     });
 
-    it('a targeted event carrying NO status defers to the poll instead of settling ', async function () {
+    it('a targeted event carrying NO status defers to the poll instead of settling', async function () {
         // The WS payload for some actions arrives without a status. Settling from it
         // reported success the indexer never claimed; the poll reads the real row.
         const { waiter, ws } = makeWsWaiter({

@@ -14,8 +14,7 @@
  *
  * XChain Platform SDK - decoder (public barrel)
  *
- * First-class decode library (spec: claude/reports/
- * confirm-decode-preflight/SPEC.md §3). Two pure layers plus the PSBT
+ * First-class decode library (spec §3). Two pure layers plus the PSBT
  * primitive:
  *
  *   parse(input, opts)        action string -> ParsedAction

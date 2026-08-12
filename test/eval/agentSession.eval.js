@@ -1,9 +1,9 @@
-//  doctrine test-coverage program: llm-eval (scored) for the agentSession
-// guardrail. AgentSession hands a key to an automated agent with a bounded
-// blast radius; the enforcement verdict is the pure evaluatePolicy() brain that
-// AgentSession wraps at its submit() chokepoint. This scores that brain across
-// a scenario corpus and asserts the pass-rate clears a floor, framed as a
-// scored eval rather than a single hard assertion.
+// llm-eval (scored) for the agentSession guardrail. AgentSession hands a key
+// to an automated agent with a bounded blast radius; the enforcement verdict
+// is the pure evaluatePolicy() brain that AgentSession wraps at its submit()
+// chokepoint. This scores that brain across a scenario corpus and asserts the
+// pass-rate clears a floor, framed as a scored eval rather than a single hard
+// assertion.
 
 const assert = require('assert');
 // The component under eval (loaded to bind the eval to the agentSession surface).

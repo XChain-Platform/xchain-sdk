@@ -104,7 +104,7 @@ function createCoSignerApp(coSigner, opts = {}) {
 
         let result;
         try {
-            // `envelope` ( §3.9) is forwarded verbatim when present: the
+            // `envelope` (§3.9) is forwarded verbatim when present: the
             // daemon validates it (grammar, own-key commitment, and whether the
             // PSBT actually funds or spends it), so nothing here needs to judge
             // it, and forwarding an absent field must stay a no-op for every
