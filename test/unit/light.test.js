@@ -73,7 +73,10 @@ function buildStore(leaves) {
 }
 
 // A §4.4 BalanceProof + the committed state_root, exactly as the explorer serves.
-function buildBalanceProof(address, tick, amountStr) {
+// `height` defaults to 100 and must equal the block_index of whatever checkpoint the
+// proof is served with: proofServer emits `height: Number(cp.block_index)` for the SAME
+// cp it returns, and the verifier now enforces that binding.
+function buildBalanceProof(address, tick, amountStr, height) {
     const keyBuf = M.balanceKey(CHAIN, NET, address, tick);
     const present = amountStr !== '0';
     const leaf = present ? M.toHex(M.amountLeaf(amountStr)) : null;
@@ -83,7 +86,7 @@ function buildBalanceProof(address, tick, amountStr) {
     const siblings = store.descend(balancesRoot, keyBuf);
     const sub = M.stateRootProof({ balances_root: balancesRoot, stakes_root: stakesRoot }, 'balances_root');
     const proof = {
-        chain: CHAIN, network: NET, height: 100, address, tick,
+        chain: CHAIN, network: NET, height: (height == null ? 100 : height), address, tick,
         amount: M.canonicalAmount(amountStr),
         smt_proof: { key: M.toHex(keyBuf), leaf_value: leaf, compressed: M.compressSmtProof(siblings) },
         sub_root_path: { index: sub.index, siblings: sub.siblings },
@@ -117,8 +120,9 @@ function buildContractStateProof(contractIndex, stateKey, valueStr) {
     return { proof, stateRoot };
 }
 
-// A §5 action inclusion proof + the committed block_merkle_root.
-function buildActionProof() {
+// A §5 action inclusion proof + the committed block_merkle_root. `height` defaults to
+// 200 and, as with buildBalanceProof, must equal the served checkpoint's block_index.
+function buildActionProof(height) {
     const rows = {
         block_index: 200,
         ledger: { credits: [{ action_index: 10, address: ADDR_A, tick: TICK, amount: '5' }],
@@ -135,7 +139,7 @@ function buildActionProof() {
     const leafIndex = ledgerCount + pos;
     const mp = M.fixedMerkleProof(leaves, leafIndex);
     const proof = {
-        chain: CHAIN, network: NET, height: 200, action_index: row.action_index,
+        chain: CHAIN, network: NET, height: (height == null ? 200 : height), action_index: row.action_index,
         tx_index: row.tx_index, action: row.action,
         leaf: M.toHex(M.actionsLeaf({ action_index: row.action_index, tx_index: row.tx_index, action: row.action })),
         merkle_proof: { index: mp.index, siblings: mp.siblings },
@@ -484,6 +488,60 @@ describe('SPV Phase 4: sdk.light.verifyBalance end-to-end (signed checkpoint, mo
             tick: TICK, atHeight: 100, validators, fetchImpl });
         assert.strictEqual(r.verified, false);
         assert.strictEqual(r.reason, 'BALANCE_QUERY_MISMATCH');
+    });
+
+    // The response's `height` field is NOT hashed into the Merkle proof, so it is a free
+    // label a drifted or hostile explorer can set at will. Until  the binding
+    // to cp.block_index was enforced only on the trustedCheckpoint branch, so a genuine
+    // old proof relabelled with a fresh height verified with false age metadata.
+    it('rejects a server-served proof whose height does not match the served checkpoint', async function () {
+        const { proof, stateRoot } = buildBalanceProof(ADDR_A, TICK, '42');   // proof.height = 100
+        const { cp, validators } = makeSignedCheckpoint(stateRoot);           // cp.block_index = 100
+        proof.height = 999;                                                   // relabelled, proof itself untouched
+        const fetchImpl = mockFetch([['/api/proof/balance/', { proof, checkpoint: cp }]]);
+        const r = await light.verifyBalance({ explorerUrl: 'https://x', coin: COIN, address: ADDR_A,
+            tick: TICK, atHeight: 100, validators, fetchImpl });
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'PROOF_HEIGHT_MISMATCH');
+        assert.strictEqual(r.height, 100, 'reported height comes from the signed checkpoint, not the label');
+    });
+
+    // ?height=H means "the nearest checkpoint AT OR ABOVE H"; a checkpoint below H
+    // answers a staler question than the caller asked.
+    it('rejects a served checkpoint below the requested atHeight', async function () {
+        const { proof, stateRoot } = buildBalanceProof(ADDR_A, TICK, '42');   // height 100
+        const { cp, validators } = makeSignedCheckpoint(stateRoot);           // block_index 100
+        const fetchImpl = mockFetch([['/api/proof/balance/', { proof, checkpoint: cp }]]);
+        const r = await light.verifyBalance({ explorerUrl: 'https://x', coin: COIN, address: ADDR_A,
+            tick: TICK, atHeight: 500, validators, fetchImpl });
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'CHECKPOINT_BELOW_ATHEIGHT');
+        assert.strictEqual(r.height, 100);
+    });
+
+    it('verifyAction rejects a server-served proof relabelled off its checkpoint height', async function () {
+        const act = buildActionProof();                                       // height 200
+        const signer = makeSigner();
+        const cp = {
+            chain: CHAIN, network: NET, block_index: 200, block_hash: 'c0'.repeat(32),
+            ledger_hash: 'a1'.repeat(32), actions_hash: 'b2'.repeat(32), contract_hash: 'c3'.repeat(32),
+            checkpoint_seq: 0, snapshot_block: 200,
+            state_root: 'd0'.repeat(32), state_root_version: 1,
+            block_merkle_root: act.blockMerkleRoot, block_merkle_version: 1,
+            validator_signatures: []
+        };
+        cp.validator_signatures = [{ pubkey: signer.pubkeyHex,
+            sig: signCanonical(signer.privateKey, checkpoint.canonicalCheckpoint(cp)) }];
+        const validators = [{ pubkey: signer.pubkeyHex, source: signer.pubkeyHex, weight: '100' }];
+        const call = () => light.verifyAction({ explorerUrl: 'https://x', coin: COIN, actionIndex: 11,
+            validators, fetchImpl: mockFetch([['/api/proof/action/', { proof: act.proof, checkpoint: cp }]]) });
+        const ok = await call();
+        assert.strictEqual(ok.verified, true, ok.reason);                      // control: binds when heights agree
+        act.proof.height = 12345;                                              // relabel only, proof untouched
+        const r = await call();
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'PROOF_HEIGHT_MISMATCH');
+        assert.strictEqual(r.height, 200);
     });
 });
 
@@ -1111,7 +1169,7 @@ describe('SPV §7.3: rotation-aware pinned path (followForward)', function () {
         const launch = rsigner(), s1 = rsigner();               // launch set rotated OUT; s1 signs now
         const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 110);
         const cp0 = pinnedCp(vs.stateRoot);
-        const bal = buildBalanceProof(ADDR_A, TICK, '42');
+        const bal = buildBalanceProof(ADDR_A, TICK, '42', 110);  // served at cp1's height
         const cp1 = signCp({ chain: CHAIN, network: NET, block_index: 110, snapshot_block: 110, checkpoint_seq: 1,
             state_root: bal.stateRoot, state_root_version: 1, block_merkle_root: 'bb'.repeat(32),
             block_merkle_version: 1, validator_signatures: [] }, [s1]);
@@ -1133,7 +1191,7 @@ describe('SPV §7.3: rotation-aware pinned path (followForward)', function () {
         const launch = rsigner(), s1 = rsigner();
         const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 110);
         const cp0 = pinnedCp(vs.stateRoot);
-        const bal = buildBalanceProof(ADDR_A, TICK, '42');
+        const bal = buildBalanceProof(ADDR_A, TICK, '42', 110);  // served at cp1's height
         const cp1 = signCp({ chain: CHAIN, network: NET, block_index: 110, snapshot_block: 110, checkpoint_seq: 1,
             state_root: bal.stateRoot, state_root_version: 1, block_merkle_root: 'bb'.repeat(32),
             block_merkle_version: 1, validator_signatures: [] }, [s1]);
@@ -1153,7 +1211,7 @@ describe('SPV §7.3: rotation-aware pinned path (followForward)', function () {
         const launch = rsigner(), s1 = rsigner();
         const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 210);
         const cp0 = pinnedCp(vs.stateRoot);
-        const act = buildActionProof();                          // height 200, action_index 11
+        const act = buildActionProof(210);                       // served at cp1's height, action_index 11
         const cp1 = signCp({ chain: CHAIN, network: NET, block_index: 210, snapshot_block: 210, checkpoint_seq: 1,
             state_root: 'cc'.repeat(32), state_root_version: 1, block_merkle_root: act.blockMerkleRoot,
             block_merkle_version: 1, validator_signatures: [] }, [s1]);
@@ -1170,7 +1228,7 @@ describe('SPV §7.3: rotation-aware pinned path (followForward)', function () {
 
     it('a pinned set that STILL signs a later checkpoint verifies directly, with no forward walk', async function () {
         const launch = rsigner();
-        const bal = buildBalanceProof(ADDR_A, TICK, '7');
+        const bal = buildBalanceProof(ADDR_A, TICK, '7', 110);   // served at cp1's height
         const cp0 = pinnedCp('ab'.repeat(32));
         const cp1 = signCp({ chain: CHAIN, network: NET, block_index: 110, snapshot_block: 110, checkpoint_seq: 1,
             state_root: bal.stateRoot, state_root_version: 1, block_merkle_root: 'bb'.repeat(32),

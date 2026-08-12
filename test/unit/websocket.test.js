@@ -172,10 +172,10 @@ describe('WebSocketClient', function () {
             expect(client.serverInfo.version).to.equal('1.0.0');
         });
 
-        it('seeds lastActionIndex from WELCOME', async function () {
+        it('seeds lastActionIndex from WELCOME as an exact decimal string', async function () {
             client = createClient(port);
             await client.connect();
-            expect(client.lastActionIndex).to.equal(500);
+            expect(client.lastActionIndex).to.equal('500');
         });
 
         it('disconnect sets connected to false', async function () {
@@ -359,15 +359,56 @@ describe('WebSocketClient', function () {
         it('tracks lastActionIndex from events', async function () {
             client = createClient(port);
             await client.connect();
-            expect(client.lastActionIndex).to.equal(500); // from WELCOME
+            expect(client.lastActionIndex).to.equal('500'); // from WELCOME
 
             server._lastClient.send(JSON.stringify({
                 type: 'NEW_ACTION', data: { action_index: 505 }
             }));
-            await waitFor(() => client.lastActionIndex === 505,
+            await waitFor(() => client.lastActionIndex === '505',
                 { message: 'lastActionIndex stayed at ' + client.lastActionIndex });
 
-            expect(client.lastActionIndex).to.equal(505);
+            expect(client.lastActionIndex).to.equal('505');
+        });
+
+        // #4154: the wire carries action indexes as exact decimal strings precisely
+        // because they can exceed 2^53. Number("9007199254740995") is 9007199254740996,
+        // so the old cursor replayed from AFTER an action it had never been handed.
+        it('keeps an above-2^53 action_index exact instead of rounding it', async function () {
+            client = createClient(port);
+            await client.connect();
+
+            server._lastClient.send(JSON.stringify({
+                type: 'NEW_ACTION', data: { action_index: '9007199254740995' }
+            }));
+            await waitFor(() => client.lastActionIndex === '9007199254740995',
+                { message: 'lastActionIndex stayed at ' + client.lastActionIndex });
+
+            expect(client.lastActionIndex).to.equal('9007199254740995');
+            // Names the rounding the string cursor exists to avoid: the old Number()
+            // path stored this index one higher than the server ever emitted.
+            expect(String(Number(client.lastActionIndex))).to.equal('9007199254740996');
+        });
+
+        it('does not move the cursor backwards for a lower index', async function () {
+            client = createClient(port);
+            await client.connect();
+
+            server._lastClient.send(JSON.stringify({
+                type: 'NEW_ACTION', data: { action_index: '505' }
+            }));
+            await waitFor(() => client.lastActionIndex === '505',
+                { message: 'lastActionIndex stayed at ' + client.lastActionIndex });
+
+            server._lastClient.send(JSON.stringify({
+                type: 'NEW_ACTION', data: { action_index: '499' }
+            }));
+            server._lastClient.send(JSON.stringify({
+                type: 'NEW_ACTION', data: { action_index: '506' }
+            }));
+            await waitFor(() => client.lastActionIndex === '506',
+                { message: 'lastActionIndex stayed at ' + client.lastActionIndex });
+
+            expect(client.lastActionIndex).to.equal('506');
         });
     });
 
@@ -690,7 +731,33 @@ describe('WebSocketClient', function () {
                 pingInterval: 60000
             });
             await c.connect();
-            expect(c.lastActionIndex).to.equal(777);
+            expect(c.lastActionIndex).to.equal('777');
+            c.disconnect();
+            await new Promise(r => s.wss.close(r));
+        });
+
+        // The "0" guard from the original coercion: a chain sitting at index 0 sends
+        // the string "0", which is truthy. It must seed the cursor without producing a
+        // since_action_index on the next subscribe (#4154 must not regress this).
+        it('a WELCOME of "0" seeds the cursor but sends no since_action_index', async function () {
+            const s = await createMockServer({ actionIndex: '0' });
+            const c = new WebSocketClient({
+                network: 'bitcoin-regtest',
+                websocketUrl: '127.0.0.1',
+                websocketPort: s.port,
+                retry: { maxRetries: 0 },
+                pingInterval: 60000
+            });
+            await c.connect();
+            expect(c.lastActionIndex).to.equal('0');
+
+            const sent = [];
+            c._send = (m) => sent.push(m);
+            c._subscriptions = [{ channels: ['blocks'], params: {} }];
+            c._resubscribe();
+
+            expect(sent).to.have.lengthOf(1);
+            expect(sent[0].params).to.not.have.property('since_action_index');
             c.disconnect();
             await new Promise(r => s.wss.close(r));
         });
@@ -872,9 +939,9 @@ describe('WebSocketClient', function () {
                 type: 'CATCH_UP_COMPLETE',
                 data: { latest_action_index: 999, events_replayed: 5 }
             }));
-            await waitFor(() => client.lastActionIndex === 999,
+            await waitFor(() => client.lastActionIndex === '999',
                 { message: 'lastActionIndex stayed at ' + client.lastActionIndex });
-            expect(client.lastActionIndex).to.equal(999);
+            expect(client.lastActionIndex).to.equal('999');
         });
     });
 
@@ -958,8 +1025,8 @@ describe('WebSocketClient', function () {
             await client.connect();
             await client.subscribe(['blocks']);
 
-            // Set lastActionIndex
-            client.lastActionIndex = 500;
+            // Set lastActionIndex (decimal string, the shape the wire hands us)
+            client.lastActionIndex = '500';
 
             const received = [];
             server._lastClient.on('message', (data) => {
@@ -972,7 +1039,29 @@ describe('WebSocketClient', function () {
                 { message: 'the server never received the replayed subscribe' });
 
             const subscribeMsgs = received.filter(m => m.action === 'subscribe');
-            expect(subscribeMsgs[0].params.since_action_index).to.equal(500);
+            expect(subscribeMsgs[0].params.since_action_index).to.equal('500');
+        });
+
+        // The whole point of #4154: the cursor that goes back out on reconnect is the
+        // byte-identical index the server sent, not a Number round-trip of it.
+        it('replays an above-2^53 cursor byte-for-byte as since_action_index', async function () {
+            client = createClient(port);
+            await client.connect();
+            await client.subscribe(['blocks']);
+
+            client.lastActionIndex = '9007199254740995';
+
+            const received = [];
+            server._lastClient.on('message', (data) => {
+                received.push(JSON.parse(data.toString()));
+            });
+
+            client._resubscribe();
+            await waitFor(() => received.filter(m => m.action === 'subscribe').length >= 1,
+                { message: 'the server never received the replayed subscribe' });
+
+            const replayed = received.filter(m => m.action === 'subscribe')[0];
+            expect(replayed.params.since_action_index).to.equal('9007199254740995');
         });
     });
 });

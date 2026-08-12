@@ -91,9 +91,14 @@ function toBytes(v, label) {
 // represented exactly. Accepts bigint, an integer Number, and a digit string, because
 // a config value above 2^53 can only reach us intact as one of the latter two.
 // Number() would silently round it, which is the whole defect ().
+//
+// SAFE integer, not merely integer (). A Number above 2^53-1 arrives here
+// ALREADY rounded, so accepting it would launder a lossy value into a cap this file
+// then compares exactly - the same defect one step later. Such a cap must be a
+// bigint or a digit string; callers fail closed on the null.
 function exactU64(v) {
     if (typeof v === 'bigint') return v >= 0n ? v : null;
-    if (typeof v === 'number') return (Number.isInteger(v) && v >= 0) ? BigInt(v) : null;
+    if (typeof v === 'number') return (Number.isSafeInteger(v) && v >= 0) ? BigInt(v) : null;
     if (typeof v === 'string' && /^\d+$/.test(v.trim())) return BigInt(v.trim());
     return null;
 }
@@ -278,10 +283,15 @@ class CoSigner {
         // fraction is chain-specific (a low-unit-value chain can pay ~all of a
         // small input as fee), so no proportional default can tell a legitimate
         // high fee from a drain without operator knowledge.
+        // Parsed with exactU64, not Number() (). Both enforcement sites
+        // below compare in BigInt, so a Number() hop rounded the cap BEFORE it was
+        // enforced and the daemon could approve a fee above what the operator set.
+        // This is the same parse allowedOutputs[].maxValue already uses; the cap is
+        // now a BigInt, so the two _deny details that embed it stringify it.
         this.maxFeeSats = (config.maxFeeSats === undefined || config.maxFeeSats === null)
-            ? null : Number(config.maxFeeSats);
-        if (this.maxFeeSats !== null && (!Number.isInteger(this.maxFeeSats) || this.maxFeeSats < 0))
-            throw new Error('maxFeeSats must be a non-negative integer');
+            ? null : exactU64(config.maxFeeSats);
+        if (this.maxFeeSats === null && config.maxFeeSats !== undefined && config.maxFeeSats !== null)
+            throw new Error('maxFeeSats must be a non-negative integer (number, bigint, or digit string)');
         // G14: the body-size limit bounds BYTES, not WORK. Sighash derivation
         // re-copies every prevout script and value per signed input, so the cost is
         // quadratic in the PSBT's input count, plus one deterministicSign each. A
@@ -442,9 +452,9 @@ class CoSigner {
                 // Same exact-u64 comparison as the allowed-output caps below ():
                 // a value Number() cannot hold exactly must not be compared as a Number.
                 const commitValue = this._toU64(out.value);
-                if (commitValue === null || commitValue > BigInt(this.maxFeeSats))
+                if (commitValue === null || commitValue > this.maxFeeSats)
                     return this._deny('OUTPUT_OVER_CAP',
-                        { index: i, value: String(out.value), maxValue: this.maxFeeSats, detail: 'envelope commit output' });
+                        { index: i, value: String(out.value), maxValue: String(this.maxFeeSats), detail: 'envelope commit output' });
                 continue;
             }
             // (c) An operator-authorized native leg (COINPAY recipient / fee output).
@@ -514,8 +524,8 @@ class CoSigner {
             return this._deny('OUTPUTS_EXCEED_INPUTS', { totalIn: totalIn.toString(), totalOut: totalOut.toString() });
         if (totalIn > 0n && totalOut === 0n)
             return this._deny('FEE_BURNS_ENTIRE_INPUT', { totalIn: totalIn.toString(), fee: fee.toString() });
-        if (this.maxFeeSats !== null && fee > BigInt(this.maxFeeSats))
-            return this._deny('FEE_EXCEEDS_CAP', { fee: fee.toString(), maxFeeSats: this.maxFeeSats });
+        if (this.maxFeeSats !== null && fee > this.maxFeeSats)
+            return this._deny('FEE_EXCEEDS_CAP', { fee: fee.toString(), maxFeeSats: String(this.maxFeeSats) });
         return null;
     }
 

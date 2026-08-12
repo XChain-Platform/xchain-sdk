@@ -52,9 +52,16 @@ function toU64(v) {
 // intent.customOutputs may legitimately arrive as a string (that is what the
 // encoder's parseSatoshiAmount allowBig path exists for), and the Number() hop that
 // used to precede toU64 rounded it away above 2^53. Mirrors cosigner exactU64.
+//
+// SAFE integer, not merely integer (). A Number above 2^53-1 has ALREADY
+// lost precision before this function sees it, so BigInt-converting it launders a
+// rounded value into a cap that is then compared exactly - the very defect the
+// bigint and digit-string branches exist to avoid. A cap that large must arrive as
+// one of those two forms; a bare Number is refused, and every caller fails closed
+// on the null (see MALFORMED_FEE_CAP / MALFORMED_PHASE_FUNDING_CAP, ).
 function exactU64(v) {
     if (typeof v === 'bigint') return v >= 0n ? v : null;
-    if (typeof v === 'number') return (Number.isInteger(v) && v >= 0) ? BigInt(v) : null;
+    if (typeof v === 'number') return (Number.isSafeInteger(v) && v >= 0) ? BigInt(v) : null;
     if (typeof v === 'string' && /^\d+$/.test(v.trim())) return BigInt(v.trim());
     return null;
 }

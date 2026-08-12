@@ -425,6 +425,66 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         expect(res.reason).to.equal('FEE_EXCEEDS_CAP');
     });
 
+    // : the cap itself was parsed with Number() while both sites that
+    // enforce it compare in BigInt, so a >2^53 cap was ROUNDED before enforcement.
+    // The chosen cap rounds UP - Number('9007199254740995') is 9007199254740996 -
+    // which is the direction that LOOSENS the guard: a fee one satoshi above the
+    // operator's real cap compared within the rounded one and was approved. Both
+    // directions are asserted, since a cap rounding the other way false-denies.
+    describe('maxFeeSats is parsed as an exact u64 ()', function () {
+        const CAP = 9007199254740995n;   // above 2^53; Number() rounds it UP to ...996
+        const IN  = 18014398509481984n;  // 2^54, comfortably above any fee below
+
+        // One signable OP_RETURN spend whose miner fee is exactly `fee`.
+        const psbtWithFee = (acct, prevHash, fee) => {
+            const txid = Buffer.from(prevHash).reverse().toString('hex');
+            const inner = bitcoin.script.compile([Buffer.from('SEND|0|TOK|1|1destX|m', 'utf8')]);
+            const cipher = crypto.createCipheriv('aes-128-ctr', txid.substr(0, 16), txid.substr(16, 16));
+            const obf = Buffer.concat([cipher.update(Buffer.concat([Buffer.from('XCHN'), inner])), cipher.final()]);
+            const psbt = new bitcoin.Psbt();
+            psbt.addInput({ hash: prevHash, index: 0, witnessUtxo: { script: acct.p2trScript, value: IN } });
+            psbt.addOutput({ script: bitcoin.payments.embed({ data: [obf] }).output, value: 0 });
+            psbt.addOutput({ script: acct.p2trScript, value: IN - fee });
+            return psbt;
+        };
+
+        const run = (capForm, fee) => {
+            const acct = makeAccount();
+            const prevHash = crypto.randomBytes(32);
+            const psbt = psbtWithFee(acct, prevHash, fee);
+            const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });
+            const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys, tweaks: acct.tweaks,
+                policy: policy(), maxFeeSats: capForm });
+            return co.process({ psbt: psbt.toHex(), inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
+        };
+
+        for (const [label, capForm] of [['bigint', CAP], ['digit string', String(CAP)]]) {
+            it(`approves a fee landing exactly on a >2^53 cap given as a ${label}`, function () {
+                expect(run(capForm, CAP).approved).to.equal(true);
+            });
+
+            it(`denies a fee ONE satoshi over a >2^53 cap given as a ${label}`, function () {
+                const res = run(capForm, CAP + 1n);
+                expect(res.approved).to.equal(false);
+                expect(res.reason).to.equal('FEE_EXCEEDS_CAP');
+                // The detail rides a JSON response, so the BigInt cap must be a string.
+                expect(res.detail.maxFeeSats).to.equal(String(CAP));
+                expect(() => JSON.stringify(res)).to.not.throw();
+            });
+        }
+
+        // A cap that cannot be represented exactly is refused at construction rather
+        // than rounded into the guard, matching allowedOutputs[].maxValue. The bare
+        // Number form of a >2^53 cap has ALREADY lost precision (), so it
+        // is rejected too: such a cap must arrive as a bigint or a digit string.
+        for (const bad of [9007199254740993, 1.5, -1, 'abc', {}, NaN])
+            it(`refuses a maxFeeSats of ${String(bad)} at construction`, function () {
+                const acct = makeAccount();
+                expect(() => new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys,
+                    tweaks: acct.tweaks, policy: policy(), maxFeeSats: bad })).to.throw(/maxFeeSats/);
+            });
+    });
+
     // Anti-drain (burn variant): the OP_RETURN action carrier is exempt from the
     // output gate because it "carries the action, not value" - but an OP_RETURN
     // output is unspendable, so any satoshis on it are burned. A malicious agent

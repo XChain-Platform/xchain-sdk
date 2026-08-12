@@ -214,7 +214,16 @@ class Utility {
         if(String(amount).startsWith('-'))
             return false;
         let divisible   = (parseInt(decimals)==0) ? false : true;
-        let [int, sats] = String(amount).split('.');
+        let parts       = String(amount).split('.');
+        let [int, sats] = parts;
+        //<MULTI-DOT-REJECT> (item 4310): reject an amount carrying more than one decimal
+        // point. Destructuring keeps only the first two segments, so "1.2.3" reads as
+        // int="1"/sats="2" and clears the divisible branch below, letting the SDK build an
+        // amount the consensus-authoritative indexer would choke on. Mirrors the identical
+        // guard in xchain-indexer/src/utility.js.
+        if(parts.length > 2)
+            return false;
+        //</MULTI-DOT-REJECT>
         if(!divisible && this.isNumeric(int) && int==amount)
             return true;
         //<FRACTIONAL-PRECISION-CAP> (item 5346): an amount must not carry more fractional

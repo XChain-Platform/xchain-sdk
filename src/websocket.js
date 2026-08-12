@@ -91,7 +91,12 @@ class WebSocketClient {
         this.reconnectAttempts  = 0;
         this.serverInfo         = null;
         this._schemaWarned      = false;
-        this.lastActionIndex    = 0;
+        // The catch-up cursor is the exact decimal STRING the v2 wire carries, or null
+        // when unseeded. Number() rounded it above 2^53 and the rounded value went back
+        // out as since_action_index, so a reconnect asked for rows after an action that
+        // had never been delivered (). null rather than 0 so an unseeded cursor
+        // is distinguishable from a chain sitting at index "0".
+        this.lastActionIndex    = null;
         this.catchingUp         = false;
         this.nextId             = 1;
 
@@ -343,28 +348,17 @@ class WebSocketClient {
             }
         }
 
-        // Track action indexes for catch-up
+        // Track action indexes for catch-up. WELCOME's latest_action_index rides the
+        // same path, so a fresh client seeds from WELCOME here rather than in a second
+        // branch below that could drift from this one.
         if (msg.data) {
-            if (msg.data.action_index) {
-                const idx = Number(msg.data.action_index);
-                if (idx > this.lastActionIndex) this.lastActionIndex = idx;
-            }
-            if (msg.data.latest_action_index) {
-                const idx = Number(msg.data.latest_action_index);
-                if (idx > this.lastActionIndex) this.lastActionIndex = idx;
-            }
+            this._advanceCursor(msg.data.action_index);
+            this._advanceCursor(msg.data.latest_action_index);
         }
 
         // Handle system messages
         if (msg.type === 'WELCOME') {
             this.serverInfo = msg.data;
-            if (this.lastActionIndex === 0 && msg.data && msg.data.latest_action_index) {
-                // Coerce: under schema v2 BIGINT fields arrive as decimal strings, and a
-                // chain at index 0 sends "0", which is truthy where the numeric 0 was not.
-                // Without Number() that string would leak into lastActionIndex and back out
-                // as since_action_index on the next catch-up request.
-                this.lastActionIndex = Number(msg.data.latest_action_index);
-            }
         }
 
         if (msg.type === 'CATCH_UP_COMPLETE') {
@@ -462,10 +456,26 @@ class WebSocketClient {
         }, delay);
     }
 
+    // Advance the catch-up cursor to `raw` when it is higher, comparing as BigInt so
+    // two consecutive indices above 2^53 stay distinct. Stores the wire's own decimal
+    // string: nothing here converts to Number, and nothing serializes a BigInt (which
+    // JSON.stringify throws on). A value that is not a non-negative integer literal is
+    // not a cursor and is ignored, which also absorbs null/undefined.
+    _advanceCursor(raw) {
+        if (raw === null || raw === undefined) return;
+        const val = String(raw);
+        if (!/^[0-9]+$/.test(val)) return;
+        if (this.lastActionIndex === null || BigInt(val) > BigInt(this.lastActionIndex))
+            this.lastActionIndex = val;
+    }
+
     _resubscribe() {
         for (const sub of this._subscriptions) {
             const params = Object.assign({}, sub.params);
-            if (this.lastActionIndex > 0) {
+            // Same gate as before the cursor became a string: a chain still at index 0
+            // gets no since_action_index, so an unseeded reconnect cannot ask the server
+            // to replay from the genesis of the feed.
+            if (this.lastActionIndex !== null && BigInt(this.lastActionIndex) > 0n) {
                 params.since_action_index = this.lastActionIndex;
             }
             this._send({ action: 'subscribe', channels: sub.channels, params });

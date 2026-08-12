@@ -287,10 +287,77 @@ describe('Validator: MAX_SUPPLY validation', function () {
         expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
     });
 
+    // . The bound was applied to split('.')[0], and BigInt('-0') is 0n, so
+    // every negative whose integer part is zero cleared the nonnegative check and was
+    // serialized into an ISSUE the indexer refuses outright (its amount-format check
+    // rejects a leading '-'), spending the fee for a guaranteed-invalid transaction.
+    //
+    // Asserting the BOUND message specifically, not merely the shared
+    // INVALID_FIELD_VALUE code: the fractional-precision check in this same block
+    // rejects most of these values too, so a code-only assertion would stay green with
+    // the sign check deleted and prove nothing about it.
+    const boundsErrors = (errors) =>
+        errors.filter(e => e.code === 'INVALID_FIELD_VALUE' && /must be between 0 and/.test(e.message));
+
+    ['-0.5', '-0.0001', '-0.9', '-0', ' -0.5', -0.5].forEach((neg) => {
+        it(`rejects a negative fractional MAX_SUPPLY ${JSON.stringify(neg)} on the SIGN, not the precision`, function () {
+            const errors = v.validate('ISSUE', { TICK: 'TOKEN', MAX_SUPPLY: neg, DECIMALS: 8 });
+            expect(boundsErrors(errors)).to.have.lengthOf(1);
+        });
+    });
+
+    it('leaves a legal positive fractional MAX_SUPPLY accepted (sign fix changes negatives only)', function () {
+        const errors = v.validate('ISSUE', { TICK: 'TOKEN', MAX_SUPPLY: '21000000.5', DECIMALS: 8 });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
     it('rejects a MAX_SUPPLY over 1 sextillion', function () {
         // 1 sextillion + 1
         const errors = v.validate('ISSUE', { TICK: 'TOKEN', MAX_SUPPLY: '1000000000000000000001' });
         expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    // Fractional precision (). The ceiling check reads split('.')[0] only, so an
+    // over-precise MAX_SUPPLY cleared the SDK and was then refused on-chain as
+    // 'invalid: MAX_SUPPLY (format)' with the miner fee already paid. What the OFFLINE
+    // validator may assert about it is bounded by what it can know: the indexer measures
+    // the fraction against the TOKEN ROW's decimals (issue.js:258) and only falls back to
+    // the wire DECIMALS when the row has none, so the wire value is not the tick's on a
+    // re-issue. The row-aware check is in preflight/checks/issue.js.
+    it('rejects a MAX_SUPPLY with more fractional digits than any tick can carry', function () {
+        // 19 fractional digits; MAX_DECIMALS is 18, so this is invalid at every decimals.
+        const errors = v.validate('ISSUE', { TICK: 'TOKEN', MAX_SUPPLY: '1.1234567890123456789', DECIMALS: 8 });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('accepts a MAX_SUPPLY at exactly MAX_DECIMALS fractional digits', function () {
+        const errors = v.validate('ISSUE', { TICK: 'TOKEN', MAX_SUPPLY: '1.123456789012345678', DECIMALS: 18 });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('accepts a whole MAX_SUPPLY with DECIMALS 0', function () {
+        const errors = v.validate('ISSUE', { TICK: 'TOKEN', MAX_SUPPLY: '21000000', DECIMALS: 0 });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    // Never stricter than consensus, the re-issue case. An 8-decimal token re-issued with a
+    // stale wire DECIMALS=0 is ACCEPTED on-chain (tick_decimals comes from the row), so an
+    // offline reject keyed to the wire value would block a legal action.
+    it('does not reject a fractional MAX_SUPPLY carrying a stale wire DECIMALS', function () {
+        const errors = v.validate('ISSUE', { TICK: 'TOKEN', MAX_SUPPLY: '1000.5', DECIMALS: 0 });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    // Same rule with DECIMALS absent: the indexer resolves NaN decimals and caps nothing,
+    // so the SDK must not invent a 0.
+    it('does not reject a fractional MAX_SUPPLY when DECIMALS is absent', function () {
+        const errors = v.validate('ISSUE', { TICK: 'TOKEN', MAX_SUPPLY: '1.5' });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('does not cap the fraction at all when DECIMALS is absent', function () {
+        const errors = v.validate('ISSUE', { TICK: 'TOKEN', MAX_SUPPLY: '1.1234567890123456789' });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
     });
 });
 
@@ -917,6 +984,183 @@ describe('Validator: VOTE binding-poll numeric fields', function () {
     it('rejects a non-numeric CALLBACK_CONTRACT', function () {
         const errors = v.validate('VOTE', { ...base, CALLBACK_CONTRACT: 'seven', CALLBACK_METHOD: 'onResult' });
         expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VOTE PER-VERSION REQUIRED FIELDS
+// VOTE's anchors are version-split, so they live in _validateVote rather than in
+// the flat ACTION_REQUIRED_FIELDS table. Field lists track vote.md's Formats section.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Validator: VOTE per-version required fields', function () {
+
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    it('accepts a complete v0 create poll', function () {
+        const errors = v.validate('VOTE', { VERSION: 0, TICK: 'GOV', END_BLOCK: '900000', OPTIONS: 'yes,no' });
+        expect(hasNoErrorCode(errors, 'MISSING_REQUIRED_FIELD')).to.be.true;
+    });
+
+    it('rejects a v0 create poll missing END_BLOCK and OPTIONS', function () {
+        const errors = v.validate('VOTE', { VERSION: 0, TICK: 'GOV' });
+        const missing = errors.filter(e => e.code === 'MISSING_REQUIRED_FIELD').map(e => e.details.field);
+        expect(missing).to.have.members(['END_BLOCK', 'OPTIONS']);
+    });
+
+    it('accepts a complete v1 ballot', function () {
+        const errors = v.validate('VOTE', { VERSION: 1, POLL_REF: '307', BALLOT: '1' });
+        expect(hasNoErrorCode(errors, 'MISSING_REQUIRED_FIELD')).to.be.true;
+    });
+
+    // The reported defect: a hand-rolled v1 carrying only POLL_REF passed the SDK
+    // and serialized, then died at the indexer on 'invalid: BALLOT (empty)'.
+    it('rejects a v1 ballot carrying only POLL_REF', function () {
+        const errors = v.validate('VOTE', { VERSION: 1, POLL_REF: '307' });
+        const missing = errors.filter(e => e.code === 'MISSING_REQUIRED_FIELD').map(e => e.details.field);
+        expect(missing).to.deep.equal(['BALLOT']);
+    });
+
+    it('rejects a v1 ballot carrying only BALLOT', function () {
+        const errors = v.validate('VOTE', { VERSION: 1, BALLOT: '1' });
+        const missing = errors.filter(e => e.code === 'MISSING_REQUIRED_FIELD').map(e => e.details.field);
+        expect(missing).to.deep.equal(['POLL_REF']);
+    });
+
+    it('rejects the system-only v2 finalizer', function () {
+        const errors = v.validate('VOTE', { VERSION: 2, POLL_REF: '307' });
+        expect(hasErrorCode(errors, 'VOTE_CONSTRAINT')).to.be.true;
+    });
+
+    it('accepts a v3 delegation set', function () {
+        const errors = v.validate('VOTE', { VERSION: 3, TICK: 'GOV', DELEGATE_TO: 'mAlice' });
+        expect(hasNoErrorCode(errors, 'MISSING_REQUIRED_FIELD')).to.be.true;
+    });
+
+    // vote.md:52 - a blank DELEGATE_TO is the documented clear-delegation action, so
+    // requiring DELEGATE_TO would reject a legitimate broadcast.
+    it('accepts a v3 clear-delegation with a blank DELEGATE_TO', function () {
+        const errors = v.validate('VOTE', { VERSION: 3, TICK: 'GOV', DELEGATE_TO: '' });
+        expect(hasNoErrorCode(errors, 'MISSING_REQUIRED_FIELD')).to.be.true;
+    });
+
+    it('rejects a v3 delegation missing TICK', function () {
+        const errors = v.validate('VOTE', { VERSION: 3, DELEGATE_TO: 'mAlice' });
+        const missing = errors.filter(e => e.code === 'MISSING_REQUIRED_FIELD').map(e => e.details.field);
+        expect(missing).to.deep.equal(['TICK']);
+    });
+
+    // With no VERSION the format is auto-selected downstream, so the anchor is the
+    // field that discriminates: POLL_REF exists only in v1, DELEGATE_TO only in v3.
+    it('rejects a version-less POLL_REF-only call', function () {
+        const errors = v.validate('VOTE', { POLL_REF: '307' });
+        const missing = errors.filter(e => e.code === 'MISSING_REQUIRED_FIELD').map(e => e.details.field);
+        expect(missing).to.deep.equal(['BALLOT']);
+    });
+
+    it('rejects a version-less DELEGATE_TO-only call', function () {
+        const errors = v.validate('VOTE', { DELEGATE_TO: 'mAlice' });
+        const missing = errors.filter(e => e.code === 'MISSING_REQUIRED_FIELD').map(e => e.details.field);
+        expect(missing).to.deep.equal(['TICK']);
+    });
+
+    // A payload carrying NEITHER discriminator is still auto-selected, not refused:
+    // the selector sorts fitting formats by length and v1 is the shortest, so these
+    // two used to serialize a bare `VOTE|1` the indexer refuses ().
+    it('rejects a wholly empty VOTE instead of serializing VOTE|1', function () {
+        const errors = v.validate('VOTE', {});
+        const missing = errors.filter(e => e.code === 'MISSING_REQUIRED_FIELD').map(e => e.details.field);
+        expect(missing).to.deep.equal(['POLL_REF', 'BALLOT']);
+    });
+
+    it('rejects a MEMO-only VOTE, which also auto-selects the ballot format', function () {
+        const errors = v.validate('VOTE', { MEMO: 'note' });
+        const missing = errors.filter(e => e.code === 'MISSING_REQUIRED_FIELD').map(e => e.details.field);
+        expect(missing).to.deep.equal(['POLL_REF', 'BALLOT']);
+    });
+
+    // TICK alone auto-selects v3 (shorter than v0), where a blank DELEGATE_TO is the
+    // documented clear-delegation, so it is a complete command and must NOT be flagged.
+    it('accepts a version-less TICK-only call as a clear-delegation', function () {
+        const errors = v.validate('VOTE', { TICK: 'GOV' });
+        expect(errors.filter(e => e.code === 'MISSING_REQUIRED_FIELD')).to.deep.equal([]);
+    });
+
+    // A v0-only field pins the create-poll format, so the v0 anchors are demanded.
+    it('rejects a version-less END_BLOCK-only call against the v0 anchors', function () {
+        const errors = v.validate('VOTE', { END_BLOCK: '900000' });
+        const missing = errors.filter(e => e.code === 'MISSING_REQUIRED_FIELD').map(e => e.details.field);
+        expect(missing).to.deep.equal(['TICK', 'OPTIONS']);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELEGATE PER-VERSION REQUIRED FIELDS ()
+// DELEGATE carried an empty ACTION_REQUIRED_FIELDS entry, so sdk.delegate({}) built
+// and paid for `DELEGATE|0` that the indexer refuses as SIGNING_PUBKEY (required).
+// The flat table cannot express these: the rotate flavors carry NEW_SIGNING_PUBKEY
+// and the revoke flavors SIGNING_PUBKEY, with no field common to all four.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Validator: DELEGATE per-version required fields', function () {
+
+    const PUB = 'a'.repeat(64);
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    const missingOf = (errors) =>
+        errors.filter(e => e.code === 'MISSING_REQUIRED_FIELD').map(e => e.details.field);
+
+    it('rejects a wholly empty DELEGATE instead of serializing DELEGATE|0', function () {
+        expect(missingOf(v.validate('DELEGATE', {}))).to.deep.equal(['NEW_SIGNING_PUBKEY']);
+    });
+
+    it('accepts a complete v0 capability rotate', function () {
+        const errors = v.validate('DELEGATE', { VERSION: 0, NEW_SIGNING_PUBKEY: PUB });
+        expect(hasNoErrorCode(errors, 'MISSING_REQUIRED_FIELD')).to.be.true;
+    });
+
+    it('rejects a v1 contract-targeted rotate missing TARGET_CONTRACT_INDEX and TICK', function () {
+        const errors = v.validate('DELEGATE', { VERSION: 1, NEW_SIGNING_PUBKEY: PUB });
+        expect(missingOf(errors)).to.have.members(['TARGET_CONTRACT_INDEX', 'TICK']);
+    });
+
+    it('accepts a complete v1 contract-targeted rotate', function () {
+        const errors = v.validate('DELEGATE', { VERSION: 1, NEW_SIGNING_PUBKEY: PUB, TARGET_CONTRACT_INDEX: '42', TICK: 'TOK' });
+        expect(hasNoErrorCode(errors, 'MISSING_REQUIRED_FIELD')).to.be.true;
+    });
+
+    it('rejects a v2 capability revoke with no SIGNING_PUBKEY', function () {
+        expect(missingOf(v.validate('DELEGATE', { VERSION: 2 }))).to.deep.equal(['SIGNING_PUBKEY']);
+    });
+
+    it('accepts a complete v3 contract-targeted revoke', function () {
+        const errors = v.validate('DELEGATE', { VERSION: 3, SIGNING_PUBKEY: PUB, TARGET_CONTRACT_INDEX: '42', TICK: 'TOK' });
+        expect(hasNoErrorCode(errors, 'MISSING_REQUIRED_FIELD')).to.be.true;
+    });
+
+    it('rejects a v3 contract-targeted revoke missing TICK', function () {
+        const errors = v.validate('DELEGATE', { VERSION: 3, SIGNING_PUBKEY: PUB, TARGET_CONTRACT_INDEX: '42' });
+        expect(missingOf(errors)).to.deep.equal(['TICK']);
+    });
+
+    // With VERSION absent the format is auto-selected downstream, so the wire field
+    // discriminates: SIGNING_PUBKEY means revoke, TARGET_CONTRACT_INDEX/TICK mean
+    // the contract-targeted pair.
+    it('reads a version-less SIGNING_PUBKEY call as a revoke and accepts it', function () {
+        const errors = v.validate('DELEGATE', { SIGNING_PUBKEY: PUB });
+        expect(hasNoErrorCode(errors, 'MISSING_REQUIRED_FIELD')).to.be.true;
+    });
+
+    it('reads a version-less TICK-only call as contract-targeted and names what is missing', function () {
+        const errors = v.validate('DELEGATE', { TICK: 'TOK' });
+        expect(missingOf(errors)).to.have.members(['NEW_SIGNING_PUBKEY', 'TARGET_CONTRACT_INDEX']);
+    });
+
+    it('accepts the version-less rotate the golden fixture builds', function () {
+        const errors = v.validate('DELEGATE', { NEW_SIGNING_PUBKEY: PUB });
+        expect(hasNoErrorCode(errors, 'MISSING_REQUIRED_FIELD')).to.be.true;
     });
 });
 

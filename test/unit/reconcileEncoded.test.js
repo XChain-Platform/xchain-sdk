@@ -447,7 +447,13 @@ describe('reconcileEncoded foreign-input change ()', function () {
 
 describe('reconcileEncoded malformed caps fail closed ()', function () {
 
-    const MALFORMED = [-1, 1.5, '5o00', '', 'abc', NaN, -1n, {}];
+    // : an UNSAFE integer Number belongs on this list. It looks exact to
+    // Number.isInteger, but JavaScript rounded it before exactU64 ever saw it, so
+    // accepting it laundered a lossy value into a cap the fee is then compared
+    // against exactly. A cap that large has to arrive as a bigint or digit string,
+    // and the  case above proves both of those forms still pass intact.
+    const MALFORMED = [-1, 1.5, '5o00', '', 'abc', NaN, -1n, {},
+                       Number.MAX_SAFE_INTEGER + 1, 9007199254740993];
 
     it('DENIES a malformed maxFeeSats instead of dropping the fee ceiling', function () {
         const funding = payTo();

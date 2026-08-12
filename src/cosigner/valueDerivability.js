@@ -228,10 +228,11 @@ const TABLE = {
         0: { class: NONE },                                   // begins cooldown returning the signer's OWN stake
         1: { class: NONE },
     },
+    // v2 (finalize) has no entry: it is system-synthesized, so formats.js omits it and
+    // no cosigner can ever be asked to sign one (same shape as PRICE v0 above).
     VOTE: {
         0: { class: DERIVABLE },                              // DEPOSIT + GAS_ESCROW, both gas-denominated (see policyEvaluator ACTION_VALUE_FIELDS)
         1: { class: NONE },                                   // cast a ballot: weight is measured from holdings, never moved
-        2: { class: UNBOUNDED, byRef: true },                 // system-injected finalization of the referenced poll
         3: { class: NONE },                                   // set/clear a standing delegation
     },
     WITHDRAW: {

@@ -220,13 +220,17 @@ var Formats = {
     },
 
     // Token-weighted governance polls. v0 = create poll, v1 = cast ballot,
-    // v2 = finalize (system-injected only; listed for format parity, not
-    // user-encodable), v3 = set/clear standing vote delegation.
-    // Must match xchain-indexer/src/actions/vote.js formats exactly.
+    // v3 = set/clear standing vote delegation. The user-encodable versions must
+    // match xchain-indexer/src/actions/vote.js exactly.
+    // v2 (finalize) is system-synthesized and is intentionally omitted, exactly as
+    // PRICE v0 is: the indexer rejects a user-broadcast VOTE v2 (vote.js
+    // `if(!data['IS_SYNTHETIC'])`), so listing it here only let sdk.vote({version:2})
+    // build a command guaranteed to be rejected on arrival. Omitting it also drops
+    // SDK DECODE of a VOTE|2 string (UNKNOWN_VERSION), the same accepted trade-off
+    // every other system-only version already carries.
     VOTE: {
         0: 'VERSION|TICK|END_BLOCK|OPTIONS|MAX_SELECTIONS|TALLY_MODE|WEIGHT_MODE|QUORUM|MIN_VOTERS|MIN_VOTE_BALANCE|DECIDE_THRESHOLD|QUESTION|DEPOSIT|CALLBACK_CONTRACT|CALLBACK_METHOD|CALLBACK_PARAMS|CALLBACK_ON|GAS_ESCROW|CALLBACK_DELAY_BLOCKS',
         1: 'VERSION|POLL_REF|BALLOT|MEMO',
-        2: 'VERSION|POLL_REF',
         3: 'VERSION|TICK|DELEGATE_TO|MEMO'
     }
 

@@ -359,8 +359,24 @@ async function verifyBalance(opts){
         cp = body.checkpoint;
         q = await _resolveQuorum(f, opts, cp);
     }
-    const base = { height: Number(proof.height), checkpoint: cp, quorum: q.quorum, weighted: q.weighted };
+    // Report the checkpoint's height, never the response's `height` label: the label
+    // is not hashed into the proof, so it is a server claim, while cp.block_index is
+    // covered by the quorum signature. The binding check below makes the two equal on
+    // every success path; sourcing from cp keeps the metadata honest if it regresses.
+    const base = { height: Number(cp.block_index), checkpoint: cp, quorum: q.quorum, weighted: q.weighted };
     if (!q.valid) return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_QUORUM_FAILED' }, base);
+    // Bind the served proof to the served checkpoint. proofServer emits height as
+    // Number(cp.block_index) for the SAME cp it returns, so a divergence is a drifted
+    // or hostile explorer relabelling a genuine old proof with a fresher height. The
+    // trustedCheckpoint branch has always enforced this; the server-served branch did
+    // not, which let stale state pass as current ().
+    if (Number(proof.height) !== Number(cp.block_index))
+        return Object.assign({ verified: false, amount: null, reason: 'PROOF_HEIGHT_MISMATCH' }, base);
+    // Enforce the request's lower bound. /proof/balance?height=H is defined as the
+    // nearest checkpoint AT OR ABOVE H, so a checkpoint below H answers a different
+    // question than the caller asked and must not verify.
+    if (opts.atHeight != null && opts.atHeight !== '' && Number(cp.block_index) < Number(opts.atHeight))
+        return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_BELOW_ATHEIGHT' }, base);
     const trusted = _hx(cp.state_root);
     if (!trusted) return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_PRE_COMMITMENT' }, base);
     if (_hx(proof.chain) !== _hx(cp.chain) || _hx(proof.network) !== _hx(cp.network))
@@ -407,10 +423,15 @@ async function verifyAction(opts){
         cp = body.checkpoint;
         q = await _resolveQuorum(f, opts, cp);
     }
-    const base = { height: Number(proof.height), action: proof.action, action_index: Number(proof.action_index),
+    // Height comes from the quorum-signed checkpoint, not the response label (see verifyBalance).
+    const base = { height: Number(cp.block_index), action: proof.action, action_index: Number(proof.action_index),
                    tx_index: (proof.tx_index == null) ? null : Number(proof.tx_index),
                    checkpoint: cp, quorum: q.quorum, weighted: q.weighted };
     if (!q.valid) return Object.assign({ verified: false, reason: 'CHECKPOINT_QUORUM_FAILED' }, base);
+    // Bind the served proof to the served checkpoint in the server-served branch too
+    // (); actionProof emits height as Number(cp.block_index) for that same cp.
+    if (Number(proof.height) !== Number(cp.block_index))
+        return Object.assign({ verified: false, reason: 'PROOF_HEIGHT_MISMATCH' }, base);
     const trusted = _hx(cp.block_merkle_root);
     if (!trusted) return Object.assign({ verified: false, reason: 'CHECKPOINT_PRE_COMMITMENT' }, base);
     if (Number(proof.action_index) !== Number(opts.actionIndex))

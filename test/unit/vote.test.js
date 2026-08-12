@@ -16,6 +16,7 @@
 const { expect } = require('chai');
 const { XChainSDK, VoteHelpers } = require('../../index.js');
 const WalletSession = require('../../src/walletSession.js');
+const Formats = require('../../src/formats.js');
 
 describe('VOTE governance helpers', function () {
     // compactTickers:false so createAction never reaches the network to resolve
@@ -146,6 +147,36 @@ describe('VOTE governance helpers', function () {
         it('requires a delegate target for a set (clear is separate)', function () {
             expect(() => v.delegateParams({ tick: 'G' })).to.throw(/delegateTo is required/);
             expect(() => v.clearDelegationParams({})).to.throw(/tick is required/);
+        });
+    });
+
+    // The raw wrapper takes hand-rolled params, so the SDK must refuse the two
+    // shapes the indexer is guaranteed to reject: the system-only v2 finalizer,
+    // and a v1 ballot missing its anchor fields.
+    describe('raw wrapper refuses commands the consumer rejects', function () {
+        it('has no v2 finalize format in the authoring map', function () {
+            expect(Object.keys(Formats.VOTE).sort()).to.deep.equal(['0', '1', '3']);
+        });
+
+        it('refuses to author the system-only v2 finalizer', async function () {
+            let err = null;
+            try { await sdk.vote({ version: 2, pollRef: '307' }); } catch (e) { err = e; }
+            expect(err, 'sdk.vote({version:2}) must not build a command').to.not.equal(null);
+            expect(err.code).to.be.oneOf(['VOTE_CONSTRAINT', 'INVALID_VERSION']);
+        });
+
+        it('refuses a hand-rolled v1 ballot carrying only POLL_REF', async function () {
+            let err = null;
+            try { await sdk.vote({ version: 1, pollRef: '307' }); } catch (e) { err = e; }
+            expect(err, 'a BALLOT-less v1 must not serialize').to.not.equal(null);
+            expect(err.code).to.equal('MISSING_REQUIRED_FIELD');
+        });
+
+        it('refuses a POLL_REF-only call that auto-selects the ballot format', async function () {
+            let err = null;
+            try { await sdk.vote({ pollRef: '307' }); } catch (e) { err = e; }
+            expect(err, 'an auto-selected BALLOT-less ballot must not serialize').to.not.equal(null);
+            expect(err.code).to.equal('MISSING_REQUIRED_FIELD');
         });
     });
 });

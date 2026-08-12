@@ -139,6 +139,9 @@ const ACTION_REQUIRED_FIELDS = {
     SWAP:               [],
     SWEEP:              ['DESTINATION'],
     UNSTAKE:            ['SIGNING_PUBKEY'],
+    // VOTE anchors are version-split with no field common to all versions (v0 create
+    // vs v1 ballot vs v3 delegate), so they are enforced per-version in _validateVote.
+    VOTE:               [],
     WITHDRAW:           ['CONTRACT_ACTION_INDEX', 'TICK', 'QUANTITY']
 };
 
@@ -346,12 +349,43 @@ class Validator {
         // MAX_SUPPLY validation (use BigInt to avoid precision loss with large numbers)
         if (field === 'MAX_SUPPLY') {
             try {
-                let bigVal = BigInt(String(value).split('.')[0]);
-                if (bigVal < 0n || bigVal > BigInt('1000000000000000000000'))
+                // The sign is read from the ORIGINAL string, because split('.') truncates
+                // before the bound is applied: '-0.5' left the integer segment '-0', and
+                // BigInt('-0') is 0n, so a negative supply cleared `bigVal < 0n` and was
+                // serialized into an ISSUE the indexer then refuses (its amount-format
+                // validator rejects any amount starting with '-') after the fee is spent.
+                // Positive-fraction handling is deliberately untouched ().
+                let raw    = String(value).trim();
+                let bigVal = BigInt(raw.split('.')[0]);
+                if (raw.startsWith('-') || bigVal < 0n || bigVal > BigInt('1000000000000000000000'))
                     errors.push(this._error('INVALID_FIELD_VALUE', 'MAX_SUPPLY must be between 0 and ' + MAX_SUPPLY_CEILING, { field, value, constraint: { min: 0, max: MAX_SUPPLY_CEILING } }));
             } catch (e) {
                 errors.push(this._error('INVALID_FIELD_VALUE', 'MAX_SUPPLY must be numeric', { field, value }));
             }
+            // Fractional precision, which the ceiling check above structurally cannot see: it
+            // range-checks split('.')[0] and throws the fraction away, so MAX_SUPPLY=1.5 with
+            // DECIMALS=0 cleared the SDK while the indexer refuses it as
+            // 'invalid: MAX_SUPPLY (format)' (issue.js fieldList['AMOUNT'] -> isValidAmountFormat)
+            // after the miner fee is already spent ().
+            //
+            // Only the part decidable OFFLINE is decided here. issue.js:258 resolves
+            // tick_decimals from the TOKEN ROW and falls back to the wire DECIMALS only when the
+            // row carries none, so the wire value is NOT the tick's decimals on a re-issue:
+            // keying the check to it rejects an 8-decimal token re-issued with a stale
+            // DECIMALS=0 and MAX_SUPPLY=1000.5, which consensus accepts. That is the
+            // SDK-stricter-than-consensus regression the FIAT_AMOUNT note below records having
+            // shipped once already. The row-aware check lives where the row is readable:
+            // preflight/checks/issue.js, which resolves the same decimals the indexer does.
+            //
+            // What holds without the row: once DECIMALS is supplied at all, the effective
+            // tick_decimals is either the row's or the wire's and both are capped at
+            // MAX_DECIMALS, so a fraction longer than MAX_DECIMALS is invalid at ANY decimals.
+            // With DECIMALS absent, consensus resolves NaN decimals and imposes no cap, so
+            // nothing is asserted rather than a 0 being invented.
+            let declaredDecimals = allFields ? allFields['DECIMALS'] : undefined;
+            let fraction = String(value).split('.')[1];
+            if (!this._isEmpty(declaredDecimals) && fraction && fraction.length > MAX_DECIMALS)
+                errors.push(this._error('INVALID_FIELD_VALUE', 'MAX_SUPPLY cannot carry more than ' + MAX_DECIMALS + ' fractional digits', { field, value, constraint: { maxFractionalDigits: MAX_DECIMALS } }));
         }
 
         // Lock field validation
@@ -778,6 +812,9 @@ class Validator {
             case 'BROADCAST':
                 errors.push(...this._validateBroadcast(fields));
                 break;
+            case 'DELEGATE':
+                errors.push(...this._validateDelegate(fields));
+                break;
             case 'DEPLOY':
                 errors.push(...this._validateDeploy(fields));
                 break;
@@ -792,6 +829,9 @@ class Validator {
                 break;
             case 'SWAP':
                 errors.push(...this._validateSwap(fields));
+                break;
+            case 'VOTE':
+                errors.push(...this._validateVote(fields));
                 break;
         }
 
@@ -1243,6 +1283,106 @@ class Validator {
             // Create mode: TYPE is required
             if (this._isEmpty(fields.TYPE))
                 errors.push(this._error('MISSING_REQUIRED_FIELD', 'LIST create requires field: TYPE', { field: 'TYPE' }));
+        }
+        return errors;
+    }
+
+    // VOTE-specific validation (version-dependent, mirroring _validateDeploy).
+    // The raw vote() wrapper lets a caller hand-roll params, and VOTE's anchor fields
+    // differ per version, so a flat ACTION_REQUIRED_FIELDS entry cannot express them.
+    // Field lists track src/formats.js and xchain-documentation/protocol/actions/vote.md.
+    _validateVote(fields) {
+        let errors = [];
+        let needs = (list, label) => {
+            for (let field of list)
+                if (this._isEmpty(fields[field]))
+                    errors.push(this._error('MISSING_REQUIRED_FIELD',
+                        label + ' requires field: ' + field, { action: 'VOTE', field }));
+        };
+
+        // An absent VERSION is auto-selected downstream, so resolve it through the
+        // selector that will actually pick it rather than through a field heuristic.
+        // A heuristic that only anchors on POLL_REF (v1) and DELEGATE_TO (v3) reads a
+        // payload carrying NEITHER as un-checkable and passes it, but select() still
+        // returns a version for that payload: it sorts the fitting formats by
+        // serialized length, and v1 is the shortest, so `sdk.vote({})` built and paid
+        // for a bare `VOTE|1` the indexer refuses as 'invalid: POLL_REF (format)'
+        // (). Asking select() also keeps this from drifting when a format
+        // is added or removed. A payload no format can carry throws NO_MATCHING_FORMAT
+        // at serialization with its own diagnostic, so nothing is asserted here.
+        let version = this._isEmpty(fields.VERSION) ? null : Number(fields.VERSION);
+        if (version === null) {
+            try { version = FormatSelector.select('VOTE', fields).version; }
+            catch (e) { return errors; }
+        }
+
+        switch (version) {
+            case 0:
+                // Create poll. Every field after OPTIONS is optional.
+                needs(['TICK', 'END_BLOCK', 'OPTIONS'], 'VOTE v0 (create poll)');
+                break;
+            case 1:
+                // Cast ballot. MEMO is optional; the indexer rejects an empty BALLOT.
+                needs(['POLL_REF', 'BALLOT'], 'VOTE v1 (cast ballot)');
+                break;
+            case 2:
+                // Finalize is system-synthesized: the indexer rejects any user-broadcast
+                // VOTE v2, and formats.js omits it, so fail here with the actionable reason
+                // rather than at serialization with a bare unknown-version error.
+                errors.push(this._error('VOTE_CONSTRAINT',
+                    'VOTE v2 (finalize) is system-synthesized and cannot be authored; the indexer rejects a user-broadcast VOTE v2',
+                    { action: 'VOTE', version: 2 }));
+                break;
+            case 3:
+                // Set or clear delegation. DELEGATE_TO is deliberately NOT required: a blank
+                // DELEGATE_TO is the documented way to clear a standing delegation.
+                needs(['TICK'], 'VOTE v3 (delegation)');
+                break;
+        }
+        return errors;
+    }
+
+    // DELEGATE-specific validation (version-dependent, mirroring _validateVote above).
+    // ACTION_REQUIRED_FIELDS carried `DELEGATE: []`, and the flat table structurally
+    // cannot express these: the rotate flavors (v0/v1) carry NEW_SIGNING_PUBKEY while
+    // the revoke flavors (v2/v3) carry SIGNING_PUBKEY, so no field is common to all
+    // four. An empty payload therefore auto-selected v0 and serialized `DELEGATE|0`,
+    // which the indexer refuses as 'invalid: SIGNING_PUBKEY (required)' with the miner
+    // fee already spent (). Field lists track src/formats.js and
+    // xchain-indexer/src/actions/delegate.js.
+    _validateDelegate(fields) {
+        let errors = [];
+        let needs = (list, label) => {
+            for (let field of list)
+                if (this._isEmpty(fields[field]))
+                    errors.push(this._error('MISSING_REQUIRED_FIELD',
+                        label + ' requires field: ' + field, { action: 'DELEGATE', field }));
+        };
+
+        // An absent VERSION is auto-selected downstream, so anchor on the fields that
+        // discriminate: SIGNING_PUBKEY means a revoke, TARGET_CONTRACT_INDEX/TICK mean
+        // the contract-targeted pair. With nothing populated, auto-selection lands on
+        // the smallest format (v0), which is what the caller is then held to.
+        let version = this._isEmpty(fields.VERSION) ? null : Number(fields.VERSION);
+        if (version === null) {
+            let targeted = !this._isEmpty(fields.TARGET_CONTRACT_INDEX) || !this._isEmpty(fields.TICK);
+            let revoke   = !this._isEmpty(fields.SIGNING_PUBKEY) && this._isEmpty(fields.NEW_SIGNING_PUBKEY);
+            version      = (revoke ? 2 : 0) + (targeted ? 1 : 0);
+        }
+
+        switch (version) {
+            case 0:
+                needs(['NEW_SIGNING_PUBKEY'], 'DELEGATE v0 (capability rotate)');
+                break;
+            case 1:
+                needs(['NEW_SIGNING_PUBKEY', 'TARGET_CONTRACT_INDEX', 'TICK'], 'DELEGATE v1 (contract-targeted rotate)');
+                break;
+            case 2:
+                needs(['SIGNING_PUBKEY'], 'DELEGATE v2 (capability revoke)');
+                break;
+            case 3:
+                needs(['SIGNING_PUBKEY', 'TARGET_CONTRACT_INDEX', 'TICK'], 'DELEGATE v3 (contract-targeted revoke)');
+                break;
         }
         return errors;
     }

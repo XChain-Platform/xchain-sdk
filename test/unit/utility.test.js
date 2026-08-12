@@ -61,6 +61,14 @@ describe('Utility.isValidAmountFormat (indexer parity)', function () {
     it('still rejects over-precise amounts (fractional cap intact)', function () {
         assert.strictEqual(utils.isValidAmountFormat(2, '1.123'), false);
     });
+
+    // Multi-dot reject (item 4310): destructuring the split dropped every segment past the
+    // second, so "1.2.3" read as int="1"/sats="2" and cleared the divisible branch.
+    it('rejects multi-dot amounts (parity with the indexer guard)', function () {
+        assert.strictEqual(utils.isValidAmountFormat(8, '1.2.3'), false);
+        assert.strictEqual(utils.isValidAmountFormat(8, '1.2.3.4'), false);
+        assert.strictEqual(utils.isValidAmountFormat(0, '1.2.3'), false);
+    });
 });
 
 describe('Utility.isInteger (indexer parity, #2393)', function () {
