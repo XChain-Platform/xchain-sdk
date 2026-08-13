@@ -181,6 +181,10 @@ describe('BatchBuilder', () => {
     const { XChainSDK, BatchBuilder, SDKValidationError } = require('../../index.js');
     const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
 
+    // A contract body only has to be valid base64 to serialize, so a DEPLOY
+    // built from it fails or passes on the BATCH cap alone.
+    const CONTRACT_B64 = Buffer.from('function main(){return 1}').toString('base64');
+
     // Basic building
 
     it('build() produces a BATCH action with semicolon-joined commands', async () => {
@@ -291,7 +295,7 @@ describe('BatchBuilder', () => {
         expect(result.actionString).to.match(/^BATCH\|/);
     });
 
-    it('batch with 2 MINT throws SDKValidationError with code BATCH_CONSTRAINT', async () => {
+    it('batch with 2 MINT of the SAME tick throws SDKValidationError with code BATCH_CONSTRAINT', async () => {
         try {
             await sdk.batch()
                 .mint({ tick: 'T', amount: '1', destination: ADDR })
@@ -301,6 +305,90 @@ describe('BatchBuilder', () => {
         } catch (err) {
             expect(err).to.be.instanceOf(SDKValidationError);
             expect(err.code).to.equal('BATCH_CONSTRAINT');
+            expect(err.message).to.include('per distinct TICK');
+            expect(err.details).to.include({ count: 2, limit: 1 });
+        }
+    });
+
+    it('batch with MINTs of 2 DISTINCT ticks builds (the cap is per token)', async () => {
+        const result = await sdk.batch()
+            .mint({ tick: 'T', amount: '1', destination: ADDR })
+            .mint({ tick: 'T2', amount: '2', destination: ADDR })
+            .mint({ tick: 'T3', amount: '3', destination: ADDR })
+            .build();
+        expect(result.action).to.equal('BATCH');
+        expect(result.actionString.split('|').slice(2).join('|').split(';')).to.have.length(3);
+    });
+
+    it('batch mixing a caret MINT tick with a named one throws, and says how to fix it', async () => {
+        // `T` and `^614` can name ONE token, and only an indexer can tell; the
+        // builder refuses rather than compose two bites at one scarce token.
+        try {
+            await sdk.batch()
+                .mint({ tick: '^614', amount: '1', destination: ADDR })
+                .mint({ tick: 'T', amount: '2', destination: ADDR })
+                .build();
+            expect.fail('Expected SDKValidationError to be thrown');
+        } catch (err) {
+            expect(err).to.be.instanceOf(SDKValidationError);
+            expect(err.code).to.equal('BATCH_CONSTRAINT');
+            expect(err.message).to.include('caret alias');
+            expect(err.message).to.include('Spell every MINT TICK by name');
+            expect(err.details.ticks).to.deep.equal(['^614', 'T']);
+        }
+    });
+
+    it('builds MINTs of two DIFFERENT caret ids: two ids are two tokens', async () => {
+        // Caret ticks are a legal way to name an existing token, and two
+        // different ids can never be one token, so there is nothing here the
+        // SDK would need an indexer to resolve.
+        const result = await sdk.batch()
+            .mint({ tick: '^614', amount: '1', destination: ADDR })
+            .mint({ tick: '^615', amount: '2', destination: ADDR })
+            .build();
+        expect(result.actionString.split('|').slice(2).join('|').split(';')).to.have.length(2);
+    });
+
+    it('builds MINTs of 2 distinct ticks even when tickResolver compacts both to ^<id>', async () => {
+        // Compaction is ON by default, so a reachable explorer turns two names
+        // into two carets. The BATCH the builder emits is re-validated as a wire
+        // string on the way out; two DIFFERENT ids are two different tokens, and
+        // refusing them would be a false refusal of a batch the chain accepts.
+        const compacting = new XChainSDK({ network: 'bitcoin-regtest' });
+        compacting.tickResolver.resolve = async (v) => ({ T: '^614', T2: '^615' }[v] || v);
+        const result = await compacting.batch()
+            .mint({ tick: 'T', amount: '1', destination: ADDR })
+            .mint({ tick: 'T2', amount: '2', destination: ADDR })
+            .build();
+        const subActions = result.actionString.split('|').slice(2).join('|').split(';');
+        expect(subActions).to.have.length(2);
+        expect(subActions[0]).to.include('^614');
+        expect(subActions[1]).to.include('^615');
+    });
+
+    it('batch with ONE DEPLOY builds: DEPLOY is capped at 1, never banned', async () => {
+        const result = await sdk.batch()
+            .deploy({ code_encoding: CONTRACT_B64, gas_limit: '100000' })
+            .send({ tick: 'T', amount: '1', destination: ADDR })
+            .build();
+        expect(result.action).to.equal('BATCH');
+        const subActions = result.actionString.split('|').slice(2).join('|').split(';');
+        expect(subActions).to.have.length(2);
+        expect(subActions[0]).to.match(/^DEPLOY\|/);
+    });
+
+    it('batch with 2 DEPLOY throws: each DEPLOY runs a constructor in the VM', async () => {
+        try {
+            await sdk.batch()
+                .deploy({ code_encoding: CONTRACT_B64, gas_limit: '100000' })
+                .deploy({ code_encoding: CONTRACT_B64, gas_limit: '100000' })
+                .build();
+            expect.fail('Expected SDKValidationError to be thrown');
+        } catch (err) {
+            expect(err).to.be.instanceOf(SDKValidationError);
+            expect(err.code).to.equal('BATCH_CONSTRAINT');
+            expect(err.message).to.include('at most 1 DEPLOY');
+            expect(err.details).to.include({ count: 2, limit: 1 });
         }
     });
 

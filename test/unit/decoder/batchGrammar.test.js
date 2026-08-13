@@ -9,7 +9,12 @@
 // findings.
 
 const { expect } = require('chai');
-const { parse, BATCH_ACTION_LIMITS, BATCH_COMMAND_LIMIT } = require('../../../src/decoder/parse.js');
+const {
+    parse,
+    BATCH_ACTION_LIMITS,
+    BATCH_GATED_ACTION_LIMITS,
+    BATCH_COMMAND_LIMIT,
+} = require('../../../src/decoder/parse.js');
 
 describe('decoder.parse - BATCH sub-grammar', function () {
 
@@ -131,9 +136,12 @@ describe('decoder.parse - BATCH sub-grammar', function () {
     });
 
     it('vendored caps match the indexer arbiter values', function () {
-        // xchain-indexer/src/actions/batch.js actionLimits; the sibling
-        // conformance below hard-fails if the checkout disagrees.
-        expect(BATCH_ACTION_LIMITS).to.deep.equal({ BATCH: 0, MINT: 1, ISSUE: 1 });
+        // What this module ENFORCES is the arbiter's MERGED post-flag table, so
+        // DEPLOY (D5) belongs here even though the indexer keeps it in a second
+        // table below the flag. The sibling conformance below reads each entry
+        // out of the table the arbiter actually stores it in.
+        expect(BATCH_ACTION_LIMITS).to.deep.equal({ BATCH: 0, MINT: 1, ISSUE: 1, DEPLOY: 1 });
+        expect(BATCH_GATED_ACTION_LIMITS).to.deep.equal({ DEPLOY: 1 });
     });
 
     describe('sibling conformance vs xchain-indexer batch.js', function () {
@@ -147,11 +155,120 @@ describe('decoder.parse - BATCH sub-grammar', function () {
         it('actionLimits values are byte-equal to the indexer source', function () {
             const src = fs.readFileSync(BATCH_SRC, 'utf8');
             for (const [action, limit] of Object.entries(BATCH_ACTION_LIMITS)) {
-                const re = new RegExp(`actionLimits\\['${action}'\\]\\s*=\\s*(\\d+)`);
+                // A gated cap lives in `gatedActionLimits` on purpose: writing it
+                // into `actionLimits` would have applied it retroactively, so
+                // finding it there would be the drift, not the match.
+                const table = BATCH_GATED_ACTION_LIMITS[action] !== undefined
+                    ? 'gatedActionLimits' : 'actionLimits';
+                const re = new RegExp(`${table}\\['${action}'\\]\\s*=\\s*(\\d+)`);
                 const m = src.match(re);
-                expect(m, `actionLimits['${action}'] not found in indexer batch.js`).to.not.equal(null);
+                expect(m, `${table}['${action}'] not found in indexer batch.js`).to.not.equal(null);
                 expect(Number(m[1])).to.equal(limit);
             }
+        });
+
+        it('DEPLOY is absent from the indexer UNGATED table, so below the flag it stays uncapped', function () {
+            // The pin above proves the SDK and the arbiter agree on DEPLOY: 1.
+            // This proves the arbiter still keeps it on the GATED side, which is
+            // what makes the merge in batchLimits.js a mirror rather than a
+            // guess. `gatedActionLimits` capitalizes its A, so the pattern reads
+            // only the ungated table by construction.
+            const src = fs.readFileSync(BATCH_SRC, 'utf8');
+            expect(/actionLimits\['DEPLOY'\]/.test(src)).to.equal(false);
+        });
+    });
+
+    describe('D5/D7 post-flag caps', function () {
+
+        it('one DEPLOY is within the cap', function () {
+            const r = parse('BATCH|0|DEPLOY|0|MyContract|1|0|src');
+            expect(r.ok).to.equal(true);
+            expect(r.validation.findings.map(f => f.code)).to.not.include('BATCH_LIMIT_EXCEEDED');
+        });
+
+        it('two DEPLOYs raise BATCH_LIMIT_EXCEEDED for DEPLOY', function () {
+            // D5: the chain accepts exactly one, because every DEPLOY runs a
+            // constructor in the VM and the 250-command cap was sized for cheap
+            // commands. Before D5 this module had no DEPLOY entry at all.
+            const r = parse('BATCH|0|DEPLOY|0|A|1|0|src;DEPLOY|0|B|1|0|src');
+            expect(r.ok).to.equal(true);
+            const limit = r.validation.findings.find(f => f.code === 'BATCH_LIMIT_EXCEEDED');
+            expect(limit).to.exist;
+            expect(limit.details).to.deep.include({ action: 'DEPLOY', limit: 1, count: 2 });
+        });
+
+        it('MINTs of two DISTINCT ticks raise nothing', function () {
+            // D7: the cap is per distinct token. Minting two different tokens
+            // in one transaction takes nothing from anyone.
+            const r = parse('BATCH|0|MINT|0|JDOG|1;MINT|0|PEPE|1');
+            expect(r.ok).to.equal(true);
+            expect(r.validation.findings.map(f => f.code)).to.not.include('BATCH_LIMIT_EXCEEDED');
+        });
+
+        it('two MINTs of ONE tick raise the MINT finding, counted per distinct token', function () {
+            const r = parse('BATCH|0|MINT|0|JDOG|1;MINT|0|PEPE|1;MINT|0|JDOG|2');
+            const limit = r.validation.findings.find(f => f.code === 'BATCH_LIMIT_EXCEEDED');
+            expect(limit).to.exist;
+            // 2, the largest run naming ONE token, NOT the raw occurrence count
+            // of 3: that difference is the whole of D7.
+            expect(limit.details).to.deep.include({ action: 'MINT', limit: 1, count: 2 });
+        });
+
+        it('a caret-ambiguous MINT pair raises NOTHING, deliberately', function () {
+            // `JDOG` and `^614` can name ONE token, and only an indexer can say
+            // whether they do. This module DECODES a string the chain may
+            // already have accepted, so silence is the honest answer: raising a
+            // finding here would claim a limit the chain may never have reached.
+            // The divergence is declared in batchLimits.js's header, not hidden.
+            const r = parse('BATCH|0|MINT|0|JDOG|1;MINT|0|^614|1');
+            expect(r.ok).to.equal(true);
+            expect(r.validation.findings.map(f => f.code)).to.not.include('BATCH_LIMIT_EXCEEDED');
+        });
+
+        it('a caret does NOT silence a breach a literal repeat already proved', function () {
+            // The pair above raises nothing because one MINT per name really is
+            // a per-token maximum of 1 - no finding was ever due. Here JDOG
+            // genuinely repeats, so the maximum is 2 before `^614` is even
+            // looked at, and no resolution can talk it back down: keying on
+            // strings only ever SPLITS what the arbiter merges, so this
+            // maximum is a lower bound. A lower bound over the cap is certain,
+            // and `approximate` is still set to say the batch may be worse than
+            // reported - never that this finding is in doubt.
+            const r = parse('BATCH|0|MINT|0|JDOG|1;MINT|0|JDOG|2;MINT|0|^614|1');
+            expect(r.ok).to.equal(true);
+            const limit = r.validation.findings.find(f => f.code === 'BATCH_LIMIT_EXCEEDED');
+            expect(limit).to.exist;
+            expect(limit.details).to.deep.include({ action: 'MINT', limit: 1, count: 2 });
+        });
+
+        it('two MINTs of the SAME caret string still raise it: one string, one id', function () {
+            const r = parse('BATCH|0|MINT|0|^614|1;MINT|0|^614|2');
+            const limit = r.validation.findings.find(f => f.code === 'BATCH_LIMIT_EXCEEDED');
+            expect(limit).to.exist;
+            expect(limit.details).to.deep.include({ action: 'MINT', limit: 1, count: 2 });
+        });
+
+        it('a legacy no-VERSION MINT reads its TICK off the injected VERSION 0', function () {
+            // `MINT|A|1|addr` carries no VERSION, so the arbiter splices one in
+            // and the TICK lands at params[1]. Reading position 1 without the
+            // injection would key both entries on '1' and '2' and miss that they
+            // name the SAME token.
+            const r = parse('BATCH|0|MINT|A|1|addr;MINT|A|2|addr');
+            const limit = r.validation.findings.find(f => f.code === 'BATCH_LIMIT_EXCEEDED');
+            expect(limit).to.exist;
+            expect(limit.details).to.deep.include({ action: 'MINT', limit: 1, count: 2 });
+        });
+
+        it('legacy no-VERSION MINTs of DIFFERENT ticks raise nothing', function () {
+            const r = parse('BATCH|0|MINT|A|1|addr;MINT|B|1|addr');
+            expect(r.validation.findings.map(f => f.code)).to.not.include('BATCH_LIMIT_EXCEEDED');
+        });
+
+        it('the command cap still runs FIRST and alone over a per-distinct-token MINT breach', function () {
+            const wire = 'BATCH|0|' + Array.from({ length: 251 }, () => 'MINT|0|JDOG|1').join(';');
+            const limits = parse(wire).validation.findings.filter(f => f.code === 'BATCH_LIMIT_EXCEEDED');
+            expect(limits).to.have.length(1);
+            expect(limits[0].details.action).to.equal('COMMAND');
         });
     });
 });

@@ -1278,6 +1278,12 @@ describe('Validator: BATCH constraints', function () {
     let v;
     beforeEach(function () { v = createValidator(); });
 
+    const ADDR = 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh';
+    // A minimal well-formed DEPLOY (VERSION|CODE_ENCODING|GAS_LIMIT); the code
+    // body only has to be valid base64 for the per-command validation to pass,
+    // so the BATCH cap is what any finding here is about.
+    const DEPLOY_CMD = 'DEPLOY|0|' + Buffer.from('function main(){return 1}').toString('base64') + '|100000';
+
     it('rejects a COMMAND with a nested BATCH', function () {
         const errors = v.validate('BATCH', { COMMAND: 'BATCH|arg1' });
         expect(hasErrorCode(errors, 'BATCH_CONSTRAINT')).to.be.true;
@@ -1293,13 +1299,76 @@ describe('Validator: BATCH constraints', function () {
         expect(hasNoErrorCode(errors, 'BATCH_CONSTRAINT')).to.be.true;
     });
 
-    it('rejects a COMMAND with 2 MINT actions', function () {
+    it('rejects a COMMAND with 2 MINT actions of the SAME tick', function () {
         const errors = v.validate('BATCH', {
-            COMMAND: 'MINT|TOKEN1|10;MINT|TOKEN2|20'
+            COMMAND: 'MINT|TOKEN1|10;MINT|TOKEN1|20'
         });
         expect(hasErrorCode(errors, 'BATCH_CONSTRAINT')).to.be.true;
-        const err = errors.find(e => e.code === 'BATCH_CONSTRAINT' && e.message.includes('at most 1 MINT'));
+        const err = errors.find(e => e.code === 'BATCH_CONSTRAINT' && e.message.includes('per distinct TICK'));
         expect(err).to.exist;
+        expect(err.details).to.include({ count: 2, limit: 1 });
+    });
+
+    it('accepts MINTs of two DISTINCT ticks (the cap is per token, not per command)', function () {
+        const errors = v.validate('BATCH', {
+            COMMAND: 'MINT|TOKEN1|10;MINT|TOKEN2|20;MINT|TOKEN3|30'
+        });
+        expect(hasNoErrorCode(errors, 'BATCH_CONSTRAINT')).to.be.true;
+    });
+
+    it('reads a legacy no-VERSION MINT TICK off the injected VERSION 0', function () {
+        // 'MINT|A|1|addr' has no VERSION, so the arbiter's injection makes the
+        // TICK params[1]; reading params[1] of the RAW command would see the
+        // amount instead and count two different tokens as one bucket.
+        const errors = v.validate('BATCH', {
+            COMMAND: 'MINT|A|1|' + ADDR + ';MINT|B|1|' + ADDR
+        });
+        expect(hasNoErrorCode(errors, 'BATCH_CONSTRAINT')).to.be.true;
+        const same = v.validate('BATCH', {
+            COMMAND: 'MINT|A|1|' + ADDR + ';MINT|A|2|' + ADDR
+        });
+        expect(same.some(e => e.code === 'BATCH_CONSTRAINT' && e.message.includes('per distinct TICK'))).to.be.true;
+    });
+
+    it('refuses a caret MINT TICK beside a named one: the SDK cannot resolve the alias', function () {
+        // `JDOG` and `^614` can be ONE token to the arbiter, so accepting the
+        // pair would let a minter take two bites at one scarce token.
+        const errors = v.validate('BATCH', { COMMAND: 'MINT|0|^614|10;MINT|0|JDOG|20' });
+        const err = errors.find(e => e.code === 'BATCH_CONSTRAINT' && e.message.includes('caret alias'));
+        expect(err).to.exist;
+        expect(err.message).to.include('Spell every MINT TICK by name');
+        expect(err.details.ticks).to.deep.equal(['^614', 'JDOG']);
+    });
+
+    it('accepts MINTs whose TICKs are ALL caret ids: two ids are two tokens', function () {
+        // tickResolver compacts MINT TICKs to `^<id>` before serializing, so this
+        // is the shape the SDK's own builder produces for two distinct names.
+        // Refusing it would be a false refusal of a batch the chain accepts.
+        const errors = v.validate('BATCH', { COMMAND: 'MINT|0|^614|10;MINT|0|^615|20' });
+        expect(hasNoErrorCode(errors, 'BATCH_CONSTRAINT')).to.be.true;
+    });
+
+    it('still rejects two MINTs of the SAME caret id', function () {
+        const errors = v.validate('BATCH', { COMMAND: 'MINT|0|^614|10;MINT|0|^614|20' });
+        const err = errors.find(e => e.code === 'BATCH_CONSTRAINT' && e.message.includes('per distinct TICK'));
+        expect(err).to.exist;
+    });
+
+    it('does not refuse a single caret MINT TICK (nothing to alias)', function () {
+        const errors = v.validate('BATCH', { COMMAND: 'MINT|0|^614|10;SEND|0|JDOG|1|' + ADDR });
+        expect(hasNoErrorCode(errors, 'BATCH_CONSTRAINT')).to.be.true;
+    });
+
+    it('accepts ONE DEPLOY in a BATCH (capped at 1, never banned)', function () {
+        const errors = v.validate('BATCH', { COMMAND: DEPLOY_CMD });
+        expect(hasNoErrorCode(errors, 'BATCH_CONSTRAINT')).to.be.true;
+    });
+
+    it('rejects TWO DEPLOYs: every DEPLOY runs a constructor in the VM', function () {
+        const errors = v.validate('BATCH', { COMMAND: DEPLOY_CMD + ';' + DEPLOY_CMD });
+        const err = errors.find(e => e.code === 'BATCH_CONSTRAINT' && e.message.includes('at most 1 DEPLOY'));
+        expect(err).to.exist;
+        expect(err.details).to.include({ count: 2, limit: 1 });
     });
 
     it('accepts a COMMAND with 1 MINT and 1 SEND (no BATCH errors)', function () {

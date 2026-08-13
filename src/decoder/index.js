@@ -28,7 +28,12 @@
 
 'use strict';
 
-const { parse, BATCH_ACTION_LIMITS } = require('./parse.js');
+// BATCH_ACTION_LIMITS here is parse.js's ACTIVE (post-flag) table, the set
+// parse() actually enforces. BATCH_GATED_ACTION_LIMITS rides beside it so a
+// consumer can tell WHICH of those caps only exist at/after
+// BATCH_ISSUANCE_LIMITS - without it the public API states four caps and no
+// way to know DEPLOY's is the flag-dependent one.
+const { parse, BATCH_ACTION_LIMITS, BATCH_GATED_ACTION_LIMITS } = require('./parse.js');
 const { describe } = require('./describe.js');
 const { actionDisplayLabel } = require('./actionDisplayLabel.js');
 const { ACTION_ALIASES } = require('./aliases.js');
@@ -48,5 +53,6 @@ module.exports = {
     actionDisplayLabel,
     ACTION_ALIASES,
     BATCH_ACTION_LIMITS,
+    BATCH_GATED_ACTION_LIMITS,
     hardening,
 };

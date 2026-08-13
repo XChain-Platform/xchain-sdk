@@ -20,9 +20,21 @@
  * count, and the whole-batch verdict. The SDK half runs everywhere. When a
  * sibling xchain-indexer checkout is present the SAME table is driven through
  * the REAL arbiter - classifyLimitAction for the classifications,
- * Batch.parse() for the verdict, and the number of dispatched sub-commands for
- * the count - so this is a comparison against running code, not against a
- * transcription of it.
+ * Batch.parse() for the verdict, maxMintsPerDistinctTick for the per-token
+ * MINT maximum, and the number of dispatched sub-commands for the count - so
+ * this is a comparison against running code, not against a transcription of it.
+ *
+ * WHERE THE TWO HALVES DO NOT AGREE, THE VECTOR SAYS SO OUT LOUD.
+ *
+ * D7 keys MINT distinctness on the RESOLVED TICKER ID; the client mirror holds
+ * strings and is a DECLARED conservative approximation (see the header of
+ * src/batchLimits.js). A vector that straddles one of those two declared
+ * divergences carries `arbiterVerdict` and `sdkVerdict` SEPARATELY plus a
+ * `divergence` naming which one it pins - never a single verdict massaged
+ * until both halves agree, which is how a divergence gets discovered in
+ * production instead of here. A meta-test enforces that shape: a vector may
+ * state two verdicts ONLY if it names a declared divergence, so a future edit
+ * cannot quietly split a vector's expectations to make a failure go away.
  ********************************************************************/
 
 const { expect } = require('chai');
@@ -32,8 +44,12 @@ const path = require('path');
 const {
     BATCH_COMMAND_LIMIT,
     BATCH_ACTION_LIMITS,
+    BATCH_GATED_ACTION_LIMITS,
+    BATCH_ACTION_LIMITS_ACTIVE,
     CHILD_ISSUE_KEY,
+    UNRESOLVED_TICK_KEY,
     classifyCommand,
+    mintTickKey,
     scanBatch,
 } = require('../../src/batchLimits.js');
 
@@ -50,8 +66,41 @@ function verdictOf(scan) {
 const repeat = (n, f) => Array.from({ length: n }, (_, i) => f(i));
 
 /*
+ * The two divergences src/batchLimits.js DECLARES in its header. A vector may
+ * state a different verdict per half only by naming one of these.
+ */
+const CARET_ALIAS = 'caret alias (declared divergence 1: detectable, flagged approximate)';
+const UNRESOLVABLE = 'unresolvable tick (declared divergence 2: undetectable client-side)';
+const DECLARED_DIVERGENCES = [CARET_ALIAS, UNRESOLVABLE];
+
+/*
+ * Ticker names the arbiter half's stub database knows about, and the ids they
+ * resolve to. These are load-bearing, not decoration: D7 buckets MINTs by
+ * RESOLVED ID, so a stub that answers every lookup with one id collapses every
+ * MINT into a single bucket and makes the distinctness vectors pass without
+ * testing anything (that is exactly what `getTickerId: async () => 1` did
+ * here, and it is why the old 'MINT keeps its limit of 1' vector looked green).
+ *
+ * JDOG is spelled 614 on purpose: the caret-alias vectors need a name and a
+ * `^<id>` that really are ONE token.
+ */
+const TICKER_IDS = new Map([
+    ['jdog',  614],
+    ['other', 615],
+    ['pepe',  700],
+    ['doge',  701],
+]);
+const EXISTING_TICKER_IDS = new Set(TICKER_IDS.values());
+
+/*
  * The vector set. `classes` is asserted per sub-command; where a vector is 250
  * commands long the classification is uniform and stated once via `uniform`.
+ *
+ * MINT vectors additionally state `mintMax` (the mirror's per-token maximum)
+ * and `arbiterMintMax` (the arbiter's, over RESOLVED ids). Those two numbers
+ * differing IS the divergence, stated as a number rather than inferred from a
+ * verdict. `approximate` is asserted on EVERY vector, present or not, so the
+ * flag cannot quietly stop being set.
  */
 const VECTORS = [
     {
@@ -119,11 +168,139 @@ const VECTORS = [
         tail: 'TRANSFER|0|JDOG|1|addr;ISSUE|0|JDOG.1|1',
         classes: ['SEND', CHILD_ISSUE_KEY], count: 2, verdict: 'valid',
     },
+
+    /* ---- D5: DEPLOY, capped at 1 by the GATED table ------------------- */
     {
-        name: 'MINT keeps its limit of 1',
-        tail: 'MINT|0|A|1;MINT|0|B|1',
-        classes: ['MINT', 'MINT'], count: 2, verdict: 'invalid: MINT (limit)',
+        name: 'exactly one DEPLOY is within the gated cap',
+        tail: 'DEPLOY|0|600160005260206000f3',
+        classes: ['DEPLOY'], count: 1, verdict: 'valid',
     },
+    {
+        name: 'two DEPLOYs break the gated cap of 1',
+        tail: 'DEPLOY|0|600160005260206000f3;DEPLOY|0|600260005260206000f3',
+        classes: ['DEPLOY', 'DEPLOY'], count: 2, verdict: 'invalid: DEPLOY (limit)',
+    },
+    {
+        name: 'a DEPLOY rides alongside the other actions it does not cap',
+        tail: 'DEPLOY|0|600160005260206000f3;ISSUE|0|JDOG|1000;ISSUE|0|JDOG.1|1;MINT|0|PEPE|1',
+        classes: ['DEPLOY', 'ISSUE', CHILD_ISSUE_KEY, 'MINT'], count: 4, verdict: 'valid',
+        mintMax: 1, arbiterMintMax: 1,
+    },
+
+    {
+        // Both sides walk their per-ACTION tallies in FIRST-APPEARANCE order,
+        // so a batch breaking two per-action caps reports the one whose action
+        // appeared first. That order is consensus-visible (it picks the error
+        // STRING), and the pair below is what stops a mirror from settling the
+        // tie differently - e.g. by sorting its keys.
+        name: 'two broken per-action caps: the action seen FIRST names the error (DEPLOY)',
+        tail: 'DEPLOY|0|6001;DEPLOY|0|6002;ISSUE|0|AAA|1;ISSUE|0|BBB|1',
+        classes: ['DEPLOY', 'DEPLOY', 'ISSUE', 'ISSUE'], count: 4,
+        verdict: 'invalid: DEPLOY (limit)',
+    },
+    {
+        name: 'two broken per-action caps, other order: the action seen FIRST names the error (ISSUE)',
+        tail: 'ISSUE|0|AAA|1;ISSUE|0|BBB|1;DEPLOY|0|6001;DEPLOY|0|6002',
+        classes: ['ISSUE', 'ISSUE', 'DEPLOY', 'DEPLOY'], count: 4,
+        verdict: 'invalid: ISSUE (limit)',
+    },
+
+    /* ---- D7: MINT, one per DISTINCT RESOLVED token -------------------- */
+    {
+        name: 'two MINTs of two DISTINCT existing ticks are valid (one per token, any number of tokens)',
+        tail: 'MINT|0|PEPE|1;MINT|0|DOGE|1',
+        classes: ['MINT', 'MINT'], count: 2, verdict: 'valid',
+        mintMax: 1, arbiterMintMax: 1,
+    },
+    {
+        name: 'two MINTs of ONE tick break the per-token limit',
+        tail: 'MINT|0|PEPE|1;MINT|0|PEPE|1',
+        classes: ['MINT', 'MINT'], count: 2, verdict: 'invalid: MINT (limit)',
+        mintMax: 2, arbiterMintMax: 2,
+    },
+    {
+        name: 'three MINTs over two ticks: the cap sees the MAXIMUM per token, not the total',
+        tail: 'MINT|0|PEPE|1;MINT|0|DOGE|1;MINT|0|PEPE|1',
+        classes: ['MINT', 'MINT', 'MINT'], count: 3, verdict: 'invalid: MINT (limit)',
+        mintMax: 2, arbiterMintMax: 2,
+    },
+    {
+        // MINT's TICK sits at params[1] only AFTER the implied VERSION 0 is
+        // injected; an un-normalized read of this pair sees '1' and 'PEPE',
+        // two buckets, and calls the batch valid. So this vector fails the
+        // moment either side reads the TICK too early.
+        name: 'legacy no-VERSION MINT: the TICK is read after the implied VERSION 0',
+        tail: 'MINT|PEPE|1|mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH;MINT|0|PEPE|1',
+        classes: ['MINT', 'MINT'], count: 2, verdict: 'invalid: MINT (limit)',
+        mintMax: 2, arbiterMintMax: 2,
+    },
+    {
+        name: 'two legacy no-VERSION MINTs of DIFFERENT ticks stay distinct',
+        tail: 'MINT|PEPE|1|mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH;MINT|DOGE|1|mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
+        classes: ['MINT', 'MINT'], count: 2, verdict: 'valid',
+        mintMax: 1, arbiterMintMax: 1,
+    },
+    {
+        // The mirror is EXACT here and must say so: one caret string is one
+        // id, no resolution needed. If `approximate` fired on any caret in
+        // sight it would suppress this real violation, so pinning the flag
+        // false is what stops the approximation from swallowing the rule.
+        name: 'two MINTs of the SAME caret TICK need no resolution and are exact',
+        tail: 'MINT|0|^614|1;MINT|0|^614|1',
+        classes: ['MINT', 'MINT'], count: 2, verdict: 'invalid: MINT (limit)',
+        mintMax: 2, arbiterMintMax: 2,
+    },
+    {
+        // Both halves agree on the VERDICT, and the mirror still reports that
+        // it could not prove it: `approximate` is a statement about the
+        // answer's provenance, never a verdict of its own.
+        name: 'a name and a DANGLING caret are distinct to both halves, and the mirror still flags it',
+        tail: 'MINT|0|JDOG|1;MINT|0|^999|1',
+        classes: ['MINT', 'MINT'], count: 2, verdict: 'valid',
+        mintMax: 1, arbiterMintMax: 1, approximate: true,
+    },
+
+    {
+        // `approximate` must NOT be a mute button. Two plain PEPEs already prove
+        // a violation on their own, and no resolution can UNDO it: keying on
+        // literal strings only ever SPLITS what the arbiter would merge, so this
+        // maximum is a lower bound and a lower bound above the cap is certain.
+        // The unrelated caret still sets the flag - the flag reports doubt about
+        // the ABSENCE of a violation, never about one already proved.
+        name: 'an unrelated caret does not silence a violation two plain ticks already proved',
+        tail: 'MINT|0|PEPE|1;MINT|0|PEPE|1;MINT|0|^614|1',
+        classes: ['MINT', 'MINT', 'MINT'], count: 3, verdict: 'invalid: MINT (limit)',
+        mintMax: 2, arbiterMintMax: 2, approximate: true,
+    },
+
+    /* ---- The two DELIBERATE divergences, stated per half --------------- */
+    {
+        // DIVERGENCE 1. `JDOG` and `^614` are ONE token to the arbiter and two
+        // strings here, so the chain rejects a batch this mirror accepts. The
+        // mirror does not guess: it raises no MINT violation off an answer it
+        // cannot support and hands the caller `approximate` instead.
+        name: 'caret alias: one token spelled two ways is one bucket on chain, two strings in the mirror',
+        tail: 'MINT|0|JDOG|1;MINT|0|^614|1',
+        classes: ['MINT', 'MINT'], count: 2,
+        arbiterVerdict: 'invalid: MINT (limit)', sdkVerdict: 'valid',
+        mintMax: 1, arbiterMintMax: 2, approximate: true,
+        divergence: CARET_ALIAS,
+    },
+    {
+        // DIVERGENCE 2. Neither name resolves, so the arbiter puts both in its
+        // ONE unresolvable bucket and rejects. A client cannot know which
+        // names exist without asking an indexer, so `approximate` is FALSE
+        // here: the mirror is not merely unsure, it is unaware, and that is
+        // the divergence it declares rather than closes.
+        name: 'unresolvable ticks: two unknown names are one bucket on chain and invisible to the mirror',
+        tail: 'MINT|0|NOSUCH|1;MINT|0|NEITHER|1',
+        classes: ['MINT', 'MINT'], count: 2,
+        arbiterVerdict: 'invalid: MINT (limit)', sdkVerdict: 'valid',
+        mintMax: 1, arbiterMintMax: 2, approximate: false,
+        divergence: UNRESOLVABLE,
+    },
+
+    /* ---- The 250-command cap ------------------------------------------ */
     {
         name: 'exactly 250 commands is within the cap',
         tail: repeat(250, (i) => 'ISSUE|0|JDOG.' + i + '|1').join(';'),
@@ -146,12 +323,52 @@ const VECTORS = [
     },
 ];
 
+const arbiterVerdictOf = (v) => (v.arbiterVerdict !== undefined ? v.arbiterVerdict : v.verdict);
+const sdkVerdictOf = (v) => (v.sdkVerdict !== undefined ? v.sdkVerdict : v.verdict);
+
 describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
 
-    it('pins the two consensus numbers the mirror is built on', function () {
+    it('pins the consensus numbers the mirror is built on, ungated and gated apart', function () {
         expect(BATCH_COMMAND_LIMIT).to.equal(250);
+        // The UNGATED table, in force on both sides of the flag. DEPLOY must
+        // stay OUT of it: putting the D5 cap here would apply it retroactively
+        // to blocks that accepted more, which is a replay fork.
         expect(BATCH_ACTION_LIMITS).to.deep.equal({ BATCH: 0, MINT: 1, ISSUE: 1 });
+        expect(BATCH_ACTION_LIMITS).to.not.have.property('DEPLOY');
+        // The GATED table, merged only at/after BATCH_ISSUANCE_LIMITS (D5).
+        expect(BATCH_GATED_ACTION_LIMITS).to.deep.equal({ DEPLOY: 1 });
+        // What clients actually enforce: the merge, because the mirror speaks
+        // for the post-flag rule set unconditionally.
+        expect(BATCH_ACTION_LIMITS_ACTIVE).to.deep.equal({ BATCH: 0, MINT: 1, ISSUE: 1, DEPLOY: 1 });
         expect(CHILD_ISSUE_KEY).to.equal('ISSUE.CHILD');
+    });
+
+    it('buckets an unresolvable TICK under a Symbol no wire string can spell', function () {
+        expect(typeof UNRESOLVED_TICK_KEY).to.equal('symbol');
+        expect(mintTickKey('').key).to.equal(UNRESOLVED_TICK_KEY);
+        expect(mintTickKey(undefined).key).to.equal(UNRESOLVED_TICK_KEY);
+        // A real tick keys on itself; only the caret form is aliasable.
+        expect(mintTickKey('PEPE')).to.deep.equal({ key: 'PEPE', aliasable: false });
+        expect(mintTickKey('^614')).to.deep.equal({ key: '^614', aliasable: true });
+    });
+
+    it('states a SEPARATE verdict per half only where a declared divergence explains it', function () {
+        for (const v of VECTORS) {
+            const split = v.arbiterVerdict !== undefined || v.sdkVerdict !== undefined;
+            if (!split) {
+                expect(v.divergence, v.name + ': agreeing vector must not name a divergence')
+                    .to.equal(undefined);
+                expect(v.verdict, v.name + ': agreeing vector must state one verdict')
+                    .to.be.a('string');
+                continue;
+            }
+            expect(v.divergence, v.name + ': a split verdict must name a DECLARED divergence')
+                .to.be.oneOf(DECLARED_DIVERGENCES);
+            expect(v.arbiterVerdict, v.name + ': a split vector states BOTH verdicts').to.be.a('string');
+            expect(v.sdkVerdict, v.name + ': a split vector states BOTH verdicts').to.be.a('string');
+            expect(v.arbiterVerdict, v.name + ': a split vector whose halves agree is not a divergence')
+                .to.not.equal(v.sdkVerdict);
+        }
     });
 
     describe('SDK half', function () {
@@ -163,7 +380,14 @@ describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
                     expect(entries.map(classifyCommand)).to.deep.equal(expected);
                 const scan = scanBatch(v.tail);
                 expect(scan.count, 'command count').to.equal(v.count);
-                expect(verdictOf(scan), 'whole-batch verdict').to.equal(v.verdict);
+                expect(verdictOf(scan), 'whole-batch verdict').to.equal(sdkVerdictOf(v));
+                if (v.mintMax !== undefined)
+                    expect(scan.mint.max, 'mirror per-token MINT maximum').to.equal(v.mintMax);
+                // Asserted on EVERY vector, so the flag cannot start firing
+                // where it should not (silencing a real MINT violation) or
+                // stop firing where it must (hiding the caret divergence).
+                expect(scan.mint.approximate, 'mirror approximation flag')
+                    .to.equal(v.approximate === true);
             });
         }
     });
@@ -176,6 +400,10 @@ describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
      * ISSUANCE_FEE is forced off, which parks the aggregate gas pre-check: that
      * is a different rule with its own row, and this suite is about
      * classification and counting.
+     *
+     * getTickerId is a REAL resolver over a fixed name->id map, not a constant.
+     * D7 buckets MINTs by resolved id, so a constant resolver makes every MINT
+     * one token and every distinctness vector vacuous.
      */
     describe('arbiter half (sibling xchain-indexer checkout)', function () {
         let makeHandler = null;
@@ -199,8 +427,27 @@ describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
                 return this.skip();
             }
 
+            // Mirror of xchain-indexer/src/db.js getTickerId, over the fixed
+            // token set above: a CANONICAL `^<id>` resolves straight to that id
+            // and only when a row backs it (a dangling caret is null, never a
+            // phantom id), a name resolves case-insensitively, and anything
+            // unknown - including a non-canonical caret, which falls through to
+            // the name lookup as a literal string - is null.
+            const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
+            const getTickerId = async function (tick) {
+                const str = String(tick);
+                const pid = str.substring(1);
+                if (str.charAt(0) === '^' && CANONICAL_CARET_ID.test(pid))
+                    return EXISTING_TICKER_IDS.has(Number(pid)) ? Number(pid) : null;
+                const hit = TICKER_IDS.get(str.toLowerCase());
+                return hit === undefined ? null : hit;
+            };
+
             const blockTime = Math.floor(Date.now() / 1000);
-            makeHandler = function () {
+            // `off` lists flags forced inactive for this handler, so one vector
+            // set can also be driven BELOW a flag day.
+            makeHandler = function (off) {
+                const disabled = off || ['ISSUANCE_FEE'];
                 const util = new IdxUtility();
                 const config = typeof IdxConfig.getConfig === 'function' ? IdxConfig.getConfig() : IdxConfig;
                 const decoderDb = { getBlockTime: async () => blockTime };
@@ -210,7 +457,7 @@ describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
                     isActionAllowed: async () => true,
                     getTokenInfo: async () => null,
                     getAddressBalances: async () => [],
-                    getTickerId: async () => 1,
+                    getTickerId,
                     suppressIndexIdCreation: false,
                 };
                 const changes = new ProtocolChanges({ config, util, decoderDb, indexerDb });
@@ -220,7 +467,7 @@ describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
                     mapper: { createMappings: async () => {} },
                     protocolChanges: {
                         isEnabled: async (name, blockIndex) =>
-                            (name === 'ISSUANCE_FEE' ? false : changes.isEnabled(name, blockIndex)),
+                            (disabled.includes(name) ? false : changes.isEnabled(name, blockIndex)),
                     },
                     processAction: async (action) => { dispatched.push(action); },
                     actionAliases: { TRANSFER: 'SEND', ADDR: 'ADDRESS', DROP: 'AIRDROP', CAST: 'BROADCAST', MSG: 'MESSAGE' },
@@ -250,6 +497,29 @@ describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
             return { status: data['STATUS'], dispatched: dispatched.length };
         }
 
+        it('mirrors the arbiter limit tables byte-for-byte, ungated and gated apart', function () {
+            const { handler } = makeHandler();
+            expect(handler.commandLimit).to.equal(BATCH_COMMAND_LIMIT);
+            expect(handler.actionLimits).to.deep.equal(BATCH_ACTION_LIMITS);
+            expect(handler.gatedActionLimits).to.deep.equal(BATCH_GATED_ACTION_LIMITS);
+            // The merge the arbiter performs at/after the flag is exactly what
+            // the mirror enforces unconditionally, so an edit to EITHER arbiter
+            // table reddens here rather than at a flag day.
+            expect(Object.assign({}, handler.actionLimits, handler.gatedActionLimits))
+                .to.deep.equal(BATCH_ACTION_LIMITS_ACTIVE);
+            expect(handler.childIssueKey).to.equal(CHILD_ISSUE_KEY);
+            expect(typeof handler.unresolvedTickKey).to.equal('symbol');
+        });
+
+        it('leaves DEPLOY uncapped BELOW the flag, which is why the tables are kept apart', async function () {
+            this.timeout(20000);
+            const { handler, dispatched } = makeHandler(['ISSUANCE_FEE', 'BATCH_ISSUANCE_LIMITS']);
+            const tail = 'DEPLOY|0|600160005260206000f3;DEPLOY|0|600260005260206000f3';
+            const got = await arbiterVerdict(handler, dispatched, tail);
+            expect(got.status, 'pre-flag verdict').to.equal('valid');
+            expect(got.dispatched, 'both DEPLOYs run below the flag').to.equal(2);
+        });
+
         for (const v of VECTORS) {
             it(v.name, async function () {
                 this.timeout(20000);
@@ -259,13 +529,26 @@ describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
                 if (expected[0] !== undefined)
                     expect(entries.map((e) => arbiterClass(handler, e))).to.deep.equal(expected);
 
+                // The arbiter's own per-token MINT maximum, over RESOLVED ids,
+                // read from the same helper parse() substitutes for the raw
+                // count. Where this differs from the mirror's `mintMax` the
+                // divergence is stated as a NUMBER, not inferred from an error
+                // string.
+                if (v.arbiterMintMax !== undefined) {
+                    const ticks = entries
+                        .filter((e) => arbiterClass(handler, e) === 'MINT')
+                        .map((e) => handler.subCommandTick('MINT', e, true));
+                    expect(await handler.maxMintsPerDistinctTick(ticks),
+                        'arbiter per-distinct-token MINT maximum').to.equal(v.arbiterMintMax);
+                }
+
                 const got = await arbiterVerdict(handler, dispatched, v.tail);
-                expect(got.status, 'arbiter verdict').to.equal(v.verdict);
+                expect(got.status, 'arbiter verdict').to.equal(arbiterVerdictOf(v));
                 // A valid batch dispatches one sub-command per counted command:
                 // that dispatch count IS the arbiter's count, and it must equal
                 // the SDK's. An invalid batch dispatches nothing, and its count
                 // is pinned by the cap boundary vectors either side of 250.
-                if (v.verdict === 'valid')
+                if (arbiterVerdictOf(v) === 'valid')
                     expect(got.dispatched, 'arbiter command count').to.equal(scanBatch(v.tail).count);
             });
         }

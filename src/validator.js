@@ -25,7 +25,23 @@ const { SDKValidationError, SDKContractError } = require('./errors.js');
 const { ADDRESS_REF_FIELDS } = require('./addressRefFields.js');
 // BATCH limit scan (command cap + dotted-TICK child classification), shared
 // with the builder, the decoder mirror and pre-flight. See src/batchLimits.js.
-const { BATCH_COMMAND_LIMIT, CHILD_ISSUE_KEY, classifyCommand } = require('./batchLimits.js');
+const {
+    BATCH_ACTION_LIMITS_ACTIVE,
+    BATCH_COMMAND_LIMIT,
+    CHILD_ISSUE_KEY,
+    classifyCommand,
+    commandTick,
+    maxMintsPerDistinctTick,
+} = require('./batchLimits.js');
+
+// Wording for the per-ACTION caps, keyed the way batchLimits keys them. The
+// LIMITS stay in the shared mirror so a change lands once; only the sentence
+// a caller reads lives here.
+const BATCH_LIMIT_MESSAGES = {
+    DEPLOY: 'BATCH can contain at most 1 DEPLOY action',
+    MINT:   'BATCH can contain at most 1 MINT action per distinct TICK',
+    ISSUE:  'BATCH can contain at most 1 top-level ISSUE action (child TICKs like JDOG.1 are exempt)',
+};
 
 // Caller-facing per-leg field of a repeated-field format (see formatSelector.js)
 const LEGS_FIELD = FormatSelector.LEGS_FIELD;
@@ -856,8 +872,10 @@ class Validator {
         if (this._isEmpty(fields.COMMAND)) return errors;
 
         let commands = String(fields.COMMAND).split(';');
-        let mintCount = 0;
-        let issueCount = 0;
+        // Occurrences per counting key, and the MINT TICKs, collected in ONE
+        // pass so the two can never disagree about which entries are MINTs.
+        let counts = {};
+        let mintTicks = [];
         let fileCount = 0;
 
         // Global command cap, FIRST and alone. The arbiter rejects an over-cap
@@ -874,32 +892,74 @@ class Validator {
 
         for (let i = 0; i < commands.length; i++) {
             let cmd = commands[i];
-            let parts = cmd.split('|');
-            let cmdAction = parts[0];
-
-            if (cmdAction === 'BATCH') {
-                errors.push(this._error('BATCH_CONSTRAINT', 'BATCH cannot contain nested BATCH actions'));
-                continue;                         // never descend into a forbidden child
-            }
-            if (cmdAction === 'DEPLOY') {
-                errors.push(this._error('BATCH_CONSTRAINT', 'BATCH cannot contain DEPLOY actions'));
-                continue;
-            }
-            if (cmdAction === 'MINT') mintCount++;
             // Child (dotted-TICK) issuances are exempt from the top-level limit
             // of 1; a caret TICK never is. classifyCommand reads the TICK the
             // executor will see, so a legacy no-VERSION command classifies off
             // params[0] the same way the arbiter's injection makes it params[1].
-            if (cmdAction === 'ISSUE' && classifyCommand(cmd) !== CHILD_ISSUE_KEY) issueCount++;
-            if (cmdAction === 'FILE') fileCount++;
+            let key = classifyCommand(cmd);
+            counts[key] = (counts[key] || 0) + 1;
+            if (key === 'MINT') mintTicks.push(commandTick(cmd));
+            if (key === 'FILE') fileCount++;
+
+            // Nested BATCH is reported HERE rather than with the counted caps
+            // below because this is also where descent stops: handing a child
+            // BATCH to _validateBatchCommand would re-enter this method.
+            if (key === 'BATCH') {
+                errors.push(this._error('BATCH_CONSTRAINT', 'BATCH cannot contain nested BATCH actions'));
+                continue;                         // never descend into a forbidden child
+            }
 
             errors.push(...this._validateBatchCommand(cmd, i));
         }
 
-        if (mintCount > 1)
-            errors.push(this._error('BATCH_CONSTRAINT', 'BATCH can contain at most 1 MINT action', { count: mintCount }));
-        if (issueCount > 1)
-            errors.push(this._error('BATCH_CONSTRAINT', 'BATCH can contain at most 1 top-level ISSUE action (child TICKs like JDOG.1 are exempt)', { count: issueCount }));
+        // MINT is capped per DISTINCT token, not per occurrence: minting twelve
+        // different tokens in one transaction takes nothing from anyone, while a
+        // batch of 100 MINTs of ONE fair-mint token beats 100 separate
+        // transactions on both fee and in-block ordering.
+        let mint = mintTicks.length ? maxMintsPerDistinctTick(mintTicks) : { max: 0, approximate: false };
+
+        // The caps come from the shared mirror, so a limit change (or a new
+        // capped action) lands in batchLimits.js alone. BATCH is skipped: its
+        // limit of 0 was already reported per occurrence in the descent-stop
+        // above. Worth stating where a caller reads these findings:
+        // BATCH_ISSUANCE_LIMITS is UNARMED on mainnet, so the LOOSENINGS this
+        // accepts (a parent plus children, MINTs of several distinct tokens) are
+        // still rejected there until the flag arms; DEPLOY is the one rule both
+        // sides of the flag agree on, since the chain never capped it below the
+        // flag and at most 1 is accepted either way.
+        for (let key of Object.keys(counts)) {
+            let limit = BATCH_ACTION_LIMITS_ACTIVE[key];
+            if (limit === undefined || key === 'BATCH') continue;
+            let observed = key === 'MINT' ? mint.max : counts[key];
+            if (observed > limit)
+                errors.push(this._error('BATCH_CONSTRAINT',
+                    BATCH_LIMIT_MESSAGES[key] || ('BATCH can contain at most ' + limit + ' ' + key + ' action(s)'),
+                    { count: observed, limit }));
+        }
+
+        // Reported after the counted caps so a batch already over a limit on the
+        // strings alone gets that precise finding first. What is left is a shape
+        // whose verdict genuinely depends on a resolution only an indexer can do:
+        // `JDOG` and `^614` can name ONE token, which would be two bites at one
+        // scarce token. This is the compose-side pre-check, the last point where
+        // the caller can still fix the spelling, so it refuses. decoder/parse.js
+        // reuses this method under `validate: true`, which is why the message
+        // claims only what is true on BOTH paths - that this SDK cannot resolve
+        // the pair - and never that the chain rejected the batch.
+        //
+        // `approximate` is already exactly this shape and nothing narrower is
+        // needed here: the seam sets it only when a caret coexists with a
+        // NON-caret key. An ALL-caret set is two distinct ids by construction
+        // and is left alone deliberately - refusing it would be a false refusal
+        // reachable by default, because tickResolver COMPACTS a MINT's TICK to
+        // `^<id>` before serializing, so the SDK's own builder normally emits
+        // all-caret MINT batches.
+        if (mint.approximate)
+            errors.push(this._error('BATCH_CONSTRAINT',
+                'BATCH mixes a `^<id>` MINT TICK with another MINT: a caret alias and a name can be the ' +
+                'SAME token, which this SDK cannot resolve. Spell every MINT TICK by name.',
+                { ticks: mintTicks.slice() }));
+
         if (fileCount > 1)
             errors.push(this._error('BATCH_CONSTRAINT', 'BATCH can contain at most 1 FILE action (one rawData per transaction)', { count: fileCount }));
 

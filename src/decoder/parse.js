@@ -41,13 +41,33 @@ const { MAX_ACTION_DATA_LENGTH } = require('../chunkHelper.js');
 // src/batchLimits.js; the conformance unit test guards drift by CLASSIFICATION
 // and COUNT, not just by the table's values. BATCH:0 = nested BATCH
 // categorically forbidden (a parse failure, not a limit finding).
-// Re-exported below: this module's BATCH_ACTION_LIMITS is a long-standing
-// public export and consumers must keep reading ONE table.
+//
+// WHAT `BATCH_ACTION_LIMITS` NAMES HERE, AND WHY IT MOVED
+//
+// batchLimits.js keeps the arbiter's two tables apart, because the arbiter does:
+// the ungated `BATCH_ACTION_LIMITS` and the flag-gated `BATCH_GATED_ACTION_LIMITS`
+// (DEPLOY, D5), merged into `BATCH_ACTION_LIMITS_ACTIVE`. This module has only
+// ever exported ONE table under the name `BATCH_ACTION_LIMITS`, and
+// `decoder/index.js` re-exports exactly that name as the public decoder API.
+// So the name is re-pointed at the ACTIVE table rather than left on the ungated
+// one: a caller reading `decoder.BATCH_ACTION_LIMITS` to decide what fits in a
+// batch must see the same caps `parse` reports findings against, and under the
+// old binding it would have read "DEPLOY: uncapped" while parse flagged a second
+// DEPLOY. One table, and it is the one this module enforces. The split halves
+// are re-exported beside it under their own names for a caller that needs to
+// know WHICH caps are flag-dependent; the pre-flag table stays reachable at its
+// source in batchLimits.js, deliberately NOT re-exported here, because two
+// spellings of "the limits" in one module is how a consumer picks the wrong one.
 const {
-    BATCH_ACTION_LIMITS,
+    BATCH_ACTION_LIMITS_ACTIVE,
+    BATCH_GATED_ACTION_LIMITS,
     BATCH_COMMAND_LIMIT,
     classifyCommand,
+    commandTick,
+    maxMintsPerDistinctTick,
 } = require('../batchLimits.js');
+
+const BATCH_ACTION_LIMITS = BATCH_ACTION_LIMITS_ACTIVE;
 
 // One shared validator instance for semantic findings (opts.validate).
 // Validator only needs the utility helpers; no per-parse state.
@@ -343,6 +363,10 @@ function parseBatch(rawAction, version, segments, doValidate) {
     const entries = tail.split(';');
     const commands = [];
     const counts = {};
+    // MINT TICKs, collected in the SAME pass that counts them so the two can
+    // never disagree about which entries are MINTs (D7 caps MINT per DISTINCT
+    // token, so the count alone no longer answers the question).
+    const mintTicks = [];
     for (const entry of entries) {
         const sub = entry === ''
             ? failure('EMPTY', 'empty BATCH command')
@@ -359,6 +383,7 @@ function parseBatch(rawAction, version, segments, doValidate) {
         // dotted-TICK ISSUE as a child, which is exempt from the top-level cap.
         const key = classifyCommand(entry);
         counts[key] = (counts[key] || 0) + 1;
+        if (key === 'MINT') mintTicks.push(commandTick(entry));
         commands.push(sub);
     }
 
@@ -375,14 +400,39 @@ function parseBatch(rawAction, version, segments, doValidate) {
             details: { action: 'COMMAND', limit: BATCH_COMMAND_LIMIT, count: entries.length },
         });
     } else {
+        // D7: MINT's cap is per DISTINCT token, so what the cap is compared
+        // against is the largest number of MINTs naming ONE token, not the raw
+        // occurrence count. Minting twelve different tokens in one transaction
+        // takes nothing from anyone; twelve MINTs of one contended token do.
+        const mint = mintTicks.length
+            ? maxMintsPerDistinctTick(mintTicks)
+            : { max: 0, approximate: false };
         for (const a of Object.keys(counts)) {
             const limit = BATCH_ACTION_LIMITS[a];
-            if (limit !== undefined && counts[a] > limit) {
+            if (limit === undefined) continue;
+            // `mint.approximate` is NOT a reason to stay silent, and the
+            // asymmetry is why. Keying on literal strings can only SPLIT what
+            // the arbiter merges - a caret and a name may be one token, never
+            // two - so this maximum is a LOWER BOUND on the arbiter's, and a
+            // lower bound over the cap is a CERTAIN breach worth reporting.
+            // Only the ABSENCE of a finding is ever in doubt, which is what the
+            // flag tells a caller that asks. Standing down on the flag instead
+            // let one unrelated caret silence a breach a literal MINT repeat
+            // had already proved. See batchLimits.js's header.
+            const observed = a === 'MINT' ? mint.max : counts[a];
+            if (observed > limit) {
+                // MINT's message names the DISTINCT-token unit, because `count`
+                // is the largest run naming one token and a reader who took it
+                // for the number of MINTs in the batch would go looking for
+                // sub-commands that are not there.
+                const plural = limit === 1 ? '' : 's';
+                const subject = a === 'ISSUE' ? 'top-level ISSUE command' + plural
+                    : a === 'MINT' ? 'MINT per DISTINCT token'
+                    : a + ' command' + plural;
                 extraFindings.push({
                     code: 'BATCH_LIMIT_EXCEEDED',
-                    message: 'BATCH allows at most ' + limit + ' ' + (a === 'ISSUE' ? 'top-level ISSUE' : a)
-                        + ' command' + (limit === 1 ? '' : 's') + '; got ' + counts[a],
-                    details: { action: a, limit, count: counts[a] },
+                    message: 'BATCH allows at most ' + limit + ' ' + subject + '; got ' + observed,
+                    details: { action: a, limit, count: observed },
                 });
             }
         }
@@ -403,4 +453,14 @@ function parseBatch(rawAction, version, segments, doValidate) {
     return result;
 }
 
-module.exports = { parse, BATCH_ACTION_LIMITS, BATCH_COMMAND_LIMIT };
+module.exports = {
+    parse,
+    BATCH_ACTION_LIMITS,
+    // Same object as above, under the spelling the compose-side sites import it
+    // by, so a sweep for the active table finds this module too.
+    BATCH_ACTION_LIMITS_ACTIVE,
+    // The flag-dependent half on its own, for a caller that must tell an
+    // always-on cap from one that only binds at/after BATCH_ISSUANCE_LIMITS.
+    BATCH_GATED_ACTION_LIMITS,
+    BATCH_COMMAND_LIMIT,
+};

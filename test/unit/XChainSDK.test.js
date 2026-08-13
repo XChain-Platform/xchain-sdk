@@ -521,6 +521,16 @@ describe('XChainSDK', function () {
             const b = sdk.batch();
             expect(b).to.be.instanceOf(BatchBuilder);
         });
+
+        it('carries a deploy() convenience beside the other VM actions', function () {
+            // DEPLOY had no convenience method while the SDK banned it from a
+            // BATCH outright. The chain caps it at 1, so the method exists and
+            // the queue accepts it like any other VM action.
+            const b = makeSDK().batch();
+            expect(b.deploy).to.be.a('function');
+            expect(b.deploy({ code_encoding: 'x', gas_limit: '1' })).to.equal(b);
+            expect(b.length).to.equal(1);
+        });
     });
 
     // Workflow methods
