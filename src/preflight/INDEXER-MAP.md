@@ -190,6 +190,15 @@ unchanged here.
   No client change.
 - **Validator pair keyed on `GET_COIN`.** Settlement pricing detail; the
   client does not price dispenses. No client change.
+- **`DISPENSER_ORACLE_PER_TOKEN_PRICE` flag-day.** Mode B (a dispenser naming
+  an `ORACLE_ADDRESS`) now divides the affordable token count by `GIVE_AMOUNT`
+  to get whole fills, so a PRICE v1 quote is the price of one TOKEN rather
+  than of one whole fill. Settlement pricing again, and the client does not
+  price dispenses, so no new verdict: preflight cannot know the landing
+  block's oracle price in any case. It DOES change what a buyer owes by a
+  factor of `GIVE_AMOUNT`, so any surface that quotes a Mode B price to a
+  human must multiply the quote by `GIVE_AMOUNT` to state a fill price (the
+  wallet's `DispenserDetail` buy panel does).
 
 Reviewing the refill mechanics also surfaced a pre-existing client defect
 that had nothing to do with these diffs: `resolveGiveRemaining` rebuilt
