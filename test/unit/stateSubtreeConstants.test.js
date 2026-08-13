@@ -224,7 +224,11 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         // exact-set tripwire stayed green through a real map change; that hole is
         // closed in the first test above, and this pin is now the SECOND line of
         // defence it was always meant to be rather than the only one.
-        const GOLDEN = 'd03e327ab0a4ff9cd33dc0a1426f12bf432a11944bc67fbb38f2bde8244cf57d';
+        // Re-pinned 2026-08-12 onto the shadow-map change described just above,
+        // which is the change this pin caught a commit late. All four carriers
+        // were verified byte-identical and unmodified at HEAD before repinning,
+        // so the invariant the pin guards holds; only the pin was stale.
+        const GOLDEN = '7c69cad798e79c8a7fe37bc9b379819dc963d6bfee7928ff0c7fee531989bda6';
         const actual = sha256File(SELF);
         if(actual !== GOLDEN)
             assert.fail('src/state_subtree_activation.js changed (sha256 ' + actual + ').\n' +
