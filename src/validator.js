@@ -31,6 +31,7 @@ const {
     CHILD_ISSUE_KEY,
     classifyCommand,
     commandTick,
+    limitKeysInListOrder,
     maxMintsPerDistinctTick,
 } = require('./batchLimits.js');
 
@@ -927,7 +928,9 @@ class Validator {
         // still rejected there until the flag arms; DEPLOY is the one rule both
         // sides of the flag agree on, since the chain never capped it below the
         // flag and at most 1 is accepted either way.
-        for (let key of Object.keys(counts)) {
+        // FIRST-APPEARANCE order (spec R2b), through the shared mirror, so this
+        // does not rest on `Object.keys` insertion order the way it used to.
+        for (let key of limitKeysInListOrder(commands)) {
             let limit = BATCH_ACTION_LIMITS_ACTIVE[key];
             if (limit === undefined || key === 'BATCH') continue;
             let observed = key === 'MINT' ? mint.max : counts[key];

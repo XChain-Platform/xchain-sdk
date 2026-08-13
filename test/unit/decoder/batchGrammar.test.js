@@ -271,4 +271,64 @@ describe('decoder.parse - BATCH sub-grammar', function () {
             expect(limits[0].details.action).to.equal('COMMAND');
         });
     });
+
+    /*
+     * R2b: among per-ACTION caps, the error names the action whose FIRST
+     * sub-command appears EARLIEST in the command list.
+     *
+     * This decoder reports EVERY broken per-action cap rather than stopping at
+     * the first, so R2b shows up here as the ORDER of the findings: the
+     * arbiter emits exactly one error string, and it is the one findings[0]
+     * names. A caller that surfaces the leading finding therefore predicts the
+     * chain's verdict, which is only true while this order holds. Both
+     * directions of each pair are stated, because one direction alone is
+     * satisfied by alphabetical or key-insertion order just as well.
+     */
+    describe('R2b per-ACTION error precedence (finding order)', function () {
+        const limitDetails = (wire) => parse(wire).validation.findings
+            .filter(f => f.code === 'BATCH_LIMIT_EXCEEDED')
+            .map(f => f.details.action);
+
+        it('leads with the action seen FIRST (DEPLOY before ISSUE)', function () {
+            expect(limitDetails('BATCH|0|DEPLOY|0|6001;DEPLOY|0|6002;ISSUE|0|A|1;ISSUE|0|B|1'))
+                .to.deep.equal(['DEPLOY', 'ISSUE']);
+        });
+
+        it('leads with the action seen FIRST (ISSUE before DEPLOY)', function () {
+            expect(limitDetails('BATCH|0|ISSUE|0|A|1;ISSUE|0|B|1;DEPLOY|0|6001;DEPLOY|0|6002'))
+                .to.deep.equal(['ISSUE', 'DEPLOY']);
+        });
+
+        it('interleaving does not reorder: the LEADER is first, not the cap completed first', function () {
+            expect(limitDetails('BATCH|0|DEPLOY|0|6001;ISSUE|0|A|1;ISSUE|0|B|1;DEPLOY|0|6002'))
+                .to.deep.equal(['DEPLOY', 'ISSUE']);
+            expect(limitDetails('BATCH|0|ISSUE|0|A|1;DEPLOY|0|6001;DEPLOY|0|6002;ISSUE|0|B|1'))
+                .to.deep.equal(['ISSUE', 'DEPLOY']);
+        });
+
+        it('a bigger overage does not jump the queue', function () {
+            // DEPLOY exceeds by 2 and ISSUE by 1; ISSUE still leads.
+            expect(limitDetails('BATCH|0|ISSUE|0|A|1;ISSUE|0|B|1;DEPLOY|0|6001;DEPLOY|0|6002;DEPLOY|0|6003'))
+                .to.deep.equal(['ISSUE', 'DEPLOY']);
+        });
+
+        it('MINT takes its turn by first appearance despite its substituted count', function () {
+            expect(limitDetails('BATCH|0|MINT|0|JDOG|1;MINT|0|JDOG|2;ISSUE|0|A|1;ISSUE|0|B|1'))
+                .to.deep.equal(['MINT', 'ISSUE']);
+            expect(limitDetails('BATCH|0|ISSUE|0|A|1;ISSUE|0|B|1;MINT|0|JDOG|1;MINT|0|JDOG|2'))
+                .to.deep.equal(['ISSUE', 'MINT']);
+        });
+
+        it('orders three broken caps by first appearance, both directions', function () {
+            expect(limitDetails('BATCH|0|MINT|0|JDOG|1;MINT|0|JDOG|2;DEPLOY|0|6001;DEPLOY|0|6002;'
+                + 'ISSUE|0|A|1;ISSUE|0|B|1')).to.deep.equal(['MINT', 'DEPLOY', 'ISSUE']);
+            expect(limitDetails('BATCH|0|ISSUE|0|A|1;ISSUE|0|B|1;DEPLOY|0|6001;DEPLOY|0|6002;'
+                + 'MINT|0|JDOG|1;MINT|0|JDOG|2')).to.deep.equal(['ISSUE', 'DEPLOY', 'MINT']);
+        });
+
+        it('uncapped and exempt commands take no turn', function () {
+            expect(limitDetails('BATCH|0|SEND|0|JDOG|1|addr;ISSUE|0|JDOG.1|1;DEPLOY|0|6001;'
+                + 'ISSUE|0|A|1;ISSUE|0|B|1;DEPLOY|0|6002')).to.deep.equal(['DEPLOY', 'ISSUE']);
+        });
+    });
 });

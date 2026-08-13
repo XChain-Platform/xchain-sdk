@@ -49,6 +49,7 @@ const {
     CHILD_ISSUE_KEY,
     UNRESOLVED_TICK_KEY,
     classifyCommand,
+    limitKeysInListOrder,
     mintTickKey,
     scanBatch,
 } = require('../../src/batchLimits.js');
@@ -187,12 +188,24 @@ const VECTORS = [
         mintMax: 1, arbiterMintMax: 1,
     },
 
+    /* ---- R2b: per-ACTION error precedence, DECLARED ------------------- *
+     *
+     * Among per-ACTION caps, the error names the action whose FIRST
+     * sub-command appears EARLIEST in the command list (spec R2b). That string
+     * is consensus, so this block is a rule test, not a tidiness test: every
+     * vector below is stated in BOTH directions, because a single direction
+     * can be satisfied by an accident (alphabetical order, key insertion,
+     * count order) rather than by the rule.
+     *
+     * The pairs are chosen so that each plausible WRONG tie-break loses at
+     * least once:
+     *   alphabetical  - loses on ISSUE-before-DEPLOY and MINT-before-DEPLOY
+     *   by count      - loses on 'two ISSUEs, then THREE DEPLOYs'
+     *   last-seen     - loses on every pair
+     *   key insertion - loses on nothing today, which is exactly the accident
+     *                   R2b exists to replace with a rule.
+     */
     {
-        // Both sides walk their per-ACTION tallies in FIRST-APPEARANCE order,
-        // so a batch breaking two per-action caps reports the one whose action
-        // appeared first. That order is consensus-visible (it picks the error
-        // STRING), and the pair below is what stops a mirror from settling the
-        // tie differently - e.g. by sorting its keys.
         name: 'two broken per-action caps: the action seen FIRST names the error (DEPLOY)',
         tail: 'DEPLOY|0|6001;DEPLOY|0|6002;ISSUE|0|AAA|1;ISSUE|0|BBB|1',
         classes: ['DEPLOY', 'DEPLOY', 'ISSUE', 'ISSUE'], count: 4,
@@ -203,6 +216,115 @@ const VECTORS = [
         tail: 'ISSUE|0|AAA|1;ISSUE|0|BBB|1;DEPLOY|0|6001;DEPLOY|0|6002',
         classes: ['ISSUE', 'ISSUE', 'DEPLOY', 'DEPLOY'], count: 4,
         verdict: 'invalid: ISSUE (limit)',
+    },
+    {
+        // INTERLEAVED, so no implementation can pass by looking at which cap
+        // was COMPLETED first: DEPLOY's second command is last in the list and
+        // it still names the error, because its FIRST one leads.
+        name: 'precedence is FIRST APPEARANCE, not first cap completed (DEPLOY leads)',
+        tail: 'DEPLOY|0|6001;ISSUE|0|AAA|1;ISSUE|0|BBB|1;DEPLOY|0|6002',
+        classes: ['DEPLOY', 'ISSUE', 'ISSUE', 'DEPLOY'], count: 4,
+        verdict: 'invalid: DEPLOY (limit)',
+    },
+    {
+        name: 'precedence is FIRST APPEARANCE, not first cap completed (ISSUE leads)',
+        tail: 'ISSUE|0|AAA|1;DEPLOY|0|6001;DEPLOY|0|6002;ISSUE|0|BBB|1',
+        classes: ['ISSUE', 'DEPLOY', 'DEPLOY', 'ISSUE'], count: 4,
+        verdict: 'invalid: ISSUE (limit)',
+    },
+    {
+        // Breaks a count-ordered tie-break: DEPLOY exceeds its cap by more,
+        // and ISSUE still names the error because it appears first.
+        name: 'the LEADING action names the error even when the other breaks its cap by more',
+        tail: 'ISSUE|0|AAA|1;ISSUE|0|BBB|1;DEPLOY|0|6001;DEPLOY|0|6002;DEPLOY|0|6003',
+        classes: ['ISSUE', 'ISSUE', 'DEPLOY', 'DEPLOY', 'DEPLOY'], count: 5,
+        verdict: 'invalid: ISSUE (limit)',
+    },
+    {
+        name: 'the LEADING action names the error even when it breaks its cap by less',
+        tail: 'DEPLOY|0|6001;DEPLOY|0|6002;DEPLOY|0|6003;ISSUE|0|AAA|1;ISSUE|0|BBB|1',
+        classes: ['DEPLOY', 'DEPLOY', 'DEPLOY', 'ISSUE', 'ISSUE'], count: 5,
+        verdict: 'invalid: DEPLOY (limit)',
+    },
+    {
+        // MINT is the one cap compared against a SUBSTITUTED count (D7's
+        // per-distinct-token maximum), so it has to be pinned in the ordering
+        // too: the substitution must not move where MINT sits in the queue.
+        name: 'MINT takes its turn by first appearance like any other cap (MINT leads)',
+        tail: 'MINT|0|PEPE|1;MINT|0|PEPE|2;ISSUE|0|AAA|1;ISSUE|0|BBB|1',
+        classes: ['MINT', 'MINT', 'ISSUE', 'ISSUE'], count: 4,
+        verdict: 'invalid: MINT (limit)',
+        mintMax: 2, arbiterMintMax: 2,
+    },
+    {
+        name: 'MINT takes its turn by first appearance like any other cap (ISSUE leads)',
+        tail: 'ISSUE|0|AAA|1;ISSUE|0|BBB|1;MINT|0|PEPE|1;MINT|0|PEPE|2',
+        classes: ['ISSUE', 'ISSUE', 'MINT', 'MINT'], count: 4,
+        verdict: 'invalid: ISSUE (limit)',
+        mintMax: 2, arbiterMintMax: 2,
+    },
+    {
+        // MINT before DEPLOY is the vector alphabetical order gets wrong.
+        name: 'a leading MINT outranks a later DEPLOY, which alphabetical order would reverse',
+        tail: 'MINT|0|PEPE|1;MINT|0|PEPE|2;DEPLOY|0|6001;DEPLOY|0|6002',
+        classes: ['MINT', 'MINT', 'DEPLOY', 'DEPLOY'], count: 4,
+        verdict: 'invalid: MINT (limit)',
+        mintMax: 2, arbiterMintMax: 2,
+    },
+    {
+        name: 'a leading DEPLOY outranks a later MINT',
+        tail: 'DEPLOY|0|6001;DEPLOY|0|6002;MINT|0|PEPE|1;MINT|0|PEPE|2',
+        classes: ['DEPLOY', 'DEPLOY', 'MINT', 'MINT'], count: 4,
+        verdict: 'invalid: DEPLOY (limit)',
+        mintMax: 2, arbiterMintMax: 2,
+    },
+    {
+        // BATCH's cap is 0, so ONE nested batch already breaks it. It is the
+        // alphabetically first name of the four, which is what makes the
+        // ISSUE-leads direction worth stating.
+        name: 'a leading nested BATCH names the error over a later ISSUE break',
+        tail: 'BATCH|0|ISSUE|0|X|1;ISSUE|0|AAA|1;ISSUE|0|BBB|1',
+        classes: ['BATCH', 'ISSUE', 'ISSUE'], count: 3,
+        verdict: 'invalid: BATCH (limit)',
+    },
+    {
+        name: 'a leading ISSUE break names the error over a later nested BATCH',
+        tail: 'ISSUE|0|AAA|1;ISSUE|0|BBB|1;BATCH|0|ISSUE|0|X|1',
+        classes: ['ISSUE', 'ISSUE', 'BATCH'], count: 3,
+        verdict: 'invalid: ISSUE (limit)',
+    },
+    {
+        // Uncapped and exempt commands take no turn: a leading SEND and a
+        // leading child ISSUE must not shift which capped action is reported.
+        name: 'uncapped and exempt commands do not take a turn in the precedence queue',
+        tail: 'SEND|0|JDOG|1|mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH;ISSUE|0|JDOG.1|1;'
+            + 'DEPLOY|0|6001;ISSUE|0|AAA|1;ISSUE|0|BBB|1;DEPLOY|0|6002',
+        classes: ['SEND', CHILD_ISSUE_KEY, 'DEPLOY', 'ISSUE', 'ISSUE', 'DEPLOY'], count: 6,
+        verdict: 'invalid: DEPLOY (limit)',
+    },
+    {
+        // Three broken caps at once, both directions, so the rule is pinned as
+        // an ORDERING rather than as a pairwise preference.
+        name: 'three broken per-action caps: the leader still names the error (MINT)',
+        tail: 'MINT|0|PEPE|1;MINT|0|PEPE|2;DEPLOY|0|6001;DEPLOY|0|6002;ISSUE|0|AAA|1;ISSUE|0|BBB|1',
+        classes: ['MINT', 'MINT', 'DEPLOY', 'DEPLOY', 'ISSUE', 'ISSUE'], count: 6,
+        verdict: 'invalid: MINT (limit)',
+        mintMax: 2, arbiterMintMax: 2,
+    },
+    {
+        name: 'three broken per-action caps, reversed: the leader still names the error (ISSUE)',
+        tail: 'ISSUE|0|AAA|1;ISSUE|0|BBB|1;DEPLOY|0|6001;DEPLOY|0|6002;MINT|0|PEPE|1;MINT|0|PEPE|2',
+        classes: ['ISSUE', 'ISSUE', 'DEPLOY', 'DEPLOY', 'MINT', 'MINT'], count: 6,
+        verdict: 'invalid: ISSUE (limit)',
+        mintMax: 2, arbiterMintMax: 2,
+    },
+    {
+        // R2b is subordinate to what R2/F7 already pinned: an unknown ACTION
+        // outranks every per-action cap however early the capped one appears.
+        name: 'an unknown ACTION still outranks the leading per-action cap',
+        tail: 'ISSUE|0|AAA|1;ISSUE|0|BBB|1;NOPE|0|x',
+        classes: ['ISSUE', 'ISSUE', 'NOPE'], count: 3,
+        verdict: 'invalid: ACTION (unknown)',
     },
 
     /* ---- D7: MINT, one per DISTINCT RESOLVED token -------------------- */
@@ -350,6 +472,40 @@ describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
         // A real tick keys on itself; only the caret form is aliasable.
         expect(mintTickKey('PEPE')).to.deep.equal({ key: 'PEPE', aliasable: false });
         expect(mintTickKey('^614')).to.deep.equal({ key: '^614', aliasable: true });
+    });
+
+    /*
+     * R2b's ordering, tested on its own rather than only through the verdicts
+     * it produces. The verdict vectors above cannot see WHY the order came out
+     * right, so a mirror that re-derived it from a tally would keep them green
+     * right up until an unrelated refactor moved a consensus string.
+     */
+    it('orders per-ACTION cap keys by FIRST APPEARANCE in the command list', function () {
+        expect(limitKeysInListOrder('DEPLOY|0|6001;ISSUE|0|AAA|1;ISSUE|0|BBB|1;DEPLOY|0|6002'.split(';')))
+            .to.deep.equal(['DEPLOY', 'ISSUE']);
+        expect(limitKeysInListOrder('ISSUE|0|AAA|1;DEPLOY|0|6001;DEPLOY|0|6002;ISSUE|0|BBB|1'.split(';')))
+            .to.deep.equal(['ISSUE', 'DEPLOY']);
+        // Every distinct key takes a place, capped or not, and each takes it
+        // exactly once however many times it recurs.
+        expect(limitKeysInListOrder(['SEND|0|JDOG|1|addr', 'ISSUE|0|JDOG.1|1', 'MINT|0|PEPE|1',
+            'MINT|0|PEPE|2', 'SEND|0|JDOG|2|addr']))
+            .to.deep.equal(['SEND', CHILD_ISSUE_KEY, 'MINT']);
+        expect(limitKeysInListOrder([])).to.deep.equal([]);
+    });
+
+    it('takes that order from the LIST, so a key that jumps object enumeration cannot move it', function () {
+        // '0' is an integer-like property name: on a plain tally object it
+        // enumerates BEFORE every string key regardless of insertion, which is
+        // the concrete way a tally-driven loop and a list-driven loop part
+        // company. Only an unknown ACTION can spell one (and that outranks the
+        // caps anyway), so this asserts the ordering primitive directly.
+        const entries = ['ISSUE|0|AAA|1', '0|0|x', 'ISSUE|0|BBB|1'];
+        const counts = {};
+        for (const e of entries) counts[classifyCommand(e)] = 1;
+        expect(Object.keys(counts), 'object enumeration hoists the integer-like key')
+            .to.deep.equal(['0', 'ISSUE']);
+        expect(limitKeysInListOrder(entries), 'list order does not')
+            .to.deep.equal(['ISSUE', '0']);
     });
 
     it('states a SEPARATE verdict per half only where a declared divergence explains it', function () {

@@ -107,6 +107,11 @@ class BatchBuilder {
         let counts = {};
         let mintTicks = [];
         let fileCount = 0;
+        // First-appearance order of the counting keys (spec R2b). Kept as a LIST
+        // because `Object.keys(counts)` returns insertion order only by
+        // convention, and R2b's whole point is that a consensus-shaped
+        // precedence must not rest on that.
+        let keyOrder = [];
 
         for (let entry of this._actions) {
             // Only a TOP-LEVEL (undotted, non-caret) ISSUE consumes the single
@@ -119,6 +124,7 @@ class BatchBuilder {
             let key = entry.action === 'ISSUE'
                 ? classifyIssueTick(paramsTick(entry.params))
                 : entry.action;
+            if (counts[key] === undefined) keyOrder.push(key);
             counts[key] = (counts[key] || 0) + 1;
             if (key === 'MINT') mintTicks.push(paramsTick(entry.params));
             if (key === 'FILE') fileCount++;
@@ -132,14 +138,14 @@ class BatchBuilder {
 
         // The caps themselves come from the shared mirror, so a limit change (or
         // a new capped action) lands in batchLimits.js alone. Iterated over the
-        // OBSERVED keys, the arbiter's own order, rather than a precedence this
-        // builder invents. Worth stating where a caller reads these throws:
+        // OBSERVED keys in FIRST-APPEARANCE order (spec R2b), the arbiter's own
+        // rule, rather than a precedence this builder invents. Worth stating where a caller reads these throws:
         // BATCH_ISSUANCE_LIMITS is UNARMED on mainnet, so the LOOSENINGS this
         // enforces (a parent plus children, MINTs of several distinct tokens) are
         // still rejected there until the flag arms; the DEPLOY cap is the one
         // rule both sides of the flag agree on, since the chain never capped
         // DEPLOY below it and at most 1 is accepted either way.
-        for (let key of Object.keys(counts)) {
+        for (let key of keyOrder) {
             let limit = BATCH_ACTION_LIMITS_ACTIVE[key];
             if (limit === undefined) continue;
             let observed = key === 'MINT' ? mint.max : counts[key];

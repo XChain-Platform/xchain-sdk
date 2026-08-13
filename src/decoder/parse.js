@@ -63,6 +63,7 @@ const {
     BATCH_GATED_ACTION_LIMITS,
     BATCH_COMMAND_LIMIT,
     classifyCommand,
+    limitKeysInListOrder,
     commandTick,
     maxMintsPerDistinctTick,
 } = require('../batchLimits.js');
@@ -407,7 +408,13 @@ function parseBatch(rawAction, version, segments, doValidate) {
         const mint = mintTicks.length
             ? maxMintsPerDistinctTick(mintTicks)
             : { max: 0, approximate: false };
-        for (const a of Object.keys(counts)) {
+        // First-appearance order over the command LIST, DECLARED by spec R2b
+        // (batchLimits.js limitKeysInListOrder owns the rule for both cap loops
+        // in this SDK). The arbiter reports only the FIRST per-action cap it
+        // breaks, so this order decides which finding a caller reading
+        // findings[0] sees named - a consensus string, not a presentation
+        // detail. Iterating `counts` matched it by key-insertion accident only.
+        for (const a of limitKeysInListOrder(entries)) {
             const limit = BATCH_ACTION_LIMITS[a];
             if (limit === undefined) continue;
             // `mint.approximate` is NOT a reason to stay silent, and the

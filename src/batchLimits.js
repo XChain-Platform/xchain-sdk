@@ -295,6 +295,36 @@ function maxMintsPerDistinctTick(ticks) {
 }
 
 /*
+ * The DISTINCT classification keys of a command list, in the order each one's
+ * FIRST command appears.
+ *
+ * This is the ONE expression of spec R2b for the client side: among per-ACTION
+ * caps, the error names the action whose first sub-command appears EARLIEST in
+ * the batch's command list. Both cap loops in this SDK (scanBatch below and
+ * decoder/parse.js) walk this list, and the arbiter walks its own list-driven
+ * copy, so the three agree by rule instead of by coincidence.
+ *
+ * Derived from the LIST rather than from a tally's keys deliberately. A plain
+ * object enumerates string keys by insertion, which HAPPENED to match this
+ * order, but nothing said so: a refactor to a Map, a sort, or a second counting
+ * pass would have moved a consensus error string with no rule to stop it, and
+ * an integer-like key (which an unknown ACTION name can be) jumps the queue on
+ * a plain object regardless of insertion. Do not fold this back into
+ * `Object.keys(counts)`.
+ */
+function limitKeysInListOrder(entries) {
+    const seen = new Set();
+    const order = [];
+    for (const entry of entries) {
+        const key = classifyCommand(entry);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        order.push(key);
+    }
+    return order;
+}
+
+/*
  * Read a TICK out of a compose-time params OBJECT (the builder's shape, before
  * anything is serialized). Matches the canonical field under any of the key
  * spellings createAction accepts (TICK / tick / Tick), and only that field:
@@ -364,7 +394,9 @@ function scanBatch(tail) {
             return { count, counts, mint, violation: { kind: 'ACTION_UNKNOWN', action: name } };
     }
 
-    for (const key of Object.keys(counts)) {
+    // First-appearance order, DECLARED by spec R2b rather than inherited from
+    // key insertion: see limitKeysInListOrder.
+    for (const key of limitKeysInListOrder(entries)) {
         const limit = BATCH_ACTION_LIMITS_ACTIVE[key];
         if (limit === undefined) continue;
         const observed = key === 'MINT' ? mint.max : counts[key];
@@ -388,6 +420,7 @@ module.exports = {
     isKnownAction,
     classifyIssueTick,
     classifyCommand,
+    limitKeysInListOrder,
     commandTick,
     mintTickKey,
     maxMintsPerDistinctTick,
