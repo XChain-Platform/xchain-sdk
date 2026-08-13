@@ -684,8 +684,10 @@ export declare class BatchBuilder {
      * Validate all queued actions, build the semicolon-joined BATCH command string,
      * and optionally encode it into a PSBT.
      *
-     * Throws `SDKValidationError` if constraints are violated (empty batch, nested
-     * BATCH, FILE action, more than one MINT, more than one ISSUE).
+     * Throws `SDKValidationError` if constraints are violated: an empty batch, a
+     * nested BATCH, a DEPLOY, more than one MINT, more than one FILE, more than
+     * one TOP-LEVEL ISSUE (child issuances with a dotted TICK such as `JDOG.1`
+     * are exempt and uncapped), or more than 250 commands in total.
      */
     build(encoderOpts?: EncoderOptions): Promise<ActionResult>;
 

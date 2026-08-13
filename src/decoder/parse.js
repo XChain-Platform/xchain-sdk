@@ -36,15 +36,18 @@ const Utility        = require('../utility.js');
 const { ACTION_ALIASES } = require('./aliases.js');
 const { MAX_ACTION_DATA_LENGTH } = require('../chunkHelper.js');
 
-// BATCH per-command-type caps. Vendored from the consensus arbiter
-// (xchain-indexer/src/actions/batch.js actionLimits); the conformance
-// unit test guards drift. BATCH:0 = nested BATCH categorically
-// forbidden (a parse failure, not a limit finding).
-const BATCH_ACTION_LIMITS = Object.freeze({
-    BATCH: 0,
-    MINT:  1,
-    ISSUE: 1,
-});
+// BATCH limit scan, vendored from the consensus arbiter
+// (xchain-indexer/src/actions/batch.js) through the one shared client copy in
+// src/batchLimits.js; the conformance unit test guards drift by CLASSIFICATION
+// and COUNT, not just by the table's values. BATCH:0 = nested BATCH
+// categorically forbidden (a parse failure, not a limit finding).
+// Re-exported below: this module's BATCH_ACTION_LIMITS is a long-standing
+// public export and consumers must keep reading ONE table.
+const {
+    BATCH_ACTION_LIMITS,
+    BATCH_COMMAND_LIMIT,
+    classifyCommand,
+} = require('../batchLimits.js');
 
 // One shared validator instance for semantic findings (opts.validate).
 // Validator only needs the utility helpers; no per-parse state.
@@ -349,20 +352,39 @@ function parseBatch(rawAction, version, segments, doValidate) {
         // BATCH:0), not a per-command recoverable failure.
         if (sub.ok === false && sub.code === 'NESTED_BATCH_FORBIDDEN')
             return failure('NESTED_BATCH_FORBIDDEN');
-        if (sub.ok) counts[sub.action] = (counts[sub.action] || 0) + 1;
+        // Counted off the RAW entry, whether or not it parsed. The arbiter
+        // counts every command in the ';'-split list; counting only the entries
+        // this parser accepted made an unparseable ISSUE - or an empty element -
+        // free here and chargeable on-chain. classifyCommand also buckets a
+        // dotted-TICK ISSUE as a child, which is exempt from the top-level cap.
+        const key = classifyCommand(entry);
+        counts[key] = (counts[key] || 0) + 1;
         commands.push(sub);
     }
 
-    // Per-command-type caps -> validation finding, not a parse failure.
+    // Caps -> validation findings, not parse failures.
     const extraFindings = [];
-    for (const a of Object.keys(counts)) {
-        const limit = BATCH_ACTION_LIMITS[a];
-        if (limit !== undefined && counts[a] > limit) {
-            extraFindings.push({
-                code: 'BATCH_LIMIT_EXCEEDED',
-                message: 'BATCH allows at most ' + limit + ' ' + a + ' command' + (limit === 1 ? '' : 's') + '; got ' + counts[a],
-                details: { action: a, limit, count: counts[a] },
-            });
+    // The global command cap runs FIRST and alone: on-chain it rejects the whole
+    // batch before any per-action count is taken, so emitting a per-action
+    // finding alongside it would describe a rule the chain never reached.
+    // Empty elements count (a trailing ';' is a command).
+    if (entries.length > BATCH_COMMAND_LIMIT) {
+        extraFindings.push({
+            code: 'BATCH_LIMIT_EXCEEDED',
+            message: 'BATCH allows at most ' + BATCH_COMMAND_LIMIT + ' commands; got ' + entries.length,
+            details: { action: 'COMMAND', limit: BATCH_COMMAND_LIMIT, count: entries.length },
+        });
+    } else {
+        for (const a of Object.keys(counts)) {
+            const limit = BATCH_ACTION_LIMITS[a];
+            if (limit !== undefined && counts[a] > limit) {
+                extraFindings.push({
+                    code: 'BATCH_LIMIT_EXCEEDED',
+                    message: 'BATCH allows at most ' + limit + ' ' + (a === 'ISSUE' ? 'top-level ISSUE' : a)
+                        + ' command' + (limit === 1 ? '' : 's') + '; got ' + counts[a],
+                    details: { action: a, limit, count: counts[a] },
+                });
+            }
         }
     }
 
@@ -381,4 +403,4 @@ function parseBatch(rawAction, version, segments, doValidate) {
     return result;
 }
 
-module.exports = { parse, BATCH_ACTION_LIMITS };
+module.exports = { parse, BATCH_ACTION_LIMITS, BATCH_COMMAND_LIMIT };

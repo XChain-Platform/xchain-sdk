@@ -317,6 +317,50 @@ describe('BatchBuilder', () => {
         }
     });
 
+    it('batch with 1 parent ISSUE + many child ISSUEs builds (dotted TICKs are exempt)', async () => {
+        const builder = sdk.batch().issue({ tick: 'JDOG', description: 'parent' });
+        for (let i = 1; i <= 50; i++) builder.issue({ tick: 'JDOG.' + i, description: 'child ' + i });
+        const result = await builder.build();
+        expect(result.action).to.equal('BATCH');
+        const command = result.actionString.split('|').slice(2).join('|');
+        expect(command.split(';')).to.have.length(51);
+    });
+
+    it('batch with 2 caret-TICK ISSUEs throws: a caret is never a child', async () => {
+        try {
+            await sdk.batch()
+                .issue({ tick: '^12.5', description: 'a' })
+                .issue({ tick: '^13.6', description: 'b' })
+                .build();
+            expect.fail('Expected SDKValidationError to be thrown');
+        } catch (err) {
+            expect(err).to.be.instanceOf(SDKValidationError);
+            expect(err.code).to.equal('BATCH_CONSTRAINT');
+            expect(err.message).to.include('top-level ISSUE');
+        }
+    });
+
+    it('batch of 251 commands throws BATCH_CONSTRAINT, and reports the cap not the ISSUE limit', async () => {
+        const builder = sdk.batch();
+        for (let i = 0; i < 251; i++) builder.issue({ tick: 'JDOG.' + i, description: 'c' });
+        try {
+            await builder.build();
+            expect.fail('Expected SDKValidationError to be thrown');
+        } catch (err) {
+            expect(err).to.be.instanceOf(SDKValidationError);
+            expect(err.code).to.equal('BATCH_CONSTRAINT');
+            expect(err.message).to.include('at most 250 commands');
+            expect(err.details).to.include({ count: 251, limit: 250 });
+        }
+    });
+
+    it('batch of exactly 250 child ISSUEs builds', async () => {
+        const builder = sdk.batch();
+        for (let i = 0; i < 250; i++) builder.issue({ tick: 'JDOG.' + i, description: 'c' });
+        const result = await builder.build();
+        expect(result.actionString.split('|').slice(2).join('|').split(';')).to.have.length(250);
+    });
+
     // Sub-action validation
 
     it('batch with invalid sub-action params (SEND missing tick) throws SDKValidationError', async () => {

@@ -9,7 +9,7 @@
 // findings.
 
 const { expect } = require('chai');
-const { parse, BATCH_ACTION_LIMITS } = require('../../../src/decoder/parse.js');
+const { parse, BATCH_ACTION_LIMITS, BATCH_COMMAND_LIMIT } = require('../../../src/decoder/parse.js');
 
 describe('decoder.parse - BATCH sub-grammar', function () {
 
@@ -72,6 +72,62 @@ describe('decoder.parse - BATCH sub-grammar', function () {
         expect(r.commands[0].action).to.equal('SEND');
         const r2 = parse('BATCH|0|transfer|0|JDOG|1|addr');
         expect(r2.commands[0]).to.deep.include({ ok: false, code: 'UNKNOWN_ACTION' });
+    });
+
+    it('a dotted-TICK ISSUE is exempt: a parent plus children is within caps', function () {
+        const r = parse('BATCH|0|ISSUE|0|JDOG|1000;ISSUE|0|JDOG.1|1;ISSUE|0|JDOG.2|1');
+        expect(r.ok).to.equal(true);
+        expect(r.validation.findings.map(f => f.code)).to.not.include('BATCH_LIMIT_EXCEEDED');
+    });
+
+    it('a caret TICK is never exempt, dot or no dot', function () {
+        const r = parse('BATCH|0|ISSUE|0|^12.5|1;ISSUE|0|^13.6|1');
+        const limit = r.validation.findings.find(f => f.code === 'BATCH_LIMIT_EXCEEDED');
+        expect(limit).to.exist;
+        expect(limit.details).to.deep.include({ action: 'ISSUE', limit: 1, count: 2 });
+    });
+
+    it('counts entries that did NOT parse, the way the arbiter counts every command', function () {
+        // The mirror used to count only the sub-entries it accepted, so a
+        // malformed second ISSUE was free here and chargeable on-chain.
+        const r = parse('BATCH|0|ISSUE|0|JDOG|1000;ISSUE|0|OTHER|1|||||||||||||||||||||||||||||||');
+        expect(r.commands[1].ok).to.equal(false);
+        const limit = r.validation.findings.find(f => f.code === 'BATCH_LIMIT_EXCEEDED');
+        expect(limit).to.exist;
+        expect(limit.details.count).to.equal(2);
+    });
+
+    it('over the 250-command cap is a finding, and it is the ONLY one', function () {
+        // Precedence: the arbiter checks the cap first and rejects the whole
+        // batch, so a per-action finding beside it would name a rule the chain
+        // never reached. This batch breaks both.
+        const wire = 'BATCH|0|' + Array.from({ length: 251 }, (_, i) => 'ISSUE|0|T' + i + '|1').join(';');
+        const r = parse(wire);
+        const limits = r.validation.findings.filter(f => f.code === 'BATCH_LIMIT_EXCEEDED');
+        expect(limits).to.have.length(1);
+        expect(limits[0].details).to.deep.include({ action: 'COMMAND', limit: BATCH_COMMAND_LIMIT, count: 251 });
+    });
+
+    it('exactly 250 commands is within the cap', function () {
+        const wire = 'BATCH|0|' + Array.from({ length: 250 }, (_, i) => 'ISSUE|0|T.' + i + '|1').join(';');
+        const r = parse(wire);
+        expect(r.validation.findings.map(f => f.code)).to.not.include('BATCH_LIMIT_EXCEEDED');
+    });
+
+    it('a trailing semicolon is a counted command', function () {
+        const wire = 'BATCH|0|' + Array.from({ length: 250 }, (_, i) => 'ISSUE|0|T.' + i + '|1').join(';') + ';';
+        const r = parse(wire);
+        const limit = r.validation.findings.find(f => f.code === 'BATCH_LIMIT_EXCEEDED');
+        expect(limit.details).to.deep.include({ action: 'COMMAND', count: 251 });
+    });
+
+    it('LOWERCASE action names never become a second ISSUE', function () {
+        // The arbiter matches action names case-sensitively and kills this batch
+        // on the activation scan instead; a mirror that upper-cased before
+        // classifying would report an ISSUE limit the chain never reaches.
+        const r = parse('BATCH|0|issue|0|A;issue|0|B');
+        expect(r.validation.findings.map(f => f.code)).to.not.include('BATCH_LIMIT_EXCEEDED');
+        expect(r.commands.every(c => c.ok === false && c.code === 'UNKNOWN_ACTION')).to.equal(true);
     });
 
     it('vendored caps match the indexer arbiter values', function () {

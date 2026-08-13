@@ -19,6 +19,7 @@
  ********************************************************************/
 
 const { SDKValidationError } = require('./errors.js');
+const { BATCH_COMMAND_LIMIT, CHILD_ISSUE_KEY, classifyIssueTick, paramsTick } = require('./batchLimits.js');
 
 
 class BatchBuilder {
@@ -69,6 +70,15 @@ class BatchBuilder {
         if (this._actions.length === 0)
             throw new SDKValidationError('BATCH_EMPTY', 'BATCH must contain at least one action');
 
+        // Global command cap, checked FIRST so a batch breaking it and the ISSUE
+        // limit reports the cap - the same precedence the arbiter pins. Each
+        // queued action serializes to exactly one ';'-separated command, so the
+        // queue length IS the count the chain will make.
+        if (this._actions.length > BATCH_COMMAND_LIMIT)
+            throw new SDKValidationError('BATCH_CONSTRAINT',
+                'BATCH can contain at most ' + BATCH_COMMAND_LIMIT + ' commands',
+                { count: this._actions.length, limit: BATCH_COMMAND_LIMIT });
+
         let mintCount = 0;
         let issueCount = 0;
         let fileCount = 0;
@@ -79,14 +89,22 @@ class BatchBuilder {
             if (entry.action === 'DEPLOY')
                 throw new SDKValidationError('BATCH_CONSTRAINT', 'BATCH cannot contain DEPLOY actions');
             if (entry.action === 'MINT') mintCount++;
-            if (entry.action === 'ISSUE') issueCount++;
+            // Only a TOP-LEVEL (undotted, non-caret) ISSUE consumes the single
+            // top-level slot; child issuances (JDOG.1, JDOG.1.2) are uncapped, so
+            // one BATCH registers a parent plus any number of its children. The
+            // TICK is read from the queued params here rather than the serialized
+            // string, which does not exist yet; tickResolver never compacts an
+            // ISSUE's defining TICK to `^<id>`, so the value classified here is
+            // the one that reaches the wire.
+            if (entry.action === 'ISSUE' && classifyIssueTick(paramsTick(entry.params)) !== CHILD_ISSUE_KEY)
+                issueCount++;
             if (entry.action === 'FILE') fileCount++;
         }
 
         if (mintCount > 1)
             throw new SDKValidationError('BATCH_CONSTRAINT', 'BATCH can contain at most 1 MINT action', { count: mintCount });
         if (issueCount > 1)
-            throw new SDKValidationError('BATCH_CONSTRAINT', 'BATCH can contain at most 1 ISSUE action', { count: issueCount });
+            throw new SDKValidationError('BATCH_CONSTRAINT', 'BATCH can contain at most 1 top-level ISSUE action (child TICKs like JDOG.1 are exempt)', { count: issueCount });
         if (fileCount > 1)
             throw new SDKValidationError('BATCH_CONSTRAINT',
                 'BATCH can contain at most 1 FILE action (one rawData per transaction)',

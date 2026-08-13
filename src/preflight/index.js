@@ -253,6 +253,7 @@ async function runPreflight(sdk, actionData, opts = {}) {
         const ctx = new CheckContext({
             sdk, parsed, source: opts.source, mode,
             signal: opts.signal, timeoutMs, localDeltas: opts.localDeltas,
+            feeMode: opts.feeMode,
         });
 
         // Tier 1 (skipped entirely in 'local' mode) and Tier 2 run

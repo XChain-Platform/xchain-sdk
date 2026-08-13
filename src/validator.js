@@ -23,6 +23,9 @@ const config  = require('./config.js');
 const FormatSelector = require('./formatSelector.js');
 const { SDKValidationError, SDKContractError } = require('./errors.js');
 const { ADDRESS_REF_FIELDS } = require('./addressRefFields.js');
+// BATCH limit scan (command cap + dotted-TICK child classification), shared
+// with the builder, the decoder mirror and pre-flight. See src/batchLimits.js.
+const { BATCH_COMMAND_LIMIT, CHILD_ISSUE_KEY, classifyCommand } = require('./batchLimits.js');
 
 // Caller-facing per-leg field of a repeated-field format (see formatSelector.js)
 const LEGS_FIELD = FormatSelector.LEGS_FIELD;
@@ -857,6 +860,18 @@ class Validator {
         let issueCount = 0;
         let fileCount = 0;
 
+        // Global command cap, FIRST and alone. The arbiter rejects an over-cap
+        // BATCH as one record before any other scan runs, so reporting the cap
+        // and stopping mirrors both the verdict and its precedence - and spares
+        // the caller a full per-command parse of a batch the chain never reads.
+        // Empty elements count, exactly as they do on-chain.
+        if (commands.length > BATCH_COMMAND_LIMIT) {
+            errors.push(this._error('BATCH_CONSTRAINT',
+                'BATCH can contain at most ' + BATCH_COMMAND_LIMIT + ' commands',
+                { count: commands.length, limit: BATCH_COMMAND_LIMIT }));
+            return errors;
+        }
+
         for (let i = 0; i < commands.length; i++) {
             let cmd = commands[i];
             let parts = cmd.split('|');
@@ -871,7 +886,11 @@ class Validator {
                 continue;
             }
             if (cmdAction === 'MINT') mintCount++;
-            if (cmdAction === 'ISSUE') issueCount++;
+            // Child (dotted-TICK) issuances are exempt from the top-level limit
+            // of 1; a caret TICK never is. classifyCommand reads the TICK the
+            // executor will see, so a legacy no-VERSION command classifies off
+            // params[0] the same way the arbiter's injection makes it params[1].
+            if (cmdAction === 'ISSUE' && classifyCommand(cmd) !== CHILD_ISSUE_KEY) issueCount++;
             if (cmdAction === 'FILE') fileCount++;
 
             errors.push(...this._validateBatchCommand(cmd, i));
@@ -880,7 +899,7 @@ class Validator {
         if (mintCount > 1)
             errors.push(this._error('BATCH_CONSTRAINT', 'BATCH can contain at most 1 MINT action', { count: mintCount }));
         if (issueCount > 1)
-            errors.push(this._error('BATCH_CONSTRAINT', 'BATCH can contain at most 1 ISSUE action', { count: issueCount }));
+            errors.push(this._error('BATCH_CONSTRAINT', 'BATCH can contain at most 1 top-level ISSUE action (child TICKs like JDOG.1 are exempt)', { count: issueCount }));
         if (fileCount > 1)
             errors.push(this._error('BATCH_CONSTRAINT', 'BATCH can contain at most 1 FILE action (one rawData per transaction)', { count: fileCount }));
 

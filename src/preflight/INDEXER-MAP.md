@@ -37,7 +37,7 @@ HEAD hashes.
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `8aa0582811749af3ff31ef37ba0793fe6ae061dc401ffb75e9a4291a1863b3cb` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `ba4dcca76a1b533233f0a6d6d6613713a3d9d68543ede80624f6f49bb33e3753` |
 | `checks/dividend.js` | `src/actions/dividend.js` | `44bf41e12afcb78717cf6705aedaaa1a3a3940cc34462be1ba5c605b74e72941` |
-| `checks/batch.js` | `src/actions/batch.js` | `58269829cb68f5065256544ba134fda0f1dc00491653d25b4b330f1ec035ef64` |
+| `checks/batch.js` | `src/actions/batch.js` | `9e47833924eece5683a56a1a0093e3f7b61d3fbfe9882a4458bec1486255b5f2` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -46,6 +46,54 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-08-13 - `batch.js` only (BATCH issuance limits), and why the rest stays red
+
+The gate is red across ELEVEN handlers, fleet-wide and for unrelated reasons
+(tracked as XC-1453). This entry refreshes exactly ONE row, `checks/batch.js`,
+because that is the only handler whose diff was read end to end and whose client
+mirror moved with it. The other ten rows are deliberately left red: their
+recorded hashes predate a baseline this review did not establish, and refreshing
+a row nobody read is the failure this log exists to prevent.
+
+Read: `src/actions/batch.js` at `105dfbf` (the BATCH_ISSUANCE_LIMITS work,
+`74c6780` + `d71c851` + `105dfbf`). Four client-visible rules, all now mirrored
+through one shared client copy of the scan, `src/batchLimits.js`:
+
+- **Dotted-TICK exemption.** At most one TOP-LEVEL (undotted) ISSUE per BATCH,
+  plus any number of children. A caret TICK is never exempt even when it
+  contains a dot. Classification reads params[1] of the NORMALIZED sub-command,
+  so a legacy no-VERSION command classifies off the same TICK the executor sees.
+  Mirrored in `batchBuilder.js`, `validator.js` and `decoder/parse.js`.
+- **250-command cap, checked FIRST.** The count is the raw `';'`-split list with
+  empty elements included, and its precedence is pinned: a batch breaking the cap
+  AND the ISSUE limit reports the cap. Mirrored at all four sites. Pre-flight
+  raises it as a WARNING, not an error: the rule arrives with a flag-day, the
+  client has no height, and an over-cap batch is still accepted where the flag
+  has not armed.
+- **Case sensitivity.** The arbiter matches action names case-sensitively and
+  kills `issue|0|A;issue|0|B` on the activation scan, not the ISSUE limit. The
+  mirror classifies before any upper-casing for exactly that reason.
+- **Aggregate gas pre-check** (`isGasProvablyUnaffordable`, `invalid: GAS
+  (insufficient)`). Mirrored in `checks/batch.js` as an ERROR, on the arbiter's
+  own predicate: the MINIMUM, never the sum, and only when EVERY sub-command is
+  a positively-priced new-tick ISSUE. Gas is billed greedily in list order, so a
+  source with gas for K of N lands K commands; a sum-based rejection would refuse
+  a transaction the chain accepts. The partially-funded case is a warning naming
+  K. Scope bail-outs mirrored: any non-ISSUE command, a caret TICK, the gas tick
+  itself, an existing TICK (a re-issue is free), and the native/rejected fee
+  modes all disable the collapse verdict.
+
+Also read but NOT re-pinned: `src/actions/issue.js`, which gained the caret-dot
+TICK rejection and the intern gating in the same train. No client change is owed
+and none was made: the SDK validator already refuses ANY `^`-led TICK on ISSUE
+(`_validateTickName`), which is strictly stronger than the caret-dot rule, and
+the intern gating is a database side effect with no wire-visible verdict. Its row
+keeps its stale hash rather than gaining a refresh this review did not earn.
+
+Conformance for all of the above is `test/unit/batchLimitsConformance.test.js`,
+which drives the REAL arbiter from the sibling checkout over a shared vector set
+and compares classification, count and whole-batch verdict.
 
 ### 2026-08-08 - nine handlers, mostly one rule
 

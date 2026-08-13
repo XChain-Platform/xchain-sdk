@@ -1308,6 +1308,50 @@ describe('Validator: BATCH constraints', function () {
         });
         expect(hasNoErrorCode(errors, 'BATCH_CONSTRAINT')).to.be.true;
     });
+
+    it('accepts one top-level ISSUE plus any number of dotted children', function () {
+        const errors = v.validate('BATCH', {
+            COMMAND: 'ISSUE|0|JDOG|1000;ISSUE|0|JDOG.1|1;ISSUE|0|JDOG.2|1;ISSUE|0|JDOG.3.4|1'
+        });
+        expect(hasNoErrorCode(errors, 'BATCH_CONSTRAINT')).to.be.true;
+    });
+
+    it('still rejects two TOP-LEVEL ISSUE actions', function () {
+        const errors = v.validate('BATCH', { COMMAND: 'ISSUE|0|JDOG|1000;ISSUE|0|OTHER|1' });
+        const err = errors.find(e => e.code === 'BATCH_CONSTRAINT' && e.message.includes('top-level ISSUE'));
+        expect(err).to.exist;
+        expect(err.details.count).to.equal(2);
+    });
+
+    it('rejects two caret-TICK ISSUEs: a caret is never a child, dot or no dot', function () {
+        const errors = v.validate('BATCH', { COMMAND: 'ISSUE|0|^12.5|1;ISSUE|0|^13.6|1' });
+        expect(errors.some(e => e.code === 'BATCH_CONSTRAINT' && e.message.includes('top-level ISSUE'))).to.be.true;
+    });
+
+    it('classifies a legacy no-VERSION dotted TICK as a child', function () {
+        const errors = v.validate('BATCH', { COMMAND: 'ISSUE|JDOG.1|1000;ISSUE|JDOG.2|1000;ISSUE|JDOG|1' });
+        expect(hasNoErrorCode(errors, 'BATCH_CONSTRAINT')).to.be.true;
+    });
+
+    it('rejects more than 250 commands, and reports ONLY the cap', function () {
+        // Cap precedence: this COMMAND also carries 251 top-level ISSUEs.
+        const command = Array.from({ length: 251 }, (_, i) => 'ISSUE|0|T' + i + '|1').join(';');
+        const errors = v.validate('BATCH', { COMMAND: command });
+        const batchErrors = errors.filter(e => e.code === 'BATCH_CONSTRAINT');
+        expect(batchErrors).to.have.length(1);
+        expect(batchErrors[0].message).to.include('at most 250 commands');
+        expect(batchErrors[0].details).to.include({ count: 251, limit: 250 });
+    });
+
+    it('accepts exactly 250 commands', function () {
+        const command = Array.from({ length: 250 }, (_, i) => 'ISSUE|0|T.' + i + '|1').join(';');
+        expect(hasNoErrorCode(v.validate('BATCH', { COMMAND: command }), 'BATCH_CONSTRAINT')).to.be.true;
+    });
+
+    it('counts a trailing semicolon as a command: 250 plus one is over the cap', function () {
+        const command = Array.from({ length: 250 }, (_, i) => 'ISSUE|0|T.' + i + '|1').join(';') + ';';
+        expect(hasErrorCode(v.validate('BATCH', { COMMAND: command }), 'BATCH_CONSTRAINT')).to.be.true;
+    });
 });
 
 // ACTION-INDEX OPERATIONS SKIP REQUIRED FIELDS

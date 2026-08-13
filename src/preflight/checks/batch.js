@@ -30,11 +30,97 @@
 
 const { FINDING_CODES } = require('../constants.js');
 const numeric = require('../numeric.js');
+const coins = require('../../coins');
+const { GAS_TICK } = require('../../protocol/constants.js');
+const { BATCH_COMMAND_LIMIT, CHILD_ISSUE_KEY, classifyIssueTick } = require('../../batchLimits.js');
+
+/*
+ * The gas schedule this chain prices an issuance from
+ * (xchain-indexer/src/actions/issue.js: GAS_SCHEDULE.ISSUE for a top-level
+ * tick, ISSUE_SUBTOKEN for a child, times GAS_PRICE). Read from the canonical
+ * coin registry rather than restated, so the §8.5 drift gate's GAS_SCHEDULE
+ * comparison covers this projection too. Returns null when the SDK's network
+ * string names no coin we can price from - the caller then declares the fee
+ * unverified instead of guessing a number.
+ */
+function gasConfig(sdk) {
+    try {
+        const [fullName, network] = String((sdk && sdk.config && sdk.config.network) || '').split('-');
+        const tick = coins.FULL_NAME_TO_TICK[fullName];
+        if (!tick || !coins.NETWORKS.includes(network)) return null;
+        const cfg = coins.getCoinConfig(tick, network);
+        if (!cfg || !cfg.GAS_SCHEDULE || !cfg.GAS_PRICE) return null;
+        return { coin: tick, gasPrice: cfg.GAS_PRICE, schedule: cfg.GAS_SCHEDULE };
+    } catch (e) {
+        return null;
+    }
+}
+
+/*
+ * Whether the issuance fee is settled by DEBITING the source's gas-token
+ * balance, which is the only mode a client can check a balance against.
+ *
+ * The chain's own rule (indexer utility.js detectFeePaymentMode): a fee OUTPUT
+ * makes it native; with no output, BTC falls back to the XCHAIN debit and
+ * LTC/DOGE reject outright. A caller who stated feeMode is believed. Where
+ * nothing is stated and the coin is LTC/DOGE the fee is a coin output, so a
+ * balance error would false-block exactly the payer the native lane exists for
+ * (spec §4.2). An unresolvable coin keeps the check: the finding is
+ * network-class and therefore overridable, and silence there would hide the
+ * shortfall this projection exists to surface.
+ */
+function xchainFeeDebit(ctx, gas) {
+    if (ctx.feeMode === 'native') return false;
+    if (ctx.feeMode === 'xchain') return true;
+    return !gas || gas.coin === 'BTC';
+}
+
+/*
+ * Price ONE ISSUE sub-command's protocol fee, in the gas token.
+ *
+ * Mirrors what the arbiter can price (indexer batch.js nominalIssueFee /
+ * isGasProvablyUnaffordable): a NEW non-caret, non-gas TICK costs the schedule
+ * price, top-level or child by the dot; a tick that already carries a valid
+ * issuance is a free re-issue.
+ *
+ * Returns { amount, chargeable } - chargeable:false meaning "priced at zero,
+ * this one cannot be shown unaffordable" - or null when the price is NOT
+ * knowable client-side (caret reference, unreachable token row, no schedule).
+ * Null is what keeps a guess out of the balance verdict.
+ */
+async function projectIssueFee(ctx, cmd, gas) {
+    if (!gas) return null;
+    const p = cmd.params || {};
+    const tick = p.TICK;
+    if (!tick || Array.isArray(tick)) return null;
+    const name = String(tick).trim();
+    // A caret TICK is an id reference the arbiter resolves rather than prices,
+    // and the gas token's own genesis issuance is fee-exempt (chicken-and-egg).
+    if (name === '' || name.charAt(0) === '^') return null;
+    if (name.toUpperCase() === String(GAS_TICK).toUpperCase())
+        return { amount: '0', chargeable: false };
+    const token = await ctx.token(name);
+    if (token === undefined) return null;                        // lookup unavailable
+    if (token !== null) return { amount: '0', chargeable: false }; // exists: free re-issue
+    const units = classifyIssueTick(name) === CHILD_ISSUE_KEY
+        ? gas.schedule.ISSUE_SUBTOKEN
+        : gas.schedule.ISSUE;
+    if (units === undefined || units === null) return null;
+    const amount = numeric.mulFloor(String(units), gas.gasPrice, 8);
+    return { amount, chargeable: numeric.isPositive(amount) };
+}
 
 // Project a sub-command's effect on the source's token balances.
 // Returns [{tick, amount}] deltas (positive = balance INCREASE) or
 // null when the effect is not projectable client-side.
-function projectDeltas(cmd, source) {
+//
+// `opts.issueFee` is the priced issuance fee from projectIssueFee. ISSUE used
+// to be unprojectable outright, which downgraded every LATER balance finding in
+// the batch to a warning - so a batch of 250 child issuances that could not
+// afford the subtoken fees pre-flighted clean. Its two effects on the source's
+// balances are the fee debit and the MINT_SUPPLY credit, and both are priced
+// here; without the fee, ISSUE stays unprojectable rather than under-stating.
+function projectDeltas(cmd, source, opts) {
     if (!cmd || !cmd.ok) return [];
     const p = cmd.params || {};
     const ticks = [].concat(p.TICK || []);
@@ -45,6 +131,22 @@ function projectDeltas(cmd, source) {
             const dest = p.DESTINATION ? String(p.DESTINATION) : source;
             if (dest !== source) return [];
             return ticks.length && amounts.length ? [{ tick: String(ticks[0]), amount: String(amounts[0]), sign: +1 }] : [];
+        }
+        case 'ISSUE': {
+            const fee = opts && opts.issueFee;
+            if (!fee) return null;                 // fee unknown: stay unprojectable
+            const out = [];
+            if (numeric.isPositive(fee.amount))
+                out.push({ tick: GAS_TICK, amount: String(fee.amount), sign: -1 });
+            // MINT_SUPPLY mints fresh supply on every valid ISSUE, to the source
+            // unless TRANSFER_SUPPLY names another address. Projecting it is what
+            // keeps a legitimate issue-then-send-the-minted batch from false-erroring.
+            const supply = p.MINT_SUPPLY;
+            const dest = p.TRANSFER_SUPPLY ? String(p.TRANSFER_SUPPLY) : source;
+            if (supply !== undefined && supply !== null && supply !== '' && !Array.isArray(supply)
+                && numeric.isPositive(String(supply)) && dest === source && ticks.length)
+                out.push({ tick: String(ticks[0]), amount: String(supply), sign: +1 });
+            return out;
         }
         case 'SEND':
         case 'DESTROY': {
@@ -58,8 +160,120 @@ function projectDeltas(cmd, source) {
             return out;
         }
         default:
-            return null; // not projectable (ISSUE mint-supply, sweeps, escrows, ...)
+            return null; // not projectable (sweeps, escrows, ...)
     }
+}
+
+/*
+ * Global per-BATCH command cap.
+ *
+ * WARNING, not an error, and deliberately so: the cap arrives with the
+ * BATCH_ISSUANCE_LIMITS flag-day, pre-flight has no chain height or flag state,
+ * and an over-cap batch is still accepted on a chain where the flag has not
+ * armed. A non-overridable client error would false-block it (spec §4.2).
+ *
+ * decoder/parse.js raises the same finding from the same shared scan, and
+ * universal.js passes validator findings through, so emit here only when that
+ * path did not already carry it - one report, one cap line.
+ */
+function checkCommandCap(ctx, commands) {
+    const count = ctx.parsed.params && ctx.parsed.params.COMMAND !== undefined
+        ? String(ctx.parsed.params.COMMAND).split(';').length
+        : commands.length;
+    if (count <= BATCH_COMMAND_LIMIT) return;
+    ctx.markRun(FINDING_CODES.BATCH_LIMIT_EXCEEDED);
+    const already = ctx.findings.some(f => f.code === FINDING_CODES.BATCH_LIMIT_EXCEEDED
+        && f.data && f.data.action === 'COMMAND');
+    if (already) return;
+    ctx.addFinding(FINDING_CODES.BATCH_LIMIT_EXCEEDED, 'warning',
+        `This batch carries ${count} commands; the chain rejects the whole batch above ${BATCH_COMMAND_LIMIT}.`,
+        { action: 'COMMAND', limit: BATCH_COMMAND_LIMIT, count });
+}
+
+/*
+ * Do the issuance fees this batch charges fit the source's gas-token balance?
+ *
+ * No single ISSUE is unaffordable here; 250 of them together are, and no
+ * per-command check can see that. Two verdicts, and the split is the whole
+ * point, because the chain has two behaviours and only one of them is a
+ * rejection of the batch:
+ *
+ * ERROR - the arbiter's own whole-batch collapse (indexer batch.js
+ *   isGasProvablyUnaffordable, `invalid: GAS (insufficient)`), which fires on
+ *   the MINIMUM, never the sum: every sub-command must be a positively-priced
+ *   new-tick ISSUE and the balance must not cover even the CHEAPEST of them.
+ *   Then nothing can be paid and the whole transaction is one invalid record.
+ *
+ * WARNING - balance covers the cheapest but not the total. Gas is billed
+ *   GREEDILY in list order against one running budget, so a source holding gas
+ *   for K of N lands exactly K valid commands (acceptance A6, driven on BTC
+ *   regtest: 8 children with gas for 6 -> 6 valid, 2 rejected, 6 debits). The
+ *   batch is NOT atomic and those K really do succeed, so erroring on the SUM
+ *   would refuse a transaction the chain accepts - the false-block this whole
+ *   severity model exists to prevent (spec §4.2). Say which K instead.
+ *
+ * `fees` carries one entry per sub-command in list order, or null for any
+ * command whose cost is not knowable client-side; a single null (or any
+ * non-ISSUE command) disables the collapse verdict exactly as it disables the
+ * arbiter's, since an unpriced command may be the affordable one.
+ */
+async function checkIssueFeeBudget(ctx, fees, gas, allPriced) {
+    if (!fees.length) return;
+    if (!xchainFeeDebit(ctx, gas)) {
+        ctx.addUnverified(FINDING_CODES.BALANCE_INSUFFICIENT,
+            'issuance fees are settled as a native-coin output on this chain; no balance to check them against');
+        return;
+    }
+    let total = '0';
+    let cheapest = null;
+    for (const fee of fees) {
+        if (fee === null) continue;
+        total = numeric.add(total, fee.amount);
+        if (fee.chargeable && (cheapest === null || numeric.gt(cheapest, fee.amount))) cheapest = fee.amount;
+    }
+    if (!numeric.isPositive(total)) return;
+    if (!ctx.source) {
+        ctx.addUnverified(FINDING_CODES.BALANCE_INSUFFICIENT, 'no source address supplied');
+        return;
+    }
+    const balance = await ctx.balance(ctx.source, GAS_TICK);
+    if (balance === null) {
+        ctx.addUnverified(FINDING_CODES.BALANCE_INSUFFICIENT, 'balance lookup unavailable for ' + GAS_TICK);
+        return;
+    }
+    ctx.markRun(FINDING_CODES.BALANCE_INSUFFICIENT);
+    if (numeric.gte(balance, total)) return;
+
+    const inFlight = ctx.deltaApplied(GAS_TICK);
+    const netted = numeric.isPositive(inFlight);
+    const netting = netted ? ` after ${inFlight} already committed from this wallet` : '';
+    const local = netted ? { localDeltaApplied: inFlight } : {};
+
+    // Every command priced and chargeable, and not even the cheapest is covered:
+    // the chain rejects the whole batch as one record.
+    if (allPriced && cheapest !== null && !numeric.gte(balance, cheapest)) {
+        ctx.addFinding(FINDING_CODES.BALANCE_INSUFFICIENT, 'error',
+            `Balance of ${GAS_TICK} (${balance}${netting}) does not cover even the cheapest issuance fee in this `
+            + `batch (${cheapest}); the chain rejects the whole batch as one record. Total charged: ${total}.`,
+            { tick: GAS_TICK, balance, total, cheapest, commandCount: fees.length, wholeBatch: true, ...local });
+        return;
+    }
+
+    // Partially funded: greedy list-order billing lands the prefix that fits.
+    let affordable = 0;
+    let spent = '0';
+    for (const fee of fees) {
+        if (fee === null) break;                       // unknown cost: stop counting honestly
+        const next = numeric.add(spent, fee.amount);
+        if (!numeric.gte(balance, next)) break;
+        spent = next;
+        affordable++;
+    }
+    ctx.addFinding(FINDING_CODES.BALANCE_INSUFFICIENT, 'warning',
+        `Balance of ${GAS_TICK} (${balance}${netting}) does not cover the ${total} of issuance fees this batch `
+        + `charges. Commands are billed in order, so about ${affordable} of ${fees.length} would be paid and the `
+        + 'rest would fail individually (a batch is not atomic).',
+        { tick: GAS_TICK, balance, total, cheapest, affordable, commandCount: fees.length, ...local });
 }
 
 async function checkBatch(ctx) {
@@ -68,12 +282,22 @@ async function checkBatch(ctx) {
         'Batch commands execute sequentially and are NOT atomic: if one fails, earlier commands still apply.',
         { commandCount: commands.length });
 
+    checkCommandCap(ctx, commands);
+
     // Running projected deltas, seeded from the caller's own localDeltas.
     // ctx.localDeltas is amounts to SUBTRACT; the projection uses the
     // same convention (positive amount = subtract from balance).
     const baseDeltas = ctx.localDeltas.slice();
     let projected = [];   // [{tick, amount}] to subtract
     let unprojectable = false;
+
+    // Per-command issuance fees, in list order, checked once against the
+    // gas-token balance after the loop. `allPriced` is the arbiter's own
+    // all-or-nothing scope gate: one command that is not a positively-priced
+    // new-tick ISSUE and the whole-batch collapse cannot be claimed.
+    const gas = gasConfig(ctx.sdk);
+    const issueFees = [];
+    let allPriced = true;
 
     const { runActionChecks } = require('./index.js');
 
@@ -83,6 +307,7 @@ async function checkBatch(ctx) {
             ctx.addFinding(FINDING_CODES.PARSE_INVALID, 'error',
                 `Batch command ${i + 1} does not parse (${cmd && cmd.code ? cmd.code : 'MALFORMED'}).`,
                 { commandIndex: i, code: cmd && cmd.code });
+            allPriced = false;
             continue;
         }
 
@@ -109,7 +334,28 @@ async function checkBatch(ctx) {
             }
         }
 
-        const deltas = projectDeltas(cmd, ctx.source);
+        // An ISSUE's fee is priced here (it needs the token row, which
+        // projectDeltas cannot fetch) and both accumulated for the batch-wide
+        // budget check and handed to the projection as this command's debit.
+        let issueFee = null;
+        if (cmd.action !== 'ISSUE') {
+            // Only ISSUE has a cost this side can price; every other fee-bearing
+            // action (ORDER, SWAP, DISPENSER, BET, AIRDROP, DIVIDEND, CALLBACK,
+            // SWEEP, DEPLOY) computes its own inside the handler, from expiration
+            // days, recipient counts, db hits or code bytes.
+            allPriced = false;
+        } else {
+            // Where the fee is a coin output rather than a balance debit there is
+            // nothing to subtract, but the command is still fully projected: a
+            // zero fee is knowledge, not an unknown.
+            issueFee = xchainFeeDebit(ctx, gas)
+                ? await projectIssueFee(ctx, cmd, gas)
+                : { amount: '0', chargeable: false };
+            issueFees.push(issueFee);
+            if (issueFee === null || !issueFee.chargeable) allPriced = false;
+        }
+
+        const deltas = projectDeltas(cmd, ctx.source, { issueFee });
         if (deltas === null) unprojectable = true;
         else {
             for (const d of deltas) {
@@ -118,6 +364,8 @@ async function checkBatch(ctx) {
             }
         }
     }
+
+    await checkIssueFeeBudget(ctx, issueFees, gas, allPriced);
 }
 
 module.exports = { checkBatch, projectDeltas };
