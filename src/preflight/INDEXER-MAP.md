@@ -26,7 +26,7 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-**Pins taken at indexer commit:** `b460999`
+**Pins taken at indexer commit:** `a4ce1fc`
 
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
@@ -77,7 +77,7 @@ found by hashing candidate blobs as above.
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `c3cfc0b97a1fff2385898ed778b580cdc4ca4e67ca9e4b85ee82f8253c7f0e8c` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `859682d31fa583fc17d02f161f99f37baaf83ee8ae5fe744422d1ab81dd535b4` |
 | `checks/dividend.js` | `src/actions/dividend.js` | `cfe53d5ef3c17bf7c1a25321e77c294a26632f66e92cca19592c8d13524ab4e3` |
-| `checks/batch.js` | `src/actions/batch.js` | `8b1b23ad3b3d7e8947b01a93159d03c222494fb9f372b769bc10bc53ac85c18a` |
+| `checks/batch.js` | `src/actions/batch.js` | `63822e9c1ad62d6bdcb86f8340c8b10f6ab9b586c84f8a28ecdc8088c74d6f80` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -86,6 +86,71 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-08-14 (fourth pass) - `batch.js`, against indexer HEAD `a4ce1fc`
+
+One row. `git log b460999..HEAD -- src/actions/batch.js` returns exactly two
+commits, `013c206` ("bound a BATCH by a weighted cost budget instead of a command
+count") and `d627a4b` ("weigh fan-out actions flat, with no read in the cap
+scan"), and the sibling `status --short src/actions/` is empty, so the recorded
+hash is committed HEAD content and the review range is exact.
+
+**This one DOES owe a client move, and the move is deliberately not made here.**
+That is a different outcome from every entry below it, so it is stated plainly
+rather than left to be inferred from a refreshed hash.
+
+- **What changed.** A new flag day, `BATCH_COST_WEIGHTING`, replaces the flat
+  250-command cap with a budget over per-action COST WEIGHTS. Budget is 250 and
+  the default weight is 1, so an ordinary batch is decided arithmetically
+  identically to today, including the error string, which stays
+  `invalid: COMMAND (limit)`. The count check survives as a pre-filter, which is
+  sound because every weight is an integer >= 1. Two weights are assigned so far:
+  `AIRDROP` and `DIVIDEND` at 25 each, flat rather than `1 + recipients`, because
+  the recipient count is not on the wire and an exact count would need an as-of
+  read per sub-command inside the very scan the budget exists to keep cheap.
+
+- **Why it is client-visible.** Ten AIRDROPs weigh 250 and fit; eleven weigh 275
+  and the whole batch rejects, where eleven sub-commands passed before. A client
+  composing fan-out batches can now be refused on weight while it is still far
+  under the command cap, and `checkCommandCap` in `checks/batch.js` cannot see
+  that, because it counts commands.
+
+- **Why the mirror is NOT built in this pass.** Two reasons, and the second is
+  the decisive one:
+  1. `BATCH_COST_WEIGHTING` is UNARMED on mainnet, on the house sentinel
+     `9999999999` (year 2286), with no scheduled instant. Testnet and regtest
+     activate at genesis, so the rule is live there and inert on mainnet.
+  2. **The weight table is incomplete and known to be about to change.** Two
+     weight classes are still unwired in the arbiter itself: DEPLOY's weight and
+     the ratified EXECUTE/XEXEC weight. Mirroring the table today would pin a
+     client to a table that is mid-construction, and every class added afterwards
+     would re-break the mirror and this gate together. The client mirror is
+     sequenced deliberately AFTER those classes land, not before.
+
+  So this refresh records a REVIEWED DEFERRAL, not an assertion that nothing is
+  owed. The distinction matters because a silent re-pin here would be exactly the
+  failure this gate exists to prevent.
+
+- **What the deferral costs, stated rather than discovered.** Until row 11 lands,
+  a client composing an over-budget fan-out batch for testnet or regtest gets no
+  client-side warning and learns from the chain's rejection. On mainnet it costs
+  nothing, because the flag is unarmed there. That is the survivable direction
+  this module already declares for its MINT approximation: the mirror may accept
+  a batch the chain rejects, never the reverse.
+
+- **What must happen before the mirror is built.** The remaining weight classes
+  land in the arbiter, THEN `batchLimits.js` gains the budget and the weight table
+  as its single source, and the four other `BATCH_COMMAND_LIMIT` sites follow it
+  (`batchBuilder.js`, `validator.js`, `decoder/parse.js`,
+  `preflight/checks/batch.js`). Note the posture question that work has to answer
+  and this entry does not: `batchBuilder` and `validator` REFUSE on the command
+  cap, and a refusal on a weight that is unarmed on mainnet would false-block
+  legal mainnet work, which is the direction this module's own doctrine forbids
+  (see the MINT approximation note above: the mirror may accept what the chain
+  rejects, never the reverse). Pre-flight's existing WARNING shape is the
+  precedent to follow.
+
+Tracked as XC-1480.
 
 ### 2026-08-13 (third pass) - `batch.js` + `dispenser.js`, against indexer HEAD `b460999`
 
