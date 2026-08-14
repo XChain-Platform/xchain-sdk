@@ -62,7 +62,9 @@ function _pinnedEntry(opts){
     const resolve = opts.pinnedResolver || pinned.getPinnedCheckpoint;
     return resolve(opts.coin) || null;
 }
-function _base(u){ return String(u || '').replace(/\/+$/, ''); }
+// Trailing slashes trimmed by loop rather than /\/+$/: the quantified group
+// backtracks polynomially on a long run of slashes in a caller-supplied URL.
+function _base(u){ let s = String(u || ''); while (s.endsWith('/')) s = s.slice(0, -1); return s; }
 async function _json(f, url){
     let r = await f(url);
     if (!r.ok) throw new Error('LightClient: explorer returned HTTP ' + r.status);

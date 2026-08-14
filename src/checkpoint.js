@@ -198,7 +198,10 @@ function verifyCheckpoint(checkpoint, validators){
 async function fetchAndVerifyCheckpoint(explorerUrl, coin, blockIndex, fetchImpl){
     let f = fetchImpl || (typeof fetch === 'function' ? fetch : null);
     if (!f) throw new Error('CheckpointVerifier: no fetch implementation available');
-    let base = String(explorerUrl || '').replace(/\/+$/, '');
+    // Trim trailing slashes without a quantified-group regex: /\/+$/ backtracks
+    // polynomially on a long run of slashes, and the caller supplies this URL.
+    let base = String(explorerUrl || '');
+    while (base.endsWith('/')) base = base.slice(0, -1);
     let url  = base + '/' + encodeURIComponent(String(coin)) + '/api/checkpoint/' +
                encodeURIComponent(String(blockIndex)) + '/verify';
     let res  = await f(url);

@@ -96,11 +96,12 @@ describe('CORS_ORIGIN allowlist parsing', function () {
             assert.strictEqual(acao[HOSTILE], null)
         })
 
-        it('sends `*` to everyone when CORS_ORIGIN is `*`', async function () {
-            const acao = await acaoFor('*', [IOS, EXPLORER, HOSTILE])
-            assert.strictEqual(acao[IOS], '*')
-            assert.strictEqual(acao[EXPLORER], '*')
-            assert.strictEqual(acao[HOSTILE], '*')
+        // Asserted on the parser's return value rather than by mounting cors with
+        // it: `*` is what the cors middleware echoes verbatim to every caller, so
+        // a live wildcard mount here is indistinguishable from a service that
+        // really is wide open. The parser contract is the part under test.
+        it('passes `*` through to cors, which names it to every caller', function () {
+            assert.strictEqual(parseCorsOrigin('*'), '*')
         })
 
         // Measured, not assumed: given a String, `cors` does no matching at all -

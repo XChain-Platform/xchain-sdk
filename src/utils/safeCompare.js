@@ -28,6 +28,11 @@
 
 const crypto = require('crypto');
 
+// Per-process HMAC key for the length-equalizing digests below. Generated at
+// load and never exported: both operands of a comparison are always keyed with
+// it in the same call, so it needs no persistence across processes.
+const COMPARE_KEY = crypto.randomBytes(32);
+
 /*
  * Constant-time-ish comparison of two candidate secrets. Returns false
  * (never throws) when either input is not a non-empty string.
@@ -39,8 +44,17 @@ const crypto = require('crypto');
 function safeTokenEqual(a, b) {
     if (typeof a !== 'string' || a.length === 0) return false;
     if (typeof b !== 'string' || b.length === 0) return false;
-    const ha = crypto.createHash('sha256').update(a).digest();
-    const hb = crypto.createHash('sha256').update(b).digest();
+    // Keyed digests, not bare hashes: both sides are reduced to a fixed 32 bytes
+    // so timingSafeEqual can run at all (it throws on length mismatch, and the
+    // mismatch itself would leak the length). The key is random per process and
+    // never leaves it, so an attacker cannot precompute a digest to compare
+    // against, which a bare unsalted hash of the candidate would allow.
+    // Not password storage, so no work factor applies: neither digest is
+    // persisted or transmitted, and both are recomputed per comparison. A
+    // deliberately slow KDF here would only add latency to every authenticated
+    // request while changing nothing an attacker can reach.
+    const ha = crypto.createHmac('sha256', COMPARE_KEY).update(a).digest(); // codeql[js/insufficient-password-hash]
+    const hb = crypto.createHmac('sha256', COMPARE_KEY).update(b).digest(); // codeql[js/insufficient-password-hash]
     return ha.length === hb.length && crypto.timingSafeEqual(ha, hb);
 }
 
