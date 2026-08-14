@@ -25,6 +25,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { execFileSync } = require('child_process');
 
 function resolveIndexerRoot() {
     const candidates = [
@@ -45,6 +46,41 @@ function parseMap(mapPath) {
     let m;
     while ((m = re.exec(text)) !== null) rows.push({ handler: m[1], hash: m[2] });
     return rows;
+}
+
+/* The indexer commit the pinned hashes were taken at.
+ *
+ * A hash on its own is not a usable baseline. The map tells a reviewer to "re-read the
+ * changed handler", which means diffing from what was pinned to what is there now, and a
+ * hash gives that diff no left-hand side. On 2026-08-13 that turned into a real trap:
+ * the indexer's history was rewritten, six pinned hashes survived only as UNREACHABLE
+ * BLOBS, and a reviewer following the map with a commit range would have silently
+ * reviewed against the wrong baseline and re-pinned on it, which is precisely the outcome
+ * this gate exists to prevent. Recovering them needed an object-store scan nobody had
+ * written down.
+ *
+ * So the map records an anchor, and the failure path below states whether that anchor is
+ * still reachable BEFORE the reviewer trusts a range built on it.
+ */
+function parseAnchor(mapPath) {
+    const m = /Pins taken at indexer commit:\*\*\s*`([0-9a-f]{7,40})`/
+        .exec(fs.readFileSync(mapPath, 'utf8'));
+    return m ? m[1] : null;
+}
+
+/* Reachable means "can be the left side of a range against HEAD", which is the only
+ * property the review instruction actually needs. An orphaned commit can still be present
+ * in the object store, so an existence check would answer yes and hand back a range that
+ * resolves to nothing useful.
+ */
+function anchorIsReachable(indexerRoot, anchor) {
+    try {
+        execFileSync('git', ['-C', indexerRoot, 'merge-base', '--is-ancestor', anchor, 'HEAD'],
+            { stdio: 'ignore' });
+        return true;
+    } catch (e) {
+        return false;
+    }
 }
 
 /* The fee-quote seam, which the hash rows above structurally cannot cover.
@@ -331,6 +367,27 @@ function main() {
         // red is the sibling's uncommitted work rather than a real handler change: this
         // hashes the WORKING TREE, and two of the four handlers in the gate's first firing
         // were nothing else. CI checks out HEAD and never sees it.
+        const anchor = parseAnchor(mapPath);
+        if (!anchor) {
+            console.error('\nThe map records no anchor commit, so there is no baseline to diff FROM.\n'
+                + 'Add a "Pins taken at indexer commit" line to src/preflight/INDEXER-MAP.md.');
+        } else if (anchorIsReachable(root, anchor)) {
+            console.error(`\nThe pins were taken at indexer commit ${anchor}, which is still reachable.\n`
+                + 'Review each drifted handler with:\n'
+                + `  git -C ${root} diff ${anchor}..HEAD -- <handler path above>`);
+        } else {
+            // The case that cost a reviewer a long detour. Say it plainly rather than
+            // letting them build a range on a commit that cannot anchor one.
+            console.error(`\nWARNING: the anchor commit ${anchor} is NOT reachable from the indexer HEAD.\n`
+                + 'That normally means the indexer history was rewritten and the pinned state was\n'
+                + 'orphaned. A commit range from it is either empty or wrong, so do NOT review that\n'
+                + 'way and do NOT re-pin on it. Recover the pinned content as a blob instead:\n'
+                + `  git -C ${root} cat-file --batch-all-objects --batch-check='%(objecttype) %(objectname)' \\\n`
+                + '    | awk \'$1=="blob"{print $2}\' \\\n'
+                + '    | while read o; do [ "$(git -C <indexer> cat-file blob $o | sha256sum | cut -d" " -f1)" = "<pinned hash>" ] \\\n'
+                + '        && echo "$o"; done\n'
+                + 'then diff that blob against the current handler, and re-anchor the map to the new HEAD.');
+        }
         console.error('\nRunning locally? Confirm against COMMITTED state first - this hashes the sibling\n'
             + 'working tree, so an uncommitted edit over there reports as drift:\n'
             + '  git -C ../xchain-indexer status --short src/actions/');

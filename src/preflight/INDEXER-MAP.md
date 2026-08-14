@@ -26,6 +26,45 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
+**Pins taken at indexer commit:** `22f0f31`
+
+That anchor is the left-hand side of the review. To see what a drifted
+handler actually did since it was pinned:
+
+    git -C ../xchain-indexer diff 22f0f31..HEAD -- src/actions/<handler>.js
+
+Re-anchor this line whenever you re-pin the table, in the same edit.
+
+### When the anchor is not reachable
+
+A hash is not a baseline on its own, and this bit the review on 2026-08-13.
+The indexer's history was rewritten by the published-history scrub, and SIX
+of the eleven pinned hashes survived only as **unreachable blobs**: the
+content still existed in the object store, but no commit reached it. A
+reviewer following the instruction above would have got an empty or
+misleading range, reviewed against the wrong baseline, and re-pinned on it,
+which defeats the whole gate. The drift gate now checks the anchor's
+reachability and says so before you build a range on it.
+
+If the anchor is gone, recover the pinned CONTENT as a blob rather than
+guessing a commit. Find the object whose SHA-256 matches the pinned hash:
+
+    git -C ../xchain-indexer cat-file --batch-all-objects \
+      --batch-check='%(objecttype) %(objectname)' | awk '$1=="blob"{print $2}' \
+      | while read o; do \
+          [ "$(git -C ../xchain-indexer cat-file blob $o | sha256sum | cut -d' ' -f1)" \
+            = "<pinned hash>" ] && echo "$o"; \
+        done
+
+Then `git -C ../xchain-indexer cat-file blob <object>` is the exact file
+that was reviewed, and diffing it against the current handler is the real
+review. Re-anchor to the new HEAD once you re-pin.
+
+Note the two hashes are different things and mixing them up wastes an hour:
+the table pins a **SHA-256 of file content**, while git object names are
+SHA-1, so the pinned hash never appears as an object name and can only be
+found by hashing candidate blobs as above.
+
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
 | `checks/send.js` (SEND) | `src/actions/send.js` | `d5181fb4a709abe535eca0388eb9bcdeceef38e4d349976b00efa830a4c67287` |
