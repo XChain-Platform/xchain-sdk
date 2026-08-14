@@ -26,7 +26,7 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-**Pins taken at indexer commit:** `22f0f31`
+**Pins taken at indexer commit:** `b460999`
 
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
@@ -71,13 +71,13 @@ found by hashing candidate blobs as above.
 | `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `562a51f60f545e7a659fcec979288c9535cffc51d280fb4fecd76ddf0663684e` |
 | `checks/mint.js` | `src/actions/mint.js` | `87465e6447385dd97b27c52ee8919f27838a0a495e3cdcddac8a413158311c2c` |
 | `checks/issue.js` | `src/actions/issue.js` | `1ba2e78f6300b203bb525085c3f92055e8fc3405108b642401ba97aa855f51ee` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `a30fa1b72a1355c9859353c77ddb0cb1185878e2555261f02fc4471c64fee317` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `2a8772ca85dd371d87aa4f554f9b0696ea185e4d562664648b808cb72f132c4b` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `edf8623a92f567cd1950e6d3943fe6756407e03e8755e4f840dd61509d9dd53b` |
 | `checks/trading.js` (ORDER) | `src/actions/order.js` | `b8f5b95204e4c0ed23cfc6105f43bb4310e803133673d651db853cd81843bde7` |
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `c3cfc0b97a1fff2385898ed778b580cdc4ca4e67ca9e4b85ee82f8253c7f0e8c` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `859682d31fa583fc17d02f161f99f37baaf83ee8ae5fe744422d1ab81dd535b4` |
 | `checks/dividend.js` | `src/actions/dividend.js` | `cfe53d5ef3c17bf7c1a25321e77c294a26632f66e92cca19592c8d13524ab4e3` |
-| `checks/batch.js` | `src/actions/batch.js` | `fbf1b73743cd5d4dd0ec161add02dcfc8c4579b4a813771b204100427b4c4c45` |
+| `checks/batch.js` | `src/actions/batch.js` | `8b1b23ad3b3d7e8947b01a93159d03c222494fb9f372b769bc10bc53ac85c18a` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -86,6 +86,64 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-08-13 (third pass) - `batch.js` + `dispenser.js`, against indexer HEAD `b460999`
+
+Two rows, one cause, and this time the cause is a single reviewable commit
+rather than a repo-wide scrub: `b460999` ("pre-flight a batch per sub-command,
+without opening the VM"). `git log 22f0f31..HEAD -- src/actions/batch.js
+src/actions/dispenser.js` returns that commit and nothing else, and the sibling
+checkout's `status --short src/actions/` is empty, so the hashes recorded above
+are committed HEAD content and the review range is exact.
+
+Both diffs are gated on `data['FEE_PROBE']`, which `actions.js` sets only on the
+synthetic transaction the read-only quote surfaces build and never on a decoded
+one. **So neither row moves a consensus verdict, and the client checks in
+`checks/batch.js` and `checks/dispenser.js` owe nothing.** That is the same
+shape as the 2026-07-26 `dispenser.js FEE_PROBE oracle fee` entry above, and it
+is deliberately NOT the end of the review, because this change did something the
+earlier probe-path changes did not: it created a response field the client had
+no reading for.
+
+- **`batch.js` - no Tier-2 change, but a new Tier-1 CONTRACT.** The diff seeds
+  two probe-local collectors above the `baseKeys` snapshot (`PROBE_SUB_VERDICTS`,
+  `PROBE_ORACLE_FEES`), refuses VM-reaching sub-actions immediately above the
+  dispatch, clears `STATUS` before each dispatched sub-command so a handler that
+  records none reports `null` instead of inheriting its predecessor's, and
+  restores the BATCH's own `status` after the loop. Nothing there is a validity
+  rule `checks/batch.js` mirrors: the command cap, the dotted-child exemption
+  and the gas-budget projection are all untouched, and the batch-level verdict a
+  client can compute is unchanged.
+  **What DID change is what the endpoint answers, and it needed a client
+  change:** `/preflight` now returns `subCommands` (each sub-command's own
+  verdict, in list order) and, on refusal, `deniedSubAction`. The last line of
+  the handler is the reason that matters - `data['STATUS'] = status` restores the
+  BATCH's structural verdict, so the outer `valid` is TRUE for a batch whose
+  commands the same response reports as invalid. Driven against the live BTC
+  regtest indexer running this commit, 2026-08-13, blockIndex 14513:
+  `BATCH|0|SEND|0|NOSUCHTOKENXYZ|1|<addr>` answers `valid:true, status:"valid"`
+  with `subCommands:[{status:"invalid: TICK (unknown)"}]`. Reading only the outer
+  field would have shown a network approval for a batch that does nothing, and
+  would additionally have demoted every Tier-2 finding on it to info. That is
+  what `TIER1_SUBCOMMAND_PREFLIGHT` and the per-sub-command precedence rule in
+  `preflight/index.js` exist for; see `test/unit/preflight/batchTier1.test.js`.
+
+- **`dispenser.js` - no client change, and the declared gap is unchanged.** The
+  diff adds one probe-only block: when a Mode B DISPENSER's oracle fee is owed
+  and above dust, it accumulates the amount into `PROBE_ORACLE_FEES` keyed by
+  oracle address. It writes a probe-local object, never `BATCH_VALUE_LEDGER`,
+  and it is inside the existing `if(data['FEE_PROBE'] ...)` shape rather than a
+  new branch on the settlement path. `checks/dispenser.js` still cannot see
+  outputs, so `DISPENSER_ORACLE_FEE` stays the declared-unverified gap it has
+  been since 2026-07-26 - the client gained no ability to CHECK the fee.
+  What it gained is the arbiter's own arithmetic for it: `oracleFeesOwed` is a
+  DISCLOSURE, not a verdict (the probe carries no outputs, so it reports the
+  total owed per oracle rather than judging an output set it does not have), and
+  Tier 1 now surfaces it as `DRYRUN_ORACLE_FEES_OWED` info. Deliberately info
+  and not an error: turning a disclosure into a verdict is exactly the
+  false-block this severity model refuses, and the number is optimistic by
+  construction on the arbiter's side too (it is a per-oracle SUM offered so a
+  composer can size the outputs, not a claim that any output exists).
 
 ### 2026-08-13 (second pass) - all eleven rows, against indexer HEAD `22f0f31`
 

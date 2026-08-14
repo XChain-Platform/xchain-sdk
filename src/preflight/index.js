@@ -185,13 +185,119 @@ function computeVerdict(findings) {
  * still outranks a hard client error, but the user is not told the
  * payment is clean when their own wallet has already committed the funds.
  */
+/*
+ * Split the arbiter's per-sub-command verdicts (BATCH only) into the three
+ * outcomes they actually carry, which is NOT a two-way valid/invalid split:
+ *
+ *   valid    - `status === 'valid'`. The network really ran this command.
+ *   invalid  - any other non-empty status string. The network ran it and
+ *              rejected it.
+ *   unjudged - `status === null`, with or without a `refused` note. Two live
+ *              causes, both measured on BTC regtest 2026-08-13: a VM sub-action
+ *              the probe refuses to dispatch (`refused` set), and a settlement
+ *              leg that returns without recording a status because the probe
+ *              carries no real transaction (`COINPAY|0|<match>` inside a batch
+ *              answers `{status:null, refused:null}`).
+ *
+ * DECLARED LIMITATION, in the idiom batchLimits.js uses for its MINT-distinctness
+ * approximation rather than left to be rediscovered: the SDK cannot turn a
+ * settlement sub-command's `null` into a verdict, and neither can the endpoint.
+ * A COINPAY obligation settles against the transaction OUTPUT paying its payee,
+ * and neither public probe surface accepts an output set - `preflight` takes
+ * {action, params, source, feeMode} and `feequote` adds only a scalar
+ * `feeOutputSats`, so the synthetic transaction's outputs hold nothing but the
+ * probe's own injected fee output. The arbiter therefore resolves no payee output
+ * and returns before recording a status. Only the API-key-gated, regtest-only
+ * `feequotedryrun` RPC accepts caller-supplied outputs, and it is not proxied by
+ * the explorer at all. Letting a public caller DECLARE an output set is a
+ * security decision (attacker-shaped outputs is one of the two named reasons that
+ * RPC stays gated) and is NOT taken here. The consequence is stated honestly to
+ * the caller instead: DRYRUN_SUBCOMMAND_UNJUDGED, which is why silence must never
+ * be read as either verdict.
+ *
+ * The third bucket is the load-bearing one. Folding it into "invalid" would
+ * manufacture a client-side false NEGATIVE for exactly the multi-payee COINPAY
+ * case the indexer half of this work fixed - the probe cannot see the settlement
+ * outputs, so it cannot judge the command, and saying "this will fail" about a
+ * transaction the chain accepts is the failure mode this whole severity model
+ * exists to prevent. Folding it into "valid" is worse: it would let the network's
+ * silence override a Tier-2 error.
+ */
+function classifySubCommands(subs) {
+    const valid = new Set();
+    const invalid = [];
+    const unjudged = [];
+    for (const s of subs) {
+        if (s.status === 'valid') valid.add(s.position);
+        else if (typeof s.status === 'string' && s.status !== '') invalid.push(s);
+        else unjudged.push(s);
+    }
+    return { valid, invalid, unjudged, allValid: invalid.length === 0 && unjudged.length === 0 };
+}
+
+// Turn those buckets into findings. Invalid sub-commands are ERRORS (overridable,
+// like every network-sourced verdict) because the alternative is a report that
+// says "pass" for a batch the network has already told us will not do what it says.
+// Unjudged ones are disclosures, never errors, for the reason above.
+function pushSubCommandFindings(findings, subs) {
+    const cls = classifySubCommands(subs);
+    for (const s of cls.invalid)
+        findings.push({ code: FINDING_CODES.DRYRUN_SUBCOMMAND_INVALID, severity: 'error',
+            source: 'dryrun', overridable: true,
+            message: `The network reports batch command ${s.position + 1}`
+                + (s.action ? ` (${s.action})` : '') + ` will fail: ${s.status}.`
+                + ' A batch is not atomic, so the other commands still apply.',
+            data: { commandIndex: s.position, action: s.action, status: s.status } });
+    for (const s of cls.unjudged)
+        findings.push({ code: FINDING_CODES.DRYRUN_SUBCOMMAND_UNJUDGED, severity: 'info',
+            source: 'dryrun',
+            message: `The network did not judge batch command ${s.position + 1}`
+                + (s.action ? ` (${s.action})` : '') + ' ('
+                + (s.refused || 'the read-only pre-flight cannot evaluate this command')
+                + '); relying on client checks for it.',
+            data: { commandIndex: s.position, action: s.action, refused: s.refused } });
+    return cls;
+}
+
 function applyTier1(findings, tier1) {
     if (!tier1) return findings;
     if (tier1.kind === 'verdict' && tier1.valid === true) {
+        // A batch answers at two levels and the outer one is not a verdict on the
+        // inner ones (indexer actions/batch.js restores the BATCH's own status
+        // after the dispatch loop). Report both, and say which is which.
+        const cls = tier1.subCommands ? pushSubCommandFindings(findings, tier1.subCommands) : null;
         findings.push({ code: FINDING_CODES.DRYRUN_VALID, severity: 'info', source: 'dryrun',
-            message: 'The network dry-run accepted this action.', data: {} });
+            message: cls
+                ? (cls.allValid
+                    ? `The network dry-run accepted this batch and all ${tier1.subCommands.length} of its commands.`
+                    : 'The network dry-run accepted this batch transaction, but NOT every command in it'
+                      + ` (${cls.valid.size} of ${tier1.subCommands.length} accepted); see the per-command findings.`)
+                : 'The network dry-run accepted this action.',
+            data: cls ? { subCommandCount: tier1.subCommands.length, accepted: cls.valid.size } : {} });
+        if (tier1.oracleFeesOwed)
+            findings.push({ code: FINDING_CODES.DRYRUN_ORACLE_FEES_OWED, severity: 'info',
+                source: 'dryrun',
+                message: 'This batch owes oracle usage fees the pre-flight discloses rather than checks: '
+                    + Object.entries(tier1.oracleFeesOwed).map(([a, v]) => `${v} to ${a}`).join(', ')
+                    + '. Size those outputs yourself; the dry-run has no outputs to check them against.',
+                data: { oracleFeesOwed: tier1.oracleFeesOwed } });
         for (const f of findings) {
             if (f.severity === 'error' && f.source === 'client') {
+                // §4.7 + per-sub-command precedence. Tier 1 outranks a Tier-2 error
+                // only where it actually judged the thing the error is about. For a
+                // batch that is PER COMMAND: a finding tagged with a commandIndex is
+                // outranked only if the network accepted THAT command, and an
+                // untagged (batch-level) finding only if it accepted every command.
+                // Without this the outer valid:true would silently flatten the whole
+                // Tier-2 batch projection - measured shape: a batch whose only
+                // command is an unknown-tick SEND answers valid:true, so the SDK's
+                // own TOKEN_NOT_FOUND error would have been demoted to info and the
+                // report rendered as a clean network approval.
+                if (cls) {
+                    const ci = f.data ? f.data.commandIndex : undefined;
+                    const outranked = Number.isInteger(ci) ? cls.valid.has(ci) : cls.allValid;
+                    if (!outranked) continue;
+                }
                 const localOnly = !!(f.data && f.data.localDeltaApplied);
                 f.severity = localOnly ? 'warning' : 'info';
                 f._downgradedBy = localOnly ? 'dryrun-valid-local-delta' : 'dryrun-valid';
@@ -199,6 +305,11 @@ function applyTier1(findings, tier1) {
             }
         }
     } else if (tier1.kind === 'verdict' && tier1.valid === false) {
+        // An invalid batch header runs no sub-commands, so there is normally nothing
+        // here; reported anyway rather than dropped, because a response that carries
+        // both is telling the caller something and silently discarding half of it is
+        // how the outer-level-only reading got wrong in the first place.
+        if (tier1.subCommands) pushSubCommandFindings(findings, tier1.subCommands);
         findings.push({ code: FINDING_CODES.DRYRUN_INVALID, severity: 'error', source: 'dryrun',
             overridable: true,
             message: 'The network reports this will fail: ' + (tier1.status || tier1.error || 'rejected'),
@@ -231,7 +342,12 @@ function applyTier1(findings, tier1) {
             message: (declined
                 ? 'The network declined to judge this action ('
                 : 'The network was not consulted (')
-                + tier1.reason + '); relying on client checks.', data: {} });
+                + tier1.reason + '); relying on client checks.',
+            // When a batch was refused over ONE of its sub-actions, the name is
+            // the actionable half of the answer, so it rides in `data` and not
+            // only in the prose: a confirm screen can point at the offending
+            // command, which a message string does not let it do.
+            data: tier1.deniedSubAction ? { deniedSubAction: tier1.deniedSubAction } : {} });
     }
     return findings;
 }

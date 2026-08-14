@@ -37,6 +37,24 @@ describe('pre-flight constants + registry', function () {
         expect(constants.TIER1_DENYLIST).to.deep.equal(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
     });
 
+    it('TIER1_SUBCOMMAND_PREFLIGHT is a SUBSET of the denylist, not a replacement for it', function () {
+        // The exception list only ever relaxes the short-circuit for something the
+        // denylist already names; an entry outside it would be meaningless (that
+        // action was never short-circuited) and would read as a second denylist.
+        expect(constants.TIER1_SUBCOMMAND_PREFLIGHT).to.deep.equal(['BATCH']);
+        for (const a of constants.TIER1_SUBCOMMAND_PREFLIGHT)
+            expect(constants.TIER1_DENYLIST, a + ' must be on the denylist it excepts').to.include(a);
+    });
+
+    it('the VM-compute actions are NOT exceptable', function () {
+        // The denylist exists to keep an unauthenticated caller from running the VM
+        // under the block-loop mutex. BATCH is exceptable only because the arbiter
+        // refuses its VM sub-actions itself; DEPLOY/EXECUTE/XEXEC ARE the VM, so
+        // adding one here would hand out that primitive directly.
+        for (const a of ['DEPLOY', 'EXECUTE', 'XEXEC'])
+            expect(constants.TIER1_SUBCOMMAND_PREFLIGHT, a).to.not.include(a);
+    });
+
     describe('drift map (§8.5)', function () {
         // The SDK unit suite is hermetic: it must NOT compare INDEXER-MAP.md
         // hashes against the live xchain-indexer sibling, which a second coder

@@ -80,6 +80,20 @@ const FINDING_CODES = Object.freeze({
     DRYRUN_VALID:        'DRYRUN_VALID',
     DRYRUN_INVALID:      'DRYRUN_INVALID',
     DRYRUN_UNAVAILABLE:  'DRYRUN_UNAVAILABLE',
+    // Tier-1 headlines for a PER-SUB-COMMAND verdict (BATCH only, see
+    // TIER1_SUBCOMMAND_PREFLIGHT). The arbiter answers a batch at two levels and
+    // the outer one is NOT a verdict on the inner ones: `valid:true` means the
+    // transaction is accepted and its commands run, not that any of them succeed.
+    // Measured on BTC regtest 2026-08-13: a batch whose ONLY sub-command is
+    // `SEND|0|NOSUCHTOKENXYZ|1|<addr>` answers `valid:true, status:"valid"` with
+    // `subCommands:[{status:"invalid: TICK (unknown)"}]`. Reporting only the outer
+    // field would show a clean network PASS for a batch that does nothing.
+    DRYRUN_SUBCOMMAND_INVALID:  'DRYRUN_SUBCOMMAND_INVALID',
+    DRYRUN_SUBCOMMAND_UNJUDGED: 'DRYRUN_SUBCOMMAND_UNJUDGED',
+    // Oracle usage fees the arbiter DISCLOSES rather than judges for a batch's
+    // Mode B DISPENSER sub-commands (indexer actions/dispenser.js): a probe carries
+    // no outputs, so it reports the total owed per oracle instead of a verdict.
+    DRYRUN_ORACLE_FEES_OWED:    'DRYRUN_ORACLE_FEES_OWED',
     // Certified Tier-2 (error-capable; §4.4 error column verbatim)
     PARSE_INVALID:       'PARSE_INVALID',
     VALIDATOR_SEMANTICS: 'VALIDATOR_SEMANTICS',
@@ -152,6 +166,34 @@ const TIER2_ERROR_CAPABLE = Object.freeze({
 // bin/check-preflight-drift.js (named, not line-pinned: the line pin had already drifted).
 const TIER1_DENYLIST = Object.freeze(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
 
+/*
+ * Denylisted actions the indexer's /preflight endpoint nevertheless ANSWERS, per
+ * sub-command, so Tier 1 must call it for them instead of short-circuiting.
+ *
+ * This exists because the two indexer probe surfaces stopped agreeing, and
+ * TIER1_DENYLIST mirrors only one of them. `FEE_QUOTE_DENYLIST` is still the
+ * literal it mirrors and BATCH is still on it - `computeFeeQuote` refuses a batch
+ * for a reason this list does not touch, that a batch's native fee is the SUM of
+ * its sub-actions' state-dependent fees and a partial quote UNDER-SIZES the output
+ * and burns the payer's miner fee. `computePreflight` took a different door:
+ * rather than lift BATCH out of the denylist (which would re-open the
+ * unauthenticated VM-compute-under-mutex the denylist exists to close) it refuses
+ * PER SUB-COMMAND and runs the rest, returning each one's own verdict.
+ *
+ * So this is NOT a hole in the mirror and must not be "fixed" by deleting BATCH
+ * from TIER1_DENYLIST: that constant's job is to stay byte-equal to the indexer
+ * literal, which bin/check-preflight-drift.js binds by VALUE, and the equality is
+ * still true. What changed is a SECOND fact about a DIFFERENT surface, recorded
+ * here in its own named place with its own reason.
+ *
+ * Adding an action here is a security decision, not a parity edit: it means Tier 1
+ * will send that action to an unauthenticated read-only endpoint that runs the real
+ * handler under the block-loop mutex. BATCH qualifies only because the arbiter
+ * itself opened that door and enforces the VM refusal on its own side, twice
+ * (a wire pre-scan before the mutex, and a check on the exact dispatched name).
+ */
+const TIER1_SUBCOMMAND_PREFLIGHT = Object.freeze(['BATCH']);
+
 // Fee-charging user actions (spec §4.4 "protocol-fee reality"). Membership mirrors
 // the indexer handlers that call createFeesObject, plus the gas-priced VM pair
 // (DEPLOY/EXECUTE). BET was missing for its whole life.
@@ -173,5 +215,6 @@ module.exports = {
     FINDING_CODES,
     TIER2_ERROR_CAPABLE,
     TIER1_DENYLIST,
+    TIER1_SUBCOMMAND_PREFLIGHT,
     FEE_CHARGING_ACTIONS,
 };

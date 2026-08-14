@@ -122,6 +122,36 @@ function nativeTickerFromCoin(coin) {
     return m ? m[1] : null;
 }
 
+/*
+ * Add `commandIndex` to a BATCH sub-command's validator finding.
+ *
+ * The parser already knows which command it is complaining about and says so as
+ * `details.index` (with the raw `command` string beside it). Every OTHER
+ * per-command finding names that same number `commandIndex`, because
+ * CheckContext.addFinding stamps it from the child context checks/batch.js
+ * builds - and these findings do not go through a child context, so they were
+ * the one per-command shape carrying the number under a different key.
+ *
+ * That mattered once Tier 1 started answering a batch PER SUB-COMMAND: the
+ * precedence rule in preflight/index.js reads `commandIndex` to decide whether
+ * the network actually judged the command a finding is about, and an untagged
+ * finding falls back to the whole-batch answer. The fallback is the SAFE
+ * direction (it keeps the error unless every command was accepted), so this is
+ * a sharpening, not a fix for a false pass: without it a local error on a
+ * command the network ACCEPTED stayed an error because some OTHER command in
+ * the batch failed, which is the false-block half of the same problem.
+ *
+ * `index` is kept as well as copied: it is part of the published finding data.
+ * Returns the original object untouched for every non-BATCH finding, so nothing
+ * outside a batch can be affected by this.
+ */
+function tagBatchCommand(parsed, details) {
+    if (!details || parsed.action !== 'BATCH') return details;
+    if (!Number.isInteger(details.index) || typeof details.command !== 'string') return details;
+    if (details.commandIndex !== undefined) return details;
+    return Object.assign({}, details, { commandIndex: details.index });
+}
+
 async function runUniversal(ctx, opts = {}) {
     const { parsed } = ctx;
 
@@ -130,20 +160,21 @@ async function runUniversal(ctx, opts = {}) {
     ctx.markRun(FINDING_CODES.VALIDATOR_SEMANTICS);
     const vFindings = (parsed.validation && parsed.validation.findings) || [];
     for (const f of vFindings) {
+        const details = tagBatchCommand(parsed, f.details);
         if (f.code === 'BATCH_LIMIT_EXCEEDED') {
-            ctx.addFinding(FINDING_CODES.BATCH_LIMIT_EXCEEDED, 'warning', f.message, f.details);
+            ctx.addFinding(FINDING_CODES.BATCH_LIMIT_EXCEEDED, 'warning', f.message, details);
             continue;
         }
         const isDest = f.details && f.details.field === 'DESTINATION';
         const isAmount = f.details && /AMOUNT|QUANTITY|SUPPLY|VALUE/.test(String(f.details.field || ''));
         if (isDest) {
-            ctx.addFinding(FINDING_CODES.DEST_ADDRESS_INVALID, 'error', f.message, f.details);
+            ctx.addFinding(FINDING_CODES.DEST_ADDRESS_INVALID, 'error', f.message, details);
         } else if (isAmount && f.code === 'INVALID_FIELD_VALUE') {
-            ctx.addFinding(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'error', f.message, f.details);
+            ctx.addFinding(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'error', f.message, details);
         } else if (HARD_VALIDATOR_CODES.has(f.code)) {
-            ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'error', f.message, f.details);
+            ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'error', f.message, details);
         } else {
-            ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'warning', f.message, f.details);
+            ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'warning', f.message, details);
         }
     }
 

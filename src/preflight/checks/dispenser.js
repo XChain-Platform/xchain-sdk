@@ -51,6 +51,17 @@ const { resolveDispenserState, resolveGiveRemaining } = require('../resolvers.js
  * (the oracle has an effective price, valued against a validator price) and
  * skips the impossible one, so a Mode B dispenser gets a real verdict instead
  * of a structural refusal. This declaration is what remains the gap.
+ *
+ * A batch narrows the gap without closing it, and the difference matters. When
+ * Mode B DISPENSERs ride inside a BATCH, /preflight now returns `oracleFeesOwed`:
+ * the TOTAL owed per oracle address, summed across the batch's sub-commands
+ * (indexer actions/dispenser.js). Tier 1 surfaces it as DRYRUN_ORACLE_FEES_OWED
+ * info. That is a DISCLOSURE, deliberately not a verdict and deliberately not an
+ * error - it is the number a composer needs to SIZE the outputs, computed by the
+ * arbiter, and it says nothing about whether any output exists. Nothing about
+ * Tier 2 changed: this check still sees an action string and no outputs, so the
+ * declaration below stands exactly as written, and the sum arrives only for a
+ * batch. A lone DISPENSER gets no such disclosure.
  */
 function noteOracleFee(ctx, oracleAddress) {
     if (!oracleAddress) return;
