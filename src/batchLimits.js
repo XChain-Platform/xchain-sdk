@@ -62,9 +62,12 @@
  * exemption (a loosening) both shipped that way already, and a client that
  * switched rule sets on a chain clock would compose one thing and validate
  * another. It has a cost worth stating plainly rather than discovering:
- * BATCH_ISSUANCE_LIMITS is UNARMED on mainnet, so a batch this mirror
- * accepts under a loosened rule (a parent plus children, MINTs of several
- * distinct tokens) is rejected by mainnet until the flag is armed.
+ * BATCH_ISSUANCE_LIMITS was UNARMED on mainnet when this mirror was written,
+ * so a batch it accepts under a loosened rule (a parent plus children, MINTs
+ * of several distinct tokens) was rejected there. That cost EXPIRES at the
+ * mainnet instant 2026-08-16T00:00:00Z (armed 2026-08-14, pre-launch): at and
+ * above it the chain applies the same rule set this mirror always has, and
+ * the divergence closes rather than needing a mirror change.
  * DEPLOY is the one rule where both sides agree: the chain never capped it
  * below the flag, so at most 1 is accepted either way.
  *
@@ -432,12 +435,13 @@ function scanBatch(tail) {
  * This applies only on the BATCHED path, and only once BOTH gates the behaviour
  * depends on are armed: `BATCH_SUBCOMMAND_OUTPUT_CAPTURE_ACTIVATION` (decoder, so a
  * batched COINPAY's payment output reaches the indexer at all - genesis-active on
- * testnet/regtest, DISARMED on mainnet) and `BATCH_ISSUANCE_LIMITS` (indexer, so the
- * per-payee resolution below ever runs - UNARMED on mainnet, sentinel 9999999999). Off
- * either gate a batched COINPAY settles nothing regardless of the output plan (row 21),
- * so on mainnet today this planner's rule has no live consensus consequence; it exists
- * so composers are correct on the day the flags arm rather than discovering this at a
- * failed settlement.
+ * testnet/regtest, mainnet at 2026-08-16T00:00:00Z) and `BATCH_ISSUANCE_LIMITS`
+ * (indexer, so the per-payee resolution below ever runs - mainnet at the SAME instant).
+ * Both were armed together on 2026-08-14 precisely so no window exists where one is
+ * live and the other is not. BELOW that instant a batched COINPAY settles nothing
+ * regardless of the output plan (row 21), so this planner's rule has no live consensus
+ * consequence on mainnet history; at and above it, the rule is load-bearing and a
+ * composer that ignores it loses a settlement.
  *
  * WHAT THIS CANNOT VERIFY FROM STRINGS ALONE: matching is exact string equality
  * between the `payee` / `address` you pass here and the address the FINISHED
