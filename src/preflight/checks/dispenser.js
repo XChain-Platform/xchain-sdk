@@ -216,6 +216,21 @@ async function checkDispense(ctx) {
             { dispenserActionIndex: idx, remaining, giveAmount });
     }
 
+    // Settlement PRICING moved underneath this declaration without moving what
+    // Tier 2 can see. A gated change (BATCH_ISSUANCE_LIMITS, xchain-indexer
+    // src/actions/dispense.js) makes one payment settle a bounded number of fills
+    // instead of buying a full multiplier against every dispenser it reaches: the
+    // handler now keeps a running consumed-value tally and prices each dispenser
+    // against what is LEFT, so a later dispenser behind the same paid address can
+    // now fail where it previously settled. It also records the attributed cost as
+    // the dispense row's GET_AMOUNT rather than the whole payment.
+    //
+    // Neither is checkable here, and not merely inconvenient to check: the tally is
+    // keyed on COIN_AMOUNT and on the SET of open dispensers behind the paid
+    // address, and pre-flight is handed an action string naming one dispenser,
+    // before any transaction (and therefore any payment value) exists. Nothing this
+    // check reads changes either - give-remaining is the GIVE-token side and the
+    // record correction has no client consumer here.
     ctx.addUnverified('DISPENSE_SETTLEMENT_MATCH',
         'exact settlement-output matching is structural and unknowable before the transaction exists');
 }

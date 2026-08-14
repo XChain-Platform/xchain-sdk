@@ -116,6 +116,22 @@ describe('Validator: TICK name validation (ISSUE action)', function () {
         expect(hasErrorCode(errors, 'INVALID_TICK_NAME')).to.be.true;
     });
 
+    // Pins the SDK half of the indexer's `invalid: TICK (caret dot)` rejection
+    // (xchain-indexer src/actions/issue.js, gated on BATCH_ISSUANCE_LIMITS). The
+    // chain's own numeric guard is parseFloat-based, so a caret tail carrying a
+    // '.' reads as a number and used to slip through into a valid ISSUE with a
+    // NULL ticker id. The SDK owes no mirror of that rule because
+    // _validateTickName refuses EVERY caret-led ISSUE TICK, which is strictly
+    // stronger - but "strictly stronger" is only true while these shapes are
+    // refused, so they are asserted rather than argued. See the 2026-08-13 entry
+    // in src/preflight/INDEXER-MAP.md.
+    it('rejects a caret ISSUE TICK whose tail contains a dot, the shape parseFloat lets through', function () {
+        for (const tick of ['^12.5', '^1.0', '^0.1']) {
+            const errors = v.validate('ISSUE', { TICK: tick });
+            expect(hasErrorCode(errors, 'INVALID_TICK_NAME'), 'tick: ' + tick).to.be.true;
+        }
+    });
+
     it('rejects a TICK containing a backslash', function () {
         const errors = v.validate('ISSUE', { TICK: 'BAD\\TOKEN' });
         expect(hasErrorCode(errors, 'INVALID_TICK_NAME')).to.be.true;

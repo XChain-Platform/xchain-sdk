@@ -13,8 +13,9 @@ client check (or confirm no client-visible logic changed), then refresh
 the hash below and re-run `node bin/check-preflight-drift.js`.
 
 Ground-truthed against HEAD 2026-07-20; `dispenser.js` and `dispense.js`
-re-reviewed against HEAD 2026-07-26, and nine handlers re-reviewed
-against HEAD 2026-08-08 (see the review log below). Hashes
+re-reviewed against HEAD 2026-07-26, nine handlers re-reviewed against
+HEAD 2026-08-08, and ALL ELEVEN re-reviewed against indexer HEAD
+`22f0f31` on 2026-08-13 (see the review log below). Hashes
 are of the indexer handler source files, resolved via
 `XCHAIN_INDEXER_PATH` or the sibling `../xchain-indexer` checkout. The
 gate SKIPS (does not fail) when no indexer checkout is present, so
@@ -27,17 +28,17 @@ HEAD hashes.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send.js` | `80248c76b126f2dffcd60e48b1efa29a27a87d9ceb1d424fe9b9ec7a0e70b94d` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `effe81706519b936fc59a6f3313ee54851830f3fcd5e68fb918e5972df53092a` |
-| `checks/mint.js` | `src/actions/mint.js` | `2e2890591651c454ed0bd026475756c6ad4c34df44988b50124d3baaa08a4e2a` |
-| `checks/issue.js` | `src/actions/issue.js` | `46ccf8e8c29f9149d29850cf99a669afc64c2a211030d99c71faaf2269dcb912` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `3ddd5c80c1ff7e09a98530c01f594e70f42270c6345c535f5bdb9c8dd7f552fe` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `2e4030e8e6d2ffa640eac4b4e56b4e039527ee2075694cc8cb765d43ad829a5c` |
-| `checks/trading.js` (ORDER) | `src/actions/order.js` | `5de3d605bfcfe1e4fbc4b0a6a6a59bf50cd8c26c1c44c29958222ac5b2bf6256` |
-| `checks/trading.js` (SWAP) | `src/actions/swap.js` | `8aa0582811749af3ff31ef37ba0793fe6ae061dc401ffb75e9a4291a1863b3cb` |
-| `checks/airdrop.js` | `src/actions/airdrop.js` | `ba4dcca76a1b533233f0a6d6d6613713a3d9d68543ede80624f6f49bb33e3753` |
-| `checks/dividend.js` | `src/actions/dividend.js` | `44bf41e12afcb78717cf6705aedaaa1a3a3940cc34462be1ba5c605b74e72941` |
-| `checks/batch.js` | `src/actions/batch.js` | `9e47833924eece5683a56a1a0093e3f7b61d3fbfe9882a4458bec1486255b5f2` |
+| `checks/send.js` (SEND) | `src/actions/send.js` | `d5181fb4a709abe535eca0388eb9bcdeceef38e4d349976b00efa830a4c67287` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `562a51f60f545e7a659fcec979288c9535cffc51d280fb4fecd76ddf0663684e` |
+| `checks/mint.js` | `src/actions/mint.js` | `87465e6447385dd97b27c52ee8919f27838a0a495e3cdcddac8a413158311c2c` |
+| `checks/issue.js` | `src/actions/issue.js` | `1ba2e78f6300b203bb525085c3f92055e8fc3405108b642401ba97aa855f51ee` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `a30fa1b72a1355c9859353c77ddb0cb1185878e2555261f02fc4471c64fee317` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `edf8623a92f567cd1950e6d3943fe6756407e03e8755e4f840dd61509d9dd53b` |
+| `checks/trading.js` (ORDER) | `src/actions/order.js` | `b8f5b95204e4c0ed23cfc6105f43bb4310e803133673d651db853cd81843bde7` |
+| `checks/trading.js` (SWAP) | `src/actions/swap.js` | `c3cfc0b97a1fff2385898ed778b580cdc4ca4e67ca9e4b85ee82f8253c7f0e8c` |
+| `checks/airdrop.js` | `src/actions/airdrop.js` | `859682d31fa583fc17d02f161f99f37baaf83ee8ae5fe744422d1ab81dd535b4` |
+| `checks/dividend.js` | `src/actions/dividend.js` | `cfe53d5ef3c17bf7c1a25321e77c294a26632f66e92cca19592c8d13524ab4e3` |
+| `checks/batch.js` | `src/actions/batch.js` | `fbf1b73743cd5d4dd0ec161add02dcfc8c4579b4a813771b204100427b4c4c45` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -47,7 +48,123 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
 
+### 2026-08-13 (second pass) - all eleven rows, against indexer HEAD `22f0f31`
+
+The entry below refreshed ONE row and left ten deliberately red, because the
+baseline those ten were pinned at had not been established. This pass
+establishes it and closes them. Every recorded hash was located as a concrete
+BLOB in the sibling checkout's object store (six of the eleven are unreachable
+objects, left behind when that repo's history was rewritten, which is why
+`git log` could not find them and why a commit range alone would have been the
+wrong tool), and each handler was diffed BLOB to HEAD and read end to end.
+Verified against COMMITTED state: every recorded hash below equals the sibling
+checkout's HEAD AND its working tree, with `git -C xchain-indexer status
+--short src/actions/` carrying nothing mapped. `22f0f31` was `origin/master`
+during the review; a local commit landed underneath it while this was being
+written (`7259826`, batched COINPAY quoting) and touches `coinpay.js` only,
+which is not a mapped row, so the pins are unchanged by it.
+
+The dominant cause across the set is `758fc1d` ("style: comment cleanup,
+internal-reference scrub, and changelog tidy"), which stripped internal issue
+ids and section-banner comments from every handler in the repo ahead of the
+public release. It moved eight of these eleven hashes and NOT ONE executable
+line in them. That is worth naming rather than waving at: a scrub that touches
+every mapped file at once is exactly the shape that tempts a blind re-pin, and
+it is also the shape under which a real change rides in unnoticed. Three rows
+did carry real change, and they are separated out below.
+
+- **`send.js` - no client change.** Baseline blob `f84ce594` (`3808773`).
+  Scrub only: banner and narration comments deleted, the PC-29 conditional-handoff
+  box comment reflowed to line comments with its content intact, trailing newline
+  restored. No condition, threshold, precedence or rejection string moved.
+- **`destroy.js` - no client change.** Baseline blob `f144f038` (`db6ce39`,
+  2026-06-20, the oldest pin in the table). Comment deletions only; zero
+  executable lines differ across nearly two months.
+- **`mint.js` - no client change.** Baseline blob `ed5d916e` (the 2026-08-12
+  pin). Scrub only. Specifically, the `UNCAPPED_MAX_SUPPLY_ZERO` block that the
+  2026-08-12 entry changed `checks/mint.js` for is byte-identical here; only its
+  comment lost an issue id, so that entry's verdict stands unrevisited.
+- **`issue.js` - REAL change, no client change owed.** Baseline blob
+  `ace76608`; `fe3bac7` + `b090671` on top of the scrub. Two additions, both
+  gated on `BATCH_ISSUANCE_LIMITS`. (1) A new rejection,
+  `invalid: TICK (caret dot)`: the handler's own caret guard is `isNumeric`,
+  which is parseFloat-based, so `^12.5` read as a number and landed a valid ISSUE
+  with a NULL ticker id. Client-visible, and no mirror is owed because
+  `validator._validateTickName` refuses EVERY `^`-led ISSUE TICK, which is
+  strictly stronger than the caret-dot subset. That argument is the load-bearing
+  one on this row and it was previously only prose, so it is now PINNED by
+  `test/unit/validator.test.js` ("rejects a caret ISSUE TICK whose tail contains
+  a dot"): if the SDK ever narrows to match the chain's rule literally, the claim
+  fails loudly instead of silently. (2) `gatedGetTokenInfo` suppresses interning
+  an unseen tick into `index_tickers` once `error` is already set. The value
+  handed back is unchanged by construction (a not-yet-interned tick reads back as
+  unknown either way), so it is a database side effect with no wire-visible
+  verdict and nothing to mirror.
+- **`dispenser.js` - no client change.** Baseline blob `5e9c791b` (the
+  2026-08-12 pin). `758fc1d` plus `cb3e3cd`, whose hunk here is a comment. The
+  `GIVE_ESCROW`-on-ownership-dispenser rejection and the `MAX_REFILLS` cap that
+  the 2026-07-26 and 2026-08-12 entries mirrored are byte-identical.
+- **`dispense.js` - REAL change, no client change owed.** Baseline blob
+  `b1eef653` (`ef66d9e`, 2026-07-26), so this row had never advanced past the
+  `DISPENSER_ORACLE_PER_TOKEN_PRICE` work the 2026-07-26 entry already reviewed;
+  that verdict (settlement pricing, and the client does not price dispenses)
+  is unchanged. New on top, from `fe3bac7` and `65d57b4` and gated on
+  `BATCH_ISSUANCE_LIMITS`: a running consumed-value tally so one payment settles
+  a bounded number of FILLS instead of buying a full multiplier against every
+  dispenser it reaches, inside a batch and (65d57b4) outside one, where several
+  open dispensers can sit behind a single paid address. It creates reachable
+  rejections on a LATER dispenser in that loop and it rewrites the dispense row's
+  `GET_AMOUNT` to the attributed cost rather than the whole payment. Neither is
+  checkable at Tier 2, and the reason is structural rather than awkward: the
+  tally is keyed on `COIN_AMOUNT` and on the SET of open dispensers behind the
+  paid address, while pre-flight is handed an action string naming one dispenser
+  BEFORE any transaction, and therefore any payment value, exists. It lands
+  inside the standing `DISPENSE_SETTLEMENT_MATCH` unverified, whose rationale
+  comment in `checks/dispenser.js` now names it, the same treatment the
+  2026-08-08 entry gave `DISPENSER_ORACLE_FEE`. The record half has no client
+  consumer either: `resolveGiveRemaining` reads the GIVE-token side, and nothing
+  in `preflight/` reads a dispense `get_amount`.
+- **`order.js` - no client change.** Baseline blob `7637c2b2`. Scrub only,
+  including one comment that traded an internal defect number for the reason it
+  stood for (BigNumber negation, not JS unary minus). No verdict moved.
+- **`swap.js` - no client change.** Baseline blob `c5242908`. Scrub only, plus
+  a restored trailing newline.
+- **`airdrop.js` - no client change.** Baseline blob `77904a45` (the
+  2026-08-12 pin). Scrub only: the Set-backed allow/block membership that the
+  2026-08-10 and 2026-08-12 entries reviewed is byte-identical, its comment
+  merely shortened.
+- **`dividend.js` - no client change.** Baseline blob `6142ac8c` (`ef66d9e`,
+  2026-07-26). Comment deletions and one doubled `// //` marker fixed.
+- **`batch.js` - client check ALREADY MOVED, and driven.** Baseline blob
+  `312a1fef` (`60683a0`), so this row is only three commits stale and all three
+  are client-visible. `581aea1` adds a GATED per-action cap of one DEPLOY per
+  batch (kept in a second table so DEPLOY stays uncapped below the flag, as it
+  always was) and re-reads MINT's existing 1 as one per DISTINCT TOKEN rather
+  than one per batch, keyed on the RESOLVED ticker id. `bdbdc1d` DECLARES the
+  precedence among per-action caps: the error names the action whose first
+  sub-command appears earliest in the command LIST, taken from the list rather
+  than from a tally's key enumeration. All three are already mirrored in
+  `src/batchLimits.js` (`BATCH_GATED_ACTION_LIMITS`, `maxMintsPerDistinctTick`,
+  `limitKeysInListOrder`) by the paired client-parity work, including the two
+  divergences a string-keyed client cannot close (the caret alias, reported as
+  approximate; unresolvable ticks, declared). Not taken on trust:
+  `test/unit/batchLimitsConformance.test.js` drives the REAL arbiter out of the
+  sibling checkout over one shared vector set and compares classification, count,
+  precedence and whole-batch verdict against the mirror, and it is green at this
+  HEAD.
+
+Net: one test added and one rationale comment widened. No client check's LOGIC
+moved in this pass, which is the outcome eight comment-only diffs and three
+gated tightenings should produce - but it is the outcome only because it was
+checked per handler, which is the whole point of the entry.
+
 ### 2026-08-13 - `batch.js` only (BATCH issuance limits), and why the rest stays red
+
+> Superseded by the entry above: the ten rows this entry left deliberately red
+> have since been ground-truthed against indexer HEAD `22f0f31` and refreshed.
+> Its reasoning for leaving them red at the time still stands, and its
+> `batch.js` review remains the record for that row's earlier state.
+
 
 The gate is red across ELEVEN handlers, fleet-wide and for unrelated reasons
 (tracked as XC-1453). This entry refreshes exactly ONE row, `checks/batch.js`,
