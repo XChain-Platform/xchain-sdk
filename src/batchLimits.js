@@ -119,6 +119,34 @@ const mathjs = require('mathjs');
 // Global per-BATCH command cap (indexer batch.js `commandLimit`).
 const BATCH_COMMAND_LIMIT = 250;
 
+// Budget the weighted sum is compared against at/after BATCH_COST_WEIGHTING
+// (indexer batch.js `weightBudget`). Equal to the command cap on purpose: with
+// a default weight of 1 an ordinary batch is decided arithmetically identically
+// to the count rule, including the error string, which stays
+// `invalid: COMMAND (limit)` for a weight overflow too.
+const BATCH_WEIGHT_BUDGET = 250;
+
+// Per-action COST WEIGHTS, byte-equal to the indexer's `commandWeights`. An
+// action absent here weighs the default 1.
+//
+// The two classes are here for different reasons and both are the arbiter's,
+// not ours: AIRDROP and DIVIDEND write a row PER RECIPIENT, and take a FLAT 25
+// rather than `1 + recipients` because the recipient count is not on the wire;
+// DEPLOY, EXECUTE and XEXEC run contract code, and 30 is the smallest round
+// weight keeping a full VM batch under the 250 ordinary-equivalent bound.
+//
+// THE INVARIANT, mirrored from the arbiter: every weight is an integer >= 1.
+// That is what makes the cheap count check a sound pre-filter for the weighted
+// one (count > budget implies weight sum > budget), which is why callers may
+// keep checking the count first and weigh only what survives.
+const BATCH_COMMAND_WEIGHTS = Object.freeze({
+    AIRDROP:  25,
+    DIVIDEND: 25,
+    DEPLOY:   30,
+    EXECUTE:  30,
+    XEXEC:    30,
+});
+
 // Per-ACTION caps, byte-equal to the indexer's UNGATED `actionLimits`
 // (0 = forbidden inside a BATCH). FILE is deliberately ABSENT: its
 // at-most-one rule is a client-side transport fact (one rawData payload per
@@ -210,6 +238,41 @@ function classifyIssueTick(tick) {
  * mutates the array in place. Never throws: an unreadable command falls back
  * to its unclassified name, which is the arbiter's own fallback.
  */
+/*
+ * Cost weight of ONE raw sub-command string (indexer `subCommandWeight`).
+ *
+ * The action is derived exactly as `classifyCommand` derives it, and then
+ * deliberately NOT reclassified: the arbiter weighs off `normalizeSubAction`,
+ * whose only transformation is alias expansion, so a child ISSUE weighs the
+ * same as any other ISSUE even though the per-action cap exempts it. Weighing
+ * a child at 0 here would be the one thing the invariant forbids.
+ *
+ * Never throws, and falls back to 1 for the arbiter's reason: 1 is the
+ * pre-flag behaviour for a sub-command, so an unreadable entry is charged as
+ * an ordinary one rather than being made free.
+ */
+function subCommandWeight(command) {
+    try {
+        const weight = BATCH_COMMAND_WEIGHTS[expandAlias(String(command).split('|')[0])];
+        if (weight === undefined) return 1;
+        return (Number.isInteger(weight) && weight >= 1) ? weight : 1;
+    } catch (e) {
+        return 1;
+    }
+}
+
+/*
+ * Total cost weight of a BATCH's raw sub-command list (indexer `batchWeight`).
+ *
+ * Plain integer arithmetic, matching the arbiter: these are small counts, not
+ * token amounts, so the bc* helpers this module uses for balances do not apply.
+ */
+function batchWeight(commands) {
+    let total = 0;
+    for (const command of commands) total += subCommandWeight(command);
+    return total;
+}
+
 function classifyCommand(command) {
     const action = expandAlias(String(command).split('|')[0]);
     if (action !== 'ISSUE') return action;
@@ -554,6 +617,10 @@ function checkCoinpayOutputPlan(obligations, outputs) {
 
 module.exports = {
     BATCH_COMMAND_LIMIT,
+    BATCH_WEIGHT_BUDGET,
+    BATCH_COMMAND_WEIGHTS,
+    subCommandWeight,
+    batchWeight,
     BATCH_ACTION_LIMITS,
     BATCH_GATED_ACTION_LIMITS,
     BATCH_ACTION_LIMITS_ACTIVE,
