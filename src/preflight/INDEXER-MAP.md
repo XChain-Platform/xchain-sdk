@@ -12,6 +12,18 @@ To resolve a drift-gate failure: re-read the changed handler, update the
 client check (or confirm no client-visible logic changed), then refresh
 the hash below and re-run `node bin/check-preflight-drift.js`.
 
+A drift no longer kills `npm run ci` before the suites load. The chain
+opens with `ci:drift:soft`, which prints the whole finding and returns 0,
+and closes with `ci:drift:verdict`, which re-asserts it and exits 1 after
+a test tally exists. A finding is therefore still fatal to the run, and
+is now reported as a named failure rather than as a dead run: it used to
+exit before mocha started, and the shared pre-push gate reads "no tally,
+no named failure" as THE SUITE NEVER RAN, so three drifts in three weeks
+each blocked every push from this repo behind a banner that could not
+tell a bad commit from a bad venue. The bare
+`node bin/check-preflight-drift.js` is unchanged and still exits 1; that
+is what the CI drift jobs on both repos run.
+
 Ground-truthed against HEAD 2026-07-20; `dispenser.js` and `dispense.js`
 re-reviewed against HEAD 2026-07-26, nine handlers re-reviewed against
 HEAD 2026-08-08, and ALL ELEVEN re-reviewed against indexer HEAD
@@ -26,7 +38,7 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-**Pins taken at indexer commit:** `a4ce1fc`
+**Pins taken at indexer commit:** `9d15127`
 
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
@@ -70,14 +82,14 @@ found by hashing candidate blobs as above.
 | `checks/send.js` (SEND) | `src/actions/send.js` | `d5181fb4a709abe535eca0388eb9bcdeceef38e4d349976b00efa830a4c67287` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `562a51f60f545e7a659fcec979288c9535cffc51d280fb4fecd76ddf0663684e` |
 | `checks/mint.js` | `src/actions/mint.js` | `87465e6447385dd97b27c52ee8919f27838a0a495e3cdcddac8a413158311c2c` |
-| `checks/issue.js` | `src/actions/issue.js` | `1ba2e78f6300b203bb525085c3f92055e8fc3405108b642401ba97aa855f51ee` |
+| `checks/issue.js` | `src/actions/issue.js` | `9287f93d10c013ae4b66cae07005b498019c653c6b11406d37cb603f16cae561` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `2a8772ca85dd371d87aa4f554f9b0696ea185e4d562664648b808cb72f132c4b` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `edf8623a92f567cd1950e6d3943fe6756407e03e8755e4f840dd61509d9dd53b` |
 | `checks/trading.js` (ORDER) | `src/actions/order.js` | `b8f5b95204e4c0ed23cfc6105f43bb4310e803133673d651db853cd81843bde7` |
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `c3cfc0b97a1fff2385898ed778b580cdc4ca4e67ca9e4b85ee82f8253c7f0e8c` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `859682d31fa583fc17d02f161f99f37baaf83ee8ae5fe744422d1ab81dd535b4` |
 | `checks/dividend.js` | `src/actions/dividend.js` | `cfe53d5ef3c17bf7c1a25321e77c294a26632f66e92cca19592c8d13524ab4e3` |
-| `checks/batch.js` | `src/actions/batch.js` | `63822e9c1ad62d6bdcb86f8340c8b10f6ab9b586c84f8a28ecdc8088c74d6f80` |
+| `checks/batch.js` | `src/actions/batch.js` | `976e8c50be889274666932d2037c40679305f5b3c0f787db1d7428d8f645d4a2` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -86,6 +98,55 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-08-15 (fifth pass) - `batch.js` and `issue.js`, against indexer HEAD `9d15127`
+
+Two rows, and they end differently: one BUILDS the mirror the fourth pass
+deferred, the other records a reviewed no-op. The sibling `status --short
+src/actions/` is empty, so both recorded hashes are committed HEAD content.
+
+**`batch.js` - the deferred mirror is now BUILT (row 11).** The fourth pass
+deferred it on one stated condition: the weight table was mid-construction, with
+DEPLOY's weight and the ratified EXECUTE/XEXEC weight still unwired in the
+arbiter. Both landed (DEPLOY, EXECUTE and XEXEC at 30, budget 250), so the
+condition is met and the mirror follows where that entry said it would:
+
+- `batchLimits.js` gains `BATCH_WEIGHT_BUDGET`, `BATCH_COMMAND_WEIGHTS`,
+  `subCommandWeight` and `batchWeight` as the single source, byte-equal to the
+  arbiter's `weightBudget` and `commandWeights`.
+- `decoder/parse.js` and `preflight/checks/batch.js` weigh a batch that already
+  fits the count, in that order, which is the arbiter's own ordering and is
+  sound because every weight is an integer >= 1.
+- The weight overflow sits in the SAME else-chain as the count cap, so it
+  suppresses per-action findings exactly as the on-chain budget check does by
+  rejecting the whole batch before any per-action count is taken.
+
+**The posture question that entry raised is answered: WARNING, not refusal.**
+`batchBuilder.js` and `validator.js` are deliberately NOT given a weight
+refusal. `BATCH_COST_WEIGHTING` is live on testnet and regtest from genesis and
+UNARMED on mainnet, and a client has no chain height to tell them apart, so a
+refusal would false-block legal mainnet work - the direction this module's
+doctrine forbids. Pre-flight's existing warning shape is followed instead, and a
+test asserts the severity so a later tightening cannot pass quietly.
+
+**`issue.js` - reviewed, NO client move owed.** The change is
+`EMISSION_ISSUANCE_LIMITS`: a per-transaction `ISSUANCE_LIMIT_LEDGER` counting
+TOP-LEVEL issuances against a limit of 1. It is initialized in `actions.js` for
+every action rather than only the VM paths, so reachability had to be checked
+rather than assumed, and the conclusion is that its client-composable surface is
+already mirrored:
+
+- A wire transaction carries one ISSUE, which is one top-level issuance.
+- A BATCH carrying two top-level ISSUEs is already refused by the per-action
+  `ISSUE: 1` cap this module has always mirrored, so the new rule is redundant
+  there rather than new.
+- Its actual reach is VM-EMITTED issuances (`execute.js`, `deploy.js` and
+  `xexec.js` thread the same ledger object, so nested executions share one
+  tally), which a client cannot compose. XEXEC is not client-composable at all,
+  which is the neighbouring finding this module already documents.
+- The arbiter's `isTopLevelIssuance` treats a caret TICK as top-level even when
+  it contains a dot. That is the same rule this module already states in its
+  header and pins by conformance vector, so the classification agrees.
 
 ### 2026-08-14 (fourth pass) - `batch.js`, against indexer HEAD `a4ce1fc`
 

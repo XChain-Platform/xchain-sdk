@@ -32,7 +32,8 @@ const { FINDING_CODES } = require('../constants.js');
 const numeric = require('../numeric.js');
 const coins = require('../../coins');
 const { GAS_TICK } = require('../../protocol/constants.js');
-const { BATCH_COMMAND_LIMIT, CHILD_ISSUE_KEY, classifyIssueTick } = require('../../batchLimits.js');
+const { BATCH_COMMAND_LIMIT, BATCH_WEIGHT_BUDGET, batchWeight, CHILD_ISSUE_KEY, classifyIssueTick }
+    = require('../../batchLimits.js');
 
 /*
  * The gas schedule this chain prices an issuance from
@@ -165,7 +166,14 @@ function projectDeltas(cmd, source, opts) {
 }
 
 /*
- * Global per-BATCH command cap.
+ * Global per-BATCH command cap, and the cost-weight budget that supersedes it
+ * at/after BATCH_COST_WEIGHTING.
+ *
+ * Both reach the same on-chain rejection and both are reported the same way,
+ * for the same reason: ten AIRDROPs weigh 250 and fit, eleven weigh 275 and the
+ * whole batch rejects, while the command count is still nowhere near 250. A
+ * client composing fan-out or VM batches can now be refused on weight alone,
+ * which counting commands cannot see.
  *
  * WARNING, not an error, and deliberately so: the cap arrives with the
  * BATCH_ISSUANCE_LIMITS flag-day, pre-flight has no chain height or flag state,
@@ -180,14 +188,33 @@ function checkCommandCap(ctx, commands) {
     const count = ctx.parsed.params && ctx.parsed.params.COMMAND !== undefined
         ? String(ctx.parsed.params.COMMAND).split(';').length
         : commands.length;
-    if (count <= BATCH_COMMAND_LIMIT) return;
+    // Weighed only when the count fits, the arbiter's ordering: every weight is
+    // an integer >= 1, so a batch that fails the count would fail the budget too
+    // and there is nothing to learn by weighing it.
+    const raw = ctx.parsed.params && ctx.parsed.params.COMMAND !== undefined
+        ? String(ctx.parsed.params.COMMAND).split(';')
+        : commands;
+    const weight = count > BATCH_COMMAND_LIMIT ? null : batchWeight(raw);
+    if (count <= BATCH_COMMAND_LIMIT && weight <= BATCH_WEIGHT_BUDGET) return;
     ctx.markRun(FINDING_CODES.BATCH_LIMIT_EXCEEDED);
     const already = ctx.findings.some(f => f.code === FINDING_CODES.BATCH_LIMIT_EXCEEDED
         && f.data && f.data.action === 'COMMAND');
     if (already) return;
+    // The weighted case says so in its own words. Both are the same on-chain
+    // rejection (`invalid: COMMAND (limit)`), but a caller told "250 commands"
+    // when it composed nine would have no idea what to change; the number that
+    // moved is the weight, so that is the number reported.
+    if (count > BATCH_COMMAND_LIMIT) {
+        ctx.addFinding(FINDING_CODES.BATCH_LIMIT_EXCEEDED, 'warning',
+            `This batch carries ${count} commands; the chain rejects the whole batch above ${BATCH_COMMAND_LIMIT}.`,
+            { action: 'COMMAND', limit: BATCH_COMMAND_LIMIT, count });
+        return;
+    }
     ctx.addFinding(FINDING_CODES.BATCH_LIMIT_EXCEEDED, 'warning',
-        `This batch carries ${count} commands; the chain rejects the whole batch above ${BATCH_COMMAND_LIMIT}.`,
-        { action: 'COMMAND', limit: BATCH_COMMAND_LIMIT, count });
+        `This batch's ${count} commands weigh ${weight}; the chain rejects the whole batch above `
+        + `${BATCH_WEIGHT_BUDGET} once cost weighting is armed (it is live on testnet and regtest, `
+        + `unarmed on mainnet).`,
+        { action: 'COMMAND', limit: BATCH_WEIGHT_BUDGET, count, weight });
 }
 
 /*

@@ -80,6 +80,21 @@ describe('pre-flight Tier 1 classification', function () {
         expect(called).to.equal(false);
     });
 
+    it('XEXEC short-circuits on the NAME, from a hand-built parsed action', async function () {
+        // XC-1475: the denylist entry for XEXEC is unreachable through decoder.parse
+        // (XEXEC is arbiter-emitted, has no wire format), so the only way to drive the
+        // guard is to hand runTier1 the parsed shape directly. That is exactly the
+        // internal-caller case the entry exists for: the short-circuit keys off the
+        // action NAME, not off how the action got here, so a parsed XEXEC arriving by
+        // any future route still never touches the unauthenticated endpoint.
+        let called = false;
+        const parsed = { action: 'XEXEC', version: 0, fields: {} };
+        const out = await runTier1({ sdk: { explorer: { getFeeQuote: async () => { called = true; return {}; } } }, parsed, source: 's', timeoutMs: 1000 });
+        expect(out.kind).to.equal('no-verdict');
+        expect(out.reason).to.equal('denylisted');
+        expect(called, 'no round trip, no mutex acquisition').to.equal(false);
+    });
+
     it('busy/retryable responses are unavailable', async function () {
         const out = await tier1For('SEND|0|JDOG|1|addr', { busy: true });
         expect(out.kind).to.equal('unavailable');

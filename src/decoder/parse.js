@@ -62,6 +62,8 @@ const {
     BATCH_ACTION_LIMITS_ACTIVE,
     BATCH_GATED_ACTION_LIMITS,
     BATCH_COMMAND_LIMIT,
+    BATCH_WEIGHT_BUDGET,
+    batchWeight,
     classifyCommand,
     limitKeysInListOrder,
     commandTick,
@@ -394,11 +396,40 @@ function parseBatch(rawAction, version, segments, doValidate) {
     // batch before any per-action count is taken, so emitting a per-action
     // finding alongside it would describe a rule the chain never reached.
     // Empty elements count (a trailing ';' is a command).
+    // Weighed only when the count already fits, which is the arbiter's own
+    // ordering: the count check is a sound pre-filter because every weight is an
+    // integer >= 1, so an oversized batch is refused without weighing anything.
+    const weight = entries.length > BATCH_COMMAND_LIMIT ? null : batchWeight(entries);
     if (entries.length > BATCH_COMMAND_LIMIT) {
         extraFindings.push({
             code: 'BATCH_LIMIT_EXCEEDED',
             message: 'BATCH allows at most ' + BATCH_COMMAND_LIMIT + ' commands; got ' + entries.length,
             details: { action: 'COMMAND', limit: BATCH_COMMAND_LIMIT, count: entries.length },
+        });
+    } else if (weight > BATCH_WEIGHT_BUDGET) {
+        // BATCH_COST_WEIGHTING: the same rejection, reached by weight instead of
+        // count, and it sits in the SAME else-chain for the reason the comment
+        // above gives. On-chain the budget check runs before any per-action
+        // count is taken and rejects the whole batch with the same
+        // `invalid: COMMAND (limit)`, so a per-action finding alongside it would
+        // again describe a rule the chain never reached.
+        //
+        // The count check stays first and is a sound pre-filter because every
+        // weight is an integer >= 1, so this only ever weighs a batch that
+        // already fits the count.
+        //
+        // FLAG-GATED, unlike the count cap above: this rule is live on testnet
+        // and regtest from genesis and UNARMED on mainnet, and pre-flight has no
+        // chain height to tell them apart. It is a finding rather than a
+        // refusal for exactly that reason - see `checkCommandCap` in
+        // preflight/checks/batch.js, which carries the same posture, and the
+        // module doctrine it cites: the mirror may accept a batch the chain
+        // rejects, never the reverse.
+        extraFindings.push({
+            code: 'BATCH_LIMIT_EXCEEDED',
+            message: 'BATCH commands weigh ' + weight + '; the chain rejects the whole batch above '
+                + BATCH_WEIGHT_BUDGET + ' once cost weighting is armed',
+            details: { action: 'COMMAND', limit: BATCH_WEIGHT_BUDGET, count: entries.length, weight },
         });
     } else {
         // D7: MINT's cap is per DISTINCT token, so what the cap is compared

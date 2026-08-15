@@ -33,6 +33,11 @@
  *                            obligation)
  *   3. denylisted VM actions (DEPLOY/EXECUTE/XEXEC; the
  *                            /preflight path marks these denied:true).
+ *                            XEXEC is defence-in-depth only: it is
+ *                            arbiter-emitted, has no wire format, and so
+ *                            never arrives here from decoder.parse. See the
+ *                            TIER1_DENYLIST comment in constants.js for why
+ *                            the unreachable entry stays (XC-1475).
  *                            BATCH is the ONE denylisted action /preflight now
  *                            answers, per sub-command, so it is sent to the
  *                            endpoint (TIER1_SUBCOMMAND_PREFLIGHT) - and the
