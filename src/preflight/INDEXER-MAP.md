@@ -12,6 +12,18 @@ To resolve a drift-gate failure: re-read the changed handler, update the
 client check (or confirm no client-visible logic changed), then refresh
 the hash below and re-run `node bin/check-preflight-drift.js`.
 
+A drift no longer kills `npm run ci` before the suites load. The chain
+opens with `ci:drift:soft`, which prints the whole finding and returns 0,
+and closes with `ci:drift:verdict`, which re-asserts it and exits 1 after
+a test tally exists. A finding is therefore still fatal to the run, and
+is now reported as a named failure rather than as a dead run: it used to
+exit before mocha started, and the shared pre-push gate reads "no tally,
+no named failure" as THE SUITE NEVER RAN, so three drifts in three weeks
+each blocked every push from this repo behind a banner that could not
+tell a bad commit from a bad venue. The bare
+`node bin/check-preflight-drift.js` is unchanged and still exits 1; that
+is what the CI drift jobs on both repos run.
+
 Ground-truthed against HEAD 2026-07-20; `dispenser.js` and `dispense.js`
 re-reviewed against HEAD 2026-07-26, nine handlers re-reviewed against
 HEAD 2026-08-08, and ALL ELEVEN re-reviewed against indexer HEAD

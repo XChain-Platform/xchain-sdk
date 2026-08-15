@@ -18,6 +18,15 @@
  *
  * Exit 0 = in sync (or skipped); exit 1 = drift.
  *
+ * FAIL-SOFT INSIDE `npm run ci` (XC-1480). This gate ran as the first link of
+ * the ci chain and exited 1, which killed the run before mocha loaded: no test
+ * tally, no named failing test, so the shared pre-push gate classified it as
+ * THE SUITE NEVER RAN and could not tell a bad commit from a bad venue. Three
+ * drifts in three weeks each bricked every sdk push that way. The finding is
+ * still fatal to the run, just no longer fatal to the RUN'S REPORTING: --soft
+ * reports and returns 0 at the head of the chain, --verdict re-asserts the
+ * same evaluation as the chain's last link, after the tally exists. See main().
+ *
  ********************************************************************/
 
 'use strict';
@@ -26,6 +35,24 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { execFileSync } = require('child_process');
+
+/* Output sink, so the gate can be run twice in one `npm run ci` without printing its
+ * report twice.
+ *
+ * The checks below write their findings as they go, which is right for the run that a
+ * reviewer reads. The closing --verdict run has the opposite need: it only re-asserts a
+ * verdict already printed, so it evaluates with the sink muted and prints one line. Every
+ * check writes through say()/warn() rather than console.* for that reason; a console call
+ * added later would leak past the mute and duplicate the report.
+ */
+const CONSOLE_SINK = {
+    log: (...a) => console.log(...a),
+    error: (...a) => console.error(...a),
+};
+const MUTED_SINK = { log: () => {}, error: () => {} };
+let OUT = CONSOLE_SINK;
+function say(...a) { OUT.log(...a); }
+function warn(...a) { OUT.error(...a); }
 
 function resolveIndexerRoot() {
     const candidates = [
@@ -154,7 +181,7 @@ function deriveFeeChargingActions(indexerRoot) {
 function checkFeeQuoteSeam(indexerRoot) {
     const actionsPath = path.join(indexerRoot, 'src', 'actions.js');
     if (!fs.existsSync(actionsPath)) {
-        console.error('drift-gate: xchain-indexer/src/actions.js not found; it defines the fee-quote lists this gate pins.');
+        warn('drift-gate: xchain-indexer/src/actions.js not found; it defines the fee-quote lists this gate pins.');
         return 1;
     }
     const indexerSrc = fs.readFileSync(actionsPath, 'utf8');
@@ -172,13 +199,13 @@ function checkFeeQuoteSeam(indexerRoot) {
     // call-site walk below, the direction the BET omission needed.
     const contradictory = feeCharging.filter((a) => exempt.includes(a));
     if (contradictory.length) {
-        console.error('drift-gate: FEE_CHARGING_ACTIONS claims a protocol fee for indexer-EXEMPT action(s): '
+        warn('drift-gate: FEE_CHARGING_ACTIONS claims a protocol fee for indexer-EXEMPT action(s): '
             + contradictory.join(', ') + '\n'
             + '  The NATIVE_FEE_FORFEIT warning would be shown for an action that charges nothing.');
         failed = 1;
     }
     if (denylist.join(',') !== tier1.join(',')) {
-        console.error('drift-gate: TIER1_DENYLIST no longer mirrors the indexer FEE_QUOTE_DENYLIST.\n'
+        warn('drift-gate: TIER1_DENYLIST no longer mirrors the indexer FEE_QUOTE_DENYLIST.\n'
             + `  indexer FEE_QUOTE_DENYLIST: ${denylist.join(', ')}\n`
             + `  sdk     TIER1_DENYLIST:     ${tier1.join(', ')}\n`
             + '  Tier 1 would start dry-running an action the indexer refuses to quote, or stop\n'
@@ -190,7 +217,7 @@ function checkFeeQuoteSeam(indexerRoot) {
     // reachability argument holds only while STATIC stays inside the denylist.
     const escaped = staticSet.filter((a) => !tier1.includes(a));
     if (escaped.length) {
-        console.error('drift-gate: FEE_QUOTE_STATIC action(s) outside TIER1_DENYLIST: ' + escaped.join(', ') + '\n'
+        warn('drift-gate: FEE_QUOTE_STATIC action(s) outside TIER1_DENYLIST: ' + escaped.join(', ') + '\n'
             + '  These now reach runTier1\'s endpoint call, whose no-verdict branch returns without\n'
             + '  attaching the quote, so the gas-schedule fee would be silently dropped.');
         failed = 1;
@@ -199,18 +226,18 @@ function checkFeeQuoteSeam(indexerRoot) {
     const unlisted = derived.filter((a) => !feeCharging.includes(a));
     const orphaned = feeCharging.filter((a) => !derived.includes(a));
     if (unlisted.length || orphaned.length) {
-        console.error('drift-gate: FEE_CHARGING_ACTIONS no longer matches the indexer handlers that charge a fee.');
+        warn('drift-gate: FEE_CHARGING_ACTIONS no longer matches the indexer handlers that charge a fee.');
         if (unlisted.length)
-            console.error('  charges a protocol fee, missing from the SDK list: ' + unlisted.join(', ') + '\n'
+            warn('  charges a protocol fee, missing from the SDK list: ' + unlisted.join(', ') + '\n'
                 + '    The NATIVE_FEE_FORFEIT disclosure would be withheld for it, exactly as it was for BET.');
         if (orphaned.length)
-            console.error('  in the SDK list with no indexer caller: ' + orphaned.join(', ') + '\n'
+            warn('  in the SDK list with no indexer caller: ' + orphaned.join(', ') + '\n'
                 + '    Either the handler stopped charging, or it was renamed and the basename no longer\n'
                 + '    matches its action name; reconcile src/preflight/constants.js against the handler.');
         failed = 1;
     }
     if (!failed) {
-        console.log(`drift-gate: fee-quote seam in sync (denylist ${tier1.length} action(s), `
+        say(`drift-gate: fee-quote seam in sync (denylist ${tier1.length} action(s), `
             + `${staticSet.length} static-quoted, all denylisted; ${feeCharging.length} fee-charging, `
             + 'none indexer-exempt, all matching the indexer call sites).');
     }
@@ -244,7 +271,7 @@ function parseIntLiteral(text, re, what, where) {
 function checkConfigConstants(indexerRoot) {
     const configPath = path.join(indexerRoot, 'src', 'config.js');
     if (!fs.existsSync(configPath)) {
-        console.error('drift-gate: xchain-indexer/src/config.js not found; it defines the caps this gate pins.');
+        warn('drift-gate: xchain-indexer/src/config.js not found; it defines the caps this gate pins.');
         return 1;
     }
     const configSrc = fs.readFileSync(configPath, 'utf8');
@@ -259,7 +286,7 @@ function checkConfigConstants(indexerRoot) {
             new RegExp('const\\s+' + name + '\\s*=\\s*(\\d+)', 'g'),
             `const ${name} declaration`, 'src/preflight/constants.js');
         if (indexerValue !== sdkValue) {
-            console.error(`drift-gate: ${name} differs between xchain-indexer and this SDK:\n`
+            warn(`drift-gate: ${name} differs between xchain-indexer and this SDK:\n`
                 + `  indexer src/config.js: ${indexerValue}\n`
                 + `  sdk     src/preflight/constants.js: ${sdkValue}\n`
                 + `  ${why}, so it would state a cap the network does not enforce.`);
@@ -267,7 +294,7 @@ function checkConfigConstants(indexerRoot) {
         }
     }
     if (!failed)
-        console.log(`drift-gate: indexer config cap(s) in sync (${CONFIG_CAPS.map((c) => c.name).join(', ')}).`);
+        say(`drift-gate: indexer config cap(s) in sync (${CONFIG_CAPS.map((c) => c.name).join(', ')}).`);
     return failed;
 }
 
@@ -302,7 +329,7 @@ function checkGasSchedules(indexerRoot) {
             a = loadGasSchedule(indexerPath);
             b = loadGasSchedule(sdkPath);
         } catch (e) {
-            console.error((e && e.message ? e.message : String(e))
+            warn((e && e.message ? e.message : String(e))
                 + `\n  ${coin} gas schedules could not be compared; fix the read rather than skipping the coin.`);
             failed = 1;
             continue;
@@ -310,34 +337,43 @@ function checkGasSchedules(indexerRoot) {
         const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].sort();
         const diffs = keys.filter((k) => String(a[k]) !== String(b[k]));
         if (diffs.length) {
-            console.error(`drift-gate: ${coin} GAS_SCHEDULE differs between xchain-indexer and this SDK:`);
+            warn(`drift-gate: ${coin} GAS_SCHEDULE differs between xchain-indexer and this SDK:`);
             for (const k of diffs)
-                console.error(`  ${k}: indexer ${a[k] === undefined ? '(absent)' : a[k]} vs sdk ${b[k] === undefined ? '(absent)' : b[k]}`);
-            console.error('  The pre-flight would quote a fee the indexer does not charge (or vice versa).');
+                warn(`  ${k}: indexer ${a[k] === undefined ? '(absent)' : a[k]} vs sdk ${b[k] === undefined ? '(absent)' : b[k]}`);
+            warn('  The pre-flight would quote a fee the indexer does not charge (or vice versa).');
             failed = 1;
         }
     }
     if (!failed)
-        console.log(`drift-gate: GAS_SCHEDULE in sync across ${GAS_SCHEDULE_COINS.join('/')}.`);
+        say(`drift-gate: GAS_SCHEDULE in sync across ${GAS_SCHEDULE_COINS.join('/')}.`);
     return failed;
 }
 
-function main() {
+/* Run every check and RETURN the verdict; never exit.
+ *
+ * Kept exit-free so the same evaluation can back three callers: the strict CLI run, the
+ * fail-soft run at the head of `npm run ci`, and the muted --verdict run that closes it.
+ * The gate used to be the process itself, which is why a drift killed `npm run ci` before
+ * mocha loaded and the pre-push gate reported NEVER RAN instead of a named failure.
+ *
+ * Returns 0 for in-sync (or skipped, when there is no sibling checkout), 1 for a finding.
+ */
+function evaluate() {
     const mapPath = path.join(__dirname, '..', 'src', 'preflight', 'INDEXER-MAP.md');
     if (!fs.existsSync(mapPath)) {
-        console.error('drift-gate: INDEXER-MAP.md not found');
-        process.exit(1);
+        warn('drift-gate: INDEXER-MAP.md not found');
+        return 1;
     }
     const root = resolveIndexerRoot();
     if (!root) {
-        console.log('drift-gate: no xchain-indexer checkout; skipping (sibling CI enforces).');
-        process.exit(0);
+        say('drift-gate: no xchain-indexer checkout; skipping (sibling CI enforces).');
+        return 0;
     }
 
     const rows = parseMap(mapPath);
     if (rows.length === 0) {
-        console.error('drift-gate: no mapping rows parsed from INDEXER-MAP.md');
-        process.exit(1);
+        warn('drift-gate: no mapping rows parsed from INDEXER-MAP.md');
+        return 1;
     }
 
     const drift = [];
@@ -355,30 +391,30 @@ function main() {
     let failed = 0;
 
     if (missing.length) {
-        console.error('drift-gate: mapped handler(s) not found in the checkout:\n  ' + missing.join('\n  '));
+        warn('drift-gate: mapped handler(s) not found in the checkout:\n  ' + missing.join('\n  '));
         failed = 1;
     }
     if (drift.length) {
-        console.error('drift-gate: indexer validity logic changed without a paired pre-flight review.\n' +
+        warn('drift-gate: indexer validity logic changed without a paired pre-flight review.\n' +
             'Re-read each handler, update the matching checks/ module (or confirm no client-visible\n' +
             'change), then refresh the hash in src/preflight/INDEXER-MAP.md:\n');
-        for (const d of drift) console.error(`  ${d.handler}\n    was ${d.expected}\n    now ${d.actual}`);
+        for (const d of drift) warn(`  ${d.handler}\n    was ${d.expected}\n    now ${d.actual}`);
         // Now that `npm run ci` runs this locally, the first suspect for a LOCAL
         // red is the sibling's uncommitted work rather than a real handler change: this
         // hashes the WORKING TREE, and two of the four handlers in the gate's first firing
         // were nothing else. CI checks out HEAD and never sees it.
         const anchor = parseAnchor(mapPath);
         if (!anchor) {
-            console.error('\nThe map records no anchor commit, so there is no baseline to diff FROM.\n'
+            warn('\nThe map records no anchor commit, so there is no baseline to diff FROM.\n'
                 + 'Add a "Pins taken at indexer commit" line to src/preflight/INDEXER-MAP.md.');
         } else if (anchorIsReachable(root, anchor)) {
-            console.error(`\nThe pins were taken at indexer commit ${anchor}, which is still reachable.\n`
+            warn(`\nThe pins were taken at indexer commit ${anchor}, which is still reachable.\n`
                 + 'Review each drifted handler with:\n'
                 + `  git -C ${root} diff ${anchor}..HEAD -- <handler path above>`);
         } else {
             // The case that cost a reviewer a long detour. Say it plainly rather than
             // letting them build a range on a commit that cannot anchor one.
-            console.error(`\nWARNING: the anchor commit ${anchor} is NOT reachable from the indexer HEAD.\n`
+            warn(`\nWARNING: the anchor commit ${anchor} is NOT reachable from the indexer HEAD.\n`
                 + 'That normally means the indexer history was rewritten and the pinned state was\n'
                 + 'orphaned. A commit range from it is either empty or wrong, so do NOT review that\n'
                 + 'way and do NOT re-pin on it. Recover the pinned content as a blob instead:\n'
@@ -388,7 +424,7 @@ function main() {
                 + '        && echo "$o"; done\n'
                 + 'then diff that blob against the current handler, and re-anchor the map to the new HEAD.');
         }
-        console.error('\nRunning locally? Confirm against COMMITTED state first - this hashes the sibling\n'
+        warn('\nRunning locally? Confirm against COMMITTED state first - this hashes the sibling\n'
             + 'working tree, so an uncommitted edit over there reports as drift:\n'
             + '  git -C ../xchain-indexer status --short src/actions/');
         failed = 1;
@@ -399,30 +435,84 @@ function main() {
     try {
         if (checkFeeQuoteSeam(root)) failed = 1;
     } catch (e) {
-        console.error(e && e.message ? e.message : String(e));
+        warn(e && e.message ? e.message : String(e));
         failed = 1;
     }
     try {
         if (checkConfigConstants(root)) failed = 1;
     } catch (e) {
-        console.error(e && e.message ? e.message : String(e));
+        warn(e && e.message ? e.message : String(e));
         failed = 1;
     }
     try {
         if (checkGasSchedules(root)) failed = 1;
     } catch (e) {
-        console.error(e && e.message ? e.message : String(e));
+        warn(e && e.message ? e.message : String(e));
         failed = 1;
     }
 
-    if (failed) process.exit(1);
+    if (failed) return 1;
 
-    console.log(`drift-gate: ${rows.length} mapped handler(s) in sync.`);
-    process.exit(0);
+    say(`drift-gate: ${rows.length} mapped handler(s) in sync.`);
+    return 0;
+}
+
+/* The three run modes, and why the soft one is not a waiver.
+ *
+ * strict (no flag)  evaluate, print, exit 1 on a finding. What CI's own drift job and any
+ *                   hand run get, and the mode the indexer-side gate runs.
+ * --soft            evaluate, print the SAME report, exit 0 regardless. Used at the head of
+ *                   `npm run ci` so a drift no longer kills the run before mocha loads. The
+ *                   finding is not forgiven: the run ends with --verdict, which fails it.
+ * --verdict         re-evaluate with the sink muted and exit 1 on a finding, printing one
+ *                   line that points back at the report the soft run already printed. Used
+ *                   as the LAST link of `npm run ci` so the failure lands after a tally.
+ *
+ * The pairing is what matters. `npm run ci` must open with --soft and close with --verdict:
+ * open with strict and a drift is fatal at load again; drop the close and a drift ships
+ * green. test/unit/preflight/driftGateModes.test.js asserts both halves of that wiring.
+ */
+function main(argv, evaluateFn) {
+    const args = argv || process.argv.slice(2);
+    // Injectable only so the modes can be tested against BOTH verdicts. A clean
+    // evaluation cannot be synthesised from a fixture (the pins are real handler
+    // bytes), and reading it off the live sibling would make the test pass or fail
+    // on whatever a second coder has in that checkout today.
+    const run = evaluateFn || evaluate;
+    const soft = args.includes('--soft');
+    const verdict = args.includes('--verdict');
+
+    if (verdict) {
+        OUT = MUTED_SINK;
+        let failed;
+        try {
+            failed = run();
+        } finally {
+            OUT = CONSOLE_SINK;
+        }
+        if (failed) {
+            warn('drift-gate: FAILED. The finding is reported in full at the top of this run '
+                + '(`npm run ci:drift` re-prints it).\n'
+                + '  The suites above ran and their tally stands; this gate is a separate finding, '
+                + 'not a suite failure.');
+        } else {
+            say('drift-gate: clean.');
+        }
+        process.exit(failed ? 1 : 0);
+    }
+
+    const failed = run();
+    if (failed && soft) {
+        warn('\ndrift-gate: reported, NOT fatal here. `npm run ci` continues so the suites still\n'
+            + 'produce a tally, and the gate re-asserts this finding as the last step of the run\n'
+            + '(`npm run ci:drift:verdict`, exit 1). Nothing above is waived.');
+        process.exit(0);
+    }
+    process.exit(failed ? 1 : 0);
 }
 
 if (require.main === module) main();
 module.exports = {
     resolveIndexerRoot, parseMap, parseStringSet, deriveFeeChargingActions,
-    checkFeeQuoteSeam, checkConfigConstants, checkGasSchedules,
+    checkFeeQuoteSeam, checkConfigConstants, checkGasSchedules, evaluate, main,
 };
