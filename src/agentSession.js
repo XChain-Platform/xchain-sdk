@@ -49,7 +49,7 @@ const { SDKPolicyError } = require('./errors.js');
 // The pure policy verdict is shared with the co-signer daemon so both
 // enforcement points run identical logic. AgentSession adds the throw +
 // observer + file-backed window store around it.
-const { evaluatePolicy, addDecimal } = require('./cosigner/policyEvaluator.js');
+const { evaluatePolicy, addDecimal, UNRESOLVED_TICK_BUCKET } = require('./cosigner/policyEvaluator.js');
 
 class AgentSession extends WalletSession {
 
@@ -189,12 +189,30 @@ class AgentSession extends WalletSession {
         return usage;
     }
 
+    // Mirrors windowStore.snapshot(). The two stores feed the SAME evaluator, so a
+    // divergence here is a policy hole only on the client side, where nothing
+    // validates the tick charset (validateDecodedParams runs on the daemon decode
+    // path alone).
+    //
+    // G1: null prototype. A caller-supplied tick of 'constructor'/'toString'/
+    // 'valueOf' would otherwise read back an inherited FUNCTION, and
+    // addDecimal(fn, amount) throws on every later evaluation until the entry ages
+    // out; a tick of '__proto__' would make the write a silent prototype-set, so
+    // that spend never counts against its cap.
+    //
+    // G8: an entry whose tick never resolved still accumulates, under the reserved
+    // bucket the evaluator reads for exactly that case (COLLECT v0, UNSTAKE v0, any
+    // future amount-without-TICK shape). Skipping them made a wildcard window cap
+    // read a used total of '0' forever, binding each transaction independently.
     _windowUsage() {
         const usage = this._pruned();
-        const perTick = {};
-        for (const e of usage.entries)
-            if (e.tick !== undefined && e.amount !== undefined)
-                perTick[e.tick] = addDecimal(perTick[e.tick] || '0', e.amount);
+        const perTick = Object.create(null);
+        for (const e of usage.entries) {
+            if (e.amount === undefined) continue;
+            const key = e.tick === undefined || e.tick === null
+                ? UNRESOLVED_TICK_BUCKET : String(e.tick);
+            perTick[key] = addDecimal(perTick[key] || '0', e.amount);
+        }
         return { count: usage.entries.length, perTick, hours: this.policy.maxPerWindow ? this.policy.maxPerWindow.hours : null };
     }
 

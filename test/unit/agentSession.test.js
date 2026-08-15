@@ -29,6 +29,7 @@ const { expect } = require('chai');
 const WalletSession  = require('../../src/walletSession.js');
 const AgentSession   = require('../../src/agentSession.js');
 const { SDKPolicyError } = require('../../src/errors.js');
+const { UNRESOLVED_TICK_BUCKET } = require('../../src/cosigner/policyEvaluator.js');
 
 // Fake just enough of XChainSDK for the WalletSession constructor.
 const fakeSdk = {
@@ -236,6 +237,41 @@ describe('AgentSession (policy-bounded wallet)', () => {
             expect(res.policy.windowUsage.perTick.TOK).to.equal('10');
             expect(res.policy.windowUsage.count).to.equal(1);
         } finally { clock.restore(); }
+    });
+
+    // G8 on the CLIENT store. windowStore.snapshot() was hardened for this; its
+    // client twin was not, so a wildcard window cap read a used total of '0'
+    // forever and bound each transaction on its own.
+    it('a repeated no-TICK action exhausts a wildcard window cap instead of resetting it', async () => {
+        const s = new AgentSession(fakeSdk, 'WIF', {
+            allowedActions: ['COLLECT'], allowUnkeyedSubmits: true, stateFile,
+            maxPerWindow: { hours: 24, perTick: { '*': '10' } },
+        });
+        const collect = (amount) => s.submit({ action: 'COLLECT', params: { amount } });
+        const res = await collect('6');                                // 6 <= 10
+        expect(res.policy.windowUsage.perTick[UNRESOLVED_TICK_BUCKET]).to.equal('6');
+        await expectDeny(() => collect('6'), 'POLICY_WINDOW_AMOUNT_EXCEEDED');   // 12 > 10
+        expect(submitStub.calledOnce).to.equal(true);
+    });
+
+    // G1 on the CLIENT store. Nothing validates the tick charset on this path
+    // (validateDecodedParams guards the daemon decode alone), so a caller-chosen
+    // tick reaches the accumulator as a key verbatim.
+    it('survives prototype-named ticks and counts a __proto__ tick toward its cap', async () => {
+        const s = mk({ maxPerWindow: { hours: 24, perTick: { '*': '10' } } });
+        // 'constructor' on a plain {} read back an inherited FUNCTION, and
+        // addDecimal(fn, amount) threw on every later evaluation.
+        await s.send({ tick: 'constructor', amount: '1' });
+        await s.send({ tick: 'toString', amount: '1' });
+        const res = await s.send({ tick: 'valueOf', amount: '1' });
+        expect(res.policy.windowUsage.perTick.constructor).to.equal('1');
+        // '__proto__' made the write a silent prototype-set, so the spend never
+        // counted and its cap never bound.
+        await s.send({ tick: '__proto__', amount: '6' });
+        const proto = await s.send({ tick: '__proto__', amount: '3' });
+        expect(proto.policy.windowUsage.perTick.__proto__).to.equal('9');
+        await expectDeny(() => s.send({ tick: '__proto__', amount: '2' }),
+            'POLICY_WINDOW_AMOUNT_EXCEEDED');
     });
 
     it('fails CLOSED on a corrupt state file', async () => {

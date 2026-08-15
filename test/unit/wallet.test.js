@@ -1002,6 +1002,58 @@ describe('WalletUtils', function() {
             expect(finalized.txid).to.be.a('string').of.length(64);
             expect(finalized.psbtHex).to.be.a('string');
         });
+
+        // The coordinator flow's extraction step is the one place a fully
+        // threshold-signed transaction can still be unspendable: bitcoinjs's
+        // 5000 sat/vB "absurd fee" guard is calibrated for BTC's unit value and
+        // an ordinary DOGE fee clears it. DOGE has no segwit, so this is p2pkh
+        // with a nonWitnessUtxo, not the p2wpkh shape the test above uses.
+        function absurdFeePsbt(netName) {
+            const wallet = new WalletUtils(netName);
+            const net = getNetwork(netName);
+            const kp = wallet.generateKeyPair();
+            const p2pkh = bitcoin.payments.p2pkh({ pubkey: kp.publicKey, network: net });
+            const prevTx = new bitcoin.Transaction();
+            prevTx.version = 1;
+            prevTx.addInput(Buffer.alloc(32), 0xffffffff, 0xffffffff, Buffer.from([0x51]));
+            prevTx.addOutput(p2pkh.output, 1_000_000);
+            const psbt = new bitcoin.Psbt({ network: net });
+            psbt.addInput({ hash: prevTx.getId(), index: 0, sequence: 0xfffffffd, nonWitnessUtxo: prevTx.toBuffer() });
+            // ~999,000 sat of fee over a ~191-byte tx is ~5230 sat/vB, just past
+            // the default guard. The control assertion below fails loudly if that
+            // margin ever stops biting, so this can never pass vacuously.
+            psbt.addOutput({ script: p2pkh.output, value: 1_000 });
+            return { wallet, kp, net, psbtHex: psbt.toHex() };
+        }
+
+        it('finalizes a dogecoin multisig PSBT whose ordinary fee exceeds the bitcoinjs guard', function() {
+            const { wallet, kp, net, psbtHex } = absurdFeePsbt('dogecoin-regtest');
+            const partial = wallet.signMultisigPsbt(psbtHex, kp.wif);
+
+            // Control: with no ceiling applied this exact PSBT is unextractable,
+            // which is what left the threshold-signed funds stuck.
+            const raw = bitcoin.Psbt.fromHex(partial.psbtHex, { network: net });
+            raw.finalizeAllInputs();
+            expect(() => raw.extractTransaction()).to.throw(/satoshi per byte/);
+
+            // Called with NO opts: the default path is the one that was broken.
+            const finalized = wallet.finalizeMultisigPsbt(partial.psbtHex);
+            expect(finalized.txHex).to.be.a('string');
+            expect(finalized.txid).to.be.a('string').of.length(64);
+        });
+
+        it('leaves the bitcoin absurd-fee guard intact', function() {
+            const { wallet, kp, psbtHex } = absurdFeePsbt('bitcoin-regtest');
+            const partial = wallet.signMultisigPsbt(psbtHex, kp.wif);
+            expect(() => wallet.finalizeMultisigPsbt(partial.psbtHex)).to.throw(/satoshi per byte/);
+        });
+
+        it('honors an explicit opts.maximumFeeRate, so a caller can tighten the ceiling', function() {
+            const { wallet, kp, psbtHex } = absurdFeePsbt('dogecoin-regtest');
+            const partial = wallet.signMultisigPsbt(psbtHex, kp.wif);
+            expect(() => wallet.finalizeMultisigPsbt(partial.psbtHex, { maximumFeeRate: 100 }))
+                .to.throw(/satoshi per byte/);
+        });
     });
 
     describe('validateAddress() - extended', function() {

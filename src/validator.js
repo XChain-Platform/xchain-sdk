@@ -626,8 +626,17 @@ class Validator {
         // FEE validation (PRICE v1: the oracle usage fee a dispenser opener pays
         // this oracle, expressed as a fraction, 0.01 = 1%). Mirrors the indexer's
         // consensus rule: optional, up to 18 decimals, 0 <= FEE <= 1.
+        //
+        // The upper bound compares as an EXACT decimal (bcnum, the same
+        // arbitrary-precision family the indexer's bcgt uses), never as a JS
+        // double. The regex admits 18 decimals, and Number('1.000000000000000001')
+        // rounds to exactly 1, so a `Number(value) > 1` gate certified a value the
+        // indexer's bcgt(V1_FEE,'1') rejects: the client signed and paid for an
+        // action that lands `invalid: FEE (format)` on-chain, forfeiting the fee.
+        // The regex already forbids a leading '-', so the indexer's companion
+        // lower bound needs no mirror here.
         if (field === 'FEE' && action === 'PRICE' && String(value).length > 0) {
-            if (!/^[0-9]+(\.[0-9]{1,18})?$/.test(String(value)) || Number(value) > 1)
+            if (!/^[0-9]+(\.[0-9]{1,18})?$/.test(String(value)) || this.util.bcnum(String(value)).gt('1'))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'FEE must be a fraction between 0 and 1 with at most 18 decimals', { field, value, constraint: { min: 0, max: 1 } }));
         }
 

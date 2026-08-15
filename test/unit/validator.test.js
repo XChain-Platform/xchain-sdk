@@ -666,6 +666,23 @@ describe('Validator: PRICE v1 oracle publish', function () {
         expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
     });
 
+    // The range gate must compare as an EXACT decimal, not as a JS double.
+    // Number('1.000000000000000001') rounds to exactly 1, so a float compare
+    // certified this value while the indexer's bcgt(V1_FEE,'1') rejects it, and
+    // the signed, fee-paying action landed invalid on-chain.
+    it('rejects a FEE just above 1 that IEEE-754 rounds to exactly 1', function () {
+        ['1.000000000000000001', '1.00000000000000001'].forEach((fee) => {
+            expect(Number(fee) > 1, fee + ' must be float-indistinguishable from 1').to.be.false;
+            const errors = v.validate('PRICE', pub({ FEE: fee }));
+            expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE'), fee).to.be.true;
+        });
+    });
+
+    it('still accepts a FEE just below 1 at full 18-decimal width', function () {
+        const errors = v.validate('PRICE', pub({ FEE: '0.999999999999999999' }));
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
     // BROADCAST shares both field names and must keep its looser rules: its
     // VALUE is an arbitrary numeric datum and its FEE is a percentage.
     it('leaves BROADCAST VALUE and FEE on their own looser rules', function () {

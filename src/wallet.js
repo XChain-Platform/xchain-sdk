@@ -509,9 +509,11 @@ class WalletUtils {
      * threshold met. Returns the broadcastable tx hex + txid.
      *
      * @param {string} psbtHex
+     * @param {{ maximumFeeRate?: number }} [opts]  maximumFeeRate overrides the
+     *   sat/vB extraction ceiling _maxFeeRate resolves from the network.
      * @returns {{ txHex: string, txid: string, psbtHex: string }}
      */
-    finalizeMultisigPsbt(psbtHex) {
+    finalizeMultisigPsbt(psbtHex, opts) {
         if (!psbtHex || typeof psbtHex !== 'string') {
             throw new SDKWalletError('INVALID_PSBT', 'finalizeMultisigPsbt: PSBT hex is required');
         }
@@ -527,6 +529,14 @@ class WalletUtils {
         } catch (err) {
             throw new SDKWalletError('FINALIZE_FAILED', `finalizeMultisigPsbt: ${err.message}`);
         }
+        // The same ceiling every other extraction path applies (signPsbt,
+        // signEnvelopeRevealPsbt, signRevealPsbt, cosigner/musig2Signer). Without
+        // it the N-of-M coordinator flow is the one path where a threshold-signed
+        // transaction on a low-unit-value chain cannot be extracted at all: an
+        // ordinary DOGE fee is ~50k sat/vB and bitcoinjs's default guard is 5000,
+        // so the funds are stuck with nothing left to sign.
+        const maxFeeRate = this._maxFeeRate(opts);
+        if (maxFeeRate) psbt.setMaximumFeeRate(maxFeeRate);
         const tx = psbt.extractTransaction();
         return {
             psbtHex: psbt.toHex(),
