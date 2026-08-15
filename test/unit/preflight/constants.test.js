@@ -46,6 +46,38 @@ describe('pre-flight constants + registry', function () {
             expect(constants.TIER1_DENYLIST, a + ' must be on the denylist it excepts').to.include(a);
     });
 
+    it('XEXEC on the denylist is defence-in-depth for an action the SDK cannot compose', function () {
+        // XC-1475. XEXEC is arbiter-EMITTED (mirror-injected from the hub mirror),
+        // not composed by a client, so there is no wire form for the SDK decoder to
+        // parse and sdk.preflight() can never reach this denylist entry. That makes
+        // the entry unreachable, not wrong: it mirrors the indexer literal by VALUE
+        // (the drift gate binds it that way) and it is the guard that would stand
+        // between an unauthenticated caller and VM compute under the block-loop
+        // mutex the moment XEXEC gains a format.
+        //
+        // This test pins the "cannot compose" half. If XEXEC ever becomes
+        // client-composable it fails on purpose, and the correct response is to
+        // exercise the denylist entry through the real parse path in tier1.test.js,
+        // never to delete the entry or this test.
+        expect(constants.TIER1_DENYLIST, 'the guard must stay even while unreachable').to.include('XEXEC');
+
+        const formats = require('../../../src/formats.js');
+        expect(Object.keys(formats), 'XEXEC must have no client wire format').to.not.include('XEXEC');
+
+        const { parse } = require('../../../src/decoder/parse.js');
+        for (const wire of ['XEXEC', 'XEXEC|0', 'XEXEC|0|1|payload', 'XEXEC|1|contract|method|args']) {
+            const r = parse(wire, { validate: false });
+            expect(r.ok, wire + ' must not parse').to.equal(false);
+            expect(r.code, wire).to.equal('UNKNOWN_ACTION');
+        }
+
+        // The action manifest is the platform-wide statement of the same fact.
+        const manifest = require('../../fixtures/action-manifest.json');
+        expect(manifest.actions.XEXEC.category).to.equal('mirror-injected');
+        expect(manifest.actions.XEXEC.wireDecoded, 'XEXEC is not wire-decoded').to.equal(undefined);
+        expect(manifest.actions.XEXEC.userEncodable, 'XEXEC is not user-encodable').to.equal(undefined);
+    });
+
     it('the VM-compute actions are NOT exceptable', function () {
         // The denylist exists to keep an unauthenticated caller from running the VM
         // under the block-loop mutex. BATCH is exceptable only because the arbiter

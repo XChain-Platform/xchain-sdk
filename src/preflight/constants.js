@@ -161,9 +161,44 @@ const TIER2_ERROR_CAPABLE = Object.freeze({
     DISPENSER_EMPTY:      'network',
 });
 
-// Tier-1 exclusions (spec §4.3): indexer FEE_QUOTE_DENYLIST mirror.
-// Kept in lockstep with FEE_QUOTE_DENYLIST in xchain-indexer/src/actions.js, enforced by
-// bin/check-preflight-drift.js (named, not line-pinned: the line pin had already drifted).
+/*
+ * Tier-1 exclusions (spec §4.3): indexer FEE_QUOTE_DENYLIST mirror.
+ * Kept in lockstep with FEE_QUOTE_DENYLIST in xchain-indexer/src/actions.js, enforced by
+ * bin/check-preflight-drift.js (named, not line-pinned: the line pin had already drifted).
+ *
+ * XEXEC IS DEFENCE-IN-DEPTH, AND DELIBERATELY UNREACHABLE (XC-1475)
+ *
+ * Three of these four entries can actually be hit from `sdk.preflight()`; XEXEC
+ * cannot, today, and that is not a defect. XEXEC is a cross-chain VM execution
+ * the arbiter EMITS: it is mirror-injected from the hub mirror rather than
+ * decoded off the wire (test/fixtures/action-manifest.json classifies it
+ * `mirror-injected`, with no `wireDecoded` and no `userEncodable`). It therefore
+ * has no entry in src/formats.js, so `decoder.parse('XEXEC|...')` returns
+ * UNKNOWN_ACTION for every wire form and `runTier1` is never handed a parsed
+ * action named XEXEC. A client composes EXECUTE; the chain, not the client,
+ * produces the XEXEC leg on the far side.
+ *
+ * So the entry protects an input the SDK cannot currently manufacture. It stays
+ * anyway, for two reasons:
+ *
+ *   1. This constant's job is to be byte-equal to the indexer literal it
+ *      mirrors, which bin/check-preflight-drift.js binds BY VALUE. Dropping
+ *      XEXEC because "the SDK can't reach it" would break the drift gate and
+ *      silently unpin the mirror.
+ *   2. `runTier1` short-circuits on the action NAME, not on provenance. The day
+ *      XEXEC gains a wire format (or an internal caller hands Tier 1 a
+ *      hand-built parsed action), this entry is the only thing standing between
+ *      an unauthenticated caller and VM compute under the arbiter's block-loop
+ *      mutex. A guard that only becomes load-bearing later must already be
+ *      there, not added later by whoever adds the format.
+ *
+ * The reachability is pinned by test, not by this comment: the constants suite
+ * asserts XEXEC is un-composable (no format, parse fails, manifest says
+ * mirror-injected) and the Tier-1 suite drives the short-circuit with a
+ * hand-built parsed action. If XEXEC ever becomes client-composable, the first
+ * test fails on purpose, and the fix is to exercise this entry through the real
+ * parse path rather than to delete either the entry or the test.
+ */
 const TIER1_DENYLIST = Object.freeze(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
 
 /*
