@@ -85,7 +85,7 @@
     "ci:security": "mocha --timeout 10000 --recursive 'test/security/**/*.test.js' --exit",
     "ci:regression": "mocha --timeout 30000 --recursive 'test/regression/**/*.test.js' --exit",
     "coverage": "c8 --reporter=text --reporter=html --include 'src/**/*.js' mocha --timeout 5000 --recursive 'test/unit/**/*.test.js' --exit",
-    "coverage:check": "c8 --check-coverage --lines 93 --statements 93 --branches 82 --functions 86 --reporter=text-summary --include 'src/**/*.js' mocha --timeout 5000 --recursive 'test/unit/**/*.test.js' --exit",
+    "coverage:check": "c8 --check-coverage --lines 93.9 --statements 93.9 --branches 82.6 --functions 86.2 --reporter=text-summary --include 'src/**/*.js' mocha --timeout 5000 --recursive 'test/unit/**/*.test.js' --exit",
     "test:smoke": "mocha --timeout 15000 --recursive 'test/smoke/**/*.test.js'",
     "test:integration": "mocha --timeout 30000 --recursive 'test/integration/**/*.test.js'",
     "test:boundary": "mocha --timeout 5000 --recursive 'test/boundary/**/*.test.js'",
