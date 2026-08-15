@@ -84,7 +84,7 @@ found by hashing candidate blobs as above.
 | `checks/mint.js` | `src/actions/mint.js` | `87465e6447385dd97b27c52ee8919f27838a0a495e3cdcddac8a413158311c2c` |
 | `checks/issue.js` | `src/actions/issue.js` | `9287f93d10c013ae4b66cae07005b498019c653c6b11406d37cb603f16cae561` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `2a8772ca85dd371d87aa4f554f9b0696ea185e4d562664648b808cb72f132c4b` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `edf8623a92f567cd1950e6d3943fe6756407e03e8755e4f840dd61509d9dd53b` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `351c19a46b60a0cb59c24ffd51d925e79bf44a4a8da73f156aa3eacc010627f5` |
 | `checks/trading.js` (ORDER) | `src/actions/order.js` | `b8f5b95204e4c0ed23cfc6105f43bb4310e803133673d651db853cd81843bde7` |
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `c3cfc0b97a1fff2385898ed778b580cdc4ca4e67ca9e4b85ee82f8253c7f0e8c` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `859682d31fa583fc17d02f161f99f37baaf83ee8ae5fe744422d1ab81dd535b4` |
@@ -98,6 +98,39 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-08-15 (sixth pass) - `dispense.js`, against indexer HEAD `07aaf8e`
+
+One row, drifted by the 2026-08-15 xchain-platform review round (findings #4891
+and #4894). The sibling `git status --short src/actions/` is empty and the
+recorded hash equals the HEAD blob, so this is committed content and not a
+working-tree artifact.
+
+- **`dispense.js` - REAL change, NO client change owed.** Two edits, reviewed
+  separately because only one of them can move a verdict.
+  - **#4894 is a rename with no behaviour.** The synthetic DISPENSER_CLOSE
+    payload built in the empty-close branch was a local named `data`, which
+    shadowed `parse()`'s own transaction object for the rest of the block; it is
+    now `cdata`, matching the MAX_DISPENSES branch below it, which already named
+    it that way for the same reason. Same keys, same values, same
+    `processAction` call. Nothing to mirror.
+  - **#4891 replaces `bcfloor` with `bcfloorSaturating` on the non-FIAT
+    multiplier, and the case it changes was never a verdict.** The two helpers
+    agree on every input that does not overflow. On inputs that do, the OLD
+    behaviour was a throw that fires before any status is recorded, escapes
+    `parse()` into the block loop, and makes that loop roll back and retry the
+    same block forever, so every indexer on the chain wedges rather than
+    committing a block. Reachable for the price of two transactions: `GET_AMOUNT`
+    is validated only against `GET_TICK`'s DECIMALS, a tick may be issued with up
+    to 18 decimals, and a dispenser priced at 1e-18 triggered by a token SEND of
+    ~0.01 drives `available / GET_AMOUNT` past 2^53-1. Because no node could
+    commit such a block, no committed history contains one, and the client's
+    pre-flight has nothing to predict differently: a valid dispense stays valid,
+    an invalid one stays invalid, and the changed input class previously produced
+    no verdict at all. The `GIVE_REMAINING` clamp already bounds the saturated
+    count to the dispenser's real capacity. `checks/dispenser.js` prices no
+    dispense (the 2026-07-26 entry's standing verdict) and mirrors no multiplier,
+    so there is nothing client-side that could drift with it.
 
 ### 2026-08-15 (fifth pass) - `batch.js` and `issue.js`, against indexer HEAD `9d15127`
 
