@@ -13,6 +13,11 @@
 # Triage convention when this goes red: bump / override / replace, or a
 # documented accept-with-justification. Pre-launch, no high/critical prod
 # advisory ships unresolved.
+#
+# Accepted findings live in AUDIT-EXCEPTIONS.md at the repo root, with the
+# reasoning and what would change each verdict. Read it before acting on a
+# `npm audit` line: one entry there exists because the tool's suggested fix
+# DOWNGRADES a signing library, which a passing familiarity would not catch.
 name: audit
 
 # Least privilege for the default GITHUB_TOKEN: every job here only reads the repo.
