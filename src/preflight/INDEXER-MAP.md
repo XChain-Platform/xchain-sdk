@@ -39,7 +39,12 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-**Pins taken at indexer commit:** `58ab8e9`
+**Pins taken at indexer commit:** `a1d36eb`
+
+(Re-anchored 2026-08-15: the pins were reviewed against `58ab8e9`, a local
+commit the LIST-memo rebase orphaned before push. Every pinned hash is
+byte-identical at `a1d36eb`, the pushed develop head, so the review stands
+and only the anchor moves.)
 
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
