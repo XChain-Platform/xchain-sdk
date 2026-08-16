@@ -22,7 +22,9 @@ const { SDKValidationError } = require('./errors.js');
 const {
     BATCH_ACTION_LIMITS_ACTIVE,
     BATCH_COMMAND_LIMIT,
+    BATCH_WEIGHT_BUDGET,
     CHILD_ISSUE_KEY,
+    actionWeight,
     classifyIssueTick,
     maxMintsPerDistinctTick,
     paramsTick,
@@ -101,6 +103,44 @@ class BatchBuilder {
             throw new SDKValidationError('BATCH_CONSTRAINT',
                 'BATCH can contain at most ' + BATCH_COMMAND_LIMIT + ' commands',
                 { count: this._actions.length, limit: BATCH_COMMAND_LIMIT });
+
+        // BATCH_COST_WEIGHTING: the WEIGHTED budget, in the arbiter's own
+        // position - immediately after the count and before every per-ACTION
+        // cap (xchain-indexer/src/actions/batch.js parse(): the count
+        // pre-filter, then the weighted sum, then the cap loop). Both bounds
+        // are the same on-chain rejection, `invalid: COMMAND (limit)`; the
+        // count stays first and is an EXACT pre-filter rather than a
+        // conservative one, because every weight is an integer >= 1, so a batch
+        // over the count is over the budget too and weighing it teaches nobody
+        // anything.
+        //
+        // WHAT COUNTING CANNOT SEE, which is the whole reason this check
+        // exists: nine EXECUTEs weigh 270 and eleven AIRDROPs weigh 275, and
+        // both are nowhere near 250 commands. Until this ran, the builder
+        // composed those batches happily and the chain rejected them whole.
+        //
+        // Weighed off the QUEUED action name rather than the serialized string,
+        // which does not exist yet; that is the same name build() serializes as
+        // the leading token, and actionWeight expands aliases exactly as the
+        // arbiter does, so `DROP` costs an AIRDROP's 25 here too.
+        //
+        // A REFUSAL, not a warning, matching the count cap beside it and the
+        // "WHICH SIDE OF THE FLAG" note in batchLimits.js: this mirror speaks
+        // for the POST-flag rule set on every network. BATCH_COST_WEIGHTING is
+        // genesis-active on testnet and regtest and unarmed on mainnet, so
+        // composing to the tighter rule is the shape that lands everywhere, and
+        // the alternative is emitting a batch that is rejected wholesale on two
+        // of the three networks. The DECODE-side sites (decoder/parse.js,
+        // preflight/checks/batch.js) report the same overflow as a finding
+        // instead, because they describe a batch someone else already composed
+        // and cannot refuse anything.
+        let weight = 0;
+        for (let entry of this._actions) weight += actionWeight(entry.action);
+        if (weight > BATCH_WEIGHT_BUDGET)
+            throw new SDKValidationError('BATCH_CONSTRAINT',
+                'BATCH commands weigh ' + weight + ' (VM and fan-out actions cost more than 1 each); '
+                + 'the chain rejects the whole batch above a total weight of ' + BATCH_WEIGHT_BUDGET,
+                { count: this._actions.length, weight, limit: BATCH_WEIGHT_BUDGET });
 
         // Occurrences per counting key, and the MINT TICKs, collected in ONE
         // pass so the two can never disagree about which entries are MINTs.

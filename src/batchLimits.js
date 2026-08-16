@@ -253,7 +253,34 @@ function classifyIssueTick(tick) {
  */
 function subCommandWeight(command) {
     try {
-        const weight = BATCH_COMMAND_WEIGHTS[expandAlias(String(command).split('|')[0])];
+        return actionWeight(String(command).split('|')[0]);
+    } catch (e) {
+        return 1;
+    }
+}
+
+/*
+ * Cost weight of ONE action NAME (indexer `subCommandWeight`, whose body reads
+ * the table off the already-normalized action and nothing else).
+ *
+ * Split out of the string form because the COMPOSE side has no wire string to
+ * split: batchBuilder queues `{ action, params }` objects and serializes only
+ * at build time, so it would otherwise have had to read the table itself, and a
+ * second reader is how the weight table would come to be applied two ways. The
+ * alias expansion and the >= 1 integer invariant are therefore stated once,
+ * here, and both callers inherit them.
+ *
+ * Alias expansion is not decoration on this side either: `DROP` weighs 25
+ * because it IS an AIRDROP to the arbiter, and a compose site that missed that
+ * would sell 250 fan-outs for the price of 250 sends.
+ *
+ * Never throws, and falls back to 1 for the arbiter's reason: 1 is the pre-flag
+ * behaviour for a sub-command, so an unreadable name is charged as an ordinary
+ * one rather than being made free.
+ */
+function actionWeight(action) {
+    try {
+        const weight = BATCH_COMMAND_WEIGHTS[expandAlias(String(action))];
         if (weight === undefined) return 1;
         return (Number.isInteger(weight) && weight >= 1) ? weight : 1;
     } catch (e) {
@@ -619,6 +646,7 @@ module.exports = {
     BATCH_COMMAND_LIMIT,
     BATCH_WEIGHT_BUDGET,
     BATCH_COMMAND_WEIGHTS,
+    actionWeight,
     subCommandWeight,
     batchWeight,
     BATCH_ACTION_LIMITS,

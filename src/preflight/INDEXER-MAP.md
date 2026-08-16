@@ -105,6 +105,37 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
 
+### 2026-08-16 - the BUILDER's weight posture is REVERSED (XC-1542)
+
+No handler moved. What moved is this file's own 2026-08-15 (fifth pass)
+answer, and it is recorded here rather than edited out of that entry so the
+reversal is visible where the reasoning lives.
+
+That entry answered the posture question with "WARNING, not refusal" for BOTH
+compose-side sites. **For `batchBuilder.js` that answer is now overturned: the
+builder REFUSES an over-budget batch**, in the arbiter's own position (after
+the count pre-filter, before the per-ACTION cap loop), with the arbiter's own
+arithmetic. The reason the earlier answer gave is real but it does not decide
+this site:
+
+- The false-block risk it names applies to a batch composed FOR mainnet while
+  `BATCH_COST_WEIGHTING` is unarmed there. It is the same risk the 250-command
+  cap beside it carried under `BATCH_ISSUANCE_LIMITS`, and this builder has
+  always refused on that one, because a composer can shrink a batch while a
+  chain rejection costs a broadcast.
+- The two DECODE-side sites keep the warning, and that split is the point
+  rather than an inconsistency: they describe a batch someone else already
+  composed and can only report, while the builder is the one site that can
+  still fix the shape before it is signed.
+
+`validator.js` is UNCHANGED and still carries no weight rule at all: it
+validates a finished BATCH command string, which is the decode side of the
+split above. The weight arithmetic itself lives once, in
+`batchLimits.js` (`actionWeight`, which `subCommandWeight` now calls), so the
+compose and decode sites cannot come to weigh an action two ways. Pinned by
+`test/unit/batchBuilderCostWeight.test.js`, whose arbiter half drives the same
+vectors through the real `xchain-indexer` Batch handler.
+
 ### 2026-08-15 - nine handlers, `9d15127..58ab8e9`
 
 Eight of the nine are the SAME one-line edit and change no validity logic
