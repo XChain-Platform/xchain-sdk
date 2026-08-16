@@ -89,13 +89,13 @@ found by hashing candidate blobs as above.
 | `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `15e134f5c27b5955e27e78187848e1878cee562a52b173dacf89389f5949aa98` |
 | `checks/mint.js` | `src/actions/mint.js` | `e491154c399be3fdd5b6b242b3da24db6c5119d4683988308b8087e4dc8dff03` |
 | `checks/issue.js` | `src/actions/issue.js` | `9287f93d10c013ae4b66cae07005b498019c653c6b11406d37cb603f16cae561` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `d1a866d0bb2c06bcbbe7fe1472946cd3f9fe0897cb1fe9d057395322989c8355` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `3636c269cd7f989469c15a4443df58185ec17f7fc72d7b799686bd554da506bc` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `97d2432f1c5eeab86648dc9bc6caa3c8b062bdc8e35851473c4c067569b53050` |
 | `checks/trading.js` (ORDER) | `src/actions/order.js` | `e9c676ff4d724b92bd94966bf6811d23bc932ed34daa694211833302e53b6b02` |
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `971338842f897e140d27565a4e01cdb364da14b81bb58e140dd6014d529b35fb` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `956463e64bb90087364b2c109c6d1f27a5b3526fd24415d6b9c22042e65e1479` |
 | `checks/dividend.js` | `src/actions/dividend.js` | `4755e314c69ead436a278a6d6196df5499a44768a236a2d9afda4b6a8623f1c1` |
-| `checks/batch.js` | `src/actions/batch.js` | `976e8c50be889274666932d2037c40679305f5b3c0f787db1d7428d8f645d4a2` |
+| `checks/batch.js` | `src/actions/batch.js` | `6d5001d89dfd7fabca44a95f69b38a84a684b7f6b4e72c022b7d1f039be074a2` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -540,6 +540,17 @@ so it is mirrored as a new universal check (`preflight/universal.js`,
 - A **dangling but well-formed** id is the same rejection with no local
   evidence: the explorer maps address -> id and nothing maps the inverse, so
   it is declared unverified rather than guessed at.
+- **Exception, on the `noCompact` fields only.** A well-formed id on
+  DISPENSER.GET_ADDRESS or DISPENSER.ORACLE_ADDRESS is decidable after all and
+  is reported rather than declared unverified, because the DECODER refuses the
+  reference whatever it points at: its address ids are a different
+  AUTO_INCREMENT sequence, so a compacted GET_ADDRESS registers no dispenser
+  (`XChainDecoder.js`) and a compacted ORACLE_ADDRESS captures no oracle-fee
+  output, leaving the create rejected after the fee is spent
+  (`oracleFeeOutput.js`). The field set is DERIVED from the `noCompact` specs in
+  `addressRefFields.js`, and the branch is per-ACTION, so ORDER/SWAP GET_ADDRESS
+  keeps the unverified verdict. Still a warning, and the validator stays silent:
+  the chain itself accepts the transaction.
 - **Warning, never an error**, including the decidable half. Three call sites
   had no follow-up format check before this activation (DISPENSER.ORACLE_ADDRESS on a
   non-oracle dispenser, ISSUE.TRANSFER/TRANSFER_SUPPLY on the genesis path,

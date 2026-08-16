@@ -97,6 +97,31 @@ async function checkDispenser(ctx) {
                 }
             }
         }
+        // A balance dispenser must hand out something. Mirrors the Format-0
+        // create rule in xchain-indexer/src/actions/dispenser.js: an absent or
+        // non-positive GIVE_AMOUNT with GIVE_OWNERSHIP=0 opens a dispenser that
+        // settles buyer payments as VALID fills crediting nothing, because every
+        // downstream guard reads a non-positive GIVE_AMOUNT as "ownership
+        // dispenser" and skips, while the auto-close threshold is that same
+        // non-positive value, so it never closes and keeps absorbing payments.
+        //
+        // Warning rather than error, and deliberately so: the handler gates the
+        // rejection behind dispenser_give_amount_activation, and preflight runs at
+        // AUTHORING time with no block time to test the flag-day against. Below
+        // the activation the chain still accepts this create, so calling it an
+        // error would refuse a transaction the network takes. Above it, the
+        // warning is the only notice a client gets before spending the fee. Same
+        // treatment, and the same reasoning, as the `^id` caret-ref activation.
+        if (!giveOwnership) {
+            const giveAmount = ctx.field('GIVE_AMOUNT');
+            if (!giveAmount || !numeric.isPositive(giveAmount)) {
+                ctx.addFinding(FINDING_CODES.AMOUNT_NOT_POSITIVE, 'warning',
+                    'GIVE_AMOUNT is required and must be greater than 0 for a balance dispenser '
+                        + '(GIVE_OWNERSHIP=0); at or above the activation the indexer rejects this create, '
+                        + 'and below it the dispenser opens but credits nothing while absorbing payments.',
+                    { giveAmount: giveAmount ?? null, giveOwnership: '0' });
+            }
+        }
         ctx.addUnverified('DISPENSER_ORIGIN_STANDING',
             'origin-standing / UTXO-freshness gate is server-side (and unreliable even on the quote path)');
         noteOracleFee(ctx, ctx.field('ORACLE_ADDRESS'));
