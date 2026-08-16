@@ -86,6 +86,7 @@
     "comment:ci:drift:verdict": "The closing half of the pair: re-evaluates muted and exits 1 on the finding the soft run already printed, as the LAST link of ci so the failure lands after a tally exists. Muted so one run does not print the report twice.",
     "ci:drift:verdict": "node bin/check-preflight-drift.js --verdict",
     "ci": "npm run ci:drift:soft && mocha --timeout 5000 --recursive 'test/unit/**/*.test.js' --exit && npm run ci:security && npm run ci:regression && npm run ci:drift:verdict",
+    "ci:full": "bash bin/ci-full.sh",
     "ci:security": "mocha --timeout 10000 --recursive 'test/security/**/*.test.js' --exit",
     "ci:regression": "mocha --timeout 30000 --recursive 'test/regression/**/*.test.js' --exit",
     "coverage": "c8 --reporter=text --reporter=html --include 'src/**/*.js' mocha --timeout 5000 --recursive 'test/unit/**/*.test.js' --exit",
