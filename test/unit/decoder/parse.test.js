@@ -117,13 +117,29 @@ describe('decoder.parse', function () {
 
     describe('rule 6: rest-fields', function () {
         it('LIST v0 collects rest items', function () {
-            const r = parse('LIST|0|1|AAA|BBB|CCC');
+            // MEMO holds the slot before the rest-field, empty here.
+            const r = parse('LIST|0|1||AAA|BBB|CCC');
             expect(r.params.ITEM).to.deep.equal(['AAA', 'BBB', 'CCC']);
             expect(r.rest).to.deep.equal(['AAA', 'BBB', 'CCC']);
         });
 
+        it('LIST v0 MEMO is a fixed field, not the first rest item', function () {
+            const r = parse('LIST|0|1|why this list exists|AAA|BBB');
+            expect(r.params.MEMO).to.equal('why this list exists');
+            expect(r.params.ITEM).to.deep.equal(['AAA', 'BBB']);
+            expect(r.rest).to.deep.equal(['AAA', 'BBB']);
+        });
+
+        it('LIST v1 MEMO sits after LIST_ACTION_INDEX and before the items', function () {
+            const r = parse('LIST|1|1|1234|adding two|AAA|BBB');
+            expect(r.params.EDIT).to.equal('1');
+            expect(r.params.LIST_ACTION_INDEX).to.equal('1234');
+            expect(r.params.MEMO).to.equal('adding two');
+            expect(r.params.ITEM).to.deep.equal(['AAA', 'BBB']);
+        });
+
         it('empty rest-field is an empty array (zero segments emitted)', function () {
-            const r = parse('LIST|0|1');
+            const r = parse('LIST|0|1|');
             expect(r.ok).to.equal(true);
             expect(r.rest).to.deep.equal([]);
         });

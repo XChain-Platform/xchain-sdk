@@ -151,9 +151,14 @@ var Formats = {
 
     LIST: {
         // ITEM is a rest-field: a LIST carries any number of items as
-        // individual pipe-delimited segments (LIST|0|1|JDOG|BRRR|TEST)
-        0: 'VERSION|TYPE|...ITEM',
-        1: 'VERSION|EDIT|LIST_ACTION_INDEX|...ITEM'
+        // individual pipe-delimited segments (LIST|0|1||JDOG|BRRR|TEST)
+        //
+        // MEMO precedes the rest-field instead of trailing it as it does on every
+        // other action. That is forced by the variadic tail: a memo after ...ITEM
+        // is indistinguishable from one more item. So a memo-less LIST still spends
+        // an empty segment on it (the `||` above).
+        0: 'VERSION|TYPE|MEMO|...ITEM',
+        1: 'VERSION|EDIT|LIST_ACTION_INDEX|MEMO|...ITEM'
     },
 
     MESSAGE: {

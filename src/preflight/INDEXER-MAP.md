@@ -26,8 +26,9 @@ is what the CI drift jobs on both repos run.
 
 Ground-truthed against HEAD 2026-07-20; `dispenser.js` and `dispense.js`
 re-reviewed against HEAD 2026-07-26, nine handlers re-reviewed against
-HEAD 2026-08-08, and ALL ELEVEN re-reviewed against indexer HEAD
-`22f0f31` on 2026-08-13 (see the review log below). Hashes
+HEAD 2026-08-08, ALL ELEVEN re-reviewed against indexer HEAD
+`22f0f31` on 2026-08-13, and NINE re-reviewed against indexer HEAD
+`58ab8e9` on 2026-08-15 (see the review log below). Hashes
 are of the indexer handler source files, resolved via
 `XCHAIN_INDEXER_PATH` or the sibling `../xchain-indexer` checkout. The
 gate SKIPS (does not fail) when no indexer checkout is present, so
@@ -38,7 +39,7 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-**Pins taken at indexer commit:** `9d15127`
+**Pins taken at indexer commit:** `58ab8e9`
 
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
@@ -79,16 +80,16 @@ found by hashing candidate blobs as above.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send.js` | `d5181fb4a709abe535eca0388eb9bcdeceef38e4d349976b00efa830a4c67287` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `562a51f60f545e7a659fcec979288c9535cffc51d280fb4fecd76ddf0663684e` |
-| `checks/mint.js` | `src/actions/mint.js` | `87465e6447385dd97b27c52ee8919f27838a0a495e3cdcddac8a413158311c2c` |
+| `checks/send.js` (SEND) | `src/actions/send.js` | `a7c07ad1505dba1eb06efd62cfbe7f8dc6fa8654a5a6825d2ed6480190d4fbdb` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `15e134f5c27b5955e27e78187848e1878cee562a52b173dacf89389f5949aa98` |
+| `checks/mint.js` | `src/actions/mint.js` | `e491154c399be3fdd5b6b242b3da24db6c5119d4683988308b8087e4dc8dff03` |
 | `checks/issue.js` | `src/actions/issue.js` | `9287f93d10c013ae4b66cae07005b498019c653c6b11406d37cb603f16cae561` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `2a8772ca85dd371d87aa4f554f9b0696ea185e4d562664648b808cb72f132c4b` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `351c19a46b60a0cb59c24ffd51d925e79bf44a4a8da73f156aa3eacc010627f5` |
-| `checks/trading.js` (ORDER) | `src/actions/order.js` | `b8f5b95204e4c0ed23cfc6105f43bb4310e803133673d651db853cd81843bde7` |
-| `checks/trading.js` (SWAP) | `src/actions/swap.js` | `c3cfc0b97a1fff2385898ed778b580cdc4ca4e67ca9e4b85ee82f8253c7f0e8c` |
-| `checks/airdrop.js` | `src/actions/airdrop.js` | `859682d31fa583fc17d02f161f99f37baaf83ee8ae5fe744422d1ab81dd535b4` |
-| `checks/dividend.js` | `src/actions/dividend.js` | `cfe53d5ef3c17bf7c1a25321e77c294a26632f66e92cca19592c8d13524ab4e3` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `d1a866d0bb2c06bcbbe7fe1472946cd3f9fe0897cb1fe9d057395322989c8355` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `97d2432f1c5eeab86648dc9bc6caa3c8b062bdc8e35851473c4c067569b53050` |
+| `checks/trading.js` (ORDER) | `src/actions/order.js` | `e9c676ff4d724b92bd94966bf6811d23bc932ed34daa694211833302e53b6b02` |
+| `checks/trading.js` (SWAP) | `src/actions/swap.js` | `971338842f897e140d27565a4e01cdb364da14b81bb58e140dd6014d529b35fb` |
+| `checks/airdrop.js` | `src/actions/airdrop.js` | `956463e64bb90087364b2c109c6d1f27a5b3526fd24415d6b9c22042e65e1479` |
+| `checks/dividend.js` | `src/actions/dividend.js` | `4755e314c69ead436a278a6d6196df5499a44768a236a2d9afda4b6a8623f1c1` |
 | `checks/batch.js` | `src/actions/batch.js` | `976e8c50be889274666932d2037c40679305f5b3c0f787db1d7428d8f645d4a2` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
@@ -98,6 +99,48 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-08-15 - nine handlers, `9d15127..58ab8e9`
+
+Eight of the nine are the SAME one-line edit and change no validity logic
+at all: the amount interpolated into each handler's `console.log` status
+line is now wrapped in `util.logAmount()`. Amounts render exponentially
+below 1e-7 once `setNumberFormats` has replaced them with a bignumber, so
+a valid `0.00000003` printed as `3e-8` in the indexer log. `logAmount`
+rewrites only values that already render that way. Nothing a client can
+observe, submit or pre-check moves.
+
+- **`send.js` - no client change.** Log-line rendering only.
+- **`destroy.js` - no client change.** Log-line rendering only.
+- **`mint.js` - no client change.** Log-line rendering only.
+- **`dispenser.js` - no client change.** Log-line rendering only.
+- **`order.js` - no client change.** Log-line rendering only.
+- **`swap.js` - no client change.** Log-line rendering only.
+- **`airdrop.js` - no client change.** Log-line rendering only.
+- **`dividend.js` - no client change.** Log-line rendering only.
+- **`dispense.js` - no client change, but NOT log-only; read this one.**
+  Carries two edits from the earlier AML round beside the log wrap.
+  (1) The fill-count divide now uses `bcfloorSaturating` instead of
+  `bcfloor`. A dispenser priced at 1e-18 could drive
+  `available / GET_AMOUNT` past 2^53-1, and the throw escaped `parse()`
+  into the block loop, which rolled back and retried the same block
+  forever. Saturating cannot change any client-predictable verdict: on
+  every input that does not overflow the two helpers agree, and the
+  behaviour it replaces on inputs that do is "no node commits this block
+  at all", so no committed history can contain one. The `GIVE_REMAINING`
+  clamp still bounds the result to real capacity. Nothing for
+  `checks/dispenser.js` to mirror - a client cannot pre-check a condition
+  whose old outcome was a wedged chain.
+  (2) A local `data` shadowing `parse()`'s transaction object was renamed
+  to `cdata`. Internal.
+
+Separately, `LIST` gained a `MEMO` field in place on formats v0/v1 in
+`58ab8e9`, positioned BEFORE the variadic `ITEM` tail. `list.js` is not in
+this table - LIST is a `checks/misc.js` unverified-only action ("per-item
+validity is recorded per-item on-chain, never a reject"), which the MEMO
+addition does not change. Its client-side safety is the default-deny
+`_checkDelimiters` guard, which already covers every field and is now
+pinned for MEMO specifically by `test/unit/validator.test.js`.
 
 ### 2026-08-15 (sixth pass) - `dispense.js`, against indexer HEAD `07aaf8e`
 

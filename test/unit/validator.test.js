@@ -845,6 +845,45 @@ describe('Validator: LIST ITEM delimiter guards', function () {
     });
 });
 
+// LIST gained MEMO in place on v0/v1. It sits BEFORE the variadic ITEM tail
+// (a trailing memo cannot be told apart from one more item), which makes its
+// delimiter safety load-bearing in a way a trailing memo's is not: a pipe in
+// the memo shifts every following segment, so the first item is read as a
+// memo fragment and the list silently gains and loses members. The default-deny
+// _checkDelimiters guard already covers every field, so these pin the coverage
+// rather than add a rule.
+describe('Validator: LIST MEMO delimiter guards', function () {
+
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    it('accepts a delimiter-clean MEMO', function () {
+        const errors = v.validate('LIST', { TYPE: 1, MEMO: 'Our official tokens', ITEM: ['FOO'] });
+        expect(hasNoErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    it('rejects a pipe in a LIST MEMO (would shift every following item)', function () {
+        const errors = v.validate('LIST', { TYPE: 1, MEMO: 'a|b', ITEM: ['FOO'] });
+        expect(hasErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    it('rejects a semicolon in a LIST MEMO (BATCH command injection)', function () {
+        const errors = v.validate('LIST', { TYPE: 2, MEMO: 'x;MINT|0|FOO|1', ITEM: ['1ExampleAddressXXXXXXXXXXXXXXXXXXX'] });
+        expect(hasErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    it('guards MEMO on the v1 edit format too', function () {
+        const errors = v.validate('LIST', { EDIT: 1, LIST_ACTION_INDEX: '1234', MEMO: 'a|b', ITEM: ['FOO'] });
+        expect(hasErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+    });
+
+    it('treats an omitted MEMO as absent, not as an error', function () {
+        const errors = v.validate('LIST', { TYPE: 1, ITEM: ['FOO'] });
+        expect(hasNoErrorCode(errors, 'FORBIDDEN_CHARACTER')).to.be.true;
+        expect(hasNoErrorCode(errors, 'MISSING_REQUIRED_FIELD')).to.be.true;
+    });
+});
+
 describe('Validator: VOTE free-text delimiter guards', function () {
 
     let v;
