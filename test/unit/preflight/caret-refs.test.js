@@ -112,4 +112,51 @@ describe('pre-flight universal: ^<id> address references', function () {
             expect(CARET_RESOLVED_FIELDS.DISPENSER).to.deep.equal(['GET_ADDRESS', 'ORACLE_ADDRESS']);
         });
     });
+
+    /*
+     * The `noCompact` pair is decidable even when the id is well-formed, because
+     * the DECODER is what cannot resolve it: its address ids are a different
+     * sequence, so a compacted GET_ADDRESS registers no dispenser and a compacted
+     * ORACLE_ADDRESS captures no oracle-fee output and the create is rejected with
+     * the fee spent (addressRefFields.js's consensus note; the decoder logs both).
+     * The SDK's own compose path never emits one, so this only fires on a
+     * hand-set param, which is exactly the case addressRefFields.js anticipates.
+     */
+    describe('noCompact fields: a well-formed id is still decidable', function () {
+        it('reports a canonical ^<id> on DISPENSER.GET_ADDRESS', async function () {
+            const r = await reportFor('DISPENSER|0|BTC|JDOG|1|0|100|BTC||1000|^57|||||memo');
+            const f = finding(r);
+            expect(f, 'expected a ' + CODE + ' finding').to.not.equal(undefined);
+            expect(f.data.field).to.equal('GET_ADDRESS');
+            expect(f.data.value).to.equal('^57');
+            expect(f.severity).to.equal('warning');
+        });
+
+        it('reports a canonical ^<id> on DISPENSER.ORACLE_ADDRESS', async function () {
+            const r = await reportFor('DISPENSER|0|BTC|JDOG|1|0|100|BTC||1000|' + ADDR + '|||^57|||memo');
+            const f = finding(r);
+            expect(f, 'expected a ' + CODE + ' finding').to.not.equal(undefined);
+            expect(f.data.field).to.equal('ORACLE_ADDRESS');
+            expect(f.severity).to.equal('warning');
+        });
+
+        it('stays a WARNING: the chain still takes the transaction, it just cannot use the reference', async function () {
+            const r = await reportFor('DISPENSER|0|BTC|JDOG|1|0|100|BTC||1000|^57|||||memo');
+            expect(r.findings.some((x) => x.code === CODE && x.severity === 'error')).to.equal(false);
+        });
+
+        it('does not report a full address on the same fields', async function () {
+            const r = await reportFor('DISPENSER|0|BTC|JDOG|1|0|100|BTC||1000|' + ADDR + '|||||memo');
+            expect(finding(r)).to.equal(undefined);
+            expect(unverified(r)).to.equal(false);
+        });
+
+        it('leaves a compactable field on another action unverified, not reported', async function () {
+            // ORDER.GET_ADDRESS carries the same field NAME with no noCompact spec,
+            // so the new verdict must be per-action or it false-flags this.
+            const r = await reportFor('ORDER|0|BTC|JDOG|10|0|BTC||5|0|^57||||memo');
+            expect(finding(r)).to.equal(undefined);
+            expect(unverified(r)).to.equal(true);
+        });
+    });
 });

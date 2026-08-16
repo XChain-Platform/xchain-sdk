@@ -57,6 +57,7 @@ const HARD_VALIDATOR_CODES = new Set(['FORBIDDEN_CHARACTER']);
  * the list TYPE says so, which pre-flight cannot decide from the wire alone.
  * `noCompact` fields (DISPENSER.GET_ADDRESS / ORACLE_ADDRESS) ARE included: the
  * SDK never emits them compacted, but the indexer still resolves a caller's.
+ * They carry a second verdict of their own, below.
  */
 const CARET_RESOLVED_FIELDS = (() => {
     const map = {};
@@ -64,6 +65,31 @@ const CARET_RESOLVED_FIELDS = (() => {
         map[action] = ADDRESS_REF_FIELDS[action]
             .filter((spec) => !spec.multi && !spec.listType)
             .map((spec) => spec.field);
+    }
+    return map;
+})();
+
+/*
+ * The `noCompact` subset of the above: fields the INDEXER resolves but the
+ * DECODER cannot, per the consensus note in addressRefFields.js.
+ *
+ * Derived, never restated, so a field added to the map cannot miss this. The
+ * verdict on these is decidable from the wire alone and does not depend on the
+ * id being live: the decoder's address ids are a different sequence, so it
+ * refuses the reference whatever it points at. A compacted DISPENSER.GET_ADDRESS
+ * registers no dispenser at all, and a compacted ORACLE_ADDRESS means the
+ * oracle-fee output is never captured, so the create is rejected after the fee
+ * was spent. Pre-flight is the surface that says so: the validator stays silent
+ * because the chain still ACCEPTS the transaction (spec §4.2 false-block
+ * invariant), and the SDK's own compose path never emits one, so only a
+ * hand-set param reaches here.
+ */
+const CARET_UNRESOLVABLE_BY_DECODER = (() => {
+    const map = {};
+    for (const action of Object.keys(ADDRESS_REF_FIELDS)) {
+        map[action] = new Set(ADDRESS_REF_FIELDS[action]
+            .filter((spec) => spec.noCompact)
+            .map((spec) => spec.field));
     }
     return map;
 })();
@@ -102,6 +128,20 @@ function checkAddressRefs(ctx) {
             ctx.addFinding(FINDING_CODES.CARET_REF_UNRESOLVABLE, 'warning',
                 `${field} is the address reference ${str}, which is not a canonical ^<id> and can never resolve. `
                 + 'The chain rejects it as an unresolvable reference.',
+                { field, value: str });
+            continue;
+        }
+        // Checked AFTER the canonical-shape branch, which is the stronger verdict
+        // (that id resolves nowhere at all). A well-formed id on one of these
+        // fields is still decidable, so it is reported rather than declared
+        // unverified: only the DECODER's inability is at issue, not the id's.
+        const decoderBlind = CARET_UNRESOLVABLE_BY_DECODER[ctx.parsed.action];
+        if (decoderBlind && decoderBlind.has(field)) {
+            ctx.addFinding(FINDING_CODES.CARET_REF_UNRESOLVABLE, 'warning',
+                `${field} is the address reference ${str}, which the decoder cannot resolve: its address ids are `
+                + 'a different sequence from the indexer\'s. Send the full address here. A compacted GET_ADDRESS '
+                + 'registers no dispenser, and a compacted ORACLE_ADDRESS captures no oracle-fee output, so the '
+                + 'create is rejected after the fee is spent.',
                 { field, value: str });
             continue;
         }
