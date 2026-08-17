@@ -81,7 +81,7 @@ describe('pre-flight Tier 1 classification', function () {
     });
 
     it('XEXEC short-circuits on the NAME, from a hand-built parsed action', async function () {
-        // XC-1475: the denylist entry for XEXEC is unreachable through decoder.parse
+        // The denylist entry for XEXEC is unreachable through decoder.parse
         // (XEXEC is arbiter-emitted, has no wire format), so the only way to drive the
         // guard is to hand runTier1 the parsed shape directly. That is exactly the
         // internal-caller case the entry exists for: the short-circuit keys off the

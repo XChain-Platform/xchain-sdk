@@ -47,7 +47,7 @@ describe('pre-flight constants + registry', function () {
     });
 
     it('XEXEC on the denylist is defence-in-depth for an action the SDK cannot compose', function () {
-        // XC-1475. XEXEC is arbiter-EMITTED (mirror-injected from the hub mirror),
+        // XEXEC is arbiter-EMITTED (mirror-injected from the hub mirror),
         // not composed by a client, so there is no wire form for the SDK decoder to
         // parse and sdk.preflight() can never reach this denylist entry. That makes
         // the entry unreachable, not wrong: it mirrors the indexer literal by VALUE

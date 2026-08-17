@@ -3,15 +3,13 @@
 // Copyright © 2025–2026 Dankest, LLC
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// Drift-gate RUN MODES and the ci wiring that depends on them (XC-1480).
+// Drift-gate RUN MODES and the ci wiring that depends on them.
 //
-// What broke three times: the gate was the first link of `npm run ci` and it
-// exited 1, so a drift killed the run before mocha loaded. No test tally and no
-// named failing test is exactly the signature the shared pre-push gate reads as
-// THE SUITE NEVER RAN, so every sdk push died behind a banner that explicitly
-// cannot distinguish a bad commit from a bad venue, and stayed dead until a
-// human noticed. The operator's decision was to fail SOFT: report the drift,
-// let the suites run, fail the run afterwards.
+// A drift exiting 1 as the first link of `npm run ci` kills the run before
+// mocha loads: no test tally and no named failing test is exactly the
+// signature the shared pre-push gate reads as THE SUITE NEVER RAN, unable to
+// distinguish a bad commit from a bad venue. The gate instead fails SOFT:
+// report the drift, let the suites run, fail the run afterwards.
 //
 // That makes the modes load-bearing, so they are tested as behaviour (spawned
 // processes, real exit codes) rather than as functions, and the ci chain's
@@ -28,7 +26,7 @@ const { spawnSync } = require('child_process');
 const SDK_ROOT = path.join(__dirname, '..', '..', '..');
 const GATE = path.join(SDK_ROOT, 'bin', 'check-preflight-drift.js');
 
-describe('drift gate run modes (§8.5, XC-1480)', function () {
+describe('drift gate run modes (§8.5)', function () {
     this.timeout(20000);
 
     // A deliberately broken indexer root: it carries src/actions/ (which is what

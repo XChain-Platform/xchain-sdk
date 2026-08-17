@@ -166,7 +166,7 @@ const TIER2_ERROR_CAPABLE = Object.freeze({
  * Kept in lockstep with FEE_QUOTE_DENYLIST in xchain-indexer/src/actions.js, enforced by
  * bin/check-preflight-drift.js (named, not line-pinned: the line pin had already drifted).
  *
- * XEXEC IS DEFENCE-IN-DEPTH, AND DELIBERATELY UNREACHABLE (XC-1475)
+ * XEXEC IS DEFENCE-IN-DEPTH, AND DELIBERATELY UNREACHABLE
  *
  * Three of these four entries can actually be hit from `sdk.preflight()`; XEXEC
  * cannot, today, and that is not a defect. XEXEC is a cross-chain VM execution

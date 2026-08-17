@@ -18,14 +18,13 @@
  *
  * Exit 0 = in sync (or skipped); exit 1 = drift.
  *
- * FAIL-SOFT INSIDE `npm run ci` (XC-1480). This gate ran as the first link of
- * the ci chain and exited 1, which killed the run before mocha loaded: no test
- * tally, no named failing test, so the shared pre-push gate classified it as
- * THE SUITE NEVER RAN and could not tell a bad commit from a bad venue. Three
- * drifts in three weeks each bricked every sdk push that way. The finding is
- * still fatal to the run, just no longer fatal to the RUN'S REPORTING: --soft
- * reports and returns 0 at the head of the chain, --verdict re-asserts the
- * same evaluation as the chain's last link, after the tally exists. See main().
+ * FAIL-SOFT INSIDE `npm run ci`. A drift exiting 1 as the first link of the
+ * chain kills the run before mocha loads: no test tally, no named failing
+ * test, so the shared pre-push gate cannot tell a bad commit from a bad venue.
+ * The finding is still fatal to the run, just no longer fatal to the RUN'S
+ * REPORTING: --soft reports and returns 0 at the head of the chain, --verdict
+ * re-asserts the same evaluation as the chain's last link, after the tally
+ * exists. See main().
  *
  ********************************************************************/
 

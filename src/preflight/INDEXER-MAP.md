@@ -105,7 +105,7 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
 
-### 2026-08-16 - the BUILDER's weight posture is REVERSED (XC-1542)
+### 2026-08-16 - the BUILDER's weight posture is REVERSED
 
 No handler moved. What moved is this file's own 2026-08-15 (fifth pass)
 answer, and it is recorded here rather than edited out of that entry so the
@@ -323,8 +323,6 @@ rather than left to be inferred from a refreshed hash.
   rejects, never the reverse). Pre-flight's existing WARNING shape is the
   precedent to follow.
 
-Tracked as XC-1480.
-
 ### 2026-08-13 (third pass) - `batch.js` + `dispenser.js`, against indexer HEAD `b460999`
 
 Two rows, one cause, and this time the cause is a single reviewable commit
@@ -501,8 +499,8 @@ checked per handler, which is the whole point of the entry.
 > `batch.js` review remains the record for that row's earlier state.
 
 
-The gate is red across ELEVEN handlers, fleet-wide and for unrelated reasons
-(tracked as XC-1453). This entry refreshes exactly ONE row, `checks/batch.js`,
+The gate is red across ELEVEN handlers, fleet-wide and for unrelated reasons.
+This entry refreshes exactly ONE row, `checks/batch.js`,
 because that is the only handler whose diff was read end to end and whose client
 mirror moved with it. The other ten rows are deliberately left red: their
 recorded hashes predate a baseline this review did not establish, and refreshing
