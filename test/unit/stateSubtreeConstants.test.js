@@ -73,7 +73,9 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.tokens_root, {});
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.contract_state_root,
             { 'BTC:regtest': 10000, 'BTC:testnet': 146500 });
-        assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_ACTIVATION, { 'BTC:regtest': 11200 });
+        assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_ACTIVATION,
+            // Testnet armed at genesis 2026-08-18 (pre-launch: every feature live on testnet).
+            { 'BTC:regtest': 11200, 'BTC:testnet': 0, 'LTC:testnet': 0, 'DOGE:testnet': 0 });
         // THE SHADOW MAPS ARE PINNED TOO, and they were not until A
         // shadow commits nothing, which is exactly why it looked safe to leave
         // unasserted here; the cost showed up on 2026-08-11, when the escrow
@@ -111,25 +113,35 @@ describe('SPV sub-tree activation constants: client export @regression', functio
                 'the escrow leaf ships SHADOWING on MAINNET (' + key + ') in a CLIENT release');
     });
 
-    it('the escrow shadow window opens exactly at 148000 on BTC:testnet, and arms nothing', function(){
+    it('the escrow shadow window is suppressed on BTC:testnet by the genesis arming', function(){
         // The boundary a client acts on, driven rather than inferred from the map.
         assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(147999, 'testnet', 'BTC'), false);
-        assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(148000, 'testnet', 'BTC'), true);
-        // A SHADOW IS NOT AN ARMING, and this is the assertion that says so. If
-        // these two ever answer true together, a client would accept a
-        // locked-balance proof for a height whose balances_root does not cover
-        // the XCHAIN_ESC domain, which is the §4 mistake this file exists to
-        // prevent. stateRootVersion must not move across the window either:
-        // Stage A is already armed on BTC:testnet at 146500, so 2 on both sides.
-        assert.strictEqual(SUB.isEscrowLockedLeafActive(148000, 'testnet', 'BTC'), false);
-        assert.strictEqual(SUB.isEscrowLockedLeafActive(999999999, 'testnet', 'BTC'), false);
+        // ARMED WINS: isEscrowLockedLeafShadowActive returns false once the chain is armed,
+        // so nothing computes twice. Testnet is armed from genesis, so the shadow entry for
+        // this height can never open, on either side of its own threshold.
+        assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(148000, 'testnet', 'BTC'), false);
+        // The original point of this case was that A SHADOW IS NOT AN ARMING, so that a
+        // client could never accept a locked-balance proof at a height whose balances_root
+        // does not cover the XCHAIN_ESC domain (the §4 mistake this file exists to prevent).
+        // That property still holds; what changed on 2026-08-18 is which side of it testnet
+        // sits on. BTC:testnet is now ARMED FROM GENESIS, and the module's documented rule is
+        // that ARMED WINS over a shadow, so the leaf is committed at every testnet height and
+        // the shadow entry is inert rather than contradictory. Mainnet, below, is where the
+        // shadow-is-not-an-arming assertion still has teeth.
+        assert.strictEqual(SUB.isEscrowLockedLeafActive(148000, 'testnet', 'BTC'), true);
+        assert.strictEqual(SUB.isEscrowLockedLeafActive(0, 'testnet', 'BTC'), true);
+        // The property under test, on the network that still carries no arming.
+        assert.strictEqual(SUB.isEscrowLockedLeafActive(999999999, 'mainnet', 'BTC'), false);
         assert.strictEqual(SUB.stateRootVersion(147999, 'testnet', 'BTC'), 2);
         assert.strictEqual(SUB.stateRootVersion(148000, 'testnet', 'BTC'), 2);
         // Chain-local, on both axes: no other coin and no other network opens.
+        // No chain shadows at this height any more, and for two different reasons that
+        // both need to hold: the testnet chains are ARMED (armed wins, so the shadow is
+        // suppressed), and every other chain was never in the shadow map to begin with.
+        // Asserted across both axes so a stray future entry still trips it.
         for(const coin of ['BTC', 'LTC', 'DOGE'])
             for(const network of ['mainnet', 'testnet', 'regtest'])
-                assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(148000, network, coin),
-                    coin === 'BTC' && network === 'testnet',
+                assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(148000, network, coin), false,
                     'escrow shadow leaked to ' + coin + '/' + network);
         // A window below the chain's own first indexed block (147500, after the
         // 2026-08-10 re-genesis) would never open at all, so the height is not
@@ -156,7 +168,10 @@ describe('SPV sub-tree activation constants: client export @regression', functio
                         assert.strictEqual(SUB.isSubtreeActive(slot, h, network, coin),
                             armed && slot === 'contract_state_root',
                             slot + ' ' + coin + '/' + network + '@' + h);
-                    assert.strictEqual(SUB.stateRootVersion(h, network, coin), armed ? 2 : 1);
+                    // stateRootVersion is 2 when ANY reserved slot OR the escrow leaf is live, so this
+                    // expectation must consider both or it under-predicts on an escrow-armed chain.
+                    const escrowArmed = SUB.isEscrowLockedLeafActive(h, network, coin);
+                    assert.strictEqual(SUB.stateRootVersion(h, network, coin), (armed || escrowArmed) ? 2 : 1);
                 }
         // A CLIENT reading this map is what tells it the slot is live at all, so
         // the boundary it will act on is pinned here too.
@@ -228,7 +243,11 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         // which is the change this pin caught a commit late. All four carriers
         // were verified byte-identical and unmodified at HEAD before repinning,
         // so the invariant the pin guards holds; only the pin was stale.
-        const GOLDEN = '7c69cad798e79c8a7fe37bc9b379819dc963d6bfee7928ff0c7fee531989bda6';
+        // Moved 2026-08-18: ESCROW_LOCKED_LEAF_ACTIVATION armed at genesis on BTC/LTC/DOGE
+        // testnet for the pre-launch "every feature live on testnet" ruling. All four copies
+        // (indexer, sync, sdk, explorer) were updated in the same change, which is exactly
+        // what this pin exists to force.
+        const GOLDEN = '315bf6285c84666ccd5b293dc66f883c89132b583449d34eaf29e90cc74ba331';
         const actual = sha256File(SELF);
         if(actual !== GOLDEN)
             assert.fail('src/state_subtree_activation.js changed (sha256 ' + actual + ').\n' +
