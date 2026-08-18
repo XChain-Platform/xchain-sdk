@@ -209,8 +209,8 @@ describe('pre-flight BATCH command cap', function () {
 });
 
 /*
- * XC-1498 / INDEXER-MAP row 11: the cost-weight budget, mirrored from the
- * arbiter once its remaining weight classes landed.
+ * INDEXER-MAP row 11: the cost-weight budget, mirrored from the arbiter
+ * once its remaining weight classes landed.
  *
  * The posture is the point and is asserted, not assumed: this is a WARNING in
  * both cases. The rule is live on testnet and regtest from genesis and UNARMED

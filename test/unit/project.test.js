@@ -54,9 +54,19 @@ describe('ProjectHelpers', function () {
             expect(() => project.rosterParams({ ticks: [] })).to.throw(/ticks is required/);
             expect(() => project.rosterParams({ ticks: ['  '] })).to.throw(/empty TICK/);
         });
+        // The empty segment after TYPE is MEMO, which LIST carries BEFORE its
+        // variadic ITEM tail rather than after it: a trailing memo could not be
+        // told apart from one more item. A roster with no memo still spends the slot.
         it('serializes to LIST v0 with each tick as its own pipe segment', function () {
             const r = sdk.actions.createAction({ action: 'LIST', params: project.rosterParams({ ticks: ['AAA', 'BBB', 'CCC'] }) });
-            expect(r.actionString).to.equal('LIST|0|1|AAA|BBB|CCC');
+            expect(r.actionString).to.equal('LIST|0|1||AAA|BBB|CCC');
+        });
+        it('carries a MEMO in its own slot without consuming a tick', function () {
+            const r = sdk.actions.createAction({
+                action: 'LIST',
+                params: { ...project.rosterParams({ ticks: ['AAA', 'BBB'] }), memo: 'our official tokens' },
+            });
+            expect(r.actionString).to.equal('LIST|0|1|our official tokens|AAA|BBB');
         });
     });
 
@@ -80,7 +90,7 @@ describe('ProjectHelpers', function () {
         });
         it('serializes to LIST v1 with the edit, source list, and items', function () {
             const r = sdk.actions.createAction({ action: 'LIST', params: project.rosterEditParams({ listActionIndex: 1234, add: ['AAA', 'BBB'] }) });
-            expect(r.actionString).to.equal('LIST|1|1|1234|AAA|BBB');
+            expect(r.actionString).to.equal('LIST|1|1|1234||AAA|BBB');
         });
     });
 
@@ -103,11 +113,11 @@ describe('ProjectHelpers', function () {
     describe('LIST ITEM rest-field (serialization regression)', function () {
         it('a plain string item still serializes as a single-item list', function () {
             const r = sdk.actions.createAction({ action: 'LIST', params: { type: 1, item: 'ONLYONE' } });
-            expect(r.actionString).to.equal('LIST|0|1|ONLYONE');
+            expect(r.actionString).to.equal('LIST|0|1||ONLYONE');
         });
         it('address lists also expand item arrays', function () {
             const r = sdk.actions.createAction({ action: 'LIST', params: { type: 2, item: ['1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev', '1FWDonkMbC6hL64JiysuggHnUAw2CKWszs'] } });
-            expect(r.actionString).to.equal('LIST|0|2|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1FWDonkMbC6hL64JiysuggHnUAw2CKWszs');
+            expect(r.actionString).to.equal('LIST|0|2||1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1FWDonkMbC6hL64JiysuggHnUAw2CKWszs');
         });
     });
 

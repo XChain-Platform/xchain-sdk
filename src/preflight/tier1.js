@@ -37,7 +37,7 @@
  *                            arbiter-emitted, has no wire format, and so
  *                            never arrives here from decoder.parse. See the
  *                            TIER1_DENYLIST comment in constants.js for why
- *                            the unreachable entry stays (XC-1475).
+ *                            the unreachable entry stays.
  *                            BATCH is the ONE denylisted action /preflight now
  *                            answers, per sub-command, so it is sent to the
  *                            endpoint (TIER1_SUBCOMMAND_PREFLIGHT) - and the
