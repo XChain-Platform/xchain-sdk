@@ -105,6 +105,32 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
 
+### 2026-08-20 - `batch.js`: fee-budget priceability widened to the arbiter's D10 scope
+
+No handler moved and no pin moves: the arbiter's D10 pricing
+(`nominalDurationFee`, `nominalExecuteFee` and their
+`isGasProvablyUnaffordable` wiring) already sits inside the pinned `batch.js`
+content. This entry records the paired CLIENT move that was still owed.
+`checks/batch.js` priced only new-tick ISSUE into its batch fee budget; it now
+also prices an ORDER / SWAP / DISPENSER format-0 create from the wire's own
+EXPIRATION (the arbiter's arithmetic: day count rounded to nearest, the
+unified free window, per-day gas at GAS_PRICE) and an EXECUTE at its
+VM_EXECUTE_BASE acceptance floor, with the arbiter's gas-token probe mirrored
+through the token lookup.
+
+The one deliberate divergence is graded rather than hidden: the arbiter
+evaluates a duration fee at the confirming block's BLOCK_TIME and the client
+only has the wall clock, so a client duration quote can OVERSTATE a
+later-confirming create. Quotes therefore carry a lower-bound grade: the
+EXECUTE floor and ISSUE schedule prices are collapse-grade and may feed the
+whole-batch ERROR, while duration quotes feed the batch-total WARNING only
+and can never collapse the batch, which keeps the mirror on the permitted
+side of its doctrine (it may accept what the chain rejects, never the
+reverse). MINT and XEXEC stay pinned OUT of pricing (MINT's real cost is
+contract code no param reveals; XEXEC is system-injected and fee-less), and
+`test/unit/preflight/batch.test.js` pins both refusals plus a positive
+pricing vector for each widened class.
+
 ### 2026-08-20 - `batch.js`: chunk-carrier DEPLOY weight discount, mirrored
 
 One row. `git log 1a4b78a4..HEAD -- src/actions/batch.js` returns exactly
