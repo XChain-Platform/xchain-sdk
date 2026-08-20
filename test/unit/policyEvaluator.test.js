@@ -199,6 +199,32 @@ describe('policyEvaluator.evaluatePolicy', function () {
             expect(evaluatePolicy(policy, { action: 'VOTE', params: { DEPOSIT: '150' } }).ok).to.equal(false);
         });
 
+        // The summed legs are decoded verbatim from the WIF holder's action string, so each one
+        // is validated BEFORE it is summed. Without that ordering a non-numeric leg throws out of resolveValue
+        // (math.bignumber) ahead of the amount gate, and a negative leg summed cleanly, shrinking
+        // the total the caps bind to.
+        it('denies a malformed or negative VOTE leg instead of throwing or shrinking the sum', function () {
+            const policy = { allowedActions: new Set(['VOTE']), maxPerAction: { VOTE: { [GAS_TICK]: '100' } } };
+            let bad;
+            expect(() => {
+                bad = evaluatePolicy(policy, { action: 'VOTE', params: { DEPOSIT: 'abc', GAS_ESCROW: '10' } });
+            }).to.not.throw();
+            expect(bad.ok).to.equal(false);
+            expect(bad.violation.code).to.equal('POLICY_AMOUNT_INVALID');
+            expect(bad.violation.details.amount).to.equal('abc');
+            // A negative leg is refused rather than netted off the other one: -100 + 110 would
+            // have bound a cap of 10 to a vote escrowing 110.
+            const neg = evaluatePolicy(policy, { action: 'VOTE', params: { DEPOSIT: '-100', GAS_ESCROW: '110' } });
+            expect(neg.ok).to.equal(false);
+            expect(neg.violation.code).to.equal('POLICY_AMOUNT_INVALID');
+            // Exponent and other non-canonical spellings deny exactly as they already do on the
+            // single-amount path.
+            expect(evaluatePolicy(policy, { action: 'VOTE', params: { DEPOSIT: '1e5' } }).violation.code)
+                .to.equal('POLICY_AMOUNT_INVALID');
+            // The valid path is untouched: both legs canonical, sum under the cap.
+            expect(evaluatePolicy(policy, { action: 'VOTE', params: { DEPOSIT: '60', GAS_ESCROW: '30' } }).ok).to.equal(true);
+        });
+
         // Capability STAKE (v1/v2) debits the gas token but carries no TICK field;
         // its tick defaults to GAS_TICK so gas-scoped caps bind (previously only
         // the '*' wildcard applied).

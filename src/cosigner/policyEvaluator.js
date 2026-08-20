@@ -122,12 +122,24 @@ function resolveValue(action, params) {
             // Several escrowed legs bound as one total (e.g. VOTE escrows DEPOSIT + GAS_ESCROW
             // together). A missing leg counts as 0, but amount stays undefined only when EVERY
             // leg is absent, so a single present leg still binds the cap.
-            let any = false, total = '0';
+            // Each leg is validated BEFORE it is summed, and a bad one is carried out
+            // raw as the resolved amount so evaluatePolicy's POLICY_AMOUNT_INVALID gate
+            // refuses it, exactly as the single-amount path does. Two reasons, both
+            // reachable from the WIF holder's verbatim action string: addDecimal is
+            // math.bignumber(), which THROWS on a non-numeric leg ('abc'), and that throw
+            // fires inside resolveValue, ahead of the gate, so the daemon's policy path
+            // raised instead of denying; and a NEGATIVE leg sums fine, shrinking the total
+            // the caps bind to, which is the cap bypass the gate's own comment describes.
+            let any = false, total = '0', invalid;
             for (const keys of spec.amountSum) {
                 const v = pick(params, keys);
-                if (v !== undefined) { any = true; total = addDecimal(total, v); }
+                if (v === undefined) continue;
+                any = true;
+                if (invalid !== undefined) continue;
+                if (isNonNegativeDecimal(v)) total = addDecimal(total, v);
+                else invalid = v;
             }
-            amount = any ? total : undefined;
+            amount = invalid !== undefined ? invalid : (any ? total : undefined);
         } else {
             amount = pick(params, spec.amount);
         }

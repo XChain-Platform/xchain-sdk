@@ -206,10 +206,22 @@ function expandAlias(action) {
         : action;
 }
 
-// Whether the arbiter would find this (alias-expanded) name registered. Stands
-// in for the indexer's `protocolChanges.isEnabled(action)` activation scan: an
-// unregistered name - including the empty string an empty command yields - is
-// `invalid: ACTION (unknown)` there, whole-batch, before any limit is counted.
+// Whether this (alias-expanded) name is one a client can author. It stands in for
+// the indexer's `protocolChanges.isEnabled(action)` activation scan - an
+// unregistered name, including the empty string an empty command yields, is
+// `invalid: ACTION (unknown)` there, whole-batch, before any limit is counted -
+// and it is deliberately NARROWER than that scan, so read it as encodability, not
+// as the chain's registry. The registry recognizes every name it holds an entry
+// for, which is a superset of the encodable formats: the validator/lifecycle/
+// mirror-injected actions absent from formats.js by design (DISPENSE,
+// COINPAY_EXPIRE, SLASH, ATTEST, ANCHOR, XCALL, NODEPROOF) and every feature-flag
+// entry sharing the same table. A hand-built wire batch naming one of those reads
+// ACTION_UNKNOWN here while the arbiter's scan passes it to its handler.
+//
+// The divergence is one-way by construction, and in the safe direction: all 31
+// formats keys are registered with no activation gate, so this never calls known
+// a name the chain would reject. It over-warns about a batch nothing in this SDK
+// can compose; it never vouches for one the chain refuses.
 function isKnownAction(action) {
     return Object.prototype.hasOwnProperty.call(formats, expandAlias(action));
 }

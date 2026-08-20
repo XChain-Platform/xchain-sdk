@@ -59,6 +59,75 @@ const { lintSource } = require('./contract/lint-core.js');
 const CONTRACT_SOURCES = require('./contract/templates.js');
 const chunkHelper = require('./chunkHelper.js');
 
+/*
+ * PER-ENTITY DELIVERY GUARDS FOR THE on*() SUBSCRIPTIONS
+ *
+ * WebSocketClient dispatches purely on `msg.type` (websocket.js _handleMessage),
+ * so every handler registered for a type sees every frame of that type on the
+ * socket. The explorer multiplexes several entity subscriptions over ONE socket
+ * and stamps each frame with the entity it belongs to, so two same-type
+ * subscriptions on one SDK instance - onToken('PEPE') and onToken('DOGE'), or one
+ * onAddress per wallet address - both fired for either entity's frame and each
+ * callback silently read the other entity's live data. The SNAPSHOT handlers in
+ * those same methods already filtered; these give the LIVE handlers the same
+ * discriminator.
+ *
+ * They fail OPEN on a frame that carries no discriminator, and that is the whole
+ * design. The entity-update frames (ADDRESS_UPDATE / TOKEN_UPDATE / MARKET_UPDATE
+ * / DISPENSER_UPDATE) always carry their entity id, but the lifecycle frames
+ * (ORDER_MATCH, SWAP_MATCH, COINPAY_*, DISPENSE, DISPENSER_CLOSED/EXPIRED) carry
+ * whatever field that event has and the server routes them by exactly that:
+ * Broadcaster._extractAddresses reads source / destination / payer_address /
+ * payee_address / address, and an ORDER_MATCH naming none of them is routed to
+ * nobody's address channel. So filter on positive evidence the frame belongs to
+ * SOMEONE ELSE, never on the absence of a field: a strict equality test against a
+ * field the frame does not carry drops every one of these events, which trades a
+ * routing bug for silent data loss.
+ *
+ * Known bound: NEW_ACTION is routed to the DESTINATION's address channel from the
+ * raw action row, while its published `data` deliberately omits `destination`
+ * (Broadcaster._onAction). That branch is inert today because the actions feed
+ * never selects a destination column; if it is ever populated, the frame must
+ * carry the field before this guard can honour it.
+ */
+
+// The address fields an explorer frame can name its party in, mirroring
+// Broadcaster._extractAddresses on the server side.
+const FRAME_ADDRESS_FIELDS = ['address', 'source', 'destination', 'payer_address', 'payee_address'];
+
+function frameData(msg) {
+    return (msg && typeof msg === 'object' && msg.data && typeof msg.data === 'object') ? msg.data : null;
+}
+
+function frameIsForAddress(msg, address) {
+    const data = frameData(msg);
+    if (!data) return true;
+    let named = false;
+    for (const field of FRAME_ADDRESS_FIELDS) {
+        const value = data[field];
+        if (value === undefined || value === null || value === '') continue;
+        named = true;
+        if (value === address) return true;
+    }
+    return !named;
+}
+
+// Compare one stamped id field, string-normalized (action_index arrives as a
+// number or a string depending on the frame).
+function frameIdMatches(msg, field, expected) {
+    const data = frameData(msg);
+    if (!data) return true;
+    const value = data[field];
+    if (value === undefined || value === null || value === '') return true;
+    return String(value) === String(expected);
+}
+
+// One wrapper per registration; the unsubscribe closure must ws.off THIS
+// reference, not the caller's callback, or the handler stays attached.
+function entityGuarded(predicate, callback) {
+    return (msg) => { if (predicate(msg)) callback(msg); };
+}
+
 class XChainSDK {
 
     // Options are applied immediately for core + explicit URLs.
@@ -1634,7 +1703,8 @@ class XChainSDK {
             'ORDER_MATCH', 'COINPAY_REQUIRED', 'COINPAY_FULFILLED', 'COINPAY_EXPIRED',
             'SWAP_MATCH', 'DISPENSE'
         ];
-        for (const t of types) ws.on(t, callback);
+        const onEvent = entityGuarded((msg) => frameIsForAddress(msg, address), callback);
+        for (const t of types) ws.on(t, onEvent);
 
         let params = { address };
         if (opts && opts.types)    params.types    = opts.types;
@@ -1653,7 +1723,7 @@ class XChainSDK {
         this._subscribeDetached(ws, ['address'], params);
 
         return () => {
-            for (const t of types) ws.off(t, callback);
+            for (const t of types) ws.off(t, onEvent);
             ws.off('SNAPSHOT', onSnapshot);
             ws.unsubscribe(['address'], { address });
         };
@@ -1663,7 +1733,8 @@ class XChainSDK {
     // Returns an unsubscribe function
     onToken(tick, callback) {
         const ws = this._requireWs();
-        ws.on('TOKEN_UPDATE', callback);
+        const onUpdate = entityGuarded((msg) => frameIdMatches(msg, 'tick', tick), callback);
+        ws.on('TOKEN_UPDATE', onUpdate);
         const onSnapshot = (msg) => {
             if (msg && msg.data && msg.data.channel === 'token' && msg.data.tick === tick){
                 callback(msg);
@@ -1672,7 +1743,7 @@ class XChainSDK {
         ws.on('SNAPSHOT', onSnapshot);
         this._subscribeDetached(ws, ['token'], { tick, snapshot: true });
         return () => {
-            ws.off('TOKEN_UPDATE', callback);
+            ws.off('TOKEN_UPDATE', onUpdate);
             ws.off('SNAPSHOT', onSnapshot);
             ws.unsubscribe(['token'], { tick });
         };
@@ -1682,7 +1753,10 @@ class XChainSDK {
     // Returns an unsubscribe function
     onMarket(tick1, tick2, callback) {
         const ws = this._requireWs();
-        ws.on('MARKET_UPDATE', callback);
+        const onUpdate = entityGuarded(
+            (msg) => frameIdMatches(msg, 'tick1', tick1) && frameIdMatches(msg, 'tick2', tick2),
+            callback);
+        ws.on('MARKET_UPDATE', onUpdate);
         const onSnapshot = (msg) => {
             if (msg && msg.data && msg.data.channel === 'market' &&
                 msg.data.tick1 === tick1 && msg.data.tick2 === tick2){
@@ -1692,7 +1766,7 @@ class XChainSDK {
         ws.on('SNAPSHOT', onSnapshot);
         this._subscribeDetached(ws, ['market'], { tick1, tick2, snapshot: true });
         return () => {
-            ws.off('MARKET_UPDATE', callback);
+            ws.off('MARKET_UPDATE', onUpdate);
             ws.off('SNAPSHOT', onSnapshot);
             ws.unsubscribe(['market'], { tick1, tick2 });
         };
@@ -1702,10 +1776,17 @@ class XChainSDK {
     // Returns an unsubscribe function
     onDispenser(actionIndex, callback) {
         const ws = this._requireWs();
-        ws.on('DISPENSER_UPDATE', callback);
-        ws.on('DISPENSE', callback);
-        ws.on('DISPENSER_CLOSED', callback);
-        ws.on('DISPENSER_EXPIRED', callback);
+        // Two different fields name the dispenser, so the guards are not
+        // interchangeable: DISPENSER_UPDATE is the entity's own frame and carries
+        // `action_index`, while the lifecycle frames carry the DISPENSE's own
+        // action_index and name their parent in `dispenser_action_index`
+        // (ChangeDetector enriches it for exactly this correlation).
+        const onUpdate    = entityGuarded((msg) => frameIdMatches(msg, 'action_index', actionIndex), callback);
+        const onLifecycle = entityGuarded((msg) => frameIdMatches(msg, 'dispenser_action_index', actionIndex), callback);
+        ws.on('DISPENSER_UPDATE', onUpdate);
+        ws.on('DISPENSE', onLifecycle);
+        ws.on('DISPENSER_CLOSED', onLifecycle);
+        ws.on('DISPENSER_EXPIRED', onLifecycle);
         const onSnapshot = (msg) => {
             if (msg && msg.data && msg.data.channel === 'dispenser' &&
                 String(msg.data.action_index) === String(actionIndex)){
@@ -1715,10 +1796,10 @@ class XChainSDK {
         ws.on('SNAPSHOT', onSnapshot);
         this._subscribeDetached(ws, ['dispenser'], { action_index: actionIndex, snapshot: true });
         return () => {
-            ws.off('DISPENSER_UPDATE', callback);
-            ws.off('DISPENSE', callback);
-            ws.off('DISPENSER_CLOSED', callback);
-            ws.off('DISPENSER_EXPIRED', callback);
+            ws.off('DISPENSER_UPDATE', onUpdate);
+            ws.off('DISPENSE', onLifecycle);
+            ws.off('DISPENSER_CLOSED', onLifecycle);
+            ws.off('DISPENSER_EXPIRED', onLifecycle);
             ws.off('SNAPSHOT', onSnapshot);
             ws.unsubscribe(['dispenser'], { action_index: actionIndex });
         };
@@ -1728,10 +1809,11 @@ class XChainSDK {
     // Returns an unsubscribe function
     onCoinpayRequired(address, callback) {
         const ws = this._requireWs();
-        ws.on('COINPAY_REQUIRED', callback);
+        const onEvent = entityGuarded((msg) => frameIsForAddress(msg, address), callback);
+        ws.on('COINPAY_REQUIRED', onEvent);
         this._subscribeDetached(ws, ['address'], { address, types: ['COINPAY_REQUIRED'] });
         return () => {
-            ws.off('COINPAY_REQUIRED', callback);
+            ws.off('COINPAY_REQUIRED', onEvent);
             ws.unsubscribe(['address'], { address });
         };
     }
@@ -1740,11 +1822,12 @@ class XChainSDK {
     // Returns an unsubscribe function
     onOrderMatch(address, callback, opts) {
         const ws = this._requireWs();
-        ws.on('ORDER_MATCH', callback);
+        const onEvent = entityGuarded((msg) => frameIsForAddress(msg, address), callback);
+        ws.on('ORDER_MATCH', onEvent);
         let params = { address, types: ['ORDER_MATCH'] };
         this._subscribeDetached(ws, ['address'], params);
         return () => {
-            ws.off('ORDER_MATCH', callback);
+            ws.off('ORDER_MATCH', onEvent);
             ws.unsubscribe(['address'], { address });
         };
     }
