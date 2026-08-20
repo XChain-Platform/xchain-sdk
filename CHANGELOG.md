@@ -5,20 +5,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added
-- `npm run release:npm-check` fails while the npm registry serves a version other than the repo's, for the SDK and the MCP server.
-- `verifyLockedBalance` gives consumers a locked-balance network path that binds the served proof to the quorum-signed checkpoint, mirroring `verifyBalance`.
-
-### Changed
-- `verifyBalance` now passes the requested identity through the verifier's `expected` binding, so a proof echoing a different address or tick is refused as `REQUESTED_IDENTITY_MISMATCH`.
-- `verifyLockedBalanceProof` gates escrow-leaf arming on a caller-supplied trusted height instead of the server-authored `proof.height`, and refuses a proof relabelled off it as `PROOF_HEIGHT_MISMATCH`.
-
-### Deprecated
-- Calling `verifyBalanceProof`, `verifyLockedBalanceProof` or `verifyContractStateProof` without the `expected` identity argument; it becomes required at the next major version.
-- Calling `verifyLockedBalanceProof` without a `trustedHeight`; meanwhile it gates at height 0, which refuses every chain armed mid-chain, and it becomes required at the next major version.
-
 ## [0.10.0] - 2026-08-13
 
 Renumbered from an unpublished in-repo 2.0.3 cut before first publish: the SDK joins the platform version stream at this release, and the 2.x versions on npm are deprecated in its favor.
@@ -28,13 +14,31 @@ Renumbered from an unpublished in-repo 2.0.3 cut before first publish: the SDK j
 - Pre-flight warns on a non-canonical `^<id>` address reference and marks a well-formed one unverified.
 - `npm run ci` now runs the pre-flight drift gate, which still skips clean without a sibling indexer checkout.
 - `verifyBalanceProof`, `verifyLockedBalanceProof` and `verifyContractStateProof` take an optional expected identity and refuse a valid proof that answers a different key.
+- `verifyLockedBalance` gives consumers a locked-balance network path that binds the served proof to the quorum-signed checkpoint, mirroring `verifyBalance`.
 - Taproot envelopes work on 2-of-3 co-signer accounts, so a commit output keeps its two-of-three property.
 - `CoSignerClient` accepts `recoveryPublicKey` and derives the 2-of-3 tap tree itself, cross-checking any supplied `tweaks`.
+- Armed the three BTC-anchored activation copies (checkpoint commitment, EQUIV header, stake-weighted quorum) at BTC 961000, in lockstep with the indexer and hub twins.
+- `ContractUtils.parseAbi(source)` reads the optional contract `abi` display-metadata block and fails closed on bad input.
+- Escrow, vesting and crowdsale templates declare `abi` blocks with method summaries and `view` flags.
+- The hub connector takes a `hubApiKey` option (env fallback `HUB_API_KEY`) for `getallconfigs` against keyed hubs.
+- `npm run release:npm-check` fails while the npm registry serves a version other than the repo's, for the SDK and the MCP server.
 
 ### Changed
 - **BREAKING** `AgentSession` now requires a spend ceiling and a stable `submitOpts.idempotencyKey`, and adds an operator kill switch; `allowUnbounded` / `allowUnkeyedSubmits` opt back out.
 - **BREAKING** `X402Client` is fail-closed on spend: omitting `maxAmount` applies a default per-payment ceiling, and unbounded spending is an explicit opt-in.
 - **BREAKING** `X402Client.fetchUrl` no longer double-pays on retry; it throws `X402_PAYMENT_AMBIGUOUS` with a resume handle instead.
+- `verifyBalance` now passes the requested identity through the verifier's `expected` binding, so a proof echoing a different address or tick is refused as `REQUESTED_IDENTITY_MISMATCH`.
+- `verifyLockedBalanceProof` gates escrow-leaf arming on a caller-supplied trusted height instead of the server-authored `proof.height`, and refuses a proof relabelled off it as `PROOF_HEIGHT_MISMATCH`.
+- Re-vendored `lint-core.js` and `metering.js` byte-identical to the canonical xchain-vm copies.
+- Re-embedded the crowdsale template via `sync:templates`, picking up the xchain-contracts `saleDecimals` validation.
+- Address-ref compaction is action-aware via `SDK_COMPACTABLE_BY_ACTION`, so a field can be compacted for one action and emitted in full for another.
+
+### Deprecated
+- Calling `verifyBalanceProof`, `verifyLockedBalanceProof` or `verifyContractStateProof` without the `expected` identity argument; it becomes required at the next major version.
+- Calling `verifyLockedBalanceProof` without a `trustedHeight`; meanwhile it gates at height 0, which refuses every chain armed mid-chain, and it becomes required at the next major version.
+
+### Removed
+- The `statuses` WebSocket filter is gone from `onAction`, `onAddress` and `onOrderMatch`, because no explorer channel populated it.
 
 ### Fixed
 - `CORS_ORIGIN` is a comma-separated allowlist rather than an echo of every request origin.
@@ -55,6 +59,7 @@ Renumbered from an unpublished in-repo 2.0.3 cut before first publish: the SDK j
 - Weighted checkpoint verification requires a valid weight and non-blank source on every validator entry.
 - A checkpoint missing its commitment roots after activation is rejected rather than verified against the legacy preimage.
 - Co-signer output caps compare as exact u64, so an output one satoshi above a cap larger than 2^53 is no longer approved.
+- Delegated dispenser opens serialize the full `GET_ADDRESS` instead of its `^<id>` reference form, so the dispenser is keyed on the real operating address and actually dispenses.
 - Review-round hardening: sub-root slot pinning in `verifyBalanceProof`, opt-in submit idempotency, fail-closed co-signer sidecar auth, compiled-push OP_RETURN pre-flight, network-aware oversize suggestions, an attestation SSRF gate, and derivation tests.
 
 ### Security
@@ -63,25 +68,6 @@ Renumbered from an unpublished in-repo 2.0.3 cut before first publish: the SDK j
 - `submitAction` reconciles every encoder-authored PSBT against the submitted intent before signing, blocking fund redirection and fee burn.
 - `generateNonce` refuses to reuse a `sessionId` under different signing inputs, which previously disclosed the private key.
 - `CoSigner`, `CoSignerClient` and `MuSig2AgentSession` require exactly the two-key pair they can sign for, so no unspendable aggregate address can be funded.
-
-### Removed
-- The `statuses` WebSocket filter is gone from `onAction`, `onAddress` and `onOrderMatch`, because no explorer channel populated it.
-
-### Added
-- Armed the three BTC-anchored activation copies (checkpoint commitment, EQUIV header, stake-weighted quorum) at BTC 961000, in lockstep with the indexer and hub twins.
-- `ContractUtils.parseAbi(source)` reads the optional contract `abi` display-metadata block and fails closed on bad input.
-- Escrow, vesting and crowdsale templates declare `abi` blocks with method summaries and `view` flags.
-- The hub connector takes a `hubApiKey` option (env fallback `HUB_API_KEY`) for `getallconfigs` against keyed hubs.
-
-### Changed
-- Re-vendored `lint-core.js` and `metering.js` byte-identical to the canonical xchain-vm copies.
-- Re-embedded the crowdsale template via `sync:templates`, picking up the xchain-contracts `saleDecimals` validation.
-- Address-ref compaction is action-aware via `SDK_COMPACTABLE_BY_ACTION`, so a field can be compacted for one action and emitted in full for another.
-
-### Fixed
-- Delegated dispenser opens serialize the full `GET_ADDRESS` instead of its `^<id>` reference form, so the dispenser is keyed on the real operating address and actually dispenses.
-
-### Security
 - `CoSigner` rejects any BIP341 `sighashType` other than `SIGHASH_DEFAULT` and `SIGHASH_ALL`, closing a drain-transaction bypass of the output gate.
 
 ## [2.0.2] - 2026-08-02
