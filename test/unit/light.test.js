@@ -480,6 +480,22 @@ describe('SPV Phase 4: sdk.light.verifyBalance end-to-end (signed checkpoint, mo
         assert.strictEqual(r.reason, 'BALANCE_QUERY_MISMATCH');
     });
 
+    // The network path also wires the caller's identity through the verifier's own
+    // `expected` binding, so a proof whose PROVEN KEY matches the request but whose
+    // echoed address field does not (the field callers read) is refused inside the
+    // verifier, not just by the expectedKey pre-check.
+    it('rejects a proof whose echoed identity differs from the request even when the key matches', async function () {
+        const ADDR_B = '1AddrBbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+        const { proof, stateRoot } = buildBalanceProof(ADDR_A, TICK, '42');
+        proof.address = ADDR_B;                 // key still proves ADDR_A, so the key pre-check passes
+        const { cp, validators } = makeSignedCheckpoint(stateRoot);
+        const fetchImpl = mockFetch([['/api/proof/balance/', { proof, checkpoint: cp }]]);
+        const r = await light.verifyBalance({ explorerUrl: 'https://x', coin: COIN, address: ADDR_A,
+            tick: TICK, atHeight: 100, validators, fetchImpl });
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'REQUESTED_IDENTITY_MISMATCH');
+    });
+
     it('rejects a genuinely-committed proof for a DIFFERENT tick than queried (query binding)', async function () {
         const { proof, stateRoot } = buildBalanceProof(ADDR_A, 'OTHERTOKEN', '999999');
         const { cp, validators } = makeSignedCheckpoint(stateRoot);

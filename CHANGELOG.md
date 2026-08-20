@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- `verifyBalance` now passes the requested identity through the verifier's `expected` binding, so a proof echoing a different address or tick is refused as `REQUESTED_IDENTITY_MISMATCH`.
+
+### Deprecated
+- Calling `verifyBalanceProof`, `verifyLockedBalanceProof` or `verifyContractStateProof` without the `expected` identity argument; it becomes required at the next major version.
+
 ## [2.0.3] - 2026-08-13
 
 ### Added

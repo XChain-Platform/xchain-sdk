@@ -85,8 +85,10 @@ function _hx(x){ return String(x == null ? '' : x).toLowerCase(); }
 // nothing downstream could see it.
 //
 // `expected` is OPTIONAL so this stays backward compatible; callers that pass it
-// get the binding. Only the fields present are compared, each as a string, so a
-// numeric contract_index and its decimal spelling agree.
+// get the binding. Omitting it is DEPRECATED: the argument becomes required at
+// the next major version, so new callers should always pass it. Only the fields
+// present are compared, each as a string, so a numeric contract_index and its
+// decimal spelling agree.
 function _expectedMismatch(expected, actual){
     if (!expected) return null;
     for (const field of Object.keys(expected)){
@@ -105,6 +107,10 @@ const DEFAULT_ANCHOR_MIN_DEPTH = 60;
 // Verify a §4.4 BalanceProof binds to a TRUSTED state_root (one already proven to
 // be in a quorum-signed checkpoint). chain/network come from the trusted
 // checkpoint, never the proof. Returns { verified, amount, reason }.
+//
+// @param {Object} [expected] The REQUESTED { address, tick } to bind the proof to
+//   (see _expectedMismatch). @deprecated Calling without `expected` is deprecated;
+//   the argument becomes required at the next major version.
 function verifyBalanceProof(proof, trustedStateRoot, chain, network, expected){
     try {
         if (!proof || !proof.smt_proof || !proof.sub_root_path) return _no('MALFORMED_PROOF');
@@ -166,6 +172,10 @@ function verifyBalanceProof(proof, trustedStateRoot, chain, network, expected){
 // mean nothing (spec §4): zero-locked is only a real claim at armed heights.
 // The height check is strict-parse fail-closed: a garbage height reads as
 // not-armed, never as armed.
+//
+// @param {Object} [expected] The REQUESTED { address, tick } to bind the proof to
+//   (see _expectedMismatch). @deprecated Calling without `expected` is deprecated;
+//   the argument becomes required at the next major version.
 function verifyLockedBalanceProof(proof, trustedStateRoot, chain, network, expected){
     try {
         if (!proof || !proof.smt_proof || !proof.sub_root_path) return _no('MALFORMED_PROOF');
@@ -214,6 +224,10 @@ function verifyLockedBalanceProof(proof, trustedStateRoot, chain, network, expec
 // slot is known to be live. Treating a below-arming non-inclusion as absence is
 // exactly the mistake spec §4 forbids; the server refuses to serve those heights
 // (CONTRACT_STATE_NOT_COMMITTED), and that refusal is the signal to respect.
+//
+// @param {Object} [expected] The REQUESTED { contract_index, state_key } to bind
+//   the proof to (see _expectedMismatch). @deprecated Calling without `expected`
+//   is deprecated; the argument becomes required at the next major version.
 function verifyContractStateProof(proof, trustedStateRoot, chain, network, expected){
     const no = (reason) => ({ verified: false, state_value: null, reason: reason });
     try {
@@ -396,7 +410,10 @@ async function verifyBalance(opts){
     const expectedKey = M.toHex(M.balanceKey(cp.chain, cp.network, String(opts.address), String(opts.tick)));
     if (!proof.smt_proof || _hx(proof.smt_proof.key) !== expectedKey)
         return Object.assign({ verified: false, amount: null, reason: 'BALANCE_QUERY_MISMATCH' }, base);
-    const v = verifyBalanceProof(proof, trusted, cp.chain, cp.network);
+    // Bind inside the verifier too: the expectedKey check above guards the proven
+    // key, `expected` guards the echoed address/tick fields the caller will read.
+    const v = verifyBalanceProof(proof, trusted, cp.chain, cp.network,
+                                 { address: String(opts.address), tick: String(opts.tick) });
     return Object.assign({ verified: v.verified, amount: v.verified ? v.amount : null, reason: v.reason }, base);
 }
 
