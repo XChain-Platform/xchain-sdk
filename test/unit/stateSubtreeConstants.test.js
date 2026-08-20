@@ -72,7 +72,10 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.ownership_root, {});
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.tokens_root, {});
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.contract_state_root,
-            { 'BTC:regtest': 10000, 'BTC:testnet': 146500 });
+            // Testnet armed at genesis 2026-08-20, replacing BTC:testnet's 146500 (left
+            // inert by the 2026-08-10 re-genesis) and adding LTC and DOGE, which had no
+            // entry at all and so were pinned by nothing before this line.
+            { 'BTC:regtest': 10000, 'BTC:testnet': 0, 'LTC:testnet': 0, 'DOGE:testnet': 0 });
         assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_ACTIVATION,
             // Testnet armed at genesis 2026-08-18 (pre-launch: every feature live on testnet).
             { 'BTC:regtest': 11200, 'BTC:testnet': 0, 'LTC:testnet': 0, 'DOGE:testnet': 0 });
@@ -85,7 +88,7 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         // an unreviewed entry is a client-visible change either way.
         assert.deepStrictEqual(SUB.STATE_SUBTREE_SHADOW,
             { ownership_root: {}, tokens_root: {}, contract_state_root: {} });
-        assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_SHADOW, { 'BTC:testnet': 148000 });
+        assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_SHADOW, {});
         // THE LAUNCH GUARD, and it is about MAINNET rather than about regtest.
         // It read /:regtest$/ while regtest was the only armed network, which was
         // the strictest form available then and the WRONG rule to keep: once the
@@ -113,41 +116,61 @@ describe('SPV sub-tree activation constants: client export @regression', functio
                 'the escrow leaf ships SHADOWING on MAINNET (' + key + ') in a CLIENT release');
     });
 
-    it('the escrow shadow window is suppressed on BTC:testnet by the genesis arming', function(){
-        // The boundary a client acts on, driven rather than inferred from the map.
+    it('no escrow shadow window is open, so a client never computes a leaf twice', function(){
+        // The map is empty. The BTC:testnet entry that sat at 148000 was dead the
+        // moment the leaf armed at genesis on all three testnets: ARMED WINS over a
+        // shadow, so the predicate answered false on BOTH sides of its own threshold
+        // while the surrounding prose still read as though a window were open. The
+        // heights it straddled are checked explicitly, so re-adding it fails here.
         assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(147999, 'testnet', 'BTC'), false);
-        // ARMED WINS: isEscrowLockedLeafShadowActive returns false once the chain is armed,
-        // so nothing computes twice. Testnet is armed from genesis, so the shadow entry for
-        // this height can never open, on either side of its own threshold.
         assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(148000, 'testnet', 'BTC'), false);
-        // The original point of this case was that A SHADOW IS NOT AN ARMING, so that a
-        // client could never accept a locked-balance proof at a height whose balances_root
-        // does not cover the XCHAIN_ESC domain (the §4 mistake this file exists to prevent).
-        // That property still holds; what changed on 2026-08-18 is which side of it testnet
-        // sits on. BTC:testnet is now ARMED FROM GENESIS, and the module's documented rule is
-        // that ARMED WINS over a shadow, so the leaf is committed at every testnet height and
-        // the shadow entry is inert rather than contradictory. Mainnet, below, is where the
-        // shadow-is-not-an-arming assertion still has teeth.
-        assert.strictEqual(SUB.isEscrowLockedLeafActive(148000, 'testnet', 'BTC'), true);
-        assert.strictEqual(SUB.isEscrowLockedLeafActive(0, 'testnet', 'BTC'), true);
-        // The property under test, on the network that still carries no arming.
+        // The property this case exists for is that A SHADOW IS NOT AN ARMING, so a
+        // client can never accept a locked-balance proof at a height whose balances_root
+        // does not cover the XCHAIN_ESC domain (the §4 mistake this file prevents).
+        // MAINNET is where that assertion still has teeth: it carries no arming at all.
         assert.strictEqual(SUB.isEscrowLockedLeafActive(999999999, 'mainnet', 'BTC'), false);
-        assert.strictEqual(SUB.stateRootVersion(147999, 'testnet', 'BTC'), 2);
-        assert.strictEqual(SUB.stateRootVersion(148000, 'testnet', 'BTC'), 2);
-        // Chain-local, on both axes: no other coin and no other network opens.
-        // No chain shadows at this height any more, and for two different reasons that
-        // both need to hold: the testnet chains are ARMED (armed wins, so the shadow is
-        // suppressed), and every other chain was never in the shadow map to begin with.
-        // Asserted across both axes so a stray future entry still trips it.
+        // The committed side on testnet, which is what a client acts on now.
+        for(const coin of ['BTC', 'LTC', 'DOGE'])
+            for(const h of [0, 147999, 148000, 999999999]){
+                assert.strictEqual(SUB.isEscrowLockedLeafActive(h, 'testnet', coin), true,
+                    coin + ':testnet locked leaf must be live at ' + h);
+                assert.strictEqual(SUB.stateRootVersion(h, 'testnet', coin), 2);
+            }
+        // Nothing shadows, on either axis, at any height. Sweeping without a carve-out
+        // is the point: the predicate must be false because the MAP is empty, not
+        // because one chain happens to be armed over it.
         for(const coin of ['BTC', 'LTC', 'DOGE'])
             for(const network of ['mainnet', 'testnet', 'regtest'])
-                assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(148000, network, coin), false,
-                    'escrow shadow leaked to ' + coin + '/' + network);
-        // A window below the chain's own first indexed block (147500, after the
-        // 2026-08-10 re-genesis) would never open at all, so the height is not
-        // merely reviewed, it is reachable.
-        assert.ok(SUB.ESCROW_LOCKED_LEAF_SHADOW['BTC:testnet'] > 147500,
-            'the shadow window must start above BTC:testnet\'s first indexed block');
+                for(const h of [0, 1, 148000, 999999999])
+                    assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(h, network, coin), false,
+                        'escrow shadow leaked to ' + coin + '/' + network + '@' + h);
+        // A permanently-false predicate would pass every assertion above, so prove the
+        // shadow path still WORKS on a scratch chain nothing else touches, including
+        // the armed-wins handover that keeps each height on exactly one column.
+        const had        = Object.prototype.hasOwnProperty.call(SUB.ESCROW_LOCKED_LEAF_SHADOW, 'DOGE:regtest');
+        const prior      = SUB.ESCROW_LOCKED_LEAF_SHADOW['DOGE:regtest'];
+        const hadArmed   = Object.prototype.hasOwnProperty.call(SUB.ESCROW_LOCKED_LEAF_ACTIVATION, 'DOGE:regtest');
+        const priorArmed = SUB.ESCROW_LOCKED_LEAF_ACTIVATION['DOGE:regtest'];
+        try {
+            SUB.ESCROW_LOCKED_LEAF_SHADOW['DOGE:regtest']     = 500;
+            SUB.ESCROW_LOCKED_LEAF_ACTIVATION['DOGE:regtest'] = 800;
+            assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(499, 'regtest', 'DOGE'), false);
+            assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(500, 'regtest', 'DOGE'), true);
+            assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(799, 'regtest', 'DOGE'), true);
+            assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(800, 'regtest', 'DOGE'), false, 'armed wins');
+            // Shadowing never moves the derived version: it is not committed.
+            assert.strictEqual(SUB.stateRootVersion(600, 'regtest', 'DOGE'), 1);
+            assert.strictEqual(SUB.stateRootVersion(800, 'regtest', 'DOGE'), 2);
+        } finally {
+            // RESTORE, never delete: DOGE:regtest is absent from both real maps, so
+            // delete IS the restore here, but it is written as a restore so that
+            // arming the chain for real later cannot turn this cleanup into a disarm.
+            if(had) SUB.ESCROW_LOCKED_LEAF_SHADOW['DOGE:regtest'] = prior;
+            else delete SUB.ESCROW_LOCKED_LEAF_SHADOW['DOGE:regtest'];
+            if(hadArmed) SUB.ESCROW_LOCKED_LEAF_ACTIVATION['DOGE:regtest'] = priorArmed;
+            else delete SUB.ESCROW_LOCKED_LEAF_ACTIVATION['DOGE:regtest'];
+        }
+        assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_SHADOW, {}, 'the scratch window was not cleaned up');
     });
 
     it('the slot list matches this repo\'s merkle.STATE_SUBTREES tail', function(){
@@ -174,9 +197,20 @@ describe('SPV sub-tree activation constants: client export @regression', functio
                     assert.strictEqual(SUB.stateRootVersion(h, network, coin), (armed || escrowArmed) ? 2 : 1);
                 }
         // A CLIENT reading this map is what tells it the slot is live at all, so
-        // the boundary it will act on is pinned here too.
+        // the boundary it will act on is pinned here too. BTC:regtest at 10000 is the
+        // only real below/at/above boundary this slot still has, every testnet chain
+        // having armed at genesis, so this is what proves the client's copy can answer
+        // false on an armed chain rather than reading as blanket-on.
+        assert.strictEqual(SUB.isSubtreeActive('contract_state_root', 0,     'regtest', 'BTC'), false);
         assert.strictEqual(SUB.isSubtreeActive('contract_state_root', 9999,  'regtest', 'BTC'), false);
         assert.strictEqual(SUB.isSubtreeActive('contract_state_root', 10000, 'regtest', 'BTC'), true);
+        // The genesis-armed side: a client must report the slot live from block 0 on
+        // all three testnet chains, or it tells its user a live slot is inert, which
+        // §4 calls the same wrong answer as shipping no export at all.
+        for(const coin of ['BTC', 'LTC', 'DOGE'])
+            for(const h of [0, 1, 999999999])
+                assert.strictEqual(SUB.isSubtreeActive('contract_state_root', h, 'testnet', coin), true,
+                    coin + ':testnet must read live to a client at ' + h);
     });
 
     it('a client reading the maps gets the SAME answer the fleet commits (arming is visible)', function(){
@@ -207,8 +241,16 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         }
         // The assertion that catches a regression in the restore itself.
         assert.strictEqual(map['BTC:regtest'], 10000, 'restored to the real armed height, not wiped');
-        assert.strictEqual(SUB.STATE_SUBTREE_ACTIVATION.contract_state_root['BTC:testnet'], 146500,
-            'the sibling armed height must survive a scratch-arm too');
+        // The sibling armed heights must survive a scratch-arm too. Checked with
+        // hasOwnProperty as well as by value: a genesis height is 0, and a bare
+        // truthiness check on 0 would read a DELETED key as if it were still armed,
+        // which is precisely the disarm this block's restore exists to catch.
+        for(const coin of ['BTC', 'LTC', 'DOGE']){
+            const k = coin + ':testnet';
+            assert.ok(Object.prototype.hasOwnProperty.call(SUB.STATE_SUBTREE_ACTIVATION.contract_state_root, k),
+                k + ' was dropped from the map by a scratch-arm');
+            assert.strictEqual(SUB.STATE_SUBTREE_ACTIVATION.contract_state_root[k], 0);
+        }
     });
 
     it('GOLDEN: this repo\'s copy has not moved on its own', function(){
@@ -247,7 +289,14 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         // testnet for the pre-launch "every feature live on testnet" ruling. All four copies
         // (indexer, sync, sdk, explorer) were updated in the same change, which is exactly
         // what this pin exists to force.
-        const GOLDEN = '315bf6285c84666ccd5b293dc66f883c89132b583449d34eaf29e90cc74ba331';
+        // Moved 2026-08-20 (Stage A genesis): STATE_SUBTREE_ACTIVATION.contract_state_root
+        // armed at genesis on all three testnet chains, replacing BTC:testnet's 146500 (left
+        // inert by the 2026-08-10 re-genesis) and adding LTC and DOGE. Legal at 0 because all
+        // three are genesis-active in state_key_collation_activation.js, so no slot arms below
+        // its own collation height. ESCROW_LOCKED_LEAF_SHADOW emptied in the same change: its
+        // BTC:testnet 148000 entry could never open once the leaf armed at genesis there, so
+        // it was unreachable code that read as an open window.
+        const GOLDEN = 'fd480996a1c082f7c4024187eb9d05d7e99d8fada1816d7a6a5d978c6e10aa72';
         const actual = sha256File(SELF);
         if(actual !== GOLDEN)
             assert.fail('src/state_subtree_activation.js changed (sha256 ' + actual + ').\n' +
