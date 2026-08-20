@@ -1,7 +1,7 @@
 {
   "name": "@dankest-llc/xchain-sdk",
   "description": "xchain-sdk generates XChain Platform ACTION commands and encodes them into unsigned blockchain transactions as well as pulls data from the XChain APIs such as balances and transaction history.",
-  "version": "2.0.3",
+  "version": "0.10.0",
   "comment:homepage": "The npm package page links wherever this points, and it points at the platform site (xchain.io's deep-link backlinks 301 away to tokenscan.io, so operator-controlled touchpoints are what still build its authority).",
   "homepage": "https://xchain.io/",
   "publishConfig": {
@@ -78,6 +78,8 @@
     "api": "node ./src/api.js",
     "test": "mocha --timeout 5000 --recursive 'test/unit/**/*.test.js'",
     "sync:templates": "node scripts/sync-templates.js",
+    "comment:release:npm-check": "Release-ceremony gate: fails while registry.npmjs.org serves a version other than this repo's, for the SDK and for mcp/. Run as the closing act of the publish step; red means an unpublished or half-published cut. Needs network by design, so it is not part of the ci chain.",
+    "release:npm-check": "node scripts/npm-sync-check.js",
     "cosigner:init-window": "node scripts/cosigner-init-window.js",
     "comment:ci:drift": "Pre-flight <-> indexer-handler drift gate (spec 8.5), strict: it answers what the suites structurally cannot, whether the Tier-2 mirrors still match the handlers they mirror, and exits 1 when they do not. What the CI drift jobs on both repos run, and what to run by hand. SKIPS clean with no sibling xchain-indexer checkout, so a single-repo clone is unaffected. It used to run in CI only, so a local `npm run ci` never showed it and it sat red on master unread for two weeks; the ci chain now runs it locally too, in the soft/verdict pair below.",
     "ci:drift": "node bin/check-preflight-drift.js",

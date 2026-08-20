@@ -7,13 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `npm run release:npm-check` fails while the npm registry serves a version other than the repo's, for the SDK and the MCP server.
+
 ### Changed
 - `verifyBalance` now passes the requested identity through the verifier's `expected` binding, so a proof echoing a different address or tick is refused as `REQUESTED_IDENTITY_MISMATCH`.
 
 ### Deprecated
 - Calling `verifyBalanceProof`, `verifyLockedBalanceProof` or `verifyContractStateProof` without the `expected` identity argument; it becomes required at the next major version.
 
-## [2.0.3] - 2026-08-13
+## [0.10.0] - 2026-08-13
+
+Renumbered from an unpublished in-repo 2.0.3 cut before first publish: the SDK joins the platform version stream at this release, and the 2.x versions on npm are deprecated in its favor.
 
 ### Added
 - `buildLlmEnvelope` rejects a temperature outside [0, 2] instead of deferring the failure to the hub.
