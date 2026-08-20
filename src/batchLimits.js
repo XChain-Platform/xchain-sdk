@@ -135,6 +135,17 @@ const BATCH_WEIGHT_BUDGET = 250;
 // DEPLOY, EXECUTE and XEXEC run contract code, and 30 is the smallest round
 // weight keeping a full VM batch under the 250 ordinary-equivalent bound.
 //
+// A chunk-carrier DEPLOY (format 4) is DISCOUNTED to the default 1, and the
+// discount lives beside the table in `subCommandWeight` on BOTH sides rather
+// than in either table, so the tables stay byte-equal with no carve-outs. The
+// arbiter short-circuits a format-4 DEPLOY into chunk storage before the VM
+// path ever runs, so it really is a row write; 30 would charge constructor
+// cost for work that has none. The format byte is read with the arbiter's own
+// derivation (`formatVersion` below), and only off the WIRE STRING: the
+// compose-side `actionWeight` sees a queued NAME with no serialized format
+// yet, so it keeps DEPLOY's full 30 there, which is the arbiter's own
+// fallback direction (unparseable falls through to the full weight).
+//
 // THE INVARIANT, mirrored from the arbiter: every weight is an integer >= 1.
 // That is what makes the cheap count check a sound pre-filter for the weighted
 // one (count > budget implies weight sum > budget), which is why callers may
@@ -251,6 +262,33 @@ function classifyIssueTick(tick) {
  * to its unclassified name, which is the arbiter's own fallback.
  */
 /*
+ * FORMAT version of one raw wire field, mirroring the arbiter's ONE derivation
+ * (xchain-indexer/src/utility.js `getFormatVersion`): the same call its
+ * dispatcher uses to set FORMAT and its weight scan uses for the chunk-carrier
+ * DEPLOY discount, reproduced branch for branch so the two sides can never
+ * read one wire byte two ways. Quotes are stripped, a numeric string up to 255
+ * parses as its integer, an absent or empty field means format 0, and
+ * anything else (a float, an object, out of range, non-numeric) is null.
+ */
+function formatVersion(format) {
+    const type = typeof format;
+    // Reject objects (prevents crash on broken toString)
+    if (type === 'object' && format !== null) return null;
+    if (type === 'number' && Number.isInteger(format) && format <= 255) return format;
+    // Default to format 0 if none is given
+    if (type === 'undefined' || (type === 'string' && format === '')) return 0;
+    // Strip out any quotes and double-quotes
+    if (type === 'string') format = format.replace(/\"|\'/g, '');
+    // Convert any numeric strings to integers (use parseFloat to detect
+    // decimals), through the arbiter's own isNumeric/isFloat idioms.
+    const numeric = typeof format === 'bigint' || (!isNaN(parseFloat(format)) && isFinite(format));
+    const parsed = parseFloat(format);
+    const isFloat = parsed === +parsed && parsed !== (parsed | 0);
+    if (numeric && !isFloat && format <= 255) return parseInt(format);
+    return null;
+}
+
+/*
  * Cost weight of ONE raw sub-command string (indexer `subCommandWeight`).
  *
  * The action is derived exactly as `classifyCommand` derives it, and then
@@ -259,13 +297,23 @@ function classifyIssueTick(tick) {
  * same as any other ISSUE even though the per-action cap exempts it. Weighing
  * a child at 0 here would be the one thing the invariant forbids.
  *
+ * Chunk-carrier DEPLOY (format 4) runs no constructor, so it takes the default
+ * row-write weight rather than DEPLOY's VM weight, exactly as the arbiter
+ * discounts it. The format byte comes from `formatVersion` over params[0]
+ * (DEPLOY takes no legacy VERSION injection, so params[0] is always the
+ * explicit version field), and anything unparseable falls through to the full
+ * weight, which is the safe (over-charging) direction.
+ *
  * Never throws, and falls back to 1 for the arbiter's reason: 1 is the
  * pre-flag behaviour for a sub-command, so an unreadable entry is charged as
  * an ordinary one rather than being made free.
  */
 function subCommandWeight(command) {
     try {
-        return actionWeight(String(command).split('|')[0]);
+        const action = expandAlias(String(command).split('|')[0]);
+        if (action === 'DEPLOY' && formatVersion(String(command).split('|')[1]) === 4)
+            return 1;
+        return actionWeight(action);
     } catch (e) {
         return 1;
     }
@@ -659,6 +707,7 @@ module.exports = {
     BATCH_WEIGHT_BUDGET,
     BATCH_COMMAND_WEIGHTS,
     actionWeight,
+    formatVersion,
     subCommandWeight,
     batchWeight,
     BATCH_ACTION_LIMITS,

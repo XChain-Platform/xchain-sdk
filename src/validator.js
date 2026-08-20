@@ -28,7 +28,9 @@ const { ADDRESS_REF_FIELDS } = require('./addressRefFields.js');
 const {
     BATCH_ACTION_LIMITS_ACTIVE,
     BATCH_COMMAND_LIMIT,
+    BATCH_WEIGHT_BUDGET,
     CHILD_ISSUE_KEY,
+    batchWeight,
     classifyCommand,
     commandTick,
     limitKeysInListOrder,
@@ -897,6 +899,23 @@ class Validator {
             errors.push(this._error('BATCH_CONSTRAINT',
                 'BATCH can contain at most ' + BATCH_COMMAND_LIMIT + ' commands',
                 { count: commands.length, limit: BATCH_COMMAND_LIMIT }));
+            return errors;
+        }
+
+        // BATCH_COST_WEIGHTING: the same whole-batch rejection, reached by
+        // WEIGHT instead of count, in the same position the arbiter checks it.
+        // Weighed only when the count already fits, which is the arbiter's own
+        // ordering: every weight is an integer >= 1, so the count check is a
+        // sound pre-filter and a batch over the count reports the count. The
+        // early return mirrors the cap's precedence too: on-chain the budget
+        // rejects the batch before any per-action scan runs, so per-command
+        // findings here would describe rules the chain never reads.
+        let weight = batchWeight(commands);
+        if (weight > BATCH_WEIGHT_BUDGET) {
+            errors.push(this._error('BATCH_CONSTRAINT',
+                'BATCH commands weigh ' + weight + ' (VM and fan-out actions cost more than 1 each); '
+                + 'the chain rejects the whole batch above a total weight of ' + BATCH_WEIGHT_BUDGET,
+                { count: commands.length, weight, limit: BATCH_WEIGHT_BUDGET }));
             return errors;
         }
 

@@ -43,15 +43,20 @@ const path = require('path');
 
 const {
     BATCH_COMMAND_LIMIT,
+    BATCH_WEIGHT_BUDGET,
+    BATCH_COMMAND_WEIGHTS,
     BATCH_ACTION_LIMITS,
     BATCH_GATED_ACTION_LIMITS,
     BATCH_ACTION_LIMITS_ACTIVE,
     CHILD_ISSUE_KEY,
     UNRESOLVED_TICK_KEY,
     classifyCommand,
+    formatVersion,
     limitKeysInListOrder,
     mintTickKey,
     scanBatch,
+    subCommandWeight,
+    batchWeight,
 } = require('../../src/batchLimits.js');
 
 // The arbiter's error vocabulary, so one table can state one expected verdict
@@ -448,6 +453,114 @@ const VECTORS = [
 const arbiterVerdictOf = (v) => (v.arbiterVerdict !== undefined ? v.arbiterVerdict : v.verdict);
 const sdkVerdictOf = (v) => (v.sdkVerdict !== undefined ? v.sdkVerdict : v.verdict);
 
+/* ---- BATCH_COST_WEIGHTING conformance vectors -------------------------- *
+ *
+ * Weights are written out LONGHAND, never derived from BATCH_COMMAND_WEIGHTS:
+ * deriving them here would make every expectation agree with the table by
+ * construction, including a wrong table. Each vector is asserted against the
+ * SDK mirror AND, when the sibling checkout is present, against the arbiter's
+ * own subCommandWeight/batchWeight, so a drift on EITHER side reddens.
+ */
+const SEND_CMD    = 'SEND|0|JDOG|1|mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+const EXEC_CMD    = 'EXECUTE|0|1|run';
+const DEPLOY_V0   = 'DEPLOY|0|600160005260206000f3';
+const DEPLOY_V4   = 'DEPLOY|4|deadbeef|0|600160005260206000f3';
+
+const WEIGHT_VECTORS = [
+    { name: 'an ordinary SEND weighs the default 1', command: SEND_CMD, weight: 1 },
+    { name: 'a top-level ISSUE weighs 1 (a row write like any other)', command: 'ISSUE|0|JDOG|1000', weight: 1 },
+    { name: 'a child ISSUE weighs the same 1: exempt from the cap, never from the scale', command: 'ISSUE|0|JDOG.1|1', weight: 1 },
+    { name: 'MINT weighs the default 1', command: 'MINT|0|PEPE|1', weight: 1 },
+    { name: 'EXECUTE weighs the VM 30', command: EXEC_CMD, weight: 30 },
+    { name: 'XEXEC rides with EXECUTE at 30', command: 'XEXEC|0|1|x', weight: 30 },
+    { name: 'AIRDROP weighs the fan-out 25', command: 'AIRDROP|0|JDOG|1|1', weight: 25 },
+    { name: 'DROP is an AIRDROP to the weight scan, alias and all', command: 'DROP|0|JDOG|1|1', weight: 25 },
+    { name: 'DIVIDEND weighs the fan-out 25', command: 'DIVIDEND|0|JDOG|PEPE|1', weight: 25 },
+    { name: 'inline DEPLOY (format 0) weighs the VM 30', command: DEPLOY_V0, weight: 30 },
+    { name: 'a bare DEPLOY with no fields reads as format 0 and keeps the 30', command: 'DEPLOY', weight: 30 },
+    { name: 'chunk-carrier DEPLOY (format 4) is a row write: weight 1', command: DEPLOY_V4, weight: 1 },
+    // The discount reads the format through the arbiter's ONE derivation
+    // (getFormatVersion), so its string normalizations apply identically.
+    { name: 'a numeric-string 04 is format 4 to the shared derivation', command: 'DEPLOY|04|deadbeef|0|6001', weight: 1 },
+    { name: 'a quoted "4" strips to format 4, exactly as the dispatcher reads it', command: 'DEPLOY|"4"|deadbeef|0|6001', weight: 1 },
+    { name: 'format 1 keeps the full VM weight: only the carrier is discounted', command: 'DEPLOY|1|aabb', weight: 30 },
+    { name: 'format 2 keeps the full VM weight', command: 'DEPLOY|2|aabb', weight: 30 },
+    { name: 'format 3 keeps the full VM weight', command: 'DEPLOY|3|aabb', weight: 30 },
+    { name: 'a float format is unparseable and falls through to the full weight', command: 'DEPLOY|4.5|aabb', weight: 30 },
+    { name: 'an empty format field means format 0, never 4', command: 'DEPLOY||aabb', weight: 30 },
+    { name: 'a non-numeric format falls through to the full weight', command: 'DEPLOY|carrier|aabb', weight: 30 },
+    { name: 'an out-of-range format (>255) falls through to the full weight', command: 'DEPLOY|256|aabb', weight: 30 },
+    // A lowercase name is not DEPLOY to either side (case-sensitive, like the
+    // limit scan): it weighs the default 1, and the activation scan rejects
+    // the batch whole before the weight ever matters.
+    { name: 'a lowercase deploy is not DEPLOY and weighs the default 1', command: 'deploy|4|aabb', weight: 1 },
+];
+
+/*
+ * Whole-batch boundary vectors at the 250 budget. `verdict` is the arbiter's
+ * parse() STATUS; the SDK half derives its own from the mirrored rule
+ * (count cap first, then the weight budget) so the two enforcement shapes are
+ * compared, not just the arithmetic.
+ */
+const WEIGHT_BATCH_VECTORS = [
+    {
+        name: '8 EXECUTEs and 10 SENDs weigh the budget exactly and fit',
+        tail: repeat(8, () => EXEC_CMD).concat(repeat(10, () => SEND_CMD)).join(';'),
+        weight: 250, verdict: 'valid',
+    },
+    {
+        name: '8 EXECUTEs and 11 SENDs weigh 251 and reject the batch whole',
+        tail: repeat(8, () => EXEC_CMD).concat(repeat(11, () => SEND_CMD)).join(';'),
+        weight: 251, verdict: 'invalid: COMMAND (limit)',
+    },
+    {
+        name: 'an inline DEPLOY may carry 220 companions',
+        tail: [DEPLOY_V0].concat(repeat(220, () => SEND_CMD)).join(';'),
+        weight: 250, verdict: 'valid',
+    },
+    {
+        name: 'an inline DEPLOY with 221 companions weighs 251 and rejects whole',
+        tail: [DEPLOY_V0].concat(repeat(221, () => SEND_CMD)).join(';'),
+        weight: 251, verdict: 'invalid: COMMAND (limit)',
+    },
+    {
+        // The ruling's whole point: a carrier is a row write, so it shares its
+        // batch with 249 companions instead of the 220 an inline DEPLOY buys.
+        name: 'a chunk-carrier DEPLOY shares its batch with 249 companions',
+        tail: [DEPLOY_V4].concat(repeat(249, () => SEND_CMD)).join(';'),
+        weight: 250, verdict: 'valid',
+    },
+    {
+        name: 'the carrier discount does not leak to its companions: one EXECUTE among them still counts 30',
+        tail: [DEPLOY_V4].concat(repeat(248, () => SEND_CMD)).concat([EXEC_CMD]).join(';'),
+        weight: 279, verdict: 'invalid: COMMAND (limit)',
+    },
+];
+
+/*
+ * Raw FORMAT fields driven through BOTH derivations (the SDK's formatVersion
+ * mirror and the arbiter's util.getFormatVersion), so the discount can never
+ * come to read a wire byte the dispatcher reads differently. `expected` pins
+ * the absolute value for the shapes the discount turns on.
+ */
+const FORMAT_FIELD_VECTORS = [
+    { field: undefined, expected: 0 },
+    { field: '', expected: 0 },
+    { field: '0', expected: 0 },
+    { field: '4', expected: 4 },
+    { field: '04', expected: 4 },
+    { field: ' 4', expected: 4 },
+    { field: '"4"', expected: 4 },
+    { field: "'4'", expected: 4 },
+    { field: 4, expected: 4 },
+    { field: '4.5', expected: null },
+    { field: 4.5, expected: null },
+    { field: 'carrier', expected: null },
+    { field: '255', expected: 255 },
+    { field: '256', expected: null },
+    { field: null, expected: null },
+];
+
 describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
 
     it('pins the consensus numbers the mirror is built on, ungated and gated apart', function () {
@@ -708,5 +821,148 @@ describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
                     expect(got.dispatched, 'arbiter command count').to.equal(scanBatch(v.tail).count);
             });
         }
+    });
+
+    /*
+     * BATCH_COST_WEIGHTING conformance: the weight table, the chunk-carrier
+     * DEPLOY discount, and the budget boundary, driven through the SDK mirror
+     * and (with the sibling checkout) the arbiter's own weight scan and a full
+     * parse() verdict. Same skip posture as the arbiter half above.
+     */
+    describe('weight conformance (BATCH_COST_WEIGHTING)', function () {
+
+        describe('SDK half', function () {
+
+            it('pins the budget and the table the vectors are stated against', function () {
+                expect(BATCH_WEIGHT_BUDGET).to.equal(250);
+                expect(BATCH_COMMAND_WEIGHTS).to.deep.equal({
+                    AIRDROP: 25, DIVIDEND: 25, DEPLOY: 30, EXECUTE: 30, XEXEC: 30,
+                });
+            });
+
+            for (const v of WEIGHT_VECTORS) {
+                it(v.name, function () {
+                    expect(subCommandWeight(v.command), 'mirror weight').to.equal(v.weight);
+                });
+            }
+
+            for (const v of WEIGHT_BATCH_VECTORS) {
+                it(v.name, function () {
+                    const entries = v.tail.split(';');
+                    expect(batchWeight(entries), 'mirror batch weight').to.equal(v.weight);
+                    // The mirrored enforcement shape: the count cap runs first
+                    // as a sound pre-filter, then the budget. Every boundary
+                    // vector fits the count, so the verdict here IS the budget's.
+                    const over = entries.length > BATCH_COMMAND_LIMIT || batchWeight(entries) > BATCH_WEIGHT_BUDGET;
+                    expect(over, 'mirror verdict').to.equal(v.verdict !== 'valid');
+                });
+            }
+        });
+
+        describe('arbiter half (sibling xchain-indexer checkout)', function () {
+            let makeHandler = null;
+            let idxUtil = null;
+
+            before(function () {
+                this.timeout(30000);
+                const roots = [process.env.XCHAIN_INDEXER_PATH,
+                    path.join(__dirname, '..', '..', '..', 'xchain-indexer')].filter(Boolean);
+                const root = roots.find((r) => fs.existsSync(path.join(r, 'src', 'actions', 'batch.js')));
+                if (!root) return this.skip();
+
+                process.env.INDEXER_COIN = process.env.INDEXER_COIN || 'BTC';
+                process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
+                let Batch, IdxUtility, IdxConfig, ProtocolChanges;
+                try {
+                    Batch = require(path.join(root, 'src', 'actions', 'batch.js'));
+                    IdxUtility = require(path.join(root, 'src', 'utility.js'));
+                    IdxConfig = require(path.join(root, 'src', 'config.js'));
+                    ProtocolChanges = require(path.join(root, 'src', 'protocol_changes.js'));
+                } catch (e) {
+                    return this.skip();
+                }
+                idxUtil = new IdxUtility();
+
+                const blockTime = Math.floor(Date.now() / 1000);
+                makeHandler = function () {
+                    const util = new IdxUtility();
+                    const config = typeof IdxConfig.getConfig === 'function' ? IdxConfig.getConfig() : IdxConfig;
+                    const decoderDb = { getBlockTime: async () => blockTime };
+                    const indexerDb = {
+                        createBatch: async () => {},
+                        createActionIndex: async () => 1,
+                        isActionAllowed: async () => true,
+                        getTokenInfo: async () => null,
+                        getAddressBalances: async () => [],
+                        getTickerId: async () => null,
+                        suppressIndexIdCreation: false,
+                    };
+                    const changes = new ProtocolChanges({ config, util, decoderDb, indexerDb });
+                    const dispatched = [];
+                    const handler = new Batch({
+                        config, util, decoderDb, indexerDb,
+                        mapper: { createMappings: async () => {} },
+                        protocolChanges: {
+                            isEnabled: async (name, blockIndex) =>
+                                (name === 'ISSUANCE_FEE' ? false : changes.isEnabled(name, blockIndex)),
+                        },
+                        processAction: async (action) => { dispatched.push(action); },
+                        actionAliases: { TRANSFER: 'SEND', ADDR: 'ADDRESS', DROP: 'AIRDROP', CAST: 'BROADCAST', MSG: 'MESSAGE' },
+                    });
+                    return { handler, dispatched };
+                };
+            });
+
+            it('mirrors the arbiter budget and weight table byte-for-byte', function () {
+                const { handler } = makeHandler();
+                expect(handler.weightBudget).to.equal(BATCH_WEIGHT_BUDGET);
+                expect(handler.commandWeights).to.deep.equal(BATCH_COMMAND_WEIGHTS);
+            });
+
+            it('derives the FORMAT byte identically to the arbiter, field for field', function () {
+                for (const v of FORMAT_FIELD_VECTORS) {
+                    const label = 'field ' + JSON.stringify(v.field === undefined ? 'undefined' : v.field);
+                    expect(formatVersion(v.field), 'mirror ' + label).to.equal(v.expected);
+                    expect(idxUtil.getFormatVersion(v.field), 'arbiter ' + label).to.equal(v.expected);
+                }
+            });
+
+            for (const v of WEIGHT_VECTORS) {
+                it(v.name, async function () {
+                    this.timeout(20000);
+                    const { handler } = makeHandler();
+                    // batchWeight over one command exercises the arbiter's whole
+                    // derivation path (action read, alias normalization, the
+                    // DEPLOY format read), exactly as parse() weighs it.
+                    const arbiter = await handler.batchWeight([v.command], { BLOCK_INDEX: 200 }, true);
+                    expect(arbiter, 'arbiter weight').to.equal(v.weight);
+                    expect(subCommandWeight(v.command), 'mirror weight').to.equal(v.weight);
+                });
+            }
+
+            for (const v of WEIGHT_BATCH_VECTORS) {
+                it(v.name, async function () {
+                    this.timeout(20000);
+                    const { handler, dispatched } = makeHandler();
+                    const entries = v.tail.split(';');
+                    expect(await handler.batchWeight(entries, { BLOCK_INDEX: 200 }, true),
+                        'arbiter batch weight').to.equal(v.weight);
+
+                    const data = {
+                        ACTION: 'BATCH', FORMAT: 0, BLOCK_INDEX: 200,
+                        SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
+                        TX_DATA: 'BATCH|0|' + v.tail,
+                    };
+                    const log = console.log;
+                    console.log = () => {};
+                    try { await handler.parse(['0'], data, null); } finally { console.log = log; }
+                    expect(data['STATUS'], 'arbiter verdict').to.equal(v.verdict);
+                    if (v.verdict === 'valid')
+                        expect(dispatched.length, 'every sub-command runs').to.equal(entries.length);
+                    else
+                        expect(dispatched.length, 'no sub-command runs').to.equal(0);
+                });
+            }
+        });
     });
 });

@@ -39,7 +39,7 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-**Pins taken at indexer commit:** `1a4b78a4`
+**Pins taken at indexer commit:** `188554e5`
 
 (Re-anchored 2026-08-15: the pins were reviewed against `58ab8e9`, a local
 commit the LIST-memo rebase orphaned before push. Every pinned hash is
@@ -49,7 +49,7 @@ and only the anchor moves.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 22f0f31..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 188554e5..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit.
 
@@ -95,7 +95,7 @@ found by hashing candidate blobs as above.
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `971338842f897e140d27565a4e01cdb364da14b81bb58e140dd6014d529b35fb` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `956463e64bb90087364b2c109c6d1f27a5b3526fd24415d6b9c22042e65e1479` |
 | `checks/dividend.js` | `src/actions/dividend.js` | `4755e314c69ead436a278a6d6196df5499a44768a236a2d9afda4b6a8623f1c1` |
-| `checks/batch.js` | `src/actions/batch.js` | `ef570ba4b724407a48c2e1a7779608d15c9f24f6d0912d6b15eff1172115327d` |
+| `checks/batch.js` | `src/actions/batch.js` | `c48dfe129171dc70c345e7e807bcc99e29fdeaa661cccf63afc49c6d492289c8` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -104,6 +104,27 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-08-20 - `batch.js`: chunk-carrier DEPLOY weight discount, mirrored
+
+One row. `git log 1a4b78a4..HEAD -- src/actions/batch.js` returns exactly
+one commit (`188554e5`), and the diff was read whole: `subCommandWeight`
+now returns the default weight of 1 for a DEPLOY whose format byte, read
+with the same `util.getFormatVersion(params[0])` call the dispatcher uses,
+is 4 (the chunk carrier, which runs no constructor); anything unparseable
+falls through to the full VM weight of 30. `commandWeights` and
+`weightBudget` are untouched, so the tables stay byte-equal.
+
+Client side, mirrored in the same change set: `src/batchLimits.js`
+`subCommandWeight` carries the identical discount through a faithful
+`formatVersion` mirror of the arbiter's derivation, and
+`test/unit/batchLimitsConformance.test.js` now drives weight vectors
+(defaults, VM 30, fan-out 25, the format-4 discount, and the budget
+boundary) through BOTH this mirror and the sibling handler's own
+`subCommandWeight`/`batchWeight`/`parse()`. The compose-side
+`actionWeight` deliberately keeps DEPLOY at 30: the builder weighs queued
+NAMES before any wire format exists, and the arbiter's own fallback for an
+unreadable format is the full weight. Anchor moves to `188554e5`.
 
 ### 2026-08-17 - comment-only hygiene pass; three rows re-pinned, nothing owed
 
