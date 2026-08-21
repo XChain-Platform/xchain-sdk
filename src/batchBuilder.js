@@ -180,11 +180,13 @@ class BatchBuilder {
         // a new capped action) lands in batchLimits.js alone. Iterated over the
         // OBSERVED keys in FIRST-APPEARANCE order (spec R2b), the arbiter's own
         // rule, rather than a precedence this builder invents. Worth stating where a caller reads these throws:
-        // BATCH_ISSUANCE_LIMITS is UNARMED on mainnet, so the LOOSENINGS this
-        // enforces (a parent plus children, MINTs of several distinct tokens) are
-        // still rejected there until the flag arms; the DEPLOY cap is the one
-        // rule both sides of the flag agree on, since the chain never capped
-        // DEPLOY below it and at most 1 is accepted either way.
+        // BATCH_ISSUANCE_LIMITS is ARMED on every network (mainnet at
+        // 2026-08-16T00:00:00Z, testnet and regtest at genesis), so the
+        // LOOSENINGS this enforces (a parent plus children, MINTs of several
+        // distinct tokens) are accepted on chain as well. Below the mainnet
+        // instant they are rejected on chain; the DEPLOY cap is the one rule
+        // both sides of the flag agree on, since the chain never caps DEPLOY
+        // below it and at most 1 is accepted either way.
         for (let key of keyOrder) {
             let limit = BATCH_ACTION_LIMITS_ACTIVE[key];
             if (limit === undefined) continue;

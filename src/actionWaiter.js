@@ -20,6 +20,11 @@
  ********************************************************************/
 
 const { SDKActionError } = require('./errors.js');
+// Both targeted-wait filters below decide index identity with this, never with
+// Number(): action_index arrives as a decimal string on the wire, and Number()
+// collapses two adjacent indices above 2^53 onto one value, which is exactly the
+// neighbouring action these filters exist to exclude.
+const { sameWireIndex } = require('./utils/wireIndex.js');
 
 // Warn-once guard for an action the indexer exposes with no status at all.
 // Once per process: BET cancel/resolve legs hit this on every wait, and a
@@ -180,7 +185,7 @@ class ActionWaiter {
                         // that entry only. This prevents a neighboring action's status from
                         // surfacing as the top-level result in multi-action transactions.
                         let targetActions = (opts.actionIndex !== undefined)
-                            ? actions.filter(a => Number(a.action_index) === Number(opts.actionIndex))
+                            ? actions.filter(a => sameWireIndex(a.action_index, opts.actionIndex))
                             : actions;
 
                         // An EMPTY target set is not a verdict. A targeted wait whose
@@ -255,7 +260,7 @@ class ActionWaiter {
                         // action's rejection as success. A non-matching event is
                         // ignored; the target action's event, or the poll fallback,
                         // settles.
-                        if (Number(msg.data.action_index) !== Number(opts.actionIndex)) return;
+                        if (!sameWireIndex(msg.data.action_index, opts.actionIndex)) return;
                         // An event without a status settles NOTHING: resolving from
                         // it would report success the indexer never claimed. Defer to the
                         // authoritative poll, which reads the full action row.

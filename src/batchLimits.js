@@ -399,20 +399,32 @@ function commandTick(command) {
 /*
  * Distinctness key for ONE MINT TICK, client-side.
  *
- * The arbiter keys on the RESOLVED ticker id; this keys on the literal
- * string, which is exact for plain names (a name maps 1:1 to an id) and
- * inexact for the two cases the header declares. Returns
+ * The arbiter keys on the RESOLVED ticker id; this keys on the CASE-FOLDED
+ * string, which is exact for plain names (a folded name maps 1:1 to an id)
+ * and inexact for the two cases the header declares. Returns
  * { key, aliasable }: `aliasable` marks a caret TICK, the divergence a
  * client CAN see, so compose-side callers can refuse the shape rather than
  * guess at it.
+ *
+ * The fold reproduces the arbiter's bucket rather than approximating it:
+ * ticker ids resolve through `SELECT id FROM index_tickers WHERE LOWER(tick)=?`
+ * (xchain-indexer/src/db.js getTickerId, whose intern cache is keyed the same
+ * way), and interning goes through that same resolve before it inserts, so two
+ * names differing only by case can never BE two ids. Keying on the literal
+ * string instead split a pair the chain merges, and a batch minting `JDOG` and
+ * `jdog` passed compose-time validation and was rejected whole on chain with
+ * the fees already spent. TICKs are mixed-case-legal on the wire (validator.js
+ * TICK_REGEX), so this is an everyday shape, not an exotic one.
  */
 function mintTickKey(tick) {
     const t = (tick === undefined || tick === null) ? '' : String(tick).trim();
     // '' is the arbiter's own unresolvable case (it never probes an empty
     // tick), so the mirror can reproduce that bucket exactly.
     if (t === '') return { key: UNRESOLVED_TICK_KEY, aliasable: false };
+    // A caret TICK is '^' + a decimal id: case-free, so the fold is a no-op
+    // there and the two forms stay comparable as written.
     if (t.charAt(0) === '^') return { key: t, aliasable: true };
-    return { key: t, aliasable: false };
+    return { key: t.toLowerCase(), aliasable: false };
 }
 
 /*
@@ -510,15 +522,32 @@ function paramsTick(params) {
  *              batch's MINT TICKs; `approximate` means the MINT verdict rests
  *              on a caret alias only an indexer could resolve
  *   violation  null, or the FIRST rule broken in the arbiter's own order:
- *              the command cap, then an unknown ACTION, then a per-ACTION cap
+ *              the command cap, then the COST-WEIGHT budget, then an unknown
+ *              ACTION, then a per-ACTION cap
+ *
+ * The weight budget sits in the arbiter's first position beside the count cap
+ * (xchain-indexer/src/actions/batch.js: the count is the cap's PRE-FILTER and the
+ * budget the rule), and both report the same `invalid: COMMAND (limit)`. It is
+ * weighed only when the count already fits, which is exact rather than
+ * conservative because every sub-command weight is an integer >= 1.
+ *
+ * WEIGHT_LIMIT is the one violation this scan can raise that a chain may not:
+ * BATCH_COST_WEIGHTING is genesis-active on testnet and regtest but still
+ * UNARMED on mainnet, where an over-weight batch is accepted. Every other kind
+ * here is armed everywhere. That is the reverse of this mirror's declared safe
+ * direction (it may accept a batch the chain rejects, never refuse one the
+ * chain takes), so the violation carries `flagGated: true` and the measured
+ * `weight`: a caller that turns a violation into a hard refusal must treat this
+ * one as a warning, which is exactly what the two shipped consumers
+ * (decoder/parse.js, preflight/checks/batch.js) already do in their own words.
  *
  * MINT is compared against the per-DISTINCT-token maximum rather than the raw
  * occurrence count (D7), exactly as the arbiter substitutes it.
  *
  * `mint.approximate` does NOT suppress a violation, and the asymmetry is the
- * whole reason it is safe not to. Keying on literal strings can only SPLIT
- * what the arbiter would merge - a caret and a name may be one token, never
- * two - so this maximum is a LOWER BOUND on the arbiter's. A maximum above
+ * whole reason it is safe not to. Keying on case-folded strings can only
+ * SPLIT what the arbiter would merge - a caret and a name may be one token,
+ * never two - so this maximum is a LOWER BOUND on the arbiter's. A maximum above
  * the cap is therefore CERTAIN and gets reported; only the ABSENCE of one is
  * in doubt, and that is exactly what the flag tells the caller. Suppressing
  * on the flag instead let one unrelated caret silence a violation two
@@ -537,6 +566,21 @@ function scanBatch(tail) {
             counts: {},
             mint: noMint,
             violation: { kind: 'COMMAND_LIMIT', action: 'COMMAND', limit: BATCH_COMMAND_LIMIT, count },
+        };
+
+    // The COST-WEIGHT budget, in the same first position and reporting the same
+    // on-chain string, weighed only now that the count fits. Flag-gated: see the
+    // WEIGHT_LIMIT note in the docblock for why this one kind carries a marker.
+    const weight = batchWeight(entries);
+    if (weight > BATCH_WEIGHT_BUDGET)
+        return {
+            count,
+            counts: {},
+            mint: noMint,
+            violation: {
+                kind: 'WEIGHT_LIMIT', action: 'COMMAND', limit: BATCH_WEIGHT_BUDGET,
+                count, weight, flagGated: true,
+            },
         };
 
     const counts = {};

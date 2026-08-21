@@ -49,11 +49,24 @@ function sub(a, b) { return mathjs.format(mathjs.subtract(bn(a), bn(b)), { notat
 
 // Floor-not-round multiply for distributions (mirrors the indexer's
 // bcmulfloor: distribution math always floors, spec §4.5.4).
+//
+// A fee is NOT a distribution. The arbiter bills gas with bcmul at 8 decimals,
+// which rounds half-up, so a fee priced through this helper quotes one satoshi
+// under the charge; price fees the way checks/batch.js does.
+//
+// The floor is decimal.js's native .floor() on the bignumber, exactly as
+// xchain-indexer/src/utility.js bcmulfloor does it. mathjs.floor is FORBIDDEN
+// here for the same reason mathjs.larger is forbidden above: it tests
+// nearlyEqual against relTol (default 1e-12) first and returns the ROUNDED
+// value when the scaled product sits just under the next integer, so it
+// answered 138 for a product of 137.99999999999. That is exactly the sub-ULP
+// band this family exists to get right, and it rounds UP, which a distribution
+// must never do.
 function mulFloor(a, b, decimals) {
     const d = Number.isInteger(decimals) ? decimals : 0;
     const product = mathjs.multiply(bn(a), bn(b));
     const scale = mathjs.bignumber(10).pow(d);
-    const floored = mathjs.floor(mathjs.multiply(product, scale)).div(scale);
+    const floored = bn(product).times(scale).floor().div(scale);
     return mathjs.format(floored, { notation: 'fixed' });
 }
 

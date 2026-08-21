@@ -53,6 +53,7 @@ const {
     classifyCommand,
     formatVersion,
     limitKeysInListOrder,
+    maxMintsPerDistinctTick,
     mintTickKey,
     scanBatch,
     subCommandWeight,
@@ -65,6 +66,9 @@ function verdictOf(scan) {
     const v = scan.violation;
     if (!v) return 'valid';
     if (v.kind === 'COMMAND_LIMIT') return 'invalid: COMMAND (limit)';
+    // The weight budget rejects with the SAME string as the count cap: the
+    // arbiter's error is "this batch is too much work", only measured better.
+    if (v.kind === 'WEIGHT_LIMIT') return 'invalid: COMMAND (limit)';
     if (v.kind === 'ACTION_UNKNOWN') return 'invalid: ACTION (unknown)';
     return 'invalid: ' + v.action + ' (limit)';
 }
@@ -582,9 +586,21 @@ describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
         expect(typeof UNRESOLVED_TICK_KEY).to.equal('symbol');
         expect(mintTickKey('').key).to.equal(UNRESOLVED_TICK_KEY);
         expect(mintTickKey(undefined).key).to.equal(UNRESOLVED_TICK_KEY);
-        // A real tick keys on itself; only the caret form is aliasable.
-        expect(mintTickKey('PEPE')).to.deep.equal({ key: 'PEPE', aliasable: false });
+        // A real tick keys on its CASE-FOLDED self; only the caret form is aliasable.
+        expect(mintTickKey('PEPE')).to.deep.equal({ key: 'pepe', aliasable: false });
         expect(mintTickKey('^614')).to.deep.equal({ key: '^614', aliasable: true });
+    });
+
+    it('folds TICK case, because the arbiter resolves ticker ids case-insensitively', function () {
+        // xchain-indexer/src/db.js getTickerId resolves through
+        // `WHERE LOWER(tick)=?` (and interning resolves before it inserts), so
+        // JDOG and jdog are ONE id on chain and must be ONE bucket here. Keyed on
+        // the literal string, this pair passed compose-time validation and the chain
+        // rejected the whole batch with the fees already spent.
+        expect(mintTickKey('JDOG').key).to.equal(mintTickKey('jdog').key);
+        expect(maxMintsPerDistinctTick(['JDOG', 'jdog'])).to.deep.equal({ max: 2, approximate: false });
+        // Distinct names stay distinct, so the fold cannot invent a refusal.
+        expect(maxMintsPerDistinctTick(['JDOG', 'PEPE'])).to.deep.equal({ max: 1, approximate: false });
     });
 
     /*
@@ -855,6 +871,19 @@ describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
                     // vector fits the count, so the verdict here IS the budget's.
                     const over = entries.length > BATCH_COMMAND_LIMIT || batchWeight(entries) > BATCH_WEIGHT_BUDGET;
                     expect(over, 'mirror verdict').to.equal(v.verdict !== 'valid');
+                    // The arithmetic above is not the canonical scan. scanBatch is
+                    // what an outside consumer reads for the whole-batch verdict,
+                    // and it does not restate this rule, so it is asserted here
+                    // rather than inferred from the sum.
+                    const scan = scanBatch(v.tail);
+                    expect(verdictOf(scan), 'scanBatch whole-batch verdict').to.equal(v.verdict);
+                    if (v.verdict !== 'valid') {
+                        expect(scan.violation.kind, 'a weight overflow is its own kind').to.equal('WEIGHT_LIMIT');
+                        expect(scan.violation.weight, 'the measured weight rides the violation').to.equal(v.weight);
+                        // The one kind a mainnet chain may not raise, so a caller
+                        // can tell it from the rules that are armed everywhere.
+                        expect(scan.violation.flagGated, 'weight is flag-gated').to.equal(true);
+                    }
                 });
             }
         });

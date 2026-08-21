@@ -629,6 +629,10 @@ class XChainSDK {
     // carrier + assembling actions on their own signing path; re-deriving it
     // caller-side would drift from consensus at the cap. Throws when the source
     // needs more than MAX_DEPLOY_CHUNKS slices.
+    //
+    // opts: { gasLimit, constructorParams, cooldownBlocks, slashDestination }. A
+    // stakeable deploy MUST pass its staking fields: they select DEPLOY v1, whose
+    // COOLDOWN_BLOCKS|SLASH_DESTINATION tail is part of the action being sized.
     planDeploy(code, opts) {
         return chunkHelper.planDeploy(String(code), opts || {});
     }

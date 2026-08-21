@@ -42,6 +42,17 @@ describe('pre-flight numeric semantics', function () {
         expect(numeric.mulFloor('4', '0.25', 2)).to.equal('1');
     });
 
+    it('mulFloor floors inside the sub-ULP band, where mathjs.floor rounds up', function () {
+        // mathjs.floor tests nearlyEqual against relTol (1e-12) before flooring,
+        // so it answers 138 here; the indexer's bcmulfloor, and this helper,
+        // must answer 137. Any value within ~1e-12 relative of the next integer
+        // is the whole reason the exact-math family exists.
+        expect(numeric.mulFloor('137.99999999999', '1', 0)).to.equal('137');
+        expect(numeric.mulFloor('0.999999999999', '1', 0)).to.equal('0');
+        // The same band one scale down: 8-decimal money is where it would bite.
+        expect(numeric.mulFloor('1.379999999999999', '100', 8)).to.equal('137.99999999');
+    });
+
     it('vendored isValidAmountFormat rejects over-precision and negatives', function () {
         expect(numeric.isValidAmountFormat(2, '1.234')).to.equal(false); // 3 dp > 2
         expect(numeric.isValidAmountFormat(2, '1.23')).to.equal(true);

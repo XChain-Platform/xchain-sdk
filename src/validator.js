@@ -951,13 +951,15 @@ class Validator {
         // capped action) lands in batchLimits.js alone. BATCH is skipped: its
         // limit of 0 was already reported per occurrence in the descent-stop
         // above. Worth stating where a caller reads these findings:
-        // BATCH_ISSUANCE_LIMITS is UNARMED on mainnet, so the LOOSENINGS this
-        // accepts (a parent plus children, MINTs of several distinct tokens) are
-        // still rejected there until the flag arms; DEPLOY is the one rule both
-        // sides of the flag agree on, since the chain never capped it below the
-        // flag and at most 1 is accepted either way.
-        // FIRST-APPEARANCE order (spec R2b), through the shared mirror, so this
-        // does not rest on `Object.keys` insertion order the way it used to.
+        // BATCH_ISSUANCE_LIMITS is ARMED on every network (mainnet at
+        // 2026-08-16T00:00:00Z, testnet and regtest at genesis), so the
+        // LOOSENINGS this accepts (a parent plus children, MINTs of several
+        // distinct tokens) are accepted on chain as well. Below the mainnet
+        // instant they are rejected on chain; DEPLOY is the one rule both
+        // sides of the flag agree on, since the chain never caps it below the
+        // flag and at most 1 is accepted either way. Keys are read in
+        // FIRST-APPEARANCE order (spec R2b) through the shared mirror, never
+        // `Object.keys` insertion order.
         for (let key of limitKeysInListOrder(commands)) {
             let limit = BATCH_ACTION_LIMITS_ACTIVE[key];
             if (limit === undefined || key === 'BATCH') continue;

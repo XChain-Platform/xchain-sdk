@@ -62,12 +62,47 @@ function ctorString(constructorParams) {
     return arr.map(p => String(p)).join('|');
 }
 
+// A field the caller actually supplied, as the wire would carry it. undefined,
+// null and '' all mean "no field": the selector only reaches a staking format
+// when one of the two staking fields is populated, and serialize() trims a
+// trailing empty one back off.
+function tailField(value) {
+    if (value === undefined || value === null) return '';
+    return String(value);
+}
+
+// The non-code part of the inline DEPLOY string, in the shape the format selector
+// would pick for these opts.
+//   v0: 'DEPLOY|0|<base64>|<gas>|<ctor...>'                     (formats.js DEPLOY 0)
+//   v1: 'DEPLOY|1|<base64>|<gas>|<ctor>|<cooldown>|<slashDst>'  (formats.js DEPLOY 1)
+// Either staking field being populated is what selects v1, so budgeting the v0
+// shape for a stakeable deploy under-counts the tail by 2 pipes plus both field
+// widths (a full address is ~40 bytes). That is the one direction that matters:
+// it plans single-shot a deploy whose real action string is over the cap, and the
+// encoder then refuses the transaction at create time with no hint that chunking
+// was the fix. A trailing empty SLASH_DESTINATION is dropped here exactly as
+// FormatSelector.serialize drops it, so the estimate cannot over-count either and
+// push an otherwise-inline deploy into a chunked (multi-transaction, multi-fee)
+// plan.
+function deployOverhead(opts) {
+    const gas      = String(opts.gasLimit || 0);
+    const ctor     = ctorString(opts.constructorParams);
+    const cooldown = tailField(opts.cooldownBlocks);
+    const slashDst = tailField(opts.slashDestination);
+    if (cooldown === '' && slashDst === '')
+        return 'DEPLOY|0||' + gas + '|' + ctor;
+    let tail = '|' + cooldown;
+    if (slashDst !== '') tail += '|' + slashDst;
+    return 'DEPLOY|1||' + gas + '|' + ctor + tail;
+}
+
 // Whether base64(code) fits a single inline DEPLOY action under the compiled cap.
-// The inline DEPLOY string is 'DEPLOY|<ver>|<base64>|<gas>|<ctor...>'; budget the
-// non-code overhead (+ the OP_PUSHDATA2 prefix) and compare against the cap.
+// Budget the non-code overhead (+ the OP_PUSHDATA2 prefix) and compare against
+// the cap. Pass cooldownBlocks/slashDestination for a stakeable deploy, or the
+// estimate sizes a v0 action the wire will not carry.
 function fitsSingleDeploy(code, opts = {}) {
     let b64      = Buffer.from(String(code), 'utf8').toString('base64');
-    let overhead = ('DEPLOY|0||' + String(opts.gasLimit || 0) + '|' + ctorString(opts.constructorParams)).length + OP_RETURN_PUSH_OVERHEAD;
+    let overhead = deployOverhead(opts).length + OP_RETURN_PUSH_OVERHEAD;
     return (Buffer.byteLength(b64, 'utf8') + overhead) <= MAX_ACTION_DATA_LENGTH;
 }
 

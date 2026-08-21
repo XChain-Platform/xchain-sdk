@@ -43,6 +43,11 @@ const ckptCommit = require('./checkpoint_commitment_activation.js');
 const pinned     = require('./pinnedCheckpoints.js');
 const swq        = require('./stake_weighted_quorum.js');
 const srb        = require('./snapshot_reorg_buffer.js');
+// Identity of a wire index is decided as BigInt, never Number(): the explorer
+// serializes BIGINT columns as decimal strings, and Number() collapses two
+// adjacent indices above 2^53 onto one value, so the binding guards below would
+// match the neighbouring action or height they exist to reject.
+const { sameWireIndex } = require('./utils/wireIndex.js');
 
 function _fetch(impl){
     let f = impl || (typeof fetch === 'function' ? fetch : null);
@@ -333,7 +338,7 @@ async function _resolveQuorum(f, opts, cp){
         const ff = await followForward({ explorerUrl: opts.explorerUrl, btcCoin: opts.coin,
             trustedCheckpoint: pcp, toHeight: Number(cp.block_index), fetchImpl: f });
         const t = ff && ff.trusted;
-        if (t && Number(t.block_index) === Number(cp.block_index)
+        if (t && sameWireIndex(t.block_index, cp.block_index)
             && _hx(t.state_root) === _hx(cp.state_root)
             && _hx(t.block_merkle_root) === _hx(cp.block_merkle_root))
             return { valid: true, quorum: null, weighted: null };
@@ -368,7 +373,7 @@ async function verifyBalance(opts){
     let cp, q;
     if (opts.trustedCheckpoint){
         cp = opts.trustedCheckpoint;
-        if (Number(proof.height) !== Number(cp.block_index))
+        if (!sameWireIndex(proof.height, cp.block_index))
             return { verified: false, amount: null, reason: 'PROOF_HEIGHT_MISMATCH',
                      height: Number(proof.height), checkpoint: cp, quorum: null, weighted: null };
         q = { valid: true, quorum: null, weighted: null };
@@ -388,7 +393,7 @@ async function verifyBalance(opts){
     // or hostile explorer relabelling a genuine old proof with a fresher height. The
     // trustedCheckpoint branch has always enforced this; the server-served branch did
     // not, which let stale state pass as current.
-    if (Number(proof.height) !== Number(cp.block_index))
+    if (!sameWireIndex(proof.height, cp.block_index))
         return Object.assign({ verified: false, amount: null, reason: 'PROOF_HEIGHT_MISMATCH' }, base);
     // Enforce the request's lower bound. /proof/balance?height=H is defined as the
     // nearest checkpoint AT OR ABOVE H, so a checkpoint below H answers a different
@@ -433,7 +438,7 @@ async function verifyAction(opts){
     let cp, q;
     if (opts.trustedCheckpoint){
         cp = opts.trustedCheckpoint;
-        if (Number(proof.height) !== Number(cp.block_index))
+        if (!sameWireIndex(proof.height, cp.block_index))
             return { verified: false, reason: 'PROOF_HEIGHT_MISMATCH', height: Number(proof.height),
                      action: proof.action, action_index: Number(proof.action_index),
                      tx_index: (proof.tx_index == null) ? null : Number(proof.tx_index),
@@ -451,11 +456,15 @@ async function verifyAction(opts){
     if (!q.valid) return Object.assign({ verified: false, reason: 'CHECKPOINT_QUORUM_FAILED' }, base);
     // Bind the served proof to the served checkpoint in the server-served branch too;
     // actionProof emits height as Number(cp.block_index) for that same cp.
-    if (Number(proof.height) !== Number(cp.block_index))
+    if (!sameWireIndex(proof.height, cp.block_index))
         return Object.assign({ verified: false, reason: 'PROOF_HEIGHT_MISMATCH' }, base);
     const trusted = _hx(cp.block_merkle_root);
     if (!trusted) return Object.assign({ verified: false, reason: 'CHECKPOINT_PRE_COMMITMENT' }, base);
-    if (Number(proof.action_index) !== Number(opts.actionIndex))
+    // The ONLY check binding this proof to the action the caller asked about, and
+    // verifyActionProof cannot back it up: that verifier recomputes the leaf FROM
+    // proof.action_index, so a genuine proof for the neighbouring action recomputes
+    // and merkle-verifies cleanly. Compared exactly (see sameWireIndex).
+    if (!sameWireIndex(proof.action_index, opts.actionIndex))
         return Object.assign({ verified: false, reason: 'ACTION_INDEX_MISMATCH' }, base);
     const v = verifyActionProof(proof, trusted);
     return Object.assign({ verified: v.verified, reason: v.reason }, base);

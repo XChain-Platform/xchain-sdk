@@ -42,6 +42,23 @@ const Utility = require('../../utility.js');
 // division, so the fee math below reads the same helpers the arbiter reads.
 const util = new Utility();
 
+// Price gas the way the arbiter CHARGES it: bcmul at 8 decimals, whose
+// fixed-precision format rounds half-up (xchain-indexer/src/utility.js
+// getUnifiedTransactionFee / getOwnershipEscrowFee / the expiration-fee paths
+// all bill through it). numeric.mulFloor is the DISTRIBUTION rule and floors, so
+// pricing a fee with it under-quoted the charge by 1e-8 wherever the product
+// carried a nonzero 9th decimal - the preview and the handler disagreeing on a
+// balance verdict. Nothing moves at the shipped GAS_PRICE of '0.00001' against
+// integer gas units, where every product is exact by the 5th decimal; the point
+// is that a future price change cannot fork the two silently.
+//
+// Re-normalized to minimal form because the amount is not an internal number:
+// it is read straight into the BALANCE_INSUFFICIENT copy and its cheapest/total
+// data, and bcmul's zero-padded '0.50000000' where '0.5' stands today would be a
+// shape change dressed as a rounding fix. It also keeps the quote byte-equal to
+// the indexer's own fee value, which stringifies minimally off its bignumber.
+const gasFee = (units, gasPrice) => numeric.add(util.bcmul(units, gasPrice, 8), '0');
+
 // Sub-commands whose creation fee is duration-metered off the wire's own
 // EXPIRATION (format 0 only). Matches the arbiter's durationFeeActions.
 const DURATION_FEE_ACTIONS = ['ORDER', 'SWAP', 'DISPENSER'];
@@ -128,7 +145,7 @@ async function projectIssueFee(ctx, cmd, gas) {
         ? gas.schedule.ISSUE_SUBTOKEN
         : gas.schedule.ISSUE;
     if (units === undefined || units === null) return null;
-    const amount = numeric.mulFloor(String(units), gas.gasPrice, 8);
+    const amount = gasFee(String(units), gas.gasPrice);
     return { amount, chargeable: numeric.isPositive(amount), bound: true };
 }
 
@@ -166,7 +183,7 @@ function projectDurationFee(cmd, gas) {
     if (!numeric.isPositive(chargeableDays))
         return { amount: '0', chargeable: false, bound: false };
     const gasCost = util.bcmul(chargeableDays, perDay, 0);
-    const amount = numeric.mulFloor(gasCost, gas.gasPrice, 8);
+    const amount = gasFee(gasCost, gas.gasPrice);
     return { amount, chargeable: numeric.isPositive(amount), bound: false };
 }
 
@@ -193,7 +210,7 @@ async function projectExecuteFee(ctx, gas) {
     if (base === undefined || base === null) return null;
     const token = await ctx.token(GAS_TICK);
     if (token === undefined || token === null) return null;
-    const amount = numeric.mulFloor(String(base), gas.gasPrice, 8);
+    const amount = gasFee(String(base), gas.gasPrice);
     return { amount, chargeable: numeric.isPositive(amount), bound: true };
 }
 
@@ -261,10 +278,13 @@ function projectDeltas(cmd, source, opts) {
  * client composing fan-out or VM batches can now be refused on weight alone,
  * which counting commands cannot see.
  *
- * WARNING, not an error, and deliberately so: the cap arrives with the
- * BATCH_ISSUANCE_LIMITS flag-day, pre-flight has no chain height or flag state,
- * and an over-cap batch is still accepted on a chain where the flag has not
- * armed. A non-overridable client error would false-block it (spec §4.2).
+ * WARNING, not an error, and deliberately so. The 250-command cap arrived with
+ * BATCH_ISSUANCE_LIMITS, now ARMED on every network (mainnet at
+ * 2026-08-16T00:00:00Z), so that half no longer rests on an unarmed flag; the
+ * WEIGHT budget beside it rides BATCH_COST_WEIGHTING, which is live on testnet
+ * and regtest and still unarmed on mainnet. Pre-flight has no chain height or
+ * flag state to tell those apart, and an over-weight batch is still accepted on
+ * mainnet, so a non-overridable client error would false-block it (spec §4.2).
  *
  * decoder/parse.js raises the same finding from the same shared scan, and
  * universal.js passes validator findings through, so emit here only when that

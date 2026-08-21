@@ -461,8 +461,8 @@ function parseBatch(rawAction, version, segments, doValidate) {
             const limit = BATCH_ACTION_LIMITS[a];
             if (limit === undefined) continue;
             // `mint.approximate` is NOT a reason to stay silent, and the
-            // asymmetry is why. Keying on literal strings can only SPLIT what
-            // the arbiter merges - a caret and a name may be one token, never
+            // asymmetry is why. Keying on case-folded strings can only SPLIT
+            // what the arbiter merges - a caret and a name may be one token, never
             // two - so this maximum is a LOWER BOUND on the arbiter's, and a
             // lower bound over the cap is a CERTAIN breach worth reporting.
             // Only the ABSENCE of a finding is ever in doubt, which is what the
