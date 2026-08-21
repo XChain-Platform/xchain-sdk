@@ -36,6 +36,7 @@ const {
     lintSource,
     findBannedAsync,
     findBannedWasm,
+    findBannedMathCalls,
     CONSENSUS_RULES
 } = require('../../src/contract/lint-core.js');
 
@@ -51,7 +52,10 @@ describe('vendored lint-core: LINT_GLOBAL_ALIAS rules', function () {
         'sloppy-mode this reading WebAssembly':   ['banned-wasm',  'module.exports = function(){ return this.WebAssembly; };'],
         'globalThis self-reference to Promise':   ['banned-async', 'module.exports = function(){ return globalThis.globalThis.Promise; };'],
         'globalThis self-reference to wasm':      ['banned-wasm',  'module.exports = function(){ return globalThis["globalThis"].WebAssembly; };'],
-        'this-rooted globalThis chain':           ['banned-async', 'module.exports = function(){ return this.globalThis.Promise; };']
+        'this-rooted globalThis chain':           ['banned-async', 'module.exports = function(){ return this.globalThis.Promise; };'],
+        'sloppy-mode this reading Math':          ['banned-math',  'module.exports = function(){ return this.Math.pow(2, 3); };'],
+        'globalThis self-reference to Math':      ['banned-math',  'module.exports = function(){ return globalThis.globalThis.Math.log(2); };'],
+        'this reading Math by computed key':      ['banned-math',  'module.exports = function(){ return this["Math"].sqrt(4); };']
     };
 
     for (const [label, [rule, code]] of Object.entries(aliased)) {
@@ -74,13 +78,18 @@ describe('vendored lint-core: LINT_GLOBAL_ALIAS rules', function () {
         assert.deepStrictEqual(findBannedAsync(promise, true, false), []);
         assert.strictEqual(findBannedWasm(wasm, true).length, 1);
         assert.deepStrictEqual(findBannedWasm(wasm, false), []);
+        const math = 'module.exports = function(){ return this.Math.pow(2, 3); };';
+        assert.strictEqual(findBannedMathCalls(math, true, true).length, 1);
+        assert.deepStrictEqual(findBannedMathCalls(math, true, false), []);
     });
 
     it('leaves the pre-epoch spellings blocking in both modes', function () {
         // The gate widens the rule; it must never make the already-live half optional.
         for (const code of [
             'module.exports = function(){ return Promise; };',
-            'module.exports = function(){ return globalThis.WebAssembly; };'
+            'module.exports = function(){ return globalThis.WebAssembly; };',
+            'module.exports = function(){ return Math.pow(2, 3); };',
+            'module.exports = function(){ return globalThis.Math.pow(2, 3); };'
         ]) {
             assert.ok(firstConsensusError(code, { globalAlias: false }), 'epoch off: ' + code);
             assert.ok(firstConsensusError(code, { globalAlias: true }),  'epoch on: '  + code);
@@ -91,7 +100,8 @@ describe('vendored lint-core: LINT_GLOBAL_ALIAS rules', function () {
         for (const code of [
             'module.exports = function(){ return this.total; };',
             'module.exports = function(o){ return o.Promise; };',
-            'module.exports = function(Promise){ return Promise; };'
+            'module.exports = function(Promise){ return Promise; };',
+            'module.exports = function(){ return this.Math.floor(1.5); };'
         ]) {
             assert.strictEqual(firstConsensusError(code), null, 'false positive on: ' + code);
         }

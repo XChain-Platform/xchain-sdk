@@ -28,7 +28,9 @@ const { ADDRESS_REF_FIELDS } = require('./addressRefFields.js');
 const {
     BATCH_ACTION_LIMITS_ACTIVE,
     BATCH_COMMAND_LIMIT,
+    BATCH_WEIGHT_BUDGET,
     CHILD_ISSUE_KEY,
+    batchWeight,
     classifyCommand,
     commandTick,
     limitKeysInListOrder,
@@ -900,6 +902,23 @@ class Validator {
             return errors;
         }
 
+        // BATCH_COST_WEIGHTING: the same whole-batch rejection, reached by
+        // WEIGHT instead of count, in the same position the arbiter checks it.
+        // Weighed only when the count already fits, which is the arbiter's own
+        // ordering: every weight is an integer >= 1, so the count check is a
+        // sound pre-filter and a batch over the count reports the count. The
+        // early return mirrors the cap's precedence too: on-chain the budget
+        // rejects the batch before any per-action scan runs, so per-command
+        // findings here would describe rules the chain never reads.
+        let weight = batchWeight(commands);
+        if (weight > BATCH_WEIGHT_BUDGET) {
+            errors.push(this._error('BATCH_CONSTRAINT',
+                'BATCH commands weigh ' + weight + ' (VM and fan-out actions cost more than 1 each); '
+                + 'the chain rejects the whole batch above a total weight of ' + BATCH_WEIGHT_BUDGET,
+                { count: commands.length, weight, limit: BATCH_WEIGHT_BUDGET }));
+            return errors;
+        }
+
         for (let i = 0; i < commands.length; i++) {
             let cmd = commands[i];
             // Child (dotted-TICK) issuances are exempt from the top-level limit
@@ -932,13 +951,15 @@ class Validator {
         // capped action) lands in batchLimits.js alone. BATCH is skipped: its
         // limit of 0 was already reported per occurrence in the descent-stop
         // above. Worth stating where a caller reads these findings:
-        // BATCH_ISSUANCE_LIMITS is UNARMED on mainnet, so the LOOSENINGS this
-        // accepts (a parent plus children, MINTs of several distinct tokens) are
-        // still rejected there until the flag arms; DEPLOY is the one rule both
-        // sides of the flag agree on, since the chain never capped it below the
-        // flag and at most 1 is accepted either way.
-        // FIRST-APPEARANCE order (spec R2b), through the shared mirror, so this
-        // does not rest on `Object.keys` insertion order the way it used to.
+        // BATCH_ISSUANCE_LIMITS is ARMED on every network (mainnet at
+        // 2026-08-16T00:00:00Z, testnet and regtest at genesis), so the
+        // LOOSENINGS this accepts (a parent plus children, MINTs of several
+        // distinct tokens) are accepted on chain as well. Below the mainnet
+        // instant they are rejected on chain; DEPLOY is the one rule both
+        // sides of the flag agree on, since the chain never caps it below the
+        // flag and at most 1 is accepted either way. Keys are read in
+        // FIRST-APPEARANCE order (spec R2b) through the shared mirror, never
+        // `Object.keys` insertion order.
         for (let key of limitKeysInListOrder(commands)) {
             let limit = BATCH_ACTION_LIMITS_ACTIVE[key];
             if (limit === undefined || key === 'BATCH') continue;

@@ -330,12 +330,14 @@ describe('pre-flight engine', function () {
             const sdk = mockSdk({ explorerSpec: {
                 getToken: () => ({ tick: 'JDOG', divisible: 0 }),
                 getBalances: () => [{ tick: 'JDOG', amount: '100' }],
-                // The feequote shape: the sentinel rides in `error` with
-                // supported:false, exactly as computeFeeQuote returns it.
+                // The real feequote shape (indexer actions.js computeFeeQuote): the
+                // sentinel rides in `status`, copied from the dry-run, while `error`
+                // is REWRITTEN into a human sentence that no longer contains it.
                 getFeeQuote: () => ({
                     supported: false, valid: false,
+                    status: 'FEE_QUOTE_CONTROLLER_UNSUPPORTED',
                     error: 'native fee pre-flight not supported for a controller-bound SEND '
-                        + '(pay the fee in XCHAIN); FEE_QUOTE_CONTROLLER_UNSUPPORTED',
+                        + '(pay the fee in XCHAIN)',
                 }),
             } });
             const r = await sdk.preflight('SEND|0|JDOG|5|' + A1,

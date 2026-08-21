@@ -43,7 +43,7 @@ async function checkGiveBalance(ctx, noun) {
     const expiration = ctx.field('EXPIRATION');
 
     if (giveOwnership || (!giveTick && giveCoin)) {
-        ctx.addFinding('GIVE_NOT_BALANCE_MODE', 'info',
+        ctx.addFinding(FINDING_CODES.GIVE_NOT_BALANCE_MODE, 'info',
             giveOwnership ? 'Ownership trade: no balance check applies.' : 'Native-coin give: settled by outputs, not balances.',
             {});
     } else if (giveTick && giveAmount && ctx.source) {

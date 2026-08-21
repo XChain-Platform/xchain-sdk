@@ -108,19 +108,30 @@ function batchCapMiddleware(maxBatch) {
  * credential, and expired buckets are pruned so the map cannot grow without
  * bound under rotating keys.
  *
+ * A bearer token only mints its own bucket when the caller's isCredential
+ * predicate accepts it; any other token (junk, rotated per request, or no
+ * token at all) is counted against the SOURCE ADDRESS. Bucketing on the raw
+ * header let an anonymous flood escape the cap by sending a fresh random
+ * token on every request, one new bucket each, which is exactly the path the
+ * pre-gate mount exists to bound. With no predicate every caller is bucketed
+ * by address.
+ *
  * The returned middleware exposes its bucket Map as .buckets so a test can
  * assert the hashing and the pruning on the shipped structure itself.
  *
- * @param {{limit: number, windowMs: number}} options
+ * @param {{limit: number, windowMs: number, isCredential?: function(string): boolean}} options
  * @returns {function} express middleware
  */
-function rateLimitMiddleware({ limit, windowMs }) {
+function rateLimitMiddleware({ limit, windowMs, isCredential }) {
     const buckets = new Map();
+    const accepts = (typeof isCredential === 'function') ? isCredential : () => false;
     const rateLimit = function rateLimit(req, res, next) {
         if (limit <= 0) return next();                    // 0 disables
         const header = req.headers['authorization'];
         const token  = (typeof header === 'string' && header.startsWith('Bearer ')) ? header.slice(7) : null;
-        const ident  = token ? ('k:' + token) : ('a:' + (req.ip || (req.socket && req.socket.remoteAddress) || 'unknown'));
+        const ident  = (token && accepts(token) === true)
+            ? ('k:' + token)
+            : ('a:' + (req.ip || (req.socket && req.socket.remoteAddress) || 'unknown'));
         const key    = crypto.createHash('sha256').update(ident).digest('hex');
 
         const now = Date.now();

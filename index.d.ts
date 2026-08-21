@@ -1084,6 +1084,10 @@ export type DeployPlan = DeployPlanSingle | DeployPlanChunked;
 export interface DeployPlanOpts {
     gasLimit?: number | string;
     constructorParams?: string | string[];
+    /** Stakeable (DEPLOY v1) cooldown in blocks; omit it and the estimate sizes a v0 action. */
+    cooldownBlocks?: number | string;
+    /** Stakeable (DEPLOY v1) slash destination; omit it and the estimate sizes a v0 action. */
+    slashDestination?: string;
 }
 
 export declare const chunkHelper: {

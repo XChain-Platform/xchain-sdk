@@ -43,6 +43,11 @@ const ckptCommit = require('./checkpoint_commitment_activation.js');
 const pinned     = require('./pinnedCheckpoints.js');
 const swq        = require('./stake_weighted_quorum.js');
 const srb        = require('./snapshot_reorg_buffer.js');
+// Identity of a wire index is decided as BigInt, never Number(): the explorer
+// serializes BIGINT columns as decimal strings, and Number() collapses two
+// adjacent indices above 2^53 onto one value, so the binding guards below would
+// match the neighbouring action or height they exist to reject.
+const { sameWireIndex, toWireIndex } = require('./utils/wireIndex.js');
 
 function _fetch(impl){
     let f = impl || (typeof fetch === 'function' ? fetch : null);
@@ -85,8 +90,10 @@ function _hx(x){ return String(x == null ? '' : x).toLowerCase(); }
 // nothing downstream could see it.
 //
 // `expected` is OPTIONAL so this stays backward compatible; callers that pass it
-// get the binding. Only the fields present are compared, each as a string, so a
-// numeric contract_index and its decimal spelling agree.
+// get the binding. Omitting it is DEPRECATED: the argument becomes required at
+// the next major version, so new callers should always pass it. Only the fields
+// present are compared, each as a string, so a numeric contract_index and its
+// decimal spelling agree.
 function _expectedMismatch(expected, actual){
     if (!expected) return null;
     for (const field of Object.keys(expected)){
@@ -105,6 +112,10 @@ const DEFAULT_ANCHOR_MIN_DEPTH = 60;
 // Verify a §4.4 BalanceProof binds to a TRUSTED state_root (one already proven to
 // be in a quorum-signed checkpoint). chain/network come from the trusted
 // checkpoint, never the proof. Returns { verified, amount, reason }.
+//
+// @param {Object} [expected] The REQUESTED { address, tick } to bind the proof to
+//   (see _expectedMismatch). @deprecated Calling without `expected` is deprecated;
+//   the argument becomes required at the next major version.
 function verifyBalanceProof(proof, trustedStateRoot, chain, network, expected){
     try {
         if (!proof || !proof.smt_proof || !proof.sub_root_path) return _no('MALFORMED_PROOF');
@@ -166,11 +177,59 @@ function verifyBalanceProof(proof, trustedStateRoot, chain, network, expected){
 // mean nothing (spec §4): zero-locked is only a real claim at armed heights.
 // The height check is strict-parse fail-closed: a garbage height reads as
 // not-armed, never as armed.
-function verifyLockedBalanceProof(proof, trustedStateRoot, chain, network, expected){
+//
+// THE HEIGHT THE GATE READS IS NEVER `proof.height`. That field is authored by
+// the explorer and is not hashed into anything, exactly like `proof.chain` and
+// `proof.network`, which this verifier already refuses to source from. Keying
+// the arming decision on it handed the decision back to the server the comment
+// above says is not trusted: a proof LABELLED at or above the armed height whose
+// non-inclusion is genuinely computed against a pre-arming balances_root passes
+// every remaining check and returns verified:true, amount:'0' - a proven-looking
+// "nothing is locked" for a height at which the ESC domain was never committed.
+//
+// So the gate reads `trustedHeight`, which callers take from the quorum-signed
+// checkpoint beside `trustedStateRoot`, and `proof.height` must equal it or the
+// proof is answering about a different block (PROOF_HEIGHT_MISMATCH, the same
+// binding verifyBalance/verifyAction enforce in their network wrappers).
+//
+// A caller that supplies no trustedHeight is gated at height 0 rather than at the
+// label. _atOrAfter is monotone in the height, so height 0 is the strictest
+// possible reading: it verifies only where the leaf is armed from genesis, i.e.
+// where the answer cannot depend on the height at all. That keeps the pre-
+// trustedHeight callers working on the testnets (armed at 0) while refusing every
+// chain with a mid-chain arming height, which is precisely the window the label
+// could have lied about.
+//
+// @param {Object} [expected] The REQUESTED { address, tick } to bind the proof to
+//   (see _expectedMismatch). @deprecated Calling without `expected` is deprecated;
+//   the argument becomes required at the next major version.
+// @param {number|string} [trustedHeight] block_index of the TRUSTED checkpoint.
+//   @deprecated Omitting it is deprecated and gates at height 0; it becomes
+//   required at the next major version.
+function verifyLockedBalanceProof(proof, trustedStateRoot, chain, network, expected, trustedHeight){
     try {
         if (!proof || !proof.smt_proof || !proof.sub_root_path) return _no('MALFORMED_PROOF');
         if (_expectedMismatch(expected, proof)) return _no('REQUESTED_IDENTITY_MISMATCH');
-        if (!SUB.isEscrowLockedLeafActive(proof.height, network, chain))
+        // The label must still PARSE as a wire index, strict, fail-closed. It no
+        // longer decides anything, but a server that cannot even name the height it
+        // is answering about has produced a proof nobody can place, and letting that
+        // through would drop the strict-parse rule the header states.
+        const label = toWireIndex(proof.height);
+        if (label === null) return _no('ESCROW_LEAF_NOT_COMMITTED');
+        const haveTrustedHeight = (trustedHeight !== undefined && trustedHeight !== null
+                                   && trustedHeight !== '');
+        if (haveTrustedHeight && !sameWireIndex(label, trustedHeight))
+            return _no('PROOF_HEIGHT_MISMATCH');
+        // Gate on the TRUSTED height. Past the bind above `label` IS that height,
+        // so reuse it: the activation carrier's own strict parse takes only a
+        // number or a digit string, and a BigInt block_index - the shape a
+        // BIGINT column arrives in, and the shape wireIndex.js exists to carry -
+        // would read as NaN there and refuse an armed chain. Normalizing here
+        // keeps the refusal for a height the carrier genuinely cannot compare
+        // (above 2^53) and drops it for the ones it can.
+        const gateWire   = haveTrustedHeight ? label : 0n;
+        const gateHeight = (gateWire <= BigInt(Number.MAX_SAFE_INTEGER)) ? Number(gateWire) : NaN;
+        if (!SUB.isEscrowLockedLeafActive(gateHeight, network, chain))
             return _no('ESCROW_LEAF_NOT_COMMITTED');
         // The proven key must be exactly escrowKey(chain, network, address, tick),
         // with chain/network from the TRUSTED checkpoint, never the proof.
@@ -214,6 +273,10 @@ function verifyLockedBalanceProof(proof, trustedStateRoot, chain, network, expec
 // slot is known to be live. Treating a below-arming non-inclusion as absence is
 // exactly the mistake spec §4 forbids; the server refuses to serve those heights
 // (CONTRACT_STATE_NOT_COMMITTED), and that refusal is the signal to respect.
+//
+// @param {Object} [expected] The REQUESTED { contract_index, state_key } to bind
+//   the proof to (see _expectedMismatch). @deprecated Calling without `expected`
+//   is deprecated; the argument becomes required at the next major version.
 function verifyContractStateProof(proof, trustedStateRoot, chain, network, expected){
     const no = (reason) => ({ verified: false, state_value: null, reason: reason });
     try {
@@ -319,7 +382,7 @@ async function _resolveQuorum(f, opts, cp){
         const ff = await followForward({ explorerUrl: opts.explorerUrl, btcCoin: opts.coin,
             trustedCheckpoint: pcp, toHeight: Number(cp.block_index), fetchImpl: f });
         const t = ff && ff.trusted;
-        if (t && Number(t.block_index) === Number(cp.block_index)
+        if (t && sameWireIndex(t.block_index, cp.block_index)
             && _hx(t.state_root) === _hx(cp.state_root)
             && _hx(t.block_merkle_root) === _hx(cp.block_merkle_root))
             return { valid: true, quorum: null, weighted: null };
@@ -354,7 +417,7 @@ async function verifyBalance(opts){
     let cp, q;
     if (opts.trustedCheckpoint){
         cp = opts.trustedCheckpoint;
-        if (Number(proof.height) !== Number(cp.block_index))
+        if (!sameWireIndex(proof.height, cp.block_index))
             return { verified: false, amount: null, reason: 'PROOF_HEIGHT_MISMATCH',
                      height: Number(proof.height), checkpoint: cp, quorum: null, weighted: null };
         q = { valid: true, quorum: null, weighted: null };
@@ -374,7 +437,7 @@ async function verifyBalance(opts){
     // or hostile explorer relabelling a genuine old proof with a fresher height. The
     // trustedCheckpoint branch has always enforced this; the server-served branch did
     // not, which let stale state pass as current.
-    if (Number(proof.height) !== Number(cp.block_index))
+    if (!sameWireIndex(proof.height, cp.block_index))
         return Object.assign({ verified: false, amount: null, reason: 'PROOF_HEIGHT_MISMATCH' }, base);
     // Enforce the request's lower bound. /proof/balance?height=H is defined as the
     // nearest checkpoint AT OR ABOVE H, so a checkpoint below H answers a different
@@ -396,7 +459,72 @@ async function verifyBalance(opts){
     const expectedKey = M.toHex(M.balanceKey(cp.chain, cp.network, String(opts.address), String(opts.tick)));
     if (!proof.smt_proof || _hx(proof.smt_proof.key) !== expectedKey)
         return Object.assign({ verified: false, amount: null, reason: 'BALANCE_QUERY_MISMATCH' }, base);
-    const v = verifyBalanceProof(proof, trusted, cp.chain, cp.network);
+    // Bind inside the verifier too: the expectedKey check above guards the proven
+    // key, `expected` guards the echoed address/tick fields the caller will read.
+    const v = verifyBalanceProof(proof, trusted, cp.chain, cp.network,
+                                 { address: String(opts.address), tick: String(opts.tick) });
+    return Object.assign({ verified: v.verified, amount: v.verified ? v.amount : null, reason: v.reason }, base);
+}
+
+// verifyLockedBalance({ explorerUrl, coin, address, tick, atHeight?, validators?, trustedCheckpoint?, pinnedResolver?, fetchImpl? })
+//  The XCHAIN_ESC counterpart of verifyBalance, same options and same
+//  -> { verified, amount, height, reason, checkpoint, quorum, weighted }.
+//
+// This wrapper is the reason the locked verifier can enforce liveness at all: it
+// is the only in-SDK place that HOLDS the quorum-signed checkpoint, so it is the
+// only place that can hand the verifier a trusted height. Without it every caller
+// had to bind proof.height to their checkpoint by hand, and the pure verifier was
+// left gating arming on the server's own label.
+//
+// A below-arming request is refused by the explorer with an error body rather than
+// a proof (proofServer.lockedBalanceProof). That refusal is a real answer here, not
+// a transport fault, so it is returned as verified:false with the server's reason
+// instead of throwing the way an absent proof does on the spendable path.
+async function verifyLockedBalance(opts){
+    opts = opts || {};
+    const f = _fetch(opts.fetchImpl);
+    const hq = (opts.atHeight != null && opts.atHeight !== '') ? ('?height=' + encodeURIComponent(String(opts.atHeight))) : '';
+    const url = _base(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.coin)) +
+                '/api/proof/locked-balance/' + encodeURIComponent(String(opts.address)) +
+                '/' + encodeURIComponent(String(opts.tick)) + hq;
+    const body = await _json(f, url);
+    if (body && !body.proof && typeof body.error === 'string' && body.error)
+        return { verified: false, amount: null, reason: body.error,
+                 height: null, checkpoint: null, quorum: null, weighted: null };
+    if (!body || !body.proof) throw new Error('LightClient: no proof in response');
+    const proof = body.proof;
+    let cp, q;
+    if (opts.trustedCheckpoint){
+        cp = opts.trustedCheckpoint;
+        if (!sameWireIndex(proof.height, cp.block_index))
+            return { verified: false, amount: null, reason: 'PROOF_HEIGHT_MISMATCH',
+                     height: Number(proof.height), checkpoint: cp, quorum: null, weighted: null };
+        q = { valid: true, quorum: null, weighted: null };
+    } else {
+        if (!body.checkpoint) throw new Error('LightClient: no checkpoint in response');
+        cp = body.checkpoint;
+        q = await _resolveQuorum(f, opts, cp);
+    }
+    // Height reported from the quorum-signed checkpoint, never the response label,
+    // for the reason verifyBalance gives.
+    const base = { height: Number(cp.block_index), checkpoint: cp, quorum: q.quorum, weighted: q.weighted };
+    if (!q.valid) return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_QUORUM_FAILED' }, base);
+    if (!sameWireIndex(proof.height, cp.block_index))
+        return Object.assign({ verified: false, amount: null, reason: 'PROOF_HEIGHT_MISMATCH' }, base);
+    if (opts.atHeight != null && opts.atHeight !== '' && Number(cp.block_index) < Number(opts.atHeight))
+        return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_BELOW_ATHEIGHT' }, base);
+    const trusted = _hx(cp.state_root);
+    if (!trusted) return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_PRE_COMMITMENT' }, base);
+    if (_hx(proof.chain) !== _hx(cp.chain) || _hx(proof.network) !== _hx(cp.network))
+        return Object.assign({ verified: false, amount: null, reason: 'PROOF_CHECKPOINT_CHAIN_MISMATCH' }, base);
+    // Bind the proven key to the CALLER's query in the ESC domain, the escrow
+    // counterpart of BALANCE_QUERY_MISMATCH.
+    const expectedKey = M.toHex(M.escrowKey(cp.chain, cp.network, String(opts.address), String(opts.tick)));
+    if (!proof.smt_proof || _hx(proof.smt_proof.key) !== expectedKey)
+        return Object.assign({ verified: false, amount: null, reason: 'LOCKED_QUERY_MISMATCH' }, base);
+    const v = verifyLockedBalanceProof(proof, trusted, cp.chain, cp.network,
+                                       { address: String(opts.address), tick: String(opts.tick) },
+                                       cp.block_index);
     return Object.assign({ verified: v.verified, amount: v.verified ? v.amount : null, reason: v.reason }, base);
 }
 
@@ -416,7 +544,7 @@ async function verifyAction(opts){
     let cp, q;
     if (opts.trustedCheckpoint){
         cp = opts.trustedCheckpoint;
-        if (Number(proof.height) !== Number(cp.block_index))
+        if (!sameWireIndex(proof.height, cp.block_index))
             return { verified: false, reason: 'PROOF_HEIGHT_MISMATCH', height: Number(proof.height),
                      action: proof.action, action_index: Number(proof.action_index),
                      tx_index: (proof.tx_index == null) ? null : Number(proof.tx_index),
@@ -434,11 +562,15 @@ async function verifyAction(opts){
     if (!q.valid) return Object.assign({ verified: false, reason: 'CHECKPOINT_QUORUM_FAILED' }, base);
     // Bind the served proof to the served checkpoint in the server-served branch too;
     // actionProof emits height as Number(cp.block_index) for that same cp.
-    if (Number(proof.height) !== Number(cp.block_index))
+    if (!sameWireIndex(proof.height, cp.block_index))
         return Object.assign({ verified: false, reason: 'PROOF_HEIGHT_MISMATCH' }, base);
     const trusted = _hx(cp.block_merkle_root);
     if (!trusted) return Object.assign({ verified: false, reason: 'CHECKPOINT_PRE_COMMITMENT' }, base);
-    if (Number(proof.action_index) !== Number(opts.actionIndex))
+    // The ONLY check binding this proof to the action the caller asked about, and
+    // verifyActionProof cannot back it up: that verifier recomputes the leaf FROM
+    // proof.action_index, so a genuine proof for the neighbouring action recomputes
+    // and merkle-verifies cleanly. Compared exactly (see sameWireIndex).
+    if (!sameWireIndex(proof.action_index, opts.actionIndex))
         return Object.assign({ verified: false, reason: 'ACTION_INDEX_MISMATCH' }, base);
     const v = verifyActionProof(proof, trusted);
     return Object.assign({ verified: v.verified, reason: v.reason }, base);
@@ -774,6 +906,7 @@ module.exports = {
     verifyContractStateProof,
     verifyActionProof,
     verifyBalance,
+    verifyLockedBalance,
     verifyAction,
     parseAnchorV3,
     anchorToCheckpoint,

@@ -21,15 +21,19 @@
  * addOutput at 21M BTC in sats (2.1e15). Dogecoin has no supply cap, so a
  * single output can legitimately exceed both ceilings (>~90.07M DOGE for
  * 2^53); without this patch the encoder cannot build such a PSBT at all.
- * Sibling of xchain-decoder/src/applyBufferutilsPatch.js, which
- * fixes the same 2^53 wall on the read side of the pipeline.
  *
- * The patch teaches the loaded modules to carry a satoshi value as either
- * a Number (unchanged fast path) or a BigInt up to 2^64-1 (the wire
- * format's true ceiling). Readers return a Number whenever the value is
- * exactly representable and a BigInt only above 2^53-1, so existing
- * Number-based callers see identical behavior for every value they could
- * already handle.
+ * This is the WRITE-SIDE contract, shared byte-for-byte with
+ * xchain-encoder/src/applyBufferutilsPatch.js: the patch teaches the loaded
+ * modules to carry a satoshi value as either a Number (unchanged fast path)
+ * or a BigInt up to 2^64-1 (the wire format's true ceiling). Readers return
+ * a Number whenever the value is exactly representable and a BigInt only
+ * above 2^53-1, so existing Number-based callers see identical behavior for
+ * every value they could already handle. The READ-SIDE copies
+ * (xchain-decoder and xchain-utxo-tracker, src/applyBufferutilsPatch.js)
+ * lift the same 2^53 wall for block decode but deliberately implement a
+ * DIFFERENT contract: BufferReader.readUInt64 always returns a BigInt and
+ * the module-level readUInt64LE/writeUInt64LE helpers keep the stock 2^53-1
+ * ceiling. Only the 2^53 probe and the error strings are common to both.
  *
  * All bitcoinjs-lib/bip174 consumers hold the patched modules' exports
  * objects and class prototypes rather than destructured copies, so
@@ -170,8 +174,14 @@ if (!psbtTxProto.__xchainBigIntValues) {
 // the public methods instead: try the stock implementation first (zero
 // behavior change for all-Number PSBTs) and, only on the BigInt-mixing
 // TypeError, recompute the amounts BigInt-safely, prime the caches the
-// stock helper would have primed, and re-run the stock method (which then
-// returns the cached result).
+// stock helper would have primed, and answer from those caches ourselves.
+// getFee / getFeeRate must NOT be re-run through stock after priming: stock
+// getTxCacheValue tests the cache for TRUTHINESS, so a primed 0 (zero-fee
+// PSBT, or any fee under 1 sat/vbyte) falls straight back into the Number
+// summing and re-throws the very TypeError this wrapper exists to absorb.
+// extractTransaction is safe to re-run: its checkFees reads the primed
+// __FEE_RATE or calls the (wrapped) getFeeRate, and it returns the primed
+// __EXTRACTED_TX.
 function witnessStackFromScriptWitness(buffer) {
     // Inverse of psbt.js's internal scriptWitnessToWitnessStack: a varint
     // element count followed by var-sliced witness elements.
@@ -229,6 +239,8 @@ if (!Psbt.prototype.__xchainBigIntAmts) {
             } catch (err) {
                 if (!(err instanceof TypeError) || !/BigInt/.test(err.message)) throw err
                 primeBigIntSafeAmts(this)
+                if (method === 'getFee') return this.__CACHE.__FEE
+                if (method === 'getFeeRate') return this.__CACHE.__FEE_RATE
                 return stock.apply(this, args)
             }
         }

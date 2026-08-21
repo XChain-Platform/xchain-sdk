@@ -109,6 +109,46 @@ describe('chunkHelper @regression', function () {
             expect(fitsSingleDeploy(borderline, { gasLimit: 0, constructorParams: ['y'.repeat(200)] }),
                 'a long constructor pushes the same source over the cap').to.equal(false);
         });
+        it('budgets the DEPLOY v1 staking tail, measured against the real composer', function () {
+            // A stakeable deploy serializes as DEPLOY v1
+            // (VERSION|CODE_ENCODING|GAS_LIMIT|CONSTRUCTOR_PARAMS|COOLDOWN_BLOCKS|
+            // SLASH_DESTINATION), so budgeting the v0 shape under-counts the tail and
+            // plans single-shot an action the encoder then refuses at create time.
+            // Verified against the canonical serializer rather than a second hand
+            // model: the largest source the planner calls single-shot must actually
+            // compile within the cap, and one byte more must not.
+            const { XChainSDK } = require('../../index.js');
+            const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
+            const opts = {
+                gasLimit: 100000,
+                constructorParams: ['alice'],
+                cooldownBlocks: 144,
+                slashDestination: 'bcrt1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080'
+            };
+            const compiled = (srcBytes) => {
+                const composed = sdk.actions.composeActionString({ action: 'DEPLOY', params: {
+                    CODE:               'x'.repeat(srcBytes),
+                    GAS_LIMIT:          opts.gasLimit,
+                    CONSTRUCTOR_PARAMS: opts.constructorParams,
+                    COOLDOWN_BLOCKS:    opts.cooldownBlocks,
+                    SLASH_DESTINATION:  opts.slashDestination
+                } });
+                expect(composed.version).to.equal(1, 'the staking fields must select DEPLOY v1');
+                return Buffer.byteLength(composed.actionString, 'utf8') + chunkHelper.OP_RETURN_PUSH_OVERHEAD;
+            };
+            let lo = 1, hi = 7000, largest = 0;
+            while (lo <= hi) {
+                const mid = (lo + hi) >> 1;
+                if (fitsSingleDeploy('x'.repeat(mid), opts)) { largest = mid; lo = mid + 1; } else hi = mid - 1;
+            }
+            expect(compiled(largest)).to.be.at.most(MAX_ACTION_DATA_LENGTH,
+                'the largest single-shot source must actually fit the compiled cap');
+            expect(compiled(largest + 1)).to.be.above(MAX_ACTION_DATA_LENGTH,
+                'one byte more must not fit, or the budget is over-reserving and over-chunking');
+            // The same source WITHOUT the staking opts is what the v0-only model saw.
+            expect(fitsSingleDeploy('x'.repeat(largest + 1), { gasLimit: opts.gasLimit, constructorParams: opts.constructorParams })).to.equal(true,
+                'the v0 shape still fits, which is exactly why the tail has to be budgeted');
+        });
     });
 
     describe('splitCode', function () {

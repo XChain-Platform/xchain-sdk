@@ -113,8 +113,14 @@ async function startApi() {
     // ANONYMOUS use; it does nothing about sustained traffic from a valid,
     // shared or leaked credential, and the batch cap above bounds one request's
     // fan-out rather than the request rate. The two are complementary and
-    // neither substitutes for the other.
-    app.use(rateLimitMiddleware({ limit: SDK_API_RATE_LIMIT, windowMs: SDK_API_RATE_WINDOW_MS }));
+    // neither substitutes for the other. Only the configured key earns its own
+    // bucket: an unvalidated token is counted against the source address, so a
+    // per-request rotating junk token cannot mint a fresh bucket each time.
+    app.use(rateLimitMiddleware({
+        limit: SDK_API_RATE_LIMIT,
+        windowMs: SDK_API_RATE_WINDOW_MS,
+        isCredential: (token) => !!SDK_API_KEY && safeTokenEqual(token, SDK_API_KEY)
+    }));
 
     // API key enforcement for all methods except ping. Fails closed: without
     // a configured key, every non-ping method is rejected, never left open.

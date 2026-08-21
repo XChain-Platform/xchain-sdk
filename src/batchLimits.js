@@ -135,6 +135,17 @@ const BATCH_WEIGHT_BUDGET = 250;
 // DEPLOY, EXECUTE and XEXEC run contract code, and 30 is the smallest round
 // weight keeping a full VM batch under the 250 ordinary-equivalent bound.
 //
+// A chunk-carrier DEPLOY (format 4) is DISCOUNTED to the default 1, and the
+// discount lives beside the table in `subCommandWeight` on BOTH sides rather
+// than in either table, so the tables stay byte-equal with no carve-outs. The
+// arbiter short-circuits a format-4 DEPLOY into chunk storage before the VM
+// path ever runs, so it really is a row write; 30 would charge constructor
+// cost for work that has none. The format byte is read with the arbiter's own
+// derivation (`formatVersion` below), and only off the WIRE STRING: the
+// compose-side `actionWeight` sees a queued NAME with no serialized format
+// yet, so it keeps DEPLOY's full 30 there, which is the arbiter's own
+// fallback direction (unparseable falls through to the full weight).
+//
 // THE INVARIANT, mirrored from the arbiter: every weight is an integer >= 1.
 // That is what makes the cheap count check a sound pre-filter for the weighted
 // one (count > budget implies weight sum > budget), which is why callers may
@@ -206,10 +217,22 @@ function expandAlias(action) {
         : action;
 }
 
-// Whether the arbiter would find this (alias-expanded) name registered. Stands
-// in for the indexer's `protocolChanges.isEnabled(action)` activation scan: an
-// unregistered name - including the empty string an empty command yields - is
-// `invalid: ACTION (unknown)` there, whole-batch, before any limit is counted.
+// Whether this (alias-expanded) name is one a client can author. It stands in for
+// the indexer's `protocolChanges.isEnabled(action)` activation scan - an
+// unregistered name, including the empty string an empty command yields, is
+// `invalid: ACTION (unknown)` there, whole-batch, before any limit is counted -
+// and it is deliberately NARROWER than that scan, so read it as encodability, not
+// as the chain's registry. The registry recognizes every name it holds an entry
+// for, which is a superset of the encodable formats: the validator/lifecycle/
+// mirror-injected actions absent from formats.js by design (DISPENSE,
+// COINPAY_EXPIRE, SLASH, ATTEST, ANCHOR, XCALL, NODEPROOF) and every feature-flag
+// entry sharing the same table. A hand-built wire batch naming one of those reads
+// ACTION_UNKNOWN here while the arbiter's scan passes it to its handler.
+//
+// The divergence is one-way by construction, and in the safe direction: all 31
+// formats keys are registered with no activation gate, so this never calls known
+// a name the chain would reject. It over-warns about a batch nothing in this SDK
+// can compose; it never vouches for one the chain refuses.
 function isKnownAction(action) {
     return Object.prototype.hasOwnProperty.call(formats, expandAlias(action));
 }
@@ -239,6 +262,33 @@ function classifyIssueTick(tick) {
  * to its unclassified name, which is the arbiter's own fallback.
  */
 /*
+ * FORMAT version of one raw wire field, mirroring the arbiter's ONE derivation
+ * (xchain-indexer/src/utility.js `getFormatVersion`): the same call its
+ * dispatcher uses to set FORMAT and its weight scan uses for the chunk-carrier
+ * DEPLOY discount, reproduced branch for branch so the two sides can never
+ * read one wire byte two ways. Quotes are stripped, a numeric string up to 255
+ * parses as its integer, an absent or empty field means format 0, and
+ * anything else (a float, an object, out of range, non-numeric) is null.
+ */
+function formatVersion(format) {
+    const type = typeof format;
+    // Reject objects (prevents crash on broken toString)
+    if (type === 'object' && format !== null) return null;
+    if (type === 'number' && Number.isInteger(format) && format <= 255) return format;
+    // Default to format 0 if none is given
+    if (type === 'undefined' || (type === 'string' && format === '')) return 0;
+    // Strip out any quotes and double-quotes
+    if (type === 'string') format = format.replace(/\"|\'/g, '');
+    // Convert any numeric strings to integers (use parseFloat to detect
+    // decimals), through the arbiter's own isNumeric/isFloat idioms.
+    const numeric = typeof format === 'bigint' || (!isNaN(parseFloat(format)) && isFinite(format));
+    const parsed = parseFloat(format);
+    const isFloat = parsed === +parsed && parsed !== (parsed | 0);
+    if (numeric && !isFloat && format <= 255) return parseInt(format);
+    return null;
+}
+
+/*
  * Cost weight of ONE raw sub-command string (indexer `subCommandWeight`).
  *
  * The action is derived exactly as `classifyCommand` derives it, and then
@@ -247,13 +297,23 @@ function classifyIssueTick(tick) {
  * same as any other ISSUE even though the per-action cap exempts it. Weighing
  * a child at 0 here would be the one thing the invariant forbids.
  *
+ * Chunk-carrier DEPLOY (format 4) runs no constructor, so it takes the default
+ * row-write weight rather than DEPLOY's VM weight, exactly as the arbiter
+ * discounts it. The format byte comes from `formatVersion` over params[0]
+ * (DEPLOY takes no legacy VERSION injection, so params[0] is always the
+ * explicit version field), and anything unparseable falls through to the full
+ * weight, which is the safe (over-charging) direction.
+ *
  * Never throws, and falls back to 1 for the arbiter's reason: 1 is the
  * pre-flag behaviour for a sub-command, so an unreadable entry is charged as
  * an ordinary one rather than being made free.
  */
 function subCommandWeight(command) {
     try {
-        return actionWeight(String(command).split('|')[0]);
+        const action = expandAlias(String(command).split('|')[0]);
+        if (action === 'DEPLOY' && formatVersion(String(command).split('|')[1]) === 4)
+            return 1;
+        return actionWeight(action);
     } catch (e) {
         return 1;
     }
@@ -339,20 +399,32 @@ function commandTick(command) {
 /*
  * Distinctness key for ONE MINT TICK, client-side.
  *
- * The arbiter keys on the RESOLVED ticker id; this keys on the literal
- * string, which is exact for plain names (a name maps 1:1 to an id) and
- * inexact for the two cases the header declares. Returns
+ * The arbiter keys on the RESOLVED ticker id; this keys on the CASE-FOLDED
+ * string, which is exact for plain names (a folded name maps 1:1 to an id)
+ * and inexact for the two cases the header declares. Returns
  * { key, aliasable }: `aliasable` marks a caret TICK, the divergence a
  * client CAN see, so compose-side callers can refuse the shape rather than
  * guess at it.
+ *
+ * The fold reproduces the arbiter's bucket rather than approximating it:
+ * ticker ids resolve through `SELECT id FROM index_tickers WHERE LOWER(tick)=?`
+ * (xchain-indexer/src/db.js getTickerId, whose intern cache is keyed the same
+ * way), and interning goes through that same resolve before it inserts, so two
+ * names differing only by case can never BE two ids. Keying on the literal
+ * string instead split a pair the chain merges, and a batch minting `JDOG` and
+ * `jdog` passed compose-time validation and was rejected whole on chain with
+ * the fees already spent. TICKs are mixed-case-legal on the wire (validator.js
+ * TICK_REGEX), so this is an everyday shape, not an exotic one.
  */
 function mintTickKey(tick) {
     const t = (tick === undefined || tick === null) ? '' : String(tick).trim();
     // '' is the arbiter's own unresolvable case (it never probes an empty
     // tick), so the mirror can reproduce that bucket exactly.
     if (t === '') return { key: UNRESOLVED_TICK_KEY, aliasable: false };
+    // A caret TICK is '^' + a decimal id: case-free, so the fold is a no-op
+    // there and the two forms stay comparable as written.
     if (t.charAt(0) === '^') return { key: t, aliasable: true };
-    return { key: t, aliasable: false };
+    return { key: t.toLowerCase(), aliasable: false };
 }
 
 /*
@@ -450,15 +522,32 @@ function paramsTick(params) {
  *              batch's MINT TICKs; `approximate` means the MINT verdict rests
  *              on a caret alias only an indexer could resolve
  *   violation  null, or the FIRST rule broken in the arbiter's own order:
- *              the command cap, then an unknown ACTION, then a per-ACTION cap
+ *              the command cap, then the COST-WEIGHT budget, then an unknown
+ *              ACTION, then a per-ACTION cap
+ *
+ * The weight budget sits in the arbiter's first position beside the count cap
+ * (xchain-indexer/src/actions/batch.js: the count is the cap's PRE-FILTER and the
+ * budget the rule), and both report the same `invalid: COMMAND (limit)`. It is
+ * weighed only when the count already fits, which is exact rather than
+ * conservative because every sub-command weight is an integer >= 1.
+ *
+ * WEIGHT_LIMIT is the one violation this scan can raise that a chain may not:
+ * BATCH_COST_WEIGHTING is genesis-active on testnet and regtest but still
+ * UNARMED on mainnet, where an over-weight batch is accepted. Every other kind
+ * here is armed everywhere. That is the reverse of this mirror's declared safe
+ * direction (it may accept a batch the chain rejects, never refuse one the
+ * chain takes), so the violation carries `flagGated: true` and the measured
+ * `weight`: a caller that turns a violation into a hard refusal must treat this
+ * one as a warning, which is exactly what the two shipped consumers
+ * (decoder/parse.js, preflight/checks/batch.js) already do in their own words.
  *
  * MINT is compared against the per-DISTINCT-token maximum rather than the raw
  * occurrence count (D7), exactly as the arbiter substitutes it.
  *
  * `mint.approximate` does NOT suppress a violation, and the asymmetry is the
- * whole reason it is safe not to. Keying on literal strings can only SPLIT
- * what the arbiter would merge - a caret and a name may be one token, never
- * two - so this maximum is a LOWER BOUND on the arbiter's. A maximum above
+ * whole reason it is safe not to. Keying on case-folded strings can only
+ * SPLIT what the arbiter would merge - a caret and a name may be one token,
+ * never two - so this maximum is a LOWER BOUND on the arbiter's. A maximum above
  * the cap is therefore CERTAIN and gets reported; only the ABSENCE of one is
  * in doubt, and that is exactly what the flag tells the caller. Suppressing
  * on the flag instead let one unrelated caret silence a violation two
@@ -477,6 +566,21 @@ function scanBatch(tail) {
             counts: {},
             mint: noMint,
             violation: { kind: 'COMMAND_LIMIT', action: 'COMMAND', limit: BATCH_COMMAND_LIMIT, count },
+        };
+
+    // The COST-WEIGHT budget, in the same first position and reporting the same
+    // on-chain string, weighed only now that the count fits. Flag-gated: see the
+    // WEIGHT_LIMIT note in the docblock for why this one kind carries a marker.
+    const weight = batchWeight(entries);
+    if (weight > BATCH_WEIGHT_BUDGET)
+        return {
+            count,
+            counts: {},
+            mint: noMint,
+            violation: {
+                kind: 'WEIGHT_LIMIT', action: 'COMMAND', limit: BATCH_WEIGHT_BUDGET,
+                count, weight, flagGated: true,
+            },
         };
 
     const counts = {};
@@ -647,6 +751,7 @@ module.exports = {
     BATCH_WEIGHT_BUDGET,
     BATCH_COMMAND_WEIGHTS,
     actionWeight,
+    formatVersion,
     subCommandWeight,
     batchWeight,
     BATCH_ACTION_LIMITS,

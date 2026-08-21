@@ -131,9 +131,21 @@ async function runTier1({ sdk, parsed, source, feeMode, signal, timeoutMs }) {
     if (quote.feeExempt === true)
         return { kind: 'no-verdict', reason: 'feeExempt', quote };
 
-    // Rule 4: guard-inert / controller-unsupported responses (the
-    // /preflight path sets the boolean; feequote uses the string sentinel).
+    // Rule 4: guard-inert / controller-unsupported responses. The /preflight path
+    // sets the boolean (indexer actions.js derives it from the dry-run status);
+    // the legacy feequote path carries the FEE_QUOTE_CONTROLLER_UNSUPPORTED
+    // sentinel in `status` and REWRITES `error` into a human sentence that no
+    // longer contains it, so `status` is the field that must be matched. Matching
+    // only `error` made this clause dead against every shipped indexer and dropped
+    // a controller refusal through to rule 1 as the vaguer 'unsupported'. The
+    // `error` test is kept as defence for any build that surfaces the raw sentinel
+    // there; it is not the live path, and no fixture may claim it is.
+    //
+    // Ordered before rule 1 on purpose: the feequote sentinel response also carries
+    // supported:false, and rule 1 would otherwise answer first with a reason that
+    // hides which refusal happened.
     if (quote.guardInert === true ||
+        String(quote.status || '').includes('FEE_QUOTE_CONTROLLER_UNSUPPORTED') ||
         String(quote.error || '').includes('FEE_QUOTE_CONTROLLER_UNSUPPORTED'))
         return { kind: 'no-verdict', reason: 'guardInert', quote };
 

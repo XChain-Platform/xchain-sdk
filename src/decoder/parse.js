@@ -377,6 +377,18 @@ function parseBatch(rawAction, version, segments, doValidate) {
         // A sub-entry that IS a BATCH flips the OUTER result: nested
         // BATCH is categorically forbidden (indexer actionLimits
         // BATCH:0), not a per-command recoverable failure.
+        //
+        // NOTHING ELSE flips it, and that asymmetry is the spec's, not an
+        // oversight: rule 8 (normative) keeps every other sub-entry failure as
+        // `commands[i] = {ok:false, code}` so describe() can render "command 3:
+        // unsupported action" without hiding the commands around it. The arbiter
+        // does reject the whole transaction on the first unregistered ACTION
+        // (batch.js activation scan; nothing dispatches), but that verdict is
+        // acceptance, which is preflight's job: checks/batch.js raises an
+        // error-severity PARSE_INVALID per bad sub-command and computeVerdict
+        // fails the whole report on it. Decode reports SHAPE; preflight reports
+        // WHETHER THE CHAIN TAKES IT. Moving the atomic verdict in here would
+        // cost the per-command detail that is this structure's whole purpose.
         if (sub.ok === false && sub.code === 'NESTED_BATCH_FORBIDDEN')
             return failure('NESTED_BATCH_FORBIDDEN');
         // Counted off the RAW entry, whether or not it parsed. The arbiter
@@ -449,8 +461,8 @@ function parseBatch(rawAction, version, segments, doValidate) {
             const limit = BATCH_ACTION_LIMITS[a];
             if (limit === undefined) continue;
             // `mint.approximate` is NOT a reason to stay silent, and the
-            // asymmetry is why. Keying on literal strings can only SPLIT what
-            // the arbiter merges - a caret and a name may be one token, never
+            // asymmetry is why. Keying on case-folded strings can only SPLIT
+            // what the arbiter merges - a caret and a name may be one token, never
             // two - so this maximum is a LOWER BOUND on the arbiter's, and a
             // lower bound over the cap is a CERTAIN breach worth reporting.
             // Only the ABSENCE of a finding is ever in doubt, which is what the

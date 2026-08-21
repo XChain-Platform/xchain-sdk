@@ -511,8 +511,15 @@ class BettingHelpers {
 
         // Floor at `d` decimals. mathjs `format` with a precision ROUNDS, which
         // would overstate a payout by one base unit; settlement floors.
+        //
+        // The floor is decimal.js's native .floor(), matching the chain's own
+        // bcmulfloordiv. mathjs.floor would smuggle the overstatement back in:
+        // it tests nearlyEqual against relTol (default 1e-12) before flooring,
+        // so a scaled quotient sitting just under the next base unit comes back
+        // rounded UP - and a parimutuel quotient is exactly where a repeating
+        // expansion lands there.
         const scale = mathjs.pow(bn(10), d);
-        const floorAt = v => mathjs.divide(mathjs.floor(mathjs.multiply(v, scale)), scale);
+        const floorAt = v => bn(v).times(scale).floor().div(scale);
         const fixed   = v => mathjs.format(v, { notation: 'fixed', precision: d });
 
         const total   = pools.reduce((sum, p) => mathjs.add(sum, bn(String(p == null ? 0 : p))), bn(0));

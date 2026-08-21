@@ -352,6 +352,92 @@ describe('SPV Phase 4: sdk.light pure verifiers', function () {
         } finally { disarmEsc(); }
     });
 
+    // Reading the arming gate off proof.height is unsafe: the explorer authors that
+    // field and nothing hashes it. With a MID-CHAIN arming height that lets a hostile
+    // or drifted server relabel a genuine pre-arming non-inclusion as "at an armed
+    // height" and get verified:true, amount:'0' out of a root that never covered ESC.
+    // buildLockedProof labels its proofs height 100, so arming at 150 puts the label
+    // above nothing and arming at 50 puts it above the threshold.
+    function armEscAt(h) { SUBACT.ESCROW_LOCKED_LEAF_ACTIVATION[ESC_KEY] = h; }
+
+    it('verifyLockedBalanceProof gates on the TRUSTED height, not the served label', function () {
+        armEscAt(150);
+        try {
+            const { proof, stateRoot } = buildLockedProof(ADDR_A, TICK, '7');
+            // Label and trusted height agree at 100, which is BELOW the armed 150.
+            const r = light.verifyLockedBalanceProof(proof, stateRoot, CHAIN, NET, null, 100);
+            assert.strictEqual(r.verified, false);
+            assert.strictEqual(r.reason, 'ESCROW_LEAF_NOT_COMMITTED');
+        } finally { disarmEsc(); }
+    });
+
+    it('verifyLockedBalanceProof accepts once the TRUSTED height is at the armed height', function () {
+        armEscAt(50);
+        try {
+            const { proof, stateRoot } = buildLockedProof(ADDR_A, TICK, '7');
+            const r = light.verifyLockedBalanceProof(proof, stateRoot, CHAIN, NET, null, 100);
+            assert.strictEqual(r.verified, true, r.reason);
+            assert.strictEqual(r.amount, M.canonicalAmount('7'));
+        } finally { disarmEsc(); }
+    });
+
+    it('verifyLockedBalanceProof REJECTS a proof relabelled off the trusted height', function () {
+        armEscAt(50);
+        try {
+            const { proof, stateRoot } = buildLockedProof(ADDR_A, TICK, '7');
+            proof.height = 99999;                    // server says "fresh", caller trusts 100
+            const r = light.verifyLockedBalanceProof(proof, stateRoot, CHAIN, NET, null, 100);
+            assert.strictEqual(r.verified, false);
+            assert.strictEqual(r.reason, 'PROOF_HEIGHT_MISMATCH');
+        } finally { disarmEsc(); }
+    });
+
+    // The old signature has no trusted height to gate on, so it gates at 0: the
+    // strictest reading, verifying only where the leaf is armed from genesis. Before
+    // this, the same call VERIFIED because the label (100) cleared the armed 50.
+    it('verifyLockedBalanceProof with no trusted height refuses a mid-chain arming', function () {
+        armEscAt(50);
+        try {
+            const { proof, stateRoot } = buildLockedProof(ADDR_A, TICK, '7');
+            const r = light.verifyLockedBalanceProof(proof, stateRoot, CHAIN, NET);
+            assert.strictEqual(r.verified, false);
+            assert.strictEqual(r.reason, 'ESCROW_LEAF_NOT_COMMITTED');
+        } finally { disarmEsc(); }
+    });
+
+    // The wrapper is the only in-SDK holder of a quorum-signed checkpoint, so it is
+    // what supplies the trusted height. trustedCheckpoint keeps this off the quorum
+    // machinery, which the verifyBalance suite already covers.
+    it('verifyLockedBalance binds the served proof to the trusted checkpoint height', async function () {
+        armEscAt(50);
+        try {
+            const { proof, stateRoot } = buildLockedProof(ADDR_A, TICK, '7');
+            const cp = { block_index: 100, state_root: stateRoot, chain: CHAIN, network: NET };
+            const serve = (p) => async () => ({ ok: true, status: 200, json: async () => ({ proof: p }) });
+
+            const ok = await light.verifyLockedBalance({ explorerUrl: 'https://x', coin: COIN,
+                address: ADDR_A, tick: TICK, trustedCheckpoint: cp, fetchImpl: serve(proof) });
+            assert.strictEqual(ok.verified, true, ok.reason);
+            assert.strictEqual(ok.amount, M.canonicalAmount('7'));
+            assert.strictEqual(ok.height, 100);
+
+            const relabelled = Object.assign({}, proof, { height: 99999 });
+            const bad = await light.verifyLockedBalance({ explorerUrl: 'https://x', coin: COIN,
+                address: ADDR_A, tick: TICK, trustedCheckpoint: cp, fetchImpl: serve(relabelled) });
+            assert.strictEqual(bad.verified, false);
+            assert.strictEqual(bad.reason, 'PROOF_HEIGHT_MISMATCH');
+        } finally { disarmEsc(); }
+    });
+
+    it('verifyLockedBalance returns the server refusal instead of throwing', async function () {
+        const fetchImpl = async () => ({ ok: true, status: 200,
+            json: async () => ({ error: 'ESCROW_LEAF_NOT_COMMITTED' }) });
+        const r = await light.verifyLockedBalance({ explorerUrl: 'https://x', coin: COIN,
+            address: ADDR_A, tick: TICK, fetchImpl });
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'ESCROW_LEAF_NOT_COMMITTED');
+    });
+
     it('verifyLockedBalanceProof REJECTS a spendable-domain proof (KEY_MISMATCH both ways)', function () {
         armEsc();
         try {
@@ -478,6 +564,22 @@ describe('SPV Phase 4: sdk.light.verifyBalance end-to-end (signed checkpoint, mo
             tick: TICK, atHeight: 100, validators, fetchImpl });
         assert.strictEqual(r.verified, false);
         assert.strictEqual(r.reason, 'BALANCE_QUERY_MISMATCH');
+    });
+
+    // The network path also wires the caller's identity through the verifier's own
+    // `expected` binding, so a proof whose PROVEN KEY matches the request but whose
+    // echoed address field does not (the field callers read) is refused inside the
+    // verifier, not just by the expectedKey pre-check.
+    it('rejects a proof whose echoed identity differs from the request even when the key matches', async function () {
+        const ADDR_B = '1AddrBbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+        const { proof, stateRoot } = buildBalanceProof(ADDR_A, TICK, '42');
+        proof.address = ADDR_B;                 // key still proves ADDR_A, so the key pre-check passes
+        const { cp, validators } = makeSignedCheckpoint(stateRoot);
+        const fetchImpl = mockFetch([['/api/proof/balance/', { proof, checkpoint: cp }]]);
+        const r = await light.verifyBalance({ explorerUrl: 'https://x', coin: COIN, address: ADDR_A,
+            tick: TICK, atHeight: 100, validators, fetchImpl });
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'REQUESTED_IDENTITY_MISMATCH');
     });
 
     it('rejects a genuinely-committed proof for a DIFFERENT tick than queried (query binding)', async function () {

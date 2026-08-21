@@ -224,8 +224,17 @@ class Workflows {
             this.sdk._preflightContractLint({ CODE: String(code) }, opts.lint);
 
         // No raw code (caller pre-encoded) → defer to the normal single-shot deploy.
+        // The staking fields go in too: they are what selects DEPLOY v1, and a plan
+        // sized on the v0 shape budgets none of that tail, so a stakeable contract
+        // landing within those bytes of the cap is planned single-shot and refused
+        // by the encoder instead of being chunked.
         let plan = (code !== undefined && code !== null)
-            ? chunkHelper.planDeploy(String(code), { gasLimit, constructorParams: ctor })
+            ? chunkHelper.planDeploy(String(code), {
+                gasLimit,
+                constructorParams: ctor,
+                cooldownBlocks:    cooldown,
+                slashDestination:  slashDst
+            })
             : { single: true };
 
         // Phase-2 params, built BEFORE Phase 1 so the assembler can be sized while

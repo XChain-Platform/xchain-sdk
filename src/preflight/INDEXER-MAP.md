@@ -39,7 +39,7 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-**Pins taken at indexer commit:** `1a4b78a4`
+**Pins taken at indexer commit:** `188554e5`
 
 (Re-anchored 2026-08-15: the pins were reviewed against `58ab8e9`, a local
 commit the LIST-memo rebase orphaned before push. Every pinned hash is
@@ -49,7 +49,7 @@ and only the anchor moves.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 22f0f31..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 188554e5..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit.
 
@@ -95,7 +95,7 @@ found by hashing candidate blobs as above.
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `971338842f897e140d27565a4e01cdb364da14b81bb58e140dd6014d529b35fb` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `956463e64bb90087364b2c109c6d1f27a5b3526fd24415d6b9c22042e65e1479` |
 | `checks/dividend.js` | `src/actions/dividend.js` | `4755e314c69ead436a278a6d6196df5499a44768a236a2d9afda4b6a8623f1c1` |
-| `checks/batch.js` | `src/actions/batch.js` | `ef570ba4b724407a48c2e1a7779608d15c9f24f6d0912d6b15eff1172115327d` |
+| `checks/batch.js` | `src/actions/batch.js` | `c48dfe129171dc70c345e7e807bcc99e29fdeaa661cccf63afc49c6d492289c8` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -104,6 +104,53 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-08-20 - `batch.js`: fee-budget priceability widened to the arbiter's D10 scope
+
+No handler moved and no pin moves: the arbiter's D10 pricing
+(`nominalDurationFee`, `nominalExecuteFee` and their
+`isGasProvablyUnaffordable` wiring) already sits inside the pinned `batch.js`
+content. This entry records the paired CLIENT move that was still owed.
+`checks/batch.js` priced only new-tick ISSUE into its batch fee budget; it now
+also prices an ORDER / SWAP / DISPENSER format-0 create from the wire's own
+EXPIRATION (the arbiter's arithmetic: day count rounded to nearest, the
+unified free window, per-day gas at GAS_PRICE) and an EXECUTE at its
+VM_EXECUTE_BASE acceptance floor, with the arbiter's gas-token probe mirrored
+through the token lookup.
+
+The one deliberate divergence is graded rather than hidden: the arbiter
+evaluates a duration fee at the confirming block's BLOCK_TIME and the client
+only has the wall clock, so a client duration quote can OVERSTATE a
+later-confirming create. Quotes therefore carry a lower-bound grade: the
+EXECUTE floor and ISSUE schedule prices are collapse-grade and may feed the
+whole-batch ERROR, while duration quotes feed the batch-total WARNING only
+and can never collapse the batch, which keeps the mirror on the permitted
+side of its doctrine (it may accept what the chain rejects, never the
+reverse). MINT and XEXEC stay pinned OUT of pricing (MINT's real cost is
+contract code no param reveals; XEXEC is system-injected and fee-less), and
+`test/unit/preflight/batch.test.js` pins both refusals plus a positive
+pricing vector for each widened class.
+
+### 2026-08-20 - `batch.js`: chunk-carrier DEPLOY weight discount, mirrored
+
+One row. `git log 1a4b78a4..HEAD -- src/actions/batch.js` returns exactly
+one commit (`188554e5`), and the diff was read whole: `subCommandWeight`
+now returns the default weight of 1 for a DEPLOY whose format byte, read
+with the same `util.getFormatVersion(params[0])` call the dispatcher uses,
+is 4 (the chunk carrier, which runs no constructor); anything unparseable
+falls through to the full VM weight of 30. `commandWeights` and
+`weightBudget` are untouched, so the tables stay byte-equal.
+
+Client side, mirrored in the same change set: `src/batchLimits.js`
+`subCommandWeight` carries the identical discount through a faithful
+`formatVersion` mirror of the arbiter's derivation, and
+`test/unit/batchLimitsConformance.test.js` now drives weight vectors
+(defaults, VM 30, fan-out 25, the format-4 discount, and the budget
+boundary) through BOTH this mirror and the sibling handler's own
+`subCommandWeight`/`batchWeight`/`parse()`. The compose-side
+`actionWeight` deliberately keeps DEPLOY at 30: the builder weighs queued
+NAMES before any wire format exists, and the arbiter's own fallback for an
+unreadable format is the full weight. Anchor moves to `188554e5`.
 
 ### 2026-08-17 - comment-only hygiene pass; three rows re-pinned, nothing owed
 
