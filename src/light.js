@@ -47,7 +47,7 @@ const srb        = require('./snapshot_reorg_buffer.js');
 // serializes BIGINT columns as decimal strings, and Number() collapses two
 // adjacent indices above 2^53 onto one value, so the binding guards below would
 // match the neighbouring action or height they exist to reject.
-const { sameWireIndex } = require('./utils/wireIndex.js');
+const { sameWireIndex, toWireIndex } = require('./utils/wireIndex.js');
 
 function _fetch(impl){
     let f = impl || (typeof fetch === 'function' ? fetch : null);
@@ -178,14 +178,58 @@ function verifyBalanceProof(proof, trustedStateRoot, chain, network, expected){
 // The height check is strict-parse fail-closed: a garbage height reads as
 // not-armed, never as armed.
 //
+// THE HEIGHT THE GATE READS IS NEVER `proof.height`. That field is authored by
+// the explorer and is not hashed into anything, exactly like `proof.chain` and
+// `proof.network`, which this verifier already refuses to source from. Keying
+// the arming decision on it handed the decision back to the server the comment
+// above says is not trusted: a proof LABELLED at or above the armed height whose
+// non-inclusion is genuinely computed against a pre-arming balances_root passes
+// every remaining check and returns verified:true, amount:'0' - a proven-looking
+// "nothing is locked" for a height at which the ESC domain was never committed.
+//
+// So the gate reads `trustedHeight`, which callers take from the quorum-signed
+// checkpoint beside `trustedStateRoot`, and `proof.height` must equal it or the
+// proof is answering about a different block (PROOF_HEIGHT_MISMATCH, the same
+// binding verifyBalance/verifyAction enforce in their network wrappers).
+//
+// A caller that supplies no trustedHeight is gated at height 0 rather than at the
+// label. _atOrAfter is monotone in the height, so height 0 is the strictest
+// possible reading: it verifies only where the leaf is armed from genesis, i.e.
+// where the answer cannot depend on the height at all. That keeps the pre-
+// trustedHeight callers working on the testnets (armed at 0) while refusing every
+// chain with a mid-chain arming height, which is precisely the window the label
+// could have lied about.
+//
 // @param {Object} [expected] The REQUESTED { address, tick } to bind the proof to
 //   (see _expectedMismatch). @deprecated Calling without `expected` is deprecated;
 //   the argument becomes required at the next major version.
-function verifyLockedBalanceProof(proof, trustedStateRoot, chain, network, expected){
+// @param {number|string} [trustedHeight] block_index of the TRUSTED checkpoint.
+//   @deprecated Omitting it is deprecated and gates at height 0; it becomes
+//   required at the next major version.
+function verifyLockedBalanceProof(proof, trustedStateRoot, chain, network, expected, trustedHeight){
     try {
         if (!proof || !proof.smt_proof || !proof.sub_root_path) return _no('MALFORMED_PROOF');
         if (_expectedMismatch(expected, proof)) return _no('REQUESTED_IDENTITY_MISMATCH');
-        if (!SUB.isEscrowLockedLeafActive(proof.height, network, chain))
+        // The label must still PARSE as a wire index, strict, fail-closed. It no
+        // longer decides anything, but a server that cannot even name the height it
+        // is answering about has produced a proof nobody can place, and letting that
+        // through would drop the strict-parse rule the header states.
+        const label = toWireIndex(proof.height);
+        if (label === null) return _no('ESCROW_LEAF_NOT_COMMITTED');
+        const haveTrustedHeight = (trustedHeight !== undefined && trustedHeight !== null
+                                   && trustedHeight !== '');
+        if (haveTrustedHeight && !sameWireIndex(label, trustedHeight))
+            return _no('PROOF_HEIGHT_MISMATCH');
+        // Gate on the TRUSTED height. Past the bind above `label` IS that height,
+        // so reuse it: the activation carrier's own strict parse takes only a
+        // number or a digit string, and a BigInt block_index - the shape a
+        // BIGINT column arrives in, and the shape wireIndex.js exists to carry -
+        // would read as NaN there and refuse an armed chain. Normalizing here
+        // keeps the refusal for a height the carrier genuinely cannot compare
+        // (above 2^53) and drops it for the ones it can.
+        const gateWire   = haveTrustedHeight ? label : 0n;
+        const gateHeight = (gateWire <= BigInt(Number.MAX_SAFE_INTEGER)) ? Number(gateWire) : NaN;
+        if (!SUB.isEscrowLockedLeafActive(gateHeight, network, chain))
             return _no('ESCROW_LEAF_NOT_COMMITTED');
         // The proven key must be exactly escrowKey(chain, network, address, tick),
         // with chain/network from the TRUSTED checkpoint, never the proof.
@@ -419,6 +463,68 @@ async function verifyBalance(opts){
     // key, `expected` guards the echoed address/tick fields the caller will read.
     const v = verifyBalanceProof(proof, trusted, cp.chain, cp.network,
                                  { address: String(opts.address), tick: String(opts.tick) });
+    return Object.assign({ verified: v.verified, amount: v.verified ? v.amount : null, reason: v.reason }, base);
+}
+
+// verifyLockedBalance({ explorerUrl, coin, address, tick, atHeight?, validators?, trustedCheckpoint?, pinnedResolver?, fetchImpl? })
+//  The XCHAIN_ESC counterpart of verifyBalance, same options and same
+//  -> { verified, amount, height, reason, checkpoint, quorum, weighted }.
+//
+// This wrapper is the reason the locked verifier can enforce liveness at all: it
+// is the only in-SDK place that HOLDS the quorum-signed checkpoint, so it is the
+// only place that can hand the verifier a trusted height. Without it every caller
+// had to bind proof.height to their checkpoint by hand, and the pure verifier was
+// left gating arming on the server's own label.
+//
+// A below-arming request is refused by the explorer with an error body rather than
+// a proof (proofServer.lockedBalanceProof). That refusal is a real answer here, not
+// a transport fault, so it is returned as verified:false with the server's reason
+// instead of throwing the way an absent proof does on the spendable path.
+async function verifyLockedBalance(opts){
+    opts = opts || {};
+    const f = _fetch(opts.fetchImpl);
+    const hq = (opts.atHeight != null && opts.atHeight !== '') ? ('?height=' + encodeURIComponent(String(opts.atHeight))) : '';
+    const url = _base(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.coin)) +
+                '/api/proof/locked-balance/' + encodeURIComponent(String(opts.address)) +
+                '/' + encodeURIComponent(String(opts.tick)) + hq;
+    const body = await _json(f, url);
+    if (body && !body.proof && typeof body.error === 'string' && body.error)
+        return { verified: false, amount: null, reason: body.error,
+                 height: null, checkpoint: null, quorum: null, weighted: null };
+    if (!body || !body.proof) throw new Error('LightClient: no proof in response');
+    const proof = body.proof;
+    let cp, q;
+    if (opts.trustedCheckpoint){
+        cp = opts.trustedCheckpoint;
+        if (!sameWireIndex(proof.height, cp.block_index))
+            return { verified: false, amount: null, reason: 'PROOF_HEIGHT_MISMATCH',
+                     height: Number(proof.height), checkpoint: cp, quorum: null, weighted: null };
+        q = { valid: true, quorum: null, weighted: null };
+    } else {
+        if (!body.checkpoint) throw new Error('LightClient: no checkpoint in response');
+        cp = body.checkpoint;
+        q = await _resolveQuorum(f, opts, cp);
+    }
+    // Height reported from the quorum-signed checkpoint, never the response label,
+    // for the reason verifyBalance gives.
+    const base = { height: Number(cp.block_index), checkpoint: cp, quorum: q.quorum, weighted: q.weighted };
+    if (!q.valid) return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_QUORUM_FAILED' }, base);
+    if (!sameWireIndex(proof.height, cp.block_index))
+        return Object.assign({ verified: false, amount: null, reason: 'PROOF_HEIGHT_MISMATCH' }, base);
+    if (opts.atHeight != null && opts.atHeight !== '' && Number(cp.block_index) < Number(opts.atHeight))
+        return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_BELOW_ATHEIGHT' }, base);
+    const trusted = _hx(cp.state_root);
+    if (!trusted) return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_PRE_COMMITMENT' }, base);
+    if (_hx(proof.chain) !== _hx(cp.chain) || _hx(proof.network) !== _hx(cp.network))
+        return Object.assign({ verified: false, amount: null, reason: 'PROOF_CHECKPOINT_CHAIN_MISMATCH' }, base);
+    // Bind the proven key to the CALLER's query in the ESC domain, the escrow
+    // counterpart of BALANCE_QUERY_MISMATCH.
+    const expectedKey = M.toHex(M.escrowKey(cp.chain, cp.network, String(opts.address), String(opts.tick)));
+    if (!proof.smt_proof || _hx(proof.smt_proof.key) !== expectedKey)
+        return Object.assign({ verified: false, amount: null, reason: 'LOCKED_QUERY_MISMATCH' }, base);
+    const v = verifyLockedBalanceProof(proof, trusted, cp.chain, cp.network,
+                                       { address: String(opts.address), tick: String(opts.tick) },
+                                       cp.block_index);
     return Object.assign({ verified: v.verified, amount: v.verified ? v.amount : null, reason: v.reason }, base);
 }
 
@@ -800,6 +906,7 @@ module.exports = {
     verifyContractStateProof,
     verifyActionProof,
     verifyBalance,
+    verifyLockedBalance,
     verifyAction,
     parseAnchorV3,
     anchorToCheckpoint,

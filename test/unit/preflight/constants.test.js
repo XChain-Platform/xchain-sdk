@@ -33,6 +33,28 @@ describe('pre-flight constants + registry', function () {
         }
     });
 
+    it('no check module emits a registry code as a string literal', function () {
+        // A literal that equals a FINDING_CODES value is a second copy of the
+        // registry: a rename moves every FINDING_CODES.* call site and leaves the
+        // literal emitting an off-contract code the wallet can bucket by severity
+        // but never match by code. Unverified-only check names with no registry
+        // entry are a different class and stay literals, so the scan keys on the
+        // registry's VALUES rather than on shape.
+        const fs = require('fs');
+        const dir = path.join(__dirname, '..', '..', '..', 'src', 'preflight', 'checks');
+        const registry = new Set(Object.values(constants.FINDING_CODES));
+        const re = /\b(?:addFinding|addUnverified|markRun)\(\s*(['"])([A-Z0-9_]+)\1/g;
+        const offenders = [];
+        for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.js'))) {
+            const src = fs.readFileSync(path.join(dir, f), 'utf8');
+            let m;
+            while ((m = re.exec(src)) !== null) {
+                if (registry.has(m[2])) offenders.push(`${f}: '${m[2]}'`);
+            }
+        }
+        expect(offenders, 'registry codes passed as literals: ' + offenders.join(', ')).to.deep.equal([]);
+    });
+
     it('TIER1_DENYLIST mirrors the indexer VM denylist', function () {
         expect(constants.TIER1_DENYLIST).to.deep.equal(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
     });

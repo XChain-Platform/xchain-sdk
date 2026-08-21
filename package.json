@@ -37,6 +37,7 @@
     "acorn-walk": "8.3.5",
     "astring": "1.9.0",
     "axios": "^1.18.1",
+    "bip174": "2.1.1",
     "bitcoinjs-lib": "6.1.7",
     "bitcoinjs-message": "^2.2.0",
     "cors": "^2.8.5",

@@ -65,7 +65,23 @@ describe('pre-flight Tier 1 classification', function () {
         expect(out.reason).to.equal('guardInert');
     });
 
-    it('FEE_QUOTE_CONTROLLER_UNSUPPORTED string is NOT a verdict', async function () {
+    // The legacy feequote shape, verbatim from indexer actions.js computeFeeQuote:
+    // the sentinel is copied onto `status` and `error` is rewritten into a human
+    // sentence that does not contain it, alongside supported:false. Matching only
+    // `error` classified this as rule 1 'unsupported' and never named the refusal.
+    it('a feequote controller refusal reports guardInert, not unsupported', async function () {
+        const out = await tier1For('SEND|0|JDOG|1|addr', {
+            supported: false, valid: false,
+            status: 'FEE_QUOTE_CONTROLLER_UNSUPPORTED',
+            error: 'native fee pre-flight not supported for a controller-bound SEND (pay the fee in XCHAIN)',
+        });
+        expect(out.kind).to.equal('no-verdict');
+        expect(out.reason).to.equal('guardInert');
+    });
+
+    // Defence only: no shipped indexer puts the raw sentinel in `error`, but a build
+    // that did must not be read as a verdict either.
+    it('FEE_QUOTE_CONTROLLER_UNSUPPORTED in error is NOT a verdict', async function () {
         const out = await tier1For('SEND|0|JDOG|1|addr', { supported: true, error: 'FEE_QUOTE_CONTROLLER_UNSUPPORTED' });
         expect(out.kind).to.equal('no-verdict');
         expect(out.reason).to.equal('guardInert');

@@ -119,8 +119,9 @@ class AuthUtils {
             const privateKey = keyPair.privateKey;
             const compressed = keyPair.compressed;
 
-            let extraEntropy;
-            // bitcoinjs-message sign(message, privateKey, compressed, messagePrefix, sigOptions)
+            // bitcoinjs-message sign(message, privateKey, compressed, messagePrefix, sigOptions).
+            // Signing is deterministic RFC 6979 by design: no extraEntropy is supplied
+            // (elliptic GHSA-848j-6mx2-7j84 is an accepted advisory, see AUDIT-EXCEPTIONS.md).
             const sigOptions = {};
             if (opts.segwitRedeemScript) sigOptions.segwitType = 'p2sh(p2wpkh)';
             if (opts.segwitNative) sigOptions.segwitType = 'p2wpkh';

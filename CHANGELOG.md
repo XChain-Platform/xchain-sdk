@@ -9,12 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `npm run release:npm-check` fails while the npm registry serves a version other than the repo's, for the SDK and the MCP server.
+- `verifyLockedBalance` gives consumers a locked-balance network path that binds the served proof to the quorum-signed checkpoint, mirroring `verifyBalance`.
 
 ### Changed
 - `verifyBalance` now passes the requested identity through the verifier's `expected` binding, so a proof echoing a different address or tick is refused as `REQUESTED_IDENTITY_MISMATCH`.
+- `verifyLockedBalanceProof` gates escrow-leaf arming on a caller-supplied trusted height instead of the server-authored `proof.height`, and refuses a proof relabelled off it as `PROOF_HEIGHT_MISMATCH`.
 
 ### Deprecated
 - Calling `verifyBalanceProof`, `verifyLockedBalanceProof` or `verifyContractStateProof` without the `expected` identity argument; it becomes required at the next major version.
+- Calling `verifyLockedBalanceProof` without a `trustedHeight`; meanwhile it gates at height 0, which refuses every chain armed mid-chain, and it becomes required at the next major version.
 
 ## [0.10.0] - 2026-08-13
 

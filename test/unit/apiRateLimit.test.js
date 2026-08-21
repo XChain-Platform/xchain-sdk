@@ -40,11 +40,17 @@ const {
 } = require('../../src/apiGuards.js');
 const { waitFor } = require('../helpers/wait.js');
 
-function buildApp(limit, windowMs) {
+// Tests that exercise per-credential bucketing pass the credentials the app
+// would accept (src/api.js passes a safeTokenEqual-against-SDK_API_KEY
+// predicate); with no predicate every caller is bucketed by source address.
+const KNOWN_KEYS = (token) => token === 'key-a' || token === 'key-b' ||
+                              token === 'k1' || token === 'k2' || token === 'super-secret-token';
+
+function buildApp(limit, windowMs, isCredential = KNOWN_KEYS) {
     const app = express();
     app.use(bodyParser.json());
     // The shipped limiter itself, not a reconstruction of it.
-    const limiter = rateLimitMiddleware({ limit, windowMs });
+    const limiter = rateLimitMiddleware({ limit, windowMs, isCredential });
     app.use(limiter);
     app.use((req, res) => res.status(200).json({ jsonrpc: '2.0', id: null, result: 'ok' }));
     app._rateBuckets = limiter.buckets;                   // the limiter's own map
@@ -91,6 +97,28 @@ describe('API request-rate limit', function () {
             assert.strictEqual((await send({ authorization: 'Bearer key-a' })).status, 429);
             // A different credential from the same address still has its budget.
             assert.strictEqual((await send({ authorization: 'Bearer key-b' })).status, 200);
+        });
+    });
+
+    it('an unvalidated token does not mint its own bucket: a rotating junk token is capped per source address', async () => {
+        const app = buildApp(2, 60000);
+        await withServer(app, async (send) => {
+            assert.strictEqual((await send({ authorization: 'Bearer junk-1' })).status, 200);
+            assert.strictEqual((await send({ authorization: 'Bearer junk-2' })).status, 200);
+            assert.strictEqual((await send({ authorization: 'Bearer junk-3' })).status, 429,
+                'a fresh random token per request must not escape the cap');
+            assert.strictEqual((await send()).status, 429, 'junk tokens share the bare-address bucket');
+            assert.strictEqual(app._rateBuckets.size, 1, 'rotating junk tokens must not grow the map');
+            // The configured credential still has its own budget.
+            assert.strictEqual((await send({ authorization: 'Bearer key-a' })).status, 200);
+        });
+    });
+
+    it('with no isCredential predicate every caller is bucketed by source address', async () => {
+        const app = buildApp(1, 60000, null);           // null, not undefined: bypass the default arg
+        await withServer(app, async (send) => {
+            assert.strictEqual((await send({ authorization: 'Bearer key-a' })).status, 200);
+            assert.strictEqual((await send({ authorization: 'Bearer key-b' })).status, 429);
         });
     });
 

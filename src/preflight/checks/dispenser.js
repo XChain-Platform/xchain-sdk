@@ -145,9 +145,9 @@ async function checkDispenser(ctx) {
         return;
     }
     if (state === null) {
-        ctx.addUnverified('DISPENSER_LIFECYCLE', 'the lookup carried no dispenser status');
+        ctx.addUnverified(FINDING_CODES.DISPENSER_LIFECYCLE, 'the lookup carried no dispenser status');
     } else if (state !== 'open') {
-        ctx.addFinding('DISPENSER_LIFECYCLE', 'warning',
+        ctx.addFinding(FINDING_CODES.DISPENSER_LIFECYCLE, 'warning',
             `Dispenser #${idx} is ${state}; this ${ctx.parsed.version === 1 ? 'cancel' : 'edit'} will likely be rejected.`,
             { dispenserActionIndex: idx, state });
     }
@@ -155,7 +155,7 @@ async function checkDispenser(ctx) {
         const owner = String(dispenser.source ?? dispenser.owner ?? '');
         const getAddress = String(dispenser.get_address ?? dispenser.GET_ADDRESS ?? '');
         if (owner && ctx.source !== owner && (!getAddress || ctx.source !== getAddress)) {
-            ctx.addFinding('DISPENSER_NOT_OWNER', 'warning',
+            ctx.addFinding(FINDING_CODES.DISPENSER_NOT_OWNER_W, 'warning',
                 `Source is neither the dispenser owner (${owner}) nor its GET_ADDRESS; the chain will reject this.`,
                 { dispenserActionIndex: idx, owner, getAddress });
         }

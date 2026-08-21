@@ -40,8 +40,21 @@ const ENCODING_LIMITS = Object.freeze({
 // Report schema version (additive-only by convention). The report is
 // consumed by the wallet PreflightPanel
 // (packages/core/src/shared/components/PreflightPanel.jsx), which reads
-// findings/severity/overridable/restricted/stateHeight/unverified and does
-// NOT read schemaVersion: the additive-only rule has no enforcement point.
+// verdict/findings/restricted/stateHeight/unverified and never reads
+// schemaVersion at runtime. The enforcement point is build-time on the
+// wallet side: PreflightPanel exports SUPPORTED_SCHEMA_VERSION and
+// test/unit/components/PreflightPanel.tier1Notice.test.jsx pins it to
+// this constant, resolving the SDK the wallet INSTALLS. So a bump here
+// fires that test when the wallet upgrades to the bumped SDK, not on the
+// commit that changes this line; bump only alongside a review of every
+// field the panel reads.
+//
+// `restricted` on the report means "covers a proper subset of the checks
+// the action warrants", never a completeness claim either way: the full
+// SDK preflight (index.js) always stamps false, and the wallet's dispenser
+// buy panel (routes/DispenserDetail.jsx) authors a funding-only report with
+// restricted: true that PreflightPanel renders as its "Partial check" chip.
+// A new writer of the field inherits that meaning or picks a new name.
 const REPORT_SCHEMA_VERSION = 1;
 
 // Dispenser refill cap (indexer config.js MAX_REFILLS). A
@@ -112,7 +125,11 @@ const FINDING_CODES = Object.freeze({
     DISPENSER_EMPTY:     'DISPENSER_EMPTY',
     // Warnings / notices (never error)
     NATIVE_FEE_FORFEIT:  'NATIVE_FEE_FORFEIT',
-    FEE_UNKNOWN:         'FEE_UNKNOWN',
+    // No FEE_UNKNOWN code: the DEPLOY/EXECUTE protocol fee is disclosed
+    // through the getFeeQuote / quoteNativeFee compose path, which the wallet
+    // renders as NATIVE_FEE_UNVERIFIED_NOTICE, never through a pre-flight finding.
+    // It was registered here with no producer anywhere in the SDK, wallet, or
+    // indexer, which is exactly the second-list-with-no-owner this header forbids.
     STALE_STATE:         'STALE_STATE',
     BATCH_NOT_ATOMIC:    'BATCH_NOT_ATOMIC',
     BATCH_LIMIT_EXCEEDED:'BATCH_LIMIT_EXCEEDED',
