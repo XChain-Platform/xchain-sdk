@@ -22,6 +22,9 @@ Renumbered from an unpublished in-repo 2.0.3 cut before first publish: the SDK j
 - Escrow, vesting and crowdsale templates declare `abi` blocks with method summaries and `view` flags.
 - The hub connector takes a `hubApiKey` option (env fallback `HUB_API_KEY`) for `getallconfigs` against keyed hubs.
 - `npm run release:npm-check` fails while the npm registry serves a version other than the repo's, for the SDK and the MCP server.
+- A registry sync check that keeps the bundled coin registry level with the hub's canonical copy.
+- Armed the contract state sub-root from genesis on every testnet, byte-identical to the indexer twin.
+- Pre-flight prices duration creates and the EXECUTE floor into the batch fee budget.
 
 ### Changed
 - **BREAKING** `AgentSession` now requires a spend ceiling and a stable `submitOpts.idempotencyKey`, and adds an operator kill switch; `allowUnbounded` / `allowUnkeyedSubmits` opt back out.
@@ -32,6 +35,8 @@ Renumbered from an unpublished in-repo 2.0.3 cut before first publish: the SDK j
 - Re-vendored `lint-core.js` and `metering.js` byte-identical to the canonical xchain-vm copies.
 - Re-embedded the crowdsale template via `sync:templates`, picking up the xchain-contracts `saleDecimals` validation.
 - Address-ref compaction is action-aware via `SDK_COMPACTABLE_BY_ACTION`, so a field can be compacted for one action and emitted in full for another.
+- The static batch validator applies the weighted budget the chain actually charges instead of counting commands, and learns the chunk-carrier DEPLOY discount, matching the builder, the decoder mirror and pre-flight.
+- `bip174` is a declared dependency pinned at 2.1.1 rather than a deep require.
 
 ### Deprecated
 - Calling `verifyBalanceProof`, `verifyLockedBalanceProof` or `verifyContractStateProof` without the `expected` identity argument; it becomes required at the next major version.
@@ -60,6 +65,11 @@ Renumbered from an unpublished in-repo 2.0.3 cut before first publish: the SDK j
 - A checkpoint missing its commitment roots after activation is rejected rather than verified against the legacy preimage.
 - Co-signer output caps compare as exact u64, so an output one satoshi above a cap larger than 2^53 is no longer approved.
 - Delegated dispenser opens serialize the full `GET_ADDRESS` instead of its `^<id>` reference form, so the dispenser is keyed on the real operating address and actually dispenses.
+- The hub-config delta consumer refuses a regressed watermark and drops its cursor on endpoint failover, so a hub restored from a snapshot no longer leaves lost-window config served as fresh forever.
+- The BigInt fee wrapper no longer re-throws on a primed cache value of zero.
+- The u64 reader contract matches the decoder's sibling.
+- WebSocket convenience handlers are scoped to the entity they registered for.
+- The pre-flight fee floor is exact, and wire indices stay BigInt-exact.
 - Review-round hardening: sub-root slot pinning in `verifyBalanceProof`, opt-in submit idempotency, fail-closed co-signer sidecar auth, compiled-push OP_RETURN pre-flight, network-aware oversize suggestions, an attestation SSRF gate, and derivation tests.
 
 ### Security
@@ -69,6 +79,7 @@ Renumbered from an unpublished in-repo 2.0.3 cut before first publish: the SDK j
 - `generateNonce` refuses to reuse a `sessionId` under different signing inputs, which previously disclosed the private key.
 - `CoSigner`, `CoSignerClient` and `MuSig2AgentSession` require exactly the two-key pair they can sign for, so no unspendable aggregate address can be funded.
 - `CoSigner` rejects any BIP341 `sighashType` other than `SIGHASH_DEFAULT` and `SIGHASH_ALL`, closing a drain-transaction bypass of the output gate.
+- The rate limiter buckets on a validated token, so a flood of rotating bearer tokens no longer escapes the cap.
 
 ## [2.0.2] - 2026-08-02
 
