@@ -88,7 +88,7 @@ found by hashing candidate blobs as above.
 | `checks/send.js` (SEND) | `src/actions/send.js` | `a7c07ad1505dba1eb06efd62cfbe7f8dc6fa8654a5a6825d2ed6480190d4fbdb` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `15e134f5c27b5955e27e78187848e1878cee562a52b173dacf89389f5949aa98` |
 | `checks/mint.js` | `src/actions/mint.js` | `e491154c399be3fdd5b6b242b3da24db6c5119d4683988308b8087e4dc8dff03` |
-| `checks/issue.js` | `src/actions/issue.js` | `2ca8734fa943eb96ed0451accbc08ed62bad07b72c1c56a0822e6c7cfc1ee91f` |
+| `checks/issue.js` | `src/actions/issue.js` | `546c080ce5ab96f1cf0a0a3ce1d7ff939dbe41495c2cf03c5c5257fdbf385f29` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `3636c269cd7f989469c15a4443df58185ec17f7fc72d7b799686bd554da506bc` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `03426508cb5a916561a6d78a14d2ba7c823a86cf73b340b56bf59a365ddb8fe2` |
 | `checks/trading.js` (ORDER) | `src/actions/order.js` | `e9c676ff4d724b92bd94966bf6811d23bc932ed34daa694211833302e53b6b02` |
@@ -104,6 +104,35 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-08-23 - `issue.js`: inherited mint windows exempted from the recency checks
+
+**`issue.js` - REAL change, no client change owed.** Baseline pin
+`2ca8734f`. The handler fills fields the issuance left unset from the
+existing token record before validating, so the `MINT_START_BLOCK` and
+`MINT_STOP_BLOCK` recency checks were being applied to INHERITED values.
+Once a token's mint window opened, the inherited start block was
+necessarily in the past and every later issuance was refused with
+`invalid: MINT_START_BLOCK < BLOCK_INDEX`, so the token could never be
+re-parameterized again; `MINT_STOP_BLOCK` carried the identical defect
+once the window closed. Both checks now read the pre-merge wire values,
+so an inherited window is exempt while an explicitly restated past value
+is still refused, and the stop-before-start cross-check still compares
+the merged (effective) window.
+
+This is a validity LOOSENING, so it is gated on
+`ISSUE_INHERITED_MINT_WINDOW` (mainnet unarmed, testnet armed at a future
+instant, regtest genesis-on) and below the activation the old rejections
+are reproduced exactly, which is what keeps from-genesis replay
+byte-identical.
+
+No mirror is owed because the client pre-flight has never predicted the
+mint window at all: `src/preflight/` contains no `MINT_START_BLOCK` or
+`MINT_STOP_BLOCK` reference, so `checks/issue.js` returned no verdict on
+this input class before the change and returns none after it. The
+loosening can therefore only turn a chain-side rejection into an
+acceptance, which no client check contradicts. Anchor moves to
+`2d9cbbbf`.
 
 ### 2026-08-20 - `batch.js`: fee-budget priceability widened to the arbiter's D10 scope
 
