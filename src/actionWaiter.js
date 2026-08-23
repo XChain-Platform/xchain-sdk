@@ -162,8 +162,15 @@ class ActionWaiter {
                         { txid, action: unknownResult, actions: unknownResult.statusUnknownActions }));
                     return;
                 }
+                // Not indexed inside the window. Say what that does and does NOT
+                // mean: the transaction may be sitting in the mempool waiting for a
+                // block, which on a chain with long or irregular block times is the
+                // ordinary case rather than a fault. Callers that broadcast it
+                // themselves mark `broadcast` on this error (see lifecycleManager).
                 settle(new SDKActionError('CONFIRMATION_TIMEOUT',
-                    'Timed out waiting for transaction ' + txid + ' to be indexed (' + timeout + 'ms)',
+                    'Transaction ' + txid + ' was not indexed within ' + timeout + 'ms. ' +
+                    'It may still be in the mempool awaiting a block; check the transaction ' +
+                    'before rebuilding it, since re-sending would spend the same inputs again.',
                     { txid, timeout }));
             }, timeout);
 

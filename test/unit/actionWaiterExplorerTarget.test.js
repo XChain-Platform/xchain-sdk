@@ -60,7 +60,7 @@ describe('ActionWaiter explorer target injection', function () {
         const waiter = new ActionWaiter(sdk);
         await assert.rejects(
             () => waiter.waitForTxid(TXID, { timeout: 1500, pollInterval: 50 }),
-            /CONFIRMATION_TIMEOUT|Timed out/);
+            (err) => err.code === 'CONFIRMATION_TIMEOUT');
         assert.ok(calls.shared > 0, 'the SDK explorer was the one polled');
     });
 

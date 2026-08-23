@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- A submit whose indexing wait expires now reports that the transaction was broadcast and is awaiting a block, rather than presenting it as a failed action.
+
 ## [0.10.0] - 2026-08-13
 
 Renumbered from an unpublished in-repo 2.0.3 cut before first publish: the SDK joins the platform version stream at this release, and the 2.x versions on npm are deprecated in its favor.
