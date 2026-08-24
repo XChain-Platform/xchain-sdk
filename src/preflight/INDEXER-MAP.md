@@ -27,8 +27,11 @@ is what the CI drift jobs on both repos run.
 Ground-truthed against HEAD 2026-07-20; `dispenser.js` and `dispense.js`
 re-reviewed against HEAD 2026-07-26, nine handlers re-reviewed against
 HEAD 2026-08-08, ALL ELEVEN re-reviewed against indexer HEAD
-`22f0f31` on 2026-08-13, and NINE re-reviewed against indexer HEAD
-`58ab8e9` on 2026-08-15 (see the review log below). Hashes
+`22f0f31` on 2026-08-13, NINE re-reviewed against indexer HEAD
+`58ab8e9` on 2026-08-15, three re-pinned after the comment-hygiene pass
+at `1a4b78a4` on 2026-08-17, `batch.js` re-reviewed at `188554e5` on
+2026-08-20, and `issue.js` re-reviewed at `2d9cbbbf` on 2026-08-23 (see
+the review log below). Hashes
 are of the indexer handler source files, resolved via
 `XCHAIN_INDEXER_PATH` or the sibling `../xchain-indexer` checkout. The
 gate SKIPS (does not fail) when no indexer checkout is present, so
@@ -39,17 +42,28 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-**Pins taken at indexer commit:** `188554e5`
+**Pins taken at indexer commit:** `2d9cbbbf`
 
-(Re-anchored 2026-08-15: the pins were reviewed against `58ab8e9`, a local
-commit the LIST-memo rebase orphaned before push. Every pinned hash is
-byte-identical at `a1d36eb`, the pushed develop head, so the review stands
-and only the anchor moves.)
+(Re-anchored 2026-08-23 by the `issue.js` mint-window pass, whose entry
+below declares this anchor. The line itself was missed in that edit and
+kept saying `188554e5`, the 2026-08-20 `batch.js` anchor, for three days;
+the rule one paragraph down is the rule it broke. `2d9cbbbf` is reachable
+from the indexer develop head and no file under `src/actions/` differs
+between the two, so every pinned hash below is byte-identical at both.)
+
+(Standing caveat on the 2026-08-15 anchor, which the paragraph above and
+the review log below both still cite: `58ab8e9` is a local commit the
+LIST-memo rebase orphaned before push. It is still present in the indexer
+object store, so an existence check answers yes, but it is NOT reachable
+from develop and a diff range built on it resolves to nothing useful, the
+trap the next section names. Every hash pinned by that pass is
+byte-identical at `a1d36eb`, the pushed develop head, so that review
+stands and only its anchor is unreachable.)
 
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 188554e5..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 2d9cbbbf..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit.
 
