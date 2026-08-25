@@ -42,7 +42,7 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-**Pins taken at indexer commit:** `2d9cbbbf`
+**Pins taken at indexer commit:** `2b65e8a4`
 
 (Re-anchored 2026-08-23 by the `issue.js` mint-window pass, whose entry
 below declares this anchor. The line itself was missed in that edit and
@@ -103,8 +103,8 @@ found by hashing candidate blobs as above.
 | `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `15e134f5c27b5955e27e78187848e1878cee562a52b173dacf89389f5949aa98` |
 | `checks/mint.js` | `src/actions/mint.js` | `e491154c399be3fdd5b6b242b3da24db6c5119d4683988308b8087e4dc8dff03` |
 | `checks/issue.js` | `src/actions/issue.js` | `546c080ce5ab96f1cf0a0a3ce1d7ff939dbe41495c2cf03c5c5257fdbf385f29` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `3636c269cd7f989469c15a4443df58185ec17f7fc72d7b799686bd554da506bc` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `03426508cb5a916561a6d78a14d2ba7c823a86cf73b340b56bf59a365ddb8fe2` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `c1ed4b8374df89756a76088be74e6fd6c1ea7b49e0daeb06558ef5e2c2d4599e` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `6f059217d824d5c7f61be9afd762b950942de61a06801dd540d6a3e2560aa2c1` |
 | `checks/trading.js` (ORDER) | `src/actions/order.js` | `e9c676ff4d724b92bd94966bf6811d23bc932ed34daa694211833302e53b6b02` |
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `971338842f897e140d27565a4e01cdb364da14b81bb58e140dd6014d529b35fb` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `956463e64bb90087364b2c109c6d1f27a5b3526fd24415d6b9c22042e65e1479` |
@@ -118,6 +118,36 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-08-25 - `dispenser.js` + `dispense.js`, against indexer HEAD `2b65e8a4`
+
+**`dispenser.js` - REAL change, no client change owed.** Baseline pin
+`2d9cbbbf`. A format-0 DISPENSER carrying an ORACLE_ADDRESS now resolves an
+effective oracle price and refuses the create when there is none, via
+`util.requireEffectiveOraclePrice(BLOCK_TIME, {ORACLE_ADDRESS, GIVE_COIN,
+GIVE_TICK, FIAT_CODE}, indexerDb)`. This is a validity TIGHTENING and a new
+client-visible rejection, double-gated on `isDispenserOraclePriceActive` and the
+`FIAT_DISPENSER_PRICING` protocol change, so below either gate the old
+acceptances are reproduced exactly.
+
+No mirror is owed, and none is possible: the predicate reads the indexer's own
+oracle feed state at BLOCK_TIME through `indexerDb`, which no client holds. The
+pre-flight has never predicted this input class either - `src/preflight/`
+references ORACLE_ADDRESS only for the oracle FEE output (`noteOracleFee`) and
+contains no `FIAT_CODE` or oracle-price reference at all, so `checks/dispenser.js`
+returned no verdict here before the change and returns none after it. Same shape
+as the 2026-08-15 saturating-divide entry: a client cannot pre-check a condition
+whose inputs live only on the indexer.
+
+The second edit is `_logStaleFreshness`, a try/catch-wrapped console.log of
+utxo-tracker sync state on a first-seen miss. No verdict reads it.
+
+**`dispense.js` - comment-only, re-pinned.** The diff is entirely prose: it
+corrects a claim that the two divide-by-zero guards were for OWNERSHIP
+dispensers. They are not - `getDispenserInfo` virtualizes an ownership
+dispenser's GIVE_AMOUNT to '1', so both guarded paths DO run for one, and the
+real case is a BALANCE dispenser created below `dispenser_give_amount_activation`
+with an empty or '0' GIVE_AMOUNT. Executable code is byte-identical.
 
 ### 2026-08-23 - `issue.js`: inherited mint windows exempted from the recency checks
 
