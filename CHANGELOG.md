@@ -5,15 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.11.0] - 2026-08-25
 
 ### Added
 - `sdk.onBetFeed(feedActionIndex, cb)` follows one betting market's live bets, latch, resolve, cancel and expiry.
 - `sdk.onAttestation(cb)` subscribes to the global attestation stream (request and response phases).
 
+### Changed
+- Updated the BTC mainnet validator reward pool address.
+- Re-pinned the BTC, LTC and DOGE testnet genesis start blocks and consensus hashes to a fresh testnet genesis just under the live chain tip.
+
 ### Fixed
 - `sdk.onAddress()` now delivers the nine later lifecycle events the explorer routes to an address channel, which it previously received and silently dropped.
 - A submit whose indexing wait expires now reports that the transaction was broadcast and is awaiting a block, rather than presenting it as a failed action.
+- The contract linter now warns when code reads a global the sandbox strips (`Date`, `fetch`, `structuredClone`, and other timers/globals), which previously linted clean and threw at runtime.
 
 ## [0.10.0] - 2026-08-13
 
