@@ -28,11 +28,14 @@
 
 const crypto = require('crypto');
 
-// Vendored single source of truth: ./protocol/constants.js (byte-identical to
-// xchain-documentation/protocol/constants.js). These are the SDK's single
-// in-repo entry point (validator.js and psbtActionDecode.js import them from
-// here); test/unit/protocolSizeCaps.test.js pins them to the canonical values so
-// a one-sided bump fails locally.
+// Vendored single source of truth: ./protocol/constants.js, which is a REORDERED
+// SUBSET of xchain-documentation/protocol/constants.js in VALUE PARITY with it,
+// not a byte-identical copy (uuid:0eb83c45) - it exports 33 of the canonical 59
+// symbols and omits e.g. MAX_STANDARD_TX_WEIGHT, so no file diff guards this
+// seam and a "restore byte identity" edit would be wrong. These are the SDK's
+// single in-repo entry point (validator.js and psbtActionDecode.js import them
+// from here); test/unit/protocolSizeCaps.test.js pins them to the canonical
+// values so a one-sided bump fails locally.
 const PROTO = require('./protocol/constants.js');
 const MAX_ACTION_DATA_LENGTH      = PROTO.MAX_ACTION_DATA_LENGTH;
 const MAX_DEPLOYCHUNK_PART_BYTES  = PROTO.MAX_DEPLOYCHUNK_PART_BYTES;

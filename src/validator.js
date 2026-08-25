@@ -76,9 +76,11 @@ const MAX_MESSAGE_LENGTH = 1048576; // 1MB
 // always fits.
 const MAX_GATE_MIN_AMOUNT_LENGTH = 40;
 // 64KB contract source code limit. Must match the indexer (DEPLOY) and the VM
-// isolate limit. Vendored single source of truth: ./protocol/constants.js
-// (byte-identical to xchain-documentation/protocol/constants.js, MAX_CODE_SIZE);
-// kept equal by the cross-service regression suite.
+// isolate limit. Vendored single source of truth: ./protocol/constants.js, whose
+// MAX_CODE_SIZE is in VALUE PARITY with (not a byte-identical copy of)
+// xchain-documentation/protocol/constants.js, which is a superset file
+// (uuid:0eb83c45); kept equal by test/unit/protocolSizeCaps.test.js and the
+// cross-service regression suite.
 const MAX_CODE_SIZE      = require('./protocol/constants.js').MAX_CODE_SIZE;
 
 // Chunked-DEPLOY caps (per-carrier CODE_PART budget + max chunks per assembly).

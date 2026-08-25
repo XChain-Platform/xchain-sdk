@@ -1638,7 +1638,7 @@ export declare class XChainSDK {
     /** Subscribe to new actions with optional type/status/tick filters. */
     onAction(callback: (msg: any) => void, opts?: { types?: string[]; ticks?: string[] }): () => void;
 
-    /** Subscribe to all events touching an address (NEW_ACTION, ADDRESS_UPDATE, ORDER_MATCH, COINPAY_*, SWAP_MATCH, DISPENSE). */
+    /** Subscribe to all events touching an address: NEW_ACTION, ADDRESS_UPDATE, ORDER_MATCH, ORDER_EXPIRED, COINPAY_REQUIRED/FULFILLED/EXPIRED, SWAP_MATCH, SWAP_EXPIRED, DISPENSE, DISPENSER_CLOSED, DISPENSER_EXPIRED, BET, BET_EXPIRED, BET_CLOSED, ATTESTATION_REQUEST, ATTESTATION_RESPONSE. */
     onAddress(address: string, callback: (msg: any) => void, opts?: { types?: string[]; snapshot?: boolean }): () => void;
 
     /** Subscribe to updates for a token. */
@@ -1649,6 +1649,12 @@ export declare class XChainSDK {
 
     /** Subscribe to updates for a dispenser (by its action index). */
     onDispenser(actionIndex: number | string, callback: (msg: any) => void): () => void;
+
+    /** Subscribe to one betting market by its feed action index: BET (branch on data.action_format), BET_EXPIRED, BET_CLOSED and the initial SNAPSHOT. */
+    onBetFeed(feedActionIndex: number | string, callback: (msg: any) => void): () => void;
+
+    /** Subscribe to the global attestation stream: ATTESTATION_REQUEST and ATTESTATION_RESPONSE. */
+    onAttestation(callback: (msg: any) => void): () => void;
 
     /** Subscribe to COINPAY_REQUIRED events on an address. */
     onCoinpayRequired(address: string, callback: (msg: any) => void): () => void;

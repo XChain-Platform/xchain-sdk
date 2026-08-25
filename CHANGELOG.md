@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `sdk.onBetFeed(feedActionIndex, cb)` follows one betting market's live bets, latch, resolve, cancel and expiry.
+- `sdk.onAttestation(cb)` subscribes to the global attestation stream (request and response phases).
+
 ### Fixed
+- `sdk.onAddress()` now delivers the nine later lifecycle events the explorer routes to an address channel, which it previously received and silently dropped.
 - A submit whose indexing wait expires now reports that the transaction was broadcast and is awaiting a block, rather than presenting it as a failed action.
 
 ## [0.10.0] - 2026-08-13
