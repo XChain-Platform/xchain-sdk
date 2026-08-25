@@ -210,9 +210,15 @@ function buildServer(options = {}) {
     // actually exists. Without this, a policy like { allowedActions: ['SEND'] } is
     // accepted and every amount gate in policyEvaluator (maxPerAction / perTick) is
     // skipped, leaving an LLM-driven submit_action able to SEND unbounded amounts to
-    // any destination. Mirror policyEvaluator's own hasAmountLimit test so the gate and
-    // the evaluator agree on what counts as a cap; maxPerWindow.maxActions is a COUNT
-    // cap, not an amount ceiling, and does not satisfy this.
+    // any destination. This is policyEvaluator's hasAmountLimit test with ONE DELIBERATE
+    // OMISSION: the evaluator also accepts `|| !!policy.confirmAbove`, and this gate must
+    // NOT. confirmAbove is rejected outright a few lines above, because there is no human
+    // in this loop to answer it, so on this rail it can never be a binding ceiling.
+    // Copying the evaluator's third clause here to "fix the divergence" would let a
+    // confirmAbove-only policy satisfy the hard-cap requirement and reopen exactly the
+    // unbounded-spend hole the confirmAbove rejection was traded away to close. The
+    // divergence is the point; test/unit/mcp.test.js pins it. maxPerWindow.maxActions is
+    // likewise a COUNT cap, not an amount ceiling, and does not satisfy this.
     if (wallet) {
         const pol = wallet.policy;
         const hasAmountCap = !!pol.maxPerAction
