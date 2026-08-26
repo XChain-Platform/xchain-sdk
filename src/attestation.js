@@ -39,6 +39,13 @@ const net = require('net');
 // literals client-side, before an ATTEST request is emitted on-chain. DNS
 // hostnames are intentionally NOT resolved here (that stays the hub's job);
 // only IP literals are checked.
+//
+// The mirror is enforced rather than merely asserted: the umbrella repo's
+// bin/check-sdk-hub-ssrf-parity.js compiles both classifiers out of their own
+// source, requires them to agree over an address sweep, and requires the two
+// bodies to be textually identical once comments are stripped. Editing one
+// side reddens CI until the other matches, and renaming this function fails
+// that gate loudly rather than silently unguarding the seam.
 function _isForbiddenAddress(addr){
     let ip = String(addr).toLowerCase();
     if (ip.startsWith('::ffff:')){

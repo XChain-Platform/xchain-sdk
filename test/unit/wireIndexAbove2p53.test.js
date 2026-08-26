@@ -165,7 +165,7 @@ describe('ActionWaiter targeted wait excludes the >2^53 neighbour', function () 
         const waiter = new ActionWaiter(sdk);
         await assert.rejects(
             () => waiter.waitForTxid(TXID, { timeout: 1200, pollInterval: 50, actionIndex: N }),
-            /CONFIRMATION_TIMEOUT|Timed out/);
+            (err) => err.code === 'CONFIRMATION_TIMEOUT');
     });
 
     it('poll path: the target action still settles the wait', async function () {
@@ -198,7 +198,7 @@ describe('ActionWaiter targeted wait excludes the >2^53 neighbour', function () 
         // Pre-fix this event settled the wait as 'valid', masking whatever the
         // target action turned out to be.
         ws.emit('NEW_ACTION', { data: { tx_hash: TXID, action_index: N_1, status: 'valid' } });
-        await assert.rejects(() => p, /CONFIRMATION_TIMEOUT|Timed out/);
+        await assert.rejects(() => p, (err) => err.code === 'CONFIRMATION_TIMEOUT');
     });
 
     it('WebSocket path: the target NEW_ACTION event still settles the wait', async function () {

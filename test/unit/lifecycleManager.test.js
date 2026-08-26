@@ -509,4 +509,50 @@ describe('LifecycleManager', function () {
             assert.deepStrictEqual(lm._extractSpentInputs(''), []);
         });
     });
+    // submitAction(): a wait that expires after a SUCCESSFUL broadcast
+    describe('submitAction(): indexing wait expires', function () {
+        // The broadcast happens before the wait, so an expired wait is not a
+        // failed action: the transaction is on the network needing a block, which
+        // chains with long or irregular block times hit routinely. Marking it is
+        // what lets a caller say "accepted, awaiting confirmation" instead of
+        // reporting a failure, and what stops a retry from rebuilding and
+        // re-spending the same inputs.
+        it('marks the timeout as broadcast so it is not read as a failed action', async function () {
+            const { SDKActionError } = require('../../src/errors.js');
+            const sdk = makeSdk();
+            const lm = new LifecycleManager(sdk);
+            sinon.stub(ActionWaiter.prototype, 'waitForTxid').rejects(
+                new SDKActionError('CONFIRMATION_TIMEOUT', 'not indexed', { txid: 'abc', timeout: 1 }));
+            try {
+                await lm.submitAction({ action: 'SEND', params: {} }, {},
+                    { wif: FAKE_WIF, waitForIndexer: true });
+                assert.fail('expected the wait to reject');
+            } catch (err) {
+                assert.strictEqual(err.code, 'CONFIRMATION_TIMEOUT');
+                assert.strictEqual(err.broadcast, true, 'the broadcast succeeded before the wait began');
+                assert.ok(err.txid, 'the caller needs the txid to check the mempool');
+                assert.strictEqual(err.details.broadcast, true);
+            } finally {
+                ActionWaiter.prototype.waitForTxid.restore();
+            }
+        });
+
+        it('leaves other wait failures unmarked', async function () {
+            const { SDKActionError } = require('../../src/errors.js');
+            const sdk = makeSdk();
+            const lm = new LifecycleManager(sdk);
+            sinon.stub(ActionWaiter.prototype, 'waitForTxid').rejects(
+                new SDKActionError('ACTION_INVALID', 'rejected by the indexer', {}));
+            try {
+                await lm.submitAction({ action: 'SEND', params: {} }, {},
+                    { wif: FAKE_WIF, waitForIndexer: true });
+                assert.fail('expected the wait to reject');
+            } catch (err) {
+                assert.strictEqual(err.code, 'ACTION_INVALID');
+                assert.strictEqual(err.broadcast, undefined, 'only a timeout means "sent but unconfirmed"');
+            } finally {
+                ActionWaiter.prototype.waitForTxid.restore();
+            }
+        });
+    });
 });

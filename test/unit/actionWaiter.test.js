@@ -110,7 +110,7 @@ describe('ActionWaiter.waitForTxid status honesty', function () {
         });
         await assert.rejects(
             () => waiter.waitForTxid(TXID, { timeout: 1200, pollInterval: 50, actionIndex: 1 }),
-            /CONFIRMATION_TIMEOUT|Timed out/);
+            (err) => err.code === 'CONFIRMATION_TIMEOUT');
     });
 
     it('a targeted wait still rejects on the target action own invalid status', async function () {
@@ -135,7 +135,7 @@ describe('ActionWaiter.waitForTxid status honesty', function () {
         const waiter = makeWaiter({ tx_hash: TXID, actions: [] });
         await assert.rejects(
             () => waiter.waitForTxid(TXID, { timeout: 1200, pollInterval: 50 }),
-            /CONFIRMATION_TIMEOUT|Timed out/);
+            (err) => err.code === 'CONFIRMATION_TIMEOUT');
     });
 
     it('flags an action the indexer reports without a status as unread, not confirmed', async function () {

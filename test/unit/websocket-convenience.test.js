@@ -245,6 +245,63 @@ describe('XChainSDK – WebSocket convenience methods', function () {
 
             expect(spy.called).to.be.false;
         });
+
+        // The explorer's Broadcaster._onLifecycleEvent routes EVERY lifecycle event
+        // to the address channel of each address its `data` names, independently of
+        // the event's own entity channel. A type absent from the registration list
+        // is therefore a frame the server sends and this client silently drops.
+        // These are the nine names that were absent.
+        it('fires on the later lifecycle types the explorer routes to an address @regression', async function () {
+            await sdk.connectWs();
+            const spy = sinon.spy();
+            sdk.onAddress('1abc', spy);
+
+            const frames = [
+                { type: 'ORDER_EXPIRED',        data: { action_index: 601, source: '1abc' } },
+                { type: 'SWAP_EXPIRED',         data: { action_index: 602, source: '1abc' } },
+                { type: 'DISPENSER_CLOSED',     data: { action_index: 603, source: '1abc', dispenser_action_index: 9 } },
+                { type: 'DISPENSER_EXPIRED',    data: { action_index: 604, source: '1abc', dispenser_action_index: 9 } },
+                { type: 'BET',                  data: { action_index: 605, source: '1abc', feed_action_index: 7, action_format: 2 } },
+                { type: 'BET_EXPIRED',          data: { action_index: 606, source: '1abc', feed_action_index: 7 } },
+                { type: 'BET_CLOSED',           data: { action_index: 7,   source: '1abc', feed_action_index: 7, synthetic: true } },
+                { type: 'ATTESTATION_REQUEST',  data: { action_index: 607, source: '1abc', version: 0 } },
+                { type: 'ATTESTATION_RESPONSE', data: { action_index: 608, source: '1abc', version: 1 } }
+            ];
+            for (const f of frames) server._lastClient.send(JSON.stringify(f));
+            await waitForCalls(spy, frames.length);
+
+            expect(spy.getCalls().map(c => c.args[0].type)).to.deep.equal(frames.map(f => f.type));
+        });
+
+        it('still scopes those later lifecycle types to the subscribed address', async function () {
+            await sdk.connectWs();
+            const spy = sinon.spy();
+            sdk.onAddress('1abc', spy);
+
+            server._lastClient.send(JSON.stringify({
+                type: 'DISPENSER_CLOSED', data: { action_index: 701, source: '1other' }
+            }));
+            server._lastClient.send(JSON.stringify({
+                type: 'ATTESTATION_RESPONSE', data: { action_index: 702, source: '1other' }
+            }));
+            await barrier();
+
+            expect(spy.called).to.be.false;
+        });
+
+        it('unsubscribe detaches the later lifecycle handlers too', async function () {
+            await sdk.connectWs();
+            const spy = sinon.spy();
+            const unsub = sdk.onAddress('1abc', spy);
+            unsub();
+
+            server._lastClient.send(JSON.stringify({
+                type: 'BET_CLOSED', data: { action_index: 7, source: '1abc', feed_action_index: 7 }
+            }));
+            await barrier();
+
+            expect(spy.called).to.be.false;
+        });
     });
 
     describe('onToken', function () {
@@ -427,6 +484,137 @@ describe('XChainSDK – WebSocket convenience methods', function () {
 
             server._lastClient.send(JSON.stringify({
                 type: 'SNAPSHOT', data: { channel: 'dispenser', action_index: 12345, give_remaining: '1000' }
+            }));
+            await barrier();
+
+            expect(spy.called).to.be.false;
+        });
+    });
+
+    describe('onBetFeed', function () {
+
+        it('fires on BET, BET_EXPIRED and BET_CLOSED for the subscribed feed', async function () {
+            await sdk.connectWs();
+            const spy = sinon.spy();
+            sdk.onBetFeed(7, spy);
+
+            server._lastClient.send(JSON.stringify({
+                type: 'BET', data: { action_index: 801, feed_action_index: 7, action_format: 2 }
+            }));
+            server._lastClient.send(JSON.stringify({
+                type: 'BET_EXPIRED', data: { action_index: 802, feed_action_index: 7 }
+            }));
+            server._lastClient.send(JSON.stringify({
+                type: 'BET_CLOSED', data: { action_index: 7, feed_action_index: 7, synthetic: true }
+            }));
+            await waitForCalls(spy, 3);
+
+            expect(spy.getCalls().map(c => c.args[0].type))
+                .to.deep.equal(['BET', 'BET_EXPIRED', 'BET_CLOSED']);
+        });
+
+        // The guard is on feed_action_index, not action_index: a BET frame's own
+        // action_index is the individual bet, and 801 is a different feed's bet.
+        it('does not fire on a bet placed on a different feed', async function () {
+            await sdk.connectWs();
+            const spy = sinon.spy();
+            sdk.onBetFeed(7, spy);
+
+            server._lastClient.send(JSON.stringify({
+                type: 'BET', data: { action_index: 801, feed_action_index: 8, action_format: 2 }
+            }));
+            await barrier();
+
+            expect(spy.called).to.be.false;
+        });
+
+        it('fires on the bet_feed SNAPSHOT frame, matching number/string wire forms', async function () {
+            await sdk.connectWs();
+            const spy = sinon.spy();
+            sdk.onBetFeed(7, spy);
+
+            server._lastClient.send(JSON.stringify({
+                type: 'SNAPSHOT', data: { channel: 'bet_feed', action_index: '7', feed_status: 'open' }
+            }));
+            await waitForCalls(spy);
+
+            expect(spy.firstCall.args[0].type).to.equal('SNAPSHOT');
+        });
+
+        it('does not fire on a SNAPSHOT for a different feed or another channel', async function () {
+            await sdk.connectWs();
+            const spy = sinon.spy();
+            sdk.onBetFeed(7, spy);
+
+            server._lastClient.send(JSON.stringify({
+                type: 'SNAPSHOT', data: { channel: 'bet_feed', action_index: 8 }
+            }));
+            server._lastClient.send(JSON.stringify({
+                type: 'SNAPSHOT', data: { channel: 'dispenser', action_index: 7 }
+            }));
+            await barrier();
+
+            expect(spy.called).to.be.false;
+        });
+
+        it('unsubscribe removes every handler it registered, SNAPSHOT included', async function () {
+            await sdk.connectWs();
+            const spy = sinon.spy();
+            const unsub = sdk.onBetFeed(7, spy);
+            unsub();
+
+            server._lastClient.send(JSON.stringify({
+                type: 'BET', data: { action_index: 801, feed_action_index: 7 }
+            }));
+            server._lastClient.send(JSON.stringify({
+                type: 'SNAPSHOT', data: { channel: 'bet_feed', action_index: 7 }
+            }));
+            await barrier();
+
+            expect(spy.called).to.be.false;
+        });
+
+        // Matched on the message body, not the method name: a missing method
+        // throws "sdk.onBetFeed is not a function", which a /onBetFeed/ pattern
+        // would accept as a pass on a build that never implemented it.
+        it('rejects a non-canonical feed action index', async function () {
+            await sdk.connectWs();
+            expect(() => sdk.onBetFeed('abc', () => {})).to.throw(/must be a numeric ACTION_INDEX/);
+            expect(() => sdk.onBetFeed(null, () => {})).to.throw(/must be a numeric ACTION_INDEX/);
+            expect(() => sdk.onBetFeed('-1', () => {})).to.throw(/must be a numeric ACTION_INDEX/);
+        });
+    });
+
+    describe('onAttestation', function () {
+
+        it('fires on both attestation phases', async function () {
+            await sdk.connectWs();
+            const spy = sinon.spy();
+            sdk.onAttestation(spy);
+
+            server._lastClient.send(JSON.stringify({
+                type: 'ATTESTATION_REQUEST', data: { action_index: 901, version: 0, request_id: 'r1' }
+            }));
+            server._lastClient.send(JSON.stringify({
+                type: 'ATTESTATION_RESPONSE', data: { action_index: 902, version: 1, request_id: 'r1' }
+            }));
+            await waitForCalls(spy, 2);
+
+            expect(spy.getCalls().map(c => c.args[0].type))
+                .to.deep.equal(['ATTESTATION_REQUEST', 'ATTESTATION_RESPONSE']);
+        });
+
+        it('unsubscribe removes both handlers', async function () {
+            await sdk.connectWs();
+            const spy = sinon.spy();
+            const unsub = sdk.onAttestation(spy);
+            unsub();
+
+            server._lastClient.send(JSON.stringify({
+                type: 'ATTESTATION_REQUEST', data: { action_index: 901, version: 0 }
+            }));
+            server._lastClient.send(JSON.stringify({
+                type: 'ATTESTATION_RESPONSE', data: { action_index: 902, version: 1 }
             }));
             await barrier();
 

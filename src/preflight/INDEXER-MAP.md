@@ -27,8 +27,11 @@ is what the CI drift jobs on both repos run.
 Ground-truthed against HEAD 2026-07-20; `dispenser.js` and `dispense.js`
 re-reviewed against HEAD 2026-07-26, nine handlers re-reviewed against
 HEAD 2026-08-08, ALL ELEVEN re-reviewed against indexer HEAD
-`22f0f31` on 2026-08-13, and NINE re-reviewed against indexer HEAD
-`58ab8e9` on 2026-08-15 (see the review log below). Hashes
+`22f0f31` on 2026-08-13, NINE re-reviewed against indexer HEAD
+`58ab8e9` on 2026-08-15, three re-pinned after the comment-hygiene pass
+at `1a4b78a4` on 2026-08-17, `batch.js` re-reviewed at `188554e5` on
+2026-08-20, and `issue.js` re-reviewed at `2d9cbbbf` on 2026-08-23 (see
+the review log below). Hashes
 are of the indexer handler source files, resolved via
 `XCHAIN_INDEXER_PATH` or the sibling `../xchain-indexer` checkout. The
 gate SKIPS (does not fail) when no indexer checkout is present, so
@@ -39,17 +42,28 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-**Pins taken at indexer commit:** `188554e5`
+**Pins taken at indexer commit:** `2b65e8a4`
 
-(Re-anchored 2026-08-15: the pins were reviewed against `58ab8e9`, a local
-commit the LIST-memo rebase orphaned before push. Every pinned hash is
-byte-identical at `a1d36eb`, the pushed develop head, so the review stands
-and only the anchor moves.)
+(Re-anchored 2026-08-23 by the `issue.js` mint-window pass, whose entry
+below declares this anchor. The line itself was missed in that edit and
+kept saying `188554e5`, the 2026-08-20 `batch.js` anchor, for three days;
+the rule one paragraph down is the rule it broke. `2d9cbbbf` is reachable
+from the indexer develop head and no file under `src/actions/` differs
+between the two, so every pinned hash below is byte-identical at both.)
+
+(Standing caveat on the 2026-08-15 anchor, which the paragraph above and
+the review log below both still cite: `58ab8e9` is a local commit the
+LIST-memo rebase orphaned before push. It is still present in the indexer
+object store, so an existence check answers yes, but it is NOT reachable
+from develop and a diff range built on it resolves to nothing useful, the
+trap the next section names. Every hash pinned by that pass is
+byte-identical at `a1d36eb`, the pushed develop head, so that review
+stands and only its anchor is unreachable.)
 
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 188554e5..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 2d9cbbbf..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit.
 
@@ -88,9 +102,9 @@ found by hashing candidate blobs as above.
 | `checks/send.js` (SEND) | `src/actions/send.js` | `a7c07ad1505dba1eb06efd62cfbe7f8dc6fa8654a5a6825d2ed6480190d4fbdb` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `15e134f5c27b5955e27e78187848e1878cee562a52b173dacf89389f5949aa98` |
 | `checks/mint.js` | `src/actions/mint.js` | `e491154c399be3fdd5b6b242b3da24db6c5119d4683988308b8087e4dc8dff03` |
-| `checks/issue.js` | `src/actions/issue.js` | `2ca8734fa943eb96ed0451accbc08ed62bad07b72c1c56a0822e6c7cfc1ee91f` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `3636c269cd7f989469c15a4443df58185ec17f7fc72d7b799686bd554da506bc` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `03426508cb5a916561a6d78a14d2ba7c823a86cf73b340b56bf59a365ddb8fe2` |
+| `checks/issue.js` | `src/actions/issue.js` | `546c080ce5ab96f1cf0a0a3ce1d7ff939dbe41495c2cf03c5c5257fdbf385f29` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `c1ed4b8374df89756a76088be74e6fd6c1ea7b49e0daeb06558ef5e2c2d4599e` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `6f059217d824d5c7f61be9afd762b950942de61a06801dd540d6a3e2560aa2c1` |
 | `checks/trading.js` (ORDER) | `src/actions/order.js` | `e9c676ff4d724b92bd94966bf6811d23bc932ed34daa694211833302e53b6b02` |
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `971338842f897e140d27565a4e01cdb364da14b81bb58e140dd6014d529b35fb` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `956463e64bb90087364b2c109c6d1f27a5b3526fd24415d6b9c22042e65e1479` |
@@ -104,6 +118,65 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-08-25 - `dispenser.js` + `dispense.js`, against indexer HEAD `2b65e8a4`
+
+**`dispenser.js` - REAL change, no client change owed.** Baseline pin
+`2d9cbbbf`. A format-0 DISPENSER carrying an ORACLE_ADDRESS now resolves an
+effective oracle price and refuses the create when there is none, via
+`util.requireEffectiveOraclePrice(BLOCK_TIME, {ORACLE_ADDRESS, GIVE_COIN,
+GIVE_TICK, FIAT_CODE}, indexerDb)`. This is a validity TIGHTENING and a new
+client-visible rejection, double-gated on `isDispenserOraclePriceActive` and the
+`FIAT_DISPENSER_PRICING` protocol change, so below either gate the old
+acceptances are reproduced exactly.
+
+No mirror is owed, and none is possible: the predicate reads the indexer's own
+oracle feed state at BLOCK_TIME through `indexerDb`, which no client holds. The
+pre-flight has never predicted this input class either - `src/preflight/`
+references ORACLE_ADDRESS only for the oracle FEE output (`noteOracleFee`) and
+contains no `FIAT_CODE` or oracle-price reference at all, so `checks/dispenser.js`
+returned no verdict here before the change and returns none after it. Same shape
+as the 2026-08-15 saturating-divide entry: a client cannot pre-check a condition
+whose inputs live only on the indexer.
+
+The second edit is `_logStaleFreshness`, a try/catch-wrapped console.log of
+utxo-tracker sync state on a first-seen miss. No verdict reads it.
+
+**`dispense.js` - comment-only, re-pinned.** The diff is entirely prose: it
+corrects a claim that the two divide-by-zero guards were for OWNERSHIP
+dispensers. They are not - `getDispenserInfo` virtualizes an ownership
+dispenser's GIVE_AMOUNT to '1', so both guarded paths DO run for one, and the
+real case is a BALANCE dispenser created below `dispenser_give_amount_activation`
+with an empty or '0' GIVE_AMOUNT. Executable code is byte-identical.
+
+### 2026-08-23 - `issue.js`: inherited mint windows exempted from the recency checks
+
+**`issue.js` - REAL change, no client change owed.** Baseline pin
+`2ca8734f`. The handler fills fields the issuance left unset from the
+existing token record before validating, so the `MINT_START_BLOCK` and
+`MINT_STOP_BLOCK` recency checks were being applied to INHERITED values.
+Once a token's mint window opened, the inherited start block was
+necessarily in the past and every later issuance was refused with
+`invalid: MINT_START_BLOCK < BLOCK_INDEX`, so the token could never be
+re-parameterized again; `MINT_STOP_BLOCK` carried the identical defect
+once the window closed. Both checks now read the pre-merge wire values,
+so an inherited window is exempt while an explicitly restated past value
+is still refused, and the stop-before-start cross-check still compares
+the merged (effective) window.
+
+This is a validity LOOSENING, so it is gated on
+`ISSUE_INHERITED_MINT_WINDOW` (mainnet unarmed, testnet armed at a future
+instant, regtest genesis-on) and below the activation the old rejections
+are reproduced exactly, which is what keeps from-genesis replay
+byte-identical.
+
+No mirror is owed because the client pre-flight has never predicted the
+mint window at all: `src/preflight/` contains no `MINT_START_BLOCK` or
+`MINT_STOP_BLOCK` reference, so `checks/issue.js` returned no verdict on
+this input class before the change and returns none after it. The
+loosening can therefore only turn a chain-side rejection into an
+acceptance, which no client check contradicts. Anchor moves to
+`2d9cbbbf`.
 
 ### 2026-08-20 - `batch.js`: fee-budget priceability widened to the arbiter's D10 scope
 

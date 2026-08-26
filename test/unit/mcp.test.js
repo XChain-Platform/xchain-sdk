@@ -20,6 +20,8 @@
 
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const { expect } = require('chai');
 const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
 const { InMemoryTransport } = require('@modelcontextprotocol/sdk/inMemory.js');
@@ -198,6 +200,50 @@ describe('MCP server (write tools)', () => {
         expect(() => buildServer({ wallet: { wif: 'W' } })).to.throw(/fail-closed/);
         expect(() => buildServer({ wallet: { wif: 'W', policy: { allowedActions: ['SEND'], confirmAbove: {} } } }))
             .to.throw(/confirmAbove/);
+    });
+
+    it('refuses a wallet policy that carries no binding amount ceiling', () => {
+        // The confirmAbove rejection above drops the human approval on the grounds
+        // that hard caps replace it, so a policy with no amount ceiling must be
+        // refused. This also pins the deliberate divergence from policyEvaluator's
+        // hasAmountLimit, which additionally counts confirmAbove: copying that third
+        // clause into mcp/server.js's hasAmountCap would let a confirmAbove-only
+        // policy satisfy the ceiling requirement, and the last case below is what
+        // catches that edit - it asserts the refusal a confirmAbove-only policy gets
+        // still comes from a rail that has no ceiling notion of confirmAbove at all.
+        const build = (policy) => () => buildServer({
+            sdkFactory: (network) => writableStub(network),
+            fetch: async () => ({ ok: true, text: async () => 'x' }),
+            wallet: { wif: 'W', policy },
+        });
+        expect(build({ allowedActions: ['SEND'] })).to.throw(/binding amount ceiling/);
+        // A count cap bounds how MANY actions, not how much value.
+        expect(build({ allowedActions: ['SEND'], maxPerWindow: { maxActions: 5 } }))
+            .to.throw(/binding amount ceiling/);
+        // Both real ceilings are accepted, so the gate is not simply refusing everything.
+        expect(build({ allowedActions: ['SEND'], maxPerWindow: { perTick: { TOK: '10' } } })).to.not.throw();
+        expect(build(POLICY)).to.not.throw();
+    });
+
+    it('keeps confirmAbove out of the ceiling predicate, which no runtime test can pin', () => {
+        // hasAmountCap is policyEvaluator's hasAmountLimit minus its
+        // `|| !!policy.confirmAbove` clause, and the omission is deliberate: on this
+        // rail confirmAbove is rejected upstream, so it can never be a real ceiling.
+        // The reason this assertion reads the SOURCE rather than driving buildServer
+        // is that the upstream rejection makes the clause unreachable - adding it back
+        // changes no observable behaviour, and every runtime test in this file still
+        // passes with it present (verified by mutation). It only becomes an unbounded
+        // -spend hole once someone ALSO relaxes the upstream rejection, and by then
+        // the widened predicate is already in the tree waiting. So the invariant is a
+        // source-level one, and this is what makes it enforced rather than merely
+        // requested by the comment above it.
+        const src = fs.readFileSync(path.join(__dirname, '../../mcp/server.js'), 'utf8');
+        const decl = /const hasAmountCap =([\s\S]*?);/.exec(src);
+        expect(decl, 'hasAmountCap declaration not found in mcp/server.js').to.not.equal(null);
+        expect(decl[1]).to.match(/maxPerAction/);
+        expect(decl[1]).to.match(/perTick/);
+        expect(decl[1], 'confirmAbove must never count as a binding ceiling on the MCP rail')
+            .to.not.match(/confirmAbove/);
     });
 
     it('with wallet config: submit_action flows through AgentSession and reports policy usage', async () => {

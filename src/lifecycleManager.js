@@ -290,15 +290,33 @@ class LifecycleManager {
             // venue is waited on where it is actually indexed, not on whatever
             // explorer hub discovery advertised.
             let waiter = new ActionWaiter(this.sdk);
-            let indexed = await waiter.waitForTxid(finalTxid, {
-                timeout:      timeout || 120000,
-                pollInterval: pollInterval || 2000,
-                requireValid: requireValid !== false,
-                strictStatus: strictStatus === true,
-                explorer:     explorer,
-                explorerUrl:  explorerUrl,
-                explorerPort: explorerPort
-            });
+            let indexed;
+            try {
+                indexed = await waiter.waitForTxid(finalTxid, {
+                    timeout:      timeout || 120000,
+                    pollInterval: pollInterval || 2000,
+                    requireValid: requireValid !== false,
+                    strictStatus: strictStatus === true,
+                    explorer:     explorer,
+                    explorerUrl:  explorerUrl,
+                    explorerPort: explorerPort
+                });
+            } catch (err) {
+                // The broadcast above SUCCEEDED, so a wait that expires is not a
+                // failed action: the transaction is on the network and needs a
+                // block. Chains with long or irregular block times exceed any
+                // default routinely. Mark it so a caller can report "accepted,
+                // awaiting confirmation" instead of presenting it as a failure,
+                // and so a retry does not double-spend the inputs by rebuilding.
+                if (err && err.code === 'CONFIRMATION_TIMEOUT'){
+                    err.broadcast = true;
+                    err.txid      = finalTxid;
+                    if (err.details && typeof err.details === 'object'){
+                        err.details.broadcast = true;
+                    }
+                }
+                throw err;
+            }
             result.indexed = indexed;
             progress('confirmed', { txid: finalTxid, action: indexed });
         }

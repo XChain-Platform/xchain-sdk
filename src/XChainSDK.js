@@ -95,6 +95,40 @@ const chunkHelper = require('./chunkHelper.js');
 // Broadcaster._extractAddresses on the server side.
 const FRAME_ADDRESS_FIELDS = ['address', 'source', 'destination', 'payer_address', 'payee_address'];
 
+/*
+ * Every frame type the explorer routes to an address channel.
+ *
+ * Two of them are the Broadcaster's own: NEW_ACTION (_onAction, to the source's
+ * and destination's channels) and ADDRESS_UPDATE (the entity's own frame). The
+ * rest are the LIFECYCLE union, because _onLifecycleEvent fans EVERY lifecycle
+ * event out to the address channel of each address _extractAddresses finds in
+ * its data, independently of the event's own entity channel. So a name missing
+ * from this list is not an event the client declines: it is a frame the server
+ * sends over the already-open socket and the client silently drops, and only a
+ * caller keyed on msg.type can tell.
+ *
+ * The producer's authority is three constants in the explorer's ChangeDetector
+ * (LIFECYCLE_MAP values, NON_ACTION_LIFECYCLE_TYPES, INLINE_LIFECYCLE_TYPES);
+ * test/unit/address-event-coverage.test.js reconciles this list against them,
+ * so the two cannot separate again unnoticed.
+ */
+// Frozen because it is exported: every onAddress subscription on the process
+// registers from this one array, so a consumer splicing it would silently
+// change delivery for all of them.
+const ADDRESS_EVENT_TYPES = Object.freeze([
+    'NEW_ACTION', 'ADDRESS_UPDATE',
+    'ORDER_MATCH', 'ORDER_EXPIRED',
+    'COINPAY_REQUIRED', 'COINPAY_FULFILLED', 'COINPAY_EXPIRED',
+    'SWAP_MATCH', 'SWAP_EXPIRED',
+    'DISPENSE', 'DISPENSER_CLOSED', 'DISPENSER_EXPIRED',
+    'BET', 'BET_EXPIRED', 'BET_CLOSED',
+    'ATTESTATION_REQUEST', 'ATTESTATION_RESPONSE'
+]);
+
+// Canonical decimal action_index, mirroring the explorer ChannelManager's
+// CANONICAL_INDEX: no sign, no leading zeros, no fraction, no trailing junk.
+const CANONICAL_ACTION_INDEX = /^(0|[1-9][0-9]*)$/;
+
 function frameData(msg) {
     return (msg && typeof msg === 'object' && msg.data && typeof msg.data === 'object') ? msg.data : null;
 }
@@ -1701,12 +1735,10 @@ class XChainSDK {
     // Returns an unsubscribe function
     onAddress(address, callback, opts) {
         const ws = this._requireWs();
-        // Register handlers for all address-relevant event types
-        const types = [
-            'NEW_ACTION', 'ADDRESS_UPDATE',
-            'ORDER_MATCH', 'COINPAY_REQUIRED', 'COINPAY_FULFILLED', 'COINPAY_EXPIRED',
-            'SWAP_MATCH', 'DISPENSE'
-        ];
+        // Register handlers for every type the explorer routes here (see
+        // ADDRESS_EVENT_TYPES); `opts.types` stays the caller's own narrowing
+        // filter, applied server-side.
+        const types = ADDRESS_EVENT_TYPES;
         const onEvent = entityGuarded((msg) => frameIsForAddress(msg, address), callback);
         for (const t of types) ws.on(t, onEvent);
 
@@ -1809,6 +1841,67 @@ class XChainSDK {
         };
     }
 
+    // Listen for one betting market's live events: bets placed, the deadline
+    // latch, resolve, cancel and expiry.
+    // Returns an unsubscribe function.
+    onBetFeed(feedActionIndex, callback) {
+        const index = String(feedActionIndex === null || feedActionIndex === undefined ? '' : feedActionIndex).trim();
+        if (!CANONICAL_ACTION_INDEX.test(index))
+            throw new Error('onBetFeed: feedActionIndex must be a numeric ACTION_INDEX, got ' + JSON.stringify(feedActionIndex));
+
+        const ws = this._requireWs();
+        // Guard on `feed_action_index`, NOT `action_index`. A BET frame's own
+        // action_index is the individual bet; the parent market rides in
+        // feed_action_index, which the ChangeDetector enriches for exactly this
+        // correlation, and which the Broadcaster routes the channel on. Getting
+        // this backwards is the dispenser_action_index bug onDispenser documents.
+        // BET_CLOSED sets both fields to the feed id, so it matches either way.
+        // Unlike a dispenser there is no entity-own update frame here (no
+        // BET_FEED_UPDATE), so one lifecycle guard plus the SNAPSHOT filter is
+        // the whole surface.
+        const onLifecycle = entityGuarded((msg) => frameIdMatches(msg, 'feed_action_index', index), callback);
+        ws.on('BET', onLifecycle);
+        ws.on('BET_EXPIRED', onLifecycle);
+        ws.on('BET_CLOSED', onLifecycle);
+        const onSnapshot = (msg) => {
+            if (msg && msg.data && msg.data.channel === 'bet_feed' &&
+                String(msg.data.action_index) === index){
+                callback(msg);
+            }
+        };
+        ws.on('SNAPSHOT', onSnapshot);
+        // The channel NAME is bare and the market id rides in params: a composite
+        // 'bet_feed:<index>' is rejected outright with `Unknown channel`, the same
+        // trap documented on websocket.js subscribeBetFeed().
+        this._subscribeDetached(ws, ['bet_feed'], { action_index: index, snapshot: true });
+        return () => {
+            ws.off('BET', onLifecycle);
+            ws.off('BET_EXPIRED', onLifecycle);
+            ws.off('BET_CLOSED', onLifecycle);
+            ws.off('SNAPSHOT', onSnapshot);
+            ws.unsubscribe(['bet_feed'], { action_index: index });
+        };
+    }
+
+    // Listen for oracle attestation traffic (both phases) on the global
+    // `attestation` channel. No entity key and no snapshot: it is a stream, not
+    // an entity with current state.
+    // Returns an unsubscribe function.
+    onAttestation(callback) {
+        const ws = this._requireWs();
+        // v0 is the request, v1 the response; the explorer splits them into two
+        // type names because the raw action row carries no version to tell them
+        // apart. No entity guard: a global channel has nothing to scope to.
+        ws.on('ATTESTATION_REQUEST', callback);
+        ws.on('ATTESTATION_RESPONSE', callback);
+        this._subscribeDetached(ws, ['attestation']);
+        return () => {
+            ws.off('ATTESTATION_REQUEST', callback);
+            ws.off('ATTESTATION_RESPONSE', callback);
+            ws.unsubscribe(['attestation']);
+        };
+    }
+
     // Shortcut: listen for COINPAY_REQUIRED events on an address
     // Returns an unsubscribe function
     onCoinpayRequired(address, callback) {
@@ -1868,3 +1961,7 @@ class XChainSDK {
 }
 
 module.exports = XChainSDK;
+// Exposed for the address-channel coverage guard: the roster onAddress registers
+// has to be reconcilable against the explorer's producer constants without a
+// second copy of it living in the test.
+module.exports.ADDRESS_EVENT_TYPES = ADDRESS_EVENT_TYPES;
