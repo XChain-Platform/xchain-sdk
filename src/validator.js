@@ -457,10 +457,19 @@ class Validator {
                 errors.push(this._error('INVALID_ADDRESS_ID', field + ' ID reference must be numeric: ' + value, { field, value }));
         }
 
-        // DESTINATION / GET_ADDRESS / TRANSFER full-address validation. A ^<id>
-        // reference is handled by the branch above, so skip the crypto-address check
-        // for it (an empty value never reaches here; the caller skips empties).
-        if (field === 'DESTINATION' || field === 'GET_ADDRESS' || field === 'TRANSFER') {
+        // DESTINATION / GET_ADDRESS / TRANSFER / TRANSFER_SUPPLY full-address
+        // validation. A ^<id> reference is handled by the branch above, so skip the
+        // crypto-address check for it (an empty value never reaches here; the caller
+        // skips empties).
+        //
+        // TRANSFER_SUPPLY is the address ISSUE credits its MINT_SUPPLY to
+        // (xchain-indexer/src/actions/issue.js rejects it as 'bad address' when it
+        // is not one), and addressRefFields.js already declares it an ISSUE
+        // address-ref field. It was additionally listed as an AMOUNT field below,
+        // which rejected every address client-side and made owner issue-and-transfer
+        // uncomposable through the SDK.
+        if (field === 'DESTINATION' || field === 'GET_ADDRESS' || field === 'TRANSFER' ||
+            field === 'TRANSFER_SUPPLY') {
             if (String(value).charAt(0) !== '^' && !this.util.isCryptoAddress(value))
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be a valid crypto address', { field, value }));
         }
@@ -584,7 +593,7 @@ class Validator {
 
         // AMOUNT validation: all listed fields must be numeric.
         if (field === 'AMOUNT' || field === 'GIVE_AMOUNT' || field === 'GET_AMOUNT' ||
-            field === 'GIVE_ESCROW' || field === 'CALLBACK_AMOUNT' || field === 'TRANSFER_SUPPLY' ||
+            field === 'GIVE_ESCROW' || field === 'CALLBACK_AMOUNT' ||
             field === 'MINT_SUPPLY' || field === 'MAX_MINT' || field === 'MINT_ADDRESS_MAX') {
             if (!this.util.isNumeric(value))
                 errors.push(this._error('INVALID_FIELD_VALUE', field + ' must be numeric', { field, value }));
