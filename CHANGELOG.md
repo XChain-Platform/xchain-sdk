@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1] - 2026-08-28
+
+Out-of-band patch on the 0.11 line, published from `develop` ahead of the next release train so the wallet can read unconfirmed transactions.
+
+### Added
+- `sdk.getUnconfirmed(address)` returns the unconfirmed actions touching an address, with the explorer's field names and any matched `destinations`.
+- `sdk.onMempoolAction(address, cb)` subscribes to unconfirmed actions for an address.
+- `MEMPOOL_ACTION` and `MEMPOOL_REMOVED` are delivered by `sdk.onAddress()`, which previously received and silently dropped them.
+- The `XORACLEB` engine tag for batch price canonicals.
+
+### Changed
+- `onAddress` and `onMempoolAction` share one refcounted address-channel subscription, so two subscribers no longer double-replay on reconnect or tear each other down.
+- The PRICE batch is version 0 and the per-round wire is removed, which is a breaking wire change taken deliberately while pre-launch.
+
+### Fixed
+- Every `on*` teardown now releases the subscription it actually opened; eight of twelve dropped a `types` filter or a `snapshot` request and released a different one.
+- `ISSUE` treats `TRANSFER_SUPPLY` as an address, and the confirm screen says so.
+
 ## [0.11.0] - 2026-08-25
 
 ### Added
