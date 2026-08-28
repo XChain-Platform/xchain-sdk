@@ -177,6 +177,24 @@ function oneShotTeardown(fn) {
     };
 }
 
+// Every on* helper below captures its subscribe params in ONE object and hands
+// that SAME object to ws.unsubscribe.
+//
+// WebSocketClient tracks a subscription under the exact (channels, params) pair
+// and matches a release against it by the JSON of both, so a teardown that
+// rebuilds params in a different shape releases nothing: the replay entry keeps
+// a live refcount, the server unsubscribe is never sent, and the channel is
+// re-subscribed on every reconnect for the life of the client. Sharing one
+// object makes the two sides structurally identical instead of leaving them a
+// convention that a single edit to the subscribe shape can break.
+//
+// Non-entity params (`types`, `snapshot`) ride along on the unsubscribe frame
+// harmlessly. The explorer's ChannelManager.unsubscribe resolves an entity
+// channel from the entity fields alone (address/addresses, tick, tick1+tick2,
+// action_index) and builds no filter object at all, and a global channel is
+// released by name with params untouched. The frame therefore names exactly the
+// subscription the subscribe opened, and nothing else.
+
 function frameData(msg) {
     return (msg && typeof msg === 'object' && msg.data && typeof msg.data === 'object') ? msg.data : null;
 }
@@ -1839,10 +1857,11 @@ class XChainSDK {
         // channel, the only one a ticks filter can attach to. Forwarding it let a caller
         // believe in a stream that never narrows; the server now reports it under
         // `ignored_filters`.
-        this._subscribeDetached(ws, ['actions'], Object.keys(params).length > 0 ? params : undefined);
+        const subParams = Object.keys(params).length > 0 ? params : undefined;
+        this._subscribeDetached(ws, ['actions'], subParams);
         return oneShotTeardown(() => {
             ws.off('NEW_ACTION', callback);
-            ws.unsubscribe(['actions']);
+            ws.unsubscribe(['actions'], subParams);
         });
     }
 
@@ -1876,7 +1895,7 @@ class XChainSDK {
         return oneShotTeardown(() => {
             for (const t of types) ws.off(t, onEvent);
             ws.off('SNAPSHOT', onSnapshot);
-            ws.unsubscribe(['address'], { address });
+            ws.unsubscribe(['address'], params);
         });
     }
 
@@ -1911,11 +1930,12 @@ class XChainSDK {
         // Bare `{ address }`, matching onAddress's default params exactly: the
         // refcount key is (channels, params), so adding a filter here would open a
         // separate subscription instead of joining the shared one.
-        this._subscribeDetached(ws, ['address'], { address });
+        const params = { address };
+        this._subscribeDetached(ws, ['address'], params);
 
         return oneShotTeardown(() => {
             for (const t of MEMPOOL_EVENT_TYPES) ws.off(t, onEvent);
-            ws.unsubscribe(['address'], { address });
+            ws.unsubscribe(['address'], params);
         });
     }
 
@@ -1931,11 +1951,12 @@ class XChainSDK {
             }
         };
         ws.on('SNAPSHOT', onSnapshot);
-        this._subscribeDetached(ws, ['token'], { tick, snapshot: true });
+        const params = { tick, snapshot: true };
+        this._subscribeDetached(ws, ['token'], params);
         return oneShotTeardown(() => {
             ws.off('TOKEN_UPDATE', onUpdate);
             ws.off('SNAPSHOT', onSnapshot);
-            ws.unsubscribe(['token'], { tick });
+            ws.unsubscribe(['token'], params);
         });
     }
 
@@ -1954,11 +1975,12 @@ class XChainSDK {
             }
         };
         ws.on('SNAPSHOT', onSnapshot);
-        this._subscribeDetached(ws, ['market'], { tick1, tick2, snapshot: true });
+        const params = { tick1, tick2, snapshot: true };
+        this._subscribeDetached(ws, ['market'], params);
         return oneShotTeardown(() => {
             ws.off('MARKET_UPDATE', onUpdate);
             ws.off('SNAPSHOT', onSnapshot);
-            ws.unsubscribe(['market'], { tick1, tick2 });
+            ws.unsubscribe(['market'], params);
         });
     }
 
@@ -1984,14 +2006,15 @@ class XChainSDK {
             }
         };
         ws.on('SNAPSHOT', onSnapshot);
-        this._subscribeDetached(ws, ['dispenser'], { action_index: actionIndex, snapshot: true });
+        const params = { action_index: actionIndex, snapshot: true };
+        this._subscribeDetached(ws, ['dispenser'], params);
         return oneShotTeardown(() => {
             ws.off('DISPENSER_UPDATE', onUpdate);
             ws.off('DISPENSE', onLifecycle);
             ws.off('DISPENSER_CLOSED', onLifecycle);
             ws.off('DISPENSER_EXPIRED', onLifecycle);
             ws.off('SNAPSHOT', onSnapshot);
-            ws.unsubscribe(['dispenser'], { action_index: actionIndex });
+            ws.unsubscribe(['dispenser'], params);
         });
     }
 
@@ -2027,13 +2050,14 @@ class XChainSDK {
         // The channel NAME is bare and the market id rides in params: a composite
         // 'bet_feed:<index>' is rejected outright with `Unknown channel`, the same
         // trap documented on websocket.js subscribeBetFeed().
-        this._subscribeDetached(ws, ['bet_feed'], { action_index: index, snapshot: true });
+        const params = { action_index: index, snapshot: true };
+        this._subscribeDetached(ws, ['bet_feed'], params);
         return oneShotTeardown(() => {
             ws.off('BET', onLifecycle);
             ws.off('BET_EXPIRED', onLifecycle);
             ws.off('BET_CLOSED', onLifecycle);
             ws.off('SNAPSHOT', onSnapshot);
-            ws.unsubscribe(['bet_feed'], { action_index: index });
+            ws.unsubscribe(['bet_feed'], params);
         });
     }
 
@@ -2062,10 +2086,11 @@ class XChainSDK {
         const ws = this._requireWs();
         const onEvent = entityGuarded((msg) => frameIsForAddress(msg, address), callback);
         ws.on('COINPAY_REQUIRED', onEvent);
-        this._subscribeDetached(ws, ['address'], { address, types: ['COINPAY_REQUIRED'] });
+        const params = { address, types: ['COINPAY_REQUIRED'] };
+        this._subscribeDetached(ws, ['address'], params);
         return oneShotTeardown(() => {
             ws.off('COINPAY_REQUIRED', onEvent);
-            ws.unsubscribe(['address'], { address });
+            ws.unsubscribe(['address'], params);
         });
     }
 
@@ -2075,11 +2100,11 @@ class XChainSDK {
         const ws = this._requireWs();
         const onEvent = entityGuarded((msg) => frameIsForAddress(msg, address), callback);
         ws.on('ORDER_MATCH', onEvent);
-        let params = { address, types: ['ORDER_MATCH'] };
+        const params = { address, types: ['ORDER_MATCH'] };
         this._subscribeDetached(ws, ['address'], params);
         return oneShotTeardown(() => {
             ws.off('ORDER_MATCH', onEvent);
-            ws.unsubscribe(['address'], { address });
+            ws.unsubscribe(['address'], params);
         });
     }
 

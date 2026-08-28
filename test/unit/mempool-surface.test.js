@@ -408,6 +408,172 @@ describe('SDK mempool surface @regression', function () {
     });
 
 
+    describe('a teardown releases exactly the subscription it opened', function () {
+
+        // ws.unsubscribe matches the tracked replay entry on the exact
+        // (channels, params) pair, so a helper that subscribes with one shape and
+        // tears down with another releases nothing at all: the refcount never
+        // reaches zero, the server keeps sending on a channel nobody is listening
+        // to, and the entry replays that channel on every reconnect for the life
+        // of the client. Every assertion below is on OBSERVABLE traffic (a frame
+        // the mock explorer received, a channel it still considers open) rather
+        // than on the client's own bookkeeping.
+
+        const addressUnsubscribes = () => state.unsubscribeFrames
+            .filter(f => f.channels.includes('address') && f.params.address === RECIPIENT);
+        const addressSubscribes = () => state.subscribeFrames
+            .filter(f => f.channels.includes('address') && f.params.address === RECIPIENT);
+        const trackedAddress = () => sdk.ws._subscriptions.filter(s => s.channels.includes('address'));
+
+        it('sends the server unsubscribe for a types-filtered address helper', async function () {
+            await sdk.connectWs();
+            const stop = sdk.onCoinpayRequired(RECIPIENT, sinon.spy());
+            await barrier();
+            expect(state.addressSubs.has(RECIPIENT), 'the subscribe never reached the server').to.be.true;
+            state.reset();
+
+            stop();
+            await barrier();
+
+            expect(addressUnsubscribes(), 'the teardown sent no unsubscribe frame').to.have.lengthOf(1);
+            expect(state.addressSubs.has(RECIPIENT), 'the server still has the channel open').to.be.false;
+            expect(trackedAddress(), 'a replay entry survived the teardown').to.have.lengthOf(0);
+        });
+
+        it('releases onAddress itself when it was opened with a types filter', async function () {
+            // onAddress is the helper the wallet actually holds open per address,
+            // so it is the one that matters most here. With no opts its params are
+            // bare { address } and a rebuilt teardown happens to match, which is
+            // why this case has to be asserted with a filter present.
+            await sdk.connectWs();
+            const stop = sdk.onAddress(RECIPIENT, sinon.spy(), { types: ['NEW_ACTION'] });
+            await barrier();
+            expect(state.addressSubs.has(RECIPIENT)).to.be.true;
+            state.reset();
+
+            stop();
+            await barrier();
+
+            expect(addressUnsubscribes(), 'the teardown sent no unsubscribe frame').to.have.lengthOf(1);
+            expect(state.addressSubs.has(RECIPIENT), 'the server still has the channel open').to.be.false;
+            expect(trackedAddress(), 'a replay entry survived the teardown').to.have.lengthOf(0);
+        });
+
+        it('releases onAddress itself when it was opened with a snapshot request', async function () {
+            await sdk.connectWs();
+            const stop = sdk.onAddress(RECIPIENT, sinon.spy(), { snapshot: true });
+            await barrier();
+            state.reset();
+
+            stop();
+            await barrier();
+
+            expect(addressUnsubscribes()).to.have.lengthOf(1);
+            expect(trackedAddress(), 'a replay entry survived the teardown').to.have.lengthOf(0);
+        });
+
+        it('does not replay a torn-down types-filtered channel on reconnect', async function () {
+            await sdk.connectWs();
+            const stop = sdk.onOrderMatch(RECIPIENT, sinon.spy());
+            await barrier();
+
+            stop();
+            await barrier();
+            state.reset();
+
+            sdk.ws._resubscribe();
+            await barrier();
+
+            expect(addressSubscribes(), 'the address channel came back on reconnect').to.have.lengthOf(0);
+            expect(state.addressSubs.has(RECIPIENT)).to.be.false;
+        });
+
+        it('shares one subscription between two identically-filtered helpers', async function () {
+            await sdk.connectWs();
+            state.reset();
+
+            const first  = sinon.spy();
+            const second = sinon.spy();
+            const stopFirst  = sdk.onOrderMatch(RECIPIENT, first);
+            const stopSecond = sdk.onOrderMatch(RECIPIENT, second);
+            await barrier();
+
+            expect(addressSubscribes(), 'the second helper opened its own subscription').to.have.lengthOf(1);
+            state.reset();
+
+            stopFirst();
+            await barrier();
+            expect(addressUnsubscribes(), 'the first teardown ended the survivor\'s delivery').to.have.lengthOf(0);
+            expect(state.addressSubs.has(RECIPIENT)).to.be.true;
+
+            // The survivor is still delivered to, which is the point of the
+            // shared refcount rather than a count matching.
+            const delivered = state.emitToAddress(RECIPIENT, {
+                type: 'ORDER_MATCH', chain: 'BTC', network: 'regtest',
+                timestamp: Date.now(), data: { address: RECIPIENT, action_index: '9' }
+            });
+            expect(delivered).to.be.true;
+            await waitForCalls(second);
+            expect(second.calledOnce).to.be.true;
+            expect(first.called).to.be.false;
+
+            stopSecond();
+            await barrier();
+            expect(addressUnsubscribes(), 'the last teardown never reached the server').to.have.lengthOf(1);
+            expect(state.addressSubs.has(RECIPIENT)).to.be.false;
+            expect(trackedAddress()).to.have.lengthOf(0);
+        });
+
+        it('releases a snapshot-shaped entity helper', async function () {
+            // `snapshot: true` rides in the subscribe params, so it is part of the
+            // subscription's identity exactly as a types filter is.
+            await sdk.connectWs();
+            const stop = sdk.onBetFeed('42', sinon.spy());
+            await barrier();
+            state.reset();
+
+            stop();
+            await barrier();
+
+            const released = state.unsubscribeFrames.filter(f => f.channels.includes('bet_feed'));
+            expect(released, 'the teardown sent no unsubscribe frame').to.have.lengthOf(1);
+            expect(released[0].params.action_index).to.equal('42');
+            expect(sdk.ws._subscriptions.filter(s => s.channels.includes('bet_feed'))).to.have.lengthOf(0);
+        });
+
+        it('releases a filtered global channel', async function () {
+            await sdk.connectWs();
+            const stop = sdk.onAction(sinon.spy(), { types: ['SEND'] });
+            await barrier();
+            state.reset();
+
+            stop();
+            await barrier();
+
+            expect(state.unsubscribeFrames.filter(f => f.channels.includes('actions'))).to.have.lengthOf(1);
+            expect(sdk.ws._subscriptions.filter(s => s.channels.includes('actions'))).to.have.lengthOf(0);
+        });
+
+        it('pairs subscribeBetFeed with unsubscribeBetFeed', async function () {
+            // Both build their params the same way, and that identity is what
+            // releases the entry. A divergence here is invisible until a reconnect
+            // re-subscribes a market nobody is watching.
+            await sdk.connectWs();
+            await sdk.ws.subscribeBetFeed(7, { snapshot: true });
+            expect(sdk.ws._subscriptions.filter(s => s.channels.includes('bet_feed'))).to.have.lengthOf(1);
+            state.reset();
+
+            sdk.ws.unsubscribeBetFeed(7, { snapshot: true });
+            await barrier();
+
+            const released = state.unsubscribeFrames.filter(f => f.channels.includes('bet_feed'));
+            expect(released, 'the pair did not release the tracked entry').to.have.lengthOf(1);
+            expect(released[0].params.action_index).to.equal('7');
+            expect(sdk.ws._subscriptions.filter(s => s.channels.includes('bet_feed'))).to.have.lengthOf(0);
+        });
+    });
+
+
     describe('getUnconfirmed', function () {
 
         function sdkWithMempool(rows, capture) {
