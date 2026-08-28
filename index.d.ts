@@ -1598,6 +1598,38 @@ export declare class XChainSDK {
     /** Get unconfirmed mempool actions filtered by query and type (address | token). */
     getMempool(query: string, type: string, opts?: QueryOptions): Promise<any>;
 
+    /**
+     * The unconfirmed transactions involving one address, as a plain array
+     * (empty when nothing matches; never null, and no throw on an empty
+     * mempool). Field names are the explorer's, verbatim.
+     *
+     * `first_seen` is UNIX SECONDS, not milliseconds, and is null against a
+     * decoder DB predating the first_seen migration.
+     *
+     * `destinations` is additive and carries the matched party, source
+     * excluded, so it holds the queried address for an incoming transaction and
+     * is empty for one the address itself sent. The same field on a WebSocket
+     * MEMPOOL_ACTION/MEMPOOL_REMOVED frame means the same thing, but is present
+     * on ADDRESS-channel frames only: the global `mempool` channel omits it.
+     *
+     * Rows are PRE-VALIDATION; the indexer can still reject the action at
+     * confirmation. There is no `amounts` field, because only SEND v0-v3 has a
+     * documented output layout.
+     *
+     * `opts.limit` defaults to 100. The explorer prefilters a bounded 500-row
+     * window of the mempool (ordered by tx_hash, not by time), so on a busy
+     * chain a pending transaction can fall outside it: an empty result is not
+     * proof the transaction was dropped.
+     */
+    getUnconfirmed(address: string, opts?: QueryOptions): Promise<Array<{
+        tx_hash: string | null;
+        source: string | null;
+        action: string | null;
+        data: string | null;
+        first_seen: number | null;
+        destinations: string[];
+    }>>;
+
     /** Get a network-wide summary (chain heights, indexer status, peer counts). */
     getNetwork(opts?: QueryOptions): Promise<any>;
 
@@ -1638,8 +1670,28 @@ export declare class XChainSDK {
     /** Subscribe to new actions with optional type/status/tick filters. */
     onAction(callback: (msg: any) => void, opts?: { types?: string[]; ticks?: string[] }): () => void;
 
-    /** Subscribe to all events touching an address: NEW_ACTION, ADDRESS_UPDATE, ORDER_MATCH, ORDER_EXPIRED, COINPAY_REQUIRED/FULFILLED/EXPIRED, SWAP_MATCH, SWAP_EXPIRED, DISPENSE, DISPENSER_CLOSED, DISPENSER_EXPIRED, BET, BET_EXPIRED, BET_CLOSED, ATTESTATION_REQUEST, ATTESTATION_RESPONSE. */
+    /** Subscribe to all events touching an address: NEW_ACTION, ADDRESS_UPDATE, MEMPOOL_ACTION, MEMPOOL_REMOVED, ORDER_MATCH, ORDER_EXPIRED, COINPAY_REQUIRED/FULFILLED/EXPIRED, SWAP_MATCH, SWAP_EXPIRED, DISPENSE, DISPENSER_CLOSED, DISPENSER_EXPIRED, BET, BET_EXPIRED, BET_CLOSED, ATTESTATION_REQUEST, ATTESTATION_RESPONSE. */
     onAddress(address: string, callback: (msg: any) => void, opts?: { types?: string[]; snapshot?: boolean }): () => void;
+
+    /**
+     * Subscribe to the UNCONFIRMED (pre-validation) transactions involving an
+     * address: MEMPOOL_ACTION when the decoder first sees one, MEMPOOL_REMOVED
+     * when it leaves the mempool (confirmed and evicted are indistinguishable,
+     * so reconcile against the confirmed NEW_ACTION feed). Returns an
+     * unsubscribe function.
+     *
+     * Frame data is `{ tx_hash, source, action, data, first_seen,
+     * destinations }` for MEMPOOL_ACTION and `{ tx_hash, source, destinations }`
+     * for MEMPOOL_REMOVED. `first_seen` is unix SECONDS and may be null.
+     * `destinations` is present on address-channel frames only; frames on the
+     * global `mempool` channel omit it, so never assume it is there.
+     *
+     * This shares onAddress's address-channel subscription (same channel, same
+     * `{ address }` params, refcounted in the WebSocket client), so watching an
+     * address for both confirmed and unconfirmed events costs ONE of the
+     * explorer's per-connection subscriptions, not two.
+     */
+    onMempoolAction(address: string, callback: (msg: any) => void): () => void;
 
     /** Subscribe to updates for a token. */
     onToken(tick: string, callback: (msg: any) => void): () => void;
