@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-08-28
+
+### Changed
+- `light.parseAnchorV7(wire)` and `light.anchorBundleSection(bundle, chain)` read the new ANCHOR v7 checkpoint bundle, one anchor per network carrying every chain's checkpoint as a section.
+- `light.fetchAnchoredCheckpoint` accepts only version 7 rows now that the per-chain anchor versions are retired.
+
+### Removed
+- `light.parseAnchorV3`; the per-chain ANCHOR v3/v5 wire no longer exists.
+
 ## [0.11.1] - 2026-08-28
 
 Out-of-band patch on the 0.11 line, published from `develop` ahead of the next release train so the wallet can read unconfirmed transactions.
