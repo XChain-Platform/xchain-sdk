@@ -309,7 +309,7 @@ function evaluatePolicy(policy, actionData, windowUsage) {
 
     if (policy.allowedDestinations) {
         // G9: allowedDestinations binds only the action-string DESTINATION field,
-        // and only 6 of the 63 decodable formats carry one (SEND v0, MINT v0,
+        // and only 7 of the 63 decodable formats carry one (SEND v0, MINT v0,
         // MESSAGE v0-v3, SWEEP v0). For every other format the destination list is
         // EMPTY and the membership loop below is vacuously satisfied - so every
         // trade, dispenser, contract-escrow, staking and native-pay action sailed

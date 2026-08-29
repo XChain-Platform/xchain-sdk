@@ -30,7 +30,8 @@ HEAD 2026-08-08, ALL ELEVEN re-reviewed against indexer HEAD
 `22f0f31` on 2026-08-13, NINE re-reviewed against indexer HEAD
 `58ab8e9` on 2026-08-15, three re-pinned after the comment-hygiene pass
 at `1a4b78a4` on 2026-08-17, `batch.js` re-reviewed at `188554e5` on
-2026-08-20, and `issue.js` re-reviewed at `2d9cbbbf` on 2026-08-23 (see
+2026-08-20, `issue.js` re-reviewed at `2d9cbbbf` on 2026-08-23, and
+`dispenser.js` + `dispense.js` re-reviewed at `2b65e8a4` on 2026-08-25 (see
 the review log below). Hashes
 are of the indexer handler source files, resolved via
 `XCHAIN_INDEXER_PATH` or the sibling `../xchain-indexer` checkout. The
@@ -44,12 +45,27 @@ HEAD hashes.
 
 **Pins taken at indexer commit:** `2b65e8a4`
 
-(Re-anchored 2026-08-23 by the `issue.js` mint-window pass, whose entry
-below declares this anchor. The line itself was missed in that edit and
-kept saying `188554e5`, the 2026-08-20 `batch.js` anchor, for three days;
-the rule one paragraph down is the rule it broke. `2d9cbbbf` is reachable
-from the indexer develop head and no file under `src/actions/` differs
-between the two, so every pinned hash below is byte-identical at both.)
+(Re-anchored 2026-08-25 by the `dispenser.js` + `dispense.js` pass, whose
+entry below declares this anchor. `2b65e8a4` is reachable from the indexer
+develop head, and the gate re-checks that reachability at run time before it
+hands a reviewer a range built on it.
+
+No byte-identity claim survives a re-anchor, so none is made here. Five files
+under `src/actions/` differ between `2d9cbbbf` and `2b65e8a4`, two of them
+mapped rows this pass re-pinned, which is exactly why the older anchor is a
+baseline for the older review only. Each review-log entry names the baseline it
+was read against; use that one, never this line, to reconstruct a past review.
+
+History, because it is why the rule below exists twice over. The 2026-08-23
+re-anchor moved the table and missed THIS line, which kept saying `188554e5`,
+the 2026-08-20 `batch.js` anchor, for three days. The 2026-08-25 pass then
+broke the same rule with the halves reversed: the anchor line moved and the
+review command below it did not, so the map named `2b65e8a4` while handing
+reviewers a `2d9cbbbf` range. Twice by careful authors is a rule that wants an
+assertion behind it, so `checkAnchorConsistency` in
+`bin/check-preflight-drift.js` now fails the gate when the anchor line and the
+review command below disagree. That leg needs no sibling checkout, so it runs
+in single-repo CI too, which is the one venue a docs-only edit reaches.)
 
 (Standing caveat on the 2026-08-15 anchor, which the paragraph above and
 the review log below both still cite: `58ab8e9` is a local commit the
@@ -63,9 +79,11 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 2d9cbbbf..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 2b65e8a4..HEAD -- src/actions/<handler>.js
 
-Re-anchor this line whenever you re-pin the table, in the same edit.
+Re-anchor this line whenever you re-pin the table, in the same edit. The gate
+asserts it: `checkAnchorConsistency` reads the commit id out of the command
+above and fails when it is not the one on the anchor line.
 
 ### When the anchor is not reachable
 

@@ -193,9 +193,14 @@ describe('API request-rate limit', function () {
     it('src/api.js mounts the limiter BEFORE the auth gate and the jsonRouter mount', () => {
         const src = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
         const rateIdx   = src.indexOf('app.use(rateLimitMiddleware(');
-        const authIdx   = src.indexOf('safeTokenEqual(got, SDK_API_KEY)');
+        // Anchored on the MOUNT, not on a compare inside the gate body: the gate
+        // now lives in src/apiGuards.js, and an anchor that can go missing makes
+        // every ordering assertion below it argue from -1.
+        const authIdx   = src.indexOf('app.use(authGateMiddleware(');
         const routerIdx = src.indexOf('jsonRouter(');
         assert.notStrictEqual(rateIdx, -1, 'rate limiter not mounted in src/api.js');
+        assert.notStrictEqual(authIdx, -1, 'auth gate not mounted in src/api.js');
+        assert.notStrictEqual(routerIdx, -1, 'jsonRouter mount missing from src/api.js');
         assert.ok(rateIdx < authIdx, 'the limiter must run before the auth gate so anonymous floods are bounded');
         assert.ok(rateIdx < routerIdx, 'the limiter must run before the router');
     });

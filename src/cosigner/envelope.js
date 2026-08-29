@@ -83,6 +83,9 @@
 
 const bitcoin = require('bitcoinjs-lib');
 const ecc     = require('@bitcoinerlab/secp256k1');
+// Shared with coSigner.js's key-path derivation: one definition of which
+// sighash types this signer will produce a message for.
+const { sighashAllowed, disallowedSighashError } = require('./sighashPolicy.js');
 
 bitcoin.initEccLib(ecc);
 
@@ -262,6 +265,13 @@ function deriveEnvelopeCommit(args = {}) {
  * the sighash commits to all prevouts.
  */
 function envelopeScriptPathSighash(psbt, inputIndex, hashType, leafHash) {
+    // Defense in depth, identical to the key-path twin in coSigner.js: never
+    // derive a signing message under a sighash type that does not commit to
+    // every output. process()'s step-8 gate rejects it earlier with a clearer
+    // code, but this export is public, and a reveal partial signed under
+    // NONE/SINGLE/ANYONECANPAY is the reassemble-a-drain-tx path the key path
+    // already refuses. Both derivations must fail closed on their own.
+    if (!sighashAllowed(hashType)) throw disallowedSighashError(hashType);
     const ins = psbt.txInputs;
     if (inputIndex < 0 || inputIndex >= ins.length)
         throw new Error('inputIndex ' + inputIndex + ' out of range');

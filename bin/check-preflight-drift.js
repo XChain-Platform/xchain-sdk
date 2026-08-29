@@ -94,6 +94,53 @@ function parseAnchor(mapPath) {
     return m ? m[1] : null;
 }
 
+/* The anchor line and the review command the map builds on it must name ONE commit.
+ *
+ * parseAnchor reads the machine half; the prose two paragraphs down tells a human which
+ * range to diff. Nothing bound the two, and they have now come apart twice by careful
+ * authors: on 2026-08-23 the table was re-pinned and the anchor LINE was missed for three
+ * days, and on 2026-08-25 the anchor line moved and the review COMMAND did not, so the map
+ * declared `2b65e8a4` while handing reviewers a `2d9cbbbf` range. A reviewer following it
+ * diffs from the wrong baseline and re-pins on it, which is the outcome the whole gate
+ * exists to prevent, and the automated half stays green throughout because it reads the
+ * correct line.
+ *
+ * ONE id, not every hash in the file: the review log legitimately cites older baselines
+ * (`188554e5`, `58ab8e9`, `2ca8734f`, `2d9cbbbf`), so a blanket "every hash equals the
+ * anchor" lint would fire on correct prose. A missing or unreadable command is a finding
+ * rather than a silent pass, the same fail-closed contract the by-value legs hold.
+ *
+ * Deliberately reads only the map, so evaluate() can run it BEFORE the no-sibling skip:
+ * single-repo CI is the one venue a documentation-only edit reaches.
+ */
+function checkAnchorConsistency(mapPath) {
+    const text = fs.readFileSync(mapPath, 'utf8');
+    const anchor = parseAnchor(mapPath);
+    if (!anchor) {
+        warn('drift-gate: INDEXER-MAP.md records no "Pins taken at indexer commit" anchor, so the\n'
+            + '  review instruction below it has no baseline to be checked against.');
+        return 1;
+    }
+    const cited = [...text.matchAll(/git\s+-C\s+\S*xchain-indexer\s+diff\s+([0-9a-f]{7,40})\.\.HEAD\s+--\s+src\/actions\//g)]
+        .map((m) => m[1]);
+    if (cited.length !== 1) {
+        warn(`drift-gate: expected exactly one "git -C ../xchain-indexer diff <anchor>..HEAD -- src/actions/" review\n`
+            + `  command in INDEXER-MAP.md, found ${cited.length}. That command is what this check compares against\n`
+            + '  the anchor line; find where it moved before editing this check.');
+        return 1;
+    }
+    if (cited[0] !== anchor) {
+        warn('drift-gate: INDEXER-MAP.md names two different indexer commits.\n'
+            + `  anchor line ("Pins taken at indexer commit"): ${anchor}\n`
+            + `  review command ("git ... diff <id>..HEAD"):     ${cited[0]}\n`
+            + '  A reviewer following the command diffs from the wrong baseline and re-pins on it.\n'
+            + '  The map\'s own rule: "Re-anchor this line whenever you re-pin the table, in the same edit."');
+        return 1;
+    }
+    say(`drift-gate: map anchor and review command agree (${anchor}).`);
+    return 0;
+}
+
 /* Reachable means "can be the left side of a range against HEAD", which is the only
  * property the review instruction actually needs. An orphaned commit can still be present
  * in the object store, so an existence check would answer yes and hand back a range that
@@ -297,6 +344,68 @@ function checkConfigConstants(indexerRoot) {
     return failed;
 }
 
+/* Indexer REGEX rules this SDK mirrors as literals.
+ *
+ * The same class as CONFIG_CAPS, one file further out. A rule declared in
+ * xchain-indexer/src/db.js is invisible to every hash row above (the row regex carries a
+ * literal src/actions/ prefix), and adding a row for db.js would not fix it: that file is
+ * ~16k lines, so the row would move on nearly every unrelated indexer edit and train
+ * blind re-pinning, and a hash proves "the file is unchanged" rather than "the two
+ * regexes agree", which is the invariant that actually matters.
+ *
+ * Compared by VALUE - source AND flags - and fails CLOSED when either literal cannot be
+ * read exactly once, the contract parseStringSet and parseIntLiteral already hold.
+ */
+const REGEX_MIRRORS = [
+    {
+        name: 'CANONICAL_CARET_ID',
+        indexerFile: 'src/db.js',
+        why: 'src/preflight/universal.js decides CARET_REF_UNRESOLVABLE on this rule',
+    },
+];
+
+/* Match `const NAME = /body/flags;`.
+ *
+ * The body alternation accepts an escaped char or a bracketed class before a bare
+ * character, so a `/` inside a character class cannot terminate the literal early and
+ * silently truncate the value being compared.
+ */
+function parseRegexLiteral(text, name, where) {
+    const re = new RegExp('const\\s+' + name + '\\s*=\\s*/((?:\\\\.|\\[(?:\\\\.|[^\\]\\\\])*\\]|[^/\\\\\\n])+)/([a-z]*)', 'g');
+    const hits = [...text.matchAll(re)];
+    if (hits.length !== 1) {
+        throw new Error(`drift-gate: expected exactly one ${name} regex declaration in ${where}, found ${hits.length}. `
+            + 'That literal is what this gate compares; find where it moved before editing this check.');
+    }
+    return { source: hits[0][1], flags: hits[0][2] };
+}
+
+function checkRegexMirrors(indexerRoot) {
+    const sdkSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'preflight', 'constants.js'), 'utf8');
+
+    let failed = 0;
+    for (const { name, indexerFile, why } of REGEX_MIRRORS) {
+        const abs = path.join(indexerRoot, indexerFile);
+        if (!fs.existsSync(abs)) {
+            warn(`drift-gate: xchain-indexer/${indexerFile} not found; it declares the ${name} rule this gate pins.`);
+            failed = 1;
+            continue;
+        }
+        const indexerRule = parseRegexLiteral(fs.readFileSync(abs, 'utf8'), name, `xchain-indexer/${indexerFile}`);
+        const sdkRule = parseRegexLiteral(sdkSrc, name, 'src/preflight/constants.js');
+        if (indexerRule.source !== sdkRule.source || indexerRule.flags !== sdkRule.flags) {
+            warn(`drift-gate: ${name} differs between xchain-indexer and this SDK:\n`
+                + `  indexer ${indexerFile}: /${indexerRule.source}/${indexerRule.flags}\n`
+                + `  sdk     src/preflight/constants.js: /${sdkRule.source}/${sdkRule.flags}\n`
+                + `  ${why}, so the SDK would judge references against a rule the chain no longer applies.`);
+            failed = 1;
+        }
+    }
+    if (!failed)
+        say(`drift-gate: mirrored indexer regex rule(s) in sync (${REGEX_MIRRORS.map((r) => r.name).join(', ')}).`);
+    return failed;
+}
+
 /* GAS_SCHEDULE parity across the three coins.
  *
  * The SDK carries its OWN copy of each coin definition, and the gas schedule is what
@@ -363,10 +472,20 @@ function evaluate() {
         warn('drift-gate: INDEXER-MAP.md not found');
         return 1;
     }
+    // Runs BEFORE the sibling skip on purpose: it reads only this repo's map, and the
+    // single-repo mode is the one venue a documentation-only edit ever reaches.
+    let failedEarly = 0;
+    try {
+        if (checkAnchorConsistency(mapPath)) failedEarly = 1;
+    } catch (e) {
+        warn(e && e.message ? e.message : String(e));
+        failedEarly = 1;
+    }
+
     const root = resolveIndexerRoot();
     if (!root) {
-        say('drift-gate: no xchain-indexer checkout; skipping (sibling CI enforces).');
-        return 0;
+        say('drift-gate: no xchain-indexer checkout; skipping the sibling checks (sibling CI enforces).');
+        return failedEarly;
     }
 
     const rows = parseMap(mapPath);
@@ -387,7 +506,7 @@ function evaluate() {
     // Report every independent check before exiting, never on the first failure: handler-hash
     // drift and a fee-quote seam break have different causes and different fixes, and exiting
     // on the first one would let unrelated stale hashes hide a live seam break behind them.
-    let failed = 0;
+    let failed = failedEarly;
 
     if (missing.length) {
         warn('drift-gate: mapped handler(s) not found in the checkout:\n  ' + missing.join('\n  '));
@@ -439,6 +558,12 @@ function evaluate() {
     }
     try {
         if (checkConfigConstants(root)) failed = 1;
+    } catch (e) {
+        warn(e && e.message ? e.message : String(e));
+        failed = 1;
+    }
+    try {
+        if (checkRegexMirrors(root)) failed = 1;
     } catch (e) {
         warn(e && e.message ? e.message : String(e));
         failed = 1;
@@ -512,6 +637,7 @@ function main(argv, evaluateFn) {
 
 if (require.main === module) main();
 module.exports = {
-    resolveIndexerRoot, parseMap, parseStringSet, deriveFeeChargingActions,
-    checkFeeQuoteSeam, checkConfigConstants, checkGasSchedules, evaluate, main,
+    resolveIndexerRoot, parseMap, parseAnchor, parseStringSet, parseRegexLiteral,
+    deriveFeeChargingActions, checkAnchorConsistency, checkFeeQuoteSeam,
+    checkConfigConstants, checkRegexMirrors, checkGasSchedules, evaluate, main,
 };

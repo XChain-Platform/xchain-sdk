@@ -23,7 +23,9 @@ const { secp256k1 } = require('@noble/curves/secp256k1');
 const MuSig2      = require('../../src/musig2.js');
 const CoSigner    = require('../../src/cosigner/coSigner.js');
 const WindowStore = require('../../src/cosigner/windowStore.js');
-const { evaluatePolicy, UNRESOLVED_TICK_BUCKET } = require('../../src/cosigner/policyEvaluator.js');
+const { evaluatePolicy, UNRESOLVED_TICK_BUCKET, formatCarriesDestination } =
+    require('../../src/cosigner/policyEvaluator.js');
+const valueDerivability = require('../../src/cosigner/valueDerivability.js');
 const { decodeActionFromPsbt } = require('../../src/cosigner/psbtActionDecode.js');
 
 function makeAccount() {
@@ -347,7 +349,7 @@ describe('G8: unresolved-tick window accumulation', function () {
 describe('G9: allowedDestinations enforceability', function () {
 
     it('denies an action whose format carries no DESTINATION field', function () {
-        // Only 6 of the 63 decodable formats carry DESTINATION. For every other one
+        // Only 7 of the 63 decodable formats carry DESTINATION. For every other one
         // the destination list was EMPTY and the membership loop was vacuously
         // satisfied, so every trade, dispenser, staking and escrow action sailed
         // through a setting the operator reads as "can only pay these addresses".
@@ -362,6 +364,26 @@ describe('G9: allowedDestinations enforceability', function () {
         });
         expect(res.approved).to.equal(false);
         expect(res.reason).to.equal('POLICY_DESTINATION_UNENFORCEABLE');
+    });
+
+    it('pins the 7-of-63 figure the G9 rationale quotes, derived from the format table', function () {
+        // The comment in policyEvaluator.js sizes how little of the policy
+        // surface allowedDestinations binds, and a hand-counted figure drifts
+        // the moment a format gains or loses a DESTINATION field. Derive both
+        // halves from the shipped tables instead: decodableFormats() is the
+        // daemon's own denominator (it already drops the multi-leg SEND v1-v3,
+        // which the decoder refuses as MULTI_LEG_UNSUPPORTED), and
+        // formatCarriesDestination is the predicate the gate itself calls.
+        const decodable = valueDerivability.decodableFormats();
+        const carriers = decodable
+            .filter((f) => formatCarriesDestination(f.action, f.version))
+            .map((f) => `${f.action} v${f.version}`)
+            .sort();
+        expect(decodable.length).to.equal(63);
+        expect(carriers).to.deep.equal([
+            'MESSAGE v0', 'MESSAGE v1', 'MESSAGE v2', 'MESSAGE v3',
+            'MINT v0', 'SEND v0', 'SWEEP v0',
+        ]);
     });
 
     it('still enforces the list for a format that does carry DESTINATION', function () {

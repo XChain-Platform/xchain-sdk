@@ -14,18 +14,19 @@
  *
  * XChain Platform SDK - Helper-API request guards
  *
- * The batch fan-out cap and the request-rate limiter used by src/api.js, in
- * their own module because src/api.js starts a live server at require time
- * (dotenv.config() + app.listen) and therefore cannot be require()'d by a unit
- * test. Keeping the guards here gives the shipped middleware ONE implementation
- * that both api.js and the tests load, instead of a copy in each test file that
- * stays green when the real guard regresses.
+ * The batch fan-out cap, the request-rate limiter and the bearer-token auth
+ * gate used by src/api.js, in their own module because src/api.js starts a live
+ * server at require time (dotenv.config() + app.listen) and therefore cannot be
+ * require()'d by a unit test. Keeping the guards here gives the shipped
+ * middleware ONE implementation that both api.js and the tests load, instead of
+ * a copy in each test file that stays green when the real guard regresses.
  *
  ********************************************************************/
 
 'use strict';
 
 const crypto = require('crypto');
+const { safeTokenEqual } = require('./utils/safeCompare.js');
 
 /*
  * Maximum JSON-RPC calls in one array (batch) body. Env-tunable because a
@@ -162,10 +163,60 @@ function rateLimitMiddleware({ limit, windowMs, isCredential }) {
     return rateLimit;
 }
 
+/*
+ * Bearer-token auth gate. Mount AFTER the batch cap and the limiter and BEFORE
+ * the router. Every method except ping needs the key, and the gate fails closed:
+ * with no key configured every non-ping method is rejected, never left open.
+ *
+ * A JSON-RPC batch arrives as an array of call objects; a single call as one
+ * object. express-json-rpc-router dispatches every element of an array body, so
+ * the gate inspects ALL of them and requires the key if ANY element is a
+ * non-ping method. Reading req.body.method off an array leaves it undefined,
+ * which would let a batch smuggle non-ping methods past this fail-closed check
+ * unauthenticated (live in four services on 2026-07-07).
+ *
+ * `method` is caller-controlled and nothing upstream types it: the router is the
+ * first layer that would reject a non-string method and it mounts after this
+ * gate, so calling .toLowerCase() on whatever arrives threw a TypeError on a
+ * pre-auth path and Express answered its default HTML 500, a shape no JSON-RPC
+ * client can parse. Hence the typeof test. Its else-branch is deliberately
+ * STRICTER than a plain truthiness test: a present-but-non-string method
+ * (including '', 0 and false) demands the key and then falls through to the
+ * router's own -32600. Only an absent method (undefined/null) stays open, which
+ * is what a bodyless GET to /openrpc.json presents. Never looser, only stricter.
+ *
+ * @param {{apiKey: string}} options
+ * @returns {function} express middleware
+ */
+function authGateMiddleware({ apiKey }) {
+    return function authGate(req, res, next) {
+        const calls = Array.isArray(req.body) ? req.body : [req.body];
+        const id = (Array.isArray(req.body) ? null : (req.body && req.body.id)) || null;
+        const needsAuth = calls.some(call => {
+            const method = call && call.method;
+            return (typeof method === 'string')
+                ? method.toLowerCase() !== 'ping'
+                : (method !== undefined && method !== null);
+        });
+        if (needsAuth) {
+            const header = req.headers['authorization'];
+            const got = (typeof header === 'string' && header.startsWith('Bearer ')) ? header.slice(7) : null;
+            if (!apiKey || !safeTokenEqual(got, apiKey)) {
+                return res.status(401).json({
+                    jsonrpc: '2.0', id,
+                    error: { code: -32001, message: 'Unauthorized' }
+                });
+            }
+        }
+        next();
+    };
+}
+
 module.exports = {
     resolveMaxBatch,
     resolveRateLimit,
     resolveRateWindowMs,
     batchCapMiddleware,
-    rateLimitMiddleware
+    rateLimitMiddleware,
+    authGateMiddleware
 };

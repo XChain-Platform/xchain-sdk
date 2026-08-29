@@ -128,4 +128,107 @@ describe('co-signer HTTP sidecar', function () {
         expect(r.status).to.equal(401);
         expect(r.body.reason).to.equal('UNAUTHORIZED');
     });
+
+    // The body cap must not be a hardcoded 256kb, roughly a sixth of the largest
+    // envelope round the protocol permits: under such a cap an oversize body
+    // reaches Express's default HTML error page, which httpTransport reads as
+    // COSIGNER_TRANSPORT_ERROR, "dead sidecar, or a proxy error page". These
+    // pin both halves: the ceiling covers a real envelope round, and anything
+    // past whatever ceiling is configured is NAMED.
+    describe('request-body ceiling', function () {
+
+        it('accepts a body far larger than the old 256kb cap', async function () {
+            // ~600 KB of envelope script hex: over the old limit, under the new
+            // default. It must reach the handler and be JUDGED (a policy denial
+            // is a 200 here), not rejected by the transport.
+            const r = await post(port, '/cosign', {
+                psbt: psbtHex,
+                inputs: [{ index: 0, agentPublicNonce: agentNonce }],
+                envelope: { script: 'ab'.repeat(300000) },
+            }, { authorization: 'Bearer sekret' });
+            expect(r.status).to.equal(200);
+            expect(r.body).to.have.property('approved');
+        });
+
+        it('names an oversize body instead of answering an HTML error page', async function () {
+            const co = new CoSigner({ secretKey: crypto.randomBytes(32),
+                publicKeys: [secp256k1.getPublicKey(crypto.randomBytes(32), true),
+                    secp256k1.getPublicKey(crypto.randomBytes(32), true)],
+                policy: { allowedActions: new Set(['SEND']) } });
+            const logs = [];
+            const app = createCoSignerApp(co, { token: 'sekret', maxBodyBytes: 4096,
+                logger: (...a) => logs.push(a) });
+            const srv = app.listen(0, '127.0.0.1');
+            await new Promise((r) => srv.once('listening', r));
+            try {
+                const r = await post(srv.address().port, '/cosign',
+                    { psbt: 'aa'.repeat(8000), inputs: [{ index: 0, agentPublicNonce: 'bb' }] },
+                    { authorization: 'Bearer sekret' });
+                expect(r.status).to.equal(413);
+                expect(r.body.reason).to.equal('REQUEST_TOO_LARGE');
+                expect(r.body.approved).to.equal(false);
+                expect(r.body.detail).to.be.a('string').and.contain('4096');
+                expect(logs.some((l) => l[0] === 'warn')).to.equal(true);
+            } finally { await new Promise((r) => srv.close(r)); }
+        });
+
+        it('leaves every other parse failure on the path it already had', async function () {
+            // The oversize handler must not swallow malformed JSON: that still
+            // lands on Express's own 400, not on a 413 REQUEST_TOO_LARGE.
+            const status = await new Promise((resolve, reject) => {
+                const data = Buffer.from('{"psbt": ');
+                const req = http.request({ host: '127.0.0.1', port, path: '/cosign', method: 'POST',
+                    headers: { 'content-type': 'application/json', 'content-length': data.length,
+                        authorization: 'Bearer sekret' } },
+                    (res) => { res.resume(); res.on('end', () => resolve(res.statusCode)); });
+                req.on('error', reject);
+                req.write(data); req.end();
+            });
+            expect(status).to.equal(400);
+        });
+
+        it('rejects a nonsensical maxBodyBytes at construction', function () {
+            const co = new CoSigner({ secretKey: crypto.randomBytes(32),
+                publicKeys: [secp256k1.getPublicKey(crypto.randomBytes(32), true),
+                    secp256k1.getPublicKey(crypto.randomBytes(32), true)],
+                policy: { allowedActions: new Set(['SEND']) } });
+            expect(() => createCoSignerApp(co, { token: 't', maxBodyBytes: 0 })).to.throw(/maxBodyBytes/);
+            expect(() => createCoSignerApp(co, { token: 't', maxBodyBytes: 1.5 })).to.throw(/maxBodyBytes/);
+        });
+
+        it('reaches the agent as REQUEST_TOO_LARGE, not COSIGNER_TRANSPORT_ERROR', async function () {
+            // The whole point of naming it: httpTransport prefers a JSON
+            // `reason` over the transport error (G13), so no client change is
+            // needed - but only if the server answers JSON at all.
+            const { httpTransport } = require('../../src/cosigner/client.js');
+            const co = new CoSigner({ secretKey: crypto.randomBytes(32),
+                publicKeys: [secp256k1.getPublicKey(crypto.randomBytes(32), true),
+                    secp256k1.getPublicKey(crypto.randomBytes(32), true)],
+                policy: { allowedActions: new Set(['SEND']) } });
+            const app = createCoSignerApp(co, { token: 'sekret', maxBodyBytes: 4096, logger: () => {} });
+            const srv = app.listen(0, '127.0.0.1');
+            await new Promise((r) => srv.once('listening', r));
+            try {
+                const transport = httpTransport(
+                    'http://127.0.0.1:' + srv.address().port + '/cosign', { token: 'sekret' });
+                let err;
+                try {
+                    await transport({ psbt: 'aa'.repeat(8000), inputs: [{ index: 0, agentPublicNonce: 'bb' }] });
+                } catch (e) { err = e; }
+                expect(err, 'an oversize body must reject').to.exist;
+                expect(err.code).to.equal('REQUEST_TOO_LARGE');
+                expect(err.code).to.not.equal('COSIGNER_TRANSPORT_ERROR');
+            } finally { await new Promise((r) => srv.close(r)); }
+        });
+
+        it('the default ceiling covers a maximum protocol envelope round', function () {
+            // The derivation, not the literal: the payload rides the wire twice,
+            // both times hex-encoded, so anything less is unservable by design.
+            const { DEFAULT_MAX_BODY_BYTES, ENVELOPE_WIRE_BYTES } =
+                require('../../src/cosigner/httpBodyLimit.js');
+            const { ENVELOPE_MAX_PAYLOAD } = require('../../src/protocol/constants.js');
+            expect(ENVELOPE_WIRE_BYTES).to.equal(4 * ENVELOPE_MAX_PAYLOAD);
+            expect(DEFAULT_MAX_BODY_BYTES).to.be.greaterThan(ENVELOPE_WIRE_BYTES);
+        });
+    });
 });

@@ -115,7 +115,10 @@ describe('API JSON-RPC batch fan-out cap', function () {
     it('src/api.js mounts the batch cap BEFORE the auth gate and the jsonRouter mount', () => {
         const src = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
         const capIdx    = src.indexOf('app.use(batchCapMiddleware(');
-        const authIdx   = src.indexOf('safeTokenEqual(got, SDK_API_KEY)');
+        // Anchored on the MOUNT, not on a compare inside the gate body: the gate
+        // now lives in src/apiGuards.js, and an anchor that can go missing makes
+        // every ordering assertion below it argue from -1.
+        const authIdx   = src.indexOf('app.use(authGateMiddleware(');
         const routerIdx = src.indexOf('jsonRouter(');
         assert.notStrictEqual(capIdx, -1, 'batch cap not mounted in src/api.js');
         assert.notStrictEqual(authIdx, -1, 'auth gate missing from src/api.js');

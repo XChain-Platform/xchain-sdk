@@ -21,7 +21,9 @@ describe('pre-flight constants + registry', function () {
         expect(constants.STALENESS_MS).to.equal(30000);
         expect(constants.ENDPOINT_MEMO_TTL_MS).to.equal(2000);
         expect(constants.REPORT_SCHEMA_VERSION).to.equal(1);
-        expect(constants.ENCODING_LIMITS).to.deep.equal({ OP_RETURN: 76, MULTISIGN: 60, P2SH: 476, P2WSH: 476 });
+        // OP_RETURN is 75 because the compose gate measures the compiled push,
+        // not the raw bytes; the parity suite below proves the two agree.
+        expect(constants.ENCODING_LIMITS).to.deep.equal({ OP_RETURN: 75, MULTISIGN: 60, P2SH: 476, P2WSH: 476 });
     });
 
     it('the certified Tier-2 error list is the single source', function () {
@@ -125,6 +127,62 @@ describe('pre-flight constants + registry', function () {
                 expect(handler).to.match(/^src\/actions\/[\w-]+\.js$/);
                 expect(hash, handler + ' hash must be 64-hex').to.match(/^[0-9a-f]{64}$/);
             }
+        });
+
+        /* The map's two halves must name one commit.
+         *
+         * The anchor line is machine-read; the review command below it is the human
+         * baseline. They came apart twice - 2026-08-23 moved the table and missed the
+         * line, 2026-08-25 moved the line and missed the command - and both times the
+         * automated half stayed green because it reads the correct line. The REAL map is
+         * asserted here (this is a pure text check over an in-repo file, so it stays
+         * hermetic), and the failing direction is driven from temp fixtures.
+         */
+        describe('anchor / review-command consistency', function () {
+            const fs = require('fs');
+            const os = require('os');
+            const { checkAnchorConsistency } = require('../../../bin/check-preflight-drift.js');
+
+            const REAL_MAP = path.join(__dirname, '..', '..', '..', 'src', 'preflight', 'INDEXER-MAP.md');
+            let dir;
+
+            function fixture(text) {
+                dir = fs.mkdtempSync(path.join(os.tmpdir(), 'anchor-consistency-'));
+                const p = path.join(dir, 'INDEXER-MAP.md');
+                fs.writeFileSync(p, text);
+                return p;
+            }
+
+            afterEach(function () {
+                if (dir) fs.rmSync(dir, { recursive: true, force: true });
+                dir = null;
+            });
+
+            it('the shipped INDEXER-MAP.md anchors its review command on its own pin', function () {
+                expect(checkAnchorConsistency(REAL_MAP)).to.equal(0);
+            });
+
+            it('fails when the review command names a different commit than the anchor line', function () {
+                const real = fs.readFileSync(REAL_MAP, 'utf8');
+                const stale = real.replace(/diff [0-9a-f]{7,40}\.\.HEAD/, 'diff 2d9cbbbf..HEAD');
+                expect(stale, 'fixture must actually differ from the real map').to.not.equal(real);
+                expect(checkAnchorConsistency(fixture(stale))).to.equal(1);
+            });
+
+            it('fails CLOSED when the review command is missing or unreadable', function () {
+                const real = fs.readFileSync(REAL_MAP, 'utf8');
+                const gutted = real.replace(/git -C \S*xchain-indexer diff [0-9a-f]{7,40}\.\.HEAD -- src\/actions\//,
+                    '(see the review log)');
+                expect(gutted).to.not.equal(real);
+                expect(checkAnchorConsistency(fixture(gutted))).to.equal(1);
+            });
+
+            it('fails CLOSED when the map records no anchor at all', function () {
+                const real = fs.readFileSync(REAL_MAP, 'utf8');
+                const anchorless = real.replace('**Pins taken at indexer commit:**', '**Pins were taken at:**');
+                expect(anchorless).to.not.equal(real);
+                expect(checkAnchorConsistency(fixture(anchorless))).to.equal(1);
+            });
         });
 
         // The gate's two by-VALUE seams, driven against SYNTHETIC fixtures so the
@@ -232,6 +290,68 @@ describe('pre-flight constants + registry', function () {
                 const r = fakeIndexer({ exempt: ['COINPAY'] });
                 require('fs').writeFileSync(path.join(r, 'src', 'coins', 'LTC.js'), 'module.exports = {};\n');
                 expect(checkGasSchedules(r)).to.equal(1);
+            });
+        });
+
+        /* The regex-mirror seam, which no mapped hash can cover either.
+         *
+         * CANONICAL_CARET_ID is declared in xchain-indexer/src/db.js, and the map's rows
+         * are `src/actions/*.js` only, so before this leg every pinned hash could stay
+         * green while the rule the SDK judges `^<id>` references against moved underneath
+         * it. Driven against SYNTHETIC indexer fixtures for the same reason the seams
+         * above are: the live sibling is a moving target.
+         */
+        describe('mirrored regex rules', function () {
+            const fs = require('fs');
+            const os = require('os');
+            const { checkRegexMirrors } = require('../../../bin/check-preflight-drift.js');
+
+            let root;
+            function fakeIndexerDb(body) {
+                root = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-gate-regex-'));
+                fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+                if (body !== null) fs.writeFileSync(path.join(root, 'src', 'db.js'), body);
+                return root;
+            }
+
+            afterEach(function () {
+                if (root) fs.rmSync(root, { recursive: true, force: true });
+                root = null;
+            });
+
+            it('passes when the indexer literal matches the SDK constant', function () {
+                const live = '/' + constants.CANONICAL_CARET_ID.source + '/'
+                    + constants.CANONICAL_CARET_ID.flags;
+                expect(checkRegexMirrors(fakeIndexerDb(
+                    'const CANONICAL_CARET_ID = ' + live + ';\n'))).to.equal(0);
+            });
+
+            it('fails when the indexer widens the canonical caret-id rule', function () {
+                // The live divergence this case must catch: `^0` and `^007` would
+                // become resolvable on chain while the SDK still reports
+                // CARET_REF_UNRESOLVABLE for them.
+                expect(checkRegexMirrors(fakeIndexerDb(
+                    'const CANONICAL_CARET_ID = /^[0-9]+$/;\n'))).to.equal(1);
+            });
+
+            it('fails when only the regex FLAGS differ', function () {
+                const live = constants.CANONICAL_CARET_ID.source;
+                expect(checkRegexMirrors(fakeIndexerDb(
+                    'const CANONICAL_CARET_ID = /' + live + '/i;\n'))).to.equal(1);
+            });
+
+            it('fails CLOSED when the indexer literal cannot be read exactly once', function () {
+                // A rename or a second declaration must never read as "it agrees" - the
+                // same contract parseStringSet and parseIntLiteral hold.
+                expect(() => checkRegexMirrors(fakeIndexerDb(
+                    'const CANONICAL_CARET_ID_V2 = /^[1-9][0-9]*$/;\n'))).to.throw(/exactly one/);
+                expect(() => checkRegexMirrors(fakeIndexerDb(
+                    'const CANONICAL_CARET_ID = /^a$/;\nconst CANONICAL_CARET_ID = /^b$/;\n')))
+                    .to.throw(/exactly one/);
+            });
+
+            it('fails when the indexer file declaring the rule is absent', function () {
+                expect(checkRegexMirrors(fakeIndexerDb(null))).to.equal(1);
             });
         });
 

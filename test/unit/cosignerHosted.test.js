@@ -239,38 +239,146 @@ describe('hosted co-signer: request handling', function () {
         expect(logs.some((l) => l[2] && l[2].tenant === 'alpha' && l[2].reason)).to.equal(true);
     });
 
-    it('caps one tenant\'s concurrent hold on the shared core', async function () {
-        const a = makeAccount();
-        const slow = tenantFor(a);
-        const app = createHostedCoSignerApp({
-            tenants: [{ id: 'solo', token: TOKEN_A, coSigner: slow }],
-            maxInflightPerTenant: 1,
-        });
+});
+
+// The predecessor of this block asserted `expect([200, 429]).to.contain(status)`
+// against a concurrency cap that could never fire, so it passed with or without
+// any limit at all. These assert the limit's actual decisions instead: which
+// request is refused, which tenant is unaffected, and what does not spend budget.
+describe('hosted co-signer: per-tenant request budget', function () {
+
+    let acctA, acctB, logs;
+    const bearer = (t) => ({ authorization: 'Bearer ' + t });
+
+    function appWith(opts) {
+        acctA = makeAccount(); acctB = makeAccount();
+        logs = [];
+        return createHostedCoSignerApp(Object.assign({
+            tenants: [
+                { id: 'alpha', token: TOKEN_A, coSigner: tenantFor(acctA) },
+                { id: 'beta',  token: TOKEN_B, coSigner: tenantFor(acctB) },
+            ],
+            logger: (...a) => logs.push(a),
+        }, opts));
+    }
+
+    async function withServer(app, fn) {
         const srv = app.listenSecure({ port: 0, host: '127.0.0.1' });
         await new Promise((r) => srv.once('listening', r));
-        try {
-            // Occupy the single slot from inside the handler, then fire a second.
-            let seen = 0;
-            slow.process = function () {
-                seen++;
-                if (seen === 1) {
-                    // Busy-hold briefly so the second request overlaps.
-                    const until = Date.now() + 60;
-                    while (Date.now() < until) { /* hold the single thread */ }
-                }
-                return { approved: false, reason: 'STUB' };
-            };
-            const body = { version: 1, psbt: 'aa', inputs: [{ index: 0, agentPublicNonce: 'bb' }] };
-            const [r1, r2] = await Promise.all([
-                post(srv.address().port, body, bearer(TOKEN_A)),
-                post(srv.address().port, body, bearer(TOKEN_A)),
-            ]);
-            // Node is single-threaded, so the cap is what bounds a tenant's hold
-            // rather than true parallelism; both must still answer, and neither
-            // may be dropped.
-            for (const r of [r1, r2]) expect([200, 429]).to.contain(r.status);
-        } finally {
-            await new Promise((r) => srv.close(r));
-        }
+        try { return await fn(srv.address().port); }
+        finally { await new Promise((r) => srv.close(r)); }
+    }
+
+    // A well-formed request that the daemon will judge (and deny on policy):
+    // what matters here is the STATUS, which is 200 for anything the budget lets
+    // through and 429 for anything it does not.
+    const body = (acct) => ({
+        version: 1,
+        psbt: buildPsbt(acct, 'SEND|0|TOK|1|bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4').toHex(),
+        inputs: [{ index: 0, agentPublicNonce: nonce(acct) }],
+    });
+
+    it('refuses the request past the budget, and names the limit', async function () {
+        const app = appWith({ maxRequestsPerTenant: 2, rateWindowMs: 60000 });
+        await withServer(app, async (port) => {
+            const r1 = await post(port, body(acctA), bearer(TOKEN_A));
+            const r2 = await post(port, body(acctA), bearer(TOKEN_A));
+            const r3 = await post(port, body(acctA), bearer(TOKEN_A));
+            expect([r1.status, r2.status, r3.status]).to.deep.equal([200, 200, 429]);
+            expect(r3.body.reason).to.equal('TENANT_RATE_LIMIT');
+            expect(r3.body.approved).to.equal(false);
+            // The tenant id never rides the wire, as on every other path here.
+            expect(JSON.stringify(r3.body)).to.not.contain('alpha');
+            expect(logs.some((l) => l[2] && l[2].tenant === 'alpha')).to.equal(true);
+        });
+    });
+
+    it('bounds one tenant without touching another', async function () {
+        const app = appWith({ maxRequestsPerTenant: 1 });
+        await withServer(app, async (port) => {
+            expect((await post(port, body(acctA), bearer(TOKEN_A))).status).to.equal(200);
+            expect((await post(port, body(acctA), bearer(TOKEN_A))).status).to.equal(429);
+            // beta has its own record and its own window.
+            expect((await post(port, body(acctB), bearer(TOKEN_B))).status).to.equal(200);
+        });
+    });
+
+    it('does not charge a tenant for requests that never authenticate', async function () {
+        // The budget is charged after the token resolves, so an anonymous flood
+        // cannot exhaust a real tenant's window (nor mint a bucket of its own).
+        const app = appWith({ maxRequestsPerTenant: 1 });
+        await withServer(app, async (port) => {
+            for (let i = 0; i < 5; i++) {
+                const bad = await post(port, body(acctA), bearer('wrong-token-0123456789abcdef'));
+                expect(bad.status).to.equal(401);
+            }
+            expect((await post(port, body(acctA), bearer(TOKEN_A))).status).to.equal(200);
+        });
+    });
+
+    it('starts a fresh window once the old one expires', async function () {
+        const app = appWith({ maxRequestsPerTenant: 1, rateWindowMs: 1 });
+        await withServer(app, async (port) => {
+            expect((await post(port, body(acctA), bearer(TOKEN_A))).status).to.equal(200);
+            await new Promise((r) => setTimeout(r, 15));
+            expect((await post(port, body(acctA), bearer(TOKEN_A))).status).to.equal(200);
+        });
+    });
+
+    it('is off unless the operator asks for it', async function () {
+        const app = appWith({});
+        await withServer(app, async (port) => {
+            for (let i = 0; i < 6; i++)
+                expect((await post(port, body(acctA), bearer(TOKEN_A))).status).to.equal(200);
+        });
+    });
+
+    it('refuses the removed maxInflightPerTenant option loudly, naming its successor', function () {
+        // A caller who set the old option believed a concurrency cap was
+        // protecting the shared core; it never could, so this must not become a
+        // silent no-op on upgrade.
+        const a = makeAccount();
+        expect(() => createHostedCoSignerApp({
+            tenants: [{ id: 'solo', token: TOKEN_A, coSigner: tenantFor(a) }],
+            maxInflightPerTenant: 1,
+        })).to.throw(/maxInflightPerTenant was removed[\s\S]*maxRequestsPerTenant/);
+    });
+
+    // The hosted surface carried the same hardcoded 256kb cap as the sidecar and
+    // must answer an oversize body the same named way, so a request cannot
+    // succeed on one transport and read as a dead daemon on the other.
+    it('names an oversize body 413 REQUEST_TOO_LARGE, with no version echoed', async function () {
+        const app = appWith({ maxBodyBytes: 4096 });
+        await withServer(app, async (port) => {
+            const r = await post(port, { version: 1, psbt: 'aa'.repeat(8000),
+                inputs: [{ index: 0, agentPublicNonce: 'bb' }] }, bearer(TOKEN_A));
+            expect(r.status).to.equal(413);
+            expect(r.body.reason).to.equal('REQUEST_TOO_LARGE');
+            expect(r.body.approved).to.equal(false);
+            // The body never parsed, so there is no version to echo (as on 401).
+            expect(r.body).to.not.have.property('version');
+            expect(JSON.stringify(r.body)).to.not.contain('alpha');
+        });
+    });
+
+    it('accepts a body far larger than the old 256kb cap by default', async function () {
+        const app = appWith({});
+        await withServer(app, async (port) => {
+            const r = await post(port, Object.assign(body(acctA),
+                { envelope: { script: 'ab'.repeat(300000) } }), bearer(TOKEN_A));
+            expect(r.status).to.equal(200);          // judged, not refused by the transport
+            expect(r.body).to.have.property('approved');
+        });
+    });
+
+    it('rejects a nonsensical budget or window at construction', function () {
+        const a = makeAccount();
+        const tenants = [{ id: 'solo', token: TOKEN_A, coSigner: tenantFor(a) }];
+        expect(() => createHostedCoSignerApp({ tenants, maxRequestsPerTenant: -1 }))
+            .to.throw(/maxRequestsPerTenant/);
+        expect(() => createHostedCoSignerApp({ tenants, maxRequestsPerTenant: 1.5 }))
+            .to.throw(/maxRequestsPerTenant/);
+        expect(() => createHostedCoSignerApp({ tenants, rateWindowMs: 0 }))
+            .to.throw(/rateWindowMs/);
     });
 });

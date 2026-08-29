@@ -36,7 +36,8 @@ const {
     resolveRateLimit,
     resolveRateWindowMs,
     batchCapMiddleware,
-    rateLimitMiddleware
+    rateLimitMiddleware,
+    authGateMiddleware
 } = require('./apiGuards.js');
 
 // Parse in .env config data
@@ -123,32 +124,10 @@ async function startApi() {
     }));
 
     // API key enforcement for all methods except ping. Fails closed: without
-    // a configured key, every non-ping method is rejected, never left open.
-    app.use((req, res, next) => {
-        // A JSON-RPC batch arrives as an array of call objects; a single call as
-        // one object. express-json-rpc-router dispatches every element of an
-        // array body, so the gate must inspect ALL of them: require the key if
-        // ANY element is a non-ping method. Reading req.body.method off an array
-        // leaves it undefined, which would let a batch smuggle non-ping methods
-        // past this fail-closed check unauthenticated.
-        let calls = Array.isArray(req.body) ? req.body : [req.body];
-        let id = (Array.isArray(req.body) ? null : (req.body && req.body.id)) || null;
-        let needsAuth = calls.some(call => {
-            let method = call && call.method;
-            return method && method.toLowerCase() !== 'ping';
-        });
-        if (needsAuth) {
-            let header = req.headers['authorization'];
-            let got = (typeof header === 'string' && header.startsWith('Bearer ')) ? header.slice(7) : null;
-            if (!SDK_API_KEY || !safeTokenEqual(got, SDK_API_KEY)) {
-                return res.status(401).json({
-                    jsonrpc: '2.0', id,
-                    error: { code: -32001, message: 'Unauthorized' }
-                });
-            }
-        }
-        next();
-    });
+    // a configured key, every non-ping method is rejected, never left open. The
+    // batch-smuggling and non-string-method rules live with the code, in
+    // src/apiGuards.js, so the unit tests exercise this exact middleware.
+    app.use(authGateMiddleware({ apiKey: SDK_API_KEY }));
 
     // Define JSON-RPC controller with all SDK methods
     const controller = {

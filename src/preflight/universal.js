@@ -26,11 +26,15 @@
 
 const { FINDING_CODES, ENCODING_LIMITS, FEE_CHARGING_ACTIONS, CANONICAL_CARET_ID } = require('./constants.js');
 const { ADDRESS_REF_FIELDS } = require('../addressRefFields.js');
+const { TICK_EXISTENCE_FIELDS } = require('../tickRefFields.js');
 const numeric = require('./numeric.js');
 
 // Wire fields that reference a TICK whose existence is checkable.
-// ISSUE is excluded (existence is legal there: format 0 creates).
-const TICK_FIELDS = ['TICK', 'DIVIDEND_TICK', 'GIVE_TICK', 'GET_TICK', 'CALLBACK_TICK'];
+// ISSUE is excluded at the loop below (existence is legal there: format 0
+// creates). Derived from tickRefFields.js, never restated. FILE.GATE_TICKER
+// belongs in this check: an unknown one makes the indexer reject the whole
+// FILE, and a FILE carries its payload.
+const TICK_FIELDS = TICK_EXISTENCE_FIELDS;
 
 // Validator codes that are locally-provable, consensus-authoritative
 // hard failures. Only FORBIDDEN_CHARACTER qualifies: a raw '|' or ';'

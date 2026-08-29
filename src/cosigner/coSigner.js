@@ -103,10 +103,10 @@ function exactU64(v) {
     return null;
 }
 
-const ALLOWED_SIGHASH = new Set([bitcoin.Transaction.SIGHASH_DEFAULT]);
-function sighashAllowed(hashType) {
-    return hashType === undefined || ALLOWED_SIGHASH.has(hashType);
-}
+// Which sighash types are signable at all: one definition, shared with the
+// envelope reveal path so the two message derivations cannot drift apart
+// (sighashPolicy.js).
+const { sighashAllowed, disallowedSighashError } = require('./sighashPolicy.js');
 
 // The five standard single-recipient payment templates. Anything else - bare
 // multisig above all - is refused as an allowedOutputs entry (see
@@ -155,8 +155,7 @@ function taprootKeyPathSighash(psbt, inputIndex, hashType) {
     // Defense in depth: never derive a signing message under a sighash type that
     // does not commit to every output. The process() sighash guard rejects it
     // earlier with a clearer code; this also protects any other caller of this export.
-    if (!sighashAllowed(hashType))
-        throw new Error('disallowed sighashType 0x' + Number(hashType).toString(16).padStart(2, '0') + ' (only SIGHASH_DEFAULT is finalizable by this signer)');
+    if (!sighashAllowed(hashType)) throw disallowedSighashError(hashType);
     const ins = psbt.txInputs;
     if (inputIndex < 0 || inputIndex >= ins.length)
         throw new Error('inputIndex ' + inputIndex + ' out of range');
