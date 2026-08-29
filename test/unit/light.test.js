@@ -967,6 +967,145 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
         assert.strictEqual(strict.depthSource, 'explorer');
     });
 
+    // The anchor cold start resolves its signer set through the SAME documented
+    // ladder as verifyBalance/verifyLockedBalance/verifyAction (light-client.md
+    // "Trust roots": explicit -> pinned -> explorer /verify). Verifying against an
+    // empty set instead is not a neutral no-op: verifyCheckpoint reads
+    // qualified.size 0 as quorum 1, weighted true, hasWeights false, so it returns
+    // CHECKPOINT_QUORUM_FAILED on a checkpoint the same explorer's set clears
+    // (measured against the public testnet explorer 2026-08-28: quorum 1, nsigs 4,
+    // against a server-reported verified true at quorum 3).
+    //
+    // `targetCoin` is what the ladder keys on here: the anchor list is read off the
+    // DOGE explorer, but the checkpoint inside it belongs to the target chain, so
+    // the /verify fetch has to name the TARGET chain's coin prefix.
+    it('fetchAnchoredCheckpoint with no validators falls through to the documented trust ladder', async function () {
+        const a = makeSignedSection({ dogeBlock: 1000 });
+        const seen = [];
+        const fetchImpl = async (url) => {
+            seen.push(url);
+            if (url.includes('/api/anchors/'))
+                return { ok: true, status: 200, json: async () => ({ data: [a.record] }) };
+            // Tier 3, exactly the shape the live explorer serves at
+            // /<coin>/api/checkpoint/<block_index>/verify: {pubkey, weight, source}.
+            if (url.includes('/api/checkpoint/'))
+                return { ok: true, status: 200, json: async () => ({ validators: a.validators }) };
+            return { ok: false, status: 404, json: async () => ({}) };
+        };
+        // Control: the identical call WITH the set verifies, so nothing else in the
+        // fixture (depth, roots, signatures) is what fails below.
+        const withSet = await light.fetchAnchoredCheckpoint({ explorerUrl: 'https://x', dogeCoin: 'DOGE',
+            targetChain: CHAIN, validators: a.validators, dogeTipHeight: 1200, minDepth: 60, fetchImpl });
+        assert.strictEqual(withSet.verified, true, withSet.reason);
+        const r = await light.fetchAnchoredCheckpoint({ explorerUrl: 'https://x', dogeCoin: 'DOGE',
+            targetChain: CHAIN, targetCoin: COIN, dogeTipHeight: 1200, minDepth: 60, fetchImpl });
+        assert.ok(seen.some(u => u.includes('/api/checkpoint/')),
+            'no set was supplied, so the convenience tier must resolve one; instead an EMPTY set was verified');
+        assert.strictEqual(r.verified, true, r.reason);
+    });
+
+    it('fetchAnchoredCheckpoint tier 3 asks the TARGET chain coin, not the DOGE coin', async function () {
+        // The wrinkle the ladder has to survive: dogeCoin names the chain the ANCHOR
+        // sits on, targetCoin the chain the CHECKPOINT belongs to. Asking DOGE for an
+        // LTC checkpoint's signer set is a different question with a different answer.
+        const a = makeSignedSection({ chain: 'LTC', dogeBlock: 1000 });
+        const verifyUrls = [];
+        const fetchImpl = async (url) => {
+            if (url.includes('/api/anchors/'))
+                return { ok: true, status: 200, json: async () => ({ data: [a.record] }) };
+            if (url.includes('/api/checkpoint/')) {
+                verifyUrls.push(url);
+                return { ok: true, status: 200, json: async () => ({ validators: a.validators }) };
+            }
+            return { ok: false, status: 404, json: async () => ({}) };
+        };
+        const r = await light.fetchAnchoredCheckpoint({ explorerUrl: 'https://x', dogeCoin: 'TDOGE',
+            targetChain: 'LTC', targetCoin: 'TLTC', dogeTipHeight: 1200, minDepth: 60, fetchImpl });
+        assert.strictEqual(r.verified, true, r.reason);
+        assert.deepStrictEqual(verifyUrls, ['https://x/TLTC/api/checkpoint/100/verify']);
+    });
+
+    it('fetchAnchoredCheckpoint tier 1: an explicit set wins and never calls /verify', async function () {
+        const a = makeSignedSection({ dogeBlock: 1000 });
+        const seen = [];
+        const fetchImpl = async (url) => {
+            seen.push(url);
+            if (url.includes('/api/anchors/'))
+                return { ok: true, status: 200, json: async () => ({ data: [a.record] }) };
+            return { ok: false, status: 404, json: async () => ({}) };
+        };
+        // targetCoin present too, so the absence of a /verify call is the explicit
+        // set winning and not a missing coin prefix.
+        const r = await light.fetchAnchoredCheckpoint({ explorerUrl: 'https://x', dogeCoin: 'DOGE',
+            targetChain: CHAIN, targetCoin: COIN, validators: a.validators,
+            dogeTipHeight: 1200, minDepth: 60, fetchImpl });
+        assert.strictEqual(r.verified, true, r.reason);
+        assert.ok(!seen.some(u => u.includes('/api/checkpoint/')), 'tier 1 must not consult the explorer for the set');
+    });
+
+    it('fetchAnchoredCheckpoint tier 2: a pinned set wins over the explorer', async function () {
+        // Same no-silent-downgrade rule the proof paths follow: with an entry pinned
+        // for the target coin, /verify is never called.
+        const a = makeSignedSection({ dogeBlock: 1000 });
+        const seen = [], askedFor = [];
+        const fetchImpl = async (url) => {
+            seen.push(url);
+            if (url.includes('/api/anchors/'))
+                return { ok: true, status: 200, json: async () => ({ data: [a.record] }) };
+            // A hostile explorer offers a set that would NOT verify this checkpoint.
+            if (url.includes('/api/checkpoint/'))
+                return { ok: true, status: 200, json: async () => ({ validators: [{ pubkey: 'ff'.repeat(32), source: 'ff'.repeat(32), weight: '100' }] }) };
+            return { ok: false, status: 404, json: async () => ({}) };
+        };
+        const r = await light.fetchAnchoredCheckpoint({ explorerUrl: 'https://x', dogeCoin: 'DOGE',
+            targetChain: CHAIN, targetCoin: COIN, dogeTipHeight: 1200, minDepth: 60, fetchImpl,
+            pinnedResolver: (coin) => { askedFor.push(coin); return { checkpoint: a.cp, validators: a.validators }; } });
+        assert.deepStrictEqual(askedFor, [COIN], 'the pinned lookup keys on the TARGET coin');
+        assert.strictEqual(r.verified, true, r.reason);
+        assert.ok(!seen.some(u => u.includes('/api/checkpoint/')), 'a pinned coin must not be downgraded to the explorer set');
+    });
+
+    it('fetchAnchoredCheckpoint FAILS CLOSED when no tier can resolve a set', async function () {
+        // Nothing maps a chain plus network back to a coin prefix, so with no explicit
+        // set, nothing pinned and no targetCoin there is no set to resolve. Refuse,
+        // rather than guess a prefix or verify against an empty set.
+        const a = makeSignedSection({ dogeBlock: 1000 });
+        const seen = [];
+        const fetchImpl = async (url) => {
+            seen.push(url);
+            if (url.includes('/api/anchors/'))
+                return { ok: true, status: 200, json: async () => ({ data: [a.record] }) };
+            if (url.includes('/api/checkpoint/'))
+                return { ok: true, status: 200, json: async () => ({ validators: a.validators }) };
+            return { ok: false, status: 404, json: async () => ({}) };
+        };
+        const r = await light.fetchAnchoredCheckpoint({ explorerUrl: 'https://x', dogeCoin: 'DOGE',
+            targetChain: CHAIN, dogeTipHeight: 1200, minDepth: 60, fetchImpl });
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'CHECKPOINT_QUORUM_FAILED');
+        assert.ok(!seen.some(u => u.includes('/api/checkpoint/')),
+            'with no coin prefix there is no /verify URL to build, so none may be guessed');
+    });
+
+    it('fetchAnchoredCheckpoint still REJECTS a resolved set that does not meet quorum', async function () {
+        // The ladder resolves a set; it does not bless one. An explorer that names a
+        // set which did not sign this checkpoint must still fail quorum.
+        const a = makeSignedSection({ dogeBlock: 1000 });
+        const other = makeSignedSection({ dogeBlock: 1000 });
+        const fetchImpl = async (url) => {
+            if (url.includes('/api/anchors/'))
+                return { ok: true, status: 200, json: async () => ({ data: [a.record] }) };
+            if (url.includes('/api/checkpoint/'))
+                return { ok: true, status: 200, json: async () => ({ validators: other.validators }) };
+            return { ok: false, status: 404, json: async () => ({}) };
+        };
+        const r = await light.fetchAnchoredCheckpoint({ explorerUrl: 'https://x', dogeCoin: 'DOGE',
+            targetChain: CHAIN, targetCoin: COIN, dogeTipHeight: 1200, minDepth: 60, fetchImpl });
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'CHECKPOINT_QUORUM_FAILED');
+        assert.strictEqual(r.quorum, 1);                        // a 1-entry set, no signature of it valid
+    });
+
     it('a DOGE-anchored checkpoint then binds a balance proof via trustedCheckpoint', async function () {
         const { proof, stateRoot } = buildBalanceProof(ADDR_A, TICK, '7');
         const a = makeSignedSection({ stateRoot, dogeBlock: 1000 });

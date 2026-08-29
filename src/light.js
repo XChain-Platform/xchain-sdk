@@ -62,10 +62,15 @@ function _fetch(impl){
 // { checkpoint, validators }: the launch checkpoint (committed state_root, the
 // seed for rotation-following) plus the set that signed it. `pinnedResolver` is
 // a test/override seam over the shipped registry.
-function _pinnedEntry(opts){
+//
+// `coin` names the registry key to look up. It defaults to opts.coin, which is
+// the right key for every proof call, but the anchor cold start reads a DOGE
+// endpoint for a checkpoint belonging to ANOTHER chain, so that caller passes
+// the target chain's coin prefix explicitly.
+function _pinnedEntry(opts, coin){
     if (opts.validators || opts.trustedCheckpoint) return null;
     const resolve = opts.pinnedResolver || pinned.getPinnedCheckpoint;
-    return resolve(opts.coin) || null;
+    return resolve(coin === undefined ? opts.coin : coin) || null;
 }
 // Trailing slashes trimmed by loop rather than /\/+$/: the quantified group
 // backtracks polynomially on a long run of slashes in a caller-supplied URL.
@@ -343,14 +348,18 @@ function _no(reason){ return { verified: false, amount: null, reason: reason }; 
 // (convenience, weaker: trusts the explorer for the SET, still verifies sigs +
 // quorum locally). Returns the verifyCheckpoint result.
 async function _verifyQuorum(f, explorerUrl, coin, cp, suppliedValidators){
-    let validators = suppliedValidators;
-    if (!validators){
-        let url = _base(explorerUrl) + '/' + encodeURIComponent(String(coin)) +
-                  '/api/checkpoint/' + encodeURIComponent(String(cp.block_index)) + '/verify';
-        let vb = await _json(f, url);
-        validators = (vb && vb.validators) || [];
-    }
+    const validators = suppliedValidators || await _explorerValidators(f, explorerUrl, coin, cp);
     return checkpoint.verifyCheckpoint(cp, validators);
+}
+
+// Tier 3 of the ladder on its own: ask the explorer which set qualifies for `cp`
+// under the coin prefix `coin`. Trusts the explorer for the SET only; the caller
+// still checks signatures and quorum locally. Transport failures throw.
+async function _explorerValidators(f, explorerUrl, coin, cp){
+    const url = _base(explorerUrl) + '/' + encodeURIComponent(String(coin)) +
+                '/api/checkpoint/' + encodeURIComponent(String(cp.block_index)) + '/verify';
+    const vb = await _json(f, url);
+    return (vb && vb.validators) || [];
 }
 
 // Resolve a served checkpoint `cp` to a quorum verdict. Order of trust:
@@ -388,6 +397,31 @@ async function _resolveQuorum(f, opts, cp){
             return { valid: true, quorum: null, weighted: null };
     }
     return { valid: false, quorum: null, weighted: null };
+}
+
+// The same ladder, but returning the SET instead of a verdict, for the caller
+// that must hand a set to a verifier which owns the quorum decision itself (the
+// DOGE-anchor cold start, whose verifier also gates burial depth and the signed
+// commitment fields). Order matches _resolveQuorum: explicit set, then the
+// pinned launch set for `coin`, then the explorer's /verify set.
+//
+// `coin` is the explorer coin prefix of the chain the CHECKPOINT belongs to,
+// which is not always opts.coin. Returns null when no tier can name a set:
+// callers must treat that as a quorum failure, never as an empty set, because
+// verifyCheckpoint reads an empty qualified set as quorum 1 and then fails every
+// checkpoint closed with a misleading count.
+//
+// A pinned entry without a usable set also returns null rather than falling
+// through to /verify, for the reason _resolveQuorum never falls through either:
+// a coin whose trust root is pinned must not be silently downgraded to the
+// explorer's word. Transport failures propagate (throw).
+async function _resolveValidatorSet(f, opts, cp, coin){
+    if (opts.validators) return opts.validators;
+    const entry = _pinnedEntry(opts, coin);
+    if (entry)
+        return (Array.isArray(entry.validators) && entry.validators.length) ? entry.validators : null;
+    if (coin == null || String(coin) === '') return null;
+    return _explorerValidators(f, opts.explorerUrl, coin, cp);
 }
 
 // ── Public network API ────────────────────────────────────────────────────────
@@ -762,6 +796,12 @@ function verifyAnchoredCheckpoint(opts){
 // boundary. `depthSource` on the result reports which tier ran ('caller' or
 // 'explorer'); pass requireTrustedDepth to refuse the convenience tier outright
 // (reason UNTRUSTED_DOGE_DEPTH) rather than accept a depth nobody proved.
+//
+// THE SIGNER SET follows the same ladder as every other network call
+// (_resolveValidatorSet). `targetCoin` names the explorer coin prefix of
+// `targetChain` for the pinned lookup and the /verify fetch; omit it only when
+// `validators` is supplied, since without either the call fails closed with
+// CHECKPOINT_QUORUM_FAILED.
 async function fetchAnchoredCheckpoint(opts){
     opts = opts || {};
     const f = _fetch(opts.fetchImpl);
@@ -794,8 +834,21 @@ async function fetchAnchoredCheckpoint(opts){
     const anchorHeight = (txHeight != null) ? txHeight : rec.block_index_doge;
     const confirmations = (tip != null && anchorHeight != null)
         ? (Number(tip) - Number(anchorHeight) + 1) : NaN;
-    const res = verifyAnchoredCheckpoint({ checkpoint: anchorToCheckpoint(rec), validators: opts.validators,
-        confirmations, minDepth });
+    const cp = anchorToCheckpoint(rec);
+    // Resolve the signer set through the SAME ladder every other network entry
+    // point uses. Handing verifyAnchoredCheckpoint `opts.validators` raw meant a
+    // caller that supplied none was verified against an empty set, which reads as
+    // quorum 1 and fails a checkpoint the explorer's own set clears 4-of-5.
+    //
+    // The ladder keys on `targetCoin`, not the DOGE coin above: the anchor is read
+    // off DOGE, but the checkpoint inside it belongs to the target chain, so the
+    // pinned lookup and the /verify URL must both name the TARGET chain's explorer
+    // coin prefix. Nothing maps a chain plus network back to a coin, so with no
+    // explicit set, nothing pinned and no targetCoin, the set stays null and the
+    // call fails closed on quorum rather than guessing a prefix from the chain name.
+    const targetCoin = (opts.targetCoin == null || String(opts.targetCoin) === '') ? null : opts.targetCoin;
+    const validators = await _resolveValidatorSet(f, opts, cp, targetCoin);
+    const res = verifyAnchoredCheckpoint({ checkpoint: cp, validators, confirmations, minDepth });
     return Object.assign({}, res, { anchor: rec, dogeTxid: rec.tx_hash || null, depthSource });
 }
 
