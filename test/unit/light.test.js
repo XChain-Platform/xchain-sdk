@@ -672,7 +672,7 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
         const spki = publicKey.export({ format: 'der', type: 'spki' });
         return { privateKey, pubkeyHex: spki.subarray(spki.length - 32).toString('hex') };
     }
-    // One SIGNED v7 section (state_root threaded in so it can bind a balance proof),
+    // One SIGNED v0 section (state_root threaded in so it can bind a balance proof),
     // returned as the checkpoint object, the section's wire fragment, the explorer
     // section row and the qualifying validator set. `network` is a parameter so the
     // header-network rule can be exercised: the signature covers the canonical built
@@ -699,7 +699,7 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
             cp.block_merkle_root, cp.block_merkle_version, sigs.length, sigs[0].pubkey, sigs[0].sig];
         // The explorer serves one row PER SECTION, each carrying the header network.
         const record = {
-            version: 7, chain: cp.chain, network: cp.network, block_index: cp.block_index, block_hash: cp.block_hash,
+            version: 0, chain: cp.chain, network: cp.network, block_index: cp.block_index, block_hash: cp.block_hash,
             ledger_hash: cp.ledger_hash, actions_hash: cp.actions_hash, contract_hash: cp.contract_hash,
             checkpoint_seq: cp.checkpoint_seq, snapshot_block: cp.snapshot_block,
             state_root: cp.state_root, state_root_version: cp.state_root_version,
@@ -710,21 +710,21 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
         return { cp, sigs, validators, fields, record };
     }
 
-    // A whole v7 bundle: header, sections CHAIN-ascending, publisher tail.
+    // A whole v0 bundle: header, sections CHAIN-ascending, publisher tail.
     function makeSignedBundle(sections, headerNetwork) {
         const ordered = sections.slice().sort((a, b) => (a.cp.chain < b.cp.chain ? -1 : a.cp.chain > b.cp.chain ? 1 : 0));
         const publisher = 'ab'.repeat(32);
-        const parts = ['7', headerNetwork || NET, 100, ordered.length];
+        const parts = ['0', headerNetwork || NET, 100, ordered.length];
         for (const s of ordered) parts.push(...s.fields);
         parts.push(publisher, 0);
         return { wire: parts.join('|'), publisher, ordered };
     }
 
-    it('parseAnchorV7 splits the FROZEN vector into its three sections', function () {
+    it('parseAnchorV0 splits the FROZEN vector into its three sections', function () {
         if (!fs.existsSync(VECTOR_FILE)) { missingSibling('the frozen ANCHOR vector at ' + VECTOR_FILE); return this.skip(); }
         const vec = JSON.parse(fs.readFileSync(VECTOR_FILE, 'utf8'));
-        const b = light.parseAnchorV7(vec.vectors.v7);
-        assert.strictEqual(b.version, 7);
+        const b = light.parseAnchorV0(vec.vectors.v0);
+        assert.strictEqual(b.version, 0);
         assert.strictEqual(b.network, vec.fixture.bundle.network);
         assert.strictEqual(b.snapshot_block, vec.fixture.bundle.snapshot_block);
         assert.strictEqual(b.section_count, 3);
@@ -752,10 +752,10 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
         assert.strictEqual(b.publisher_attestations.length, vec.fixture.bundle.attest_sigs.length);
     });
 
-    it('every v7 section takes NETWORK from the HEADER, never from the section', function () {
+    it('every v0 section takes NETWORK from the HEADER, never from the section', function () {
         if (!fs.existsSync(VECTOR_FILE)) { missingSibling('the frozen ANCHOR vector at ' + VECTOR_FILE); return this.skip(); }
         const vec = JSON.parse(fs.readFileSync(VECTOR_FILE, 'utf8'));
-        const b = light.parseAnchorV7(vec.vectors.v7);
+        const b = light.parseAnchorV0(vec.vectors.v0);
         for (const s of b.sections)
             assert.strictEqual(s.network, vec.fixture.bundle.network, s.chain + ' must carry the header network');
         // The rule is load-bearing, not cosmetic: the per-chain canonical the validators
@@ -763,19 +763,51 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
         // blank) verifies a DIFFERENT string than the one that was signed.
         const s = makeSignedSection({ chain: 'LTC' });
         const { wire } = makeSignedBundle([s], NET);
-        const sec = light.anchorBundleSection(light.parseAnchorV7(wire), 'LTC');
+        const sec = light.anchorBundleSection(light.parseAnchorV0(wire), 'LTC');
         assert.strictEqual(checkpoint.verifyCheckpoint(sec, s.validators).valid, true);
-        const wrong = light.anchorBundleSection(light.parseAnchorV7(wire.replace('7|' + NET + '|', '7|testnet|')), 'LTC');
+        const wrong = light.anchorBundleSection(light.parseAnchorV0(wire.replace('0|' + NET + '|', '0|testnet|')), 'LTC');
         assert.strictEqual(wrong.network, 'testnet');
         assert.strictEqual(checkpoint.verifyCheckpoint(wrong, s.validators).valid, false,
             'a section canonicalized with the wrong network must not verify');
+    });
+
+    it('fetchAnchoredCheckpoint retrieves the LTC section off the FROZEN v0 vector (AT3, offline)', async function () {
+        if (!fs.existsSync(VECTOR_FILE)) { missingSibling('the frozen ANCHOR vector at ' + VECTOR_FILE); return this.skip(); }
+        const vec = JSON.parse(fs.readFileSync(VECTOR_FILE, 'utf8'));
+        const b = light.parseAnchorV0(vec.vectors.v0);
+        // Explorer serves one row PER SECTION under v0 (§2.4); reproduce that shape from
+        // the parsed bundle so the fetch path is exercised end to end, not just the parser.
+        const rows = b.sections.map(s => Object.assign({ version: b.version, tx_hash: 'fixturetx', block_index_doge: 2000 }, s));
+        let calledUrl = null;
+        const fetchImpl = async (url) => {
+            calledUrl = url;
+            return { ok: true, status: 200, json: async () => rows };
+        };
+        const r = await light.fetchAnchoredCheckpoint({ explorerUrl: 'https://x', dogeCoin: 'RDOGE',
+            targetChain: 'LTC', targetCoin: 'RLTC', validators: [], dogeTipHeight: 2100, minDepth: 1, fetchImpl });
+        assert.match(calledUrl, /\/RDOGE\/api\/anchors\/LTC\/chain$/, 'must query the TARGET chain, off the DOGE explorer');
+        // The row returned is the LTC section specifically, not BTC/DOGE, and every
+        // field survived parse -> explorer-row shape -> anchorToCheckpoint byte-identical
+        // to the frozen fixture (this is the mechanism AT3 exercises on the live stack).
+        const ltcFixture = vec.fixture.bundle.sections.find(s => s.chain === 'LTC');
+        assert.strictEqual(r.anchor.chain, 'LTC');
+        assert.strictEqual(r.checkpoint.block_index, ltcFixture.block_index);
+        assert.strictEqual(r.checkpoint.checkpoint_seq, ltcFixture.checkpoint_seq);
+        assert.strictEqual(r.checkpoint.state_root, ltcFixture.state_root);
+        assert.strictEqual(r.checkpoint.block_merkle_root, ltcFixture.block_merkle_root);
+        // The frozen vector's signatures are fixture placeholders, not real signatures
+        // over a real validator set, so quorum fails; reaching CHECKPOINT_QUORUM_FAILED
+        // (rather than NO_ROOT_ANCHOR / MALFORMED_ROOT / ROOTS_NOT_SIGNED) proves the
+        // section cleared retrieval, filtering and root-shape checks first.
+        assert.strictEqual(r.verified, false);
+        assert.strictEqual(r.reason, 'CHECKPOINT_QUORUM_FAILED');
     });
 
     it('anchorBundleSection picks a chain and returns null for a chain the bundle omits', function () {
         const btc = makeSignedSection({ chain: 'BTC' });
         const ltc = makeSignedSection({ chain: 'LTC' });
         const { wire } = makeSignedBundle([ltc, btc], NET);
-        const b = light.parseAnchorV7('ANCHOR|' + wire);              // leading ANCHOR| tolerated
+        const b = light.parseAnchorV0('ANCHOR|' + wire);              // leading ANCHOR| tolerated
         assert.deepStrictEqual(b.sections.map(s => s.chain), ['BTC', 'LTC']);
         assert.strictEqual(light.anchorBundleSection(b, 'ltc').checkpoint_seq, 7);
         assert.strictEqual(light.anchorBundleSection(b, 'BTC').chain, 'BTC');
@@ -784,15 +816,15 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
         assert.strictEqual(light.anchorBundleSection(wire, 'LTC').chain, 'LTC');   // raw wire accepted
     });
 
-    it('parseAnchorV7 REFUSES the retired v0/v3/v4/v5 anchor versions', function () {
-        for (const v of ['0', '3', '4', '5'])
-            assert.throws(() => light.parseAnchorV7(v + '|BTC|regtest|1'), /not an ANCHOR bundle/, 'v' + v + ' must be refused');
-        assert.throws(() => light.parseAnchorV7('7|regtest|100|0'), /bad ANCHOR SECTION_COUNT/);
-        assert.throws(() => light.parseAnchorV7('7|regtest|100|2|BTC|1|aa|bb|cc|dd|1|100|ee|1|ff|1|1|pk|sig'),
+    it('parseAnchorV0 REFUSES the retired v3/v4/v5 and superseded v7 anchor versions', function () {
+        for (const v of ['3', '4', '5', '7'])
+            assert.throws(() => light.parseAnchorV0(v + '|BTC|regtest|1'), /not an ANCHOR bundle/, 'v' + v + ' must be refused');
+        assert.throws(() => light.parseAnchorV0('0|regtest|100|0'), /bad ANCHOR SECTION_COUNT/);
+        assert.throws(() => light.parseAnchorV0('0|regtest|100|2|BTC|1|aa|bb|cc|dd|1|100|ee|1|ff|1|1|pk|sig'),
             /truncated ANCHOR section 1/);
     });
 
-    it('a v7 LTC section verifies through verifyAnchoredCheckpoint (AT2, offline)', function () {
+    it('a v0 LTC section verifies through verifyAnchoredCheckpoint (AT2, offline)', function () {
         const ltc = makeSignedSection({ chain: 'LTC' });
         const doge = makeSignedSection({ chain: 'DOGE' });
         const btc = makeSignedSection({ chain: 'BTC' });
@@ -874,7 +906,7 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
         assert.strictEqual(r.reason, 'MALFORMED_ROOT');
     });
 
-    it('fetchAnchoredCheckpoint picks the newest v7 section row and verifies depth + quorum', async function () {
+    it('fetchAnchoredCheckpoint picks the newest v0 section row and verifies depth + quorum', async function () {
         const a = makeSignedSection({ dogeBlock: 1000 });
         // an older, lower-seq anchor that should be ignored in favor of the newest
         const fetchImpl = async (url) => {
@@ -907,16 +939,16 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
                 targetChain: CHAIN, validators: a.validators, dogeTipHeight: 1200, minDepth: 60, fetchImpl });
             assert.strictEqual(r.verified, false, 'v' + version + ' must not verify');
             assert.strictEqual(r.reason, 'NO_ROOT_ANCHOR');
-            // Control: the identical row at version 7 is accepted, so the refusal is the
+            // Control: the identical row at version 0 is accepted, so the refusal is the
             // version gate and not some other property of the fixture.
-            a.record.version = 7;
+            a.record.version = 0;
             const ok = await light.fetchAnchoredCheckpoint({ explorerUrl: 'https://x', dogeCoin: 'DOGE',
                 targetChain: CHAIN, validators: a.validators, dogeTipHeight: 1200, minDepth: 60, fetchImpl });
             assert.strictEqual(ok.verified, true, ok.reason);
         }
     });
 
-    it('fetchAnchoredCheckpoint keeps its per-chain filter over v7 section rows', async function () {
+    it('fetchAnchoredCheckpoint keeps its per-chain filter over v0 section rows', async function () {
         // A bundle reaches the explorer as one row per section sharing an action_index,
         // so the chain filter selects the section and needs no bundle awareness.
         const btc = makeSignedSection({ chain: 'BTC', dogeBlock: 1000 });

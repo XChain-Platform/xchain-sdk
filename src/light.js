@@ -612,43 +612,58 @@ async function verifyAction(opts){
 
 // ── DOGE-anchor cold-start trust (spec §7.2 b / D4) ───────────────────────────
 // A client with no prior trust root bootstraps from the on-chain ANCHOR: read the
-// latest root-bearing ANCHOR v7 bundle off DOGE, confirm it is buried under a
+// latest root-bearing ANCHOR v0 bundle off DOGE, confirm it is buried under a
 // chosen PoW depth, and adopt the quorum-signed checkpoint of the section for the
 // chain it cares about. Trust still bottoms out at the federation quorum (the DOGE
 // PoW only hardens delivery/timing, §7.4); the SDK has no DOGE backend, so the
 // caller supplies the confirmation depth from its own DOGE source.
 
-// ANCHOR v7 is the checkpoint BUNDLE: one anchor per network per cycle carrying
-// every chain's checkpoint as a section (spec anchor-bundle-per-network §2.1):
+// The single-wire ANCHOR family (anchor-v0-single-wire spec §2.1) is three
+// version-disjoint shapes on one wire:
 //
-//   ANCHOR|7|NETWORK|SNAPSHOT_BLOCK|SECTION_COUNT
-//     {CHAIN|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH
-//      |CHECKPOINT_SEQ|SECTION_SNAPSHOT_BLOCK|STATE_ROOT|STATE_ROOT_VERSION
-//      |BLOCK_MERKLE_ROOT|BLOCK_MERKLE_VERSION|SIG_COUNT|(PUBKEY|SIG)...} x N
-//     |PUBLISHER|ATTEST_SIG_COUNT|(APUBKEY|ASIG)...
+//   v0 is the checkpoint BUNDLE: one anchor per network per cycle carrying every
+//   chain's checkpoint as a section (this is what parseAnchorV0 below parses;
+//   this constant was ANCHOR_BUNDLE_VERSION = 7 before the 2026-08-30 flag day):
+//
+//     ANCHOR|0|NETWORK|SNAPSHOT_BLOCK|SECTION_COUNT
+//       {CHAIN|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH
+//        |CHECKPOINT_SEQ|SECTION_SNAPSHOT_BLOCK|STATE_ROOT|STATE_ROOT_VERSION
+//        |BLOCK_MERKLE_ROOT|BLOCK_MERKLE_VERSION|SIG_COUNT|(PUBKEY|SIG)...} x N
+//       |PUBLISHER|ATTEST_SIG_COUNT|(APUBKEY|ASIG)...
+//
+//   v1 is the archive head plus its publisher tail (ATTEST_SIG_COUNT MAY be 0 on
+//   a degraded round); v2 is an archive continuation chunk. Neither carries an SPV
+//   checkpoint, so the light client SKIPS both: only v0 bundle rows are ever
+//   passed to parseAnchorV0 or accepted by the fetchAnchoredCheckpoint filter.
+//
+//   ACTIVATION: an ANCHOR of any version mined below ANCHOR_ACTIVATION[network]
+//   (protocol/constants.js; { mainnet: 0, testnet: 67858600, regtest: 0 }) is
+//   invalid on the wire and never reaches this parser; at/above it only 0/1/2
+//   exist. The SDK trusts the indexer/explorer to have already applied that gate.
 //
 // Sections are variable-width (their signature lists differ), so the bundle is
 // walked with a cursor rather than read at the fixed offsets the retired v3/v5
-// single-chain wires allowed. Versions 0/3/4/5 are RETIRED (D2, pre-launch: the
-// hub no longer emits them and the indexer no longer parses them).
-const ANCHOR_BUNDLE_VERSION = 7;
+// single-chain wires allowed. Versions 1/2 are skipped as above; the pre-launch
+// v0/v3/v4/v5 per-chain wires (a disjoint, now-retired numbering that predates
+// this family, D2) are refused by the version check below.
+const ANCHOR_BUNDLE_VERSION = 0;
 
-// Parse an ANCHOR v7 bundle wire string (optional leading "ANCHOR|") into
+// Parse an ANCHOR v0 bundle wire string (optional leading "ANCHOR|") into
 // { version, network, snapshot_block, section_count, sections, publisher,
 //   publisher_attestations }, where each section is the checkpoint shape
 // sdk.checkpoint.verifyCheckpoint consumes. Pure; for callers who decode the raw
-// DOGE transaction themselves. Throws on a malformed / non-v7 string.
+// DOGE transaction themselves. Throws on a malformed / non-v0 string.
 //
 // A section omits NETWORK on the wire, so every section takes the HEADER network:
 // that is the string the signed per-chain canonical (XCHECKPOINT|CHAIN|NETWORK|...)
 // was built with, and taking it from anywhere else would verify a different
 // canonical than the validators signed.
-function parseAnchorV7(wire){
+function parseAnchorV0(wire){
     let p = String(wire || '').split('|');
     if (p.length && /^anchor$/i.test(p[0])) p = p.slice(1);
     const ver = String(p[0]);
     if (ver !== String(ANCHOR_BUNDLE_VERSION))
-        throw new Error('LightClient: not an ANCHOR bundle (need v7, got VERSION ' + p[0] + ')');
+        throw new Error('LightClient: not an ANCHOR bundle (need v0, got VERSION ' + p[0] + ')');
     const network = String(p[1] || '');
     const snapshotBlock = Number(p[2]);
     const count = parseInt(p[3], 10);
@@ -699,19 +714,19 @@ function parseAnchorV7(wire){
     };
 }
 
-// Pick one chain's section out of a parsed bundle (or a raw v7 wire) as the
+// Pick one chain's section out of a parsed bundle (or a raw v0 wire) as the
 // normalized checkpoint verifyAnchoredCheckpoint consumes. Returns null when the
 // bundle carries no section for that chain, which is the NORMAL daily case for a
 // chain that cut no new checkpoint (spec D4), not an error.
 function anchorBundleSection(bundle, chain){
-    const b = (typeof bundle === 'string') ? parseAnchorV7(bundle) : bundle;
+    const b = (typeof bundle === 'string') ? parseAnchorV0(bundle) : bundle;
     if (!b || !Array.isArray(b.sections)) throw new Error('LightClient: not a parsed ANCHOR bundle');
     const want = String(chain || '').toUpperCase();
     return b.sections.find(s => String(s.chain).toUpperCase() === want) || null;
 }
 
 // Normalize an explorer /api/anchors record (a full row) into the checkpoint shape.
-// Under v7 the explorer serves ONE row per section, each carrying its own chain,
+// Under v0 the explorer serves ONE row per section, each carrying its own chain,
 // the header network and its own roots and signatures, so this mapping is
 // unchanged from the one-anchor-per-chain era.
 function anchorToCheckpoint(a){
@@ -736,7 +751,7 @@ const ANCHOR_ROOT_RE    = /^[0-9a-f]{64}$/i;
 const ANCHOR_VERSION_RE = /^\d+$/;
 
 // Verify a DOGE-anchored checkpoint as a trust root. `checkpoint` is the normalized
-// object (a v7 section from anchorBundleSection, or anchorToCheckpoint on an
+// object (a v0 section from anchorBundleSection, or anchorToCheckpoint on an
 // explorer section row), which MUST carry the committed roots;
 // `confirmations` is the DOGE depth the caller obtained from its own DOGE source.
 // Returns { verified, reason, checkpoint, confirmations, minDepth, quorum, weighted }.
@@ -748,8 +763,8 @@ function verifyAnchoredCheckpoint(opts){
     const safeConf = Number.isFinite(confirmations) ? confirmations : 0;
     if (!cp) return { verified: false, reason: 'NO_CHECKPOINT', checkpoint: null, confirmations: 0, minDepth, quorum: null, weighted: null };
     const reject = (reason) => ({ verified: false, reason, checkpoint: cp, confirmations: safeConf, minDepth, quorum: null, weighted: null });
-    // Every v7 section is root-bearing by construction; a rootless row (the retired
-    // v0/v4 shape, or a section the hub should have skipped) cannot serve SPV trust.
+    // Every v0 section is root-bearing by construction; a rootless row (a pre-launch
+    // retired per-chain shape, or a section the hub should have skipped) cannot serve SPV trust.
     // Empty counts as absent: the parser maps a missing wire field to '', not null.
     // The reason string keeps its shipped NOT_A_V3_ANCHOR spelling: it is a public
     // result contract, and it still names the same condition (no committed roots).
@@ -781,7 +796,7 @@ function verifyAnchoredCheckpoint(opts){
 // Convenience: fetch the latest root-bearing ANCHOR section for `targetChain` from the
 // DOGE explorer, confirm its DOGE depth (caller supplies the tip via dogeTipHeight or
 // getDogeTipHeight), and verify it. Anchors are DOGE-only, so the list is served by the
-// DOGE explorer; each record's `chain` is the chain whose checkpoint it commits. A v7
+// DOGE explorer; each record's `chain` is the chain whose checkpoint it commits. A v0
 // bundle is served as one row PER SECTION, so the per-chain filter below is exactly the
 // one that ran when each chain had its own anchor. Returns the
 // verifyAnchoredCheckpoint result plus { anchor, dogeTxid, depthSource }.
@@ -811,9 +826,11 @@ async function fetchAnchoredCheckpoint(opts){
                 '/api/anchors/' + encodeURIComponent(String(opts.targetChain)) + '/chain';
     const body = await _json(f, url);
     let rows = Array.isArray(body) ? body : ((body && (body.data || body.results || body.rows)) || []);
-    // v7 section rows only. Versions 0/3/4/5 are retired (D2) and are refused here
-    // rather than filtered by root presence, so a replayed pre-launch anchor cannot
-    // serve as a trust root; the state_root check still guards a malformed section.
+    // v0 section rows only (the checkpoint bundle, spec anchor-v0-single-wire §2.1);
+    // v1 (archive head) and v2 (chunk) carry no SPV checkpoint and are skipped here,
+    // as is any pre-launch retired per-chain shape, rather than filtered by root
+    // presence, so a replayed pre-launch anchor cannot serve as a trust root; the
+    // state_root check still guards a malformed section.
     rows = rows.filter(r => r && Number(r.version) === ANCHOR_BUNDLE_VERSION && r.state_root &&
                             String(r.chain).toUpperCase() === String(opts.targetChain).toUpperCase());
     rows.sort((a, b) => Number(b.checkpoint_seq) - Number(a.checkpoint_seq));   // newest checkpoint first
@@ -1029,7 +1046,7 @@ module.exports = {
     verifyBalance,
     verifyLockedBalance,
     verifyAction,
-    parseAnchorV7,
+    parseAnchorV0,
     anchorBundleSection,
     anchorToCheckpoint,
     verifyAnchoredCheckpoint,
