@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-08-30
+
+### Added
+- The light client reads the checkpoint bundle on version 0.
+- An unconfirmed-transaction subscription surface, with refcounted subscriptions.
+
+### Fixed
+- Both published packages carry one version, and the dependency range says so.
+- The anchored-checkpoint path resolves its validator set through the trust ladder.
+- A subscription teardown releases the subscription it opened.
+- TRANSFER_SUPPLY is an address, and the confirm screen says so.
+
+### Changed
+- Price batches are version 0, and the per-round wire is retired.
+- The vendored action manifest carries the roll call.
+
 ## [0.12.0] - 2026-08-28
 
 ### Changed
