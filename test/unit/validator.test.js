@@ -1951,3 +1951,44 @@ describe('Validator: FILE GATE_MIN_AMOUNT (PC-29)', function () {
         });
     });
 });
+
+// TRANSFER_SUPPLY: an ADDRESS, never a quantity
+
+describe('Validator: TRANSFER_SUPPLY is an address field', function () {
+
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    // TRANSFER_SUPPLY names the address ISSUE credits MINT_SUPPLY to, and both
+    // addressRefFields.js and the indexer treat it that way. It was ALSO listed
+    // among the numeric AMOUNT fields, so every real address failed the numeric
+    // rule and owner issue-and-transfer could not be composed through the SDK.
+    it('accepts a real address, which the numeric rule used to reject', function () {
+        const errors = v.validate('ISSUE', {
+            TICK:            'MYTOKEN',
+            MINT_SUPPLY:     '1000',
+            TRANSFER_SUPPLY: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh'
+        });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('rejects a value that is not an address', function () {
+        const errors = v.validate('ISSUE', {
+            TICK:            'MYTOKEN',
+            MINT_SUPPLY:     '1000',
+            TRANSFER_SUPPLY: 'not-an-address'
+        });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    // A ^<id> compacted reference is resolved later by the indexer, so the
+    // address check is skipped for it exactly as it is for TRANSFER.
+    it('accepts a compacted ^<id> reference without an address check', function () {
+        const errors = v.validate('ISSUE', {
+            TICK:            'MYTOKEN',
+            MINT_SUPPLY:     '1000',
+            TRANSFER_SUPPLY: '^42'
+        });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+});

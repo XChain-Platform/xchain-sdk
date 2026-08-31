@@ -23,9 +23,13 @@ const Validator         = require('./validator.js');
 const { getNetwork }    = require('./networks.js');
 const { SDKValidationError, SDKContractError } = require('./errors.js');
 
-// Encoding byte limits for pre-flight validation
+// Encoding byte limits for pre-flight validation. Only P2SH is read from this
+// table today (the oversize suggestion below); the OP_RETURN gate is
+// compiledPushSize()-based in _validateEncoding, so the entry here is kept in
+// step with that rule rather than left at the old raw 80-4 figure, which is
+// where src/preflight/constants.js copied its off-by-one from.
 const ENCODING_LIMITS = {
-    OP_RETURN:  76,   // 80 - 4 byte magic word (XCHN)
+    OP_RETURN:  75,   // 80 - 4 byte magic word (XCHN) - 1 byte compiled push prefix
     MULTISIGN:  60,   // 60 bytes of data per chunk (data split across 2 fake pubkeys)
     P2SH:       476,  // 520 - 44 byte script overhead
     P2WSH:      476   // 520 - 44 byte script overhead per chunk (MAX_SCRIPT_ELEMENT_SIZE bound)

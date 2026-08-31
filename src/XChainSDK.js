@@ -91,9 +91,28 @@ const chunkHelper = require('./chunkHelper.js');
  * carry the field before this guard can honour it.
  */
 
-// The address fields an explorer frame can name its party in, mirroring
+// The SINGULAR address fields an explorer frame can name its party in, mirroring
 // Broadcaster._extractAddresses on the server side.
+//
+// `destination` stays on this list even though the confirmed-side NEW_ACTION
+// retired it in favour of the `destinations` array below. Two reasons, both
+// about what the SERVER still does: _extractAddresses reads `destination` to
+// this day and routes every lifecycle frame by it, and this guard filters on
+// positive evidence a frame belongs to SOMEONE ELSE. Dropping the field could
+// therefore only ADD deliveries, handing a subscriber a frame whose only named
+// party is a different address; keeping it costs nothing, because a frame that
+// does not carry the field is unaffected by a rule about the field.
 const FRAME_ADDRESS_FIELDS = ['address', 'source', 'destination', 'payer_address', 'payee_address'];
+
+// The ARRAY address field. Mempool frames on an address channel name their
+// recipients only here (`{tx_hash, source, action, data, first_seen,
+// destinations}`), and M1.4's NEW_ACTION uses the same field and semantics, so
+// a guard that walked the singular fields alone rejected a correctly-routed
+// delivery to the RECIPIENT: the frame names `source`, the source is not the
+// subscriber, and "named by someone else" is a rejection. Absent on the GLOBAL
+// mempool channel's frames by design (the matched set is derived from the
+// server's own subscriber list), so it is never assumed present.
+const FRAME_ADDRESS_ARRAY_FIELD = 'destinations';
 
 /*
  * Every frame type the explorer routes to an address channel.
@@ -117,6 +136,12 @@ const FRAME_ADDRESS_FIELDS = ['address', 'source', 'destination', 'payer_address
 // change delivery for all of them.
 const ADDRESS_EVENT_TYPES = Object.freeze([
     'NEW_ACTION', 'ADDRESS_UPDATE',
+    // Unconfirmed (pre-validation) frames, Broadcaster-level like the two above
+    // and likewise absent from the ChannelManager's `types` subscribe
+    // vocabulary. Until they were listed here onAddress registered no handler
+    // for them, so the explorer sent them over the open socket and the client
+    // dropped them silently: the exact failure the comment above describes.
+    'MEMPOOL_ACTION', 'MEMPOOL_REMOVED',
     'ORDER_MATCH', 'ORDER_EXPIRED',
     'COINPAY_REQUIRED', 'COINPAY_FULFILLED', 'COINPAY_EXPIRED',
     'SWAP_MATCH', 'SWAP_EXPIRED',
@@ -125,9 +150,50 @@ const ADDRESS_EVENT_TYPES = Object.freeze([
     'ATTESTATION_REQUEST', 'ATTESTATION_RESPONSE'
 ]);
 
+// The unconfirmed subset of the roster above, registered by onMempoolAction.
+// MEMPOOL_REMOVED rides along because a consumer that is shown a pending entry
+// has to be told when it leaves the mempool (confirmed or evicted, which the
+// explorer cannot distinguish); without it a phantom row never reconciles away.
+// Frozen for the same reason as ADDRESS_EVENT_TYPES: it is exported.
+const MEMPOOL_EVENT_TYPES = Object.freeze(['MEMPOOL_ACTION', 'MEMPOOL_REMOVED']);
+
 // Canonical decimal action_index, mirroring the explorer ChannelManager's
 // CANONICAL_INDEX: no sign, no leading zeros, no fraction, no trailing junk.
 const CANONICAL_ACTION_INDEX = /^(0|[1-9][0-9]*)$/;
+
+// Wrap a teardown closure so it releases its subscription AT MOST ONCE.
+//
+// ws.subscribe/unsubscribe are refcounted, so a second call on the same teardown
+// decrements a count another holder still relies on and ends SOMEONE ELSE'S
+// delivery, with no error anywhere. Unbalanced callers are ordinary (a cleanup
+// that also runs on an error path, a component that tears down twice), so every
+// on* teardown this module hands out goes through here.
+function oneShotTeardown(fn) {
+    let released = false;
+    return () => {
+        if (released) return;
+        released = true;
+        fn();
+    };
+}
+
+// Every on* helper below captures its subscribe params in ONE object and hands
+// that SAME object to ws.unsubscribe.
+//
+// WebSocketClient tracks a subscription under the exact (channels, params) pair
+// and matches a release against it by the JSON of both, so a teardown that
+// rebuilds params in a different shape releases nothing: the replay entry keeps
+// a live refcount, the server unsubscribe is never sent, and the channel is
+// re-subscribed on every reconnect for the life of the client. Sharing one
+// object makes the two sides structurally identical instead of leaving them a
+// convention that a single edit to the subscribe shape can break.
+//
+// Non-entity params (`types`, `snapshot`) ride along on the unsubscribe frame
+// harmlessly. The explorer's ChannelManager.unsubscribe resolves an entity
+// channel from the entity fields alone (address/addresses, tick, tick1+tick2,
+// action_index) and builds no filter object at all, and a global channel is
+// released by name with params untouched. The frame therefore names exactly the
+// subscription the subscribe opened, and nothing else.
 
 function frameData(msg) {
     return (msg && typeof msg === 'object' && msg.data && typeof msg.data === 'object') ? msg.data : null;
@@ -137,6 +203,22 @@ function frameIsForAddress(msg, address) {
     const data = frameData(msg);
     if (!data) return true;
     let named = false;
+
+    // The array field first, because it is the only one that names the RECIPIENT
+    // of an unconfirmed transaction. An EMPTY array deliberately does not count
+    // as "named": it names nobody, so letting it set the flag would flip the
+    // fail-open rule above into a rejection for a frame that identifies no party
+    // at all (the global-channel mempool shape, which carries no destinations key
+    // whatsoever, takes the same path).
+    const destinations = data[FRAME_ADDRESS_ARRAY_FIELD];
+    if (Array.isArray(destinations)) {
+        for (const value of destinations) {
+            if (value === undefined || value === null || value === '') continue;
+            named = true;
+            if (value === address) return true;
+        }
+    }
+
     for (const field of FRAME_ADDRESS_FIELDS) {
         const value = data[field];
         if (value === undefined || value === null || value === '') continue;
@@ -1623,6 +1705,57 @@ class XChainSDK {
         return this._requireExplorer().getMempool(query, type, opts);
     }
 
+    // The unconfirmed transactions involving ONE address: the address-typed,
+    // wallet-facing read over the same /mempool/{query}/{type} route getMempool
+    // wraps. Returns a plain ARRAY of rows (never null, never a throw on an empty
+    // mempool), each:
+    //
+    //   { tx_hash, source, action, data, first_seen, destinations: string[] }
+    //
+    // Field names are the explorer's, VERBATIM, and are not camelCased on the way
+    // through: mempool rows, confirmed history rows and the wallet's own pending
+    // records are merged by the same keys downstream, and one renaming layer in
+    // the middle is how those three vocabularies drift apart.
+    //
+    // `first_seen` is UNIX SECONDS (not milliseconds) and is null against a
+    // decoder DB predating the first_seen migration, so a caller that needs a
+    // timestamp must have a fallback.
+    //
+    // `destinations` is additive, and here it can only ever hold the queried
+    // address: this is a REST read with no subscriber set behind it, so the one
+    // party the server attested to is the address that was asked about. The
+    // semantics match the WS frame's field exactly (matched parties, source
+    // excluded), which is what lets a caller derive direction the same way from a
+    // polled row and a live frame. It is empty when the row is the address's OWN
+    // transaction, i.e. `source` is the address.
+    //
+    // Deliberately NO `amounts` field: only SEND v0-v3 has a documented output
+    // layout, so per-output tuples cannot be produced honestly for every action
+    // and a partially-populated field would read as authoritative.
+    //
+    // WINDOW: the explorer prefilters a bounded 500-row window of the mempool
+    // (ordered by tx_hash, not by time), so on a busy chain an address's pending
+    // transaction can sit outside it and this returns []. Absence is not proof a
+    // transaction was dropped.
+    async getUnconfirmed(address, opts) {
+        // 100 matches the SDK's own existing mempool caller (x402's payment
+        // verifier) and sits well inside the explorer's 500-row window.
+        const options = Object.assign({ limit: 100 }, opts || {});
+        const res  = await this._requireExplorer().getMempool(address, 'address', options);
+        const rows = (res && Array.isArray(res.data)) ? res.data : [];
+        return rows.map((row) => ({
+            tx_hash:    row.tx_hash    === undefined ? null : row.tx_hash,
+            source:     row.source     === undefined ? null : row.source,
+            action:     row.action     === undefined ? null : row.action,
+            data:       row.data       === undefined ? null : row.data,
+            first_seen: row.first_seen === undefined ? null : row.first_seen,
+            // Compared exactly, with no case folding, because the server matched
+            // it that way: normalizing here would claim a match the explorer's
+            // own prefilter did not make.
+            destinations: (row.source === address) ? [] : [address]
+        }));
+    }
+
     // Network-wide summary (chain heights, indexer status, peer counts,
     // recommended finality confirmations). See ExplorerClient.getNetwork.
     async getNetwork(opts) {
@@ -1697,10 +1830,10 @@ class XChainSDK {
         const ws = this._requireWs();
         ws.on('NEW_BLOCK', callback);
         this._subscribeDetached(ws, ['blocks']);
-        return () => {
+        return oneShotTeardown(() => {
             ws.off('NEW_BLOCK', callback);
             ws.unsubscribe(['blocks']);
-        };
+        });
     }
 
     // Listen for new actions with optional type/status filters
@@ -1724,11 +1857,12 @@ class XChainSDK {
         // channel, the only one a ticks filter can attach to. Forwarding it let a caller
         // believe in a stream that never narrows; the server now reports it under
         // `ignored_filters`.
-        this._subscribeDetached(ws, ['actions'], Object.keys(params).length > 0 ? params : undefined);
-        return () => {
+        const subParams = Object.keys(params).length > 0 ? params : undefined;
+        this._subscribeDetached(ws, ['actions'], subParams);
+        return oneShotTeardown(() => {
             ws.off('NEW_ACTION', callback);
-            ws.unsubscribe(['actions']);
-        };
+            ws.unsubscribe(['actions'], subParams);
+        });
     }
 
     // Listen for events on a specific address
@@ -1758,11 +1892,51 @@ class XChainSDK {
 
         this._subscribeDetached(ws, ['address'], params);
 
-        return () => {
+        return oneShotTeardown(() => {
             for (const t of types) ws.off(t, onEvent);
             ws.off('SNAPSHOT', onSnapshot);
-            ws.unsubscribe(['address'], { address });
-        };
+            ws.unsubscribe(['address'], params);
+        });
+    }
+
+    // Listen for the UNCONFIRMED (pre-validation) transactions involving an
+    // address: MEMPOOL_ACTION when the decoder first sees one, MEMPOOL_REMOVED
+    // when it leaves the mempool. Returns an unsubscribe function.
+    //
+    // Frames are PRE-VALIDATION. The indexer can still reject the action at
+    // confirmation, and MEMPOOL_REMOVED cannot distinguish "confirmed" from
+    // "evicted", so a consumer reconciles against the confirmed NEW_ACTION feed
+    // rather than treating a removal as a result.
+    //
+    // Frame data:
+    //   MEMPOOL_ACTION  { tx_hash, source, action, data, first_seen, destinations[] }
+    //   MEMPOOL_REMOVED { tx_hash, source, destinations[] }
+    // `first_seen` is unix SECONDS and may be null. `destinations` is present on
+    // address-channel frames only; the global `mempool` channel omits it.
+    //
+    // This SHARES onAddress's subscription rather than opening a second one. Both
+    // subscribe ['address'] with the same `{ address }` params, so the refcount in
+    // WebSocketClient.subscribe makes them one server subscription and one
+    // reconnect-replay entry, and neither one's teardown ends the other's
+    // delivery. That is not just tidiness: the explorer's per-connection
+    // subscription cap (25 by default) is spent per subscribe, and a wallet opens
+    // one connection per chain, so a second subscription per address would halve
+    // the addresses it can watch.
+    onMempoolAction(address, callback) {
+        const ws = this._requireWs();
+        const onEvent = entityGuarded((msg) => frameIsForAddress(msg, address), callback);
+        for (const t of MEMPOOL_EVENT_TYPES) ws.on(t, onEvent);
+
+        // Bare `{ address }`, matching onAddress's default params exactly: the
+        // refcount key is (channels, params), so adding a filter here would open a
+        // separate subscription instead of joining the shared one.
+        const params = { address };
+        this._subscribeDetached(ws, ['address'], params);
+
+        return oneShotTeardown(() => {
+            for (const t of MEMPOOL_EVENT_TYPES) ws.off(t, onEvent);
+            ws.unsubscribe(['address'], params);
+        });
     }
 
     // Listen for token updates
@@ -1777,12 +1951,13 @@ class XChainSDK {
             }
         };
         ws.on('SNAPSHOT', onSnapshot);
-        this._subscribeDetached(ws, ['token'], { tick, snapshot: true });
-        return () => {
+        const params = { tick, snapshot: true };
+        this._subscribeDetached(ws, ['token'], params);
+        return oneShotTeardown(() => {
             ws.off('TOKEN_UPDATE', onUpdate);
             ws.off('SNAPSHOT', onSnapshot);
-            ws.unsubscribe(['token'], { tick });
-        };
+            ws.unsubscribe(['token'], params);
+        });
     }
 
     // Listen for market updates
@@ -1800,12 +1975,13 @@ class XChainSDK {
             }
         };
         ws.on('SNAPSHOT', onSnapshot);
-        this._subscribeDetached(ws, ['market'], { tick1, tick2, snapshot: true });
-        return () => {
+        const params = { tick1, tick2, snapshot: true };
+        this._subscribeDetached(ws, ['market'], params);
+        return oneShotTeardown(() => {
             ws.off('MARKET_UPDATE', onUpdate);
             ws.off('SNAPSHOT', onSnapshot);
-            ws.unsubscribe(['market'], { tick1, tick2 });
-        };
+            ws.unsubscribe(['market'], params);
+        });
     }
 
     // Listen for dispenser updates
@@ -1830,15 +2006,16 @@ class XChainSDK {
             }
         };
         ws.on('SNAPSHOT', onSnapshot);
-        this._subscribeDetached(ws, ['dispenser'], { action_index: actionIndex, snapshot: true });
-        return () => {
+        const params = { action_index: actionIndex, snapshot: true };
+        this._subscribeDetached(ws, ['dispenser'], params);
+        return oneShotTeardown(() => {
             ws.off('DISPENSER_UPDATE', onUpdate);
             ws.off('DISPENSE', onLifecycle);
             ws.off('DISPENSER_CLOSED', onLifecycle);
             ws.off('DISPENSER_EXPIRED', onLifecycle);
             ws.off('SNAPSHOT', onSnapshot);
-            ws.unsubscribe(['dispenser'], { action_index: actionIndex });
-        };
+            ws.unsubscribe(['dispenser'], params);
+        });
     }
 
     // Listen for one betting market's live events: bets placed, the deadline
@@ -1873,14 +2050,15 @@ class XChainSDK {
         // The channel NAME is bare and the market id rides in params: a composite
         // 'bet_feed:<index>' is rejected outright with `Unknown channel`, the same
         // trap documented on websocket.js subscribeBetFeed().
-        this._subscribeDetached(ws, ['bet_feed'], { action_index: index, snapshot: true });
-        return () => {
+        const params = { action_index: index, snapshot: true };
+        this._subscribeDetached(ws, ['bet_feed'], params);
+        return oneShotTeardown(() => {
             ws.off('BET', onLifecycle);
             ws.off('BET_EXPIRED', onLifecycle);
             ws.off('BET_CLOSED', onLifecycle);
             ws.off('SNAPSHOT', onSnapshot);
-            ws.unsubscribe(['bet_feed'], { action_index: index });
-        };
+            ws.unsubscribe(['bet_feed'], params);
+        });
     }
 
     // Listen for oracle attestation traffic (both phases) on the global
@@ -1895,11 +2073,11 @@ class XChainSDK {
         ws.on('ATTESTATION_REQUEST', callback);
         ws.on('ATTESTATION_RESPONSE', callback);
         this._subscribeDetached(ws, ['attestation']);
-        return () => {
+        return oneShotTeardown(() => {
             ws.off('ATTESTATION_REQUEST', callback);
             ws.off('ATTESTATION_RESPONSE', callback);
             ws.unsubscribe(['attestation']);
-        };
+        });
     }
 
     // Shortcut: listen for COINPAY_REQUIRED events on an address
@@ -1908,11 +2086,12 @@ class XChainSDK {
         const ws = this._requireWs();
         const onEvent = entityGuarded((msg) => frameIsForAddress(msg, address), callback);
         ws.on('COINPAY_REQUIRED', onEvent);
-        this._subscribeDetached(ws, ['address'], { address, types: ['COINPAY_REQUIRED'] });
-        return () => {
+        const params = { address, types: ['COINPAY_REQUIRED'] };
+        this._subscribeDetached(ws, ['address'], params);
+        return oneShotTeardown(() => {
             ws.off('COINPAY_REQUIRED', onEvent);
-            ws.unsubscribe(['address'], { address });
-        };
+            ws.unsubscribe(['address'], params);
+        });
     }
 
     // Shortcut: listen for ORDER_MATCH events on an address
@@ -1921,12 +2100,12 @@ class XChainSDK {
         const ws = this._requireWs();
         const onEvent = entityGuarded((msg) => frameIsForAddress(msg, address), callback);
         ws.on('ORDER_MATCH', onEvent);
-        let params = { address, types: ['ORDER_MATCH'] };
+        const params = { address, types: ['ORDER_MATCH'] };
         this._subscribeDetached(ws, ['address'], params);
-        return () => {
+        return oneShotTeardown(() => {
             ws.off('ORDER_MATCH', onEvent);
-            ws.unsubscribe(['address'], { address });
-        };
+            ws.unsubscribe(['address'], params);
+        });
     }
 
     // Wait for a transaction to be indexed by the explorer
@@ -1952,10 +2131,10 @@ class XChainSDK {
         const ws = this._requireWs();
         ws.on('NETWORK_STATS', callback);
         this._subscribeDetached(ws, ['network']);
-        return () => {
+        return oneShotTeardown(() => {
             ws.off('NETWORK_STATS', callback);
             ws.unsubscribe(['network']);
-        };
+        });
     }
 
 }
@@ -1965,3 +2144,7 @@ module.exports = XChainSDK;
 // has to be reconcilable against the explorer's producer constants without a
 // second copy of it living in the test.
 module.exports.ADDRESS_EVENT_TYPES = ADDRESS_EVENT_TYPES;
+// The unconfirmed subset onMempoolAction registers, exported for the same
+// reason: a consumer (or a test) checking which frames the mempool surface
+// delivers should read the list the code registers from, not a copy of it.
+module.exports.MEMPOOL_EVENT_TYPES = MEMPOOL_EVENT_TYPES;

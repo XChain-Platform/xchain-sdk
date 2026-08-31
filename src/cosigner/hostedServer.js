@@ -47,9 +47,20 @@
  *
  * HONEST LIMITS, because a hosted deployment will meet them:
  *   - Node is single-threaded and signing is CPU-bound, so tenants share one
- *     core. The per-tenant in-flight cap below bounds how much of it any one
- *     tenant can hold, but it is not fair scheduling and is not a substitute
- *     for running large tenants in their own process.
+ *     core. What bounds a tenant's share of it is: per REQUEST, that tenant's
+ *     own `maxCosignInputs` (required at construction, G14); per WINDOW, the
+ *     optional `maxRequestsPerTenant` fixed-window limit below, which is off
+ *     unless the operator sets it. The frequency bound is approximate -
+ *     requests are not equal cost, and a fixed window admits a burst across a
+ *     window boundary. Neither is fair scheduling, and neither substitutes for
+ *     running a large tenant in its own process.
+ *
+ *     There is deliberately NO concurrency cap. `CoSigner.process` is
+ *     synchronous and so is this handler, so a request occupies the core for
+ *     one uninterrupted event-loop turn and no two requests of one tenant are
+ *     ever in flight at once. An in-flight counter here read 0 at every check
+ *     and its 429 branch was unreachable: an operator-facing protection that
+ *     could not fire. Restoring one means making signing asynchronous first.
  *   - This adds no billing, quota, audit export, or key custody. The daemon
  *     keys are held in memory by whoever constructs the tenants.
  *   - Denials are logged, not persisted (same as the sidecar, G17).
@@ -61,6 +72,9 @@
 const crypto  = require('crypto');
 const express = require('express');
 const { safeTokenEqual } = require('../utils/safeCompare.js');
+// One body ceiling for BOTH co-signer transports, derived from the protocol's
+// envelope payload maximum rather than hardcoded here (httpBodyLimit.js).
+const { resolveMaxBodyBytes, tooLargeHandler } = require('./httpBodyLimit.js');
 
 // The wire versions this endpoint implements. A request MUST name one.
 const SUPPORTED_WIRE_VERSIONS = new Set([1]);
@@ -68,8 +82,11 @@ const SUPPORTED_WIRE_VERSIONS = new Set([1]);
 // Hosts that do not require TLS, because the traffic never leaves the machine.
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 
-// Default ceiling on concurrent in-flight requests per tenant (see HONEST LIMITS).
-const DEFAULT_MAX_INFLIGHT_PER_TENANT = 4;
+// Fixed window for the optional per-tenant request-rate bound (see HONEST
+// LIMITS). The bound itself is OFF by default: a hosted deployment's sane
+// request rate is deployment-specific, and a guessed default would either be
+// decorative or deny legitimate traffic on day one.
+const DEFAULT_RATE_WINDOW_MS = 60000;
 
 function sha256(s) { return crypto.createHash('sha256').update(s, 'utf8').digest('hex'); }
 
@@ -80,7 +97,14 @@ function sha256(s) { return crypto.createHash('sha256').update(s, 'utf8').digest
  *   tenants  [{ id, token, coSigner }]  one entry per served account. `token`
  *            is that tenant's bearer credential and MUST be unique; `coSigner`
  *            is a fully-configured CoSigner (its own key, policy, window store).
- *   maxInflightPerTenant {number}  default 4
+ *   maxRequestsPerTenant {number}  requests one tenant may make per window.
+ *            0 (the default) disables the bound entirely.
+ *   rateWindowMs {number}  the fixed window for that bound; default 60000
+ *   maxBodyBytes {number}  request-body ceiling; defaults to the derived
+ *            envelope-round maximum (httpBodyLimit.js). Anything past it
+ *            answers 413 REQUEST_TOO_LARGE, at whatever value is set. An
+ *            exposed deployment tunes this DOWN rather than back to an
+ *            unnamed transport failure.
  *   logger   {function}  (level, message, context) sink; defaults to console
  * @returns {express.Express} with a `.listenSecure()` helper attached
  */
@@ -89,10 +113,24 @@ function createHostedCoSignerApp(opts = {}) {
     if (!tenants || tenants.length === 0)
         throw new Error('createHostedCoSignerApp requires a non-empty tenants array');
 
-    const maxInflight = (opts.maxInflightPerTenant === undefined || opts.maxInflightPerTenant === null)
-        ? DEFAULT_MAX_INFLIGHT_PER_TENANT : Number(opts.maxInflightPerTenant);
-    if (!Number.isInteger(maxInflight) || maxInflight < 1)
-        throw new Error('maxInflightPerTenant must be a positive integer');
+    // Removed, not ignored: an operator who set this believed a concurrency cap
+    // was protecting the shared core, and it never could (HONEST LIMITS above).
+    // Silently dropping the option would leave that belief in place, so this
+    // fails at construction, before the listener binds, and names the successor.
+    if (opts.maxInflightPerTenant !== undefined && opts.maxInflightPerTenant !== null)
+        throw new Error('maxInflightPerTenant was removed: signing is synchronous, so an in-flight ' +
+            'counter never exceeded zero and its TENANT_BUSY branch could not fire. ' +
+            'Use maxRequestsPerTenant (with rateWindowMs) for a bound that does.');
+
+    const maxRequests = (opts.maxRequestsPerTenant === undefined || opts.maxRequestsPerTenant === null)
+        ? 0 : Number(opts.maxRequestsPerTenant);
+    if (!Number.isInteger(maxRequests) || maxRequests < 0)
+        throw new Error('maxRequestsPerTenant must be a non-negative integer (0 disables the bound)');
+
+    const rateWindowMs = (opts.rateWindowMs === undefined || opts.rateWindowMs === null)
+        ? DEFAULT_RATE_WINDOW_MS : Number(opts.rateWindowMs);
+    if (!Number.isInteger(rateWindowMs) || rateWindowMs < 1)
+        throw new Error('rateWindowMs must be a positive integer');
 
     const sink = typeof opts.logger === 'function' ? opts.logger : null;
     const log = (level, message, context) => {
@@ -143,11 +181,21 @@ function createHostedCoSignerApp(opts = {}) {
 
         const hash = sha256(t.token);
         if (byTokenHash.has(hash)) throw new Error(`two tenants share a bearer token ("${t.id}")`);
-        byTokenHash.set(hash, { id: t.id, token: t.token, coSigner: t.coSigner, inflight: 0 });
+        // The rate window lives ON the tenant record, not in a module-level Map
+        // keyed by credential: the tenant set is fixed at construction, so this
+        // state cannot grow without bound, and the check therefore runs only
+        // after the bearer token has resolved to a tenant. A caller cannot mint
+        // a fresh bucket, or pollute someone else's, by rotating tokens.
+        byTokenHash.set(hash, {
+            id: t.id, token: t.token, coSigner: t.coSigner,
+            rate: { count: 0, resetAt: 0 },
+        });
     }
 
+    const maxBodyBytes = resolveMaxBodyBytes(opts.maxBodyBytes);
+
     const app = express();
-    app.use(express.json({ limit: '256kb' }));
+    app.use(express.json({ limit: maxBodyBytes }));
 
     app.post('/v1/cosign', (req, res) => {
         const auth = req.get('authorization') || '';
@@ -160,6 +208,28 @@ function createHostedCoSignerApp(opts = {}) {
         if (!tenant || !safeTokenEqual(presented, tenant.token)) {
             log('warn', 'hosted co-sign request rejected: bad bearer token', { presented: presented !== null });
             return res.status(401).json({ approved: false, reason: 'UNAUTHORIZED' });
+        }
+
+        // Bound how OFTEN one tenant may reach the shared core. Charged here,
+        // immediately after the token resolves, so the budget is "authenticated
+        // requests by this tenant" and nothing cheaper: a request that never
+        // authenticates never resolves a tenant and so can never spend someone
+        // else's budget, while a flood of well-formed-but-junk bodies from a
+        // leaked token is bounded exactly like a flood of real ones.
+        if (maxRequests > 0) {
+            const now = Date.now();
+            const w = tenant.rate;
+            if (w.resetAt <= now) { w.count = 0; w.resetAt = now + rateWindowMs; }
+            w.count += 1;
+            if (w.count > maxRequests) {
+                const retryAfter = Math.ceil((w.resetAt - now) / 1000);
+                log('warn', 'hosted co-sign request rejected: tenant is over its request budget',
+                    { tenant: tenant.id, maxRequests, rateWindowMs });
+                res.set('Retry-After', String(retryAfter));
+                // The tenant id stays out of the body, as on every other path here.
+                return res.status(429).json({ approved: false, reason: 'TENANT_RATE_LIMIT',
+                    detail: `at most ${maxRequests} requests per ${rateWindowMs}ms per tenant` });
+            }
         }
 
         const body = req.body || {};
@@ -178,15 +248,6 @@ function createHostedCoSignerApp(opts = {}) {
                 detail: 'psbt (hex) and a non-empty inputs[] of { index, agentPublicNonce } are required' });
         }
 
-        // Bound how much of the single shared core one tenant can hold at once.
-        if (tenant.inflight >= maxInflight) {
-            log('warn', 'hosted co-sign request rejected: tenant is at its in-flight cap',
-                { tenant: tenant.id, maxInflight });
-            return res.status(429).json({ approved: false, reason: 'TENANT_BUSY',
-                detail: `at most ${maxInflight} concurrent requests per tenant` });
-        }
-
-        tenant.inflight++;
         let result;
         try {
             result = tenant.coSigner.process({
@@ -202,8 +263,6 @@ function createHostedCoSignerApp(opts = {}) {
                 tenant: tenant.id, message: e && e.message, code: e && e.code, stack: e && e.stack,
             });
             return res.status(500).json({ approved: false, reason: 'INTERNAL_ERROR', version: body.version });
-        } finally {
-            tenant.inflight--;
         }
 
         if (result && result.approved !== true)
@@ -212,6 +271,11 @@ function createHostedCoSignerApp(opts = {}) {
 
         return res.status(200).json(Object.assign({ version: body.version }, result));
     });
+
+    // After the route: an oversize body is a stated capability limit, not a
+    // network fault (httpBodyLimit.js). No `version` is echoed here, as on the
+    // 401 path: the body never parsed, so there is no version to echo.
+    app.use(tooLargeHandler(maxBodyBytes, log));
 
     /*
      * Bind the app, refusing an insecure network listener.
@@ -241,4 +305,4 @@ function createHostedCoSignerApp(opts = {}) {
     return app;
 }
 
-module.exports = { createHostedCoSignerApp, SUPPORTED_WIRE_VERSIONS, DEFAULT_MAX_INFLIGHT_PER_TENANT };
+module.exports = { createHostedCoSignerApp, SUPPORTED_WIRE_VERSIONS, DEFAULT_RATE_WINDOW_MS };

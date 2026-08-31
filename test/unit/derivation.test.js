@@ -25,9 +25,16 @@ const fs     = require('fs');
 const path   = require('path');
 
 const { FAMILY_SLIP44 } = require('../../src/derivation.js');
+const { ALLOWED_COINS } = require('../../src/coins/index.js');
 
 // Registered mainnet SLIP-44 coin types; the contract this module anchors.
 const EXPECTED = { BTC: 0, LTC: 2, DOGE: 3 };
+
+// The canonical coin registry, sorted, as the coverage target for both key sets
+// below. src/coins/index.js documents adding a chain as "drop a <COIN>.js data
+// file in this directory and add it to COIN_FILES; nothing else in this file
+// changes", so nothing in THIS file may be the thing that has to notice.
+const REGISTERED = [...ALLOWED_COINS].sort();
 
 // coin family -> wallet descriptor file whose p2pkh path (m/44'/N') carries the
 // authoritative coin type on the other side of the contract.
@@ -63,6 +70,26 @@ describe('derivation FAMILY_SLIP44', function () {
             assert.deepStrictEqual(FAMILY_SLIP44, EXPECTED);
         });
 
+        // EXPECTED and DESCRIPTOR_FILE are hand-written, and so was the key set
+        // they were checked against, so a fourth coin could land in COIN_FILES
+        // and disturb nothing here. That is not a cosmetic gap: the wallet's
+        // cross-repo leg iterates Object.entries(FAMILY_SLIP44), so a coin
+        // missing from the anchor produces no case there either, and the wallet
+        // side stays green against its own constant, which is the one thing
+        // src/derivation.js exists to prevent. Bind both key sets to the
+        // registry instead.
+        it('FAMILY_SLIP44 covers every coin in the SDK coin registry', function () {
+            assert.deepStrictEqual(Object.keys(FAMILY_SLIP44).sort(), REGISTERED,
+                'FAMILY_SLIP44 drifted from coins.ALLOWED_COINS: add the new coin\'s registered ' +
+                'mainnet SLIP-44 coin type to src/derivation.js');
+        });
+
+        it('DESCRIPTOR_FILE covers every coin in the SDK coin registry', function () {
+            assert.deepStrictEqual(Object.keys(DESCRIPTOR_FILE).sort(), REGISTERED,
+                'DESCRIPTOR_FILE drifted from coins.ALLOWED_COINS: add the new coin\'s wallet ' +
+                'descriptor filename here, or the cross-repo drift guard below emits no case for it');
+        });
+
         it('every value is a non-negative integer coin type', function () {
             for (const [family, coinType] of Object.entries(FAMILY_SLIP44)) {
                 assert.strictEqual(Number.isInteger(coinType), true, family + ' coin type must be an integer');
@@ -72,8 +99,13 @@ describe('derivation FAMILY_SLIP44', function () {
     });
 
     describe('cross-repo drift guard vs wallet HD descriptors', function () {
-        for (const family of Object.keys(EXPECTED)) {
-            it(family + ' matches xchain-wallet ' + DESCRIPTOR_FILE[family] + ' m/44 path', function () {
+        // Iterate the REGISTRY, not a hand-listed key set: a coin added to
+        // COIN_FILES must produce a drift case here or fail the coverage tests
+        // above, never silently produce none.
+        for (const family of REGISTERED) {
+            it(family + ' matches xchain-wallet ' + (DESCRIPTOR_FILE[family] || '<unmapped>') + ' m/44 path', function () {
+                assert.ok(DESCRIPTOR_FILE[family],
+                    family + ' is in coins.ALLOWED_COINS but has no wallet descriptor mapped in DESCRIPTOR_FILE');
                 const file = path.join(WALLET_DESCRIPTORS_DIR, DESCRIPTOR_FILE[family]);
                 if (!requireSibling(this, file)) return;
                 const coinType = coinTypeFromDescriptor(fs.readFileSync(file, 'utf8'));

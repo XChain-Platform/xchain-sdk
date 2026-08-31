@@ -30,7 +30,8 @@ HEAD 2026-08-08, ALL ELEVEN re-reviewed against indexer HEAD
 `22f0f31` on 2026-08-13, NINE re-reviewed against indexer HEAD
 `58ab8e9` on 2026-08-15, three re-pinned after the comment-hygiene pass
 at `1a4b78a4` on 2026-08-17, `batch.js` re-reviewed at `188554e5` on
-2026-08-20, and `issue.js` re-reviewed at `2d9cbbbf` on 2026-08-23 (see
+2026-08-20, `issue.js` re-reviewed at `2d9cbbbf` on 2026-08-23, and
+`dispenser.js` + `dispense.js` re-reviewed at `2b65e8a4` on 2026-08-25 (see
 the review log below). Hashes
 are of the indexer handler source files, resolved via
 `XCHAIN_INDEXER_PATH` or the sibling `../xchain-indexer` checkout. The
@@ -42,14 +43,29 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-**Pins taken at indexer commit:** `2b65e8a4`
+**Pins taken at indexer commit:** `c49b9710`
 
-(Re-anchored 2026-08-23 by the `issue.js` mint-window pass, whose entry
-below declares this anchor. The line itself was missed in that edit and
-kept saying `188554e5`, the 2026-08-20 `batch.js` anchor, for three days;
-the rule one paragraph down is the rule it broke. `2d9cbbbf` is reachable
-from the indexer develop head and no file under `src/actions/` differs
-between the two, so every pinned hash below is byte-identical at both.)
+(Re-anchored 2026-08-25 by the `dispenser.js` + `dispense.js` pass, whose
+entry below declares this anchor. `2b65e8a4` is reachable from the indexer
+develop head, and the gate re-checks that reachability at run time before it
+hands a reviewer a range built on it.
+
+No byte-identity claim survives a re-anchor, so none is made here. Five files
+under `src/actions/` differ between `2d9cbbbf` and `2b65e8a4`, two of them
+mapped rows this pass re-pinned, which is exactly why the older anchor is a
+baseline for the older review only. Each review-log entry names the baseline it
+was read against; use that one, never this line, to reconstruct a past review.
+
+History, because it is why the rule below exists twice over. The 2026-08-23
+re-anchor moved the table and missed THIS line, which kept saying `188554e5`,
+the 2026-08-20 `batch.js` anchor, for three days. The 2026-08-25 pass then
+broke the same rule with the halves reversed: the anchor line moved and the
+review command below it did not, so the map named `2b65e8a4` while handing
+reviewers a `2d9cbbbf` range. Twice by careful authors is a rule that wants an
+assertion behind it, so `checkAnchorConsistency` in
+`bin/check-preflight-drift.js` now fails the gate when the anchor line and the
+review command below disagree. That leg needs no sibling checkout, so it runs
+in single-repo CI too, which is the one venue a docs-only edit reaches.)
 
 (Standing caveat on the 2026-08-15 anchor, which the paragraph above and
 the review log below both still cite: `58ab8e9` is a local commit the
@@ -63,9 +79,11 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 2d9cbbbf..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff c49b9710..HEAD -- src/actions/<handler>.js
 
-Re-anchor this line whenever you re-pin the table, in the same edit.
+Re-anchor this line whenever you re-pin the table, in the same edit. The gate
+asserts it: `checkAnchorConsistency` reads the commit id out of the command
+above and fails when it is not the one on the anchor line.
 
 ### When the anchor is not reachable
 
@@ -108,8 +126,8 @@ found by hashing candidate blobs as above.
 | `checks/trading.js` (ORDER) | `src/actions/order.js` | `e9c676ff4d724b92bd94966bf6811d23bc932ed34daa694211833302e53b6b02` |
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `971338842f897e140d27565a4e01cdb364da14b81bb58e140dd6014d529b35fb` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `956463e64bb90087364b2c109c6d1f27a5b3526fd24415d6b9c22042e65e1479` |
-| `checks/dividend.js` | `src/actions/dividend.js` | `4755e314c69ead436a278a6d6196df5499a44768a236a2d9afda4b6a8623f1c1` |
-| `checks/batch.js` | `src/actions/batch.js` | `c48dfe129171dc70c345e7e807bcc99e29fdeaa661cccf63afc49c6d492289c8` |
+| `checks/dividend.js` | `src/actions/dividend.js` | `318754131de748339bad0a79eb2381309dac240150858f9a33abde42f9007248` |
+| `checks/batch.js` | `src/actions/batch.js` | `5ad83d4788ad84225a51e7f86161d207a6e8164320b6d1dc27f3fb3c40b9f1e5` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -118,6 +136,38 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-08-29 - `dividend.js` + `batch.js`, against indexer HEAD `c49b9710`
+
+No mirror is owed and no client check moves: both handlers drifted by hash
+without changing any verdict a client pre-flight can predict. Anchor moves to
+`c49b9710`.
+
+`dividend.js` holds `ALLOW_LIST` and `BLOCK_LIST` as `Set`s instead of arrays,
+so the per-holder membership probe in the holder loop is an O(1) hash lookup
+rather than a scan of the whole list. The predicate is the same predicate:
+`allowList.length && !allowList.includes(a)` became
+`allowList.size && !allowList.has(a)`, and the emptiness leg still gates the
+check, so a configured-but-empty `ALLOW_LIST` keeps admitting everyone exactly
+as before. No input class changes verdict, and `checks/dividend.js` never
+mirrored the list contents anyway.
+
+`batch.js` stops swallowing INFRASTRUCTURE faults in the gas-affordability
+probe. The probe is a DB read (`indexerDb.getTokenInfo`), so a deadlock (1213),
+a lock-wait timeout (1205) or a killed connection landed in the same catch as a
+deterministic failure and returned `null`; `null` short-circuits
+`isGasProvablyUnaffordable` to false, so a faulted node wrote STATUS `valid`
+and dispatched every sub-command while a healthy peer wrote one
+`invalid: GAS (insufficient)` - a fork committed into the block. The catch now
+calls `rethrowIfInfraFault(e)` first, which propagates exactly that class and
+nothing else, so the block rolls back and retries. Deterministic failures still
+return `null` unchanged.
+
+That is a NODE-side consistency fix on a path the client cannot reach: a client
+pre-flight has no DB, so it has no infrastructure-fault class to mirror, and
+every deterministic verdict `checks/batch.js` predicts is byte-for-byte what it
+predicted before. The fix came out of the 2026-08-29 review round as finding
+#6160.
 
 ### 2026-08-25 - `dispenser.js` + `dispense.js`, against indexer HEAD `2b65e8a4`
 

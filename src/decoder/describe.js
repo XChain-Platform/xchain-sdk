@@ -125,7 +125,13 @@ function _harden(decoded, p, ctx) {
 
     const details = decoded.details.map(({ label, value }) => {
         let v = sanitizeText(value, warnings);
-        if (/amount|supply|escrow|per unit/i.test(label) && v !== '') {
+        // A label ending in "to" names a DESTINATION, not a quantity, even when it
+        // also carries an amount word: ISSUE v2's "Transfer minted supply to" holds
+        // TRANSFER_SUPPLY, an address, and running it through formatAmount flagged
+        // every legitimate owner issue-and-transfer as 'not a plain decimal number'
+        // on the confirm screen.
+        const isDestinationLabel = /\bto$/i.test(label);
+        if (/amount|supply|escrow|per unit/i.test(label) && !isDestinationLabel && v !== '') {
             // No tokenDecimals map supplied => NaN sentinel: formatAmount
             // skips both precision comparisons (frac > NaN is false) but
             // still flags junk and exponential notation. Multi-leg values
@@ -135,7 +141,7 @@ function _harden(decoded, p, ctx) {
                 : NaN;
             v = v.split(', ').map(part => formatAmount(part, decimals, warnings)).join(', ');
         }
-        if ((own || contacts) && /destination|address|transfer ownership to/i.test(label) && v !== '') {
+        if ((own || contacts) && (isDestinationLabel || /destination|address/i.test(label)) && v !== '') {
             if (own && own.has(v)) v = v + ' (your address)';
             else if (contacts && typeof contacts[v] === 'string') v = v + ' (contact: ' + sanitizeText(contacts[v]) + ')';
         }

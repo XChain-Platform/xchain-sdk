@@ -6,7 +6,32 @@
 // of multi-value / type-gated fields.
 
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const { ADDRESS_REF_FIELDS, SDK_COMPACTABLE, SDK_COMPACTABLE_BY_ACTION } = require('../../src/addressRefFields.js');
+
+const SDK_TWIN = path.join(__dirname, '..', '..', 'src', 'addressRefFields.js');
+const INDEXER_ROOT = [
+    process.env.XCHAIN_INDEXER_PATH,
+    process.env.XCHAIN_INDEXER_DIR,
+    path.join(__dirname, '..', '..', '..', 'xchain-indexer'),
+].filter(Boolean)[0];
+const INDEXER_TWIN = path.join(INDEXER_ROOT, 'src', 'addressRefFields.js');
+
+// A parity guard must never silently pass by skipping. Absent sibling: skip, so a
+// standalone clone stays green. Absent sibling on the venue that REQUIRES one
+// (XCHAIN_REQUIRE_SIBLINGS=1, set by bin/ci-full.sh's test gate and the drift-guards
+// job): throw, so the guard cannot green-by-skip exactly where it is depended on.
+// Mirrors requireSibling in test/unit/contract-parity.test.js; deliberately not keyed
+// on the generic CI flag, which the shared unit job sets without a sibling checkout.
+function requireSibling(ctx, absPath) {
+    if (fs.existsSync(absPath)) return true;
+    if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+        throw new Error('addressRefFields parity guard cannot run: required sibling missing at '
+            + absPath + ' (the job setting XCHAIN_REQUIRE_SIBLINGS=1 must check out xchain-indexer)');
+    ctx.skip();
+    return false;
+}
 
 describe('addressRefFields', function () {
     it('maps the core address-bearing actions', function () {
@@ -76,5 +101,31 @@ describe('addressRefFields', function () {
             for (const s of specs) declared.add(s.field);
         for (const f of SDK_COMPACTABLE)
             assert.ok(declared.has(f), `${f} must be a declared address field`);
+    });
+
+    /* The consensus twin, bound from THIS side of the seam.
+     *
+     * src/addressRefFields.js is carried byte-identically with
+     * xchain-indexer/src/addressRefFields.js, and its own header says so. A byte-identity
+     * assertion held only by the indexer's suite is not enough: an edit made HERE then
+     * passes `npm run ci`, bin/ci-full.sh and the drift-guards job green and surfaces
+     * only on the indexer's venue - while src/ is in the publish allowlist, so a
+     * divergent copy can reach npm consumers first. Every vendored copy in this repo
+     * (the xchain-vm pair, the reference impls, the activation constants) must be bound
+     * from both sides, this one included.
+     */
+    describe('consensus twin drift guard', function () {
+        it('src/addressRefFields.js is byte-identical to the xchain-indexer copy', function () {
+            if (!requireSibling(this, INDEXER_TWIN)) return;
+            assert.strictEqual(
+                fs.readFileSync(SDK_TWIN, 'utf8'),
+                fs.readFileSync(INDEXER_TWIN, 'utf8'),
+                'CONSENSUS TWIN DRIFT: xchain-sdk/src/addressRefFields.js and '
+                + 'xchain-indexer/src/addressRefFields.js have diverged. They define the wire '
+                + '^<id> reference surface, and the SDK-compactable set must stay a subset of '
+                + 'what the indexer assigns, so adding or removing a field is a wire-format '
+                + 'change: reconcile the two deliberately, never by re-syncing one onto the other.'
+            );
+        });
     });
 });

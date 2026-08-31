@@ -66,7 +66,7 @@ function nonce(acct) {
 describe('G14: input-count cap', function () {
 
     it('refuses more requested inputs than the cap', function () {
-        // The 256kb body limit bounds bytes, not work: sighash derivation is
+        // The HTTP body limit bounds bytes, not work: sighash derivation is
         // quadratic in the input count plus a deterministicSign each, so one
         // crafted request could occupy the single-threaded sidecar for seconds.
         // A frozen daemon is, per the threat model, permanently stuck funds.

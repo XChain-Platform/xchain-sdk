@@ -31,9 +31,15 @@
 // Fields across all ACTION formats whose value references an EXISTING token,
 // and therefore can be compacted to the `^<id>` wire form (the xchain-indexer
 // accepts `^<id>` anywhere it accepts a ticker; see getTickerId()). The
-// defining TICK of an ISSUE is deliberately excluded: a brand-new token has no
-// id yet, and the SDK validator forbids a `^`-led name on ISSUE.
-const TICK_REF_FIELDS = ['TICK', 'GIVE_TICK', 'GET_TICK', 'DIVIDEND_TICK', 'CALLBACK_TICK'];
+// defining TICK of an ISSUE is deliberately excluded at the call site below: a
+// brand-new token has no id yet, and the SDK validator forbids a `^`-led name
+// on ISSUE.
+//
+// The set is defined once in tickRefFields.js and never restated here, so it
+// stays checkable against formats.js. That module also records why
+// FILE.GATE_TICKER is held out of this set permanently: the indexer joins
+// gated_files.gate_ticker by literal string, so a `^<id>` un-gates the file.
+const { TICK_REF_FIELDS } = require('./tickRefFields.js');
 
 // Hard upper bound on a single compaction lookup. A reachable explorer answers
 // in well under this; the cap only matters for a host that accepts a connection

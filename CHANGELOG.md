@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-08-30
+
+### Added
+- The light client reads the checkpoint bundle on version 0.
+- An unconfirmed-transaction subscription surface, with refcounted subscriptions.
+
+### Fixed
+- Both published packages carry one version, and the dependency range says so.
+- The anchored-checkpoint path resolves its validator set through the trust ladder.
+- A subscription teardown releases the subscription it opened.
+- TRANSFER_SUPPLY is an address, and the confirm screen says so.
+
+### Changed
+- Price batches are version 0, and the per-round wire is retired.
+- The vendored action manifest carries the roll call.
+
+## [0.12.0] - 2026-08-28
+
+### Changed
+- `light.parseAnchorV7(wire)` and `light.anchorBundleSection(bundle, chain)` read the new ANCHOR v7 checkpoint bundle, one anchor per network carrying every chain's checkpoint as a section.
+- `light.fetchAnchoredCheckpoint` accepts only version 7 rows now that the per-chain anchor versions are retired.
+
+### Removed
+- `light.parseAnchorV3`; the per-chain ANCHOR v3/v5 wire no longer exists.
+
+## [0.11.1] - 2026-08-28
+
+Out-of-band patch on the 0.11 line, published from `develop` ahead of the next release train so the wallet can read unconfirmed transactions.
+
+### Added
+- `sdk.getUnconfirmed(address)` returns the unconfirmed actions touching an address, with the explorer's field names and any matched `destinations`.
+- `sdk.onMempoolAction(address, cb)` subscribes to unconfirmed actions for an address.
+- `MEMPOOL_ACTION` and `MEMPOOL_REMOVED` are delivered by `sdk.onAddress()`, which previously received and silently dropped them.
+- The `XORACLEB` engine tag for batch price canonicals.
+
+### Changed
+- `onAddress` and `onMempoolAction` share one refcounted address-channel subscription, so two subscribers no longer double-replay on reconnect or tear each other down.
+- The PRICE batch is version 0 and the per-round wire is removed, which is a breaking wire change taken deliberately while pre-launch.
+
+### Fixed
+- Every `on*` teardown now releases the subscription it actually opened; eight of twelve dropped a `types` filter or a `snapshot` request and released a different one.
+- `ISSUE` treats `TRANSFER_SUPPLY` as an address, and the confirm screen says so.
+
 ## [0.11.0] - 2026-08-25
 
 ### Added

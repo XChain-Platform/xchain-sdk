@@ -83,9 +83,17 @@ describe('address-channel event coverage vs the explorer producer @regression', 
         const valid = require(CHANNEL_MANAGER).VALID_TYPES;
         assert.ok(valid && valid.size > 0, 'read no VALID_TYPES out of the explorer ChannelManager');
 
-        // The two Broadcaster-level frames are not action/lifecycle types and are
-        // deliberately absent from the types filter's vocabulary.
-        const BROADCASTER_FRAMES = new Set(['NEW_ACTION', 'ADDRESS_UPDATE']);
+        // The Broadcaster-level frames are not action/lifecycle types and are
+        // deliberately absent from the types filter's vocabulary. The two mempool
+        // frames belong here for the same reason as NEW_ACTION and
+        // ADDRESS_UPDATE: the Broadcaster emits them from the decoder's mempool
+        // diff, not from the lifecycle map, and the explorer's `types` filter
+        // narrows mempool frames by the row's ACTION name (SEND, ISSUE, ...), so
+        // naming the frame type as a subscribe filter would be rejected.
+        const BROADCASTER_FRAMES = new Set([
+            'NEW_ACTION', 'ADDRESS_UPDATE',
+            'MEMPOOL_ACTION', 'MEMPOOL_REMOVED'
+        ]);
         const phantom = XChainSDK.ADDRESS_EVENT_TYPES
             .filter(t => !BROADCASTER_FRAMES.has(t) && !valid.has(t)).sort();
         assert.deepStrictEqual(phantom, [],

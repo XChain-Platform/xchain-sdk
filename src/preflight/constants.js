@@ -27,11 +27,21 @@
 // (protocol constants) + the compose-time limits in actions.js.
 const { MAX_ACTION_DATA_LENGTH } = require('../chunkHelper.js');
 
-// Per-carrier data budgets (bytes of action string). Mirrors
-// actions.js ENCODING_LIMITS (OP_RETURN 80-4 magic; P2SH/P2WSH
-// 520-44 script overhead per chunk; MULTISIGN 60/chunk).
+// Per-carrier data budgets (bytes of action string). Mirrors the compose-time
+// gate in actions.js (P2SH/P2WSH 520-44 script overhead per chunk; MULTISIGN
+// 60/chunk).
+//
+// OP_RETURN is 75, not 80-4: the compose gate measures the COMPILED push
+// (`compiledPushSize(bytes) + 4 > 80`, actions.js), and the push prefix grows
+// with the payload. 75 bytes compile to 76 and fit in the 80-byte relay
+// standard once the 4-byte magic is added; 76 bytes need OP_PUSHDATA1 and
+// compile to 78, which does not. A raw `bytes > 75` test is exactly that rule
+// for every length (the prefix step happens at the same boundary), so this
+// table can stay a plain byte budget. It read 76 while the compose gate read
+// the compiled size, and pre-flight passed a 76-byte action string that
+// compose then threw ENCODING_DATA_TOO_LARGE on.
 const ENCODING_LIMITS = Object.freeze({
-    OP_RETURN: 76,
+    OP_RETURN: 75,
     MULTISIGN: 60,
     P2SH:      476,
     P2WSH:     476,
@@ -40,7 +50,11 @@ const ENCODING_LIMITS = Object.freeze({
 // Report schema version (additive-only by convention). The report is
 // consumed by the wallet PreflightPanel
 // (packages/core/src/shared/components/PreflightPanel.jsx), which reads
-// verdict/findings/restricted/stateHeight/unverified and never reads
+// `verdict`, `findings[].severity`, `findings[].code`, `findings[].message`,
+// `findings[].overridable`, `findings[]._downgradedBy`,
+// `findings[].data.commandIndex`, `findings[].data.subCommandCount`,
+// `findings[].data.accepted`, `restricted`, `stateHeight`, and
+// `unverified[].check` / `unverified[].reason`, and never reads
 // schemaVersion at runtime. The enforcement point is build-time on the
 // wallet side: PreflightPanel exports SUPPORTED_SCHEMA_VERSION and
 // test/unit/components/PreflightPanel.tier1Notice.test.jsx pins it to
@@ -48,6 +62,23 @@ const ENCODING_LIMITS = Object.freeze({
 // fires that test when the wallet upgrades to the bumped SDK, not on the
 // commit that changes this line; bump only alongside a review of every
 // field the panel reads.
+//
+// The list is element-by-element on purpose. A bare "findings" reads as
+// covered while the two entries inside it that actually carry safety go
+// unreviewed, and both look droppable:
+//   - `_downgradedBy` is underscore-led and so reads as private, but the
+//     panel's notice filter is `severity === 'info' && !f._downgradedBy`.
+//     Removing or renaming it resurrects the Tier-2 errors index.js demoted
+//     as user-facing notices under a passing verdict chip, which is the exact
+//     contradiction the demotion exists to avoid.
+//   - `data.commandIndex` is read INDIRECTLY, through the panel's
+//     preflightFindingKey() (packages/core/src/shared/utils/
+//     preflightFindingKey.js), which makes (code, commandIndex) the override
+//     identity for batch sub-command errors. Without it one "Sign anyway"
+//     clears every sub-command error sharing a code.
+// This SDK-side list is also the only copy that ships: src/ is in the publish
+// allowlist and index.d.ts declares no PreflightReport type, so a third-party
+// consumer building its own panel from the tarball has nothing else to read.
 //
 // `restricted` on the report means "covers a proper subset of the checks
 // the action warrants", never a completeness claim either way: the full
@@ -73,7 +104,11 @@ const MAX_REFILLS = 5;
 // CANONICAL_CARET_ID (xchain-indexer src/db.js). Anything else - `^0`, `^007`,
 // `^0x10`, `^abc`, a bare `^` - cannot resolve on ANY node, so at/after the
 // caret-ref strict-activation flag-day it is a hard `invalid: <FIELD> (unresolvable ^id)` reject.
-// The §8.5 drift gate over the mapped handlers is what catches a change to it.
+// No mapped handler hash covers it: the map's rows are `src/actions/*.js` only and this
+// rule lives in db.js, so every pinned hash stays green while the rule moves.
+// checkRegexMirrors in bin/check-preflight-drift.js is what catches a change to it, by
+// comparing the two literals (source and flags) and failing closed when either cannot be
+// read exactly once.
 const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
 
 // Lifecycle constants (spec §4.6).

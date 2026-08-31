@@ -718,7 +718,12 @@ describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
             // phantom id), a name resolves case-insensitively, and anything
             // unknown - including a non-canonical caret, which falls through to
             // the name lookup as a literal string - is null.
-            const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
+            //
+            // The rule is READ from src/preflight/constants.js rather than re-inlined
+            // here: that constant is the SDK's single mirror of the indexer literal, and
+            // checkRegexMirrors in bin/check-preflight-drift.js binds it to db.js by
+            // value. A third local copy could disagree with both and nothing would see it.
+            const { CANONICAL_CARET_ID } = require('../../src/preflight/constants.js');
             const getTickerId = async function (tick) {
                 const str = String(tick);
                 const pid = str.substring(1);
