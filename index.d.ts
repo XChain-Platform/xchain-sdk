@@ -2024,6 +2024,14 @@ export interface SubmitActionResult {
     signed: SignPsbtResult;
     /** UTXOs consumed by this transaction */
     spentInputs: Array<{ txid: string; vout: number }>;
+    /**
+     * Change this action paid back to the caller and did not spend again in a
+     * later phase, shaped for handing straight back to createTx({ utxos }).
+     * WalletSession registers these speculatively, which is what chains
+     * consecutive submits parent -> child instead of producing siblings.
+     * Empty when the change destination is not a parseable address.
+     */
+    changeOutputs: Array<{ txid: string; vout: number; value: number | string; scriptPubKey: string; confirmations: number }>;
     /** Indexed action data (null if waitForIndexer was false) */
     indexed: any | null;
 }

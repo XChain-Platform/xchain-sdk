@@ -188,6 +188,12 @@ class LifecycleManager {
         progress('broadcasting', { txid: signed.txid });
         await encoder.broadcastTx(signed.txHex);
 
+        // Every transaction this action actually puts on the wire, in order.
+        // The change each one pays back to the caller is harvested below, after
+        // the last phase, so a caller can spend it immediately instead of
+        // waiting for the tracker to confirm it.
+        let broadcastHexes = [signed.txHex];
+
         // Extract spent inputs from the signed PSBT for UTXO cache tracking
         let spentInputs = this._extractSpentInputs(encoded.psbt);
 
@@ -212,6 +218,7 @@ class LifecycleManager {
                       revealTxHex: revealSigned.txHex, cause: err });
             }
             spentInputs = spentInputs.concat(this._extractSpentInputs(encoded.revealPsbt));
+            broadcastHexes.push(revealSigned.txHex);
             finalTxidEnvelope = revealSigned.txid;
         }
 
@@ -259,6 +266,7 @@ class LifecycleManager {
             // the custom finalizer, not the default single-sig finalizeAllInputs.
             let spendSigned = this.sdk.wallet.signRevealPsbt(spendResult.psbt, wif);
             await encoder.broadcastTx(spendSigned.txHex);
+            broadcastHexes.push(spendSigned.txHex);
 
             // Track phase 2 spent inputs
             let phase2Inputs = this._extractSpentInputs(spendResult.psbt);
@@ -273,15 +281,36 @@ class LifecycleManager {
             signed = revealSigned;
         }
 
+        // The change this action paid back to the caller and did not spend again
+        // in a later phase. Without it, a caller's next action has nothing left
+        // in its cache and falls back to whatever the tracker has CONFIRMED, so
+        // consecutive submits pick independent inputs and land as siblings
+        // instead of a parent-child chain. A later phase legitimately spends an
+        // earlier phase's output (the envelope reveal, the P2SH phase-2 reveal),
+        // so anything already in spentInputs is dropped here rather than handed
+        // back as spendable.
+        let spentSet = new Set(spentInputs.map(i => i.txid + ':' + i.vout));
+        // encoderOpts.change is the caller's own change destination; with none
+        // given the encoder returns change to the caller identity (pubkey, which
+        // on this path is an ADDRESS - see submit() in walletSession).
+        let changeAddress = encoderOpts.change || encoderOpts.pubkey;
+        let changeOutputs = [];
+        for (let hex of broadcastHexes) {
+            for (let out of this._extractChangeOutputs(hex, changeAddress)) {
+                if (!spentSet.has(out.txid + ':' + out.vout)) changeOutputs.push(out);
+            }
+        }
+
         let result = {
-            txid:         finalTxid,
-            actionString: createResult.actionString,
-            action:       createResult.action,
-            version:      createResult.version,
-            encoding:     encoded.encoding,
-            signed:       signed,
-            spentInputs:  spentInputs,
-            indexed:      null
+            txid:          finalTxid,
+            actionString:  createResult.actionString,
+            action:        createResult.action,
+            version:       createResult.version,
+            encoding:      encoded.encoding,
+            signed:        signed,
+            spentInputs:   spentInputs,
+            changeOutputs: changeOutputs,
+            indexed:       null
         };
 
         if (waitForIndexer) {
@@ -331,6 +360,57 @@ class LifecycleManager {
     _reconcileNetwork() {
         try { return this.sdk.wallet.getBitcoinNetwork(); }
         catch (e) { return undefined; }
+    }
+
+    // Outputs of one BROADCAST transaction that pay back to the caller's own
+    // change destination, shaped exactly as the encoder's validateUtxoEntry
+    // demands (txid, vout, value, scriptPubKey, confirmations), so the caller
+    // can hand them straight back into createTx({ utxos }). confirmations is 0
+    // by construction: the transaction is on the wire, not in a block, and the
+    // encoder only keeps a zero-confirmation input when unconfirmed is left at
+    // its default true.
+    //
+    // Reads the SIGNED tx hex rather than the PSBT, because a chained spend
+    // needs the real txid, which only exists once the inputs are final.
+    _extractChangeOutputs(txHex, changeAddress) {
+        if (!txHex || !changeAddress) return [];
+        try {
+            const bitcoin = require('bitcoinjs-lib');
+            // Compare SCRIPTS, not decoded addresses. address.fromOutputScript
+            // throws on every non-standard output a transaction here carries
+            // (the OP_RETURN carrier, the bare-multisig data outputs, a P2SH
+            // chunk leg), and one throw mid-loop would lose the change output
+            // too. Encoding the change address once and matching bytes has
+            // neither problem, and it silently ignores an address the network
+            // cannot parse (a hex pubkey passed as `pubkey`), which is the
+            // fail-closed answer: no change tracked, same as before.
+            let changeScript = bitcoin.address
+                .toOutputScript(changeAddress, this._reconcileNetwork())
+                .toString('hex');
+            let tx   = bitcoin.Transaction.fromHex(txHex);
+            let txid = tx.getId();
+            let outs = [];
+            for (let vout = 0; vout < tx.outs.length; vout++) {
+                let script = Buffer.from(tx.outs[vout].script).toString('hex');
+                if (script !== changeScript) continue;
+                // applyBufferutilsPatch hands back a value above 2^53-1 (a large
+                // DOGE change output) as a BigInt, which JSON.stringify refuses,
+                // so this entry would kill the very createTx call it exists to
+                // fund. Carry it as the exact decimal STRING the tracker itself
+                // emits and the encoder's parseSatoshiAmount already accepts.
+                let value = tx.outs[vout].value;
+                outs.push({
+                    txid:          txid,
+                    vout:          vout,
+                    value:         (typeof value === 'bigint') ? value.toString() : value,
+                    scriptPubKey:  script,
+                    confirmations: 0
+                });
+            }
+            return outs;
+        } catch (e) {
+            return [];
+        }
     }
 
     _extractSpentInputs(psbtHex) {

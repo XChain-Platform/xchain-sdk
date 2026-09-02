@@ -129,9 +129,22 @@ class WalletSession {
         let mgr = new LifecycleManager(this.sdk);
         let result = await mgr.submitAction(actionData, mergedEncoder, mergedOpts);
 
-        // Update UTXO cache: mark spent inputs, add speculative change
+        // Update UTXO cache: mark spent inputs, then register the change this
+        // action paid back to us. Registering the change is what makes the NEXT
+        // submit spend THIS one's output, chaining parent -> child. Without it
+        // the cache is drained after every submit, the re-pull below falls back
+        // to whatever the tracker has CONFIRMED, and two consecutive sends from
+        // one session pick independent inputs and land as siblings.
+        //
+        // Order matters: markSpent first, so a phase that spent an earlier
+        // phase's output is never re-offered as available.
         if (result.spentInputs) {
             this._utxoCache.markSpent(result.spentInputs);
+        }
+        if (Array.isArray(result.changeOutputs)) {
+            for (let utxo of result.changeOutputs) {
+                this._utxoCache.addSpeculative(utxo);
+            }
         }
 
         return result;

@@ -80,6 +80,63 @@ function buildSignedTx() {
 }
 
 /**
+ * A two-transaction chain built with real keys, for the change-tracking tests.
+ *
+ * tx1 carries an OP_RETURN data output plus change back to `changeAddress` at
+ * vout 1; tx2 SPENDS that change output and pays its own change back. This is
+ * the shape the P2SH two-phase flow produces, where the reveal consumes what
+ * the funding transaction paid the caller.
+ *
+ * Everything is on the bitcoinjs DEFAULT network, because the fake SDK has no
+ * wallet.getBitcoinNetwork and _reconcileNetwork therefore falls back to it.
+ */
+function buildChangeChain() {
+    const bitcoin = require('bitcoinjs-lib');
+    const ecc = require('@bitcoinerlab/secp256k1');
+    const { ECPairFactory } = require('ecpair');
+    bitcoin.initEccLib(ecc);
+    const ECPair = ECPairFactory(ecc);
+
+    const kp        = ECPair.makeRandom();
+    const inScript  = bitcoin.payments.p2wpkh({ pubkey: kp.publicKey }).output;
+    const change    = bitcoin.payments.p2pkh({ pubkey: kp.publicKey });
+    const opReturn  = bitcoin.script.compile([bitcoin.opcodes.OP_RETURN, Buffer.from('58434841494e', 'hex')]);
+
+    const prevTx = new bitcoin.Transaction();
+    prevTx.addInput(Buffer.alloc(32), 0xffffffff, 0xffffffff, Buffer.from([0x51]));
+    prevTx.addOutput(inScript, 100_000);
+
+    const psbt1 = new bitcoin.Psbt();
+    psbt1.addInput({ hash: prevTx.getId(), index: 0, sequence: 0xfffffffd,
+                     witnessUtxo: { script: inScript, value: 100_000 } });
+    psbt1.addOutput({ script: opReturn, value: 0 });
+    psbt1.addOutput({ address: change.address, value: 90_000 });
+    const psbt1Hex = psbt1.toHex();          // the encoder answers UNSIGNED
+    psbt1.signAllInputs(kp);
+    psbt1.finalizeAllInputs();
+    const tx1 = psbt1.extractTransaction();
+
+    const psbt2 = new bitcoin.Psbt();
+    psbt2.addInput({ hash: tx1.getId(), index: 1, sequence: 0xfffffffd, nonWitnessUtxo: tx1.toBuffer() });
+    psbt2.addOutput({ address: change.address, value: 80_000 });
+    const psbt2Hex = psbt2.toHex();
+    psbt2.signAllInputs(kp);
+    psbt2.finalizeAllInputs();
+    const tx2 = psbt2.extractTransaction();
+
+    return {
+        changeAddress: change.address,
+        changeScript:  change.output.toString('hex'),
+        // The same key as a raw hex pubkey. The reconcile gate derives the
+        // caller's default-type scripts from it, so a change output still
+        // reconciles; _extractChangeOutputs cannot parse it as an address.
+        pubkeyHex:     Buffer.from(kp.publicKey).toString('hex'),
+        phase1: { psbtHex: psbt1Hex, txHex: tx1.toHex(), txid: tx1.getId() },
+        phase2: { psbtHex: psbt2Hex, txHex: tx2.toHex(), txid: tx2.getId() },
+    };
+}
+
+/**
  * Build a minimal fake SDK.
  *
  * @param {Object} [overrides]  – override specific sdk methods
@@ -174,6 +231,83 @@ describe('LifecycleManager', function () {
             assert.strictEqual(result.actionString, 'XCHAIN|SEND|...');
             assert.strictEqual(result.encoding, 'OP_RETURN');
             assert.strictEqual(result.indexed, null);
+        });
+
+        // Without these, the change a submit pays back to the caller is
+        // never handed to the UTXO cache, so the caller's NEXT action picks
+        // independent confirmed inputs and lands as a SIBLING of this one
+        // instead of its child.
+        it('returns the change output paid back to the caller, shaped for createTx', async function () {
+            const chain = buildChangeChain();
+            const sdk = makeSdk({
+                wallet: {
+                    signPsbt:       () => ({ txHex: chain.phase1.txHex, txid: chain.phase1.txid, psbtHex: chain.phase1.psbtHex }),
+                    signRevealPsbt: () => ({ txHex: chain.phase2.txHex, txid: chain.phase2.txid, psbtHex: chain.phase2.psbtHex }),
+                }
+            }, {
+                createTx:    async () => ({ psbt: chain.phase1.psbtHex, encoding: 'OP_RETURN' }),
+                broadcastTx: async () => ({}),
+            });
+            const lm = new LifecycleManager(sdk);
+            const result = await lm.submitAction(
+                { action: 'SEND', params: {} },
+                { pubkey: chain.changeAddress, change: chain.changeAddress },
+                { wif: FAKE_WIF, waitForIndexer: false }
+            );
+            // The OP_RETURN carrier at vout 0 is not the caller's coin; only the
+            // change at vout 1 comes back, with every field the encoder's
+            // validateUtxoEntry demands of a caller-supplied utxos entry.
+            assert.deepStrictEqual(result.changeOutputs, [{
+                txid:          chain.phase1.txid,
+                vout:          1,
+                value:         90_000,
+                scriptPubKey:  chain.changeScript,
+                confirmations: 0
+            }]);
+        });
+
+        it('carries a >2^53 change value as an exact decimal string, not a BigInt', function () {
+            // applyBufferutilsPatch reads a large DOGE output value as a BigInt,
+            // and JSON.stringify throws on one: the entry would kill the very
+            // createTx call it exists to fund. The encoder's parseSatoshiAmount
+            // takes the decimal-string form (allowBig), which is also what the
+            // utxo-tracker emits for the same value.
+            require('../../src/applyBufferutilsPatch.js');
+            const bitcoin = require('bitcoinjs-lib');
+            const chain = buildChangeChain();
+            const big   = 9007199254740993n;      // 2^53 + 1
+
+            const tx = new bitcoin.Transaction();
+            tx.addInput(Buffer.alloc(32), 0);
+            tx.addOutput(bitcoin.address.toOutputScript(chain.changeAddress), big);
+
+            const lm  = new LifecycleManager(makeSdk());
+            const out = lm._extractChangeOutputs(tx.toHex(), chain.changeAddress);
+            assert.strictEqual(out.length, 1);
+            assert.strictEqual(out[0].value, '9007199254740993');
+            assert.doesNotThrow(() => JSON.stringify(out));
+        });
+
+        it('tracks no change when the change destination is not a parseable address', async function () {
+            const chain = buildChangeChain();
+            const sdk = makeSdk({
+                wallet: {
+                    signPsbt:       () => ({ txHex: chain.phase1.txHex, txid: chain.phase1.txid, psbtHex: chain.phase1.psbtHex }),
+                    signRevealPsbt: () => ({ txHex: chain.phase2.txHex, txid: chain.phase2.txid, psbtHex: chain.phase2.psbtHex }),
+                }
+            }, {
+                createTx:    async () => ({ psbt: chain.phase1.psbtHex, encoding: 'OP_RETURN' }),
+                broadcastTx: async () => ({}),
+            });
+            const lm = new LifecycleManager(sdk);
+            // A raw hex pubkey is not an address; nothing can be matched, and the
+            // fail-closed answer is an empty list rather than a guessed script.
+            const result = await lm.submitAction(
+                { action: 'SEND', params: {} },
+                { pubkey: chain.pubkeyHex },
+                { wif: FAKE_WIF, waitForIndexer: false }
+            );
+            assert.deepStrictEqual(result.changeOutputs, []);
         });
 
         it('includes spentInputs array in result', async function () {
@@ -374,6 +508,37 @@ describe('LifecycleManager', function () {
             assert.ok(Array.isArray(result.spentInputs));
             // The psbt has 1 input, so spentInputs from both phases = 2
             assert.strictEqual(result.spentInputs.length, 2);
+        });
+
+        it('drops a phase-1 change output that phase 2 spends back', async function () {
+            const chain = buildChangeChain();
+            const sdk = makeSdk({
+                wallet: {
+                    signPsbt:       () => ({ txHex: chain.phase1.txHex, txid: chain.phase1.txid, psbtHex: chain.phase1.psbtHex }),
+                    signRevealPsbt: () => ({ txHex: chain.phase2.txHex, txid: chain.phase2.txid, psbtHex: chain.phase2.psbtHex }),
+                }
+            }, {
+                createTx:    async () => ({ psbt: chain.phase1.psbtHex, encoding: 'P2SH' }),
+                spendP2sh:   async () => ({ psbt: chain.phase2.psbtHex }),
+                broadcastTx: async () => ({}),
+            });
+            const lm = new LifecycleManager(sdk);
+            const result = await lm.submitAction(
+                { action: 'DEPLOY', params: {} },
+                { pubkey: chain.changeAddress, change: chain.changeAddress },
+                { wif: FAKE_WIF, waitForIndexer: false }
+            );
+            // Phase 2 consumes phase 1's change, so handing it back as spendable
+            // would put a provably-spent outpoint into the caller's UTXO set and
+            // the encoder would build a double-spend from it. Only the reveal's
+            // own change survives.
+            assert.deepStrictEqual(result.changeOutputs, [{
+                txid:          chain.phase2.txid,
+                vout:          0,
+                value:         80_000,
+                scriptPubKey:  chain.changeScript,
+                confirmations: 0
+            }]);
         });
     });
 

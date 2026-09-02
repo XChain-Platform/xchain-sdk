@@ -237,6 +237,65 @@ describe('WalletSession', function () {
             assert.strictEqual(session._utxoCache.getAvailable().length, 0);
         });
 
+        // The chaining guarantee: addSpeculative hands the change back to the
+        // cache, so the next submit spends it. Without that call every submit
+        // drains the cache, the re-pull below hands the next submit whatever the
+        // tracker has CONFIRMED, and two consecutive sends from one wallet
+        // session pick independent inputs and land as siblings, not parent -> child.
+        it('registers the change output so the next submit spends it (chain, not siblings)', async function () {
+            let calls = 0;
+            let sdk = makeSdk({
+                _requireEncoder: () => ({
+                    getUTXOs: async () => {
+                        calls += 1;
+                        return { utxos: [{ txid: 'utxo1', vout: 0, value: 100000, scriptPubKey: '76a914aa88ac' }] };
+                    }
+                })
+            });
+            let session = new WalletSession(sdk, WIF_MAINNET, { waitForIndexer: false });
+
+            const change = { txid: 'tx1', vout: 1, value: 90000, scriptPubKey: '76a914aa88ac', confirmations: 0 };
+            submitStub.onCall(0).resolves({
+                txid: 'tx1', status: 'broadcast',
+                spentInputs:   [{ txid: 'utxo1', vout: 0 }],
+                changeOutputs: [change]
+            });
+            submitStub.onCall(1).resolves({ txid: 'tx2', status: 'broadcast', spentInputs: [{ txid: 'tx1', vout: 1 }], changeOutputs: [] });
+
+            await session.submit({ action: 'SEND', params: {} });
+            await session.submit({ action: 'SEND', params: {} });
+
+            // The second submit funded from tx1's own change: that is the
+            // parent-child chain. A re-pull would mean the cache was empty and
+            // the tracker chose the inputs instead.
+            let [, encoderOpts] = submitStub.secondCall.args;
+            assert.deepStrictEqual(encoderOpts.utxos, [change]);
+            assert.strictEqual(calls, 1, 'the change made a second tracker pull unnecessary');
+        });
+
+        it('does not re-offer change that a later phase of the same submit already spent', async function () {
+            let session = new WalletSession(makeSdk(), WIF_MAINNET, { waitForIndexer: false });
+            // A two-phase action whose reveal consumed its own phase-1 change:
+            // the lifecycle already filters it out of changeOutputs, and
+            // markSpent runs first here so a stale entry could not survive either.
+            submitStub.onCall(0).resolves({
+                txid: 'p2', status: 'broadcast',
+                spentInputs:   [{ txid: 'utxo1', vout: 0 }, { txid: 'p1', vout: 1 }],
+                changeOutputs: [{ txid: 'p1', vout: 1, value: 90000, scriptPubKey: '76a914aa88ac', confirmations: 0 }]
+            });
+
+            await session.submit({ action: 'DEPLOY', params: {} });
+            let keys = session._utxoCache.getAvailable().map(u => u.txid + ':' + u.vout);
+            assert.ok(!keys.includes('p1:1'), 'a spent outpoint must never be offered as change');
+        });
+
+        it('tolerates a lifecycle result with no changeOutputs field', async function () {
+            let session = new WalletSession(makeSdk(), WIF_MAINNET, { waitForIndexer: false });
+            submitStub.onCall(0).resolves({ txid: 'tx1', status: 'broadcast', spentInputs: [{ txid: 'utxo1', vout: 0 }] });
+            await session.submit({ action: 'SEND', params: {} });
+            assert.strictEqual(session._utxoCache.getAvailable().length, 0);
+        });
+
         it('re-refreshes a drained cache so two-step workflows keep funding', async function () {
             // First refresh returns the funding UTXO; after the first submit
             // spends it the cache is empty, and the second submit must
