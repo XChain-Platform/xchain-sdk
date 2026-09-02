@@ -2108,6 +2108,15 @@ export declare class WalletSession {
     /** Refresh UTXOs from the UTXO tracker */
     refreshUTXOs(): Promise<any[]>;
 
+    /**
+     * Complete a hand-picked input list into what createTx accepts: fills the
+     * scriptPubKey (and value/confirmations) the encoder requires but the public
+     * UTXO surfaces do not return, matching each outpoint against this address's
+     * tracker view. Caller-supplied fields win. Throws UTXO_NOT_FOUND naming any
+     * outpoint it cannot complete.
+     */
+    hydrateUTXOs(utxos: Array<{ txid: string; vout: number; [k: string]: any }>, opts?: { refresh?: boolean }): Promise<any[]>;
+
     /** Submit any action using this session's credentials and UTXO cache */
     submit(actionData: { action: string; params: ActionParams }, encoderOpts?: Partial<EncoderOptions>, submitOpts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
 

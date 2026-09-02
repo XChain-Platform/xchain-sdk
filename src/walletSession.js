@@ -71,6 +71,72 @@ class WalletSession {
         return this._utxoCache.refresh(this.address, encoder);
     }
 
+    // Complete a hand-picked input list into what createTx actually accepts.
+    //
+    // The encoder REQUIRES scriptPubKey on every explicitly supplied utxo
+    // (validateUtxoEntry rejects the entry otherwise), and the public
+    // balance/UTXO surfaces callers pick their inputs from do not carry it. So
+    // "select the inputs yourself" - the documented way around any UTXO
+    // selection the session makes for you - fails on a shape the caller has no
+    // way to source. Match each outpoint against the session's tracker view,
+    // which does carry scriptPubKey, and hand back entries that can go straight
+    // into submit({ utxos }).
+    //
+    // Caller-supplied fields WIN: only what is missing is filled in, so an entry
+    // that already carries its own scriptPubKey is passed through untouched.
+    // opts.refresh = false reuses an already-loaded cache instead of re-pulling.
+    async hydrateUTXOs(utxos, opts = {}) {
+        if (!Array.isArray(utxos)) {
+            throw new SDKWalletError('INVALID_UTXOS', 'hydrateUTXOs requires an array of { txid, vout } entries');
+        }
+        if (utxos.length === 0) return [];
+
+        if (opts.refresh !== false || !this._utxoCache.isLoaded()) {
+            await this.refreshUTXOs();
+        }
+
+        let known = new Map();
+        for (let u of this._utxoCache.getAvailable()) {
+            known.set(u.txid + ':' + u.vout, u);
+        }
+
+        let hydrated = [];
+        let unresolved = [];
+        for (let u of utxos) {
+            if (!u || typeof u.txid !== 'string' || u.vout === undefined || u.vout === null) {
+                throw new SDKWalletError('INVALID_UTXOS', 'each hydrateUTXOs entry needs a txid and a vout');
+            }
+            let match = known.get(u.txid + ':' + u.vout);
+            let entry = {
+                ...(match || {}),
+                ...u
+            };
+            if (entry.scriptPubKey === undefined && match) entry.scriptPubKey = match.scriptPubKey;
+            if (entry.value === undefined && match)        entry.value        = match.value;
+            // The encoder's unconfirmed filter compares confirmations loosely
+            // against 0, and a missing field is not the same as a zero: default
+            // it only when the tracker view has no answer either.
+            if (entry.confirmations === undefined) entry.confirmations = match ? match.confirmations : 0;
+
+            if (typeof entry.scriptPubKey !== 'string' || entry.scriptPubKey.length === 0) {
+                unresolved.push(u.txid + ':' + u.vout);
+            }
+            hydrated.push(entry);
+        }
+
+        if (unresolved.length > 0) {
+            throw new SDKWalletError(
+                'UTXO_NOT_FOUND',
+                `cannot complete ${unresolved.length} hand-picked input(s) for ${this.address}: ` +
+                `${unresolved.join(', ')} carry no scriptPubKey and are not in this address's UTXO ` +
+                `tracker view (spent, belonging to another address, or not yet seen)`,
+                { address: this.address, unresolved }
+            );
+        }
+
+        return hydrated;
+    }
+
     // Submit any action using this session's key, address, and UTXO cache
     // actionData     = { action, params }
     // encoderOpts    = override encoder options (optional)
@@ -88,19 +154,38 @@ class WalletSession {
     }
 
     async _submitInner(actionData, encoderOpts = {}, submitOpts = {}) {
+        // An explicit `unconfirmed` is a policy the CALLER stated about
+        // zero-confirmation inputs, and injecting `utxos` below is what decides
+        // whether it can hold: once the encoder is handed a set it stops making
+        // its own mempool-inclusive fetch, so a cache snapshot taken before
+        // those outputs existed silently denies an opt-in the caller believes it
+        // made. Re-pull the tracker view first so what was opted into is
+        // actually on offer. Only for an EXPLICIT true: a caller who said
+        // nothing keeps the cached, chained fast path and its saved round trip.
+        let wantsUnconfirmed  = (encoderOpts.unconfirmed === true);
+        let refusesUnconfirmed = (encoderOpts.unconfirmed === false);
+
         // Lazy-load UTXOs if cache is empty and no explicit UTXOs provided
-        if (!encoderOpts.utxos && !this._utxoCache.isLoaded()) {
+        let justRefreshed = false;
+        if (!encoderOpts.utxos && (wantsUnconfirmed || !this._utxoCache.isLoaded())) {
             await this.refreshUTXOs();
+            justRefreshed = true;
         }
 
         let utxos = this._utxoCache.getAvailable();
-        // A prior submit in this session drains the cache (spent inputs are
-        // marked, but the change output isn't tracked), so the second leg of
-        // a two-step workflow (setRoster, attachContent) would otherwise fall
-        // through to the encoder's pubkey-keyed UTXO fetch, which cannot
-        // resolve a hex pubkey to an address. With waitForIndexer (the
-        // default) the prior action's change is confirmed by now: re-pull it.
-        if (!encoderOpts.utxos && utxos.length === 0 && this._utxoCache.isLoaded()) {
+        // Fallback for a submit whose change could not be tracked (a
+        // caller-supplied change address off the session key, an encoding
+        // whose change output this SDK cannot recognize): the cache is then
+        // drained, and the second leg of a two-step workflow (setRoster,
+        // attachContent) would otherwise fall through to the encoder's
+        // pubkey-keyed UTXO fetch, which cannot resolve a hex pubkey to an
+        // address. With waitForIndexer (the default) the prior action's change
+        // is confirmed by now: re-pull it. In the normal case the change was
+        // registered speculatively above and this branch never fires, which is
+        // what chains the transactions.
+        // justRefreshed: an explicit unconfirmed:true already pulled this view a
+        // few lines up, and re-pulling the same empty answer buys nothing.
+        if (!encoderOpts.utxos && utxos.length === 0 && this._utxoCache.isLoaded() && !justRefreshed) {
             await this.refreshUTXOs();
             utxos = this._utxoCache.getAvailable();
         }
@@ -117,7 +202,30 @@ class WalletSession {
         };
         // Only inject cached UTXOs if caller didn't provide their own
         if (!encoderOpts.utxos && utxos.length > 0) {
-            mergedEncoder.utxos = utxos;
+            if (refusesUnconfirmed) {
+                // unconfirmed:false refuses zero-conf inputs. The encoder applies
+                // the same filter to whatever it is handed, so the SET it ends up
+                // with is identical either way; what differs is the error when
+                // the filter empties it. Every speculative change output the
+                // session chains carries confirmations:0, so a session mid-chain
+                // is exactly the case that empties, and the encoder then reports
+                // "no utxos found on the blockchain" - which points the operator
+                // at an address that is in fact funded. Filter here so that case
+                // can say what actually happened.
+                let confirmedOnly = utxos.filter(u => Number(u.confirmations) !== 0);
+                if (confirmedOnly.length === 0) {
+                    throw new SDKWalletError(
+                        'NO_CONFIRMED_UTXOS',
+                        `unconfirmed:false was requested but every available UTXO for ${this.address} ` +
+                        `is unconfirmed (${utxos.length} zero-confirmation output(s), including this ` +
+                        `session's own chained change); wait for a block or drop unconfirmed:false`,
+                        { address: this.address, available: utxos.length }
+                    );
+                }
+                mergedEncoder.utxos = confirmedOnly;
+            } else {
+                mergedEncoder.utxos = utxos;
+            }
         }
 
         let mergedOpts = {
