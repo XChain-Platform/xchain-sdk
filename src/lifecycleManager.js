@@ -24,6 +24,14 @@ const EncoderClient = require('./encoder.js');
 const { SDKActionError, SDKConfigError } = require('./errors.js');
 const { reconcileEncoded, psbtPrevouts } = require('./reconcileEncoded.js');
 
+// Actions that execute against a CONTRACT. For these, "the transaction is
+// confirmed" is not the event a caller is waiting for: the indexer executes the
+// action in a later pass, and the deposit/execution is only real once that pass
+// has written the action's status row. Two things follow, both below:
+// strictStatus defaults on (a status the indexer never wrote is not evidence of
+// success), and opts.awaitContract can gate on the contract's own state.
+const CONTRACT_ACTIONS = new Set(['DEPOSIT', 'EXECUTE', 'WITHDRAW']);
+
 
 class LifecycleManager {
 
@@ -43,7 +51,26 @@ class LifecycleManager {
     //   requireValid    - reject if action status is 'invalid' (default true)
     //   strictStatus    - with requireValid, also refuse to ASSUME validity: reject
     //                     ACTION_STATUS_UNKNOWN when no indexer status could be read
-    //                     for the action (default false; see actionWaiter)
+    //                     for the action (see actionWaiter). Defaults to FALSE for
+    //                     ordinary actions and TRUE for the contract actions
+    //                     (DEPOSIT/EXECUTE/WITHDRAW): the explorer exposes a
+    //                     transaction's action rows as soon as the decoder writes
+    //                     them, which is BEFORE the indexer executes them against the
+    //                     contract, so resolving on a status the indexer never wrote
+    //                     returns while the deposit is still pending and the caller's
+    //                     next transaction spends inputs it already used. The indexer
+    //                     writes a status row for all three (valid or invalid), so
+    //                     waiting for one costs nothing on a healthy stack. Pass
+    //                     strictStatus:false to opt back out.
+    //   awaitContract   - gate on the CONTRACT'S OWN state before returning, which is
+    //                     the only signal that cannot race the indexer:
+    //                       { contractActionIndex, key, equals, match,   (state gate)
+    //                         tick, minQuantity,                         (balance gate)
+    //                         timeout, pollInterval }
+    //                     contractActionIndex defaults to the action's own. The state
+    //                     gate runs when key or match is given, the balance gate when
+    //                     tick is given, and both may be used together. Results land on
+    //                     result.contractState / result.contractBalance
     //   maxFeeSats      - absolute miner-fee ceiling the encoder's answer must stay
     //                     under (reconcileEncoded.js). Unset leaves only the
     //                     always-on burn guards
@@ -65,6 +92,11 @@ class LifecycleManager {
               explorer, explorerUrl, explorerPort } = opts;
         if (!wif) throw new SDKConfigError('MISSING_WIF', 'submitAction requires opts.wif (WIF private key)');
         if (waitForIndexer === undefined) waitForIndexer = true;
+
+        // See the strictStatus note above: a contract action defaults to
+        // fail-closed, everything else keeps the historical default.
+        let contractAction = CONTRACT_ACTIONS.has(String(actionData && actionData.action).toUpperCase());
+        if (strictStatus === undefined) strictStatus = contractAction;
 
         let encoder = this.sdk._requireEncoder();
         let progress = onProgress || (() => {});
@@ -350,7 +382,83 @@ class LifecycleManager {
             progress('confirmed', { txid: finalTxid, action: indexed });
         }
 
+        if (opts.awaitContract)
+            await this._awaitContract(result, actionData, opts, progress, finalTxid);
+
         return result;
+    }
+
+    // Gate on the contract's own state before handing the result back.
+    //
+    // This is the settle-safe boundary: a caller that deposits and then settles
+    // must not build the settling transaction until the contract has actually
+    // been credited, because the deposit's inputs are gone the moment it lands
+    // and the VM would revert on a balance that is not there yet. Both waits
+    // are bounded and fail CLOSED - a gate that never sees the state throws
+    // rather than letting the caller proceed on an assumption.
+    async _awaitContract(result, actionData, opts, progress, finalTxid) {
+        let gate  = opts.awaitContract;
+        let index = (gate.contractActionIndex !== undefined && gate.contractActionIndex !== null)
+            ? gate.contractActionIndex
+            : LifecycleManager._contractIndexOf(actionData);
+        if (index === undefined || index === null || index === '')
+            throw new SDKConfigError('MISSING_CONTRACT_INDEX',
+                'opts.awaitContract needs a contractActionIndex; this action does not carry one');
+
+        let waitOpts = {
+            timeout:      gate.timeout      !== undefined ? gate.timeout      : (opts.timeout || 120000),
+            pollInterval: gate.pollInterval !== undefined ? gate.pollInterval : (opts.pollInterval || 2000),
+            explorer:     opts.explorer,
+            explorerUrl:  opts.explorerUrl,
+            explorerPort: opts.explorerPort
+        };
+        let waiter = new ActionWaiter(this.sdk);
+
+        try {
+            if (gate.key !== undefined || typeof gate.match === 'function') {
+                progress('waiting_contract_state', { contractActionIndex: index, key: gate.key });
+                result.contractState = await waiter.waitForContractState(index, Object.assign({}, waitOpts, {
+                    key:    gate.key,
+                    equals: gate.equals,
+                    match:  gate.match
+                }));
+            }
+            if (gate.tick) {
+                progress('waiting_contract_balance', { contractActionIndex: index, tick: gate.tick });
+                result.contractBalance = await waiter.waitForContractBalance(index, gate.tick,
+                    Object.assign({}, waitOpts, { minQuantity: gate.minQuantity }));
+            }
+        } catch (err) {
+            // Same reasoning as the indexer-wait timeout: the transaction IS
+            // broadcast, so this is "not executed yet", never "not sent". A
+            // caller that rebuilds on this error double-spends its own inputs.
+            if (err && (err.code === 'CONTRACT_STATE_TIMEOUT' || err.code === 'CONTRACT_BALANCE_TIMEOUT')) {
+                err.broadcast = true;
+                err.txid      = finalTxid;
+                if (err.details && typeof err.details === 'object') {
+                    err.details.broadcast = true;
+                    err.details.txid      = finalTxid;
+                }
+            }
+            throw err;
+        }
+
+        progress('contract_settled', {
+            contractActionIndex: index,
+            state:   result.contractState   || null,
+            balance: result.contractBalance || null
+        });
+    }
+
+    // The contract an action targets, from its own params. Accepts the camelCase
+    // form callers write and the upper-case wire form, so a params object built
+    // either way gates on the right contract.
+    static _contractIndexOf(actionData) {
+        let params = (actionData && actionData.params) || {};
+        let index = params.contractActionIndex;
+        if (index === undefined) index = params.CONTRACT_ACTION_INDEX;
+        if (index === undefined) index = params.contract_action_index;
+        return index;
     }
 
     // Extract input references from an unsigned PSBT hex for UTXO cache tracking

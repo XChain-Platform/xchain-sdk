@@ -1313,6 +1313,24 @@ describe('XChainSDK', function () {
             const result = await sdk.waitForActionIndex(99, {});
             expect(result.action_index).to.equal(99);
         });
+
+        it('waitForContractState creates ActionWaiter and gates on contract state', async function () {
+            sdk = makeSDK();
+            const ActionWaiter = require('../../src/actionWaiter.js');
+            const stub = sinon.stub(ActionWaiter.prototype, 'waitForContractState').resolves({ value: 'FUNDED' });
+            const result = await sdk.waitForContractState(73, { key: 'status', equals: 'FUNDED' });
+            expect(result.value).to.equal('FUNDED');
+            expect(stub.firstCall.args[0]).to.equal(73);
+        });
+
+        it('waitForContractBalance creates ActionWaiter and gates on the contract balance', async function () {
+            sdk = makeSDK();
+            const ActionWaiter = require('../../src/actionWaiter.js');
+            const stub = sinon.stub(ActionWaiter.prototype, 'waitForContractBalance').resolves({ quantity: '1000' });
+            const result = await sdk.waitForContractBalance(73, 'PAY514', { minQuantity: '1000' });
+            expect(result.quantity).to.equal('1000');
+            expect(stub.firstCall.args[1]).to.equal('PAY514');
+        });
     });
 
     // _applyEndpoints: creates clients when they don't exist

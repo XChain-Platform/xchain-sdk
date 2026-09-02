@@ -26,6 +26,7 @@ Developer-facing SDK for the [XChain Platform](https://xchain.io/): generate XCh
 - **Workflow recipes**: `sdk.issueAndDistribute()`, `sdk.deployAndFund()`, `sdk.stakeAndDelegate()`, and more
 - **Cross-chain helpers**: coordinate swaps and parallel actions across BTC, LTC, and DOGE SDK instances
 - **Event-driven confirmation**: `sdk.waitForAction(txid)` resolves when the indexer processes a transaction
+- **Contract settle gate**: `sdk.waitForContractState(index, { key: 'status', equals: 'FUNDED' })` and `sdk.waitForContractBalance(index, tick, { minQuantity })` wait on the contract's own state, which is the only signal that cannot race the indexer; `submitAction({ awaitContract: {...} })` runs the same gate inline, so a deposit does not hand control back before the contract has been credited
 - **Interactive REPL**: `npm run repl` drops into a live session with a pre-configured SDK instance
 - **Automatic format selection**: picks the smallest encoding format for every action
 - **PSBT generation**: integrates with xchain-encoder to produce unsigned transactions

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `sdk.waitForContractState()`, `sdk.waitForContractBalance()` and the bound `contract.waitForState()` / `contract.waitForBalance()` wait on a contract's own state instead of on transaction confirmation.
+- `submitAction({ awaitContract })` gates a contract action on that state before returning, so a deposit cannot be settled before the indexer has executed it.
+
+### Changed
+- DEPOSIT, EXECUTE and WITHDRAW default to `strictStatus`, refusing to resolve on an action row the indexer has not yet written a status for.
+
 ## [0.12.0] - 2026-08-30
 
 ### Added

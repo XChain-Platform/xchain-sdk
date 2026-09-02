@@ -2125,6 +2125,26 @@ class XChainSDK {
         return waiter.waitForActionIndex(actionIndex, opts);
     }
 
+    // Wait until a CONTRACT'S OWN state satisfies a condition, e.g.
+    //   await sdk.waitForContractState(73, { key: 'status', equals: 'FUNDED' })
+    // This is the gate a caller needs before settling against a contract: a
+    // confirmed transaction, and even a visible action row, is earlier than the
+    // indexer executing the action, and settling in that gap spends inputs the
+    // pending action already used. opts: { key, equals, match, timeout,
+    // pollInterval, explorer | explorerUrl+explorerPort }.
+    async waitForContractState(contractActionIndex, opts) {
+        let waiter = new ActionWaiter(this);
+        return waiter.waitForContractState(contractActionIndex, opts);
+    }
+
+    // Wait until a contract HOLDS a token balance: the same gate for a DEPOSIT,
+    // which credits the contract without writing any state key of its own.
+    // opts adds minQuantity (default: any quantity above zero).
+    async waitForContractBalance(contractActionIndex, tick, opts) {
+        let waiter = new ActionWaiter(this);
+        return waiter.waitForContractBalance(contractActionIndex, tick, opts);
+    }
+
     // Listen for network stats updates
     // Returns an unsubscribe function
     onNetworkStats(callback) {

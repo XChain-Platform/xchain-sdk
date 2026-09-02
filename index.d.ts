@@ -1138,6 +1138,15 @@ export declare class ContractClient {
     getBalance(tick?: string): Promise<ContractBalanceEntry | ContractBalanceEntry[]>;
     /** Get the contract's declared permissions manifest (programmable policy layer) */
     getManifest(): Promise<ContractManifest>;
+
+    /**
+     * Wait until this contract's OWN state satisfies a condition, e.g.
+     * `{ key: 'status', equals: 'FUNDED' }`. The gate to hold before settling:
+     * a confirmed transaction is earlier than the indexer executing the action.
+     */
+    waitForState(opts: WaitForContractStateOpts): Promise<ContractStateWaitResult>;
+    /** Wait until this contract holds a token balance (the DEPOSIT gate). */
+    waitForBalance(tick: string, opts?: WaitForContractBalanceOpts): Promise<ContractBalanceWaitResult>;
 }
 
 
@@ -1647,6 +1656,17 @@ export declare class XChainSDK {
     /** Wait for a specific action_index to appear in the explorer */
     waitForActionIndex(actionIndex: number | string, opts?: WaitForActionOpts): Promise<any>;
 
+    /**
+     * Wait until a CONTRACT'S OWN state satisfies a condition, e.g.
+     * `sdk.waitForContractState(73, { key: 'status', equals: 'FUNDED' })`.
+     * A confirmed transaction is earlier than the indexer executing the action,
+     * and settling in that gap spends inputs the pending action already used.
+     */
+    waitForContractState(contractActionIndex: number | string, opts: WaitForContractStateOpts): Promise<ContractStateWaitResult>;
+
+    /** Wait until a contract HOLDS a token balance: the same gate for a DEPOSIT. */
+    waitForContractBalance(contractActionIndex: number | string, tick: string, opts?: WaitForContractBalanceOpts): Promise<ContractBalanceWaitResult>;
+
 
     /*
      *  WebSocket: Real-Time Subscription methods
@@ -1999,6 +2019,29 @@ export interface SubmitActionOpts {
     pollInterval?: number;
     /** Reject if action status is 'invalid' (default: true) */
     requireValid?: boolean;
+    /**
+     * With requireValid, also refuse to ASSUME validity when the indexer wrote
+     * no status for the action. Defaults to false for ordinary actions and TRUE
+     * for DEPOSIT/EXECUTE/WITHDRAW, whose action rows are visible before the
+     * indexer executes them against the contract.
+     */
+    strictStatus?: boolean;
+    /**
+     * Gate on the CONTRACT'S OWN state before resolving, the only signal that
+     * cannot race the indexer. The state gate runs when key or match is given,
+     * the balance gate when tick is given, and both may be used together;
+     * contractActionIndex defaults to the one the action itself targets.
+     */
+    awaitContract?: {
+        contractActionIndex?: number | string;
+        key?: string;
+        equals?: any;
+        match?: (state: Record<string, any>, ctx: ContractStateWaitResult) => boolean;
+        tick?: string;
+        minQuantity?: number | string;
+        timeout?: number;
+        pollInterval?: number;
+    };
     /** Explorer client the indexer wait polls instead of the SDK's own. */
     explorer?: any;
     /** Host/URL to build that explorer client from (with explorerPort); for isolated stacks. */
@@ -2034,6 +2077,59 @@ export interface SubmitActionResult {
     changeOutputs: Array<{ txid: string; vout: number; value: number | string; scriptPubKey: string; confirmations: number }>;
     /** Indexed action data (null if waitForIndexer was false) */
     indexed: any | null;
+    /** Contract state read by the awaitContract state gate, when one ran */
+    contractState?: ContractStateWaitResult;
+    /** Contract balance read by the awaitContract balance gate, when one ran */
+    contractBalance?: ContractBalanceWaitResult;
+}
+
+export interface WaitForContractStateOpts {
+    /** State key to read (reads the whole state map when absent) */
+    key?: string;
+    /** Value that key must hold, compared against the PARSED value */
+    equals?: any;
+    /** Predicate run against the whole state map instead of/alongside equals */
+    match?: (state: Record<string, any>, ctx: ContractStateWaitResult) => boolean;
+    /** Timeout in ms (default: 120000) */
+    timeout?: number;
+    /** Polling interval in ms (default: 2000) */
+    pollInterval?: number;
+    /** Explorer client to poll INSTEAD of this SDK's own (isolated stacks). */
+    explorer?: any;
+    /** Host/URL to build that explorer client from (with explorerPort). */
+    explorerUrl?: string;
+    /** Port for explorerUrl. */
+    explorerPort?: number;
+}
+
+export interface WaitForContractBalanceOpts extends Omit<WaitForContractStateOpts, 'key' | 'equals' | 'match'> {
+    /** Minimum quantity the contract must hold (default: any quantity above zero) */
+    minQuantity?: number | string;
+    /** Predicate run against the quantity STRING */
+    match?: (quantity: string | null, ctx: ContractBalanceWaitResult) => boolean;
+}
+
+export interface ContractStateWaitResult {
+    contractActionIndex: number | string;
+    key?: string;
+    /** Parsed value of `key`, undefined when the key is not present */
+    value?: any;
+    /**
+     * The state this read returned as a { key: parsedValue } map: the whole
+     * state when no key was given, that key's row alone when one was.
+     */
+    state: Record<string, any>;
+    /** The raw explorer response */
+    raw: any;
+}
+
+export interface ContractBalanceWaitResult {
+    contractActionIndex: number | string;
+    tick: string;
+    /** Exact decimal string, or null when the contract holds no row for the tick */
+    quantity: string | null;
+    /** The raw explorer response */
+    raw: any;
 }
 
 export interface WaitForActionOpts {
