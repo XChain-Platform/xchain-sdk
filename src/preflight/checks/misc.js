@@ -40,8 +40,14 @@ const ASPECT_NOTES = {
     DEPOSIT:  'contract active-state resolves server-side',
     WITHDRAW: 'deployer-only gate and contract credit resolve server-side',
     COINPAY:  'obligation existence/match/expiry resolve server-side; Tier 1 gives NO verdict (feeExempt)',
-    BROADCAST:'no chain-state preconditions beyond format',
-    MESSAGE:  'no chain-state preconditions beyond format',
+    // null: the action has no chain-state precondition at all, so there is
+    // nothing the client failed to check and nothing belongs under the
+    // wallet's "Could not verify" heading. Emitting "no chain-state
+    // preconditions beyond format" there read as a failure to the first
+    // testnet user who met it, and a positive statement filed under a
+    // negative heading is worse than no entry.
+    BROADCAST: null,
+    MESSAGE:   null,
     FILE:     'gated-transfer ownership/escrow state resolves server-side',
     LINK:     'target-action ownership resolves server-side',
     LIST:     'per-item validity is recorded per-item on-chain, never a reject',
@@ -52,6 +58,7 @@ const ASPECT_NOTES = {
 
 async function checkMisc(ctx) {
     const action = ctx.parsed.action;
+    if (Object.prototype.hasOwnProperty.call(ASPECT_NOTES, action) && ASPECT_NOTES[action] === null) return;
     const note = ASPECT_NOTES[action];
     if (note) ctx.addUnverified(action + '_STATE', note);
     else ctx.addUnverified(action + '_STATE', 'no client-side state checks are certified for this action');
