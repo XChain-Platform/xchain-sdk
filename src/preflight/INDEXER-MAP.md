@@ -43,7 +43,7 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-**Pins taken at indexer commit:** `c49b9710`
+**Pins taken at indexer commit:** `af901c3b`
 
 (Re-anchored 2026-08-25 by the `dispenser.js` + `dispense.js` pass, whose
 entry below declares this anchor. `2b65e8a4` is reachable from the indexer
@@ -79,7 +79,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff c49b9710..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff af901c3b..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -127,7 +127,7 @@ found by hashing candidate blobs as above.
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `971338842f897e140d27565a4e01cdb364da14b81bb58e140dd6014d529b35fb` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `956463e64bb90087364b2c109c6d1f27a5b3526fd24415d6b9c22042e65e1479` |
 | `checks/dividend.js` | `src/actions/dividend.js` | `318754131de748339bad0a79eb2381309dac240150858f9a33abde42f9007248` |
-| `checks/batch.js` | `src/actions/batch.js` | `5ad83d4788ad84225a51e7f86161d207a6e8164320b6d1dc27f3fb3c40b9f1e5` |
+| `checks/batch.js` | `src/actions/batch.js` | `35bdc7ff59f7f72819c8159163583899e6bdc43b27a6db1b59aa973739e79eeb` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -136,6 +136,25 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-03 - `batch.js`, against indexer HEAD `af901c3b`
+
+No client check moves. The handler now reports a guard-inert controller refusal
+inside a probed BATCH as UNJUDGED, `status: null` with a `refused` note naming
+the controller, where it previously passed the raw
+`invalid: FEE_QUOTE_CONTROLLER_UNSUPPORTED` status through. Every consumer reads
+a non-empty status as a rejection, so the old shape manufactured a false
+negative: a SEND that pre-flighted guard-inert and landed valid on its own
+reported "will fail" as a batch sub-command.
+
+`checks/batch.js` needs nothing, because this is a third producer of a shape the
+client already consumes rather than a new contract. `src/preflight/index.js`
+documents unjudged as "`status === null`, with or without a `refused` note" and
+falls back to a generic sentence when the note is absent, and `tier1.js` already
+parses `refused` defensively. The VM sub-action refusal and the settlement case
+take the same road.
+
+Anchor moves to `af901c3b`.
 
 ### 2026-08-29 - `dividend.js` + `batch.js`, against indexer HEAD `c49b9710`
 
