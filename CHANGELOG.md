@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.15.0] - 2026-09-04
 
 ### Added
 - `sdk.waitForContractState()`, `sdk.waitForContractBalance()` and the bound `contract.waitForState()` / `contract.waitForBalance()` wait on a contract's own state instead of on transaction confirmation.
@@ -16,9 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `onAddress` delivers the XCALL_COMPLETED and XCALL_EXPIRED frames the explorer routes to an address instead of dropping them.
 - A MuSig2 `sessionId` is single-use: every repeat is refused, so one secret nonce can no longer be re-issued and spent in two signing sessions.
 
+### Fixed
+- An explicit unconfirmed policy is honoured and hand-picked inputs are completed.
+- A submit change output is registered so consecutive session submits chain.
+- Preflight no longer files actions with nothing to verify under "Could not verify"; the batch handler is re-pinned and the indexer map re-anchored.
+
 ### Changed
 - DEPOSIT, EXECUTE and WITHDRAW default to `strictStatus`, refusing to resolve on an action row the indexer has not yet written a status for.
 - The light client fetches an explorer validator set once per checkpoint height per session instead of once per proof.
+- The stripped-globals module is vendored from the VM and guarded against drift.
+- The vendored coin registry is resynced from the hub.
 
 ## [0.12.0] - 2026-08-30
 

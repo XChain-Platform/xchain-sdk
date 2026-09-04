@@ -5,7 +5,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/npm/v/%40dankest-llc%2Fxchain-sdk" alt="npm version">
-  <img src="https://img.shields.io/badge/tests-4%2C345%2B%20passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-4%2C408%2B%20passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/node-%3E%3D22-green" alt="Node">
   <img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue" alt="License">
 </p>
@@ -177,7 +177,7 @@ const token = await sdk.getToken('MYTOKEN');
 | Command | Description |
 |---|---|
 | `npm run api` | Start JSON-RPC server (port from `SDK_API_PORT`, default 3005) |
-| `npm test` | Run unit tests (4,051 tests) |
+| `npm test` | Run unit tests (4,114 tests) |
 | `npm run repl` | Start interactive REPL with a pre-configured SDK instance |
 | `npm run build` | Production browser bundle -> `dist/xchain_sdk.min.js` |
 | `npm run build:dev` | Development browser bundle -> `dist/xchain_sdk.js` |
