@@ -352,14 +352,37 @@ async function _verifyQuorum(f, explorerUrl, coin, cp, suppliedValidators){
     return checkpoint.verifyCheckpoint(cp, validators);
 }
 
+// Cache the explorer's /verify validator set per (explorer, coin, checkpoint
+// height): a CLOSED checkpoint's signer set never changes, so repeat proofs at
+// one height ask the same question; bounded so a long session can't grow it.
+const VALIDATOR_SET_CACHE_MAX = 64;
+const validatorSetCache = new Map();
+
+// Reset the cache: for tests, and for any embedder that wants a clean slate
+// without restarting the process.
+function clearValidatorSetCache(){ validatorSetCache.clear(); }
+
 // Tier 3 of the ladder on its own: ask the explorer which set qualifies for `cp`
 // under the coin prefix `coin`. Trusts the explorer for the SET only; the caller
 // still checks signatures and quorum locally. Transport failures throw.
+//
+// Cached by PROMISE so concurrent callers at one key (the wallet fans proof
+// jobs through a pool of 6) share one in-flight read instead of each firing a
+// request; a rejected fetch is evicted immediately so a blip is not pinned.
 async function _explorerValidators(f, explorerUrl, coin, cp){
+    const key = _base(explorerUrl) + '|' + String(coin) + '|' + String(cp.block_index);
+    const cached = validatorSetCache.get(key);
+    if (cached) return cached;
     const url = _base(explorerUrl) + '/' + encodeURIComponent(String(coin)) +
                 '/api/checkpoint/' + encodeURIComponent(String(cp.block_index)) + '/verify';
-    const vb = await _json(f, url);
-    return (vb && vb.validators) || [];
+    const p = _json(f, url).then((vb) => (vb && vb.validators) || []);
+    p.catch(() => { validatorSetCache.delete(key); });
+    if (validatorSetCache.size >= VALIDATOR_SET_CACHE_MAX){
+        const oldestKey = validatorSetCache.keys().next().value;
+        validatorSetCache.delete(oldestKey);
+    }
+    validatorSetCache.set(key, p);
+    return p;
 }
 
 // Resolve a served checkpoint `cp` to a quorum verdict. Order of trust:
@@ -1056,5 +1079,6 @@ module.exports = {
     verifyCheckpointWithProvenSet,
     followForward,
     getPinnedCheckpoint: pinned.getPinnedCheckpoint,
-    getPinnedValidators: pinned.getPinnedValidators
+    getPinnedValidators: pinned.getPinnedValidators,
+    clearValidatorSetCache
 };

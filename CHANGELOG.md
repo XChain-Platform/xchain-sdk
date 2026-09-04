@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - DEPOSIT, EXECUTE and WITHDRAW default to `strictStatus`, refusing to resolve on an action row the indexer has not yet written a status for.
+- The light client fetches an explorer validator set once per checkpoint height per session instead of once per proof.
 
 ## [0.12.0] - 2026-08-30
 
