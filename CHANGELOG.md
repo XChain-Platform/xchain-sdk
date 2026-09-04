@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.15.0] - 2026-09-04
+## [0.15.0] - 2026-09-07
 
 ### Added
 - `sdk.waitForContractState()`, `sdk.waitForContractBalance()` and the bound `contract.waitForState()` / `contract.waitForBalance()` wait on a contract's own state instead of on transaction confirmation.
@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The light client fetches an explorer validator set once per checkpoint height per session instead of once per proof.
 - The stripped-globals module is vendored from the VM and guarded against drift.
 - The vendored coin registry is resynced from the hub.
+- Three dependency floors move off advisory ranges disclosed against the shipped tree, with hono gaining a floor it did not have.
 
 ## [0.12.0] - 2026-08-30
 
