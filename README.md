@@ -162,6 +162,9 @@ const token = await sdk.getToken('MYTOKEN');
 | `SDK_API_PORT` | No | `3005` | Port for the optional SDK helper API |
 | `SDK_API_KEY` | No | (none) | API key for the helper API; required as `Authorization: Bearer <key>` on every method except `ping` (methods reject with 401 when unset) |
 | `CORS_ORIGIN` | No | Disabled | CORS allowed origin for the helper API |
+| `SDK_API_MAX_BATCH` | No | `20` | Maximum JSON-RPC calls in one array (batch) body. A non-numeric or non-positive value falls back to `20`; no value disables the cap |
+| `SDK_API_RATE_LIMIT` | No | `300` | Requests per window per credential (per source address when unauthenticated). A non-numeric or negative value falls back to `300`; an explicit `0` disables the limiter and is the only way to turn it off |
+| `SDK_API_RATE_WINDOW_MS` | No | `60000` | Length of the fixed rate-limit window, in milliseconds. A non-numeric or non-positive value falls back to `60000` |
 | `EXPLORER_URL` / `EXPLORER_PORT` | No | `127.0.0.1` / `8080` | xchain-explorer location |
 | `ENCODER_URL` / `ENCODER_PORT` | No | `127.0.0.1` / `3003` | xchain-encoder location |
 | `HUB_URL` | No | (none) | Full xchain-hub URL |

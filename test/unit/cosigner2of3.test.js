@@ -110,6 +110,44 @@ describe('cosigner/account deriveMuSig2P2TR2of3 (recovery)', function () {
         expect(schnorr.verify(out.signature, out.msg, acct.outputXOnly)).to.equal(true);
     });
 
+    it('refuses a swapped [daemon, agent] pair rather than deriving a different 2-of-3 tree', function () {
+        const agent = key(), daemon = key(), recovery = key();
+        const policy = { allowedActions: new Set(['SEND']) };
+
+        // The 2-of-3 tree is order-sensitive, so the swap is not a relabelling: it
+        // commits DIFFERENT recovery leaves and a different address. Prove that
+        // first, so the refusal below is guarding something real.
+        const right = deriveMuSig2P2TR2of3({ agent: agent.pk, daemon: daemon.pk, recovery: recovery.pk });
+        const swapped = deriveMuSig2P2TR2of3({ agent: daemon.pk, daemon: agent.pk, recovery: recovery.pk });
+        expect(swapped.address).to.not.equal(right.address);
+        expect(swapped.recovery.agentRecovery.script.equals(right.recovery.agentRecovery.script))
+            .to.equal(false);
+
+        // The daemon must be publicKeys[1]; the agent half normalizes by searching
+        // for its own key, so nothing downstream would have caught the swap.
+        expect(() => new CoSigner({ secretKey: daemon.sk,
+            publicKeys: [daemon.pk, agent.pk], recoveryPublicKey: recovery.pk, policy }))
+            .to.throw(/must occupy publicKeys\[1\]/);
+        // The correctly ordered pair still constructs.
+        expect(() => new CoSigner({ secretKey: daemon.sk,
+            publicKeys: [agent.pk, daemon.pk], recoveryPublicKey: recovery.pk, policy })).to.not.throw();
+    });
+
+    it('refuses a signer set its own secretKey is not in, in either account shape', function () {
+        const agent = key(), daemon = key(), stranger = key(), recovery = key();
+        const policy = { allowedActions: new Set(['SEND']) };
+        expect(() => new CoSigner({ secretKey: stranger.sk,
+            publicKeys: [agent.pk, daemon.pk], policy }))
+            .to.throw(/does not derive any key in publicKeys/);
+        expect(() => new CoSigner({ secretKey: stranger.sk,
+            publicKeys: [agent.pk, daemon.pk], recoveryPublicKey: recovery.pk, policy }))
+            .to.throw(/does not derive any key in publicKeys/);
+        // A plain 2-of-2 daemon in either slot is fine: key aggregation is over the
+        // set both halves share, and no asymmetric leaf hangs off the order.
+        expect(() => new CoSigner({ secretKey: daemon.sk, publicKeys: [daemon.pk, agent.pk], policy }))
+            .to.not.throw();
+    });
+
     it('agent+recovery satisfy leaf 1 (script-path recovery if the daemon is lost)', function () {
         const agent = key(), daemon = key(), recovery = key();
         const acct = deriveMuSig2P2TR2of3({ agent: agent.pk, daemon: daemon.pk, recovery: recovery.pk });

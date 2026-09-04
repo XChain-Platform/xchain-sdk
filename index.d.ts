@@ -978,7 +978,8 @@ export interface MuSig2GenerateNonceParams {
     publicKey: Uint8Array;
     /** Optional secret key (32 bytes), improves nonce randomness */
     secretKey?: Uint8Array;
-    /** 32 bytes of session randomness; library uses secure random if omitted */
+    /** 32 bytes of session randomness, SINGLE-USE per publicKey (a repeat throws
+     *  SESSION_ID_REUSED); library uses secure random if omitted */
     sessionId?: Uint8Array;
     /** Aggregated x-only public key (binds nonce to the key-agg context) */
     xOnlyPublicKey?: Uint8Array;
@@ -1690,7 +1691,7 @@ export declare class XChainSDK {
     /** Subscribe to new actions with optional type/status/tick filters. */
     onAction(callback: (msg: any) => void, opts?: { types?: string[]; ticks?: string[] }): () => void;
 
-    /** Subscribe to all events touching an address: NEW_ACTION, ADDRESS_UPDATE, MEMPOOL_ACTION, MEMPOOL_REMOVED, ORDER_MATCH, ORDER_EXPIRED, COINPAY_REQUIRED/FULFILLED/EXPIRED, SWAP_MATCH, SWAP_EXPIRED, DISPENSE, DISPENSER_CLOSED, DISPENSER_EXPIRED, BET, BET_EXPIRED, BET_CLOSED, ATTESTATION_REQUEST, ATTESTATION_RESPONSE. */
+    /** Subscribe to all events touching an address: NEW_ACTION, ADDRESS_UPDATE, MEMPOOL_ACTION, MEMPOOL_REMOVED, ORDER_MATCH, ORDER_EXPIRED, COINPAY_REQUIRED/FULFILLED/EXPIRED, SWAP_MATCH, SWAP_EXPIRED, DISPENSE, DISPENSER_CLOSED, DISPENSER_EXPIRED, BET, BET_EXPIRED, BET_CLOSED, XCALL_COMPLETED, XCALL_EXPIRED, ATTESTATION_REQUEST, ATTESTATION_RESPONSE. */
     onAddress(address: string, callback: (msg: any) => void, opts?: { types?: string[]; snapshot?: boolean }): () => void;
 
     /**
@@ -1725,7 +1726,7 @@ export declare class XChainSDK {
     /** Subscribe to one betting market by its feed action index: BET (branch on data.action_format), BET_EXPIRED, BET_CLOSED and the initial SNAPSHOT. */
     onBetFeed(feedActionIndex: number | string, callback: (msg: any) => void): () => void;
 
-    /** Subscribe to one cross-chain call by its 64-hex call_id: XCALL_COMPLETED and XCALL_EXPIRED. */
+    /** Subscribe to one cross-chain call by its 64-hex call_id: XCALL_COMPLETED, XCALL_EXPIRED and the initial SNAPSHOT. The id is lower-cased before it is sent, because the explorer normalizes case at subscribe time. */
     onXcall(callId: string, callback: (msg: any) => void): () => void;
 
     /** Subscribe to the global attestation stream: ATTESTATION_REQUEST and ATTESTATION_RESPONSE. */

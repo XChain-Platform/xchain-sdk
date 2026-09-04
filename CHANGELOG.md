@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `sdk.waitForContractState()`, `sdk.waitForContractBalance()` and the bound `contract.waitForState()` / `contract.waitForBalance()` wait on a contract's own state instead of on transaction confirmation.
 - `submitAction({ awaitContract })` gates a contract action on that state before returning, so a deposit cannot be settled before the indexer has executed it.
+- `sdk.onXcall(callId, cb)` follows one cross-chain call's completion, expiry and initial snapshot.
+
+### Fixed
+- `onAddress` delivers the XCALL_COMPLETED and XCALL_EXPIRED frames the explorer routes to an address instead of dropping them.
+- A MuSig2 `sessionId` is single-use: every repeat is refused, so one secret nonce can no longer be re-issued and spent in two signing sessions.
 
 ### Changed
 - DEPOSIT, EXECUTE and WITHDRAW default to `strictStatus`, refusing to resolve on an action row the indexer has not yet written a status for.

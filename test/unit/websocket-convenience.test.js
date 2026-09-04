@@ -250,7 +250,8 @@ describe('XChainSDK – WebSocket convenience methods', function () {
         // to the address channel of each address its `data` names, independently of
         // the event's own entity channel. A type absent from the registration list
         // is therefore a frame the server sends and this client silently drops.
-        // These are the nine names that were absent.
+        // These are the nine names that were absent, plus the two XCALL phases
+        // that later shipped on the producer and were dropped the same way.
         it('fires on the later lifecycle types the explorer routes to an address @regression', async function () {
             await sdk.connectWs();
             const spy = sinon.spy();
@@ -264,6 +265,10 @@ describe('XChainSDK – WebSocket convenience methods', function () {
                 { type: 'BET',                  data: { action_index: 605, source: '1abc', feed_action_index: 7, action_format: 2 } },
                 { type: 'BET_EXPIRED',          data: { action_index: 606, source: '1abc', feed_action_index: 7 } },
                 { type: 'BET_CLOSED',           data: { action_index: 7,   source: '1abc', feed_action_index: 7, synthetic: true } },
+                // The two XCALL terminal phases were the next pair to ship on the
+                // producer (spec M5.4) and to go unregistered here.
+                { type: 'XCALL_COMPLETED',      data: { action_index: 609, source: '1abc', call_id: 'a'.repeat(64), synthetic: true } },
+                { type: 'XCALL_EXPIRED',        data: { action_index: 610, source: '1abc', call_id: 'b'.repeat(64), synthetic: false } },
                 { type: 'ATTESTATION_REQUEST',  data: { action_index: 607, source: '1abc', version: 0 } },
                 { type: 'ATTESTATION_RESPONSE', data: { action_index: 608, source: '1abc', version: 1 } }
             ];
@@ -582,6 +587,101 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             expect(() => sdk.onBetFeed('abc', () => {})).to.throw(/must be a numeric ACTION_INDEX/);
             expect(() => sdk.onBetFeed(null, () => {})).to.throw(/must be a numeric ACTION_INDEX/);
             expect(() => sdk.onBetFeed('-1', () => {})).to.throw(/must be a numeric ACTION_INDEX/);
+        });
+    });
+
+    describe('onXcall', function () {
+
+        const CALL_ID = 'a1b2c3d4'.repeat(8);
+
+        it('fires on both terminal phases for the subscribed call', async function () {
+            await sdk.connectWs();
+            const spy = sinon.spy();
+            sdk.onXcall(CALL_ID, spy);
+
+            server._lastClient.send(JSON.stringify({
+                type: 'XCALL_COMPLETED',
+                data: { call_id: CALL_ID, action_index: 901, request_status: 'completed', synthetic: true }
+            }));
+            server._lastClient.send(JSON.stringify({
+                type: 'XCALL_EXPIRED',
+                data: { call_id: CALL_ID, action_index: 902, request_status: 'expired', result_status: null }
+            }));
+            await waitForCalls(spy, 2);
+
+            expect(spy.getCalls().map(c => c.args[0].type))
+                .to.deep.equal(['XCALL_COMPLETED', 'XCALL_EXPIRED']);
+        });
+
+        it('does not fire on another call\'s terminal phase', async function () {
+            await sdk.connectWs();
+            const spy = sinon.spy();
+            sdk.onXcall(CALL_ID, spy);
+
+            server._lastClient.send(JSON.stringify({
+                type: 'XCALL_COMPLETED', data: { call_id: 'f'.repeat(64), action_index: 903 }
+            }));
+            await barrier();
+
+            expect(spy.called).to.be.false;
+        });
+
+        // Only the Broadcaster's ROUTING key is lower-cased, so an id that comes
+        // back upper-cased inside `data` is the same call and must still deliver.
+        it('matches the frame call_id case-insensitively', async function () {
+            await sdk.connectWs();
+            const spy = sinon.spy();
+            sdk.onXcall(CALL_ID, spy);
+
+            server._lastClient.send(JSON.stringify({
+                type: 'XCALL_COMPLETED', data: { call_id: CALL_ID.toUpperCase(), action_index: 904 }
+            }));
+            await waitForCalls(spy);
+
+            expect(spy.calledOnce).to.be.true;
+        });
+
+        it('fires on the xcall SNAPSHOT frame and not another channel\'s', async function () {
+            await sdk.connectWs();
+            const spy = sinon.spy();
+            sdk.onXcall(CALL_ID, spy);
+
+            server._lastClient.send(JSON.stringify({
+                type: 'SNAPSHOT', data: { channel: 'bet_feed', action_index: 7, call_id: CALL_ID }
+            }));
+            server._lastClient.send(JSON.stringify({
+                type: 'SNAPSHOT', data: { channel: 'xcall', call_id: CALL_ID, request_status: 'pending' }
+            }));
+            await waitForCalls(spy);
+
+            expect(spy.calledOnce).to.be.true;
+            expect(spy.firstCall.args[0].data.channel).to.equal('xcall');
+        });
+
+        it('unsubscribe removes every handler it registered, SNAPSHOT included', async function () {
+            await sdk.connectWs();
+            const spy = sinon.spy();
+            const unsub = sdk.onXcall(CALL_ID, spy);
+            unsub();
+
+            server._lastClient.send(JSON.stringify({
+                type: 'XCALL_EXPIRED', data: { call_id: CALL_ID, action_index: 905 }
+            }));
+            server._lastClient.send(JSON.stringify({
+                type: 'SNAPSHOT', data: { channel: 'xcall', call_id: CALL_ID }
+            }));
+            await barrier();
+
+            expect(spy.called).to.be.false;
+        });
+
+        // Matched on the message body, not the method name, for the same reason
+        // the onBetFeed case above is: a missing method throws too.
+        it('rejects a call_id that is not 64 hex', async function () {
+            await sdk.connectWs();
+            expect(() => sdk.onXcall('abc', () => {})).to.throw(/must be a 64-character hex string/);
+            expect(() => sdk.onXcall(null, () => {})).to.throw(/must be a 64-character hex string/);
+            expect(() => sdk.onXcall('g'.repeat(64), () => {})).to.throw(/must be a 64-character hex string/);
         });
     });
 

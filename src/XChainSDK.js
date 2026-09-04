@@ -2073,32 +2073,48 @@ class XChainSDK {
         });
     }
 
-    // Listen for one cross-chain call's resolution: completion or expiry.
+    // Listen for one cross-chain call's terminal phases: XCALL_COMPLETED,
+    // XCALL_EXPIRED and the initial SNAPSHOT.
     // Returns an unsubscribe function.
-    //
-    // Keyed on the 64-hex call_id, which is the deterministic digest the source
-    // chain's VM run produced and the only field the explorer guarantees on
-    // these frames. The id is LOWER-CASED here because the explorer normalizes
-    // it at subscribe time and routes events on the normalized key: a caller
-    // passing the upper-case form would otherwise hold a valid subscription and
-    // receive nothing, which is indistinguishable from a call that never
-    // resolved. The explorer serves no snapshot for this channel (its subscribe
-    // accepts call_id/call_ids and nothing else), so unlike onDispenser and
-    // onBetFeed there is no SNAPSHOT handler and no snapshot param.
     onXcall(callId, callback) {
+        // Lower-case, not just String(): the explorer normalizes the id at
+        // subscribe time, so an upper-case id subscribes fine and receives nothing.
         const id = String(callId === null || callId === undefined ? '' : callId).trim().toLowerCase();
         if (!CANONICAL_CALL_ID.test(id))
-            throw new Error('onXcall: callId must be a 64-character hex call_id, got ' + JSON.stringify(callId));
+            throw new Error('onXcall: callId must be a 64-character hex string, got ' + JSON.stringify(callId));
 
         const ws = this._requireWs();
-        const onLifecycle = entityGuarded((msg) => frameIdMatches(msg, 'call_id', id), callback);
+        // Compare the frame's own call_id case-insensitively, because only the
+        // Broadcaster's ROUTING key is lower-cased, never the id inside `data`.
+        // Fail open on a frame that carries no call_id, matching frameIdMatches:
+        // the guard rejects on positive evidence of another call, never on silence.
+        const matchesCall = (msg) => {
+            const data = frameData(msg);
+            if (!data) return true;
+            const value = data.call_id;
+            if (value === undefined || value === null || value === '') return true;
+            return String(value).toLowerCase() === id;
+        };
+        // One lifecycle guard plus the SNAPSHOT filter is the whole surface: a call
+        // has no entity-own update frame (no XCALL_UPDATE), exactly like bet_feed.
+        const onLifecycle = entityGuarded(matchesCall, callback);
         ws.on('XCALL_COMPLETED', onLifecycle);
         ws.on('XCALL_EXPIRED', onLifecycle);
-        const params = { call_id: id };
+        const onSnapshot = (msg) => {
+            if (msg && msg.data && msg.data.channel === 'xcall' &&
+                String(msg.data.call_id).toLowerCase() === id){
+                callback(msg);
+            }
+        };
+        ws.on('SNAPSHOT', onSnapshot);
+        // Bare channel name with the id in params, like every sibling entity: a
+        // composite 'xcall:<id>' is rejected outright with `Unknown channel`.
+        const params = { call_id: id, snapshot: true };
         this._subscribeDetached(ws, ['xcall'], params);
         return oneShotTeardown(() => {
             ws.off('XCALL_COMPLETED', onLifecycle);
             ws.off('XCALL_EXPIRED', onLifecycle);
+            ws.off('SNAPSHOT', onSnapshot);
             ws.unsubscribe(['xcall'], params);
         });
     }
