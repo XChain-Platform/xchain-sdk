@@ -342,6 +342,36 @@ describe('pre-flight Tier-2 per-action matrix', function () {
             expect(has(r, 'DISPENSER_NOT_OPEN', 'error')).to.equal(true);
         });
 
+        // Settlement half of dispenser_amount_positivity_activation: against a
+        // self-priced dispenser the fill count is floor(payment / GET_AMOUNT), so a
+        // stored price that is not positive fails every dispense after the coin moves.
+        it('a self-priced dispenser storing a non-positive GET_AMOUNT is warned, never blocked', async function () {
+            const r = await reportFor('DISPENSE|0|42', {
+                getAction: () => dispenserAction({ get_amount: '-5' }),
+            });
+            expect(has(r, 'AMOUNT_NOT_POSITIVE', 'warning')).to.equal(true);
+            expect(r.findings.every(f => f.severity !== 'error')).to.equal(true);
+        });
+
+        it('a stored GET_AMOUNT the divide cannot parse is warned the same way', async function () {
+            const r = await reportFor('DISPENSE|0|42', {
+                getAction: () => dispenserAction({ get_amount: 'abc' }),
+            });
+            expect(has(r, 'AMOUNT_NOT_POSITIVE', 'warning')).to.equal(true);
+        });
+
+        it('a positive stored GET_AMOUNT raises no positivity warning', async function () {
+            const r = await reportFor('DISPENSE|0|42', { getAction: () => dispenserAction() });
+            expect(has(r, 'AMOUNT_NOT_POSITIVE')).to.equal(false);
+        });
+
+        it('an oracle-priced dispenser is exempt from the stored-price rule, as in the handler', async function () {
+            const r = await reportFor('DISPENSE|0|42', {
+                getAction: () => dispenserAction({ get_amount: '0', oracle_address: 'orc1' }),
+            });
+            expect(has(r, 'AMOUNT_NOT_POSITIVE')).to.equal(false);
+        });
+
         // The indexer keeps minting new terminal statuses (`empty`,
         // `max_dispenses_reached` from the refill caps). Gating on
         // anything-but-open is what keeps this from going stale each time.
@@ -400,6 +430,54 @@ describe('pre-flight Tier-2 per-action matrix', function () {
             expect(has(r, 'DISPENSER_EMPTY')).to.equal(false);
             expect(unverified(r, 'DISPENSER_NOT_OPEN')).to.equal(true);
             expect(unverified(r, 'DISPENSER_EMPTY')).to.equal(true);
+        });
+    });
+
+    describe('DISPENSER create pricing (amount-positivity mirror)', function () {
+        // Format 0 wire: VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_OWNERSHIP|GIVE_ESCROW
+        //   |GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|FIAT_CODE|FIAT_AMOUNT|ORACLE_ADDRESS
+        // An empty GET_TICK prices in the native coin; no FIAT_CODE and no
+        // ORACLE_ADDRESS makes the dispenser self-priced.
+        // Rule order follows the handler: the native-coin decimals check runs
+        // first, and isValidAmountFormat is what rejects a leading '-', so a
+        // negative native-coin price surfaces as the FORMAT warning. (The
+        // universal wire-format rule already hard-blocks a negative amount on its
+        // own; the mirror's job is the zero, empty and precision cases it misses.)
+        it('a negative native-coin GET_AMOUNT is a format warning', async function () {
+            const r = await reportFor('DISPENSER|0|BTC|JDOG|1|0|100|BTC||-1', {});
+            expect(has(r, 'AMOUNT_FORMAT_INVALID', 'warning')).to.equal(true);
+        });
+
+        it('a negative token-priced GET_AMOUNT reaches the positivity rule', async function () {
+            const r = await reportFor('DISPENSER|0|BTC|JDOG|1|0|100|BTC|OTHER|-1', {});
+            expect(has(r, 'AMOUNT_NOT_POSITIVE', 'warning')).to.equal(true);
+        });
+
+        it('a zero self-priced GET_AMOUNT reaches the positivity rule', async function () {
+            const r = await reportFor('DISPENSER|0|BTC|JDOG|1|0|100|BTC||0', {});
+            expect(has(r, 'AMOUNT_NOT_POSITIVE', 'warning')).to.equal(true);
+        });
+
+        it('a self-priced dispenser with no GET_AMOUNT at all is warned', async function () {
+            const r = await reportFor('DISPENSER|0|BTC|JDOG|1|0|100|BTC||', {});
+            expect(has(r, 'AMOUNT_NOT_POSITIVE', 'warning')).to.equal(true);
+        });
+
+        it('a native-coin GET_AMOUNT past the coin decimals is a format warning', async function () {
+            const r = await reportFor('DISPENSER|0|BTC|JDOG|1|0|100|BTC||0.123456789', {});
+            expect(has(r, 'AMOUNT_FORMAT_INVALID', 'warning')).to.equal(true);
+        });
+
+        it('a well-formed positive self-priced GET_AMOUNT raises neither', async function () {
+            const r = await reportFor('DISPENSER|0|BTC|JDOG|1|0|100|BTC||0.5', {});
+            expect(has(r, 'AMOUNT_NOT_POSITIVE')).to.equal(false);
+            expect(has(r, 'AMOUNT_FORMAT_INVALID')).to.equal(false);
+        });
+
+        it('a FIAT-priced dispenser is exempt from the GET_AMOUNT rules, as in the handler', async function () {
+            const r = await reportFor('DISPENSER|0|BTC|JDOG|1|0|100|BTC||||USD|1', {});
+            expect(has(r, 'AMOUNT_NOT_POSITIVE')).to.equal(false);
+            expect(has(r, 'AMOUNT_FORMAT_INVALID')).to.equal(false);
         });
     });
 

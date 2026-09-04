@@ -43,12 +43,12 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-**Pins taken at indexer commit:** `af901c3b`
+**Pins taken at indexer commit:** `334d8117`
 
-(Re-anchored 2026-08-25 by the `dispenser.js` + `dispense.js` pass, whose
-entry below declares this anchor. `2b65e8a4` is reachable from the indexer
-develop head, and the gate re-checks that reachability at run time before it
-hands a reviewer a range built on it.
+(Re-anchored 2026-09-04 by the amount-positivity pass over `dispenser.js`,
+`dispense.js` and `issue.js`, whose entry below declares this anchor.
+`334d8117` is reachable from the indexer develop head, and the gate re-checks
+that reachability at run time before it hands a reviewer a range built on it.
 
 No byte-identity claim survives a re-anchor, so none is made here. Five files
 under `src/actions/` differ between `2d9cbbbf` and `2b65e8a4`, two of them
@@ -79,7 +79,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff af901c3b..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 334d8117..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -120,9 +120,9 @@ found by hashing candidate blobs as above.
 | `checks/send.js` (SEND) | `src/actions/send.js` | `a7c07ad1505dba1eb06efd62cfbe7f8dc6fa8654a5a6825d2ed6480190d4fbdb` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `15e134f5c27b5955e27e78187848e1878cee562a52b173dacf89389f5949aa98` |
 | `checks/mint.js` | `src/actions/mint.js` | `e491154c399be3fdd5b6b242b3da24db6c5119d4683988308b8087e4dc8dff03` |
-| `checks/issue.js` | `src/actions/issue.js` | `546c080ce5ab96f1cf0a0a3ce1d7ff939dbe41495c2cf03c5c5257fdbf385f29` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `c1ed4b8374df89756a76088be74e6fd6c1ea7b49e0daeb06558ef5e2c2d4599e` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `6f059217d824d5c7f61be9afd762b950942de61a06801dd540d6a3e2560aa2c1` |
+| `checks/issue.js` | `src/actions/issue.js` | `d29136642b5e666834b84ef0344cf70c577b0f7f38402c1707f48d439221df57` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `a0e12843830c5ddada648af5e5bfeac5769cdd2074755409a4e80ce455a2b3f0` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `686a25caea723dfba71a0e207d80b84af5efe882b6c0f5dca1f406d029fa6ac0` |
 | `checks/trading.js` (ORDER) | `src/actions/order.js` | `e9c676ff4d724b92bd94966bf6811d23bc932ed34daa694211833302e53b6b02` |
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `971338842f897e140d27565a4e01cdb364da14b81bb58e140dd6014d529b35fb` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `956463e64bb90087364b2c109c6d1f27a5b3526fd24415d6b9c22042e65e1479` |
@@ -136,6 +136,48 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-04 - `dispenser.js` + `dispense.js` + `issue.js`, against indexer HEAD `334d8117`
+
+Baseline pin `af901c3b` for all three. One activation, two enforcement points,
+and one comment-only row.
+
+**`dispenser.js` - REAL change, client mirror added.** Two Format-0 create
+rules, both gated on `dispenser_amount_positivity_activation` (testnet and
+regtest from genesis, mainnet on the unarmed sentinel): a native-coin-priced
+`GET_AMOUNT` (empty `GET_TICK`) is now checked with `isValidAmountFormat`
+against `COIN_DECIMALS`, where the only format check before was a conjunct on
+`getTokenInfo` that an empty `GET_TICK` never loads, and a `GET_AMOUNT` on a
+dispenser naming neither `FIAT_CODE` nor `ORACLE_ADDRESS` must be strictly
+positive. Both are client-visible rejections (`invalid: GET_AMOUNT (format)`,
+`invalid: GET_AMOUNT (must be positive)`) on inputs the client holds in full, so
+`checks/dispenser.js` now mirrors them: `AMOUNT_FORMAT_INVALID` when the
+self-priced native-coin amount fails the coin's decimals (read from the
+vendored coin registry, never a literal), `AMOUNT_NOT_POSITIVE` when a
+self-priced `GET_AMOUNT` is absent, non-numeric or not greater than zero. Both
+are WARNINGS, on the same reasoning as the `GIVE_AMOUNT` rule beside them: the
+handler reads the block's consensus time and pre-flight has none. FIAT and
+oracle dispensers are untouched, as in the handler.
+
+**`dispense.js` - REAL change, client mirror added.** The settlement gate that
+read `multiplier == 0` now reads `!bcgt(multiplier, '0')` above the same
+activation, so a NEGATIVE fill count (a dust payment divided by a negative
+stored price) is rejected instead of settling valid with every downstream
+guard skipped; and the non-FIAT divide is wrapped so a `GET_AMOUNT` that
+`bcdiv` cannot parse rejects as `invalid: GET_AMOUNT (format)` instead of
+throwing into the block loop (ungated, because the behaviour it replaces is
+"no node commits this block"). `checks/dispenser.js` `checkDispense` now warns
+`AMOUNT_NOT_POSITIVE` when the resolved dispenser is self-priced and its stored
+`get_amount` is non-numeric or not positive, since every dispense against it
+fails after the native coin moves. The FIAT and oracle producers of the count
+are not predictable client-side and stay declared as before.
+
+**`issue.js` - comment-only, re-pinned.** The diff is four lines of the
+parameter docblock: `ACTION_CLASS` is documented as validated against
+`CONTROLLER_BINDABLE_CLASSES` with `all` named as the bindable, never-routable
+catch-all. Executable code is byte-identical to the `af901c3b` pin.
+
+Anchor moves to `334d8117`.
 
 ### 2026-09-03 - `batch.js`, against indexer HEAD `af901c3b`
 
