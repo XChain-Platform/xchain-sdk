@@ -147,7 +147,13 @@ const ADDRESS_EVENT_TYPES = Object.freeze([
     'SWAP_MATCH', 'SWAP_EXPIRED',
     'DISPENSE', 'DISPENSER_CLOSED', 'DISPENSER_EXPIRED',
     'BET', 'BET_EXPIRED', 'BET_CLOSED',
-    'ATTESTATION_REQUEST', 'ATTESTATION_RESPONSE'
+    'ATTESTATION_REQUEST', 'ATTESTATION_RESPONSE',
+    // Cross-chain call resolution. The Broadcaster routes every lifecycle event
+    // to the address channel of each address it names, so these arrive on an
+    // address subscription whether or not the consumer also watches the xcall
+    // channel; absent from this list, onAddress registered no handler and the
+    // frames were sent and dropped in silence, exactly as MEMPOOL_ACTION was.
+    'XCALL_COMPLETED', 'XCALL_EXPIRED'
 ]);
 
 // The unconfirmed subset of the roster above, registered by onMempoolAction.
@@ -160,6 +166,12 @@ const MEMPOOL_EVENT_TYPES = Object.freeze(['MEMPOOL_ACTION', 'MEMPOOL_REMOVED'])
 // Canonical decimal action_index, mirroring the explorer ChannelManager's
 // CANONICAL_INDEX: no sign, no leading zeros, no fraction, no trailing junk.
 const CANONICAL_ACTION_INDEX = /^(0|[1-9][0-9]*)$/;
+
+// Canonical form of an xcall subscription key: the 64-hex call_id. Mirrors the
+// explorer ChannelManager's CANONICAL_CALL_ID, which refuses anything else at
+// subscribe time, so validating here turns a silent no-events subscription into
+// an immediate throw naming the argument.
+const CANONICAL_CALL_ID = /^[0-9a-f]{64}$/;
 
 // Wrap a teardown closure so it releases its subscription AT MOST ONCE.
 //
@@ -2058,6 +2070,36 @@ class XChainSDK {
             ws.off('BET_CLOSED', onLifecycle);
             ws.off('SNAPSHOT', onSnapshot);
             ws.unsubscribe(['bet_feed'], params);
+        });
+    }
+
+    // Listen for one cross-chain call's resolution: completion or expiry.
+    // Returns an unsubscribe function.
+    //
+    // Keyed on the 64-hex call_id, which is the deterministic digest the source
+    // chain's VM run produced and the only field the explorer guarantees on
+    // these frames. The id is LOWER-CASED here because the explorer normalizes
+    // it at subscribe time and routes events on the normalized key: a caller
+    // passing the upper-case form would otherwise hold a valid subscription and
+    // receive nothing, which is indistinguishable from a call that never
+    // resolved. The explorer serves no snapshot for this channel (its subscribe
+    // accepts call_id/call_ids and nothing else), so unlike onDispenser and
+    // onBetFeed there is no SNAPSHOT handler and no snapshot param.
+    onXcall(callId, callback) {
+        const id = String(callId === null || callId === undefined ? '' : callId).trim().toLowerCase();
+        if (!CANONICAL_CALL_ID.test(id))
+            throw new Error('onXcall: callId must be a 64-character hex call_id, got ' + JSON.stringify(callId));
+
+        const ws = this._requireWs();
+        const onLifecycle = entityGuarded((msg) => frameIdMatches(msg, 'call_id', id), callback);
+        ws.on('XCALL_COMPLETED', onLifecycle);
+        ws.on('XCALL_EXPIRED', onLifecycle);
+        const params = { call_id: id };
+        this._subscribeDetached(ws, ['xcall'], params);
+        return oneShotTeardown(() => {
+            ws.off('XCALL_COMPLETED', onLifecycle);
+            ws.off('XCALL_EXPIRED', onLifecycle);
+            ws.unsubscribe(['xcall'], params);
         });
     }
 

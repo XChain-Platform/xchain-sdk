@@ -1725,6 +1725,9 @@ export declare class XChainSDK {
     /** Subscribe to one betting market by its feed action index: BET (branch on data.action_format), BET_EXPIRED, BET_CLOSED and the initial SNAPSHOT. */
     onBetFeed(feedActionIndex: number | string, callback: (msg: any) => void): () => void;
 
+    /** Subscribe to one cross-chain call by its 64-hex call_id: XCALL_COMPLETED and XCALL_EXPIRED. */
+    onXcall(callId: string, callback: (msg: any) => void): () => void;
+
     /** Subscribe to the global attestation stream: ATTESTATION_REQUEST and ATTESTATION_RESPONSE. */
     onAttestation(callback: (msg: any) => void): () => void;
 

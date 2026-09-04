@@ -113,7 +113,8 @@ describe('address-channel event coverage vs the explorer producer @regression', 
             token:     'onToken',
             market:    'onMarket',
             dispenser: 'onDispenser',
-            bet_feed:  'onBetFeed'
+            bet_feed:  'onBetFeed',
+            xcall:     'onXcall'
         };
         const unwrapped = [...entityChannels]
             .filter(c => typeof XChainSDK.prototype[WRAPPER_FOR_CHANNEL[c]] !== 'function').sort();
