@@ -63,7 +63,7 @@ const SIBLINGS = [
       guards: 'co-signer decode parity against the authoritative decoder' },
     { repo: 'xchain-vm',            envs: ['XCHAIN_VM_DIR'],
       marker: 'src',
-      guards: 'lint-core and metering vendored-copy parity' },
+      guards: 'lint-core, metering and stripped-globals vendored-copy parity' },
     { repo: 'xchain-sync',          envs: ['XCHAIN_SYNC_DIR'],
       marker: 'src',
       guards: 'cross-repo consensus-constant byte-identity' },

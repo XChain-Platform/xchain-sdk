@@ -252,6 +252,106 @@ export interface ValidationResult {
 
 
 /*
+ *  Pre-flight report
+ *
+ *  The shape `sdk.preflight()` RETURNS, and only that. src/preflight/
+ *  constants.js is the normative source for the field list, the finding-code
+ *  registry and the additive-only rule on REPORT_SCHEMA_VERSION; this block
+ *  declares that same shape so a consumer building its own panel from the
+ *  published tarball has something to read besides prose. Add a field in both
+ *  places or in neither.
+ *
+ *  It is deliberately NOT the shape every consumer of a report accepts. A
+ *  caller may author a narrower report of its own - the `restricted` note in
+ *  constants.js names the wallet's funding-only dispenser panel doing exactly
+ *  that - and such a producer emits a proper subset of these fields. Widening
+ *  this declaration to admit those would stop it describing what the engine
+ *  returns, which is the one thing a tarball consumer has no other way to
+ *  learn. A consumer that accepts both shapes declares its own accepted-input
+ *  type; xchain-wallet's PreflightPanel does.
+ */
+
+/** Report-level verdict, computed from the findings (`src/preflight/index.js`). */
+export type PreflightVerdict = 'pass' | 'warn' | 'fail';
+
+/** Finding severity. Only certified codes may reach `error`; see the §4.2 trust model. */
+export type PreflightSeverity = 'error' | 'warning' | 'info';
+
+export interface PreflightFinding {
+    /** Registry code, e.g. `'DRYRUN_UNAVAILABLE'`. The identity every code-keyed consumer matches on. */
+    code: string;
+    severity: PreflightSeverity;
+    /** Diagnostic sentence written for a report reader, not for a signer. */
+    message: string;
+    /** Which party said it: `'dryrun'` for a network-sourced verdict, `'client'` otherwise. */
+    source: string;
+    /** Per-finding detail; always an object, empty when the check carried none. */
+    data: {
+        /** Position of the BATCH sub-command a finding belongs to. Half of the override identity. */
+        commandIndex?: number;
+        /** Commands in the BATCH the network answered about. */
+        subCommandCount?: number;
+        /** How many of those it accepted; `accepted < subCommandCount` means a partial approval. */
+        accepted?: number;
+        [key: string]: unknown;
+    };
+    /** Present only on errors: whether a signer may override this one. Absent on warnings and info. */
+    overridable?: boolean;
+    /**
+     * Set when Tier-1 precedence demoted a contradicting Tier-2 error to info.
+     * Underscore-led but load-bearing: the wallet panel's notice filter is
+     * `severity === 'info' && !f._downgradedBy`, so dropping or renaming it
+     * resurrects demoted errors as user-facing notices under a passing chip.
+     */
+    _downgradedBy?: string;
+}
+
+/** An aspect the run could not check, disclosed rather than thrown. */
+export interface PreflightUnverified {
+    /** The check that could not run. */
+    check: string;
+    /** Why it could not. */
+    reason: string;
+}
+
+export interface PreflightReport {
+    /** REPORT_SCHEMA_VERSION at the time of the run; additive-only by convention. */
+    schemaVersion: number;
+    verdict: PreflightVerdict;
+    /**
+     * True means the report covers a proper SUBSET of the checks the action
+     * warrants. Never a completeness claim either way. The engine this type
+     * describes always stamps false; the field is declared because a caller
+     * reading a report cannot know that without being told, and because the
+     * partial producers outside the SDK stamp true (constants.js names them).
+     */
+    restricted: boolean;
+    /** Codes of every check that ran, including those that produced no finding. */
+    checksRun: string[];
+    findings: PreflightFinding[];
+    unverified: PreflightUnverified[];
+    /** Tier-1 fee quote when one was obtained, else null. Untyped for the same reason `getFeeQuote` is. */
+    quote: unknown;
+    /** Block height the network answered at, or null when Tier-1 gave no verdict. */
+    stateHeight: number | null;
+    /** Wall-clock cost of the run, in ms. */
+    elapsedMs: number;
+    /**
+     * When the engine stamped this report (`nowMs()`), for staleness.
+     *
+     * Underscore-led and still part of the returned surface: the SDK's own
+     * `isStale(report, { now, knownTip })` in src/preflight/lifecycle.js reads
+     * it to decide whether a report is too old to sign against, and
+     * test/unit/preflight/lifecycle.test.js pins that behaviour. Every report
+     * the engine returns carries it, so a tarball consumer writing its own
+     * Approve-time re-check has it to read; omitting it from this declaration
+     * would describe a report the engine does not produce.
+     */
+    _stampedAt: number;
+}
+
+
+/*
  *  Explorer query options
  */
 

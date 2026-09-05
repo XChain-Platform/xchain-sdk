@@ -82,6 +82,17 @@ describe('contract-lint parity + drift', function () {
                 if (!requireSibling(this, VM_SRC_DIR)) return;
                 const vendored = path.join(VENDORED_DIR, f);
                 const canonical = path.join(VM_SRC_DIR, f);
+                // requireSibling proves the DIRECTORY resolves, never the per-file
+                // canonical, so a stale sibling checkout (or a vendored file enrolled
+                // before its canonical lands) reaches sha256 with no file. Fail closed
+                // and name it, the contract check-preflight-drift.js holds for a
+                // mapped-but-missing handler, rather than raising a raw ENOENT that
+                // reads as a broken harness instead of as the finding.
+                assert.ok(
+                    fs.existsSync(canonical),
+                    'NO CANONICAL: ' + f + ' is in VENDORED_FILES but xchain-vm has no ' + canonical +
+                    '; the sibling checkout is stale, or the file was renamed/removed upstream.'
+                );
                 assert.strictEqual(
                     sha256(vendored), sha256(canonical),
                     'VENDOR DRIFT: ' + f + ' differs from xchain-vm canonical; re-sync the copy.'
