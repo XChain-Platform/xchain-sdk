@@ -55,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The stripped-globals module is vendored from the VM and guarded against drift.
 - The vendored coin registry is resynced from the hub.
 - Three dependency floors move off advisory ranges disclosed against the shipped tree, with hono gaining a floor it did not have.
+- The x402 challenge verifier compares MACs with the SDK's shared constant-time token comparison, so a truncated MAC no longer short-circuits on operand length.
 
 ## [0.12.0] - 2026-08-30
 

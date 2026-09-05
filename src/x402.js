@@ -49,6 +49,7 @@ const crypto = require('crypto');
 const { create, all } = require('mathjs');
 const { SDKX402Error } = require('./errors.js');
 const AuthUtils = require('./auth.js');
+const { safeTokenEqual } = require('./utils/safeCompare.js');
 
 const math = create(all, { number: 'BigNumber', precision: 64 });
 const bn   = (v) => math.bignumber(String(v));
@@ -309,8 +310,10 @@ class X402Gateway {
         const payload = token.slice(0, dot);
         const mac = token.slice(dot + 1);
         const expect = crypto.createHmac('sha256', this._challengeSecret).update(payload).digest('hex');
-        const a = Buffer.from(mac), b = Buffer.from(expect);
-        if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return { ok: false, code: 'X402_BAD_CHALLENGE' };
+        // Shared constant-time comparator: both operands are hex strings, and it
+        // equalizes operand length before comparing, so a truncated MAC no longer
+        // short-circuits on length. An empty mac fails its non-empty-string guard.
+        if (!safeTokenEqual(mac, expect)) return { ok: false, code: 'X402_BAD_CHALLENGE' };
         let body;
         try { body = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')); }
         catch (e) { return { ok: false, code: 'X402_BAD_CHALLENGE' }; }

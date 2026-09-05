@@ -415,6 +415,30 @@ describe('x402', () => {
             expect((await gw.verify(proof, '/r')).ok).to.equal(true);
         });
 
+        it('dispenser: a challenge whose MAC is tampered with or truncated is rejected', async () => {
+            const gw = mkGw({ send: null, dispenser: { holdTick: 'ACCESS', minBalance: '1' } });
+            explorer.getBalances.resolves({ data: [{ tick: 'ACCESS', amount: '5' }] });
+            const body = await gw.challengeBody('/r');
+            const offer = body.accepts.find((a) => a.scheme === 'xchain-dispenser');
+            const dot = offer.challenge.lastIndexOf('.');
+            const payload = offer.challenge.slice(0, dot);
+            const mac = offer.challenge.slice(dot + 1);
+
+            // (a) one hex character of the MAC flipped: same length, wrong MAC.
+            const flipped = payload + '.' + mac.slice(0, -1) + (mac.slice(-1) === 'a' ? 'b' : 'a');
+            // (b) MAC truncated by a few characters: shorter, wrong MAC.
+            const truncated = payload + '.' + mac.slice(0, -4);
+
+            for (const challenge of [flipped, truncated]) {
+                // Signed over the tampered token, so the challenge MAC check is what
+                // rejects it (it runs before the payload is parsed or the signature
+                // is checked), not a signature mismatch.
+                const proof = { x402Version: 1, scheme: 'xchain-dispenser', coin: 'TDOGE', payer: PAYER,
+                                challenge, payerSignature: auth.signMessage(challenge, WIF).signature };
+                expect((await gw.verify(proof, '/r')).code).to.equal('X402_BAD_CHALLENGE');
+            }
+        });
+
         it('X402Client.buildSignedProof produces a dispenser proof the gateway accepts', async () => {
             const gw = mkGw({ send: null, dispenser: { holdTick: 'ACCESS', minBalance: '1' } });
             explorer.getBalances.resolves({ data: [{ tick: 'ACCESS', amount: '5' }] });
