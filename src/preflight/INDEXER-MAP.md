@@ -31,7 +31,8 @@ HEAD 2026-08-08, ALL ELEVEN re-reviewed against indexer HEAD
 `58ab8e9` on 2026-08-15, three re-pinned after the comment-hygiene pass
 at `1a4b78a4` on 2026-08-17, `batch.js` re-reviewed at `188554e5` on
 2026-08-20, `issue.js` re-reviewed at `2d9cbbbf` on 2026-08-23, and
-`dispenser.js` + `dispense.js` re-reviewed at `2b65e8a4` on 2026-08-25 (see
+`dispenser.js` + `dispense.js` re-reviewed at `2b65e8a4` on 2026-08-25, and
+`send.js` + `dispense.js` re-reviewed at `0d7074ad` on 2026-09-06 (see
 the review log below). Hashes
 are of the indexer handler source files, resolved via
 `XCHAIN_INDEXER_PATH` or the sibling `../xchain-indexer` checkout. The
@@ -43,15 +44,15 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-**Pins taken at indexer commit:** `18954ab3`
+**Pins taken at indexer commit:** `0d7074ad`
 
-(Re-anchored 2026-09-06 by the leg-amount consolidation pass over `send.js`,
-`destroy.js` and `batch.js`, whose entry below declares this anchor.
-`18954ab3` is reachable from the indexer develop head, and the gate re-checks
+(Re-anchored 2026-09-06 by the gated-handoff reference and dispense-tally-scale
+pass over `send.js` and `dispense.js`, whose entry below declares this anchor.
+`0d7074ad` is reachable from the indexer develop head, and the gate re-checks
 that reachability at run time before it hands a reviewer a range built on it.
 
-No byte-identity claim survives a re-anchor, so none is made here. Five files
-under `src/actions/` differ between `2d9cbbbf` and `2b65e8a4`, two of them
+No byte-identity claim survives a re-anchor, so none is made here. Four files
+under `src/actions/` differ between `18954ab3` and `0d7074ad`, two of them
 mapped rows this pass re-pinned, which is exactly why the older anchor is a
 baseline for the older review only. Each review-log entry names the baseline it
 was read against; use that one, never this line, to reconstruct a past review.
@@ -79,7 +80,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 18954ab3..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 0d7074ad..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -117,12 +118,12 @@ found by hashing candidate blobs as above.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send.js` | `413eb46a72c27b8bc250f5bcad3696db6ee444b0483758a81bbe4a5a7e848e4d` |
+| `checks/send.js` (SEND) | `src/actions/send.js` | `506ac1cb5fd9e69326c0c3b03b54c61ec233bcbe5ab02b47a871f6402a13460f` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `4e030a365892e67f36adea669e997563134870cfde05f542851df83430ba07e2` |
 | `checks/mint.js` | `src/actions/mint.js` | `e491154c399be3fdd5b6b242b3da24db6c5119d4683988308b8087e4dc8dff03` |
 | `checks/issue.js` | `src/actions/issue.js` | `d29136642b5e666834b84ef0344cf70c577b0f7f38402c1707f48d439221df57` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `a0e12843830c5ddada648af5e5bfeac5769cdd2074755409a4e80ce455a2b3f0` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `686a25caea723dfba71a0e207d80b84af5efe882b6c0f5dca1f406d029fa6ac0` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `a71a0ee82b884965c2f62ea3579d8d09b4d31d481ffaf9c7a7e848069155a3f0` |
 | `checks/trading.js` (ORDER) | `src/actions/order.js` | `e9c676ff4d724b92bd94966bf6811d23bc932ed34daa694211833302e53b6b02` |
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `971338842f897e140d27565a4e01cdb364da14b81bb58e140dd6014d529b35fb` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `956463e64bb90087364b2c109c6d1f27a5b3526fd24415d6b9c22042e65e1479` |
@@ -136,6 +137,73 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-06 (second pass) - `send.js` + `dispense.js`, against indexer HEAD `0d7074ad`
+
+Read `18954ab3..0d7074ad` over both handlers plus the two activation modules the
+diff adds, `gated_handoff_ref_activation.js` and
+`dispense_payment_tally_scale_activation.js`. Both are flag-day gated with
+mainnet on the unarmed house sentinel (9999999999) and testnet/regtest from
+genesis, so both reviews turn on the same question the leg-amount entry below
+turns on: what a client may assert when the rule binds on one plane and not on
+another.
+
+`send.js`: the gated-SEND handoff gate matched the sibling MESSAGE's DESTINATION
+by raw wire compare. Siblings hold wire parameters with no address-reference
+resolution, and MESSAGE.DESTINATION is compaction-eligible while SEND.DESTINATION
+is multi-valued and never compacted, so a BATCH(SEND, MESSAGE) to an already-
+indexed recipient spells the same address two ways and the gate recorded
+`invalid: gated token transfer requires key handoff message` while the fee was
+spent and the key envelope published. Above the flag day a caret-spelled sibling
+destination resolves through `resolveAddressRefChecked` before the compare,
+fail-closed on a rejected reference and on a value still caret-prefixed after
+resolution.
+
+**Direction: this NARROWS rejection**, the dangerous side. A correctly formed
+gated transfer the chain rejected for spelling is now accepted, so any client
+still predicting that rejection is a false block. `checks/send.js` predicts
+nothing of the kind: the handoff has been a declared aspect
+(`SEND_RESTRICTIONS`) since PC-29 made it conditional, never an error, and
+`checks/batch.js` does not pair sub-commands at all. So no false block exists and
+no error is owed.
+
+**What IS owed is a declaration, because this SDK is the composer that triggers
+the defect.** `addressRefFields.js` lists MESSAGE.DESTINATION as single-valued
+with no `noCompact`, and the batch builder resolves sub-actions with compaction
+on by default, so an SDK-composed gated handoff carries exactly the spelling that
+pairs only where the flag day is armed. Mainnet is unarmed, so on the plane most
+clients broadcast to, that transfer still fails and pre-flight still passes it.
+`checks/send.js` gains `GATED_HANDOFF_REF`, an unverified aspect naming the
+spelling-dependence and the unarmed plane. It stays a declaration for the reason
+the entry below states: the pairing depends on the activation state of the block
+that will carry the action, which pre-flight cannot read, and mirroring the wire
+compare as an error would reject on testnet and regtest what those planes accept.
+Nothing about the SDK's wire behaviour changes here: `addressRefFields.js` is
+untouched on both sides and their byte-identical conformance test still holds.
+
+`dispense.js`: the non-batch payment tally ran at a fixed 8 dp. `COIN_AMOUNT`
+carries the SEND trigger's own amount, denominated in the sent tick, and a tick
+may be issued with up to 18 decimals, so both ends of the tally rounded. Below
+half a satoshi a charge rendered as zero, the pool never drained and every
+dispenser behind the paid address filled off one payment; just above it a charge
+rounded up and a sibling dispenser the buyer had paid for was refused. The tally
+now runs at the tick's own scale (18) for a token-denominated, non-batch payment.
+The BATCH pool and native-coin triggers stay at 8 dp, and the row's rendered cost
+keeps the legacy 8 dp width wherever that width is exact.
+
+**Direction: BOTH, and neither reaches the client.** The over-issuance half
+widens rejection (extra fills that settled are refused) and the over-charge half
+narrows it (a refused sibling now settles), which is why it is gated at all. But
+`checks/dispenser.js` cannot see either: pre-flight is handed an action string
+naming one dispenser, and `COIN_AMOUNT` appears nowhere in `src/preflight/` because
+the payment is a transaction output that does not exist yet. The three checks
+DISPENSE does run (dispenser exists, resolved state is open, give-remaining covers
+one fill) all read the GIVE side, which this change does not touch, and the
+stored-price warning is a warning. **Nothing is owed**: the standing
+`DISPENSE_SETTLEMENT_MATCH` declaration already covers settlement pricing, and it
+gains a stanza naming the tally scale so the rationale stays current.
+
+Anchor moves to `0d7074ad`.
 
 ### 2026-09-06 - `send.js` + `destroy.js` + `batch.js`, against indexer HEAD `18954ab3`
 

@@ -32,6 +32,18 @@
  * of which pre-flight can read - so it stays a declared-unverified
  * aspect, now named as conditional rather than blanket.
  *
+ * How that handoff is MATCHED is itself conditional, on a second
+ * flag-day. Above it the indexer resolves a caret-spelled sibling
+ * MESSAGE DESTINATION and compares canonical addresses; below it the
+ * comparison is a raw wire compare, and a `^id` spelling matches no
+ * SEND DESTINATION, which is multi-valued and never compacted. This
+ * SDK compacts a single-valued MESSAGE.DESTINATION by default
+ * (addressRefFields.js), so a wallet-composed BATCH(SEND, MESSAGE) to
+ * an indexed recipient carries exactly the spelling that pairs only
+ * above the flag-day. The rule NARROWS rejection, so mirroring the
+ * wire compare as an error would false-block wherever it is armed,
+ * and it is declared rather than predicted.
+ *
  * LEG-AMOUNT CONSOLIDATION is the second conditional, and it WIDENS
  * rejection rather than narrowing it. Above its flag-day both handlers
  * hold a leg whose RAW amount fails its tick's format out of the merge,
@@ -120,6 +132,14 @@ async function checkSend(ctx) {
     ctx.addUnverified('SEND_RESTRICTIONS',
         'sleep state, allow/block lists, controller-guard outcome, and the conditional gated-key handoff '
         + '(required only when the recipient\'s post-send balance reaches a pack threshold) are server-side only');
+    // Which SPELLING of a handoff MESSAGE pairs with this send is decided by the
+    // including block's activation state, so it is named rather than predicted
+    // (see the header: mirroring the wire compare would false-block).
+    ctx.addUnverified('GATED_HANDOFF_REF',
+        'above its flag-day a gated-transfer key-handoff MESSAGE is paired with this send by RESOLVED address, '
+        + 'and below it by raw wire spelling, so a ^id-compacted MESSAGE destination pairs only where the '
+        + 'flag-day is armed; the activation state of the including block is server-side only, and mainnet '
+        + 'is not armed for it');
 }
 
 async function checkDestroy(ctx) {

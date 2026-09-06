@@ -328,14 +328,15 @@ async function checkDispense(ctx) {
             { dispenserActionIndex: idx, getAmount: String(getAmount) });
     }
 
-    // Settlement PRICING moved underneath this declaration without moving what
+    // Settlement PRICING sits underneath this declaration without changing what
     // Tier 2 can see. A gated change (BATCH_ISSUANCE_LIMITS, xchain-indexer
     // src/actions/dispense.js) makes one payment settle a bounded number of fills
-    // instead of buying a full multiplier against every dispenser it reaches: the
-    // handler now keeps a running consumed-value tally and prices each dispenser
-    // against what is LEFT, so a later dispenser behind the same paid address can
-    // now fail where it previously settled. It also records the attributed cost as
-    // the dispense row's GET_AMOUNT rather than the whole payment.
+    // rather than buying a full multiplier against every dispenser it reaches: the
+    // handler keeps a running consumed-value tally and prices each dispenser
+    // against what is LEFT, so where the flag day is armed a later dispenser behind
+    // the same paid address can fail on a payment that settles it below the
+    // threshold. It also records the attributed cost as the dispense row's
+    // GET_AMOUNT rather than the whole payment.
     //
     // Neither is checkable here, and not merely inconvenient to check: the tally is
     // keyed on COIN_AMOUNT and on the SET of open dispensers behind the paid
@@ -343,6 +344,9 @@ async function checkDispense(ctx) {
     // before any transaction (and therefore any payment value) exists. Nothing this
     // check reads changes either - give-remaining is the GIVE-token side and the
     // record correction has no client consumer here.
+    // The tally's SCALE is conditional too, on its own flag-day: a token-denominated
+    // payment nets at the paying tick's decimals rather than at 8, which moves the
+    // fill count only where a sub-satoshi price rounds. Same unreadable inputs.
     ctx.addUnverified('DISPENSE_SETTLEMENT_MATCH',
         'exact settlement-output matching is structural and unknowable before the transaction exists');
 }
