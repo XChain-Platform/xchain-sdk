@@ -43,11 +43,11 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-**Pins taken at indexer commit:** `334d8117`
+**Pins taken at indexer commit:** `18954ab3`
 
-(Re-anchored 2026-09-04 by the amount-positivity pass over `dispenser.js`,
-`dispense.js` and `issue.js`, whose entry below declares this anchor.
-`334d8117` is reachable from the indexer develop head, and the gate re-checks
+(Re-anchored 2026-09-06 by the leg-amount consolidation pass over `send.js`,
+`destroy.js` and `batch.js`, whose entry below declares this anchor.
+`18954ab3` is reachable from the indexer develop head, and the gate re-checks
 that reachability at run time before it hands a reviewer a range built on it.
 
 No byte-identity claim survives a re-anchor, so none is made here. Five files
@@ -79,7 +79,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 334d8117..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 18954ab3..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -117,8 +117,8 @@ found by hashing candidate blobs as above.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send.js` | `a7c07ad1505dba1eb06efd62cfbe7f8dc6fa8654a5a6825d2ed6480190d4fbdb` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `15e134f5c27b5955e27e78187848e1878cee562a52b173dacf89389f5949aa98` |
+| `checks/send.js` (SEND) | `src/actions/send.js` | `413eb46a72c27b8bc250f5bcad3696db6ee444b0483758a81bbe4a5a7e848e4d` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `4e030a365892e67f36adea669e997563134870cfde05f542851df83430ba07e2` |
 | `checks/mint.js` | `src/actions/mint.js` | `e491154c399be3fdd5b6b242b3da24db6c5119d4683988308b8087e4dc8dff03` |
 | `checks/issue.js` | `src/actions/issue.js` | `d29136642b5e666834b84ef0344cf70c577b0f7f38402c1707f48d439221df57` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `a0e12843830c5ddada648af5e5bfeac5769cdd2074755409a4e80ce455a2b3f0` |
@@ -127,7 +127,7 @@ found by hashing candidate blobs as above.
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `971338842f897e140d27565a4e01cdb364da14b81bb58e140dd6014d529b35fb` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `956463e64bb90087364b2c109c6d1f27a5b3526fd24415d6b9c22042e65e1479` |
 | `checks/dividend.js` | `src/actions/dividend.js` | `318754131de748339bad0a79eb2381309dac240150858f9a33abde42f9007248` |
-| `checks/batch.js` | `src/actions/batch.js` | `35bdc7ff59f7f72819c8159163583899e6bdc43b27a6db1b59aa973739e79eeb` |
+| `checks/batch.js` | `src/actions/batch.js` | `a505347a6a680341385be1296d92eae665d76cea8c371e3919f57deae1f9e5e3` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -136,6 +136,45 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-06 - `send.js` + `destroy.js` + `batch.js`, against indexer HEAD `18954ab3`
+
+`batch.js` owes nothing: the only change is a documentation path in a comment,
+`TOKEN_GATED_CONTENT.md` to `token-gated-content.md`. Executable code is
+byte-identical to the `334d8117` pin.
+
+`send.js` and `destroy.js` both gain the leg-amount consolidation rule behind
+`consolidation_leg_amount_activation.js`. Above its flag-day a leg whose RAW
+amount fails `isValidAmountFormat` for its tick is held out of the merge on its
+own key, so it reaches the handler's existing per-leg check instead of being
+summed into a total that passes. Two 0.5 legs of a 0-decimals token merged to
+`1` and settled while either leg alone was rejected. Both key shapes are
+prefixed above the threshold (`k` for a merge key, `i` for a held-out leg), so a
+DESTINATION chosen to spell a held-out leg's key cannot collide with one, and
+prefixing uniformly leaves insertion order and the emitted record order
+unchanged.
+
+This one IS client-visible, and it widens rejection rather than narrowing it,
+which is the direction that can strand a client mid-broadcast. `checks/send.js`
+covers SEND and DESTROY and does no decimals-aware per-leg format check today:
+`numeric.isValidAmountFormat` is called from `mint.js`, `issue.js` and
+`dispenser.js` and from nowhere in this module. So above the threshold the
+client would have predicted acceptance for a send the chain now rejects.
+
+**`checks/send.js` gains a declared-unverified aspect, not a mirrored error**,
+and the distinction is the whole review. Predicting the rule needs the tick's
+DECIMALS *and* the activation state at the block that will carry the action.
+Mainnet sits on the UNARMED house sentinel (9999999999, year 2286) while testnet
+and regtest run from genesis, so a check that raised the error unconditionally
+would reject on mainnet what mainnet still accepts. That is the false-block this
+module's contract forbids, and `validator.js:396-404` records the SDK shipping
+exactly that regression once already. `LEG_AMOUNT_CONSOLIDATION` names the
+conditional instead, the same road the PC-29 gated-key handoff took.
+
+Re-mirror this as a real error only when the operator arms mainnet, and only
+alongside a decimals lookup and an activation source the SDK can actually read.
+
+Anchor moves to `18954ab3`.
 
 ### 2026-09-04 - `dispenser.js` + `dispense.js` + `issue.js`, against indexer HEAD `334d8117`
 
