@@ -11,10 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sdk.waitForContractState()`, `sdk.waitForContractBalance()` and the bound `contract.waitForState()` / `contract.waitForBalance()` wait on a contract's own state instead of on transaction confirmation.
 - `submitAction({ awaitContract })` gates a contract action on that state before returning, so a deposit cannot be settled before the indexer has executed it.
 - `sdk.onXcall(callId, cb)` follows one cross-chain call's completion, expiry and initial snapshot.
+- An `encoderApiKey` option (with an `ENCODER_API_KEY` env fallback) sends `x-api-key`, so the SDK can reach an xchain-encoder whose operator set `API_KEY`.
 
 ### Fixed
 - `onAddress` delivers the XCALL_COMPLETED and XCALL_EXPIRED frames the explorer routes to an address instead of dropping them.
 - A MuSig2 `sessionId` is single-use: every repeat is refused, so one secret nonce can no longer be re-issued and spent in two signing sessions.
+- A malformed `SDK_API_RATE_LIMIT` such as `0junk` or `0.5` falls back to the 300-request default and warns at startup instead of silently disabling the helper API's rate limiter; an exact `0` is still the only off switch.
+- The 64-bit value validator rejects `-0.5` and `+/-Infinity` with stock bitcoinjs-lib's own error strings instead of a fractional-component message or a native BigInt conversion error.
 
 ### Changed
 - DEPOSIT, EXECUTE and WITHDRAW default to `strictStatus`, refusing to resolve on an action row the indexer has not yet written a status for.

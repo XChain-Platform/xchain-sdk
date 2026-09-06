@@ -30,6 +30,7 @@
 
 'use strict';
 
+const crypto = require('crypto');
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { z } = require('zod');
 const { version: SDK_VERSION } = require('./package.json');
@@ -56,6 +57,33 @@ const COIN_NETWORKS = {
 };
 
 const DOCS_BASE = 'https://docs.xchain.io';
+
+// Key ordering is not part of what a submission MEANS, and the caller is a model
+// re-emitting JSON, so the same request must hash the same however its object
+// keys came out this time. Sorts every object key at every depth and leaves array
+// order alone (that IS meaning). Cycles cannot occur: the value came off the wire
+// as JSON.
+function canonicalJson(value) {
+    if (value === null || typeof value !== 'object') return JSON.stringify(value ?? null);
+    if (Array.isArray(value)) return '[' + value.map(canonicalJson).join(',') + ']';
+    return '{' + Object.keys(value).sort()
+        .map((k) => JSON.stringify(k) + ':' + canonicalJson(value[k]))
+        .join(',') + '}';
+}
+
+// The default idempotency key for a submit_action call: a hash of exactly what
+// the submission does. AgentSession REQUIRES a stable key (POLICY_IDEMPOTENCY_
+// REQUIRED) because a submit can throw after the transaction already landed, and
+// the thing that retries on this rail is a model, which re-derives the same
+// arguments rather than remembering a key it minted. Hashing the arguments is
+// therefore the key the caller would have supplied if it could: an identical
+// retry is refused and handed the prior txid instead of paying twice. A caller
+// that MEANS to repeat a payment passes its own idempotency_key.
+function derivedIdempotencyKey(coin, action, params) {
+    return 'mcp-' + crypto.createHash('sha256')
+        .update(canonicalJson({ coin, action, params: params ?? {} }))
+        .digest('hex');
+}
 
 const coinParam = z.enum(Object.keys(COIN_NETWORKS))
     .describe('Chain + network: BTC/LTC/DOGE mainnet, T prefix = testnet, R prefix = local regtest');
@@ -86,9 +114,12 @@ function buildServer(options = {}) {
     // Every tool returns the raw JSON the platform returned, as text. Amounts
     // are arbitrary-precision decimal STRINGS; never parse them as floats.
     const ok = (data) => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 1) }] });
-    const fail = (err) => ({
+    // `extra` is opt-in per call site, never a blanket spread of err.details: an
+    // error's details are shaped by whatever threw, and this rail answers a model.
+    const fail = (err, extra) => ({
         isError: true,
-        content: [{ type: 'text', text: JSON.stringify({ error: err.message || String(err), code: err.code || err.name || 'ERROR' }) }],
+        content: [{ type: 'text', text: JSON.stringify(Object.assign(
+            { error: err.message || String(err), code: err.code || err.name || 'ERROR' }, extra || {})) }],
     });
     const tool = (name, description, schema, handler) => {
         server.registerTool(name, {
@@ -178,14 +209,28 @@ function buildServer(options = {}) {
         { coin: coinParam, contract_action_index: z.number().int().min(0), key: z.string().optional() },
         ({ coin, contract_action_index, key }) => sdkFor(coin).getContractState(contract_action_index, key));
 
+    // getExecutions is (query, type, opts): the explorer's filtered route is
+    // /executions/{QUERY}/{TYPE} and the type segment is required, so the
+    // contract action index is the QUERY and 'contract' names its index.
+    // Passing opts in the type slot builds '/executions/42/[object Object]'.
     tool('get_executions', 'Executions of a contract.',
         { coin: coinParam, contract_action_index: z.number().int().min(0), ...pageOpts },
-        ({ coin, contract_action_index, page, limit }) => sdkFor(coin).getExecutions(contract_action_index, { page, limit }));
+        ({ coin, contract_action_index, page, limit }) => sdkFor(coin).getExecutions(contract_action_index, 'contract', { page, limit }));
 
     /* ── attestations / validators / checkpoints ────────────────────── */
-    tool('get_attestations', 'ATTEST v0 requests + v1 responses, including LLM attestations contracts requested via xchain.attestation.request.',
+    tool('get_attestations', 'ATTEST v0 requests + v1 responses, including LLM attestations contracts requested via xchain.attestation.request. Omit BOTH query and type for the unfiltered list; whenever query is given, type names the index it filters on and is required.',
         { coin: coinParam, query: z.string().optional(), type: z.enum(['block', 'address', 'contract']).optional(), ...pageOpts },
-        ({ coin, query, type, page, limit }) => sdkFor(coin).getAttestations(query, type, { page, limit }));
+        ({ coin, query, type, page, limit }) => {
+            // The filtered route is /attestations/{QUERY}/{TYPE} with the type
+            // segment required; the two fields are independently optional here,
+            // so refuse the pair the SDK would render as '/attestations/42/undefined'.
+            // registerTool takes a raw Zod shape, so cross-field rules live here.
+            if (query && !type)
+                throw Object.assign(
+                    new Error('get_attestations: type is required when query is given (one of block, address, contract); omit both for the unfiltered list'),
+                    { code: 'INVALID_ARGUMENT' });
+            return sdkFor(coin).getAttestations(query, type, { page, limit });
+        });
 
     tool('get_validators', 'Active validators and their staked capabilities.',
         { coin: coinParam },
@@ -254,18 +299,40 @@ function buildServer(options = {}) {
         server.registerTool('submit_action', {
             description: 'Compose, policy-check, sign, broadcast an XChain action and wait for the indexer. '
                 + 'Enforced by the operator-configured AgentSession policy: out-of-policy actions are refused '
-                + 'before signing, with a POLICY_* code. Treat policy refusals as final, not retryable.',
+                + 'before signing, with a POLICY_* code. Treat policy refusals as final, not retryable. '
+                + 'At most once: repeating a call with the same coin, action and params is REFUSED with '
+                + 'POLICY_DUPLICATE_SUBMIT and the original txid, so a call that timed out is safe to repeat '
+                + 'and will never pay twice. To make a DELIBERATE second identical payment, pass a new '
+                + 'idempotency_key.',
             inputSchema: {
                 coin: coinParam,
                 action: z.string().describe('ACTION name, e.g. SEND, MINT, EXECUTE'),
                 params: z.record(z.string(), z.any()).describe('Action parameters (e.g. {tick, amount, destination}). Amounts are decimal strings.'),
+                idempotency_key: z.string().min(1).optional().describe(
+                    'Optional. Defaults to a hash of coin+action+params, which is what makes a repeated call safe. '
+                    + 'Supply a NEW value only to make a second, deliberately identical payment; supply the SAME '
+                    + 'value to retry one call without risking a double spend.'),
             },
             annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
-        }, async ({ coin, action, params }) => {
+        }, async ({ coin, action, params, idempotency_key: idempotencyKey }) => {
+            const ACTION = String(action).toUpperCase();
             try {
-                const result = await sessionFor(coin).submit({ action: String(action).toUpperCase(), params });
+                // Third argument: submit(actionData, encoderOpts, submitOpts). Passing
+                // nothing here is what left this tool refusing every call with
+                // POLICY_IDEMPOTENCY_REQUIRED under the default policy.
+                const result = await sessionFor(coin).submit(
+                    { action: ACTION, params },
+                    {},
+                    { idempotencyKey: idempotencyKey || derivedIdempotencyKey(coin, ACTION, params) });
                 return ok({ txid: result.txid, status: result.status, policy: result.policy });
-            } catch (err) { return fail(err); }
+            } catch (err) {
+                // A duplicate refusal carries the earlier txid. Without it the caller
+                // is told only that it already paid, with no way to find the payment
+                // and resume waiting on it, which is the retry this refusal exists to
+                // replace. Nothing else is copied out of details.
+                const txid = err && err.details && err.details.txid;
+                return txid ? fail(err, { txid }) : fail(err);
+            }
         });
     }
 

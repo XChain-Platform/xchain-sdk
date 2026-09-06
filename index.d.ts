@@ -992,7 +992,7 @@ export declare const AttestationHelpers: {
 /*
  *  GatedFileUtils: AES-256-GCM encryption / key-handoff (de)serialization
  *  for FILE v1 token-gated content.
- *  Spec: protocol/TOKEN_GATED_CONTENT.md
+ *  Spec: protocol/token-gated-content.md
  */
 
 export interface GenerateKeyResult {
@@ -1552,8 +1552,8 @@ export declare class XChainSDK {
     /** Get a single execution result by its ACTION_INDEX */
     getExecution(executionActionIndex: number | string): Promise<ExecutionInfo>;
 
-    /** Get execution history for a contract */
-    getExecutions(contractActionIndex?: number | string, opts?: QueryOptions): Promise<ListEnvelope<ExecutionInfo>>;
+    /** Get execution history, filtered by `type` (block | address | contract; defaults to contract) */
+    getExecutions(query?: number | string, type?: string, opts?: QueryOptions): Promise<ListEnvelope<ExecutionInfo>>;
 
     /** Get deposits for a contract */
     getDeposits(query: string, type: string, opts?: QueryOptions): Promise<any>;
@@ -1896,7 +1896,7 @@ export declare class XChainSDK {
 
     /**
      * AES-256-GCM encryption / key-handoff utilities for FILE v1 token-gated content.
-     * Spec: protocol/TOKEN_GATED_CONTENT.md
+     * Spec: protocol/token-gated-content.md
      */
     readonly gatedFile: GatedFileUtils;
 

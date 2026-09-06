@@ -22,7 +22,7 @@
  * Recipients hash each 32-byte candidate to identify which gated FILE
  * (by KEY_HASH) it unlocks; no KEY_HASH is sent on the wire. Pack
  * membership is implicit; files sharing one K share one entry.
- * See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
+ * See xchain-documentation/protocol/token-gated-content.md.
  *
  ********************************************************************/
 

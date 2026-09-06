@@ -452,9 +452,24 @@ class CoSigner {
             //     diversion. The value guard also neutralizes a decoy OP_RETURN of
             //     a non-carrier shape (which the decoder's strict length===2 count
             //     ignores) being used as a value sink.
+            //
+            //     ON AN ENVELOPE ROLE THE EXEMPTION DOES NOT APPLY AT ALL. An
+            //     envelope carries its action in the tapleaf, so the transaction
+            //     needs no data carrier: step 2 above decodes a COMMIT and a CANCEL
+            //     from the leaf script, never from this PSBT, and a CANCEL is not
+            //     policy-judged at all on the premise that it publishes NO ACTION.
+            //     A zero-value OP_RETURN waved through here is therefore a SECOND
+            //     action that nothing in this daemon judged, riding on a signature
+            //     the daemon gave to something else - and the chain reads it, because
+            //     envelope recognition is witness-based and a commit reveals no
+            //     envelope witness. The value check is the wrong question for it: the
+            //     carrier is not a burn, it is an unauthorized command. Refuse it
+            //     under the same reason string the reveal path already uses for a
+            //     mixed carrier (psbtActionDecode.extractEnvelopeActionString).
             let decomp = null;
             try { decomp = bitcoin.script.decompile(out.script); } catch (e) { /* non-standard */ }
             if (decomp && decomp[0] === bitcoin.opcodes.OP_RETURN) {
+                if (env) return this._deny('ENVELOPE_MIXED_CARRIER', { index: i });
                 if (Number(out.value) > 0)
                     return this._deny('OP_RETURN_CARRIES_VALUE', { index: i, value: out.value });
                 continue;
@@ -706,6 +721,10 @@ class CoSigner {
         //    policy would mean that tightening a policy (or retiring an action
         //    from allowedActions) permanently strands whatever sits in an
         //    unrevealed commit, turning a recovery path into a way to lose funds.
+        //    "Publishes no action at all" is a premise the OUTPUT GATE has to keep
+        //    true: _checkOutputs refuses every OP_RETURN on an envelope role, so a
+        //    cancel cannot carry one. Weaken that refusal and this skip becomes an
+        //    unjudged signing path.
         const windowUsage = this.windowStore ? this.windowStore.snapshot() : undefined;
         let verdict = { ok: true, evaluation: {} };
         if (!env || env.role !== 'cancel') {

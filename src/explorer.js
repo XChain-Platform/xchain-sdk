@@ -464,7 +464,7 @@ class ExplorerClient {
     // ACTION_INDEX. Returns a Buffer of the encrypted file bytes
     // ([12-byte nonce][ct][16-byte GCM tag]) ready for decryption with
     // the symmetric key from the corresponding MESSAGE handoff.
-    // See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
+    // See xchain-documentation/protocol/token-gated-content.md.
     async getGatedFileRaw(actionIndex, coin = null) {
         let url = '/' + this._siblingCoin(coin) + '/api/file/' + actionIndex + '/raw';
         let self = this;

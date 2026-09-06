@@ -35,6 +35,18 @@ class EncoderClient {
         // can overlay hub-discovered endpoints). No-op when not supplied.
         this._readyHook = options.readyHook || null;
 
+        // Optional encoder API key, mirroring HubConnector's hubApiKey. An
+        // xchain-encoder whose operator set API_KEY 401s every method except
+        // GET /openrpc.json, so without this the SDK could not talk to a keyed
+        // deployment at all. Read here rather than per request because
+        // _buildClient() is also the hub-discovery rebuild path, and a header
+        // attached at call time would have to be re-derived there. Guarded for
+        // browser bundles where process is undefined. Note the exposure this
+        // buys: with no pinned encoderUrl the hub overlay repoints the client,
+        // and the key then goes to whatever encoder host the hub named.
+        this.apiKey = options.encoderApiKey ||
+            (typeof process !== 'undefined' && process.env && process.env.ENCODER_API_KEY) || '';
+
         // Build the pooled axios client for the current baseUrl/port.
         this._buildClient();
 
@@ -66,11 +78,15 @@ class EncoderClient {
             maxSockets:     pool.maxSockets || 10,
             maxFreeSockets: pool.maxFreeSockets || 5
         });
+        // Only send x-api-key when one is configured: an empty header value is
+        // still a header, and a keyed encoder would compare against it.
+        let headers = { 'Content-Type': 'application/json' };
+        if (this.apiKey) headers['x-api-key'] = this.apiKey;
         this.client = axios.create({
             baseURL: baseURL,
             proxy: false,
             timeout: this.timeout,
-            headers: { 'Content-Type': 'application/json' },
+            headers: headers,
             httpAgent:  isHttps ? undefined : this._agent,
             httpsAgent: isHttps ? this._agent : undefined
         });
@@ -391,7 +407,7 @@ class EncoderClient {
     // Signing a raw estimateFee answer trusts the remote encoder.
     //
     // Required: same as createTx (data, pubkey)
-    // Returns: { psbt, encoding, revealPsbt?, fee, inputTotal, outputTotal }
+    // Returns: { psbt, encoding, revealPsbt?, carrierScripts?, fee, inputTotal, outputTotal }
     async estimateFee(params) {
         let result = await this.createTx(params);
 
@@ -402,6 +418,13 @@ class EncoderClient {
         // unable to tell a legitimate commit leg from parked value. It is a
         // gate input, not an extra thing to sign: estimateFees consumes it and deletes it.
         if (result.revealPsbt) feeInfo.revealPsbt = result.revealPsbt;
+        // The chunk lanes' redeem scripts, carried through for the same reason the
+        // reveal is: they are a GATE INPUT. A P2SH/P2WSH payload lives in scripts the
+        // PSBT holds only the hashes of, so without them the caller-side carrier bind
+        // has nothing to hash against and cannot tell an intended action from a
+        // substituted one. Dropping the field here left the estimate path structurally
+        // unable to run the check the submit path runs.
+        if (result.carrierScripts) feeInfo.carrierScripts = result.carrierScripts;
         try {
             const bitcoin = require('bitcoinjs-lib');
             let psbt = bitcoin.Psbt.fromHex(result.psbt);

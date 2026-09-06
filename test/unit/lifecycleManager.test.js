@@ -401,6 +401,73 @@ describe('LifecycleManager', function () {
         });
     });
 
+    // The encoder is a REMOTE service that chooses the bytes this SDK signs.
+    // reconcileEncoded proves the coin still goes where the caller asked and never
+    // reads the data carrier, so a response with identical outputs and an identical
+    // fee could still carry a different COMMAND, and this path signed it.
+    describe('submitAction(): the carrier must hold the action that was submitted', function () {
+        const SUBMITTED   = 'SEND|0|TOK|1|1RecipientAAAAAAAAAAAAAAAAAAAAAAAA|m';
+        const SUBSTITUTED = 'SEND|0|TOK|1000|1RecipientBBBBBBBBBBBBBBBBBBBBBBBB|m';
+
+        // An encoder answer built the way xchain-encoder builds one: the action
+        // compiled behind the XCHN magic word, AES-128-CTR obfuscated under the
+        // first input's txid, in a zero-value OP_RETURN, with change back to the
+        // funding script. Only the carrier's CONTENTS differ between the two cases.
+        function encoderAnswer(carriedAction) {
+            const bitcoin = require('bitcoinjs-lib');
+            const crypto  = require('crypto');
+            const ecc     = require('@bitcoinerlab/secp256k1');
+            const { ECPairFactory } = require('ecpair');
+            bitcoin.initEccLib(ecc);
+            const kp = ECPairFactory(ecc).makeRandom();
+            const script = bitcoin.payments.p2wpkh({ pubkey: kp.publicKey }).output;
+            const prevHash = crypto.randomBytes(32);
+            const txid = Buffer.from(prevHash).reverse().toString('hex');
+            const tagged = Buffer.concat([Buffer.from('XCHN'),
+                bitcoin.script.compile([Buffer.from(carriedAction, 'utf8')])]);
+            const cipher = crypto.createCipheriv('aes-128-ctr', txid.substr(0, 16), txid.substr(16, 16));
+            const psbt = new bitcoin.Psbt();
+            psbt.addInput({ hash: prevHash, index: 0, witnessUtxo: { script, value: 100_000 } });
+            psbt.addOutput({ script: bitcoin.payments.embed({
+                data: [Buffer.concat([cipher.update(tagged), cipher.final()])] }).output, value: 0 });
+            psbt.addOutput({ script, value: 90_000 });
+            return psbt.toHex();
+        }
+
+        function sdkFor(carriedAction, calls) {
+            return makeSdk({
+                actions: { createAction: () => ({ actionString: SUBMITTED, action: 'SEND', version: 0 }) },
+                wallet:  { signPsbt: () => { calls.push('sign'); return { txHex: '00', txid: 'signedtxid', psbtHex: '00' }; } },
+            }, {
+                createTx:    async () => ({ psbt: encoderAnswer(carriedAction), encoding: 'OP_RETURN' }),
+                broadcastTx: async () => { calls.push('broadcast'); return { txid: 'signedtxid' }; },
+            });
+        }
+
+        it('refuses a substituted amount and destination BEFORE anything is signed', async function () {
+            const calls = [];
+            const lm = new LifecycleManager(sdkFor(SUBSTITUTED, calls));
+            await assert.rejects(
+                () => lm.submitAction({ action: 'SEND', params: {} }, { pubkey: '03pub' },
+                    { wif: FAKE_WIF, waitForIndexer: false }),
+                (e) => e.code === 'CARRIER_ACTION_MISMATCH');
+            assert.deepStrictEqual(calls, [],
+                'the substituted command must be refused before any key touches it');
+        });
+
+        // The control: the identical shape, carrying what was actually submitted,
+        // still signs and broadcasts. Without it the refusal above would only prove
+        // the path throws.
+        it('signs and broadcasts when the carrier holds exactly what was submitted', async function () {
+            const calls = [];
+            const lm = new LifecycleManager(sdkFor(SUBMITTED, calls));
+            const result = await lm.submitAction({ action: 'SEND', params: {} }, { pubkey: '03pub' },
+                { wif: FAKE_WIF, waitForIndexer: false });
+            assert.strictEqual(result.txid, 'signedtxid');
+            assert.deepStrictEqual(calls, ['sign', 'broadcast']);
+        });
+    });
+
     // submitAction(): P2SH two-phase path
     describe('submitAction(): P2SH two-phase encoding', function () {
         it('runs phase-2 when encoding is P2SH, broadcasts twice, returns phase-2 txid', async function () {

@@ -54,6 +54,9 @@ const { publicDefaults } = require('./endpoints.js');
 // The pre-sign intent gate. estimateFees hands back a signable encoder-authored PSBT,
 // so it runs the same reconciliation submitAction does.
 const { reconcileEncoded, psbtPrevouts } = require('./reconcileEncoded.js');
+// ... and its carrier half: the gate reads outputs and the fee, this reads the
+// action the transaction actually carries.
+const { assertCarrierBinding } = require('./carrier/bindActionCarrier.js');
 const { SDKConfigError, SDKExplorerError, SDKContractError } = require('./errors.js');
 const { lintSource } = require('./contract/lint-core.js');
 const CONTRACT_SOURCES = require('./contract/templates.js');
@@ -416,6 +419,10 @@ class XChainSDK {
             this.encoder = new EncoderClient({
                 encoderUrl:  encoderUrl,
                 encoderPort: encoderPort ? parseInt(encoderPort) : undefined,
+                // Explicit because this client's options are cherry-picked, not
+                // spread the way HubConnector's are; without the line an
+                // encoderApiKey passed to the SDK reaches no encoder request.
+                encoderApiKey: resolved.encoderApiKey || this.options.encoderApiKey,
                 timeout:     resolved.timeout,
                 hooks:       hooks,
                 retry:       retry,
@@ -517,7 +524,7 @@ class XChainSDK {
                 if (!this._isDowngrade('encoder', this.encoder, endpoints.encoderUrl))
                     this.encoder.setBase(endpoints.encoderUrl, endpoints.encoderPort);
             } else {
-                this.encoder = new EncoderClient({ encoderUrl: endpoints.encoderUrl, encoderPort: endpoints.encoderPort, timeout: this.options.timeout, hooks, retry, pool, readyHook });
+                this.encoder = new EncoderClient({ encoderUrl: endpoints.encoderUrl, encoderPort: endpoints.encoderPort, encoderApiKey: this.options.encoderApiKey, timeout: this.options.timeout, hooks, retry, pool, readyHook });
             }
         }
 
@@ -1013,6 +1020,20 @@ class XChainSDK {
             phaseSpends: revealPsbt ? (psbtPrevouts(revealPsbt) || []) : null,
         });
 
+        // ... and the same carrier bind, for the same reason. The gate above reads
+        // outputs, values and the fee and deliberately never reads the data carrier,
+        // so a PSBT that reconciles perfectly can still carry a different command
+        // than the one this method was asked to price. A signable PSBT handed back
+        // unbound is the identical exposure to signing it here.
+        assertCarrierBinding({
+            psbt:           feeResult.psbt,
+            actionString:   result.actionString,
+            encoding:       feeResult.encoding,
+            carrierScripts: feeResult.carrierScripts,
+            network:        reconcileNetwork,
+            label:          'fee estimate',
+        });
+
         feeResult.actionString = result.actionString;
         feeResult.action       = result.action;
         feeResult.version      = result.version;
@@ -1160,7 +1181,7 @@ class XChainSDK {
 
     /*
      *  Token-gated content (FILE with GATE_TICKER set).
-     *  See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
+     *  See xchain-documentation/protocol/token-gated-content.md.
      */
 
     // Fetch the raw ciphertext bytes for a gated FILE by ACTION_INDEX.

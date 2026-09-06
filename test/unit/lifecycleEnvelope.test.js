@@ -57,6 +57,39 @@ function buildSignedTx() {
     return { psbtHex: unsignedHex, txHex: tx.toHex(), txid: tx.getId() };
 }
 
+const ACTION_STRING = 'XCHAIN|FILE|...';
+
+// A §3.2 envelope leaf carrying `actionString`: OP_FALSE OP_IF 'XCHN' <format>
+// <payload pushes> OP_ENDIF <32-byte key> OP_CHECKSIG. The reveal fixtures build
+// one because the lifecycle now proves the reveal it is about to sign declares the
+// action that was submitted, and a reveal carrying no leaf at all is a response the
+// encoder never emits: the leaf IS the envelope.
+function envelopeLeaf(actionString) {
+    const bitcoin = require('bitcoinjs-lib');
+    const crypto = require('crypto');
+    const payload = bitcoin.script.compile([Buffer.from(actionString, 'utf8')]);
+    const pushes = [];
+    for (let i = 0; i < payload.length; i += 520) pushes.push(payload.subarray(i, i + 520));
+    return bitcoin.script.compile([
+        bitcoin.opcodes.OP_FALSE, bitcoin.opcodes.OP_IF,
+        Buffer.from('XCHN', 'utf8'), Buffer.from([0x00]), ...pushes,
+        bitcoin.opcodes.OP_ENDIF, crypto.randomBytes(32), bitcoin.opcodes.OP_CHECKSIG,
+    ]);
+}
+
+// Attach that leaf to input 0 of a reveal PSBT, the way the encoder's reveal does.
+function withEnvelopeLeaf(psbt, actionString = ACTION_STRING) {
+    const crypto = require('crypto');
+    psbt.updateInput(0, {
+        tapLeafScript: [{
+            leafVersion: 0xc0,
+            script: envelopeLeaf(actionString),
+            controlBlock: Buffer.concat([Buffer.from([0xc0]), crypto.randomBytes(32)]),
+        }],
+    });
+    return psbt;
+}
+
 // Fake SDK whose encoder returns an ENVELOPE PAIR, with every broadcast and signing
 // call recorded in one ordered trace so the sequence itself can be asserted.
 const RECOVERY = {
@@ -66,13 +99,18 @@ const RECOVERY = {
 };
 
 function makeEnvelopeSdk({ revealSignThrows = false, revealBroadcastThrows = false, customSigner = null } = {}) {
+    const bitcoin = require('bitcoinjs-lib');
     const signed = buildSignedTx();
+    // Same transaction shape as the commit, plus the envelope leaf on input 0:
+    // the reveal is where the action bytes first exist in a transaction at all.
+    const revealHex = withEnvelopeLeaf(
+        bitcoin.Psbt.fromHex(signed.psbtHex, { network: bitcoin.networks.regtest })).toHex();
     const trace = [];
 
     const encoder = {
         createTx: async () => ({
             psbt:       signed.psbtHex,
-            revealPsbt: signed.psbtHex,          // the pair, per §6
+            revealPsbt: revealHex,               // the pair, per §6
             envelope:   RECOVERY,                // the §3.5 recovery record
             encoding:   'TAPROOT',
         }),
@@ -181,6 +219,7 @@ describe('Taproot envelope pair through the lifecycle', function () {
         const reveal = new bitcoin.Psbt({ network: net });
         reveal.addInput({ hash: 'bb'.repeat(32), index: 0, witnessUtxo: { script: commitLeg, value: 8_000 } });
         reveal.addOutput({ script: fundingScript, value: 7_500 });
+        withEnvelopeLeaf(reveal);
 
         sdk._requireEncoder = () => ({
             createTx:    async () => ({ psbt: commit.toHex(), revealPsbt: reveal.toHex(), envelope: RECOVERY, encoding: 'TAPROOT' }),
@@ -208,6 +247,7 @@ describe('Taproot envelope pair through the lifecycle', function () {
         const reveal = new bitcoin.Psbt({ network: net });
         reveal.addInput({ hash: 'bb'.repeat(32), index: 0, witnessUtxo: { script: commitLeg, value: 8_000 } });
         reveal.addOutput({ script: fundingScript, value: 7_500 });
+        withEnvelopeLeaf(reveal);
 
         sdk._requireEncoder = () => ({
             createTx:    async () => ({ psbt: commit.toHex(), revealPsbt: reveal.toHex(), envelope: RECOVERY, encoding: 'TAPROOT' }),

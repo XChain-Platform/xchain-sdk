@@ -105,7 +105,15 @@ function deployOverhead(opts) {
 // estimate sizes a v0 action the wire will not carry.
 function fitsSingleDeploy(code, opts = {}) {
     let b64      = Buffer.from(String(code), 'utf8').toString('base64');
-    let overhead = deployOverhead(opts).length + OP_RETURN_PUSH_OVERHEAD;
+    // BYTES, not UTF-16 code units. MAX_ACTION_DATA_LENGTH bounds the COMPILED
+    // push and the encoder measures the action string with Buffer.byteLength, so
+    // a constructor param outside ASCII costs more on the wire than String.length
+    // reports: 'é' is one code unit and two bytes, an emoji two units and four
+    // bytes. Under-counting here plans a single-shot deploy whose real action
+    // string is over the cap, and the encoder then refuses it at create time with
+    // nothing pointing at chunking as the fix. The base64 below was already
+    // byte-counted; this is the one term that was not.
+    let overhead = Buffer.byteLength(deployOverhead(opts), 'utf8') + OP_RETURN_PUSH_OVERHEAD;
     return (Buffer.byteLength(b64, 'utf8') + overhead) <= MAX_ACTION_DATA_LENGTH;
 }
 

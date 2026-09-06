@@ -167,6 +167,7 @@ const token = await sdk.getToken('MYTOKEN');
 | `SDK_API_RATE_WINDOW_MS` | No | `60000` | Length of the fixed rate-limit window, in milliseconds. A non-numeric or non-positive value falls back to `60000` |
 | `EXPLORER_URL` / `EXPLORER_PORT` | No | `127.0.0.1` / `8080` | xchain-explorer location |
 | `ENCODER_URL` / `ENCODER_PORT` | No | `127.0.0.1` / `3003` | xchain-encoder location |
+| `ENCODER_API_KEY` | No | (none) | API key sent as `x-api-key` to an xchain-encoder whose operator set `API_KEY`; also settable per instance as the `encoderApiKey` option. With no pinned `ENCODER_URL` it is also sent to whatever encoder host hub discovery names |
 | `HUB_URL` | No | (none) | Full xchain-hub URL |
 | `HUB_API_HOST` / `HUB_PORT` | No | (none) | xchain-hub host/port form used by some SDK paths |
 | `HUB_API_KEY` | No | (none) | API key for `getallconfigs` against keyed hubs; public zero-config discovery should use the hub's chain-registry endpoint instead |

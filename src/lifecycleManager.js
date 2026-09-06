@@ -23,6 +23,7 @@ const ActionWaiter = require('./actionWaiter.js');
 const EncoderClient = require('./encoder.js');
 const { SDKActionError, SDKConfigError } = require('./errors.js');
 const { reconcileEncoded, psbtPrevouts } = require('./reconcileEncoded.js');
+const { assertCarrierBinding, assertEnvelopeCarrierBinding } = require('./carrier/bindActionCarrier.js');
 
 // Actions that execute against a CONTRACT. For these, "the transaction is
 // confirmed" is not the event a caller is waiting for: the indexer executes the
@@ -172,6 +173,23 @@ class LifecycleManager {
                 requiredSpends: phase1.phaseFunding,
             }));
 
+        // Bind the CARRIER to the action that was submitted, which the gate above
+        // deliberately never reads: reconcileEncoded is PSBT-structural and
+        // false-positive-free by charter, so it accounts for outputs, values and the
+        // fee and says nothing about the command riding in the data carrier. Keeping
+        // every native output and the fee identical while swapping a SEND's amount and
+        // destination therefore reconciled cleanly, and this path signed the
+        // substituted command. Fail-closed, and BEFORE either signing branch: a custom
+        // signer runs its own policy over the same unbound bytes.
+        assertCarrierBinding({
+            psbt:           encoded.psbt,
+            actionString:   createResult.actionString,
+            encoding:       encoded.encoding,
+            carrierScripts: encoded.carrierScripts,
+            network:        this._reconcileNetwork(),
+            label:          'transaction',
+        });
+
         progress('signing', { encoding: encoded.encoding });
         let signed;
         if (typeof opts.signer === 'function') {
@@ -206,6 +224,16 @@ class LifecycleManager {
         // the reveal HERE, while nothing is on chain yet and a throw costs nothing.
         let revealSigned = null;
         if (encoded.revealPsbt) {
+            // The reveal is where the envelope's action bytes first appear in a
+            // transaction at all (the commit output is only a hash of the leaf), so
+            // it is the only place a substituted envelope action can be caught. Bind
+            // it here, while the commit is still unbroadcast and a throw costs
+            // nothing but the round trip.
+            assertEnvelopeCarrierBinding({
+                revealPsbt:   encoded.revealPsbt,
+                actionString: createResult.actionString,
+                network:      this._reconcileNetwork(),
+            });
             revealSigned = this.sdk.wallet.signEnvelopeRevealPsbt(encoded.revealPsbt, wif);
             // §3.5 requires {commit outpoint, internal key, tapleaf hash} to be
             // durably persisted BEFORE the commit is broadcast, because the key-path
@@ -293,6 +321,21 @@ class LifecycleManager {
                 label: 'phase-2 reveal',
                 requiredSpends: phase1.phaseFunding,
             }));
+
+            // The phase-2 carrier is the reveal's tag marker plus the redeem scripts
+            // its INPUTS reveal, and those inputs can only be the legs phase 1
+            // committed to (requiredSpends above, and bitcoinjs will not sign a
+            // redeem script that does not hash to the prevout), so the payload is
+            // already bound by phase 1's carrier-script check. What is not bound is a
+            // SECOND carrier smuggled into this transaction, which this catches:
+            // encoding is left off deliberately, because spendP2sh returns no
+            // carrierScripts of its own and there is nothing here to hash them to.
+            assertCarrierBinding({
+                psbt:         spendResult.psbt,
+                actionString: createResult.actionString,
+                network:      this._reconcileNetwork(),
+                label:        'phase-2 reveal',
+            });
 
             // Phase-2 inputs are non-standard P2SH/P2WSH reveal inputs; they need
             // the custom finalizer, not the default single-sig finalizeAllInputs.

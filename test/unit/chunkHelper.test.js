@@ -149,6 +149,53 @@ describe('chunkHelper @regression', function () {
             expect(fitsSingleDeploy('x'.repeat(largest + 1), { gasLimit: opts.gasLimit, constructorParams: opts.constructorParams })).to.equal(true,
                 'the v0 shape still fits, which is exactly why the tail has to be budgeted');
         });
+
+        it('budgets non-ASCII constructor params in BYTES, measured against the real composer', function () {
+            // The cap bounds the COMPILED PUSH and the encoder measures the action
+            // string in UTF-8 bytes, so budgeting the overhead with String.length
+            // under-counts every constructor param outside ASCII: 'é' is one UTF-16
+            // code unit and two bytes. The planner then calls single-shot a deploy
+            // whose real action string is over the cap, and the encoder refuses it at
+            // create time with nothing naming chunking as the fix. Same composer-
+            // verified method as the case above, so it bounds over-reserving too: the
+            // +1 assertion fails if the budget starts chunking sources that still fit.
+            const { XChainSDK } = require('../../index.js');
+            const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
+            // 40 code units, 80 bytes: that 40-unit gap is the whole defect.
+            const ctor = 'é'.repeat(40);
+            expect(ctor.length).to.equal(40);
+            expect(Buffer.byteLength(ctor, 'utf8')).to.equal(80);
+
+            const opts = { gasLimit: 100000, constructorParams: [ctor] };
+            const compiled = (srcBytes) => {
+                const composed = sdk.actions.composeActionString({ action: 'DEPLOY', params: {
+                    CODE:               'x'.repeat(srcBytes),
+                    GAS_LIMIT:          opts.gasLimit,
+                    CONSTRUCTOR_PARAMS: opts.constructorParams
+                } });
+                return Buffer.byteLength(composed.actionString, 'utf8') + chunkHelper.OP_RETURN_PUSH_OVERHEAD;
+            };
+            const frontier = (o) => {
+                let lo = 1, hi = 7000, largest = 0;
+                while (lo <= hi) {
+                    const mid = (lo + hi) >> 1;
+                    if (fitsSingleDeploy('x'.repeat(mid), o)) { largest = mid; lo = mid + 1; } else hi = mid - 1;
+                }
+                return largest;
+            };
+
+            const largest = frontier(opts);
+            expect(compiled(largest)).to.be.at.most(MAX_ACTION_DATA_LENGTH,
+                'the largest single-shot source must actually fit the compiled cap');
+            expect(compiled(largest + 1)).to.be.above(MAX_ACTION_DATA_LENGTH,
+                'one byte more must not fit, or the budget is over-reserving and over-chunking');
+
+            // The same 40 params in pure ASCII weigh 40 bytes less on the wire, so
+            // they must admit a strictly larger source. Equal frontiers would mean
+            // the overhead is still being read off the code-unit count.
+            expect(frontier({ gasLimit: 100000, constructorParams: ['e'.repeat(40)] })).to.be.above(largest,
+                '40 extra wire bytes must cost source headroom, or the overhead counts code units');
+        });
     });
 
     describe('splitCode', function () {

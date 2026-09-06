@@ -746,7 +746,9 @@ describe('ExplorerClient', function () {
             const dts = require('fs').readFileSync(require('path').join(__dirname, '../../index.d.ts'), 'utf8');
             expect(dts, 'ListEnvelope must be declared').to.match(/export interface ListEnvelope<T> \{/);
             expect(dts).to.match(/getContracts\(query\?: string, type\?: string, opts\?: QueryOptions\): Promise<ListEnvelope<ContractInfo>>;/);
-            expect(dts).to.match(/getExecutions\(contractActionIndex\?: number \| string, opts\?: QueryOptions\): Promise<ListEnvelope<ExecutionInfo>>;/);
+            // Three-arg, matching the implementation: a two-arg declaration here is
+            // what taught callers to put opts in the type slot (mcp get_executions).
+            expect(dts).to.match(/getExecutions\(query\?: number \| string, type\?: string, opts\?: QueryOptions\): Promise<ListEnvelope<ExecutionInfo>>;/);
             expect(dts, 'the ContractClient mirror delegates straight through').to.match(/getExecutions\(opts\?: QueryOptions\): Promise<ListEnvelope<ExecutionInfo>>;/);
         });
 

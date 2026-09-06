@@ -190,6 +190,33 @@ describe('API request-rate limit', function () {
         assert.strictEqual(resolveRateWindowMs({ SDK_API_RATE_WINDOW_MS: '1000' }), 1000);
     });
 
+    it('a zero-prefixed junk value is junk, not the off switch', () => {
+        // parseInt() truncates at the first non-digit, so a zero-prefixed junk value
+        // resolves to 0/-0 and reaches the limiter's "0 disables" branch, turning an
+        // operator typo into a disabled limiter. The whole string is validated instead.
+        for (const junk of ['0junk', '0.5', '-0.5', '0x10', '1e3', '00 1', '+0', '', '   '])
+            assert.strictEqual(resolveRateLimit({ SDK_API_RATE_LIMIT: junk }), 300,
+                'a malformed value must fall back to 300, not disable the limiter: ' + JSON.stringify(junk));
+        // Whole numbers still parse, padding included, and 0 is still the one off switch.
+        assert.strictEqual(resolveRateLimit({ SDK_API_RATE_LIMIT: ' 300 ' }), 300);
+        assert.strictEqual(resolveRateLimit({ SDK_API_RATE_LIMIT: '007' }), 7);
+        assert.strictEqual(resolveRateLimit({ SDK_API_RATE_LIMIT: '0' }), 0);
+    });
+
+    it('the shipped limiter still bites when the env value was junk', async () => {
+        // The end-to-end form of the assertion above, on the real middleware:
+        // with the truncating parse this app ran unlimited and every one of the
+        // 301 requests returned 200.
+        const limit = resolveRateLimit({ SDK_API_RATE_LIMIT: '0junk' });
+        assert.strictEqual(limit, 300);
+        const app = buildApp(limit, 60000);
+        await withServer(app, async (send) => {
+            for (let i = 0; i < limit; i++)
+                assert.strictEqual((await send()).status, 200, 'request ' + i + ' must be allowed');
+            assert.strictEqual((await send()).status, 429, 'request 301 must be rejected, not waved through');
+        });
+    });
+
     it('src/api.js mounts the limiter BEFORE the auth gate and the jsonRouter mount', () => {
         const src = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
         const rateIdx   = src.indexOf('app.use(rateLimitMiddleware(');
