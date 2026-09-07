@@ -141,6 +141,7 @@ class ExplorerClient {
                     let response = await self.client.get(url, { params: self._buildParams(opts) });
                     if (self.hooks.onResponse)
                         self.hooks.onResponse({ service: 'explorer', method: 'GET', url, status: response.status });
+                    self._recordFreshness(response);
                     return response.data;
                 } catch (err) {
                     if (self.hooks.onError)
@@ -155,6 +156,40 @@ class ExplorerClient {
             if (err instanceof SDKExplorerError) throw err;
             self._handleError(err, url);
         }
+    }
+
+    // Freshness of the explorer's indexed tip, as the explorer stamps it on
+    // every data response: the XChain-Freshness / XChain-Tip-Block /
+    // XChain-Tip-Age-S headers on all of them, plus a `freshness` body object
+    // while the tip is stale. The explorer serves a stale coin rather than
+    // refusing it, so this is how a consumer learns that what it just read is a
+    // true record up to a tip that is behind. A response with no marker (an
+    // older explorer) leaves the record untouched.
+    _recordFreshness(response) {
+        let headers = (response && response.headers) || {};
+        let marker  = headers['xchain-freshness'];
+        let body    = response && response.data;
+        let inBody  = (body && typeof body === 'object' && !Array.isArray(body) && body.freshness && typeof body.freshness === 'object') ? body.freshness : null;
+        if (marker === undefined && !inBody) return;
+        let stale = inBody ? inBody.stale === true : String(marker).toLowerCase() === 'stale';
+        let num   = (v) => (v === undefined || v === null || v === '' || !Number.isFinite(Number(v))) ? null : Number(v);
+        this._freshness = {
+            stale,
+            tipBlock:      inBody && inBody.tip_block !== undefined ? num(inBody.tip_block) : num(headers['xchain-tip-block']),
+            tipAgeSeconds: inBody && inBody.tip_age_seconds !== undefined ? num(inBody.tip_age_seconds) : num(headers['xchain-tip-age-s']),
+            replicaHalted: inBody && typeof inBody.replica_halted === 'boolean' ? inBody.replica_halted : null,
+            observedAt:    Date.now()
+        };
+    }
+
+    // The last freshness marker this client saw, or null before any marked
+    // response has arrived. { stale, tipBlock, tipAgeSeconds, replicaHalted,
+    // observedAt }. Read this after a balance or history call to tell
+    // served-and-current from served-and-behind; sdk.freshness() is the same
+    // record, and sdk.assertFresh() turns a stale one into a typed error for
+    // the paths that must not build on it.
+    freshness() {
+        return this._freshness ? Object.assign({}, this._freshness) : null;
     }
 
     _handleError(err, url) {

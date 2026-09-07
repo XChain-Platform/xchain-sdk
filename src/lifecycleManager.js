@@ -63,6 +63,11 @@ class LifecycleManager {
     //                     writes a status row for all three (valid or invalid), so
     //                     waiting for one costs nothing on a healthy stack. Pass
     //                     strictStatus:false to opt back out.
+    //   strictFreshness - refuse (SDKExplorerError COIN_DATA_STALE) when the explorer's
+    //                     indexed tip for this coin is behind, before anything is
+    //                     encoded or signed; see sdk.assertFresh(). Off by default:
+    //                     the explorer serves a stale coin marked rather than
+    //                     refused, and the encoder sizes the spend from its own node
     //   awaitContract   - gate on the CONTRACT'S OWN state before returning, which is
     //                     the only signal that cannot race the indexer:
     //                       { contractActionIndex, key, equals, match,   (state gate)
@@ -101,6 +106,17 @@ class LifecycleManager {
 
         let encoder = this.sdk._requireEncoder();
         let progress = onProgress || (() => {});
+
+        // strictFreshness: refuse to build on an explorer whose indexed tip is
+        // behind. The explorer serves a stale coin (marked, never refused), and
+        // the encoder sizes the transaction from its own node, so a stale
+        // explorer does not by itself make a spend wrong; but a caller whose
+        // params came from explorer reads (a balance, a dispenser state, an
+        // order book) can ask for the read to be current before anything is
+        // signed. Off by default so a wallet keeps working through an indexer
+        // stall; the wallet shows the delay instead.
+        if (opts.strictFreshness)
+            await this.sdk.assertFresh();
 
         // Create and validate action string. Compact ticker names AND
         // addresses to their `^<id>` wire form first (on by default; each

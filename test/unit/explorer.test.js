@@ -1108,14 +1108,15 @@ describe('ExplorerClient', function () {
             });
         }
 
-        it('has 118 public methods', function () {
+        it('has 119 public methods', function () {
             // 113 = 112 + getPreflight (validity-first pre-flight proxy).
             // 117 = 113 + the four BET reads: getBetFeeds, getBetFeed,
             // getBets, getOracleStats.
             // 118 = 117 + getOracleFeeQuote (dispenser oracle usage fee).
+            // 119 = 118 + freshness (the explorer's per-response tip marker).
             let publicMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(publicMethods).to.have.length(118);
+            expect(publicMethods).to.have.length(119);
         });
     });
 
