@@ -97,6 +97,10 @@ const ENVELOPE_MAGIC = Buffer.from('XCHN', 'utf8');
 // recognition change and never a client-side surprise (§3.2).
 const ENVELOPE_FORMAT_V0 = 0x00;
 const TAPROOT_LEAF_VERSION = 0xc0;
+// Carried for parity with the decoder's §3.8 annex rule and deliberately unread
+// here: this module takes its leaf from the PSBT's tapLeafScript field, never from
+// a witness stack, so there is no trailing annex to skip. The rule is live in
+// XChainDecoder.detectEnvelopeWitness, which this file mirrors only script-side.
 const TAPROOT_ANNEX_MARKER = 0x50;
 
 /*

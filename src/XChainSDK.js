@@ -54,6 +54,9 @@ const { publicDefaults } = require('./endpoints.js');
 // The pre-sign intent gate. estimateFees hands back a signable encoder-authored PSBT,
 // so it runs the same reconciliation submitAction does.
 const { reconcileEncoded, psbtPrevouts } = require('./reconcileEncoded.js');
+// ... and its carrier half: the gate reads outputs and the fee, this reads the
+// action the transaction actually carries.
+const { assertCarrierBinding } = require('./carrier/bindActionCarrier.js');
 const { SDKConfigError, SDKExplorerError, SDKContractError } = require('./errors.js');
 const { lintSource } = require('./contract/lint-core.js');
 const CONTRACT_SOURCES = require('./contract/templates.js');
@@ -147,7 +150,13 @@ const ADDRESS_EVENT_TYPES = Object.freeze([
     'SWAP_MATCH', 'SWAP_EXPIRED',
     'DISPENSE', 'DISPENSER_CLOSED', 'DISPENSER_EXPIRED',
     'BET', 'BET_EXPIRED', 'BET_CLOSED',
-    'ATTESTATION_REQUEST', 'ATTESTATION_RESPONSE'
+    'ATTESTATION_REQUEST', 'ATTESTATION_RESPONSE',
+    // Cross-chain call resolution. The Broadcaster routes every lifecycle event
+    // to the address channel of each address it names, so these arrive on an
+    // address subscription whether or not the consumer also watches the xcall
+    // channel; absent from this list, onAddress registered no handler and the
+    // frames were sent and dropped in silence, exactly as MEMPOOL_ACTION was.
+    'XCALL_COMPLETED', 'XCALL_EXPIRED'
 ]);
 
 // The unconfirmed subset of the roster above, registered by onMempoolAction.
@@ -160,6 +169,12 @@ const MEMPOOL_EVENT_TYPES = Object.freeze(['MEMPOOL_ACTION', 'MEMPOOL_REMOVED'])
 // Canonical decimal action_index, mirroring the explorer ChannelManager's
 // CANONICAL_INDEX: no sign, no leading zeros, no fraction, no trailing junk.
 const CANONICAL_ACTION_INDEX = /^(0|[1-9][0-9]*)$/;
+
+// Canonical form of an xcall subscription key: the 64-hex call_id. Mirrors the
+// explorer ChannelManager's CANONICAL_CALL_ID, which refuses anything else at
+// subscribe time, so validating here turns a silent no-events subscription into
+// an immediate throw naming the argument.
+const CANONICAL_CALL_ID = /^[0-9a-f]{64}$/;
 
 // Wrap a teardown closure so it releases its subscription AT MOST ONCE.
 //
@@ -404,6 +419,10 @@ class XChainSDK {
             this.encoder = new EncoderClient({
                 encoderUrl:  encoderUrl,
                 encoderPort: encoderPort ? parseInt(encoderPort) : undefined,
+                // Explicit because this client's options are cherry-picked, not
+                // spread the way HubConnector's are; without the line an
+                // encoderApiKey passed to the SDK reaches no encoder request.
+                encoderApiKey: resolved.encoderApiKey || this.options.encoderApiKey,
                 timeout:     resolved.timeout,
                 hooks:       hooks,
                 retry:       retry,
@@ -505,7 +524,7 @@ class XChainSDK {
                 if (!this._isDowngrade('encoder', this.encoder, endpoints.encoderUrl))
                     this.encoder.setBase(endpoints.encoderUrl, endpoints.encoderPort);
             } else {
-                this.encoder = new EncoderClient({ encoderUrl: endpoints.encoderUrl, encoderPort: endpoints.encoderPort, timeout: this.options.timeout, hooks, retry, pool, readyHook });
+                this.encoder = new EncoderClient({ encoderUrl: endpoints.encoderUrl, encoderPort: endpoints.encoderPort, encoderApiKey: this.options.encoderApiKey, timeout: this.options.timeout, hooks, retry, pool, readyHook });
             }
         }
 
@@ -1001,6 +1020,20 @@ class XChainSDK {
             phaseSpends: revealPsbt ? (psbtPrevouts(revealPsbt) || []) : null,
         });
 
+        // ... and the same carrier bind, for the same reason. The gate above reads
+        // outputs, values and the fee and deliberately never reads the data carrier,
+        // so a PSBT that reconciles perfectly can still carry a different command
+        // than the one this method was asked to price. A signable PSBT handed back
+        // unbound is the identical exposure to signing it here.
+        assertCarrierBinding({
+            psbt:           feeResult.psbt,
+            actionString:   result.actionString,
+            encoding:       feeResult.encoding,
+            carrierScripts: feeResult.carrierScripts,
+            network:        reconcileNetwork,
+            label:          'fee estimate',
+        });
+
         feeResult.actionString = result.actionString;
         feeResult.action       = result.action;
         feeResult.version      = result.version;
@@ -1148,7 +1181,7 @@ class XChainSDK {
 
     /*
      *  Token-gated content (FILE with GATE_TICKER set).
-     *  See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
+     *  See xchain-documentation/protocol/token-gated-content.md.
      */
 
     // Fetch the raw ciphertext bytes for a gated FILE by ACTION_INDEX.
@@ -2061,6 +2094,52 @@ class XChainSDK {
         });
     }
 
+    // Listen for one cross-chain call's terminal phases: XCALL_COMPLETED,
+    // XCALL_EXPIRED and the initial SNAPSHOT.
+    // Returns an unsubscribe function.
+    onXcall(callId, callback) {
+        // Lower-case, not just String(): the explorer normalizes the id at
+        // subscribe time, so an upper-case id subscribes fine and receives nothing.
+        const id = String(callId === null || callId === undefined ? '' : callId).trim().toLowerCase();
+        if (!CANONICAL_CALL_ID.test(id))
+            throw new Error('onXcall: callId must be a 64-character hex string, got ' + JSON.stringify(callId));
+
+        const ws = this._requireWs();
+        // Compare the frame's own call_id case-insensitively, because only the
+        // Broadcaster's ROUTING key is lower-cased, never the id inside `data`.
+        // Fail open on a frame that carries no call_id, matching frameIdMatches:
+        // the guard rejects on positive evidence of another call, never on silence.
+        const matchesCall = (msg) => {
+            const data = frameData(msg);
+            if (!data) return true;
+            const value = data.call_id;
+            if (value === undefined || value === null || value === '') return true;
+            return String(value).toLowerCase() === id;
+        };
+        // One lifecycle guard plus the SNAPSHOT filter is the whole surface: a call
+        // has no entity-own update frame (no XCALL_UPDATE), exactly like bet_feed.
+        const onLifecycle = entityGuarded(matchesCall, callback);
+        ws.on('XCALL_COMPLETED', onLifecycle);
+        ws.on('XCALL_EXPIRED', onLifecycle);
+        const onSnapshot = (msg) => {
+            if (msg && msg.data && msg.data.channel === 'xcall' &&
+                String(msg.data.call_id).toLowerCase() === id){
+                callback(msg);
+            }
+        };
+        ws.on('SNAPSHOT', onSnapshot);
+        // Bare channel name with the id in params, like every sibling entity: a
+        // composite 'xcall:<id>' is rejected outright with `Unknown channel`.
+        const params = { call_id: id, snapshot: true };
+        this._subscribeDetached(ws, ['xcall'], params);
+        return oneShotTeardown(() => {
+            ws.off('XCALL_COMPLETED', onLifecycle);
+            ws.off('XCALL_EXPIRED', onLifecycle);
+            ws.off('SNAPSHOT', onSnapshot);
+            ws.unsubscribe(['xcall'], params);
+        });
+    }
+
     // Listen for oracle attestation traffic (both phases) on the global
     // `attestation` channel. No entity key and no snapshot: it is a stream, not
     // an entity with current state.
@@ -2123,6 +2202,26 @@ class XChainSDK {
     async waitForActionIndex(actionIndex, opts) {
         let waiter = new ActionWaiter(this);
         return waiter.waitForActionIndex(actionIndex, opts);
+    }
+
+    // Wait until a CONTRACT'S OWN state satisfies a condition, e.g.
+    //   await sdk.waitForContractState(73, { key: 'status', equals: 'FUNDED' })
+    // This is the gate a caller needs before settling against a contract: a
+    // confirmed transaction, and even a visible action row, is earlier than the
+    // indexer executing the action, and settling in that gap spends inputs the
+    // pending action already used. opts: { key, equals, match, timeout,
+    // pollInterval, explorer | explorerUrl+explorerPort }.
+    async waitForContractState(contractActionIndex, opts) {
+        let waiter = new ActionWaiter(this);
+        return waiter.waitForContractState(contractActionIndex, opts);
+    }
+
+    // Wait until a contract HOLDS a token balance: the same gate for a DEPOSIT,
+    // which credits the contract without writing any state key of its own.
+    // opts adds minQuantity (default: any quantity above zero).
+    async waitForContractBalance(contractActionIndex, tick, opts) {
+        let waiter = new ActionWaiter(this);
+        return waiter.waitForContractBalance(contractActionIndex, tick, opts);
     }
 
     // Listen for network stats updates

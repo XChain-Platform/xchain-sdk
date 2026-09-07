@@ -481,6 +481,63 @@ describe('G5: window-store single-writer lock', function () {
         }
     });
 
+    // The startup race this closes: create-then-write left the lockfile EXISTING
+    // and EMPTY between openSync('wx') and the writeSync that filled it. A second
+    // daemon starting in that window parsed no holder, could prove no pid alive,
+    // and reclaimed the LIVE lock as stale. Both then held the store, and since
+    // each rewrites the whole file from its own cache, they discard each other's
+    // consumption history and re-open the full budget with no symptom.
+    it('refuses to reclaim a lock whose holder record is empty', function () {
+        const stateFile = tmpStateFile('lock-empty');
+        // Exactly what an observer saw mid-acquire, and what a power loss can leave.
+        fs.writeFileSync(stateFile + '.lock', '');
+        let err = null;
+        try { new WindowStore(stateFile, 24, null, { init: true }); } catch (e) { err = e; }
+        try {
+            expect(err, 'an unreadable holder is not proof the lock is stale').to.not.equal(null);
+            expect(err.code).to.equal('WINDOW_STORE_LOCKED');
+            expect(err.holderPid).to.equal(null);
+            expect(err.message).to.contain(stateFile + '.lock');
+            expect(fs.existsSync(stateFile + '.lock'), 'the live lock must survive the refusal').to.equal(true);
+        } finally {
+            try { fs.unlinkSync(stateFile + '.lock'); } catch (e) { /* ignore */ }
+            try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
+        }
+    });
+
+    it('refuses to reclaim a lock whose holder record does not name a pid', function () {
+        const stateFile = tmpStateFile('lock-garbage');
+        fs.writeFileSync(stateFile + '.lock', JSON.stringify({ t: Date.now() }));
+        let err = null;
+        try { new WindowStore(stateFile, 24, null, { init: true }); } catch (e) { err = e; }
+        try {
+            expect(err).to.not.equal(null);
+            expect(err.code).to.equal('WINDOW_STORE_LOCKED');
+            expect(fs.existsSync(stateFile + '.lock')).to.equal(true);
+        } finally {
+            try { fs.unlinkSync(stateFile + '.lock'); } catch (e) { /* ignore */ }
+            try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
+        }
+    });
+
+    // The other half: the lockfile is never observable empty in the first place,
+    // because the record is written to a tmp file and hardlinked into place.
+    it('never publishes a lock name that is not already complete', function () {
+        const stateFile = tmpStateFile('lock-atomic');
+        const store = new WindowStore(stateFile, 24, null, { init: true });
+        try {
+            const raw = fs.readFileSync(stateFile + '.lock', 'utf8');
+            expect(raw.length, 'the published lock must carry its holder record').to.be.greaterThan(0);
+            expect(JSON.parse(raw).pid).to.equal(process.pid);
+            const leftovers = fs.readdirSync(path.dirname(stateFile))
+                .filter(f => f.startsWith(path.basename(stateFile) + '.lock.') && f.endsWith('.tmp'));
+            expect(leftovers, 'the staging file must not be left behind').to.deep.equal([]);
+        } finally {
+            store.release();
+            try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
+        }
+    });
+
     it('takes over a lock whose holder is dead, so a crash is not operator-only recovery', function () {
         const stateFile = tmpStateFile('lock-stale');
         // pid 2^22 is above the default pid_max on Linux and macOS, so it is

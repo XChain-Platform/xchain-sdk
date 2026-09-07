@@ -58,10 +58,10 @@ describe('MuSig2', function () {
             expect(() => musig.aggregateKeys([h('02'.padEnd(66, '0')), 12345])).to.throw(/hex string or Uint8Array/);
         });
 
-        it('generateNonce refuses to reuse a sessionId across different signing inputs', function () {
-            // BIP327 derives the SECRET nonce from the sessionId, so the same
-            // sessionId over a different message reuses the secret nonce and
-            // discloses the private key.
+        it('generateNonce treats a sessionId as single-use, whatever the other inputs', function () {
+            // BIP327 derives the SECRET nonce from the sessionId, so ANY second
+            // nonce under one sessionId is a second live handle on the same secret
+            // nonce, and two partial signatures under it disclose the private key.
             const sk = crypto.randomBytes(32);
             const pk = Buffer.from(secp256k1.getPublicKey(sk, true));
             const sessionId = crypto.randomBytes(32);
@@ -69,11 +69,37 @@ describe('MuSig2', function () {
             musig.generateNonce({ publicKey: pk, secretKey: sk, sessionId, msg: msgA });
             expect(() => musig.generateNonce({ publicKey: pk, secretKey: sk, sessionId, msg: msgB }))
                 .to.throw(/sessionId was already used/);
-            // A byte-identical repeat regenerates the same nonce for the same
-            // message and signs nothing new, so it is allowed through.
-            expect(() => musig.generateNonce({ publicKey: pk, secretKey: sk, sessionId, msg: msgA })).to.not.throw();
+            // A byte-identical repeat is refused too: it regenerates the same secret
+            // nonce, which is then spendable under a different aggregate nonce.
+            expect(() => musig.generateNonce({ publicKey: pk, secretKey: sk, sessionId, msg: msgA }))
+                .to.throw(/sessionId was already used/);
             // Omitting the sessionId leaves entropy to the library; nothing to reuse.
             expect(() => musig.generateNonce({ publicKey: pk, secretKey: sk, msg: msgB })).to.not.throw();
+        });
+
+        it('generateNonce refuses a msg-less sessionId repeat, and the repeat would have re-issued one secret nonce', function () {
+            // Round 1 normally runs BEFORE the message is known, so a msg-less
+            // repeat was the ordinary shape the old inputs-digest guard waved
+            // through. Prove the hazard is real, then prove the guard refuses it.
+            const sk = crypto.randomBytes(32);
+            const pk = Buffer.from(secp256k1.getPublicKey(sk, true));
+            const sessionId = crypto.randomBytes(32);
+            const first = musig.generateNonce({ publicKey: pk, secretKey: sk, sessionId });
+            expect(() => musig.generateNonce({ publicKey: pk, secretKey: sk, sessionId }))
+                .to.throw(/sessionId was already used/);
+            // Negative control: nonceGen is deterministic in (sessionId, secretKey,
+            // publicKey), so a repeat the guard does NOT see re-issues the same 66
+            // bytes as a distinct object, i.e. a second live handle on one secret
+            // nonce. A fresh module copy has an empty guard set and shows exactly it.
+            const musigPath = require.resolve('../../src/musig2.js');
+            const cached = require.cache[musigPath];
+            delete require.cache[musigPath];
+            const FreshMuSig2 = require('../../src/musig2.js');
+            delete require.cache[musigPath];
+            require.cache[musigPath] = cached;
+            const second = new FreshMuSig2().generateNonce({ publicKey: pk, secretKey: sk, sessionId });
+            expect(Buffer.from(second).toString('hex')).to.equal(Buffer.from(first).toString('hex'));
+            expect(second).to.not.equal(first);
         });
 
         it('generateNonce rejects params that are not objects', function () {

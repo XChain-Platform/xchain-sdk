@@ -176,19 +176,28 @@ class Workflows {
             p.deploy = await session.deploy(deployParams, {}, opts);
 
             if (deposits && deposits.length > 0) {
-                // Use the action_index from the deploy result for the contract reference
-                let contractActionIndex = p.deploy.indexed
-                    ? p.deploy.indexed.action_index
-                    : null;
+                // The contract reference for the deposits. Reading indexed.action_index
+                // directly saw `undefined` on the POLLING path, where the waiter resolves
+                // a whole TRANSACTION ({ actions: [{ action_index }] }) rather than a
+                // single action; `undefined` then passed a `!== null` guard and a DEPOSIT
+                // was assembled with no contract reference at all, after the deploy had
+                // been broadcast and paid for. _actionIndexOf resolves both shapes, which
+                // is what every other flow in this file already uses it for.
+                let contractActionIndex = this._actionIndexOf(p.deploy.indexed);
+                // Nullish, not falsy: index 0 is a valid index and must fund. Throwing
+                // rather than skipping matches attachContent and setRoster, because a
+                // caller that asked for deposits and got a SUCCESS carrying none was told
+                // the contract is funded when it is not. The throw sits inside
+                // _withPartial, so the broadcast deploy comes back as err.partial.
+                if (contractActionIndex === undefined || contractActionIndex === null)
+                    throw new Error('deployAndFund: DEPLOY action_index unavailable; submit with waitForIndexer enabled');
 
-                if (contractActionIndex !== null) {
-                    for (let dep of deposits) {
-                        p.deposits.push(await session.deposit({
-                            contractActionIndex,
-                            tick:     dep.tick,
-                            quantity: dep.quantity
-                        }, {}, opts));
-                    }
+                for (let dep of deposits) {
+                    p.deposits.push(await session.deposit({
+                        contractActionIndex,
+                        tick:     dep.tick,
+                        quantity: dep.quantity
+                    }, {}, opts));
                 }
             }
 
@@ -273,11 +282,14 @@ class Workflows {
             }
 
             if (deposits && deposits.length > 0) {
-                let contractActionIndex = p.deploy.indexed ? p.deploy.indexed.action_index : null;
-                if (contractActionIndex !== null) {
-                    for (let dep of deposits) {
-                        p.deposits.push(await session.deposit({ contractActionIndex, tick: dep.tick, quantity: dep.quantity }, {}, opts));
-                    }
+                // Same resolution and same refusal as deployAndFund above: the polling
+                // waiter answers with a transaction, so the direct read of
+                // indexed.action_index handed `undefined` to a DEPOSIT.
+                let contractActionIndex = this._actionIndexOf(p.deploy.indexed);
+                if (contractActionIndex === undefined || contractActionIndex === null)
+                    throw new Error('deployContract: DEPLOY action_index unavailable; submit with waitForIndexer enabled');
+                for (let dep of deposits) {
+                    p.deposits.push(await session.deposit({ contractActionIndex, tick: dep.tick, quantity: dep.quantity }, {}, opts));
                 }
             }
 

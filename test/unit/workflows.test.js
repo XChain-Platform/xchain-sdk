@@ -263,16 +263,49 @@ describe('Workflows', function () {
             assert.strictEqual(result.deposits[0].txid, 'deposit_tx');
         });
 
-        it('skips deposits when deploy indexed has no action_index (null)', async function () {
+        // Was "skips deposits when ...". A caller that asked for deposits and got a
+        // SUCCESS carrying none had been told the contract is funded when it is not,
+        // and the sibling flows (attachContent, setRoster) already refuse instead of
+        // skipping. The broadcast deploy is not lost: _withPartial returns it.
+        it('refuses to fund when deploy indexed has no action_index (null), keeping the deploy', async function () {
             const sdk = makeSdk({
                 deploy: async () => ({ txid: 'deploy', indexed: null })
             });
             const wf = new Workflows(sdk);
-            const result = await wf.deployAndFund(FAKE_WIF, { code: 'x' }, [
-                { tick: 'A', quantity: '10' }
-            ]);
-            // indexed is null → contractActionIndex is null → deposits skipped
-            assert.deepStrictEqual(result.deposits, []);
+            let err;
+            try {
+                await wf.deployAndFund(FAKE_WIF, { code: 'x' }, [{ tick: 'A', quantity: '10' }]);
+            } catch (e) { err = e; }
+            assert.ok(err, 'an unfunded contract must not look like success');
+            assert.match(err.message, /action_index unavailable/);
+            assert.strictEqual(err.partial.deploy.txid, 'deploy');
+            assert.deepStrictEqual(err.partial.deposits, []);
+        });
+
+        // The defect: the POLLING waiter resolves a whole transaction, so reading
+        // indexed.action_index directly saw undefined, which passed a `!== null`
+        // guard and sent a DEPOSIT carrying no contract reference at all.
+        it('funds from the polling waiter shape ({ actions: [...] })', async function () {
+            const depositCalls = [];
+            const sdk = makeSdk({
+                deploy:  async () => ({ txid: 'deploy_tx', indexed: { actions: [{ action_index: 99 }] } }),
+                deposit: async (p) => { depositCalls.push(p); return { txid: 'dep' }; }
+            });
+            const wf = new Workflows(sdk);
+            const result = await wf.deployAndFund(FAKE_WIF, { code: 'x' }, [{ tick: 'TOK', quantity: '50' }]);
+            assert.strictEqual(result.deposits.length, 1);
+            assert.strictEqual(depositCalls[0].contractActionIndex, 99);
+        });
+
+        it('funds on action_index 0, which is a valid index and not a missing one', async function () {
+            const depositCalls = [];
+            const sdk = makeSdk({
+                deploy:  async () => ({ txid: 'deploy_tx', indexed: { action_index: 0 } }),
+                deposit: async (p) => { depositCalls.push(p); return { txid: 'dep' }; }
+            });
+            const wf = new Workflows(sdk);
+            await wf.deployAndFund(FAKE_WIF, { code: 'x' }, [{ tick: 'TOK', quantity: '1' }]);
+            assert.strictEqual(depositCalls[0].contractActionIndex, 0);
         });
 
         it('on a deposit failure, attaches the already-broadcast deploy to the error', async function () {
@@ -293,15 +326,18 @@ describe('Workflows', function () {
             assert.strictEqual(err.partial.deposits[0].txid, 'deposit_tx_1');
         });
 
-        it('skips deposits when deploy result has no indexed field', async function () {
+        it('refuses to fund when the deploy result has no indexed field at all', async function () {
             const sdk = makeSdk({
                 deploy: async () => ({ txid: 'deploy' })
             });
             const wf = new Workflows(sdk);
-            const result = await wf.deployAndFund(FAKE_WIF, { code: 'x' }, [
-                { tick: 'A', quantity: '10' }
-            ]);
-            assert.deepStrictEqual(result.deposits, []);
+            let err;
+            try {
+                await wf.deployAndFund(FAKE_WIF, { code: 'x' }, [{ tick: 'A', quantity: '10' }]);
+            } catch (e) { err = e; }
+            assert.ok(err);
+            assert.match(err.message, /waitForIndexer/);
+            assert.strictEqual(err.partial.deploy.txid, 'deploy');
         });
 
         it('passes contractActionIndex to each deposit call', async function () {
@@ -527,6 +563,64 @@ describe('Workflows', function () {
             });
             assert.strictEqual(calls.deploys[0].version, '3');
             assert.strictEqual(calls.deploys[0].cooldownBlocks, 100);
+        });
+    });
+
+    // deployContract()'s funding leg had no coverage at all, which is how it kept
+    // the same direct read of indexed.action_index that deployAndFund had.
+    describe('deployContract() funding leg', function () {
+        function makeDepositSdk(calls, indexed) {
+            const session = {
+                deployChunk: async () => ({ txid: 'chunk_tx' }),
+                deploy:      async () => ({ txid: 'deploy_tx', indexed }),
+                deposit:     async (p) => { calls.push(p); return { txid: 'deposit_tx' }; },
+            };
+            return {
+                actions: new Actions({ config: config.getConfig(), util: new Utility() }),
+                session: () => session,
+                _preflightContractLint: () => {},
+            };
+        }
+
+        it('funds from the polling waiter shape ({ actions: [...] })', async function () {
+            const calls = [];
+            const wf = new Workflows(makeDepositSdk(calls, { actions: [{ action_index: 7 }] }));
+            const out = await wf.deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 },
+                [{ tick: 'TOK', quantity: '5' }]);
+            assert.strictEqual(out.deposits.length, 1);
+            assert.strictEqual(calls[0].contractActionIndex, 7);
+        });
+
+        it('funds on action_index 0', async function () {
+            const calls = [];
+            const wf = new Workflows(makeDepositSdk(calls, { action_index: 0 }));
+            await wf.deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 }, [{ tick: 'TOK', quantity: '5' }]);
+            assert.strictEqual(calls[0].contractActionIndex, 0);
+        });
+
+        it('refuses to fund with no resolvable index, keeping the broadcast deploy', async function () {
+            const calls = [];
+            const wf = new Workflows(makeDepositSdk(calls, null));
+            let err;
+            try {
+                await wf.deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 }, [{ tick: 'TOK', quantity: '5' }]);
+            } catch (e) { err = e; }
+            assert.ok(err);
+            assert.match(err.message, /deployContract: DEPLOY action_index unavailable/);
+            assert.strictEqual(calls.length, 0, 'no DEPOSIT may go out without a contract reference');
+            assert.strictEqual(err.partial.deploy.txid, 'deploy_tx');
+        });
+    });
+
+    describe('_actionIndexOf', function () {
+        it('resolves both waiter shapes and reports nothing when neither is present', function () {
+            const wf = new Workflows(makeSdk());
+            assert.strictEqual(wf._actionIndexOf({ action_index: 5 }), 5);
+            assert.strictEqual(wf._actionIndexOf({ action_index: 0 }), 0);
+            assert.strictEqual(wf._actionIndexOf({ actions: [{ action_index: 3 }] }), 3);
+            assert.strictEqual(wf._actionIndexOf({ actions: [] }), undefined);
+            assert.strictEqual(wf._actionIndexOf(null), undefined);
+            assert.strictEqual(wf._actionIndexOf(undefined), undefined);
         });
     });
 });

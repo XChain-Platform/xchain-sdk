@@ -111,6 +111,87 @@ describe('Security: Validator.validate - hostile field values', function () {
   });
 });
 
+describe('Security: ticker references cannot smuggle wire delimiters', function () {
+
+  // Actions serialize to ACTION|VERSION|F1|F2|..., and ';' separates BATCH
+  // sub-commands, so a '|' or ';' inside any FIELD VALUE rewrites the field
+  // layout. The five ticker-reference fields are exempt from the blanket
+  // delimiter guard because they are supposed to carry their own; an ordinary
+  // (non-ISSUE, non-'^') ticker name carried none, so SEND with
+  // TICK='TOKEN|100|^1|memo' emitted SEND|0|TOKEN|100|^1|memo|1|^2 and the v0
+  // SEND parser read the injected amount and destination instead of the ones
+  // the caller composed and a confirmation screen displayed.
+  const TICK_REF_CASES = [
+    ['SEND',     'TICK',          { AMOUNT: '1', DESTINATION: '^2' }],
+    ['DIVIDEND', 'DIVIDEND_TICK', { TICK: 'TOKEN', AMOUNT: '1' }],
+    ['SWAP',     'GIVE_TICK',     { GET_TICK: 'H', GIVE_AMOUNT: '1', GET_AMOUNT: '1' }],
+    ['SWAP',     'GET_TICK',      { GIVE_TICK: 'G', GIVE_AMOUNT: '1', GET_AMOUNT: '1' }],
+    ['CALLBACK', 'CALLBACK_TICK', { TICK: 'TOKEN' }],
+  ];
+
+  it('rejects a pipe in every ticker-reference field', function () {
+    for (const [action, field, rest] of TICK_REF_CASES) {
+      const errors = v().validate(action, Object.assign({ [field]: 'TOKEN|100|^1|memo' }, rest));
+      expect(errors.some(e => e.code === 'FORBIDDEN_CHARACTER'),
+        `${action}.${field} accepted a pipe`).to.equal(true);
+    }
+  });
+
+  it('rejects a semicolon in every ticker-reference field', function () {
+    // Worse than the pipe: ';' inside a BATCH string injects an entire sub-command.
+    for (const [action, field, rest] of TICK_REF_CASES) {
+      const errors = v().validate(action, Object.assign({ [field]: 'TOKEN;SEND|0|X|1|^9' }, rest));
+      expect(errors.some(e => e.code === 'FORBIDDEN_CHARACTER'),
+        `${action}.${field} accepted a semicolon`).to.equal(true);
+    }
+  });
+
+  it('rejects a delimiter-bearing ticker reference inside a leg', function () {
+    const errors = v().validate('SEND', {
+      LEGS: [{ TICK: 'TOKEN|100|^1|memo', AMOUNT: '1', DESTINATION: '^2' }]
+    });
+    expect(errors.some(e => e.code === 'FORBIDDEN_CHARACTER')).to.equal(true);
+  });
+
+  it('still rejects a delimiter inside a ^ID reference, as a bad id', function () {
+    // The '^' branch is covered by its own numeric check rather than the new one:
+    // isNumeric tests the whole remainder, so '1|memo' is not numeric. Pinned so
+    // the coverage is a fact rather than an assumption.
+    const errors = v().validate('SEND', { TICK: '^1|memo', AMOUNT: '1', DESTINATION: '^2' });
+    expect(errors.some(e => e.code === 'INVALID_TICK_ID')).to.equal(true);
+  });
+
+  it('leaves every legitimate ticker reference alone', function () {
+    // The guard is delimiters only. Applying full tick-name rules to a non-ISSUE
+    // reference would make the SDK stricter than consensus and refuse names that
+    // already exist on chain.
+    const legitimate = [
+      ['SEND',  { TICK: 'TOKEN',        AMOUNT: '1', DESTINATION: '^2' }],
+      ['SEND',  { TICK: 'PARENT.CHILD', AMOUNT: '1', DESTINATION: '^2' }],
+      ['SEND',  { TICK: '^123',         AMOUNT: '1', DESTINATION: '^2' }],
+      ['ISSUE', { TICK: 'MYTOKEN', MAX_SUPPLY: '1000', DECIMALS: '0' }],
+    ];
+    for (const [action, fields] of legitimate) {
+      const errors = v().validate(action, fields);
+      expect(errors, `${action} ${JSON.stringify(fields)} -> ${errors.map(e => e.code)}`)
+        .to.have.length(0);
+    }
+  });
+
+  it('never emits an injected wire string from composeActionString', function () {
+    // The end of the path, not just the gate: composition must throw rather than
+    // hand a caller a serialized string with extra fields in it.
+    const Actions = require('../../src/actions.js');
+    const acts    = new Actions({ config: {}, util: new Utility(), options: {} });
+    expect(() => acts.composeActionString({
+      action: 'SEND', params: { TICK: 'TOKEN|100|^1|memo', AMOUNT: '1', DESTINATION: '^2' }
+    })).to.throw(/pipe/i);
+    expect(acts.composeActionString({
+      action: 'SEND', params: { TICK: 'TOKEN', AMOUNT: '1', DESTINATION: '^2' }
+    }).actionString).to.equal('SEND|0|TOKEN|1|^2');
+  });
+});
+
 describe('Security: _isDowngrade endpoint transport guard', function () {
   let sdk;
   beforeEach(function () { sdk = new XChainSDK({}); });

@@ -113,7 +113,10 @@ describe('address-channel event coverage vs the explorer producer @regression', 
             token:     'onToken',
             market:    'onMarket',
             dispenser: 'onDispenser',
-            bet_feed:  'onBetFeed'
+            bet_feed:  'onBetFeed',
+            // xcall shipped the same way a milestone later (spec M5.4), which is
+            // why this map is read as a claim about the SDK, never as the roster.
+            xcall:     'onXcall'
         };
         const unwrapped = [...entityChannels]
             .filter(c => typeof XChainSDK.prototype[WRAPPER_FOR_CHANNEL[c]] !== 'function').sort();

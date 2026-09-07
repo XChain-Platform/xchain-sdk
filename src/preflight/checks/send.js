@@ -32,6 +32,33 @@
  * of which pre-flight can read - so it stays a declared-unverified
  * aspect, now named as conditional rather than blanket.
  *
+ * How that handoff is MATCHED is itself conditional, on a second
+ * flag-day. Above it the indexer resolves a caret-spelled sibling
+ * MESSAGE DESTINATION and compares canonical addresses; below it the
+ * comparison is a raw wire compare, and a `^id` spelling matches no
+ * SEND DESTINATION, which is multi-valued and never compacted. This
+ * SDK compacts a single-valued MESSAGE.DESTINATION by default
+ * (addressRefFields.js), so a wallet-composed BATCH(SEND, MESSAGE) to
+ * an indexed recipient carries exactly the spelling that pairs only
+ * above the flag-day. The rule NARROWS rejection, so mirroring the
+ * wire compare as an error would false-block wherever it is armed,
+ * and it is declared rather than predicted.
+ *
+ * LEG-AMOUNT CONSOLIDATION is the second conditional, and it WIDENS
+ * rejection rather than narrowing it. Above its flag-day both handlers
+ * hold a leg whose RAW amount fails its tick's format out of the merge,
+ * so it lands on the handler's per-leg check instead of being summed
+ * into a total that passes: two 0.5 legs of a 0-decimals token used to
+ * merge to '1' and settle.
+ *
+ * It is declared, not mirrored, and the distinction is load-bearing.
+ * Predicting it needs the tick's DECIMALS *and* the activation state at
+ * the block that will carry this action, and mainnet is UNARMED on the
+ * house sentinel while testnet and regtest run it from genesis. A check
+ * that raised the error unconditionally would reject on mainnet what
+ * mainnet still accepts, which is the false-block this module's own
+ * contract forbids and which the SDK has shipped once already.
+ *
  ********************************************************************/
 
 'use strict';
@@ -89,15 +116,35 @@ async function checkBalanceCovers(ctx, verb) {
     }
 }
 
+// Name the leg-amount consolidation rule as unverified. Deciding it needs the
+// tick's DECIMALS and the activation state at the including block, so it is
+// declared here rather than predicted (see the header on the false-block risk).
+function declareLegAmountRule(ctx, verb) {
+    ctx.addUnverified('LEG_AMOUNT_CONSOLIDATION',
+        `above its flag-day, a ${verb.toLowerCase()} leg whose amount does not fit its tick's decimals is `
+        + 'rejected on its own instead of merging into a sibling leg; the activation state of the including '
+        + 'block is server-side only, and mainnet is not armed for it');
+}
+
 async function checkSend(ctx) {
     await checkBalanceCovers(ctx, 'Send');
+    declareLegAmountRule(ctx, 'Send');
     ctx.addUnverified('SEND_RESTRICTIONS',
         'sleep state, allow/block lists, controller-guard outcome, and the conditional gated-key handoff '
         + '(required only when the recipient\'s post-send balance reaches a pack threshold) are server-side only');
+    // Which SPELLING of a handoff MESSAGE pairs with this send is decided by the
+    // including block's activation state, so it is named rather than predicted
+    // (see the header: mirroring the wire compare would false-block).
+    ctx.addUnverified('GATED_HANDOFF_REF',
+        'above its flag-day a gated-transfer key-handoff MESSAGE is paired with this send by RESOLVED address, '
+        + 'and below it by raw wire spelling, so a ^id-compacted MESSAGE destination pairs only where the '
+        + 'flag-day is armed; the activation state of the including block is server-side only, and mainnet '
+        + 'is not armed for it');
 }
 
 async function checkDestroy(ctx) {
     await checkBalanceCovers(ctx, 'Destroy');
+    declareLegAmountRule(ctx, 'Destroy');
     ctx.addUnverified('DESTROY_RESTRICTIONS',
         'sleep state, allow/block lists, and burn-guard outcome are server-side only');
 }

@@ -23,6 +23,15 @@ const ActionWaiter = require('./actionWaiter.js');
 const EncoderClient = require('./encoder.js');
 const { SDKActionError, SDKConfigError } = require('./errors.js');
 const { reconcileEncoded, psbtPrevouts } = require('./reconcileEncoded.js');
+const { assertCarrierBinding, assertEnvelopeCarrierBinding } = require('./carrier/bindActionCarrier.js');
+
+// Actions that execute against a CONTRACT. For these, "the transaction is
+// confirmed" is not the event a caller is waiting for: the indexer executes the
+// action in a later pass, and the deposit/execution is only real once that pass
+// has written the action's status row. Two things follow, both below:
+// strictStatus defaults on (a status the indexer never wrote is not evidence of
+// success), and opts.awaitContract can gate on the contract's own state.
+const CONTRACT_ACTIONS = new Set(['DEPOSIT', 'EXECUTE', 'WITHDRAW']);
 
 
 class LifecycleManager {
@@ -43,7 +52,26 @@ class LifecycleManager {
     //   requireValid    - reject if action status is 'invalid' (default true)
     //   strictStatus    - with requireValid, also refuse to ASSUME validity: reject
     //                     ACTION_STATUS_UNKNOWN when no indexer status could be read
-    //                     for the action (default false; see actionWaiter)
+    //                     for the action (see actionWaiter). Defaults to FALSE for
+    //                     ordinary actions and TRUE for the contract actions
+    //                     (DEPOSIT/EXECUTE/WITHDRAW): the explorer exposes a
+    //                     transaction's action rows as soon as the decoder writes
+    //                     them, which is BEFORE the indexer executes them against the
+    //                     contract, so resolving on a status the indexer never wrote
+    //                     returns while the deposit is still pending and the caller's
+    //                     next transaction spends inputs it already used. The indexer
+    //                     writes a status row for all three (valid or invalid), so
+    //                     waiting for one costs nothing on a healthy stack. Pass
+    //                     strictStatus:false to opt back out.
+    //   awaitContract   - gate on the CONTRACT'S OWN state before returning, which is
+    //                     the only signal that cannot race the indexer:
+    //                       { contractActionIndex, key, equals, match,   (state gate)
+    //                         tick, minQuantity,                         (balance gate)
+    //                         timeout, pollInterval }
+    //                     contractActionIndex defaults to the action's own. The state
+    //                     gate runs when key or match is given, the balance gate when
+    //                     tick is given, and both may be used together. Results land on
+    //                     result.contractState / result.contractBalance
     //   maxFeeSats      - absolute miner-fee ceiling the encoder's answer must stay
     //                     under (reconcileEncoded.js). Unset leaves only the
     //                     always-on burn guards
@@ -65,6 +93,11 @@ class LifecycleManager {
               explorer, explorerUrl, explorerPort } = opts;
         if (!wif) throw new SDKConfigError('MISSING_WIF', 'submitAction requires opts.wif (WIF private key)');
         if (waitForIndexer === undefined) waitForIndexer = true;
+
+        // See the strictStatus note above: a contract action defaults to
+        // fail-closed, everything else keeps the historical default.
+        let contractAction = CONTRACT_ACTIONS.has(String(actionData && actionData.action).toUpperCase());
+        if (strictStatus === undefined) strictStatus = contractAction;
 
         let encoder = this.sdk._requireEncoder();
         let progress = onProgress || (() => {});
@@ -140,6 +173,23 @@ class LifecycleManager {
                 requiredSpends: phase1.phaseFunding,
             }));
 
+        // Bind the CARRIER to the action that was submitted, which the gate above
+        // deliberately never reads: reconcileEncoded is PSBT-structural and
+        // false-positive-free by charter, so it accounts for outputs, values and the
+        // fee and says nothing about the command riding in the data carrier. Keeping
+        // every native output and the fee identical while swapping a SEND's amount and
+        // destination therefore reconciled cleanly, and this path signed the
+        // substituted command. Fail-closed, and BEFORE either signing branch: a custom
+        // signer runs its own policy over the same unbound bytes.
+        assertCarrierBinding({
+            psbt:           encoded.psbt,
+            actionString:   createResult.actionString,
+            encoding:       encoded.encoding,
+            carrierScripts: encoded.carrierScripts,
+            network:        this._reconcileNetwork(),
+            label:          'transaction',
+        });
+
         progress('signing', { encoding: encoded.encoding });
         let signed;
         if (typeof opts.signer === 'function') {
@@ -174,6 +224,16 @@ class LifecycleManager {
         // the reveal HERE, while nothing is on chain yet and a throw costs nothing.
         let revealSigned = null;
         if (encoded.revealPsbt) {
+            // The reveal is where the envelope's action bytes first appear in a
+            // transaction at all (the commit output is only a hash of the leaf), so
+            // it is the only place a substituted envelope action can be caught. Bind
+            // it here, while the commit is still unbroadcast and a throw costs
+            // nothing but the round trip.
+            assertEnvelopeCarrierBinding({
+                revealPsbt:   encoded.revealPsbt,
+                actionString: createResult.actionString,
+                network:      this._reconcileNetwork(),
+            });
             revealSigned = this.sdk.wallet.signEnvelopeRevealPsbt(encoded.revealPsbt, wif);
             // §3.5 requires {commit outpoint, internal key, tapleaf hash} to be
             // durably persisted BEFORE the commit is broadcast, because the key-path
@@ -187,6 +247,12 @@ class LifecycleManager {
 
         progress('broadcasting', { txid: signed.txid });
         await encoder.broadcastTx(signed.txHex);
+
+        // Every transaction this action actually puts on the wire, in order.
+        // The change each one pays back to the caller is harvested below, after
+        // the last phase, so a caller can spend it immediately instead of
+        // waiting for the tracker to confirm it.
+        let broadcastHexes = [signed.txHex];
 
         // Extract spent inputs from the signed PSBT for UTXO cache tracking
         let spentInputs = this._extractSpentInputs(encoded.psbt);
@@ -212,6 +278,7 @@ class LifecycleManager {
                       revealTxHex: revealSigned.txHex, cause: err });
             }
             spentInputs = spentInputs.concat(this._extractSpentInputs(encoded.revealPsbt));
+            broadcastHexes.push(revealSigned.txHex);
             finalTxidEnvelope = revealSigned.txid;
         }
 
@@ -255,10 +322,26 @@ class LifecycleManager {
                 requiredSpends: phase1.phaseFunding,
             }));
 
+            // The phase-2 carrier is the reveal's tag marker plus the redeem scripts
+            // its INPUTS reveal, and those inputs can only be the legs phase 1
+            // committed to (requiredSpends above, and bitcoinjs will not sign a
+            // redeem script that does not hash to the prevout), so the payload is
+            // already bound by phase 1's carrier-script check. What is not bound is a
+            // SECOND carrier smuggled into this transaction, which this catches:
+            // encoding is left off deliberately, because spendP2sh returns no
+            // carrierScripts of its own and there is nothing here to hash them to.
+            assertCarrierBinding({
+                psbt:         spendResult.psbt,
+                actionString: createResult.actionString,
+                network:      this._reconcileNetwork(),
+                label:        'phase-2 reveal',
+            });
+
             // Phase-2 inputs are non-standard P2SH/P2WSH reveal inputs; they need
             // the custom finalizer, not the default single-sig finalizeAllInputs.
             let spendSigned = this.sdk.wallet.signRevealPsbt(spendResult.psbt, wif);
             await encoder.broadcastTx(spendSigned.txHex);
+            broadcastHexes.push(spendSigned.txHex);
 
             // Track phase 2 spent inputs
             let phase2Inputs = this._extractSpentInputs(spendResult.psbt);
@@ -273,15 +356,36 @@ class LifecycleManager {
             signed = revealSigned;
         }
 
+        // The change this action paid back to the caller and did not spend again
+        // in a later phase. Without it, a caller's next action has nothing left
+        // in its cache and falls back to whatever the tracker has CONFIRMED, so
+        // consecutive submits pick independent inputs and land as siblings
+        // instead of a parent-child chain. A later phase legitimately spends an
+        // earlier phase's output (the envelope reveal, the P2SH phase-2 reveal),
+        // so anything already in spentInputs is dropped here rather than handed
+        // back as spendable.
+        let spentSet = new Set(spentInputs.map(i => i.txid + ':' + i.vout));
+        // encoderOpts.change is the caller's own change destination; with none
+        // given the encoder returns change to the caller identity (pubkey, which
+        // on this path is an ADDRESS - see submit() in walletSession).
+        let changeAddress = encoderOpts.change || encoderOpts.pubkey;
+        let changeOutputs = [];
+        for (let hex of broadcastHexes) {
+            for (let out of this._extractChangeOutputs(hex, changeAddress)) {
+                if (!spentSet.has(out.txid + ':' + out.vout)) changeOutputs.push(out);
+            }
+        }
+
         let result = {
-            txid:         finalTxid,
-            actionString: createResult.actionString,
-            action:       createResult.action,
-            version:      createResult.version,
-            encoding:     encoded.encoding,
-            signed:       signed,
-            spentInputs:  spentInputs,
-            indexed:      null
+            txid:          finalTxid,
+            actionString:  createResult.actionString,
+            action:        createResult.action,
+            version:       createResult.version,
+            encoding:      encoded.encoding,
+            signed:        signed,
+            spentInputs:   spentInputs,
+            changeOutputs: changeOutputs,
+            indexed:       null
         };
 
         if (waitForIndexer) {
@@ -321,7 +425,83 @@ class LifecycleManager {
             progress('confirmed', { txid: finalTxid, action: indexed });
         }
 
+        if (opts.awaitContract)
+            await this._awaitContract(result, actionData, opts, progress, finalTxid);
+
         return result;
+    }
+
+    // Gate on the contract's own state before handing the result back.
+    //
+    // This is the settle-safe boundary: a caller that deposits and then settles
+    // must not build the settling transaction until the contract has actually
+    // been credited, because the deposit's inputs are gone the moment it lands
+    // and the VM would revert on a balance that is not there yet. Both waits
+    // are bounded and fail CLOSED - a gate that never sees the state throws
+    // rather than letting the caller proceed on an assumption.
+    async _awaitContract(result, actionData, opts, progress, finalTxid) {
+        let gate  = opts.awaitContract;
+        let index = (gate.contractActionIndex !== undefined && gate.contractActionIndex !== null)
+            ? gate.contractActionIndex
+            : LifecycleManager._contractIndexOf(actionData);
+        if (index === undefined || index === null || index === '')
+            throw new SDKConfigError('MISSING_CONTRACT_INDEX',
+                'opts.awaitContract needs a contractActionIndex; this action does not carry one');
+
+        let waitOpts = {
+            timeout:      gate.timeout      !== undefined ? gate.timeout      : (opts.timeout || 120000),
+            pollInterval: gate.pollInterval !== undefined ? gate.pollInterval : (opts.pollInterval || 2000),
+            explorer:     opts.explorer,
+            explorerUrl:  opts.explorerUrl,
+            explorerPort: opts.explorerPort
+        };
+        let waiter = new ActionWaiter(this.sdk);
+
+        try {
+            if (gate.key !== undefined || typeof gate.match === 'function') {
+                progress('waiting_contract_state', { contractActionIndex: index, key: gate.key });
+                result.contractState = await waiter.waitForContractState(index, Object.assign({}, waitOpts, {
+                    key:    gate.key,
+                    equals: gate.equals,
+                    match:  gate.match
+                }));
+            }
+            if (gate.tick) {
+                progress('waiting_contract_balance', { contractActionIndex: index, tick: gate.tick });
+                result.contractBalance = await waiter.waitForContractBalance(index, gate.tick,
+                    Object.assign({}, waitOpts, { minQuantity: gate.minQuantity }));
+            }
+        } catch (err) {
+            // Same reasoning as the indexer-wait timeout: the transaction IS
+            // broadcast, so this is "not executed yet", never "not sent". A
+            // caller that rebuilds on this error double-spends its own inputs.
+            if (err && (err.code === 'CONTRACT_STATE_TIMEOUT' || err.code === 'CONTRACT_BALANCE_TIMEOUT')) {
+                err.broadcast = true;
+                err.txid      = finalTxid;
+                if (err.details && typeof err.details === 'object') {
+                    err.details.broadcast = true;
+                    err.details.txid      = finalTxid;
+                }
+            }
+            throw err;
+        }
+
+        progress('contract_settled', {
+            contractActionIndex: index,
+            state:   result.contractState   || null,
+            balance: result.contractBalance || null
+        });
+    }
+
+    // The contract an action targets, from its own params. Accepts the camelCase
+    // form callers write and the upper-case wire form, so a params object built
+    // either way gates on the right contract.
+    static _contractIndexOf(actionData) {
+        let params = (actionData && actionData.params) || {};
+        let index = params.contractActionIndex;
+        if (index === undefined) index = params.CONTRACT_ACTION_INDEX;
+        if (index === undefined) index = params.contract_action_index;
+        return index;
     }
 
     // Extract input references from an unsigned PSBT hex for UTXO cache tracking
@@ -331,6 +511,57 @@ class LifecycleManager {
     _reconcileNetwork() {
         try { return this.sdk.wallet.getBitcoinNetwork(); }
         catch (e) { return undefined; }
+    }
+
+    // Outputs of one BROADCAST transaction that pay back to the caller's own
+    // change destination, shaped exactly as the encoder's validateUtxoEntry
+    // demands (txid, vout, value, scriptPubKey, confirmations), so the caller
+    // can hand them straight back into createTx({ utxos }). confirmations is 0
+    // by construction: the transaction is on the wire, not in a block, and the
+    // encoder only keeps a zero-confirmation input when unconfirmed is left at
+    // its default true.
+    //
+    // Reads the SIGNED tx hex rather than the PSBT, because a chained spend
+    // needs the real txid, which only exists once the inputs are final.
+    _extractChangeOutputs(txHex, changeAddress) {
+        if (!txHex || !changeAddress) return [];
+        try {
+            const bitcoin = require('bitcoinjs-lib');
+            // Compare SCRIPTS, not decoded addresses. address.fromOutputScript
+            // throws on every non-standard output a transaction here carries
+            // (the OP_RETURN carrier, the bare-multisig data outputs, a P2SH
+            // chunk leg), and one throw mid-loop would lose the change output
+            // too. Encoding the change address once and matching bytes has
+            // neither problem, and it silently ignores an address the network
+            // cannot parse (a hex pubkey passed as `pubkey`), which is the
+            // fail-closed answer: no change tracked, same as before.
+            let changeScript = bitcoin.address
+                .toOutputScript(changeAddress, this._reconcileNetwork())
+                .toString('hex');
+            let tx   = bitcoin.Transaction.fromHex(txHex);
+            let txid = tx.getId();
+            let outs = [];
+            for (let vout = 0; vout < tx.outs.length; vout++) {
+                let script = Buffer.from(tx.outs[vout].script).toString('hex');
+                if (script !== changeScript) continue;
+                // applyBufferutilsPatch hands back a value above 2^53-1 (a large
+                // DOGE change output) as a BigInt, which JSON.stringify refuses,
+                // so this entry would kill the very createTx call it exists to
+                // fund. Carry it as the exact decimal STRING the tracker itself
+                // emits and the encoder's parseSatoshiAmount already accepts.
+                let value = tx.outs[vout].value;
+                outs.push({
+                    txid:          txid,
+                    vout:          vout,
+                    value:         (typeof value === 'bigint') ? value.toString() : value,
+                    scriptPubKey:  script,
+                    confirmations: 0
+                });
+            }
+            return outs;
+        } catch (e) {
+            return [];
+        }
     }
 
     _extractSpentInputs(psbtHex) {

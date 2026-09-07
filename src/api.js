@@ -32,6 +32,7 @@ const { parseCorsOrigin } = require('./corsOrigin.js');
 // one implementation: this file starts listening at require time, so a unit test
 // can only reach the guards through src/apiGuards.js.
 const {
+    parseWholeNumber,
     resolveMaxBatch,
     resolveRateLimit,
     resolveRateWindowMs,
@@ -55,6 +56,12 @@ if(!SDK_API_KEY)
 // back to a safe default on a junk value; see src/apiGuards.js).
 const SDK_API_MAX_BATCH      = resolveMaxBatch(process.env);
 const SDK_API_RATE_LIMIT     = resolveRateLimit(process.env);
+// Say so when the limiter setting was unusable. A silent substitution is what
+// made the truncation bug expensive: the operator believed the value they typed
+// was in force, and nothing in the log said otherwise.
+if(process.env.SDK_API_RATE_LIMIT !== undefined && parseWholeNumber(process.env.SDK_API_RATE_LIMIT) === null)
+    console.warn('WARNING: SDK_API_RATE_LIMIT is not a whole number; using the default of ' + SDK_API_RATE_LIMIT +
+                 ' requests per window. Set it to exactly 0 to disable the limiter.');
 const SDK_API_RATE_WINDOW_MS = resolveRateWindowMs(process.env);
 const NETWORK      = process.env.NETWORK;
 const EXPLORER_URL = process.env.EXPLORER_URL;

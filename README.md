@@ -5,7 +5,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/npm/v/%40dankest-llc%2Fxchain-sdk" alt="npm version">
-  <img src="https://img.shields.io/badge/tests-4%2C345%2B%20passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-4%2C408%2B%20passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/node-%3E%3D22-green" alt="Node">
   <img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue" alt="License">
 </p>
@@ -26,6 +26,7 @@ Developer-facing SDK for the [XChain Platform](https://xchain.io/): generate XCh
 - **Workflow recipes**: `sdk.issueAndDistribute()`, `sdk.deployAndFund()`, `sdk.stakeAndDelegate()`, and more
 - **Cross-chain helpers**: coordinate swaps and parallel actions across BTC, LTC, and DOGE SDK instances
 - **Event-driven confirmation**: `sdk.waitForAction(txid)` resolves when the indexer processes a transaction
+- **Contract settle gate**: `sdk.waitForContractState(index, { key: 'status', equals: 'FUNDED' })` and `sdk.waitForContractBalance(index, tick, { minQuantity })` wait on the contract's own state, which is the only signal that cannot race the indexer; `submitAction({ awaitContract: {...} })` runs the same gate inline, so a deposit does not hand control back before the contract has been credited
 - **Interactive REPL**: `npm run repl` drops into a live session with a pre-configured SDK instance
 - **Automatic format selection**: picks the smallest encoding format for every action
 - **PSBT generation**: integrates with xchain-encoder to produce unsigned transactions
@@ -161,8 +162,12 @@ const token = await sdk.getToken('MYTOKEN');
 | `SDK_API_PORT` | No | `3005` | Port for the optional SDK helper API |
 | `SDK_API_KEY` | No | (none) | API key for the helper API; required as `Authorization: Bearer <key>` on every method except `ping` (methods reject with 401 when unset) |
 | `CORS_ORIGIN` | No | Disabled | CORS allowed origin for the helper API |
+| `SDK_API_MAX_BATCH` | No | `20` | Maximum JSON-RPC calls in one array (batch) body. A non-numeric or non-positive value falls back to `20`; no value disables the cap |
+| `SDK_API_RATE_LIMIT` | No | `300` | Requests per window per credential (per source address when unauthenticated). A non-numeric or negative value falls back to `300`; an explicit `0` disables the limiter and is the only way to turn it off |
+| `SDK_API_RATE_WINDOW_MS` | No | `60000` | Length of the fixed rate-limit window, in milliseconds. A non-numeric or non-positive value falls back to `60000` |
 | `EXPLORER_URL` / `EXPLORER_PORT` | No | `127.0.0.1` / `8080` | xchain-explorer location |
 | `ENCODER_URL` / `ENCODER_PORT` | No | `127.0.0.1` / `3003` | xchain-encoder location |
+| `ENCODER_API_KEY` | No | (none) | API key sent as `x-api-key` to an xchain-encoder whose operator set `API_KEY`; also settable per instance as the `encoderApiKey` option. With no pinned `ENCODER_URL` it is also sent to whatever encoder host hub discovery names |
 | `HUB_URL` | No | (none) | Full xchain-hub URL |
 | `HUB_API_HOST` / `HUB_PORT` | No | (none) | xchain-hub host/port form used by some SDK paths |
 | `HUB_API_KEY` | No | (none) | API key for `getallconfigs` against keyed hubs; public zero-config discovery should use the hub's chain-registry endpoint instead |
@@ -173,7 +178,7 @@ const token = await sdk.getToken('MYTOKEN');
 | Command | Description |
 |---|---|
 | `npm run api` | Start JSON-RPC server (port from `SDK_API_PORT`, default 3005) |
-| `npm test` | Run unit tests (4,051 tests) |
+| `npm test` | Run unit tests (4,114 tests) |
 | `npm run repl` | Start interactive REPL with a pre-configured SDK instance |
 | `npm run build` | Production browser bundle -> `dist/xchain_sdk.min.js` |
 | `npm run build:dev` | Development browser bundle -> `dist/xchain_sdk.js` |

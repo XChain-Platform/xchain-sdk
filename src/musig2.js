@@ -223,29 +223,29 @@ function normalizePubkeys(pubkeys) {
 }
 
 
-// Nonce sessions this process has already generated, keyed publicKey|sessionId and
-// valued by a digest of every input that determines the nonce.
-const _nonceSessions = new Map();
+// SessionIds this process has already generated a nonce under, keyed publicKey|sessionId.
+const _nonceSessions = new Set();
 
-// A sessionId is the caller's assertion that this nonce is fresh, and BIP327 derives
-// the SECRET nonce from it: the same sessionId with any different input yields the
-// same secret nonce over a different message, which discloses the private key. So a
-// reused sessionId is refused. A byte-identical repeat is allowed through, because it
-// reproduces the same nonce for the same message and can sign nothing the first call
-// could not - that is how a stateless co-signer retries. Only calls that PASS a
-// sessionId are tracked; omitting it leaves nonce entropy to the library's secure
-// random, where there is nothing to reuse.
+// Refuses EVERY repeat of a (publicKey, sessionId) pair: a sessionId is single-use.
+// BIP327 derives the SECRET nonce from it, so a second generateNonce hands back a second
+// live handle on the SAME secret nonce (the library caches it in a WeakMap keyed by the
+// returned array's identity, and partialSign drops only the handle it consumed), and two
+// partial signatures under one secret nonce solve for the private key. Byte-identical
+// arguments are not evidence the repeat is safe: msg is optional and the aggregate nonce
+// is unknowable at round 1, so the two nonces can still be spent under different
+// challenges. Stateless retry is deterministicSign, never a replayed sessionId. Calls
+// that omit sessionId are untracked (the library uses secure random, nothing to reuse).
 function guardSessionIdReuse(params) {
     if (params.sessionId === undefined) return;
     const part = (v) => (v === undefined || v === null ? '' : Buffer.from(v).toString('hex'));
     const key = part(params.publicKey) + '|' + part(params.sessionId);
-    const inputs = [part(params.secretKey), part(params.xOnlyPublicKey), part(params.msg), part(params.extraInput)].join('|');
-    const seen = _nonceSessions.get(key);
-    if (seen !== undefined && seen !== inputs)
+    if (_nonceSessions.has(key))
         throw new SDKMuSigError('SESSION_ID_REUSED',
-            'this sessionId was already used to generate a nonce for this key under different signing inputs; '
-            + 'reusing a MuSig2 nonce across messages discloses the private key');
-    _nonceSessions.set(key, inputs);
+            'this sessionId was already used to generate a nonce for this key; a MuSig2 sessionId is '
+            + 'single-use, and regenerating its nonce lets one secret nonce be spent in two signing '
+            + 'sessions, which discloses the private key. Pass a fresh 32-byte sessionId, omit it, or '
+            + 'use deterministicSign for stateless retry');
+    _nonceSessions.add(key);
 }
 
 /*
@@ -306,7 +306,8 @@ class MuSig2 {
      * @param {object} params
      * @param {Uint8Array} params.publicKey        our 33-byte compressed pubkey
      * @param {Uint8Array} [params.secretKey]      our secret (optional, improves randomness)
-     * @param {Uint8Array} [params.sessionId]      32 bytes; if omitted, library uses secure random
+     * @param {Uint8Array} [params.sessionId]      32 bytes, SINGLE-USE per publicKey (a repeat
+     *        throws SESSION_ID_REUSED); if omitted, library uses secure random
      * @param {Uint8Array} [params.xOnlyPublicKey] aggregated x-only pubkey (binds nonce to the key-agg ctx)
      * @param {Uint8Array} [params.msg]            32-byte message to be signed
      * @param {Uint8Array} [params.extraInput]     additional entropy

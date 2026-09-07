@@ -128,6 +128,19 @@ describe('UTXOCache', function () {
             assert.strictEqual(cache.getAvailable().length, 1);
         });
 
+        it('prunes speculative UTXOs that have since been spent', async function () {
+            // A spent change output never appears in the confirmed set, so
+            // nothing else would retire it: a session chaining many sends would
+            // otherwise carry every dead change output it ever created.
+            let encoder = { getUTXOs: async () => ({ utxos: [] }) };
+            await cache.refresh('addr1', encoder);
+            cache.addSpeculative({ txid: 'spec1', vout: 0, value: 9999 });
+            cache.markSpent([{ txid: 'spec1', vout: 0 }]);
+
+            await cache.refresh('addr1', encoder);
+            assert.strictEqual(cache._speculative.length, 0);
+        });
+
         it('returns empty array when encoder returns empty utxos', async function () {
             let encoder = { getUTXOs: async () => ({ utxos: [] }) };
             let result = await cache.refresh('addr1', encoder);
@@ -215,6 +228,20 @@ describe('UTXOCache', function () {
             cache.addSpeculative({ txid: 'new', vout: 0, value: 5000 });
             // even without refresh, speculative UTXOs appear in getAvailable
             assert.strictEqual(cache.getAvailable().length, 1);
+        });
+
+        it('ignores a repeat registration of the same outpoint', function () {
+            // Handing the encoder the same input twice builds a transaction that
+            // spends one outpoint in two places and can never relay.
+            cache.addSpeculative({ txid: 'new', vout: 0, value: 5000 });
+            cache.addSpeculative({ txid: 'new', vout: 0, value: 5000 });
+            assert.strictEqual(cache.getAvailable().length, 1);
+        });
+
+        it('distinguishes two vouts of the same txid', function () {
+            cache.addSpeculative({ txid: 'new', vout: 0, value: 5000 });
+            cache.addSpeculative({ txid: 'new', vout: 1, value: 4000 });
+            assert.strictEqual(cache.getAvailable().length, 2);
         });
 
         it('ignores null utxo', function () {

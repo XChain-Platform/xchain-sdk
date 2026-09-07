@@ -61,21 +61,28 @@ const MAX_SAFE_BIG = BigInt(Number.MAX_SAFE_INTEGER)
 
 // Bounds-check a satoshi value that may be a Number or a BigInt, mirroring
 // stock verifuint's error strings so callers relying on them keep working.
+// Guard order is stock verifuint's, not a preference: non-number, negative,
+// upper bound, fractional. Testing fractional first made -0.5 report a
+// fractional component where stock reports a negative value, and converting to
+// BigInt before the range check let +/-Infinity escape as a native BigInt
+// RangeError instead of either stock string. Comparing before converting is
+// what fixes both, and mixed Number/BigInt relational comparison is legal, so
+// one pair of comparisons covers both accepted types (NaN fails both and falls
+// to the fractional branch, exactly as stock does).
 function verifyU64(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') {
         throw new Error('cannot write a non-number as a number')
     }
+    if (value < 0) {
+        throw new Error('specified a negative value for writing an unsigned value')
+    }
+    if (value > MAX_U64) {
+        throw new Error('RangeError: value out of range')
+    }
     if (typeof value === 'number' && Math.floor(value) !== value) {
         throw new Error('value has a fractional component')
     }
-    const big = BigInt(value)
-    if (big < 0n) {
-        throw new Error('specified a negative value for writing an unsigned value')
-    }
-    if (big > MAX_U64) {
-        throw new Error('RangeError: value out of range')
-    }
-    return big
+    return BigInt(value)
 }
 
 // Number when exactly representable, BigInt above 2^53-1. Keeps every

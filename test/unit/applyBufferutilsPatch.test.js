@@ -49,6 +49,35 @@ describe('applyBufferutilsPatch', function () {
         assert.throws(() => bufferutils.writeUInt64LE(buf, 0x10000000000000000n, 0), /value out of range/);
     });
 
+    // The header promises stock verifuint's error strings, and a caller that
+    // branches on them only keeps working if EVERY rejected value produces the
+    // one stock verifuint produces. Testing fractional before the range checks
+    // broke that for -0.5, and converting to BigInt before them let +/-Infinity
+    // out as a native BigInt RangeError that is neither stock string.
+    it('rejects every invalid value with the stock verifuint string', function () {
+        const buf = Buffer.alloc(8);
+        const cases = [
+            ['5',        /cannot write a non-number as a number/],
+            [-0.5,       /specified a negative value for writing an unsigned value/],
+            [-1,         /specified a negative value for writing an unsigned value/],
+            [-1n,        /specified a negative value for writing an unsigned value/],
+            [-Infinity,  /specified a negative value for writing an unsigned value/],
+            [Infinity,   /value out of range/],
+            [1e30,       /value out of range/],
+            [0.5,        /value has a fractional component/],
+            [NaN,        /value has a fractional component/]
+        ];
+        for (const [value, expected] of cases) {
+            assert.throws(() => bufferutils.writeUInt64LE(buf, value, 0), expected,
+                'wrong error string for ' + String(value));
+            // The native BigInt conversion error is the specific escape hatch
+            // the guard order closes, so name it rather than only the shape.
+            assert.throws(() => bufferutils.writeUInt64LE(buf, value, 0),
+                (err) => !/cannot be converted to a BigInt/.test(err.message),
+                'a native BigInt conversion error escaped for ' + String(value));
+        }
+    });
+
     // Fee-accounting wrapper: bitcoinjs-lib's stock cache getter tests __FEE /
     // __FEE_RATE for truthiness, so a primed 0 (zero fee, or any fee under
     // 1 sat/vbyte) must be answered by the wrapper itself rather than by

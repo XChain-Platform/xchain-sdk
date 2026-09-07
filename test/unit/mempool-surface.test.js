@@ -541,6 +541,30 @@ describe('SDK mempool surface @regression', function () {
             expect(sdk.ws._subscriptions.filter(s => s.channels.includes('bet_feed'))).to.have.lengthOf(0);
         });
 
+        it('releases the xcall helper and sends the id lower-cased', async function () {
+            // Two contracts in one run, because both are silent when broken: the
+            // explorer lower-cases at subscribe time, so an upper-case id would
+            // hold a live subscription that receives nothing, and a teardown that
+            // rebuilt the params in another shape would release nothing at all.
+            const CALL_ID = 'a1b2c3d4'.repeat(8);
+            await sdk.connectWs();
+            const stop = sdk.onXcall(CALL_ID.toUpperCase(), sinon.spy());
+            await barrier();
+
+            const opened = state.subscribeFrames.filter(f => f.channels.includes('xcall'));
+            expect(opened, 'the subscribe never reached the server').to.have.lengthOf(1);
+            expect(opened[0].params.call_id).to.equal(CALL_ID);
+            state.reset();
+
+            stop();
+            await barrier();
+
+            const released = state.unsubscribeFrames.filter(f => f.channels.includes('xcall'));
+            expect(released, 'the teardown sent no unsubscribe frame').to.have.lengthOf(1);
+            expect(released[0].params.call_id).to.equal(CALL_ID);
+            expect(sdk.ws._subscriptions.filter(s => s.channels.includes('xcall'))).to.have.lengthOf(0);
+        });
+
         it('releases a filtered global channel', async function () {
             await sdk.connectWs();
             const stop = sdk.onAction(sinon.spy(), { types: ['SEND'] });

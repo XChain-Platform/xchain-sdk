@@ -153,6 +153,35 @@ describe('ContractClient', function () {
         });
     });
 
+    // The settle gate: a caller holding a bound client asks the CONTRACT
+    // whether the action executed, never the transaction whether it confirmed.
+    describe('waitForState() / waitForBalance()', function () {
+        it('waitForState delegates to the SDK gate, bound to this contract', async function () {
+            let seen = null;
+            let sdk = makeSdk({
+                waitForContractState: async (idx, opts) => { seen = { idx, opts }; return { value: 'FUNDED' }; }
+            });
+            let client = new ContractClient(sdk, 73);
+            let result = await client.waitForState({ key: 'status', equals: 'FUNDED' });
+            assert.strictEqual(result.value, 'FUNDED');
+            assert.strictEqual(seen.idx, 73);
+            assert.strictEqual(seen.opts.equals, 'FUNDED');
+        });
+
+        it('waitForBalance delegates with the tick', async function () {
+            let seen = null;
+            let sdk = makeSdk({
+                waitForContractBalance: async (idx, tick, opts) => { seen = { idx, tick, opts }; return { quantity: '1000' }; }
+            });
+            let client = new ContractClient(sdk, 73);
+            let result = await client.waitForBalance('PAY514', { minQuantity: '1000' });
+            assert.strictEqual(result.quantity, '1000');
+            assert.strictEqual(seen.idx, 73);
+            assert.strictEqual(seen.tick, 'PAY514');
+            assert.strictEqual(seen.opts.minQuantity, '1000');
+        });
+    });
+
     describe('getExecutions()', function () {
         it('returns execution history', async function () {
             let sdk = makeSdk();

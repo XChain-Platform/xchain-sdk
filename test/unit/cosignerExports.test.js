@@ -42,13 +42,15 @@ describe('co-signer public exports', function () {
     it('the public exports are actually wired (a derive round-trips)', function () {
         const crypto = require('crypto');
         const { secp256k1 } = require('@noble/curves/secp256k1');
+        const daemonSk = crypto.randomBytes(32);
         const a = Buffer.from(secp256k1.getPublicKey(crypto.randomBytes(32), true));
-        const b = Buffer.from(secp256k1.getPublicKey(crypto.randomBytes(32), true));
+        const b = Buffer.from(secp256k1.getPublicKey(daemonSk, true));
         const acct = pkg.deriveMuSig2P2TR([a, b]);
         expect(acct.address).to.be.a('string');
         expect(acct.output).to.have.length(34);            // OP_1 <32-byte>
-        // CoSigner constructs from the public export with a normalized policy.
-        const co = new pkg.CoSigner({ secretKey: crypto.randomBytes(32),
+        // CoSigner constructs from the public export with a normalized policy, and
+        // its secretKey is the daemon half of the pair it is configured with.
+        const co = new pkg.CoSigner({ secretKey: daemonSk,
             publicKeys: [a, b], policy: { allowedActions: new Set(['SEND']) } });
         expect(co).to.be.an.instanceof(pkg.CoSigner);
     });

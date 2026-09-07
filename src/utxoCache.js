@@ -53,9 +53,16 @@ class UTXOCache {
         this._stale = false;
 
         // Confirmed UTXOs that we previously tracked as speculative can be removed
-        // from the speculative list (they're now in _utxos)
+        // from the speculative list (they're now in _utxos). A speculative entry
+        // that has since been SPENT is dropped here too: it will never appear in
+        // _utxos, so nothing else would ever retire it, and a long-lived session
+        // that chains many sends would otherwise carry every dead change output
+        // it ever created.
         let confirmedSet = new Set(this._utxos.map(u => u.txid + ':' + u.vout));
-        this._speculative = this._speculative.filter(u => !confirmedSet.has(u.txid + ':' + u.vout));
+        this._speculative = this._speculative.filter(u => {
+            let key = u.txid + ':' + u.vout;
+            return !confirmedSet.has(key) && !this._spent.has(key);
+        });
 
         return this._utxos;
     }
@@ -75,11 +82,22 @@ class UTXOCache {
         }
     }
 
-    // Add a speculative change UTXO from a just-broadcast transaction
+    // Add a speculative change UTXO from a just-broadcast transaction.
     // This lets the next transaction use the change output immediately
-    // without waiting for confirmation
+    // without waiting for confirmation, which is what chains consecutive
+    // sends from one session into parent -> child instead of siblings.
+    // Called by WalletSession._submitInner with the lifecycle result's
+    // changeOutputs.
+    //
+    // Deduplicated on the outpoint: registering the same change twice would
+    // hand the encoder the same input twice, and the SDK is not the only thing
+    // that may call this.
     addSpeculative(utxo) {
         if (!utxo || !utxo.txid) return;
+        let key = utxo.txid + ':' + utxo.vout;
+        for (let existing of this._speculative) {
+            if (existing.txid + ':' + existing.vout === key) return;
+        }
         this._speculative.push(utxo);
     }
 

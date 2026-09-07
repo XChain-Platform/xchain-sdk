@@ -76,9 +76,21 @@ const ENCODING_LIMITS = Object.freeze({
 //     preflightFindingKey.js), which makes (code, commandIndex) the override
 //     identity for batch sub-command errors. Without it one "Sign anyway"
 //     clears every sub-command error sharing a code.
-// This SDK-side list is also the only copy that ships: src/ is in the publish
-// allowlist and index.d.ts declares no PreflightReport type, so a third-party
-// consumer building its own panel from the tarball has nothing else to read.
+// This SDK-side list is the NORMATIVE copy, and it is not the only one that
+// ships: src/ and index.d.ts are both in the publish allowlist, and index.d.ts
+// declares the engine's return as `PreflightReport` for a third-party consumer
+// building its own panel from the tarball. That declaration is a mirror of this
+// list, not a second source: a field added here is added there in the same
+// change, or the tarball starts describing a report it no longer produces.
+//
+// Two things the mirror is NOT, both of which have already been written down
+// wrongly once. It is not a per-field copy of the list above: that list is what
+// the WALLET PANEL reads, while the declaration is what THIS FILE'S engine
+// returns, so `_stampedAt` (stamped on every report, read by lifecycle.js's
+// isStale) is declared there and absent here. And it is not a type any producer
+// of a report must satisfy - see the `restricted` paragraph below, which blesses
+// narrower reports authored outside the SDK. A consumer that accepts those too
+// declares its own wider input type; the declaration here stays the engine's.
 //
 // `restricted` on the report means "covers a proper subset of the checks
 // the action warrants", never a completeness claim either way: the full

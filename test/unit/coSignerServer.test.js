@@ -151,9 +151,12 @@ describe('co-signer HTTP sidecar', function () {
         });
 
         it('names an oversize body instead of answering an HTML error page', async function () {
-            const co = new CoSigner({ secretKey: crypto.randomBytes(32),
+            // The daemon's own key sits in the pair it is configured with (the
+            // constructor refuses a set its secretKey does not appear in).
+            const daemonSk = crypto.randomBytes(32);
+            const co = new CoSigner({ secretKey: daemonSk,
                 publicKeys: [secp256k1.getPublicKey(crypto.randomBytes(32), true),
-                    secp256k1.getPublicKey(crypto.randomBytes(32), true)],
+                    secp256k1.getPublicKey(daemonSk, true)],
                 policy: { allowedActions: new Set(['SEND']) } });
             const logs = [];
             const app = createCoSignerApp(co, { token: 'sekret', maxBodyBytes: 4096,
@@ -188,9 +191,12 @@ describe('co-signer HTTP sidecar', function () {
         });
 
         it('rejects a nonsensical maxBodyBytes at construction', function () {
-            const co = new CoSigner({ secretKey: crypto.randomBytes(32),
+            // The daemon's own key sits in the pair it is configured with (the
+            // constructor refuses a set its secretKey does not appear in).
+            const daemonSk = crypto.randomBytes(32);
+            const co = new CoSigner({ secretKey: daemonSk,
                 publicKeys: [secp256k1.getPublicKey(crypto.randomBytes(32), true),
-                    secp256k1.getPublicKey(crypto.randomBytes(32), true)],
+                    secp256k1.getPublicKey(daemonSk, true)],
                 policy: { allowedActions: new Set(['SEND']) } });
             expect(() => createCoSignerApp(co, { token: 't', maxBodyBytes: 0 })).to.throw(/maxBodyBytes/);
             expect(() => createCoSignerApp(co, { token: 't', maxBodyBytes: 1.5 })).to.throw(/maxBodyBytes/);
@@ -201,9 +207,12 @@ describe('co-signer HTTP sidecar', function () {
             // `reason` over the transport error (G13), so no client change is
             // needed - but only if the server answers JSON at all.
             const { httpTransport } = require('../../src/cosigner/client.js');
-            const co = new CoSigner({ secretKey: crypto.randomBytes(32),
+            // The daemon's own key sits in the pair it is configured with (the
+            // constructor refuses a set its secretKey does not appear in).
+            const daemonSk = crypto.randomBytes(32);
+            const co = new CoSigner({ secretKey: daemonSk,
                 publicKeys: [secp256k1.getPublicKey(crypto.randomBytes(32), true),
-                    secp256k1.getPublicKey(crypto.randomBytes(32), true)],
+                    secp256k1.getPublicKey(daemonSk, true)],
                 policy: { allowedActions: new Set(['SEND']) } });
             const app = createCoSignerApp(co, { token: 'sekret', maxBodyBytes: 4096, logger: () => {} });
             const srv = app.listen(0, '127.0.0.1');

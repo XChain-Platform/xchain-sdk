@@ -43,16 +43,34 @@ function resolveMaxBatch(env = process.env) {
 }
 
 /*
+ * Parses a setting that must be a whole non-negative number, returning null for
+ * anything else so a caller can tell "malformed" from a real 0. parseInt() is
+ * wrong here because it truncates at the first non-digit: '0junk', '0.5',
+ * '-0.5' and '0x10' all become 0, and a resolver whose 0 is a meaningful OFF
+ * switch then reads an operator's typo as a deliberate disable.
+ *
+ * @param {*} raw
+ * @returns {number|null}
+ */
+function parseWholeNumber(raw) {
+    const s = String(raw ?? '').trim();
+    if (!/^\d+$/.test(s)) return null;
+    const n = Number(s);
+    return Number.isSafeInteger(n) ? n : null;
+}
+
+/*
  * Requests per window per credential (per source address when unauthenticated).
  * A junk value falls back to the default; an explicit 0 disables the limiter,
- * which is the only way to turn it off.
+ * which is the only way to turn it off. Validates the WHOLE string, because
+ * this resolver's 0 is the off switch (see parseWholeNumber).
  *
  * @param {object} [env]
  * @returns {number}
  */
 function resolveRateLimit(env = process.env) {
-    const n = parseInt(env.SDK_API_RATE_LIMIT, 10);
-    return (Number.isFinite(n) && n >= 0) ? n : 300;
+    const n = parseWholeNumber(env.SDK_API_RATE_LIMIT);
+    return (n === null) ? 300 : n;
 }
 
 /*
@@ -213,6 +231,7 @@ function authGateMiddleware({ apiKey }) {
 }
 
 module.exports = {
+    parseWholeNumber,
     resolveMaxBatch,
     resolveRateLimit,
     resolveRateWindowMs,

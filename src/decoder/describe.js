@@ -43,6 +43,30 @@
 const { actionDisplayLabel } = require('./actionDisplayLabel.js');
 const { sanitizeText, formatAmount } = require('./hardening.js');
 
+// Scale the multi-send per-token totals are summed at: 18 dp, the finest precision any
+// tick can be issued with (MAX_TOKEN_DECIMALS), so no legal leg loses digits.
+const TOTAL_SCALE = 1000000000000000000n;
+
+// A plain unsigned decimal string to an exact BigInt count of 10^-18 units, or null when
+// the leg is not one. Number()+`+` is not exact enough for the one figure a user reads as
+// what the transaction moves: 0.1 and 0.2 add to 0.30000000000000004, an 18-decimal tick
+// loses its tail, and a leg above 2^53 base units collapses to a nearby double before it
+// is ever added. null is what makes the caller omit the total instead of guessing it.
+function toScaledUnits(value) {
+    const s = String(value === null || value === undefined ? '' : value).trim();
+    const m = /^(\d+)(?:\.(\d{1,18}))?$/.exec(s);
+    if (m === null) return null;
+    return BigInt(m[1]) * TOTAL_SCALE + BigInt((m[2] || '').padEnd(18, '0'));
+}
+
+// Scaled units back to a plain decimal string, trailing zeros trimmed so a whole total
+// still reads '11' rather than '11.000000000000000000'.
+function fromScaledUnits(units) {
+    const whole = (units / TOTAL_SCALE).toString();
+    const frac = (units % TOTAL_SCALE).toString().padStart(18, '0').replace(/0+$/, '');
+    return frac ? `${whole}.${frac}` : whole;
+}
+
 /*
  * @param {object} parsed  a ParsedAction from decoder.parse(), or a
  *                 legacy `{ action, params | fields }` object (the
@@ -293,10 +317,10 @@ function decodeSend(p, chainSuffix) {
  *
  * Totals are per TOKEN, because SEND v2 lets each leg carry its own tick, and
  * a summary that added 7 XCHAIN to 3 PEPECREATURE would be worse than one that
- * named a single leg. Amounts are summed as decimal strings via plain numeric
- * addition only when every leg parses; otherwise the total is omitted rather
- * than guessed, since a wrong total on a signing screen is the failure mode
- * this whole path exists to prevent.
+ * named a single leg. Amounts are summed EXACTLY, as scaled BigInt units, only
+ * when every leg parses; otherwise the total is omitted rather than guessed,
+ * since a wrong total on a signing screen is the failure mode this whole path
+ * exists to prevent.
  */
 function decodeMultiSend(p, chainSuffix) {
     const dests = toArray(p.DESTINATION);
@@ -308,16 +332,16 @@ function decodeMultiSend(p, chainSuffix) {
     const tickAt = (i) => String(ticks.length > 1 ? (ticks[i] ?? '') : (ticks[0] ?? ''));
     const memoAt = (i) => String(memos.length > 1 ? (memos[i] ?? '') : (memos[0] ?? ''));
 
-    /** @type {Map<string, number|null>} */
+    /** @type {Map<string, bigint|null>} */
     const totals = new Map();
     for (let i = 0; i < dests.length; i++) {
         const tick = tickAt(i) || '?';
-        const n = Number(amounts[i]);
-        const running = totals.has(tick) ? totals.get(tick) : 0;
-        totals.set(tick, running === null || !Number.isFinite(n) ? null : running + n);
+        const units = toScaledUnits(amounts[i]);
+        const running = totals.has(tick) ? totals.get(tick) : 0n;
+        totals.set(tick, running === null || units === null ? null : running + units);
     }
     const totalsText = [...totals.entries()]
-        .map(([tick, sum]) => (sum === null ? tick : `${sum} ${tick}`))
+        .map(([tick, sum]) => (sum === null ? tick : `${fromScaledUnits(sum)} ${tick}`))
         .join(', ');
 
     return {

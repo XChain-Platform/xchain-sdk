@@ -62,6 +62,29 @@ describe('decoder.describe', function () {
             expect(d.summary).to.equal('Send 1 JDOG to 2 recipients');
             expect(d.warnings).to.include('An amount is not positive.');
         });
+
+        // The total is the one number a user reads as "what this transaction moves", so it
+        // is summed exactly. Float addition rendered these three as '0.30000000000000004',
+        // '1' (the 18-dp tail simply gone) and '1111111111' (a whole satoshi over).
+        it('sums the total EXACTLY, not with IEEE-754 addition', function () {
+            expect(describeAction(parse('SEND|1|JDOG|0.1|alice|0.2|bob')).summary)
+                .to.equal('Send 0.3 JDOG to 2 recipients');
+            expect(describeAction(parse('SEND|1|JDOG|1|alice|0.000000000000000001|bob')).summary)
+                .to.equal('Send 1.000000000000000001 JDOG to 2 recipients');
+            // Above 2^53 base units: the DOGE-supply case, where a double cannot represent
+            // either leg or their sum.
+            expect(describeAction(parse('SEND|1|JDOG|123456789.12345678|alice|987654321.87654321|bob')).summary)
+                .to.equal('Send 1111111110.99999999 JDOG to 2 recipients');
+        });
+
+        it('omits the total rather than guessing when a leg is not a plain decimal', function () {
+            // Number() accepted every one of these and rendered a total no leg carries.
+            for (const bad of ['1e3', '-1', '0x10', 'Infinity', '.5'])
+                expect(describeAction({
+                    action: 'SEND',
+                    params: { TICK: 'JDOG', AMOUNT: ['1', bad], DESTINATION: ['a', 'b'] },
+                }).summary, 'leg ' + bad).to.equal('Send JDOG to 2 recipients');
+        });
     });
 
     it('legacy {action, params} shape still works (wallet shim path)', function () {

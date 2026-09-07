@@ -83,6 +83,19 @@ class ContractClient {
         return explorer.getContractState(this.contractActionIndex, key);
     }
 
+    // Wait until this contract's own state satisfies a condition, e.g.
+    //   await contract.waitForState({ key: 'status', equals: 'FUNDED' })
+    // The gate to hold before settling: a confirmed transaction is earlier than
+    // the indexer executing the action against the contract.
+    async waitForState(opts) {
+        return this.sdk.waitForContractState(this.contractActionIndex, opts);
+    }
+
+    // Wait until this contract holds a token balance (the DEPOSIT gate).
+    async waitForBalance(tick, opts) {
+        return this.sdk.waitForContractBalance(this.contractActionIndex, tick, opts);
+    }
+
     // Get contract execution history
     async getExecutions(opts) {
         let explorer = this.sdk._requireExplorer();

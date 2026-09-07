@@ -80,6 +80,63 @@ function buildSignedTx() {
 }
 
 /**
+ * A two-transaction chain built with real keys, for the change-tracking tests.
+ *
+ * tx1 carries an OP_RETURN data output plus change back to `changeAddress` at
+ * vout 1; tx2 SPENDS that change output and pays its own change back. This is
+ * the shape the P2SH two-phase flow produces, where the reveal consumes what
+ * the funding transaction paid the caller.
+ *
+ * Everything is on the bitcoinjs DEFAULT network, because the fake SDK has no
+ * wallet.getBitcoinNetwork and _reconcileNetwork therefore falls back to it.
+ */
+function buildChangeChain() {
+    const bitcoin = require('bitcoinjs-lib');
+    const ecc = require('@bitcoinerlab/secp256k1');
+    const { ECPairFactory } = require('ecpair');
+    bitcoin.initEccLib(ecc);
+    const ECPair = ECPairFactory(ecc);
+
+    const kp        = ECPair.makeRandom();
+    const inScript  = bitcoin.payments.p2wpkh({ pubkey: kp.publicKey }).output;
+    const change    = bitcoin.payments.p2pkh({ pubkey: kp.publicKey });
+    const opReturn  = bitcoin.script.compile([bitcoin.opcodes.OP_RETURN, Buffer.from('58434841494e', 'hex')]);
+
+    const prevTx = new bitcoin.Transaction();
+    prevTx.addInput(Buffer.alloc(32), 0xffffffff, 0xffffffff, Buffer.from([0x51]));
+    prevTx.addOutput(inScript, 100_000);
+
+    const psbt1 = new bitcoin.Psbt();
+    psbt1.addInput({ hash: prevTx.getId(), index: 0, sequence: 0xfffffffd,
+                     witnessUtxo: { script: inScript, value: 100_000 } });
+    psbt1.addOutput({ script: opReturn, value: 0 });
+    psbt1.addOutput({ address: change.address, value: 90_000 });
+    const psbt1Hex = psbt1.toHex();          // the encoder answers UNSIGNED
+    psbt1.signAllInputs(kp);
+    psbt1.finalizeAllInputs();
+    const tx1 = psbt1.extractTransaction();
+
+    const psbt2 = new bitcoin.Psbt();
+    psbt2.addInput({ hash: tx1.getId(), index: 1, sequence: 0xfffffffd, nonWitnessUtxo: tx1.toBuffer() });
+    psbt2.addOutput({ address: change.address, value: 80_000 });
+    const psbt2Hex = psbt2.toHex();
+    psbt2.signAllInputs(kp);
+    psbt2.finalizeAllInputs();
+    const tx2 = psbt2.extractTransaction();
+
+    return {
+        changeAddress: change.address,
+        changeScript:  change.output.toString('hex'),
+        // The same key as a raw hex pubkey. The reconcile gate derives the
+        // caller's default-type scripts from it, so a change output still
+        // reconciles; _extractChangeOutputs cannot parse it as an address.
+        pubkeyHex:     Buffer.from(kp.publicKey).toString('hex'),
+        phase1: { psbtHex: psbt1Hex, txHex: tx1.toHex(), txid: tx1.getId() },
+        phase2: { psbtHex: psbt2Hex, txHex: tx2.toHex(), txid: tx2.getId() },
+    };
+}
+
+/**
  * Build a minimal fake SDK.
  *
  * @param {Object} [overrides]  – override specific sdk methods
@@ -176,6 +233,83 @@ describe('LifecycleManager', function () {
             assert.strictEqual(result.indexed, null);
         });
 
+        // Without these, the change a submit pays back to the caller is
+        // never handed to the UTXO cache, so the caller's NEXT action picks
+        // independent confirmed inputs and lands as a SIBLING of this one
+        // instead of its child.
+        it('returns the change output paid back to the caller, shaped for createTx', async function () {
+            const chain = buildChangeChain();
+            const sdk = makeSdk({
+                wallet: {
+                    signPsbt:       () => ({ txHex: chain.phase1.txHex, txid: chain.phase1.txid, psbtHex: chain.phase1.psbtHex }),
+                    signRevealPsbt: () => ({ txHex: chain.phase2.txHex, txid: chain.phase2.txid, psbtHex: chain.phase2.psbtHex }),
+                }
+            }, {
+                createTx:    async () => ({ psbt: chain.phase1.psbtHex, encoding: 'OP_RETURN' }),
+                broadcastTx: async () => ({}),
+            });
+            const lm = new LifecycleManager(sdk);
+            const result = await lm.submitAction(
+                { action: 'SEND', params: {} },
+                { pubkey: chain.changeAddress, change: chain.changeAddress },
+                { wif: FAKE_WIF, waitForIndexer: false }
+            );
+            // The OP_RETURN carrier at vout 0 is not the caller's coin; only the
+            // change at vout 1 comes back, with every field the encoder's
+            // validateUtxoEntry demands of a caller-supplied utxos entry.
+            assert.deepStrictEqual(result.changeOutputs, [{
+                txid:          chain.phase1.txid,
+                vout:          1,
+                value:         90_000,
+                scriptPubKey:  chain.changeScript,
+                confirmations: 0
+            }]);
+        });
+
+        it('carries a >2^53 change value as an exact decimal string, not a BigInt', function () {
+            // applyBufferutilsPatch reads a large DOGE output value as a BigInt,
+            // and JSON.stringify throws on one: the entry would kill the very
+            // createTx call it exists to fund. The encoder's parseSatoshiAmount
+            // takes the decimal-string form (allowBig), which is also what the
+            // utxo-tracker emits for the same value.
+            require('../../src/applyBufferutilsPatch.js');
+            const bitcoin = require('bitcoinjs-lib');
+            const chain = buildChangeChain();
+            const big   = 9007199254740993n;      // 2^53 + 1
+
+            const tx = new bitcoin.Transaction();
+            tx.addInput(Buffer.alloc(32), 0);
+            tx.addOutput(bitcoin.address.toOutputScript(chain.changeAddress), big);
+
+            const lm  = new LifecycleManager(makeSdk());
+            const out = lm._extractChangeOutputs(tx.toHex(), chain.changeAddress);
+            assert.strictEqual(out.length, 1);
+            assert.strictEqual(out[0].value, '9007199254740993');
+            assert.doesNotThrow(() => JSON.stringify(out));
+        });
+
+        it('tracks no change when the change destination is not a parseable address', async function () {
+            const chain = buildChangeChain();
+            const sdk = makeSdk({
+                wallet: {
+                    signPsbt:       () => ({ txHex: chain.phase1.txHex, txid: chain.phase1.txid, psbtHex: chain.phase1.psbtHex }),
+                    signRevealPsbt: () => ({ txHex: chain.phase2.txHex, txid: chain.phase2.txid, psbtHex: chain.phase2.psbtHex }),
+                }
+            }, {
+                createTx:    async () => ({ psbt: chain.phase1.psbtHex, encoding: 'OP_RETURN' }),
+                broadcastTx: async () => ({}),
+            });
+            const lm = new LifecycleManager(sdk);
+            // A raw hex pubkey is not an address; nothing can be matched, and the
+            // fail-closed answer is an empty list rather than a guessed script.
+            const result = await lm.submitAction(
+                { action: 'SEND', params: {} },
+                { pubkey: chain.pubkeyHex },
+                { wif: FAKE_WIF, waitForIndexer: false }
+            );
+            assert.deepStrictEqual(result.changeOutputs, []);
+        });
+
         it('includes spentInputs array in result', async function () {
             const sdk = makeSdk();
             const lm = new LifecycleManager(sdk);
@@ -264,6 +398,73 @@ describe('LifecycleManager', function () {
             assert.ok(steps.includes('encoding'));
             assert.ok(steps.includes('signing'));
             assert.ok(steps.includes('broadcasting'));
+        });
+    });
+
+    // The encoder is a REMOTE service that chooses the bytes this SDK signs.
+    // reconcileEncoded proves the coin still goes where the caller asked and never
+    // reads the data carrier, so a response with identical outputs and an identical
+    // fee could still carry a different COMMAND, and this path signed it.
+    describe('submitAction(): the carrier must hold the action that was submitted', function () {
+        const SUBMITTED   = 'SEND|0|TOK|1|1RecipientAAAAAAAAAAAAAAAAAAAAAAAA|m';
+        const SUBSTITUTED = 'SEND|0|TOK|1000|1RecipientBBBBBBBBBBBBBBBBBBBBBBBB|m';
+
+        // An encoder answer built the way xchain-encoder builds one: the action
+        // compiled behind the XCHN magic word, AES-128-CTR obfuscated under the
+        // first input's txid, in a zero-value OP_RETURN, with change back to the
+        // funding script. Only the carrier's CONTENTS differ between the two cases.
+        function encoderAnswer(carriedAction) {
+            const bitcoin = require('bitcoinjs-lib');
+            const crypto  = require('crypto');
+            const ecc     = require('@bitcoinerlab/secp256k1');
+            const { ECPairFactory } = require('ecpair');
+            bitcoin.initEccLib(ecc);
+            const kp = ECPairFactory(ecc).makeRandom();
+            const script = bitcoin.payments.p2wpkh({ pubkey: kp.publicKey }).output;
+            const prevHash = crypto.randomBytes(32);
+            const txid = Buffer.from(prevHash).reverse().toString('hex');
+            const tagged = Buffer.concat([Buffer.from('XCHN'),
+                bitcoin.script.compile([Buffer.from(carriedAction, 'utf8')])]);
+            const cipher = crypto.createCipheriv('aes-128-ctr', txid.substr(0, 16), txid.substr(16, 16));
+            const psbt = new bitcoin.Psbt();
+            psbt.addInput({ hash: prevHash, index: 0, witnessUtxo: { script, value: 100_000 } });
+            psbt.addOutput({ script: bitcoin.payments.embed({
+                data: [Buffer.concat([cipher.update(tagged), cipher.final()])] }).output, value: 0 });
+            psbt.addOutput({ script, value: 90_000 });
+            return psbt.toHex();
+        }
+
+        function sdkFor(carriedAction, calls) {
+            return makeSdk({
+                actions: { createAction: () => ({ actionString: SUBMITTED, action: 'SEND', version: 0 }) },
+                wallet:  { signPsbt: () => { calls.push('sign'); return { txHex: '00', txid: 'signedtxid', psbtHex: '00' }; } },
+            }, {
+                createTx:    async () => ({ psbt: encoderAnswer(carriedAction), encoding: 'OP_RETURN' }),
+                broadcastTx: async () => { calls.push('broadcast'); return { txid: 'signedtxid' }; },
+            });
+        }
+
+        it('refuses a substituted amount and destination BEFORE anything is signed', async function () {
+            const calls = [];
+            const lm = new LifecycleManager(sdkFor(SUBSTITUTED, calls));
+            await assert.rejects(
+                () => lm.submitAction({ action: 'SEND', params: {} }, { pubkey: '03pub' },
+                    { wif: FAKE_WIF, waitForIndexer: false }),
+                (e) => e.code === 'CARRIER_ACTION_MISMATCH');
+            assert.deepStrictEqual(calls, [],
+                'the substituted command must be refused before any key touches it');
+        });
+
+        // The control: the identical shape, carrying what was actually submitted,
+        // still signs and broadcasts. Without it the refusal above would only prove
+        // the path throws.
+        it('signs and broadcasts when the carrier holds exactly what was submitted', async function () {
+            const calls = [];
+            const lm = new LifecycleManager(sdkFor(SUBMITTED, calls));
+            const result = await lm.submitAction({ action: 'SEND', params: {} }, { pubkey: '03pub' },
+                { wif: FAKE_WIF, waitForIndexer: false });
+            assert.strictEqual(result.txid, 'signedtxid');
+            assert.deepStrictEqual(calls, ['sign', 'broadcast']);
         });
     });
 
@@ -374,6 +575,37 @@ describe('LifecycleManager', function () {
             assert.ok(Array.isArray(result.spentInputs));
             // The psbt has 1 input, so spentInputs from both phases = 2
             assert.strictEqual(result.spentInputs.length, 2);
+        });
+
+        it('drops a phase-1 change output that phase 2 spends back', async function () {
+            const chain = buildChangeChain();
+            const sdk = makeSdk({
+                wallet: {
+                    signPsbt:       () => ({ txHex: chain.phase1.txHex, txid: chain.phase1.txid, psbtHex: chain.phase1.psbtHex }),
+                    signRevealPsbt: () => ({ txHex: chain.phase2.txHex, txid: chain.phase2.txid, psbtHex: chain.phase2.psbtHex }),
+                }
+            }, {
+                createTx:    async () => ({ psbt: chain.phase1.psbtHex, encoding: 'P2SH' }),
+                spendP2sh:   async () => ({ psbt: chain.phase2.psbtHex }),
+                broadcastTx: async () => ({}),
+            });
+            const lm = new LifecycleManager(sdk);
+            const result = await lm.submitAction(
+                { action: 'DEPLOY', params: {} },
+                { pubkey: chain.changeAddress, change: chain.changeAddress },
+                { wif: FAKE_WIF, waitForIndexer: false }
+            );
+            // Phase 2 consumes phase 1's change, so handing it back as spendable
+            // would put a provably-spent outpoint into the caller's UTXO set and
+            // the encoder would build a double-spend from it. Only the reveal's
+            // own change survives.
+            assert.deepStrictEqual(result.changeOutputs, [{
+                txid:          chain.phase2.txid,
+                vout:          0,
+                value:         80_000,
+                scriptPubKey:  chain.changeScript,
+                confirmations: 0
+            }]);
         });
     });
 
@@ -553,6 +785,182 @@ describe('LifecycleManager', function () {
             } finally {
                 ActionWaiter.prototype.waitForTxid.restore();
             }
+        });
+    });
+
+    /*
+     *  Contract settle gate
+     *
+     *  The explorer exposes a transaction's ACTION rows as soon as the decoder
+     *  writes them, which is BEFORE the indexer executes them against the
+     *  contract. A caller that settled on that read spent inputs its own
+     *  pending deposit had already used (bad-txns-inputs-missingorspent from
+     *  the encoder) and, where it landed at all, reverted in the VM against a
+     *  contract that had not been credited. These pin the two gates that close
+     *  the window.
+     */
+    describe('submitAction(): contract actions', function () {
+
+        // A fake SDK whose createAction reports the contract action under test.
+        function contractSdk(action, explorer) {
+            const sdk = makeSdk({
+                _requireExplorer: () => explorer,
+            });
+            sdk.actions = {
+                createAction: () => ({ actionString: 'XCHAIN|' + action + '|...', action, version: 1 }),
+            };
+            return sdk;
+        }
+
+        it('defaults strictStatus ON for DEPOSIT, EXECUTE and WITHDRAW', async function () {
+            for (const action of ['DEPOSIT', 'EXECUTE', 'WITHDRAW']) {
+                const waiterStub = sinon.stub(ActionWaiter.prototype, 'waitForTxid').resolves({ status: 'valid' });
+                const lm = new LifecycleManager(contractSdk(action, {}));
+                await lm.submitAction({ action, params: { contractActionIndex: 73 } }, {}, { wif: FAKE_WIF });
+                assert.strictEqual(waiterStub.firstCall.args[1].strictStatus, true,
+                    action + ': a status the indexer never wrote is not evidence the contract executed');
+                sinon.restore();
+            }
+        });
+
+        it('leaves strictStatus OFF for an ordinary action', async function () {
+            const waiterStub = sinon.stub(ActionWaiter.prototype, 'waitForTxid').resolves({ status: 'valid' });
+            const lm = new LifecycleManager(makeSdk());
+            await lm.submitAction({ action: 'SEND', params: {} }, {}, { wif: FAKE_WIF });
+            assert.strictEqual(waiterStub.firstCall.args[1].strictStatus, false);
+        });
+
+        it('honours an explicit strictStatus:false on a contract action', async function () {
+            const waiterStub = sinon.stub(ActionWaiter.prototype, 'waitForTxid').resolves({ status: 'valid' });
+            const lm = new LifecycleManager(contractSdk('DEPOSIT', {}));
+            await lm.submitAction({ action: 'DEPOSIT', params: { contractActionIndex: 73 } }, {},
+                { wif: FAKE_WIF, strictStatus: false });
+            assert.strictEqual(waiterStub.firstCall.args[1].strictStatus, false);
+        });
+
+        it('gates on the contract state and reports it on the result', async function () {
+            sinon.stub(ActionWaiter.prototype, 'waitForTxid').resolves({ status: 'valid' });
+            let reads = 0;
+            const explorer = {
+                // The contract goes FUNDED only on the third read: the two before
+                // it are the window in which a settling caller can return early.
+                getContractState: async () => ({ total: 1, data: [
+                    { state_key: 'status', state_value: JSON.stringify(++reads < 3 ? 'OPEN' : 'FUNDED') }
+                ]}),
+            };
+            const lm = new LifecycleManager(contractSdk('EXECUTE', explorer));
+            const steps = [];
+            const result = await lm.submitAction(
+                { action: 'EXECUTE', params: { contractActionIndex: 73 } }, {},
+                { wif: FAKE_WIF, onProgress: (s) => steps.push(s),
+                  awaitContract: { key: 'status', equals: 'FUNDED', timeout: 3000, pollInterval: 5 } }
+            );
+            assert.strictEqual(result.contractState.value, 'FUNDED');
+            assert.strictEqual(result.contractState.contractActionIndex, 73,
+                'the gate defaults to the contract the action itself targets');
+            assert.strictEqual(reads, 3);
+            assert.ok(steps.includes('waiting_contract_state'));
+            assert.ok(steps.includes('contract_settled'));
+        });
+
+        it('gates on the contract BALANCE for a deposit that writes no state key', async function () {
+            sinon.stub(ActionWaiter.prototype, 'waitForTxid').resolves({ status: 'valid' });
+            let reads = 0;
+            const explorer = {
+                getContractBalance: async () => (++reads < 2)
+                    ? { total: 0, data: [] }
+                    : { total: 1, data: [{ tick: 'PAY514', quantity: '1000' }] },
+            };
+            const lm = new LifecycleManager(contractSdk('DEPOSIT', explorer));
+            const result = await lm.submitAction(
+                { action: 'DEPOSIT', params: { contractActionIndex: 73, tick: 'PAY514', quantity: '1000' } }, {},
+                { wif: FAKE_WIF,
+                  awaitContract: { tick: 'PAY514', minQuantity: '1000', timeout: 3000, pollInterval: 5 } }
+            );
+            assert.strictEqual(result.contractBalance.quantity, '1000');
+            assert.strictEqual(reads, 2, 'the empty read must not settle the gate');
+        });
+
+        it('reads the contract index off the upper-case wire form too', async function () {
+            sinon.stub(ActionWaiter.prototype, 'waitForTxid').resolves({ status: 'valid' });
+            const explorer = {
+                getContractState: async () => ({ total: 1, data: [
+                    { state_key: 'status', state_value: '"FUNDED"' }] }),
+            };
+            const lm = new LifecycleManager(contractSdk('EXECUTE', explorer));
+            const result = await lm.submitAction(
+                { action: 'EXECUTE', params: { CONTRACT_ACTION_INDEX: 91 } }, {},
+                { wif: FAKE_WIF, awaitContract: { key: 'status', equals: 'FUNDED', timeout: 1000, pollInterval: 5 } }
+            );
+            assert.strictEqual(result.contractState.contractActionIndex, 91);
+        });
+
+        it('marks a gate timeout as broadcast so the caller does not rebuild and double-spend', async function () {
+            sinon.stub(ActionWaiter.prototype, 'waitForTxid').resolves({ status: 'valid' });
+            const explorer = {
+                getContractState: async () => ({ total: 1, data: [
+                    { state_key: 'status', state_value: '"OPEN"' }] }),
+            };
+            const lm = new LifecycleManager(contractSdk('EXECUTE', explorer));
+            try {
+                await lm.submitAction({ action: 'EXECUTE', params: { contractActionIndex: 73 } }, {},
+                    { wif: FAKE_WIF, awaitContract: { key: 'status', equals: 'FUNDED', timeout: 60, pollInterval: 5 } });
+                assert.fail('a gate that never sees the state must not resolve');
+            } catch (err) {
+                assert.strictEqual(err.code, 'CONTRACT_STATE_TIMEOUT');
+                assert.strictEqual(err.broadcast, true);
+                assert.ok(err.txid);
+                assert.strictEqual(err.details.broadcast, true);
+            }
+        });
+
+        it('refuses a gate with no contract to read', async function () {
+            sinon.stub(ActionWaiter.prototype, 'waitForTxid').resolves({ status: 'valid' });
+            const lm = new LifecycleManager(contractSdk('EXECUTE', {}));
+            try {
+                await lm.submitAction({ action: 'EXECUTE', params: {} }, {},
+                    { wif: FAKE_WIF, awaitContract: { key: 'status', equals: 'FUNDED' } });
+                assert.fail('should have thrown');
+            } catch (err) {
+                assert.strictEqual(err.code, 'MISSING_CONTRACT_INDEX');
+            }
+        });
+
+        // The regression itself, end to end through the REAL waiter: a deposit
+        // must not hand control back before the contract holds the tokens.
+        it('does not return a deposit until the contract is credited', async function () {
+            const txid = 'aa'.repeat(32);
+            const order = [];
+            let statusReads = 0;
+            let credited = false;
+            const explorer = {
+                // The decoder's rows land first, with no indexer status on them.
+                getTransaction: async () => {
+                    let indexed = ++statusReads >= 3;
+                    if (indexed) credited = true;             // the same indexer pass credits the contract
+                    order.push(indexed ? 'action-status' : 'tx-confirmed');
+                    return { tx_hash: txid, block_index: 4200,
+                             actions: [{ action: 'DEPOSIT', action_index: 5, status: indexed ? 'valid' : null }] };
+                },
+                getContractBalance: async () => {
+                    order.push('balance-read');
+                    return credited
+                        ? { total: 1, data: [{ tick: 'PAY514', quantity: '1000' }] }
+                        : { total: 0, data: [] };
+                },
+            };
+            const lm = new LifecycleManager(contractSdk('DEPOSIT', explorer));
+            const result = await lm.submitAction(
+                { action: 'DEPOSIT', params: { contractActionIndex: 73, tick: 'PAY514', quantity: '1000' } }, {},
+                { wif: FAKE_WIF, timeout: 4000, pollInterval: 20,
+                  awaitContract: { tick: 'PAY514', minQuantity: '1000', timeout: 3000, pollInterval: 20 } }
+            );
+
+            assert.strictEqual(result.contractBalance.quantity, '1000');
+            assert.ok(order.indexOf('tx-confirmed') >= 0, 'the early confirmed reads happened');
+            assert.ok(order.indexOf('balance-read') > order.indexOf('action-status'),
+                'the balance is only read once the action carries an indexer status');
+            assert.ok(statusReads >= 3, 'a status-less action row must not settle the wait');
         });
     });
 });

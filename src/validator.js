@@ -107,7 +107,11 @@ const FORBIDDEN_TEXT_CHARS = ['|', ';'];
 // principled exemption list: BATCH COMMAND legitimately holds both delimiters,
 // and the rest carry their own delimiter validation under a distinct error code
 // (tick-name / GATE_TICKER / per-element PARAMS), so they opt out here to avoid
-// double-reporting.
+// double-reporting. An exemption is only ever as good as the validation it names:
+// the ticker fields' own check covered ISSUE TICK and '^' ID references and left an
+// ordinary non-ISSUE ticker name unvalidated, which is the injection _validateField
+// now closes at its third branch. Adding a field here means proving, at the branch
+// that claims it, that every value shape reaches a delimiter check.
 const DELIMITER_EXEMPT_FIELDS = new Set([
     'COMMAND',                                                          // BATCH sub-action carrier
     'TICK', 'GIVE_TICK', 'GET_TICK', 'DIVIDEND_TICK', 'CALLBACK_TICK',  // own tick-name validation
@@ -347,10 +351,28 @@ class Validator {
                 // Full TICK name validation on ISSUE (includes ^ first char check)
                 errors.push(...this._validateTickName(value));
             } else if (String(value).startsWith('^')) {
-                // TICK_ID reference (^123), only valid outside of ISSUE
+                // TICK_ID reference (^123), only valid outside of ISSUE. A delimiter
+                // inside the id is already fatal here: isNumeric tests the WHOLE
+                // remainder, so '^1|memo' fails as a non-numeric id.
                 let id = String(value).substring(1);
                 if (!this.util.isNumeric(id))
                     errors.push(this._error('INVALID_TICK_ID', field + ' ID reference must be numeric: ' + value, { field, value }));
+            } else {
+                // An ordinary ticker name on a non-ISSUE action: the branch that had
+                // nothing. These five fields are on DELIMITER_EXEMPT_FIELDS on the
+                // stated grounds that they carry their own delimiter validation, which
+                // was true of the two branches above and of nothing else, so
+                // TICK='TOKEN|100|^1|memo' validated clean and serialized to
+                // SEND|0|TOKEN|100|^1|memo|1|^2 - a wire string whose v0 parser reads
+                // an injected amount and destination, and a ';' here injects a whole
+                // BATCH sub-command.
+                //
+                // Delimiters only, deliberately: full _validateTickName on a non-ISSUE
+                // reference would make the SDK stricter than consensus and refuse tick
+                // names that already exist on chain (the regression the FIAT_AMOUNT note
+                // below records shipping once). '|' and ';' are outside TICK_REGEX
+                // anyway, so nothing legitimate loses.
+                errors.push(...this._scanDelimiters(field, value));
             }
         }
 
@@ -489,10 +511,18 @@ class Validator {
         }
 
         // FILE v1 gated-content fields
+        // The /i is deliberate and mirrors consensus: xchain-indexer accepts either
+        // case and records the lowercase form, so tightening this to lowercase-only
+        // would make the decoder's advisory findings disagree with chain validity on
+        // FILEs the chain accepted, and would contradict gatedFile.verifyKey, which
+        // lowercases a supplied KEY_HASH before comparing. Producers still emit
+        // lowercase (generateKey uses digest('hex')); the message says so rather than
+        // asserting a rule this check does not enforce.
         if (action === 'FILE' && field === 'KEY_HASH') {
             if (value !== '' && !/^[0-9a-f]{64}$/i.test(String(value)))
                 errors.push(this._error('INVALID_FIELD_VALUE',
-                    'KEY_HASH must be a 64-character lowercase hex string (sha256(K))',
+                    'KEY_HASH must be 64 hex characters, sha256(K); emit it lowercase, ' +
+                    'the chain accepts either case and records the lowercase form',
                     { field, value }));
         }
         if (action === 'FILE' && field === 'GATE_TICKER') {
@@ -1529,6 +1559,13 @@ class Validator {
     // checking each element, so a corrupted roster/allow-list entry is caught too.
     _checkDelimiters(field, value) {
         if (DELIMITER_EXEMPT_FIELDS.has(field)) return [];
+        return this._scanDelimiters(field, value);
+    }
+
+    // The scan itself, with no exemption check. Split out so a field that opts out
+    // of the blanket guard can still be scanned from inside the validation it opted
+    // out IN FAVOUR OF, and report the same code and message as every other field.
+    _scanDelimiters(field, value) {
         let errors = [];
         let items = Array.isArray(value) ? value : [value];
         for (let item of items) {

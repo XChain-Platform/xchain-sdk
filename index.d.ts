@@ -252,6 +252,106 @@ export interface ValidationResult {
 
 
 /*
+ *  Pre-flight report
+ *
+ *  The shape `sdk.preflight()` RETURNS, and only that. src/preflight/
+ *  constants.js is the normative source for the field list, the finding-code
+ *  registry and the additive-only rule on REPORT_SCHEMA_VERSION; this block
+ *  declares that same shape so a consumer building its own panel from the
+ *  published tarball has something to read besides prose. Add a field in both
+ *  places or in neither.
+ *
+ *  It is deliberately NOT the shape every consumer of a report accepts. A
+ *  caller may author a narrower report of its own - the `restricted` note in
+ *  constants.js names the wallet's funding-only dispenser panel doing exactly
+ *  that - and such a producer emits a proper subset of these fields. Widening
+ *  this declaration to admit those would stop it describing what the engine
+ *  returns, which is the one thing a tarball consumer has no other way to
+ *  learn. A consumer that accepts both shapes declares its own accepted-input
+ *  type; xchain-wallet's PreflightPanel does.
+ */
+
+/** Report-level verdict, computed from the findings (`src/preflight/index.js`). */
+export type PreflightVerdict = 'pass' | 'warn' | 'fail';
+
+/** Finding severity. Only certified codes may reach `error`; see the §4.2 trust model. */
+export type PreflightSeverity = 'error' | 'warning' | 'info';
+
+export interface PreflightFinding {
+    /** Registry code, e.g. `'DRYRUN_UNAVAILABLE'`. The identity every code-keyed consumer matches on. */
+    code: string;
+    severity: PreflightSeverity;
+    /** Diagnostic sentence written for a report reader, not for a signer. */
+    message: string;
+    /** Which party said it: `'dryrun'` for a network-sourced verdict, `'client'` otherwise. */
+    source: string;
+    /** Per-finding detail; always an object, empty when the check carried none. */
+    data: {
+        /** Position of the BATCH sub-command a finding belongs to. Half of the override identity. */
+        commandIndex?: number;
+        /** Commands in the BATCH the network answered about. */
+        subCommandCount?: number;
+        /** How many of those it accepted; `accepted < subCommandCount` means a partial approval. */
+        accepted?: number;
+        [key: string]: unknown;
+    };
+    /** Present only on errors: whether a signer may override this one. Absent on warnings and info. */
+    overridable?: boolean;
+    /**
+     * Set when Tier-1 precedence demoted a contradicting Tier-2 error to info.
+     * Underscore-led but load-bearing: the wallet panel's notice filter is
+     * `severity === 'info' && !f._downgradedBy`, so dropping or renaming it
+     * resurrects demoted errors as user-facing notices under a passing chip.
+     */
+    _downgradedBy?: string;
+}
+
+/** An aspect the run could not check, disclosed rather than thrown. */
+export interface PreflightUnverified {
+    /** The check that could not run. */
+    check: string;
+    /** Why it could not. */
+    reason: string;
+}
+
+export interface PreflightReport {
+    /** REPORT_SCHEMA_VERSION at the time of the run; additive-only by convention. */
+    schemaVersion: number;
+    verdict: PreflightVerdict;
+    /**
+     * True means the report covers a proper SUBSET of the checks the action
+     * warrants. Never a completeness claim either way. The engine this type
+     * describes always stamps false; the field is declared because a caller
+     * reading a report cannot know that without being told, and because the
+     * partial producers outside the SDK stamp true (constants.js names them).
+     */
+    restricted: boolean;
+    /** Codes of every check that ran, including those that produced no finding. */
+    checksRun: string[];
+    findings: PreflightFinding[];
+    unverified: PreflightUnverified[];
+    /** Tier-1 fee quote when one was obtained, else null. Untyped for the same reason `getFeeQuote` is. */
+    quote: unknown;
+    /** Block height the network answered at, or null when Tier-1 gave no verdict. */
+    stateHeight: number | null;
+    /** Wall-clock cost of the run, in ms. */
+    elapsedMs: number;
+    /**
+     * When the engine stamped this report (`nowMs()`), for staleness.
+     *
+     * Underscore-led and still part of the returned surface: the SDK's own
+     * `isStale(report, { now, knownTip })` in src/preflight/lifecycle.js reads
+     * it to decide whether a report is too old to sign against, and
+     * test/unit/preflight/lifecycle.test.js pins that behaviour. Every report
+     * the engine returns carries it, so a tarball consumer writing its own
+     * Approve-time re-check has it to read; omitting it from this declaration
+     * would describe a report the engine does not produce.
+     */
+    _stampedAt: number;
+}
+
+
+/*
  *  Explorer query options
  */
 
@@ -892,7 +992,7 @@ export declare const AttestationHelpers: {
 /*
  *  GatedFileUtils: AES-256-GCM encryption / key-handoff (de)serialization
  *  for FILE v1 token-gated content.
- *  Spec: protocol/TOKEN_GATED_CONTENT.md
+ *  Spec: protocol/token-gated-content.md
  */
 
 export interface GenerateKeyResult {
@@ -978,7 +1078,8 @@ export interface MuSig2GenerateNonceParams {
     publicKey: Uint8Array;
     /** Optional secret key (32 bytes), improves nonce randomness */
     secretKey?: Uint8Array;
-    /** 32 bytes of session randomness; library uses secure random if omitted */
+    /** 32 bytes of session randomness, SINGLE-USE per publicKey (a repeat throws
+     *  SESSION_ID_REUSED); library uses secure random if omitted */
     sessionId?: Uint8Array;
     /** Aggregated x-only public key (binds nonce to the key-agg context) */
     xOnlyPublicKey?: Uint8Array;
@@ -1138,6 +1239,15 @@ export declare class ContractClient {
     getBalance(tick?: string): Promise<ContractBalanceEntry | ContractBalanceEntry[]>;
     /** Get the contract's declared permissions manifest (programmable policy layer) */
     getManifest(): Promise<ContractManifest>;
+
+    /**
+     * Wait until this contract's OWN state satisfies a condition, e.g.
+     * `{ key: 'status', equals: 'FUNDED' }`. The gate to hold before settling:
+     * a confirmed transaction is earlier than the indexer executing the action.
+     */
+    waitForState(opts: WaitForContractStateOpts): Promise<ContractStateWaitResult>;
+    /** Wait until this contract holds a token balance (the DEPOSIT gate). */
+    waitForBalance(tick: string, opts?: WaitForContractBalanceOpts): Promise<ContractBalanceWaitResult>;
 }
 
 
@@ -1442,8 +1552,8 @@ export declare class XChainSDK {
     /** Get a single execution result by its ACTION_INDEX */
     getExecution(executionActionIndex: number | string): Promise<ExecutionInfo>;
 
-    /** Get execution history for a contract */
-    getExecutions(contractActionIndex?: number | string, opts?: QueryOptions): Promise<ListEnvelope<ExecutionInfo>>;
+    /** Get execution history, filtered by `type` (block | address | contract; defaults to contract) */
+    getExecutions(query?: number | string, type?: string, opts?: QueryOptions): Promise<ListEnvelope<ExecutionInfo>>;
 
     /** Get deposits for a contract */
     getDeposits(query: string, type: string, opts?: QueryOptions): Promise<any>;
@@ -1647,6 +1757,17 @@ export declare class XChainSDK {
     /** Wait for a specific action_index to appear in the explorer */
     waitForActionIndex(actionIndex: number | string, opts?: WaitForActionOpts): Promise<any>;
 
+    /**
+     * Wait until a CONTRACT'S OWN state satisfies a condition, e.g.
+     * `sdk.waitForContractState(73, { key: 'status', equals: 'FUNDED' })`.
+     * A confirmed transaction is earlier than the indexer executing the action,
+     * and settling in that gap spends inputs the pending action already used.
+     */
+    waitForContractState(contractActionIndex: number | string, opts: WaitForContractStateOpts): Promise<ContractStateWaitResult>;
+
+    /** Wait until a contract HOLDS a token balance: the same gate for a DEPOSIT. */
+    waitForContractBalance(contractActionIndex: number | string, tick: string, opts?: WaitForContractBalanceOpts): Promise<ContractBalanceWaitResult>;
+
 
     /*
      *  WebSocket: Real-Time Subscription methods
@@ -1670,7 +1791,7 @@ export declare class XChainSDK {
     /** Subscribe to new actions with optional type/status/tick filters. */
     onAction(callback: (msg: any) => void, opts?: { types?: string[]; ticks?: string[] }): () => void;
 
-    /** Subscribe to all events touching an address: NEW_ACTION, ADDRESS_UPDATE, MEMPOOL_ACTION, MEMPOOL_REMOVED, ORDER_MATCH, ORDER_EXPIRED, COINPAY_REQUIRED/FULFILLED/EXPIRED, SWAP_MATCH, SWAP_EXPIRED, DISPENSE, DISPENSER_CLOSED, DISPENSER_EXPIRED, BET, BET_EXPIRED, BET_CLOSED, ATTESTATION_REQUEST, ATTESTATION_RESPONSE. */
+    /** Subscribe to all events touching an address: NEW_ACTION, ADDRESS_UPDATE, MEMPOOL_ACTION, MEMPOOL_REMOVED, ORDER_MATCH, ORDER_EXPIRED, COINPAY_REQUIRED/FULFILLED/EXPIRED, SWAP_MATCH, SWAP_EXPIRED, DISPENSE, DISPENSER_CLOSED, DISPENSER_EXPIRED, BET, BET_EXPIRED, BET_CLOSED, XCALL_COMPLETED, XCALL_EXPIRED, ATTESTATION_REQUEST, ATTESTATION_RESPONSE. */
     onAddress(address: string, callback: (msg: any) => void, opts?: { types?: string[]; snapshot?: boolean }): () => void;
 
     /**
@@ -1704,6 +1825,9 @@ export declare class XChainSDK {
 
     /** Subscribe to one betting market by its feed action index: BET (branch on data.action_format), BET_EXPIRED, BET_CLOSED and the initial SNAPSHOT. */
     onBetFeed(feedActionIndex: number | string, callback: (msg: any) => void): () => void;
+
+    /** Subscribe to one cross-chain call by its 64-hex call_id: XCALL_COMPLETED, XCALL_EXPIRED and the initial SNAPSHOT. The id is lower-cased before it is sent, because the explorer normalizes case at subscribe time. */
+    onXcall(callId: string, callback: (msg: any) => void): () => void;
 
     /** Subscribe to the global attestation stream: ATTESTATION_REQUEST and ATTESTATION_RESPONSE. */
     onAttestation(callback: (msg: any) => void): () => void;
@@ -1772,7 +1896,7 @@ export declare class XChainSDK {
 
     /**
      * AES-256-GCM encryption / key-handoff utilities for FILE v1 token-gated content.
-     * Spec: protocol/TOKEN_GATED_CONTENT.md
+     * Spec: protocol/token-gated-content.md
      */
     readonly gatedFile: GatedFileUtils;
 
@@ -1999,6 +2123,29 @@ export interface SubmitActionOpts {
     pollInterval?: number;
     /** Reject if action status is 'invalid' (default: true) */
     requireValid?: boolean;
+    /**
+     * With requireValid, also refuse to ASSUME validity when the indexer wrote
+     * no status for the action. Defaults to false for ordinary actions and TRUE
+     * for DEPOSIT/EXECUTE/WITHDRAW, whose action rows are visible before the
+     * indexer executes them against the contract.
+     */
+    strictStatus?: boolean;
+    /**
+     * Gate on the CONTRACT'S OWN state before resolving, the only signal that
+     * cannot race the indexer. The state gate runs when key or match is given,
+     * the balance gate when tick is given, and both may be used together;
+     * contractActionIndex defaults to the one the action itself targets.
+     */
+    awaitContract?: {
+        contractActionIndex?: number | string;
+        key?: string;
+        equals?: any;
+        match?: (state: Record<string, any>, ctx: ContractStateWaitResult) => boolean;
+        tick?: string;
+        minQuantity?: number | string;
+        timeout?: number;
+        pollInterval?: number;
+    };
     /** Explorer client the indexer wait polls instead of the SDK's own. */
     explorer?: any;
     /** Host/URL to build that explorer client from (with explorerPort); for isolated stacks. */
@@ -2024,8 +2171,69 @@ export interface SubmitActionResult {
     signed: SignPsbtResult;
     /** UTXOs consumed by this transaction */
     spentInputs: Array<{ txid: string; vout: number }>;
+    /**
+     * Change this action paid back to the caller and did not spend again in a
+     * later phase, shaped for handing straight back to createTx({ utxos }).
+     * WalletSession registers these speculatively, which is what chains
+     * consecutive submits parent -> child instead of producing siblings.
+     * Empty when the change destination is not a parseable address.
+     */
+    changeOutputs: Array<{ txid: string; vout: number; value: number | string; scriptPubKey: string; confirmations: number }>;
     /** Indexed action data (null if waitForIndexer was false) */
     indexed: any | null;
+    /** Contract state read by the awaitContract state gate, when one ran */
+    contractState?: ContractStateWaitResult;
+    /** Contract balance read by the awaitContract balance gate, when one ran */
+    contractBalance?: ContractBalanceWaitResult;
+}
+
+export interface WaitForContractStateOpts {
+    /** State key to read (reads the whole state map when absent) */
+    key?: string;
+    /** Value that key must hold, compared against the PARSED value */
+    equals?: any;
+    /** Predicate run against the whole state map instead of/alongside equals */
+    match?: (state: Record<string, any>, ctx: ContractStateWaitResult) => boolean;
+    /** Timeout in ms (default: 120000) */
+    timeout?: number;
+    /** Polling interval in ms (default: 2000) */
+    pollInterval?: number;
+    /** Explorer client to poll INSTEAD of this SDK's own (isolated stacks). */
+    explorer?: any;
+    /** Host/URL to build that explorer client from (with explorerPort). */
+    explorerUrl?: string;
+    /** Port for explorerUrl. */
+    explorerPort?: number;
+}
+
+export interface WaitForContractBalanceOpts extends Omit<WaitForContractStateOpts, 'key' | 'equals' | 'match'> {
+    /** Minimum quantity the contract must hold (default: any quantity above zero) */
+    minQuantity?: number | string;
+    /** Predicate run against the quantity STRING */
+    match?: (quantity: string | null, ctx: ContractBalanceWaitResult) => boolean;
+}
+
+export interface ContractStateWaitResult {
+    contractActionIndex: number | string;
+    key?: string;
+    /** Parsed value of `key`, undefined when the key is not present */
+    value?: any;
+    /**
+     * The state this read returned as a { key: parsedValue } map: the whole
+     * state when no key was given, that key's row alone when one was.
+     */
+    state: Record<string, any>;
+    /** The raw explorer response */
+    raw: any;
+}
+
+export interface ContractBalanceWaitResult {
+    contractActionIndex: number | string;
+    tick: string;
+    /** Exact decimal string, or null when the contract holds no row for the tick */
+    quantity: string | null;
+    /** The raw explorer response */
+    raw: any;
 }
 
 export interface WaitForActionOpts {
@@ -2099,6 +2307,15 @@ export declare class WalletSession {
 
     /** Refresh UTXOs from the UTXO tracker */
     refreshUTXOs(): Promise<any[]>;
+
+    /**
+     * Complete a hand-picked input list into what createTx accepts: fills the
+     * scriptPubKey (and value/confirmations) the encoder requires but the public
+     * UTXO surfaces do not return, matching each outpoint against this address's
+     * tracker view. Caller-supplied fields win. Throws UTXO_NOT_FOUND naming any
+     * outpoint it cannot complete.
+     */
+    hydrateUTXOs(utxos: Array<{ txid: string; vout: number; [k: string]: any }>, opts?: { refresh?: boolean }): Promise<any[]>;
 
     /** Submit any action using this session's credentials and UTXO cache */
     submit(actionData: { action: string; params: ActionParams }, encoderOpts?: Partial<EncoderOptions>, submitOpts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;

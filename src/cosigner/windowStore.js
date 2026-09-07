@@ -52,6 +52,10 @@ const CLOCK_SKEW_TOLERANCE_MS = 60 * 1000;
 const HELD_LOCKS = new Set();
 let exitHookInstalled = false;
 
+// link() errno values that mean "this mount cannot hardlink", as opposed to
+// "the name is taken" (EEXIST). Only these fall back to create-then-write.
+const LINK_UNSUPPORTED = new Set(['EPERM', 'ENOSYS', 'EOPNOTSUPP', 'ENOTSUP', 'EXDEV', 'EMLINK']);
+
 function installExitHook() {
     if (exitHookInstalled) return;
     exitHookInstalled = true;
@@ -108,19 +112,62 @@ class WindowStore {
         }
     }
 
-    // Exclusive advisory lock: an O_EXCL lockfile carrying the holder's pid.
-    // O_EXCL create is atomic, so two processes racing to start cannot both win.
-    // A lockfile whose recorded pid is no longer alive is a crash leftover and
+    // Publish the holder record and the lockfile NAME in one atomic step: build a
+    // complete `<lock>.<pid>.tmp` first, then hardlink it into place. link() either
+    // creates the name or fails EEXIST, and it can only ever create a name that
+    // already has the full record behind it.
+    //
+    // Create-then-write did NOT have that property, and the gap was the whole bug:
+    // between openSync(lockFile,'wx') and the writeSync that filled it, the lockfile
+    // existed and was EMPTY. A second daemon starting in that window read zero bytes,
+    // failed to parse a holder, could not prove any pid alive, and reclaimed the live
+    // lock as stale. Both processes then held the store, and because each caches the
+    // whole entry array and rewrites the file from that cache, they discard each
+    // other's consumption history and silently re-open the full budget.
+    //
+    // Falls back to the old create-then-write on mounts with no hardlink support
+    // (some network and FUSE filesystems), where the empty-file window returns and
+    // the fail-closed unreadable-holder branch in _acquireLock is what covers it.
+    _publishLock(lockFile) {
+        const tmp    = `${lockFile}.${process.pid}.tmp`;
+        const record = JSON.stringify({ pid: process.pid, t: Date.now() });
+        let fd = null;
+        try {
+            fd = fs.openSync(tmp, 'w', 0o600);
+            fs.writeSync(fd, record);
+            // Durability only: a lock name whose content never reached disk comes
+            // back from a power loss as the empty file this whole method exists to
+            // rule out. Not the safety property, so a filesystem that refuses is fine.
+            try { fs.fsyncSync(fd); } catch (e) { /* best effort */ }
+            fs.closeSync(fd);
+            fd = null;
+            fs.linkSync(tmp, lockFile);
+        } catch (e) {
+            if (e.code === 'EEXIST' || !LINK_UNSUPPORTED.has(e.code)) throw e;
+            const fallbackFd = fs.openSync(lockFile, 'wx', 0o600);
+            try { fs.writeSync(fallbackFd, record); } finally { fs.closeSync(fallbackFd); }
+        } finally {
+            if (fd !== null) { try { fs.closeSync(fd); } catch (e2) { /* already gone */ } }
+            try { fs.unlinkSync(tmp); } catch (e2) { /* never created, or already reaped */ }
+        }
+    }
+
+    // Exclusive advisory lock: a lockfile carrying the holder's pid, published
+    // atomically by _publishLock so it is never observable empty or half-written.
+    // A lockfile whose recorded pid is PROVABLY not alive is a crash leftover and
     // is taken over (with a loud note), because refusing to start after a crash
     // would turn a liveness blip into an operator-only recovery.
+    //
+    // An unreadable holder record is NOT that proof and never authorizes reclaiming
+    // the lock: "I cannot tell who holds this" and "nobody holds this" are different
+    // answers, and only the second one makes taking it over safe. Fail closed and
+    // make the operator look, because the failure this guards is silent budget reset.
     _acquireLock() {
         const lockFile = this._stateFile + '.lock';
         fs.mkdirSync(path.dirname(this._stateFile), { recursive: true });
         for (let attempt = 0; attempt < 2; attempt++) {
             try {
-                const fd = fs.openSync(lockFile, 'wx', 0o600);
-                fs.writeSync(fd, JSON.stringify({ pid: process.pid, t: Date.now() }));
-                fs.closeSync(fd);
+                this._publishLock(lockFile);
                 this._lockFile = lockFile;
                 HELD_LOCKS.add(lockFile);
                 installExitHook();
@@ -140,9 +187,19 @@ class WindowStore {
                     err.holderPid = pid ?? null;
                     throw err;
                 }
-                // Stale: the recorded holder is gone (or the lock is unreadable).
-                console.warn(`[cosigner] taking over a stale window-store lock at ${lockFile}` +
-                    (pid ? ` (dead pid ${pid})` : ' (unreadable holder record)'));
+                if (!Number.isInteger(pid) || pid <= 0) {
+                    const err = new Error(
+                        `co-signer window state at ${this._stateFile} is locked by ${lockFile}, whose holder ` +
+                        `record does not name a process. That is not evidence the lock is stale, and taking it ` +
+                        `over on a guess is how two daemons end up sharing one window store and silently ` +
+                        `re-opening the full spending budget; refusing to start. Confirm no co-signer daemon ` +
+                        `is running against this state file, then delete ${lockFile}.`);
+                    err.code = 'WINDOW_STORE_LOCKED';
+                    err.holderPid = null;
+                    throw err;
+                }
+                // Stale: the recorded holder is provably gone.
+                console.warn(`[cosigner] taking over a stale window-store lock at ${lockFile} (dead pid ${pid})`);
                 try { fs.unlinkSync(lockFile); } catch (e2) { /* raced; the retry re-checks */ }
             }
         }

@@ -55,7 +55,11 @@ function buildAccountAndPsbt(actionString, opts = {}) {
     const keys    = [agentPk, coPk];
     const acct    = deriveMuSig2P2TR(keys);
     const value   = opts.value || 100000;
-    return { agentSk, coSk, agentPk, coPk, keys, acct, value,
+    // The action string is kept ON the fixture, not only inside the carrier it
+    // builds: the submit path now proves the PSBT carries the action the SDK
+    // composed, so a stub that answers a different string is a response no encoder
+    // could produce.
+    return { agentSk, coSk, agentPk, coPk, keys, acct, value, actionString,
              psbtHex: psbtSpending(acct.output, actionString, Object.assign({ value }, opts)) };
 }
 
@@ -190,7 +194,7 @@ describe('MuSig2AgentSession', function () {
             },
             tickResolver:    { resolveActionParams: async (a, p) => p },
             addressResolver: { resolveActionParams: async (a, p) => p },
-            actions:         { createAction: () => ({ actionString: 'SEND|x', action: 'SEND', version: 0 }) },
+            actions:         { createAction: () => ({ actionString: s.actionString, action: 'SEND', version: 0 }) },
             _requireEncoder: () => ({
                 createTx:    async () => { captured.encodeCalls++; return { psbt: s.psbtHex, encoding: 'OP_RETURN' }; },
                 broadcastTx: async (txHex) => { captured.broadcasts.push(txHex); return { txid: 'ok' }; },
@@ -342,7 +346,8 @@ describe('MuSig2AgentSession', function () {
         const recPk    = Buffer.from(secp256k1.getPublicKey(recSk, true));
         const a3 = deriveMuSig2P2TR2of3({ agent: agentPk, daemon: daemonPk, recovery: recPk });
         const value = 100000;
-        const s = { agentSk, agentPk, psbtHex: psbtSpending(a3.output, `SEND|0|TOK|5|${DEST}|m`, { value }) };
+        const actionString = `SEND|0|TOK|5|${DEST}|m`;
+        const s = { agentSk, agentPk, actionString, psbtHex: psbtSpending(a3.output, actionString, { value }) };
 
         // The daemon derives the 2-of-3 tree from the recovery PUBLIC KEY; a raw
         // tweak is not an accepted configuration surface (G3).

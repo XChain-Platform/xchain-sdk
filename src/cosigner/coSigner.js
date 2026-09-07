@@ -201,6 +201,19 @@ class CoSigner {
             throw new Error('publicKeys must be exactly the [agent, daemon] pair '
                 + '(a 2-of-3 account names its third key as recoveryPublicKey)');
         this.publicKeys = config.publicKeys;
+        // This daemon's OWN key must be in the signer set, and the set's order is a
+        // claim it has to check rather than adopt. Fail closed at construction, the
+        // mirror of MuSig2AgentSession's COSIGNER_KEY_MISMATCH on the agent side.
+        const ownPub = ecc.pointFromScalar(this.secretKey, true);
+        if (!ownPub) throw new Error('secretKey is not a valid secp256k1 private key');
+        const ownHex  = Buffer.from(ownPub).toString('hex').toLowerCase();
+        const keyHex  = this.publicKeys.map((k, i) =>
+            Buffer.from(toBytes(k, 'publicKeys[' + i + ']')).toString('hex').toLowerCase());
+        this.ownKeyIndex = keyHex.indexOf(ownHex);
+        if (this.ownKeyIndex < 0)
+            throw new Error("this co-signer's secretKey does not derive any key in publicKeys, so its "
+                + 'partial can never aggregate to the account key (publicKeys is the [agent, daemon] '
+                + "pair and must contain this daemon's public key)");
         if (!config.policy || !config.policy.allowedActions)
             throw new Error('a normalized policy with allowedActions is required');
         this.policy = config.policy;
@@ -250,6 +263,18 @@ class CoSigner {
             if (this.publicKeys.length !== 2)
                 throw new Error('recoveryPublicKey requires exactly the [agent, daemon] pair in publicKeys ' +
                     '(the recovery key is the third party and is named separately)');
+            // The 2-of-3 tree is ORDER-SENSITIVE: deriveMuSig2P2TR2of3 builds two
+            // ASYMMETRIC leaves, MuSig2(agent,recovery) and MuSig2(daemon,recovery),
+            // so the daemon must be publicKeys[1]. The agent half normalizes by
+            // searching for its own key (musig2AgentSession.js), so a swapped pair
+            // does not collide: it derives a different address and differently
+            // composed recovery leaves, and the operator's escape hatch is not
+            // where they believe it is. Refuse it here instead.
+            if (this.ownKeyIndex !== 1)
+                throw new Error('a 2-of-3 co-signer must occupy publicKeys[1]: publicKeys is the '
+                    + '[agent, daemon] pair IN THAT ORDER, and the two recovery leaves are derived '
+                    + "asymmetrically from it, so a swapped pair commits leaves nobody expects. This "
+                    + "daemon's key is at index " + this.ownKeyIndex + '; swap publicKeys.');
             let tree;
             try {
                 tree = deriveMuSig2P2TR2of3({
@@ -427,9 +452,24 @@ class CoSigner {
             //     diversion. The value guard also neutralizes a decoy OP_RETURN of
             //     a non-carrier shape (which the decoder's strict length===2 count
             //     ignores) being used as a value sink.
+            //
+            //     ON AN ENVELOPE ROLE THE EXEMPTION DOES NOT APPLY AT ALL. An
+            //     envelope carries its action in the tapleaf, so the transaction
+            //     needs no data carrier: step 2 above decodes a COMMIT and a CANCEL
+            //     from the leaf script, never from this PSBT, and a CANCEL is not
+            //     policy-judged at all on the premise that it publishes NO ACTION.
+            //     A zero-value OP_RETURN waved through here is therefore a SECOND
+            //     action that nothing in this daemon judged, riding on a signature
+            //     the daemon gave to something else - and the chain reads it, because
+            //     envelope recognition is witness-based and a commit reveals no
+            //     envelope witness. The value check is the wrong question for it: the
+            //     carrier is not a burn, it is an unauthorized command. Refuse it
+            //     under the same reason string the reveal path already uses for a
+            //     mixed carrier (psbtActionDecode.extractEnvelopeActionString).
             let decomp = null;
             try { decomp = bitcoin.script.decompile(out.script); } catch (e) { /* non-standard */ }
             if (decomp && decomp[0] === bitcoin.opcodes.OP_RETURN) {
+                if (env) return this._deny('ENVELOPE_MIXED_CARRIER', { index: i });
                 if (Number(out.value) > 0)
                     return this._deny('OP_RETURN_CARRIES_VALUE', { index: i, value: out.value });
                 continue;
@@ -681,6 +721,10 @@ class CoSigner {
         //    policy would mean that tightening a policy (or retiring an action
         //    from allowedActions) permanently strands whatever sits in an
         //    unrevealed commit, turning a recovery path into a way to lose funds.
+        //    "Publishes no action at all" is a premise the OUTPUT GATE has to keep
+        //    true: _checkOutputs refuses every OP_RETURN on an envelope role, so a
+        //    cancel cannot carry one. Weaken that refusal and this skip becomes an
+        //    unjudged signing path.
         const windowUsage = this.windowStore ? this.windowStore.snapshot() : undefined;
         let verdict = { ok: true, evaluation: {} };
         if (!env || env.role !== 'cancel') {
