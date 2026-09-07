@@ -216,7 +216,8 @@ class Workflows {
     // deposits      - [{ tick, quantity }, ...] (optional initial token deposits)
     // opts          - submit options
     //
-    // Returns: { deploy: <submitResult>, chunks: [<submitResult>...], deposits: [...] }
+    // Returns: { deploy: <submitResult>, chunks: [<submitResult>...], deposits: [...],
+    //            contractActionIndex: <the deployed contract's action_index> }
     async deployContract(wif, deployParams = {}, deposits, opts = {}) {
         let session = this.sdk.session(wif, opts);
         let code    = (deployParams.code !== undefined) ? deployParams.code : deployParams.CODE;
@@ -263,9 +264,12 @@ class Workflows {
             this._assertAssemblerFits(assembleParams);
         }
 
-        return this._withPartial({ deploy: null, chunks: [], deposits: [] }, async (p) => {
+        return this._withPartial({ deploy: null, chunks: [], deposits: [], contractActionIndex: null }, async (p) => {
             if (plan.single) {
                 p.deploy = await session.deploy(deployParams, {}, opts);
+                // An inline deploy IS the contract's action, so its own indexed row
+                // answers the index and there is nothing to resolve.
+                p.contractActionIndex = this._actionIndexOf(p.deploy.indexed);
             } else {
                 // Phase 1: each ordered base64 slice as its own DEPLOY v4 carrier, confirmed in turn so
                 // they are all on-chain (at lower action_index) before the assembling DEPLOY runs.
@@ -279,13 +283,26 @@ class Workflows {
                 }
                 // Phase 2: assemble (params + size already pre-flighted above).
                 p.deploy = await session.deploy(assembleParams, {}, opts);
+
+                // A chunk group deploys at whichever piece COMPLETES it, which need
+                // not be the assembler: a reorg can re-pack a correctly sequenced
+                // group assembler-first, and the contract then lives at a carrier's
+                // index. The assembler's own indexed row cannot know that, so ask the
+                // explorer. Skipped when the assembler's index is unresolvable, which
+                // is the caller submitting without an indexer wait: there is then no
+                // action to look up and the deposit leg below refuses as it always has.
+                let assemblerActionIndex = this._actionIndexOf(p.deploy.indexed);
+                if (assemblerActionIndex !== undefined && assemblerActionIndex !== null)
+                    p.contractActionIndex = await this.resolveDeployedContract(assemblerActionIndex, opts);
             }
 
             if (deposits && deposits.length > 0) {
-                // Same resolution and same refusal as deployAndFund above: the polling
-                // waiter answers with a transaction, so the direct read of
-                // indexed.action_index handed `undefined` to a DEPOSIT.
-                let contractActionIndex = this._actionIndexOf(p.deploy.indexed);
+                // Same refusal as deployAndFund above: a caller that asked for deposits
+                // and got a SUCCESS carrying none was told the contract is funded when
+                // it is not. The index comes from the resolution above rather than from
+                // indexed.action_index, so a deferred group funds the contract that was
+                // actually deployed instead of an assembler that deployed nothing.
+                let contractActionIndex = p.contractActionIndex;
                 if (contractActionIndex === undefined || contractActionIndex === null)
                     throw new Error('deployContract: DEPLOY action_index unavailable; submit with waitForIndexer enabled');
                 for (let dep of deposits) {
@@ -295,6 +312,122 @@ class Workflows {
 
             return p;
         });
+    }
+
+    // Resolve the contract a chunked DEPLOY produced, through the explorer.
+    //
+    // A chunk group deploys at whichever piece COMPLETES it, so the contract's
+    // index is not knowable from the assembling DEPLOY's own row: it is A when the
+    // carriers were already on chain (the sequential case), and a carrier's index C
+    // when the group completed later. The explorer reports the answer on A's action
+    // detail as `deployed_contract_index`, paired with `assembly_status` so a group
+    // that settled WITHOUT deploying is distinguishable from one still waiting for
+    // its chunks. Public and safely re-callable, which is what a client resuming a
+    // deploy after a reorg needs.
+    //
+    // assemblerActionIndex - A, the assembling DEPLOY's action_index
+    // opts:
+    //   timeout      - ms to poll before giving up (default 120000)
+    //   pollInterval - ms between reads (default 2000, the ActionWaiter's own)
+    //
+    // Returns the deployed contract's action_index, verbatim as the explorer
+    // reports it (the same string-or-number shape _actionIndexOf hands back).
+    // Throws when the group settled without a contract; the error carries the
+    // reported status as `err.status` and A as `err.actionIndex`. A read that
+    // throws is not a verdict (the ActionWaiter's own rule): the poll continues
+    // and the last read error is reported at the deadline.
+    async resolveDeployedContract(assemblerActionIndex, opts = {}) {
+        if (assemblerActionIndex === undefined || assemblerActionIndex === null)
+            throw new Error('resolveDeployedContract: an assembling DEPLOY action_index is required');
+
+        let timeout      = opts.timeout > 0 ? opts.timeout : 120000;
+        let pollInterval = opts.pollInterval > 0 ? opts.pollInterval : 2000;
+        let deadline     = Date.now() + timeout;
+        let observed     = null;
+        let lastError    = null;
+
+        for (;;) {
+            let detail = null;
+            let read   = false;
+            try {
+                detail = await this._actionDetailOf(assemblerActionIndex);
+                lastError = null;
+                read = true;
+            } catch (e) {
+                lastError = e;
+            }
+
+            if (read && detail) {
+                let hasIndex  = Object.prototype.hasOwnProperty.call(detail, 'deployed_contract_index');
+                let hasStatus = Object.prototype.hasOwnProperty.call(detail, 'assembly_status');
+                let index     = detail.deployed_contract_index;
+
+                if (hasIndex && index !== undefined && index !== null) return index;
+
+                if (hasIndex || hasStatus) {
+                    // The explorer reports the pair. A status that has stopped being
+                    // `pending` while no contract index exists means the group settled
+                    // without deploying (a hash mismatch or a source drained of gas at
+                    // the completing carrier consumes the assembler), and nothing
+                    // retries that, so waiting out the timeout would only hide it.
+                    let status = detail.assembly_status;
+                    if (status !== undefined && status !== null) {
+                        observed = String(status);
+                        if (!/^pending/i.test(observed))
+                            throw this._deployedContractFailure(assemblerActionIndex, observed);
+                    }
+                } else {
+                    // An explorer from before the field landed reports only the
+                    // assembler's own status. That is the whole answer for a group
+                    // completed by the assembler itself and for one that failed
+                    // outright; a pending assembler it cannot resolve, so the poll
+                    // runs to the deadline and says which field was missing.
+                    let status = (detail.status === undefined || detail.status === null) ? '' : String(detail.status);
+                    if (status) observed = status;
+                    if (/^valid/i.test(status)) return assemblerActionIndex;
+                    if (/^invalid/i.test(status)) throw this._deployedContractFailure(assemblerActionIndex, status);
+                }
+            }
+
+            let remaining = deadline - Date.now();
+            if (remaining <= 0) {
+                let err = new Error('resolveDeployedContract: the explorer exposes no deployed_contract_index for DEPLOY '
+                    + assemblerActionIndex + ' after ' + timeout + 'ms'
+                    + (observed ? ' (last status: ' + observed + ')' : '')
+                    + (lastError ? ' (last read error: ' + lastError.message + ')' : ''));
+                err.status      = observed;
+                err.actionIndex = assemblerActionIndex;
+                if (lastError) err.cause = lastError;
+                throw err;
+            }
+            await new Promise(r => setTimeout(r, Math.min(pollInterval, remaining)));
+        }
+    }
+
+    // The terminal verdict of a chunk group that settled without a contract. The
+    // reported status rides in the message AND on `err.status` so a caller can
+    // branch on it without parsing prose.
+    _deployedContractFailure(assemblerActionIndex, status) {
+        let err = new Error('resolveDeployedContract: DEPLOY ' + assemblerActionIndex
+            + ' deployed no contract: ' + status);
+        err.status      = status;
+        err.actionIndex = assemblerActionIndex;
+        return err;
+    }
+
+    // The explorer's action detail for one action, unwrapped from whichever
+    // envelope it arrives in: the route wraps the row as { data }, the explorer's
+    // own getAction answers a single-element array, and some responses nest the
+    // row under `action`. Mirrors the unwrap the e2e drills already use.
+    async _actionDetailOf(actionIndex) {
+        let body = await this.sdk.getAction(actionIndex);
+        if (!body) return null;
+        let d = (body.data !== undefined && body.data !== null) ? body.data : body;
+        if (Array.isArray(d)) d = d.length ? d[0] : null;
+        if (!d || typeof d !== 'object') return null;
+        if (d.action && typeof d.action === 'object' && !Array.isArray(d.action)
+            && d.action.action_index !== undefined) return d.action;
+        return d;
     }
 
     // Distribute a dividend to all holders of a token.
