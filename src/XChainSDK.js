@@ -1733,6 +1733,53 @@ class XChainSDK {
         return this._requireExplorer().getStatus();
     }
 
+    // Freshness of the explorer's indexed tip for this SDK's coin, as the
+    // explorer stamped it on the last data response this client received:
+    // { stale, tipBlock, tipAgeSeconds, replicaHalted, observedAt }, or null
+    // before any marked response has arrived. The explorer serves a coin whose
+    // tip is behind rather than refusing the read, so a read succeeding says
+    // nothing about how current it is; this does. Read it after a balance or
+    // history call, or call assertFresh() on a path that must not build on
+    // stale state.
+    freshness() {
+        return this._requireExplorer().freshness();
+    }
+
+    // Resolve the freshness of this SDK's coin, probing /status when no marked
+    // response has been seen yet (or the last one is older than maxAgeMs), and
+    // throw SDKExplorerError COIN_DATA_STALE when the tip is stale. Returns the
+    // freshness record when it is live. A coin the explorer does not measure
+    // (no `stale` entry for it) passes: there is no verdict to fail on. The
+    // /status probe also makes this work against an explorer that predates the
+    // per-response markers, since `stale` has been on /status longer.
+    async assertFresh(opts = {}) {
+        let explorer = this._requireExplorer();
+        let maxAgeMs = Number.isFinite(Number(opts.maxAgeMs)) ? Number(opts.maxAgeMs) : 60000;
+        let f = explorer.freshness();
+        if (!f || (Date.now() - f.observedAt) >= maxAgeMs) {
+            let status = await explorer.getStatus();
+            let coin   = explorer.coin;
+            let stale  = status && status.stale && typeof status.stale === 'object' ? status.stale[coin] : undefined;
+            let num    = (v) => (v === undefined || v === null || !Number.isFinite(Number(v))) ? null : Number(v);
+            if (stale === undefined) return { stale: false, tipBlock: null, tipAgeSeconds: null, replicaHalted: null, observedAt: Date.now(), measured: false };
+            f = {
+                stale:         stale === true,
+                tipBlock:      status.last_block      ? num(status.last_block[coin])      : null,
+                tipAgeSeconds: status.tip_age_seconds ? num(status.tip_age_seconds[coin]) : null,
+                replicaHalted: status.replica_halted && typeof status.replica_halted[coin] === 'boolean' ? status.replica_halted[coin] : null,
+                observedAt:    Date.now()
+            };
+        }
+        if (f.stale) {
+            let where = f.tipBlock !== null ? ' at block ' + f.tipBlock : '';
+            let age   = f.tipAgeSeconds !== null ? ' (' + Math.round(f.tipAgeSeconds / 60) + ' minutes old)' : '';
+            throw new SDKExplorerError('COIN_DATA_STALE',
+                'Explorer data for ' + explorer.coin + ' is behind the chain' + where + age + '; refusing to build on it',
+                { freshness: f });
+        }
+        return f;
+    }
+
     // Unconfirmed mempool actions, type ∈ {address, token}.
     async getMempool(query, type, opts) {
         return this._requireExplorer().getMempool(query, type, opts);
