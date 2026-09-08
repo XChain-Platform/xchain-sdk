@@ -294,13 +294,31 @@ class ExplorerClient {
         );
     }
 
+    // The batch route answers 200 only with one entry per requested address, so
+    // a 200 whose body lacks the first address is not the route at all: an
+    // explorer that predates it hands every unknown POST to its JSON-RPC router,
+    // which answers a -32600 error object at HTTP 200 (measured on a live
+    // 0.15.3 explorer), never a 404. That shape becomes the typed
+    // EXPLORER_BATCH_UNSUPPORTED so a caller can fall back to the per-address
+    // reads instead of parsing an RPC error as balances.
+    _assertBatchBody(body, addresses, url) {
+        if (body && typeof body === 'object' && !Array.isArray(body) && Object.prototype.hasOwnProperty.call(body, addresses[0])) return body;
+        throw new SDKExplorerError(
+            'EXPLORER_BATCH_UNSUPPORTED',
+            'Explorer does not serve ' + url + ': the answer carried no entry for the requested addresses',
+            { url, data: body }
+        );
+    }
+
     // One request for up to 20 addresses, answered keyed by address with the
     // same bodies as the per-address reads (see the explorer's batch route).
-    // An explorer without the route answers 404, which reaches the caller as
-    // EXPLORER_HTTP_404: that is the wallet's feature-detection signal.
+    // An explorer without the route surfaces as EXPLORER_BATCH_UNSUPPORTED (or
+    // EXPLORER_HTTP_404 from a deployment that 404s unknown POSTs): either is
+    // the wallet's feature-detection signal.
     async getBalancesBatch(addresses, opts = {}) {
         this._assertBatchAddresses(addresses);
-        return this._post('/balances', { addresses }, opts);
+        let body = await this._post('/balances', { addresses }, opts);
+        return this._assertBatchBody(body, addresses, '/' + this.coin + '/api/balances');
     }
 
     async getAddress(address, opts = {}) {
@@ -459,11 +477,12 @@ class ExplorerClient {
     }
 
     // The address-typed obligations read for up to 20 addresses in one request,
-    // answered keyed by address. Same 404 feature-detection signal as the
-    // balances batch on an explorer that predates the route.
+    // answered keyed by address. Same feature-detection signal as the balances
+    // batch on an explorer that predates the route.
     async getCoinpayObligationsBatch(addresses, opts = {}) {
         this._assertBatchAddresses(addresses);
-        return this._post('/coinpay_obligations', { addresses }, opts);
+        let body = await this._post('/coinpay_obligations', { addresses }, opts);
+        return this._assertBatchBody(body, addresses, '/' + this.coin + '/api/coinpay_obligations');
     }
 
     async getDispensers(query, type, opts = {}) {

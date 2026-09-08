@@ -88,7 +88,7 @@ describe('ExplorerClient batch reads', function () {
 
         it('carries the coin prefix of the client network', async function () {
             const regtest = new ExplorerClient(Object.assign({}, OPTS, { network: 'bitcoin-regtest' }));
-            const scope = nock(BASE).post('/RBTC/api/coinpay_obligations', { addresses: ['a1'] }).reply(200, {});
+            const scope = nock(BASE).post('/RBTC/api/coinpay_obligations', { addresses: ['a1'] }).reply(200, { a0: { balances: null, address: null, error: null }, a1: { balances: null, address: null, error: null } });
             await regtest.getCoinpayObligationsBatch(['a1']);
             expect(scope.isDone()).to.equal(true);
         });
@@ -98,13 +98,13 @@ describe('ExplorerClient batch reads', function () {
             const hooked = new ExplorerClient(Object.assign({}, OPTS, {
                 readyHook: async () => { order.push('ready'); }
             }));
-            nock(BASE).post('/BTC/api/balances').reply(200, function () { order.push('request'); return {}; });
+            nock(BASE).post('/BTC/api/balances').reply(200, function () { order.push('request'); return { a1: { balances: null, address: null, error: null } }; });
             await hooked.getBalancesBatch(['a1']);
             expect(order).to.deep.equal(['ready', 'request']);
         });
 
         it('records the freshness marker off a batch response', async function () {
-            nock(BASE).post('/BTC/api/balances').reply(200, {}, {
+            nock(BASE).post('/BTC/api/balances').reply(200, { a1: { balances: null, address: null, error: null } }, {
                 'XChain-Freshness': 'stale',
                 'XChain-Tip-Block': '840000',
                 'XChain-Tip-Age-S': '900'
@@ -135,8 +135,8 @@ describe('ExplorerClient batch reads', function () {
 
         for (const [label, input] of Object.entries(bad)) {
             it('refuses ' + label + ' with INVALID_ADDRESSES, before any request', async function () {
-                const balances = nock(BASE).post('/BTC/api/balances').reply(200, {});
-                const coinpay  = nock(BASE).post('/BTC/api/coinpay_obligations').reply(200, {});
+                const balances = nock(BASE).post('/BTC/api/balances').reply(200, { a0: { balances: null, address: null, error: null }, a1: { balances: null, address: null, error: null } });
+                const coinpay  = nock(BASE).post('/BTC/api/coinpay_obligations').reply(200, { a0: { balances: null, address: null, error: null }, a1: { balances: null, address: null, error: null } });
                 let thrownA, thrownB;
                 try { await client.getBalancesBatch(input); } catch (e) { thrownA = e; }
                 try { await client.getCoinpayObligationsBatch(input); } catch (e) { thrownB = e; }
@@ -154,7 +154,7 @@ describe('ExplorerClient batch reads', function () {
 
         it('accepts exactly 20 addresses, the boundary the explorer accepts', async function () {
             const twenty = Array.from({ length: 20 }, (_, i) => 'a' + i);
-            const scope = nock(BASE).post('/BTC/api/balances', { addresses: twenty }).reply(200, {});
+            const scope = nock(BASE).post('/BTC/api/balances', { addresses: twenty }).reply(200, { a0: { balances: null, address: null, error: null }, a1: { balances: null, address: null, error: null } });
             await client.getBalancesBatch(twenty);
             expect(scope.isDone()).to.equal(true);
         });
@@ -171,6 +171,27 @@ describe('ExplorerClient batch reads', function () {
             expect(thrown.code).to.equal('EXPLORER_HTTP_404');
             expect(thrown.details.status).to.equal(404);
             expect(thrown.message).to.equal('Explorer returned HTTP 404 for /BTC/api/balances');
+        });
+
+        it('an older explorer answers the POST with a JSON-RPC error at HTTP 200, and it surfaces as EXPLORER_BATCH_UNSUPPORTED', async function () {
+            // Measured on a live explorer that predates the route: every unknown
+            // POST lands on its JSON-RPC router, which answers this object at 200.
+            const rpcError = { error: { code: -32600, message: 'Invalid Request, wrong version - undefined' }, id: null };
+            nock(BASE).post('/BTC/api/balances').reply(200, rpcError);
+            nock(BASE).post('/BTC/api/coinpay_obligations').reply(200, rpcError);
+            for (const call of [() => client.getBalancesBatch(['a1']), () => client.getCoinpayObligationsBatch(['a1'])]) {
+                let thrown;
+                try { await call(); } catch (e) { thrown = e; }
+                expect(thrown).to.be.instanceof(SDKExplorerError);
+                expect(thrown.code).to.equal('EXPLORER_BATCH_UNSUPPORTED');
+                expect(thrown.details.data).to.deep.equal(rpcError);
+            }
+        });
+
+        it('a 200 that carries the requested addresses is the route, whatever else it carries', async function () {
+            nock(BASE).post('/BTC/api/balances').reply(200, { a1: { balances: null, address: null, error: { code: 'DB_ERROR', error: 'x', status: 500 } } });
+            const body = await client.getBalancesBatch(['a1']);
+            expect(body.a1.error.code).to.equal('DB_ERROR');
         });
 
         it('a 429 surfaces as SDKRateLimitedError only after the honoured Retry-After wait', async function () {
@@ -224,7 +245,7 @@ describe('ExplorerClient batch reads', function () {
             const onRequest = sinon.spy();
             const onResponse = sinon.spy();
             const hooked = new ExplorerClient(Object.assign({}, OPTS, { hooks: { onRequest, onResponse } }));
-            nock(BASE).post('/BTC/api/balances').reply(200, {});
+            nock(BASE).post('/BTC/api/balances').reply(200, { a0: { balances: null, address: null, error: null }, a1: { balances: null, address: null, error: null } });
             await hooked.getBalancesBatch(['a1']);
             expect(onRequest.calledOnce).to.be.true;
             expect(onRequest.firstCall.args[0]).to.include({ service: 'explorer', method: 'POST', url: '/BTC/api/balances' });
@@ -248,7 +269,7 @@ describe('ExplorerClient batch reads', function () {
                 hooks: { onRetry }
             }));
             nock(BASE).post('/BTC/api/balances').reply(503, 'unavailable');
-            nock(BASE).post('/BTC/api/balances').reply(200, {});
+            nock(BASE).post('/BTC/api/balances').reply(200, { a0: { balances: null, address: null, error: null }, a1: { balances: null, address: null, error: null } });
             await hooked.getBalancesBatch(['a1']);
             expect(onRetry.calledOnce).to.be.true;
             expect(onRetry.firstCall.args[0]).to.include({ service: 'explorer', method: 'POST', status: 503 });
@@ -295,7 +316,7 @@ describe('ExplorerClient batch reads', function () {
         });
 
         it('the facade refuses a bad list with the same error, before any request', async function () {
-            const scope = nock(BASE).post('/BTC/api/balances').reply(200, {});
+            const scope = nock(BASE).post('/BTC/api/balances').reply(200, { a0: { balances: null, address: null, error: null }, a1: { balances: null, address: null, error: null } });
             let thrown;
             try { await sdk.getBalancesBatch([]); } catch (e) { thrown = e; }
             expect(thrown).to.be.instanceof(SDKExplorerError);
