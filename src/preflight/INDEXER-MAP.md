@@ -33,8 +33,9 @@ at `1a4b78a4` on 2026-08-17, `batch.js` re-reviewed at `188554e5` on
 2026-08-20, `issue.js` re-reviewed at `2d9cbbbf` on 2026-08-23, and
 `dispenser.js` + `dispense.js` re-reviewed at `2b65e8a4` on 2026-08-25, and
 `send.js` + `dispense.js` re-reviewed at `0d7074ad` on 2026-09-06, and
-`batch.js` re-pinned at `717e7abe` on 2026-09-08 after a comment-only edit (see
-the review log below). Hashes
+`batch.js` re-pinned at `717e7abe` on 2026-09-08 after a comment-only edit, and
+again at `8778008d` the same day after the chunk-carrier weight comment was
+rewritten for deferred assembly (see the review log below). Hashes
 are of the indexer handler source files, resolved via
 `XCHAIN_INDEXER_PATH` or the sibling `../xchain-indexer` checkout. The
 gate SKIPS (does not fail) when no indexer checkout is present, so
@@ -45,17 +46,18 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-**Pins taken at indexer commit:** `717e7abe`
+**Pins taken at indexer commit:** `8778008d`
 
-(Re-anchored 2026-09-08 by the comment-only `batch.js` re-pin, whose entry below
-declares this anchor. `717e7abe` is reachable from the indexer develop head, and
-the gate re-checks that reachability at run time before it hands a reviewer a
-range built on it.
+(Re-anchored 2026-09-08 by the second comment-only `batch.js` re-pin of the day,
+whose entry below declares this anchor. `8778008d` is reachable from the indexer
+develop head, and the gate re-checks that reachability at run time before it
+hands a reviewer a range built on it.
 
-No byte-identity claim survives a re-anchor, so none is made here. Five files
-under `src/actions/` differ between `0d7074ad` and `717e7abe`; `batch.js` is the
-only mapped row among them and its executable code is byte-identical, the other
-four are unmapped handlers, which is exactly why the older anchor is a
+No byte-identity claim survives a re-anchor, so none is made here. One file
+under `src/actions/` differs between `717e7abe` and `8778008d`, `batch.js`
+itself, and its executable code is byte-identical to the `a505347a` pin: only
+the two comments about the chunk-carrier weight moved, which is exactly why the
+older anchor is a
 baseline for the older review only. Each review-log entry names the baseline it
 was read against; use that one, never this line, to reconstruct a past review.
 
@@ -82,7 +84,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 717e7abe..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 8778008d..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -130,7 +132,7 @@ found by hashing candidate blobs as above.
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `971338842f897e140d27565a4e01cdb364da14b81bb58e140dd6014d529b35fb` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `956463e64bb90087364b2c109c6d1f27a5b3526fd24415d6b9c22042e65e1479` |
 | `checks/dividend.js` | `src/actions/dividend.js` | `318754131de748339bad0a79eb2381309dac240150858f9a33abde42f9007248` |
-| `checks/batch.js` | `src/actions/batch.js` | `9073081204f440235b544ad642f1d3c2aa5b237a2425253a3cfe2b46fa314ce8` |
+| `checks/batch.js` | `src/actions/batch.js` | `73e89c873a9dc6164158186968ffdc8629acfce8675de33340034202ca5af1ba` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -139,6 +141,18 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-08 (second pass) - `batch.js`, against indexer HEAD `8778008d`
+
+`batch.js` owes nothing: the only change since `717e7abe` rewrites the two
+comments about the format-4 (chunk-carrier) DEPLOY weight discount. They used to
+justify the discount by "a carrier runs no constructor", which stopped being true
+at `DEPLOY_DEFERRED_ASSEMBLY` (the carrier that completes a chunk group now runs
+the constructor); they now name the real bound, the per-name cap of one `DEPLOY`
+per batch, which `checkCommandCap` in `checks/batch.js` already mirrors. Executable
+code is byte-identical to the `a505347a` pin, verifiable with
+`git -C ../xchain-indexer diff 717e7abe..8778008d -- src/actions/batch.js`.
+The client-side weight table and the conformance vectors are unchanged.
 
 ### 2026-09-08 - `batch.js`, against indexer HEAD `717e7abe`
 
