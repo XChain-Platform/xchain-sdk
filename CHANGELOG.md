@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Every deploy path now refuses a contract that exports no conforming `meta` before the action is composed, with the chain's own verdict string, and `sdk.contracts.getExportedMeta()` exposes the same static read.
+
 ## [0.16.0] - 2026-09-08
 
 ### Added

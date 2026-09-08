@@ -637,6 +637,15 @@ export interface ContractInfo {
     permissions?: string[] | null;
     /** Declared royalty cap in basis points (snake_case on the wire); null/absent = global cap */
     max_take_bps?: number | null;
+    /** Contract identity: the evaluated `meta.name` recorded at deploy; null/absent for a
+     *  contract deployed before CONTRACT_META_REQUIRED */
+    meta_name?: string | null;
+    /** Contract identity: the evaluated `meta.description` recorded at deploy */
+    meta_description?: string | null;
+    /** Contract identity: the evaluated `meta.version` recorded at deploy (optional field) */
+    meta_version?: string | null;
+    /** The whole evaluated `meta` object (parsed meta_json), including keys consensus ignores */
+    meta?: Record<string, any> | null;
     [key: string]: any;
 }
 
@@ -646,6 +655,14 @@ export interface ContractManifest {
     permissions: string[] | null;
     /** Declared royalty cap in basis points; null = the global cap applies */
     maxTakeBps: number | null;
+    /** Contract identity: the recorded name, or null */
+    name?: string | null;
+    /** Contract identity: the recorded description, or null */
+    description?: string | null;
+    /** Contract identity: the recorded version, or null */
+    version?: string | null;
+    /** The whole recorded `meta` object, or null */
+    meta?: Record<string, any> | null;
 }
 
 export interface ContractStateEntry {
@@ -722,8 +739,61 @@ export interface DeployLintOptions {
     /**
      * 'block' (default): throw before building the action if the contract has
      * lint errors. 'warn': log and proceed. 'off': skip the pre-flight lint.
+     * The contract-identity check (CONTRACT_META_REQUIRED, see
+     * ContractUtils.checkExportedMeta) rides this same mode on sdk.deploy().
      */
     lint?: 'block' | 'warn' | 'off';
+}
+
+/**
+ * Contract-identity pre-flight, on the session/workflow deploy seams (which have no
+ * `lint` option). 'block' (default) throws the exact consensus verdict BEFORE the
+ * action is composed, signed or broadcast, so a contract the chain will reject for a
+ * missing or malformed `meta` never costs a fee; 'warn' logs it and proceeds; 'off'
+ * (or `false`) skips. Only a PROVEN failure refuses: computed meta, and any shape the
+ * static walk cannot read, advise.
+ */
+export interface DeployPreflightOptions {
+    preflight?: 'block' | 'warn' | 'off' | false;
+}
+
+/**
+ * A static read of a contract's exported `meta` (ContractUtils.getExportedMeta).
+ *   'present'     - a `meta` object literal was found; each field is its string literal
+ *                   or null (key absent, or value not a string literal)
+ *   'absent'      - a literal export shape was found carrying no `meta`: the one
+ *                   outcome that proves the chain answers "meta required"
+ *   'undecidable' - no literal export shape, a non-literal `meta`, a spread or a
+ *                   computed key, or an unparseable source; the chain evaluates it
+ */
+export type ContractMetaRead =
+    | {
+          status: 'present';
+          /** The `meta.name` string literal, or null when the key is absent or non-literal */
+          name: string | null;
+          /** The `meta.description` string literal, or null */
+          description: string | null;
+          /** The `meta.version` string literal, or null */
+          version: string | null;
+          /** Keys whose value is a non-literal expression (the chain evaluates these) */
+          computed: string[];
+          /** Keys whose value is a literal that is not a string */
+          nonStringLiteral: string[];
+          /** 1-based line of the `meta` object literal, or null */
+          line: number | null;
+      }
+    | { status: 'absent' }
+    | { status: 'undecidable' };
+
+/** The contract-identity pre-flight verdict (ContractUtils.checkExportedMeta). */
+export interface ContractMetaCheck {
+    /**
+     * The exact `invalid: CONTRACT_MANIFEST (...)` string the chain would write, or
+     * null. Non-null only for a shape the static read PROVES wrong.
+     */
+    error: string | null;
+    /** Advisories for what the static read could not judge (computed or unreadable meta) */
+    advisories: string[];
 }
 
 /** Input shape for createAction */
@@ -839,6 +909,20 @@ export declare class ContractUtils {
     validate(sourceCode: string): SyntaxValidationResult;
     /** Detect float literal usage in contract source */
     checkFloatUsage(sourceCode: string): string[];
+    /** The exported callable method names of a `module.exports = { fn... }` surface (acorn-only) */
+    getExportedMethodNames(sourceCode: string): string[];
+    /**
+     * Static read of the contract's exported identity (`meta`), including the
+     * function-export form (`fn.meta = {...}`). Never throws. Check `status` on the
+     * result rather than feature-detecting the method itself.
+     */
+    getExportedMeta(sourceCode: string): ContractMetaRead;
+    /**
+     * Contract-identity pre-flight verdict: the exact consensus string the chain would
+     * write (CONTRACT_META_REQUIRED, spec 2.3), or null, plus advisories for what a
+     * static read cannot judge. Never throws.
+     */
+    checkExportedMeta(sourceCode: string): ContractMetaCheck;
     /** Check if contract source is within the 64KB size limit */
     checkCodeSize(sourceCode: string): CodeSizeResult;
     /** Heuristic gas limit suggestion based on code complexity */
@@ -1897,7 +1981,7 @@ export declare class XChainSDK {
     stakeAndDelegate(wif: string, stakeParams: StakeParams | ActionParams, delegateParams?: DelegateParams | ActionParams, opts?: Partial<SubmitActionOpts>): Promise<{ stake: SubmitActionResult; delegate: SubmitActionResult | null }>;
 
     /** Deploy a contract and optionally deposit initial tokens */
-    deployAndFund(wif: string, deployParams: DeployParams | ActionParams, deposits?: Array<{ tick: string; quantity: string | number }>, opts?: Partial<SubmitActionOpts>): Promise<{ deploy: SubmitActionResult; deposits: SubmitActionResult[] }>;
+    deployAndFund(wif: string, deployParams: DeployParams | ActionParams, deposits?: Array<{ tick: string; quantity: string | number }>, opts?: Partial<SubmitActionOpts> & DeployPreflightOptions): Promise<{ deploy: SubmitActionResult; deposits: SubmitActionResult[] }>;
 
     /** Distribute a dividend to all holders of a token */
     distributeDividend(wif: string, dividendParams: DividendParams | ActionParams, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
@@ -2387,9 +2471,10 @@ export declare class WalletSession {
     /** DELEGATE V1: rotate signing key for a specific deployed contract (forces VERSION=1) */
     delegateForContract(params: ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
 
-    deploy(params: DeployParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    /** Deploy a contract. `opts.preflight` runs the contract-identity check first (see DeployPreflightOptions) */
+    deploy(params: DeployParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts> & DeployPreflightOptions): Promise<SubmitActionResult>;
     /** Submit a single base64 code slice as a DEPLOY v4 carrier (chunked-deploy phase 1) */
-    deployChunk(params: ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
+    deployChunk(params: ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts> & DeployPreflightOptions): Promise<SubmitActionResult>;
     execute(params: ExecuteParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
     deposit(params: DepositParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
     withdraw(params: WithdrawParams | ActionParams, enc?: Partial<EncoderOptions>, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;

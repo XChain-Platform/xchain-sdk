@@ -226,29 +226,65 @@ describe('ContractClient', function () {
     });
 
     describe('parseManifest()', function () {
+        // Contract identity (meta_*) rides the same explorer object as the permissions
+        // manifest, so every case carries its four identity keys; a contract deployed
+        // before CONTRACT_META_REQUIRED has none and reads null.
+        const NO_META = { name: null, description: null, version: null, meta: null };
+
         it('parses a permissions JSON string and numeric max_take_bps', function () {
             assert.deepStrictEqual(
                 ContractClient.parseManifest({ permissions: '["SEND","MINT"]', max_take_bps: 300 }),
-                { permissions: ['SEND', 'MINT'], maxTakeBps: 300 }
+                { permissions: ['SEND', 'MINT'], maxTakeBps: 300, ...NO_META }
             );
         });
         it('passes through an already-parsed array', function () {
             assert.deepStrictEqual(
                 ContractClient.parseManifest({ permissions: ['SEND'], max_take_bps: null }),
-                { permissions: ['SEND'], maxTakeBps: null }
+                { permissions: ['SEND'], maxTakeBps: null, ...NO_META }
             );
         });
         it('returns nulls for a manifest-less contract', function () {
-            assert.deepStrictEqual(ContractClient.parseManifest({}), { permissions: null, maxTakeBps: null });
+            assert.deepStrictEqual(ContractClient.parseManifest({}), { permissions: null, maxTakeBps: null, ...NO_META });
         });
         it('returns nulls for null input', function () {
-            assert.deepStrictEqual(ContractClient.parseManifest(null), { permissions: null, maxTakeBps: null });
+            assert.deepStrictEqual(ContractClient.parseManifest(null), { permissions: null, maxTakeBps: null, ...NO_META });
         });
         it('treats unparseable permissions as null (no throw)', function () {
             assert.deepStrictEqual(
                 ContractClient.parseManifest({ permissions: 'not-json', max_take_bps: '' }),
-                { permissions: null, maxTakeBps: null }
+                { permissions: null, maxTakeBps: null, ...NO_META }
             );
+        });
+
+        it('admits meta_name, meta_description, meta_version and a parsed meta object', function () {
+            assert.deepStrictEqual(
+                ContractClient.parseManifest({
+                    permissions: ['SEND'],
+                    max_take_bps: 250,
+                    meta_name: 'Escrow',
+                    meta_description: 'Two-party escrow with an arbiter',
+                    meta_version: '1.0.0',
+                    meta: { name: 'Escrow', description: 'Two-party escrow with an arbiter', version: '1.0.0' }
+                }),
+                {
+                    permissions: ['SEND'],
+                    maxTakeBps: 250,
+                    name: 'Escrow',
+                    description: 'Two-party escrow with an arbiter',
+                    version: '1.0.0',
+                    meta: { name: 'Escrow', description: 'Two-party escrow with an arbiter', version: '1.0.0' }
+                }
+            );
+        });
+
+        it('parses a meta delivered as a JSON string, and nulls a malformed one', function () {
+            assert.deepStrictEqual(
+                ContractClient.parseManifest({ meta_name: 'Vault', meta: '{"name":"Vault","tags":["defi"]}' }).meta,
+                { name: 'Vault', tags: ['defi'] }
+            );
+            assert.strictEqual(ContractClient.parseManifest({ meta: '{not json' }).meta, null);
+            assert.strictEqual(ContractClient.parseManifest({ meta: '[1,2]' }).meta, null);
+            assert.strictEqual(ContractClient.parseManifest({ meta_name: '' }).name, null);
         });
     });
 
