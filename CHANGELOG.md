@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - The deploy workflow resolves a chunked contract through the explorer's reported contract index, so a group completed by a later carrier still resolves.
+- `SDKRateLimitedError` (code `RATE_LIMITED`) is thrown for an HTTP 429 that survives the retry, carrying `service`, `status` and the server's `retryAfterSeconds`.
+
+### Changed
+- A 429 retry honours `Retry-After` (or `RateLimit-Reset`) up to `retryAfterMaxDelay` (60 s) instead of the backoff cap, and is retried once (`maxRateLimitRetries`); 5xx backoff still caps at `maxDelay`.
 
 ## [0.15.1] - 2026-09-07
 

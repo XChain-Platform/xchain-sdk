@@ -131,6 +131,24 @@ class SDKCompressionError extends SDKError {
     }
 }
 
+// A 429 that survived the honoured retry in retry.js. It is deliberately NOT
+// an SDKExplorerError/SDKEncoderError subclass: a rate limit is a policy answer
+// with a wait attached, not a service fault, and a UI wants to say "slow down
+// for N seconds" rather than "the service is broken". `retryAfterSeconds` is
+// what the origin asked for (Retry-After, else RateLimit-Reset), or null when
+// it asked for nothing. The seconds are repeated in the message text because
+// some consumers only see an error's name and message across a worker or IPC
+// boundary, where own properties do not survive structured cloning.
+class SDKRateLimitedError extends SDKError {
+    constructor(message, details = {}) {
+        super('RATE_LIMITED', message, details);
+        this.name              = 'SDKRateLimitedError';
+        this.service           = details.service !== undefined ? details.service : null;
+        this.status            = details.status !== undefined ? details.status : 429;
+        this.retryAfterSeconds = details.retryAfterSeconds !== undefined ? details.retryAfterSeconds : null;
+    }
+}
+
 class SDKPolicyError extends SDKError {
     constructor(code, message, details = {}) {
         super(code, message, details);
@@ -176,6 +194,7 @@ module.exports = {
     SDKMuSigError,
     SDKGatedFileError,
     SDKCompressionError,
+    SDKRateLimitedError,
     SDKPolicyError,
     SDKX402Error,
     SDKPreflightError

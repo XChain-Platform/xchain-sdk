@@ -61,7 +61,8 @@ const {
     SDKMuSigError,
     SDKPolicyError,
     SDKX402Error,
-    SDKPreflightError
+    SDKPreflightError,
+    SDKRateLimitedError
 } = require('./src/errors.js');
 
 module.exports = {
@@ -122,6 +123,7 @@ module.exports = {
     SDKPolicyError,
     SDKX402Error,
     SDKPreflightError,
+    SDKRateLimitedError,
     // Default export for convenience
     default: XChainSDK
 };

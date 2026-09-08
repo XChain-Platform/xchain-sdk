@@ -19,8 +19,8 @@
  ********************************************************************/
 
 const axios = require('axios');
-const { SDKEncoderError } = require('./errors.js');
-const { withRetry, isRetryable } = require('./retry.js');
+const { SDKEncoderError, SDKRateLimitedError } = require('./errors.js');
+const { withRetry, isRetryable, getRetryAfterSeconds } = require('./retry.js');
 
 
 class EncoderClient {
@@ -110,7 +110,9 @@ class EncoderClient {
         let retryConfig = this.retry === false ? { maxRetries: 0 } : this.retry;
 
         let onRetry = this.hooks.onRetry ? (attempt, delay, err) => {
-            this.hooks.onRetry({ service: 'encoder', method, attempt, delay, error: err.message });
+            // `status` lets a hook tell a rate limit from a 5xx without parsing
+            // the message; null for a transport error that never got a response.
+            this.hooks.onRetry({ service: 'encoder', method, attempt, delay, error: err.message, status: err.response ? err.response.status : null });
         } : null;
 
         try {
@@ -162,6 +164,17 @@ class EncoderClient {
 
     _handleError(err, method) {
         if (err.response) {
+            // A 429 reaching here already survived retry.js's honoured wait, so
+            // it is the caller's to handle. The "Encoder returned HTTP 429 for
+            // method <method>" prefix stays byte-exact for integrators matching
+            // on it.
+            if (err.response.status === 429) {
+                let seconds = getRetryAfterSeconds(err);
+                throw new SDKRateLimitedError(
+                    'Encoder returned HTTP 429 for method ' + method + (seconds === null ? '' : '; retry after ' + seconds + ' seconds'),
+                    { service: 'encoder', status: 429, retryAfterSeconds: seconds, method, data: err.response.data }
+                );
+            }
             throw new SDKEncoderError(
                 'ENCODER_HTTP_' + err.response.status,
                 'Encoder returned HTTP ' + err.response.status + ' for method ' + method,

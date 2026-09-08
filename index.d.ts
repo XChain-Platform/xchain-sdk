@@ -30,6 +30,16 @@ export interface RetryConfig {
     maxDelay?: number;
     /** Exponential backoff multiplier (default: 2) */
     backoffFactor?: number;
+    /**
+     * Maximum delay in milliseconds honoured from a 429's `Retry-After` (or
+     * `RateLimit-Reset`) header, independent of `maxDelay` (default: 60000).
+     */
+    retryAfterMaxDelay?: number;
+    /**
+     * Maximum number of retries spent on HTTP 429 responses, budgeted
+     * separately from `maxRetries` (default: 1).
+     */
+    maxRateLimitRetries?: number;
 }
 
 
@@ -66,6 +76,8 @@ export interface RetryInfo {
     attempt: number;
     delay: number;
     error: string;
+    /** HTTP status of the response being retried; null for a transport error */
+    status?: number | null;
 }
 
 
@@ -744,6 +756,21 @@ export declare class SDKExplorerError extends SDKError {}
 export declare class SDKHubError extends SDKError {}
 export declare class SDKConfigError extends SDKError {}
 export declare class SDKContractError extends SDKError {}
+
+/**
+ * An HTTP 429 that survived the SDK's honoured retry. `code` is always
+ * `'RATE_LIMITED'`. Not an SDKExplorerError/SDKEncoderError subclass: a rate
+ * limit is a policy answer with a wait attached, not a service fault.
+ */
+export declare class SDKRateLimitedError extends SDKError {
+    /** Which client hit the limit */
+    service: 'explorer' | 'encoder' | null;
+    /** Always 429 */
+    status: number;
+    /** Seconds the origin asked for, or null when it sent neither header */
+    retryAfterSeconds: number | null;
+    constructor(message: string, details?: Record<string, any>);
+}
 
 
 /*
@@ -2773,6 +2800,7 @@ export {
     SDKMessagingError,
     SDKActionError,
     SDKMuSigError,
+    SDKRateLimitedError,
     SDKPolicyError,
     SDKX402Error,
 };
