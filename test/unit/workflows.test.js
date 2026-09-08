@@ -41,6 +41,9 @@ function makeSdk(sessionMethods = {}) {
     const sessionFns = Object.assign({}, defaults, sessionMethods);
     return {
         session: () => sessionFns,
+        // The explorer read the chunked-deploy resolution polls. Answers the
+        // sequential shape (the assembler's own index) unless a test overrides it.
+        getAction: async (actionIndex) => ({ data: [{ action_index: actionIndex, deployed_contract_index: actionIndex, assembly_status: 'valid' }] }),
     };
 }
 
@@ -516,6 +519,10 @@ describe('Workflows', function () {
             return {
                 actions: new Actions({ config: config.getConfig(), util: new Utility() }),
                 session: () => session,
+                // The chunked path resolves the contract through the explorer, so the
+                // fake has to answer an action detail: this one is the sequential case
+                // (the group was complete at the assembler, contract index = A).
+                getAction: async () => ({ data: [{ action_index: 99, deployed_contract_index: 99, assembly_status: 'valid' }] }),
                 _preflightContractLint: () => {},
             };
         }
@@ -609,6 +616,152 @@ describe('Workflows', function () {
             assert.match(err.message, /deployContract: DEPLOY action_index unavailable/);
             assert.strictEqual(calls.length, 0, 'no DEPOSIT may go out without a contract reference');
             assert.strictEqual(err.partial.deploy.txid, 'deploy_tx');
+        });
+    });
+
+    // resolveDeployedContract()
+    //
+    // A chunk group deploys at whichever piece completes it, so the assembler's own
+    // row does not name the contract. These pin the poll against the explorer's
+    // reported pair (deployed_contract_index / assembly_status), including the two
+    // ways it can end without a contract and the older explorer that reports neither.
+    describe('resolveDeployedContract()', function () {
+        // Answers each queued explorer detail in turn, repeating the last one, and
+        // records how many GETs the poll actually made.
+        function makeExplorerSdk(details) {
+            const state = { calls: [], sdk: null };
+            state.sdk = {
+                session:   () => ({}),
+                getAction: async (actionIndex) => {
+                    state.calls.push(actionIndex);
+                    const d = details[Math.min(state.calls.length - 1, details.length - 1)];
+                    return (typeof d === 'function') ? d() : d;
+                },
+            };
+            return state;
+        }
+
+        const FAST = { timeout: 2000, pollInterval: 1 };
+
+        it('answers the assembler index in one GET when the group deployed there (R2.1)', async function () {
+            const state = makeExplorerSdk([{ data: [{ action_index: 1378, deployed_contract_index: 1378, assembly_status: 'valid' }] }]);
+            const wf = new Workflows(state.sdk);
+            const index = await wf.resolveDeployedContract(1378, FAST);
+            assert.strictEqual(index, 1378);
+            assert.deepStrictEqual(state.calls, [1378], 'the sequential case must cost exactly one explorer read');
+        });
+
+        it('answers the completing carrier index after the group stops pending', async function () {
+            const pending = { data: [{ action_index: 1419, deployed_contract_index: null, assembly_status: 'pending: CODE_HASH (awaiting chunks)' }] };
+            const done    = { data: [{ action_index: 1419, deployed_contract_index: 1421, assembly_status: 'valid' }] };
+            const state = makeExplorerSdk([pending, pending, pending, done]);
+            const wf = new Workflows(state.sdk);
+            const index = await wf.resolveDeployedContract(1419, FAST);
+            assert.strictEqual(index, 1421, 'the contract lives at the carrier that completed the group, not at the assembler');
+            assert.strictEqual(state.calls.length, 4);
+        });
+
+        it('rejects with the reported status when the group settled without a contract', async function () {
+            // A hash mismatch at the completing carrier consumes the assembler: nothing
+            // retries it, so a client that kept polling would wait out the whole timeout.
+            const state = makeExplorerSdk([{ data: [{ action_index: 1430, deployed_contract_index: null, assembly_status: 'invalid: CODE_HASH (hash mismatch)' }] }]);
+            const wf = new Workflows(state.sdk);
+            let err;
+            try { await wf.resolveDeployedContract(1430, FAST); } catch (e) { err = e; }
+            assert.ok(err, 'a settled non-pending status with no contract must reject');
+            assert.ok(err.message.indexOf('invalid: CODE_HASH (hash mismatch)') !== -1,
+                'the reported status must ride in the message: ' + err.message);
+            assert.strictEqual(err.status, 'invalid: CODE_HASH (hash mismatch)');
+            assert.strictEqual(err.actionIndex, 1430);
+            assert.strictEqual(state.calls.length, 1, 'a terminal verdict must not be re-polled');
+        });
+
+        it('falls back to the assembler index when the explorer carries neither field and the action is valid', async function () {
+            // An explorer from before the field landed. A valid assembler is a group
+            // that completed at A, which is the only case such an explorer can answer.
+            const state = makeExplorerSdk([{ data: [{ action_index: 287, status: 'valid' }] }]);
+            const wf = new Workflows(state.sdk);
+            assert.strictEqual(await wf.resolveDeployedContract(287, FAST), 287);
+            assert.strictEqual(state.calls.length, 1);
+        });
+
+        it('rejects an invalid assembler when the explorer carries neither field', async function () {
+            const state = makeExplorerSdk([{ data: [{ action_index: 70, status: 'invalid: CODE_HASH (no chunks)' }] }]);
+            const wf = new Workflows(state.sdk);
+            let err;
+            try { await wf.resolveDeployedContract(70, FAST); } catch (e) { err = e; }
+            assert.ok(err);
+            assert.ok(err.message.indexOf('invalid: CODE_HASH (no chunks)') !== -1, err.message);
+            assert.strictEqual(err.status, 'invalid: CODE_HASH (no chunks)');
+        });
+
+        it('times out, naming the missing field, when the explorer carries neither field and the action is pending', async function () {
+            const state = makeExplorerSdk([{ data: [{ action_index: 1419, status: 'pending: CODE_HASH (awaiting chunks)' }] }]);
+            const wf = new Workflows(state.sdk);
+            let err;
+            try { await wf.resolveDeployedContract(1419, { timeout: 30, pollInterval: 5 }); } catch (e) { err = e; }
+            assert.ok(err, 'an explorer that never reports the field must not hang forever');
+            assert.ok(err.message.indexOf('deployed_contract_index') !== -1,
+                'the timeout must name the field the explorer never exposed: ' + err.message);
+            assert.strictEqual(err.actionIndex, 1419);
+            assert.ok(state.calls.length > 1, 'it should have polled more than once before the deadline');
+        });
+
+        it('unwraps the bare-object and nested-action envelopes too', async function () {
+            const bare   = makeExplorerSdk([{ action_index: 5, deployed_contract_index: 9, assembly_status: 'valid' }]);
+            const nested = makeExplorerSdk([{ data: { action: { action_index: 5, deployed_contract_index: 11, assembly_status: 'valid' } } }]);
+            assert.strictEqual(await new Workflows(bare.sdk).resolveDeployedContract(5, FAST), 9);
+            assert.strictEqual(await new Workflows(nested.sdk).resolveDeployedContract(5, FAST), 11);
+        });
+
+        it('refuses to poll without an assembler action_index', async function () {
+            const state = makeExplorerSdk([{}]);
+            const wf = new Workflows(state.sdk);
+            await assert.rejects(() => wf.resolveDeployedContract(null, FAST), /action_index is required/);
+            assert.strictEqual(state.calls.length, 0);
+        });
+    });
+
+    // The chunked deploy's funding leg must fund the contract that was actually
+    // deployed, which after a reorder is a carrier's index and not the assembler's.
+    describe('deployContract() chunked funding leg', function () {
+        it('deposits against the resolved contract index, not the assembler index', async function () {
+            const deposited = [];
+            const session = {
+                deployChunk: async () => ({ txid: 'chunk_tx' }),
+                deploy:      async () => ({ txid: 'deploy_tx', indexed: { action_index: 1419 } }),
+                deposit:     async (p) => { deposited.push(p); return { txid: 'deposit_tx' }; },
+            };
+            const sdk = {
+                actions: new Actions({ config: config.getConfig(), util: new Utility() }),
+                session: () => session,
+                getAction: async () => ({ data: [{ action_index: 1419, deployed_contract_index: 1421, assembly_status: 'valid' }] }),
+                _preflightContractLint: () => {},
+            };
+            const wf = new Workflows(sdk);
+            const out = await wf.deployContract(FAKE_WIF, { code: 'x'.repeat(20000), gasLimit: 100000 },
+                [{ tick: 'TOK', quantity: '5' }], { pollInterval: 1 });
+            assert.strictEqual(out.contractActionIndex, 1421);
+            assert.strictEqual(deposited.length, 1);
+            assert.strictEqual(deposited[0].contractActionIndex, 1421,
+                'a DEPOSIT sent to the assembler index would fund nothing');
+        });
+
+        it('carries the single-shot contract index on the result without an explorer read', async function () {
+            let reads = 0;
+            const session = {
+                deploy:  async () => ({ txid: 'deploy_tx', indexed: { action_index: 7 } }),
+                deposit: async () => ({ txid: 'deposit_tx' }),
+            };
+            const sdk = {
+                actions: new Actions({ config: config.getConfig(), util: new Utility() }),
+                session: () => session,
+                getAction: async () => { reads++; return null; },
+                _preflightContractLint: () => {},
+            };
+            const out = await new Workflows(sdk).deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 });
+            assert.strictEqual(out.contractActionIndex, 7);
+            assert.strictEqual(reads, 0, 'an inline deploy is its own contract; nothing to resolve');
         });
     });
 
