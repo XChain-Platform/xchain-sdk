@@ -28,6 +28,11 @@ const ContractClient = require('./contractClient.js');
 // (Coin prefix mapping lives in endpoints.coinPrefix, single source of truth,
 //  shared with the public-default resolution.)
 
+// The explorer's batch reads answer 400 above 20 addresses in one body, so the
+// client refuses the same ceiling before spending a request (and, on a wallet
+// under an edge limiter, before spending a rate-limit token).
+const BATCH_ADDRESS_LIMIT = 20;
+
 class ExplorerClient {
 
     constructor(options = {}) {
@@ -160,6 +165,51 @@ class ExplorerClient {
         }
     }
 
+    // POST twin of _get, for the batch reads: the same ready hook, retry
+    // policy, hooks, freshness record and error typing, so a caller cannot tell
+    // the two transports apart by how a failure arrives. Retrying is safe here
+    // because the only bodies the SDK posts to the explorer are reads.
+    async _post(path, body, opts = {}) {
+        if (this._readyHook) await this._readyHook();
+        let url = '/' + this.coin + '/api' + path;
+        let self = this;
+
+        let onRetry = this.hooks.onRetry ? (attempt, delay, err) => {
+            // `status` lets a hook tell a rate limit from a 5xx without parsing
+            // the message; null for a transport error that never got a response.
+            this.hooks.onRetry({ service: 'explorer', method: 'POST', url, attempt, delay, error: err.message, status: err.response ? err.response.status : null });
+        } : null;
+
+        // Same escape hatches as _get: retry === false on the client, or
+        // opts.noRetry per call. noRetry is not a query param, so _buildParams
+        // (whitelist) ignores it.
+        let retryConfig = (this.retry === false || (opts && opts.noRetry)) ? { maxRetries: 0 } : this.retry;
+
+        try {
+            return await withRetry(async () => {
+                if (self.hooks.onRequest)
+                    self.hooks.onRequest({ service: 'explorer', method: 'POST', url });
+                try {
+                    let response = await self.client.post(url, body, { params: self._buildParams(opts) });
+                    if (self.hooks.onResponse)
+                        self.hooks.onResponse({ service: 'explorer', method: 'POST', url, status: response.status });
+                    self._recordFreshness(response);
+                    return response.data;
+                } catch (err) {
+                    if (self.hooks.onError)
+                        self.hooks.onError({ service: 'explorer', method: 'POST', url, error: err.message });
+                    // Re-throw raw error so withRetry can inspect retryability; wrap only when not retryable
+                    if (isRetryable(err)) throw err;
+                    self._handleError(err, url);
+                }
+            }, retryConfig, onRetry);
+        } catch (err) {
+            // After all retries, wrap any raw (non-SDK) error into a typed SDKExplorerError
+            if (err instanceof SDKExplorerError) throw err;
+            self._handleError(err, url);
+        }
+    }
+
     // Freshness of the explorer's indexed tip, as the explorer stamps it on
     // every data response: the XChain-Freshness / XChain-Tip-Block /
     // XChain-Tip-Age-S headers on all of them, plus a `freshness` body object
@@ -226,6 +276,31 @@ class ExplorerClient {
 
     async getBalances(address, opts = {}) {
         return this._get('/balances/' + address, opts);
+    }
+
+    // Shared by both batch reads. A caller's own malformed list is refused here
+    // rather than at the explorer, so a bug in a polling loop cannot spend a
+    // request (or a rate-limit token) to be told what the client already knows.
+    _assertBatchAddresses(addresses) {
+        let ok = Array.isArray(addresses)
+            && addresses.length > 0
+            && addresses.length <= BATCH_ADDRESS_LIMIT
+            && addresses.every(a => typeof a === 'string');
+        if (ok) return;
+        throw new SDKExplorerError(
+            'INVALID_ADDRESSES',
+            'addresses must be a non-empty array of at most ' + BATCH_ADDRESS_LIMIT + ' address strings',
+            { count: Array.isArray(addresses) ? addresses.length : null }
+        );
+    }
+
+    // One request for up to 20 addresses, answered keyed by address with the
+    // same bodies as the per-address reads (see the explorer's batch route).
+    // An explorer without the route answers 404, which reaches the caller as
+    // EXPLORER_HTTP_404: that is the wallet's feature-detection signal.
+    async getBalancesBatch(addresses, opts = {}) {
+        this._assertBatchAddresses(addresses);
+        return this._post('/balances', { addresses }, opts);
     }
 
     async getAddress(address, opts = {}) {
@@ -381,6 +456,14 @@ class ExplorerClient {
 
     async getCoinpayObligations(query, type, opts = {}) {
         return this._get('/coinpay_obligations/' + query + '/' + type, opts);
+    }
+
+    // The address-typed obligations read for up to 20 addresses in one request,
+    // answered keyed by address. Same 404 feature-detection signal as the
+    // balances batch on an explorer that predates the route.
+    async getCoinpayObligationsBatch(addresses, opts = {}) {
+        this._assertBatchAddresses(addresses);
+        return this._post('/coinpay_obligations', { addresses }, opts);
     }
 
     async getDispensers(query, type, opts = {}) {

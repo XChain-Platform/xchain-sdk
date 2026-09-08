@@ -1232,6 +1232,13 @@ class XChainSDK {
         return this._requireExplorer().getBalances(address, opts);
     }
 
+    // Up to 20 addresses in one request, answered keyed by address. A caller
+    // that must also work against an older explorer feature-detects with
+    // `typeof sdk.getBalancesBatch === 'function'` and falls back on a 404.
+    async getBalancesBatch(addresses, opts) {
+        return this._requireExplorer().getBalancesBatch(addresses, opts);
+    }
+
     async getAddress(address) {
         return this._requireExplorer().getAddress(address);
     }
@@ -1334,6 +1341,12 @@ class XChainSDK {
 
     async getCoinpayObligations(query, type, opts) {
         return this._requireExplorer().getCoinpayObligations(query, type, opts);
+    }
+
+    // The address-typed obligations read for up to 20 addresses in one request,
+    // answered keyed by address.
+    async getCoinpayObligationsBatch(addresses, opts) {
+        return this._requireExplorer().getCoinpayObligationsBatch(addresses, opts);
     }
 
     async getDispensers(query, type, opts) {

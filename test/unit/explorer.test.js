@@ -78,6 +78,22 @@ describe('ExplorerClient', function () {
             expect(result).to.have.property('total', 1);
         });
 
+        it('getBalancesBatch POSTs {addresses} to /{COIN}/api/balances', async function () {
+            nock(BASE).post('/BTC/api/balances', { addresses: ['a1', 'a2'] })
+                .reply(200, { a1: { balances: { total: 1, data: [] }, address: null, error: null }, a2: { balances: null, address: null, error: null } });
+            let result = await client.getBalancesBatch(['a1', 'a2']);
+            expect(result).to.have.all.keys('a1', 'a2');
+            expect(result.a1.balances.total).to.equal(1);
+        });
+
+        it('getCoinpayObligationsBatch POSTs {addresses} to /{COIN}/api/coinpay_obligations', async function () {
+            nock(BASE).post('/BTC/api/coinpay_obligations', { addresses: ['a1', 'a2'] })
+                .reply(200, { a1: { coinpay_obligations: { total: 0, data: [] }, error: null }, a2: { coinpay_obligations: null, error: null } });
+            let result = await client.getCoinpayObligationsBatch(['a1', 'a2']);
+            expect(result).to.have.all.keys('a1', 'a2');
+            expect(result.a1.coinpay_obligations.total).to.equal(0);
+        });
+
         it('getToken hits /{COIN}/api/token/{tick}', async function () {
             nock(BASE).get('/BTC/api/token/MYTOKEN').reply(200, { info: { tick: 'MYTOKEN' } });
             let result = await client.getToken('MYTOKEN');
@@ -1075,11 +1091,11 @@ describe('ExplorerClient', function () {
 
     describe('public methods', function () {
         const methods = [
-            'getBalances', 'getAddress', 'getHolders', 'getCredits', 'getDebits', 'getEscrows',
+            'getBalances', 'getBalancesBatch', 'getAddress', 'getHolders', 'getCredits', 'getDebits', 'getEscrows',
             'getToken', 'getProject', 'getTokens', 'getIssues',
             'getTransaction', 'getAction', 'getBlock', 'getHistory',
             'getAddresses', 'getAirdrops', 'getBatches', 'getBroadcasts', 'getCallbacks',
-            'getCoinpays', 'getCoinpayExpires', 'getCoinpayObligations',
+            'getCoinpays', 'getCoinpayExpires', 'getCoinpayObligations', 'getCoinpayObligationsBatch',
             'getDestroys', 'getDispensers', 'getDispenses',
             'getDispenserCancels', 'getDispenserCloses', 'getDispenserExpires', 'getDispenserEdits',
             'getDividends', 'getFees',
@@ -1108,15 +1124,17 @@ describe('ExplorerClient', function () {
             });
         }
 
-        it('has 119 public methods', function () {
+        it('has 121 public methods', function () {
             // 113 = 112 + getPreflight (validity-first pre-flight proxy).
             // 117 = 113 + the four BET reads: getBetFeeds, getBetFeed,
             // getBets, getOracleStats.
             // 118 = 117 + getOracleFeeQuote (dispenser oracle usage fee).
             // 119 = 118 + freshness (the explorer's per-response tip marker).
+            // 121 = 119 + the two batch reads: getBalancesBatch,
+            // getCoinpayObligationsBatch.
             let publicMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(publicMethods).to.have.length(119);
+            expect(publicMethods).to.have.length(121);
         });
     });
 

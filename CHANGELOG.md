@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `getBalancesBatch(addresses)` and `getCoinpayObligationsBatch(addresses)` read up to 20 addresses in one explorer request each, so a wallet poll costs one request per chain instead of two per address.
 - `SDKRateLimitedError` (code `RATE_LIMITED`) is thrown for an HTTP 429 that survives the retry, carrying `service`, `status` and the server's `retryAfterSeconds`.
 
 ### Changed

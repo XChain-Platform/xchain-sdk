@@ -1467,6 +1467,9 @@ export declare class XChainSDK {
     /** Get all token balances for an address. */
     getBalances(address: string, opts?: QueryOptions): Promise<any>;
 
+    /** One request for up to 20 addresses; answered keyed by address, each entry carrying the same bodies as the per-address balances and address reads. */
+    getBalancesBatch(addresses: string[], opts?: QueryOptions): Promise<Record<string, any>>;
+
     /** Get address summary information. */
     getAddress(address: string): Promise<any>;
 
@@ -1641,6 +1644,8 @@ export declare class XChainSDK {
     getCoinpayExpires(query: string, type: string, opts?: QueryOptions): Promise<any>;
     /** COINPay outstanding-obligation rows, type in {block, address, source}. */
     getCoinpayObligations(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    /** One request for up to 20 addresses; answered keyed by address, each entry carrying the same body as the address-typed obligations read. */
+    getCoinpayObligationsBatch(addresses: string[], opts?: QueryOptions): Promise<Record<string, any>>;
     /** Native-coin fee pre-flight for one action (proxies the indexer feequote). */
     getFeeQuote(opts: { action: string; params?: ActionParams; source?: string; feeOutputSats?: number }): Promise<any>;
     /** Native-coin fee schedule plus current oracle prices. */
