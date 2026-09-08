@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.16.0] - 2026-09-08
 
 ### Added
 - `getBalancesBatch(addresses)` and `getCoinpayObligationsBatch(addresses)` read up to 20 addresses in one explorer request each, so a wallet poll costs one request per chain instead of two per address.
