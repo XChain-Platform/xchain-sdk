@@ -28,9 +28,11 @@ const ExplorerClient  = require('../../src/explorer.js');
 const EncoderClient   = require('../../src/encoder.js');
 const HubConnector    = require('../../src/hub.js');
 const {
+    SDKError,
     SDKExplorerError,
     SDKEncoderError,
-    SDKHubError
+    SDKHubError,
+    SDKRateLimitedError
 } = require('../../src/errors.js');
 
 // Note: nock.disableNetConnect is set inside each describe block, not globally,
@@ -135,18 +137,21 @@ describe('ExplorerClient – network chaos', function () {
     });
 
     // (d) HTTP 429 Too Many Requests
-    it('d) HTTP 429 – throws SDKExplorerError with code EXPLORER_HTTP_429', async () => {
+    it('d) HTTP 429 – throws SDKRateLimitedError with code RATE_LIMITED', async () => {
         nock(EXPLORER_BASE)
             .get(COIN_PATH + '/balances/testaddr')
-            .reply(429, { error: 'rate limited' });
+            .reply(429, { error: 'rate limited' }, { 'Retry-After': '30' });
 
         const client = makeExplorer();
         try {
             await client.getBalances('testaddr');
-            throw new Error('Expected SDKExplorerError but call succeeded');
+            throw new Error('Expected SDKRateLimitedError but call succeeded');
         } catch (err) {
-            expect(err).to.be.instanceof(SDKExplorerError);
-            expect(err.code).to.equal('EXPLORER_HTTP_429');
+            expect(err).to.be.instanceof(SDKRateLimitedError);
+            expect(err).to.be.instanceof(SDKError);
+            expect(err.code).to.equal('RATE_LIMITED');
+            expect(err.service).to.equal('explorer');
+            expect(err.retryAfterSeconds).to.equal(30);
         }
     });
 

@@ -607,3 +607,354 @@ describe('retry helpers (pure)', function () {
         });
     });
 });
+
+
+// Section 5: the 429 path (rate limits)
+//
+// A rate limit is a policy answer with a wait attached, so it is budgeted and
+// capped apart from 5xx backoff: retryAfterMaxDelay caps the honoured wait
+// (maxDelay does not), maxRateLimitRetries caps how many 429s are retried, and
+// a 429 that survives the retry reaches the caller as SDKRateLimitedError.
+
+const { getRetryAfterSeconds, getRateLimitDelay, parseRateLimitReset } = require('../../src/retry.js');
+const { SDKError, SDKExplorerError, SDKEncoderError, SDKRateLimitedError } = require('../../src/errors.js');
+
+function rateLimitErr(headers, status = 429) {
+    return { response: { status, headers, data: { error: 'rate limited' } } };
+}
+
+describe('retry: the 429 path', function () {
+
+    describe('DEFAULTS', function () {
+        it('caps an honoured Retry-After at 60 s and retries a 429 once', function () {
+            expect(DEFAULTS.retryAfterMaxDelay).to.equal(60000);
+            expect(DEFAULTS.maxRateLimitRetries).to.equal(1);
+        });
+    });
+
+    describe('getDelay() on a 429', function () {
+
+        it('(a) honours Retry-After: 30 past a maxDelay of 2000', function () {
+            // The wallet ships maxDelay: 2000 to keep 5xx backoff short. That
+            // must not shrink the wait a rate limiter actually asked for.
+            const cfg = { ...DEFAULTS, maxDelay: 2000 };
+            expect(getDelay(0, cfg, rateLimitErr({ 'retry-after': '30' }))).to.equal(30000);
+        });
+
+        it('(b) a 503 with Retry-After: 30 still clamps to maxDelay', function () {
+            const cfg = { ...DEFAULTS, maxDelay: 2000 };
+            expect(getDelay(0, cfg, rateLimitErr({ 'retry-after': '30' }, 503))).to.equal(2000);
+        });
+
+        it('caps an absurd Retry-After at retryAfterMaxDelay, not maxDelay', function () {
+            const cfg = { ...DEFAULTS, maxDelay: 2000, retryAfterMaxDelay: 60000 };
+            expect(getDelay(0, cfg, rateLimitErr({ 'retry-after': '900' }))).to.equal(60000);
+        });
+
+        it('honours an overridden retryAfterMaxDelay', function () {
+            const cfg = { ...DEFAULTS, maxDelay: 2000, retryAfterMaxDelay: 5000 };
+            expect(getDelay(0, cfg, rateLimitErr({ 'retry-after': '30' }))).to.equal(5000);
+        });
+
+        it('(c) falls back to RateLimit-Reset when Retry-After is absent', function () {
+            const cfg = { ...DEFAULTS, maxDelay: 2000 };
+            expect(getDelay(0, cfg, rateLimitErr({ 'ratelimit-reset': '45' }))).to.equal(45000);
+        });
+
+        it('prefers Retry-After over RateLimit-Reset when both are present', function () {
+            const cfg = { ...DEFAULTS, maxDelay: 2000 };
+            expect(getDelay(0, cfg, rateLimitErr({ 'retry-after': '10', 'ratelimit-reset': '45' }))).to.equal(10000);
+        });
+
+        it('falls back to normal backoff for a 429 carrying neither header', function () {
+            const cfg = { baseDelay: 100, backoffFactor: 2, maxDelay: 2000, retryAfterMaxDelay: 60000 };
+            const d = getDelay(3, cfg, rateLimitErr({}));
+            // base*2^3 = 800, ±25% jitter, and nowhere near the 60 s ceiling
+            expect(d).to.be.greaterThan(599);
+            expect(d).to.be.lessThan(1001);
+        });
+
+    });
+
+    describe('parseRateLimitReset() / getRateLimitDelay() / getRetryAfterSeconds()', function () {
+
+        it('parseRateLimitReset turns whole seconds into milliseconds', function () {
+            expect(parseRateLimitReset('45')).to.equal(45000);
+            expect(parseRateLimitReset('0')).to.equal(0);
+        });
+
+        it('parseRateLimitReset returns null for absent or unparseable values', function () {
+            expect(parseRateLimitReset(undefined)).to.equal(null);
+            expect(parseRateLimitReset('')).to.equal(null);
+            expect(parseRateLimitReset('soon')).to.equal(null);
+            expect(parseRateLimitReset('-5')).to.equal(null);
+        });
+
+        it('getRateLimitDelay returns null when neither header is present', function () {
+            expect(getRateLimitDelay(rateLimitErr({}))).to.equal(null);
+            expect(getRateLimitDelay(null)).to.equal(null);
+        });
+
+        it('getRetryAfterSeconds reads whole seconds off either header', function () {
+            expect(getRetryAfterSeconds(rateLimitErr({ 'retry-after': '30' }))).to.equal(30);
+            expect(getRetryAfterSeconds(rateLimitErr({ 'ratelimit-reset': '45' }))).to.equal(45);
+        });
+
+        it('getRetryAfterSeconds rounds UP, since waiting short buys another 429', function () {
+            // An origin's HTTP-date lands on a whole second, our clock does not,
+            // so the delta is fractional. Freeze the clock 1.4 s short of the
+            // date: rounding DOWN would send the retry back before the window
+            // reopened. Frozen rather than sampled, or the sub-second phase of
+            // the real clock decides whether this test passes.
+            const realNow = Date.now;
+            const when    = 'Fri, 01 Jan 2100 00:00:02 GMT';
+            Date.now = () => Date.parse(when) - 1400;
+            try {
+                expect(getRetryAfterSeconds(rateLimitErr({ 'retry-after': when }))).to.equal(2);
+            } finally {
+                Date.now = realNow;
+            }
+        });
+
+        it('getRetryAfterSeconds returns null when the response asked for nothing', function () {
+            expect(getRetryAfterSeconds(rateLimitErr({}))).to.equal(null);
+        });
+
+    });
+
+    describe('withRetry() 429 budget', function () {
+
+        it('(d) maxRateLimitRetries: 1 with maxRetries: 3 throws on the second 429', async function () {
+            let callCount = 0;
+            const err429 = { response: { status: 429, headers: {} }, message: 'too many requests' };
+
+            let thrown;
+            try {
+                await withRetry(async () => {
+                    callCount++;
+                    throw err429;
+                }, { maxRetries: 3, baseDelay: 10, maxRateLimitRetries: 1 });
+            } catch (e) {
+                thrown = e;
+            }
+            expect(thrown).to.equal(err429);
+            // One honoured retry, then the caller gets the rate limit, even
+            // though maxRetries would have allowed three attempts more.
+            expect(callCount).to.equal(2);
+        });
+
+        it('maxRateLimitRetries: 0 throws the first 429 without retrying', async function () {
+            let callCount = 0;
+            const err429 = { response: { status: 429, headers: {} }, message: 'too many requests' };
+            try {
+                await withRetry(async () => {
+                    callCount++;
+                    throw err429;
+                }, { maxRetries: 3, baseDelay: 10, maxRateLimitRetries: 0 });
+            } catch (e) { /* expected */ }
+            expect(callCount).to.equal(1);
+        });
+
+        it('the 429 budget does not shrink the 5xx budget', async function () {
+            let callCount = 0;
+            const err503 = { response: { status: 503, headers: {} }, message: 'unavailable' };
+            try {
+                await withRetry(async () => {
+                    callCount++;
+                    throw err503;
+                }, { maxRetries: 3, baseDelay: 10, maxRateLimitRetries: 1 });
+            } catch (e) { /* expected */ }
+            expect(callCount).to.equal(4);
+        });
+
+    });
+
+    describe('(e) ExplorerClient on a surviving 429', function () {
+
+        const EXPLORER_BASE = 'http://ratelimit.test:8080';
+
+        function makeClient() {
+            // retryAfterMaxDelay: 20 keeps the honoured wait at 20 ms in-test
+            // while the header still says 30 s, so the reported seconds and the
+            // cap are exercised independently.
+            return new ExplorerClient({
+                network:      'bitcoin-mainnet',
+                explorerUrl:  'ratelimit.test',
+                explorerPort: 8080,
+                retry: { maxRetries: 2, baseDelay: 10, retryAfterMaxDelay: 20 }
+            });
+        }
+
+        afterEach(() => nock.cleanAll());
+
+        it('429 then 200: the retry is honoured and the caller sees nothing', async function () {
+            nock(EXPLORER_BASE)
+                .get('/BTC/api/status').reply(429, { error: 'slow down' }, { 'Retry-After': '30' })
+                .get('/BTC/api/status').reply(200, { ok: true });
+
+            const result = await makeClient().getStatus();
+            expect(result).to.deep.equal({ ok: true });
+        });
+
+        it('429 then 429: throws SDKRateLimitedError carrying the seconds', async function () {
+            nock(EXPLORER_BASE)
+                .get('/BTC/api/status').reply(429, { error: 'slow down' }, { 'Retry-After': '30' })
+                .get('/BTC/api/status').reply(429, { error: 'slow down' }, { 'Retry-After': '30' });
+
+            let thrown;
+            try {
+                await makeClient().getStatus();
+            } catch (e) { thrown = e; }
+
+            expect(thrown).to.exist;
+            expect(thrown.name).to.equal('SDKRateLimitedError');
+            expect(thrown).to.be.instanceof(SDKRateLimitedError);
+            expect(thrown).to.be.instanceof(SDKError);
+            expect(thrown.code).to.equal('RATE_LIMITED');
+            expect(thrown.service).to.equal('explorer');
+            expect(thrown.status).to.equal(429);
+            expect(thrown.retryAfterSeconds).to.equal(30);
+            expect(thrown.message).to.equal('Explorer returned HTTP 429 for /BTC/api/status; retry after 30 seconds');
+            expect(thrown.details.url).to.equal('/BTC/api/status');
+            expect(thrown.details.data).to.deep.equal({ error: 'slow down' });
+        });
+
+        it('429 with RateLimit-Reset only: the seconds come off the fallback header', async function () {
+            nock(EXPLORER_BASE)
+                .get('/BTC/api/status').reply(429, {}, { 'RateLimit-Reset': '45' })
+                .get('/BTC/api/status').reply(429, {}, { 'RateLimit-Reset': '45' });
+
+            let thrown;
+            try {
+                await makeClient().getStatus();
+            } catch (e) { thrown = e; }
+            expect(thrown.name).to.equal('SDKRateLimitedError');
+            expect(thrown.retryAfterSeconds).to.equal(45);
+            expect(thrown.message).to.equal('Explorer returned HTTP 429 for /BTC/api/status; retry after 45 seconds');
+        });
+
+        it('429 with no wait header: the message omits the suffix and the field is null', async function () {
+            nock(EXPLORER_BASE)
+                .get('/BTC/api/status').reply(429, {})
+                .get('/BTC/api/status').reply(429, {});
+
+            let thrown;
+            try {
+                await makeClient().getStatus();
+            } catch (e) { thrown = e; }
+            expect(thrown.name).to.equal('SDKRateLimitedError');
+            expect(thrown.retryAfterSeconds).to.equal(null);
+            expect(thrown.message).to.equal('Explorer returned HTTP 429 for /BTC/api/status');
+        });
+
+        it('a 503 is unaffected: still SDKExplorerError with the HTTP code', async function () {
+            nock(EXPLORER_BASE)
+                .get('/BTC/api/status').reply(503)
+                .get('/BTC/api/status').reply(503)
+                .get('/BTC/api/status').reply(503);
+
+            let thrown;
+            try {
+                await makeClient().getStatus();
+            } catch (e) { thrown = e; }
+            expect(thrown).to.be.instanceof(SDKExplorerError);
+            expect(thrown.code).to.equal('EXPLORER_HTTP_503');
+        });
+
+        it('the onRetry hook payload carries the status', async function () {
+            const seen = [];
+            const client = new ExplorerClient({
+                network:      'bitcoin-mainnet',
+                explorerUrl:  'ratelimit.test',
+                explorerPort: 8080,
+                retry: { maxRetries: 2, baseDelay: 10, retryAfterMaxDelay: 20 },
+                hooks: { onRetry: (info) => seen.push(info) }
+            });
+
+            nock(EXPLORER_BASE)
+                .get('/BTC/api/status').reply(429, {}, { 'Retry-After': '30' })
+                .get('/BTC/api/status').reply(200, { ok: true });
+
+            await client.getStatus();
+            expect(seen).to.have.lengthOf(1);
+            expect(seen[0].status).to.equal(429);
+            expect(seen[0].service).to.equal('explorer');
+        });
+
+    });
+
+    describe('(f) EncoderClient on a surviving 429', function () {
+
+        const ENCODER_BASE = 'http://ratelimit.test:3000';
+
+        function makeClient() {
+            return new EncoderClient({
+                encoderUrl:  'ratelimit.test',
+                encoderPort: 3000,
+                retry: { maxRetries: 2, baseDelay: 10, retryAfterMaxDelay: 20 }
+            });
+        }
+
+        afterEach(() => nock.cleanAll());
+
+        it('429 then 200: the retry is honoured and the caller sees nothing', async function () {
+            nock(ENCODER_BASE)
+                .post('/').reply(429, { error: 'slow down' }, { 'Retry-After': '30' })
+                .post('/').reply(200, { jsonrpc: '2.0', id: 2, result: 'pong' });
+
+            expect(await makeClient().ping()).to.equal('pong');
+        });
+
+        it('429 then 429: throws SDKRateLimitedError carrying the seconds', async function () {
+            nock(ENCODER_BASE)
+                .post('/').reply(429, { error: 'slow down' }, { 'Retry-After': '30' })
+                .post('/').reply(429, { error: 'slow down' }, { 'Retry-After': '30' });
+
+            let thrown;
+            try {
+                await makeClient().ping();
+            } catch (e) { thrown = e; }
+
+            expect(thrown).to.exist;
+            expect(thrown.name).to.equal('SDKRateLimitedError');
+            expect(thrown.code).to.equal('RATE_LIMITED');
+            expect(thrown.service).to.equal('encoder');
+            expect(thrown.status).to.equal(429);
+            expect(thrown.retryAfterSeconds).to.equal(30);
+            expect(thrown.message).to.equal('Encoder returned HTTP 429 for method ping; retry after 30 seconds');
+            expect(thrown.details.method).to.equal('ping');
+        });
+
+        it('a 500 is unaffected: still SDKEncoderError with the HTTP code', async function () {
+            nock(ENCODER_BASE).post('/').reply(500, { error: 'internal' });
+
+            let thrown;
+            try {
+                await makeClient().ping();
+            } catch (e) { thrown = e; }
+            expect(thrown).to.be.instanceof(SDKEncoderError);
+            expect(thrown.code).to.equal('ENCODER_HTTP_500');
+        });
+
+        it('the onRetry hook payload carries the status', async function () {
+            const seen = [];
+            const client = new EncoderClient({
+                encoderUrl:  'ratelimit.test',
+                encoderPort: 3000,
+                retry: { maxRetries: 2, baseDelay: 10, retryAfterMaxDelay: 20 },
+                hooks: { onRetry: (info) => seen.push(info) }
+            });
+
+            nock(ENCODER_BASE)
+                .post('/').reply(429, {}, { 'Retry-After': '30' })
+                .post('/').reply(200, { jsonrpc: '2.0', id: 2, result: 'pong' });
+
+            await client.ping();
+            expect(seen).to.have.lengthOf(1);
+            expect(seen[0].status).to.equal(429);
+            expect(seen[0].service).to.equal('encoder');
+        });
+
+    });
+
+});

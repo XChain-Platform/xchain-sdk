@@ -25,7 +25,15 @@ const DEFAULTS = {
     maxRetries:    3,
     baseDelay:     1000,   // 1 second
     maxDelay:      30000,  // 30 seconds
-    backoffFactor: 2
+    backoffFactor: 2,
+    // A 429 is a policy answer with a wait attached, not a transient fault, so
+    // it gets its own ceiling: maxDelay is tuned for how long a caller will sit
+    // through 5xx backoff (the wallet uses 2 s), which is far shorter than the
+    // window an origin actually asks a rate-limited client to wait out.
+    retryAfterMaxDelay: 60000,  // 60 seconds
+    // 429 retries are budgeted separately from maxRetries, so a caller on the
+    // 3-retry default does not sit through three full Retry-After windows.
+    maxRateLimitRetries: 1
 };
 
 
@@ -61,12 +69,53 @@ function getRetryAfterDelay(err) {
     return parseRetryAfter(header);
 }
 
+// Parse a RateLimit-Reset header value (IETF draft standard headers): whole
+// seconds until the current limit window resets. Milliseconds out, or null.
+function parseRateLimitReset(value) {
+    if (value === undefined || value === null || value === '') return null;
+    let seconds = parseInt(value, 10);
+    if (isNaN(seconds) || seconds < 0) return null;
+    return seconds * 1000;
+}
+
+// How long a rate-limited response asks the caller to wait, in milliseconds.
+// Retry-After is authoritative; RateLimit-Reset is the fallback for an origin
+// that only emits the draft-standard headers. axios lower-cases header names.
+function getRateLimitDelay(err) {
+    let retryAfter = getRetryAfterDelay(err);
+    if (retryAfter !== null) return retryAfter;
+    if (!err || !err.response || !err.response.headers) return null;
+    return parseRateLimitReset(err.response.headers['ratelimit-reset']);
+}
+
+// Whole seconds a rate-limited response asked for, or null when it carried
+// neither header. Rounded UP: waiting less than the origin asked for just
+// buys another 429. This is what the clients put on SDKRateLimitedError.
+function getRetryAfterSeconds(err) {
+    let ms = getRateLimitDelay(err);
+    if (ms === null) return null;
+    return Math.ceil(ms / 1000);
+}
+
 // Calculate delay with exponential backoff + jitter
 // If the error has a Retry-After header, use that instead
 function getDelay(attempt, config, err) {
-    let retryAfter = getRetryAfterDelay(err);
-    if (retryAfter !== null) {
-        return Math.min(retryAfter, config.maxDelay);
+    let status = (err && err.response) ? err.response.status : null;
+    if (status === 429) {
+        // Honour what the origin asked for, capped by retryAfterMaxDelay rather
+        // than maxDelay, so the honoured wait is a real one instead of a 2 s
+        // stub that walks straight into the next 429.
+        let asked = getRateLimitDelay(err);
+        if (asked !== null) {
+            let cap = config.retryAfterMaxDelay !== undefined ? config.retryAfterMaxDelay : DEFAULTS.retryAfterMaxDelay;
+            return Math.min(asked, cap);
+        }
+        // Neither header on the 429: fall through to the normal backoff.
+    } else {
+        let retryAfter = getRetryAfterDelay(err);
+        if (retryAfter !== null) {
+            return Math.min(retryAfter, config.maxDelay);
+        }
     }
     let delay = config.baseDelay * Math.pow(config.backoffFactor, attempt);
     delay = Math.min(delay, config.maxDelay);
@@ -77,26 +126,38 @@ function getDelay(attempt, config, err) {
 
 // Execute an async function with retry logic
 // fn: async function to execute
-// config: { maxRetries, baseDelay, maxDelay, backoffFactor }
+// config: { maxRetries, baseDelay, maxDelay, backoffFactor, retryAfterMaxDelay, maxRateLimitRetries }
 // onRetry: optional callback(attempt, delay, error) for logging/hooks
 async function withRetry(fn, config = {}, onRetry = null) {
     let opts = {
         maxRetries:    config.maxRetries !== undefined ? config.maxRetries : DEFAULTS.maxRetries,
         baseDelay:     config.baseDelay !== undefined ? config.baseDelay : DEFAULTS.baseDelay,
         maxDelay:      config.maxDelay !== undefined ? config.maxDelay : DEFAULTS.maxDelay,
-        backoffFactor: config.backoffFactor !== undefined ? config.backoffFactor : DEFAULTS.backoffFactor
+        backoffFactor: config.backoffFactor !== undefined ? config.backoffFactor : DEFAULTS.backoffFactor,
+        retryAfterMaxDelay:  config.retryAfterMaxDelay !== undefined ? config.retryAfterMaxDelay : DEFAULTS.retryAfterMaxDelay,
+        maxRateLimitRetries: config.maxRateLimitRetries !== undefined ? config.maxRateLimitRetries : DEFAULTS.maxRateLimitRetries
     };
 
     let lastError;
+    let rateLimitRetries = 0;
     for (let attempt = 0; attempt <= opts.maxRetries; attempt++) {
         try {
             return await fn();
         } catch (err) {
             lastError = err;
 
+            // 429s spend their own budget: past it the caller gets the rate
+            // limit to surface, however many general retries are left.
+            let isRateLimit = !!(err && err.response && err.response.status === 429);
+            if (isRateLimit && rateLimitRetries >= opts.maxRateLimitRetries) {
+                throw err;
+            }
+
             if (attempt >= opts.maxRetries || !isRetryable(err)) {
                 throw err;
             }
+
+            if (isRateLimit) rateLimitRetries++;
 
             let delay = getDelay(attempt, opts, err);
             if (onRetry) onRetry(attempt + 1, delay, err);
@@ -107,4 +168,9 @@ async function withRetry(fn, config = {}, onRetry = null) {
 }
 
 
-module.exports = { withRetry, isRetryable, getDelay, parseRetryAfter, getRetryAfterDelay, DEFAULTS, RETRYABLE_STATUS_CODES };
+module.exports = {
+    withRetry, isRetryable, getDelay,
+    parseRetryAfter, getRetryAfterDelay,
+    parseRateLimitReset, getRateLimitDelay, getRetryAfterSeconds,
+    DEFAULTS, RETRYABLE_STATUS_CODES
+};

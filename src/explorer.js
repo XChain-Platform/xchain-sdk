@@ -19,8 +19,8 @@
  ********************************************************************/
 
 const axios = require('axios');
-const { SDKExplorerError } = require('./errors.js');
-const { withRetry, isRetryable } = require('./retry.js');
+const { SDKExplorerError, SDKRateLimitedError } = require('./errors.js');
+const { withRetry, isRetryable, getRetryAfterSeconds } = require('./retry.js');
 const { coinPrefix } = require('./endpoints.js');
 const { getSupportedNetworks } = require('./networks.js');
 const ContractClient = require('./contractClient.js');
@@ -124,7 +124,9 @@ class ExplorerClient {
         let self = this;
 
         let onRetry = this.hooks.onRetry ? (attempt, delay, err) => {
-            this.hooks.onRetry({ service: 'explorer', method: 'GET', url, attempt, delay, error: err.message });
+            // `status` lets a hook tell a rate limit from a 5xx without parsing
+            // the message; null for a transport error that never got a response.
+            this.hooks.onRetry({ service: 'explorer', method: 'GET', url, attempt, delay, error: err.message, status: err.response ? err.response.status : null });
         } : null;
 
         // Disable retry if retry === false, or per-call via opts.noRetry (used by
@@ -194,6 +196,17 @@ class ExplorerClient {
 
     _handleError(err, url) {
         if (err.response) {
+            // A 429 reaching here already survived retry.js's honoured wait, so
+            // it is the caller's to handle. Keep the "Explorer returned HTTP
+            // 429 for <url>" prefix byte-exact: integrators (and the wallet's
+            // message-regex fallback) match on it.
+            if (err.response.status === 429) {
+                let seconds = getRetryAfterSeconds(err);
+                throw new SDKRateLimitedError(
+                    'Explorer returned HTTP 429 for ' + url + (seconds === null ? '' : '; retry after ' + seconds + ' seconds'),
+                    { service: 'explorer', status: 429, retryAfterSeconds: seconds, url, data: err.response.data }
+                );
+            }
             throw new SDKExplorerError(
                 'EXPLORER_HTTP_' + err.response.status,
                 'Explorer returned HTTP ' + err.response.status + ' for ' + url,

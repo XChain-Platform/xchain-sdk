@@ -68,6 +68,39 @@ describe('SDK error classes', function () {
         });
     }
 
+    // SDKRateLimitedError is not in the list above: its constructor takes
+    // (message, details) and forces code 'RATE_LIMITED', because a rate limit
+    // is one condition rather than a family of codes.
+    it('SDKRateLimitedError forces code RATE_LIMITED and lifts the three fields out of details', function () {
+        const e = new errors.SDKRateLimitedError('Explorer returned HTTP 429 for /BTC/api/status; retry after 30 seconds', {
+            service: 'explorer', status: 429, retryAfterSeconds: 30, url: '/BTC/api/status', data: { error: 'slow down' }
+        });
+        assert.ok(e instanceof SDKError, 'SDKRateLimitedError should extend SDKError');
+        assert.ok(e instanceof Error);
+        assert.strictEqual(e.name, 'SDKRateLimitedError');
+        assert.strictEqual(e.code, 'RATE_LIMITED');
+        assert.strictEqual(e.message, 'Explorer returned HTTP 429 for /BTC/api/status; retry after 30 seconds');
+        assert.strictEqual(e.service, 'explorer');
+        assert.strictEqual(e.status, 429);
+        assert.strictEqual(e.retryAfterSeconds, 30);
+        assert.strictEqual(e.details.url, '/BTC/api/status');
+        assert.deepStrictEqual(e.details.data, { error: 'slow down' });
+    });
+
+    it('SDKRateLimitedError defaults retryAfterSeconds to null and status to 429', function () {
+        const e = new errors.SDKRateLimitedError('Encoder returned HTTP 429 for method ping');
+        assert.strictEqual(e.retryAfterSeconds, null);
+        assert.strictEqual(e.status, 429);
+        assert.strictEqual(e.service, null);
+        assert.deepStrictEqual(e.details, {});
+    });
+
+    it('SDKRateLimitedError is NOT an explorer/encoder error, so a caller can catch it apart', function () {
+        const e = new errors.SDKRateLimitedError('m', { service: 'explorer' });
+        assert.ok(!(e instanceof errors.SDKExplorerError));
+        assert.ok(!(e instanceof errors.SDKEncoderError));
+    });
+
     it('a subclass is throwable and catchable as SDKError', function () {
         assert.throws(
             () => { throw new SDKHubError('HUB_DOWN', 'unreachable'); },
