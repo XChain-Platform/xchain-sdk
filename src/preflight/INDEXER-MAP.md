@@ -32,7 +32,8 @@ HEAD 2026-08-08, ALL ELEVEN re-reviewed against indexer HEAD
 at `1a4b78a4` on 2026-08-17, `batch.js` re-reviewed at `188554e5` on
 2026-08-20, `issue.js` re-reviewed at `2d9cbbbf` on 2026-08-23, and
 `dispenser.js` + `dispense.js` re-reviewed at `2b65e8a4` on 2026-08-25, and
-`send.js` + `dispense.js` re-reviewed at `0d7074ad` on 2026-09-06 (see
+`send.js` + `dispense.js` re-reviewed at `0d7074ad` on 2026-09-06, and
+`batch.js` re-pinned at `717e7abe` on 2026-09-08 after a comment-only edit (see
 the review log below). Hashes
 are of the indexer handler source files, resolved via
 `XCHAIN_INDEXER_PATH` or the sibling `../xchain-indexer` checkout. The
@@ -44,16 +45,17 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-**Pins taken at indexer commit:** `0d7074ad`
+**Pins taken at indexer commit:** `717e7abe`
 
-(Re-anchored 2026-09-06 by the gated-handoff reference and dispense-tally-scale
-pass over `send.js` and `dispense.js`, whose entry below declares this anchor.
-`0d7074ad` is reachable from the indexer develop head, and the gate re-checks
-that reachability at run time before it hands a reviewer a range built on it.
+(Re-anchored 2026-09-08 by the comment-only `batch.js` re-pin, whose entry below
+declares this anchor. `717e7abe` is reachable from the indexer develop head, and
+the gate re-checks that reachability at run time before it hands a reviewer a
+range built on it.
 
-No byte-identity claim survives a re-anchor, so none is made here. Four files
-under `src/actions/` differ between `18954ab3` and `0d7074ad`, two of them
-mapped rows this pass re-pinned, which is exactly why the older anchor is a
+No byte-identity claim survives a re-anchor, so none is made here. Five files
+under `src/actions/` differ between `0d7074ad` and `717e7abe`; `batch.js` is the
+only mapped row among them and its executable code is byte-identical, the other
+four are unmapped handlers, which is exactly why the older anchor is a
 baseline for the older review only. Each review-log entry names the baseline it
 was read against; use that one, never this line, to reconstruct a past review.
 
@@ -80,7 +82,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 0d7074ad..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 717e7abe..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -128,7 +130,7 @@ found by hashing candidate blobs as above.
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `971338842f897e140d27565a4e01cdb364da14b81bb58e140dd6014d529b35fb` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `956463e64bb90087364b2c109c6d1f27a5b3526fd24415d6b9c22042e65e1479` |
 | `checks/dividend.js` | `src/actions/dividend.js` | `318754131de748339bad0a79eb2381309dac240150858f9a33abde42f9007248` |
-| `checks/batch.js` | `src/actions/batch.js` | `a505347a6a680341385be1296d92eae665d76cea8c371e3919f57deae1f9e5e3` |
+| `checks/batch.js` | `src/actions/batch.js` | `9073081204f440235b544ad642f1d3c2aa5b237a2425253a3cfe2b46fa314ce8` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -137,6 +139,16 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-08 - `batch.js`, against indexer HEAD `717e7abe`
+
+`batch.js` owes nothing: the only change since `0d7074ad` is one comment line
+above the VM action weights, which now cites the 2026-08-14 cost-measurement
+report by name instead of by a repository path. Executable code is
+byte-identical to the `a505347a` pin, verifiable with
+`git -C ../xchain-indexer diff 0d7074ad..717e7abe -- src/actions/batch.js`.
+The other four handlers that moved in the same range (`attest.js`,
+`deploy.js`, `deploy_chunk.js`, `rollcall.js`) are not mapped rows.
 
 ### 2026-09-06 (second pass) - `send.js` + `dispense.js`, against indexer HEAD `0d7074ad`
 
