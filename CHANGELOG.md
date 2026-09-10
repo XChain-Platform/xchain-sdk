@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `findToken(tick)` and `tokenExists(tick)` answer a missing ticker as `null`/`false` instead of throwing on the explorer's 404, and unwrap the token record from its `info` envelope; `getToken()` keeps its raw nested shape and is now documented as such.
 - Every deploy path now refuses a contract that exports no conforming `meta` before the action is composed, with the chain's own verdict string, and `sdk.contracts.getExportedMeta()` exposes the same static read.
 
 ## [0.16.0] - 2026-09-08

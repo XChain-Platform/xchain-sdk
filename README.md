@@ -175,8 +175,20 @@ await session.deploy({ code, gasLimit: 200000 });
 // deploy is still rejected on-chain. A computed or unreadable `meta` only warns.
 sdk.contracts.getExportedMeta(code);  // { status: 'present', name: 'Escrow', ... }
 
-// Query blockchain data
+// Query blockchain data. The token record arrives NESTED under `info`:
 const token = await sdk.getToken('MYTOKEN');
+token.info.tick_id;   // '42'   <- the fields live here
+token.tick_id;        // undefined
+
+// A tick that does not exist answers HTTP 404, so getToken() THROWS
+// SDKExplorerError (code EXPLORER_HTTP_404) instead of answering an empty
+// body. Use these for an existence check rather than a try/catch:
+await sdk.tokenExists('MYTOKEN');   // true / false, never throws on absence
+await sdk.findToken('MYTOKEN');     // the unwrapped info record, or null
+
+// Both answer "absent" only for the 404. A timeout, network failure, 429 or
+// 5xx still throws, because an explorer that could not answer is not proof
+// that the ticker is free.
 ```
 
 ## Configuration

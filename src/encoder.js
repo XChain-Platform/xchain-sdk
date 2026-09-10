@@ -235,6 +235,13 @@ class EncoderClient {
     //   feeQuote         - protocol fee { address, amount } from hub
     //
     // Returns: { psbt: <hex>, encoding: <string> }
+    // Plus, when the encoder's transparent FILE compression ran:
+    //   compression: { compressed, rawLength, storedLength, reason,
+    //                  data, rawData } - `data` and `rawData` (compressed only)
+    //   are the action string and payload THIS PSBT actually carries, which are
+    //   not the ones submitted: compression rewrote the COMPRESSION field and
+    //   deflated the payload. Every confirm check and every phase-2 rebuild must
+    //   read them, or it describes/rebuilds a transaction that does not exist.
     async createTx(params) {
         // `data` is optional. A transaction with no ACTION is a plain
         // payment (the encoder's create_tx contract has always allowed it, and
@@ -346,7 +353,7 @@ class EncoderClient {
         return this._rpc('create_tx', rpcParams);
     }
 
-    // P2SH/P2WSH two-phase helper: spend a previously created P2SH/P2WSH output
+    // P2SH/P2WSH two-phase helper: spend an existing P2SH/P2WSH output
     // This is phase 2 of the two-transaction pattern used by P2SH/P2WSH encoding
     //
     // Required:
@@ -356,6 +363,12 @@ class EncoderClient {
     //
     // Optional:
     //   change, fee, feePerKb, rbf, dust, unconfirmed, compressedPubKey, encoding, rawData
+    //   compress - FILE payload compression, tri-state as on createTx. Pass
+    //     `false` with the STORED bytes (create_tx's compression.data /
+    //     compression.rawData) to rebuild a reveal over a payload phase 1
+    //     already compressed: the reveal must reproduce the commit's chunks
+    //     byte for byte, and re-deriving them here instead of carrying them
+    //     makes the reveal unable to spend the commit.
     //   customOutputs - additional outputs to emit on the reveal (phase 2). On
     //     native-fee chains the protocol fee output MUST ride the reveal tx,
     //     because the indexer treats the reveal (not the funding tx) as the
@@ -392,6 +405,11 @@ class EncoderClient {
         if (params.dust !== undefined)             rpcParams.dust = params.dust;
         if (params.unconfirmed !== undefined)      rpcParams.unconfirmed = params.unconfirmed;
         if (params.customOutputs !== undefined)    rpcParams.customOutputs = params.customOutputs;
+        // Tri-state, forwarded rather than defaulted (see createTx). It was
+        // silently dropped here while createTx forwarded it, so a caller handing
+        // phase 2 already-deflated bytes could not tell the encoder to leave them
+        // alone and depended on a guard firing by accident.
+        if (params.compress !== undefined)         rpcParams.compress = params.compress;
 
         return this._rpc('create_tx', rpcParams);
     }

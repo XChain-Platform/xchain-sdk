@@ -1344,8 +1344,22 @@ class XChainSDK {
      *  Explorer: Token Methods
      */
 
-    async getToken(tick) {
-        return this._requireExplorer().getToken(tick);
+    // Raw token read: answers the NESTED envelope { info: { tick, tick_id, ... } }
+    // and THROWS SDKExplorerError EXPLORER_HTTP_404 when the tick does not
+    // exist. For an existence check use tokenExists/findToken below.
+    async getToken(tick, opts) {
+        return this._requireExplorer().getToken(tick, opts);
+    }
+
+    // The token's info record (already unwrapped from the .info envelope), or
+    // null when the tick does not exist. Errors other than the 404 still throw.
+    async findToken(tick, opts) {
+        return this._requireExplorer().findToken(tick, opts);
+    }
+
+    // true/false existence check that does not throw on a missing tick.
+    async tokenExists(tick, opts) {
+        return this._requireExplorer().tokenExists(tick, opts);
     }
 
     // Current official-token roster of a project tick (protocol/Project_Registry.md)

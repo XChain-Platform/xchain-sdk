@@ -625,6 +625,28 @@ export interface ListEnvelope<T> {
     runtime?: string;
 }
 
+/**
+ * A token's record as the explorer stores it. Field set varies by ISSUE
+ * version, so it stays open, but `tick` and `tick_id` are always present.
+ */
+export interface TokenInfo {
+    tick: string;
+    tick_id: string | number;
+    [key: string]: any;
+}
+
+/**
+ * What `getToken()` answers: the token record NESTED under `info` (a few
+ * deployments answer a one-element array of the same envelope). A tick that
+ * does not exist is an HTTP 404, so `getToken()` THROWS SDKExplorerError
+ * `EXPLORER_HTTP_404` rather than answering an empty body. Use
+ * `findToken()` / `tokenExists()` for an existence check.
+ */
+export interface TokenRecord {
+    info?: TokenInfo;
+    [key: string]: any;
+}
+
 export interface ContractInfo {
     actionIndex: number;
     address: string;
@@ -1577,8 +1599,23 @@ export declare class XChainSDK {
      *  Explorer: Token methods
      */
 
-    /** Get a single token by ticker. */
-    getToken(tick: string): Promise<any>;
+    /**
+     * Get a single token by ticker. Answers the NESTED envelope
+     * `{ info: { tick, tick_id, ... } }`, and THROWS SDKExplorerError
+     * `EXPLORER_HTTP_404` when the tick does not exist.
+     */
+    getToken(tick: string, opts?: QueryOptions): Promise<TokenRecord>;
+
+    /**
+     * The token's info record (already unwrapped from the `info` envelope), or
+     * `null` when the tick does not exist. Only the 404 becomes `null`: a
+     * timeout, network failure, 429 or 5xx still throws, because an explorer
+     * that could not answer is not a token that is absent.
+     */
+    findToken(tick: string, opts?: QueryOptions): Promise<TokenInfo | null>;
+
+    /** Existence check that does not throw on a missing tick. */
+    tokenExists(tick: string, opts?: QueryOptions): Promise<boolean>;
 
     /** Get a project tick's current official-token roster (spec: protocol/Project_Registry.md). */
     getProject(tick: string): Promise<any>;

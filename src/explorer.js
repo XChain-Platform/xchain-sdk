@@ -350,8 +350,43 @@ class ExplorerClient {
      *  Token Methods
      */
 
+    // Raw token read. The row arrives NESTED as { info: { tick, tick_id, ... } }
+    // (some deployments answer a one-element array of that envelope), and a tick
+    // that does not exist answers HTTP 404, which surfaces here as a thrown
+    // SDKExplorerError with code EXPLORER_HTTP_404. Use findToken/tokenExists
+    // for an existence check; see those for why the obvious ones are wrong.
     async getToken(tick, opts = {}) {
         return this._get('/token/' + tick, opts);
+    }
+
+    // The token's info record, or null when the tick does not exist.
+    //
+    // getToken()'s two surprises defeat the two checks a caller reaches for
+    // first: reading `row.tick` off the top level reports every EXISTING token
+    // absent (the fields live under .info), and "call it, treat a throw or an
+    // empty body as absent" throws on every MISSING one (404, not an empty
+    // 200). findToken unwraps the envelope and answers null for that 404.
+    //
+    // Only the 404 becomes null. A network failure, timeout, 429 or 5xx still
+    // throws, because "the explorer could not answer" is not "the token does
+    // not exist" and silently collapsing the two mints tokens over a blip.
+    async findToken(tick, opts = {}) {
+        let token;
+        try {
+            token = await this.getToken(tick, opts);
+        } catch (err) {
+            let status = err && err.details ? err.details.status : undefined;
+            if (status === 404 || (err && err.code === 'EXPLORER_HTTP_404')) return null;
+            throw err;
+        }
+        let info = token && (Array.isArray(token) ? (token[0] || {}).info : token.info);
+        return (info && typeof info === 'object') ? info : null;
+    }
+
+    // Existence check that does not throw on a missing tick. Same error policy
+    // as findToken: absent is false, unreachable still throws.
+    async tokenExists(tick, opts = {}) {
+        return (await this.findToken(tick, opts)) !== null;
     }
 
     // Current official-token roster of a project tick (protocol/Project_Registry.md).

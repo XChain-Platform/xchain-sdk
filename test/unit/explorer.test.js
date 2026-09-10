@@ -100,6 +100,91 @@ describe('ExplorerClient', function () {
             expect(result.info.tick).to.equal('MYTOKEN');
         });
 
+        // getToken has two shapes a caller cannot guess: the row is
+        // NESTED under .info, and a missing tick answers HTTP 404 rather than an
+        // empty body. Both naive existence checks are therefore wrong in
+        // OPPOSITE directions, which is what these two pin.
+        it('the naive top-level check reads an EXISTING token as absent', async function () {
+            nock(BASE).get('/BTC/api/token/MYTOKEN').reply(200, { info: { tick: 'MYTOKEN', tick_id: '42' } });
+            let row = await client.getToken('MYTOKEN');
+            expect(row.tick, 'the fields live under .info, not the top level').to.equal(undefined);
+            expect(row.info.tick).to.equal('MYTOKEN');
+        });
+
+        it('the naive catch-empty check throws on a MISSING token', async function () {
+            nock(BASE).get('/BTC/api/token/NOPE').reply(404, { error: 'not found' });
+            let threw = null;
+            try { await client.getToken('NOPE'); } catch (e) { threw = e; }
+            expect(threw, 'a missing tick is a 404, never an empty 200').to.not.equal(null);
+            expect(threw.code).to.equal('EXPLORER_HTTP_404');
+        });
+
+        it('findToken unwraps the .info envelope', async function () {
+            nock(BASE).get('/BTC/api/token/MYTOKEN').reply(200, { info: { tick: 'MYTOKEN', tick_id: '42' } });
+            let info = await client.findToken('MYTOKEN');
+            expect(info.tick).to.equal('MYTOKEN');
+            expect(info.tick_id).to.equal('42');
+        });
+
+        it('findToken unwraps the one-element array envelope', async function () {
+            nock(BASE).get('/BTC/api/token/MYTOKEN').reply(200, [{ info: { tick: 'MYTOKEN', tick_id: '7' } }]);
+            let info = await client.findToken('MYTOKEN');
+            expect(info.tick_id).to.equal('7');
+        });
+
+        it('findToken answers null on a 404 instead of throwing', async function () {
+            nock(BASE).get('/BTC/api/token/NOPE').reply(404, { error: 'not found' });
+            expect(await client.findToken('NOPE')).to.equal(null);
+        });
+
+        it('findToken answers null when a 200 carries no info record', async function () {
+            nock(BASE).get('/BTC/api/token/NOPE').reply(200, {});
+            expect(await client.findToken('NOPE')).to.equal(null);
+        });
+
+        it('tokenExists is true for a present tick and false for a missing one', async function () {
+            nock(BASE).get('/BTC/api/token/MYTOKEN').reply(200, { info: { tick: 'MYTOKEN', tick_id: '42' } });
+            expect(await client.tokenExists('MYTOKEN')).to.equal(true);
+            nock(BASE).get('/BTC/api/token/NOPE').reply(404, { error: 'not found' });
+            expect(await client.tokenExists('NOPE')).to.equal(false);
+        });
+
+        // "The explorer could not answer" is not "the token does not exist":
+        // collapsing the two would let a blip mint a duplicate ticker.
+        it('tokenExists still throws when the explorer fails for any other reason', async function () {
+            nock(BASE).get('/BTC/api/token/MYTOKEN').reply(503);
+            let threw = null;
+            try { await client.tokenExists('MYTOKEN'); } catch (e) { threw = e; }
+            expect(threw, 'a 503 must not read as absent').to.not.equal(null);
+            expect(threw.code).to.equal('EXPLORER_HTTP_503');
+
+            nock(BASE).get('/BTC/api/token/MYTOKEN').replyWithError('connection reset');
+            threw = null;
+            try { await client.tokenExists('MYTOKEN'); } catch (e) { threw = e; }
+            expect(threw, 'an unreachable host must not read as absent').to.not.equal(null);
+            expect(threw.code).to.equal('EXPLORER_NETWORK');
+        });
+
+        it('findToken forwards opts to the underlying read', async function () {
+            nock(BASE).get('/BTC/api/token/MYTOKEN').query({ page: '2' })
+                .reply(200, { info: { tick: 'MYTOKEN' } });
+            let info = await client.findToken('MYTOKEN', { page: 2 });
+            expect(info.tick).to.equal('MYTOKEN');
+        });
+
+        it('index.d.ts and the README document the nested shape and the helpers', function () {
+            const dts = require('fs').readFileSync(require('path').join(__dirname, '../../index.d.ts'), 'utf8');
+            expect(dts, 'TokenInfo must be declared').to.match(/export interface TokenInfo \{/);
+            expect(dts).to.match(/getToken\(tick: string, opts\?: QueryOptions\): Promise<TokenRecord>;/);
+            expect(dts).to.match(/findToken\(tick: string, opts\?: QueryOptions\): Promise<TokenInfo \| null>;/);
+            expect(dts).to.match(/tokenExists\(tick: string, opts\?: QueryOptions\): Promise<boolean>;/);
+
+            const readme = require('fs').readFileSync(require('path').join(__dirname, '../../README.md'), 'utf8');
+            expect(readme, 'the nested envelope must be documented').to.match(/token\.info\.tick_id/);
+            expect(readme, 'the 404-on-missing behaviour must be documented').to.match(/EXPLORER_HTTP_404/);
+            expect(readme).to.match(/sdk\.tokenExists\(/);
+        });
+
         it('getTransaction hits /{COIN}/api/transaction/{query}/{type}', async function () {
             nock(BASE).get('/BTC/api/transaction/abc123/tx_hash').reply(200, { tx_hash: 'abc123' });
             let result = await client.getTransaction('abc123', 'tx_hash');
@@ -1109,7 +1194,7 @@ describe('ExplorerClient', function () {
     describe('public methods', function () {
         const methods = [
             'getBalances', 'getBalancesBatch', 'getAddress', 'getHolders', 'getCredits', 'getDebits', 'getEscrows',
-            'getToken', 'getProject', 'getTokens', 'getIssues',
+            'getToken', 'findToken', 'tokenExists', 'getProject', 'getTokens', 'getIssues',
             'getTransaction', 'getAction', 'getBlock', 'getHistory',
             'getAddresses', 'getAirdrops', 'getBatches', 'getBroadcasts', 'getCallbacks',
             'getCoinpays', 'getCoinpayExpires', 'getCoinpayObligations', 'getCoinpayObligationsBatch',
@@ -1141,7 +1226,7 @@ describe('ExplorerClient', function () {
             });
         }
 
-        it('has 121 public methods', function () {
+        it('has 123 public methods', function () {
             // 113 = 112 + getPreflight (validity-first pre-flight proxy).
             // 117 = 113 + the four BET reads: getBetFeeds, getBetFeed,
             // getBets, getOracleStats.
@@ -1149,9 +1234,11 @@ describe('ExplorerClient', function () {
             // 119 = 118 + freshness (the explorer's per-response tip marker).
             // 121 = 119 + the two batch reads: getBalancesBatch,
             // getCoinpayObligationsBatch.
+            // 123 = 121 + the two non-throwing token existence reads:
+            // findToken, tokenExists.
             let publicMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(publicMethods).to.have.length(121);
+            expect(publicMethods).to.have.length(123);
         });
     });
 
