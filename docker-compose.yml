@@ -3,6 +3,9 @@ version: '3'
 services:
   xchain_sdk:
     build: .
+    # The image bakes no .env (Dockerfile); a local .env is handed to the
+    # container here instead.
+    env_file: .env
     networks:
       - network1
     ports:
