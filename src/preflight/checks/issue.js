@@ -67,6 +67,18 @@ function checkMaxSupplyFormat(ctx, tick, token) {
         : (wireDecimals === '' ? null : wireDecimals);
 
     ctx.markRun(FINDING_CODES.AMOUNT_FORMAT_INVALID);
+    // The check below is the LEGACY amount-format rule (see numeric.js). Above its
+    // flag-day the indexer also requires every AMOUNT-class field to denote the number
+    // the ledger credits, which pre-flight cannot decide: it needs the activation state
+    // of the block that will carry the action. Declared rather than raised, because
+    // neither mainnet nor testnet is armed and rejecting here would block an ISSUE both
+    // planes accept. Filed before the NaN-decimals return, because the representability
+    // rule does not depend on a resolved precision for its integer-width leg.
+    ctx.addUnverified('AMOUNT_REPRESENTABILITY',
+        'above its flag-day an AMOUNT-class field must be a plain decimal numeral denoting the number the '
+        + 'ledger credits, so exponent notation and an integer too wide for the ledger aggregation are '
+        + 'rejected instead of crediting a different number; the activation state of the including block '
+        + 'is server-side only, and neither mainnet nor testnet is armed for it');
     // Neither side resolves a precision: that is consensus's own NaN-decimals case, which
     // imposes no cap at all, so asserting one here would be stricter than the chain.
     if (decimals === null) return;

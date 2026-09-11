@@ -131,6 +131,18 @@ async function checkMint(ctx) {
             { tick, amount, decimals });
     }
 
+    // The amount-format check above is the LEGACY rule (see numeric.js). Above its
+    // flag-day the indexer additionally requires the amount text to denote the number
+    // the ledger credits, which this client cannot predict: it needs the activation
+    // state of the block that will carry the action. Declared, never raised as an
+    // error, because neither mainnet nor testnet is armed and rejecting here would
+    // block a broadcast both planes accept.
+    ctx.addUnverified('AMOUNT_REPRESENTABILITY',
+        'above its flag-day an AMOUNT must be a plain decimal numeral denoting the number the ledger '
+        + 'credits, so exponent notation and an integer too wide for the ledger aggregation are rejected '
+        + 'instead of crediting a different number; the activation state of the including block is '
+        + 'server-side only, and neither mainnet nor testnet is armed for it');
+
     ctx.addUnverified('MINT_ADDRESS_HEADROOM',
         'per-address minted headroom, allow/block lists, and mint-guard outcome are server-side only');
 }

@@ -72,6 +72,25 @@ function mulFloor(a, b, decimals) {
 
 // Wire-amount format validity per the tick's decimals: the vendored
 // consensus rule (negative, over-precision, non-numeric all refuse).
+//
+// DELIBERATELY THE TWO-ARGUMENT (LEGACY) RULE. The indexer's
+// isValidAmountFormat now takes an optional third argument, the including
+// block's consensus timestamp, and a call that supplies it opts into the
+// AMOUNT-REPRESENTABILITY gate: the amount text must be a plain unsigned
+// decimal numeral whose integer part fits the ledger's aggregation width, so
+// exponent notation and radix prefixes are refused rather than validated and
+// then credited as a different number. That gate only ever REJECTS more, and it
+// is flag-day gated per chain with mainnet and testnet both on the unarmed
+// house sentinel. Vendoring it here would make this client reject amounts both
+// public planes still accept, which is the SDK-stricter-than-consensus
+// false-block this module's contract forbids (src/validator.js records the SDK
+// shipping exactly that regression once already).
+//
+// So the rule is DECLARED, not predicted: the checks modules that judge amount
+// format (checks/mint.js, checks/issue.js, checks/dispenser.js) file an
+// AMOUNT_REPRESENTABILITY unverified aspect naming it. Mirror it as a real
+// rejection only once mainnet is armed, and only alongside an activation source
+// this SDK can actually read. See src/preflight/INDEXER-MAP.md.
 function isValidAmountFormat(decimals, amount) {
     return util.isValidAmountFormat(decimals, amount);
 }

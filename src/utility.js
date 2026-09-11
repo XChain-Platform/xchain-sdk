@@ -204,6 +204,15 @@ class Utility {
         return false;
     }
 
+    // Two arguments on purpose. The consensus-authoritative indexer copy takes an
+    // optional third one, the including block's consensus timestamp, which opts that
+    // call into its flag-day AMOUNT-REPRESENTABILITY gate (an amount must be a plain
+    // decimal numeral that denotes the number the ledger credits, so '5e-19' no longer
+    // validates and then credits 1e-18). This copy stays on the legacy rule while
+    // mainnet and testnet are both unarmed for that gate: a client that rejects what
+    // those planes still accept blocks a valid broadcast. Parity with the indexer copy
+    // is asserted in test/unit/utility.test.js, and it is parity with the legacy
+    // two-argument path, which the indexer preserves byte-for-byte below the threshold.
     isValidAmountFormat(decimals, amount){
         // Reject objects that can't be safely converted to string (mirrors indexer).
         if(amount !== null && amount !== undefined && typeof amount === 'object' && this.safeToString(amount) === null)
