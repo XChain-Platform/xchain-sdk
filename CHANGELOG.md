@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `index.d.ts` now declares the low-level WebSocket client and the `sdk.ws` member, so TypeScript callers can use the raw subscribe/on surface.
+
+### Fixed
+- `AttestationHelpers.llm()` rejects a non-string `opts.system` instead of serializing it as `[object Object]`.
+
 ## [0.17.0] - 2026-09-10
 
 ### Added

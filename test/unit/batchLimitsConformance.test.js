@@ -51,26 +51,70 @@ const {
     CHILD_ISSUE_KEY,
     UNRESOLVED_TICK_KEY,
     classifyCommand,
+    commandTick,
     formatVersion,
     limitKeysInListOrder,
     maxMintsPerDistinctTick,
     mintTickKey,
-    scanBatch,
     subCommandWeight,
     batchWeight,
 } = require('../../src/batchLimits.js');
+const { parse } = require('../../src/decoder/parse.js');
 
-// The arbiter's error vocabulary, so one table can state one expected verdict
-// for both halves. 'valid' means no whole-batch rule was broken.
-function verdictOf(scan) {
-    const v = scan.violation;
-    if (!v) return 'valid';
-    if (v.kind === 'COMMAND_LIMIT') return 'invalid: COMMAND (limit)';
-    // The weight budget rejects with the SAME string as the count cap: the
-    // arbiter's error is "this batch is too much work", only measured better.
-    if (v.kind === 'WEIGHT_LIMIT') return 'invalid: COMMAND (limit)';
-    if (v.kind === 'ACTION_UNKNOWN') return 'invalid: ACTION (unknown)';
-    return 'invalid: ' + v.action + ' (limit)';
+/*
+ * THE SDK HALF IS THE SHIPPED DECODER, NOT A SECOND SCANNER.
+ *
+ * The SDK half drives `decoder/parse.js`, the code a consumer actually gets,
+ * rather than a `scanBatch` helper kept in batchLimits.js for this test alone.
+ * Such a helper restates the arbiter's whole precedence chain a second time
+ * with no caller in the SDK, and a mirror only the test reads proves the test,
+ * not the product.
+ *
+ * `mirrorVerdict` translates parse's finding vocabulary into the arbiter's
+ * error strings, applying the arbiter's OWN precedence (whole-batch cap or
+ * weight first, then an unknown/empty ACTION, then the first per-action cap),
+ * because parse returns command-level findings ahead of batch-level ones and
+ * that list order is a presentation detail rather than a consensus rule.
+ */
+function mirrorVerdict(tail) {
+    const result = parse('BATCH|0|' + String(tail), { validate: true });
+
+    // Nested BATCH is a categorical PARSE failure client-side, not a finding:
+    // BATCH's cap of 0 means no readable batch can contain one at all.
+    if (!result.ok) return 'parse failure: ' + result.code;
+
+    const findings = (result.validation && result.validation.findings) || [];
+    const limits = findings.filter((f) => f.code === 'BATCH_LIMIT_EXCEEDED');
+
+    // The count cap and the weight budget both reject the whole batch under
+    // `COMMAND`, and both run ahead of every per-action count on chain. The
+    // decoder already honours that precedence by reporting the cap ALONE (it
+    // is pinned below, 'the cap is reported alone...'), so this branch is a
+    // guard against that changing under the translation, not the rule itself.
+    if (limits.some((f) => f.details && f.details.action === 'COMMAND'))
+        return 'invalid: COMMAND (limit)';
+
+    // An unregistered ACTION name - the empty string an empty command yields
+    // included - kills the whole batch before any per-action cap is counted.
+    if (findings.some((f) => f.code === 'BATCH_COMMAND_INVALID'
+        && f.details && (f.details.code === 'UNKNOWN_ACTION' || f.details.code === 'EMPTY')))
+        return 'invalid: ACTION (unknown)';
+
+    // Among per-action caps the FIRST finding wins, and parse emits them in
+    // limitKeysInListOrder, which is spec R2b's first-appearance rule.
+    if (limits.length) return 'invalid: ' + limits[0].details.action + ' (limit)';
+
+    return 'valid';
+}
+
+/*
+ * The mirror's per-token MINT maximum, assembled from the SAME two primitives
+ * decoder/parse.js assembles it from, so the number asserted here is the one
+ * the shipped cap loop compares against rather than a test-local recount.
+ */
+function mirrorMint(entries) {
+    const ticks = entries.filter((e) => classifyCommand(e) === 'MINT').map(commandTick);
+    return ticks.length ? maxMintsPerDistinctTick(ticks) : { max: 0, approximate: false };
 }
 
 const repeat = (n, f) => Array.from({ length: n }, (_, i) => f(i));
@@ -291,16 +335,25 @@ const VECTORS = [
         // BATCH's cap is 0, so ONE nested batch already breaks it. It is the
         // alphabetically first name of the four, which is what makes the
         // ISSUE-leads direction worth stating.
+        //
+        // `decoderVerdict`: the SHIPPED client expresses BATCH's cap of 0 as a
+        // categorical PARSE refusal rather than a limit finding, and a parse
+        // refusal has no position - so the SDK side cannot distinguish this
+        // vector from its mirror image below, and does not pretend to. Both
+        // halves still REJECT; only the error name differs, and the arbiter
+        // half below pins the consensus string for both directions.
         name: 'a leading nested BATCH names the error over a later ISSUE break',
         tail: 'BATCH|0|ISSUE|0|X|1;ISSUE|0|AAA|1;ISSUE|0|BBB|1',
         classes: ['BATCH', 'ISSUE', 'ISSUE'], count: 3,
         verdict: 'invalid: BATCH (limit)',
+        decoderVerdict: 'parse failure: NESTED_BATCH_FORBIDDEN',
     },
     {
         name: 'a leading ISSUE break names the error over a later nested BATCH',
         tail: 'ISSUE|0|AAA|1;ISSUE|0|BBB|1;BATCH|0|ISSUE|0|X|1',
         classes: ['ISSUE', 'ISSUE', 'BATCH'], count: 3,
         verdict: 'invalid: ISSUE (limit)',
+        decoderVerdict: 'parse failure: NESTED_BATCH_FORBIDDEN',
     },
     {
         // Uncapped and exempt commands take no turn: a leading SEND and a
@@ -506,6 +559,17 @@ const WEIGHT_VECTORS = [
  * (count cap first, then the weight budget) so the two enforcement shapes are
  * compared, not just the arithmetic.
  */
+/*
+ * `decoderVerdict` on a vector below records that the SHIPPED decoder answers
+ * this tail before the weight rule is ever reached: a batch carrying 220-odd
+ * DEPLOY/SEND companions is longer than the wire payload `parse` will accept,
+ * so it refuses with TOO_LONG. The weight arithmetic those vectors exist for
+ * is still asserted directly (`batchWeight` above), and the finding SHAPE a
+ * weight overflow produces is pinned by its own case below on a tail short
+ * enough to parse. Stating the parse failure is the point: it is what a
+ * consumer really sees, where the deleted scanBatch helper answered
+ * a verdict no shipped code path would have reached.
+ */
 const WEIGHT_BATCH_VECTORS = [
     {
         name: '8 EXECUTEs and 10 SENDs weigh the budget exactly and fit',
@@ -520,24 +584,25 @@ const WEIGHT_BATCH_VECTORS = [
     {
         name: 'an inline DEPLOY may carry 220 companions',
         tail: [DEPLOY_V0].concat(repeat(220, () => SEND_CMD)).join(';'),
-        weight: 250, verdict: 'valid',
+        weight: 250, verdict: 'valid', decoderVerdict: 'parse failure: TOO_LONG',
     },
     {
         name: 'an inline DEPLOY with 221 companions weighs 251 and rejects whole',
         tail: [DEPLOY_V0].concat(repeat(221, () => SEND_CMD)).join(';'),
-        weight: 251, verdict: 'invalid: COMMAND (limit)',
+        weight: 251, verdict: 'invalid: COMMAND (limit)', decoderVerdict: 'parse failure: TOO_LONG',
     },
     {
         // The ruling's whole point: a carrier is a row write, so it shares its
         // batch with 249 companions instead of the 220 an inline DEPLOY buys.
         name: 'a chunk-carrier DEPLOY shares its batch with 249 companions',
         tail: [DEPLOY_V4].concat(repeat(249, () => SEND_CMD)).join(';'),
-        weight: 250, verdict: 'valid',
+        weight: 250, verdict: 'valid', decoderVerdict: 'parse failure: TOO_LONG',
     },
     {
         name: 'the carrier discount does not leak to its companions: one EXECUTE among them still counts 30',
         tail: [DEPLOY_V4].concat(repeat(248, () => SEND_CMD)).concat([EXEC_CMD]).join(';'),
         weight: 279, verdict: 'invalid: COMMAND (limit)',
+        decoderVerdict: 'parse failure: TOO_LONG',
     },
 ];
 
@@ -657,21 +722,44 @@ describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
     });
 
     describe('SDK half', function () {
+        it('the cap is reported alone, so no per-command finding can outrank it', function () {
+            // The arbiter checks the command cap FIRST and rejects the whole
+            // batch there, never reaching the unknown-ACTION scan a trailing
+            // empty command would otherwise trip. The decoder matches that by
+            // emitting the cap and NOTHING else - which is why the vector below
+            // reads 'invalid: COMMAND (limit)' and not 'ACTION (unknown)'. Pinned
+            // directly because a decoder that started reporting both would move
+            // a consensus error string with every vector still green.
+            const tail = repeat(250, (i) => 'ISSUE|0|JDOG.' + i + '|1').join(';') + ';';
+            expect(tail.split(';').length, 'over the cap, with an empty last command').to.equal(251);
+            const findings = (parse('BATCH|0|' + tail, { validate: true })
+                .validation || {}).findings || [];
+            expect(findings.some((f) => f.code === 'BATCH_LIMIT_EXCEEDED'
+                && f.details.action === 'COMMAND'), 'the cap is reported').to.equal(true);
+            expect(findings.filter((f) => f.code === 'BATCH_COMMAND_INVALID'),
+                'no per-command finding survives the cap').to.deep.equal([]);
+            expect(mirrorVerdict(tail)).to.equal('invalid: COMMAND (limit)');
+        });
+
         for (const v of VECTORS) {
             it(v.name, function () {
                 const entries = v.tail.split(';');
                 const expected = v.classes || entries.map(() => v.uniform);
                 if (expected[0] !== undefined)
                     expect(entries.map(classifyCommand)).to.deep.equal(expected);
-                const scan = scanBatch(v.tail);
-                expect(scan.count, 'command count').to.equal(v.count);
-                expect(verdictOf(scan), 'whole-batch verdict').to.equal(sdkVerdictOf(v));
+                // The arbiter's count is the raw ';'-split length, empties
+                // included; that is what `entries` is, and every downstream
+                // rule here is stated against it.
+                expect(entries.length, 'command count').to.equal(v.count);
+                expect(mirrorVerdict(v.tail), 'whole-batch verdict')
+                    .to.equal(v.decoderVerdict || sdkVerdictOf(v));
+                const mint = mirrorMint(entries);
                 if (v.mintMax !== undefined)
-                    expect(scan.mint.max, 'mirror per-token MINT maximum').to.equal(v.mintMax);
+                    expect(mint.max, 'mirror per-token MINT maximum').to.equal(v.mintMax);
                 // Asserted on EVERY vector, so the flag cannot start firing
                 // where it should not (silencing a real MINT violation) or
                 // stop firing where it must (hiding the caret divergence).
-                expect(scan.mint.approximate, 'mirror approximation flag')
+                expect(mint.approximate, 'mirror approximation flag')
                     .to.equal(v.approximate === true);
             });
         }
@@ -836,10 +924,11 @@ describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
                 expect(got.status, 'arbiter verdict').to.equal(arbiterVerdictOf(v));
                 // A valid batch dispatches one sub-command per counted command:
                 // that dispatch count IS the arbiter's count, and it must equal
-                // the SDK's. An invalid batch dispatches nothing, and its count
-                // is pinned by the cap boundary vectors either side of 250.
+                // the count the vector states, which the SDK half asserts the
+                // raw ';'-split against. An invalid batch dispatches nothing,
+                // and its count is pinned by the cap vectors either side of 250.
                 if (arbiterVerdictOf(v) === 'valid')
-                    expect(got.dispatched, 'arbiter command count').to.equal(scanBatch(v.tail).count);
+                    expect(got.dispatched, 'arbiter command count').to.equal(v.count);
             });
         }
     });
@@ -876,21 +965,35 @@ describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
                     // vector fits the count, so the verdict here IS the budget's.
                     const over = entries.length > BATCH_COMMAND_LIMIT || batchWeight(entries) > BATCH_WEIGHT_BUDGET;
                     expect(over, 'mirror verdict').to.equal(v.verdict !== 'valid');
-                    // The arithmetic above is not the canonical scan. scanBatch is
-                    // what an outside consumer reads for the whole-batch verdict,
-                    // and it does not restate this rule, so it is asserted here
-                    // rather than inferred from the sum.
-                    const scan = scanBatch(v.tail);
-                    expect(verdictOf(scan), 'scanBatch whole-batch verdict').to.equal(v.verdict);
-                    if (v.verdict !== 'valid') {
-                        expect(scan.violation.kind, 'a weight overflow is its own kind').to.equal('WEIGHT_LIMIT');
-                        expect(scan.violation.weight, 'the measured weight rides the violation').to.equal(v.weight);
-                        // The one kind a mainnet chain may not raise, so a caller
-                        // can tell it from the rules that are armed everywhere.
-                        expect(scan.violation.flagGated, 'weight is flag-gated').to.equal(true);
-                    }
+                    // The arithmetic above is not what a consumer reads. The
+                    // shipped decoder is, so its answer is asserted directly -
+                    // including where that answer is the payload-length refusal
+                    // it reaches before any limit rule (see decoderVerdict).
+                    expect(mirrorVerdict(v.tail), 'decoder whole-batch verdict')
+                        .to.equal(v.decoderVerdict || v.verdict);
                 });
             }
+
+            it('reports a weight overflow as a whole-batch COMMAND limit that names its flag', function () {
+                // Short enough to parse, so the decoder reaches the weight rule:
+                // ten inline DEPLOYs weigh 300 against a budget of 250.
+                const tail = repeat(10, () => 'DEPLOY|0|6001').join(';');
+                expect(batchWeight(tail.split(';')), 'the tail is over budget').to.equal(300);
+                expect(mirrorVerdict(tail)).to.equal('invalid: COMMAND (limit)');
+                const findings = (parse('BATCH|0|' + tail, { validate: true })
+                    .validation || {}).findings || [];
+                const over = findings.find((f) => f.code === 'BATCH_LIMIT_EXCEEDED'
+                    && f.details && f.details.action === 'COMMAND');
+                expect(over, 'the overflow is reported as a whole-batch COMMAND limit')
+                    .to.not.equal(undefined);
+                expect(over.details.weight, 'the measured weight rides the finding').to.equal(300);
+                expect(over.details.limit, 'against the budget, not the count cap')
+                    .to.equal(BATCH_WEIGHT_BUDGET);
+                // This is the one rule a mainnet chain may not raise yet, so the
+                // finding must say so rather than read as a rule armed everywhere.
+                expect(over.message, 'a weight overflow names its flag')
+                    .to.contain('once cost weighting is armed');
+            });
         });
 
         describe('arbiter half (sibling xchain-indexer checkout)', function () {

@@ -111,6 +111,9 @@ function buildLlmEnvelope(opts){
     if (!opts || typeof opts.prompt !== 'string' || opts.prompt.length === 0){
         throw new Error('AttestationHelpers.llm: opts.prompt (non-empty string) is required');
     }
+    if (opts.system !== undefined && typeof opts.system !== 'string'){
+        throw new Error('AttestationHelpers.llm: opts.system must be a string');
+    }
     if (opts.format !== undefined && opts.format !== 'text' && opts.format !== 'json_object'){
         throw new Error('AttestationHelpers.llm: opts.format must be "text" or "json_object"');
     }

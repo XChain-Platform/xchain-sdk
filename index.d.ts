@@ -1153,6 +1153,85 @@ export interface EncryptPackResult {
     keyHash: string;
 }
 
+/*
+ *  WebSocketClient: low-level real-time client wrapping the xchain-explorer
+ *  WebSocket API. XChainSDK's onBlock()/onAction()/onAddress()/... helpers
+ *  wrap this; `sdk.ws` is the instance itself for callers who need the raw
+ *  subscribe/on/off surface (e.g. `sdk.ws.subscribeBetFeed(index)`).
+ */
+
+// Internal: reached only via `sdk.ws`; not re-exported from index.js, so declared (not exported) here.
+declare class WebSocketClient {
+    constructor(options?: {
+        /** Explorer/websocket hostname; falls back to explorerUrl, then 'localhost' */
+        websocketUrl?: string;
+        explorerUrl?: string;
+        /** Explorer/websocket port; falls back to explorerPort, then 8080 */
+        websocketPort?: number;
+        explorerPort?: number;
+        websocketProtocol?: string;
+        network?: string;
+        hooks?: { onWsConnect?: (info: { url: string }) => void; onWsDisconnect?: (info: { code: number }) => void; onWsReconnect?: (info: { attempt: number; delay: number }) => void; onWsMessage?: (msg: any) => void; onWsSchemaMismatch?: (info: { serverSchemaVersion: number; clientSchemaVersion: number }) => void };
+        retry?: RetryConfig | false;
+        /** Ping interval in milliseconds (default: 25000) */
+        pingInterval?: number;
+        readyHook?: () => Promise<void>;
+    });
+
+    /** WS envelope schema version this SDK build understands */
+    static readonly WS_SCHEMA_VERSION: number;
+
+    baseUrl: string;
+    port: number;
+    protocol: string;
+    readonly coin: string;
+    connected: boolean;
+    catchingUp: boolean;
+    /** Decimal-string catch-up cursor, or null when unseeded */
+    lastActionIndex: string | null;
+
+    /** Connect and resolve when the WELCOME message is received */
+    connect(): Promise<any>;
+
+    /** Disconnect intentionally (no auto-reconnect follows) */
+    disconnect(): void;
+
+    /** True when the underlying socket is open */
+    isConnected(): boolean;
+
+    /** Repoint at a new host/port; reconnects immediately if currently connected */
+    setBase(url?: string, port?: number): void;
+
+    /**
+     * Subscribe to one or more channels. Refcounted per (channels, params):
+     * repeat subscribes to the same pair share one server-side subscription
+     * and resolve the same SUBSCRIBED confirmation. Tracked for replay on
+     * reconnect. Rejects with WS_TIMEOUT if the server never confirms.
+     */
+    subscribe(channels: string[], params?: Record<string, any>): Promise<any>;
+
+    /** Refcounted counterpart of subscribe(): releases one holder, only the last one unsubscribes server-side. */
+    unsubscribe(channels: string[], params?: Record<string, any>): void;
+
+    /** Subscribe to one betting market's live events by its feed ACTION_INDEX */
+    subscribeBetFeed(feedActionIndex: number | string, params?: Record<string, any>): Promise<any>;
+
+    /** Stop following a betting market; params must match subscribeBetFeed's exactly */
+    unsubscribeBetFeed(feedActionIndex: number | string, params?: Record<string, any>): void;
+
+    /** Resolves with the server's SUBSCRIPTION_LIST response */
+    listSubscriptions(): Promise<any>;
+
+    /** Register a handler for a WS message type (or '*' for all) */
+    on(eventType: string, callback: (msg: any) => void): void;
+
+    /** Remove a previously registered handler */
+    off(eventType: string, callback: (msg: any) => void): void;
+
+    /** Register a handler that fires once then removes itself */
+    once(eventType: string, callback: (msg: any) => void): void;
+}
+
 // Internal: reached only via `sdk.gatedFile`; not re-exported from index.js, so declared (not exported) here.
 declare class GatedFileUtils {
     /** Generate a fresh random 256-bit symmetric key */
@@ -1931,6 +2010,14 @@ export declare class XChainSDK {
      *  catch_up? }`. Requires the WS client to be configured (network +
      *  websocketUrl/explorerUrl, or hub discovery) and connected.
      */
+
+    /**
+     * The low-level WebSocket client, or null until a network + websocketUrl/
+     * explorerUrl (or hub discovery) configures one. Use the on*() helpers
+     * below for the common cases; reach for `sdk.ws` directly for the raw
+     * subscribe/on/off surface, e.g. `sdk.ws.subscribeBetFeed(index)`.
+     */
+    readonly ws: WebSocketClient | null;
 
     /** Connect the WebSocket client (auto-called by init() when configured). */
     connectWs(): Promise<any>;

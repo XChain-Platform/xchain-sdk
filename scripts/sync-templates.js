@@ -7,7 +7,20 @@
 // pattern change:  npm run sync:templates
 //
 // A drift guard (test/unit/template-parity.test.js) fails the build if the
-// embedded copy and the canonical xchain-contracts source diverge.
+// embedded copy and the canonical xchain-contracts source diverge, but it
+// only runs when a sibling xchain-contracts checkout sits beside this repo
+// (`.ci-siblings` declares it), and CI resolves that sibling from ITS
+// ORIGIN. Editing a canonical template locally and forgetting to regenerate
+// is therefore only caught for certain by a combined-tree run, or by
+// pushing xchain-contracts before xchain-sdk (canonical-first ordering) so
+// the SDK's own gate compares against the real edit rather than a stale
+// origin copy - see CONTRIBUTING.md, "Editing a canonical template".
+//
+// --check (no write) answers the same question up front, locally, without
+// needing mocha or a sibling checkout wired into a test runner: it fails
+// loudly (exit 1) the moment the embed would differ from what sync would
+// write, so a canonical edit can be caught before it is ever pushed.
+//   node scripts/sync-templates.js --check
 
 'use strict';
 
@@ -74,7 +87,36 @@ function render(templates, patterns) {
     ].join('\n');
 }
 
+// Same skip contract as the drift guard: no sibling checkout, no verdict.
+// A missing xchain-contracts checkout is a normal single-repo clone, not a
+// drift signal, so --check exits 0 (nothing to compare) rather than failing.
+function check() {
+    if (!fs.existsSync(CONTRACTS_DIR)) {
+        process.stdout.write('sync:templates --check: no sibling xchain-contracts checkout at ' +
+            CONTRACTS_DIR + ', skipping (nothing to compare)\n');
+        return;
+    }
+    const templates = collectTemplates();
+    const patterns  = collectPatterns();
+    const expected  = render(templates, patterns);
+    const actual    = fs.existsSync(OUT_FILE) ? fs.readFileSync(OUT_FILE, 'utf8') : null;
+    if (actual === expected) {
+        process.stdout.write('sync:templates --check: src/contract/templates.js matches canonical xchain-contracts\n');
+        return;
+    }
+    if (actual === null) {
+        process.stderr.write('TEMPLATE DRIFT: src/contract/templates.js does not exist; run `npm run sync:templates`.\n');
+    } else {
+        process.stderr.write('TEMPLATE DRIFT: src/contract/templates.js is stale against canonical xchain-contracts; run `npm run sync:templates`.\n');
+    }
+    process.exitCode = 1;
+}
+
 function main() {
+    if (process.argv.includes('--check')) {
+        check();
+        return;
+    }
     if (!fs.existsSync(CONTRACTS_DIR))
         throw new Error('xchain-contracts sibling repo not found at ' + CONTRACTS_DIR);
     const templates = collectTemplates();

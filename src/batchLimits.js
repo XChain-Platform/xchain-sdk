@@ -82,9 +82,9 @@
  *     so two MINTs spelled both ways are one token to the arbiter and two
  *     strings here. Detectable because the caret form is visible in the
  *     wire text, so the compose-side sites REFUSE the shape and tell the
- *     caller to spell the TICK by name; scanBatch, which decodes rather
- *     than composes, reports it as `approximate` instead of inventing a
- *     verdict it cannot support.
+ *     caller to spell the TICK by name; `maxMintsPerDistinctTick`, which
+ *     decodes rather than composes, reports it as `approximate` instead of
+ *     inventing a verdict it cannot support.
  *  2. UNRESOLVABLE TICKS, undetectable. The arbiter buckets every TICK
  *     that resolves to no id TOGETHER, so two MINTs of two not-yet-created
  *     tokens are one bucket and one reject there, two distinct strings
@@ -112,7 +112,6 @@
 
 'use strict';
 
-const formats = require('./formats.js');
 const { ACTION_ALIASES } = require('./decoder/aliases.js');
 const mathjs = require('mathjs');
 
@@ -217,25 +216,17 @@ function expandAlias(action) {
         : action;
 }
 
-// Whether this (alias-expanded) name is one a client can author. It stands in for
-// the indexer's `protocolChanges.isEnabled(action)` activation scan - an
-// unregistered name, including the empty string an empty command yields, is
-// `invalid: ACTION (unknown)` there, whole-batch, before any limit is counted -
-// and it is deliberately NARROWER than that scan, so read it as encodability, not
-// as the chain's registry. The registry recognizes every name it holds an entry
-// for, which is a superset of the encodable formats: the validator/lifecycle/
-// mirror-injected actions absent from formats.js by design (DISPENSE,
-// COINPAY_EXPIRE, SLASH, ATTEST, ANCHOR, XCALL, NODEPROOF) and every feature-flag
-// entry sharing the same table. A hand-built wire batch naming one of those reads
-// ACTION_UNKNOWN here while the arbiter's scan passes it to its handler.
+// NOTE ON THE ACTIVATION SCAN, which this module deliberately does NOT mirror.
 //
-// The divergence is one-way by construction, and in the safe direction: all 31
-// formats keys are registered with no activation gate, so this never calls known
-// a name the chain would reject. It over-warns about a batch nothing in this SDK
-// can compose; it never vouches for one the chain refuses.
-function isKnownAction(action) {
-    return Object.prototype.hasOwnProperty.call(formats, expandAlias(action));
-}
+// The arbiter rejects a whole batch with `invalid: ACTION (unknown)` when any
+// sub-command names something its `protocolChanges.isEnabled(action)` scan does
+// not recognize (the empty string an empty command yields included), before any
+// limit is counted. The client side answers that question in the DECODER, where
+// each sub-command is parsed anyway: decoder/parse.js raises
+// BATCH_COMMAND_INVALID with an UNKNOWN_ACTION / EMPTY code off the real parse
+// attempt. This module deliberately exposes no second, narrower `formats`-keyed
+// predicate: with the decoder answering the question for every caller, a
+// third way to ask it would have no consumer outside a test.
 
 /*
  * Classify one ISSUE TICK value.
@@ -474,9 +465,9 @@ function maxMintsPerDistinctTick(ticks) {
  *
  * This is the ONE expression of spec R2b for the client side: among per-ACTION
  * caps, the error names the action whose first sub-command appears EARLIEST in
- * the batch's command list. Both cap loops in this SDK (scanBatch below and
- * decoder/parse.js) walk this list, and the arbiter walks its own list-driven
- * copy, so the three agree by rule instead of by coincidence.
+ * the batch's command list. The SDK's cap loop (decoder/parse.js) walks this
+ * list, and the arbiter walks its own list-driven copy, so the two agree by
+ * rule instead of by coincidence.
  *
  * Derived from the LIST rather than from a tally's keys deliberately. A plain
  * object enumerates string keys by insertion, which HAPPENED to match this
@@ -509,108 +500,6 @@ function paramsTick(params) {
     for (const key of Object.keys(params))
         if (key.replace(/_/g, '').toLowerCase() === 'tick') return params[key];
     return undefined;
-}
-
-/*
- * Scan a BATCH COMMAND tail (everything after `BATCH|<version>|`) exactly as
- * the arbiter scans it.
- *
- * Returns { count, counts, mint, violation }:
- *   count      total commands, the raw ';'-split length with empties counted
- *   counts     classification key -> occurrences (every entry, parsed or not)
- *   mint       { max, approximate } from maxMintsPerDistinctTick over this
- *              batch's MINT TICKs; `approximate` means the MINT verdict rests
- *              on a caret alias only an indexer could resolve
- *   violation  null, or the FIRST rule broken in the arbiter's own order:
- *              the command cap, then the COST-WEIGHT budget, then an unknown
- *              ACTION, then a per-ACTION cap
- *
- * The weight budget sits in the arbiter's first position beside the count cap
- * (xchain-indexer/src/actions/batch.js: the count is the cap's PRE-FILTER and the
- * budget the rule), and both report the same `invalid: COMMAND (limit)`. It is
- * weighed only when the count already fits, which is exact rather than
- * conservative because every sub-command weight is an integer >= 1.
- *
- * WEIGHT_LIMIT is the one violation this scan can raise that a chain may not:
- * BATCH_COST_WEIGHTING is genesis-active on testnet and regtest but still
- * UNARMED on mainnet, where an over-weight batch is accepted. Every other kind
- * here is armed everywhere. That is the reverse of this mirror's declared safe
- * direction (it may accept a batch the chain rejects, never refuse one the
- * chain takes), so the violation carries `flagGated: true` and the measured
- * `weight`: a caller that turns a violation into a hard refusal must treat this
- * one as a warning, which is exactly what the two shipped consumers
- * (decoder/parse.js, preflight/checks/batch.js) already do in their own words.
- *
- * MINT is compared against the per-DISTINCT-token maximum rather than the raw
- * occurrence count (D7), exactly as the arbiter substitutes it.
- *
- * `mint.approximate` does NOT suppress a violation, and the asymmetry is the
- * whole reason it is safe not to. Keying on case-folded strings can only
- * SPLIT what the arbiter would merge - a caret and a name may be one token,
- * never two - so this maximum is a LOWER BOUND on the arbiter's. A maximum above
- * the cap is therefore CERTAIN and gets reported; only the ABSENCE of one is
- * in doubt, and that is exactly what the flag tells the caller. Suppressing
- * on the flag instead let one unrelated caret silence a violation two
- * identical plain ticks had already proved.
- */
-function scanBatch(tail) {
-    const entries = String(tail).split(';');
-    const count = entries.length;
-    const noMint = { max: 0, approximate: false };
-
-    // The cap runs first, which pins error precedence: a batch that breaks it
-    // and other rules reports the cap, never the rule a later loop would find.
-    if (count > BATCH_COMMAND_LIMIT)
-        return {
-            count,
-            counts: {},
-            mint: noMint,
-            violation: { kind: 'COMMAND_LIMIT', action: 'COMMAND', limit: BATCH_COMMAND_LIMIT, count },
-        };
-
-    // The COST-WEIGHT budget, in the same first position and reporting the same
-    // on-chain string, weighed only now that the count fits. Flag-gated: see the
-    // WEIGHT_LIMIT note in the docblock for why this one kind carries a marker.
-    const weight = batchWeight(entries);
-    if (weight > BATCH_WEIGHT_BUDGET)
-        return {
-            count,
-            counts: {},
-            mint: noMint,
-            violation: {
-                kind: 'WEIGHT_LIMIT', action: 'COMMAND', limit: BATCH_WEIGHT_BUDGET,
-                count, weight, flagGated: true,
-            },
-        };
-
-    const counts = {};
-    // Collected in the SAME pass that counts, so the two can never disagree
-    // about which entries are MINTs.
-    const mintTicks = [];
-    for (const entry of entries) {
-        const key = classifyCommand(entry);
-        counts[key] = (counts[key] || 0) + 1;
-        if (key === 'MINT') mintTicks.push(commandTick(entry));
-    }
-    const mint = mintTicks.length ? maxMintsPerDistinctTick(mintTicks) : noMint;
-
-    for (const entry of entries) {
-        const name = String(entry).split('|')[0];
-        if (!isKnownAction(name))
-            return { count, counts, mint, violation: { kind: 'ACTION_UNKNOWN', action: name } };
-    }
-
-    // First-appearance order, DECLARED by spec R2b rather than inherited from
-    // key insertion: see limitKeysInListOrder.
-    for (const key of limitKeysInListOrder(entries)) {
-        const limit = BATCH_ACTION_LIMITS_ACTIVE[key];
-        if (limit === undefined) continue;
-        const observed = key === 'MINT' ? mint.max : counts[key];
-        if (observed > limit)
-            return { count, counts, mint, violation: { kind: 'ACTION_LIMIT', action: key, limit, count: observed } };
-    }
-
-    return { count, counts, mint, violation: null };
 }
 
 /*
@@ -762,7 +651,6 @@ module.exports = {
     LEGACY_FORMAT_ACTIONS,
     isLegacyActionFormat,
     expandAlias,
-    isKnownAction,
     classifyIssueTick,
     classifyCommand,
     limitKeysInListOrder,
@@ -770,7 +658,6 @@ module.exports = {
     mintTickKey,
     maxMintsPerDistinctTick,
     paramsTick,
-    scanBatch,
     planCoinpayOutputs,
     checkCoinpayOutputPlan,
 };

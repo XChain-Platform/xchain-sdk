@@ -80,6 +80,64 @@ Run the no-external-services tiers before every commit. New action-generation or
 
 ---
 
+## Editing a canonical template (xchain-contracts)
+
+`src/contract/templates.js` is generated, not hand-written: `scripts/sync-templates.js`
+embeds the canonical `xchain-contracts` template sources (`escrow`, `vesting`,
+`crowdsale`, `amm`, plus everything under `patterns/`) as base64 so
+`sdk.scaffold()` can return them from a browser bundle with no `fs` at
+runtime. If your change touches a canonical template or pattern in
+`xchain-contracts`, you must also run, in this repo, before committing:
+
+```bash
+npm run sync:templates
+```
+
+and commit the resulting `src/contract/templates.js` diff alongside the
+`xchain-contracts` change, as one logical unit.
+
+**Why this is easy to miss.** The drift guard (`test/unit/template-parity.test.js`)
+only compares the embed against a canonical source when a sibling
+`xchain-contracts` checkout sits beside this repo (`.ci-siblings` declares it;
+this repo's own CI checks it out). Without that sibling present the guard
+`this.skip()`s cleanly, so a single-repo clone's test run and a solo
+`xchain-contracts` PR can both go green while carrying the drift. Only a
+combined-tree run, or this repo's own CI, ever actually compares the bytes.
+
+**Push order is canonical-first, and it is not optional.** `xchain-contracts`
+is canonical; `xchain-sdk` is a consumer. This repo's CI resolves the
+`xchain-contracts` sibling from **its origin**, at whatever ref is currently
+pushed there, never from your local edit. So:
+
+- Push (or merge) the `xchain-contracts` change **first**.
+- Push the regenerated `xchain-sdk` change **second**, once the canonical
+  side is on origin, so the drift guard here compares against the real
+  template rather than a stale one.
+- If both halves must ship together and the canonical side genuinely cannot
+  land first, pair the pushes with the platform's standard cross-repo twin
+  mechanism instead of skipping the check: `CI_COMPANIONS="xchain-contracts=<ref>" git push`
+  on the SDK side resolves that sibling from your local checkout instead of
+  origin. This is the same mechanism every other cross-repo drift guard on
+  the platform uses; it is not new machinery, just declaring the ordering
+  for this pair.
+
+**Verify locally before either push**, without needing a sibling wired into
+a test runner or a full mocha run:
+
+```bash
+node scripts/sync-templates.js --check
+```
+
+Exits `0` and prints a skip note when no sibling `xchain-contracts` checkout
+is present (a normal single-repo clone, not a drift signal). Exits `0` and
+confirms the embed matches when a sibling is present and in sync. Exits `1`
+with a `TEMPLATE DRIFT` message the moment the embed would differ from what
+`npm run sync:templates` would write, so a canonical edit made without
+regenerating is caught before it is ever pushed, not just at the CI
+boundary.
+
+---
+
 ## Coding style
 
 - **Plain JavaScript**, no TypeScript (TypeScript definitions live in `index.d.ts` and are maintained alongside the source). Raw `mathjs` bignumber for all amount and fee calculations; no ORM.

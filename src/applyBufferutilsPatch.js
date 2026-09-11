@@ -22,8 +22,8 @@
  * single output can legitimately exceed both ceilings (>~90.07M DOGE for
  * 2^53); without this patch the encoder cannot build such a PSBT at all.
  *
- * This is the WRITE-SIDE contract, shared with (NOT byte-for-byte identical
- * to) xchain-encoder/src/applyBufferutilsPatch.js: the patch teaches the loaded
+ * This is the WRITE-SIDE contract, shared with
+ * xchain-encoder/src/applyBufferutilsPatch.js: the patch teaches the loaded
  * modules to carry a satoshi value as either a Number (unchanged fast path)
  * or a BigInt up to 2^64-1 (the wire format's true ceiling). Readers return
  * a Number whenever the value is exactly representable and a BigInt only
@@ -35,16 +35,12 @@
  * the module-level readUInt64LE/writeUInt64LE helpers keep the stock 2^53-1
  * ceiling. Only the 2^53 probe and the error strings are common to both.
  *
- * Re-sync seam (uuid:311476c7). Do not copy the encoder file over this one:
- * this copy carries a fix the encoder copy does not, in the Psbt fee-accounting
- * wrapper below. After priming the caches, this copy answers getFee/getFeeRate
- * from __CACHE directly, because stock getTxCacheValue tests those caches for
- * TRUTHINESS and a primed 0 (zero-fee PSBT, or any fee under 1 sat/vbyte) falls
- * back into the Number summing and re-throws; the encoder copy still re-runs the
- * stock method there. The encoder header also omits the read-side paragraph
- * above and names xchain-decoder as its sibling instead. Any convergence pass
- * runs SDK-ward, and test/unit/applyBufferutilsPatch.test.js pins the behavior
- * this copy must keep.
+ * Re-sync seam (uuid:311476c7). Everything below this banner is pinned
+ * byte-identical to the encoder copy's body by
+ * xchain-encoder/test/unit/applyBufferutilsPatch.test.js. Only the two headers
+ * differ, because each names the other and its own read-side relationship.
+ * Convergence runs SDK-ward: change this copy first, then copy its body to the
+ * encoder, or the twin guard goes red.
  *
  * All bitcoinjs-lib/bip174 consumers hold the patched modules' exports
  * objects and class prototypes rather than destructured copies, so
