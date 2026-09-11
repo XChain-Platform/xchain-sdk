@@ -39,7 +39,8 @@ rewritten for deferred assembly, and `batch.js` + `dispense.js` re-pinned at
 `d362079e` on 2026-09-09 after the genesis-arm comment edits, and NINE
 re-reviewed on 2026-09-11 for the amount-representability gate, read against
 indexer HEAD `88f4efaf` plus its paired change (see the review
-log below). Hashes
+log below), and `dispenser.js` re-pinned at `62c8d7c7` later the same day
+after the freshness-shape fail-closed change (no client change). Hashes
 are of the indexer handler source files, resolved via
 `XCHAIN_INDEXER_PATH` or the sibling `../xchain-indexer` checkout. The
 gate SKIPS (does not fail) when no indexer checkout is present, so
@@ -50,7 +51,9 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-One documented exception to that last sentence, and it is the current one. A
+One documented exception to that last sentence existed for part of 2026-09-11
+and is closed: the paired indexer change landed as `e3398122` and the table is
+re-anchored past it below. The reasoning is kept because the situation recurs. A
 cross-repo pairing has to be written on ONE side first, and the side that moves
 second cannot know the other side's commit id. The nine rows re-pinned on
 2026-09-11 are the content of the indexer amount-representability change, which
@@ -62,15 +65,22 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `88f4efaf`
+**Pins taken at indexer commit:** `62c8d7c7`
 
-(Re-anchored 2026-09-11 by the amount-representability review below. `88f4efaf`
-is the reachable indexer develop head that review was read against, and the nine
-re-pinned rows are that head PLUS the paired change, for the reason the
-paragraph above gives. A reviewer diffing `88f4efaf..HEAD` therefore sees the
-amount-representability change itself, which is the change the entry below
-reviews line by line; no other mapped row moved in that range. Nothing else is
-claimed for this anchor.
+(Re-anchored 2026-09-11, second pass, by the `dispenser.js` re-pin below.
+`62c8d7c7` is the indexer develop head that pin was read against. It contains
+the amount-representability change, landed as `e3398122`, which the nine-row
+review earlier the same day read as a paired working-tree change against
+`88f4efaf`; with it landed, every row in the table is a plain HEAD hash of
+`62c8d7c7` and the working-tree exception above applies to no row. A reviewer
+diffing `62c8d7c7..HEAD` sees only what moves after this pin.
+
+Earlier note, same day. Re-anchored 2026-09-11 by the amount-representability
+review below. `88f4efaf` was the reachable indexer develop head that review was
+read against, and the nine re-pinned rows were that head PLUS the paired change.
+A reviewer diffing `88f4efaf..62c8d7c7` sees the amount-representability change
+itself, which that entry reviews line by line, plus the `dispenser.js` change
+the second-pass entry reviews; no other mapped row moved in that range.
 
 Earlier note, kept because the reasoning is still the rule. Re-anchored
 2026-09-09 by the genesis-arm re-pin of `batch.js` and
@@ -110,7 +120,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 88f4efaf..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 62c8d7c7..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -152,7 +162,7 @@ found by hashing candidate blobs as above.
 | `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `2d4d3179eab5ccdd323dc86475ed48e6f10928261c25624e7fc5223ae9142a41` |
 | `checks/mint.js` | `src/actions/mint.js` | `7e0ef940547b47700181b97f9ed64c4e9cf499b3705244ceba67c351044fa11b` |
 | `checks/issue.js` | `src/actions/issue.js` | `3066ece8ba87ea2ef18cd7453f4d96e9ad70d4af0f6c32cb5551bf782d3aad01` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `65c4e0485d0e1473e636e6dbe20375ae6be3f02c40401cb7144f17d24eadc4d6` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `22634d973dbffe3d000fcdc2fd3d01f2c9e5f28eb1c2e4ad957e6a043db11f4a` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `c349a43c1181026ca03a69d1960fd4cf1542fa8f9e1e1090c53959342d366372` |
 | `checks/trading.js` (ORDER) | `src/actions/order.js` | `870a0a5f687a79bd6e323903fc95151a94abdeaf1c43dd876910c3d8b030d8e4` |
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `1d9493a28d1e54e1cb3961a8d5723064e728271e599ae76951174f9f5c5b2331` |
@@ -167,6 +177,29 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-11 (second pass) - `dispenser.js`, against indexer HEAD `62c8d7c7`
+
+Baseline pin: the amount-representability content (`88f4efaf` plus `e3398122`).
+Range read: `git -C ../xchain-indexer diff 88f4efaf..62c8d7c7 -- src/actions/dispenser.js`,
+minus the one-token timestamp edits the entry below already reviewed.
+
+**`dispenser.js` - REAL change, no client change owed.** One hunk, on the v0
+create path's origin-standing exception. Where the handler asked the UTXO tracker
+for the GET_ADDRESS's first appearance it now passes a `strictShape` flag,
+resolved from `dispenser_freshness_shape_activation` on THIS chain's block index
+(the tracker client has no block context, so the handler supplies the verdict).
+At or after that flag-day a non-null answer that carries no numeric height
+throws, the existing catch reads it as not fresh, and the exception is refused;
+below it that answer is the legacy null, which grants the exception as before.
+Nothing on the wire, no field, no error string and no ordering changed; the
+outcome differs only when the tracker returns a shapeless row, which a client
+cannot observe. `checks/dispenser.js` already declares
+`DISPENSER_ORIGIN_STANDING` unverified because the origin-standing /
+UTXO-freshness gate is server-side, and that declaration covers this change
+exactly. Re-pinned; anchor moved to `62c8d7c7` in the same edit. `dispense.js`
+and the nine rows below are byte-identical between `e3398122` and `62c8d7c7`
+(the gate reported only this row).
 
 ### 2026-09-11 - nine handlers, against indexer HEAD `88f4efaf` plus its paired change
 
