@@ -65,6 +65,124 @@ function loadAcornWalk() {
 }
 
 
+/* --- Contract identity (`meta`) -------------------------------------------
+ *
+ * CONTRACT_META_REQUIRED makes `meta.name` and `meta.description` a consensus
+ * requirement: at/after the flag day the indexer rejects a DEPLOY whose contract
+ * exports no conforming `meta`. The SDK sees that BEFORE the caller pays a fee.
+ *
+ * SDK-LOCAL on purpose: this is a client-side mirror, never lint-core (the frozen
+ * byte-vendored consensus set) and never an import of the xchain-vm toolkit (which
+ * is not an SDK dependency and pulls isolated-vm). The toolkit carries its own copy
+ * of the same algorithm; the two are kept in step by the spec, not by a require.
+ *
+ * The read is STATIC (acorn) while the chain EVALUATES `meta` in the isolate, so a
+ * computed value is invisible here. That asymmetry decides what may refuse: only a
+ * missing key or a failing string LITERAL blocks; anything the walk cannot see
+ * advises, so the SDK never refuses a contract the chain would accept.
+ */
+
+// Frozen consensus tokens, verbatim from spec 2.3 (the same strings the indexer
+// writes into the action's status), so the caller reads the chain's own words.
+const META_VERDICTS = {
+    REQUIRED:    'invalid: CONTRACT_MANIFEST (meta required)',
+    NAME:        'invalid: CONTRACT_MANIFEST (meta.name must be a string of 1..64 bytes, printable, trimmed)',
+    DESCRIPTION: 'invalid: CONTRACT_MANIFEST (meta.description must be a string of 1..512 bytes, printable, trimmed)',
+    VERSION:     'invalid: CONTRACT_MANIFEST (meta.version must be a string of 1..32 bytes, printable, trimmed)'
+};
+
+const META_NAME_MAX_BYTES        = 64;
+const META_DESCRIPTION_MAX_BYTES = 512;
+const META_VERSION_MAX_BYTES     = 32;
+
+// Code points banned ANYWHERE in a meta text field: C0 controls, DEL + C1,
+// zero-width joiners/spaces, and the bidi overrides that let a name render as
+// something other than its bytes. U+000A is banned too, excepted only for
+// `description` (allowLf). Exactly the consensus set, never a superset: widening
+// it client-side would refuse a contract the chain accepts.
+function isBannedMetaCodePoint(cp, allowLf) {
+    if (cp === 0x0A) return !allowLf;
+    if (cp <= 0x1F) return true;                     // C0 controls
+    if (cp >= 0x7F && cp <= 0x9F) return true;       // DEL + C1 controls
+    if (cp >= 0x200B && cp <= 0x200D) return true;   // zero-width space/non-joiner/joiner
+    if (cp === 0x2060 || cp === 0xFEFF) return true; // word joiner, BOM/ZWNBSP
+    if (cp >= 0x202A && cp <= 0x202E) return true;   // bidi embedding/override
+    if (cp >= 0x2066 && cp <= 0x2069) return true;   // bidi isolates
+    if (cp === 0x200E || cp === 0x200F) return true; // LRM / RLM
+    return false;
+}
+
+// "Trimmed" as an explicit code-point set rather than String.trim(), which follows
+// the host Node's Unicode table and would make the client verdict disagree with the
+// chain's on a different Node build.
+const META_EDGE_CODE_POINTS = new Set([
+    0x0020, 0x00A0, 0x1680,
+    0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200A,
+    0x2028, 0x2029, 0x202F, 0x205F, 0x3000
+]);
+
+function isMetaEdgeCodePoint(cp, allowLf) {
+    return META_EDGE_CODE_POINTS.has(cp) || (allowLf && cp === 0x0A);
+}
+
+// The consensus text grammar for one meta field (spec 2.3), mirrored client-side:
+// UTF-8 BYTES, no locale, no trim(), no normalisation.
+// allowLf: LF is legal inside (and at the edges of) a description only.
+function isValidMetaText(s, maxBytes, allowLf) {
+    if (typeof s !== 'string') return false;
+    // A lone surrogate re-encodes as U+FFFD for the byte count and is refused by a
+    // utf8mb4 column, so it can never be stored as written.
+    if (typeof s.isWellFormed === 'function' && !s.isWellFormed()) return false;
+    let bytes = Buffer.byteLength(s, 'utf8');
+    if (bytes < 1 || bytes > maxBytes) return false;
+    let cps = Array.from(s);
+    for (let ch of cps) {
+        if (isBannedMetaCodePoint(ch.codePointAt(0), allowLf)) return false;
+    }
+    if (isMetaEdgeCodePoint(cps[0].codePointAt(0), allowLf)) return false;
+    if (isMetaEdgeCodePoint(cps[cps.length - 1].codePointAt(0), allowLf)) return false;
+    return true;
+}
+
+// Read the literal name/description/version out of a `meta` object literal.
+//
+// Three outcomes per key, and the difference is what decides refusing vs advising:
+//   - a string LITERAL: the value is known, so the grammar judges it;
+//   - a NON-LITERAL expression ('Escrow ' + x, an identifier, a call, a template
+//     literal): computed meta. The chain evaluates `meta` in the isolate and judges
+//     whatever it yields, so a static read that cannot see the value must not refuse
+//     it; the key is reported in `computed` and only advised on;
+//   - a literal that is not a string (version: 1, name: null): the chain rejects it,
+//     and so do we, through the ordinary null read (reported in nonStringLiteral so
+//     an optional key can tell "absent" from "present and wrong").
+// A key that is simply MISSING also reads null, which is what refuses a nameless
+// contract.
+function readMetaLiterals(metaObj) {
+    for (let p of metaObj.properties) {
+        // A spread or a computed key can inject or rename any of the three fields.
+        if (p.type !== 'Property' || p.computed) return { status: 'undecidable' };
+    }
+    let out = {
+        status: 'present',
+        name: null,
+        description: null,
+        version: null,
+        computed: [],           // keys present whose value is a non-literal expression
+        nonStringLiteral: [],   // keys present whose value is a literal but not a string
+        line: (metaObj.loc && metaObj.loc.start && metaObj.loc.start.line) || null
+    };
+    for (let p of metaObj.properties) {
+        let key = p.key && (p.key.name || p.key.value);
+        if (key !== 'name' && key !== 'description' && key !== 'version') continue;
+        let v = p.value;
+        if (v && v.type === 'Literal' && typeof v.value === 'string') out[key] = v.value;
+        else if (v && v.type === 'Literal') out.nonStringLiteral.push(key);
+        else out.computed.push(key);
+    }
+    return out;
+}
+
+
 class ContractUtils {
 
     // base64-encode UTF-8 contract source code for DEPLOY payloads (1.33x vs hex's 2x;
@@ -151,6 +269,134 @@ class ContractUtils {
             }
         }
         return names;
+    }
+
+    // Static read of a contract's exported `meta` (contract identity: name,
+    // description, version). Same acorn walk shape as getExportedMethodNames
+    // (ES2020, script), and the same SDK-local rule: never lint-core.
+    //
+    // Returns exactly one of:
+    //   { status: 'present', name, description, version, computed[], nonStringLiteral[], line }
+    //        a `meta` object literal was found; each field is its string literal, or
+    //        null when the key is absent or its value is not a string literal.
+    //        `computed` names the keys whose value is a non-literal expression (the
+    //        chain evaluates those, so they advise rather than refuse);
+    //        `nonStringLiteral` names keys whose literal value is not a string.
+    //   { status: 'absent' }
+    //        a literal export shape was found and it carries no `meta`: this is the
+    //        one outcome that proves the chain will answer "meta required".
+    //   { status: 'undecidable' }
+    //        acorn is unavailable, the source does not parse, no literal export shape
+    //        was found (module.exports = function(){}, an exports.foo surface, a
+    //        factory), `meta` is not an object literal, or the object uses a spread
+    //        or a computed key. The chain evaluates it at deploy; the SDK does not guess.
+    // Never throws.
+    getExportedMeta(sourceCode) {
+        let parser = loadAcorn();
+        let walker = loadAcornWalk();
+        if (!parser || !walker) return { status: 'undecidable' };
+        let ast;
+        try {
+            ast = parser.parse(String(sourceCode), { ecmaVersion: 2020, sourceType: 'script', locations: true });
+        } catch (e) {
+            return { status: 'undecidable' };
+        }
+
+        let exportObj  = null;   // module.exports = { ... }
+        let exportName = null;   // module.exports = someIdentifier
+        let seenExport = false;
+        let metaAssignments = new Map();   // identifier -> node assigned to <id>.meta
+
+        walker.simple(ast, {
+            AssignmentExpression(node) {
+                let l = node.left;
+                if (!l || l.type !== 'MemberExpression' || l.computed) return;
+                if (!l.object || l.object.type !== 'Identifier' || !l.property) return;
+                if (l.object.name === 'module' && l.property.name === 'exports') {
+                    // First module.exports assignment wins, matching the method-names walk.
+                    if (seenExport) return;
+                    seenExport = true;
+                    if (node.right && node.right.type === 'ObjectExpression') exportObj = node.right;
+                    else if (node.right && node.right.type === 'Identifier') exportName = node.right.name;
+                    return;
+                }
+                // The function-export form (spec R1): `contract.meta = { ... }`, which the
+                // VM reads off a function export too.
+                if (l.property.name === 'meta' && !metaAssignments.has(l.object.name))
+                    metaAssignments.set(l.object.name, node.right);
+            }
+        });
+
+        if (exportObj) {
+            for (let p of exportObj.properties) {
+                if (p.type !== 'Property' || p.computed) return { status: 'undecidable' };
+            }
+            let metaProp = exportObj.properties.find((p) => (p.key && (p.key.name || p.key.value)) === 'meta');
+            if (!metaProp) return { status: 'absent' };
+            if (!metaProp.value || metaProp.value.type !== 'ObjectExpression') return { status: 'undecidable' };
+            return readMetaLiterals(metaProp.value);
+        }
+
+        if (exportName) {
+            if (!metaAssignments.has(exportName)) return { status: 'absent' };
+            let right = metaAssignments.get(exportName);
+            if (!right || right.type !== 'ObjectExpression') return { status: 'undecidable' };
+            return readMetaLiterals(right);
+        }
+
+        return { status: 'undecidable' };
+    }
+
+    // Pre-flight verdict for contract identity, shared by every SDK deploy seam
+    // (sdk.deploy's lint, walletSession.deploy/deployChunk's preflight).
+    // Returns { error: string|null, advisories: string[] }: `error` is the exact
+    // consensus string the chain would write, and is non-null ONLY for a shape the
+    // static read PROVES wrong (no meta at all, or a failing string literal).
+    // Everything the walk cannot see becomes an advisory, so the SDK never refuses a
+    // deploy the chain would accept. Never throws.
+    checkExportedMeta(sourceCode) {
+        let read = this.getExportedMeta(sourceCode);
+        let advisories = [];
+
+        if (read.status === 'undecidable') {
+            return {
+                error: null,
+                advisories: ['contract identity (meta) could not be read statically; the chain evaluates ' +
+                    'meta at deploy, and CONTRACT_META_REQUIRED rejects a contract whose evaluated meta ' +
+                    'has no valid name and description']
+            };
+        }
+
+        if (read.status === 'absent') {
+            return {
+                error: META_VERDICTS.REQUIRED,
+                advisories: []
+            };
+        }
+
+        let computed = read.computed || [];
+        if (computed.length) {
+            advisories.push('contract identity: meta.' + computed.join(', meta.') +
+                (computed.length > 1 ? ' are ' : ' is ') +
+                'a computed expression, so the SDK cannot check it here; the chain evaluates meta at ' +
+                'deploy and CONTRACT_META_REQUIRED judges the evaluated value (string literals are ' +
+                'recommended, so what you read is what the chain records)');
+        }
+
+        // Rows 5-7 of spec 2.3, in order: first failure wins, so the caller sees the
+        // same string the chain would write.
+        if (!computed.includes('name') && !isValidMetaText(read.name, META_NAME_MAX_BYTES, false))
+            return { error: META_VERDICTS.NAME, advisories };
+        if (!computed.includes('description') && !isValidMetaText(read.description, META_DESCRIPTION_MAX_BYTES, true))
+            return { error: META_VERDICTS.DESCRIPTION, advisories };
+        // `version` is optional: judged only when the key is present with a literal
+        // value (a string that fails the grammar, or a literal that is not a string).
+        let versionLiteralPresent = read.version !== null || (read.nonStringLiteral || []).includes('version');
+        if (!computed.includes('version') && versionLiteralPresent
+            && !isValidMetaText(read.version, META_VERSION_MAX_BYTES, false))
+            return { error: META_VERDICTS.VERSION, advisories };
+
+        return { error: null, advisories };
     }
 
     // Check if contract source is within the 64KB byte limit
@@ -249,3 +495,12 @@ module.exports = ContractUtils;
 // Re-export so parity/drift guards can assert this entry point rides the same
 // (validator-sourced) cap; see test/unit/protocolSizeCaps.test.js.
 module.exports.MAX_CODE_SIZE = MAX_CODE_SIZE;
+
+// The frozen CONTRACT_MANIFEST meta strings and the client-side grammar, exported
+// so a caller (and the deploy seams in XChainSDK / walletSession) can compare
+// against the exact consensus token instead of re-typing it.
+module.exports.META_VERDICTS             = META_VERDICTS;
+module.exports.META_NAME_MAX_BYTES       = META_NAME_MAX_BYTES;
+module.exports.META_DESCRIPTION_MAX_BYTES = META_DESCRIPTION_MAX_BYTES;
+module.exports.META_VERSION_MAX_BYTES    = META_VERSION_MAX_BYTES;
+module.exports.isValidMetaText           = isValidMetaText;

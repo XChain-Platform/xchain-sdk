@@ -5,7 +5,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/npm/v/%40dankest-llc%2Fxchain-sdk" alt="npm version">
-  <img src="https://img.shields.io/badge/tests-4%2C552%2B%20passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-4%2C648%2B%20passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/node-%3E%3D22-green" alt="Node">
   <img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue" alt="License">
 </p>
@@ -45,6 +45,7 @@ Developer-facing SDK for the [XChain Platform](https://xchain.io/): generate XCh
 - **MCP server**: `npx xchain-mcp` exposes all explorer query tools as Model Context Protocol tools for AI agent use
 - **Wallet & auth**: key management, PSBT signing, challenge-response verification
 - **Smart contracts**: deploy, execute, deposit, withdraw via xchain-vm integration
+- **Contract identity pre-flight**: a deployed contract must export `meta: { name, description, version }` (`CONTRACT_META_REQUIRED`). `sdk.deploy()`, `session.deploy()`, `session.deployChunk()`, `sdk.deployAndFund()` and `sdk.deployStakeableContract()` read it statically before the action is composed and refuse with the chain's own verdict string, so a contract the indexer will reject never costs a fee. `sdk.contracts.getExportedMeta(source)` exposes the same read
 - **Hub discovery**: auto-resolves service endpoints from xchain-hub
 - **Retry with backoff**: handles HTTP 429/502/503/504, respects `Retry-After` headers
 - **Request hooks**: `onRequest`, `onResponse`, `onError`, `onRetry` callbacks
@@ -150,8 +151,44 @@ await sdk.issueAndDistribute('your-wif-key',
     ]
 );
 
-// Query blockchain data
+// Deploy a smart contract. Every contract must export its identity: `meta.name`
+// and `meta.description` are consensus-required (CONTRACT_META_REQUIRED), and
+// `meta.version` is optional but indexed. Use STRING LITERALS: the chain evaluates
+// `meta` at deploy, so a computed name is not what you read in the source, and the
+// pre-flight cannot check it for you.
+const code = `module.exports = {
+    meta: {
+        name:        'Escrow',                           // 1..64 bytes
+        description: 'Two-party escrow with an arbiter', // 1..512 bytes
+        version:     '1.0.0'                             // optional, 1..32 bytes
+    },
+    permissions: ['SEND'],
+    initialize(xchain) { xchain.state.set('status', 'OPEN'); }
+};`;
+await session.deploy({ code, gasLimit: 200000 });
+
+// A contract with no conforming meta is refused BEFORE anything is composed,
+// signed or broadcast, with the exact verdict the indexer would have written:
+//   SDKContractError: invalid: CONTRACT_MANIFEST (meta required)
+// Pass { preflight: 'warn' | 'off' } (session/workflow seams) or
+// { lint: 'warn' | 'off' } (sdk.deploy) to downgrade or skip the check; the
+// deploy is still rejected on-chain. A computed or unreadable `meta` only warns.
+sdk.contracts.getExportedMeta(code);  // { status: 'present', name: 'Escrow', ... }
+
+// Query blockchain data. The token record arrives NESTED under `info`:
 const token = await sdk.getToken('MYTOKEN');
+token.info.tick_id;   // '42'   <- the fields live here
+token.tick_id;        // undefined
+
+// A tick that does not exist answers HTTP 404, so getToken() THROWS
+// SDKExplorerError (code EXPLORER_HTTP_404) instead of answering an empty
+// body. Use these for an existence check rather than a try/catch:
+await sdk.tokenExists('MYTOKEN');   // true / false, never throws on absence
+await sdk.findToken('MYTOKEN');     // the unwrapped info record, or null
+
+// Both answer "absent" only for the 404. A timeout, network failure, 429 or
+// 5xx still throws, because an explorer that could not answer is not proof
+// that the ticker is free.
 ```
 
 ## Configuration
@@ -178,7 +215,7 @@ const token = await sdk.getToken('MYTOKEN');
 | Command | Description |
 |---|---|
 | `npm run api` | Start JSON-RPC server (port from `SDK_API_PORT`, default 3005) |
-| `npm test` | Run unit tests (4,252 tests) |
+| `npm test` | Run unit tests (4,348 tests) |
 | `npm run repl` | Start interactive REPL with a pre-configured SDK instance |
 | `npm run build` | Production browser bundle -> `dist/xchain_sdk.min.js` |
 | `npm run build:dev` | Development browser bundle -> `dist/xchain_sdk.js` |

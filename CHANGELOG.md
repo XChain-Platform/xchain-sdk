@@ -5,9 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.17.0] - 2026-09-10
+
+### Added
+- `findToken(tick)` and `tokenExists(tick)` answer a missing ticker as `null`/`false` instead of throwing on the explorer's 404, and unwrap the token record from its `info` envelope; `getToken()` keeps its raw nested shape and is now documented as such.
+- Every deploy path now refuses a contract that exports no conforming `meta` before the action is composed, with the chain's own verdict string, and `sdk.contracts.getExportedMeta()` exposes the same static read.
+- The vendored contract transform and deploy linter carry the rest-pattern metering rule and the `banned-rest` positions, so the author-facing linter and the chain agree on what deploys.
+
+### Changed
+- The vendored mainnet activation twin is armed at genesis under the 2026-09-09 ruling.
+
+### Fixed
+- The x402 challenge MAC is compared with the shared constant-time comparator.
+- The encoder's written compression bytes are carried through the encoder and lifecycle manager, so the confirm string matches what the PSBT actually holds.
+
 ## [0.16.0] - 2026-09-08
 
 ### Added
+- `getBalancesBatch(addresses)` and `getCoinpayObligationsBatch(addresses)` read up to 20 addresses in one explorer request each, so a wallet poll costs one request per chain instead of two per address.
 - `SDKRateLimitedError` (code `RATE_LIMITED`) is thrown for an HTTP 429 that survives the retry, carrying `service`, `status` and the server's `retryAfterSeconds`.
 
 ### Changed
@@ -49,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The stripped-globals module is vendored from the VM and guarded against drift.
 - The vendored coin registry is resynced from the hub.
 - Three dependency floors move off advisory ranges disclosed against the shipped tree, with hono gaining a floor it did not have.
+- The x402 challenge verifier compares MACs with the SDK's shared constant-time token comparison, so a truncated MAC no longer short-circuits on operand length.
 
 ## [0.12.0] - 2026-08-30
 

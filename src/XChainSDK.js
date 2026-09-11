@@ -26,6 +26,9 @@ const EncoderClient  = require('./encoder.js');
 const HubConnector   = require('./hub.js');
 const BatchBuilder   = require('./batchBuilder.js');
 const ContractUtils  = require('./contracts.js');
+// The frozen CONTRACT_MANIFEST meta verdict strings (spec 2.3), so the deploy
+// pre-flight compares against the token itself rather than a retyped copy.
+const CONTRACT_META_VERDICTS = ContractUtils.META_VERDICTS;
 const ContractClient = require('./contractClient.js');
 const WebSocketClient = require('./websocket.js');
 const WalletUtils    = require('./wallet.js');
@@ -787,7 +790,14 @@ class XChainSDK {
         else if (params && typeof params.CODE_ENCODING === 'string') {
             try { code = this.contracts.decode(params.CODE_ENCODING); } catch (e) { return; }
         }
-        if (typeof code !== 'string') return;
+        if (typeof code !== 'string') {
+            // The lint deliberately reads only the wire spelling. Contract identity is a
+            // fee-saving refusal, so it also runs over the camelCase spelling the session
+            // and workflow seams take: a nameless deploy({ code }) is refused like a
+            // nameless deploy({ CODE }).
+            this._preflightContractMeta(this._contractSourceFromParams(params), mode);
+            return;
+        }
 
         const result = this.validateContract(code);
         for (const w of result.warnings)
@@ -808,11 +818,17 @@ class XChainSDK {
                     'Pass constructorParams (an empty value runs a zero-arg initialize).');
         } catch (e) { /* best-effort nudge; never block a deploy on it */ }
 
-        if (result.valid) return;
+        if (result.valid) {
+            // Contract identity is judged AFTER the lint verdict because the chain judges
+            // it after validateSyntax: a contract broken on both reports the syntax error.
+            this._preflightContractMeta(code, mode);
+            return;
+        }
 
         if (mode === 'warn') {
             for (const e of result.errors)
                 console.warn('DEPLOY lint error: ' + e.message);
+            this._preflightContractMeta(code, mode);
             return;
         }
         // 'block'
@@ -821,6 +837,70 @@ class XChainSDK {
         throw new SDKContractError('CONTRACT_LINT_FAILED',
             'Contract failed pre-flight validation: ' + first.message + more +
             ". Fix the contract or pass { lint: 'off' } to skip (it would still be rejected at deploy).");
+    }
+
+    // The contract source a DEPLOY's params carry, or undefined. Accepts the
+    // UPPER_SNAKE wire spelling and the camelCase one the session/workflow seams take
+    // (actions.js normalizes them later, after the point a pre-flight is worth
+    // anything), so `code` is pre-flighted the same way `CODE` is.
+    _contractSourceFromParams(params) {
+        if (!params) return undefined;
+        if (typeof params.CODE === 'string') return params.CODE;
+        if (typeof params.code === 'string') return params.code;
+        let enc = typeof params.CODE_ENCODING === 'string' ? params.CODE_ENCODING
+                : (typeof params.codeEncoding === 'string' ? params.codeEncoding : undefined);
+        if (typeof enc !== 'string') return undefined;
+        try { return this.contracts.decode(enc); } catch (e) { return undefined; }
+    }
+
+    // Contract identity (`meta`) pre-flight, spec 2.3 / CONTRACT_META_REQUIRED.
+    // Shared by every deploy seam so one refusal rule covers sdk.deploy(),
+    // walletSession.deploy/deployChunk and the workflows built on them.
+    //   'block' (default): throw with the exact consensus string the chain would
+    //                      write, BEFORE the action is composed, so no fee is paid for
+    //                      a deploy the chain will reject;
+    //   'warn'           : log the same string and proceed;
+    //   'off'            : skip.
+    // Only a PROVEN failure refuses (no meta at all, or a string literal that fails the
+    // byte grammar). Computed meta and any shape the static walk cannot read are
+    // advisories: the chain evaluates meta in the isolate, and the SDK must never
+    // refuse a contract the chain would accept.
+    _preflightContractMeta(code, mode) {
+        // `false` is accepted as 'off' because the session's submit options already
+        // carry a `preflight` key for the action pre-flight engine, whose off value is
+        // false; a caller who turned that off never meant to be blocked here either.
+        if (mode === false || mode === 'off') return;
+        // 'report' is the action pre-flight engine's non-blocking mode and means the
+        // same thing here; every other value (including its 'enforce'/'local') blocks,
+        // which is the safe default for a check that saves a fee.
+        mode = (mode === 'warn' || mode === 'report') ? 'warn' : 'block';
+        if (typeof code !== 'string') return;
+
+        let verdict;
+        // Best-effort: a detector fault must never block a deploy on its own.
+        try { verdict = this.contracts.checkExportedMeta(code); } catch (e) { return; }
+
+        for (const a of verdict.advisories)
+            console.warn('DEPLOY meta advisory: ' + a);
+
+        if (!verdict.error) return;
+
+        if (mode === 'warn') {
+            console.warn('DEPLOY meta error: ' + verdict.error);
+            return;
+        }
+        const isRequired = verdict.error === CONTRACT_META_VERDICTS.REQUIRED;
+        throw new SDKContractError(
+            isRequired ? 'CONTRACT_META_REQUIRED' : 'CONTRACT_META_INVALID',
+            verdict.error,
+            {
+                verdict: verdict.error,
+                hint: isRequired
+                    ? "export meta: { name, description, version } as the first key of the contract, " +
+                      "or pass { preflight: 'off' } / { lint: 'off' } to skip (the deploy would still be rejected on-chain)"
+                    : "fix the meta field to match the consensus grammar, or pass { preflight: 'off' } / " +
+                      "{ lint: 'off' } to skip (the deploy would still be rejected on-chain)"
+            });
     }
 
     async deploy(params, encoder, opts = {}) {
@@ -1232,6 +1312,13 @@ class XChainSDK {
         return this._requireExplorer().getBalances(address, opts);
     }
 
+    // Up to 20 addresses in one request, answered keyed by address. A caller
+    // that must also work against an older explorer feature-detects with
+    // `typeof sdk.getBalancesBatch === 'function'` and falls back on a 404.
+    async getBalancesBatch(addresses, opts) {
+        return this._requireExplorer().getBalancesBatch(addresses, opts);
+    }
+
     async getAddress(address) {
         return this._requireExplorer().getAddress(address);
     }
@@ -1257,8 +1344,22 @@ class XChainSDK {
      *  Explorer: Token Methods
      */
 
-    async getToken(tick) {
-        return this._requireExplorer().getToken(tick);
+    // Raw token read: answers the NESTED envelope { info: { tick, tick_id, ... } }
+    // and THROWS SDKExplorerError EXPLORER_HTTP_404 when the tick does not
+    // exist. For an existence check use tokenExists/findToken below.
+    async getToken(tick, opts) {
+        return this._requireExplorer().getToken(tick, opts);
+    }
+
+    // The token's info record (already unwrapped from the .info envelope), or
+    // null when the tick does not exist. Errors other than the 404 still throw.
+    async findToken(tick, opts) {
+        return this._requireExplorer().findToken(tick, opts);
+    }
+
+    // true/false existence check that does not throw on a missing tick.
+    async tokenExists(tick, opts) {
+        return this._requireExplorer().tokenExists(tick, opts);
     }
 
     // Current official-token roster of a project tick (protocol/Project_Registry.md)
@@ -1334,6 +1435,12 @@ class XChainSDK {
 
     async getCoinpayObligations(query, type, opts) {
         return this._requireExplorer().getCoinpayObligations(query, type, opts);
+    }
+
+    // The address-typed obligations read for up to 20 addresses in one request,
+    // answered keyed by address.
+    async getCoinpayObligationsBatch(addresses, opts) {
+        return this._requireExplorer().getCoinpayObligationsBatch(addresses, opts);
     }
 
     async getDispensers(query, type, opts) {

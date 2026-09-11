@@ -83,6 +83,8 @@ function assertMsgMatchesPsbt(psbtHex, inputIndex, msg, envelope) {
             'cannot recompute the sighash for input ' + inputIndex + ' to verify the co-signer msg: ' + e.message);
     }
     const got = Buffer.from(msg);
+    // Stays inline deliberately: these are raw fixed-length sighash Buffers, not
+    // string secrets, so they are outside utils/safeCompare.js's string-only domain.
     if (expected.length !== got.length || !crypto.timingSafeEqual(expected, got))
         throw new SDKPolicyError('COSIGNER_MSG_MISMATCH',
             'co-signer msg is not the sighash of the submitted PSBT (input ' + inputIndex +

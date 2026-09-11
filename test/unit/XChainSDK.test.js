@@ -1069,6 +1069,8 @@ describe('XChainSDK', function () {
             { m: 'getDebits',             args: ['addr1', 'address', {}] },
             { m: 'getEscrows',            args: ['addr1', 'address', {}] },
             { m: 'getToken',              args: ['TOKEN'] },
+            { m: 'findToken',             args: ['TOKEN'] },
+            { m: 'tokenExists',           args: ['TOKEN'] },
             { m: 'getTokens',             args: ['addr1', 'address', {}] },
             { m: 'getIssues',             args: ['TOKEN', 'token', {}] },
             { m: 'getTransaction',        args: ['abc', 'tx_hash'] },

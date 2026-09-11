@@ -328,9 +328,39 @@ class WalletSession {
     async delegateForContract(params, enc, opts) { return this.submit({ action: 'DELEGATE', params: Utility.withForcedVersion('1', params) }, enc, opts); }
 
     // VM / Smart Contracts
-    async deploy(params, enc, opts)      { return this.submit({ action: 'DEPLOY', params }, enc, opts); }
+    //
+    // opts.preflight ('block' default | 'warn' | 'off') runs the contract-identity
+    // check (CONTRACT_META_REQUIRED, spec 2.3) BEFORE anything is composed, signed or
+    // broadcast: a contract the chain will reject for a missing or malformed `meta`
+    // never costs a fee. Only a PROVEN failure refuses; computed meta advises.
+    // sdk.deploy() has its own `lint` seam; this is the session's, and the two run the
+    // same branch.
+    async deploy(params, enc, opts)      {
+        this._preflightContractMeta(params, opts);
+        return this.submit({ action: 'DEPLOY', params }, enc, opts);
+    }
     // One base64 code slice of a chunked deploy. DEPLOY v4 carrier (see sdk.deployContract / chunkHelper).
-    async deployChunk(params, enc, opts) { return this.submit({ action: 'DEPLOY', params: Utility.withForcedVersion('4', params) }, enc, opts); }
+    // A carrier slice usually holds a fragment rather than a parseable module, which reads
+    // undecidable and advises; the pre-flight bites on the assembling piece that does carry
+    // the whole source, which is where the chain judges a chunked deploy too.
+    async deployChunk(params, enc, opts) {
+        this._preflightContractMeta(params, opts);
+        return this.submit({ action: 'DEPLOY', params: Utility.withForcedVersion('4', params) }, enc, opts);
+    }
+
+    // Run the SDK's contract-identity pre-flight over a DEPLOY's params, before the
+    // action is composed. The check lives on the SDK facade; a session built on a
+    // stripped-down sdk object (the unit harnesses here, an embedding shell) has
+    // nothing to run, and a deploy must not die on the absence of a client-side
+    // courtesy check that only ever saves a fee. The refusal path itself is driven
+    // against a real XChainSDK in test/unit/contract-meta-preflight.test.js, so a
+    // renamed facade method fails there rather than silently disarming this.
+    _preflightContractMeta(params, opts) {
+        let sdk = this.sdk;
+        if (!sdk || typeof sdk._preflightContractMeta !== 'function'
+                 || typeof sdk._contractSourceFromParams !== 'function') return;
+        sdk._preflightContractMeta(sdk._contractSourceFromParams(params), (opts || {}).preflight);
+    }
     async execute(params, enc, opts)   { return this.submit({ action: 'EXECUTE', params }, enc, opts); }
     async deposit(params, enc, opts)   { return this.submit({ action: 'DEPOSIT', params }, enc, opts); }
     async withdraw(params, enc, opts)  { return this.submit({ action: 'WITHDRAW', params }, enc, opts); }

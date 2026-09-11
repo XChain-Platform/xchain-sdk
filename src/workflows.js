@@ -151,7 +151,8 @@ class Workflows {
     // deployParams  - DEPLOY action params; MUST include COOLDOWN_BLOCKS (1..100000) and
     //                 SLASH_DESTINATION (address or 'BURN' sentinel). VERSION is forced to 1.
     // deposits      - [{ tick, quantity }, ...] (optional initial token deposits)
-    // opts          - submit options
+    // opts          - submit options, plus opts.preflight (see deployAndFund: the
+    //                 contract-identity check runs before anything is composed)
     //
     // Returns: { deploy: <submitResult>, deposits: [<submitResult>, ...] }
     async deployStakeableContract(wif, deployParams, deposits, opts = {}) {
@@ -167,7 +168,12 @@ class Workflows {
     // wif           - WIF private key
     // deployParams  - DEPLOY action params (code/codeEncoding, gasLimit, constructorParams)
     // deposits      - [{ tick, quantity }, ...] (optional initial token deposits)
-    // opts          - submit options
+    // opts          - submit options, plus opts.preflight ('block' default | 'warn' |
+    //                 'off'): the contract-identity check (CONTRACT_META_REQUIRED) runs
+    //                 inside session.deploy BEFORE the action is composed, so a contract
+    //                 the chain will reject for a missing or malformed `meta` never pays
+    //                 a fee, and no deposit leg is attempted against a contract that
+    //                 will not exist.
     //
     // Returns: { deploy: <submitResult>, deposits: [<submitResult>, ...] }
     async deployAndFund(wif, deployParams, deposits, opts = {}) {

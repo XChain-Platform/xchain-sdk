@@ -139,6 +139,35 @@ class LifecycleManager {
 
         let encoded = await encoder.createTx(txParams);
 
+        // What the transaction the encoder just built ACTUALLY carries.
+        //
+        // Transparent FILE compression runs inside create_tx: it rewrites the
+        // action string's COMPRESSION field and deflates the payload, so from
+        // this line on `createResult.actionString` and `encoderOpts.rawData`
+        // describe the REQUEST, not the bytes. Reading the request instead of
+        // the answer broke both ends of a compressible FILE upload - the carrier
+        // binding gate below refused the transaction it had just asked for, and
+        // the phase-2 reveal was rebuilt from the caller's uncompressed payload,
+        // which compiles a different carrier and can never spend the commit.
+        //
+        // Fail closed when the encoder says it compressed but will not say what
+        // it wrote: an encoder too old to report the bytes cannot be gated or
+        // revealed against, and the recoverable outcome is a refusal here, before
+        // anything is signed, rather than a stranded commit afterwards.
+        let carriedActionString = createResult.actionString;
+        let carriedRawData = encoderOpts.rawData;
+        const encoderCompressed = !!(encoded.compression && encoded.compression.compressed);
+        if (encoderCompressed) {
+            if (typeof encoded.compression.data !== 'string' || !encoded.compression.data.length
+                || typeof encoded.compression.rawData !== 'string')
+                throw new SDKActionError('COMPRESSION_BYTES_UNREPORTED',
+                    'the encoder compressed the payload but did not report the action string and ' +
+                    'stored bytes it wrote, so neither the carrier gate nor the reveal can be built ' +
+                    'from them; refusing before anything is signed');
+            carriedActionString = encoded.compression.data;
+            carriedRawData = encoded.compression.rawData;
+        }
+
         // Reconcile the encoder's answer against what was submitted, BEFORE
         // any signature exists. createTx is an RPC to a remote service that picks the
         // inputs, the outputs and the fee; until this gate, nothing between that
@@ -199,7 +228,7 @@ class LifecycleManager {
         // signer runs its own policy over the same unbound bytes.
         assertCarrierBinding({
             psbt:           encoded.psbt,
-            actionString:   createResult.actionString,
+            actionString:   carriedActionString,
             encoding:       encoded.encoding,
             carrierScripts: encoded.carrierScripts,
             network:        this._reconcileNetwork(),
@@ -247,7 +276,7 @@ class LifecycleManager {
             // nothing but the round trip.
             assertEnvelopeCarrierBinding({
                 revealPsbt:   encoded.revealPsbt,
-                actionString: createResult.actionString,
+                actionString: carriedActionString,
                 network:      this._reconcileNetwork(),
             });
             revealSigned = this.sdk.wallet.signEnvelopeRevealPsbt(encoded.revealPsbt, wif);
@@ -317,9 +346,20 @@ class LifecycleManager {
                 pubkey:           encoderOpts.pubkey,
                 p2shHash:         signed.txid,
                 p2shHex:          signed.txHex,
-                data:             createResult.actionString,
+                // The bytes phase 1 COMMITTED to, not the ones submitted. The
+                // encoder chunks script.compile([data, rawData]) and the reveal
+                // must reproduce those chunks exactly; handing it the caller's
+                // uncompressed payload (or a marker without the deflated bytes
+                // behind it) compiles a different carrier, and a reveal that does
+                // not hash to the commit's outputs can never spend them.
+                data:             carriedActionString,
                 encoding:         encoded.encoding,
-                rawData:          encoderOpts.rawData,
+                rawData:          carriedRawData,
+                // These bytes are ALREADY deflated and the action already declares
+                // the codec. Stated rather than left to the deployment default,
+                // which would otherwise re-enter the compression pass and depend on
+                // a guard refusing by accident to leave them alone.
+                ...(encoderCompressed ? { compress: false } : {}),
                 compressedPubKey: encoderOpts.compressedPubKey,
                 change:           encoderOpts.change,
                 fee:              encoderOpts.fee,
@@ -348,7 +388,7 @@ class LifecycleManager {
             // carrierScripts of its own and there is nothing here to hash them to.
             assertCarrierBinding({
                 psbt:         spendResult.psbt,
-                actionString: createResult.actionString,
+                actionString: carriedActionString,
                 network:      this._reconcileNetwork(),
                 label:        'phase-2 reveal',
             });
@@ -394,7 +434,10 @@ class LifecycleManager {
 
         let result = {
             txid:          finalTxid,
-            actionString:  createResult.actionString,
+            // The string that is ON CHAIN and therefore the one the indexer read,
+            // which after a compression pass is not the one submitted. A caller
+            // correlating this against the indexed action needs the written form.
+            actionString:  carriedActionString,
             action:        createResult.action,
             version:       createResult.version,
             encoding:      encoded.encoding,

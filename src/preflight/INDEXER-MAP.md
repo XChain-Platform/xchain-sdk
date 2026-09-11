@@ -35,7 +35,9 @@ at `1a4b78a4` on 2026-08-17, `batch.js` re-reviewed at `188554e5` on
 `send.js` + `dispense.js` re-reviewed at `0d7074ad` on 2026-09-06, and
 `batch.js` re-pinned at `717e7abe` on 2026-09-08 after a comment-only edit, and
 again at `8778008d` the same day after the chunk-carrier weight comment was
-rewritten for deferred assembly (see the review log below). Hashes
+rewritten for deferred assembly, and `batch.js` + `dispense.js` re-pinned at
+`d362079e` on 2026-09-09 after the genesis-arm comment edits (see the review
+log below). Hashes
 are of the indexer handler source files, resolved via
 `XCHAIN_INDEXER_PATH` or the sibling `../xchain-indexer` checkout. The
 gate SKIPS (does not fail) when no indexer checkout is present, so
@@ -46,18 +48,19 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-**Pins taken at indexer commit:** `8778008d`
+**Pins taken at indexer commit:** `d362079e`
 
-(Re-anchored 2026-09-08 by the second comment-only `batch.js` re-pin of the day,
-whose entry below declares this anchor. `8778008d` is reachable from the indexer
-develop head, and the gate re-checks that reachability at run time before it
-hands a reviewer a range built on it.
+(Re-anchored 2026-09-09 by the genesis-arm re-pin of `batch.js` and
+`dispense.js`, whose entry below declares this anchor. `d362079e` is reachable
+from the indexer develop head, and the gate re-checks that reachability at run
+time before it hands a reviewer a range built on it.
 
-No byte-identity claim survives a re-anchor, so none is made here. One file
-under `src/actions/` differs between `717e7abe` and `8778008d`, `batch.js`
-itself, and its executable code is byte-identical to the `a505347a` pin: only
-the two comments about the chunk-carrier weight moved, which is exactly why the
-older anchor is a
+No byte-identity claim survives a re-anchor, so none is made here. Four files
+under `src/actions/` differ between `8778008d` and `d362079e`: `batch.js` and
+`dispense.js` are the mapped rows, and the executable code of each is
+byte-identical to its previous pin (only comments describing the mainnet arming
+state moved); `cross_settle.js` and `deploy.js` are unmapped handlers, which is
+exactly why the older anchor is a
 baseline for the older review only. Each review-log entry names the baseline it
 was read against; use that one, never this line, to reconstruct a past review.
 
@@ -84,7 +87,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 8778008d..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff d362079e..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -127,12 +130,12 @@ found by hashing candidate blobs as above.
 | `checks/mint.js` | `src/actions/mint.js` | `e491154c399be3fdd5b6b242b3da24db6c5119d4683988308b8087e4dc8dff03` |
 | `checks/issue.js` | `src/actions/issue.js` | `d29136642b5e666834b84ef0344cf70c577b0f7f38402c1707f48d439221df57` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `a0e12843830c5ddada648af5e5bfeac5769cdd2074755409a4e80ce455a2b3f0` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `a71a0ee82b884965c2f62ea3579d8d09b4d31d481ffaf9c7a7e848069155a3f0` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `c349a43c1181026ca03a69d1960fd4cf1542fa8f9e1e1090c53959342d366372` |
 | `checks/trading.js` (ORDER) | `src/actions/order.js` | `e9c676ff4d724b92bd94966bf6811d23bc932ed34daa694211833302e53b6b02` |
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `971338842f897e140d27565a4e01cdb364da14b81bb58e140dd6014d529b35fb` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `956463e64bb90087364b2c109c6d1f27a5b3526fd24415d6b9c22042e65e1479` |
 | `checks/dividend.js` | `src/actions/dividend.js` | `318754131de748339bad0a79eb2381309dac240150858f9a33abde42f9007248` |
-| `checks/batch.js` | `src/actions/batch.js` | `73e89c873a9dc6164158186968ffdc8629acfce8675de33340034202ca5af1ba` |
+| `checks/batch.js` | `src/actions/batch.js` | `2bb1b542d584bcea2f015c3f2421099666b31904b31e88e685f32c6021f66195` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -141,6 +144,21 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-09 - `batch.js` + `dispense.js`, against indexer HEAD `d362079e`
+
+Neither owes anything: every change since `8778008d` is a comment. The
+mainnet genesis arm (the 2026-09-09 ruling that armed the identity gates at
+mainnet block 0) reworded the comments that described mainnet as unarmed.
+`batch.js` now says the weight loosening applies on mainnet from block 0 rather
+than "while the flag is unarmed on mainnet"; `dispense.js` now describes the
+pre-`dispenser_give_amount_activation` zero-divisor and coerced-zero paths as
+legacy-only history rather than live mainnet behaviour. Executable code is
+byte-identical to the `8778008d` pins, verifiable with
+`git -C ../xchain-indexer diff 8778008d..d362079e -- src/actions/batch.js
+src/actions/dispense.js`. The client checks, the weight table and the
+conformance vectors are unchanged: the arm moves activation values, not
+validity rules, and the checks already model the armed rule as the only rule.
 
 ### 2026-09-08 (second pass) - `batch.js`, against indexer HEAD `8778008d`
 

@@ -204,19 +204,34 @@ describe('CompressionUtils (Part B)', function () {
         });
 
         it('never throws on hostile or malformed input', async function () {
-            const cases = [
+            // These fixtures are deterministically not a valid deflate-raw
+            // stream (empty, single/four-byte bogus lead-ins, non-buffer
+            // types), so inflated:false is a fixed, safe assumption here.
+            const deterministicallyInvalid = [
                 Buffer.alloc(0),
                 Buffer.from([0x00]),
                 Buffer.from([0xff, 0xff, 0xff, 0xff]),
-                crypto.randomBytes(64),
                 null,
                 undefined,
                 'not a buffer',
                 42
             ];
-            for (const input of cases) {
+            for (const input of deterministicallyInvalid) {
                 const r = await compression.inflate(input);
                 assert.strictEqual(r.inflated, false, 'no false positive on ' + String(input));
+                assert.ok(typeof r.error === 'string');
+            }
+
+            // A raw deflate stream carries no header or checksum, so a
+            // random 64-byte buffer can, on rare occasion, decode as a
+            // (bounded, sane) valid stream. Never assert the fixed outcome
+            // here; just never throw, and never hand back an unbounded or
+            // malformed-shaped result either way.
+            const r = await compression.inflate(crypto.randomBytes(64));
+            if (r.inflated) {
+                assert.ok(Buffer.isBuffer(r.bytes));
+                assert.ok(r.bytes.length <= r.storedLength * CONSTANTS.COMPRESSION_MAX_RATIO);
+            } else {
                 assert.ok(typeof r.error === 'string');
             }
         });
@@ -480,5 +495,172 @@ describe('CompressionUtils (Part B)', function () {
             assert.strictEqual(docs.COMPRESSION_MAX_RATIO, CONSTANTS.COMPRESSION_MAX_RATIO);
             assert.strictEqual(docs.COMPRESSION_MAX_INPUT_BYTES, CONSTANTS.COMPRESSION_MAX_INPUT_BYTES);
         });
+    });
+});
+
+// The encoder COMPRESSES inside create_tx: it rewrites the action
+// string's COMPRESSION field and deflates the payload, so from the moment
+// create_tx answers, the submitted action string and the caller's rawData
+// describe the request and not the bytes. Reading the request instead of the
+// answer broke both ends of a compressible FILE upload - the carrier gate
+// refused the transaction this SDK had just asked for, and the phase-2 reveal
+// was rebuilt from the uncompressed payload, compiling a carrier that hashes to
+// nothing the commit created (a broadcast commit nothing can spend).
+describe('LifecycleManager submits against the bytes the encoder WROTE', function () {
+
+    const LifecycleManager = require('../../src/lifecycleManager.js');
+    const bitcoin = require('bitcoinjs-lib');
+    const ecc = require('@bitcoinerlab/secp256k1');
+    const { ECPairFactory } = require('ecpair');
+    bitcoin.initEccLib(ecc);
+    const ECPair = ECPairFactory(ecc);
+
+    const FAKE_WIF = 'L1rkA9mYRjVPVdvMuVbHRMX6SPHM7fNwCEfT3AV2qCGAmJ8wNfp';
+    const FILE_ACTION = 'FILE|0|sample.txt|text/plain';
+    const FILE_ACTION_WRITTEN = 'FILE|0|sample.txt|text/plain|||||||1';
+    const SUPPLIED_RAW = 'x'.repeat(2048);
+    const STORED_RAW = 'z'.repeat(300);
+
+    // A signed-and-unsigned pair the reconcile gate can parse.
+    function buildSignedTx() {
+        const kp = ECPair.makeRandom();
+        const script = bitcoin.payments.p2wpkh({ pubkey: kp.publicKey }).output;
+        const prevTx = new bitcoin.Transaction();
+        prevTx.addInput(Buffer.alloc(32), 0xffffffff, 0xffffffff, Buffer.from([0x51]));
+        prevTx.addOutput(script, 100000);
+        const psbt = new bitcoin.Psbt();
+        psbt.addInput({ hash: prevTx.getId(), index: 0, sequence: 0xfffffffd,
+                        witnessUtxo: { script, value: 100000 } });
+        psbt.addOutput({ script, value: 90000 });
+        const psbtHex = psbt.toHex();
+        psbt.signAllInputs(kp);
+        psbt.finalizeAllInputs();
+        const tx = psbt.extractTransaction();
+        return { psbtHex, txHex: tx.toHex(), txid: tx.getId() };
+    }
+
+    // An encoder answer built the way xchain-encoder builds one: the action
+    // compiled behind the XCHN magic word, AES-128-CTR obfuscated under the
+    // first input's txid, in a zero-value OP_RETURN, change back to the funding
+    // script. Only the carrier's CONTENTS differ between cases.
+    function encoderAnswer(carriedAction) {
+        const kp = ECPair.makeRandom();
+        const script = bitcoin.payments.p2wpkh({ pubkey: kp.publicKey }).output;
+        const prevHash = crypto.randomBytes(32);
+        const txid = Buffer.from(prevHash).reverse().toString('hex');
+        const tagged = Buffer.concat([Buffer.from('XCHN'),
+            bitcoin.script.compile([Buffer.from(carriedAction, 'utf8')])]);
+        const cipher = crypto.createCipheriv('aes-128-ctr', txid.substr(0, 16), txid.substr(16, 16));
+        const psbt = new bitcoin.Psbt();
+        psbt.addInput({ hash: prevHash, index: 0, witnessUtxo: { script, value: 100000 } });
+        psbt.addOutput({ script: bitcoin.payments.embed({
+            data: [Buffer.concat([cipher.update(tagged), cipher.final()])] }).output, value: 0 });
+        psbt.addOutput({ script, value: 90000 });
+        return psbt.toHex();
+    }
+
+    function makeSdk(encoderOverrides, calls) {
+        const signed = buildSignedTx();
+        const encoder = Object.assign({
+            createTx:    async () => ({ psbt: signed.psbtHex, encoding: 'OP_RETURN' }),
+            spendP2sh:   async () => ({ psbt: signed.psbtHex }),
+            broadcastTx: async () => { calls.push('broadcast'); return { txid: signed.txid }; },
+        }, encoderOverrides);
+        return {
+            _requireEncoder: () => encoder,
+            actions: { createAction: () => ({ actionString: FILE_ACTION, action: 'FILE', version: 0 }) },
+            tickResolver:    { resolveActionParams: async (a, p) => p },
+            addressResolver: { resolveActionParams: async (a, p) => p },
+            wallet: {
+                signPsbt:       () => { calls.push('sign'); return { txHex: signed.txHex, txid: 'p1txid', psbtHex: signed.psbtHex }; },
+                signRevealPsbt: () => { calls.push('sign-reveal'); return { txHex: signed.txHex, txid: 'p2txid', psbtHex: signed.psbtHex }; },
+            },
+        };
+    }
+
+    const REPORT = {
+        compressed: true, rawLength: SUPPLIED_RAW.length, storedLength: STORED_RAW.length,
+        reason: null, data: FILE_ACTION_WRITTEN, rawData: STORED_RAW,
+    };
+
+    const submit = (sdk) => new LifecycleManager(sdk).submitAction(
+        { action: 'FILE', params: {} },
+        { pubkey: '03pub', change: 'addr', rawData: SUPPLIED_RAW },
+        { wif: FAKE_WIF, waitForIndexer: false });
+
+    it('hands phase 2 the WRITTEN action string and the STORED payload', async function () {
+        const calls = [];
+        let spendParams = null;
+        const signed = buildSignedTx();
+        const sdk = makeSdk({
+            createTx:  async () => ({ psbt: signed.psbtHex, encoding: 'P2SH', compression: REPORT }),
+            spendP2sh: async (p) => { spendParams = p; return { psbt: signed.psbtHex }; },
+        }, calls);
+
+        await submit(sdk);
+
+        assert.strictEqual(spendParams.data, FILE_ACTION_WRITTEN,
+            'the reveal must re-derive its chunks from the string the commit carried');
+        assert.strictEqual(spendParams.rawData, STORED_RAW,
+            'and from the deflated bytes, not the ones the caller handed over');
+        assert.strictEqual(spendParams.compress, false,
+            'these bytes are already deflated; say so rather than depend on a guard');
+    });
+
+    it('leaves phase 2 on the caller\'s own bytes when nothing was compressed', async function () {
+        const calls = [];
+        let spendParams = null;
+        const signed = buildSignedTx();
+        const sdk = makeSdk({
+            createTx:  async () => ({ psbt: signed.psbtHex, encoding: 'P2SH' }),
+            spendP2sh: async (p) => { spendParams = p; return { psbt: signed.psbtHex }; },
+        }, calls);
+
+        await submit(sdk);
+
+        assert.strictEqual(spendParams.data, FILE_ACTION);
+        assert.strictEqual(spendParams.rawData, SUPPLIED_RAW);
+        assert.strictEqual(spendParams.compress, undefined,
+            'the deployment default is left alone when there is nothing to pin');
+    });
+
+    it('REFUSES before signing when the encoder compressed but withheld what it wrote', async function () {
+        const calls = [];
+        const signed = buildSignedTx();
+        const sdk = makeSdk({
+            createTx: async () => ({ psbt: signed.psbtHex, encoding: 'P2SH',
+                compression: { compressed: true, rawLength: 2048, storedLength: 300, reason: null } }),
+        }, calls);
+
+        await assert.rejects(() => submit(sdk), (e) => e.code === 'COMPRESSION_BYTES_UNREPORTED');
+        assert.deepStrictEqual(calls, [],
+            'nothing may be signed or broadcast when the reveal cannot be rebuilt');
+    });
+
+    it('binds the carrier to the WRITTEN string, and reports it as the action string', async function () {
+        const calls = [];
+        const sdk = makeSdk({
+            createTx: async () => ({ psbt: encoderAnswer(FILE_ACTION_WRITTEN),
+                encoding: 'OP_RETURN', compression: REPORT }),
+        }, calls);
+
+        const result = await submit(sdk);
+        assert.deepStrictEqual(calls, ['sign', 'broadcast'],
+            'a compressible FILE upload must stop refusing the transaction it asked for');
+        assert.strictEqual(result.actionString, FILE_ACTION_WRITTEN,
+            'the reported action string is the one on chain, which is what the indexer read');
+    });
+
+    it('still refuses a carrier that holds neither the submitted nor the written string', async function () {
+        // The gate was re-pointed, not loosened: a substituted command riding in
+        // on the same field compression legitimately rewrites is still tamper.
+        const calls = [];
+        const sdk = makeSdk({
+            createTx: async () => ({ psbt: encoderAnswer('FILE|0|payload.exe|text/plain|||||||1'),
+                encoding: 'OP_RETURN', compression: REPORT }),
+        }, calls);
+
+        await assert.rejects(() => submit(sdk), (e) => e.code === 'CARRIER_ACTION_MISMATCH');
+        assert.deepStrictEqual(calls, []);
     });
 });

@@ -126,9 +126,15 @@ class ContractClient {
 
     // Normalize the manifest off a raw explorer contract object. `permissions` may arrive
     // as a JSON string ('["SEND"]') or an already-parsed array; anything else → null.
+    //
+    // Contract identity (spec 2.5/2.6) rides the same object: `meta_name`,
+    // `meta_description`, `meta_version` are flat columns and `meta` is the parsed
+    // `meta_json` (an object, or a JSON string on a client that did not parse it).
+    // They are display metadata, so a malformed value degrades to null rather than
+    // throwing: a contract deployed before CONTRACT_META_REQUIRED carries none at all.
     static parseManifest(info) {
         if (!info)
-            return { permissions: null, maxTakeBps: null };
+            return { permissions: null, maxTakeBps: null, name: null, description: null, version: null, meta: null };
         let permissions = null;
         let raw = info.permissions;
         if (Array.isArray(raw)) {
@@ -138,7 +144,27 @@ class ContractClient {
         }
         let mtb = info.max_take_bps;
         let maxTakeBps = (mtb === null || mtb === undefined || mtb === '') ? null : Number(mtb);
-        return { permissions, maxTakeBps };
+
+        let text = (v) => (typeof v === 'string' && v.length) ? v : null;
+        let meta = null;
+        let rawMeta = info.meta;
+        if (rawMeta && typeof rawMeta === 'object' && !Array.isArray(rawMeta)) {
+            meta = rawMeta;
+        } else if (typeof rawMeta === 'string' && rawMeta.length) {
+            try {
+                let m = JSON.parse(rawMeta);
+                if (m && typeof m === 'object' && !Array.isArray(m)) meta = m;
+            } catch (e) { meta = null; }
+        }
+
+        return {
+            permissions,
+            maxTakeBps,
+            name:        text(info.meta_name),
+            description: text(info.meta_description),
+            version:     text(info.meta_version),
+            meta
+        };
     }
 
 }
