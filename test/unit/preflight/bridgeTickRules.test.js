@@ -192,15 +192,37 @@ describe('pre-flight bridge landing: ISSUE tick rules', function () {
             expect(f.data.tick).to.equal('JDOG.SUB');
         });
 
+        /* Each opt-in field is now judged on TWO layers, and both are wanted.
+         *
+         * src/validator.js carries the offline format-7 field rules, so a caller who
+         * composes without ever running pre-flight is refused at compose time; the
+         * pre-flight bridges every validator finding into the report as a
+         * VALIDATOR_SEMANTICS *warning* (universal.js: only FORBIDDEN_CHARACTER is a hard
+         * validator code), while checks/issue.js raises its own non-overridable *error*
+         * for the same field. The error is the authoritative refusal, so these cases key
+         * on severity rather than on "the first finding for this field", which is the
+         * validator's warning twin now that both layers report.
+         */
+        const fieldFinding = (r, field, severity) => r.findings.find(
+            (x) => x.code === 'VALIDATOR_SEMANTICS' && x.data.field === field && x.severity === severity);
+
         it('BRIDGE_CHAINS must name other chain coins', async function () {
             const bad = ['ETH', 'BTC', 'DOGE,BTC', 'DOGE, LTC', 'XCHAIN'];
             for (const chains of bad) {
                 const r = await reportFor(`ISSUE|7|JDOG|${chains}`, mine(), { coin: 'BTC' });
-                const f = r.findings.find(x => x.code === 'VALIDATOR_SEMANTICS' && x.data.field === 'BRIDGE_CHAINS');
+                const f = fieldFinding(r, 'BRIDGE_CHAINS', 'error');
                 expect(f, chains).to.not.equal(undefined);
                 expect(f.severity, chains).to.equal('error');
                 expect(f.overridable, chains).to.equal(false);
             }
+            // The offline layer under it: everything except the self-chain half is
+            // decidable from the wire alone, so the validator names the same field too.
+            const membership = await reportFor('ISSUE|7|JDOG|ETH', mine(), { coin: 'BTC' });
+            expect(fieldFinding(membership, 'BRIDGE_CHAINS', 'warning')).to.not.equal(undefined);
+            // The self-chain half is NOT offline-decidable (the validator carries no
+            // coin), so there the error stands alone.
+            const selfChain = await reportFor('ISSUE|7|JDOG|BTC', mine(), { coin: 'BTC' });
+            expect(fieldFinding(selfChain, 'BRIDGE_CHAINS', 'warning')).to.equal(undefined);
             for (const chains of ['DOGE', 'doge,ltc', 'LTC,DOGE', '-', '']) {
                 const r = await reportFor(`ISSUE|7|JDOG|${chains}`, mine(), { coin: 'BTC' });
                 expect(has(r, 'VALIDATOR_SEMANTICS'), JSON.stringify(chains)).to.equal(false);
@@ -224,9 +246,11 @@ describe('pre-flight bridge landing: ISSUE tick rules', function () {
         it('MIN_DEPTH is digits only', async function () {
             for (const depth of ['abc', '1.5', '-1', '1e2']) {
                 const r = await reportFor(`ISSUE|7|JDOG||${depth}`, mine(), { coin: 'BTC' });
-                const f = r.findings.find(x => x.code === 'VALIDATOR_SEMANTICS' && x.data.field === 'MIN_DEPTH');
+                const f = fieldFinding(r, 'MIN_DEPTH', 'error');
                 expect(f, depth).to.not.equal(undefined);
                 expect(f.severity, depth).to.equal('error');
+                // The offline twin: digits-only needs no chain state at all.
+                expect(fieldFinding(r, 'MIN_DEPTH', 'warning'), depth).to.not.equal(undefined);
             }
             for (const depth of ['0', '12', '']) {
                 const r = await reportFor(`ISSUE|7|JDOG||${depth}`, mine(), { coin: 'BTC' });
@@ -236,9 +260,11 @@ describe('pre-flight bridge landing: ISSUE tick rules', function () {
 
         it('LOCK_BRIDGE is 0 or 1', async function () {
             const r = await reportFor('ISSUE|7|JDOG|||2', mine(), { coin: 'BTC' });
-            const f = r.findings.find(x => x.code === 'VALIDATOR_SEMANTICS' && x.data.field === 'LOCK_BRIDGE');
+            const f = fieldFinding(r, 'LOCK_BRIDGE', 'error');
             expect(f).to.not.equal(undefined);
             expect(f.severity).to.equal('error');
+            // The offline twin, which LOCK_BRIDGE gets from config['LOCK_FIELDS'].
+            expect(fieldFinding(r, 'LOCK_BRIDGE', 'warning')).to.not.equal(undefined);
             for (const lock of ['0', '1', '']) {
                 const ok = await reportFor(`ISSUE|7|JDOG|||${lock}`, mine(), { coin: 'BTC' });
                 expect(has(ok, 'VALIDATOR_SEMANTICS'), JSON.stringify(lock)).to.equal(false);
@@ -247,8 +273,13 @@ describe('pre-flight bridge landing: ISSUE tick rules', function () {
 
         it('the field rules run even when the row lookup is down', async function () {
             const r = await reportFor('ISSUE|7|JDOG|ETH|x|2', { getToken: () => { throw new Error('boom'); } }, { coin: 'BTC' });
-            const fields = r.findings.filter(f => f.code === 'VALIDATOR_SEMANTICS').map(f => f.data.field);
-            expect(fields).to.have.members(['BRIDGE_CHAINS', 'MIN_DEPTH', 'LOCK_BRIDGE']);
+            const at = (severity) => r.findings
+                .filter(f => f.code === 'VALIDATOR_SEMANTICS' && f.severity === severity)
+                .map(f => f.data.field);
+            expect(at('error')).to.have.members(['BRIDGE_CHAINS', 'MIN_DEPTH', 'LOCK_BRIDGE']);
+            // All three rules are offline-decidable, so the validator names all three too
+            // and neither layer depends on the row lookup that just failed.
+            expect(at('warning')).to.have.members(['BRIDGE_CHAINS', 'MIN_DEPTH', 'LOCK_BRIDGE']);
         });
     });
 });

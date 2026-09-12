@@ -843,6 +843,44 @@ class Validator {
             }
         }
 
+        // ISSUE v7 bridge opt-in fields (the token bridge spec §7). Both names live on
+        // that one format and nowhere else in formats.js, so neither needs an action gate.
+        //
+        // BRIDGE_CHAINS is the '-' sentinel (bridge nowhere) or a comma list of chain
+        // coins. Mirrors xchain-indexer/src/actions/issue.js:862, which upper-cases each
+        // comma segment and refuses the action when it is not in config['COINS']. It does
+        // NOT trim, so ' LTC' is refused on chain and must be refused here too; trimming
+        // would make the SDK looser than consensus and pay a miner fee to find out.
+        //
+        // The handler's other half of that rule, "and not THIS chain", is undecidable
+        // here: the validator carries a network but no coin. src/preflight/checks/issue.js
+        // owns that half, where the plane is known.
+        //
+        // An EMPTY value never reaches this branch (the caller skips empties), which is
+        // the wire meaning the handler gives it: empty = unchanged.
+        if (field === 'BRIDGE_CHAINS' && String(value) !== '-') {
+            for (let chain of String(value).split(',')) {
+                if (!VALID_COINS.includes(chain.toUpperCase())) {
+                    errors.push(this._error('INVALID_FIELD_VALUE',
+                        'BRIDGE_CHAINS must be "-" or a comma list of chain coins ('
+                        + VALID_COINS.join(', ') + '), excluding this chain; "' + chain + '" is not one',
+                        { field, value: chain, constraint: { valid: VALID_COINS } }));
+                    break;
+                }
+            }
+        }
+
+        // MIN_DEPTH is a raise-only confirmation depth: the federation honours
+        // max(platform default, MIN_DEPTH), so 0 is "no raise" and a negative or
+        // fractional value is meaningless. Digits only, mirroring
+        // xchain-indexer/src/actions/issue.js:873 ('invalid: MIN_DEPTH (format)').
+        if (field === 'MIN_DEPTH') {
+            if (!/^[0-9]+$/.test(String(value)))
+                errors.push(this._error('INVALID_FIELD_VALUE',
+                    'MIN_DEPTH must be a whole number of confirmations (digits only)',
+                    { field, value }));
+        }
+
         if (field === 'VALUE') {
             if (!this.util.isNumeric(value))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'VALUE must be numeric', { field, value }));
@@ -868,10 +906,14 @@ class Validator {
 
         switch (action) {
             case 'ADDRESS':
-            case 'ISSUE':
                 // ISSUE v6 / ADDRESS v1 controller bind/unbind cross-field rules (no-op for a
                 // plain ISSUE/ADDRESS that carries no controller fields).
                 errors.push(...this._validateControllerBind(fields));
+                break;
+            case 'ISSUE':
+                errors.push(...this._validateControllerBind(fields));
+                // ISSUE v7 bridge opt-in cross-field rules (no-op for every other format).
+                errors.push(...this._validateBridgeOptIn(fields));
                 break;
             case 'BATCH':
                 errors.push(...this._validateBatch(fields));
@@ -925,6 +967,43 @@ class Validator {
             errors.push(this._error('MISSING_REQUIRED_FIELD', 'ACTION_CLASS is required for a controller bind/unbind', { field: 'ACTION_CLASS' }));
         if (!isUnbind && !hasController)
             errors.push(this._error('MISSING_REQUIRED_FIELD', 'CONTROLLER is required to bind a controller', { field: 'CONTROLLER' }));
+        return errors;
+    }
+
+    /*
+     * ISSUE v7 (the issuer's bridge opt-in) cross-field rules.
+     *
+     * One refusal is decidable with nothing but the wire fields: the indexer refuses the
+     * WHOLE format for a dotted name (xchain-indexer/src/actions/issue.js:855,
+     * 'invalid: TICK (subassets are not bridgeable yet)'). A bridged row is created one
+     * level under its origin chain's root, and the bridge creates exactly that one level,
+     * so a dotted native name would strand the in-leg on the parent gate AFTER the origin
+     * escrow was already debited. Refusing the opt-in is what stops such a token from ever
+     * being advertised as bridgeable.
+     *
+     * The handler judges the RESOLVED name, so a '^id' reference to a dotted row is refused
+     * on chain and cannot be seen from here; that half, like the unknown-tick and the
+     * LOCK_BRIDGE=1 frozen-field refusals, needs the token row and lives in
+     * src/preflight/checks/issue.js. Nothing is asserted about it here rather than guessed.
+     */
+    _validateBridgeOptIn(fields) {
+        let errors = [];
+        // An absent VERSION is auto-selected downstream, and BRIDGE_CHAINS / MIN_DEPTH /
+        // LOCK_BRIDGE appear on format 7 alone, so carrying one of them IS this format.
+        let version = this._isEmpty(fields.VERSION) ? null : Number(fields.VERSION);
+        if (version === null) {
+            let carriesBridgeField = !this._isEmpty(fields['BRIDGE_CHAINS'])
+                || !this._isEmpty(fields['MIN_DEPTH'])
+                || !this._isEmpty(fields['LOCK_BRIDGE']);
+            if (!carriesBridgeField) return errors;
+        } else if (version !== 7) {
+            return errors;
+        }
+        let tick = this._isEmpty(fields['TICK']) ? '' : String(fields['TICK']);
+        if (tick.charAt(0) !== '^' && tick.includes('.'))
+            errors.push(this._error('ISSUE_CONSTRAINT',
+                'subassets are not bridgeable yet, so the indexer refuses the ISSUE v7 bridge opt-in for ' + tick,
+                { action: 'ISSUE', version: 7, field: 'TICK', value: tick }));
         return errors;
     }
 

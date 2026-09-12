@@ -97,6 +97,13 @@ var Config = {
         ];
 
         // Define list of LOCK fields
+        //
+        // Mirrors xchain-indexer/src/actions/issue.js fieldList['LOCK'], which is what
+        // gives every name here the whole lock discipline on chain (0/1 format, and a
+        // set lock can never be unset). LOCK_BRIDGE is the ISSUE v7 bridge opt-in's
+        // freeze over BRIDGE_CHAINS and MIN_DEPTH; without it in this list the SDK's
+        // one LOCK_FIELDS consumer (validator.js) let a LOCK_BRIDGE=2 through to a
+        // paid-for action the indexer then refuses.
         config['LOCK_FIELDS'] = [
             'LOCK_MAX_SUPPLY',
             'LOCK_MINT',
@@ -104,7 +111,8 @@ var Config = {
             'LOCK_MAX_MINT',
             'LOCK_DESCRIPTION',
             'LOCK_SLEEP',
-            'LOCK_CALLBACK'
+            'LOCK_CALLBACK',
+            'LOCK_BRIDGE'
         ];
 
         // Define list of LIST fields

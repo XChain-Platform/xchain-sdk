@@ -380,7 +380,11 @@ describe('Validator: lock field validation', function () {
         'LOCK_MAX_MINT',
         'LOCK_DESCRIPTION',
         'LOCK_SLEEP',
-        'LOCK_CALLBACK'
+        // LOCK_BRIDGE is the ISSUE v7 bridge opt-in's freeze over BRIDGE_CHAINS and
+        // MIN_DEPTH. Listed by hand rather than read off config['LOCK_FIELDS'], so
+        // dropping it from that list fails here instead of quietly testing nothing.
+        'LOCK_CALLBACK',
+        'LOCK_BRIDGE'
     ];
 
     let v;
@@ -1994,5 +1998,125 @@ describe('Validator: TRANSFER_SUPPLY is an address field', function () {
             TRANSFER_SUPPLY: '^42'
         });
         expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+});
+
+// ISSUE v7: the issuer's bridge opt-in (BRIDGE_CHAINS / MIN_DEPTH / LOCK_BRIDGE)
+//
+// Every rule below mirrors a named refusal in xchain-indexer/src/actions/issue.js, so
+// each case is written as "what the chain does with this wire value", never as a
+// restatement of the SDK's own message.
+
+describe('Validator: ISSUE v7 bridge opt-in fields', function () {
+
+    let v;
+    beforeEach(function () { v = createValidator(); });
+
+    // BRIDGE_CHAINS (indexer issue.js: 'invalid: BRIDGE_CHAINS')
+
+    it('accepts the "-" sentinel, which is how an opt-in is cleared', function () {
+        const errors = v.validate('ISSUE', { VERSION: 7, TICK: 'JDOG', BRIDGE_CHAINS: '-' });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('accepts a comma list of chain coins', function () {
+        const errors = v.validate('ISSUE', { VERSION: 7, TICK: 'JDOG', BRIDGE_CHAINS: 'DOGE,LTC' });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    // The handler upper-cases each segment before testing membership, so a lowercase
+    // coin is accepted on chain and must not be refused here.
+    it('accepts a lowercase coin, which the handler upper-cases before testing', function () {
+        const errors = v.validate('ISSUE', { VERSION: 7, TICK: 'JDOG', BRIDGE_CHAINS: 'doge' });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('rejects a coin the platform does not run', function () {
+        const errors = v.validate('ISSUE', { VERSION: 7, TICK: 'JDOG', BRIDGE_CHAINS: 'ETH' });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('rejects the whole list when only one entry is bad', function () {
+        const errors = v.validate('ISSUE', { VERSION: 7, TICK: 'JDOG', BRIDGE_CHAINS: 'DOGE,ETH,LTC' });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    // The handler splits on ',' and does NOT trim, so ' LTC' never matches a coin and
+    // the action is refused on chain. Trimming here would make the SDK looser than
+    // consensus and the caller would pay a miner fee to discover it.
+    it('rejects an entry padded with a space, exactly as the untrimming handler does', function () {
+        const errors = v.validate('ISSUE', { VERSION: 7, TICK: 'JDOG', BRIDGE_CHAINS: 'DOGE, LTC' });
+        expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    // MIN_DEPTH (indexer issue.js: 'invalid: MIN_DEPTH (format)', /^\d+$/)
+
+    it('accepts a whole-number MIN_DEPTH', function () {
+        const errors = v.validate('ISSUE', { VERSION: 7, TICK: 'JDOG', MIN_DEPTH: '6' });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('accepts MIN_DEPTH = 0, which is the raise-only "no raise"', function () {
+        const errors = v.validate('ISSUE', { VERSION: 7, TICK: 'JDOG', MIN_DEPTH: 0 });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    ['-1', '6.5', 'six', '1e3'].forEach(function (bad) {
+        it('rejects a non-digit MIN_DEPTH: ' + bad, function () {
+            const errors = v.validate('ISSUE', { VERSION: 7, TICK: 'JDOG', MIN_DEPTH: bad });
+            expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+        });
+    });
+
+    // Subassets are not bridgeable yet: the indexer refuses the WHOLE format for a
+    // dotted name ('invalid: TICK (subassets are not bridgeable yet)').
+
+    it('refuses the opt-in for a dotted (subasset) TICK', function () {
+        const errors = v.validate('ISSUE', { VERSION: 7, TICK: 'JDOG.SUB', BRIDGE_CHAINS: 'DOGE' });
+        expect(hasErrorCode(errors, 'ISSUE_CONSTRAINT')).to.be.true;
+    });
+
+    // The refusal is on the whole format, not only on a non-empty BRIDGE_CHAINS: a
+    // dotted row can never carry a value in these fields, so a lock or a clear on one
+    // is meaningless and answers the same way.
+    it('refuses a dotted TICK even when the opt-in only locks the fields', function () {
+        const errors = v.validate('ISSUE', { VERSION: 7, TICK: 'JDOG.SUB', LOCK_BRIDGE: 1 });
+        expect(hasErrorCode(errors, 'ISSUE_CONSTRAINT')).to.be.true;
+    });
+
+    it('leaves a dotted TICK alone on every other ISSUE format', function () {
+        const errors = v.validate('ISSUE', { VERSION: 1, TICK: 'JDOG.SUB', DESCRIPTION: 'a child token' });
+        expect(hasNoErrorCode(errors, 'ISSUE_CONSTRAINT')).to.be.true;
+    });
+
+    // An absent VERSION is auto-selected downstream and these three fields exist on
+    // format 7 alone, so carrying one of them is the format.
+    it('applies the subasset refusal when VERSION is absent but a bridge field is carried', function () {
+        const errors = v.validate('ISSUE', { TICK: 'JDOG.SUB', MIN_DEPTH: '6' });
+        expect(hasErrorCode(errors, 'ISSUE_CONSTRAINT')).to.be.true;
+    });
+
+    it('says nothing about a plain ISSUE that carries no bridge field', function () {
+        const errors = v.validate('ISSUE', { TICK: 'JDOG.SUB', DESCRIPTION: 'a child token' });
+        expect(hasNoErrorCode(errors, 'ISSUE_CONSTRAINT')).to.be.true;
+    });
+
+    // The handler judges the RESOLVED name, which a '^id' reference does not carry:
+    // that refusal needs the token row and belongs to the pre-flight, so nothing is
+    // asserted about it here rather than guessed at.
+    it('says nothing about a ^<id> reference, whose row only the pre-flight can resolve', function () {
+        const errors = v.validate('ISSUE', { VERSION: 7, TICK: '^12', BRIDGE_CHAINS: 'DOGE' });
+        expect(hasNoErrorCode(errors, 'ISSUE_CONSTRAINT')).to.be.true;
+    });
+
+    it('accepts a well-formed opt-in on a top-level tick', function () {
+        const errors = v.validate('ISSUE', {
+            VERSION:       7,
+            TICK:          'JDOG',
+            BRIDGE_CHAINS: 'DOGE,LTC',
+            MIN_DEPTH:     '6',
+            LOCK_BRIDGE:   1
+        });
+        expect(errors).to.deep.equal([]);
     });
 });

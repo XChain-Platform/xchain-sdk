@@ -406,6 +406,88 @@ function checkRegexMirrors(indexerRoot) {
     return failed;
 }
 
+/* Indexer LIST constants this SDK vendors, compared ORDER INCLUDED.
+ *
+ * RESERVED_FUTURE_ROOTS lives in xchain-indexer/src/reservedRoots.js, which no mapped hash
+ * row can cover (every row carries a literal src/actions/ prefix) and which issue.js reads
+ * by symbol, so the handler's hash does not move when a root is added or dropped. That is
+ * the MAX_REFILLS blind spot one file further out, and it matters more here: the SDK's
+ * vendored copy in src/preflight/constants.js is what the ISSUE pre-flight refuses a new
+ * top-level create against, so a silent drift either warns on a name the chain allows or
+ * stays silent on one the chain refuses - after the miner fee is spent.
+ *
+ * Compared as an ORDERED list rather than a set, for the reason the indexer's own comment
+ * gives for pinning the order against xchain-documentation: an unordered compare passes
+ * while one side silently reorders, and it also cannot see a DUPLICATE (a set compare
+ * swallows a repeated name on one side while the two lengths disagree). Fails CLOSED when
+ * either literal cannot be read exactly once, or reads as empty - "could not parse it"
+ * must never land as "it agrees", the contract every seam above holds.
+ */
+const LIST_MIRRORS = [
+    {
+        name: 'RESERVED_FUTURE_ROOTS',
+        indexerFile: 'src/reservedRoots.js',
+        why: 'src/preflight/checks/issue.js refuses a new top-level ISSUE against this list',
+    },
+];
+
+/* Match `const NAME = [...]` (bare, `Object.freeze([...])` or `new Set([...])`) and return
+ * the quoted entries IN SOURCE ORDER, duplicates kept. parseStringSet sorts and dedupes,
+ * which is right for a membership comparison and wrong for this one.
+ */
+function parseStringList(text, name, where) {
+    const re = new RegExp('const\\s+' + name + '\\s*=\\s*(?:new Set\\(|Object\\.freeze\\()?\\s*\\[([^\\]]*)\\]', 'g');
+    const hits = [];
+    let m;
+    while ((m = re.exec(text)) !== null) hits.push(m[1]);
+    if (hits.length !== 1) {
+        throw new Error(`drift-gate: expected exactly one ${name} declaration in ${where}, found ${hits.length}. `
+            + 'That literal is what this gate compares; find where it moved before editing this check.');
+    }
+    const entries = [...hits[0].matchAll(/['"]([^'"]*)['"]/g)].map((x) => x[1]);
+    if (entries.length === 0) {
+        throw new Error(`drift-gate: ${name} in ${where} read as an EMPTY list. An empty reserved list would `
+            + 'compare equal against another unreadable one and report a seam that is not being checked; '
+            + 'fix the read rather than trusting a green gate.');
+    }
+    return entries;
+}
+
+function checkListMirrors(indexerRoot) {
+    const sdkSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'preflight', 'constants.js'), 'utf8');
+
+    let failed = 0;
+    const summary = [];
+    for (const { name, indexerFile, why } of LIST_MIRRORS) {
+        const abs = path.join(indexerRoot, indexerFile);
+        if (!fs.existsSync(abs)) {
+            warn(`drift-gate: xchain-indexer/${indexerFile} not found; it declares the ${name} list this gate pins.`);
+            failed = 1;
+            continue;
+        }
+        const indexerList = parseStringList(fs.readFileSync(abs, 'utf8'), name, `xchain-indexer/${indexerFile}`);
+        const sdkList = parseStringList(sdkSrc, name, 'src/preflight/constants.js');
+        if (indexerList.join(',') !== sdkList.join(',')) {
+            const onlyIndexer = indexerList.filter((x) => !sdkList.includes(x));
+            const onlySdk = sdkList.filter((x) => !indexerList.includes(x));
+            warn(`drift-gate: ${name} differs between xchain-indexer and this SDK:\n`
+                + `  indexer ${indexerFile}: ${indexerList.length} entr(ies)\n`
+                + `  sdk     src/preflight/constants.js: ${sdkList.length} entr(ies)`);
+            if (onlyIndexer.length) warn(`  in the indexer only: ${onlyIndexer.join(', ')}`);
+            if (onlySdk.length) warn(`  in the SDK only:     ${onlySdk.join(', ')}`);
+            if (!onlyIndexer.length && !onlySdk.length)
+                warn('  same members, different ORDER or a repeated entry; the two copies are pinned order-identical.');
+            warn(`  ${why}, so the SDK would judge a create against a list the chain no longer applies.`);
+            failed = 1;
+            continue;
+        }
+        summary.push(`${name}: ${sdkList.length}`);
+    }
+    if (!failed)
+        say(`drift-gate: mirrored indexer list(s) in sync (${summary.join(', ')}).`);
+    return failed;
+}
+
 /* GAS_SCHEDULE parity across the three coins.
  *
  * The SDK carries its OWN copy of each coin definition, and the gas schedule is what
@@ -569,6 +651,12 @@ function evaluate() {
         failed = 1;
     }
     try {
+        if (checkListMirrors(root)) failed = 1;
+    } catch (e) {
+        warn(e && e.message ? e.message : String(e));
+        failed = 1;
+    }
+    try {
         if (checkGasSchedules(root)) failed = 1;
     } catch (e) {
         warn(e && e.message ? e.message : String(e));
@@ -637,7 +725,7 @@ function main(argv, evaluateFn) {
 
 if (require.main === module) main();
 module.exports = {
-    resolveIndexerRoot, parseMap, parseAnchor, parseStringSet, parseRegexLiteral,
+    resolveIndexerRoot, parseMap, parseAnchor, parseStringSet, parseStringList, parseRegexLiteral,
     deriveFeeChargingActions, checkAnchorConsistency, checkFeeQuoteSeam,
-    checkConfigConstants, checkRegexMirrors, checkGasSchedules, evaluate, main,
+    checkConfigConstants, checkRegexMirrors, checkListMirrors, checkGasSchedules, evaluate, main,
 };

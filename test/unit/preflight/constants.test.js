@@ -355,6 +355,86 @@ describe('pre-flight constants + registry', function () {
             });
         });
 
+        /* The vendored-LIST seam, the third class no mapped hash can cover.
+         *
+         * RESERVED_FUTURE_ROOTS is declared in xchain-indexer/src/reservedRoots.js and read
+         * by issue.js through a symbol, so every pinned handler hash stays green while the
+         * reserved set moves underneath the SDK copy the ISSUE pre-flight judges a create
+         * against. Driven against SYNTHETIC indexer fixtures, like the seams above, because
+         * the live sibling is a moving target.
+         */
+        describe('mirrored indexer lists', function () {
+            const fs = require('fs');
+            const os = require('os');
+            const { checkListMirrors } = require('../../../bin/check-preflight-drift.js');
+
+            let root;
+            function fakeIndexerRoots(body) {
+                root = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-gate-list-'));
+                fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+                if (body !== null) fs.writeFileSync(path.join(root, 'src', 'reservedRoots.js'), body);
+                return root;
+            }
+
+            // The SDK's own list, re-emitted in the indexer's declaration shape.
+            const declare = (roots) => 'const RESERVED_FUTURE_ROOTS = Object.freeze(['
+                + roots.map((r) => `'${r}'`).join(', ') + ']);\n';
+            const live = () => [...constants.RESERVED_FUTURE_ROOTS];
+
+            afterEach(function () {
+                if (root) fs.rmSync(root, { recursive: true, force: true });
+                root = null;
+            });
+
+            it('passes when the indexer list matches the SDK copy entry for entry', function () {
+                expect(checkListMirrors(fakeIndexerRoots(declare(live())))).to.equal(0);
+            });
+
+            it('fails when the indexer reserves a root the SDK does not know about', function () {
+                // The live direction: a chain is added to the reserved set and the SDK stays
+                // silent on a create the chain now refuses.
+                expect(checkListMirrors(fakeIndexerRoots(declare(live().concat('XYZW'))))).to.equal(1);
+            });
+
+            it('fails when the SDK carries a root the indexer has released', function () {
+                expect(checkListMirrors(fakeIndexerRoots(declare(live().slice(1))))).to.equal(1);
+            });
+
+            // Same members, different order: a set comparison passes this and the two copies
+            // are pinned order-identical, so it is a finding.
+            it('fails when the two lists agree on membership but not on order', function () {
+                const reordered = live();
+                reordered.push(reordered.shift());
+                expect(checkListMirrors(fakeIndexerRoots(declare(reordered)))).to.equal(1);
+            });
+
+            // A duplicate is what a set comparison structurally cannot see: it dedupes one
+            // side down to the other's length and reports agreement.
+            it('fails when one side repeats an entry', function () {
+                const dupe = live();
+                dupe.splice(1, 0, dupe[0]);
+                expect(checkListMirrors(fakeIndexerRoots(declare(dupe)))).to.equal(1);
+            });
+
+            it('fails CLOSED when the indexer literal cannot be read exactly once', function () {
+                expect(() => checkListMirrors(fakeIndexerRoots(
+                    "const RESERVED_ROOTS_V2 = Object.freeze(['ETH']);\n"))).to.throw(/exactly one/);
+                expect(() => checkListMirrors(fakeIndexerRoots(
+                    declare(['ETH']) + declare(['SOL'])))).to.throw(/exactly one/);
+            });
+
+            // "Parsed as empty" must never land as "the two agree": an empty list would
+            // compare equal against any other unreadable one.
+            it('fails CLOSED when the list parses as empty', function () {
+                expect(() => checkListMirrors(fakeIndexerRoots(
+                    'const RESERVED_FUTURE_ROOTS = Object.freeze([]);\n'))).to.throw(/EMPTY/);
+            });
+
+            it('fails when the indexer file declaring the list is absent', function () {
+                expect(checkListMirrors(fakeIndexerRoots(null))).to.equal(1);
+            });
+        });
+
         it('every checks/ action module is mapped (or intentionally misc-only)', function () {
             // Guard against adding a certified check without a drift-map entry.
             const { parseMap } = require('../../../bin/check-preflight-drift.js');
