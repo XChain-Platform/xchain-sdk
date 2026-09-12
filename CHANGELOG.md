@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-09-11
+
+### Added
+- `index.d.ts` now declares the low-level WebSocket client and the `sdk.ws` member, so TypeScript callers can use the raw subscribe/on surface.
+- Preflight rejects an amount the ledger would not credit as written (exponential, hex, signed or over-wide spellings) for ISSUE, MINT and DISPENSER; the check is advisory and the indexer stays the authority.
+
+### Changed
+- `sync-templates` gains a `--check` drift guard, the action-roundtrip golden generator is CLI-only so `test:all` no longer rewrites it, and the unused `batchLimits` helpers are dropped.
+
+### Fixed
+- `AttestationHelpers.llm()` rejects a non-string `opts.system` instead of serializing it as `[object Object]`.
+- `HubConnector` cross-checks the coin consensus hashes the hub serves on `getallconfigs` against the bundled coin files and logs any coin that disagrees.
+- The Docker image no longer tries to bake a `.env` file, so the build succeeds on the legacy builder and configuration reaches the container as environment only.
+
 ## [0.17.0] - 2026-09-10
 
 ### Added

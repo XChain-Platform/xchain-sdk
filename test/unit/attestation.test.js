@@ -68,6 +68,23 @@ describe('AttestationHelpers.llm', function () {
         expect(() => Attestation.llm({ prompt: 123 })).to.throw(/prompt/);
     });
 
+    it('throws when system is a non-string object (would otherwise serialize as "[object Object]")', function () {
+        expect(() => Attestation.llm({ prompt: 'x', system: { evil: true } })).to.throw(/system/);
+    });
+
+    it('throws when system is a number', function () {
+        expect(() => Attestation.llm({ prompt: 'x', system: 42 })).to.throw(/system/);
+    });
+
+    it('throws when system is an array', function () {
+        expect(() => Attestation.llm({ prompt: 'x', system: ['a', 'b'] })).to.throw(/system/);
+    });
+
+    it('accepts a string system unchanged', function () {
+        const parsed = JSON.parse(Attestation.llm({ prompt: 'x', system: 'be concise' }));
+        expect(parsed.system).to.equal('be concise');
+    });
+
     it('throws when opts is null', function () {
         expect(() => Attestation.llm(null)).to.throw(/prompt/);
     });

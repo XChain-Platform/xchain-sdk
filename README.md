@@ -5,7 +5,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/npm/v/%40dankest-llc%2Fxchain-sdk" alt="npm version">
-  <img src="https://img.shields.io/badge/tests-4%2C648%2B%20passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-4%2C669%2B%20passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/node-%3E%3D22-green" alt="Node">
   <img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue" alt="License">
 </p>
@@ -32,7 +32,7 @@ Developer-facing SDK for the [XChain Platform](https://xchain.io/): generate XCh
 - **PSBT generation**: integrates with xchain-encoder to produce unsigned transactions
 - **115+ explorer query methods**: balances, tokens, transactions, markets, history, contracts
 - **Batch builder**: fluent API: `await sdk.batch().send({...}).mint({...}).build()` (`build()` is async)
-- **Real-time events**: WebSocket streaming with `onBlock()`, `onAction()`, `onAddress()`, and more
+- **Real-time events**: WebSocket streaming with automatic reconnection and catch-up via `onBlock()`, `onAction()`, `onAddress()`, `onToken()`, `onMarket()`, `onDispenser()`, `onBetFeed()`, `onXcall()`, `onAttestation()`, and more; `sdk.ws` exposes the low-level client (`subscribe()`, `on()`, `listSubscriptions()`, ...) directly
 - **Encrypted messaging**: ECIES, ECDH, and AES encryption for MESSAGE actions; `messaging.send()` accepts a `Buffer` payload and `getMessages()` exposes `msg.bytes` for binary ECIES
 - **Token-gated file publishing**: `sdk.gatedFile.encryptFileBytes()` and `sdk.gatedFile.encryptPack()` produce AES-256-GCM ciphertext + key for FILE v1 gated content; key handoff as a compact 33-byte binary payload via `serializeKeyPayload()` / `parseKeyPayload()` (sent through ECIES in binary mode). See [Token-Gated Content](https://docs.xchain.io/protocol/token-gated-content)
 - **Attestation envelope helpers**: `AttestationHelpers.llm({...})` builds the JSON envelope a VM contract passes to `xchain.attestation.request(...)` with provider_id `'llm'`; `AttestationHelpers.httpGet({url})` validates the URL and returns the payload string for `'http_get'`; `AttestationHelpers.requestOptions({redundancy, deadlineBlocks})` builds the gateway options object. By design these are envelope builders only: there is no user-submittable ATTEST action. ATTEST v0 (request) and v1 (response) are VM-emitted: a contract calls `xchain.attestation.request(...)` and validators emit the on-chain attestation. So the SDK helps you shape the request a contract makes, and you read the results via `getAttestations()`. It does not (and cannot) encode an ATTEST action directly, the same way XCALL is VM-emission-only.
@@ -215,7 +215,7 @@ await sdk.findToken('MYTOKEN');     // the unwrapped info record, or null
 | Command | Description |
 |---|---|
 | `npm run api` | Start JSON-RPC server (port from `SDK_API_PORT`, default 3005) |
-| `npm test` | Run unit tests (4,348 tests) |
+| `npm test` | Run unit tests (4,366 tests) |
 | `npm run repl` | Start interactive REPL with a pre-configured SDK instance |
 | `npm run build` | Production browser bundle -> `dist/xchain_sdk.min.js` |
 | `npm run build:dev` | Development browser bundle -> `dist/xchain_sdk.js` |

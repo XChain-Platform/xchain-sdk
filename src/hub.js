@@ -20,6 +20,16 @@
 
 const axios = require('axios');
 const { SDKHubError } = require('./errors.js');
+const coins = require('./coins');
+
+// Local { coin -> consensusHash } per network, computed on first use. The bundled
+// coin registry cannot change under a running process, so re-hashing it on every
+// config poll would be pure waste.
+const LOCAL_CONSENSUS_HASHES = {};
+function localConsensusHashes(network){
+    if(!LOCAL_CONSENSUS_HASHES[network]) LOCAL_CONSENSUS_HASHES[network] = coins.consensusHashes(network);
+    return LOCAL_CONSENSUS_HASHES[network];
+}
 
 // Fold a getallconfigs delta (only the rows that changed since our cursor) into
 // the cached nested config map, mutating and returning `base`. The hub's configs
@@ -271,6 +281,8 @@ class HubConnector {
     // (extractServiceEndpoints) see the same full-map shape regardless of hub
     // version. seq stays 0 against an old hub.
     _applyConfigResult(result) {
+        this._checkHubConsensusHash(result && typeof result === 'object' ? result.coin_consensus_hashes : null);
+
         let payload, seq, watermark;
         if (result && typeof result === 'object' && result.configs && typeof result.configs === 'object' && ('seq' in result)) {
             payload   = result.configs;
@@ -299,6 +311,38 @@ class HubConnector {
         }
         // First fetch (or post-restart): payload is the full tree.
         return payload || {};
+    }
+
+    // Transport-integrity check: compare the consensus-config hashes the hub serves
+    // on getallconfigs against our OWN bundled ones. Hub-served consensus values are
+    // never applied (the SDK derives them from the bundled src/coins registry, which
+    // is itself pin-verified), so this only logs; what it buys is that a hub built
+    // from a divergent bundle surfaces at the first config fetch instead of later as
+    // an opaque refused-or-wrong encode. Widened to every coin and network because
+    // the SDK bundles all three and is pointed at whatever venue the caller chose.
+    _checkHubConsensusHash(hubHashes){
+        if(!hubHashes || typeof hubHashes !== 'object') return;   // older hub: field absent
+        let mismatches = [];
+        for(const network of coins.NETWORKS){
+            let served = hubHashes[network];
+            if(!served || typeof served !== 'object') continue;
+            let local = localConsensusHashes(network);
+            for(const tick of Object.keys(local)){
+                // A coin the hub does not serve is version skew, not drift; only a
+                // hash the hub DOES serve and that differs counts as a mismatch.
+                if(served[tick] && served[tick] !== local[tick])
+                    mismatches.push(tick + '/' + network + ': hub ' + served[tick] + ' vs bundled ' + local[tick]);
+            }
+        }
+        // A polling SDK re-runs this on every fetch, so log only when the mismatch
+        // SET changes: a standing divergence must not flood the console, and a drift
+        // that widens or clears must still report.
+        let key = mismatches.join('|');
+        if(key === (this._lastConsensusMismatchKey || '')) return;
+        this._lastConsensusMismatchKey = key;
+        if(mismatches.length)
+            console.error('XChain SDK HubConnector: CONSENSUS HASH MISMATCH: the hub serves consensus config differing from this package\'s bundled coin files (' +
+                mismatches.join('; ') + '). Hub consensus values are never applied (they are pinned locally); upgrade the lagging side.');
     }
 
     // Ping the hub (tries each endpoint in order)

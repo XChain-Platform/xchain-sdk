@@ -175,6 +175,18 @@ async function checkDispenser(ctx) {
                     { getAmount: getAmount ?? null });
             }
         }
+        // GIVE_AMOUNT, GIVE_ESCROW, GET_AMOUNT and FIAT_AMOUNT are all judged above (or
+        // by validator.js) against the LEGACY amount-format rule, see numeric.js. Above
+        // its flag-day the indexer also requires each of them to denote the number the
+        // ledger credits, which pre-flight cannot decide: it needs the activation state
+        // of the block that will carry the create. Declared rather than raised, because
+        // neither mainnet nor testnet is armed and rejecting here would block a create
+        // both planes accept.
+        ctx.addUnverified('AMOUNT_REPRESENTABILITY',
+            'above its flag-day every amount on this create must be a plain decimal numeral denoting the '
+            + 'number the ledger credits, so exponent notation and an integer too wide for the ledger '
+            + 'aggregation are rejected instead of crediting a different number; the activation state of '
+            + 'the including block is server-side only, and neither mainnet nor testnet is armed for it');
         ctx.addUnverified('DISPENSER_ORIGIN_STANDING',
             'origin-standing / UTXO-freshness gate is server-side (and unreliable even on the quote path)');
         noteOracleFee(ctx, ctx.field('ORACLE_ADDRESS'));

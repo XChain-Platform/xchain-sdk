@@ -36,8 +36,11 @@ at `1a4b78a4` on 2026-08-17, `batch.js` re-reviewed at `188554e5` on
 `batch.js` re-pinned at `717e7abe` on 2026-09-08 after a comment-only edit, and
 again at `8778008d` the same day after the chunk-carrier weight comment was
 rewritten for deferred assembly, and `batch.js` + `dispense.js` re-pinned at
-`d362079e` on 2026-09-09 after the genesis-arm comment edits (see the review
-log below). Hashes
+`d362079e` on 2026-09-09 after the genesis-arm comment edits, and NINE
+re-reviewed on 2026-09-11 for the amount-representability gate, read against
+indexer HEAD `88f4efaf` plus its paired change (see the review
+log below), and `dispenser.js` re-pinned at `62c8d7c7` later the same day
+after the freshness-shape fail-closed change (no client change). Hashes
 are of the indexer handler source files, resolved via
 `XCHAIN_INDEXER_PATH` or the sibling `../xchain-indexer` checkout. The
 gate SKIPS (does not fail) when no indexer checkout is present, so
@@ -48,9 +51,39 @@ so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
 HEAD, so CI sees only committed change. Hashes recorded here are always
 HEAD hashes.
 
-**Pins taken at indexer commit:** `d362079e`
+One documented exception to that last sentence existed for part of 2026-09-11
+and is closed: the paired indexer change landed as `e3398122` and the table is
+re-anchored past it below. The reasoning is kept because the situation recurs. A
+cross-repo pairing has to be written on ONE side first, and the side that moves
+second cannot know the other side's commit id. The nine rows re-pinned on
+2026-09-11 are the content of the indexer amount-representability change, which
+is a paired working-tree change at the time this was written and becomes the
+indexer commit that lands with it. So those nine pins are HEAD hashes as of the
+landing and not of the anchor below; the review-log entry states which files
+differ and why, and the gate is green only once both sides land together. Treat
+a green gate here against an indexer tree WITHOUT that change as the finding it
+is: the nine rows will report drift, and the answer is the missing indexer
+commit, not a re-pin back.
 
-(Re-anchored 2026-09-09 by the genesis-arm re-pin of `batch.js` and
+**Pins taken at indexer commit:** `62c8d7c7`
+
+(Re-anchored 2026-09-11, second pass, by the `dispenser.js` re-pin below.
+`62c8d7c7` is the indexer develop head that pin was read against. It contains
+the amount-representability change, landed as `e3398122`, which the nine-row
+review earlier the same day read as a paired working-tree change against
+`88f4efaf`; with it landed, every row in the table is a plain HEAD hash of
+`62c8d7c7` and the working-tree exception above applies to no row. A reviewer
+diffing `62c8d7c7..HEAD` sees only what moves after this pin.
+
+Earlier note, same day. Re-anchored 2026-09-11 by the amount-representability
+review below. `88f4efaf` was the reachable indexer develop head that review was
+read against, and the nine re-pinned rows were that head PLUS the paired change.
+A reviewer diffing `88f4efaf..62c8d7c7` sees the amount-representability change
+itself, which that entry reviews line by line, plus the `dispenser.js` change
+the second-pass entry reviews; no other mapped row moved in that range.
+
+Earlier note, kept because the reasoning is still the rule. Re-anchored
+2026-09-09 by the genesis-arm re-pin of `batch.js` and
 `dispense.js`, whose entry below declares this anchor. `d362079e` is reachable
 from the indexer develop head, and the gate re-checks that reachability at run
 time before it hands a reviewer a range built on it.
@@ -87,7 +120,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff d362079e..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 62c8d7c7..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -125,16 +158,16 @@ found by hashing candidate blobs as above.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send.js` | `506ac1cb5fd9e69326c0c3b03b54c61ec233bcbe5ab02b47a871f6402a13460f` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `4e030a365892e67f36adea669e997563134870cfde05f542851df83430ba07e2` |
-| `checks/mint.js` | `src/actions/mint.js` | `e491154c399be3fdd5b6b242b3da24db6c5119d4683988308b8087e4dc8dff03` |
-| `checks/issue.js` | `src/actions/issue.js` | `d29136642b5e666834b84ef0344cf70c577b0f7f38402c1707f48d439221df57` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `a0e12843830c5ddada648af5e5bfeac5769cdd2074755409a4e80ce455a2b3f0` |
+| `checks/send.js` (SEND) | `src/actions/send.js` | `288332b9d583646e56462faf516bc762c657049cfb65ede3ae2a29d446705130` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `2d4d3179eab5ccdd323dc86475ed48e6f10928261c25624e7fc5223ae9142a41` |
+| `checks/mint.js` | `src/actions/mint.js` | `7e0ef940547b47700181b97f9ed64c4e9cf499b3705244ceba67c351044fa11b` |
+| `checks/issue.js` | `src/actions/issue.js` | `3066ece8ba87ea2ef18cd7453f4d96e9ad70d4af0f6c32cb5551bf782d3aad01` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `22634d973dbffe3d000fcdc2fd3d01f2c9e5f28eb1c2e4ad957e6a043db11f4a` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `c349a43c1181026ca03a69d1960fd4cf1542fa8f9e1e1090c53959342d366372` |
-| `checks/trading.js` (ORDER) | `src/actions/order.js` | `e9c676ff4d724b92bd94966bf6811d23bc932ed34daa694211833302e53b6b02` |
-| `checks/trading.js` (SWAP) | `src/actions/swap.js` | `971338842f897e140d27565a4e01cdb364da14b81bb58e140dd6014d529b35fb` |
-| `checks/airdrop.js` | `src/actions/airdrop.js` | `956463e64bb90087364b2c109c6d1f27a5b3526fd24415d6b9c22042e65e1479` |
-| `checks/dividend.js` | `src/actions/dividend.js` | `318754131de748339bad0a79eb2381309dac240150858f9a33abde42f9007248` |
+| `checks/trading.js` (ORDER) | `src/actions/order.js` | `870a0a5f687a79bd6e323903fc95151a94abdeaf1c43dd876910c3d8b030d8e4` |
+| `checks/trading.js` (SWAP) | `src/actions/swap.js` | `1d9493a28d1e54e1cb3961a8d5723064e728271e599ae76951174f9f5c5b2331` |
+| `checks/airdrop.js` | `src/actions/airdrop.js` | `cafa9417a86ae310b2c7f89534210c1b1fb08dc25115ed4e4d7d0ce6da858f59` |
+| `checks/dividend.js` | `src/actions/dividend.js` | `6d13a64a82686a85d1967b56e9b2d80cffb864234e11af5f7699ca236bf3d4e4` |
 | `checks/batch.js` | `src/actions/batch.js` | `2bb1b542d584bcea2f015c3f2421099666b31904b31e88e685f32c6021f66195` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
@@ -144,6 +177,100 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-11 (second pass) - `dispenser.js`, against indexer HEAD `62c8d7c7`
+
+Baseline pin: the amount-representability content (`88f4efaf` plus `e3398122`).
+Range read: `git -C ../xchain-indexer diff 88f4efaf..62c8d7c7 -- src/actions/dispenser.js`,
+minus the one-token timestamp edits the entry below already reviewed.
+
+**`dispenser.js` - REAL change, no client change owed.** One hunk, on the v0
+create path's origin-standing exception. Where the handler asked the UTXO tracker
+for the GET_ADDRESS's first appearance it now passes a `strictShape` flag,
+resolved from `dispenser_freshness_shape_activation` on THIS chain's block index
+(the tracker client has no block context, so the handler supplies the verdict).
+At or after that flag-day a non-null answer that carries no numeric height
+throws, the existing catch reads it as not fresh, and the exception is refused;
+below it that answer is the legacy null, which grants the exception as before.
+Nothing on the wire, no field, no error string and no ordering changed; the
+outcome differs only when the tracker returns a shapeless row, which a client
+cannot observe. `checks/dispenser.js` already declares
+`DISPENSER_ORIGIN_STANDING` unverified because the origin-standing /
+UTXO-freshness gate is server-side, and that declaration covers this change
+exactly. Re-pinned; anchor moved to `62c8d7c7` in the same edit. `dispense.js`
+and the nine rows below are byte-identical between `e3398122` and `62c8d7c7`
+(the gate reported only this row).
+
+### 2026-09-11 - nine handlers, against indexer HEAD `88f4efaf` plus its paired change
+
+Baseline pin `d362079e` for all nine. One change, nine call sites, and the
+answer is the same on every row: **no mirrored rejection ships, and one declared
+aspect does.**
+
+**What moved on the indexer side.** `utility.isValidAmountFormat(decimals,
+amount)` gained an optional third parameter, the including block's consensus
+timestamp, and a new module keyed to it. Supplying the timestamp opts the call
+into an AMOUNT-REPRESENTABILITY rule: the amount text must be a plain unsigned
+decimal numeral, digits with at most one point, whose significant integer part
+fits the ledger aggregation's integer capacity. The defect it closes is that the
+legacy body validates TEXT through `isNumeric`, which accepts the whole
+JavaScript number grammar, so `5e-19` passed at 18 decimals (its "fraction" is
+the four characters `e-19`, well inside 18) and the ledger then credited
+`1e-18`, a different number from the one that was validated; `1e-1` passed on an
+INDIVISIBLE tick and credited `0`; and a 43-digit integer passed and overflowed
+the aggregation the supply sums cast to. Hex, binary, signed, trailing-space and
+bare-point spellings went the same way. Leading zeros and trailing fractional
+zeros stay valid, because they are exactly representable.
+
+The nine drifted rows are `send.js`, `destroy.js`, `mint.js`, `issue.js`,
+`dispenser.js`, `order.js`, `swap.js`, `airdrop.js` and `dividend.js`. On every
+one of them the whole diff is the same one-token edit, the block's consensus
+timestamp added as the third argument at 14 call sites (plus `dispenser.js`'s
+fiat call, which forwards it through `isValidFiatFormat`). No predicate, no
+error string, no field and no ordering changed on any row. `dispense.js` and
+`batch.js` are untouched and keep their `d362079e` pins. Five handlers outside
+the map take the same edit (`attest.js`, `bet.js`, `callback.js`, `deposit.js`,
+`withdraw.js`); they are unmapped rows and no client check covers them.
+
+**Direction: this NARROWS acceptance, never widens it.** The gate is an early
+`return false` placed ahead of the untouched legacy body, so it can only reject
+more. That makes the "byte-identical replay below the threshold" claim
+mechanical rather than a review judgement, and it puts the client-side risk
+squarely on the false-PASS side: a pre-flight that says valid for an amount the
+chain now rejects.
+
+**Nothing is mirrored as an error, and the activation table is why.** Mainnet
+and testnet are BOTH on the unarmed house sentinel (9999999999, year 2286);
+only regtest runs the rule from genesis. So on every plane a client broadcasts
+to, the chain still accepts the whole non-numeral family, and a client that
+rejected it would block a broadcast consensus would have taken. That is the
+SDK-stricter-than-consensus false block this map's contract forbids, and
+`src/validator.js` records this SDK shipping exactly that regression once
+already. It is also the road the two entries below took for
+`LEG_AMOUNT_CONSOLIDATION` and `GATED_HANDOFF_REF`, for the same reason: a
+pre-flight cannot read the activation state of a block that does not exist yet.
+
+**What IS owed is a declaration, on the three modules that judge amount
+format.** `checks/mint.js` (mint AMOUNT), `checks/issue.js` (MAX_SUPPLY) and
+`checks/dispenser.js` (the Format-0 create amounts) each call
+`numeric.isValidAmountFormat` and each now files an `AMOUNT_REPRESENTABILITY`
+unverified aspect naming the rule, the credited-number defect it closes, and
+the unarmed planes. `checks/trading.js`, `checks/airdrop.js`,
+`checks/dividend.js` and `checks/send.js` file nothing new: none of them does a
+decimals-aware amount-format check, so none of them ever returned the verdict
+this rule changes, and `checks/send.js` already declares the neighbouring
+leg-amount rule. `checks/batch.js` has no amount-format logic at all.
+
+`src/preflight/numeric.js` and `src/utility.js` keep the LEGACY two-argument
+rule verbatim and now say so in place, with the condition for changing that:
+mirror the rule as a real rejection only once mainnet is armed, and only
+alongside an activation source this SDK can actually read. Until then the
+vendored copy is parity with the indexer's legacy path, which the indexer
+preserves byte-for-byte below the threshold, so the cross-service parity suite
+stays green by construction rather than by coincidence.
+
+Anchor moves to `88f4efaf`; see the anchor note above for why the pins are that
+head plus the paired change.
 
 ### 2026-09-09 - `batch.js` + `dispense.js`, against indexer HEAD `d362079e`
 
