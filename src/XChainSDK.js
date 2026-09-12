@@ -712,6 +712,17 @@ class XChainSDK {
     // resolveMarket / cancelMarket.
     async bet(params, encoder)              { return this.createAction({ action: 'BET', params, encoder }); }
 
+    // XBRIDGE (cross-chain lock/burn/settle, xchain-bridge.md / xchain-token-bridge.md).
+    // Raw wrapper: the version is taken from params.version (0 lock XCHAIN / 1 burn
+    // XCHAIN / 3 lock a token / 4 burn a bridged token). v2 and v5 are the
+    // system-injected settle legs and are refused if broadcast. opts is accepted
+    // for symmetry with the other builders (deploy, submitAction) but is not
+    // required here: the coin-and-network-aware address validation lives in the
+    // sdk.workflows.bridgeLock / bridgeBurn / bridgeTokenLock / bridgeTokenBurn
+    // recipes, which pin the version and validate the destination before this
+    // builder is ever reached. Use those for a signed+broadcast round trip.
+    async xbridge(params, encoder, opts = {}) { return this.createAction({ action: 'XBRIDGE', params, encoder }); }
+
     async stake(params, encoder)            { return this.createAction({ action: 'STAKE', params, encoder }); }
     async unstake(params, encoder)          { return this.createAction({ action: 'UNSTAKE', params, encoder }); }
     async delegate(params, encoder)         { return this.createAction({ action: 'DELEGATE', params, encoder }); }

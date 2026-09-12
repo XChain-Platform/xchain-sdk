@@ -770,8 +770,12 @@ describe('Validator: LIST TYPE validation', function () {
         expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
     });
 
+    // TYPE 2 is an ADDRESS list, so the item has to look like an address. A tick
+    // such as 'MYTOKEN' only passes while the validator checks length alone; a
+    // tick in an address list is exactly what the coin-aware check exists to
+    // refuse.
     it('accepts LIST TYPE = 2', function () {
-        const errors = v.validate('LIST', { TYPE: 2, ITEM: 'MYTOKEN' });
+        const errors = v.validate('LIST', { TYPE: 2, ITEM: '16Jswqk47s9PUcyCc88MMVwzgvHPvtEpf' });
         expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
     });
 

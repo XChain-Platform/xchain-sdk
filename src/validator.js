@@ -185,9 +185,17 @@ const ACTION_INDEX_FIELDS = {
 
 class Validator {
 
-    constructor(util) {
+    constructor(util, network) {
         this.util   = util;
         this.config = config.getConfig();
+        // Network LIST TYPE=2 (ADDRESS list) items are checked against: mainnet,
+        // testnet and regtest addresses are disjoint byte-prefix/HRP spaces (see
+        // isCryptoAddress in utility.js), so a list built for one network must
+        // never accept an address shaped for another. Falls back to process.env.NETWORK,
+        // matching the SDK-wide network-resolution convention (XChainSDK.js,
+        // actions.js), for a caller that only sets NETWORK in the environment and
+        // never passes it here explicitly.
+        this.network = network || process.env.NETWORK || null;
     }
 
     // The caller's per-leg array, or null when this is a flat single-leg call.
@@ -1415,13 +1423,101 @@ class Validator {
 
     _validateList(fields) {
         let errors = [];
+        let isEdit = !this._isEmpty(fields.LIST_ACTION_INDEX) || !this._isEmpty(fields.EDIT);
         // LIST v0 (create) requires TYPE; LIST v1 (edit) requires EDIT + LIST_ACTION_INDEX
-        if (this._isEmpty(fields.LIST_ACTION_INDEX) && this._isEmpty(fields.EDIT)) {
+        if (!isEdit) {
             // Create mode: TYPE is required
             if (this._isEmpty(fields.TYPE))
                 errors.push(this._error('MISSING_REQUIRED_FIELD', 'LIST create requires field: TYPE', { field: 'TYPE' }));
         }
+
+        // TYPE 2 (ADDRESS list) item validation (xchain-bridge.md row 13,
+        // xchain-token-bridge-policy.md row 7): every ITEM must be a real crypto
+        // address for at least one supported coin, checked against ONE network
+        // (never a roster of all three), so a mainnet address can never ride in
+        // as one testnet/regtest happens to share a byte prefix with a different
+        // coin, and vice versa.
+        //
+        // Edit mode is deliberately left unchecked: LIST v1 does not resend TYPE,
+        // and the SDK holds no other state on which TYPE the list being edited
+        // already carries. Guessing here would either be blind (skip always, same
+        // as today) or wrong (assume ADDRESS and reject a legitimate TICK item);
+        // the indexer, which does hold that state, is the arbiter for edits.
+        if (!isEdit && Number(fields.TYPE) === 2)
+            errors.push(...this._validateListAddressItems(fields));
+
         return errors;
+    }
+
+    // TYPE=2 LIST.ITEM validation, see _validateList for scope.
+    _validateListAddressItems(fields) {
+        let errors = [];
+        let raw = fields.ITEM;
+        if (this._isEmpty(raw)) return errors;
+        let items = Array.isArray(raw) ? raw : [raw];
+        for (let item of items) {
+            if (this._isEmpty(item)) continue;
+            // ^<id> reference to an already-indexed address. addressRefFields.js
+            // marks LIST.ITEM `listType:true`: the indexer still assigns it an
+            // address id like any other address-bearing field even though the SDK
+            // never COMPACTS an ITEM to this form, so a caller-supplied ^id is a
+            // legitimate item and is format-checked as a bare id, not as an address.
+            if (String(item).charAt(0) === '^') {
+                let id = String(item).substring(1);
+                if (!this.util.isNumeric(id))
+                    errors.push(this._error('INVALID_ADDRESS_ID', 'LIST ITEM ID reference must be numeric: ' + item, { field: 'ITEM', value: item }));
+                continue;
+            }
+            if (!this._isValidListAddress(item))
+                errors.push(this._error('INVALID_FIELD_VALUE',
+                    'LIST ITEM must be a valid address' + (this.network ? ' on ' + this.network : '') +
+                    ' for a supported coin (' + VALID_COINS.join(', ') + ')',
+                    { field: 'ITEM', value: item }));
+        }
+        return errors;
+    }
+
+    // True when `address` is a well-formed address for AT LEAST ONE supported
+    // coin on this.network. Checked coin-by-coin with the coin-aware
+    // isCryptoAddress (never the length-only heuristic once a network is known):
+    // each coin's own params gate on ITS OWN network's version bytes/HRP, so
+    // looping a FIXED network across coins can only add coins that validate at
+    // THAT network, never smuggle in a different network's address under cover
+    // of a coin name the list carries no field for.
+    //
+    // Some version bytes are shared ACROSS coins on testnet/regtest by upstream
+    // convention (BTC and LTC both use pubKeyHash 0x6f/scriptHash 0xc4 there, and
+    // DOGE regtest reuses the same pair - see coins/BTC.js, LTC.js, DOGE.js).
+    // That is a real, documented protocol-level ambiguity (which coin a
+    // 0x6f-prefixed address belongs to cannot be told from the address alone),
+    // not something a per-item check can resolve since LIST carries no per-item
+    // coin field to disambiguate against; accepting the address as valid for
+    // "some supported coin at this network" is the correct and only answer
+    // available at this layer. Bech32 addresses carry no such ambiguity: every
+    // coin's HRP is distinct per network (bc/tb/bcrt, ltc/tltc/rltc).
+    //
+    // Without a resolved network (no explicit constructor param, no NETWORK env
+    // var) the SDK cannot know which byte table applies, so this falls back to
+    // the historical length-only heuristic (isCryptoAddress's own doc comment)
+    // rather than refusing every list-address action for a caller who never
+    // configured one.
+    _isValidListAddress(address) {
+        if (!this.network)
+            return this.util.isCryptoAddress(address);
+        // `network` reaches us in either spelling: a bare tier ('regtest') from
+        // NETWORK, or a chain id ('bitcoin-regtest') from sdk.options.network.
+        // addressParams only knows the tier, so take the half after the dash on
+        // the SDK-wide convention (XChainSDK.js:1295, endpoints.js:48). Without
+        // this a chain-id caller matched no byte table and every address was
+        // refused, which is how it first surfaced.
+        let tier = String(this.network).includes('-')
+            ? String(this.network).split('-')[1]
+            : this.network;
+        for (let coin of VALID_COINS) {
+            if (this.util.isCryptoAddress(address, coin, tier))
+                return true;
+        }
+        return false;
     }
 
     // VOTE-specific validation (version-dependent, mirroring _validateDeploy).

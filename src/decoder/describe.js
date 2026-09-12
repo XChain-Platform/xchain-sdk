@@ -19,11 +19,11 @@
  * function (no vault, no network); both wallet shells and any SDK
  * consumer render the same {summary, details, warnings} contract.
  *
- * Dedicated describers: ADDRESS, SEND, SWEEP, ISSUE (v0-v6), MINT,
+ * Dedicated describers: ADDRESS, SEND, SWEEP, ISSUE (v0-v7), MINT,
  * DESTROY, BATCH, BROADCAST, DISPENSER, DIVIDEND, LIST, AIRDROP, ORDER,
  * SWAP, STAKE, UNSTAKE, DELEGATE, VOTE, DEPLOY, EXECUTE, DEPOSIT,
  * WITHDRAW, COINPAY, COLLECT, MESSAGE, FILE, LINK, SLEEP, CALLBACK,
- * PRICE, BET - i.e. every ACTION in formats.js, which
+ * PRICE, BET, XBRIDGE - i.e. every ACTION in formats.js, which
  * `test/unit/decoder/describe.test.js` enumerates rather than trusting
  * this list: the confirm screen is where a user verifies intent
  * before signing, so a missing case there is a coverage hole on the
@@ -127,6 +127,7 @@ function describe(parsed, ctx = {}) {
     else if (action === 'CALLBACK') decoded = decodeCallback(p, chainSuffix);
     else if (action === 'PRICE') decoded = decodePrice(p, chainSuffix);
     else if (action === 'BET') decoded = decodeBet(p, chainSuffix);
+    else if (action === 'XBRIDGE') decoded = decodeXbridge(p, chainSuffix);
     else decoded = genericFallback(action, p, chainSuffix);
 
     return _harden(decoded, p, ctx);
@@ -1004,6 +1005,47 @@ function decodeIssue(p, chainSuffix) {
         };
     }
 
+    if (version === '7') {
+        // Bridgeability opt-in (xchain-token-bridge.md section 7). Without this
+        // branch a v7 fell through to the v0 create-or-update path below and read
+        // "Configure token FUFU": a confirm screen that says nothing about opting
+        // the token into cross-chain movement, and nothing about LOCK_BRIDGE, which
+        // freezes both fields for the life of the token.
+        const chains = str(p.BRIDGE_CHAINS);
+        const minDepth = str(p.MIN_DEPTH);
+        const lockBridge = str(p.LOCK_BRIDGE) === '1';
+        // '-' is the clear sentinel; an EMPTY field means "leave unchanged", which
+        // is why a caller can never clear a list with ''.
+        const clearing = chains === '-';
+        return {
+            summary: clearing
+                ? `Disable bridging for ${tick || '?'}${chainSuffix}`
+                : chains
+                    ? `Allow ${tick || '?'} to bridge to ${chains}${chainSuffix}`
+                    : `Update bridge settings of ${tick || '?'}${chainSuffix}`,
+            details: [
+                { label: 'Token', value: tick },
+                ...(chains
+                    ? [{ label: 'Bridgeable to', value: clearing ? 'nothing (bridging off)' : chains }]
+                    : []),
+                ...(minDepth ? [{ label: 'Minimum confirmations', value: minDepth }] : []),
+                ...(lockBridge ? [{ label: 'Lock bridge settings', value: 'yes' }] : []),
+                ...(memo ? [{ label: 'Memo', value: memo }] : []),
+            ],
+            warnings: [
+                ...(lockBridge
+                    ? ['Locking is permanent. The bridge chains and minimum confirmations '
+                        + 'cannot be changed after this transaction confirms.']
+                    : []),
+                ...(!clearing && chains
+                    ? ['Holders will be able to move this token to the named chains, '
+                        + 'where its supply is a bridged copy this chain does not control.']
+                    : []),
+                ...baseWarnings,
+            ],
+        };
+    }
+
     // Version 0: full create-or-update.
     const maxSupply = str(p.MAX_SUPPLY);
     const maxMint = str(p.MAX_MINT);
@@ -1760,6 +1802,88 @@ function decodeBet(p, chainSuffix) {
             'You are the oracle: if you never resolve it, bettors are refunded after the refund window, and your address carries that record publicly.',
             ...(outcomeList.length < 2 ? ['A market needs at least two outcomes.'] : []),
             ...memoWarn,
+        ],
+    };
+}
+
+/*
+ * XBRIDGE describer: the cross-chain bridge (xchain-bridge.md section 4,
+ * xchain-token-bridge.md section 5). One action name, and the version decides
+ * both the leg and the asset:
+ *
+ *   v0  lock XCHAIN on BTC for a credit on DEST_COIN
+ *   v1  burn XCHAIN off BTC for a release back on BTC
+ *   v3  lock a general token on its origin chain
+ *   v4  burn a bridged <ORIGIN>.<NAME> copy back to its origin chain
+ *   v2/v5  the matching SETTLE legs, injected by the indexer from a finalized
+ *          bridge_transfers row. A user never broadcasts one (a broadcast v2 is
+ *          refused as system-injected) and formats.js deliberately omits both,
+ *          so they cannot arrive through decoder.parse. They are still described
+ *          here, accurately and as something to refuse, because a confirm screen
+ *          that met one and shrugged with the generic fallback would be inviting
+ *          a signature on a leg the chain will reject.
+ *
+ * The warning every user-broadcast leg carries is the one property that makes a
+ * bridge different from a send: the funds leave THIS chain, and the credit lands
+ * on a chain this screen cannot see or verify. A wrong destination address is
+ * unrecoverable, so it is named rather than left to be inferred from the fields.
+ */
+function decodeXbridge(p, chainSuffix) {
+    const version = str(p.VERSION) || '0';
+    const amount = str(p.AMOUNT);
+    const memo = str(p.MEMO);
+    const tick = str(p.TICK);
+    const destCoin = str(p.DEST_COIN);
+    // Each leg names its counterparty in a different field, never DESTINATION.
+    const dest = str(p.DEST_ADDRESS) || str(p.BTC_ADDRESS) || str(p.ORIGIN_ADDRESS);
+
+    const memoWarnings = memo && /[|;]/.test(memo)
+        ? ['Memo contains | or ;: the protocol will reject this transaction.']
+        : [];
+
+    if (version === '2' || version === '5') {
+        return {
+            summary: `Bridge settlement leg (system-injected)${chainSuffix}`,
+            details: [
+                ...(tick ? [{ label: 'Token', value: tick }] : []),
+                ...(amount ? [{ label: 'Amount', value: amount }] : []),
+                ...(dest ? [{ label: 'Recipient', value: dest }] : []),
+            ],
+            warnings: [
+                'The chain injects this leg itself once a bridge transfer finalizes. '
+                    + 'A broadcast one is always rejected, so do not sign it.',
+            ],
+        };
+    }
+
+    const isBurn = version === '1' || version === '4';
+    // v0/v1 move the gas token and carry no TICK field; v3/v4 name theirs.
+    const asset = tick || 'XCHAIN';
+
+    const summary = isBurn
+        ? `Bridge ${amount || '?'} ${asset} back${chainSuffix ? ` from${chainSuffix.slice(3)}` : ''}`
+            + ` to ${dest || '?'}`
+        : `Bridge ${amount || '?'} ${asset}${chainSuffix} to ${destCoin || '?'} address ${dest || '?'}`;
+
+    return {
+        summary,
+        details: [
+            { label: 'Token', value: asset },
+            { label: 'Amount', value: amount },
+            ...(destCoin ? [{ label: 'Destination chain', value: destCoin }] : []),
+            { label: isBurn ? 'Release to' : 'Credit to', value: dest },
+            ...(memo ? [{ label: 'Memo', value: memo }] : []),
+        ],
+        warnings: [
+            ...(!amount || Number(amount) <= 0 ? ['Amount is not positive.'] : []),
+            ...(!dest ? ['Destination address is empty.'] : []),
+            ...(!isBurn && !destCoin ? ['Destination chain is empty.'] : []),
+            ...memoWarnings,
+            isBurn
+                ? 'This burns the tokens here and releases them on the other chain. '
+                    + 'Check the address: the release cannot be undone or redirected.'
+                : 'This locks the tokens here and credits them on another chain. '
+                    + 'Check the address and chain: the credit cannot be undone or redirected.',
         ],
     };
 }

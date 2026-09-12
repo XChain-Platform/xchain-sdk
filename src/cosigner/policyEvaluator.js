@@ -94,6 +94,18 @@ const ACTION_VALUE_FIELDS = {
     // the governance token's budget was consumed by spending that never touched it. The
     // escrow is gas, always, so the tick is fixed and the decoded TICK is ignored here.
     VOTE:      { amountSum: [['deposit', 'DEPOSIT'], ['gasEscrow', 'GAS_ESCROW']], tickFixed: GAS_TICK },
+    // XBRIDGE v0/v1 bridge the GAS token and carry no TICK field at all (a v3 of the
+    // gas tick is refused, 'invalid: TICK (use XBRIDGE v0)'), so without a default
+    // their tick resolved to undefined and a tick-scoped cap - maxPerAction.XBRIDGE
+    // .XCHAIN, maxPerWindow.perTick.XCHAIN - never bound a single lock or burn; only
+    // the '*' wildcard applied. Exactly the STAKE v1/v2 shape above, and the reason
+    // valueDerivability classifies those two versions DERIVABLE rather than leaving
+    // the denomination unreadable.
+    //
+    // tickDefault, NOT tickFixed: the token-bridge versions v3 and v4 carry their own
+    // TICK and debit THAT token (xchain-token-bridge.md section 5), so the decoded
+    // value must win. pick() prefers it and falls back here only for v0/v1.
+    XBRIDGE:   { amount: AMOUNT_KEYS, tick: TICK_KEYS, tickDefault: GAS_TICK },
 };
 
 // Actions whose value outflow the evaluator cannot bound from the action params
@@ -309,8 +321,14 @@ function evaluatePolicy(policy, actionData, windowUsage) {
 
     if (policy.allowedDestinations) {
         // G9: allowedDestinations binds only the action-string DESTINATION field,
-        // and only 7 of the 63 decodable formats carry one (SEND v0, MINT v0,
-        // MESSAGE v0-v3, SWEEP v0). For every other format the destination list is
+        // and only 7 of the 68 decodable formats carry one (SEND v0, MINT v0,
+        // MESSAGE v0-v3, SWEEP v0). The denominator moved 63 -> 68 with the bridge
+        // wave (ISSUE v7, XBRIDGE v0/v1/v3/v4) and the numerator did not: an XBRIDGE
+        // names its counterparty in DEST_ADDRESS / BTC_ADDRESS / ORIGIN_ADDRESS, none
+        // of which is the DESTINATION field this list reads. Both halves are derived
+        // from the shipped tables by the G9 conformance case in
+        // test/unit/cosignerHardening2.test.js, so this figure never needs hand-counting.
+        // For every other format the destination list is
         // EMPTY and the membership loop below is vacuously satisfied - so every
         // trade, dispenser, contract-escrow, staking and native-pay action sailed
         // straight through a setting the operator reads as "this agent can only

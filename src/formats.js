@@ -142,7 +142,13 @@ var Formats = {
         4: 'VERSION|TICK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT|MEMO',
         5: 'VERSION|TICK|ALLOW_LIST|BLOCK_LIST|MEMO',
         // v6: bind/unbind a token's action-class to a controller contract (programmable policy layer).
-        6: 'VERSION|TICK|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO'
+        6: 'VERSION|TICK|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO',
+        // v7: issuer bridgeability opt-in (xchain-token-bridge.md section 7). Owner-only.
+        // BRIDGE_CHAINS is a comma list of destination coins, or '-' for none; MIN_DEPTH
+        // raises the confirmation depth the federation honours for this token's locks;
+        // LOCK_BRIDGE=1 freezes both fields forever. An EMPTY field means unchanged, so a
+        // caller clears a list with the '-' sentinel and never with ''.
+        7: 'VERSION|TICK|BRIDGE_CHAINS|MIN_DEPTH|LOCK_BRIDGE|MEMO'
     },
 
     LINK: {
@@ -222,6 +228,25 @@ var Formats = {
 
     WITHDRAW: {
         0: 'VERSION|CONTRACT_ACTION_INDEX|TICK|QUANTITY'
+    },
+
+    // Cross-chain bridge. One action name, one handler, a version switch that
+    // decides who may broadcast and on which chain (xchain-bridge.md section 4,
+    // xchain-token-bridge.md section 5).
+    //   v0 = lock XCHAIN on BTC for a credit on DEST_COIN (BTC only)
+    //   v1 = burn XCHAIN off BTC for a release on BTC (never on BTC)
+    //   v3 = lock a general token on its origin chain (token bridge)
+    //   v4 = burn a bridged <ORIGIN>.<NAME> row back to its origin chain
+    // v2 and v5 (the settle legs) are deliberately omitted: they are injected by
+    // the indexer from a finalized bridge_transfers row and a broadcast one is
+    // refused on arrival ('invalid: XBRIDGE v2 is system-injected'), so listing
+    // them here would only let sdk.submit({version:2}) build a guaranteed-refused
+    // action. The same trade PRICE v0 and VOTE v2 already carry.
+    XBRIDGE: {
+        0: 'VERSION|DEST_COIN|DEST_ADDRESS|AMOUNT|MEMO',
+        1: 'VERSION|BTC_ADDRESS|AMOUNT|MEMO',
+        3: 'VERSION|TICK|DEST_COIN|DEST_ADDRESS|AMOUNT|MEMO',
+        4: 'VERSION|TICK|ORIGIN_ADDRESS|AMOUNT|MEMO'
     },
 
     // Token-weighted governance polls. v0 = create poll, v1 = cast ballot,

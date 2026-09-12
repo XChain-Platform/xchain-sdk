@@ -184,6 +184,14 @@ const TABLE = {
         4: { class: NONE },                                   // callback params
         5: { class: NONE },                                   // allow/block lists
         6: { class: NONE },                                   // controller bind/unbind
+        // v7 sets BRIDGE_CHAINS / MIN_DEPTH / LOCK_BRIDGE on the issuer's OWN row
+        // (xchain-token-bridge.md section 7). It is bridgeability policy, not a
+        // transfer: no balance is debited, no supply moves, and the format carries
+        // no TRANSFER / TRANSFER_SUPPLY escape hatch for v0 and v2 to need `unless`
+        // for. Turning bridging ON later lets the OWNER lock value through XBRIDGE
+        // v3, but that lock is its own action with its own classification below;
+        // signing the opt-in moves nothing.
+        7: { class: NONE },                                   // bridgeability opt-in
     },
     LINK: {
         0: { class: NONE },
@@ -238,6 +246,36 @@ const TABLE = {
     },
     WITHDRAW: {
         0: { class: NONE },                                   // returns the signer's OWN contract deposit
+    },
+    /*
+     * Cross-chain bridge. Every user-broadcast version is a REAL outflow the
+     * signer never gets back on this chain: a lock debits the source and credits
+     * the federation's escrow address, a burn debits the source and destroys
+     * supply (xchain-bridge.md section 4, xchain-token-bridge.md section 5). So
+     * none of these is NONE, however much a "bridge" reads like a transfer the
+     * signer still owns - the credit lands on ANOTHER chain, which this daemon
+     * cannot see, and an amount cap is exactly the control an operator would
+     * expect to bound it.
+     *
+     * All four are DERIVABLE rather than byRef: the AMOUNT is stated in the
+     * action string and so is the denomination. v3/v4 carry TICK outright; v0/v1
+     * bridge the GAS token by definition (v3 is refused for the gas tick,
+     * 'invalid: TICK (use XBRIDGE v0)'), so they are gas-denominated the same way
+     * capability STAKE v1/v2 is, via the XBRIDGE tickDefault in policyEvaluator's
+     * ACTION_VALUE_FIELDS. Without that entry a tick-scoped cap on v0/v1 would
+     * resolve tick=undefined and never bind, which is the silent-skip shape this
+     * whole table exists to close - so DERIVABLE here is only true WITH it.
+     *
+     * v2 and v5 (the settle legs) get no entry, exactly as VOTE v2 and PRICE v0
+     * get none: they are mirror-injected, formats.js omits them, and no co-signer
+     * can ever be asked to sign one. An entry would fail the stale-entry half of
+     * the conformance pair.
+     */
+    XBRIDGE: {
+        0: { class: DERIVABLE },                              // lock XCHAIN for a credit on DEST_COIN; AMOUNT, gas-denominated
+        1: { class: DERIVABLE },                              // burn XCHAIN for a release on BTC; same denomination
+        3: { class: DERIVABLE },                              // lock a general token: explicit TICK + AMOUNT
+        4: { class: DERIVABLE },                              // burn a bridged <ORIGIN>.<NAME> row home: explicit TICK + AMOUNT
     },
 };
 

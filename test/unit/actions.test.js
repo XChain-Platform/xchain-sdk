@@ -695,10 +695,13 @@ describe('Actions – introspection', function () {
     beforeEach(function () { actions = createActions(); });
 
     // getActions()
-    it('getActions() returns an array of exactly 31 action names', function () {
+    // 32 since XBRIDGE joined the action set (xchain-bridge.md section 4). The count
+    // is pinned rather than derived so a name that appears or vanishes by accident,
+    // rather than by a protocol decision, fails here.
+    it('getActions() returns an array of exactly 32 action names', function () {
         let list = actions.getActions();
         expect(list).to.be.an('array');
-        expect(list).to.have.length(31);
+        expect(list).to.have.length(32);
     });
 
     it('getActions() contains all expected action names', function () {
@@ -707,7 +710,7 @@ describe('Actions – introspection', function () {
             'ADDRESS', 'AIRDROP', 'BATCH', 'BET', 'BROADCAST', 'CALLBACK',
             'DESTROY', 'DISPENSER', 'DIVIDEND', 'FILE', 'ISSUE',
             'LINK', 'LIST', 'MESSAGE', 'MINT', 'ORDER',
-            'SEND', 'SLEEP', 'SWAP', 'SWEEP'
+            'SEND', 'SLEEP', 'SWAP', 'SWEEP', 'XBRIDGE'
         ];
         for (let name of expected) {
             expect(list).to.include(name);

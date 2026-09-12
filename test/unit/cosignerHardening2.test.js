@@ -366,7 +366,7 @@ describe('G9: allowedDestinations enforceability', function () {
         expect(res.reason).to.equal('POLICY_DESTINATION_UNENFORCEABLE');
     });
 
-    it('pins the 7-of-63 figure the G9 rationale quotes, derived from the format table', function () {
+    it('pins the 7-of-68 figure the G9 rationale quotes, derived from the format table', function () {
         // The comment in policyEvaluator.js sizes how little of the policy
         // surface allowedDestinations binds, and a hand-counted figure drifts
         // the moment a format gains or loses a DESTINATION field. Derive both
@@ -379,7 +379,13 @@ describe('G9: allowedDestinations enforceability', function () {
             .filter((f) => formatCarriesDestination(f.action, f.version))
             .map((f) => `${f.action} v${f.version}`)
             .sort();
-        expect(decodable.length).to.equal(63);
+        // 63 -> 68 when the bridge wave landed ISSUE v7 and XBRIDGE v0/v1/v3/v4.
+        // The NUMERATOR did not move: an XBRIDGE names its counterparty in
+        // DEST_ADDRESS / BTC_ADDRESS / ORIGIN_ADDRESS, none of which is the
+        // DESTINATION field allowedDestinations reads, so the list still binds
+        // exactly the seven formats below. Keep the figure in the rationale
+        // comment at src/cosigner/policyEvaluator.js in step with this number.
+        expect(decodable.length).to.equal(68);
         expect(carriers).to.deep.equal([
             'MESSAGE v0', 'MESSAGE v1', 'MESSAGE v2', 'MESSAGE v3',
             'MINT v0', 'SEND v0', 'SWEEP v0',

@@ -52,11 +52,15 @@ class Actions {
         this.config    = sdk.config;
         this.util      = sdk.util;
         this.actions   = this.util.getActions();
-        this.validator = new Validator(this.util);
-        // Resolved network name, used only to keep oversized-payload encoding
-        // suggestions network-aware (non-segwit chains cannot use P2WSH). Absent
-        // on a bare {config, util} shim; treated as segwit-capable (unchanged).
+        // Resolved network name. Keeps oversized-payload encoding suggestions
+        // network-aware (non-segwit chains cannot use P2WSH), and is handed to the
+        // validator so a LIST address item is checked against the coins of THIS
+        // network. Resolved before the validator is built: constructed after, the
+        // validator silently fell back to a length-only heuristic for every caller
+        // that configured a network without also exporting NETWORK. Absent on a
+        // bare {config, util} shim; treated as segwit-capable (unchanged).
         this.network   = (sdk.options && sdk.options.network) || process.env.NETWORK || null;
+        this.validator = new Validator(this.util, this.network);
     }
 
     // Whether the resolved network supports segwit encodings (P2WSH). Fails

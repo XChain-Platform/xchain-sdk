@@ -115,9 +115,13 @@ describe('ProjectHelpers', function () {
             const r = sdk.actions.createAction({ action: 'LIST', params: { type: 1, item: 'ONLYONE' } });
             expect(r.actionString).to.equal('LIST|0|1||ONLYONE');
         });
+        // Regtest addresses, because this sdk is built on bitcoin-regtest. A
+        // mainnet pair here would only pass while LIST items were checked on
+        // length alone; a mainnet address in a regtest list is exactly what the
+        // coin-aware check refuses.
         it('address lists also expand item arrays', function () {
-            const r = sdk.actions.createAction({ action: 'LIST', params: { type: 2, item: ['1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev', '1FWDonkMbC6hL64JiysuggHnUAw2CKWszs'] } });
-            expect(r.actionString).to.equal('LIST|0|2||1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1FWDonkMbC6hL64JiysuggHnUAw2CKWszs');
+            const r = sdk.actions.createAction({ action: 'LIST', params: { type: 2, item: ['mipcBbFg9gMiCh81Kj8tqqdgoZub1ZJRfn', 'n2eMqTT929pb1RDNuqEnxdaLau1rxy3efi'] } });
+            expect(r.actionString).to.equal('LIST|0|2||mipcBbFg9gMiCh81Kj8tqqdgoZub1ZJRfn|n2eMqTT929pb1RDNuqEnxdaLau1rxy3efi');
         });
     });
 

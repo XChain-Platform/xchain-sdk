@@ -150,6 +150,10 @@ describe('decoder round-trip guarantee', function () {
             LIST:      'LIST|0|1|AAA',
             EXECUTE:   'EXECUTE|0|9|method|p1',
             DEPLOY:    'DEPLOY|0|aGVsbG8=|100000',
+            // XBRIDGE v0 (lock the gas token for a credit on another chain): the
+            // only bridge leg a user-built BATCH realistically carries. v2 and v5
+            // are system-injected and are not in formats.js at all.
+            XBRIDGE:   'XBRIDGE|0|DOGE|addr|100',
         };
 
         it('covers every userEncodable action except BATCH', function () {

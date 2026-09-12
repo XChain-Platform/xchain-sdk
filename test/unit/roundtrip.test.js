@@ -396,6 +396,43 @@ describe('Round-trip: serialize then parse back', function () {
             params: { version: 1, feedActionIndex: '1234', memo: 'postponed' },
             expectedVersion: 1,
             check: { FEED_ACTION_INDEX: '1234', MEMO: 'postponed' }
+        },
+        {
+            // XBRIDGE v0 = lock the gas token on BTC for a credit on DEST_COIN.
+            // DEST_COIN and DEST_ADDRESS lead, so a field shift here would send a
+            // lock to the wrong chain entirely (xchain-bridge.md section 4).
+            name: 'XBRIDGE v0 (lock for a credit on another chain)',
+            action: 'xbridge',
+            params: { destCoin: 'DOGE', destAddress: 'DFundmtrigPmpmcqzuz57TQx65uEmPx8pW', amount: '100', memo: 'lock' },
+            expectedVersion: 0,
+            check: { DEST_COIN: 'DOGE', DEST_ADDRESS: 'DFundmtrigPmpmcqzuz57TQx65uEmPx8pW', AMOUNT: '100', MEMO: 'lock' }
+        },
+        {
+            // XBRIDGE v1 = burn the bridged gas token off BTC to release the BTC
+            // escrow. Only BTC_ADDRESS precedes AMOUNT, a different arity from v0.
+            name: 'XBRIDGE v1 (burn for a release on BTC)',
+            action: 'xbridge',
+            params: { version: 1, btcAddress: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', amount: '50', memo: 'burn' },
+            expectedVersion: 1,
+            check: { BTC_ADDRESS: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', AMOUNT: '50', MEMO: 'burn' }
+        },
+        {
+            // XBRIDGE v3 = lock a general token on its origin chain. Same tail as
+            // v0 with TICK prepended, which is the exact one-slot shift this
+            // harness exists to catch (xchain-token-bridge.md section 5).
+            name: 'XBRIDGE v3 (lock a general token)',
+            action: 'xbridge',
+            params: { tick: 'JDOG', destCoin: 'DOGE', destAddress: 'DFundmtrigPmpmcqzuz57TQx65uEmPx8pW', amount: '7', memo: 'tlock' },
+            expectedVersion: 3,
+            check: { TICK: 'JDOG', DEST_COIN: 'DOGE', DEST_ADDRESS: 'DFundmtrigPmpmcqzuz57TQx65uEmPx8pW', AMOUNT: '7', MEMO: 'tlock' }
+        },
+        {
+            // XBRIDGE v4 = burn a bridged <ORIGIN>.<NAME> row back to its origin.
+            name: 'XBRIDGE v4 (burn a bridged token home)',
+            action: 'xbridge',
+            params: { version: 4, tick: 'BTC.JDOG', originAddress: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', amount: '7', memo: 'tburn' },
+            expectedVersion: 4,
+            check: { TICK: 'BTC.JDOG', ORIGIN_ADDRESS: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', AMOUNT: '7', MEMO: 'tburn' }
         }
         // DEPLOY v4 (chunk carrier) is exercised by the indexer carrier unit test and the
         // chunked-deploy e2e test; DEPLOY is excluded from this round-trip harness (its
