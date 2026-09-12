@@ -295,10 +295,29 @@ const TIER1_SUBCOMMAND_PREFLIGHT = Object.freeze(['BATCH']);
 
 // Fee-charging user actions (spec §4.4 "protocol-fee reality"). Membership mirrors
 // the indexer handlers that call createFeesObject, plus the gas-priced VM pair
-// (DEPLOY/EXECUTE). BET was missing for its whole life.
+// (DEPLOY/EXECUTE). BET was missing for its whole life. XBRIDGE charges on the
+// lock and burn legs a client composes (the base bridge spec); the settle leg is
+// system-injected and never reaches pre-flight.
 const FEE_CHARGING_ACTIONS = Object.freeze([
     'ISSUE', 'SWEEP', 'DISPENSER', 'DIVIDEND', 'AIRDROP', 'CALLBACK',
-    'ORDER', 'SWAP', 'DEPLOY', 'EXECUTE', 'BET',
+    'ORDER', 'SWAP', 'DEPLOY', 'EXECUTE', 'BET', 'XBRIDGE',
+]);
+
+// Tick-namespace rules an ISSUE create is judged by at/above the indexer's
+// TICK_NAMESPACE_ACTIVATION (the token bridge spec, R8). Both mirror
+// xchain-indexer: the floor is MIN_NEW_TOP_LEVEL_TICK_LENGTH in src/actions/issue.js
+// (covered by the mapped hash) and the roots are RESERVED_FUTURE_ROOTS in
+// src/reservedRoots.js, which NO mapped hash covers, so a change there moves this
+// list by hand. Chain tickers held for roots the platform has not integrated yet: a
+// name leaves the list only by moving into the coin set, and both refuse identically.
+const MIN_NEW_TOP_LEVEL_TICK_LENGTH = 4;
+const RESERVED_FUTURE_ROOTS = Object.freeze([
+    'ADA', 'ALGO', 'APT', 'ARB', 'ATOM', 'AVAX', 'BCH', 'BNB', 'BSV', 'BTG',
+    'CRO', 'DGB', 'DOT', 'EOS', 'ETC', 'ETH', 'FIL', 'FIRO', 'GRS', 'ICP',
+    'INJ', 'KAS', 'MNT', 'NEO', 'NMC', 'OP', 'POL', 'PPC', 'RVN', 'SEI',
+    'SOL', 'STX', 'SUI', 'TIA', 'TON', 'TRX', 'VET', 'VTC', 'XCP', 'XDP',
+    'XEC', 'XLM', 'XMR', 'XRP', 'XTZ', 'ZEC', 'ZK',
+    'BASE', 'DASH', 'HBAR', 'HOOD', 'HYPE', 'NEAR',
 ]);
 
 module.exports = {
@@ -316,4 +335,6 @@ module.exports = {
     TIER1_DENYLIST,
     TIER1_SUBCOMMAND_PREFLIGHT,
     FEE_CHARGING_ACTIONS,
+    MIN_NEW_TOP_LEVEL_TICK_LENGTH,
+    RESERVED_FUTURE_ROOTS,
 };

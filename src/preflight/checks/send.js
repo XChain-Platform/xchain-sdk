@@ -59,12 +59,24 @@
  * mainnet still accepts, which is the false-block this module's own
  * contract forbids and which the SDK has shipped once already.
  *
+ * DESTROY has two BRIDGE supply-path refusals (the base bridge spec),
+ * both UNCONDITIONAL on every plane and every height: the gas tick
+ * off BTC ('use XBRIDGE v1') and a bridged copy `<ORIGIN>.<NAME>`
+ * whose origin is another chain coin ('use XBRIDGE v4'). A burn here
+ * would strand the escrow the supply shadows on the origin chain.
+ * Both are mirrored as TICK_FORMAT warnings (the code is not
+ * error-certified), keyed on the explorer's chain coin, and declared
+ * instead when no chain coin is configured.
+ *
  ********************************************************************/
 
 'use strict';
 
 const { FINDING_CODES } = require('../constants.js');
 const numeric = require('../numeric.js');
+const { ALLOWED_COINS } = require('../../coins/index.js');
+const { GAS_TICK } = require('../../protocol/constants.js');
+const { planeFromCoin } = require('./issue.js');
 
 // Net multi-leg TICK/AMOUNT pairs into per-tick totals. SEND v1
 // repeats AMOUNT under one TICK; v2/v3 repeat TICK too.
@@ -142,9 +154,54 @@ async function checkSend(ctx) {
         + 'is not armed for it');
 }
 
+// A bridged copy is `<ORIGIN>.<NAME>` with ORIGIN another chain coin (the indexer's
+// parseBridgedTick): exactly two dot-separated parts, a non-empty name, and a
+// prefix that is a chain coin other than this one. Same-chain `BTC.X` on BTC is a
+// native subasset of the root, not a copy.
+function bridgedOrigin(tick, localCoin) {
+    const parts = String(tick).split('.');
+    if (parts.length !== 2 || parts[1] === '') return null;
+    const prefix = parts[0].toUpperCase();
+    if (!ALLOWED_COINS.includes(prefix) || prefix === localCoin) return null;
+    return prefix;
+}
+
+// The bridge supply-path refusals: a burn of supply that shadows an escrow held on
+// another chain. Unconditional in the handler, so the only thing that can stop the
+// mirror deciding is not knowing which chain this is.
+function checkBridgeSupplyPath(ctx) {
+    const plane = planeFromCoin(ctx.sdk && ctx.sdk.explorer && ctx.sdk.explorer.coin);
+    const ticks = [].concat(ctx.params.TICK || []).map(t => String(t || '')).filter(Boolean);
+    if (ticks.length === 0) return;
+    if (!plane) {
+        ctx.addUnverified('DESTROY_BRIDGE_SUPPLY',
+            'the gas tick off BTC and a bridged copy (<ORIGIN>.<NAME> from another chain) cannot be '
+            + 'destroyed, only unlocked through XBRIDGE; no chain coin is configured, so neither can be decided');
+        return;
+    }
+    ctx.markRun(FINDING_CODES.TICK_FORMAT);
+    for (const tick of ticks) {
+        if (tick.toUpperCase() === GAS_TICK && plane.coin !== 'BTC') {
+            ctx.addFinding(FINDING_CODES.TICK_FORMAT, 'warning',
+                `${tick} cannot be destroyed off BTC; its supply here shadows an escrow on BTC, so the indexer `
+                + 'refuses this DESTROY (burn it through XBRIDGE v1 instead).',
+                { tick, rule: 'use-xbridge-v1', coin: plane.coin });
+            continue;
+        }
+        const origin = bridgedOrigin(tick, plane.coin);
+        if (origin) {
+            ctx.addFinding(FINDING_CODES.TICK_FORMAT, 'warning',
+                `${tick} is a bridged copy of a ${origin} token; its supply here shadows an escrow on ${origin}, `
+                + 'so the indexer refuses this DESTROY (unlock it through XBRIDGE v4 instead).',
+                { tick, rule: 'use-xbridge-v4', origin, coin: plane.coin });
+        }
+    }
+}
+
 async function checkDestroy(ctx) {
     await checkBalanceCovers(ctx, 'Destroy');
     declareLegAmountRule(ctx, 'Destroy');
+    checkBridgeSupplyPath(ctx);
     ctx.addUnverified('DESTROY_RESTRICTIONS',
         'sleep state, allow/block lists, and burn-guard outcome are server-side only');
 }

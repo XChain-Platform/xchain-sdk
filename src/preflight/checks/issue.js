@@ -31,13 +31,185 @@
  * ISSUE's genesis path skips the isCryptoAddress checks that used to
  * be the only thing catching it.
  *
+ * TICK NAMESPACE (the token bridge spec). Three tick refusals are
+ * mirrored below, as TICK_FORMAT warnings because that code is not
+ * error-certified. Two are UNCONDITIONAL on every plane and every
+ * height: the reserved names (coin roots plus the gas tick) are
+ * matched case-folded, with the gas tick exempt for the GAS address
+ * and for every source on regtest; and the gas tick is refused off
+ * BTC from every source, because off BTC its supply is the shadow of
+ * an escrow the bridge alone may create. The third is ACTIVATION-KEYED
+ * and creation-only: at/above the tick-namespace flag-day a NEW
+ * top-level name shorter than four characters, or one held for a
+ * chain the platform may integrate later, is refused. Mainnet and
+ * testnet are not armed for it and pre-flight cannot read the
+ * including block's height, so it is a warning that names the
+ * condition, the same treatment as the dispenser GIVE_AMOUNT rule.
+ *
+ * ISSUE FORMAT 7 is the issuer's bridge opt-in (BRIDGE_CHAINS,
+ * MIN_DEPTH, LOCK_BRIDGE). Below the token-bridge activation the
+ * format does not exist ('VERSION (unknown)'), above it each field
+ * rule refuses on its own, so every static refusal here is certain
+ * on every plane: an unknown tick, a subasset, a BRIDGE_CHAINS entry
+ * that is not another chain, a non-digit MIN_DEPTH, a LOCK_BRIDGE
+ * outside 0/1. The lock and the policy mutual exclusion (controller
+ * bindings, allow/block lists, the bridged bit) need row state the
+ * explorer does not serve, so they are declared.
+ *
  ********************************************************************/
 
 'use strict';
 
-const { FINDING_CODES } = require('../constants.js');
+const {
+    FINDING_CODES, MIN_NEW_TOP_LEVEL_TICK_LENGTH, RESERVED_FUTURE_ROOTS,
+} = require('../constants.js');
 const numeric = require('../numeric.js');
 const { tokenField } = require('./mint.js');
+const { ALLOWED_COINS, getCoinConfig } = require('../../coins/index.js');
+const { GAS_TICK } = require('../../protocol/constants.js');
+const Utility = require('../../utility.js');
+
+const util = new Utility();
+
+// The indexer's RESERVED_TICKS: the coin roots plus the gas tick, matched against
+// the upper-cased wire tick (config.js in xchain-indexer builds the same list).
+const RESERVED_TICKS = Object.freeze(ALLOWED_COINS.concat(GAS_TICK));
+
+// The plane this SDK is pointed at, read off the explorer's coin code: the native
+// ticker with a network prefix (T=testnet, R=regtest, none=mainnet). Null when no
+// explorer is configured or the code is not a chain coin, so a caller can tell
+// "cannot decide" from "decided". (Same shape as nativeTickerFromCoin in
+// universal.js; kept local to avoid a cross-module import cycle.)
+function planeFromCoin(coin) {
+    const m = /^([TR]?)(BTC|LTC|DOGE)$/.exec(String(coin || '').toUpperCase());
+    if (!m) return null;
+    const network = m[1] === 'T' ? 'testnet' : m[1] === 'R' ? 'regtest' : 'mainnet';
+    return { coin: m[2], network };
+}
+
+// Mirror the handler's tick refusals in the handler's order, so the warning names
+// the verdict the chain would give first. `token` is the row lookup: null for a
+// fresh create, undefined when the lookup failed, an object for an existing row.
+function checkTickRules(ctx, tick, token) {
+    const plane = planeFromCoin(ctx.sdk && ctx.sdk.explorer && ctx.sdk.explorer.coin);
+    const tickUpper = tick.toUpperCase();
+    const isGasTick = tickUpper === GAS_TICK;
+    ctx.markRun(FINDING_CODES.TICK_FORMAT);
+
+    if (RESERVED_TICKS.includes(tickUpper)) {
+        // The gas tick's exemption turns on the plane (regtest) or the source (the GAS
+        // address); without a plane neither half can be decided, so say so.
+        if (isGasTick && !plane) {
+            ctx.addUnverified('ISSUE_GAS_TICK',
+                'the gas tick is reserved except for the GAS address (every source on regtest) and is '
+                + 'refused off BTC from every source; no chain coin is configured, so neither can be decided');
+            return;
+        }
+        const gasAddress = isGasTick ? getCoinConfig(plane.coin, plane.network).addresses.GAS : null;
+        const exempt = isGasTick && (plane.network === 'regtest' || (ctx.source && ctx.source === gasAddress));
+        if (!exempt) {
+            ctx.addFinding(FINDING_CODES.TICK_FORMAT, 'warning',
+                `${tick} is a reserved name (matched case-folded); the indexer refuses this ISSUE.`,
+                { tick, rule: 'reserved' });
+            return;
+        }
+        if (plane.coin !== 'BTC') {
+            ctx.addFinding(FINDING_CODES.TICK_FORMAT, 'warning',
+                `${tick} can only be issued on BTC; off BTC its supply is created by the bridge alone, `
+                + 'so the indexer refuses this ISSUE.',
+                { tick, rule: 'btc-only', coin: plane.coin });
+        }
+        return;
+    }
+
+    // Creation-only namespace rules at/above the tick-namespace flag-day. A `^id`
+    // reference names an existing row, so the floor never applies to it, and a
+    // dotted child is measured on its own full length by the handler too.
+    const caretRef = tick.charAt(0) === '^';
+    const topLevel = caretRef || !tick.includes('.');
+    const isFuture = RESERVED_FUTURE_ROOTS.includes(tickUpper);
+    const tooShort = !caretRef && topLevel && tick.length < MIN_NEW_TOP_LEVEL_TICK_LENGTH;
+    if (!isFuture && !tooShort) return;
+    if (token === undefined) {
+        ctx.addUnverified('ISSUE_TICK_NAMESPACE', 'token lookup unavailable');
+        return;
+    }
+    if (token !== null) return; // an existing row keeps its name; the rule is creation-only
+    ctx.addFinding(FINDING_CODES.TICK_FORMAT, 'warning',
+        (isFuture
+            ? `${tick} is held for a chain the platform may integrate later; `
+            : `${tick} is shorter than ${MIN_NEW_TOP_LEVEL_TICK_LENGTH} characters; `)
+        + 'at or above the tick-namespace activation the indexer refuses a new top-level name like this, '
+        + 'and neither mainnet nor testnet is armed for it.',
+        { tick, rule: isFuture ? 'reserved-root' : 'length' });
+}
+
+// ISSUE format 7, the issuer's bridge opt-in. Every refusal raised here holds on
+// every plane: below the token-bridge activation the whole format is refused as an
+// unknown VERSION, and above it each rule refuses on its own.
+function checkBridgeOptIn(ctx, tick, token) {
+    if (String(ctx.parsed.version) !== '7') return;
+    const plane = planeFromCoin(ctx.sdk && ctx.sdk.explorer && ctx.sdk.explorer.coin);
+
+    ctx.addUnverified('ISSUE_BRIDGE_ACTIVATION',
+        'ISSUE format 7 exists only at or above the token-bridge activation of the including block, and '
+        + 'below it the indexer answers VERSION (unknown); the activation state is server-side only, and '
+        + 'neither mainnet nor testnet is armed for it');
+
+    // Format 7 edits an existing row and carries no creation fields, so an unknown
+    // tick is a refusal, never a create. Universal skips the token-exists check for
+    // ISSUE because format 0 creates; this is the one format that cannot.
+    ctx.markRun(FINDING_CODES.TOKEN_NOT_FOUND);
+    if (token === null) {
+        ctx.addFinding(FINDING_CODES.TOKEN_NOT_FOUND, 'error',
+            `Token ${tick} does not exist on this chain; ISSUE format 7 edits an existing token.`,
+            { field: 'TICK', tick });
+    }
+
+    // Subassets are not bridgeable yet, and the refusal is on the whole format. The
+    // RESOLVED name is judged: a `^id` reference to a dotted row is refused as well,
+    // so the row's own tick is read first and the wire field is the fallback.
+    const resolved = token ? (tokenField(token, ['info.tick', 'tick', 'TICK']) || tick) : tick;
+    if (resolved.includes('.')) {
+        ctx.addFinding(FINDING_CODES.TICK_FORMAT, 'warning',
+            `${resolved} is a subasset; subassets are not bridgeable yet, so the indexer refuses this ISSUE.`,
+            { tick: resolved, rule: 'subasset' });
+    }
+
+    // BRIDGE_CHAINS: a comma list of OTHER chain coins, or the sentinel '-' for none.
+    // Empty means unchanged, as every ISSUE field. Entries are upper-cased and not
+    // trimmed, exactly as the handler splits them.
+    ctx.markRun(FINDING_CODES.VALIDATOR_SEMANTICS);
+    const chains = ctx.field('BRIDGE_CHAINS');
+    if (chains && chains !== '-') {
+        for (const chain of chains.split(',')) {
+            const c = chain.toUpperCase();
+            if (!ALLOWED_COINS.includes(c) || (plane && c === plane.coin)) {
+                ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'error',
+                    `BRIDGE_CHAINS entry "${chain}" is not another chain coin (one of ${ALLOWED_COINS.join(', ')}, `
+                    + 'excluding this chain).',
+                    { field: 'BRIDGE_CHAINS', value: chain });
+                break;
+            }
+        }
+    }
+
+    // MIN_DEPTH is a raise-only confirmation depth: digits only.
+    const minDepth = ctx.field('MIN_DEPTH');
+    if (minDepth && !/^\d+$/.test(minDepth)) {
+        ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'error',
+            'MIN_DEPTH must be a whole number of confirmations (digits only).',
+            { field: 'MIN_DEPTH', value: minDepth });
+    }
+
+    // LOCK_BRIDGE takes the lock discipline every other LOCK field has: 0 or 1.
+    const lockBridge = ctx.field('LOCK_BRIDGE');
+    if (lockBridge && !util.isValidLockValue(lockBridge)) {
+        ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'error',
+            'LOCK_BRIDGE must be 0 or 1.',
+            { field: 'LOCK_BRIDGE', value: lockBridge, constraint: { valid: [0, 1] } });
+    }
+}
 
 // MAX_SUPPLY fractional precision, measured at the decimals CONSENSUS uses.
 //
@@ -94,6 +266,9 @@ async function checkIssue(ctx) {
     if (!tick || Array.isArray(tick)) return;
 
     const token = await ctx.token(tick);
+    checkTickRules(ctx, tick, token);
+    // The format-7 field rules need no row, so they run before the lookup gate below.
+    checkBridgeOptIn(ctx, tick, token);
     ctx.markRun(FINDING_CODES.NOT_OWNER);
     if (token === undefined) {
         ctx.addUnverified(FINDING_CODES.NOT_OWNER, 'token lookup unavailable');
@@ -116,6 +291,16 @@ async function checkIssue(ctx) {
 
     ctx.addUnverified('ISSUE_LOCK_RATCHETS',
         'lock ratchets vs requested edits, isDistributed callback freeze, and reserved-TICK tables are server-side only');
+    // The bridge opt-in and a chain-local policy exclude each other at/above the
+    // token-bridge activation, in both directions: format 7 on a token with a
+    // controller binding or an allow/block list, and formats 0/5/6 taking a list or
+    // a binding onto a token that is bridgeable or has bridged. The explorer's token
+    // document carries none of the row state that decides it.
+    ctx.addUnverified('ISSUE_BRIDGE_POLICY_EXCLUSION',
+        'a bridge opt-in (format 7) on a token with a controller binding or an allow/block list, a '
+        + 'later edit of BRIDGE_CHAINS or MIN_DEPTH under LOCK_BRIDGE, and a list or binding edit on a '
+        + 'token that is bridgeable or has bridged are refused at or above the token-bridge activation; '
+        + 'the bindings, lists, lock and bridged bit are server-side only');
 }
 
-module.exports = { checkIssue };
+module.exports = { checkIssue, planeFromCoin };

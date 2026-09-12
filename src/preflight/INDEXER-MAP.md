@@ -40,7 +40,9 @@ rewritten for deferred assembly, and `batch.js` + `dispense.js` re-pinned at
 re-reviewed on 2026-09-11 for the amount-representability gate, read against
 indexer HEAD `88f4efaf` plus its paired change (see the review
 log below), and `dispenser.js` re-pinned at `62c8d7c7` later the same day
-after the freshness-shape fail-closed change (no client change). Hashes
+after the freshness-shape fail-closed change (no client change), and `issue.js` +
+`destroy.js` re-reviewed at `97e7ae1f` on 2026-09-12 for the bridge landing (four
+client checks added, see the review log). Hashes
 are of the indexer handler source files, resolved via
 `XCHAIN_INDEXER_PATH` or the sibling `../xchain-indexer` checkout. The
 gate SKIPS (does not fail) when no indexer checkout is present, so
@@ -65,9 +67,16 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `62c8d7c7`
+**Pins taken at indexer commit:** `97e7ae1f`
 
-(Re-anchored 2026-09-11, second pass, by the `dispenser.js` re-pin below.
+(Re-anchored 2026-09-12 by the bridge-landing review of `issue.js` and
+`destroy.js` below. `97e7ae1f` is the indexer commit that lands the XBRIDGE handler
+and the bridge's ISSUE and DESTROY rules; a reviewer diffing `97e7ae1f..HEAD` sees
+only what moves after this pin. The other six files under `src/actions/` that move
+in `62c8d7c7..97e7ae1f` (`list.js`, `slash.js`, `sleep.js`, `stake.js`, `sweep.js`,
+`xbridge.js`) are unmapped rows.
+
+Earlier note. Re-anchored 2026-09-11, second pass, by the `dispenser.js` re-pin below.
 `62c8d7c7` is the indexer develop head that pin was read against. It contains
 the amount-representability change, landed as `e3398122`, which the nine-row
 review earlier the same day read as a paired working-tree change against
@@ -120,7 +129,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 62c8d7c7..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 97e7ae1f..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -159,9 +168,9 @@ found by hashing candidate blobs as above.
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
 | `checks/send.js` (SEND) | `src/actions/send.js` | `288332b9d583646e56462faf516bc762c657049cfb65ede3ae2a29d446705130` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `2d4d3179eab5ccdd323dc86475ed48e6f10928261c25624e7fc5223ae9142a41` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `f5bf5d43b712cee9c27b70dfb4db7e19d334f64e6aaf5ca9e4353fd368d9f33c` |
 | `checks/mint.js` | `src/actions/mint.js` | `7e0ef940547b47700181b97f9ed64c4e9cf499b3705244ceba67c351044fa11b` |
-| `checks/issue.js` | `src/actions/issue.js` | `3066ece8ba87ea2ef18cd7453f4d96e9ad70d4af0f6c32cb5551bf782d3aad01` |
+| `checks/issue.js` | `src/actions/issue.js` | `75a86a10b65a5de9e93590923ad0233279ca42a313a95c7b46c93dd6a6b380ec` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `22634d973dbffe3d000fcdc2fd3d01f2c9e5f28eb1c2e4ad957e6a043db11f4a` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `c349a43c1181026ca03a69d1960fd4cf1542fa8f9e1e1090c53959342d366372` |
 | `checks/trading.js` (ORDER) | `src/actions/order.js` | `870a0a5f687a79bd6e323903fc95151a94abdeaf1c43dd876910c3d8b030d8e4` |
@@ -177,6 +186,119 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-12 - `issue.js` + `destroy.js`, against indexer HEAD `97e7ae1f` (the bridge landing)
+
+Baseline pin `62c8d7c7` for both. Range read:
+`git -C ../xchain-indexer diff 62c8d7c7..97e7ae1f -- src/actions/issue.js src/actions/destroy.js`,
+plus the three modules the diff adds (`token_bridge_activation.js`,
+`token_policy_activation.js`, `tick_namespace_activation.js`) and `reservedRoots.js`.
+This is the base bridge spec and the token bridge spec landing on the indexer side.
+Both handlers owe client changes, and one constant does too: `XBRIDGE` joins
+`FEE_CHARGING_ACTIONS`, because `xbridge.js` charges through `createFeesObject` on
+the lock and burn legs a client composes (the settle legs are system-injected and
+never reach pre-flight); the fee seam reported it missing, exactly the BET shape.
+
+**Three activation tables, and which side of each the client stands on.**
+`TOKEN_BRIDGE_ACTIVATION` (ISSUE format 7, XBRIDGE v3/v4) and
+`TICK_NAMESPACE_ACTIVATION` (the four-character floor and the reserved roots) both
+hold mainnet and testnet at the house sentinel (9999999999) with regtest at 0;
+`TOKEN_POLICY_INHERITANCE_ACTIVATION` the same. So the rule every entry below turns
+on is the one this map has applied since the leg-amount review: a rule that binds
+on one plane and not another is a warning or a declaration, never an error, unless
+its verdict is the same on EVERY plane at EVERY height. Several of this landing's
+rules are exactly that, and those are mirrored as findings.
+
+**`issue.js` - REAL changes, four client checks moved.**
+
+1. *Reserved names, case-folded (unconditional).* `RESERVED_TICKS` (the coin roots
+   plus the gas tick) was matched by exact-case `indexOf`; it is now matched against
+   the UPPER-CASED tick, so `ISSUE btc` is refused where it was accepted. The regtest
+   exemption narrows from the whole check to the gas tick alone, and `IS_GENESIS` is
+   exempt (a system-injected path no broadcast carries). **Direction: WIDENS
+   rejection**, on every plane and at every height (measured zero rows for every
+   case variant, so no replayed verdict moves). `checks/issue.js` had no reserved
+   check at all ("reserved-TICK tables are internal"). It gains one: a `TICK_FORMAT`
+   warning (the code is not error-certified) for a reserved name, with the gas tick's
+   exemption decided from the explorer's chain code (regtest) and the vendored GAS
+   address (the source), and declared as `ISSUE_GAS_TICK` when no chain code is
+   configured. A coin root needs no plane to be refused.
+
+2. *The gas tick off BTC (unconditional).* `invalid: TICK (BTC-only)` was keyed on
+   `NETWORK != regtest`; it is now refused off BTC from every source on every network,
+   because off BTC the gas tick's supply is the shadow of an escrow only the bridge's
+   settle leg may create. **Direction: WIDENS rejection** (regtest only; no off-BTC
+   broadcast history exists elsewhere). Mirrored as a `TICK_FORMAT` warning keyed on
+   the chain code, after the reserved check in the handler's order, so the warning
+   names the verdict the chain gives first.
+
+3. *Tick namespace (activation-keyed, creation-only).* At/above the flag-day a NEW
+   top-level name shorter than four characters is `invalid: TICK (length)` and a name
+   on `RESERVED_FUTURE_ROOTS` is `invalid: TICK (reserved)`, reserved winning when a
+   name is both; an existing row is untouched (the handler probes for one first), a
+   `^id` reference is never short, and a dotted child is measured on its own full
+   length. **Direction: WIDENS rejection**, but only where armed, which is regtest.
+   Mirrored the way the dispenser GIVE_AMOUNT rule is: a `TICK_FORMAT` warning that
+   names the condition and the unarmed planes, raised only for a fresh create (the
+   row lookup says so), declared as `ISSUE_TICK_NAMESPACE` when the lookup is down
+   and the name is short or listed. The floor (`MIN_NEW_TOP_LEVEL_TICK_LENGTH`) and
+   the 53 roots are vendored into `constants.js`. The floor lives in `issue.js` and
+   so is under this row's hash; the roots live in `src/reservedRoots.js`, which NO
+   mapped hash covers, so a change there moves the vendored list by hand until the
+   drift gate grows a by-value seam for it (owed, noted in the constant's comment).
+
+4. *ISSUE format 7, the bridge opt-in.* New format `VERSION|TICK|BRIDGE_CHAINS|
+   MIN_DEPTH|LOCK_BRIDGE|MEMO`, admitted only at/above `TOKEN_BRIDGE_ACTIVATION` and
+   otherwise `invalid: VERSION (unknown)`. Above it: an unknown tick is `TICK
+   (unknown)` (format 7 edits, never creates); the RESOLVED name may not be dotted
+   (`subassets are not bridgeable yet`, judged on the row's tick so `^id` cannot
+   slip a subasset in); every `BRIDGE_CHAINS` entry, upper-cased and NOT trimmed,
+   must be a chain coin other than this one, with `-` the sentinel for none and
+   empty meaning unchanged; `MIN_DEPTH` is digits only; `LOCK_BRIDGE` joins the LOCK
+   field list (0/1, cannot-unset). Every one of those refusals holds on every plane:
+   below the activation the whole format is refused, above it each rule refuses on
+   its own, so they are FINDINGS. The unknown tick is a `TOKEN_NOT_FOUND` error
+   (network, overridable; universal skips ISSUE because format 0 creates, and this is
+   the one format that cannot). `BRIDGE_CHAINS`, `MIN_DEPTH` and `LOCK_BRIDGE` are
+   `VALIDATOR_SEMANTICS` errors (local), the class the static validator's own field
+   rules land in; they run before the row lookup gate so a down explorer does not
+   hide them. The subasset refusal is a `TICK_FORMAT` warning. The activation itself
+   is declared as `ISSUE_BRIDGE_ACTIVATION`, since a client cannot read the height.
+
+   Not mirrored, and declared as `ISSUE_BRIDGE_POLICY_EXCLUSION`: the `(locked)`
+   refusals of a later `BRIDGE_CHAINS` / `MIN_DEPTH` edit under `LOCK_BRIDGE=1`, the
+   opt-in refused on a token with a controller binding or an allow/block list
+   (`policy-bound tokens are not bridgeable yet`, the list half lifting at policy
+   inheritance behind an `XPOLICY_MAX_MEMBERS` ceiling), and the mirror rule that a
+   bridgeable or bridged token cannot take a list or a binding on formats 0/5/6
+   (`bridged tokens cannot be policy-bound yet`). All of them read row state
+   (bindings, list membership, the lock, the `bridged` bit) the explorer's token
+   document does not serve.
+
+   Not client-visible: `IS_GENESIS` exemptions on every rule above (no broadcast
+   carries the flag), and the fee-side comment edits. The owner gate is unchanged and
+   already covers format 7.
+
+**`destroy.js` - REAL change, one client check moved.** Two unconditional refusals
+after the tick-exists check, on every leg: the gas tick off BTC is `invalid: TICK
+(use XBRIDGE v1)` and a bridged copy `<ORIGIN>.<NAME>` (exactly two parts, a
+non-empty name, a prefix that is a chain coin other than this one, per
+`utility.parseBridgedTick`) is `invalid: TICK (use XBRIDGE v4)`. A burn here would
+strand the escrow the supply shadows on the origin chain. **Direction: WIDENS
+rejection**, on every plane and at every height (no such row can exist before the
+bridge creates one, so no replayed verdict moves). `checks/send.js` (DESTROY) gains
+both as `TICK_FORMAT` warnings keyed on the explorer's chain code, judged per leg,
+and declared as `DESTROY_BRIDGE_SUPPLY` when no chain code is configured. SEND is
+untouched on both sides.
+
+**What the static validator does not yet do, for the record.** `src/config.js`
+`LOCK_FIELDS` does not list `LOCK_BRIDGE` and `src/validator.js` has no format-7
+field rules, so today the pre-flight checks above are the only client-side judge of
+those fields. That is a validator change, not a map change; when it lands the
+`VALIDATOR_SEMANTICS` findings here and there will agree by construction (both call
+`isValidLockValue`).
+
+Anchor moves to `97e7ae1f`. Tests: `test/unit/preflight/bridgeTickRules.test.js`.
 
 ### 2026-09-11 (second pass) - `dispenser.js`, against indexer HEAD `62c8d7c7`
 
