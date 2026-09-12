@@ -102,10 +102,44 @@ describe('TickResolver', function () {
             expect(out).to.deep.equal({ k: 'v', other: 5 });
         });
 
-        it('does NOT compact the defining TICK of an ISSUE', async function () {
+        it('does NOT compact the defining TICK of an ISSUE with no VERSION given', async function () {
             const r = new TickResolver(makeSdk({}, tokenStub({ jdog: 1234 })));
             const out = await r.resolveActionParams('ISSUE', { TICK: 'JDOG' });
             expect(out.TICK).to.equal('JDOG');
+        });
+
+        // P20: only the formats that EDIT an existing token (xchain-indexer
+        // src/actions/issue.js: format 6 requires tokenInfo at issue.js:780, format 7
+        // at issue.js:828) may compact TICK. Every create-or-edit format (0-5) must
+        // stay uncompacted: a brand-new token has no id yet, and an unresolvable
+        // caret on a create format registers a junk row server-side instead of
+        // refusing.
+        for (const version of ['0', '1', '2', '3', '4', '5']) {
+            it(`does NOT compact ISSUE.TICK on format ${version} (create-or-edit)`, async function () {
+                const r = new TickResolver(makeSdk({}, tokenStub({ jdog: 1234 })));
+                const out = await r.resolveActionParams('ISSUE', { VERSION: version, TICK: 'JDOG' });
+                expect(out.TICK).to.equal('JDOG');
+            });
+        }
+
+        for (const version of ['6', '7']) {
+            it(`compacts ISSUE.TICK on format ${version} (edit-only)`, async function () {
+                const r = new TickResolver(makeSdk({}, tokenStub({ jdog: 1234 })));
+                const out = await r.resolveActionParams('ISSUE', { VERSION: version, TICK: 'JDOG' });
+                expect(out.TICK).to.equal('^1234');
+            });
+        }
+
+        it('compacts ISSUE.TICK on format 7 given a camelCase version key', async function () {
+            const r = new TickResolver(makeSdk({}, tokenStub({ jdog: 1234 })));
+            const out = await r.resolveActionParams('ISSUE', { version: '7', TICK: 'JDOG' });
+            expect(out.TICK).to.equal('^1234');
+        });
+
+        it('falls back to the name on format 7 when the id cannot be resolved (unindexed/unknown tick)', async function () {
+            const r = new TickResolver(makeSdk({}, tokenStub({ jdog: 1234 })));
+            const out = await r.resolveActionParams('ISSUE', { VERSION: '7', TICK: 'UNKNOWNTOK' });
+            expect(out.TICK).to.equal('UNKNOWNTOK'); // lookup throws (404) -> resolve() falls back
         });
 
         it('compacts CALLBACK_TICK on an ISSUE (references an existing token)', async function () {

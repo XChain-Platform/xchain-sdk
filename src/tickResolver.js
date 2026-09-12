@@ -31,15 +31,31 @@
 // Fields across all ACTION formats whose value references an EXISTING token,
 // and therefore can be compacted to the `^<id>` wire form (the xchain-indexer
 // accepts `^<id>` anywhere it accepts a ticker; see getTickerId()). The
-// defining TICK of an ISSUE is deliberately excluded at the call site below: a
-// brand-new token has no id yet, and the SDK validator forbids a `^`-led name
-// on ISSUE.
+// defining TICK of an ISSUE is handled separately at the call site below,
+// gated by format rather than excluded outright: the validator now accepts a
+// caret-led ISSUE TICK (row 24), but compacting it is only safe on the
+// formats that EDIT an existing token.
 //
 // The set is defined once in tickRefFields.js and never restated here, so it
 // stays checkable against formats.js. That module also records why
 // FILE.GATE_TICKER is held out of this set permanently: the indexer joins
 // gated_files.gate_ticker by literal string, so a `^<id>` un-gates the file.
 const { TICK_REF_FIELDS } = require('./tickRefFields.js');
+
+// ISSUE formats that reject an unknown TICK outright (xchain-indexer
+// src/actions/issue.js: format 6 requires an existing tokenInfo at
+// issue.js:780, "Can only bind a controller to an existing token you own";
+// format 7 requires it at issue.js:828, "Format 7 edits an existing row and
+// carries no creation fields"). Every other format (0-5) is create-or-edit: an
+// unknown TICK falls through to createToken with whatever fields that format
+// carries, so compacting TICK there is never safe. A new token has no id yet,
+// and db.js's createTicker never assigns a caret-prefixed name, so an
+// unresolvable `^id` sent on a create format does not refuse - it registers a
+// row with a NULL ticker id (documented server-side; no client action). Only
+// on these two formats does an unresolvable caret name an EDIT that the
+// handler itself refuses ('invalid: TICK (unknown)'), matching every other
+// TICK_REF_FIELDS compaction: safe only when the value must already exist.
+const ISSUE_TICK_COMPACT_FORMATS = new Set(['6', '7']);
 
 // Hard upper bound on a single compaction lookup. A reachable explorer answers
 // in well under this; the cap only matters for a host that accepts a connection
@@ -120,12 +136,25 @@ class TickResolver {
         if (!this.enabled() || params === undefined || params === null) return params;
         let name = String(action || '').toUpperCase();
         let out  = Object.assign({}, params);
+        // ISSUE's own TICK needs the wire format before it can be judged (see
+        // ISSUE_TICK_COMPACT_FORMATS above); read it once, tolerant of either
+        // casing, the same way the loop below maps every other key.
+        let issueVersion = null;
+        if (name === 'ISSUE') {
+            for (let k of Object.keys(out)) {
+                if (this.sdk.util.camelToUpperSnake(k) === 'VERSION') { issueVersion = String(out[k]); break; }
+            }
+        }
         for (let key of Object.keys(out)) {
             // Map the (possibly camelCase) key to its canonical UPPER_SNAKE name
             // to test whether it is a ticker-reference field.
             let field = this.sdk.util.camelToUpperSnake(key);
             if (!TICK_REF_FIELDS.includes(field)) continue;
-            if (name === 'ISSUE' && field === 'TICK') continue;   // defining ticker: no id yet
+            // Defining ticker: compact only on the formats that edit an existing
+            // token. A create format (0-5, including when VERSION is absent/blank,
+            // which formats() defaults to 0) never compacts: a brand-new token has
+            // no id yet.
+            if (name === 'ISSUE' && field === 'TICK' && !ISSUE_TICK_COMPACT_FORMATS.has(issueVersion)) continue;
             let val = out[key];
             if (val === undefined || val === null || Array.isArray(val)) continue;
             out[key] = await this.resolve(val);

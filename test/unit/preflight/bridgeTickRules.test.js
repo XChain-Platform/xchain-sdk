@@ -192,6 +192,34 @@ describe('pre-flight bridge landing: ISSUE tick rules', function () {
             expect(f.data.tick).to.equal('JDOG.SUB');
         });
 
+        // P21: a `^id` now reaches this check (tickResolver.js compacts ISSUE.TICK on
+        // format 7). ctx.token forwards it verbatim to explorer.getToken, which the
+        // real explorer resolves by id (xchain-explorer/src/db.js getToken(): a
+        // leading '^' switches the lookup to `t1.tick_id=?`). These mocks discriminate
+        // by the exact tick argument received, mirroring that id-vs-name branch,
+        // rather than returning a canned token regardless of input.
+        describe('a caret TICK reference (P21: id resolution must not false-block)', function () {
+            const idAware = () => ({
+                getToken: (tick) => {
+                    if (tick === '^12') return { tick: 'JDOG', tick_id: 12, owner: 'me' };
+                    return notFound();
+                }
+            });
+
+            it('a caret id that resolves to a real token raises no TOKEN_NOT_FOUND', async function () {
+                const r = await reportFor('ISSUE|7|^12|DOGE', idAware(), { coin: 'BTC', source: 'me' });
+                expect(has(r, 'TOKEN_NOT_FOUND')).to.equal(false);
+            });
+
+            it('a caret id the explorer cannot resolve still raises TOKEN_NOT_FOUND', async function () {
+                const r = await reportFor('ISSUE|7|^999|DOGE', idAware(), { coin: 'BTC', source: 'me' });
+                const f = find(r, 'TOKEN_NOT_FOUND');
+                expect(f).to.not.equal(undefined);
+                expect(f.severity).to.equal('error');
+                expect(f.data.tick).to.equal('^999');
+            });
+        });
+
         /* Each opt-in field is now judged on TWO layers, and both are wanted.
          *
          * src/validator.js carries the offline format-7 field rules, so a caller who

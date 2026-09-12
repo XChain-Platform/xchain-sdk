@@ -265,6 +265,18 @@ async function checkIssue(ctx) {
     const tick = ctx.field('TICK');
     if (!tick || Array.isArray(tick)) return;
 
+    // `tick` may now be a `^id` reference on the edit formats (row 24 lifted the
+    // validator's blanket caret refusal; tickResolver.js compacts ISSUE.TICK on
+    // formats 6/7 only). No separate id-to-name resolution step runs here: ctx.token
+    // forwards the wire value verbatim to explorer.getToken, which the indexer's
+    // own explorer already resolves by id (xchain-explorer/src/db.js getToken():
+    // `search.charAt(0)==='^'` switches the WHERE clause to `t1.tick_id=?`, the same
+    // path a caret name takes on every other TICK_REF_FIELDS lookup - see
+    // preflight/universal.js's token-exists loop, which passes a compacted MINT/SEND
+    // tick through unchanged the same way). A canonical, existing id therefore comes
+    // back as a normal token row (no false TOKEN_NOT_FOUND below); an id that
+    // resolves to nothing 404s and is correctly reported absent, same as an unknown
+    // name.
     const token = await ctx.token(tick);
     checkTickRules(ctx, tick, token);
     // The format-7 field rules need no row, so they run before the lookup gate below.
