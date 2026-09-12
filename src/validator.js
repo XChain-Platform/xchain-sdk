@@ -92,9 +92,18 @@ const { MAX_DEPLOYCHUNK_PART_BYTES, MAX_DEPLOY_CHUNKS } = require('./chunkHelper
 // Allowed TICK characters: a-zA-Z0-9 and ~!@#$%^&*()_+-={}[]:<>.?
 // Must stay an exact match for the indexer's TICK_CHARACTERS (xchain-indexer
 // src/config.js); the SDK must never be more permissive than consensus.
-// Forbidden: \ | ; . / and ^ as first char
+// Forbidden: \ | ; . / (a leading ^ switches the value from a NAME to an id
+// reference and is judged by _validateIssueTickRef instead, never by this regex).
 const TICK_REGEX = /^[a-zA-Z0-9~!@#$%^&*()_+\-={}[\]:<>.?]+$/;
-const TICK_FORBIDDEN_FIRST_CHAR = '^';
+// The caret that marks a wire value as an INDEX REFERENCE rather than a name.
+const TICK_REF_PREFIX = '^';
+
+// The one resolvable `^<id>` byte-form, vendored from the indexer's db.js and held
+// there by checkRegexMirrors in bin/check-preflight-drift.js. Imported rather than
+// restated so this file cannot drift from the copy the gate pins: getTickerId
+// (xchain-indexer/src/db.js:4090) resolves a caret TICK only in this form, so any
+// other caret names no row on any node.
+const { CANONICAL_CARET_ID } = require('./preflight/constants.js');
 
 // Characters forbidden in text fields (pipe = field separator, semicolon = command separator)
 const FORBIDDEN_TEXT_CHARS = ['|', ';'];
@@ -356,8 +365,10 @@ class Validator {
         if (field === 'TICK' || field === 'GIVE_TICK' || field === 'GET_TICK' ||
             field === 'DIVIDEND_TICK' || field === 'CALLBACK_TICK') {
             if (action === 'ISSUE' && field === 'TICK') {
-                // Full TICK name validation on ISSUE (includes ^ first char check)
-                errors.push(...this._validateTickName(value));
+                // Full TICK validation on ISSUE. A caret-led value is an id
+                // reference rather than a name and is judged as one (see
+                // _validateTickName's first branch).
+                errors.push(...this._validateTickName(value, allFields));
             } else if (String(value).startsWith('^')) {
                 // TICK_ID reference (^123), only valid outside of ISSUE. A delimiter
                 // inside the id is already fatal here: isNumeric tests the WHOLE
@@ -1699,15 +1710,18 @@ class Validator {
         return errors;
     }
 
-    _validateTickName(value) {
+    _validateTickName(value, fields) {
         let errors = [];
         let name = String(value);
 
+        // A caret-led ISSUE TICK is an INDEX REFERENCE, not a name, and consensus
+        // judges the two by different rules, so they take different branches. Running
+        // the name rules over `^12` refused every reference the chain resolves.
+        if (name.startsWith(TICK_REF_PREFIX))
+            return this._validateIssueTickRef(name, fields || {});
+
         if (name.length === 0 || name.length > MAX_TICK_LENGTH)
             errors.push(this._error('INVALID_TICK_NAME', 'TICK name must be 1-' + MAX_TICK_LENGTH + ' characters', { value, length: name.length }));
-
-        if (name.startsWith(TICK_FORBIDDEN_FIRST_CHAR))
-            errors.push(this._error('INVALID_TICK_NAME', 'TICK name cannot start with ^', { value }));
 
         if (!TICK_REGEX.test(name))
             errors.push(this._error('INVALID_TICK_NAME', 'TICK name contains invalid characters', { value, allowed: 'a-zA-Z0-9~!@#$%^&*()_+-={}[]:<>.?' }));
@@ -1726,6 +1740,97 @@ class Validator {
             errors.push(this._error('INVALID_TICK_NAME', 'TICK name cannot contain slash (/)', { value }));
 
         return errors;
+    }
+
+    /*
+     * A caret-led ISSUE TICK, judged as the id reference it is.
+     *
+     * A caret id names an existing token exactly as the spelled-out name does: the
+     * handler resolves both through the same call (xchain-indexer/src/actions/
+     * issue.js:848-853 says so for format 7, and getTickerId is identical on every
+     * format), so refusing every caret-led TICK unconditionally would block an
+     * action consensus accepts. That is also why the ticker compactor holds
+     * ISSUE.TICK out of TICK_REF_FIELDS.
+     *
+     * Two of the three rules bind on EVERY format, because the handler applies them
+     * before it branches on one:
+     *   - issue.js:349 refuses a non-numeric id, `invalid: TICK (id)`, with the same
+     *     parseFloat-based isNumeric this calls;
+     *   - issue.js:361 refuses a '.' inside the id, `invalid: TICK (caret dot)`, the
+     *     shape isNumeric lets through (`^12.5` reads as a number) and which lands a
+     *     valid ISSUE with a NULL ticker id below the flag-day.
+     *
+     * The third is GATED BY FORMAT, and that is the whole reason this takes `fields`.
+     * Resolution itself is canonical-only: getTickerId (xchain-indexer/src/db.js:4090)
+     * resolves a caret TICK only as /^[1-9][0-9]*$/ and only to a row that exists, so
+     * `^007`, `^0` and `^-1` name nothing on any node. What the chain DOES about that
+     * differs by format, so the client's verdict has to as well:
+     *   - formats 6 and 7 refuse an unresolved tick outright (issue.js:782 and
+     *     issue.js:828, `invalid: TICK (unknown)`), so a non-canonical caret is
+     *     refused there on every plane at every height - below the token-bridge
+     *     activation format 7 is `VERSION (unknown)` instead, which is still a refusal
+     *     - and an error here false-blocks nothing;
+     *   - formats 0 to 5 ACCEPT it (the handler falls through to createToken and
+     *     registers a row with a NULL ticker id), so an error here would refuse an
+     *     action consensus accepts, the false-block this validator's non-ISSUE ticker
+     *     branch already refuses to commit.
+     */
+    _validateIssueTickRef(ref, fields) {
+        let errors = [];
+        let id     = ref.substring(1);
+
+        // The handler measures the WHOLE wire tick, caret included (issue.js:365).
+        if (ref.length > MAX_TICK_LENGTH)
+            errors.push(this._error('INVALID_TICK_NAME', 'TICK must be 1-' + MAX_TICK_LENGTH + ' characters', { value: ref, length: ref.length }));
+
+        // TICK opts out of the blanket delimiter guard in favour of this validation,
+        // so the scan runs from inside it (the id rules below would catch '|' and ';'
+        // as non-numeric, but the caller gets the delimiter's own code and message).
+        errors.push(...this._scanDelimiters('TICK', ref));
+
+        if (!this.util.isNumeric(id)) {
+            errors.push(this._error('INVALID_TICK_ID',
+                'TICK ID reference must be numeric: ' + ref, { field: 'TICK', value: ref }));
+        } else if (id.includes('.')) {
+            errors.push(this._error('INVALID_TICK_ID',
+                'TICK ID reference cannot contain a dot: ' + ref + ' reads as a number but names no ticker id',
+                { field: 'TICK', value: ref }));
+        } else {
+            let format = this._issueFormat(fields);
+            if ((format === 6 || format === 7) && !CANONICAL_CARET_ID.test(id))
+                errors.push(this._error('INVALID_TICK_ID',
+                    'TICK ID reference ' + ref + ' is not a canonical ^<id> (no leading zero, id >= 1), so it '
+                    + 'resolves on no node; ISSUE format ' + format + ' edits an existing token and the indexer '
+                    + 'refuses it as an unknown TICK.',
+                    { field: 'TICK', value: ref, version: format }));
+        }
+
+        return errors;
+    }
+
+    /*
+     * The ISSUE format this action will be serialized as, or null when it cannot be
+     * decided from the wire fields alone.
+     *
+     * An absent VERSION is auto-selected downstream (formatSelector.js), so the two
+     * formats whose caret rule is stricter are recovered from the fields only THEY
+     * carry: BRIDGE_CHAINS / MIN_DEPTH / LOCK_BRIDGE appear on format 7 alone and the
+     * controller fields on format 6 alone (issue.js:105-120). Anything else answers
+     * null and takes the permissive branch, which is the safe direction: a missed
+     * format costs a warning the chain will repeat, a wrong one costs a false block.
+     */
+    _issueFormat(fields) {
+        if (!this._isEmpty(fields.VERSION)) {
+            let version = Number(fields.VERSION);
+            return Number.isInteger(version) ? version : null;
+        }
+        if (!this._isEmpty(fields.BRIDGE_CHAINS) || !this._isEmpty(fields.MIN_DEPTH)
+            || !this._isEmpty(fields.LOCK_BRIDGE))
+            return 7;
+        if (!this._isEmpty(fields.CONTROLLER) || !this._isEmpty(fields.ACTION_CLASS)
+            || !this._isEmpty(fields.UNBIND) || !this._isEmpty(fields.COOLDOWN_BLOCKS))
+            return 6;
+        return null;
     }
 
     // Default-deny delimiter guard. No serialized field value may contain the '|'

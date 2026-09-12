@@ -98,9 +98,28 @@ describe('Ticker NAME vs TICK_ID (^N) equivalence', function () {
         })).to.throw();
     });
 
-    it('rejects a ^-led name as the defining TICK of an ISSUE', function () {
-        expect(() => sdk.actions.createAction({
+    // ISSUE joins the equivalence: the handler resolves a caret TICK through the same
+    // getTickerId as every other ticker field, so an ISSUE naming an existing token by
+    // id serializes and is accepted. A blanket refusal here would be stricter than
+    // consensus; the per-format contract is test/unit/issueTickRef.test.js.
+    it('serializes a ^id as the defining TICK of an ISSUE', function () {
+        const str = sdk.actions.createAction({
             action: 'ISSUE', params: { TICK: '^1234', MAX_SUPPLY: '1000', DECIMALS: '0' }
+        }).actionString;
+        expect(str.split('|')).to.include('^1234');
+    });
+
+    it('rejects a ^id with a non-numeric body as the defining TICK of an ISSUE', function () {
+        expect(() => sdk.actions.createAction({
+            action: 'ISSUE', params: { TICK: '^abc', MAX_SUPPLY: '1000', DECIMALS: '0' }
+        })).to.throw();
+    });
+
+    // Formats 6 and 7 refuse an unresolved tick outright, and a non-canonical id
+    // resolves on no node, so the SDK refuses it there rather than after the fee.
+    it('rejects a non-canonical ^id on the ISSUE bridge opt-in (format 7)', function () {
+        expect(() => sdk.actions.createAction({
+            action: 'ISSUE', params: { VERSION: 7, TICK: '^007', BRIDGE_CHAINS: 'DOGE' }
         })).to.throw();
     });
 });

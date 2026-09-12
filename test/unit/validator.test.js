@@ -111,24 +111,25 @@ describe('Validator: TICK name validation (ISSUE action)', function () {
         expect(hasErrorCode(errors, 'INVALID_TICK_NAME')).to.be.true;
     });
 
-    it('rejects a TICK that starts with a caret', function () {
+    // A caret-led ISSUE TICK is an id reference, not a name: it is refused as a bad
+    // ID (xchain-indexer src/actions/issue.js:349, `invalid: TICK (id)`) rather than
+    // as a bad name. The full per-format contract is test/unit/issueTickRef.test.js.
+    it('rejects a TICK that starts with a caret and a non-numeric id', function () {
         const errors = v.validate('ISSUE', { TICK: '^BADSTART' });
-        expect(hasErrorCode(errors, 'INVALID_TICK_NAME')).to.be.true;
+        expect(hasErrorCode(errors, 'INVALID_TICK_ID')).to.be.true;
     });
 
     // Pins the SDK half of the indexer's `invalid: TICK (caret dot)` rejection
-    // (xchain-indexer src/actions/issue.js, gated on BATCH_ISSUANCE_LIMITS). The
+    // (xchain-indexer src/actions/issue.js:361, gated on BATCH_ISSUANCE_LIMITS). The
     // chain's own numeric guard is parseFloat-based, so a caret tail carrying a
-    // '.' reads as a number and used to slip through into a valid ISSUE with a
-    // NULL ticker id. The SDK owes no mirror of that rule because
-    // _validateTickName refuses EVERY caret-led ISSUE TICK, which is strictly
-    // stronger - but "strictly stronger" is only true while these shapes are
-    // refused, so they are asserted rather than argued. See the 2026-08-13 entry
-    // in src/preflight/INDEXER-MAP.md.
+    // '.' reads as a number and slips into a valid ISSUE with a NULL ticker id.
+    // This rule is mirrored DIRECTLY (a blanket refusal of every caret-led ISSUE
+    // TICK would be stricter than consensus), and these shapes are the assertion
+    // for it. See the 2026-09-12 (P17) entry in src/preflight/INDEXER-MAP.md.
     it('rejects a caret ISSUE TICK whose tail contains a dot, the shape parseFloat lets through', function () {
         for (const tick of ['^12.5', '^1.0', '^0.1']) {
             const errors = v.validate('ISSUE', { TICK: tick });
-            expect(hasErrorCode(errors, 'INVALID_TICK_NAME'), 'tick: ' + tick).to.be.true;
+            expect(hasErrorCode(errors, 'INVALID_TICK_ID'), 'tick: ' + tick).to.be.true;
         }
     });
 

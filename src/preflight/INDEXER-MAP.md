@@ -42,7 +42,10 @@ indexer HEAD `88f4efaf` plus its paired change (see the review
 log below), and `dispenser.js` re-pinned at `62c8d7c7` later the same day
 after the freshness-shape fail-closed change (no client change), and `issue.js` +
 `destroy.js` re-reviewed at `97e7ae1f` on 2026-09-12 for the bridge landing (four
-client checks added, see the review log). Hashes
+client checks added, see the review log), and `issue.js` re-reviewed AGAIN later the
+same day against the now-pushed `97e7ae1f`, which confirmed the pin and moved no
+hash but did move a client rule (the caret TICK, see the second 2026-09-12 entry in
+the review log). Hashes
 are of the indexer handler source files, resolved via
 `XCHAIN_INDEXER_PATH` or the sibling `../xchain-indexer` checkout. The
 gate SKIPS (does not fail) when no indexer checkout is present, so
@@ -75,6 +78,32 @@ and the bridge's ISSUE and DESTROY rules; a reviewer diffing `97e7ae1f..HEAD` se
 only what moves after this pin. The other six files under `src/actions/` that move
 in `62c8d7c7..97e7ae1f` (`list.js`, `slash.js`, `sleep.js`, `stake.js`, `sweep.js`,
 `xbridge.js`) are unmapped rows.
+
+CONFIRMED LATER THE SAME DAY, and read this before you re-pin anything from a local
+run. `97e7ae1f` was written here while it still sat on a landing branch; it is now
+the PUSHED `origin/develop` head of xchain-indexer, so the anchor is authoritative
+and every row above is a plain HEAD hash of it. Against that tree the gate exits 0.
+
+What it does NOT exit 0 against is a local `xchain-indexer` checkout sitting on the
+platform's TWIN lineage, and that is not drift. The public lineage is produced by
+squashing and scrubbing the local one, and the scrub rewrites comments, so the two
+copies of `src/actions/issue.js` differ by comment text alone (a pair of internal
+tracker id tags the public scrub strips, plus a reworded reserved-tick paragraph)
+and hash differently:
+`75a86a10` on `origin/develop`, `3744f957` on the local twin. The executable code is
+identical, which the second 2026-09-12 review-log entry records line by line. DO NOT
+re-pin to the local hash to silence a local red: CI on BOTH repos clones the sibling
+at `develop` from GitHub, so that pin goes red in the venue that blocks pushes and
+stays red, because the scrub keeps the two spellings apart. Reproduce the venue's
+verdict instead, with the env var CI itself sets:
+
+    git -C ../xchain-indexer archive origin/develop | tar -x -C /tmp/indexer-develop
+    XCHAIN_INDEXER_PATH=/tmp/indexer-develop node bin/check-preflight-drift.js
+
+and see what the twin actually carries with
+`git -C ../xchain-indexer diff origin/develop..HEAD -- src/actions/issue.js`. A local
+red that this pair explains is a checkout that needs reconciling with origin, not a
+handler that needs reviewing.
 
 Earlier note. Re-anchored 2026-09-11, second pass, by the `dispenser.js` re-pin below.
 `62c8d7c7` is the indexer develop head that pin was read against. It contains
@@ -186,6 +215,76 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-12 (second pass) - `issue.js` re-read against the pushed `97e7ae1f`, and the caret TICK
+
+The drift gate was red on a LOCAL run with `src/actions/issue.js` reading `3744f957`
+against the pinned `75a86a10`, and the anchor reported unreachable. Both findings
+have one cause and it is not a handler change: the sibling checkout sat on the
+platform's twin lineage (local `develop` `85c61af7`, five commits that never reached
+origin), while `97e7ae1f` had by then been pushed and IS `origin/develop`. Against
+the pushed tree the map was, and is, exactly in sync: all eleven rows, the fee-quote
+seam, `MAX_REFILLS`, `CANONICAL_CARET_ID`, `RESERVED_FUTURE_ROOTS` (53) and the three
+gas schedules. So NO ROW MOVED and the anchor stands; the recipe for reproducing that
+verdict is in the anchor note above.
+
+**The paired review, done against the content that differs.** The whole difference
+between the pinned blob and the local twin is three comment hunks in `issue.js`
+(`git -C ../xchain-indexer diff origin/develop..HEAD -- src/actions/issue.js`): the
+reserved-tick paragraph reworded from "an exact-case indexOf would let `ISSUE btc`
+through" to "the check used to be an exact-case indexOf", the regtest-exemption
+paragraph reworded the same way, and two internal tracker id tags the public scrub
+strips.
+Not one executable line differs, so no validity rule moved and no client twin is
+owed. Every rule the first 2026-09-12 entry mirrored was re-checked against the
+handler and stands: the case-folded reserved list (`issue.js:403`), the gas tick off
+BTC (`issue.js:433`), the tick-namespace floor and the reserved roots
+(`issue.js:472-483`) and the four format-7 field rules (`issue.js:828-888`), against
+`checks/issue.js` `checkTickRules` / `checkBridgeOptIn` and, since row 19 of the
+bridge build, `validator.js`'s own `LOCK_BRIDGE` / `BRIDGE_CHAINS` / `MIN_DEPTH`
+rules. The other mapped handlers are byte-identical across both lineages.
+
+**One client rule DID move, in the other direction: the caret TICK.** Re-reading the
+handler for this review surfaced a place where the SDK was stricter than consensus.
+`_validateTickName` refused EVERY `^`-led ISSUE TICK on every format, and the handler
+refuses no such thing: it validates a caret TICK as an id (`issue.js:349`, non-numeric
+is `invalid: TICK (id)`; `issue.js:361`, a dot in the id is `invalid: TICK (caret
+dot)`) and then resolves it through `getTickerId` exactly as it resolves a spelled-out
+name, which is what `issue.js:848-853` says outright for format 7 and what
+`issue.js:472-483` assumes when it exempts a caret from the four-character floor. The
+SDK was therefore refusing edits the chain accepts, and `src/tickResolver.js` holds
+`ISSUE.TICK` out of the compaction set for that reason alone.
+
+The validator now judges a caret ISSUE TICK as a reference, GATED BY FORMAT, because
+the chain's answer is format-dependent in exactly one place:
+
+- every format: a non-numeric id, and a `.` inside the id. Both are refused before the
+  handler branches, so both are refused here on every format. The caret-dot rule was
+  previously argued as covered by the blanket refusal ("strictly stronger"); with the
+  blanket gone it is mirrored directly, which is the stronger arrangement anyway.
+- formats 6 and 7 only: the id must be canonical (`/^[1-9][0-9]*$/`, the vendored
+  `CANONICAL_CARET_ID`). Resolution is canonical-only (`xchain-indexer/src/db.js:4090`
+  hands only that form to SQL, and only for a row that exists), and those two formats
+  refuse an unresolved tick outright (`issue.js:782` and `issue.js:828`, `invalid:
+  TICK (unknown)`). Below the token-bridge activation format 7 is `VERSION (unknown)`
+  instead, so the refusal holds on every plane at every height and an error here
+  false-blocks nothing.
+- formats 0 to 5: NOT refused, deliberately. The handler falls through to
+  `createToken` there and the ISSUE lands valid (with a NULL ticker id, the defect the
+  caret-dot rule closed one shape of), so a client error would refuse an action
+  consensus accepts, the false-block invariant this validator's non-ISSUE ticker
+  branch already declines to break.
+
+`VERSION` is auto-selected downstream, so the gate recovers formats 7 and 6 from the
+fields only they carry (`BRIDGE_CHAINS` / `MIN_DEPTH` / `LOCK_BRIDGE`, and the
+controller fields); anything undecidable takes the permissive branch, which is the
+safe direction. Pinned by `test/unit/issueTickRef.test.js` (21 cases, both directions
+per format) plus the two amended cases in `test/unit/validator.test.js` and the ISSUE
+cases in `test/unit/ticker-id-equivalence.test.js`. Pre-flight needed no change:
+`checks/issue.js` already reads the RESOLVED name for the subasset rule and already
+exempts a caret from the namespace floor. The explorer's own `getToken` must resolve
+`^<id>` for the Tier-2 row lookup to see such a token at all; that is server-side and
+outside this map.
 
 ### 2026-09-12 - `issue.js` + `destroy.js`, against indexer HEAD `97e7ae1f` (the bridge landing)
 
@@ -1068,7 +1167,10 @@ did carry real change, and they are separated out below.
   one on this row and it was previously only prose, so it is now PINNED by
   `test/unit/validator.test.js` ("rejects a caret ISSUE TICK whose tail contains
   a dot"): if the SDK ever narrows to match the chain's rule literally, the claim
-  fails loudly instead of silently. (2) `gatedGetTokenInfo` suppresses interning
+  fails loudly instead of silently. **[SUPERSEDED 2026-09-12, second entry above:
+  the SDK did narrow, because the blanket refusal was stricter than consensus. The
+  caret-dot rule is now mirrored DIRECTLY on every format and the pinning test
+  still holds it; only the "strictly stronger" justification is retired.]** (2) `gatedGetTokenInfo` suppresses interning
   an unseen tick into `index_tickers` once `error` is already set. The value
   handed back is unchanged by construction (a not-yet-interned tick reads back as
   unknown either way), so it is a database side effect with no wire-visible
@@ -1180,6 +1282,10 @@ and none was made: the SDK validator already refuses ANY `^`-led TICK on ISSUE
 (`_validateTickName`), which is strictly stronger than the caret-dot rule, and
 the intern gating is a database side effect with no wire-visible verdict. Its row
 keeps its stale hash rather than gaining a refresh this review did not earn.
+**[SUPERSEDED 2026-09-12, second entry above. "Strictly stronger" was also
+strictly stricter than consensus: the handler resolves a caret TICK on every
+ISSUE format, so the blanket refusal was blocking edits the chain accepts. The
+caret-dot rule is mirrored directly now; the intern-gating verdict stands.]**
 
 Conformance for all of the above is `test/unit/batchLimitsConformance.test.js`,
 which drives the REAL arbiter from the sibling checkout over a shared vector set
