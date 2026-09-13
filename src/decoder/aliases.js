@@ -16,7 +16,7 @@
  *
  * Documented on-chain action aliases, expanded BEFORE any format
  * lookup. Keep in lockstep with xchain-decoder/src/XChainDecoder.js
- * ACTION_ALIASES, xchain-indexer/src/actions.js actionAliases, and
+ * ACTION_ALIASES, xchain-indexer/src/actions/index.js actionAliases, and
  * xchain-documentation/protocol/action-manifest.json "aliases": a
  * spec-following client may encode any of these leading tokens and
  * produce a valid on-chain payload. Lookup is case-sensitive, exactly

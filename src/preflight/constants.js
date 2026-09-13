@@ -240,7 +240,7 @@ const TIER2_ERROR_CAPABLE = Object.freeze({
 
 /*
  * Tier-1 exclusions (spec §4.3): indexer FEE_QUOTE_DENYLIST mirror.
- * Kept in lockstep with FEE_QUOTE_DENYLIST in xchain-indexer/src/actions.js, enforced by
+ * Kept in lockstep with FEE_QUOTE_DENYLIST in xchain-indexer/src/actions/index.js, enforced by
  * bin/check-preflight-drift.js (named, not line-pinned: the line pin had already drifted).
  *
  * XEXEC IS DEFENCE-IN-DEPTH, AND DELIBERATELY UNREACHABLE

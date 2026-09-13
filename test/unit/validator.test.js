@@ -601,7 +601,7 @@ describe('Validator: FIAT dispenser GET_AMOUNT convention', function () {
 // FIAT_CODE, so it missed the allow-list check entirely until this suite;
 // VALUE fell through to BROADCAST's numeric-only rule and FEE was checked
 // for BROADCAST only. Each case below mirrors an indexer verdict in
-// xchain-indexer/src/actions/price.js _parseV1.
+// xchain-indexer/src/actions/price/index.js _parseV1.
 
 describe('Validator: PRICE v1 oracle publish', function () {
 

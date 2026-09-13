@@ -70,9 +70,26 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `6a8a9621`
+**Pins taken at indexer commit:** `63f49c38`
 
-(Re-anchored 2026-09-13 by the EXPIRATION representability review of `dispenser.js`,
+(Re-anchored 2026-09-13, second pass, by the comment-merge review of `send.js` and
+`airdrop.js`. `63f49c38` is the pushed `origin/develop` head, which now carries the
+`docs(...)` commits that merged the explanation back onto rewritten comment lines;
+the previous anchor `e8ae831e` is its ancestor and stays reachable. Seven rows are
+plain blobs of `63f49c38`: the five that have not moved since `e8ae831e`
+(`destroy.js`, `mint.js`, `order.js`, `swap.js`, `dividend.js`) plus `send.js` and
+`airdrop.js`, whose pins move in this pass because a comment commit changed their
+bytes. Four rows, `issue.js`, `dispenser.js`, `dispense.js` and `batch.js`, are
+hashes of the PAIRED WORKING TREE of the M3 feature-directory pass rather than of
+this anchor, exactly like the 2026-09-11 nine: the indexer half and this half land
+together, so a checkout without the M3 commits reports those four drifted and the
+answer is the missing indexer commit, never a re-pin back. The M3 commits leave
+`send.js` and `airdrop.js` byte-identical, so those two rows are in sync against
+the pushed tree and against the M3 tree alike. The two review-log entries below
+record what the diffs contain: for the four, relative-require and comment-path
+repoints; for the two, comment text only.
+
+Earlier note. Re-anchored 2026-09-13 by the EXPIRATION representability review of `dispenser.js`,
 `order.js` and `swap.js` below. `3353ae26` is the tree those three rows were hashed
 from; the bound itself arrives four commits earlier at `c0752359`, and nothing under
 `src/actions/` moves between the two, so a reviewer may diff from either and see the
@@ -172,7 +189,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 6a8a9621..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 63f49c38..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -210,17 +227,17 @@ found by hashing candidate blobs as above.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send.js` | `22efd8bf4845c2c8e3ef860009a1411c00ad63bc2dd84d50c472eea9eb85490f` |
+| `checks/send.js` (SEND) | `src/actions/send.js` | `efa3cfb5837513ca231adc686e140138c536cf8018a8c171ecfd998af593ab0a` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `0b4c889051f64c9d6b358da4719473c21fe61e0defe5334151dbef28f841dedc` |
 | `checks/mint.js` | `src/actions/mint.js` | `9da462902a2807387e0f230693dd227ad4aae1a8e9058b16dccddcf55d566346` |
-| `checks/issue.js` | `src/actions/issue.js` | `7c9ba4295a697d318527d5dcd32b74778a25ef4a9ab7b17423abcd9afee9c9b6` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `9b66a86d0b389e064f131768328cfc855e36d34892e88a32b652892d069da555` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `52c8e9ff9abda3ba0b517f04c73b56036b3db1b6b796c64c1a9266b96aff9328` |
+| `checks/issue.js` | `src/actions/issue.js` | `99192fbf982b61a649df8db60579bbc3ed5a96bfcbb9be0bfbf5bbcca07ae785` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `3cd1dc72cb6944384092884955015a7c0a12f7a87e795b93dc9f906621aaf3ac` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `b3a784ab608b14f8ac2053e692a67704fba48c018ecd1eae2ee6eadc49e0d4a2` |
 | `checks/trading.js` (ORDER) | `src/actions/order.js` | `2edfeffb23e0e84f84fcced56753fa77d2eef19df34c1323c46ed03de6f701d5` |
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `9cbf5c44a18ca8b1c87f2871c84b963b81de6922549674a34afc246f52d49d18` |
-| `checks/airdrop.js` | `src/actions/airdrop.js` | `49f1b4982a3010904145b98a66ff57cf4c685b73a1ca3c430125c555414e5406` |
+| `checks/airdrop.js` | `src/actions/airdrop.js` | `6421772689b547a577d8b4053eb5e2d78a9fc8186d07a10eb6cc6a6398a5fac9` |
 | `checks/dividend.js` | `src/actions/dividend.js` | `41fc97779f62e2695d3e42927f059d56933ab943252a352c8e9e2441b7e2b02a` |
-| `checks/batch.js` | `src/actions/batch.js` | `212fcc1380d82d90eb443b131a3386c0dd7eb01992b5312af8eff2f431cee0a4` |
+| `checks/batch.js` | `src/actions/batch.js` | `bd8a0885001bfa952ce941f909045164c8a57f901b6921b889f05256530d4ed2` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -229,6 +246,70 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-13 (second pass) - `send.js` + `airdrop.js`, the comment-merge commits
+
+`send.js` moves from `22efd8bf` to `efa3cfb5`, `airdrop.js` from `49f1b498` to
+`64217726`. Both pins were `e8ae831e` blobs, and each handler was touched exactly once
+since, by `577c4966`, one of six `docs(...)` commits that merged the explanation back
+onto comment lines an earlier scrub had rewritten. Those commits are on the pushed head
+this pass re-anchors to, so both new pins are plain blobs of the anchor. Range read:
+`git -C ../xchain-indexer diff e8ae831e..origin/develop -- src/actions/send.js
+src/actions/airdrop.js` (spelled against `origin/develop` rather than against `HEAD` so
+the gate's anchor-consistency check still finds exactly one review command, the one under
+**Pins taken at indexer commit**).
+
+**What moved: comment text, nothing executable.** Four hunks, three in `airdrop.js` and
+one in `send.js`, and every changed line in all four is inside a comment. `airdrop.js`
+restates why `recipients` and `approved` are Sets rather than arrays and what the
+XCHAIN-mode fee debit below them is for; `send.js` restates the conditional-handoff
+paragraph in the present tense and spells out that leg consolidation by (DESTINATION,
+TICK) is what closes the split-into-many-small-sends bypass. No validity rule, no
+threshold, no field, no format version and no error string changed on either handler, so
+no `checks/` module owes a change.
+
+Machine-verified as well as read, because "I read it and it was only comments" is the
+claim this gate exists to distrust. Each handler's acorn token stream, which excludes
+comments and whitespace by construction and compares token values as well as token types,
+is identical across the change: `send.js` 2776 tokens before and after, `airdrop.js` 2307,
+each pair hashing to one value. The comparison was itself falsified before it was trusted,
+by flipping `packs.length > 0` to `>=` in a scratch copy of the new `send.js`: it reported
+that operator as the first differing token, so an identical stream is evidence rather than
+a tool that cannot say no. The indexer working tree was clean at the time, so the hashed
+bytes are committed bytes and not a local edit.
+
+### 2026-09-13 - `issue.js` + `dispenser.js` + `dispense.js` + `batch.js`, the M3 feature-directory move
+
+Baseline pin for all four rows was the `e8ae831e` blob (`7c9ba429`, `9b66a86d`,
+`52c8e9ff`, `212fcc13`); the new pins are `99192fbf`, `3cd1dc72`, `b3a784ab` and
+`bd8a0885`. Range read: `git -C ../xchain-indexer diff origin/develop..HEAD -- src/actions/issue.js
+src/actions/dispenser.js src/actions/dispense.js src/actions/batch.js` (`e8ae831e` was
+`origin/develop` on the day this entry was written, and is an ancestor of the anchor now
+in force; spelled by name here so the gate's anchor-consistency check still finds exactly
+one review command, the one under **Pins taken at indexer commit**).
+
+**What moved: nothing executable.** Every changed line in the four handlers is a
+relative `require` re-aimed at a module that moved under a feature directory, or a
+comment naming that module's old path. `issue.js` now reads `../consensus/reservedRoots.js`
+and names `actions/execute/index.js`; `dispenser.js` and `dispense.js` read
+`../chain/dispenserDivergenceMetrics.js`; `batch.js` reads `../consensus/fault_guard.js`
+and reaches the loader as `./index.js` instead of `../actions.js`. Each pair resolves
+to the same module as before. No validity rule, no threshold, no field, no format
+version and no error string changed on any of the four.
+
+**Direction: NEITHER, no admission boundary moves.** NO CLIENT CHECK MOVES. The
+mirrored logic in `checks/issue.js`, `checks/dispenser.js` and `checks/batch.js` is
+untouched and still mirrors the same rules; the refresh exists only so the hash rows
+follow the handlers to their new bytes.
+
+**Two seams the move did touch, both repaired in the same change set and not
+client-visible.** The gate's own fee-quote leg read the loader at `src/actions.js`,
+which is now `src/actions/index.js`; and `deriveFeeChargingActions` walked
+`src/actions/` with a flat `*.js` readdir, which silently drops every handler that
+became a directory. Both are fixed in `bin/check-preflight-drift.js`, the second so
+that a dropped handler can never again read as "charges no fee": falsified by
+restoring the flat walk, which reds the gate naming XBRIDGE as an SDK entry with no
+indexer caller.
 
 ### 2026-09-13 - `dispenser.js` + `order.js` + `swap.js`, the EXPIRATION representability bound
 

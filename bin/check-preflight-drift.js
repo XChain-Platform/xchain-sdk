@@ -159,14 +159,14 @@ function anchorIsReachable(indexerRoot, anchor) {
 /* The fee-quote seam, which the hash rows above structurally cannot cover.
  *
  * Every mapped row is a per-handler file under src/actions/, so the row regex carries a
- * literal `src/actions/` prefix and can never match the TOP-LEVEL src/actions.js. That is the
+ * literal `src/actions/` prefix and can never match the ACTION LOADER src/actions/index.js. That is the
  * file defining FEE_QUOTE_DENYLIST and FEE_QUOTE_STATIC, and until now the only thing binding
  * them to the SDK's TIER1_DENYLIST was a hand-written comment, which had already drifted.
  *
- * Compared by VALUE rather than by hash on purpose. Hashing all of actions.js would fire on
+ * Compared by VALUE rather than by hash on purpose. Hashing all of the loader would fire on
  * every unrelated edit to a large file, and anchor-scoped hashing can silently lose coverage
  * when a marker moves, which is the worse failure for financial logic. The invariant that
- * actually matters is not "actions.js is unchanged", it is that the two lists agree, so check
+ * actually matters is not "the loader is unchanged", it is that the two lists agree, so check
  * exactly that and fail closed when either literal cannot be read.
  */
 function parseStringSet(text, name, where) {
@@ -207,15 +207,28 @@ function deriveFeeChargingActions(indexerRoot) {
     const dir = path.join(indexerRoot, 'src', 'actions');
     let entries;
     try {
-        entries = fs.readdirSync(dir);
+        entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch (e) {
         throw new Error(`drift-gate: could not read ${dir} to derive the fee-charging set `
             + `(${e && e.message ? e.message : String(e)}). Fix the read rather than skipping the check.`);
     }
-    const callers = entries
-        .filter((f) => f.endsWith('.js'))
-        .filter((f) => /\bcreateFeesObject\s*\(/.test(stripCommentsAndStrings(fs.readFileSync(path.join(dir, f), 'utf8'))))
-        .map((f) => path.basename(f, '.js').toUpperCase());
+    // A handler is either src/actions/<name>.js or, since the M3 feature-directory pass,
+    // src/actions/<name>/index.js. A flat readdir of *.js alone silently drops every
+    // directory handler, and a dropped handler reads as "charges no fee" rather than as a
+    // broken walk, so both shapes are resolved here. src/actions/index.js is the ACTION
+    // LOADER, not a handler, and is skipped so it cannot enrol itself as action INDEX.
+    const handlers = [];
+    for (const e of entries) {
+        if (e.isDirectory()) {
+            const idx = path.join(dir, e.name, 'index.js');
+            if (fs.existsSync(idx)) handlers.push({ action: e.name, file: idx });
+        } else if (e.name.endsWith('.js') && e.name !== 'index.js') {
+            handlers.push({ action: path.basename(e.name, '.js'), file: path.join(dir, e.name) });
+        }
+    }
+    const callers = handlers
+        .filter((h) => /\bcreateFeesObject\s*\(/.test(stripCommentsAndStrings(fs.readFileSync(h.file, 'utf8'))))
+        .map((h) => h.action.toUpperCase());
     if (callers.length === 0) {
         throw new Error('drift-gate: no handler under xchain-indexer/src/actions/ calls createFeesObject. '
             + 'That is how a protocol fee is charged, so an empty walk means this check stopped working, '
@@ -225,18 +238,18 @@ function deriveFeeChargingActions(indexerRoot) {
 }
 
 function checkFeeQuoteSeam(indexerRoot) {
-    const actionsPath = path.join(indexerRoot, 'src', 'actions.js');
+    const actionsPath = path.join(indexerRoot, 'src', 'actions', 'index.js');
     if (!fs.existsSync(actionsPath)) {
-        warn('drift-gate: xchain-indexer/src/actions.js not found; it defines the fee-quote lists this gate pins.');
+        warn('drift-gate: xchain-indexer/src/actions/index.js not found; it defines the fee-quote lists this gate pins.');
         return 1;
     }
     const indexerSrc = fs.readFileSync(actionsPath, 'utf8');
     const sdkSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'preflight', 'constants.js'), 'utf8');
 
-    const denylist = parseStringSet(indexerSrc, 'FEE_QUOTE_DENYLIST', 'xchain-indexer/src/actions.js');
-    const staticSet = parseStringSet(indexerSrc, 'FEE_QUOTE_STATIC', 'xchain-indexer/src/actions.js');
+    const denylist = parseStringSet(indexerSrc, 'FEE_QUOTE_DENYLIST', 'xchain-indexer/src/actions/index.js');
+    const staticSet = parseStringSet(indexerSrc, 'FEE_QUOTE_STATIC', 'xchain-indexer/src/actions/index.js');
     const tier1 = parseStringSet(sdkSrc, 'TIER1_DENYLIST', 'src/preflight/constants.js');
-    const exempt = parseStringSet(indexerSrc, 'FEE_QUOTE_EXEMPT', 'xchain-indexer/src/actions.js');
+    const exempt = parseStringSet(indexerSrc, 'FEE_QUOTE_EXEMPT', 'xchain-indexer/src/actions/index.js');
     const feeCharging = parseStringSet(sdkSrc, 'FEE_CHARGING_ACTIONS', 'src/preflight/constants.js');
 
     let failed = 0;
@@ -408,7 +421,7 @@ function checkRegexMirrors(indexerRoot) {
 
 /* Indexer LIST constants this SDK vendors, compared ORDER INCLUDED.
  *
- * RESERVED_FUTURE_ROOTS lives in xchain-indexer/src/reservedRoots.js, which no mapped hash
+ * RESERVED_FUTURE_ROOTS lives in xchain-indexer/src/consensus/reservedRoots.js, which no mapped hash
  * row can cover (every row carries a literal src/actions/ prefix) and which issue.js reads
  * by symbol, so the handler's hash does not move when a root is added or dropped. That is
  * the MAX_REFILLS blind spot one file further out, and it matters more here: the SDK's
@@ -426,7 +439,7 @@ function checkRegexMirrors(indexerRoot) {
 const LIST_MIRRORS = [
     {
         name: 'RESERVED_FUTURE_ROOTS',
-        indexerFile: 'src/reservedRoots.js',
+        indexerFile: 'src/consensus/reservedRoots.js',
         why: 'src/preflight/checks/issue.js refuses a new top-level ISSUE against this list',
     },
 ];

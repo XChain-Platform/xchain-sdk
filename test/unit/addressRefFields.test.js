@@ -16,7 +16,7 @@ const INDEXER_ROOT = [
     process.env.XCHAIN_INDEXER_DIR,
     path.join(__dirname, '..', '..', '..', 'xchain-indexer'),
 ].filter(Boolean)[0];
-const INDEXER_TWIN = path.join(INDEXER_ROOT, 'src', 'addressRefFields.js');
+const INDEXER_TWIN = path.join(INDEXER_ROOT, 'src', 'consensus', 'addressRefFields.js');
 
 // A parity guard must never silently pass by skipping. Absent sibling: skip, so a
 // standalone clone stays green. Absent sibling on the venue that REQUIRES one
@@ -106,7 +106,7 @@ describe('addressRefFields', function () {
     /* The consensus twin, bound from THIS side of the seam.
      *
      * src/addressRefFields.js is carried byte-identically with
-     * xchain-indexer/src/addressRefFields.js, and its own header says so. A byte-identity
+     * xchain-indexer/src/consensus/addressRefFields.js, and its own header says so. A byte-identity
      * assertion held only by the indexer's suite is not enough: an edit made HERE then
      * passes `npm run ci`, bin/ci-full.sh and the drift-guards job green and surfaces
      * only on the indexer's venue - while src/ is in the publish allowlist, so a
@@ -121,7 +121,7 @@ describe('addressRefFields', function () {
                 fs.readFileSync(SDK_TWIN, 'utf8'),
                 fs.readFileSync(INDEXER_TWIN, 'utf8'),
                 'CONSENSUS TWIN DRIFT: xchain-sdk/src/addressRefFields.js and '
-                + 'xchain-indexer/src/addressRefFields.js have diverged. They define the wire '
+                + 'xchain-indexer/src/consensus/addressRefFields.js have diverged. They define the wire '
                 + '^<id> reference surface, and the SDK-compactable set must stay a subset of '
                 + 'what the indexer assigns, so adding or removing a field is a wire-format '
                 + 'change: reconcile the two deliberately, never by re-syncing one onto the other.'

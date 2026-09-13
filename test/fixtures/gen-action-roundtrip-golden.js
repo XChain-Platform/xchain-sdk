@@ -94,15 +94,28 @@ function buildIndexerParse() {
     const ACTIONS_DIR = path.join(IDX_ROOT, 'src', 'actions');
     const STUB = { config: {}, decoderDb: null, indexerDb: null, util: null, mapper: null };
 
+    // A handler is either src/actions/<name>.js or, since the M3 feature-directory pass,
+    // src/actions/<name>/index.js. A flat *.js readdir alone would drop every directory
+    // handler and regenerate a golden file missing their formats, so both shapes are
+    // resolved. src/actions/index.js is the ACTION LOADER rather than a handler.
     const FORMATS = {};
-    for (const file of fs.readdirSync(ACTIONS_DIR)) {
-        if (!file.endsWith('.js') || file === 'README.md') continue;
+    for (const entry of fs.readdirSync(ACTIONS_DIR, { withFileTypes: true })) {
+        let action, modulePath;
+        if (entry.isDirectory()) {
+            action = entry.name;
+            modulePath = path.join(ACTIONS_DIR, entry.name, 'index.js');
+            if (!fs.existsSync(modulePath)) continue;
+        } else {
+            if (!entry.name.endsWith('.js') || entry.name === 'index.js') continue;
+            action = entry.name.replace(/\.js$/, '');
+            modulePath = path.join(ACTIONS_DIR, entry.name);
+        }
         let Handler, inst;
-        try { Handler = require(path.join(ACTIONS_DIR, file)); } catch (_) { continue; }
+        try { Handler = require(modulePath); } catch (_) { continue; }
         if (typeof Handler !== 'function') continue;
         try { inst = new Handler(STUB); } catch (_) { continue; }
         if (inst && inst.formats && typeof inst.formats === 'object' && Object.keys(inst.formats).length)
-            FORMATS[file.replace(/\.js$/, '')] = inst.formats;
+            FORMATS[action] = inst.formats;
     }
 
     const util = new IdxUtility();
