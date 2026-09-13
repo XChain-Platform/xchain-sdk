@@ -10,7 +10,7 @@
 
 // ContractUtils.parseAbi (spec: xchain-documentation/protocol/Contract_ABI.md).
 // The fixture strings are duplicated verbatim from the explorer suite
-// (xchain-explorer/test/unit/contract-introspect.test.js) so the two
+// (xchain-explorer/test/unit/contract_introspect.test.js) so the two
 // hand-synced parser copies are tested against identical inputs.
 
 const assert = require('assert');
