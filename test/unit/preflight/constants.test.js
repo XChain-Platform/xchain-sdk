@@ -295,9 +295,9 @@ describe('pre-flight constants + registry', function () {
 
         /* The regex-mirror seam, which no mapped hash can cover either.
          *
-         * CANONICAL_CARET_ID is declared in xchain-indexer/src/db.js, and the map's rows
-         * are `src/actions/*.js` only, so before this leg every pinned hash could stay
-         * green while the rule the SDK judges `^<id>` references against moved underneath
+         * CANONICAL_CARET_ID is declared in xchain-indexer/src/db/shared.js, and the map's
+         * rows are `src/actions/*.js` only, so without this leg every pinned hash stays
+         * green while the rule the SDK judges `^<id>` references against moves underneath
          * it. Driven against SYNTHETIC indexer fixtures for the same reason the seams
          * above are: the live sibling is a moving target.
          */
@@ -307,10 +307,14 @@ describe('pre-flight constants + registry', function () {
             const { checkRegexMirrors } = require('../../../bin/check-preflight-drift.js');
 
             let root;
-            function fakeIndexerDb(body) {
+            // The path is spelled out rather than read back from REGEX_MIRRORS: pinning
+            // the fixture to the table would make every case pass whatever the table
+            // said, which is the one thing this leg must not do.
+            function fakeIndexerDb(body, at) {
                 root = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-gate-regex-'));
-                fs.mkdirSync(path.join(root, 'src'), { recursive: true });
-                if (body !== null) fs.writeFileSync(path.join(root, 'src', 'db.js'), body);
+                const rel = at || 'src/db/shared.js';
+                fs.mkdirSync(path.join(root, path.dirname(rel)), { recursive: true });
+                if (body !== null) fs.writeFileSync(path.join(root, rel), body);
                 return root;
             }
 
@@ -352,6 +356,16 @@ describe('pre-flight constants + registry', function () {
 
             it('fails when the indexer file declaring the rule is absent', function () {
                 expect(checkRegexMirrors(fakeIndexerDb(null))).to.equal(1);
+            });
+
+            it('fails when the rule sits at src/db.js rather than the declared path', function () {
+                // The gate follows the declared path, it does not search for the rule. An
+                // indexer whose declaration sits anywhere else is one this SDK is not
+                // pinned against, and reading that as agreement is the false-green way.
+                const live = '/' + constants.CANONICAL_CARET_ID.source + '/'
+                    + constants.CANONICAL_CARET_ID.flags;
+                expect(checkRegexMirrors(fakeIndexerDb(
+                    'const CANONICAL_CARET_ID = ' + live + ';\n', 'src/db.js'))).to.equal(1);
             });
         });
 

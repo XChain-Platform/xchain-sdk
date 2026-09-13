@@ -346,12 +346,12 @@ function checkConfigConstants(indexerRoot) {
 
 /* Indexer REGEX rules this SDK mirrors as literals.
  *
- * The same class as CONFIG_CAPS, one file further out. A rule declared in
- * xchain-indexer/src/db.js is invisible to every hash row above (the row regex carries a
- * literal src/actions/ prefix), and adding a row for db.js would not fix it: that file is
- * ~16k lines, so the row would move on nearly every unrelated indexer edit and train
- * blind re-pinning, and a hash proves "the file is unchanged" rather than "the two
- * regexes agree", which is the invariant that actually matters.
+ * The same class as CONFIG_CAPS, one file further out. CANONICAL_CARET_ID is declared in
+ * xchain-indexer/src/db/shared.js, the module the per-feature mixins under src/db/ import
+ * it from, and no hash row above can reach it: the row regex carries a literal
+ * src/actions/ prefix, so no row can name a file under src/db/ at all. A hash would also
+ * prove "the file is unchanged" rather than "the two regexes agree", which is the
+ * invariant that actually matters, so this seam pins the literal and not the file.
  *
  * Compared by VALUE - source AND flags - and fails CLOSED when either literal cannot be
  * read exactly once, the contract parseStringSet and parseIntLiteral already hold.
@@ -359,7 +359,7 @@ function checkConfigConstants(indexerRoot) {
 const REGEX_MIRRORS = [
     {
         name: 'CANONICAL_CARET_ID',
-        indexerFile: 'src/db.js',
+        indexerFile: 'src/db/shared.js',
         why: 'src/preflight/universal.js decides CARET_REF_UNRESOLVABLE on this rule',
     },
 ];
