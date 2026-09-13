@@ -23,7 +23,7 @@
 //   1. VALUE   - every copy's map equals the canonical map in xchain-documentation.
 //   2. IDENTITY- every copy is byte-identical to the sdk copy apart from the single
 //                self-referential header line that names the OTHER copies.
-// Mirrors xchain-indexer/test/unit/anchorRewardActivationParity.test.js. Skips green
+// Mirrors xchain-indexer/test/unit/anchor_reward_activation_parity.test.js. Skips green
 // when the siblings are absent (standalone deploy), unless XCHAIN_REQUIRE_SIBLINGS=1.
 
 const assert = require('assert');

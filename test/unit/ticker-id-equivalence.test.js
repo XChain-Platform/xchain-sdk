@@ -15,7 +15,7 @@
 // for every action that carries a ticker field, and that the two forms produce
 // structurally identical action strings differing ONLY in the token reference.
 // (The indexer-side proof that both resolve to the same token lives in
-// xchain-indexer/test/unit/db.queries.test.js.)
+// xchain-indexer/test/unit/db_queries.test.js.)
 
 const { expect } = require('chai');
 const { XChainSDK } = require('../../index.js');
