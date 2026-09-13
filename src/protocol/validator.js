@@ -23,6 +23,10 @@ const config  = require('../config.js');
 const FormatSelector = require('./format_selector.js');
 const { SDKValidationError, SDKContractError } = require('../utils/errors.js');
 const { ADDRESS_REF_FIELDS } = require('../addressRefFields.js');
+// Safe at the top, measured rather than assumed: nothing betting.js loads at
+// require time leads back here, so no cycle can hand this file a half-built
+// module. The decoder's parse below is the opposite case and stays in its body.
+const { BET_LIMITS } = require('../actions/betting.js');
 // BATCH limit scan (command cap + dotted-TICK child classification), shared
 // with the builder, the decoder mirror and pre-flight. See src/batchLimits.js.
 const {
@@ -1194,7 +1198,7 @@ class Validator {
     // resolve carries OUTCOME, place carries OUTCOME + AMOUNT.
     _validateBet(fields) {
         let errors = [];
-        const limits = require('../actions/betting.js').BET_LIMITS;
+        const limits = BET_LIMITS;
         const isCreate = this._isEmpty(fields.FEED_ACTION_INDEX);
 
         if (isCreate) {

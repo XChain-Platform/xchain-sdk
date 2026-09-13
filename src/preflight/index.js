@@ -42,6 +42,10 @@ const { runUniversal } = require('./universal.js');
 const { runActionChecks } = require('./checks/index.js');
 const { runTier1 } = require('./tier1.js');
 const { Coalescer } = require('./lifecycle.js');
+// Loaded here rather than inside defaultActions(): nothing the Actions class
+// loads at require time comes back to this file, so there is no cycle for a
+// lazy require to break. The INSTANCE stays lazy below; only the class moved.
+const Actions = require('../actions/index.js');
 
 // Virtual actions have no user-encodable wire FORMAT (they are settled
 // on-chain by other means) but the wallet still needs a pre-flight for
@@ -68,7 +72,6 @@ function buildVirtual(action, fields) {
 let _fallbackActions = null;
 function defaultActions() {
     if (!_fallbackActions) {
-        const Actions = require('../actions/index.js');
         _fallbackActions = new Actions({ config: {}, util: new Utility() });
     }
     return _fallbackActions;
