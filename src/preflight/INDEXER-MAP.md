@@ -70,7 +70,7 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `3353ae26`
+**Pins taken at indexer commit:** `6a8a9621`
 
 (Re-anchored 2026-09-13 by the EXPIRATION representability review of `dispenser.js`,
 `order.js` and `swap.js` below. `3353ae26` is the tree those three rows were hashed
@@ -172,7 +172,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 3353ae26..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 6a8a9621..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -210,17 +210,17 @@ found by hashing candidate blobs as above.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send.js` | `288332b9d583646e56462faf516bc762c657049cfb65ede3ae2a29d446705130` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `f5bf5d43b712cee9c27b70dfb4db7e19d334f64e6aaf5ca9e4353fd368d9f33c` |
-| `checks/mint.js` | `src/actions/mint.js` | `7e0ef940547b47700181b97f9ed64c4e9cf499b3705244ceba67c351044fa11b` |
-| `checks/issue.js` | `src/actions/issue.js` | `75a86a10b65a5de9e93590923ad0233279ca42a313a95c7b46c93dd6a6b380ec` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `ca0b1d1399a7876207253ee297086f0b46d22e9191817d3da8ce88f910eff298` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `c349a43c1181026ca03a69d1960fd4cf1542fa8f9e1e1090c53959342d366372` |
-| `checks/trading.js` (ORDER) | `src/actions/order.js` | `3bfe764c3a9c484c3899a5170e060688e969cb5770d703ac46568d2275a86ae5` |
-| `checks/trading.js` (SWAP) | `src/actions/swap.js` | `927a277ef40d197061e0a5ac1ebcb5dffee493d86f05773dd7b9b7177e253625` |
-| `checks/airdrop.js` | `src/actions/airdrop.js` | `cafa9417a86ae310b2c7f89534210c1b1fb08dc25115ed4e4d7d0ce6da858f59` |
-| `checks/dividend.js` | `src/actions/dividend.js` | `6d13a64a82686a85d1967b56e9b2d80cffb864234e11af5f7699ca236bf3d4e4` |
-| `checks/batch.js` | `src/actions/batch.js` | `2bb1b542d584bcea2f015c3f2421099666b31904b31e88e685f32c6021f66195` |
+| `checks/send.js` (SEND) | `src/actions/send.js` | `22efd8bf4845c2c8e3ef860009a1411c00ad63bc2dd84d50c472eea9eb85490f` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `0b4c889051f64c9d6b358da4719473c21fe61e0defe5334151dbef28f841dedc` |
+| `checks/mint.js` | `src/actions/mint.js` | `9da462902a2807387e0f230693dd227ad4aae1a8e9058b16dccddcf55d566346` |
+| `checks/issue.js` | `src/actions/issue.js` | `7c9ba4295a697d318527d5dcd32b74778a25ef4a9ab7b17423abcd9afee9c9b6` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `9b66a86d0b389e064f131768328cfc855e36d34892e88a32b652892d069da555` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `52c8e9ff9abda3ba0b517f04c73b56036b3db1b6b796c64c1a9266b96aff9328` |
+| `checks/trading.js` (ORDER) | `src/actions/order.js` | `2edfeffb23e0e84f84fcced56753fa77d2eef19df34c1323c46ed03de6f701d5` |
+| `checks/trading.js` (SWAP) | `src/actions/swap.js` | `9cbf5c44a18ca8b1c87f2871c84b963b81de6922549674a34afc246f52d49d18` |
+| `checks/airdrop.js` | `src/actions/airdrop.js` | `49f1b4982a3010904145b98a66ff57cf4c685b73a1ca3c430125c555414e5406` |
+| `checks/dividend.js` | `src/actions/dividend.js` | `41fc97779f62e2695d3e42927f059d56933ab943252a352c8e9e2441b7e2b02a` |
+| `checks/batch.js` | `src/actions/batch.js` | `212fcc1380d82d90eb443b131a3386c0dd7eb01992b5312af8eff2f431cee0a4` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
