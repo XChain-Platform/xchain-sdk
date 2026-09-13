@@ -112,6 +112,19 @@ const REPORT_SCHEMA_VERSION = 1;
 // change to it, by value.
 const MAX_REFILLS = 5;
 
+// Largest EXPIRATION the chain can store: the BIGINT UNSIGNED ceiling, byte-for-byte
+// config['INTEGER_FIELDS']['EXPIRATION'] in xchain-indexer/src/config.js (U64_MAX).
+// A decimal digit STRING, never a number: 18446744073709551615 does not survive a
+// double, so a Number literal here would compare one short of the real ceiling and
+// call the largest storable expiration invalid.
+//
+// The handlers that read it (src/actions/{order,swap,dispenser}.js) refuse an
+// EXPIRATION outside [0, this] as `invalid: EXPIRATION (format)` rather than
+// normalizing it to NULL, which is what makes it a client-checkable rule; the
+// mapped hashes of those three handlers cover the rejection, and this constant is
+// the value they reject against.
+const EXPIRATION_MAX = '18446744073709551615';
+
 // Canonical `^<id>` address-reference id, byte-for-byte the indexer's
 // CANONICAL_CARET_ID (xchain-indexer src/db.js). Anything else - `^0`, `^007`,
 // `^0x10`, `^abc`, a bare `^` - cannot resolve on ANY node, so at/after the
@@ -329,6 +342,7 @@ module.exports = {
     ENCODING_LIMITS,
     MAX_ACTION_DATA_LENGTH,
     MAX_REFILLS,
+    EXPIRATION_MAX,
     CANONICAL_CARET_ID,
     FINDING_CODES,
     TIER2_ERROR_CAPABLE,

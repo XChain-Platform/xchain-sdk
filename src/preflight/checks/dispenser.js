@@ -26,7 +26,7 @@
 
 'use strict';
 
-const { FINDING_CODES, MAX_REFILLS } = require('../constants.js');
+const { FINDING_CODES, MAX_REFILLS, EXPIRATION_MAX } = require('../constants.js');
 const numeric = require('../numeric.js');
 const { resolveDispenserState, resolveGiveRemaining } = require('../resolvers.js');
 const { getCoinConfig } = require('../../coins/index.js');
@@ -93,7 +93,26 @@ function noteOracleFee(ctx, oracleAddress) {
         'the oracle usage fee is an output-level rule; the wallet checks it at compose time');
 }
 
+// The EXPIRATION representability bound, mirrored from the create and edit paths
+// of xchain-indexer src/actions/dispenser.js: a value outside [0, EXPIRATION_MAX]
+// is `invalid: EXPIRATION (format)` rather than an expiration normalized to NULL,
+// which would be a dispenser that never closes. Same rule, same error severity
+// and the same reasoning as the ORDER/SWAP copy in checks/trading.js, including
+// why it runs on every format that carries the field rather than on the create
+// alone.
+function checkExpirationRange(ctx) {
+    const expiration = ctx.field('EXPIRATION');
+    if (expiration === '') return;
+    ctx.markRun(FINDING_CODES.VALIDATOR_SEMANTICS);
+    if (!numeric.exceedsUnsignedColumn(expiration, EXPIRATION_MAX)) return;
+    ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'error',
+        `EXPIRATION (${expiration}) is outside the range the chain can store (0 to ${EXPIRATION_MAX}); `
+        + 'the indexer rejects this dispenser as invalid: EXPIRATION (format).',
+        { field: 'EXPIRATION', value: expiration, constraint: { min: '0', max: EXPIRATION_MAX } });
+}
+
 async function checkDispenser(ctx) {
+    checkExpirationRange(ctx);
     const version = String(ctx.parsed.version);
     if (version === '0') {
         // Open: flat hasBalance(GIVE_ESCROW), skipped when

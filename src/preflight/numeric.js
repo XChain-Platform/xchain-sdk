@@ -43,6 +43,33 @@ function gt(a, b) { return bn(a).gt(bn(b)); }
 
 function isPositive(v) { return bn(v).gt(bn(0)); }
 
+// Whether an integer wire value is PROVABLY outside the unsigned range [0, max]
+// the column storing it can hold. Byte-for-byte the indexer's
+// exceedsUnsignedColumn (xchain-indexer/src/utility.js), including the part that
+// looks like a defect and is not: it answers FALSE for anything it cannot prove
+// (a spelling neither BigInt nor Number can read), so a value the chain accepts
+// today keeps its current verdict and this can never be stricter than consensus.
+//
+// Plain integer literals compare as BigInt because Number() loses precision above
+// 2^53: through a double, 18446744073709551616 equals the u64 ceiling and the
+// first unstorable value would read as storable. `max` is therefore a decimal
+// digit STRING (constants.js), never a number.
+//
+// The non-literal branch is the one that catches '1e30': isInteger accepts it
+// (it IS an integer-valued double) and the digits regex does not, so the
+// comparison falls through to the double, which is exact enough three orders of
+// magnitude past the ceiling.
+function exceedsUnsignedColumn(value, max) {
+    if (value === null || value === undefined) return false;
+    const raw = String(value).trim();
+    if (/^[+-]?[0-9]+$/.test(raw)) {
+        const n = BigInt(raw);
+        return (n < 0n || n > BigInt(max));
+    }
+    const approx = Number(raw);
+    return (Number.isFinite(approx) && (approx < 0 || approx > Number(max)));
+}
+
 function add(a, b) { return mathjs.format(mathjs.add(bn(a), bn(b)), { notation: 'fixed' }); }
 
 function sub(a, b) { return mathjs.format(mathjs.subtract(bn(a), bn(b)), { notation: 'fixed' }); }
@@ -95,4 +122,4 @@ function isValidAmountFormat(decimals, amount) {
     return util.isValidAmountFormat(decimals, amount);
 }
 
-module.exports = { gte, gt, isPositive, add, sub, mulFloor, isValidAmountFormat };
+module.exports = { gte, gt, isPositive, add, sub, mulFloor, isValidAmountFormat, exceedsUnsignedColumn };

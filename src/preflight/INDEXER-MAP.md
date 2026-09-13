@@ -70,9 +70,23 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `97e7ae1f`
+**Pins taken at indexer commit:** `3353ae26`
 
-(Re-anchored 2026-09-12 by the bridge-landing review of `issue.js` and
+(Re-anchored 2026-09-13 by the EXPIRATION representability review of `dispenser.js`,
+`order.js` and `swap.js` below. `3353ae26` is the tree those three rows were hashed
+from; the bound itself arrives four commits earlier at `c0752359`, and nothing under
+`src/actions/` moves between the two, so a reviewer may diff from either and see the
+same handlers. The eight unchanged rows are plain HEAD hashes of this tree as well,
+which the gate confirms by exiting 0 against it.
+
+READ THIS BEFORE TREATING A RED ROW AS DRIFT: at the time of the re-anchor
+`3353ae26` had not been pushed, so a checkout at `origin/develop` carries neither it
+nor the three new handler hashes and reports all three rows drifted. That is the
+missing indexer commit, not drift, and the answer is the paragraph above this one,
+never a re-pin back. The previous anchor `97e7ae1f` is `origin/develop` and stays
+reachable; the three rows are the only ones that move off it.
+
+Earlier note. Re-anchored 2026-09-12 by the bridge-landing review of `issue.js` and
 `destroy.js` below. `97e7ae1f` is the indexer commit that lands the XBRIDGE handler
 and the bridge's ISSUE and DESTROY rules; a reviewer diffing `97e7ae1f..HEAD` sees
 only what moves after this pin. The other six files under `src/actions/` that move
@@ -158,7 +172,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 97e7ae1f..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 3353ae26..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -200,10 +214,10 @@ found by hashing candidate blobs as above.
 | `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `f5bf5d43b712cee9c27b70dfb4db7e19d334f64e6aaf5ca9e4353fd368d9f33c` |
 | `checks/mint.js` | `src/actions/mint.js` | `7e0ef940547b47700181b97f9ed64c4e9cf499b3705244ceba67c351044fa11b` |
 | `checks/issue.js` | `src/actions/issue.js` | `75a86a10b65a5de9e93590923ad0233279ca42a313a95c7b46c93dd6a6b380ec` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `22634d973dbffe3d000fcdc2fd3d01f2c9e5f28eb1c2e4ad957e6a043db11f4a` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `ca0b1d1399a7876207253ee297086f0b46d22e9191817d3da8ce88f910eff298` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `c349a43c1181026ca03a69d1960fd4cf1542fa8f9e1e1090c53959342d366372` |
-| `checks/trading.js` (ORDER) | `src/actions/order.js` | `870a0a5f687a79bd6e323903fc95151a94abdeaf1c43dd876910c3d8b030d8e4` |
-| `checks/trading.js` (SWAP) | `src/actions/swap.js` | `1d9493a28d1e54e1cb3961a8d5723064e728271e599ae76951174f9f5c5b2331` |
+| `checks/trading.js` (ORDER) | `src/actions/order.js` | `3bfe764c3a9c484c3899a5170e060688e969cb5770d703ac46568d2275a86ae5` |
+| `checks/trading.js` (SWAP) | `src/actions/swap.js` | `927a277ef40d197061e0a5ac1ebcb5dffee493d86f05773dd7b9b7177e253625` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `cafa9417a86ae310b2c7f89534210c1b1fb08dc25115ed4e4d7d0ce6da858f59` |
 | `checks/dividend.js` | `src/actions/dividend.js` | `6d13a64a82686a85d1967b56e9b2d80cffb864234e11af5f7699ca236bf3d4e4` |
 | `checks/batch.js` | `src/actions/batch.js` | `2bb1b542d584bcea2f015c3f2421099666b31904b31e88e685f32c6021f66195` |
@@ -215,6 +229,64 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-13 - `dispenser.js` + `order.js` + `swap.js`, the EXPIRATION representability bound
+
+Baseline pin for all three rows was the pushed `origin/develop` blob (`22634d97`,
+`870a0a5f`, `1d9493a2`); the new pins are `ca0b1d13`, `3bfe764c` and `927a2773`.
+Range read: `git -C ../xchain-indexer diff origin/develop..HEAD -- src/actions/dispenser.js
+src/actions/order.js src/actions/swap.js`, which is 21 added lines and not one removed
+or changed one: the same seven-line block in each handler, plus the two things it
+reads, `exceedsUnsignedColumn` in `src/utility.js` and `config['INTEGER_FIELDS']` in
+`src/config.js`. Nothing else in the three handlers moved, so this review covers the
+whole of what the pins now carry.
+
+**The rule.** An `EXPIRATION` outside `[0, 18446744073709551615]` (the field's
+`INTEGER_FIELDS` entry, the BIGINT UNSIGNED ceiling) is `invalid: EXPIRATION (format)`.
+The block sits immediately after the existing integer-format check and before every
+format-gated rule, guarded by `isNull` alone, so it binds on the create and on the
+format-2 edit alike, and skips format 1, which carries no such field. **Direction:
+WIDENS rejection.** What it replaced was worse than a rejection rather than milder
+than one: an otherwise valid payload normalized to a NULL expiration on the way to
+storage, which is an escrow or a dispenser that never expires.
+
+**The client owed a mirror, and it is an error.** `checks/trading.js` (ORDER, SWAP)
+and `checks/dispenser.js` read `EXPIRATION` with no bound at all, so pre-flight
+answered "valid" for a payload every node now refuses. Both modules gain
+`checkExpirationRange`, raising `VALIDATOR_SEMANTICS` at severity error, which that
+code certifies as local and therefore non-overridable. Error rather than warning
+because the rule rides no activation table: unlike the dispenser-family and
+amount-representability rules this map holds at warning, its verdict is identical on
+every plane at every height, which is this map's standing test. The negative half is
+refused even by a node that predates the bound, which reads a negative expiration as
+`invalid: EXPIRATION (past)` further down the same handler; only the above-ceiling
+half is new, and the transitional window for it is one fleet roll of a value no
+honest composer produces.
+
+**Exactly as wide as the handler, and no wider.** Three deliberate non-claims:
+
+- The predicate is vendored whole into `preflight/numeric.js` as
+  `exceedsUnsignedColumn`, including the part that reads like a defect and is not:
+  it answers false for any spelling it cannot prove out of range, so a value the
+  chain accepts today keeps its verdict and the mirror cannot become stricter than
+  consensus.  
+- The ceiling is a decimal digit STRING in `preflight/constants.js`
+  (`EXPIRATION_MAX`), never a number. Through a double the largest storable
+  expiration and the first unstorable one are the same value, so a numeric literal
+  would refuse the largest legal expiration. The boundary pair is asserted in both
+  directions, and the suite pins the collapse itself so the reason cannot be
+  forgotten.  
+- A non-numeric or fractional `EXPIRATION` is left alone here. The handler refuses it
+  with the same error string one check earlier, but through `isNumeric`/`isInteger`,
+  which this block does not mirror; claiming it here would be a verdict the
+  predicate cannot prove. So is an expiration that is merely in the past: the tip it
+  is measured against is server-side, which is what the existing `EXPIRY_IN_PAST`
+  notice already says.
+
+Pinned by `test/unit/preflight/expiration_representability.test.js` (33 cases): the
+boundary pair at the predicate and through a full report, negative and zero, the
+exponent branch, the unprovable family, and every action and format that carries the
+field, create and edit, ORDER, SWAP and DISPENSER.
 
 ### 2026-09-12 (second pass) - `issue.js` re-read against the pushed `97e7ae1f`, and the caret TICK
 
