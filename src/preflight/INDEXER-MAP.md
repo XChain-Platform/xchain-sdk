@@ -70,9 +70,21 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `63f49c38`
+**Pins taken at indexer commit:** `2bd35c36`
 
-(Re-anchored 2026-09-13, second pass, by the comment-merge review of `send.js` and
+(Re-anchored 2026-09-13, third pass, by the M4 code-structure review of all eleven
+handlers below. `2bd35c36` is the pushed `origin/develop` head of xchain-indexer, which
+now carries the M3 feature-directory commits, so the four M3 rows the previous note
+describes as paired working-tree hashes are plain blobs of it. The previous anchor
+`63f49c38` is its ancestor and stays reachable. ALL ELEVEN rows are now hashes of the
+PAIRED WORKING TREE of the M4 pass rather than of this anchor: the indexer half (file
+renames, private methods losing their underscore, and `console.*` calls moved onto the
+observability logger) and this half land together, so a checkout at `2bd35c36` reports
+all eleven rows drifted, and the answer is the missing indexer commits, never a re-pin
+back. The review-log entry below records that the eleven diffs reduce to those three
+declared transformations with zero token residue.)
+
+(Earlier note. Re-anchored 2026-09-13, second pass, by the comment-merge review of `send.js` and
 `airdrop.js`. `63f49c38` is the pushed `origin/develop` head, which now carries the
 `docs(...)` commits that merged the explanation back onto rewritten comment lines;
 the previous anchor `e8ae831e` is its ancestor and stays reachable. Seven rows are
@@ -189,7 +201,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 63f49c38..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 2bd35c36..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -227,17 +239,17 @@ found by hashing candidate blobs as above.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send.js` | `efa3cfb5837513ca231adc686e140138c536cf8018a8c171ecfd998af593ab0a` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `0b4c889051f64c9d6b358da4719473c21fe61e0defe5334151dbef28f841dedc` |
-| `checks/mint.js` | `src/actions/mint.js` | `9da462902a2807387e0f230693dd227ad4aae1a8e9058b16dccddcf55d566346` |
-| `checks/issue.js` | `src/actions/issue.js` | `99192fbf982b61a649df8db60579bbc3ed5a96bfcbb9be0bfbf5bbcca07ae785` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `3cd1dc72cb6944384092884955015a7c0a12f7a87e795b93dc9f906621aaf3ac` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `b3a784ab608b14f8ac2053e692a67704fba48c018ecd1eae2ee6eadc49e0d4a2` |
-| `checks/trading.js` (ORDER) | `src/actions/order.js` | `2edfeffb23e0e84f84fcced56753fa77d2eef19df34c1323c46ed03de6f701d5` |
-| `checks/trading.js` (SWAP) | `src/actions/swap.js` | `9cbf5c44a18ca8b1c87f2871c84b963b81de6922549674a34afc246f52d49d18` |
-| `checks/airdrop.js` | `src/actions/airdrop.js` | `6421772689b547a577d8b4053eb5e2d78a9fc8186d07a10eb6cc6a6398a5fac9` |
-| `checks/dividend.js` | `src/actions/dividend.js` | `41fc97779f62e2695d3e42927f059d56933ab943252a352c8e9e2441b7e2b02a` |
-| `checks/batch.js` | `src/actions/batch.js` | `bd8a0885001bfa952ce941f909045164c8a57f901b6921b889f05256530d4ed2` |
+| `checks/send.js` (SEND) | `src/actions/send.js` | `2e49cb3250a726f8628838773940a435d11f55cd3cd347313fb050b454ae0d2a` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `0be984876a9f98b7ce8b50ee9305c9d92cbad9e6d5bae8130b49019f19313ecc` |
+| `checks/mint.js` | `src/actions/mint.js` | `4021fa16abe8952de98929fe0b632a11d56346a12911d79e59dc0e044a18ca59` |
+| `checks/issue.js` | `src/actions/issue.js` | `8c2913f3e2bd616abcdbcbb1d67037b0d06f31f4c9a6985fae587ea174d165ba` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `6d0a9599b884f760d3a2175d8d1f7f62cd349e3c70c1d56b8cfe39a3d3d6f0d7` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `d72fe8c83b81b4ce12b1c90851657e7f3610658c5acdeca3b24ded451bc35916` |
+| `checks/trading.js` (ORDER) | `src/actions/order.js` | `d87d568a808a0da05c5da4bdab7d602d04533c85151bd47b2731d55f60d8a740` |
+| `checks/trading.js` (SWAP) | `src/actions/swap.js` | `ff297dbe7f2fbe6424b6ea61fd463b9ec9847de7157500345ca1f0a2be2dd398` |
+| `checks/airdrop.js` | `src/actions/airdrop.js` | `ef52e3900ae20a64a0653f3a4bf775692b1cd73d5c9c9cf82840b2b3926bd4c9` |
+| `checks/dividend.js` | `src/actions/dividend.js` | `3405fa19e629bab98b5b3c33fd0128e3e6873f551a3f722fef55197e3be22f57` |
+| `checks/batch.js` | `src/actions/batch.js` | `14efa63c75f94b8db0503e390b970b3aba7271a22ddb1a65fb9bbaa46f402de2` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -246,6 +258,54 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-13 (third pass) - all eleven handlers, the M4 code-structure pass
+
+Baseline pin for every row was the `2bd35c36` blob (`efa3cfb5`, `0b4c8890`, `9da46290`,
+`99192fbf`, `3cd1dc72`, `b3a784ab`, `2edfeffb`, `9cbf5c44`, `64217726`, `41fc9777`,
+`bd8a0885`); the new pins, in table order, are `2e49cb32`, `0be98487`, `4021fa16`,
+`8c2913f3`, `6d0a9599`, `d72fe8c8`, `d87d568a`, `ff297dbe`, `ef52e390`, `3405fa19` and
+`14efa63c`, hashed from the M4 indexer tree at `c6242000` with its handlers clean, and unchanged at
+`6ee8615c`, whose one commit touches no mapped handler. Range
+read: `git -C ../xchain-indexer diff origin/develop..HEAD -- src/actions/` restricted to
+the eleven mapped files, with `origin/develop` at `2bd35c36` (spelled by name so the gate's
+anchor-consistency check still finds exactly one review command, the one under **Pins
+taken at indexer commit**). 38 lines added and 26 removed across the eleven, from five
+commits: the file renames, the method renames, the logger rewrite, a test-file rename that
+reached a comment, and a comment merge.
+
+**What moved: three declared mechanical transformations, nothing else.** (1) A relative
+`require` re-aimed at a renamed module: `dispenser.js` and `dispense.js` now read
+`../chain/dispenser_divergence_metrics.js` for `../chain/dispenserDivergenceMetrics.js`.
+(2) A private method losing its underscore: `dispenser.js` declares and calls
+`logStaleFreshness` for `_logStaleFreshness`, a name no other file calls. (3) Every
+`console.*` call rewritten onto the observability logger (`console.log(` becomes
+`getLogger().info(` with the message text unchanged; 19 sites: five in `dispenser.js`,
+three each in `order.js` and `swap.js`, one in each of the other eight), plus the one
+`const { getLogger } = require('../observability/index.js');` import the rewrite inserts
+per file. Every other changed line is inside a comment (`batch.js` names
+`setActionParamHandler` and a snake_case test file; `swap.js` gains one comment line). No
+validity rule, no threshold, no field, no format version and no error string changed on
+any of the eleven.
+
+Machine-verified, because a rename and a logging rewrite are exactly where a real change
+could hide. Each handler's acorn token stream (comments and whitespace excluded, token
+values compared as well as types) was taken at `2bd35c36`, normalised by those three
+transformations as the M4 codemods' own maps declare them (the rename-files plan, the
+rename-methods `renamed` list, and the console-to-logger level map with its per-file site
+counts, which had to match) and by nothing else, then compared with the M4 tip. Residue is
+ZERO on all eleven: send 2778 tokens, destroy 1522, mint 1844, issue 5769, dispenser
+4745, dispense 2720, order 3522, swap 3252, airdrop 2309, dividend 1797, batch 2986, each
+pair hashing to one value. The comparator was falsified first: flipping `packs.length > 0`
+to `>=` in a scratch copy of the new `send.js` and adding a space inside the
+`'invalid: VERSION (unknown)'` error string in `dispenser.js` each reported exactly one
+residue token naming that operator or string, and restoring one un-rewritten
+`console.log` reported 306, so a zero is evidence and not a tool that cannot say no.
+
+**Direction: NEITHER, no admission boundary moves.** NO CLIENT CHECK MOVES. The logger
+calls are the status lines each handler prints after its verdict is already decided, and
+the renamed method is the log-only freshness diagnostic; neither is an input to validity.
+The refresh exists only so the hash rows follow the handlers to their new bytes.
 
 ### 2026-09-13 (second pass) - `send.js` + `airdrop.js`, the comment-merge commits
 
