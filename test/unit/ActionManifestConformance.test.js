@@ -150,12 +150,23 @@ describe('ACTION manifest conformance: sdk userEncodable set @regression', funct
             }
         });
 
+        // A handler is either a flat module or a feature directory with an
+        // index.js. Both are one handler to the indexer's own loader, so the audit
+        // has to resolve both or a moved handler reads as an action the indexer
+        // cannot process at all, which is the opposite of what the move did.
+        function handlerFile(action) {
+            const base = path.join(ACTIONS_DIR, action.toLowerCase());
+            for (const candidate of [base + '.js', path.join(base, 'index.js')])
+                if (fs.existsSync(candidate)) return candidate;
+            return null;
+        }
+
         it('every userEncodableVersions entry is a FORMAT the indexer parses', function () {
             const unparsable = {};
             const unmapped   = [];
             for (const action of manifestSlice('userEncodable')) {
-                const file = path.join(ACTIONS_DIR, action.toLowerCase() + '.js');
-                if (!fs.existsSync(file)) { unmapped.push(action); continue; }
+                const file = handlerFile(action);
+                if (!file) { unmapped.push(action); continue; }
                 const src = fs.readFileSync(file, 'utf8');
                 const declared = new Set([...src.matchAll(/this\.formats\[(\d+)\]/g)].map(m => Number(m[1])));
                 const gap = manifestVersions(action).filter(v => !declared.has(v));
