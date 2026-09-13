@@ -1,0 +1,34 @@
+{
+  "repo": "xchain-sdk",
+  "rev": "957d9490eb59f7a40ce13c66a9356733b5217100",
+  "sha256": {
+    "twinsCanonicalElsewhere": {
+      "src/merkle.js": "f5f6e2a2329118d9c20170ac156a730511096aacb57e3f9b9719ea774a1a10bc",
+      "src/equivocation_header.js": "22ab002669fb11bde53e3f8178625093ab623992a72f8c84528dc5debdd38f64",
+      "src/stake_weighted_quorum.js": "1f8dd1d77eecc13af02b943c569332a901ea28d504a7c4b9028b9da4fa4f2800",
+      "src/snapshot_reorg_buffer.js": "66bca8b5c9f7643a96bdb43966a8411afaaa5dedd8353b797080b35f958027ad",
+      "src/state_subtree_activation.js": "fd480996a1c082f7c4024187eb9d05d7e99d8fada1816d7a6a5d978c6e10aa72",
+      "src/checkpoint_commitment_activation.js": "c0d98b243f1cae170e2fb2f6316a7c628a9ff73c6e1ea6ae9a21592d9bbbe6cb",
+      "src/addressRefFields.js": "24b8aef78d7048ca02c87c326f2925b539bc844cfd1908c6bcef43e0584f4fdd",
+      "src/checkpoint.js": "0b0e80f1372ef59fb6c8e7ec00a1f66d5e88ddca0a12584cadd087c1db595117",
+      "src/contract/abi-core.js": "8222b193b5e65da7130af0bb589ff38d069f3a088f0d9f901826ffb18a3e9294",
+      "test/fixtures/roundtrip-conformance.json": "d9963ac7c35bdcfab99595fec040d7791d73119cb62fef20db136f8ea56236ed",
+      "test/fixtures/action-manifest.json": "93ac85b4d76f078951a2e95eb3ca303f39fb9f18d0fb91b1ae16693716bef72f",
+      "test/unit/xcall-constants-cross-repo.test.js": "baa3bd32e8626a6b177c92f001455bf6922e4ec85ddad46456f5e8a6a903df96",
+      "test/fixtures/gate-min-amount-vectors.json": "414a68df798c8eb24532abc4e0275326cc138019541a7cd4fb3b0221eef2b3c2"
+    },
+    "vmCanonicalTrio": {
+      "src/contract/lint-core.js": "720d64dc3151f4105378ce47e3c6edba61155c46677a0cb02df1c773a17ad65a",
+      "src/contract/metering.js": "834552b7f6c1a86084def6b5a0094a0626a1ca078cf87208a94b01e532a3f101",
+      "src/contract/stripped-globals.js": "363aeedba1afd6e9882d9a21ab01336a3acd05b5b495928ea352084bbd75e7e9"
+    },
+    "hubCanonicalCoins": {
+      "src/coins/BTC.js": "900d82359d27269ebb775a207e84cac7ac0702f57f07c0239d5406f2a0ec6c90",
+      "src/coins/DOGE.js": "a0952d619edec50c09d0cbac90023cba2e8e75f0fa98b650e2ee1f4eadd7540b",
+      "src/coins/LTC.js": "c227025a7b1e8d70f5165f6065cd2894161abd4966814c8f7b0f462e036474c9",
+      "src/coins/consensus_pin.js": "f41142b6b3c9e3f1c1d491b9737fee5e6fd988d700bd96f0d200f7bd0b301ae7",
+      "src/coins/index.js": "af301d7ba0a0456db6a19f0ea07584b3e136293ed4e040e11e82b9bf31ace8e1"
+    }
+  },
+  "fileCount": 21
+}
