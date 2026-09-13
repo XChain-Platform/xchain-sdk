@@ -590,12 +590,14 @@ class XChainSDK {
     }
 
     _requireExplorer() {
+        // Refuse to go further without an explorer: every read of chain state goes through it.
         if (!this.explorer)
             throw new SDKConfigError('EXPLORER_NOT_CONFIGURED', 'Explorer not configured. Provide network + explorerUrl, or use hub discovery via init().');
         return this.explorer;
     }
 
     _requireEncoder() {
+        // Refuse to go further without an encoder: it is what turns an action into a transaction.
         if (!this.encoder)
             throw new SDKConfigError('ENCODER_NOT_CONFIGURED', 'Encoder not configured. Provide encoderUrl, or use hub discovery via init().');
         return this.encoder;
@@ -750,6 +752,7 @@ class XChainSDK {
     scaffold(name) {
         const b64 = (CONTRACT_SOURCES.templates && CONTRACT_SOURCES.templates[name]) ||
                     (CONTRACT_SOURCES.patterns && CONTRACT_SOURCES.patterns[name]);
+        // An unknown template name is an error, and the message lists the names that do exist.
         if (!b64) {
             const avail = this.listTemplates();
             throw new SDKContractError('TEMPLATE_NOT_FOUND',
@@ -1054,8 +1057,10 @@ class XChainSDK {
         let nativeFeeQuote = null;
         if (encoderOpts.payFeeInNativeCoin) {
             nativeFeeQuote = await this.quoteNativeFee(actionData, { source: encoderOpts.source || encoderOpts.change });
+            // Paying the fee in the native coin only works where the network offers it for this action.
             if (!nativeFeeQuote || nativeFeeQuote.supported === false)
                 throw new SDKConfigError('NATIVE_FEE_UNSUPPORTED', 'Native-coin fee not available for this action: ' + ((nativeFeeQuote && nativeFeeQuote.error) || 'unsupported'), { quote: nativeFeeQuote });
+            // Offered is not enough: the quote also has to come back with a price we can actually pay.
             if (nativeFeeQuote.valid === false)
                 throw new SDKConfigError('NATIVE_FEE_INVALID', 'Native-coin fee cannot be priced: ' + (nativeFeeQuote.error || 'invalid'), { quote: nativeFeeQuote });
             if (Number(nativeFeeQuote.requiredFeeSats) > 0)
@@ -1217,6 +1222,7 @@ class XChainSDK {
      */
 
     async pingHub() {
+        // No hub address was given, so there is nothing to ping.
         if (!this.hub) throw new SDKConfigError('HUB_NOT_CONFIGURED', 'Hub not configured. Provide hubUrl in SDK options.');
         return this.hub.ping();
     }
@@ -1290,6 +1296,7 @@ class XChainSDK {
     async getAllMessagesForAddress(address, opts) {
         let explorer = this._requireExplorer();
         let network = this.options.network || process.env.NETWORK;
+        // Messages are looked up per network, so without one we would not know which chain to ask.
         if (!network) throw new SDKConfigError('NETWORK_NOT_CONFIGURED', 'Network is required for cross-chain message queries.');
 
         let tier = network.split('-')[1]; // 'mainnet', 'testnet', or 'regtest'
@@ -1796,6 +1803,7 @@ class XChainSDK {
     // ignored; only local crypto decides.
     async verifyCheckpoint(blockIndex) {
         let body = await this._requireExplorer().getCheckpointVerify(blockIndex);
+        // Nothing to verify if the explorer sent no checkpoint back; fail loudly rather than report success.
         if (!body || !body.checkpoint) throw new Error('verifyCheckpoint: no checkpoint in response');
         let result = CheckpointVerifier.verifyCheckpoint(body.checkpoint, body.validators || []);
         return Object.assign({ checkpoint: body.checkpoint, snapshotAvailable: !!body.snapshot_available }, result);
@@ -1971,6 +1979,7 @@ class XChainSDK {
 
     // Ensure WebSocket client is initialized
     _requireWs() {
+        // Live updates need a WebSocket connection; without one configured, refuse.
         if (!this.ws)
             throw new SDKConfigError('WEBSOCKET_NOT_CONFIGURED', 'WebSocket not configured. Provide network + websocketUrl or explorerUrl, or use hub discovery via init().');
         return this.ws;
@@ -2221,6 +2230,7 @@ class XChainSDK {
     // Returns an unsubscribe function.
     onBetFeed(feedActionIndex, callback) {
         const index = String(feedActionIndex === null || feedActionIndex === undefined ? '' : feedActionIndex).trim();
+        // A feed is named by a plain number; anything else could never match a real feed.
         if (!CANONICAL_ACTION_INDEX.test(index))
             throw new Error('onBetFeed: feedActionIndex must be a numeric ACTION_INDEX, got ' + JSON.stringify(feedActionIndex));
 
@@ -2266,6 +2276,7 @@ class XChainSDK {
         // Lower-case, not just String(): the explorer normalizes the id at
         // subscribe time, so an upper-case id subscribes fine and receives nothing.
         const id = String(callId === null || callId === undefined ? '' : callId).trim().toLowerCase();
+        // A call id is exactly 64 hex characters; reject anything else before subscribing to nothing.
         if (!CANONICAL_CALL_ID.test(id))
             throw new Error('onXcall: callId must be a 64-character hex string, got ' + JSON.stringify(callId));
 
