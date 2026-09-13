@@ -7,7 +7,7 @@
 // stubbed explorer client and the pre-flight engine attached, so tests
 // drive Tier 1 / Tier 2 without any network.
 
-const Preflight = require('../../../src/preflight/index.js');
+const Preflight = require('../../../../src/preflight/index.js');
 
 // Build a mock explorer whose methods return canned data. `spec` maps
 // method name -> function(...args) or a value; a method returning a

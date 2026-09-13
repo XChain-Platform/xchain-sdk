@@ -349,7 +349,7 @@ function evaluatePolicy(policy, actionData, windowUsage) {
         // names its counterparty in DEST_ADDRESS / BTC_ADDRESS / ORIGIN_ADDRESS, none
         // of which is the DESTINATION field this list reads. Both halves are derived
         // from the shipped tables by the G9 conformance case in
-        // test/unit/cosignerHardening2.test.js, so this figure never needs hand-counting.
+        // test/unit/cosigner_hardening2.test.js, so this figure never needs hand-counting.
         // For every other format the destination list is
         // EMPTY and the membership loop below is vacuously satisfied - so every
         // trade, dispenser, contract-escrow, staking and native-pay action sailed

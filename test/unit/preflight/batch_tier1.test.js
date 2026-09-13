@@ -37,7 +37,7 @@ const { runTier1, normalizeSubCommands } = require('../../../src/preflight/tier1
 const { applyTier1, computeVerdict } = require('../../../src/preflight/index.js');
 const { parse } = require('../../../src/decoder/parse.js');
 const constants = require('../../../src/preflight/constants.js');
-const { mockSdk } = require('./_mock.js');
+const { mockSdk } = require('./helpers/mock.js');
 
 const FC = constants.FINDING_CODES;
 const BATCH_WIRE = 'BATCH|0|SEND|0|JDOG|1|addr;SEND|0|JDOG|2|addr2';

@@ -113,7 +113,7 @@ describe('Validator: TICK name validation (ISSUE action)', function () {
 
     // A caret-led ISSUE TICK is an id reference, not a name: it is refused as a bad
     // ID (xchain-indexer src/actions/issue.js:349, `invalid: TICK (id)`) rather than
-    // as a bad name. The full per-format contract is test/unit/issueTickRef.test.js.
+    // as a bad name. The full per-format contract is test/unit/issue_tick_ref.test.js.
     it('rejects a TICK that starts with a caret and a non-numeric id', function () {
         const errors = v.validate('ISSUE', { TICK: '^BADSTART' });
         expect(hasErrorCode(errors, 'INVALID_TICK_ID')).to.be.true;

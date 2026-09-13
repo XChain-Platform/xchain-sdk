@@ -108,7 +108,7 @@ run_tier "drift: coin consensus-pin conformance" node -e '
 sync_abi_core_check() { (cd "$SIB" && xchain-explorer/bin/sync-abi-core.sh --check); }
 run_tier "drift: contract abi-core byte-identity" sync_abi_core_check
 run_tier "drift: explorer route contract" \
-  env XCHAIN_REQUIRE_SIBLINGS=1 npx mocha test/unit/explorer-route-contract.test.js
+  env XCHAIN_REQUIRE_SIBLINGS=1 npx mocha test/unit/explorer_route_contract.test.js
 run_tier "drift: pre-flight <-> handler gate" \
   env XCHAIN_INDEXER_PATH="$SIB/xchain-indexer" node bin/check-preflight-drift.js
 

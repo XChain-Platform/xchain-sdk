@@ -353,7 +353,7 @@ class WalletSession {
     // stripped-down sdk object (the unit harnesses here, an embedding shell) has
     // nothing to run, and a deploy must not die on the absence of a client-side
     // courtesy check that only ever saves a fee. The refusal path itself is driven
-    // against a real XChainSDK in test/unit/contract-meta-preflight.test.js, so a
+    // against a real XChainSDK in test/unit/contract_meta_preflight.test.js, so a
     // renamed facade method fails there rather than silently disarming this.
     _preflightContractMeta(params, opts) {
         let sdk = this.sdk;

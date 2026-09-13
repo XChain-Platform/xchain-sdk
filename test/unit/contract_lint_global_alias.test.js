@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * test/unit/contract-lint-global-alias.test.js
+ * test/unit/contract_lint_global_alias.test.js
  *
  * LINT_GLOBAL_ALIAS behaviour through the SDK's VENDORED lint_core.
  *

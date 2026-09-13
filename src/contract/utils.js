@@ -509,7 +509,7 @@ class ContractUtils {
 module.exports = ContractUtils;
 
 // Re-export so parity/drift guards can assert this entry point rides the same
-// (validator-sourced) cap; see test/unit/protocolSizeCaps.test.js.
+// (validator-sourced) cap; see test/unit/protocol_size_caps.test.js.
 module.exports.MAX_CODE_SIZE = MAX_CODE_SIZE;
 
 // The frozen CONTRACT_MANIFEST meta strings and the client-side grammar, exported

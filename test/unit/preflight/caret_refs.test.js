@@ -10,7 +10,7 @@
 // unknowable half rather than guessing at it.
 
 const { expect } = require('chai');
-const { mockSdk } = require('./_mock.js');
+const { mockSdk } = require('./helpers/mock.js');
 const { CARET_RESOLVED_FIELDS } = require('../../../src/preflight/universal.js');
 const { ADDRESS_REF_FIELDS } = require('../../../src/addressRefFields.js');
 

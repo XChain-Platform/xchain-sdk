@@ -20,7 +20,7 @@
 // verdict is legacy-only rather than reading silence as "checked, fine".
 
 const { expect } = require('chai');
-const { mockSdk, notFound } = require('./_mock.js');
+const { mockSdk, notFound } = require('./helpers/mock.js');
 const Utility = require('../../../src/utils/utility.js');
 const numeric = require('../../../src/preflight/numeric.js');
 

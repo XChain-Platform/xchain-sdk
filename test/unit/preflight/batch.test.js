@@ -8,7 +8,7 @@
 // false-alarm on the SEND leg, because the MINT credited the balance.
 
 const { expect } = require('chai');
-const { mockSdk } = require('./_mock.js');
+const { mockSdk } = require('./helpers/mock.js');
 
 function reportFor(wire, explorerSpec, opts = {}) {
     const sdk = mockSdk({ explorerSpec: { getFeeQuote: () => ({ feeExempt: true }), ...explorerSpec } });

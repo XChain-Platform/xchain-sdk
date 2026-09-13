@@ -7,7 +7,7 @@
  *
  * Generates docs/openrpc.json (OpenRPC 1.3.2) for the SDK's standalone
  * JSON-RPC server (src/api.js, `npm run api`). METHODS below mirrors the
- * controller object; test/unit/openrpc-coverage.test.js fails on drift.
+ * controller object; test/unit/openrpc_coverage.test.js fails on drift.
  *
  * Run: node docs/openrpc.build.js
  */

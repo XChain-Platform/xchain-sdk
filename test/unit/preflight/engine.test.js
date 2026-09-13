@@ -7,7 +7,7 @@
 // tier precedence, and the severity/trust model (spec §4.1-4.3).
 
 const { expect } = require('chai');
-const { mockSdk, notFound } = require('./_mock.js');
+const { mockSdk, notFound } = require('./helpers/mock.js');
 const { SDKFormatError, SDKPreflightError } = require('../../../src/utils/errors.js');
 const { normalizeInput } = require('../../../src/preflight/index.js');
 const Actions = require('../../../src/actions/index.js');

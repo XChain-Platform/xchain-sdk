@@ -92,7 +92,7 @@ jobs:
         working-directory: xchain-sdk
         env:
           XCHAIN_REQUIRE_SIBLINGS: "1"
-        run: npx mocha test/unit/explorer-route-contract.test.js
+        run: npx mocha test/unit/explorer_route_contract.test.js
 
       # Pre-flight drift gate (confirm/decode/pre-flight spec §8.5). The Tier-2
       # checks in src/preflight/checks/ mirror validity logic that is

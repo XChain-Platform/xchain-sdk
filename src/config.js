@@ -72,7 +72,7 @@ var Config = {
             'MAX_MINT',
             // BET MIN_AMOUNT is an amount-class field at the wager tick's
             // DECIMALS, so it falls under the wire-canonicalization contract in
-            // test/unit/wire-number-canonical.test.js: without it a market with a
+            // test/unit/wire_number_canonical.test.js: without it a market with a
             // 0.00000001 minimum would put "1e-8" on the chain. The other BET
             // numerics (FEED_ACTION_INDEX, OUTCOME, DEADLINE, REFUND_WINDOW) are
             // small integers that String() never renders scientifically, so they

@@ -35,7 +35,7 @@ function hasErrorCode(errors, code) {
 }
 
 // Real addresses over a hash160 of 0x01 bytes, one per (coin, network) the
-// registry declares. Byte-identical family to test/unit/bridge-sdk.test.js's
+// registry declares. Byte-identical family to test/unit/bridge_sdk.test.js's
 // ADDR table (kept local so this file's jail does not depend on that file).
 const ADDR = {
     BTC_MAIN_P2PKH:   '16Jswqk47s9PUcyCc88MMVwzgvHPvtEpf',

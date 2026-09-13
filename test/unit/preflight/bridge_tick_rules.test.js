@@ -11,7 +11,7 @@
 // stubbed, so what is asserted is the verdict a wallet would see.
 
 const { expect } = require('chai');
-const { mockSdk, notFound } = require('./_mock.js');
+const { mockSdk, notFound } = require('./helpers/mock.js');
 const { getCoinConfig } = require('../../../src/coins/index.js');
 const constants = require('../../../src/preflight/constants.js');
 

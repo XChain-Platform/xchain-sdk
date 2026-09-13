@@ -16,7 +16,7 @@
 
 // Regression: a slow sibling load must name itself
 //
-// test/unit/action-roundtrip-golden.test.js loads the sibling xchain-indexer in
+// test/unit/action_roundtrip_golden.test.js loads the sibling xchain-indexer in
 // a `before` hook: src/utility.js plus every handler in src/actions/. That ran
 // under mocha's default 5s hook timeout, and mocha attributes a hook failure to
 // the FIRST test in the block, so a cold venue checkout produced
@@ -35,7 +35,7 @@ const fs              = require('fs');
 const path            = require('path');
 
 const SDK_ROOT     = path.join(__dirname, '..', '..');
-const GOLDEN_TEST  = path.join(SDK_ROOT, 'test', 'unit', 'action-roundtrip-golden.test.js');
+const GOLDEN_TEST  = path.join(SDK_ROOT, 'test', 'unit', 'action_roundtrip_golden.test.js');
 const MOCHA_BIN    = path.join(SDK_ROOT, 'node_modules', 'mocha', 'bin', 'mocha.js');
 const LOAD_TEST    = 'the sibling xchain-indexer parser loads within its budget';
 

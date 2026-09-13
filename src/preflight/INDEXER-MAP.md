@@ -537,9 +537,9 @@ the chain's answer is format-dependent in exactly one place:
 `VERSION` is auto-selected downstream, so the gate recovers formats 7 and 6 from the
 fields only they carry (`BRIDGE_CHAINS` / `MIN_DEPTH` / `LOCK_BRIDGE`, and the
 controller fields); anything undecidable takes the permissive branch, which is the
-safe direction. Pinned by `test/unit/issueTickRef.test.js` (21 cases, both directions
+safe direction. Pinned by `test/unit/issue_tick_ref.test.js` (21 cases, both directions
 per format) plus the two amended cases in `test/unit/validator.test.js` and the ISSUE
-cases in `test/unit/ticker-id-equivalence.test.js`. Pre-flight needed no change:
+cases in `test/unit/ticker_id_equivalence.test.js`. Pre-flight needed no change:
 `checks/issue.js` already reads the RESOLVED name for the subasset rule and already
 exempts a caret from the namespace floor. The explorer's own `getToken` must resolve
 `^<id>` for the Tier-2 row lookup to see such a token at all; that is server-side and
@@ -656,7 +656,7 @@ those fields. That is a validator change, not a map change; when it lands the
 `VALIDATOR_SEMANTICS` findings here and there will agree by construction (both call
 `isValidLockValue`).
 
-Anchor moves to `97e7ae1f`. Tests: `test/unit/preflight/bridgeTickRules.test.js`.
+Anchor moves to `97e7ae1f`. Tests: `test/unit/preflight/bridge_tick_rules.test.js`.
 
 ### 2026-09-11 (second pass) - `dispenser.js`, against indexer HEAD `62c8d7c7`
 
@@ -1086,7 +1086,7 @@ falls through to the full VM weight of 30. `commandWeights` and
 Client side, mirrored in the same change set: `src/protocol/batch_limits.js`
 `subCommandWeight` carries the identical discount through a faithful
 `formatVersion` mirror of the arbiter's derivation, and
-`test/unit/batchLimitsConformance.test.js` now drives weight vectors
+`test/unit/batch_limits_conformance.test.js` now drives weight vectors
 (defaults, VM 30, fan-out 25, the format-4 discount, and the budget
 boundary) through BOTH this mirror and the sibling handler's own
 `subCommandWeight`/`batchWeight`/`parse()`. The compose-side
@@ -1131,7 +1131,7 @@ validates a finished BATCH command string, which is the decode side of the
 split above. The weight arithmetic itself lives once, in
 `batchLimits.js` (`actionWeight`, which `subCommandWeight` now calls), so the
 compose and decode sites cannot come to weigh an action two ways. Pinned by
-`test/unit/batchBuilderCostWeight.test.js`, whose arbiter half drives the same
+`test/unit/batch_builder_cost_weight.test.js`, whose arbiter half drives the same
 vectors through the real `xchain-indexer` Batch handler.
 
 ### 2026-08-15 - nine handlers, `9d15127..58ab8e9`
@@ -1360,7 +1360,7 @@ no reading for.
   field would have shown a network approval for a batch that does nothing, and
   would additionally have demoted every Tier-2 finding on it to info. That is
   what `TIER1_SUBCOMMAND_PREFLIGHT` and the per-sub-command precedence rule in
-  `preflight/index.js` exist for; see `test/unit/preflight/batchTier1.test.js`.
+  `preflight/index.js` exist for; see `test/unit/preflight/batch_tier1.test.js`.
 
 - **`dispenser.js` - no client change, and the declared gap is unchanged.** The
   diff adds one probe-only block: when a Mode B DISPENSER's oracle fee is owed
@@ -1482,7 +1482,7 @@ did carry real change, and they are separated out below.
   `limitKeysInListOrder`) by the paired client-parity work, including the two
   divergences a string-keyed client cannot close (the caret alias, reported as
   approximate; unresolvable ticks, declared). Not taken on trust:
-  `test/unit/batchLimitsConformance.test.js` drives the REAL arbiter out of the
+  `test/unit/batch_limits_conformance.test.js` drives the REAL arbiter out of the
   sibling checkout over one shared vector set and compares classification, count,
   precedence and whole-batch verdict against the mirror, and it is green at this
   HEAD.
@@ -1546,7 +1546,7 @@ strictly stricter than consensus: the handler resolves a caret TICK on every
 ISSUE format, so the blanket refusal was blocking edits the chain accepts. The
 caret-dot rule is mirrored directly now; the intern-gating verdict stands.]**
 
-Conformance for all of the above is `test/unit/batchLimitsConformance.test.js`,
+Conformance for all of the above is `test/unit/batch_limits_conformance.test.js`,
 which drives the REAL arbiter from the sibling checkout over a shared vector set
 and compares classification, count and whole-batch verdict.
 

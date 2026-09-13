@@ -8,7 +8,7 @@
 // ground-truthing pass and the never-error invariants (false-block).
 
 const { expect } = require('chai');
-const { mockSdk, notFound } = require('./_mock.js');
+const { mockSdk, notFound } = require('./helpers/mock.js');
 const config  = require('../../../src/config.js');
 const Utility = require('../../../src/utils/utility.js');
 const Actions = require('../../../src/actions/index.js');

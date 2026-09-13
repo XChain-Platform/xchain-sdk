@@ -30,7 +30,7 @@
  * NOTE: this lives in a standalone module, NOT on src/coins/*.js, because the
  * coin modules are consensus-critical and vendored byte-identically from the
  * canonical xchain-hub/src/coins registry (enforced by
- * test/unit/coins-conformance.test.js). Adding a field there would fork the
+ * test/unit/coins_conformance.test.js). Adding a field there would fork the
  * pinned copies. If a backend component ever performs HD derivation, it should
  * consume FAMILY_SLIP44 from here rather than hand-copying the value a fourth
  * time.

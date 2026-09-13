@@ -58,7 +58,7 @@ const { ENVELOPE_MAX_PAYLOAD } = require('../protocol/constants.js');
 //
 // These carrier constants are re-declared rather than imported because the
 // arbiter is service-bound (see the file header), so they are pinned instead by
-// test/unit/cosignerRoundtripConformance.test.js, which decodes the SHARED
+// test/unit/cosigner_roundtrip_conformance.test.js, which decodes the SHARED
 // encoder->decoder roundtrip-conformance fixture through this module. If the
 // encoder/decoder ever changes the magic word, the P2SH/P2WSH tags or the
 // key/IV derivation, the regenerated fixture stops decoding here and that test

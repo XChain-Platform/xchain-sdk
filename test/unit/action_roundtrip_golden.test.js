@@ -69,7 +69,7 @@ function resolveIndexerRoot() {
 const LOAD_BUDGET_MS = Number(process.env.XCHAIN_GOLDEN_LOAD_BUDGET_MS || 30000);
 
 // Test-only knob: synchronously stall the sibling load to stand in for a cold
-// venue checkout. Used by test/regression/goldenSiblingLoadAttribution.test.js;
+// venue checkout. Used by test/regression/golden_sibling_load_attribution.test.js;
 // unset (0) everywhere else, so it costs a real run nothing.
 function stallSiblingLoadIfForced() {
     const ms = Number(process.env.XCHAIN_GOLDEN_FORCE_SLOW_LOAD_MS || 0);

@@ -32,7 +32,7 @@ const coins   = require('../coins');
 // The per-coin version bytes and bech32 HRPs are NOT hand-duplicated here the way
 // the indexer duplicates them: they are read from the hashed coin registry
 // (src/coins), which already carries pubKeyHash / scriptHash / bech32 per network
-// and is covered by the consensus pin. test/unit/address-parity.test.js asserts the
+// and is covered by the consensus pin. test/unit/address_parity.test.js asserts the
 // indexer's hand-written ADDRESS_PARAMS table still equals this registry, so a
 // one-sided edit to either is a red test rather than a silent divergence.
 const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';

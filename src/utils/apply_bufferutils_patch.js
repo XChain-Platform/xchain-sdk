@@ -37,7 +37,7 @@
  *
  * Re-sync seam (uuid:311476c7). Everything below this banner is pinned
  * byte-identical to the encoder copy's body by
- * xchain-encoder/test/unit/applyBufferutilsPatch.test.js. Only the two headers
+ * xchain-encoder/test/unit/apply_bufferutils_patch.test.js. Only the two headers
  * differ, because each names the other and its own read-side relationship.
  * Convergence runs SDK-ward: change this copy first, then copy its body to the
  * encoder, or the twin guard goes red.

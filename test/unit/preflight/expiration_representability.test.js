@@ -25,7 +25,7 @@
 // would take.
 
 const { expect } = require('chai');
-const { mockSdk } = require('./_mock.js');
+const { mockSdk } = require('./helpers/mock.js');
 const numeric = require('../../../src/preflight/numeric.js');
 const { EXPIRATION_MAX } = require('../../../src/preflight/constants.js');
 

@@ -136,7 +136,7 @@ const FRAME_ADDRESS_ARRAY_FIELD = 'destinations';
  *
  * The producer's authority is three constants in the explorer's ChangeDetector
  * (LIFECYCLE_MAP values, NON_ACTION_LIFECYCLE_TYPES, INLINE_LIFECYCLE_TYPES);
- * test/unit/address-event-coverage.test.js reconciles this list against them,
+ * test/unit/address_event_coverage.test.js reconciles this list against them,
  * so the two cannot separate again unnoticed.
  */
 // Frozen because it is exported: every onAddress subscription on the process

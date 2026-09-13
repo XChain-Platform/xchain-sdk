@@ -695,7 +695,7 @@ function evaluate() {
  *
  * The pairing is what matters. `npm run ci` must open with --soft and close with --verdict:
  * open with strict and a drift is fatal at load again; drop the close and a drift ships
- * green. test/unit/preflight/driftGateModes.test.js asserts both halves of that wiring.
+ * green. test/unit/preflight/drift_gate_modes.test.js asserts both halves of that wiring.
  */
 function main(argv, evaluateFn) {
     const args = argv || process.argv.slice(2);

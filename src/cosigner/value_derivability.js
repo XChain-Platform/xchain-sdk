@@ -27,7 +27,7 @@
  * and anything absent DENIES with POLICY_UNBOUNDED_ACTION whenever the policy
  * expresses any amount-limiting intent. Adding a format to formats.js without
  * classifying it here fails the two conformance cases in the
- * `G2: value-derivability allowlist` describe of test/unit/cosignerHardening.test.js
+ * `G2: value-derivability allowlist` describe of test/unit/cosigner_hardening.test.js
  * (they cross-check decodableFormats() against TABLE in both directions), so the
  * table cannot silently rot behind a new action.
  *

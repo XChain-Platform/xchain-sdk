@@ -6,7 +6,7 @@
 //
 // Each value is the base64-encoded UTF-8 source of a canonical xchain-contracts
 // template/pattern, embedded so sdk.scaffold() works in a browser bundle (no fs).
-// A drift guard (test/unit/template-parity.test.js) enforces byte-parity with the
+// A drift guard (test/unit/template_parity.test.js) enforces byte-parity with the
 // xchain-contracts repo.
 
 module.exports = {

@@ -101,7 +101,7 @@ describe('Ticker NAME vs TICK_ID (^N) equivalence', function () {
     // ISSUE joins the equivalence: the handler resolves a caret TICK through the same
     // getTickerId as every other ticker field, so an ISSUE naming an existing token by
     // id serializes and is accepted. A blanket refusal here would be stricter than
-    // consensus; the per-format contract is test/unit/issueTickRef.test.js.
+    // consensus; the per-format contract is test/unit/issue_tick_ref.test.js.
     it('serializes a ^id as the defining TICK of an ISSUE', function () {
         const str = sdk.actions.createAction({
             action: 'ISSUE', params: { TICK: '^1234', MAX_SUPPLY: '1000', DECIMALS: '0' }

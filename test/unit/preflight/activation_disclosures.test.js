@@ -14,7 +14,7 @@
 // no disclosure may still tell a caller mainnet is unarmed for them.
 
 const { expect } = require('chai');
-const { mockSdk } = require('./_mock.js');
+const { mockSdk } = require('./helpers/mock.js');
 
 const OTHER = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4';
 

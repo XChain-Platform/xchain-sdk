@@ -110,7 +110,7 @@
     "repl": "node src/repl.js",
     "build": "npx browserify index.js -s XChainSDK -t [ babelify --presets [ @babel/preset-env ] --global ] | npx uglify-js --compress --mangle -o dist/xchain_sdk.min.js",
     "build:dev": "npx browserify index.js -s XChainSDK -t [ babelify --presets [ @babel/preset-env ] --global ] -o dist/xchain_sdk.js",
-    "test:eval": "mocha --timeout 30000 --recursive 'test/eval/**/*.eval.js'"
+    "test:eval": "mocha --timeout 30000 --recursive 'test/eval/**/*.test.js'"
   },
   "engines": {
     "node": ">=22.0.0"

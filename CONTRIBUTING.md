@@ -96,7 +96,7 @@ npm run sync:templates
 and commit the resulting `src/contract/templates.js` diff alongside the
 `xchain-contracts` change, as one logical unit.
 
-**Why this is easy to miss.** The drift guard (`test/unit/template-parity.test.js`)
+**Why this is easy to miss.** The drift guard (`test/unit/template_parity.test.js`)
 only compares the embed against a canonical source when a sibling
 `xchain-contracts` checkout sits beside this repo (`.ci-siblings` declares it;
 this repo's own CI checks it out). Without that sibling present the guard

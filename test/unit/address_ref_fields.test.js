@@ -22,7 +22,7 @@ const INDEXER_TWIN = path.join(INDEXER_ROOT, 'src', 'consensus', 'addressRefFiel
 // standalone clone stays green. Absent sibling on the venue that REQUIRES one
 // (XCHAIN_REQUIRE_SIBLINGS=1, set by bin/ci-full.sh's test gate and the drift-guards
 // job): throw, so the guard cannot green-by-skip exactly where it is depended on.
-// Mirrors requireSibling in test/unit/contract-parity.test.js; deliberately not keyed
+// Mirrors requireSibling in test/unit/contract_parity.test.js; deliberately not keyed
 // on the generic CI flag, which the shared unit job sets without a sibling checkout.
 function requireSibling(ctx, absPath) {
     if (fs.existsSync(absPath)) return true;
