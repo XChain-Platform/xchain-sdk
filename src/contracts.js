@@ -19,17 +19,17 @@
  *
  * These are pure functions with no dependency on isolated-vm.
  *
- * validate() / checkFloatUsage() delegate to ./contract/lint-core.js, a
- * BYTE-IDENTICAL vendored copy of xchain-vm/src/lint-core.js, so the SDK's
+ * validate() / checkFloatUsage() delegate to ./contract/lint_core.js, a
+ * BYTE-IDENTICAL vendored copy of xchain-vm/src/lint_core.js, so the SDK's
  * pre-flight verdict matches the indexer's deploy-time validation exactly
  * (no false greens). A CI parity guard (sha256) fails the build on drift.
- * lint-core pulls acorn/acorn-walk/astring (pure JS, browser-safe; now hard
+ * lint_core pulls acorn/acorn-walk/astring (pure JS, browser-safe; now hard
  * deps), never isolated-vm.
  *
  ********************************************************************/
 
 const { SDKContractError } = require('./errors.js');
-const { lintSource, findFloatWarnings } = require('./contract/lint-core.js');
+const { lintSource, findFloatWarnings } = require('./contract/lint_core.js');
 const abiCore = require('./contract/abi-core.js');
 
 // 64KB contract source code limit. Canonical value in
@@ -71,7 +71,7 @@ function loadAcornWalk() {
  * requirement: at/after the flag day the indexer rejects a DEPLOY whose contract
  * exports no conforming `meta`. The SDK sees that BEFORE the caller pays a fee.
  *
- * SDK-LOCAL on purpose: this is a client-side mirror, never lint-core (the frozen
+ * SDK-LOCAL on purpose: this is a client-side mirror, never lint_core (the frozen
  * byte-vendored consensus set) and never an import of the xchain-vm toolkit (which
  * is not an SDK dependency and pulls isolated-vm). The toolkit carries its own copy
  * of the same algorithm; the two are kept in step by the spec, not by a require.
@@ -201,7 +201,7 @@ class ContractUtils {
     }
 
     // Pre-flight syntax/rule validation (no V8 / isolated-vm required). Runs every
-    // acorn-coverable deploy check via the vendored lint-core (deploy parity), so a
+    // acorn-coverable deploy check via the vendored lint_core (deploy parity), so a
     // valid result here means the contract clears the indexer's syntax gate too,
     // EXCEPT the V8-only step-1 compile, which can only run at deploy/CLI.
     // Returns { valid, error?, warnings? } (back-compat shape; error = first error).
@@ -223,7 +223,7 @@ class ContractUtils {
     }
 
     // Detect float literal usage in contract source. Delegates to the vendored
-    // lint-core so the warning text matches the VM / deploy path exactly.
+    // lint_core so the warning text matches the VM / deploy path exactly.
     // Returns array of warning strings.
     checkFloatUsage(sourceCode) {
         if (typeof sourceCode !== 'string') return [];
@@ -234,7 +234,7 @@ class ContractUtils {
     // surface). Acorn-only (no V8 / isolate); returns [] on unparseable source or
     // when acorn is unavailable. SDK-local on purpose: this powers a client-side
     // deploy nudge (a contract exporting `initialize` with no CONSTRUCTOR_PARAMS),
-    // so it must NOT edit the byte-identity-locked consensus lint-core. Mirrors that
+    // so it must NOT edit the byte-identity-locked consensus lint_core. Mirrors that
     // primitive's findExportsObject logic (same ES2020 pin) so the view matches.
     getExportedMethodNames(sourceCode) {
         let parser = loadAcorn();
@@ -273,7 +273,7 @@ class ContractUtils {
 
     // Static read of a contract's exported `meta` (contract identity: name,
     // description, version). Same acorn walk shape as getExportedMethodNames
-    // (ES2020, script), and the same SDK-local rule: never lint-core.
+    // (ES2020, script), and the same SDK-local rule: never lint_core.
     //
     // Returns exactly one of:
     //   { status: 'present', name, description, version, computed[], nonStringLiteral[], line }

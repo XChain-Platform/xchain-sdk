@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/contract-lint-global-alias.test.js
  *
- * LINT_GLOBAL_ALIAS behaviour through the SDK's VENDORED lint-core.
+ * LINT_GLOBAL_ALIAS behaviour through the SDK's VENDORED lint_core.
  *
  * contract-parity.test.js already pins the vendored copy byte-identical (sha256)
  * to the xchain-vm canonical, but only when the sibling checkout is present. This
@@ -38,14 +38,14 @@ const {
     findBannedWasm,
     findBannedMathCalls,
     CONSENSUS_RULES
-} = require('../../src/contract/lint-core.js');
+} = require('../../src/contract/lint_core.js');
 
 function firstConsensusError(code, opts) {
     const errs = lintSource(code, opts).errors.filter((e) => CONSENSUS_RULES.has(e.rule));
     return errs.length ? errs[0] : null;
 }
 
-describe('vendored lint-core: LINT_GLOBAL_ALIAS rules', function () {
+describe('vendored lint_core: LINT_GLOBAL_ALIAS rules', function () {
 
     const aliased = {
         'sloppy-mode this reading Promise':       ['banned-async', 'module.exports = function(){ return this.Promise; };'],

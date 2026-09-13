@@ -61,7 +61,7 @@ const { reconcileEncoded, psbtPrevouts } = require('./reconcileEncoded.js');
 // action the transaction actually carries.
 const { assertCarrierBinding } = require('./carrier/bindActionCarrier.js');
 const { SDKConfigError, SDKExplorerError, SDKContractError } = require('./errors.js');
-const { lintSource } = require('./contract/lint-core.js');
+const { lintSource } = require('./contract/lint_core.js');
 const CONTRACT_SOURCES = require('./contract/templates.js');
 const chunkHelper = require('./chunkHelper.js');
 
@@ -730,7 +730,7 @@ class XChainSDK {
 
     // Pre-flight lint of raw contract source (plain JS, pre-base64). Advisory,
     // synchronous, no network, browser-safe; runs every acorn-coverable deploy
-    // check via the vendored lint-core. The isolated-vm V8 syntax compile runs
+    // check via the vendored lint_core. The isolated-vm V8 syntax compile runs
     // only at deploy/CLI, so authoritative is always false; the CLI / on-chain
     // deploy has the final word.
     // @returns {{ valid:boolean, errors:Rule[], warnings:Rule[], authoritative:false }}

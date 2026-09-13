@@ -13,7 +13,7 @@
 // The SDK's contract linter MUST match the indexer's deploy-time validator, or
 // authors get false greens (lint passes, on-chain deploy rejects). Two guards:
 //
-//   1. DRIFT: the vendored src/contract/{lint-core,metering}.js must be
+//   1. DRIFT: the vendored src/contract/{lint_core,metering}.js must be
 //      byte-identical (sha256) to the xchain-vm canonicals. (Skipped when the
 //      sibling xchain-vm checkout is absent, e.g. SDK cloned standalone.)
 //   2. VERDICT: a fixture corpus (good templates + one bad per rule) gets the
@@ -35,11 +35,11 @@ const ContractUtils = require('../../src/contracts.js');
 const VENDORED_DIR = path.join(__dirname, '..', '..', 'src', 'contract');
 const VM_SRC_DIR   = path.join(__dirname, '..', '..', '..', 'xchain-vm', 'src');
 const CONTRACTS_DIR = path.join(__dirname, '..', '..', '..', 'xchain-contracts');
-// stripped-globals.js is in the vendor set because it is the ONE
-// definition of the sandbox's stripped-global names, required by lint-core.js
+// stripped_globals.js is in the vendor set because it is the ONE
+// definition of the sandbox's stripped-global names, required by lint_core.js
 // here and by sandbox.js / toolkit/authoring.js in xchain-vm. It is
 // dependency-free so the single require line resolves at both vendored depths.
-const VENDORED_FILES = ['lint-core.js', 'metering.js', 'stripped-globals.js'];
+const VENDORED_FILES = ['lint_core.js', 'metering.js', 'stripped_globals.js'];
 
 function sha256(file) {
     return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -136,7 +136,7 @@ describe('contract-lint parity + drift', function () {
     });
 
     describe('Move 2: logic-level rules (advisory, never deploy-blocking)', function () {
-        const { CONSENSUS_RULES } = require('../../src/contract/lint-core.js');
+        const { CONSENSUS_RULES } = require('../../src/contract/lint_core.js');
         let sdk;
         before(function () { sdk = new XChainSDK({ network: 'bitcoin-regtest', noHub: true }); });
 
