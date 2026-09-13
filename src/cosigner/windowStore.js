@@ -138,7 +138,7 @@ class WindowStore {
     _publishLock(lockFile) {
         const tmp    = `${lockFile}.${process.pid}.tmp`;
         // `pid` and `t` keep their exact shape: external tooling reads them. The
-        // nonce is additive, and is what _assertLockOwned compares against.
+        // nonce is additive, and is what assertLockOwned compares against.
         const record = JSON.stringify({ pid: process.pid, t: Date.now(), nonce: this._lockNonce });
         let fd = null;
         try {
@@ -270,7 +270,7 @@ class WindowStore {
         // Only ever remove a lock this instance still owns. A lockfile at our name
         // that carries somebody else's nonce belongs to a successor, and deleting
         // it would hand the store to a third starter as a free takeover.
-        if (this._lockIsOurs() !== false)
+        if (this.lockIsOurs() !== false)
             try { fs.unlinkSync(this._lockFile); } catch (e) { /* already gone */ }
         HELD_LOCKS.delete(this._lockFile);
         this._lockFile = null;
@@ -280,7 +280,7 @@ class WindowStore {
     // (no readable holder record, so no proof either way). Only `false` is
     // evidence of loss, mirroring the acquire path's rule that "I cannot tell who
     // holds this" and "nobody holds this" are different answers.
-    _lockIsOurs() {
+    lockIsOurs() {
         let holder = null;
         try { holder = JSON.parse(fs.readFileSync(this._lockFile, 'utf8')); }
         catch (e) { return e.code === 'ENOENT' ? false : null; }
@@ -295,9 +295,9 @@ class WindowStore {
     // the whole file and restoring already-spent budget. Fail closed and loud: the
     // co-signer treats a throw out of record() as a refusal to authorize, so no
     // signature is released by a fenced store.
-    _assertLockOwned() {
+    assertLockOwned() {
         if (!this._lockFile) return;   // constructed with { lock: false }
-        if (this._lockIsOurs() !== false) return;
+        if (this.lockIsOurs() !== false) return;
         const message = `co-signer window state at ${this._stateFile} is no longer owned by this store ` +
             `(the lock at ${this._lockFile} names another holder). Writing the window from this store's ` +
             `cache would discard another daemon's consumption history and re-open the spending budget; ` +
@@ -490,7 +490,7 @@ class WindowStore {
     // the budget is consumed on authorization, conservatively, even if the agent
     // never completes the aggregate (can't double-spend the cap).
     record({ action, tick, amount, txid }) {
-        this._assertLockOwned();
+        this.assertLockOwned();
         const usage = this._pruned();
         const now = this._now();
         // G19: a backward clock step between writes would let a later entry sort
@@ -528,7 +528,7 @@ class WindowStore {
     // The file is 0600: the window is both the spending budget and the approval
     // audit log, and nothing but the daemon uid has any business in it.
     _persist(usage) {
-        this._assertLockOwned();
+        this.assertLockOwned();
         fs.mkdirSync(path.dirname(this._stateFile), { recursive: true });
         const tmp = this._stateFile + '.tmp';
         const fd = fs.openSync(tmp, 'w', 0o600);
