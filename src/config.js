@@ -149,6 +149,44 @@ var Config = {
         return config;
     },
 
+    // Environment readers, one per variable the SDK consults outside this file.
+    //
+    // Each one reads process.env at the moment it is CALLED, never at require
+    // time, so a caller that sets a variable after loading the SDK sees exactly
+    // what it saw before these existed. None of them supplies a default or
+    // coerces a value: every call site keeps its own fallback and its own
+    // parsing, because moving a default here would change what an unset
+    // variable means rather than only where it is read.
+    env: {
+        // Which network (for example bitcoin-regtest) to use when the caller
+        // did not pass one.
+        network:        () => process.env.NETWORK,
+
+        // Service endpoints, used only when the caller passed no url or port.
+        hubApiHost:     () => process.env.HUB_API_HOST,
+        explorerUrl:    () => process.env.EXPLORER_URL,
+        explorerPort:   () => process.env.EXPLORER_PORT,
+        encoderUrl:     () => process.env.ENCODER_URL,
+        encoderPort:    () => process.env.ENCODER_PORT,
+        websocketUrl:   () => process.env.WEBSOCKET_URL,
+        websocketPort:  () => process.env.WEBSOCKET_PORT,
+
+        // Which origins the helper API answers cross-origin requests from.
+        corsOrigin:     () => process.env.CORS_ORIGIN,
+
+        // Set by npm while one of its scripts runs; absent when the SDK is
+        // simply required as a library.
+        packageName:    () => process.env.npm_package_name,
+        packageVersion: () => process.env.npm_package_version,
+
+        // The two service API keys are read from clients that are also bundled
+        // for browsers, where there may be no process object at all. Check for
+        // it before reading, so a browser build gets "not set" instead of a
+        // crash, exactly as the guard at the old call sites did.
+        encoderApiKey:  () => (typeof process !== 'undefined' && process.env ? process.env.ENCODER_API_KEY : undefined),
+        hubApiKey:      () => (typeof process !== 'undefined' && process.env ? process.env.HUB_API_KEY : undefined),
+    },
+
 }
 
 module.exports = Config;

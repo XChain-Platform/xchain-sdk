@@ -25,6 +25,7 @@ const Utility       = require('../utils/utility.js');
 // Canonical coin registry: the bridge recipes check DEST_COIN and BRIDGE_CHAINS
 // against the coins that actually exist rather than against a local list.
 const coins         = require('../coins');
+const Config        = require('../config.js');
 
 
 class Workflows {
@@ -693,7 +694,7 @@ class Workflows {
     // Network the bridge helpers validate addresses against. An explicit
     // opts.network wins, then the SDK's configured network, then the environment.
     _bridgeNetwork(opts = {}) {
-        return opts.network || (this.sdk.options && this.sdk.options.network) || process.env.NETWORK || null;
+        return opts.network || (this.sdk.options && this.sdk.options.network) || Config.env.network() || null;
     }
 
     // The Utility instance to validate with. Falls back to a fresh one so the

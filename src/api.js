@@ -28,6 +28,7 @@ const jsonRouter = require('express-json-rpc-router');
 const XChainSDK  = require('./XChainSDK');
 const { safeTokenEqual } = require('./utils/safe_compare.js');
 const { parseCorsOrigin } = require('./utils/cors_origin.js');
+const Config = require('./config.js');
 // Request guards live in their own module so the shipped middleware has exactly
 // one implementation: this file starts listening at require time, so a unit test
 // can only reach the guards through src/apiGuards.js.
@@ -108,7 +109,7 @@ async function startApi() {
     // single origin: handing `cors` the raw string echoes it back verbatim to every
     // caller, which is a multi-value header no browser accepts. See
     // src/corsOrigin.js.
-    app.use(cors({ origin: parseCorsOrigin(process.env.CORS_ORIGIN) }));
+    app.use(cors({ origin: parseCorsOrigin(Config.env.corsOrigin()) }));
 
     // Batch fan-out cap, BEFORE the auth gate and the router: capping ahead of
     // the auth gate bounds the unauthenticated ping path too, and ahead of the

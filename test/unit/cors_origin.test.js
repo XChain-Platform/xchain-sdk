@@ -158,9 +158,12 @@ describe('CORS_ORIGIN allowlist parsing', function () {
 
         it('mounts cors through parseCorsOrigin, never the raw env var', function () {
             const src = require('fs').readFileSync(require('path').join(__dirname, '../../src/api.js'), 'utf8')
-            assert.ok(/cors\(\{\s*origin:\s*parseCorsOrigin\(process\.env\.CORS_ORIGIN\)/.test(src),
-                'api.js must mount cors with parseCorsOrigin(process.env.CORS_ORIGIN)')
-            assert.ok(!/cors\(\{\s*origin:\s*process\.env\.CORS_ORIGIN/.test(src),
+            // The variable is read through the config home's call-time getter, so
+            // the wiring to pin is the parser wrapped around that read.
+            assert.ok(/cors\(\{\s*origin:\s*parseCorsOrigin\(Config\.env\.corsOrigin\(\)\)/.test(src),
+                'api.js must mount cors with parseCorsOrigin(Config.env.corsOrigin())')
+            // Neither spelling of the raw value may reach cors unparsed.
+            assert.ok(!/cors\(\{\s*origin:\s*(?:process\.env\.CORS_ORIGIN|Config\.env\.corsOrigin\(\))/.test(src),
                 'api.js must not hand the raw CORS_ORIGIN string to cors')
         })
     })

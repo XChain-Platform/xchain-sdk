@@ -208,7 +208,7 @@ class Validator {
         // matching the SDK-wide network-resolution convention (XChainSDK.js,
         // actions.js), for a caller that only sets NETWORK in the environment and
         // never passes it here explicitly.
-        this.network = network || process.env.NETWORK || null;
+        this.network = network || config.env.network() || null;
     }
 
     // The caller's per-leg array, or null when this is a flat single-leg call.

@@ -22,6 +22,7 @@ const FormatSelector    = require('../protocol/format_selector.js');
 const Validator         = require('../protocol/validator.js');
 const { getNetwork }    = require('../protocol/networks.js');
 const { SDKValidationError, SDKContractError } = require('../utils/errors.js');
+const Config            = require('../config.js');
 
 // Encoding byte limits for pre-flight validation. Only P2SH is read from this
 // table today (the oversize suggestion below); the OP_RETURN gate is
@@ -59,7 +60,7 @@ class Actions {
         // validator silently fell back to a length-only heuristic for every caller
         // that configured a network without also exporting NETWORK. Absent on a
         // bare {config, util} shim; treated as segwit-capable (unchanged).
-        this.network   = (sdk.options && sdk.options.network) || process.env.NETWORK || null;
+        this.network   = (sdk.options && sdk.options.network) || Config.env.network() || null;
         this.validator = new Validator(this.util, this.network);
     }
 

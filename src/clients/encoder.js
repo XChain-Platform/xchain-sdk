@@ -21,6 +21,7 @@
 const axios = require('axios');
 const { SDKEncoderError, SDKRateLimitedError } = require('../utils/errors.js');
 const { withRetry, isRetryable, getRetryAfterSeconds } = require('../utils/retry.js');
+const Config = require('../config.js');
 
 
 class EncoderClient {
@@ -45,7 +46,7 @@ class EncoderClient {
         // buys: with no pinned encoderUrl the hub overlay repoints the client,
         // and the key then goes to whatever encoder host the hub named.
         this.apiKey = options.encoderApiKey ||
-            (typeof process !== 'undefined' && process.env && process.env.ENCODER_API_KEY) || '';
+            Config.env.encoderApiKey() || '';
 
         // Build the pooled axios client for the current baseUrl/port.
         this._buildClient();

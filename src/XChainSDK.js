@@ -270,8 +270,8 @@ class XChainSDK {
     // Hub discovery requires calling init() (async) after construction.
     constructor(options = {}) {
 
-        this.version = process.env.npm_package_version;
-        this.name    = process.env.npm_package_name;
+        this.version = config.env.packageVersion();
+        this.name    = config.env.packageName();
         this.options = options;
 
         // Initialize core (no network required)
@@ -295,7 +295,7 @@ class XChainSDK {
 
         this.workflows = new Workflows(this);
 
-        let network = options.network || process.env.NETWORK || null;
+        let network = options.network || config.env.network() || null;
         this.wallet     = new WalletUtils(network);
         this.auth       = new AuthUtils(network);
         this.messaging  = new MessagingUtils(network);
@@ -382,7 +382,7 @@ class XChainSDK {
         // network-only construction discovers endpoints with zero config;
         // regtest gets no hub unless one is explicitly supplied.
         let pub     = publicDefaults(network);
-        let hubUrl  = options.hubUrl  || process.env.HUB_API_HOST || pub.hubUrl;
+        let hubUrl  = options.hubUrl  || config.env.hubApiHost() || pub.hubUrl;
         let hubPort = options.hubPort || (process.env.HUB_PORT ? parseInt(process.env.HUB_PORT) : undefined);
         if (options.hubValidators || hubUrl) {
             this.hub = new HubConnector(Object.assign({}, options, { hubUrl, hubPort }));
@@ -393,7 +393,7 @@ class XChainSDK {
 
     // Config resolution: constructor options > env vars > public defaults > localhost.
     _initClients(resolved) {
-        let network = resolved.network || process.env.NETWORK;
+        let network = resolved.network || config.env.network();
         let hooks   = this.options.hooks || {};
         let retry   = this.options.retry !== undefined ? this.options.retry : {};
         let pool    = this.options.pool || {};
@@ -401,8 +401,8 @@ class XChainSDK {
         let pub       = publicDefaults(network);
         let readyHook = () => this._ensureReady();
 
-        let explorerUrl  = resolved.explorerUrl  || process.env.EXPLORER_URL || pub.explorerUrl;
-        let explorerPort = resolved.explorerPort || process.env.EXPLORER_PORT;
+        let explorerUrl  = resolved.explorerUrl  || config.env.explorerUrl() || pub.explorerUrl;
+        let explorerPort = resolved.explorerPort || config.env.explorerPort();
         if (network && (explorerUrl || explorerPort)) {
             this.explorer = new ExplorerClient({
                 network:      network,
@@ -418,8 +418,8 @@ class XChainSDK {
             this.explorer = new ExplorerClient({ network, timeout: resolved.timeout, hooks, retry, pool, readyHook });
         }
 
-        let encoderUrl  = resolved.encoderUrl  || process.env.ENCODER_URL || pub.encoderUrl;
-        let encoderPort = resolved.encoderPort || process.env.ENCODER_PORT;
+        let encoderUrl  = resolved.encoderUrl  || config.env.encoderUrl() || pub.encoderUrl;
+        let encoderPort = resolved.encoderPort || config.env.encoderPort();
         if (encoderUrl || encoderPort) {
             this.encoder = new EncoderClient({
                 encoderUrl:  encoderUrl,
@@ -437,8 +437,8 @@ class XChainSDK {
         }
 
         // WebSocket follows explorer URL/port unless an explicit websocketUrl is given.
-        let websocketUrl  = resolved.websocketUrl  || this.options.websocketUrl  || process.env.WEBSOCKET_URL;
-        let websocketPort = resolved.websocketPort || this.options.websocketPort || process.env.WEBSOCKET_PORT;
+        let websocketUrl  = resolved.websocketUrl  || this.options.websocketUrl  || config.env.websocketUrl();
+        let websocketPort = resolved.websocketPort || this.options.websocketPort || config.env.websocketPort();
         if (network && (websocketUrl || websocketPort || explorerUrl || explorerPort)) {
             let wsUrl  = websocketUrl  || explorerUrl;
             let wsPort = websocketPort ? parseInt(websocketPort) : (explorerPort ? parseInt(explorerPort) : undefined);
@@ -506,7 +506,7 @@ class XChainSDK {
     // not yet exist (e.g. hub-only configuration).
     _applyEndpoints() {
         if (!this.hub) return;
-        let network   = this.options.network || process.env.NETWORK;
+        let network   = this.options.network || config.env.network();
         let endpoints = this.hub.extractServiceEndpoints(network);
         let hooks     = this.options.hooks || {};
         let retry     = this.options.retry !== undefined ? this.options.retry : {};
@@ -1295,7 +1295,7 @@ class XChainSDK {
      */
     async getAllMessagesForAddress(address, opts) {
         let explorer = this._requireExplorer();
-        let network = this.options.network || process.env.NETWORK;
+        let network = this.options.network || config.env.network();
         // Messages are looked up per network, so without one we would not know which chain to ask.
         if (!network) throw new SDKConfigError('NETWORK_NOT_CONFIGURED', 'Network is required for cross-chain message queries.');
 

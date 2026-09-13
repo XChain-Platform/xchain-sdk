@@ -21,6 +21,7 @@
 const axios = require('axios');
 const { SDKHubError } = require('../utils/errors.js');
 const coins = require('../coins');
+const Config = require('../config.js');
 
 // Local { coin -> consensusHash } per network, computed on first use. The bundled
 // coin registry cannot change under a running process, so re-hashing it on every
@@ -120,7 +121,7 @@ class HubConnector {
         // HUB_API_KEY in a Node environment). Guarded for browser bundles
         // where process is undefined.
         this.apiKey = options.hubApiKey ||
-            (typeof process !== 'undefined' && process.env && process.env.HUB_API_KEY) || '';
+            Config.env.hubApiKey() || '';
 
         // Multi-endpoint support: hubValidators takes priority over hubUrl:hubPort
         if(options.hubValidators && Array.isArray(options.hubValidators) && options.hubValidators.length > 0){
