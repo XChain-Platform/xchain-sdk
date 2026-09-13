@@ -30,6 +30,7 @@ const CrossChainHelper = require('./actions/cross_chain.js');
 
 async function startREPL(options = {}) {
 
+    // Build options from env vars and explicit options
     let sdkOptions = {
         network:     options.network     || process.env.NETWORK     || 'bitcoin-regtest',
         explorerUrl: options.explorerUrl || process.env.EXPLORER_URL,
@@ -74,11 +75,13 @@ async function startREPL(options = {}) {
         breakEvalOnSigint: true
     });
 
+    // Inject helpers into context
     server.context.sdk     = sdk;
     server.context.session = (wif, opts) => sdk.session(wif, opts);
     server.context.keygen  = () => sdk.generateKeyPair();
     server.context.CrossChainHelper = CrossChainHelper;
 
+    // Custom commands
     server.defineCommand('actions', {
         help: 'List all available action types',
         action() {
@@ -129,6 +132,7 @@ async function startREPL(options = {}) {
         }
     });
 
+    // Clean shutdown
     server.on('exit', () => {
         sdk.stop();
         process.exit(0);

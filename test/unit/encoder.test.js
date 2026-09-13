@@ -306,6 +306,7 @@ describe('EncoderClient', function () {
         });
 
         it('returns feeInfo with computed fee from a valid PSBT', async function () {
+            // Build a minimal valid PSBT using bitcoinjs-lib
             const bitcoin = require('bitcoinjs-lib');
             const ecc = require('@bitcoinerlab/secp256k1');
             const { ECPairFactory } = require('ecpair');
@@ -634,6 +635,7 @@ describe('EncoderClient', function () {
             const kp = ECPair.makeRandom({ network: net });
             const p2pkh = bitcoin.payments.p2pkh({ pubkey: kp.publicKey, network: net });
 
+            // Build a funding tx
             const fundTx = new bitcoin.Transaction();
             fundTx.addInput(Buffer.alloc(32), 0, 0xffffffff, Buffer.from([0x51]));
             fundTx.addOutput(p2pkh.output, 200000);

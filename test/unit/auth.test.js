@@ -39,6 +39,7 @@ describe('AuthUtils', function() {
             const customMsg = 'Please sign this to verify your wallet.';
             const result = auth.generateChallenge('bc1qtest', { message: customMsg });
             expect(result.challenge).to.equal(customMsg);
+            // Should still return nonce and timestamp metadata
             expect(result.nonce).to.be.a('string');
             expect(result.timestamp).to.be.a('string');
         });
