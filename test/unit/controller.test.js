@@ -10,6 +10,8 @@
  * contact legal@dankest.llc.
  */
 
+// XChain Platform SDK - ControllerHelpers Tests
+//
 // ControllerHelpers tests: asserts the bind/unbind builders serialize through
 // createAction to the EXACT ISSUE v6 / ADDRESS v1 wire strings the indexer
 // parses, and that validateAction accepts the clean shapes and rejects the

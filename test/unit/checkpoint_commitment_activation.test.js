@@ -2,6 +2,8 @@
 // (byte-identical twin of the hub/indexer/explorer/sync copies). The SDK
 // verifier must gate the SIGNED checkpoint preimage on the same BTC-anchored
 // snapshot_block era, so this pins the threshold map and the gate function.
+// Every copy has to agree: if two services read a different block here, they
+// disagree about which checkpoints carry the light-client roots at all.
 
 const assert = require('assert');
 const {

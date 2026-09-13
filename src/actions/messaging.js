@@ -844,7 +844,8 @@ class MessagingUtils {
 
     // v1 KDF: HKDF-SHA256 over the raw ECDH product with a fixed protocol salt
     // and a per-method `info` label. The differing `info` per method is what
-    // guarantees cross-method domain separation.
+    // guarantees cross-method domain separation: a key that leaks from one
+    // method cannot be replayed to read messages protected by the other.
     _hkdfFromEcdh(privateKey, publicKey, info) {
         let raw = this._ecdhProduct(privateKey, publicKey);
         return hkdfSha256(raw, HKDF_SALT, info, HKDF_KEY_LEN);

@@ -182,7 +182,8 @@ describe('MessagingUtils @crypto @regression', function () {
         });
     });
 
-    // KDF versioning + cross-method domain separation
+    // KDF versioning + cross-method domain separation: one ECDH secret must
+    // never produce the same encryption key in two different methods.
     describe('KDF v1 (HKDF-SHA256) versioning and domain separation', function () {
 
         // The derivation used to call crypto.hkdfSync, which does not
