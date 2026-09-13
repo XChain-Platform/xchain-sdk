@@ -522,10 +522,39 @@ class Utility {
             // truncate, and parseFloat also emits scientific notation (e.g.
             // "1e-18"), corrupting the on-chain ACTION string. fixed notation keeps
             // the exact wire value, matching how the indexer reads it back.
-            if(!this.isNull(value) && this.isNumeric(value))
+            if(!this.isNull(value) && this.isNumeric(value)){
+                // A JS Number arrives having ALREADY been through the double
+                // rounding, and String() then prints the shortest decimal that
+                // round-trips, so the bignumber below turns a value the caller never
+                // sent into an exact-looking wire amount with no error anywhere:
+                // JSON.parse('{"AMOUNT":9007199254740993}') is 9007199254740992 by
+                // the time this gate sees it, and bodyParser.json() puts every HTTP
+                // caller on that path. The double carries 15 decimal digits
+                // faithfully; a shortest form needing MORE than that is a value the
+                // Number could not have held as written, so refuse it and say what
+                // to send instead. Strings and BigInt are untouched, and a Number
+                // that IS exact at this width (1e21 prints as one significant digit)
+                // still canonicalizes exactly as before.
+                if(typeof value === 'number' && this.significantDigits(value) > 15)
+                    throw new RangeError(
+                        name + ' was supplied as a JS number with more precision than a ' +
+                        'double carries, so its value was already rounded before the SDK ' +
+                        'saw it; send an amount of this size as a decimal string');
                 data[name] = mathjs.format(mathjs.bignumber(String(value).trim()), { notation: 'fixed' });
+            }
         }
         return data;
+    }
+
+    // Significant decimal digits in a finite Number's SHORTEST round-tripping form
+    // (what String() prints), ignoring sign, exponent, and leading/trailing zeros:
+    // 1e21 and 100 are 1, 9007199254740992 is 16, 0.1 is 1. Used by
+    // setNumberFormats to tell a faithfully-carried magnitude from a rounded one.
+    significantDigits(value){
+        if(typeof value !== 'number' || !Number.isFinite(value))
+            return 0;
+        let mantissa = String(value).split(/[eE]/)[0].replace('-','').replace('.','');
+        return mantissa.replace(/^0+/,'').replace(/0+$/,'').length;
     }
 
     // Determine if a tx hash is valid or not

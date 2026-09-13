@@ -1023,3 +1023,42 @@ describe('Actions – partial unstake/claim optional AMOUNT', function () {
         }
     });
 });
+
+// A version can be spelled two ways: params.VERSION, or a top-level `version` on
+// the request (the shape sdk.decoder.parse() output carries). Both spellings must
+// reach the same verdict: validation that runs before the top-level one is read
+// checks version-dependent required fields against the AUTO-SELECTED format while a
+// different version is serialized, and that malformed action broadcasts fine, burning
+// the miner fee on an indexer rejection.
+describe('Actions - top-level version reaches version-dependent validation', function () {
+    let actions;
+    beforeEach(function () { actions = createActions(); });
+
+    it('rejects an incomplete VOTE v0 spelled top-level, as it does spelled in params', function () {
+        const paramsSpelling   = () => actions.createAction({ action: 'VOTE', params: { VERSION: 0, TICK: 'TOKEN' } });
+        const topLevelSpelling = () => actions.createAction({ action: 'VOTE', version: 0, params: { TICK: 'TOKEN' } });
+        expect(paramsSpelling).to.throw(SDKValidationError, /END_BLOCK/);
+        expect(topLevelSpelling).to.throw(SDKValidationError, /END_BLOCK/);
+        // and with the same error code, not merely some error
+        let a, b;
+        try { paramsSpelling(); }   catch (e) { a = e.code; }
+        try { topLevelSpelling(); } catch (e) { b = e.code; }
+        expect(b).to.equal(a);
+    });
+
+    it('serializes a complete payload identically under either spelling', function () {
+        const params      = { TICK: 'TOKEN', END_BLOCK: 900000, OPTIONS: ['yes', 'no'] };
+        const viaParams   = actions.createAction({ action: 'VOTE', params: Object.assign({ VERSION: 0 }, params) });
+        const viaTopLevel = actions.createAction({ action: 'VOTE', version: 0, params: Object.assign({}, params) });
+        expect(viaTopLevel.actionString).to.equal(viaParams.actionString);
+        expect(viaTopLevel.version).to.equal(viaParams.version);
+    });
+
+    it('lets a params-level VERSION win over a conflicting top-level version', function () {
+        const result = actions.createAction({
+            action: 'VOTE', version: 1,
+            params: { VERSION: 0, TICK: 'TOKEN', END_BLOCK: 900000, OPTIONS: ['yes', 'no'] }
+        });
+        expect(result.version).to.equal(0);
+    });
+});

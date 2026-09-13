@@ -252,8 +252,38 @@ function projectDeltas(cmd, source, opts) {
                 out.push({ tick: String(ticks[0]), amount: String(supply), sign: +1 });
             return out;
         }
-        case 'SEND':
+        case 'SEND': {
+            // Debits every leg, and credits back the ones addressed to the source.
+            // A settled SEND writes TWO ledger rows - debit SOURCE, credit
+            // DESTINATION (indexer src/actions/send.js) - so a self-addressed leg
+            // is balance-neutral for every LATER command in the batch, and
+            // projecting it as a pure loss false-errors the next one with
+            // BALANCE_INSUFFICIENT. The intra-command check in checks/send.js
+            // still counts the leg as a spend, which mirrors the handler's own
+            // per-leg debit of its in-memory snapshot.
+            //
+            // DESTINATION is one entry per leg, parallel to AMOUNT, on every SEND
+            // version (v1 repeats AMOUNT/DESTINATION under one TICK; v2/v3 repeat
+            // TICK too, which is why the tick index clamps and these do not).
+            // Compared as a raw string, as MINT above does: a leg whose
+            // destination is missing or spelled any other way keeps its debit, so
+            // an unknown spelling over-states the spend rather than letting an
+            // unaffordable batch pre-flight clean.
+            const out = [];
+            const dests = [].concat(p.DESTINATION || []);
+            const n = Math.max(ticks.length, amounts.length);
+            for (let i = 0; i < n; i++) {
+                const tick = String(ticks[Math.min(i, ticks.length - 1)] || '');
+                const amount = String(amounts[i] !== undefined ? amounts[i] : '');
+                if (!tick || amount === '') continue;
+                out.push({ tick, amount, sign: -1 });
+                if (dests[i] !== undefined && String(dests[i]) === source)
+                    out.push({ tick, amount, sign: +1 });
+            }
+            return out;
+        }
         case 'DESTROY': {
+            // Debit-only: DESTROY burns the supply and has no DESTINATION.
             const out = [];
             const n = Math.max(ticks.length, amounts.length);
             for (let i = 0; i < n; i++) {
@@ -279,12 +309,18 @@ function projectDeltas(cmd, source, opts) {
  * which counting commands cannot see.
  *
  * WARNING, not an error, and deliberately so. The 250-command cap arrived with
- * BATCH_ISSUANCE_LIMITS, now ARMED on every network (mainnet at
- * 2026-08-16T00:00:00Z), so that half no longer rests on an unarmed flag; the
- * WEIGHT budget beside it rides BATCH_COST_WEIGHTING, which is live on testnet
- * and regtest and still unarmed on mainnet. Pre-flight has no chain height or
- * flag state to tell those apart, and an over-weight batch is still accepted on
- * mainnet, so a non-overridable client error would false-block it (spec §4.2).
+ * BATCH_ISSUANCE_LIMITS, ARMED on every network (mainnet at
+ * 2026-08-16T00:00:00Z); the WEIGHT budget beside it rides BATCH_COST_WEIGHTING,
+ * whose mainnet constant the 2026-09-09 ruling moved to genesis
+ * (BATCH_COST_WEIGHTING_MAINNET_TIME = 0 in xchain-indexer/src/protocol_changes.js).
+ * The weighting gate only ever evaluates INSIDE the issuance-limits gate, so its
+ * effective mainnet activation is that entry's 2026-08-16T00:00:00Z - past either
+ * way, and both halves are in force on mainnet today. It stays a warning because
+ * pre-flight resolves neither the network nor the including block's consensus
+ * time, so it cannot certify which gate the action lands under, and a
+ * non-overridable client error on an advisory reading would false-block
+ * (spec §4.2). Raising it to an error is a client-behaviour change with its own
+ * blast radius and is not made here.
  *
  * decoder/parse.js raises the same finding from the same shared scan, and
  * universal.js passes validator findings through, so emit here only when that
@@ -318,8 +354,8 @@ function checkCommandCap(ctx, commands) {
     }
     ctx.addFinding(FINDING_CODES.BATCH_LIMIT_EXCEEDED, 'warning',
         `This batch's ${count} commands weigh ${weight}; the chain rejects the whole batch above `
-        + `${BATCH_WEIGHT_BUDGET} once cost weighting is armed (it is live on testnet and regtest, `
-        + `unarmed on mainnet).`,
+        + `${BATCH_WEIGHT_BUDGET} (cost weighting is in force on every network: testnet and regtest `
+        + `from genesis, mainnet from 2026-08-16T00:00:00Z).`,
         { action: 'COMMAND', limit: BATCH_WEIGHT_BUDGET, count, weight });
 }
 

@@ -237,6 +237,32 @@ describe('carrier binding: the transaction must carry the action that was submit
                 psbt.addOutput({ script: OWN, value: 90000 });
                 expect(bind({ psbt, carrierScripts: undefined, actionString: SEND_A, encoding })).to.not.throw();
             });
+
+            // Compression runs BEFORE the encoder picks an encoding, and a FILE big
+            // enough to chunk is still big enough to chunk once deflated, so this
+            // lane is exactly where a real compressed FILE lands. verifyCarrierScripts
+            // compares bytes with no tolerance of its own, so the one rewrite is
+            // offered here too, recomputed from the SUBMITTED string.
+            it('accepts a compressed FILE whose scripts reassemble to the rewritten action', function () {
+                const raw = 'FILE|0|report.bin|application/octet-stream';
+                const compressed = 'FILE|0|report.bin|application/octet-stream|||||||1';
+                const { psbt, carrierScripts } = chunkLane(compressed, encoding);
+                expect(bind({ psbt, carrierScripts, actionString: raw, encoding })).to.not.throw();
+            });
+
+            it('still refuses a FILE whose other fields moved under cover of the rewrite', function () {
+                const raw = 'FILE|0|report.bin|application/octet-stream';
+                const tampered = 'FILE|0|payload.exe|application/octet-stream|||||||1';
+                const { psbt, carrierScripts } = chunkLane(tampered, encoding);
+                expect(bind({ psbt, carrierScripts, actionString: raw, encoding }))
+                    .to.throw(/does not carry the action/);
+            });
+
+            it('grants the chunk lane no such tolerance for a SEND', function () {
+                const { psbt, carrierScripts } = chunkLane(SEND_A + '|1', encoding);
+                expect(bind({ psbt, carrierScripts, actionString: SEND_A, encoding }))
+                    .to.throw(/does not carry the action/);
+            });
         });
     });
 

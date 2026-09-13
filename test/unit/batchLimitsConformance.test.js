@@ -989,10 +989,13 @@ describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
                 expect(over.details.weight, 'the measured weight rides the finding').to.equal(300);
                 expect(over.details.limit, 'against the budget, not the count cap')
                     .to.equal(BATCH_WEIGHT_BUDGET);
-                // This is the one rule a mainnet chain may not raise yet, so the
-                // finding must say so rather than read as a rule armed everywhere.
+                // The finding must name the gate it rode in on. BATCH_COST_WEIGHTING
+                // is armed on every network since the 2026-09-09 ruling (mainnet
+                // effective 2026-08-16T00:00:00Z, through the issuance-limits gate it
+                // nests inside), so the message states that and never a stale
+                // unarmed-on-mainnet claim.
                 expect(over.message, 'a weight overflow names its flag')
-                    .to.contain('once cost weighting is armed');
+                    .to.contain('cost weighting is in force on every network');
             });
         });
 

@@ -54,6 +54,30 @@ describe('wire number canonicalization contract', function () {
         }
     });
 
+    // The gate refuses rather than stringifying whatever the JSON parser hands it: a
+    // JS number above the double-safe range stringifies into an exact-looking decimal
+    // for a value the caller never sent. JSON.parse('{"AMOUNT":9007199254740993}') is
+    // 9007199254740992 before the SDK sees it, and bodyParser.json() puts every
+    // HTTP caller on that path. Silent money drift, so it must refuse.
+    it('refuses a JS number whose value was already rounded by the parser', function () {
+        const rounded = JSON.parse('{"AMOUNT":9007199254740993}').AMOUNT;
+        expect(rounded).to.equal(9007199254740992);
+        expect(() => util.setNumberFormats({ AMOUNT: rounded }))
+            .to.throw(RangeError, /already rounded/);
+        // The decimal-string spelling of the same amount is exact and still passes.
+        expect(util.setNumberFormats({ AMOUNT: '9007199254740993' }).AMOUNT)
+            .to.equal('9007199254740993');
+    });
+
+    it('leaves faithfully-carried magnitudes alone, above 2^53 included', function () {
+        // 1e21 needs one significant digit, so the double holds it exactly; the
+        // guard must not turn a working large-supply amount into an error.
+        expect(util.setNumberFormats({ MAX_SUPPLY: 1e21 }).MAX_SUPPLY)
+            .to.equal('1000000000000000000000');
+        expect(util.setNumberFormats({ AMOUNT: 0.00000001 }).AMOUNT).to.equal('0.00000001');
+        expect(util.setNumberFormats({ AMOUNT: 123.456 }).AMOUNT).to.equal('123.456');
+    });
+
     it('VOTE v0 poll-create wire string carries DEPOSIT/GAS_ESCROW as fixed decimals', async function () {
         // compactTickers:false so createAction never reaches the network.
         const sdk = new XChainSDK({ network: 'bitcoin-mainnet', compactTickers: false });

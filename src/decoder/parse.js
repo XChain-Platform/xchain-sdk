@@ -430,9 +430,12 @@ function parseBatch(rawAction, version, segments, doValidate) {
         // weight is an integer >= 1, so this only ever weighs a batch that
         // already fits the count.
         //
-        // FLAG-GATED, unlike the count cap above: this rule is live on testnet
-        // and regtest from genesis and UNARMED on mainnet, and pre-flight has no
-        // chain height to tell them apart. It is a finding rather than a
+        // FLAG-GATED, unlike the count cap above: this rule runs from genesis on
+        // testnet and regtest, and on mainnet from 2026-08-16T00:00:00Z, the
+        // issuance-limits instant the weighting gate nests inside (the
+        // 2026-09-09 ruling set BATCH_COST_WEIGHTING_MAINNET_TIME to 0). Both are
+        // past, and pre-flight still has no chain height or block time to say
+        // which gate an action lands under. It is a finding rather than a
         // refusal for exactly that reason - see `checkCommandCap` in
         // preflight/checks/batch.js, which carries the same posture, and the
         // module doctrine it cites: the mirror may accept a batch the chain
@@ -440,7 +443,9 @@ function parseBatch(rawAction, version, segments, doValidate) {
         extraFindings.push({
             code: 'BATCH_LIMIT_EXCEEDED',
             message: 'BATCH commands weigh ' + weight + '; the chain rejects the whole batch above '
-                + BATCH_WEIGHT_BUDGET + ' once cost weighting is armed',
+                + BATCH_WEIGHT_BUDGET
+                + ' (cost weighting is in force on every network: testnet and regtest from genesis, '
+                + 'mainnet from 2026-08-16T00:00:00Z)',
             details: { action: 'COMMAND', limit: BATCH_WEIGHT_BUDGET, count: entries.length, weight },
         });
     } else {

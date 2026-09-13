@@ -196,6 +196,44 @@ describe('chunkHelper @regression', function () {
             expect(frontier({ gasLimit: 100000, constructorParams: ['e'.repeat(40)] })).to.be.above(largest,
                 '40 extra wire bytes must cost source headroom, or the overhead counts code units');
         });
+
+        it('does not over-reserve for an ABSENT constructor, measured against the real composer', function () {
+            // FormatSelector.serialize pops TRAILING empty fields, so a DEPLOY v0
+            // with no constructor params ends at GAS_LIMIT and carries no separator
+            // for it. Emitting one in the budget over-counted by exactly one byte,
+            // which is the whole gap at the cap: a source whose real compiled push
+            // is exactly MAX_ACTION_DATA_LENGTH was planned chunked, and the caller
+            // paid N carrier fees plus an assembler fee for code that fits one
+            // transaction. Same composer-verified frontier method as the two cases
+            // above: the +1 assertion is the one that catches over-reserving.
+            const { XChainSDK } = require('../../index.js');
+            const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
+            const opts = { gasLimit: 1000000 };
+            const compiled = (srcBytes) => {
+                const composed = sdk.actions.composeActionString({ action: 'DEPLOY', params: {
+                    CODE:      'x'.repeat(srcBytes),
+                    GAS_LIMIT: opts.gasLimit
+                } });
+                expect(composed.version).to.equal(0, 'no staking field must select DEPLOY v0');
+                return Buffer.byteLength(composed.actionString, 'utf8') + chunkHelper.OP_RETURN_PUSH_OVERHEAD;
+            };
+            let lo = 1, hi = 7000, largest = 0;
+            while (lo <= hi) {
+                const mid = (lo + hi) >> 1;
+                if (fitsSingleDeploy('x'.repeat(mid), opts)) { largest = mid; lo = mid + 1; } else hi = mid - 1;
+            }
+            expect(compiled(largest)).to.be.at.most(MAX_ACTION_DATA_LENGTH,
+                'the largest single-shot source must actually fit the compiled cap');
+            expect(compiled(largest + 1)).to.be.above(MAX_ACTION_DATA_LENGTH,
+                'one byte more must not fit, or the budget is over-reserving and over-chunking');
+
+            // The reported case, pinned concretely: 6,129 source bytes at
+            // gasLimit=1000000 compile to exactly the cap, so the planner must call
+            // it single-shot.
+            expect(compiled(6129)).to.equal(MAX_ACTION_DATA_LENGTH);
+            expect(planDeploy('x'.repeat(6129), opts).single).to.equal(true,
+                'a source that compiles to exactly the cap must not be chunked');
+        });
     });
 
     describe('splitCode', function () {

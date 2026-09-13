@@ -127,10 +127,11 @@ class BatchBuilder {
         // A REFUSAL, not a warning, matching the count cap beside it and the
         // "WHICH SIDE OF THE FLAG" note in batchLimits.js: this mirror speaks
         // for the POST-flag rule set on every network. BATCH_COST_WEIGHTING is
-        // genesis-active on testnet and regtest and unarmed on mainnet, so
-        // composing to the tighter rule is the shape that lands everywhere, and
-        // the alternative is emitting a batch that is rejected wholesale on two
-        // of the three networks. The DECODE-side sites (decoder/parse.js,
+        // genesis-active on testnet and regtest and, since the 2026-09-09 ruling,
+        // in force on mainnet too (effective 2026-08-16T00:00:00Z, through the
+        // issuance-limits gate it nests inside), so composing to it is the shape
+        // that lands everywhere and the alternative is emitting a batch that is
+        // rejected wholesale. The DECODE-side sites (decoder/parse.js,
         // preflight/checks/batch.js) report the same overflow as a finding
         // instead, because they describe a batch someone else already composed
         // and cannot refuse anything.

@@ -234,7 +234,16 @@ class Workflows {
         let ctor     = (deployParams.constructorParams !== undefined) ? deployParams.constructorParams : deployParams.CONSTRUCTOR_PARAMS;
         let cooldown = (deployParams.cooldownBlocks !== undefined) ? deployParams.cooldownBlocks : deployParams.COOLDOWN_BLOCKS;
         let slashDst = (deployParams.slashDestination !== undefined) ? deployParams.slashDestination : deployParams.SLASH_DESTINATION;
-        let hasStaking = (cooldown !== undefined && cooldown !== null && cooldown !== '');
+        // EITHER staking field populated makes this a staking deploy, which is the
+        // rule chunkHelper.deployOverhead and FormatSelector already apply. Gating on
+        // cooldown alone dropped a populated slashDestination out of assembleParams
+        // and shipped DEPLOY v2, so a config the inline path refuses (validator.js:
+        // 'SLASH_DESTINATION requires COOLDOWN_BLOCKS', mirroring the indexer)
+        // silently became a non-stakeable contract whenever the source was large
+        // enough to chunk. Carrying the field through instead reaches that same
+        // refusal in _assertAssemblerFits, before any carrier is broadcast.
+        let populated  = (v) => (v !== undefined && v !== null && v !== '');
+        let hasStaking = populated(cooldown) || populated(slashDst);
 
         // Pre-flight lint the fully-assembled source ONCE, before chunking, so the
         // single-shot and chunked paths share one verdict (default 'block'; pass

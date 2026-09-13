@@ -571,6 +571,30 @@ describe('Workflows', function () {
             assert.strictEqual(calls.deploys[0].version, '3');
             assert.strictEqual(calls.deploys[0].cooldownBlocks, 100);
         });
+
+        // A slashDestination with no cooldownBlocks is a config the INLINE deploy
+        // refuses (validator: 'SLASH_DESTINATION requires COOLDOWN_BLOCKS', the same
+        // rule the indexer applies). The chunked path must refuse it too: a staking
+        // gate that reads cooldownBlocks alone drops the destination out of the
+        // assembler params and deploys the contract as a non-stakeable v2, with no
+        // refusal at all. Source size may not decide whether a staking config is
+        // legal, and the refusal has to land before any carrier fee is spent.
+        it('refuses a slashDestination with no cooldown, as the inline path does', async function () {
+            const calls = { chunks: [], deploys: [] };
+            const wf = new Workflows(makeChunkSdk(calls));
+            let err;
+            try {
+                await wf.deployContract(FAKE_WIF, {
+                    code: 'x'.repeat(20000),
+                    gasLimit: 100000,
+                    slashDestination: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+                });
+            } catch (e) { err = e; }
+            assert.ok(err, 'a chunked deploy must refuse the config the inline deploy refuses');
+            assert.match(err.message, /SLASH_DESTINATION requires COOLDOWN_BLOCKS/);
+            assert.strictEqual(calls.chunks.length, 0, 'no carrier fee may be spent on a config that cannot deploy');
+            assert.strictEqual(calls.deploys.length, 0);
+        });
     });
 
     // deployContract()'s funding leg had no coverage at all, which is how it kept

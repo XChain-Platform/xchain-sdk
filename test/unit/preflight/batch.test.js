@@ -37,6 +37,38 @@ describe('pre-flight intra-BATCH projection', function () {
         expect(has(r, 'BALANCE_INSUFFICIENT', 'error')).to.equal(true);
     });
 
+    // A settled SEND writes a debit AND a credit, so a leg addressed to the
+    // source nets to zero for every later command. A projection that shares
+    // DESTROY's debit-only branch false-errors the next command.
+    const held10 = {
+        getToken: () => ({ tick: 'JDOG', decimals: '0' }),
+        getBalances: () => [{ tick: 'JDOG', amount: '10' }],
+    };
+    const OTHER = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4';
+
+    it('a self-send leaves the balance intact for the next command', async function () {
+        const r = await reportFor(`BATCH|0|SEND|0|JDOG|10|me;SEND|0|JDOG|10|${OTHER}`, held10);
+        expect(has(r, 'BALANCE_INSUFFICIENT', 'error')).to.equal(false);
+    });
+
+    it('a send to another address still errors the next command', async function () {
+        const r = await reportFor(`BATCH|0|SEND|0|JDOG|10|${OTHER};SEND|0|JDOG|10|${OTHER}`, held10);
+        expect(has(r, 'BALANCE_INSUFFICIENT', 'error')).to.equal(true);
+    });
+
+    it('DESTROY stays debit-only: a following self-send is not rescued', async function () {
+        const r = await reportFor('BATCH|0|DESTROY|0|JDOG|10;SEND|0|JDOG|10|me', held10);
+        expect(has(r, 'BALANCE_INSUFFICIENT', 'error')).to.equal(true);
+    });
+
+    it('a mixed multi-leg SEND debits only the leg that leaves the wallet', async function () {
+        // 10 held; one leg of 5 to self, one leg of 5 away -> 5 left.
+        const ok = await reportFor(`BATCH|0|SEND|1|JDOG|5|me|5|${OTHER}|m;SEND|0|JDOG|5|${OTHER}`, held10);
+        expect(has(ok, 'BALANCE_INSUFFICIENT', 'error')).to.equal(false);
+        const over = await reportFor(`BATCH|0|SEND|1|JDOG|5|me|5|${OTHER}|m;SEND|0|JDOG|6|${OTHER}`, held10);
+        expect(has(over, 'BALANCE_INSUFFICIENT', 'error')).to.equal(true);
+    });
+
     it('carries the non-atomicity standing warning', async function () {
         const r = await reportFor('BATCH|0|MINT|0|JDOG|1', {
             getToken: () => ({ tick: 'JDOG', decimals: '0' }),
@@ -396,7 +428,7 @@ describe('pre-flight BATCH cost-weight budget', function () {
         expect(caps[0].data.weight).to.equal(270);
     });
 
-    it('is a WARNING, never an error: the flag is unarmed on mainnet', async function () {
+    it('is a WARNING, never an error: pre-flight cannot resolve the including block', async function () {
         const r = await reportFor(batchOf('AIRDROP|0|1', 11), money);
         const caps = capFinding(r);
         expect(caps).to.have.length(1);

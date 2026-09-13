@@ -226,9 +226,21 @@ class LifecycleManager {
         // destination therefore reconciled cleanly, and this path signed the
         // substituted command. Fail-closed, and BEFORE either signing branch: a custom
         // signer runs its own policy over the same unbound bytes.
+        // The AUTHORIZATION baseline is the string the caller SUBMITTED, never the
+        // string the encoder reports it wrote. Those are two different values and
+        // only one of them is authorization: feeding the gate the encoder's own
+        // `compression.data` made it compare the encoder's transaction against the
+        // encoder's own claim about that transaction, so an answer carrying a
+        // substituted SEND plus a matching `compression.data` passed this gate and
+        // reached signing. The reported bytes stay in `carriedActionString` /
+        // `carriedRawData` for the two uses that genuinely need what is ON CHAIN:
+        // the phase-2 reveal rebuild and the returned `result.actionString`. The
+        // gates recompute the one legitimate COMPRESSION rewrite locally
+        // (bindActionCarrier.js), on both the inline and the chunk lane, so a real
+        // compressed FILE still binds.
         assertCarrierBinding({
             psbt:           encoded.psbt,
-            actionString:   carriedActionString,
+            actionString:   createResult.actionString,
             encoding:       encoded.encoding,
             carrierScripts: encoded.carrierScripts,
             network:        this._reconcileNetwork(),
@@ -275,8 +287,9 @@ class LifecycleManager {
             // it here, while the commit is still unbroadcast and a throw costs
             // nothing but the round trip.
             assertEnvelopeCarrierBinding({
+                // Submitted string, for the reason stated at the phase-1 gate.
+                actionString: createResult.actionString,
                 revealPsbt:   encoded.revealPsbt,
-                actionString: carriedActionString,
                 network:      this._reconcileNetwork(),
             });
             revealSigned = this.sdk.wallet.signEnvelopeRevealPsbt(encoded.revealPsbt, wif);
@@ -388,7 +401,10 @@ class LifecycleManager {
             // carrierScripts of its own and there is nothing here to hash them to.
             assertCarrierBinding({
                 psbt:         spendResult.psbt,
-                actionString: carriedActionString,
+                // Submitted string, for the reason stated at the phase-1 gate. No
+                // encoding is passed, so only the inline check runs and its
+                // COMPRESSION tolerance covers the compressed FILE lane.
+                actionString: createResult.actionString,
                 network:      this._reconcileNetwork(),
                 label:        'phase-2 reveal',
             });

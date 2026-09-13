@@ -305,7 +305,9 @@ class ContractUtils {
         let exportObj  = null;   // module.exports = { ... }
         let exportName = null;   // module.exports = someIdentifier
         let seenExport = false;
+        let exportAssignments = 0;         // every module.exports assignment, any scope
         let metaAssignments = new Map();   // identifier -> node assigned to <id>.meta
+        let metaAssignmentCounts = new Map();
 
         walker.simple(ast, {
             AssignmentExpression(node) {
@@ -313,7 +315,9 @@ class ContractUtils {
                 if (!l || l.type !== 'MemberExpression' || l.computed) return;
                 if (!l.object || l.object.type !== 'Identifier' || !l.property) return;
                 if (l.object.name === 'module' && l.property.name === 'exports') {
-                    // First module.exports assignment wins, matching the method-names walk.
+                    // First module.exports assignment wins; the count below decides
+                    // whether that read may be trusted at all.
+                    exportAssignments += 1;
                     if (seenExport) return;
                     seenExport = true;
                     if (node.right && node.right.type === 'ObjectExpression') exportObj = node.right;
@@ -322,10 +326,19 @@ class ContractUtils {
                 }
                 // The function-export form (spec R1): `contract.meta = { ... }`, which the
                 // VM reads off a function export too.
-                if (l.property.name === 'meta' && !metaAssignments.has(l.object.name))
-                    metaAssignments.set(l.object.name, node.right);
+                if (l.property.name === 'meta') {
+                    metaAssignmentCounts.set(l.object.name, (metaAssignmentCounts.get(l.object.name) || 0) + 1);
+                    if (!metaAssignments.has(l.object.name)) metaAssignments.set(l.object.name, node.right);
+                }
             }
         });
+
+        // More than one export assignment: the isolate evaluates whichever runs LAST,
+        // and a source-order walk cannot say which that is (an assignment may sit in a
+        // function, a branch or a loop). `error` here is the exact consensus refusal
+        // string, so a first-wins guess can refuse a deploy the chain would accept.
+        // Say undecidable and advise instead; the VM toolkit gate carries the twin.
+        if (exportAssignments > 1) return { status: 'undecidable' };
 
         if (exportObj) {
             for (let p of exportObj.properties) {
@@ -339,6 +352,9 @@ class ContractUtils {
 
         if (exportName) {
             if (!metaAssignments.has(exportName)) return { status: 'absent' };
+            // Same reasoning one level down: two `<id>.meta` assignments leave the
+            // first read unprovable, so it advises rather than refusing.
+            if ((metaAssignmentCounts.get(exportName) || 0) > 1) return { status: 'undecidable' };
             let right = metaAssignments.get(exportName);
             if (!right || right.type !== 'ObjectExpression') return { status: 'undecidable' };
             return readMetaLiterals(right);

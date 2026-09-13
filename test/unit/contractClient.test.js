@@ -69,6 +69,45 @@ describe('ContractClient', function () {
                 assert.strictEqual(e.name, 'SDKContractError');
             }
         });
+
+        // An index Number() cannot hold exactly must FAIL CLOSED. Before the guard
+        // '9007199254740993' was stored as ...992, so every deposit, withdraw,
+        // execute and wait on the client silently addressed a neighbouring
+        // contract that the indexer resolves as a legitimate target.
+        it('rejects an index above the exactly-representable range', function () {
+            for (let input of ['9007199254740993', 9007199254740993, '18446744073709551615']) {
+                try {
+                    new ContractClient(makeSdk(), input);
+                    assert.fail('should have thrown for ' + String(input));
+                } catch (e) {
+                    assert.strictEqual(e.name, 'SDKContractError');
+                    assert.strictEqual(e.code, 'INVALID_CONTRACT_INDEX');
+                    assert.ok(/exactly-representable/.test(e.message), 'message names the range: ' + e.message);
+                }
+            }
+        });
+
+        it('accepts the largest exactly-representable index', function () {
+            let client = new ContractClient(makeSdk(), '9007199254740991');
+            assert.strictEqual(client.contractActionIndex, 9007199254740991);
+        });
+
+        it('accepts a bigint index and stores it as a number', function () {
+            let client = new ContractClient(makeSdk(), 42n);
+            assert.strictEqual(client.contractActionIndex, 42);
+        });
+
+        it('rejects non-canonical index spellings rather than coercing them', function () {
+            for (let input of ['   ', true, '12.5', '100abc', -1, '-1', '0x10', '1e3']) {
+                try {
+                    new ContractClient(makeSdk(), input);
+                    assert.fail('should have thrown for ' + String(input));
+                } catch (e) {
+                    assert.strictEqual(e.name, 'SDKContractError', 'for ' + String(input));
+                    assert.strictEqual(e.code, 'INVALID_CONTRACT_INDEX');
+                }
+            }
+        });
     });
 
     describe('call()', function () {

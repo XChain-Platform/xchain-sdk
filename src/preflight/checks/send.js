@@ -53,11 +53,14 @@
  *
  * It is declared, not mirrored, and the distinction is load-bearing.
  * Predicting it needs the tick's DECIMALS *and* the activation state at
- * the block that will carry this action, and mainnet is UNARMED on the
- * house sentinel while testnet and regtest run it from genesis. A check
- * that raised the error unconditionally would reject on mainnet what
- * mainnet still accepts, which is the false-block this module's own
- * contract forbids and which the SDK has shipped once already.
+ * the block that will carry this action, which pre-flight cannot read.
+ * The 2026-09-09 ruling armed it at genesis on EVERY network - the
+ * authority map reads `mainnet: 0` alongside testnet and regtest
+ * (xchain-indexer/src/consolidation_leg_amount_activation.js) - so the
+ * old reason for declaring it, that an unconditional error would reject
+ * on mainnet what mainnet still accepts, no longer holds. Promoting it
+ * to a mirrored error is a client-behaviour change with its own blast
+ * radius and is not made here; until then it stays declared.
  *
  * DESTROY has two BRIDGE supply-path refusals (the base bridge spec),
  * both UNCONDITIONAL on every plane and every height: the gas tick
@@ -134,8 +137,8 @@ async function checkBalanceCovers(ctx, verb) {
 function declareLegAmountRule(ctx, verb) {
     ctx.addUnverified('LEG_AMOUNT_CONSOLIDATION',
         `above its flag-day, a ${verb.toLowerCase()} leg whose amount does not fit its tick's decimals is `
-        + 'rejected on its own instead of merging into a sibling leg; the activation state of the including '
-        + 'block is server-side only, and mainnet is not armed for it');
+        + 'rejected on its own instead of merging into a sibling leg; the rule is armed on every network, '
+        + 'mainnet included, and the activation state of the including block is server-side only');
 }
 
 async function checkSend(ctx) {
@@ -150,8 +153,8 @@ async function checkSend(ctx) {
     ctx.addUnverified('GATED_HANDOFF_REF',
         'above its flag-day a gated-transfer key-handoff MESSAGE is paired with this send by RESOLVED address, '
         + 'and below it by raw wire spelling, so a ^id-compacted MESSAGE destination pairs only where the '
-        + 'flag-day is armed; the activation state of the including block is server-side only, and mainnet '
-        + 'is not armed for it');
+        + 'flag-day is armed; the flag-day is armed on every network, mainnet included, and the activation '
+        + 'state of the including block is server-side only');
 }
 
 // A bridged copy is `<ORIGIN>.<NAME>` with ORIGIN another chain coin (the indexer's

@@ -83,17 +83,20 @@ function tailField(value) {
 // widths (a full address is ~40 bytes). That is the one direction that matters:
 // it plans single-shot a deploy whose real action string is over the cap, and the
 // encoder then refuses the transaction at create time with no hint that chunking
-// was the fix. A trailing empty SLASH_DESTINATION is dropped here exactly as
-// FormatSelector.serialize drops it, so the estimate cannot over-count either and
-// push an otherwise-inline deploy into a chunked (multi-transaction, multi-fee)
-// plan.
+// was the fix. EVERY trailing empty field is dropped here exactly as
+// FormatSelector.serialize drops it (it pops trailing empties before joining), so
+// the estimate cannot over-count either and push an otherwise-inline deploy into a
+// chunked (multi-transaction, multi-fee) plan. That covers a trailing empty
+// SLASH_DESTINATION on v1 and, on v0, an absent CONSTRUCTOR_PARAMS: emitting its
+// separator anyway over-counted by one byte, which is enough to chunk a source
+// whose real compiled push lands exactly on MAX_ACTION_DATA_LENGTH.
 function deployOverhead(opts) {
     const gas      = String(opts.gasLimit || 0);
     const ctor     = ctorString(opts.constructorParams);
     const cooldown = tailField(opts.cooldownBlocks);
     const slashDst = tailField(opts.slashDestination);
     if (cooldown === '' && slashDst === '')
-        return 'DEPLOY|0||' + gas + '|' + ctor;
+        return 'DEPLOY|0||' + gas + (ctor === '' ? '' : '|' + ctor);
     let tail = '|' + cooldown;
     if (slashDst !== '') tail += '|' + slashDst;
     return 'DEPLOY|1||' + gas + '|' + ctor + tail;

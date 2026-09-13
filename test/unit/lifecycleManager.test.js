@@ -466,6 +466,64 @@ describe('LifecycleManager', function () {
             assert.strictEqual(result.txid, 'signedtxid');
             assert.deepStrictEqual(calls, ['sign', 'broadcast']);
         });
+
+        // The compression report is the encoder's own claim about its own answer,
+        // so it cannot be allowed to REPLACE the thing being authorized. Feeding
+        // the gate `compression.data` made it compare the encoder's transaction
+        // against the encoder's own intent, and a substituted SEND with a matching
+        // report passed. The gate reads the SUBMITTED string instead.
+        function sdkForReported(carriedAction, reported, calls) {
+            return makeSdk({
+                actions: { createAction: () => ({ actionString: SUBMITTED, action: 'SEND', version: 0 }) },
+                wallet:  { signPsbt: () => { calls.push('sign'); return { txHex: '00', txid: 'signedtxid', psbtHex: '00' }; } },
+            }, {
+                createTx:    async () => ({
+                    psbt: encoderAnswer(carriedAction), encoding: 'OP_RETURN',
+                    compression: { compressed: true, data: reported, rawData: '' },
+                }),
+                broadcastTx: async () => { calls.push('broadcast'); return { txid: 'signedtxid' }; },
+            });
+        }
+
+        it('refuses a substitution the encoder also declares in compression.data', async function () {
+            const calls = [];
+            // Both halves of the answer are the attacker's: the carrier holds the
+            // substituted SEND and the report declares that same string.
+            const lm = new LifecycleManager(sdkForReported(SUBSTITUTED, SUBSTITUTED, calls));
+            await assert.rejects(
+                () => lm.submitAction({ action: 'SEND', params: {} }, { pubkey: '03pub' },
+                    { wif: FAKE_WIF, waitForIndexer: false }),
+                (e) => e.code === 'CARRIER_ACTION_MISMATCH');
+            assert.deepStrictEqual(calls, [],
+                'a self-consistent encoder answer is still not an authorization');
+        });
+
+        // The legitimate lane the tolerance exists for: a FILE v0 whose COMPRESSION
+        // field the caller left empty and the encoder set. The gate recomputes that
+        // one rewrite locally, so this still signs, and result.actionString reports
+        // the bytes that are ON CHAIN rather than the ones submitted.
+        it('still signs a genuinely compressed FILE and reports the on-chain string', async function () {
+            const calls = [];
+            const Compression = require('../../src/compression.js');
+            const submittedFile = 'FILE|0|doc.txt|text/plain|aaa|bbb|TOK|||';
+            const compressedFile = new Compression().withCompressionField(submittedFile, '1');
+            assert.notStrictEqual(compressedFile, submittedFile);
+            const sdk = makeSdk({
+                actions: { createAction: () => ({ actionString: submittedFile, action: 'FILE', version: 0 }) },
+                wallet:  { signPsbt: () => { calls.push('sign'); return { txHex: '00', txid: 'signedtxid', psbtHex: '00' }; } },
+            }, {
+                createTx:    async () => ({
+                    psbt: encoderAnswer(compressedFile), encoding: 'OP_RETURN',
+                    compression: { compressed: true, data: compressedFile, rawData: 'deflated' },
+                }),
+                broadcastTx: async () => { calls.push('broadcast'); return { txid: 'signedtxid' }; },
+            });
+            const result = await new LifecycleManager(sdk).submitAction(
+                { action: 'FILE', params: {} }, { pubkey: '03pub' },
+                { wif: FAKE_WIF, waitForIndexer: false });
+            assert.deepStrictEqual(calls, ['sign', 'broadcast']);
+            assert.strictEqual(result.actionString, compressedFile);
+        });
     });
 
     // submitAction(): P2SH two-phase path

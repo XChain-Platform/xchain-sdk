@@ -188,6 +188,28 @@ function capFor(table, tick) {
     return ownLookup(table, '*');
 }
 
+// Decide whether a cap table can ever BIND. `{}`, `{ SEND: {} }` and
+// `{ SEND: { TOK: '' } }` are all truthy, so a ceiling gate written as
+// `!!policy.maxPerAction` accepts them while capFor resolves undefined for every
+// lookup and the amount gates are skipped: a ceiling the operator believes in and
+// the evaluator never applies. Own-property reads throughout, for the same reason
+// capFor uses them (G1), so an inherited 'constructor' cannot make an empty table
+// look populated. Shapes: one-level { TICK|'*': cap }, two-level
+// { ACTION: { TICK|'*': cap } }.
+function hasEnforceableCap(table, opts = {}) {
+    if (!table || typeof table !== 'object' || Array.isArray(table)) return false;
+    for (const key of Object.keys(table)) {
+        const value = ownLookup(table, key);
+        if (opts.twoLevel) {
+            if (hasEnforceableCap(value)) return true;
+            continue;
+        }
+        if (typeof value === 'number' && Number.isFinite(value)) return true;
+        if (typeof value === 'string' && value.trim() !== '') return true;
+    }
+    return false;
+}
+
 // Resolve a ^<id> wire-form tick reference to its name via the policy's
 // declared { NAME: id } map. Deterministic and offline: the daemon must not
 // depend on (or trust) an explorer lookup to decide what it signs.
@@ -453,6 +475,7 @@ module.exports = {
     // Exposed so AgentSession and the daemon share the exact same primitives.
     pick,
     capFor,
+    hasEnforceableCap,
     inCollection,
     gtDecimal,
     addDecimal,

@@ -1432,7 +1432,7 @@ export declare class ContractClient {
     /** ACTION_INDEX of the bound contract */
     readonly contractActionIndex: number;
 
-    constructor(sdk: XChainSDK, contractActionIndex: number);
+    constructor(sdk: XChainSDK, contractActionIndex: number | string);
 
     /** Execute a method on the contract (creates EXECUTE action) */
     call(method: string, params?: string[], encoder?: EncoderOptions): Promise<ActionResult>;
@@ -1591,7 +1591,7 @@ export declare class XChainSDK {
     readonly contracts: ContractUtils;
 
     /** Create a bound contract client for repeated interactions with a deployed contract */
-    contract(contractActionIndex: number): ContractClient;
+    contract(contractActionIndex: number | string): ContractClient;
 
 
     /*

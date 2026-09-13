@@ -98,6 +98,24 @@ describe('AgentSession (policy-bounded wallet)', () => {
         expect(() => new AgentSession(fakeSdk, 'WIF', { allowedActions: ['SEND'], stateFile, allowUnbounded: true })).to.not.throw();
     });
 
+    // A cap table that exists but resolves no cap is not a ceiling: capFor returns
+    // undefined for every lookup, so policyEvaluator's amount comparisons are all
+    // skipped and the allowlisted action moves any amount at all.
+    it('refuses construction on a cap table with no usable entry', () => {
+        const build = (extra) => () => new AgentSession(fakeSdk, 'WIF',
+            Object.assign({ allowedActions: ['SEND'], stateFile }, extra));
+        expect(build({ maxPerAction: {} })).to.throw(SDKPolicyError).with.property('code', 'POLICY_INVALID');
+        expect(build({ maxPerAction: { SEND: {} } })).to.throw(SDKPolicyError);
+        expect(build({ maxPerAction: { SEND: { TOK: '' } } })).to.throw(SDKPolicyError);
+        expect(build({ maxPerWindow: { hours: 1, perTick: {} } })).to.throw(SDKPolicyError);
+        // Inherited entries are invisible to capFor, so they are no ceiling either.
+        expect(build({ maxPerAction: { SEND: Object.create({ TOK: '5' }) } })).to.throw(SDKPolicyError);
+        // Populated tables still construct, and the unbounded opt-in is unchanged.
+        expect(build({ maxPerAction: { SEND: { TOK: '5' } } })).to.not.throw();
+        expect(build({ maxPerWindow: { hours: 1, perTick: { '*': '5' } } })).to.not.throw();
+        expect(build({ maxPerAction: {}, allowUnbounded: true })).to.not.throw();
+    });
+
     // kill switch + idempotency
 
     it('refuses a submit with no idempotencyKey, and accepts one with a key', async () => {
@@ -315,6 +333,55 @@ describe('AgentSession (policy-bounded wallet)', () => {
             'POLICY_DUPLICATE_SUBMIT');
         expect(err.details.txid).to.equal('tx123');
         expect(submitStub.calledOnce).to.equal(true);   // second submit never broadcast
+    });
+
+    // Keys outlive the spend window, on their own horizon: the duplicate guard reads
+    // the _pruned() list, so dropping every entry past maxPerWindow.hours lets an
+    // identical retry one window later broadcast and pay a SECOND time while
+    // submit_action advertises at-most-once.
+    it('remembers an idempotency key past the spend window', async () => {
+        const s = mk({ maxPerWindow: { hours: 1, perTick: { TOK: '10' } } });
+        const clock = sinon.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
+        try {
+            await s.send({ tick: 'TOK', amount: '5' }, undefined, { idempotencyKey: 'k-window' });
+            clock.tick(25 * 60 * 60 * 1000);                    // 25h: well past the window
+            const err = await expectDeny(
+                () => s.send({ tick: 'TOK', amount: '5' }, undefined, { idempotencyKey: 'k-window' }),
+                'POLICY_DUPLICATE_SUBMIT');
+            expect(err.details.txid).to.equal('tx123');
+            expect(submitStub.calledOnce).to.equal(true);       // no second broadcast
+        } finally { clock.restore(); }
+    });
+
+    // The one way this retention could deny a legitimate payment: a retained key row
+    // that still counts against maxActions or the per-tick total.
+    it('a retained key row consumes no window budget', async () => {
+        const s = mk({ maxPerWindow: { hours: 1, maxActions: 1, perTick: { TOK: '10' } } });
+        const clock = sinon.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
+        try {
+            await s.send({ tick: 'TOK', amount: '10' }, undefined, { idempotencyKey: 'k-budget-1' });
+            clock.tick(61 * 60 * 1000);
+            const res = await s.send({ tick: 'TOK', amount: '10' }, undefined, { idempotencyKey: 'k-budget-2' });
+            expect(res.policy.windowUsage.count).to.equal(1);
+            expect(res.policy.windowUsage.perTick.TOK).to.equal('10');
+            expect(submitStub.calledTwice).to.equal(true);
+        } finally { clock.restore(); }
+    });
+
+    it('releases the key once the retention horizon passes', async () => {
+        const s = mk({ maxPerWindow: { hours: 1, perTick: { TOK: '10' } }, idempotencyHours: 2 });
+        const clock = sinon.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
+        try {
+            await s.send({ tick: 'TOK', amount: '5' }, undefined, { idempotencyKey: 'k-horizon' });
+            clock.tick(3 * 60 * 60 * 1000);                     // past the 2h horizon
+            await s.send({ tick: 'TOK', amount: '5' }, undefined, { idempotencyKey: 'k-horizon' });
+            expect(submitStub.calledTwice).to.equal(true);
+        } finally { clock.restore(); }
+    });
+
+    it('rejects a non-positive idempotencyHours at construction', () => {
+        expect(() => mk({ idempotencyHours: 0 })).to.throw(SDKPolicyError);
+        expect(() => mk({ idempotencyHours: 'lots' })).to.throw(SDKPolicyError);
     });
 
     it('without an idempotencyKey, repeat submits both broadcast (unchanged behavior)', async () => {

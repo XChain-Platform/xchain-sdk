@@ -156,9 +156,11 @@ async function checkDispenser(ctx) {
         // settles dust payments as valid fills and manufactures escrow on close.
         //
         // Warning rather than error, for exactly the GIVE_AMOUNT reasoning above:
-        // the handler gates both on the block's consensus time, pre-flight has no
-        // block time, and mainnet is unarmed, so below the threshold the chain still
-        // accepts the create.
+        // the handler gates both on the block's consensus time and pre-flight has
+        // no block time, so it cannot certify which side of the flag-day this
+        // create lands on. The 2026-09-09 ruling armed the gate at genesis on
+        // every network (dispenser_amount_positivity_activation reads `mainnet: 0`),
+        // so the unarmed-mainnet half of this reasoning no longer applies.
         const getAmount = ctx.field('GET_AMOUNT');
         if (isSelfPriced(ctx.field('FIAT_CODE'), ctx.field('ORACLE_ADDRESS'))) {
             const decimals = ctx.field('GET_TICK') ? null : nativeCoinDecimals(ctx.field('GET_COIN'));

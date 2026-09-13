@@ -134,6 +134,32 @@ describe('contract identity (meta): static read + deploy pre-flight', function (
                 assert.deepStrictEqual(utils.getExportedMeta(src), { status: 'undecidable' }, src.slice(0, 40));
         });
 
+        // Two module.exports assignments: the chain evaluates whichever runs LAST,
+        // and this walk cannot prove which that is. Reading the FIRST one reported
+        // valid metadata for a source whose evaluated export has none, and refused a
+        // source whose evaluated export is fine, with the exact consensus string.
+        it('is UNDECIDABLE when a source assigns module.exports more than once', function () {
+            const META = "{ name: 'A', description: 'B' }";
+            const first = 'module.exports = { meta: ' + META + ', run() {} };\nmodule.exports = { run() {} };';
+            const reversed = 'module.exports = { run() {} };\nmodule.exports = { meta: ' + META + ', run() {} };';
+            for (const src of [first, reversed])
+                assert.deepStrictEqual(utils.getExportedMeta(src), { status: 'undecidable' }, src.slice(0, 40));
+            // And the pre-flight advises rather than refusing either of them.
+            for (const src of [first, reversed]) {
+                const v = utils.checkExportedMeta(src);
+                assert.strictEqual(v.error, null);
+                assert.strictEqual(v.advisories.length, 1);
+            }
+        });
+
+        it('is UNDECIDABLE when the function-export form assigns <id>.meta more than once', function () {
+            const src = 'function c (xchain) { return 1; }\n' +
+                "c.meta = { name: 'A', description: 'B' };\n" +
+                "c.meta = { name: '', description: '' };\n" +
+                'module.exports = c;';
+            assert.deepStrictEqual(utils.getExportedMeta(src), { status: 'undecidable' });
+        });
+
         it('never throws on junk input', function () {
             for (const src of ['', null, undefined, 42, '<<<'])
                 assert.ok(['present', 'absent', 'undecidable'].includes(utils.getExportedMeta(src).status));

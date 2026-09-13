@@ -21,6 +21,7 @@
  ********************************************************************/
 
 const { SDKContractError } = require('./errors.js');
+const { toWireIndex } = require('./utils/wireIndex.js');
 
 
 class ContractClient {
@@ -29,16 +30,31 @@ class ContractClient {
         if (!contractActionIndex && contractActionIndex !== 0)
             throw new SDKContractError('INVALID_CONTRACT_INDEX', 'contractActionIndex is required');
 
-        // Reject a truthy-but-non-numeric index (e.g. "abc") at construction rather
-        // than letting Number() coerce it to NaN and surface as a malformed
-        // `.../contract/NaN` request from every later call.
-        let idx = Number(contractActionIndex);
-        if (!Number.isInteger(idx) || idx < 0)
+        // Parse the index as a BigInt wire index, not with Number(). The test here
+        // is exact REPRESENTABILITY, not integrality: Number.isInteger() is true of
+        // a value Number() has already rounded, so '9007199254740993' passed it and
+        // was stored as ...992, silently binding every later deposit, withdraw,
+        // execute and wait to a DIFFERENT contract. toWireIndex() refuses a rounded
+        // number and accepts only canonical digits, so a non-representable index
+        // fails closed instead of naming a neighbour.
+        let idx = toWireIndex(contractActionIndex);
+        // An out-of-range index gets its own message, because "not an integer" is
+        // misleading advice for a caller who supplied a perfectly good index that
+        // only a JS number cannot carry. toWireIndex() already refused the rounded
+        // NUMBER spelling, so recognise it here from the raw argument.
+        let outOfRange = (idx !== null && idx > BigInt(Number.MAX_SAFE_INTEGER)) ||
+            (idx === null && typeof contractActionIndex === 'number' &&
+                Number.isInteger(contractActionIndex) && contractActionIndex >= 0);
+        if (outOfRange)
+            throw new SDKContractError('INVALID_CONTRACT_INDEX',
+                'contractActionIndex ' + String(contractActionIndex) + ' is above the exactly-representable range ' +
+                '(2^53-1) and cannot be bound without changing which contract it names');
+        if (idx === null)
             throw new SDKContractError('INVALID_CONTRACT_INDEX',
                 'contractActionIndex must be a non-negative integer (a contract ACTION_INDEX)');
 
         this.sdk = sdk;
-        this.contractActionIndex = idx;
+        this.contractActionIndex = Number(idx);
         this._info = null;
     }
 

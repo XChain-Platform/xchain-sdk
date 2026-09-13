@@ -93,16 +93,25 @@ function hasChunkOutput(psbt, encoding) {
  * byte for byte - a SEND's amount and recipient included, which is what the
  * fund-loss substitution needs to change.
  */
+// Recompute the one tolerated rewrite LOCALLY from the submitted string: the
+// compressed form of a FILE v0 action whose COMPRESSION field the caller left
+// empty. Returns null when no rewrite is legitimate. Derived here rather than
+// read off the encoder's report, so the tolerance stays a computation over the
+// caller's own bytes and never a value the answer supplies.
+function toleratedCompressedForm(intended) {
+    if (typeof intended !== 'string') return null;
+    // A caller that already declared COMPRESSION owns the field; the encoder
+    // does not get to rewrite one it did not set.
+    if (compressionUtils.compressionFieldOf(intended) !== '') return null;
+    try { return compressionUtils.withCompressionField(intended, COMPRESSION_CODE_DEFLATE_RAW); }
+    catch (e) { return null; }   // not a FILE v0, so no rewrite is legitimate
+}
+
 function carriedActionMatches(carried, intended) {
     if (typeof carried !== 'string' || typeof intended !== 'string') return false;
     if (carried === intended) return true;
-    // A caller that already declared COMPRESSION owns the field; the encoder
-    // does not get to rewrite one it did not set.
-    if (compressionUtils.compressionFieldOf(intended) !== '') return false;
-    let compressed;
-    try { compressed = compressionUtils.withCompressionField(intended, COMPRESSION_CODE_DEFLATE_RAW); }
-    catch (e) { return false; }   // not a FILE v0, so no rewrite is legitimate
-    return carried === compressed;
+    const compressed = toleratedCompressedForm(intended);
+    return compressed !== null && carried === compressed;
 }
 
 function mismatch(code, label, details) {
@@ -183,8 +192,24 @@ function assertCarrierBinding({ psbt, actionString, encoding, carrierScripts, ne
     const enc = String(encoding || '').toUpperCase();
     if (!CHUNK_ENCODINGS.includes(enc)) return;
     if (!hasChunkOutput(asPsbt(psbt, network), enc)) return;
-    const verified = verifyCarrierScripts({ psbt, carrierScripts, encoding: enc, actionString, network });
+    // verifyCarrierScripts compares the reassembled payload byte for byte, so it
+    // carries none of the inline lane's COMPRESSION tolerance. Compression runs
+    // BEFORE the encoder picks an encoding, and a FILE large enough to chunk is
+    // still large enough to chunk once deflated, so the chunk lane is exactly
+    // where a legitimate compressed FILE lands. Offer the same single locally
+    // recomputed rewrite here rather than the encoder's reported string: a
+    // substituted SEND still has nowhere to hide, and a real compressed FILE
+    // stops being refused by its own gate.
+    let verified = verifyCarrierScripts({ psbt, carrierScripts, encoding: enc, actionString, network });
     if (verified && verified.ok === true) return;
+    const compressedForm = toleratedCompressedForm(actionString);
+    if (compressedForm) {
+        const retried = verifyCarrierScripts({ psbt, carrierScripts, encoding: enc, actionString: compressedForm, network });
+        if (retried && retried.ok === true) return;
+        // Report the compressed attempt's reason: on a FILE lane it is the one
+        // that describes what the transaction actually carries.
+        verified = retried;
+    }
     // SCRIPTS_MISSING lands here too, and deliberately: an encoder that returns no
     // carrier scripts leaves the largest payloads unverifiable, and "cannot check"
     // is not "checked", so the absent evidence fails the binding rather than passing it.

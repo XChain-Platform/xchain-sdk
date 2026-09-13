@@ -26,6 +26,7 @@
  *       maxPerAction: { SEND: { MYTOKEN: '100', '*': '10' } },
  *       maxPerWindow: { hours: 24, perTick: { MYTOKEN: '500' }, maxActions: 50 },
  *       confirmAbove: { perTick: { '*': '50' }, handler: async (ctx) => bool },
+ *       idempotencyHours: 720,                             // key memory, default 30d
  *       onPolicyViolation: (violation) => { ... },         // observe denials
  *       stateFile: '/path/to/usage.json'                   // window persistence
  *   });
@@ -49,7 +50,7 @@ const { SDKPolicyError } = require('./errors.js');
 // The pure policy verdict is shared with the co-signer daemon so both
 // enforcement points run identical logic. AgentSession adds the throw +
 // observer + file-backed window store around it.
-const { evaluatePolicy, addDecimal, UNRESOLVED_TICK_BUCKET } = require('./cosigner/policyEvaluator.js');
+const { evaluatePolicy, addDecimal, hasEnforceableCap, UNRESOLVED_TICK_BUCKET } = require('./cosigner/policyEvaluator.js');
 
 class AgentSession extends WalletSession {
 
@@ -65,21 +66,33 @@ class AgentSession extends WalletSession {
             throw new SDKPolicyError('POLICY_INVALID', 'maxPerWindow.hours must be a positive number');
         if (policy.confirmAbove && typeof policy.confirmAbove.handler !== 'function')
             throw new SDKPolicyError('POLICY_INVALID', 'confirmAbove requires a handler function');
+        // How long an idempotency key is REMEMBERED, which is not how long a spend
+        // window lasts (see _pruned).
+        if (policy.idempotencyHours !== undefined
+            && (!Number.isFinite(policy.idempotencyHours) || policy.idempotencyHours <= 0))
+            throw new SDKPolicyError('POLICY_INVALID', 'idempotencyHours must be a positive number');
 
-        // BREAKING, and deliberately: a policy with an action allowlist but no
-        // monetary ceiling bounded nothing, so an automated agent could execute an
-        // allowed value-moving action without limit. At least one
-        // enforceable ceiling is now required, and running without one is an
-        // explicit, auditable opt-in rather than the state a caller reaches by
-        // omission. Same shape the X402Client fail-closed change took:
-        // the default is safe, unbounded is a word someone had to type.
-        const hasCeiling = !!policy.maxPerAction
-            || !!(win && win.perTick)
+        // Require at least one enforceable ceiling, BREAKING for a policy that ships
+        // an action allowlist with no monetary ceiling: such a policy bounds nothing,
+        // so an automated agent can execute an allowed value-moving action without
+        // limit. Running without a ceiling is an explicit, auditable opt-in rather
+        // than the state a caller reaches by omission. Same shape as the X402Client
+        // fail-closed default: the default is safe, unbounded is a word someone types.
+        //
+        // The cap tables are tested for an ENFORCEABLE entry, not for truthiness:
+        // `maxPerAction: {}`, `{ SEND: {} }` and `maxPerWindow.perTick: {}` are all
+        // truthy objects that capFor resolves to undefined for every lookup, so a
+        // truthiness test passes each one through this gate while every amount
+        // comparison in policyEvaluator is skipped - an allowlisted SEND of any size,
+        // under a policy the operator reads as capped.
+        const hasCeiling = hasEnforceableCap(policy.maxPerAction, { twoLevel: true })
+            || hasEnforceableCap(win && win.perTick)
             || !!policy.confirmAbove;
         if (!hasCeiling && policy.allowUnbounded !== true)
             throw new SDKPolicyError('POLICY_INVALID',
                 'AgentSession requires at least one spend ceiling: maxPerAction, maxPerWindow.perTick, ' +
-                'or confirmAbove. An allowlist alone bounds WHICH actions run, never how much they move. ' +
+                'or confirmAbove. An allowlist alone bounds WHICH actions run, never how much they move, ' +
+                'and a cap table with no usable entry (e.g. {} or { SEND: {} }) is not a ceiling. ' +
                 'Set allowUnbounded: true to run without one.');
 
         this.policy = {
@@ -98,6 +111,10 @@ class AgentSession extends WalletSession {
             // SECOND transaction, so the key is required on the automated rail rather
             // than offered. Same opt-in shape as allowUnbounded.
             allowUnkeyedSubmits: policy.allowUnkeyedSubmits === true,
+            // Retention horizon for idempotency keys, independent of maxPerWindow.
+            // 30 days by default: long enough that no realistic retry outlives it,
+            // bounded so the state file cannot grow without limit.
+            idempotencyHours:    policy.idempotencyHours === undefined ? 720 : policy.idempotencyHours,
         };
 
         // Operator kill switch. Two halves, because they answer different
@@ -179,12 +196,28 @@ class AgentSession extends WalletSession {
         return this._usage;
     }
 
+    // Two cutoffs, because a spend window and an at-most-once record answer
+    // different questions. An idempotency key that dies with the window lets an
+    // identical retry one window later re-broadcast and pay a SECOND time, against a
+    // submit_action that advertises at-most-once without qualification. A keyed row
+    // therefore outlives its window, COMPACTED to { t, key, txid }: action, tick and
+    // amount are dropped so an aged-out row can never be summed into a spend cap
+    // even if some future caller sums the raw list. _windowUsage() filters by the
+    // window cutoff regardless, which is the belt to this brace.
     _pruned() {
         const usage = this._loadUsage();
         const win = this.policy.maxPerWindow;
         if (win) {
-            const cutoff = Date.now() - win.hours * 3600 * 1000;
-            usage.entries = usage.entries.filter((e) => e.t >= cutoff);
+            const now = Date.now();
+            const windowCutoff = now - win.hours * 3600 * 1000;
+            const keyCutoff = now - this.policy.idempotencyHours * 3600 * 1000;
+            const kept = [];
+            for (const e of usage.entries) {
+                if (e.t >= windowCutoff) { kept.push(e); continue; }
+                if (e.key !== undefined && e.key !== null && e.t >= keyCutoff)
+                    kept.push({ t: e.t, key: e.key, txid: e.txid === undefined ? null : e.txid });
+            }
+            usage.entries = kept;
         }
         return usage;
     }
@@ -204,16 +237,25 @@ class AgentSession extends WalletSession {
     // bucket the evaluator reads for exactly that case (COLLECT v0, UNSTAKE v0, any
     // future amount-without-TICK shape). Skipping them made a wildcard window cap
     // read a used total of '0' forever, binding each transaction independently.
+    //
+    // The window cutoff is applied HERE as well as in _pruned(), because _pruned()
+    // now retains aged-out keyed rows for the at-most-once guard. Counting those
+    // rows would let a spent-and-expired submission keep consuming maxActions and
+    // perTick budget forever, which is the one way this retention could deny a
+    // legitimate payment.
     _windowUsage() {
         const usage = this._pruned();
+        const win = this.policy.maxPerWindow;
+        const cutoff = win ? Date.now() - win.hours * 3600 * 1000 : -Infinity;
+        const inWindow = usage.entries.filter((e) => e.t >= cutoff);
         const perTick = Object.create(null);
-        for (const e of usage.entries) {
+        for (const e of inWindow) {
             if (e.amount === undefined) continue;
             const key = e.tick === undefined || e.tick === null
                 ? UNRESOLVED_TICK_BUCKET : String(e.tick);
             perTick[key] = addDecimal(perTick[key] || '0', e.amount);
         }
-        return { count: usage.entries.length, perTick, hours: this.policy.maxPerWindow ? this.policy.maxPerWindow.hours : null };
+        return { count: inWindow.length, perTick, hours: win ? win.hours : null };
     }
 
     // Append one window entry and persist. Returns the pushed entry (a live reference
@@ -324,6 +366,7 @@ class AgentSession extends WalletSession {
             if (prior)
                 this._deny('POLICY_DUPLICATE_SUBMIT',
                     `a submission with idempotencyKey ${keyStr} was already recorded` +
+                    ` (keys are remembered for ${this.policy.idempotencyHours}h)` +
                     (prior.txid ? ` (txid ${prior.txid})` : '') +
                     '; not broadcasting again. Resume the existing payment instead of retrying.',
                     { idempotencyKey: keyStr, txid: prior.txid || null });

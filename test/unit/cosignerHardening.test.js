@@ -615,4 +615,111 @@ describe('G5: window-store single-writer lock', function () {
             try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
         }
     });
+
+    // The reclamation race. A stale takeover that deletes the lock BY NAME lets two
+    // starters that both observed the same dead holder both delete: the second
+    // one's unlink removes the first one's LIVE lock and it publishes its own.
+    // Both stores then hold the file and, since each rewrites it whole from its own
+    // cache, they discard each other's consumption history and restore the budget.
+    //
+    // Driven deterministically rather than with real concurrency: the second
+    // starter's FIRST read of the lockfile is served the stale record it would
+    // read before the first starter publishes, and everything after that is the
+    // real code path.
+    it('refuses a second starter that already read the stale holder the first one took over', function () {
+        const stateFile = tmpStateFile('lock-race');
+        const lockFile  = stateFile + '.lock';
+        const staleRecord = JSON.stringify({ pid: 4194304, t: Date.now() });
+        fs.writeFileSync(lockFile, staleRecord);
+
+        const first = new WindowStore(stateFile, 24, null, { init: true });
+        const published = fs.readFileSync(lockFile, 'utf8');
+
+        const realRead = fs.readFileSync;
+        let served = false;
+        fs.readFileSync = function (p, ...rest) {
+            if (!served && p === lockFile) { served = true; return staleRecord; }
+            return realRead.call(fs, p, ...rest);
+        };
+        let err = null;
+        try { new WindowStore(stateFile, 24, null, { init: true }); }
+        catch (e) { err = e; }
+        finally { fs.readFileSync = realRead; }
+
+        try {
+            expect(err, 'the second starter must not acquire a lock the first one holds').to.not.equal(null);
+            expect(err.code).to.equal('WINDOW_STORE_LOCKED');
+            expect(fs.existsSync(lockFile), 'the live lock must survive the refusal').to.equal(true);
+            expect(fs.readFileSync(lockFile, 'utf8'), 'the surviving lock must still be the first store\'s')
+                .to.equal(published);
+            const leftovers = fs.readdirSync(path.dirname(stateFile))
+                .filter(f => f.startsWith(path.basename(lockFile) + '.stale.'));
+            expect(leftovers, 'a refused reclaim must not leave a carried-away lock behind').to.deep.equal([]);
+
+            // And the survivor still owns the window: its charge persists.
+            first.record({ action: 'SEND', tick: 'TOK', amount: '7' });
+            expect(JSON.parse(fs.readFileSync(stateFile, 'utf8')).entries.length).to.equal(1);
+        } finally {
+            first.release();
+            try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
+        }
+    });
+
+    it('leaves no carried-away lock behind after a successful stale takeover', function () {
+        const stateFile = tmpStateFile('lock-stale-clean');
+        fs.writeFileSync(stateFile + '.lock', JSON.stringify({ pid: 4194304, t: Date.now() }));
+        const store = new WindowStore(stateFile, 24, null, { init: true });
+        try {
+            const leftovers = fs.readdirSync(path.dirname(stateFile))
+                .filter(f => f.startsWith(path.basename(stateFile) + '.lock.stale.'));
+            expect(leftovers).to.deep.equal([]);
+        } finally {
+            store.release();
+            try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
+        }
+    });
+
+    // Fencing: the acquire fix stops two STARTERS racing, and this stops a store
+    // that lost its lock afterwards from rewriting the window from a stale cache.
+    it('refuses to record once its lock has been taken by another store', function () {
+        const stateFile = tmpStateFile('lock-fence');
+        const lockFile  = stateFile + '.lock';
+        const first = new WindowStore(stateFile, 24, null, { init: true });
+        first.record({ action: 'SEND', tick: 'TOK', amount: '5' });
+
+        // An operator `rm` of the lockfile is enough; a successor then starts.
+        fs.unlinkSync(lockFile);
+        const second = new WindowStore(stateFile, 24, null, {});
+        second.record({ action: 'SEND', tick: 'TOK', amount: '3' });
+        const afterSecond = fs.readFileSync(stateFile, 'utf8');
+
+        try {
+            let err = null;
+            try { first.record({ action: 'SEND', tick: 'TOK', amount: '99' }); } catch (e) { err = e; }
+            expect(err, 'a fenced store must refuse rather than clobber').to.not.equal(null);
+            expect(err.code).to.equal('WINDOW_STORE_FENCED');
+            expect(fs.readFileSync(stateFile, 'utf8'), 'the successor\'s history must be untouched')
+                .to.equal(afterSecond);
+        } finally {
+            second.release();
+            try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
+        }
+    });
+
+    it('does not delete a lock that now belongs to a successor', function () {
+        const stateFile = tmpStateFile('lock-release-fence');
+        const lockFile  = stateFile + '.lock';
+        const first = new WindowStore(stateFile, 24, null, { init: true });
+        fs.unlinkSync(lockFile);
+        const second = new WindowStore(stateFile, 24, null, {});
+        const successorLock = fs.readFileSync(lockFile, 'utf8');
+        try {
+            first.release();
+            expect(fs.existsSync(lockFile), 'the successor\'s lock must survive').to.equal(true);
+            expect(fs.readFileSync(lockFile, 'utf8')).to.equal(successorLock);
+        } finally {
+            second.release();
+            try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
+        }
+    });
 });

@@ -51,6 +51,17 @@ describe('networks', function() {
             expect(() => getNetwork(null)).to.throw(/Unknown network/);
         });
 
+        // NETWORKS is a plain object literal, so a bare index lookup answers every
+        // Object.prototype member with a truthy non-network value. Those resolved
+        // instead of throwing, and AuthUtils then passed the resulting undefined
+        // messagePrefix into bitcoinMessage.sign/verify rather than the caller
+        // getting "Unknown network" for an unsupported string.
+        it('should throw on inherited Object.prototype keys, not resolve them', function() {
+            for (const key of ['__proto__', 'constructor', 'toString', 'valueOf',
+                               'hasOwnProperty', 'isPrototypeOf', 'propertyIsEnumerable'])
+                expect(() => getNetwork(key), key).to.throw(/Unknown network/);
+        });
+
         it('should return frozen objects', function() {
             const net = getNetwork('bitcoin-mainnet');
             expect(Object.isFrozen(net)).to.be.true;

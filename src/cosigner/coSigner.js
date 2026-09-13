@@ -175,6 +175,22 @@ function taprootKeyPathSighash(psbt, inputIndex, hashType) {
         hashType === undefined ? bitcoin.Transaction.SIGHASH_DEFAULT : hashType);
 }
 
+// The txid of the COMMIT a reveal spends, or null. §3.5 pins the commit outpoint
+// at input 0 (the decoder's recognition depends on it, and _checkPrevouts and
+// _checkSource both rely on the same placement), so the commit txid is input 0's
+// prevout hash, byte-reversed into display order the way the window store records
+// it. Best-effort: a malformed PSBT returns null and the caller keeps the full
+// window projection rather than guessing.
+function revealCommitTxid(psbt) {
+    try {
+        const hash = psbt.txInputs[0].hash;
+        if (!Buffer.isBuffer(hash) || hash.length !== 32) return null;
+        return Buffer.from(hash).reverse().toString('hex');
+    } catch (e) {
+        return null;
+    }
+}
+
 class CoSigner {
 
     /*
@@ -725,7 +741,25 @@ class CoSigner {
         //    true: _checkOutputs refuses every OP_RETURN on an envelope role, so a
         //    cancel cannot carry one. Weaken that refusal and this skip becomes an
         //    unjudged signing path.
-        const windowUsage = this.windowStore ? this.windowStore.snapshot() : undefined;
+        //
+        //    A REVEAL is judged against the window MINUS its own commit's entry,
+        //    when this daemon recorded one. Step 10 charges an envelope once, at
+        //    the commit, but the reveal was still evaluated against the full
+        //    snapshot, so the evaluator projected a SECOND expenditure for an
+        //    action already paid for: with maxActions:1 the commit passes, fills
+        //    the window and its own reveal is denied POLICY_WINDOW_COUNT_EXCEEDED,
+        //    leaving a broadcast commit stuck until the window expires or the
+        //    agent pays to cancel. Removing that one entry is not a relaxation of
+        //    the window: the reveal is judged on exactly the usage its commit was,
+        //    with every other gate (allowedActions, per-action cap, destinations,
+        //    confirmAbove) untouched. It applies ONLY where the store holds a live
+        //    entry for the commit outpoint this reveal spends, so a commit this
+        //    daemon never charged keeps the full projection and fails closed.
+        let windowUsage = this.windowStore ? this.windowStore.snapshot() : undefined;
+        if (this.windowStore && env && env.role === 'reveal') {
+            const adjusted = this.windowStore.snapshotExcludingTxid(revealCommitTxid(psbt));
+            if (adjusted) windowUsage = adjusted;
+        }
         let verdict = { ok: true, evaluation: {} };
         if (!env || env.role !== 'cancel') {
             verdict = evaluatePolicy(this.policy,

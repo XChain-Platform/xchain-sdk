@@ -37,8 +37,9 @@
 
 'use strict';
 
-const fs   = require('fs');
-const path = require('path');
+const fs     = require('fs');
+const path   = require('path');
+const crypto = require('crypto');
 const { addDecimal, UNRESOLVED_TICK_BUCKET } = require('./policyEvaluator.js');
 
 // How far ahead of our own clock a persisted timestamp may sit before it is
@@ -100,6 +101,12 @@ class WindowStore {
         // operator can be told about them without the store throwing forever.
         this._quarantined = [];
         this._lockFile = null;
+        // Identifies THIS store instance in the holder record, so a store that has
+        // lost its lock can tell the difference between "the lock is still mine"
+        // and "a lockfile exists". The pid alone cannot: a successor on the same
+        // host, or this pid after an operator cleared and another daemon retook the
+        // file, both read back as a plausible holder.
+        this._lockNonce = crypto.randomBytes(16).toString('hex');
         this._init = opts.init === true;
         if (opts.lock !== false) this._acquireLock();
         // Load EAGERLY so an absent or unreadable window is a startup failure the
@@ -130,7 +137,9 @@ class WindowStore {
     // the fail-closed unreadable-holder branch in _acquireLock is what covers it.
     _publishLock(lockFile) {
         const tmp    = `${lockFile}.${process.pid}.tmp`;
-        const record = JSON.stringify({ pid: process.pid, t: Date.now() });
+        // `pid` and `t` keep their exact shape: external tooling reads them. The
+        // nonce is additive, and is what _assertLockOwned compares against.
+        const record = JSON.stringify({ pid: process.pid, t: Date.now(), nonce: this._lockNonce });
         let fd = null;
         try {
             fd = fs.openSync(tmp, 'w', 0o600);
@@ -198,9 +207,54 @@ class WindowStore {
                     err.holderPid = null;
                     throw err;
                 }
-                // Stale: the recorded holder is provably gone.
+                // Stale: the recorded holder is provably gone. Reclaim by RENAME,
+                // never by name.
+                //
+                // unlinkSync(lockFile) deletes whatever sits at that name when it
+                // runs, which need not be the record just read. Two starters that
+                // both observe the same dead holder both reach this line: the first
+                // deletes the stale lock and publishes a LIVE one, and the second's
+                // unlink then deletes that live lock and publishes its own. Both
+                // constructors return, both stores hold the file, and because each
+                // rewrites the whole file from its own cache they discard each
+                // other's consumption history and silently restore the full
+                // spending budget. _publishLock's hardlink atomicity covers
+                // publication, not reclamation, so it never saw this.
+                //
+                // rename claims one directory entry atomically, so only one
+                // contender can carry the file away, and the carried record is then
+                // checked against the dead holder that authorized the takeover.
                 console.warn(`[cosigner] taking over a stale window-store lock at ${lockFile} (dead pid ${pid})`);
-                try { fs.unlinkSync(lockFile); } catch (e2) { /* raced; the retry re-checks */ }
+                const carried = `${lockFile}.stale.${process.pid}.${crypto.randomBytes(6).toString('hex')}`;
+                try { fs.renameSync(lockFile, carried); }
+                catch (e2) { continue; }   // another starter carried it away; the retry re-reads
+                let carriedHolder = null;
+                try { carriedHolder = JSON.parse(fs.readFileSync(carried, 'utf8')); } catch (e2) { /* unreadable */ }
+                const carriedPid = carriedHolder && carriedHolder.pid;
+                if (carriedPid !== pid || pidAlive(carriedPid)) {
+                    // Not the record that authorized this takeover: a successor
+                    // published between the read and the rename. Put it back and
+                    // refuse, rather than deleting a lock somebody else is holding.
+                    let restored = false;
+                    try { fs.linkSync(carried, lockFile); restored = true; }
+                    catch (e2) {
+                        if (e2.code !== 'EEXIST' && !fs.existsSync(lockFile)) {
+                            try { fs.renameSync(carried, lockFile); restored = true; }
+                            catch (e3) { /* leave the carried file for the operator to find */ }
+                        }
+                    }
+                    if (restored || fs.existsSync(lockFile))
+                        try { fs.unlinkSync(carried); } catch (e2) { /* already moved or gone */ }
+                    const err = new Error(
+                        `co-signer window state at ${this._stateFile}: the stale lock at ${lockFile} was ` +
+                        `reclaimed by another starting process before this one could take it over. Two ` +
+                        `daemons sharing one window store overwrite each other's consumption history ` +
+                        `wholesale, silently re-opening the full spending budget; refusing to start.`);
+                    err.code = 'WINDOW_STORE_LOCKED';
+                    err.holderPid = Number.isInteger(carriedPid) ? carriedPid : null;
+                    throw err;
+                }
+                try { fs.unlinkSync(carried); } catch (e2) { /* already gone */ }
             }
         }
         const err = new Error(`co-signer window state at ${this._stateFile}: could not acquire the ` +
@@ -213,9 +267,45 @@ class WindowStore {
     // over (or at shutdown); the process-exit hook is the backstop.
     release() {
         if (!this._lockFile) return;
-        try { fs.unlinkSync(this._lockFile); } catch (e) { /* already gone */ }
+        // Only ever remove a lock this instance still owns. A lockfile at our name
+        // that carries somebody else's nonce belongs to a successor, and deleting
+        // it would hand the store to a third starter as a free takeover.
+        if (this._lockIsOurs() !== false)
+            try { fs.unlinkSync(this._lockFile); } catch (e) { /* already gone */ }
         HELD_LOCKS.delete(this._lockFile);
         this._lockFile = null;
+    }
+
+    // Tri-state on purpose: true (ours), false (provably somebody else's), null
+    // (no readable holder record, so no proof either way). Only `false` is
+    // evidence of loss, mirroring the acquire path's rule that "I cannot tell who
+    // holds this" and "nobody holds this" are different answers.
+    _lockIsOurs() {
+        let holder = null;
+        try { holder = JSON.parse(fs.readFileSync(this._lockFile, 'utf8')); }
+        catch (e) { return e.code === 'ENOENT' ? false : null; }
+        if (!holder || typeof holder.nonce !== 'string') return null;
+        return holder.nonce === this._lockNonce;
+    }
+
+    // Refuse to write the window from a cache this store no longer has the right
+    // to publish. The acquire fix stops two STARTERS racing; this stops a store
+    // that lost its lock afterwards (an operator `rm` of the lockfile, a rogue
+    // non-protocol writer, a container restart reusing the path) from rewriting
+    // the whole file and restoring already-spent budget. Fail closed and loud: the
+    // co-signer treats a throw out of record() as a refusal to authorize, so no
+    // signature is released by a fenced store.
+    _assertLockOwned() {
+        if (!this._lockFile) return;   // constructed with { lock: false }
+        if (this._lockIsOurs() !== false) return;
+        const message = `co-signer window state at ${this._stateFile} is no longer owned by this store ` +
+            `(the lock at ${this._lockFile} names another holder). Writing the window from this store's ` +
+            `cache would discard another daemon's consumption history and re-open the spending budget; ` +
+            `refusing. Confirm which daemon owns this state file.`;
+        this._fault(message, { stateFile: this._stateFile, lockFile: this._lockFile });
+        const err = new Error(message);
+        err.code = 'WINDOW_STORE_FENCED';
+        throw err;
     }
 
     _fault(message, context) {
@@ -340,10 +430,38 @@ class WindowStore {
     // LOOSENS the per-tick cap, since the un-added amount never reaches perTick, which
     // is why _load now refuses such a row outright. Kept here as belt-and-
     // braces for a file written by an older build.
-    snapshot() {
+    // The same snapshot with ONE already-charged entry left out, or null when no
+    // live entry carries that txid.
+    //
+    // An envelope is two transactions carrying ONE action and is charged once, at
+    // the commit (coSigner.js step 10). The reveal was still EVALUATED against the
+    // full snapshot, so the evaluator projected a second expenditure for an action
+    // the window had already paid for: at maxActions:1 the commit passes, consumes
+    // the window, and its own reveal is then denied POLICY_WINDOW_COUNT_EXCEEDED,
+    // stranding a broadcast commit until the window expires or it is cancelled.
+    // Handing the reveal a snapshot with its commit's own entry removed makes it
+    // judged exactly as the commit was, with every gate still in force, instead of
+    // charged twice. Null when the commit is one this daemon never recorded
+    // (externally funded, or already aged out), so that reveal keeps the full
+    // projection and the caller fails closed.
+    snapshotExcludingTxid(txid) {
+        if (typeof txid !== 'string' || txid.length === 0) return null;
+        const live = this._pruned().entries;
+        if (!live.some((e) => e.txid === txid)) return null;
+        return this.snapshot({ excludeTxid: txid });
+    }
+
+    snapshot(opts) {
+        const excludeTxid = (opts && typeof opts.excludeTxid === 'string') ? opts.excludeTxid : null;
         const usage = this._pruned();
+        // NEVER assign back into `usage`: _pruned returns the LOADED usage object
+        // and writing its entries here would delete the excluded entry from the
+        // store's own live state, turning a read into a silent budget refund.
+        const entries = excludeTxid
+            ? usage.entries.filter((e) => e.txid !== excludeTxid)
+            : usage.entries;
         const perTick = Object.create(null);
-        for (const e of usage.entries) {
+        for (const e of entries) {
             if (e.amount === undefined) continue;
             try {
                 // G8: an entry whose tick never resolved still accumulates, under a
@@ -360,7 +478,7 @@ class WindowStore {
                     { action: e.action, txid: e.txid || null });
             }
         }
-        return { count: usage.entries.length, perTick };
+        return { count: entries.length, perTick };
     }
 
     // Entries this store could not accumulate. Non-empty means the persisted
@@ -372,6 +490,7 @@ class WindowStore {
     // the budget is consumed on authorization, conservatively, even if the agent
     // never completes the aggregate (can't double-spend the cap).
     record({ action, tick, amount, txid }) {
+        this._assertLockOwned();
         const usage = this._pruned();
         const now = this._now();
         // G19: a backward clock step between writes would let a later entry sort
@@ -409,6 +528,7 @@ class WindowStore {
     // The file is 0600: the window is both the spending budget and the approval
     // audit log, and nothing but the daemon uid has any business in it.
     _persist(usage) {
+        this._assertLockOwned();
         fs.mkdirSync(path.dirname(this._stateFile), { recursive: true });
         const tmp = this._stateFile + '.tmp';
         const fd = fs.openSync(tmp, 'w', 0o600);

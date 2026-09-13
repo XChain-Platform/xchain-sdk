@@ -223,6 +223,38 @@ describe('pre-flight Tier-2 per-action matrix', function () {
             expect(f, 'MAX_MINT=0 means uncapped, not a zero-mint cap').to.equal(undefined);
         });
 
+        // The producer-side precision contract, pinned from the consumer end. The
+        // explorer serves mints.max as a decimal string at the token's decimals; when
+        // it served a JS float instead, a cap of 100000000.00000002 arrived as
+        // 100000000.00000001 and a mint of exactly the configured cap was rejected.
+        const precisionToken = (max) => realToken({
+            info:   { coin: 'BTC', tick: 'JDOG', description: '', owner: 'someone-else', tick_id: 1, decimals: 8 },
+            mints:  { max, address_max: null, start_block: 0, stop_block: 0 },
+            supply: { current: '0', max: '0', decimals: 8 },
+        });
+
+        it('does not flag a mint equal to a high-precision decimal-string cap', async function () {
+            const tok = precisionToken('100000000.00000002');
+            const r = await reportFor('MINT|0|JDOG|100000000.00000002', { getToken: () => tok });
+            const f = r.findings.find(x => x.code === 'MINT_OVER_MAX');
+            expect(f, 'a mint equal to the cap is not over the cap').to.equal(undefined);
+        });
+
+        // The negative control for the case above: one ulp over the cap must still
+        // fire, and the float-truncated cap the old producer served must fire too.
+        // Without these two, the case above would pass on a check that never runs.
+        it('still flags a mint above a high-precision cap, and on the truncated cap', async function () {
+            const exact = precisionToken('100000000.00000002');
+            const over = await reportFor('MINT|0|JDOG|100000000.00000003', { getToken: () => exact });
+            expect(over.findings.find(x => x.code === 'MINT_OVER_MAX'),
+                'one ulp above the cap must still be flagged').to.not.equal(undefined);
+
+            const truncated = precisionToken(100000000.00000002);
+            const lossy = await reportFor('MINT|0|JDOG|100000000.00000002', { getToken: () => truncated });
+            expect(lossy.findings.find(x => x.code === 'MINT_OVER_MAX'),
+                'the float cap is exactly the failure the producer fix removes').to.not.equal(undefined);
+        });
+
         // The MAX_SUPPLY twin of the case above, and the sharper one: '0' is a
         // truthy STRING, so the headroom path ran with maxSupply=0 and produced a
         // NEGATIVE headroom, making every mint on an uncapped token an error. At/after

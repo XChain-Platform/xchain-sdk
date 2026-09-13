@@ -145,6 +145,19 @@ class Actions {
         // pass through untouched for the validator to report.
         fields = this._normalizeLegs(fields);
 
+        // [3f] A top-level `version` is the same request spelled the other way (the
+        // shape sdk.decoder.parse() output and pre-flight callers carry). Fold it
+        // into fields.VERSION HERE, before casting and validation, so the
+        // version-dependent rules in validator.js check the version that will
+        // actually be serialized: they read fields.VERSION only, and an unfolded
+        // top-level spelling lets VOTE/DELEGATE/DEPLOY validate against the
+        // auto-selected format and then serialize a different one, costing a miner
+        // fee on an action the indexer rejects. A params-level VERSION still wins,
+        // and 0 is a valid version, so the tests are against undefined/null/''.
+        if ((fields.VERSION === undefined || fields.VERSION === null || fields.VERSION === '')
+            && data.version !== undefined && data.version !== null && data.version !== '')
+            fields.VERSION = data.version;
+
         // [4] Cast numeric fields
         fields = this.util.setNumberFormats(fields);
 
@@ -155,16 +168,13 @@ class Actions {
         // [6] Select optimal format version
         // Callers may force a specific version by passing `version` in params (e.g. STAKE v1 vs v2).
         // VERSION is otherwise an auto-field set by the selector from the format key.
+        // Both spellings arrive here as fields.VERSION: the top-level one was folded
+        // in at [3f] so validation above saw it too.
         let explicitVersion = undefined;
         if (fields.VERSION !== undefined && fields.VERSION !== null && fields.VERSION !== '') {
             explicitVersion = fields.VERSION;
             delete fields.VERSION;
         }
-        // A top-level `version` is the same request spelled the other way, and
-        // pre-flight callers spell it that way. Honoured here so both entry
-        // points read it identically; a params-level VERSION still wins.
-        if (explicitVersion === undefined && data.version !== undefined && data.version !== null && data.version !== '')
-            explicitVersion = data.version;
         let selected = FormatSelector.select(actionName, fields, explicitVersion);
 
         // [6b] DEPLOY stakeable formats (v1/v3) carry CONSTRUCTOR_PARAMS as a

@@ -285,6 +285,29 @@ describe('MCP server (write tools)', () => {
         expect(build(POLICY)).to.not.throw();
     });
 
+    it('refuses a cap table that is present but holds no usable cap', () => {
+        // `{}` is truthy, so a ceiling gate written as `!!pol.maxPerAction` accepted
+        // every table below while capFor resolved undefined for each lookup and every
+        // amount comparison in policyEvaluator was skipped: submit_action could SEND
+        // any amount under a policy the operator wrote as capped.
+        const build = (policy) => () => buildServer({
+            sdkFactory: (network) => writableStub(network),
+            fetch: async () => ({ ok: true, text: async () => 'x' }),
+            wallet: { wif: 'W', policy },
+        });
+        expect(build({ allowedActions: ['SEND'], maxPerAction: {} })).to.throw(/binding amount ceiling/);
+        expect(build({ allowedActions: ['SEND'], maxPerAction: { SEND: {} } })).to.throw(/binding amount ceiling/);
+        expect(build({ allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '' } } })).to.throw(/binding amount ceiling/);
+        expect(build({ allowedActions: ['SEND'], maxPerWindow: { hours: 24, perTick: {} } })).to.throw(/binding amount ceiling/);
+        // An INHERITED entry must not make an empty table look populated: capFor
+        // reads own properties only, so it would resolve no cap from one (G1).
+        expect(build({ allowedActions: ['SEND'], maxPerAction: { SEND: Object.create({ TOK: '5' }) } }))
+            .to.throw(/binding amount ceiling/);
+        // A populated table on either clause still builds.
+        expect(build({ allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '5' } } })).to.not.throw();
+        expect(build({ allowedActions: ['SEND'], maxPerWindow: { hours: 24, perTick: { '*': '5' } } })).to.not.throw();
+    });
+
     it('keeps confirmAbove out of the ceiling predicate, which no runtime test can pin', () => {
         // hasAmountCap is policyEvaluator's hasAmountLimit minus its
         // `|| !!policy.confirmAbove` clause, and the omission is deliberate: on this
