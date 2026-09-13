@@ -17,23 +17,25 @@
 'use strict';
 
 const { expect } = require('chai');
-const mod = require('../../index.js');
 
 const ADDR = 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh';
 
 describe('Module entry point', () => {
 
     it('exports XChainSDK', () => {
+        const mod = require('../../index.js');
         expect(mod).to.have.property('XChainSDK');
         expect(mod.XChainSDK).to.be.a('function');
     });
 
     it('exports BatchBuilder', () => {
+        const mod = require('../../index.js');
         expect(mod).to.have.property('BatchBuilder');
         expect(mod.BatchBuilder).to.be.a('function');
     });
 
     it('exports all error classes', () => {
+        const mod = require('../../index.js');
         const errorClasses = [
             'SDKError',
             'SDKValidationError',
@@ -56,6 +58,7 @@ describe('Module entry point', () => {
     });
 
     it('default export equals XChainSDK', () => {
+        const mod = require('../../index.js');
         expect(mod.default).to.equal(mod.XChainSDK);
     });
 

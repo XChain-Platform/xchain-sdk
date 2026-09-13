@@ -23,7 +23,6 @@ const MuSig2   = require('../../src/cosigner/musig2.js');
 const CoSigner = require('../../src/cosigner/co_signer.js');
 const { httpTransport } = require('../../src/cosigner/client.js');
 const { createCoSignerApp } = require('../../src/cosigner/server.js');
-const valueDerivability = require('../../src/cosigner/value_derivability.js');
 
 function makeAccount() {
     const musig   = new MuSig2();
@@ -327,6 +326,7 @@ describe('G17: fault and denial logging', function () {
 describe('bounded rest-field EXECUTE decode', function () {
 
     const { decodeActionFromPsbt } = require('../../src/cosigner/psbt_action_decode.js');
+    const valueDerivability = require('../../src/cosigner/value_derivability.js');
 
     it('an agent behind a co-signer can now call a contract at all', function () {
         // Before this, EXECUTE's only wire format ended in ...PARAMS and the

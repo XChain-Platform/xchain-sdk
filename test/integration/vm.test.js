@@ -31,7 +31,6 @@ const Validator        = require('../../src/protocol/validator.js');
 const ContractUtils    = require('../../src/contract/utils.js');
 const ContractClient   = require('../../src/contract/client.js');
 const { SDKValidationError, SDKContractError } = require('../../src/utils/errors.js');
-const mod = require('../../index.js');
 
 const ADDR = 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh';
 
@@ -786,16 +785,19 @@ describe('ContractClient', function () {
 describe('VM module exports', function () {
 
     it('exports SDKContractError', function () {
+        const mod = require('../../index.js');
         expect(mod).to.have.property('SDKContractError');
         expect(mod.SDKContractError).to.be.a('function');
     });
 
     it('exports ContractClient', function () {
+        const mod = require('../../index.js');
         expect(mod).to.have.property('ContractClient');
         expect(mod.ContractClient).to.be.a('function');
     });
 
     it('exports ContractUtils', function () {
+        const mod = require('../../index.js');
         expect(mod).to.have.property('ContractUtils');
         expect(mod.ContractUtils).to.be.a('function');
     });

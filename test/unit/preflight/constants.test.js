@@ -12,10 +12,6 @@
 const { expect } = require('chai');
 const path = require('path');
 const constants = require('../../../src/preflight/constants.js');
-const fs = require('fs');
-const formats = require('../../../src/protocol/formats.js');
-const manifest = require('../../fixtures/action-manifest.json');
-const os = require('os');
 
 describe('pre-flight constants + registry', function () {
 
@@ -46,6 +42,7 @@ describe('pre-flight constants + registry', function () {
         // but never match by code. Unverified-only check names with no registry
         // entry are a different class and stay literals, so the scan keys on the
         // registry's VALUES rather than on shape.
+        const fs = require('fs');
         const dir = path.join(__dirname, '..', '..', '..', 'src', 'preflight', 'checks');
         const registry = new Set(Object.values(constants.FINDING_CODES));
         const re = /\b(?:addFinding|addUnverified|markRun)\(\s*(['"])([A-Z0-9_]+)\1/g;
@@ -88,6 +85,7 @@ describe('pre-flight constants + registry', function () {
         // never to delete the entry or this test.
         expect(constants.TIER1_DENYLIST, 'the guard must stay even while unreachable').to.include('XEXEC');
 
+        const formats = require('../../../src/protocol/formats.js');
         expect(Object.keys(formats), 'XEXEC must have no client wire format').to.not.include('XEXEC');
 
         const { parse } = require('../../../src/decoder/parse.js');
@@ -98,6 +96,7 @@ describe('pre-flight constants + registry', function () {
         }
 
         // The action manifest is the platform-wide statement of the same fact.
+        const manifest = require('../../fixtures/action-manifest.json');
         expect(manifest.actions.XEXEC.category).to.equal('mirror-injected');
         expect(manifest.actions.XEXEC.wireDecoded, 'XEXEC is not wire-decoded').to.equal(undefined);
         expect(manifest.actions.XEXEC.userEncodable, 'XEXEC is not user-encodable').to.equal(undefined);
@@ -140,6 +139,8 @@ describe('pre-flight constants + registry', function () {
          * hermetic), and the failing direction is driven from temp fixtures.
          */
         describe('anchor / review-command consistency', function () {
+            const fs = require('fs');
+            const os = require('os');
             const { checkAnchorConsistency } = require('../../../bin/check-preflight-drift.js');
 
             const REAL_MAP = path.join(__dirname, '..', '..', '..', 'src', 'preflight', 'INDEXER-MAP.md');
@@ -187,6 +188,8 @@ describe('pre-flight constants + registry', function () {
         // The gate's two by-VALUE seams, driven against SYNTHETIC fixtures so the
         // suite stays hermetic (the live sibling is a moving target, per the note above).
         describe('by-value seams', function () {
+            const fs = require('fs');
+            const os = require('os');
             const { checkFeeQuoteSeam, checkConfigConstants, checkGasSchedules } = require('../../../bin/check-preflight-drift.js');
 
             let root;
@@ -299,6 +302,8 @@ describe('pre-flight constants + registry', function () {
          * above are: the live sibling is a moving target.
          */
         describe('mirrored regex rules', function () {
+            const fs = require('fs');
+            const os = require('os');
             const { checkRegexMirrors } = require('../../../bin/check-preflight-drift.js');
 
             let root;
@@ -373,6 +378,8 @@ describe('pre-flight constants + registry', function () {
          * the live sibling is a moving target.
          */
         describe('mirrored indexer lists', function () {
+            const fs = require('fs');
+            const os = require('os');
             const { checkListMirrors } = require('../../../bin/check-preflight-drift.js');
 
             let root;

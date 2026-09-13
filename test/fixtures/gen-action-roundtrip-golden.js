@@ -79,8 +79,8 @@ const CASES = [
 // Encoder side. Required lazily so loading this module pulls in nothing.
 function buildActionsFactory() {
     const sdkConfig  = require(path.join(SDK_ROOT, 'src', 'config.js'));
-    const SdkUtility = require(path.join(SDK_ROOT, 'src', 'utility.js'));
-    const Actions    = require(path.join(SDK_ROOT, 'src', 'actions.js'));
+    const SdkUtility = require(path.join(SDK_ROOT, 'src', 'utils', 'utility.js'));
+    const Actions    = require(path.join(SDK_ROOT, 'src', 'actions', 'index.js'));
     return () => new Actions({ config: sdkConfig.getConfig(), util: new SdkUtility() });
 }
 

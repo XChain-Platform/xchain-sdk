@@ -16,7 +16,6 @@ const Workflows = require('../../src/actions/workflows.js');
 const Actions = require('../../src/actions/index.js');
 const Utility = require('../../src/utils/utility.js');
 const config = require('../../src/config.js');
-const NftHelpers = require('../../src/actions/nft.js');
 
 // Helpers
 
@@ -438,6 +437,7 @@ describe('Workflows', function () {
 
     // attachContent() (optional on-chain TIS authoring legs)
     describe('attachContent()', function () {
+        const NftHelpers = require('../../src/actions/nft.js');
 
         function makeAttachSdk(calls) {
             let fileCount = 0;

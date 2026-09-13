@@ -173,6 +173,7 @@ describe('contract-lint parity + drift', function () {
         }
 
         it('the four templates emit zero Move-2 findings (low false-positive)', function () {
+            const fs = require('fs');
             const dir = path.join(__dirname, '..', '..', '..', 'xchain-contracts');
             if (!requireSibling(this, dir)) return;
             for (const name of ['escrow', 'vesting', 'crowdsale', 'amm']) {

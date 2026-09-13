@@ -105,7 +105,7 @@ describe('decoder round-trip guarantee', function () {
         });
         it('cosigner psbtActionDecode consumes the same table (single source)', function () {
             const src = fs.readFileSync(
-                path.join(__dirname, '../../../src/cosigner/psbt_action_decode.js'), 'utf8');
+                path.join(__dirname, '..', '..', '..', 'src', 'cosigner', 'psbt_action_decode.js'), 'utf8');
             expect(src).to.include("require('../decoder/aliases.js')");
             expect(src).to.not.match(/TRANSFER:\s*'SEND'/);
         });

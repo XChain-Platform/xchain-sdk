@@ -15,17 +15,6 @@ const { expect } = require('chai');
 const sinon   = require('sinon');
 const XChainSDK = require('../../src/XChainSDK.js');
 const { SDKConfigError } = require('../../src/utils/errors.js');
-const bitcoin = require('bitcoinjs-lib');
-const ecc = require('@bitcoinerlab/secp256k1');
-const EncoderClient = require('../../src/clients/encoder.js');
-const fs = require('fs');
-const path = require('path');
-const LifecycleManager = require('../../src/carrier/lifecycle_manager.js');
-const ContractClient = require('../../src/contract/client.js');
-const ControllerHelpers = require('../../src/actions/controller.js');
-const WalletSession = require('../../src/utils/wallet_session.js');
-const BatchBuilder = require('../../src/carrier/batch_builder.js');
-const ActionWaiter = require('../../src/utils/action_waiter.js');
 
 // Helpers
 
@@ -67,6 +56,8 @@ function mockExplorer(sdk, returnVal = {}) {
 // back to the funding script. estimateFees now runs the same fail-closed reconcile gate
 // submitAction does, so a placeholder string is no longer a usable stand-in.
 function estimatePsbtHex() {
+    const bitcoin = require('bitcoinjs-lib');
+    const ecc = require('@bitcoinerlab/secp256k1');
     const { ECPairFactory } = require('ecpair');
     bitcoin.initEccLib(ecc);
     const net = bitcoin.networks.regtest;
@@ -302,6 +293,7 @@ describe('XChainSDK', function () {
         // compression policy, its Taproot signer capability and its source-address
         // UTXO selection with no error to tell it so.
         it('forwards EVERY optional encoder field to encoder.createTx', async function () {
+            const EncoderClient = require('../../src/clients/encoder.js');
             const sdk = makeSDK();
             mockEncoder(sdk, { psbt: 'aabbcc', encoding: 'OP_RETURN' });
             const encoderOpts = { pubkey: 'mypubkey' };
@@ -337,6 +329,9 @@ describe('XChainSDK', function () {
         // Drift guard: the shared list is the ONLY place the optional set is named,
         // so it has to stay equal to what createTx's own mapper actually reads.
         it('the shared option list covers every optional field createTx maps', function () {
+            const fs = require('fs');
+            const path = require('path');
+            const EncoderClient = require('../../src/clients/encoder.js');
             const src = fs.readFileSync(path.join(__dirname, '../../src/clients/encoder.js'), 'utf8');
             const start = src.indexOf('async createTx(params)');
             // Stop at the next method, or spendP2sh's own params leak into the scan.
@@ -418,6 +413,7 @@ describe('XChainSDK', function () {
         it('creates a LifecycleManager and delegates', async function () {
             const sdk = makeSDK();
             // Stub LifecycleManager
+            const LifecycleManager = require('../../src/carrier/lifecycle_manager.js');
             const submitStub = sinon.stub().resolves({ txid: 'fake' });
             sinon.stub(LifecycleManager.prototype, 'submitAction').callsFake(submitStub);
             const result = await sdk.submitAction({ action: 'SEND', params: {} }, { pubkey: 'pub' }, {});
@@ -486,6 +482,7 @@ describe('XChainSDK', function () {
     describe('contract()', function () {
         it('returns a ContractClient instance', function () {
             const sdk = makeSDK();
+            const ContractClient = require('../../src/contract/client.js');
             const cc = sdk.contract(42);
             expect(cc).to.be.instanceOf(ContractClient);
         });
@@ -494,6 +491,7 @@ describe('XChainSDK', function () {
     describe('controller (programmable policy)', function () {
         it('exposes sdk.controller as a ControllerHelpers instance', function () {
             const sdk = makeSDK();
+            const ControllerHelpers = require('../../src/actions/controller.js');
             expect(sdk.controller).to.be.instanceOf(ControllerHelpers);
         });
         it('getContractManifest delegates to the explorer reader', async function () {
@@ -508,6 +506,7 @@ describe('XChainSDK', function () {
     describe('session()', function () {
         it('returns a WalletSession instance', function () {
             const sdk = makeSDK();
+            const WalletSession = require('../../src/utils/wallet_session.js');
             // Use a valid WIF for regtest
             const kp = sdk.wallet.generateKeyPair();
             const session = sdk.session(kp.wif, {});
@@ -518,6 +517,7 @@ describe('XChainSDK', function () {
     describe('batch()', function () {
         it('returns a BatchBuilder', function () {
             const sdk = makeSDK();
+            const BatchBuilder = require('../../src/carrier/batch_builder.js');
             const b = sdk.batch();
             expect(b).to.be.instanceOf(BatchBuilder);
         });
@@ -592,6 +592,8 @@ describe('XChainSDK', function () {
         // broadcast directly, so it has to clear the same fail-closed intent gate
         // submitAction applies. Before this it was the one signing route with none.
         it('estimateFees REFUSES an encoder answer that diverts value to a destination nobody asked for', async function () {
+            const bitcoin = require('bitcoinjs-lib');
+            const ecc = require('@bitcoinerlab/secp256k1');
             const { ECPairFactory } = require('ecpair');
             bitcoin.initEccLib(ecc);
             const net = bitcoin.networks.regtest;
@@ -621,6 +623,8 @@ describe('XChainSDK', function () {
         // gate above never reconciles it, so returning it would hand back a second signable
         // PSBT nothing checked - the same hole one field over.
         it('estimateFees consumes an envelope reveal as the phase pin and never returns it', async function () {
+            const bitcoin = require('bitcoinjs-lib');
+            const ecc = require('@bitcoinerlab/secp256k1');
             const { ECPairFactory } = require('ecpair');
             bitcoin.initEccLib(ecc);
             const net = bitcoin.networks.regtest;
@@ -654,6 +658,8 @@ describe('XChainSDK', function () {
         // The pin the reveal exists for: a shaped leg the companion transaction does not
         // spend is value parked in a script only the encoder controls.
         it('estimateFees REFUSES an envelope commit whose funding leg the reveal never spends', async function () {
+            const bitcoin = require('bitcoinjs-lib');
+            const ecc = require('@bitcoinerlab/secp256k1');
             const { ECPairFactory } = require('ecpair');
             bitcoin.initEccLib(ecc);
             const net = bitcoin.networks.regtest;
@@ -1296,6 +1302,7 @@ describe('XChainSDK', function () {
 
         it('waitForAction creates ActionWaiter and calls waitForTxid', async function () {
             sdk = makeSDK();
+            const ActionWaiter = require('../../src/utils/action_waiter.js');
             sinon.stub(ActionWaiter.prototype, 'waitForTxid').resolves({ action_index: 42 });
             const result = await sdk.waitForAction('txid1', { timeout: 5000 });
             expect(result.action_index).to.equal(42);
@@ -1303,6 +1310,7 @@ describe('XChainSDK', function () {
 
         it('waitForActionIndex creates ActionWaiter and calls waitForActionIndex', async function () {
             sdk = makeSDK();
+            const ActionWaiter = require('../../src/utils/action_waiter.js');
             sinon.stub(ActionWaiter.prototype, 'waitForActionIndex').resolves({ action_index: 99 });
             const result = await sdk.waitForActionIndex(99, {});
             expect(result.action_index).to.equal(99);
@@ -1310,6 +1318,7 @@ describe('XChainSDK', function () {
 
         it('waitForContractState creates ActionWaiter and gates on contract state', async function () {
             sdk = makeSDK();
+            const ActionWaiter = require('../../src/utils/action_waiter.js');
             const stub = sinon.stub(ActionWaiter.prototype, 'waitForContractState').resolves({ value: 'FUNDED' });
             const result = await sdk.waitForContractState(73, { key: 'status', equals: 'FUNDED' });
             expect(result.value).to.equal('FUNDED');
@@ -1318,6 +1327,7 @@ describe('XChainSDK', function () {
 
         it('waitForContractBalance creates ActionWaiter and gates on the contract balance', async function () {
             sdk = makeSDK();
+            const ActionWaiter = require('../../src/utils/action_waiter.js');
             const stub = sinon.stub(ActionWaiter.prototype, 'waitForContractBalance').resolves({ quantity: '1000' });
             const result = await sdk.waitForContractBalance(73, 'PAY514', { minQuantity: '1000' });
             expect(result.quantity).to.equal('1000');

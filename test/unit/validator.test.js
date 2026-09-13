@@ -22,8 +22,6 @@ const { expect } = require('chai');
 const Utility    = require('../../src/utils/utility.js');
 const Validator  = require('../../src/protocol/validator.js');
 const { SDKValidationError } = require('../../src/utils/errors.js');
-const fs = require('fs');
-const path = require('path');
 
 function createValidator() {
     return new Validator(new Utility());
@@ -1903,6 +1901,8 @@ describe('Validator: FILE GATE_MIN_AMOUNT (PC-29)', function () {
     // three implementations are pinned to one another rather than to three
     // independently-written test suites that agree today by coincidence.
     describe('shared GATE_MIN_AMOUNT vectors', function () {
+        const fs      = require('fs');
+        const path    = require('path');
         const FIXTURE = path.join(__dirname, '../fixtures/gate-min-amount-vectors.json');
         const vectors = JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
 

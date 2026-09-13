@@ -36,7 +36,6 @@ const Utility        = require('../../src/utils/utility.js');
 const Actions        = require('../../src/actions/index.js');
 const { parse }      = require('../../src/decoder/parse.js');
 const { SDKFormatError, SDKValidationError } = require('../../src/utils/errors.js');
-const formats = require('../../src/protocol/formats.js');
 
 // Every repeated-field format in formats.js and the decomposition the
 // serializer must derive for it. A new multi-leg format shows up here as a
@@ -82,6 +81,7 @@ describe('FormatSelector.getRepeatedGroup()', function () {
     }
 
     it('returns null for every single-leg format, and flags no format it cannot decompose', function () {
+        const formats = require('../../src/protocol/formats.js');
         const found = [];
         for (const action of Object.keys(formats)) {
             for (const version of Object.keys(formats[action])) {
@@ -300,6 +300,7 @@ describe('select() with legs', function () {
     });
 
     it('never auto-selects a repeated format when no legs were provided', function () {
+        const formats = require('../../src/protocol/formats.js');
         const flat = {
             SEND:    { TICK: 'AAA', AMOUNT: 5, DESTINATION: ADDR_A, MEMO: 'm' },
             DESTROY: { TICK: 'AAA', AMOUNT: 5, MEMO: 'm' },

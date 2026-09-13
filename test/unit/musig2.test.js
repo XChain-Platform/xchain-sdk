@@ -94,10 +94,6 @@ describe('MuSig2', function () {
             const musigPath = require.resolve('../../src/cosigner/musig2.js');
             const cached = require.cache[musigPath];
             delete require.cache[musigPath];
-            // Loaded HERE on purpose, between the two cache deletes: hoisting this
-            // require to the top of the file hands back the already-loaded module,
-            // whose guard set is not empty, and the negative control silently stops
-            // being a control.
             const FreshMuSig2 = require('../../src/cosigner/musig2.js');
             delete require.cache[musigPath];
             require.cache[musigPath] = cached;

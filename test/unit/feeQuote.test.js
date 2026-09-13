@@ -27,8 +27,6 @@ const { expect } = require('chai');
 const nock = require('nock');
 const ExplorerClient = require('../../src/clients/explorer.js');
 const { XChainSDK } = require('../../index.js');
-const bitcoin = require('bitcoinjs-lib');
-const ecc = require('@bitcoinerlab/secp256k1');
 
 describe('Native-coin fee quote (client)', function () {
 
@@ -72,6 +70,8 @@ describe('Native-coin fee quote (client)', function () {
         // reconcile gate submitAction does, so a placeholder string is no longer a
         // usable stand-in for what the encoder returns.
         function estimatePsbtHex() {
+            const bitcoin = require('bitcoinjs-lib');
+            const ecc = require('@bitcoinerlab/secp256k1');
             const { ECPairFactory } = require('ecpair');
             bitcoin.initEccLib(ecc);
             const net = bitcoin.networks.regtest;

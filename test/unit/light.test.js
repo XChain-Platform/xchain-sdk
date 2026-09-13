@@ -30,8 +30,6 @@ const path   = require('path');
 const M      = require('../../src/merkle.js');
 const light  = require('../../src/protocol/light_client.js');
 const checkpoint = require('../../src/checkpoint.js');
-const SUBACT = require('../../src/state_subtree_activation.js');
-const pinned = require('../../src/protocol/pinned_checkpoints.js');
 
 // The AUTHORITATIVE ANCHOR wire vector lives in the docs repo (hub and indexer
 // vendor byte-identical copies; the SDK reads the original rather than adding a
@@ -305,6 +303,7 @@ describe('SPV Phase 4: sdk.light pure verifiers', function () {
     // whether the domain is committed at the proof's height, whatever the
     // server said, because no proof can tell (an armed-but-idle domain and an
     // inert one commit byte-identical roots).
+    const SUBACT = require('../../src/state_subtree_activation.js');
     const ESC_KEY = CHAIN + ':' + NET;
     // BTC:regtest carries a REAL armed height now, so "disarm" must not DELETE the key:
     // that silently wipes the fleet-armed set for every later test in the process, and
@@ -1497,6 +1496,7 @@ describe('SPV Phase 5: validator-set proof + trustless quorum', function () {
 
 describe('SPV D4: pinned launch trust root', function () {
 
+    const pinned = require('../../src/protocol/pinned_checkpoints.js');
 
     function makeSigner() {
         const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');

@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// Unit coverage for src/protocol/tick_ref_fields.js, the canonical map of which ACTION
+// Unit coverage for src/tickRefFields.js, the canonical map of which ACTION
 // params name an EXISTING token and which of those the SDK may compact to the
 // `^<id>` wire form.
 //

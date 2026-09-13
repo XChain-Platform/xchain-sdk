@@ -222,7 +222,7 @@ describe('pre-flight bridge landing: ISSUE tick rules', function () {
 
         /* Each opt-in field is now judged on TWO layers, and both are wanted.
          *
-         * src/protocol/validator.js carries the offline format-7 field rules, so a caller who
+         * src/validator.js carries the offline format-7 field rules, so a caller who
          * composes without ever running pre-flight is refused at compose time; the
          * pre-flight bridges every validator finding into the report as a
          * VALIDATOR_SEMANTICS *warning* (universal.js: only FORBIDDEN_CHARACTER is a hard

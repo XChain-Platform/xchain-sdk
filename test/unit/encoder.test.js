@@ -12,9 +12,6 @@ const { expect } = require('chai');
 const nock = require('nock');
 const sinon = require('sinon');
 const EncoderClient = require('../../src/clients/encoder.js');
-const bitcoin = require('bitcoinjs-lib');
-const ecc = require('@bitcoinerlab/secp256k1');
-const XChainSDK = require('../../src/XChainSDK.js');
 
 describe('EncoderClient', function () {
 
@@ -309,6 +306,8 @@ describe('EncoderClient', function () {
         });
 
         it('returns feeInfo with computed fee from a valid PSBT', async function () {
+            const bitcoin = require('bitcoinjs-lib');
+            const ecc = require('@bitcoinerlab/secp256k1');
             const { ECPairFactory } = require('ecpair');
             bitcoin.initEccLib(ecc);
             const ECPair = ECPairFactory(ecc);
@@ -625,6 +624,8 @@ describe('EncoderClient', function () {
         });
 
         it('computes fee using nonWitnessUtxo (legacy input)', async function () {
+            const bitcoin = require('bitcoinjs-lib');
+            const ecc = require('@bitcoinerlab/secp256k1');
             const { ECPairFactory } = require('ecpair');
             bitcoin.initEccLib(ecc);
             const ECPair = ECPairFactory(ecc);
@@ -791,6 +792,7 @@ describe('EncoderClient', function () {
         });
 
         it('is threaded from the XChainSDK constructor, whose encoder options are cherry-picked', function () {
+            const XChainSDK = require('../../src/XChainSDK.js');
             let sdk = new XChainSDK({
                 network: 'bitcoin-regtest', noHub: true,
                 encoderUrl: 'encoder.test', encoderPort: 3000, encoderApiKey: 'fake-key'

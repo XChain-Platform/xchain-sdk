@@ -9,7 +9,6 @@
 // contact legal@dankest.llc.
 
 const { expect } = require('chai');
-const ExplorerClient = require('../../src/clients/explorer.js');
 const {
     PUBLIC_HUB, PUBLIC_EXPLORER, PUBLIC_ENCODER,
     isRegtest, coinPrefix, publicDefaults
@@ -51,6 +50,7 @@ describe('endpoints', function () {
             });
         }
         it('matches explorer.js coin derivation (single source of truth)', function () {
+            const ExplorerClient = require('../../src/clients/explorer.js');
             for (let [network, prefix] of Object.entries(cases)) {
                 expect(new ExplorerClient({ network }).coin).to.equal(prefix);
             }

@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Unit tests for src/cosigner/agent_session.js: the policy-bounded agent wallet.
+ * Unit tests for src/agentSession.js: the policy-bounded agent wallet.
  * WalletSession.submit is stubbed so no encoder/explorer is touched;
  * these tests exercise ONLY the policy layer and its persistence.
  *
@@ -30,7 +30,6 @@ const WalletSession  = require('../../src/utils/wallet_session.js');
 const AgentSession   = require('../../src/cosigner/agent_session.js');
 const { SDKPolicyError } = require('../../src/utils/errors.js');
 const { UNRESOLVED_TICK_BUCKET } = require('../../src/cosigner/policy_evaluator.js');
-const sdkIndex = require('../../index.js');
 
 // Fake just enough of XChainSDK for the WalletSession constructor.
 const fakeSdk = {
@@ -411,6 +410,7 @@ describe('AgentSession (policy-bounded wallet)', () => {
     // exports
 
     it('is exported from the SDK entry point with its error class', () => {
+        const sdkIndex = require('../../index.js');
         expect(sdkIndex.AgentSession).to.equal(AgentSession);
         expect(sdkIndex.SDKPolicyError).to.equal(SDKPolicyError);
     });

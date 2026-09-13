@@ -10,7 +10,7 @@
 //
 // FAMILY_SLIP44 shape + cross-repo drift guard.
 //
-// src/protocol/derivation.js is the backend-side anchor for the wallet<->backend
+// src/derivation.js is the backend-side anchor for the wallet<->backend
 // coin-type parity contract. This suite pins its shape and values, and
 // drift-guards each coin type against the wallet HD descriptors at
 // xchain-wallet/packages/core/src/registry/descriptors/{bitcoin,litecoin,
@@ -76,7 +76,7 @@ describe('derivation FAMILY_SLIP44', function () {
         // cross-repo leg iterates Object.entries(FAMILY_SLIP44), so a coin
         // missing from the anchor produces no case there either, and the wallet
         // side stays green against its own constant, which is the one thing
-        // src/protocol/derivation.js exists to prevent. Bind both key sets to the
+        // src/derivation.js exists to prevent. Bind both key sets to the
         // registry instead.
         it('FAMILY_SLIP44 covers every coin in the SDK coin registry', function () {
             assert.deepStrictEqual(Object.keys(FAMILY_SLIP44).sort(), REGISTERED,

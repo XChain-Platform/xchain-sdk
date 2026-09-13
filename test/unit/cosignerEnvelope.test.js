@@ -32,11 +32,6 @@ const {
 const { deriveMuSig2P2TR2of3 } = require('../../src/cosigner/account.js');
 const { buildRecoverySpend, localPairSigner } = require('../../src/cosigner/recovery.js');
 const { decodeEnvelopeAction } = require('../../src/cosigner/psbt_action_decode.js');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-const http = require('http');
-const EncoderClient = require('../../src/clients/encoder.js');
 
 bitcoin.initEccLib(ecc);
 
@@ -694,6 +689,9 @@ describe('co-signer: Taproot envelope composition', function () {
     });
 
     describe('budget: one action, two transactions, one charge', function () {
+        const fs = require('fs');
+        const os = require('os');
+        const path = require('path');
 
         function freshStore() {
             const p = path.join(os.tmpdir(), `xc990-window-${crypto.randomBytes(6).toString('hex')}.json`);
@@ -1028,6 +1026,7 @@ describe('co-signer: the envelope on a 2-of-3 account', function () {
 // kind of divergence that only shows up in production. So drive it over real
 // HTTP once, end to end, through the shipped sidecar.
 describe('co-signer: the envelope survives the wire', function () {
+    const http = require('http');
     const { createCoSignerApp } = require('../../src/cosigner/server.js');
     const { createHostedCoSignerApp } = require('../../src/cosigner/hosted_server.js');
 
@@ -1117,6 +1116,7 @@ describe('co-signer: the envelope survives the wire', function () {
 // the smallest footprint, or wants to opt out of compression, must be able to
 // say so through the SDK rather than dropping to raw JSON-RPC.
 describe('SDK create_tx passthrough', function () {
+    const EncoderClient = require('../../src/clients/encoder.js');
 
     function clientCapturing(captured) {
         // A real client with only the transport replaced, so the parameter

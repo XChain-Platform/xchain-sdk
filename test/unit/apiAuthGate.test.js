@@ -14,7 +14,7 @@
  *
  * XChain Platform SDK - API bearer-token auth gate tests
  *
- * These mount the SHIPPED gate from src/utils/api_guards.js (the same function
+ * These mount the SHIPPED gate from src/apiGuards.js (the same function
  * src/api.js mounts), not a reconstruction of it: src/api.js starts a live
  * server at require time (dotenv.config() + app.listen(SDK_API_PORT)) and so
  * cannot be require()'d by a unit test, which is exactly why the guards live in

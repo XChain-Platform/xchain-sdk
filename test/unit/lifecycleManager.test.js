@@ -14,11 +14,6 @@ const assert = require('assert');
 const sinon = require('sinon');
 const LifecycleManager = require('../../src/carrier/lifecycle_manager.js');
 const ActionWaiter = require('../../src/utils/action_waiter.js');
-const bitcoin = require('bitcoinjs-lib');
-const ecc = require('@bitcoinerlab/secp256k1');
-const EncoderClient = require('../../src/clients/encoder.js');
-const crypto = require('crypto');
-const Compression = require('../../src/protocol/compression.js');
 
 // Helpers: minimal fake SDK and collaborators
 
@@ -28,6 +23,8 @@ const Compression = require('../../src/protocol/compression.js');
 let _cachedPsbtHex = null;
 function buildTestPsbtHex() {
     if (_cachedPsbtHex) return _cachedPsbtHex;
+    const bitcoin = require('bitcoinjs-lib');
+    const ecc = require('@bitcoinerlab/secp256k1');
     const { ECPairFactory } = require('ecpair');
     bitcoin.initEccLib(ecc);
     const ECPair = ECPairFactory(ecc);
@@ -57,6 +54,8 @@ function buildTestPsbtHex() {
 const FAKE_WIF = 'L1rkA9mYRjVPVdvMuVbHRMX6SPHM7fNwCEfT3AV2qCGAmJ8wNfp';
 
 function buildSignedTx() {
+    const bitcoin = require('bitcoinjs-lib');
+    const ecc = require('@bitcoinerlab/secp256k1');
     const { ECPairFactory } = require('ecpair');
     bitcoin.initEccLib(ecc);
     const ECPair = ECPairFactory(ecc);
@@ -92,6 +91,8 @@ function buildSignedTx() {
  * wallet.getBitcoinNetwork and _reconcileNetwork therefore falls back to it.
  */
 function buildChangeChain() {
+    const bitcoin = require('bitcoinjs-lib');
+    const ecc = require('@bitcoinerlab/secp256k1');
     const { ECPairFactory } = require('ecpair');
     bitcoin.initEccLib(ecc);
     const ECPair = ECPairFactory(ecc);
@@ -272,6 +273,7 @@ describe('LifecycleManager', function () {
             // takes the decimal-string form (allowBig), which is also what the
             // utxo-tracker emits for the same value.
             require('../../src/utils/apply_bufferutils_patch.js');
+            const bitcoin = require('bitcoinjs-lib');
             const chain = buildChangeChain();
             const big   = 9007199254740993n;      // 2^53 + 1
 
@@ -350,6 +352,7 @@ describe('LifecycleManager', function () {
         // Taproot signer capability and its source-address UTXO selection in
         // silence. This one is driven off the shared list, so it cannot go stale.
         it('forwards EVERY field of the shared createTx option list', async function () {
+            const EncoderClient = require('../../src/clients/encoder.js');
             const captured = [];
             const signed = buildSignedTx();
             const sdk = makeSdk({}, {
@@ -411,6 +414,9 @@ describe('LifecycleManager', function () {
         // first input's txid, in a zero-value OP_RETURN, with change back to the
         // funding script. Only the carrier's CONTENTS differ between the two cases.
         function encoderAnswer(carriedAction) {
+            const bitcoin = require('bitcoinjs-lib');
+            const crypto  = require('crypto');
+            const ecc     = require('@bitcoinerlab/secp256k1');
             const { ECPairFactory } = require('ecpair');
             bitcoin.initEccLib(ecc);
             const kp = ECPairFactory(ecc).makeRandom();
@@ -498,6 +504,7 @@ describe('LifecycleManager', function () {
         // the bytes that are ON CHAIN rather than the ones submitted.
         it('still signs a genuinely compressed FILE and reports the on-chain string', async function () {
             const calls = [];
+            const Compression = require('../../src/protocol/compression.js');
             const submittedFile = 'FILE|0|doc.txt|text/plain|aaa|bbb|TOK|||';
             const compressedFile = new Compression().withCompressionField(submittedFile, '1');
             assert.notStrictEqual(compressedFile, submittedFile);

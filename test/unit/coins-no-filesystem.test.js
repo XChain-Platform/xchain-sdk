@@ -33,8 +33,6 @@
 const assert = require('assert');
 
 const coins = require('../../src/coins');
-const fs = require('fs');
-const path = require('path');
 
 describe('coin registry without a filesystem', function(){
 
@@ -91,6 +89,8 @@ describe('coin registry without a filesystem', function(){
     });
 
     it('still reads the sidecar under a real Node, so the guard is not a mute button', function(){
+        const fs = require('fs');
+        const path = require('path');
         const sidecar = path.resolve(process.cwd(), 'fullnode.regtest.json');
         const preexisting = fs.existsSync(sidecar);
         if(preexisting) this.skip();

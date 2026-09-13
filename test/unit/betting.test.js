@@ -24,7 +24,6 @@ const { XChainSDK } = require('../../index.js');
 const BettingHelpers = require('../../src/actions/betting.js');
 const { BET_LIMITS, BET_DETAILS_SCHEMA } = require('../../src/actions/betting.js');
 const formats = require('../../src/protocol/formats.js');
-const WebSocketClient = require('../../src/clients/websocket.js');
 
 // A fixed "now" so deadline pre-flight never depends on the wall clock.
 const NOW = 1769000000;
@@ -539,6 +538,7 @@ describe('BET client surfaces', function () {
     });
 
     it('builds the bet_feed websocket subscription the way the server accepts it', function () {
+        const WebSocketClient = require('../../src/clients/websocket.js');
         const sent = [];
         const client = Object.create(WebSocketClient.prototype);
         client.subscribe = (channels, params) => { sent.push(['sub', channels, params]); };
