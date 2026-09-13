@@ -23,7 +23,7 @@
  ********************************************************************/
 
 const { expect } = require('chai');
-const { planCoinpayOutputs, checkCoinpayOutputPlan } = require('../../src/batchLimits.js');
+const { planCoinpayOutputs, checkCoinpayOutputPlan } = require('../../src/protocol/batch_limits.js');
 
 describe('batchLimits: COINPAY per-payee output planning (spec row 31)', function(){
 

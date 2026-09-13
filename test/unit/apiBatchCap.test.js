@@ -20,7 +20,7 @@
  * thousands of concurrent backend RPCs.
  *
  * src/api.js starts a live server at require time, so these tests mount the
- * SHIPPED middleware from src/apiGuards.js (the same function src/api.js
+ * SHIPPED middleware from src/utils/api_guards.js (the same function src/api.js
  * mounts) rather than a copy of it, and a source check pins that api.js still
  * mounts it ahead of the auth gate and the router.
  *
@@ -34,7 +34,7 @@ const path   = require('path');
 const http   = require('http');
 const express = require('express');
 const bodyParser = require('body-parser');
-const { batchCapMiddleware, resolveMaxBatch } = require('../../src/apiGuards.js');
+const { batchCapMiddleware, resolveMaxBatch } = require('../../src/utils/api_guards.js');
 
 function buildApp(maxBatch) {
     const app = express();
@@ -116,7 +116,7 @@ describe('API JSON-RPC batch fan-out cap', function () {
         const src = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
         const capIdx    = src.indexOf('app.use(batchCapMiddleware(');
         // Anchored on the MOUNT, not on a compare inside the gate body: the gate
-        // now lives in src/apiGuards.js, and an anchor that can go missing makes
+        // now lives in src/utils/api_guards.js, and an anchor that can go missing makes
         // every ordering assertion below it argue from -1.
         const authIdx   = src.indexOf('app.use(authGateMiddleware(');
         const routerIdx = src.indexOf('jsonRouter(');

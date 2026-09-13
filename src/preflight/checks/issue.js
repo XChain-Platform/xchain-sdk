@@ -67,7 +67,7 @@ const numeric = require('../numeric.js');
 const { tokenField } = require('./mint.js');
 const { ALLOWED_COINS, getCoinConfig } = require('../../coins/index.js');
 const { GAS_TICK } = require('../../protocol/constants.js');
-const Utility = require('../../utility.js');
+const Utility = require('../../utils/utility.js');
 
 const util = new Utility();
 

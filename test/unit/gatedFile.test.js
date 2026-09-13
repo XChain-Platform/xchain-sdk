@@ -10,9 +10,9 @@
 
 const { expect } = require('chai');
 const crypto = require('crypto');
-const GatedFileUtils = require('../../src/gatedFile.js');
-const { HANDOFF_VERSION, KEY_LEN, IV_LEN, AUTH_TAG_LEN } = require('../../src/gatedFile.js');
-const { SDKGatedFileError } = require('../../src/errors.js');
+const GatedFileUtils = require('../../src/actions/gated_file.js');
+const { HANDOFF_VERSION, KEY_LEN, IV_LEN, AUTH_TAG_LEN } = require('../../src/actions/gated_file.js');
+const { SDKGatedFileError } = require('../../src/utils/errors.js');
 
 describe('GatedFileUtils', function () {
 

@@ -33,8 +33,8 @@ const numeric = require('../numeric.js');
 const coins = require('../../coins');
 const { GAS_TICK } = require('../../protocol/constants.js');
 const { BATCH_COMMAND_LIMIT, BATCH_WEIGHT_BUDGET, batchWeight, CHILD_ISSUE_KEY, classifyIssueTick }
-    = require('../../batchLimits.js');
-const Utility = require('../../utility.js');
+    = require('../../protocol/batch_limits.js');
+const Utility = require('../../utils/utility.js');
 
 // The vendored consensus arithmetic (bcsub/bcdiv/bcmul with the arbiter's
 // fixed-precision rounding). The duration-fee day count MUST round to nearest,

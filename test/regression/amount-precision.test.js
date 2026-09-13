@@ -28,7 +28,7 @@
 
 const { expect } = require('chai');
 const crypto = require('crypto');
-const Utility = require('../../src/utility.js');
+const Utility = require('../../src/utils/utility.js');
 
 function u() { return new Utility(); }
 function fmtAmount(value) { return u().setNumberFormats({ AMOUNT: value }).AMOUNT; }

@@ -40,7 +40,7 @@
 
 'use strict';
 
-const { actionDisplayLabel } = require('./actionDisplayLabel.js');
+const { actionDisplayLabel } = require('./action_display_label.js');
 const { sanitizeText, formatAmount } = require('./hardening.js');
 
 // Scale the multi-send per-token totals are summed at: 18 dp, the finest precision any

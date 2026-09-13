@@ -4,7 +4,7 @@
 // wire). Exercises the patched read/write and varint helpers.
 
 const assert = require('assert');
-const bufferutils = require('../../src/applyBufferutilsPatch.js');
+const bufferutils = require('../../src/utils/apply_bufferutils_patch.js');
 
 describe('applyBufferutilsPatch', function () {
     it('exposes the patched bufferutils surface', function () {

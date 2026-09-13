@@ -42,9 +42,9 @@ const fs         = require('fs');
 const path       = require('path');
 
 const config  = require('../../src/config.js');
-const Utility = require('../../src/utility.js');
-const Actions = require('../../src/actions.js');
-const Formats = require('../../src/formats.js');
+const Utility = require('../../src/utils/utility.js');
+const Actions = require('../../src/actions/index.js');
+const Formats = require('../../src/protocol/formats.js');
 
 // The ISSUE format table exactly as it shipped before format 7 was added
 // (xchain-sdk/src/formats.js at the commit that preceded this wave). Frozen

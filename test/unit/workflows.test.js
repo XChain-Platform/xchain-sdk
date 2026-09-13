@@ -12,10 +12,11 @@
 
 const assert = require('assert');
 const sinon = require('sinon');
-const Workflows = require('../../src/workflows.js');
-const Actions = require('../../src/actions.js');
-const Utility = require('../../src/utility.js');
+const Workflows = require('../../src/actions/workflows.js');
+const Actions = require('../../src/actions/index.js');
+const Utility = require('../../src/utils/utility.js');
 const config = require('../../src/config.js');
+const NftHelpers = require('../../src/actions/nft.js');
 
 // Helpers
 
@@ -437,7 +438,6 @@ describe('Workflows', function () {
 
     // attachContent() (optional on-chain TIS authoring legs)
     describe('attachContent()', function () {
-        const NftHelpers = require('../../src/nft.js');
 
         function makeAttachSdk(calls) {
             let fileCount = 0;

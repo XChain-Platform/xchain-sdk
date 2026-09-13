@@ -85,7 +85,7 @@ const bitcoin = require('bitcoinjs-lib');
 const ecc     = require('@bitcoinerlab/secp256k1');
 // Shared with coSigner.js's key-path derivation: one definition of which
 // sighash types this signer will produce a message for.
-const { sighashAllowed, disallowedSighashError } = require('./sighashPolicy.js');
+const { sighashAllowed, disallowedSighashError } = require('./sighash_policy.js');
 
 bitcoin.initEccLib(ecc);
 

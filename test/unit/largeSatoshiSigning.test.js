@@ -11,13 +11,13 @@
 // SDK passthrough: a PSBT the encoder built around a satoshi value
 // above Number.MAX_SAFE_INTEGER (2^53-1, ~90.07M DOGE) must parse, sign,
 // finalize, and extract here with the value carried bit-exact (BigInt).
-// src/applyBufferutilsPatch.js (loaded by src/wallet.js) provides the
+// src/utils/apply_bufferutils_patch.js (loaded by src/utils/wallet.js) provides the
 // BigInt-safe bitcoinjs-lib/bip174 behavior; these tests pin it.
 
 const { expect } = require('chai');
 const bitcoin = require('bitcoinjs-lib');
-const WalletUtils = require('../../src/wallet.js');
-const { getNetwork } = require('../../src/networks.js');
+const WalletUtils = require('../../src/utils/wallet.js');
+const { getNetwork } = require('../../src/protocol/networks.js');
 
 const BIG_IN = 12000000000000000000n;  // 1.2e19 sats, > 2^53-1, < u64 max
 const BIG_OUT = 11000000000000000001n; // exact odd value: rounds if ever a Number

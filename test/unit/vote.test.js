@@ -15,8 +15,8 @@
 
 const { expect } = require('chai');
 const { XChainSDK, VoteHelpers } = require('../../index.js');
-const WalletSession = require('../../src/walletSession.js');
-const Formats = require('../../src/formats.js');
+const WalletSession = require('../../src/utils/wallet_session.js');
+const Formats = require('../../src/protocol/formats.js');
 
 describe('VOTE governance helpers', function () {
     // compactTickers:false so createAction never reaches the network to resolve

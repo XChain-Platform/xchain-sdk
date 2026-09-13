@@ -9,8 +9,8 @@
 // contact legal@dankest.llc.
 
 const { expect } = require('chai');
-const TickResolver = require('../../src/tickResolver.js');
-const Utility = require('../../src/utility.js');
+const TickResolver = require('../../src/utils/tick_resolver.js');
+const Utility = require('../../src/utils/utility.js');
 
 // Minimal fake SDK exposing only what TickResolver touches: options, util,
 // and an explorer stub whose getToken returns a token doc (or throws).

@@ -16,13 +16,14 @@
 const { expect } = require('chai');
 const http    = require('http');
 const crypto  = require('crypto');
-require('../../src/applyBufferutilsPatch.js');
+require('../../src/utils/apply_bufferutils_patch.js');
 const bitcoin = require('bitcoinjs-lib');
 const { secp256k1 } = require('@noble/curves/secp256k1');
-const MuSig2   = require('../../src/musig2.js');
-const CoSigner = require('../../src/cosigner/coSigner.js');
+const MuSig2   = require('../../src/cosigner/musig2.js');
+const CoSigner = require('../../src/cosigner/co_signer.js');
 const { httpTransport } = require('../../src/cosigner/client.js');
 const { createCoSignerApp } = require('../../src/cosigner/server.js');
+const valueDerivability = require('../../src/cosigner/value_derivability.js');
 
 function makeAccount() {
     const musig   = new MuSig2();
@@ -325,8 +326,7 @@ describe('G17: fault and denial logging', function () {
 
 describe('bounded rest-field EXECUTE decode', function () {
 
-    const { decodeActionFromPsbt } = require('../../src/cosigner/psbtActionDecode.js');
-    const valueDerivability = require('../../src/cosigner/valueDerivability.js');
+    const { decodeActionFromPsbt } = require('../../src/cosigner/psbt_action_decode.js');
 
     it('an agent behind a co-signer can now call a contract at all', function () {
         // Before this, EXECUTE's only wire format ended in ...PARAMS and the

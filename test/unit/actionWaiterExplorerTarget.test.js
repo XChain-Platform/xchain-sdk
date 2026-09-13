@@ -25,8 +25,9 @@
 
 const assert = require('assert');
 const EventEmitter = require('events');
-const ActionWaiter = require('../../src/actionWaiter.js');
+const ActionWaiter = require('../../src/utils/action_waiter.js');
 const { waitFor } = require('../helpers/wait.js');
+const ExplorerClient = require('../../src/clients/explorer.js');
 
 const TXID = 'aa'.repeat(32);
 
@@ -109,7 +110,6 @@ describe('ActionWaiter explorer target injection', function () {
         // The override changes only the TARGET: coin prefix + timeout still
         // come from the SDK, so a redirected wait reads the same coin's data.
         assert.strictEqual(waiter.explorer.timeout, 1234);
-        const ExplorerClient = require('../../src/explorer.js');
         assert.strictEqual(waiter.explorer.coin,
             new ExplorerClient({ network: 'dogecoin-regtest' }).coin);
     });

@@ -9,7 +9,7 @@
 // contact legal@dankest.llc.
 
 const { expect } = require('chai');
-const { evaluatePolicy, GAS_TICK } = require('../../src/cosigner/policyEvaluator.js');
+const { evaluatePolicy, GAS_TICK } = require('../../src/cosigner/policy_evaluator.js');
 
 // The pure verdict function shared by AgentSession (client guardrail) and the
 // co-signer daemon (hard enforcement). No I/O, no throws: deny is a return

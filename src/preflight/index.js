@@ -34,8 +34,8 @@
 'use strict';
 
 const { parse } = require('../decoder/parse.js');
-const Utility = require('../utility.js');
-const { SDKFormatError, SDKPreflightError } = require('../errors.js');
+const Utility = require('../utils/utility.js');
+const { SDKFormatError, SDKPreflightError } = require('../utils/errors.js');
 const { REPORT_SCHEMA_VERSION, DEFAULT_TIMEOUT_MS, FINDING_CODES } = require('./constants.js');
 const { CheckContext } = require('./context.js');
 const { runUniversal } = require('./universal.js');
@@ -68,7 +68,7 @@ function buildVirtual(action, fields) {
 let _fallbackActions = null;
 function defaultActions() {
     if (!_fallbackActions) {
-        const Actions = require('../actions.js');
+        const Actions = require('../actions/index.js');
         _fallbackActions = new Actions({ config: {}, util: new Utility() });
     }
     return _fallbackActions;

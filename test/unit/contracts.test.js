@@ -9,7 +9,7 @@
 // contact legal@dankest.llc.
 
 const assert = require('assert');
-const ContractUtils = require('../../src/contracts.js');
+const ContractUtils = require('../../src/contract/utils.js');
 
 describe('ContractUtils', function () {
 

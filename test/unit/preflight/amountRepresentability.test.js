@@ -13,7 +13,7 @@
 // both unarmed. So this SDK must keep ACCEPTING that family: rejecting it here
 // would block a broadcast both public planes take. These assertions are the
 // falsification of a premature mirror. If someone vendors the rule into
-// src/utility.js or src/preflight/numeric.js before mainnet arms, they go red.
+// src/utils/utility.js or src/preflight/numeric.js before mainnet arms, they go red.
 //
 // AND DECLARED, NOT SILENT. The three checks modules that judge amount format
 // must say the rule exists, as an unverified aspect, so a caller is told the
@@ -21,7 +21,7 @@
 
 const { expect } = require('chai');
 const { mockSdk, notFound } = require('./_mock.js');
-const Utility = require('../../../src/utility.js');
+const Utility = require('../../../src/utils/utility.js');
 const numeric = require('../../../src/preflight/numeric.js');
 
 function reportFor(wire, explorerSpec, opts = {}) {

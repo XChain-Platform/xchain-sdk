@@ -34,13 +34,13 @@
 const crypto = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
 const { secp256k1 } = require('@noble/curves/secp256k1');
-const MuSig2 = require('../musig2.js');
+const MuSig2 = require('./musig2.js');
 const {
     deriveEnvelopeCommit, classifyEnvelopeRole, envelopeScriptPathSighash, envelopeRoundTweaks,
 } = require('./envelope.js');
 const { deriveMuSig2P2TR2of3 } = require('./account.js');
-const { SDKPolicyError } = require('../errors.js');
-const { taprootKeyPathSighash } = require('./coSigner.js');
+const { SDKPolicyError } = require('../utils/errors.js');
+const { taprootKeyPathSighash } = require('./co_signer.js');
 
 function toBytes(v, label) {
     if (v instanceof Uint8Array) return v;

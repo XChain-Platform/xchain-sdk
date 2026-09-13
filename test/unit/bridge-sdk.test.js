@@ -25,11 +25,11 @@
 // two specs, not against whatever formats.js happens to hold.
 
 const assert   = require('assert');
-const formats  = require('../../src/formats.js');
-const Actions  = require('../../src/actions.js');
-const Utility  = require('../../src/utility.js');
+const formats  = require('../../src/protocol/formats.js');
+const Actions  = require('../../src/actions/index.js');
+const Utility  = require('../../src/utils/utility.js');
 const config   = require('../../src/config.js');
-const Workflows = require('../../src/workflows.js');
+const Workflows = require('../../src/actions/workflows.js');
 
 // Spec literals. xchain-bridge.md section 4 (v0, v1), xchain-token-bridge.md
 // section 5 (v3, v4) and section 7 (ISSUE format 7).

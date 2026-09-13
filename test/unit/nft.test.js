@@ -16,7 +16,7 @@
 'use strict';
 
 const { expect } = require('chai');
-const NftHelpers = require('../../src/nft.js');
+const NftHelpers = require('../../src/actions/nft.js');
 const { XChainSDK } = require('../../index.js');
 
 // Parse an ISSUE v0 action string into a field map keyed by the documented template,

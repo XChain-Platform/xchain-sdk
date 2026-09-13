@@ -26,7 +26,7 @@
 'use strict';
 
 const mathjs = require('mathjs');
-const Utility = require('../utility.js');
+const Utility = require('../utils/utility.js');
 
 const util = new Utility();
 
@@ -110,7 +110,7 @@ function mulFloor(a, b, decimals) {
 // is flag-day gated per chain with mainnet and testnet both on the unarmed
 // house sentinel. Vendoring it here would make this client reject amounts both
 // public planes still accept, which is the SDK-stricter-than-consensus
-// false-block this module's contract forbids (src/validator.js records the SDK
+// false-block this module's contract forbids (src/protocol/validator.js records the SDK
 // shipping exactly that regression once already).
 //
 // So the rule is DECLARED, not predicted: the checks modules that judge amount

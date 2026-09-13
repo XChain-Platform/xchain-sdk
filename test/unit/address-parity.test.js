@@ -36,7 +36,7 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const Utility = require('../../src/utility.js');
+const Utility = require('../../src/utils/utility.js');
 const coins   = require('../../src/coins');
 
 // GitHub CI checks siblings out beside the repo; fall back to the dev sibling layout.

@@ -27,7 +27,7 @@
 'use strict';
 
 const assert = require('assert');
-const ActionWaiter = require('../../src/actionWaiter.js');
+const ActionWaiter = require('../../src/utils/action_waiter.js');
 
 // Minimal fake SDK: no WebSocket, explorer returns a canned transaction.
 function makeWaiter(txResult) {

@@ -9,8 +9,8 @@
 // contact legal@dankest.llc.
 
 const { expect } = require('chai');
-const AddressResolver = require('../../src/addressResolver.js');
-const Utility = require('../../src/utility.js');
+const AddressResolver = require('../../src/utils/address_resolver.js');
+const Utility = require('../../src/utils/utility.js');
 
 // A real, indexable address per chain (regtest BTC P2PKH-style sample).
 const ADDR  = 'mxchaintestaddressXXXXXXXXXXXX1a8EAfp';

@@ -18,9 +18,9 @@
 
 const { expect } = require('chai');
 const nock = require('nock');
-const ExplorerClient = require('../../src/explorer.js');
-const EncoderClient  = require('../../src/encoder.js');
-const { withRetry, isRetryable, getDelay, DEFAULTS } = require('../../src/retry.js');
+const ExplorerClient = require('../../src/clients/explorer.js');
+const EncoderClient  = require('../../src/clients/encoder.js');
+const { withRetry, isRetryable, getDelay, DEFAULTS } = require('../../src/utils/retry.js');
 
 
 // Section 1: Retry utility unit tests
@@ -537,7 +537,7 @@ describe('request hooks - EncoderClient', () => {
 // Pure retry helpers (parseRetryAfter / getRetryAfterDelay / getDelay) ──
 // getDelay / DEFAULTS are already imported at the top of this file; only pull in
 // the helpers not already bound here.
-const { parseRetryAfter, getRetryAfterDelay } = require('../../src/retry.js');
+const { parseRetryAfter, getRetryAfterDelay } = require('../../src/utils/retry.js');
 
 describe('retry helpers (pure)', function () {
 
@@ -616,8 +616,8 @@ describe('retry helpers (pure)', function () {
 // (maxDelay does not), maxRateLimitRetries caps how many 429s are retried, and
 // a 429 that survives the retry reaches the caller as SDKRateLimitedError.
 
-const { getRetryAfterSeconds, getRateLimitDelay, parseRateLimitReset } = require('../../src/retry.js');
-const { SDKError, SDKExplorerError, SDKEncoderError, SDKRateLimitedError } = require('../../src/errors.js');
+const { getRetryAfterSeconds, getRateLimitDelay, parseRateLimitReset } = require('../../src/utils/retry.js');
+const { SDKError, SDKExplorerError, SDKEncoderError, SDKRateLimitedError } = require('../../src/utils/errors.js');
 
 function rateLimitErr(headers, status = 429) {
     return { response: { status, headers, data: { error: 'rate limited' } } };

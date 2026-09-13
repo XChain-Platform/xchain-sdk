@@ -9,7 +9,7 @@
 // contact legal@dankest.llc.
 
 const assert = require('assert');
-const UTXOCache = require('../../src/utxoCache.js');
+const UTXOCache = require('../../src/carrier/utxo_cache.js');
 
 describe('UTXOCache', function () {
 

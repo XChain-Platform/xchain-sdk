@@ -51,9 +51,9 @@ try {
 // must apply the evaluator's own notion of an enforceable cap, not a second one.
 let hasEnforceableCap;
 try {
-    ({ hasEnforceableCap } = require('@dankest-llc/xchain-sdk/src/cosigner/policyEvaluator.js'));
+    ({ hasEnforceableCap } = require('@dankest-llc/xchain-sdk/src/cosigner/policy_evaluator.js'));
 } catch {
-    ({ hasEnforceableCap } = require('../src/cosigner/policyEvaluator.js'));
+    ({ hasEnforceableCap } = require('../src/cosigner/policy_evaluator.js'));
 }
 
 // Explorer-style coin prefixes → SDK network strings. Mainnet/testnet default

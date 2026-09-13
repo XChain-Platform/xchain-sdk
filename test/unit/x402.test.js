@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Unit tests for src/x402.js: action-string parsing (incl. spoof
+ * Unit tests for src/utils/x402.js: action-string parsing (incl. spoof
  * cases), invoice lifecycle, send/dispenser/deposit verification with
  * a stubbed explorer, the provisional sweeper, and the client loop
  * with a stubbed session. No network, no real chain.
@@ -27,9 +27,12 @@ const path   = require('path');
 const sinon  = require('sinon');
 const { expect } = require('chai');
 
-const { X402Gateway, X402Client, parseActionString } = require('../../src/x402.js');
-const { SDKX402Error, SDKPolicyError, SDKActionError } = require('../../src/errors.js');
+const { X402Gateway, X402Client, parseActionString } = require('../../src/utils/x402.js');
+const { SDKX402Error, SDKPolicyError, SDKActionError } = require('../../src/utils/errors.js');
 const { waitFor } = require('../helpers/wait.js');
+const ecc = require('@bitcoinerlab/secp256k1');
+const AuthUtils = require('../../src/utils/auth.js');
+const sdkIndex = require('../../index.js');
 
 const NONCE = 'a'.repeat(32);
 
@@ -297,9 +300,7 @@ describe('x402', () => {
 
     describe('X402Gateway payer-signature binding', () => {
         const { ECPairFactory } = require('ecpair');
-        const ecc = require('@bitcoinerlab/secp256k1');
-        const { getNetwork } = require('../../src/networks.js');
-        const AuthUtils = require('../../src/auth.js');
+        const { getNetwork } = require('../../src/protocol/networks.js');
         const ECPair = ECPairFactory(ecc);
 
         const NET = 'dogecoin-testnet';   // matches coin TDOGE
@@ -559,9 +560,7 @@ describe('x402', () => {
 
         it('signs the invoice for a requireSignature send offer and the gateway accepts it end-to-end', async () => {
             const { ECPairFactory } = require('ecpair');
-            const ecc = require('@bitcoinerlab/secp256k1');
-            const { getNetwork } = require('../../src/networks.js');
-            const AuthUtils = require('../../src/auth.js');
+            const { getNetwork } = require('../../src/protocol/networks.js');
             const NET = 'dogecoin-testnet';
             const netParams = getNetwork(NET);
             const auth = new AuthUtils(NET);
@@ -604,7 +603,6 @@ describe('x402', () => {
     });
 
     it('exports are wired into the SDK entry point', () => {
-        const sdkIndex = require('../../index.js');
         expect(sdkIndex.X402Gateway).to.be.a('function');
         expect(sdkIndex.X402Client).to.be.a('function');
         expect(sdkIndex.SDKX402Error).to.equal(SDKX402Error);

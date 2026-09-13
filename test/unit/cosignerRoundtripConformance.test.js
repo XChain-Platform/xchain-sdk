@@ -33,7 +33,7 @@ const bitcoin = require('bitcoinjs-lib');
 const {
     decodeActionFromPsbt, decodeActionStringFromPsbt,
     MAGIC_WORD, P2SH_TAG, P2WSH_TAG, OBFUSCATION,
-} = require('../../src/cosigner/psbtActionDecode.js');
+} = require('../../src/cosigner/psbt_action_decode.js');
 
 const VENDORED = path.join(__dirname, '..', 'fixtures', 'roundtrip-conformance.json');
 const fixture  = require('../fixtures/roundtrip-conformance.json');

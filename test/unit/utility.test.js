@@ -9,7 +9,7 @@
 // contact legal@dankest.llc.
 
 const assert = require('assert');
-const Utility = require('../../src/utility.js');
+const Utility = require('../../src/utils/utility.js');
 
 describe('BigInt JSON encoding (#3921)', function () {
 

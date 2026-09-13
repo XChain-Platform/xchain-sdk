@@ -17,6 +17,7 @@
 const { expect } = require('chai');
 const pkg = require('../../index.js');
 const XChainSDK = require('../../src/XChainSDK.js');
+const crypto = require('crypto');
 
 const PUBLIC = [
     'CoSigner', 'CoSignerClient', 'deriveMuSig2P2TR', 'deriveMuSig2P2TR2of3',
@@ -40,7 +41,6 @@ describe('co-signer public exports', function () {
     });
 
     it('the public exports are actually wired (a derive round-trips)', function () {
-        const crypto = require('crypto');
         const { secp256k1 } = require('@noble/curves/secp256k1');
         const daemonSk = crypto.randomBytes(32);
         const a = Buffer.from(secp256k1.getPublicKey(crypto.randomBytes(32), true));

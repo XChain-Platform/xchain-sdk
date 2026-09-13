@@ -14,7 +14,7 @@
  *
  * XChain Platform SDK - API bearer-token auth gate tests
  *
- * These mount the SHIPPED gate from src/apiGuards.js (the same function
+ * These mount the SHIPPED gate from src/utils/api_guards.js (the same function
  * src/api.js mounts), not a reconstruction of it: src/api.js starts a live
  * server at require time (dotenv.config() + app.listen(SDK_API_PORT)) and so
  * cannot be require()'d by a unit test, which is exactly why the guards live in
@@ -33,7 +33,7 @@ const path   = require('path');
 const http   = require('http');
 const express = require('express');
 const bodyParser = require('body-parser');
-const { authGateMiddleware } = require('../../src/apiGuards.js');
+const { authGateMiddleware } = require('../../src/utils/api_guards.js');
 
 function buildApp(SDK_API_KEY) {
     const app = express();
@@ -259,9 +259,9 @@ describe('API bearer-token auth gate', function () {
     });
 
     it('keeps the timing-safe compare, in the guard module the gate now lives in', () => {
-        const guards = fs.readFileSync(path.join(__dirname, '../../src/apiGuards.js'), 'utf8');
-        assert.notStrictEqual(guards.indexOf("require('./utils/safeCompare.js')"), -1,
-            'safeCompare require missing from src/apiGuards.js');
+        const guards = fs.readFileSync(path.join(__dirname, '../../src/utils/api_guards.js'), 'utf8');
+        assert.notStrictEqual(guards.indexOf("require('./safe_compare.js')"), -1,
+            'safeCompare require missing from src/utils/api_guards.js');
         assert.notStrictEqual(guards.indexOf('safeTokenEqual(got, apiKey)'), -1,
             'the auth gate must compare the bearer token with safeTokenEqual');
     });

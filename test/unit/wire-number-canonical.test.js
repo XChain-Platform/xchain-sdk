@@ -19,7 +19,7 @@
 
 const { expect } = require('chai');
 const config     = require('../../src/config.js');
-const Utility    = require('../../src/utility.js');
+const Utility    = require('../../src/utils/utility.js');
 const { XChainSDK } = require('../../index.js');
 
 const cfg  = config.getConfig();

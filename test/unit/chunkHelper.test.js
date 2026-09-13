@@ -29,7 +29,7 @@
 
 const { expect } = require('chai');
 const crypto = require('crypto');
-const chunkHelper = require('../../src/chunkHelper.js');
+const chunkHelper = require('../../src/contract/chunk_helper.js');
 
 const { codeHashOf, fitsSingleDeploy, splitCode, planDeploy,
         MAX_ACTION_DATA_LENGTH, MAX_DEPLOYCHUNK_PART_BYTES, MAX_DEPLOY_CHUNKS } = chunkHelper;

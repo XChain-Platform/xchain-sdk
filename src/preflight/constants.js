@@ -25,7 +25,7 @@
 
 // Encoding carrier caps ride the existing single sources: chunkHelper
 // (protocol constants) + the compose-time limits in actions.js.
-const { MAX_ACTION_DATA_LENGTH } = require('../chunkHelper.js');
+const { MAX_ACTION_DATA_LENGTH } = require('../contract/chunk_helper.js');
 
 // Per-carrier data budgets (bytes of action string). Mirrors the compose-time
 // gate in actions.js (P2SH/P2WSH 520-44 script overhead per chunk; MULTISIGN
@@ -250,7 +250,7 @@ const TIER2_ERROR_CAPABLE = Object.freeze({
  * the arbiter EMITS: it is mirror-injected from the hub mirror rather than
  * decoded off the wire (test/fixtures/action-manifest.json classifies it
  * `mirror-injected`, with no `wireDecoded` and no `userEncodable`). It therefore
- * has no entry in src/formats.js, so `decoder.parse('XEXEC|...')` returns
+ * has no entry in src/protocol/formats.js, so `decoder.parse('XEXEC|...')` returns
  * UNKNOWN_ACTION for every wire form and `runTier1` is never handed a parsed
  * action named XEXEC. A client composes EXECUTE; the chain, not the client,
  * produces the XEXEC leg on the far side.

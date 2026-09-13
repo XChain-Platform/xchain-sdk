@@ -24,9 +24,10 @@
 // These attack both surfaces.
 
 const { expect } = require('chai');
-const Utility    = require('../../src/utility.js');
-const Validator  = require('../../src/validator.js');
+const Utility    = require('../../src/utils/utility.js');
+const Validator  = require('../../src/protocol/validator.js');
 const XChainSDK  = require('../../src/XChainSDK.js');
+const Actions = require('../../src/actions/index.js');
 
 function v() { return new Validator(new Utility()); }
 
@@ -181,7 +182,6 @@ describe('Security: ticker references cannot smuggle wire delimiters', function 
   it('never emits an injected wire string from composeActionString', function () {
     // The end of the path, not just the gate: composition must throw rather than
     // hand a caller a serialized string with extra fields in it.
-    const Actions = require('../../src/actions.js');
     const acts    = new Actions({ config: {}, util: new Utility(), options: {} });
     expect(() => acts.composeActionString({
       action: 'SEND', params: { TICK: 'TOKEN|100|^1|memo', AMOUNT: '1', DESTINATION: '^2' }

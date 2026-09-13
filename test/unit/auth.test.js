@@ -9,8 +9,8 @@
 // contact legal@dankest.llc.
 
 const { expect } = require('chai');
-const AuthUtils = require('../../src/auth.js');
-const WalletUtils = require('../../src/wallet.js');
+const AuthUtils = require('../../src/utils/auth.js');
+const WalletUtils = require('../../src/utils/wallet.js');
 
 describe('AuthUtils', function() {
 

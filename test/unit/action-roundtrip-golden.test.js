@@ -36,8 +36,8 @@ const fs         = require('fs');
 const path       = require('path');
 
 const config   = require('../../src/config.js');
-const Utility   = require('../../src/utility.js');
-const Actions   = require('../../src/actions.js');
+const Utility   = require('../../src/utils/utility.js');
+const Actions   = require('../../src/actions/index.js');
 
 const FIXTURE_PATH = path.join(__dirname, '..', 'fixtures', 'action-roundtrip-golden.json');
 const GOLDEN       = JSON.parse(fs.readFileSync(FIXTURE_PATH, 'utf8'));
@@ -149,7 +149,7 @@ describe('Action round-trip golden – SDK encoder byte-layout contract', functi
 
         before(function () {
             // What this hook does is a CROSS-REPO require() sweep: the
-            // sibling xchain-indexer's src/utility.js plus every handler in its
+            // sibling xchain-indexer's src/utils/utility.js plus every handler in its
             // src/actions/ (~50 modules), none of them in this repo's module
             // cache. On a cold venue checkout that has run past mocha's DEFAULT
             // 5s hook timeout, and mocha attributes a hook failure to the FIRST
@@ -180,7 +180,7 @@ describe('Action round-trip golden – SDK encoder byte-layout contract', functi
 
         it('the sibling xchain-indexer parser loads within its budget', function () {
             if (!indexerRoot) this.skip();
-            const what = `the cross-repo load of ${indexerRoot} (src/utility.js plus every handler in src/actions/)`;
+            const what = `the cross-repo load of ${indexerRoot} (src/utils/utility.js plus every handler in src/actions/)`;
             if (loadError)
                 expect.fail(`${what} threw after ${loadMs}ms: ${loadError.message}. ` +
                             'This is a sibling-load failure, not a golden-fixture drift.');

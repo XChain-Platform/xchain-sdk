@@ -30,9 +30,9 @@ const https = require('https');
 const sinon = require('sinon');
 const axios = require('axios');
 
-const ExplorerClient = require('../../src/explorer.js');
-const EncoderClient  = require('../../src/encoder.js');
-const HubConnector   = require('../../src/hub.js');
+const ExplorerClient = require('../../src/clients/explorer.js');
+const EncoderClient  = require('../../src/clients/encoder.js');
+const HubConnector   = require('../../src/clients/hub.js');
 
 // Recognisable stand-ins for a SOCKS agent. Real ones are http/https
 // Agent subclasses that dial through a proxy; all that matters here is

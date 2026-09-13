@@ -19,7 +19,7 @@
 'use strict';
 
 const { expect } = require('chai');
-const Attestation = require('../../src/attestation.js');
+const Attestation = require('../../src/actions/attestation.js');
 
 describe('AttestationHelpers.llm', function () {
 

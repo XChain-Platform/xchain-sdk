@@ -9,7 +9,7 @@
 // contact legal@dankest.llc.
 
 const assert = require('assert');
-const errors = require('../../src/errors.js');
+const errors = require('../../src/utils/errors.js');
 
 const {
     SDKError,

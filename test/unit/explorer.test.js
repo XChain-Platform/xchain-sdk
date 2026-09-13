@@ -11,7 +11,7 @@
 const { expect } = require('chai');
 const nock = require('nock');
 const sinon = require('sinon');
-const ExplorerClient = require('../../src/explorer.js');
+const ExplorerClient = require('../../src/clients/explorer.js');
 
 describe('ExplorerClient', function () {
 

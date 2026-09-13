@@ -17,12 +17,12 @@
 const { expect } = require('chai');
 const http    = require('http');
 const crypto  = require('crypto');
-require('../../src/applyBufferutilsPatch.js');
+require('../../src/utils/apply_bufferutils_patch.js');
 const bitcoin = require('bitcoinjs-lib');
 const { secp256k1 } = require('@noble/curves/secp256k1');
-const MuSig2   = require('../../src/musig2.js');
-const CoSigner = require('../../src/cosigner/coSigner.js');
-const { createHostedCoSignerApp } = require('../../src/cosigner/hostedServer.js');
+const MuSig2   = require('../../src/cosigner/musig2.js');
+const CoSigner = require('../../src/cosigner/co_signer.js');
+const { createHostedCoSignerApp } = require('../../src/cosigner/hosted_server.js');
 
 function makeAccount() {
     const musig   = new MuSig2();

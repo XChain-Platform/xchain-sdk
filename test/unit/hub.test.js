@@ -10,7 +10,7 @@
 
 const assert = require('assert');
 const nock = require('nock');
-const HubConnector = require('../../src/hub.js');
+const HubConnector = require('../../src/clients/hub.js');
 
 const HUB_BASE = 'http://localhost:10000';
 const HUB2_BASE = 'http://hub2.test:8001';

@@ -13,8 +13,8 @@ const nock = require('nock');
 const sinon = require('sinon');
 const bitcoin = require('bitcoinjs-lib');
 const ecc = require('@bitcoinerlab/secp256k1');
-const WalletUtils = require('../../src/wallet.js');
-const { getNetwork } = require('../../src/networks.js');
+const WalletUtils = require('../../src/utils/wallet.js');
+const { getNetwork } = require('../../src/protocol/networks.js');
 
 describe('WalletUtils', function() {
 
@@ -660,7 +660,7 @@ describe('WalletUtils', function() {
 
         it('should re-throw SDK errors from encoder.getUTXOs', async function() {
             const wallet = new WalletUtils('bitcoin-regtest');
-            const { SDKWalletError } = require('../../src/errors.js');
+            const { SDKWalletError } = require('../../src/utils/errors.js');
             const sdkErr = new SDKWalletError('SOME_CODE', 'sdk error');
             const encoder = { getUTXOs: async () => { throw sdkErr; } };
             try {
@@ -695,7 +695,7 @@ describe('WalletUtils', function() {
 
         it('should re-throw SDK errors from encoder.broadcastTx', async function() {
             const wallet = new WalletUtils('bitcoin-regtest');
-            const { SDKWalletError } = require('../../src/errors.js');
+            const { SDKWalletError } = require('../../src/utils/errors.js');
             const sdkErr = new SDKWalletError('SOME_BROADCAST_ERR', 'sdk-level error');
             const encoder = { broadcastTx: async () => { throw sdkErr; } };
             try {

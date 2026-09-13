@@ -19,51 +19,53 @@
  ********************************************************************/
 
 const config         = require('./config.js');
-const Actions        = require('./actions.js');
-const Utility        = require('./utility.js');
-const ExplorerClient = require('./explorer.js');
-const EncoderClient  = require('./encoder.js');
-const HubConnector   = require('./hub.js');
-const BatchBuilder   = require('./batchBuilder.js');
-const ContractUtils  = require('./contracts.js');
+const Actions        = require('./actions/index.js');
+const Utility        = require('./utils/utility.js');
+const ExplorerClient = require('./clients/explorer.js');
+const EncoderClient  = require('./clients/encoder.js');
+const HubConnector   = require('./clients/hub.js');
+const BatchBuilder   = require('./carrier/batch_builder.js');
+const ContractUtils  = require('./contract/utils.js');
 // The frozen CONTRACT_MANIFEST meta verdict strings (spec 2.3), so the deploy
 // pre-flight compares against the token itself rather than a retyped copy.
 const CONTRACT_META_VERDICTS = ContractUtils.META_VERDICTS;
-const ContractClient = require('./contractClient.js');
-const WebSocketClient = require('./websocket.js');
-const WalletUtils    = require('./wallet.js');
-const AuthUtils      = require('./auth.js');
-const MessagingUtils = require('./messaging.js');
-const GatedFileUtils = require('./gatedFile.js');
-const CompressionUtils = require('./compression.js');
-const NftHelpers     = require('./nft.js');
-const ProjectHelpers = require('./project.js');
-const ControllerHelpers = require('./controller.js');
-const VoteHelpers    = require('./vote.js');
-const BettingHelpers = require('./betting.js');
-const AttestationHelpers = require('./attestation.js');
+const ContractClient = require('./contract/client.js');
+const WebSocketClient = require('./clients/websocket.js');
+const WalletUtils    = require('./utils/wallet.js');
+const AuthUtils      = require('./utils/auth.js');
+const MessagingUtils = require('./actions/messaging.js');
+const GatedFileUtils = require('./actions/gated_file.js');
+const CompressionUtils = require('./protocol/compression.js');
+const NftHelpers     = require('./actions/nft.js');
+const ProjectHelpers = require('./actions/project.js');
+const ControllerHelpers = require('./actions/controller.js');
+const VoteHelpers    = require('./actions/vote.js');
+const BettingHelpers = require('./actions/betting.js');
+const AttestationHelpers = require('./actions/attestation.js');
 const CheckpointVerifier = require('./checkpoint.js');
-const LightClient        = require('./light.js');
+const LightClient        = require('./protocol/light_client.js');
 const Decoder            = require('./decoder/index.js');
 const Preflight          = require('./preflight/index.js');
-const MuSig2            = require('./musig2.js');
-const ActionWaiter      = require('./actionWaiter.js');
-const LifecycleManager  = require('./lifecycleManager.js');
-const WalletSession     = require('./walletSession.js');
-const Workflows         = require('./workflows.js');
-const TickResolver      = require('./tickResolver.js');
-const AddressResolver   = require('./addressResolver.js');
-const { publicDefaults } = require('./endpoints.js');
+const MuSig2            = require('./cosigner/musig2.js');
+const ActionWaiter      = require('./utils/action_waiter.js');
+const LifecycleManager  = require('./carrier/lifecycle_manager.js');
+const WalletSession     = require('./utils/wallet_session.js');
+const Workflows         = require('./actions/workflows.js');
+const TickResolver      = require('./utils/tick_resolver.js');
+const AddressResolver   = require('./utils/address_resolver.js');
+const { publicDefaults } = require('./utils/endpoints.js');
 // The pre-sign intent gate. estimateFees hands back a signable encoder-authored PSBT,
 // so it runs the same reconciliation submitAction does.
-const { reconcileEncoded, psbtPrevouts } = require('./reconcileEncoded.js');
+const { reconcileEncoded, psbtPrevouts } = require('./carrier/reconcile_encoded.js');
 // ... and its carrier half: the gate reads outputs and the fee, this reads the
 // action the transaction actually carries.
-const { assertCarrierBinding } = require('./carrier/bindActionCarrier.js');
-const { SDKConfigError, SDKExplorerError, SDKContractError } = require('./errors.js');
+const { assertCarrierBinding } = require('./carrier/bind_action_carrier.js');
+const { SDKConfigError, SDKExplorerError, SDKContractError } = require('./utils/errors.js');
 const { lintSource } = require('./contract/lint_core.js');
 const CONTRACT_SOURCES = require('./contract/templates.js');
-const chunkHelper = require('./chunkHelper.js');
+const chunkHelper = require('./contract/chunk_helper.js');
+const AgentSession = require('./cosigner/agent_session.js');
+const MuSig2AgentSession = require('./cosigner/musig2_agent_session.js');
 
 /*
  * PER-ENTITY DELIVERY GUARDS FOR THE on*() SUBSCRIPTIONS
@@ -936,7 +938,6 @@ class XChainSDK {
     // policy (action allowlist, per-action and per-window caps, destination
     // allowlist, confirmation hook). Fail-closed. See src/agentSession.js.
     agentSession(wif, policy, opts) {
-        const AgentSession = require('./agentSession.js');
         return new AgentSession(this, wif, policy, opts);
     }
 
@@ -946,7 +947,6 @@ class XChainSDK {
     // out-of-policy actions. opts.coSigner = { transport, publicKeys, network? };
     // the agent's own pubkey must be in publicKeys. See src/cosigner/musig2AgentSession.js.
     musig2AgentSession(wif, policy, opts) {
-        const MuSig2AgentSession = require('./cosigner/musig2AgentSession.js');
         return new MuSig2AgentSession(this, wif, policy, opts);
     }
 

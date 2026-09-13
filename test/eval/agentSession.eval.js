@@ -7,8 +7,8 @@
 
 const assert = require('assert');
 // The component under eval (loaded to bind the eval to the agentSession surface).
-require('../../src/agentSession.js');
-const { evaluatePolicy } = require('../../src/cosigner/policyEvaluator.js');
+require('../../src/cosigner/agent_session.js');
+const { evaluatePolicy } = require('../../src/cosigner/policy_evaluator.js');
 
 // A minimal policy: two actions allowed, one destination allow-listed.
 const policy = {

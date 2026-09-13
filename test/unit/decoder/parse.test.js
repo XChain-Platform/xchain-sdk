@@ -9,7 +9,7 @@
 
 const { expect } = require('chai');
 const { parse } = require('../../../src/decoder/parse.js');
-const { MAX_ACTION_DATA_LENGTH } = require('../../../src/chunkHelper.js');
+const { MAX_ACTION_DATA_LENGTH } = require('../../../src/contract/chunk_helper.js');
 
 describe('decoder.parse', function () {
 

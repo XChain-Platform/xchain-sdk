@@ -9,7 +9,7 @@
 // contact legal@dankest.llc.
 
 const assert = require('assert');
-const ContractClient = require('../../src/contractClient.js');
+const ContractClient = require('../../src/contract/client.js');
 
 // Build a minimal stub SDK with injected collaborators
 function makeSdk(overrides = {}) {

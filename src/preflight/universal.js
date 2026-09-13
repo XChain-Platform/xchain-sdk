@@ -26,7 +26,7 @@
 
 const { FINDING_CODES, ENCODING_LIMITS, FEE_CHARGING_ACTIONS, CANONICAL_CARET_ID } = require('./constants.js');
 const { ADDRESS_REF_FIELDS } = require('../addressRefFields.js');
-const { TICK_EXISTENCE_FIELDS } = require('../tickRefFields.js');
+const { TICK_EXISTENCE_FIELDS } = require('../protocol/tick_ref_fields.js');
 const numeric = require('./numeric.js');
 
 // Wire fields that reference a TICK whose existence is checkable.

@@ -10,8 +10,10 @@
 
 const { expect } = require('chai');
 const crypto = require('crypto');
-const MessagingUtils = require('../../src/messaging.js');
-const WalletUtils = require('../../src/wallet.js');
+const MessagingUtils = require('../../src/actions/messaging.js');
+const WalletUtils = require('../../src/utils/wallet.js');
+const Actions = require('../../src/actions/index.js');
+const Utility = require('../../src/utils/utility.js');
 
 // Real secp256k1 keypairs (no stubbing) so these exercise the actual
 // ECIES / ECDH / AES-GCM primitives end-to-end.
@@ -898,7 +900,6 @@ describe('MessagingUtils @crypto @regression', function () {
         });
 
         it('encrypts a binary payload with ECDH method (round-trips via sessionDecryptBytes)', async function () {
-            const crypto = require('crypto');
             const secret = crypto.randomBytes(32).toString('hex');
             const payload = crypto.randomBytes(33);
             let sentParams = null;
@@ -920,7 +921,6 @@ describe('MessagingUtils @crypto @regression', function () {
         });
 
         it('encrypts a binary payload with AES method (round-trips via aesDecryptBytes)', async function () {
-            const crypto = require('crypto');
             const key = crypto.randomBytes(32).toString('hex');
             const payload = Buffer.concat([Buffer.from([0x01, 0x00, 0xff]), crypto.randomBytes(30)]);
             let sentParams = null;
@@ -980,7 +980,6 @@ describe('MessagingUtils @crypto @regression', function () {
 
         // Happy-path for ECDH (method=2) send
         it('returns txid on a successful ECDH send', async function () {
-            const crypto = require('crypto');
             const secret = crypto.randomBytes(32).toString('hex');
             const fakeSdk = {
                 createAction: async () => ({ psbt: 'psbtHex', actionString: 'XC|MSG' }),
@@ -999,7 +998,6 @@ describe('MessagingUtils @crypto @regression', function () {
 
         // Happy-path for AES (method=3) send
         it('returns txid on a successful AES send', async function () {
-            const crypto = require('crypto');
             const key = crypto.randomBytes(32).toString('hex');
             const fakeSdk = {
                 createAction: async () => ({ psbt: 'psbtHex', actionString: 'XC|MSG' }),
@@ -1022,8 +1020,6 @@ describe('MessagingUtils @crypto @regression', function () {
         // must resolve MESSAGE v2. (Pre-fix this threw NO_MATCHING_FORMAT, which the old
         // createAction stub hid: that false-green is the bug this regression guards.)
         it('encodes a real MESSAGE v2 action and returns txid on a successful ECIES send', async function () {
-            const Actions = require('../../src/actions.js');
-            const Utility = require('../../src/utility.js');
             const realActions = new Actions({ util: new Utility(), config: {} });
             const bob = keypair();
             const dest = new WalletUtils(NETWORK).deriveAddress(bob.publicKeyHex);

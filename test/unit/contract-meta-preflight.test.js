@@ -21,11 +21,11 @@
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const ContractUtils    = require('../../src/contracts.js');
+const ContractUtils    = require('../../src/contract/utils.js');
 const XChainSDK        = require('../../src/XChainSDK.js');
-const Workflows        = require('../../src/workflows.js');
-const LifecycleManager = require('../../src/lifecycleManager.js');
-const WalletSession    = require('../../src/walletSession.js');
+const Workflows        = require('../../src/actions/workflows.js');
+const LifecycleManager = require('../../src/carrier/lifecycle_manager.js');
+const WalletSession    = require('../../src/utils/wallet_session.js');
 const TEMPLATES        = require('../../src/contract/templates.js');
 
 const V = ContractUtils.META_VERDICTS;

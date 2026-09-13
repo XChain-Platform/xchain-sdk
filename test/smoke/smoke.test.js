@@ -11,6 +11,12 @@
 const { expect } = require('chai');
 const axios = require('axios');
 const http = require('http');
+const express = require('express');
+const bodyParser = require('body-parser');
+const helmet = require('helmet');
+const cors = require('cors');
+const jsonRouter = require('express-json-rpc-router');
+const XChainSDK = require('../../src/XChainSDK');
 
 describe('Smoke: API server end-to-end', function () {
 
@@ -19,12 +25,6 @@ describe('Smoke: API server end-to-end', function () {
 
     before(function (done) {
         // Boot the SDK API server programmatically
-        const express    = require('express');
-        const bodyParser = require('body-parser');
-        const helmet     = require('helmet');
-        const cors       = require('cors');
-        const jsonRouter = require('express-json-rpc-router');
-        const XChainSDK  = require('../../src/XChainSDK');
 
         const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
 
@@ -139,7 +139,6 @@ describe('Smoke: API server end-to-end', function () {
     // truncated or lossy response, and it does not have to be edited every time
     // the protocol gains an action.
     it('get_actions returns the full action registry', async function () {
-        const XChainSDK = require('../../src/XChainSDK');
         const expected = new XChainSDK({ network: 'bitcoin-regtest' }).getActions();
 
         let res = await rpc('get_actions');

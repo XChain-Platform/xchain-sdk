@@ -25,7 +25,7 @@
 
 const repl = require('repl');
 const XChainSDK = require('./XChainSDK.js');
-const CrossChainHelper = require('./crossChain.js');
+const CrossChainHelper = require('./actions/cross_chain.js');
 
 
 async function startREPL(options = {}) {

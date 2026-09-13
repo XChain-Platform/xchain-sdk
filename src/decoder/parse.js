@@ -29,16 +29,16 @@
 
 'use strict';
 
-const formats        = require('../formats.js');
-const FormatSelector = require('../formatSelector.js');
-const Validator      = require('../validator.js');
-const Utility        = require('../utility.js');
+const formats        = require('../protocol/formats.js');
+const FormatSelector = require('../protocol/format_selector.js');
+const Validator      = require('../protocol/validator.js');
+const Utility        = require('../utils/utility.js');
 const { ACTION_ALIASES } = require('./aliases.js');
-const { MAX_ACTION_DATA_LENGTH } = require('../chunkHelper.js');
+const { MAX_ACTION_DATA_LENGTH } = require('../contract/chunk_helper.js');
 
 // BATCH limit scan, vendored from the consensus arbiter
 // (xchain-indexer/src/actions/batch.js) through the one shared client copy in
-// src/batchLimits.js; the conformance unit test guards drift by CLASSIFICATION
+// src/protocol/batch_limits.js; the conformance unit test guards drift by CLASSIFICATION
 // and COUNT, not just by the table's values. BATCH:0 = nested BATCH
 // categorically forbidden (a parse failure, not a limit finding).
 //
@@ -68,7 +68,7 @@ const {
     limitKeysInListOrder,
     commandTick,
     maxMintsPerDistinctTick,
-} = require('../batchLimits.js');
+} = require('../protocol/batch_limits.js');
 
 const BATCH_ACTION_LIMITS = BATCH_ACTION_LIMITS_ACTIVE;
 

@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Unit tests for WebSocketClient (src/websocket.js)
+ * Unit tests for WebSocketClient (src/clients/websocket.js)
  *
  * Uses an in-process ws.Server as a mock to test the client
  * without requiring a real xchain-explorer.
@@ -22,9 +22,10 @@
 const { expect }  = require('chai');
 const sinon       = require('sinon');
 const WebSocket   = require('ws');
-const WebSocketClient = require('../../src/websocket.js');
-const { SDKExplorerError } = require('../../src/errors.js');
+const WebSocketClient = require('../../src/clients/websocket.js');
+const { SDKExplorerError } = require('../../src/utils/errors.js');
 const { waitFor, waitForCalls } = require('../helpers/wait.js');
+const path = require('path');
 
 // Mock WebSocket Server
 
@@ -131,13 +132,11 @@ describe('WebSocketClient', function () {
     describe('WS_SCHEMA_VERSION', function () {
 
         it('is exposed as a static on the client class', function () {
-            const WebSocketClient = require('../../src/websocket.js');
             expect(WebSocketClient.WS_SCHEMA_VERSION).to.be.a('number');
             expect(WebSocketClient.WS_SCHEMA_VERSION).to.equal(2);
         });
 
         it('matches the explorer sibling schema version when checked out (cross-repo drift guard)', function () {
-            const path = require('path');
             const fs = require('fs');
             const explorerDir = path.join(__dirname, '..', '..', '..', 'xchain-explorer');
             const explorerSchema = path.join(explorerDir, 'src', 'ws', 'schema_version.js');
@@ -147,7 +146,6 @@ describe('WebSocketClient', function () {
             if (!fs.existsSync(path.join(explorerDir, 'package.json'))) return this.skip();
             expect(fs.existsSync(explorerSchema),
                 path.relative(explorerDir, explorerSchema) + ' is gone from xchain-explorer; repoint this drift guard').to.be.true;
-            const WebSocketClient = require('../../src/websocket.js');
             expect(require(explorerSchema).WS_SCHEMA_VERSION).to.equal(WebSocketClient.WS_SCHEMA_VERSION);
         });
     });

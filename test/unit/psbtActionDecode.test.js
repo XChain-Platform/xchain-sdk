@@ -11,8 +11,8 @@
 const { expect } = require('chai');
 const crypto  = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
-const { decodeActionFromPsbt, decodeActionStringFromPsbt } = require('../../src/cosigner/psbtActionDecode.js');
-const { evaluatePolicy } = require('../../src/cosigner/policyEvaluator.js');
+const { decodeActionFromPsbt, decodeActionStringFromPsbt } = require('../../src/cosigner/psbt_action_decode.js');
+const { evaluatePolicy } = require('../../src/cosigner/policy_evaluator.js');
 
 // Build an OP_RETURN PSBT exactly the way xchain-encoder does, so the decoder
 // is tested against the real forward construction (not the decoder's own

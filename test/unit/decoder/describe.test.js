@@ -12,7 +12,7 @@
 const { expect } = require('chai');
 const { parse } = require('../../../src/decoder/parse.js');
 const { describe: describeAction } = require('../../../src/decoder/describe.js');
-const FORMATS = require('../../../src/formats.js');
+const FORMATS = require('../../../src/protocol/formats.js');
 
 const GENERIC = /No plain-English summary is available/;
 

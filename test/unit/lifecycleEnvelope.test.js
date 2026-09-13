@@ -26,13 +26,14 @@
 'use strict';
 
 const assert = require('assert');
-const LifecycleManager = require('../../src/lifecycleManager.js');
+const LifecycleManager = require('../../src/carrier/lifecycle_manager.js');
+const bitcoin = require('bitcoinjs-lib');
+const ecc = require('@bitcoinerlab/secp256k1');
+const crypto = require('crypto');
 
 const FAKE_WIF = 'L1rkA9mYRjVPVdvMuVbHRMX6SPHM7fNwCEfT3AV2qCGAmJ8wNfp';
 
 function buildSignedTx() {
-    const bitcoin = require('bitcoinjs-lib');
-    const ecc = require('@bitcoinerlab/secp256k1');
     const { ECPairFactory } = require('ecpair');
     bitcoin.initEccLib(ecc);
     const ECPair = ECPairFactory(ecc);
@@ -65,8 +66,6 @@ const ACTION_STRING = 'XCHAIN|FILE|...';
 // action that was submitted, and a reveal carrying no leaf at all is a response the
 // encoder never emits: the leaf IS the envelope.
 function envelopeLeaf(actionString) {
-    const bitcoin = require('bitcoinjs-lib');
-    const crypto = require('crypto');
     const payload = bitcoin.script.compile([Buffer.from(actionString, 'utf8')]);
     const pushes = [];
     for (let i = 0; i < payload.length; i += 520) pushes.push(payload.subarray(i, i + 520));
@@ -79,7 +78,6 @@ function envelopeLeaf(actionString) {
 
 // Attach that leaf to input 0 of a reveal PSBT, the way the encoder's reveal does.
 function withEnvelopeLeaf(psbt, actionString = ACTION_STRING) {
-    const crypto = require('crypto');
     psbt.updateInput(0, {
         tapLeafScript: [{
             leafVersion: 0xc0,
@@ -99,7 +97,6 @@ const RECOVERY = {
 };
 
 function makeEnvelopeSdk({ revealSignThrows = false, revealBroadcastThrows = false, customSigner = null } = {}) {
-    const bitcoin = require('bitcoinjs-lib');
     const signed = buildSignedTx();
     // Same transaction shape as the commit, plus the envelope leaf on input 0:
     // the reveal is where the action bytes first exist in a transaction at all.
@@ -204,8 +201,6 @@ describe('Taproot envelope pair through the lifecycle', function () {
         // hostile encoder could add a second, correctly shaped P2TR output only it can
         // spend and the SDK would sign it. The commit and its reveal arrive from one
         // createTx call, so the reveal's inputs decide which leg is real.
-        const bitcoin = require('bitcoinjs-lib');
-        const crypto = require('crypto');
         const { sdk, trace, signed } = makeEnvelopeSdk();
         const net = bitcoin.networks.regtest;
         const fundingScript = bitcoin.Psbt.fromHex(signed.psbtHex).data.inputs[0].witnessUtxo.script;
@@ -233,8 +228,6 @@ describe('Taproot envelope pair through the lifecycle', function () {
     it('the same pair WITHOUT the parked leg goes all the way through', async function () {
         // The other half of the pin: a legitimate commit still reconciles, so the
         // rejection above is the encoder misbehaving rather than the gate being blind.
-        const bitcoin = require('bitcoinjs-lib');
-        const crypto = require('crypto');
         const { sdk, trace, signed } = makeEnvelopeSdk();
         const net = bitcoin.networks.regtest;
         const fundingScript = bitcoin.Psbt.fromHex(signed.psbtHex).data.inputs[0].witnessUtxo.script;

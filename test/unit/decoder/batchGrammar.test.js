@@ -9,6 +9,8 @@
 // findings.
 
 const { expect } = require('chai');
+const fs = require('fs');
+const path = require('path');
 const {
     parse,
     BATCH_ACTION_LIMITS,
@@ -145,8 +147,6 @@ describe('decoder.parse - BATCH sub-grammar', function () {
     });
 
     describe('sibling conformance vs xchain-indexer batch.js', function () {
-        const fs = require('fs');
-        const path = require('path');
         const INDEXER = process.env.XCHAIN_INDEXER_PATH ||
             path.join(__dirname, '..', '..', '..', '..', 'xchain-indexer');
         const BATCH_SRC = path.join(INDEXER, 'src', 'actions', 'batch.js');

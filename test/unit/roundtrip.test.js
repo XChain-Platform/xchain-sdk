@@ -10,10 +10,10 @@
 
 const { expect } = require('chai');
 const config = require('../../src/config.js');
-const Utility = require('../../src/utility.js');
-const Actions = require('../../src/actions.js');
-const FormatSelector = require('../../src/formatSelector.js');
-const formats = require('../../src/formats.js');
+const Utility = require('../../src/utils/utility.js');
+const Actions = require('../../src/actions/index.js');
+const FormatSelector = require('../../src/protocol/format_selector.js');
+const formats = require('../../src/protocol/formats.js');
 
 function createActions() {
     let sdk = { config: config.getConfig(), util: new Utility() };

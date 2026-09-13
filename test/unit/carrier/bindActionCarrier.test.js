@@ -16,9 +16,9 @@
 
 const { expect } = require('chai');
 const crypto = require('crypto');
-require('../../../src/applyBufferutilsPatch.js');
+require('../../../src/utils/apply_bufferutils_patch.js');
 const bitcoin = require('bitcoinjs-lib');
-const { assertCarrierBinding, assertEnvelopeCarrierBinding } = require('../../../src/carrier/bindActionCarrier.js');
+const { assertCarrierBinding, assertEnvelopeCarrierBinding } = require('../../../src/carrier/bind_action_carrier.js');
 
 const NET = bitcoin.networks.bitcoin;
 const H160 = Buffer.alloc(20, 0xab);

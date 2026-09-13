@@ -24,7 +24,7 @@
 'use strict';
 
 const { expect } = require('chai');
-const ProjectHelpers = require('../../src/project.js');
+const ProjectHelpers = require('../../src/actions/project.js');
 const { XChainSDK } = require('../../index.js');
 
 describe('ProjectHelpers', function () {

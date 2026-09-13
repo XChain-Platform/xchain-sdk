@@ -24,9 +24,9 @@ const fs = require('fs');
 const path = require('path');
 
 const config  = require('../../../src/config.js');
-const Utility = require('../../../src/utility.js');
-const Actions = require('../../../src/actions.js');
-const formats = require('../../../src/formats.js');
+const Utility = require('../../../src/utils/utility.js');
+const Actions = require('../../../src/actions/index.js');
+const formats = require('../../../src/protocol/formats.js');
 const { parse, BATCH_ACTION_LIMITS } = require('../../../src/decoder/parse.js');
 const { describe: describeAction } = require('../../../src/decoder/describe.js');
 const { ACTION_ALIASES } = require('../../../src/decoder/aliases.js');
@@ -105,7 +105,7 @@ describe('decoder round-trip guarantee', function () {
         });
         it('cosigner psbtActionDecode consumes the same table (single source)', function () {
             const src = fs.readFileSync(
-                path.join(__dirname, '..', '..', '..', 'src', 'cosigner', 'psbtActionDecode.js'), 'utf8');
+                path.join(__dirname, '../../../src/cosigner/psbt_action_decode.js'), 'utf8');
             expect(src).to.include("require('../decoder/aliases.js')");
             expect(src).to.not.match(/TRANSFER:\s*'SEND'/);
         });

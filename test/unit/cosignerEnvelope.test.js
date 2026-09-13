@@ -17,21 +17,26 @@
 
 const { expect } = require('chai');
 const crypto  = require('crypto');
-require('../../src/applyBufferutilsPatch.js');
+require('../../src/utils/apply_bufferutils_patch.js');
 const bitcoin = require('bitcoinjs-lib');
 const ecc     = require('@bitcoinerlab/secp256k1');
 const { secp256k1, schnorr } = require('@noble/curves/secp256k1');
-const MuSig2   = require('../../src/musig2.js');
-const CoSigner = require('../../src/cosigner/coSigner.js');
+const MuSig2   = require('../../src/cosigner/musig2.js');
+const CoSigner = require('../../src/cosigner/co_signer.js');
 const CoSignerClient = require('../../src/cosigner/client.js');
-const WindowStore = require('../../src/cosigner/windowStore.js');
+const WindowStore = require('../../src/cosigner/window_store.js');
 const {
     parseEnvelopeScript, deriveEnvelopeCommit, envelopeLeafHash,
     envelopeScriptPathSighash, classifyEnvelopeRole, envelopeRoundTweaks,
 } = require('../../src/cosigner/envelope.js');
 const { deriveMuSig2P2TR2of3 } = require('../../src/cosigner/account.js');
 const { buildRecoverySpend, localPairSigner } = require('../../src/cosigner/recovery.js');
-const { decodeEnvelopeAction } = require('../../src/cosigner/psbtActionDecode.js');
+const { decodeEnvelopeAction } = require('../../src/cosigner/psbt_action_decode.js');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const http = require('http');
+const EncoderClient = require('../../src/clients/encoder.js');
 
 bitcoin.initEccLib(ecc);
 
@@ -294,7 +299,7 @@ describe('co-signer: Taproot envelope composition', function () {
             const acct = makeAccount();
             const { script, commit } = commitFor(acct);
             const psbt = buildRevealPsbt(acct, commit);
-            const { decodeActionFromPsbt } = require('../../src/cosigner/psbtActionDecode.js');
+            const { decodeActionFromPsbt } = require('../../src/cosigner/psbt_action_decode.js');
             const decoded = decodeActionFromPsbt(psbt);
             expect(decoded.ok).to.equal(true);
             expect(decoded.action).to.equal('FILE');
@@ -307,7 +312,7 @@ describe('co-signer: Taproot envelope composition', function () {
             const { commit } = commitFor(acct);
             const psbt = buildRevealPsbt(acct, commit);
             psbt.addOutput({ script: bitcoin.payments.embed({ data: [Buffer.from('XCHNjunk')] }).output, value: 0 });
-            const { decodeActionFromPsbt } = require('../../src/cosigner/psbtActionDecode.js');
+            const { decodeActionFromPsbt } = require('../../src/cosigner/psbt_action_decode.js');
             const decoded = decodeActionFromPsbt(psbt);
             expect(decoded.ok).to.equal(false);
             expect(decoded.reason).to.equal('ENVELOPE_MIXED_CARRIER');
@@ -316,7 +321,7 @@ describe('co-signer: Taproot envelope composition', function () {
         it('refuses an envelope that is not input 0, and two envelope inputs', function () {
             const acct = makeAccount();
             const { commit } = commitFor(acct);
-            const { decodeActionFromPsbt } = require('../../src/cosigner/psbtActionDecode.js');
+            const { decodeActionFromPsbt } = require('../../src/cosigner/psbt_action_decode.js');
 
             const notZero = new bitcoin.Psbt();
             notZero.addInput({ hash: crypto.randomBytes(32), index: 0,
@@ -689,9 +694,6 @@ describe('co-signer: Taproot envelope composition', function () {
     });
 
     describe('budget: one action, two transactions, one charge', function () {
-        const fs = require('fs');
-        const os = require('os');
-        const path = require('path');
 
         function freshStore() {
             const p = path.join(os.tmpdir(), `xc990-window-${crypto.randomBytes(6).toString('hex')}.json`);
@@ -1026,9 +1028,8 @@ describe('co-signer: the envelope on a 2-of-3 account', function () {
 // kind of divergence that only shows up in production. So drive it over real
 // HTTP once, end to end, through the shipped sidecar.
 describe('co-signer: the envelope survives the wire', function () {
-    const http = require('http');
     const { createCoSignerApp } = require('../../src/cosigner/server.js');
-    const { createHostedCoSignerApp } = require('../../src/cosigner/hostedServer.js');
+    const { createHostedCoSignerApp } = require('../../src/cosigner/hosted_server.js');
 
     function post(port, path, body, headers) {
         return new Promise((resolve, reject) => {
@@ -1116,7 +1117,6 @@ describe('co-signer: the envelope survives the wire', function () {
 // the smallest footprint, or wants to opt out of compression, must be able to
 // say so through the SDK rather than dropping to raw JSON-RPC.
 describe('SDK create_tx passthrough', function () {
-    const EncoderClient = require('../../src/encoder.js');
 
     function clientCapturing(captured) {
         // A real client with only the transport replaced, so the parameter

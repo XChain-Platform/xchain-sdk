@@ -29,10 +29,10 @@
 
 const { expect } = require('chai');
 
-const chunkHelper      = require('../../src/chunkHelper.js');
-const Validator        = require('../../src/validator.js');
-const ContractUtils    = require('../../src/contracts.js');
-const psbtActionDecode = require('../../src/cosigner/psbtActionDecode.js');
+const chunkHelper      = require('../../src/contract/chunk_helper.js');
+const Validator        = require('../../src/protocol/validator.js');
+const ContractUtils    = require('../../src/contract/utils.js');
+const psbtActionDecode = require('../../src/cosigner/psbt_action_decode.js');
 
 // Canonical values: xchain-documentation/protocol/constants.js. Change these
 // ONLY as part of a coordinated protocol-wide cap change.

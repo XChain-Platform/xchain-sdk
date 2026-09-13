@@ -19,7 +19,7 @@
  * fan-out rather than the request rate.
  *
  * src/api.js starts a live server at require time, so these tests mount the
- * SHIPPED limiter from src/apiGuards.js (the same function src/api.js mounts)
+ * SHIPPED limiter from src/utils/api_guards.js (the same function src/api.js mounts)
  * rather than a copy of it, and a source check pins that api.js still mounts it
  * ahead of the auth gate and the router.
  *
@@ -37,8 +37,9 @@ const {
     rateLimitMiddleware,
     resolveRateLimit,
     resolveRateWindowMs
-} = require('../../src/apiGuards.js');
+} = require('../../src/utils/api_guards.js');
 const { waitFor } = require('../helpers/wait.js');
+const pkg = require('../../package.json');
 
 // Tests that exercise per-credential bucketing pass the credentials the app
 // would accept (src/api.js passes a safeTokenEqual-against-SDK_API_KEY
@@ -221,7 +222,7 @@ describe('API request-rate limit', function () {
         const src = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
         const rateIdx   = src.indexOf('app.use(rateLimitMiddleware(');
         // Anchored on the MOUNT, not on a compare inside the gate body: the gate
-        // now lives in src/apiGuards.js, and an anchor that can go missing makes
+        // now lives in src/utils/api_guards.js, and an anchor that can go missing makes
         // every ordering assertion below it argue from -1.
         const authIdx   = src.indexOf('app.use(authGateMiddleware(');
         const routerIdx = src.indexOf('jsonRouter(');
@@ -239,7 +240,6 @@ describe('API request-rate limit', function () {
     });
 
     it('adds no runtime dependency for the limiter', () => {
-        const pkg = require('../../package.json');
         const deps = Object.keys(pkg.dependencies || {});
         for (const forbidden of ['express-rate-limit', 'rate-limiter-flexible', 'express-slow-down'])
             assert.ok(!deps.includes(forbidden), forbidden + ' must not be a runtime dependency of a published SDK');

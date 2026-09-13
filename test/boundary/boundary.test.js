@@ -21,10 +21,10 @@
 
 const { expect } = require('chai');
 const config = require('../../src/config.js');
-const Utility = require('../../src/utility.js');
-const Actions = require('../../src/actions.js');
-const Validator = require('../../src/validator.js');
-const FormatSelector = require('../../src/formatSelector.js');
+const Utility = require('../../src/utils/utility.js');
+const Actions = require('../../src/actions/index.js');
+const Validator = require('../../src/protocol/validator.js');
+const FormatSelector = require('../../src/protocol/format_selector.js');
 
 function createActions() {
     let sdk = { config: config.getConfig(), util: new Utility() };

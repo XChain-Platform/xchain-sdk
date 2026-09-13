@@ -13,10 +13,10 @@ const crypto  = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
 const ecc     = require('@bitcoinerlab/secp256k1');
 const { secp256k1 } = require('@noble/curves/secp256k1');
-const { reconcileEncoded } = require('../../src/reconcileEncoded.js');
+const { reconcileEncoded } = require('../../src/carrier/reconcile_encoded.js');
 // Teaches bitcoinjs/bip174 to carry satoshi values above 2^53 as BigInt; the >2^53
 // fee-cap case below cannot build its PSBT without it.
-require('../../src/applyBufferutilsPatch.js');
+require('../../src/utils/apply_bufferutils_patch.js');
 
 bitcoin.initEccLib(ecc);
 
@@ -200,7 +200,7 @@ describe('reconcileEncoded (encoder-authored PSBT vs submitted intent)', functio
 // arrives later - plus an opt-in value cap for the window neither covers.
 // ---------------------------------------------------------------------------
 
-const { psbtPrevouts } = require('../../src/reconcileEncoded.js');
+const { psbtPrevouts } = require('../../src/carrier/reconcile_encoded.js');
 
 // A p2wsh script for a fresh 32-byte witness program, the shape of a chunk leg.
 const shapedP2wsh = () => bitcoin.payments.p2wsh({ hash: crypto.randomBytes(32), network: NET }).output;

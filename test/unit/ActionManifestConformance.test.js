@@ -30,7 +30,7 @@ const path = require('path');
 
 const VENDORED = path.join(__dirname, '..', 'fixtures', 'action-manifest.json');
 const MANIFEST = JSON.parse(fs.readFileSync(VENDORED, 'utf8'));
-const Formats  = require('../../src/formats.js');
+const Formats  = require('../../src/protocol/formats.js');
 
 const EDIT_HINT = 'Edit xchain-documentation/protocol/action-manifest.json, re-vendor with ' +
                   'bin/sync-action-manifest.sh, or change src/formats.js.';

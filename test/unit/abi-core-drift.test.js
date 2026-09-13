@@ -20,6 +20,8 @@ const assert = require('assert');
 const crypto = require('crypto');
 const fs     = require('fs');
 const path   = require('path');
+const ContractUtils = require('../../src/contract/utils.js');
+const abiCore = require('../../src/contract/abi-core.js');
 
 const VENDORED  = path.join(__dirname, '..', '..', 'src', 'contract', 'abi-core.js');
 const CANONICAL = path.join(__dirname, '..', '..', '..', 'xchain-explorer', 'src', 'abi-core.js');
@@ -39,8 +41,6 @@ describe('abi-core drift guard @regression', function () {
     });
 
     it('ContractUtils.parseAbi delegates to the vendored core (same object out)', function () {
-        const ContractUtils = require('../../src/contracts.js');
-        const abiCore       = require('../../src/contract/abi-core.js');
         const src = `module.exports = {
             abi: { version: 1, methods: { run: { summary: 'Run', params: [{ name: 'x', type: 'string' }] } } },
             run: function(xchain){}

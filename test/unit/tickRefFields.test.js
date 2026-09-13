@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// Unit coverage for src/tickRefFields.js, the canonical map of which ACTION
+// Unit coverage for src/protocol/tick_ref_fields.js, the canonical map of which ACTION
 // params name an EXISTING token and which of those the SDK may compact to the
 // `^<id>` wire form.
 //
@@ -21,8 +21,8 @@
 
 const assert = require('assert');
 
-const { TICK_REF_FIELDS, TICK_NO_COMPACT_FIELDS, TICK_EXISTENCE_FIELDS } = require('../../src/tickRefFields.js');
-const formats = require('../../src/formats.js');
+const { TICK_REF_FIELDS, TICK_NO_COMPACT_FIELDS, TICK_EXISTENCE_FIELDS } = require('../../src/protocol/tick_ref_fields.js');
+const formats = require('../../src/protocol/formats.js');
 
 // Every field name in every ACTION format version whose name denotes a ticker.
 // Read out of the format strings rather than hand-listed, so a tick-bearing
@@ -70,11 +70,11 @@ describe('tickRefFields', function () {
     it('the compaction resolver and the pre-flight existence check both derive from this module', function () {
         // No independent literal may survive at either call site: that is how the
         // two runtime copies drifted apart in the first place.
-        const resolverSrc = require('fs').readFileSync(require.resolve('../../src/tickResolver.js'), 'utf8');
+        const resolverSrc = require('fs').readFileSync(require.resolve('../../src/utils/tick_resolver.js'), 'utf8');
         const preflightSrc = require('fs').readFileSync(require.resolve('../../src/preflight/universal.js'), 'utf8');
-        assert.ok(/require\(['"]\.\/tickRefFields\.js['"]\)/.test(resolverSrc),
+        assert.ok(/require\(['"]\.\.\/protocol\/tick_ref_fields\.js['"]\)/.test(resolverSrc),
             'tickResolver.js must take its field set from tickRefFields.js');
-        assert.ok(/require\(['"]\.\.\/tickRefFields\.js['"]\)/.test(preflightSrc),
+        assert.ok(/require\(['"]\.\.\/protocol\/tick_ref_fields\.js['"]\)/.test(preflightSrc),
             'preflight/universal.js must take its field set from tickRefFields.js');
 
         const { TICK_FIELDS } = require('../../src/preflight/universal.js');

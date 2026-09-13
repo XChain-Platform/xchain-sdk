@@ -30,7 +30,7 @@ const fs     = require('fs');
 const path   = require('path');
 
 const XChainSDK    = require('../../src/XChainSDK.js');
-const ContractUtils = require('../../src/contracts.js');
+const ContractUtils = require('../../src/contract/utils.js');
 
 const VENDORED_DIR = path.join(__dirname, '..', '..', 'src', 'contract');
 const VM_SRC_DIR   = path.join(__dirname, '..', '..', '..', 'xchain-vm', 'src');
@@ -173,7 +173,6 @@ describe('contract-lint parity + drift', function () {
         }
 
         it('the four templates emit zero Move-2 findings (low false-positive)', function () {
-            const fs = require('fs');
             const dir = path.join(__dirname, '..', '..', '..', 'xchain-contracts');
             if (!requireSibling(this, dir)) return;
             for (const name of ['escrow', 'vesting', 'crowdsale', 'amm']) {

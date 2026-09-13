@@ -37,9 +37,9 @@ const { expect } = require('chai');
 const fs      = require('fs');
 const path    = require('path');
 const crypto  = require('crypto');
-require('../../src/applyBufferutilsPatch.js');
+require('../../src/utils/apply_bufferutils_patch.js');
 const bitcoin = require('bitcoinjs-lib');
-const { decodeActionFromPsbt } = require('../../src/cosigner/psbtActionDecode.js');
+const { decodeActionFromPsbt } = require('../../src/cosigner/psbt_action_decode.js');
 
 // Resolve the sibling arbiter repo, mirroring the convention the other
 // cross-repo conformance suites use: skip when it is not checked out (a

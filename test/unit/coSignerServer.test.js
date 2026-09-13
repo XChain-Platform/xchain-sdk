@@ -13,8 +13,8 @@ const http    = require('http');
 const crypto  = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
 const { secp256k1 } = require('@noble/curves/secp256k1');
-const MuSig2 = require('../../src/musig2.js');
-const CoSigner = require('../../src/cosigner/coSigner.js');
+const MuSig2 = require('../../src/cosigner/musig2.js');
+const CoSigner = require('../../src/cosigner/co_signer.js');
 const { createCoSignerApp } = require('../../src/cosigner/server.js');
 
 // Minimal JSON POST over real HTTP (no supertest dependency).
@@ -234,7 +234,7 @@ describe('co-signer HTTP sidecar', function () {
             // The derivation, not the literal: the payload rides the wire twice,
             // both times hex-encoded, so anything less is unservable by design.
             const { DEFAULT_MAX_BODY_BYTES, ENVELOPE_WIRE_BYTES } =
-                require('../../src/cosigner/httpBodyLimit.js');
+                require('../../src/cosigner/http_body_limit.js');
             const { ENVELOPE_MAX_PAYLOAD } = require('../../src/protocol/constants.js');
             expect(ENVELOPE_WIRE_BYTES).to.equal(4 * ENVELOPE_MAX_PAYLOAD);
             expect(DEFAULT_MAX_BODY_BYTES).to.be.greaterThan(ENVELOPE_WIRE_BYTES);

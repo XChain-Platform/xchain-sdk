@@ -17,7 +17,7 @@
 // Regression: a slow sibling load must name itself
 //
 // test/unit/action-roundtrip-golden.test.js loads the sibling xchain-indexer in
-// a `before` hook: src/utility.js plus every handler in src/actions/. That ran
+// a `before` hook: src/utils/utility.js plus every handler in src/actions/. That ran
 // under mocha's default 5s hook timeout, and mocha attributes a hook failure to
 // the FIRST test in the block, so a cold venue checkout produced
 //   `"before all" hook for "the two vendored golden copies are byte-identical"`

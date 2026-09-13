@@ -14,7 +14,7 @@
 // hand-synced parser copies are tested against identical inputs.
 
 const assert = require('assert');
-const ContractUtils = require('../../src/contracts.js');
+const ContractUtils = require('../../src/contract/utils.js');
 
 describe('ContractUtils.parseAbi()', function () {
 

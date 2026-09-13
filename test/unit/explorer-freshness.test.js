@@ -22,10 +22,10 @@
 
 const { expect } = require('chai');
 const nock = require('nock');
-const ExplorerClient   = require('../../src/explorer.js');
+const ExplorerClient   = require('../../src/clients/explorer.js');
 const XChainSDK        = require('../../src/XChainSDK.js');
-const LifecycleManager = require('../../src/lifecycleManager.js');
-const { SDKExplorerError } = require('../../src/errors.js');
+const LifecycleManager = require('../../src/carrier/lifecycle_manager.js');
+const { SDKExplorerError } = require('../../src/utils/errors.js');
 
 const BASE = 'http://explorer.test:8080';
 

@@ -15,8 +15,8 @@ const sinon = require('sinon');
 // We mock LifecycleManager via module-level proxyquire-style or by stubbing
 // the prototype. Since the repo doesn't use proxyquire, we stub the class
 // prototype after requiring both modules.
-const LifecycleManager = require('../../src/lifecycleManager.js');
-const WalletSession = require('../../src/walletSession.js');
+const LifecycleManager = require('../../src/carrier/lifecycle_manager.js');
+const WalletSession = require('../../src/utils/wallet_session.js');
 
 // Fake WIF key: bitcoinjs/ecpair accepts mainnet WIF
 const WIF_MAINNET = 'KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFU73NUBBy7N';

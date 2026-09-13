@@ -18,7 +18,7 @@
 'use strict';
 
 const { expect } = require('chai');
-const ControllerHelpers = require('../../src/controller.js');
+const ControllerHelpers = require('../../src/actions/controller.js');
 const { XChainSDK, ControllerHelpers: ExportedControllerHelpers } = require('../../index.js');
 
 describe('ControllerHelpers', function () {

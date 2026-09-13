@@ -47,7 +47,7 @@ const {
     BATCH_WEIGHT_BUDGET,
     BATCH_COMMAND_WEIGHTS,
     actionWeight,
-} = require('../../src/batchLimits.js');
+} = require('../../src/protocol/batch_limits.js');
 
 // Queue `entries` ([action, params] pairs) on a fresh builder and return the
 // message of whatever _validate() throws, or null when it accepts the batch.

@@ -26,8 +26,8 @@ const helmet     = require('helmet');
 const cors       = require('cors');
 const jsonRouter = require('express-json-rpc-router');
 const XChainSDK  = require('./XChainSDK');
-const { safeTokenEqual } = require('./utils/safeCompare.js');
-const { parseCorsOrigin } = require('./corsOrigin.js');
+const { safeTokenEqual } = require('./utils/safe_compare.js');
+const { parseCorsOrigin } = require('./utils/cors_origin.js');
 // Request guards live in their own module so the shipped middleware has exactly
 // one implementation: this file starts listening at require time, so a unit test
 // can only reach the guards through src/apiGuards.js.
@@ -39,7 +39,7 @@ const {
     batchCapMiddleware,
     rateLimitMiddleware,
     authGateMiddleware
-} = require('./apiGuards.js');
+} = require('./utils/api_guards.js');
 
 // Parse in .env config data
 dotenv.config();
@@ -53,7 +53,7 @@ const SDK_API_KEY  = process.env.SDK_API_KEY || '';
 if(!SDK_API_KEY)
     console.warn('WARNING: SDK_API_KEY is not set. All helper-API methods except ping will return 401. Set SDK_API_KEY to use the API.');
 // Batch-cap and rate-limit settings, parsed by the guard module (each one falls
-// back to a safe default on a junk value; see src/apiGuards.js).
+// back to a safe default on a junk value; see src/utils/api_guards.js).
 const SDK_API_MAX_BATCH      = resolveMaxBatch(process.env);
 const SDK_API_RATE_LIMIT     = resolveRateLimit(process.env);
 // Say so when the limiter setting was unusable. A silent substitution is what
@@ -133,7 +133,7 @@ async function startApi() {
     // API key enforcement for all methods except ping. Fails closed: without
     // a configured key, every non-ping method is rejected, never left open. The
     // batch-smuggling and non-string-method rules live with the code, in
-    // src/apiGuards.js, so the unit tests exercise this exact middleware.
+    // src/utils/api_guards.js, so the unit tests exercise this exact middleware.
     app.use(authGateMiddleware({ apiKey: SDK_API_KEY }));
 
     // Define JSON-RPC controller with all SDK methods

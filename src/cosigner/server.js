@@ -28,10 +28,10 @@
 'use strict';
 
 const express = require('express');
-const { safeTokenEqual } = require('../utils/safeCompare.js');
+const { safeTokenEqual } = require('../utils/safe_compare.js');
 // One body ceiling for BOTH co-signer transports, derived from the protocol's
 // envelope payload maximum rather than hardcoded here (httpBodyLimit.js).
-const { resolveMaxBodyBytes, tooLargeHandler } = require('./httpBodyLimit.js');
+const { resolveMaxBodyBytes, tooLargeHandler } = require('./http_body_limit.js');
 
 /*
  * Build an Express app exposing POST /cosign.

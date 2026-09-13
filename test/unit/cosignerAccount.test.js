@@ -12,8 +12,8 @@ const { expect } = require('chai');
 const crypto  = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
 const { secp256k1, schnorr } = require('@noble/curves/secp256k1');
-const MuSig2 = require('../../src/musig2.js');
-const CoSigner = require('../../src/cosigner/coSigner.js');
+const MuSig2 = require('../../src/cosigner/musig2.js');
+const CoSigner = require('../../src/cosigner/co_signer.js');
 const { deriveMuSig2P2TR } = require('../../src/cosigner/account.js');
 
 const h2b = (h) => Buffer.from(h, 'hex');

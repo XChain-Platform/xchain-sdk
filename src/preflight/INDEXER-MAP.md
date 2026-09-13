@@ -511,7 +511,7 @@ is `invalid: TICK (id)`; `issue.js:361`, a dot in the id is `invalid: TICK (care
 dot)`) and then resolves it through `getTickerId` exactly as it resolves a spelled-out
 name, which is what `issue.js:848-853` says outright for format 7 and what
 `issue.js:472-483` assumes when it exempts a caret from the four-character floor. The
-SDK was therefore refusing edits the chain accepts, and `src/tickResolver.js` holds
+SDK was therefore refusing edits the chain accepts, and `src/utils/tick_resolver.js` holds
 `ISSUE.TICK` out of the compaction set for that reason alone.
 
 The validator now judges a caret ISSUE TICK as a reference, GATED BY FORMAT, because
@@ -650,7 +650,7 @@ and declared as `DESTROY_BRIDGE_SUPPLY` when no chain code is configured. SEND i
 untouched on both sides.
 
 **What the static validator does not yet do, for the record.** `src/config.js`
-`LOCK_FIELDS` does not list `LOCK_BRIDGE` and `src/validator.js` has no format-7
+`LOCK_FIELDS` does not list `LOCK_BRIDGE` and `src/protocol/validator.js` has no format-7
 field rules, so today the pre-flight checks above are the only client-side judge of
 those fields. That is a validator change, not a map change; when it lands the
 `VALIDATOR_SEMANTICS` findings here and there will agree by construction (both call
@@ -725,7 +725,7 @@ only regtest runs the rule from genesis. So on every plane a client broadcasts
 to, the chain still accepts the whole non-numeral family, and a client that
 rejected it would block a broadcast consensus would have taken. That is the
 SDK-stricter-than-consensus false block this map's contract forbids, and
-`src/validator.js` records this SDK shipping exactly that regression once
+`src/protocol/validator.js` records this SDK shipping exactly that regression once
 already. It is also the road the two entries below took for
 `LEG_AMOUNT_CONSOLIDATION` and `GATED_HANDOFF_REF`, for the same reason: a
 pre-flight cannot read the activation state of a block that does not exist yet.
@@ -741,7 +741,7 @@ decimals-aware amount-format check, so none of them ever returned the verdict
 this rule changes, and `checks/send.js` already declares the neighbouring
 leg-amount rule. `checks/batch.js` has no amount-format logic at all.
 
-`src/preflight/numeric.js` and `src/utility.js` keep the LEGACY two-argument
+`src/preflight/numeric.js` and `src/utils/utility.js` keep the LEGACY two-argument
 rule verbatim and now say so in place, with the condition for changing that:
 mirror the rule as a real rejection only once mainnet is armed, and only
 alongside an activation source this SDK can actually read. Until then the
@@ -1083,7 +1083,7 @@ is 4 (the chunk carrier, which runs no constructor); anything unparseable
 falls through to the full VM weight of 30. `commandWeights` and
 `weightBudget` are untouched, so the tables stay byte-equal.
 
-Client side, mirrored in the same change set: `src/batchLimits.js`
+Client side, mirrored in the same change set: `src/protocol/batch_limits.js`
 `subCommandWeight` carries the identical discount through a faithful
 `formatVersion` mirror of the arbiter's derivation, and
 `test/unit/batchLimitsConformance.test.js` now drives weight vectors
@@ -1478,7 +1478,7 @@ did carry real change, and they are separated out below.
   precedence among per-action caps: the error names the action whose first
   sub-command appears earliest in the command LIST, taken from the list rather
   than from a tally's key enumeration. All three are already mirrored in
-  `src/batchLimits.js` (`BATCH_GATED_ACTION_LIMITS`, `maxMintsPerDistinctTick`,
+  `src/protocol/batch_limits.js` (`BATCH_GATED_ACTION_LIMITS`, `maxMintsPerDistinctTick`,
   `limitKeysInListOrder`) by the paired client-parity work, including the two
   divergences a string-keyed client cannot close (the caret alias, reported as
   approximate; unresolvable ticks, declared). Not taken on trust:
@@ -1509,7 +1509,7 @@ a row nobody read is the failure this log exists to prevent.
 
 Read: `src/actions/batch.js` at `105dfbf` (the BATCH_ISSUANCE_LIMITS work,
 `74c6780` + `d71c851` + `105dfbf`). Four client-visible rules, all now mirrored
-through one shared client copy of the scan, `src/batchLimits.js`:
+through one shared client copy of the scan, `src/protocol/batch_limits.js`:
 
 - **Dotted-TICK exemption.** At most one TOP-LEVEL (undotted) ISSUE per BATCH,
   plus any number of children. A caret TICK is never exempt even when it

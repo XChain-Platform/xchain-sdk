@@ -8,10 +8,10 @@
 
 const { expect } = require('chai');
 const { mockSdk, notFound } = require('./_mock.js');
-const { SDKFormatError, SDKPreflightError } = require('../../../src/errors.js');
+const { SDKFormatError, SDKPreflightError } = require('../../../src/utils/errors.js');
 const { normalizeInput } = require('../../../src/preflight/index.js');
-const Actions = require('../../../src/actions.js');
-const Utility = require('../../../src/utility.js');
+const Actions = require('../../../src/actions/index.js');
+const Utility = require('../../../src/utils/utility.js');
 // A real compose core, built directly rather than off mockSdk (which is a
 // bare {config} shim): these cases compare the TWO CONSUMERS of that core,
 // so the mock plumbing should not sit between them.

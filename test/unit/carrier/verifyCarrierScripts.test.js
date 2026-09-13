@@ -10,7 +10,7 @@
 
 const { expect } = require('chai');
 const bitcoin = require('bitcoinjs-lib');
-const { verifyCarrierScripts, REASONS } = require('../../../src/carrier/verifyCarrierScripts.js');
+const { verifyCarrierScripts, REASONS } = require('../../../src/carrier/verify_carrier_scripts.js');
 
 const NET = bitcoin.networks.bitcoin;
 const H160 = Buffer.alloc(20, 0xab); // stand-in for the caller HASH160

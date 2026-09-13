@@ -17,16 +17,16 @@ const fs      = require('fs');
 const os      = require('os');
 const path    = require('path');
 const crypto  = require('crypto');
-require('../../src/applyBufferutilsPatch.js');
+require('../../src/utils/apply_bufferutils_patch.js');
 const bitcoin = require('bitcoinjs-lib');
 const { secp256k1 } = require('@noble/curves/secp256k1');
-const MuSig2      = require('../../src/musig2.js');
-const CoSigner    = require('../../src/cosigner/coSigner.js');
-const WindowStore = require('../../src/cosigner/windowStore.js');
+const MuSig2      = require('../../src/cosigner/musig2.js');
+const CoSigner    = require('../../src/cosigner/co_signer.js');
+const WindowStore = require('../../src/cosigner/window_store.js');
 const { evaluatePolicy, UNRESOLVED_TICK_BUCKET, formatCarriesDestination } =
-    require('../../src/cosigner/policyEvaluator.js');
-const valueDerivability = require('../../src/cosigner/valueDerivability.js');
-const { decodeActionFromPsbt } = require('../../src/cosigner/psbtActionDecode.js');
+    require('../../src/cosigner/policy_evaluator.js');
+const valueDerivability = require('../../src/cosigner/value_derivability.js');
+const { decodeActionFromPsbt } = require('../../src/cosigner/psbt_action_decode.js');
 
 function makeAccount() {
     const musig   = new MuSig2();
@@ -384,7 +384,7 @@ describe('G9: allowedDestinations enforceability', function () {
         // DEST_ADDRESS / BTC_ADDRESS / ORIGIN_ADDRESS, none of which is the
         // DESTINATION field allowedDestinations reads, so the list still binds
         // exactly the seven formats below. Keep the figure in the rationale
-        // comment at src/cosigner/policyEvaluator.js in step with this number.
+        // comment at src/cosigner/policy_evaluator.js in step with this number.
         expect(decodable.length).to.equal(68);
         expect(carriers).to.deep.equal([
             'MESSAGE v0', 'MESSAGE v1', 'MESSAGE v2', 'MESSAGE v3',

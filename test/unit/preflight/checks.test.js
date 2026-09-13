@@ -10,8 +10,8 @@
 const { expect } = require('chai');
 const { mockSdk, notFound } = require('./_mock.js');
 const config  = require('../../../src/config.js');
-const Utility = require('../../../src/utility.js');
-const Actions = require('../../../src/actions.js');
+const Utility = require('../../../src/utils/utility.js');
+const Actions = require('../../../src/actions/index.js');
 
 // Run a report against a set of endpoint stubs; Tier 1 is neutralized
 // (feeExempt => no verdict) so Tier-2 findings stand on their own.

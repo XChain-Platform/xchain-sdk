@@ -28,7 +28,7 @@
 
 const assert       = require('assert');
 const sinon        = require('sinon');
-const ActionWaiter = require('../../src/actionWaiter.js');
+const ActionWaiter = require('../../src/utils/action_waiter.js');
 
 // The datatable envelope the explorer actually serves for
 // /{COIN}/api/contract/{idx}/state, values as the JSON text it stores.

@@ -34,11 +34,11 @@
 
 const bitcoin = require('bitcoinjs-lib');
 const ecc     = require('@bitcoinerlab/secp256k1');
-const MuSig2  = require('../musig2.js');
-const { exactU64 } = require('./coSigner.js');
+const MuSig2  = require('./musig2.js');
+const { exactU64 } = require('./co_signer.js');
 // Teach bitcoinjs to serialize a satoshi value above 2^53. Idempotent via
 // the module cache; without it a BigInt output value throws at write time.
-require('../applyBufferutilsPatch');
+require('../utils/apply_bufferutils_patch');
 
 bitcoin.initEccLib(ecc);
 

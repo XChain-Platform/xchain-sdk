@@ -72,19 +72,19 @@ function makeBundledWsModule() {
     return getAugmentedNamespace(namespace);
 }
 
-// Load a pristine copy of src/websocket.js while require('ws') resolves to the
+// Load a pristine copy of src/clients/websocket.js while require('ws') resolves to the
 // supplied module object. Restores the require cache afterwards so the rest of
 // the suite keeps seeing the real `ws`.
 function loadClientWithWsModule(wsExports) {
     const wsPath  = require.resolve('ws');
-    const clientPath = require.resolve('../../src/websocket.js');
+    const clientPath = require.resolve('../../src/clients/websocket.js');
     const savedWs     = require.cache[wsPath];
     const savedClient = require.cache[clientPath];
 
     require.cache[wsPath] = { id: wsPath, filename: wsPath, loaded: true, exports: wsExports };
     delete require.cache[clientPath];
     try {
-        return require('../../src/websocket.js');
+        return require('../../src/clients/websocket.js');
     } finally {
         if (savedWs) require.cache[wsPath] = savedWs; else delete require.cache[wsPath];
         delete require.cache[clientPath];

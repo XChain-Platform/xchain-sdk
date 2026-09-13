@@ -9,7 +9,7 @@
 // contact legal@dankest.llc.
 
 const { expect } = require('chai');
-const { getNetwork, getSupportedNetworks, NETWORKS } = require('../../src/networks.js');
+const { getNetwork, getSupportedNetworks, NETWORKS } = require('../../src/protocol/networks.js');
 
 describe('networks', function() {
 

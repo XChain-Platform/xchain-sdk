@@ -9,7 +9,7 @@
 // contact legal@dankest.llc.
 
 const assert = require('assert');
-const CrossChainHelper = require('../../src/crossChain.js');
+const CrossChainHelper = require('../../src/actions/cross_chain.js');
 
 // Build a minimal stub SDK
 function makeSdk(coin, overrides = {}) {

@@ -22,7 +22,7 @@ const { expect }  = require('chai');
 const sinon       = require('sinon');
 const WebSocket   = require('ws');
 const { XChainSDK } = require('../../index.js');
-const { SDKConfigError } = require('../../src/errors.js');
+const { SDKConfigError } = require('../../src/utils/errors.js');
 const { waitFor, waitForCalls } = require('../helpers/wait.js');
 
 // Mock Server

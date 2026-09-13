@@ -36,8 +36,8 @@
 'use strict';
 
 const { expect } = require('chai');
-const Utility    = require('../../src/utility.js');
-const Validator  = require('../../src/validator.js');
+const Utility    = require('../../src/utils/utility.js');
+const Validator  = require('../../src/protocol/validator.js');
 
 function createValidator() {
     return new Validator(new Utility());

@@ -24,8 +24,8 @@
 // into the hot path. Scale with PERF_ITERATIONS.
 
 const { expect } = require('chai');
-const Utility   = require('../../src/utility.js');
-const Validator = require('../../src/validator.js');
+const Utility   = require('../../src/utils/utility.js');
+const Validator = require('../../src/protocol/validator.js');
 
 const ITERATIONS = parseInt(process.env.PERF_ITERATIONS, 10) || 10000;
 

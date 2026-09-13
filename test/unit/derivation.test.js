@@ -10,7 +10,7 @@
 //
 // FAMILY_SLIP44 shape + cross-repo drift guard.
 //
-// src/derivation.js is the backend-side anchor for the wallet<->backend
+// src/protocol/derivation.js is the backend-side anchor for the wallet<->backend
 // coin-type parity contract. This suite pins its shape and values, and
 // drift-guards each coin type against the wallet HD descriptors at
 // xchain-wallet/packages/core/src/registry/descriptors/{bitcoin,litecoin,
@@ -24,7 +24,7 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const { FAMILY_SLIP44 } = require('../../src/derivation.js');
+const { FAMILY_SLIP44 } = require('../../src/protocol/derivation.js');
 const { ALLOWED_COINS } = require('../../src/coins/index.js');
 
 // Registered mainnet SLIP-44 coin types; the contract this module anchors.
@@ -76,12 +76,12 @@ describe('derivation FAMILY_SLIP44', function () {
         // cross-repo leg iterates Object.entries(FAMILY_SLIP44), so a coin
         // missing from the anchor produces no case there either, and the wallet
         // side stays green against its own constant, which is the one thing
-        // src/derivation.js exists to prevent. Bind both key sets to the
+        // src/protocol/derivation.js exists to prevent. Bind both key sets to the
         // registry instead.
         it('FAMILY_SLIP44 covers every coin in the SDK coin registry', function () {
             assert.deepStrictEqual(Object.keys(FAMILY_SLIP44).sort(), REGISTERED,
                 'FAMILY_SLIP44 drifted from coins.ALLOWED_COINS: add the new coin\'s registered ' +
-                'mainnet SLIP-44 coin type to src/derivation.js');
+                'mainnet SLIP-44 coin type to src/protocol/derivation.js');
         });
 
         it('DESCRIPTOR_FILE covers every coin in the SDK coin registry', function () {

@@ -37,10 +37,13 @@ const zlib = require('zlib');
 const path = require('path');
 const fs = require('fs');
 
-const CompressionUtils = require('../../src/compression.js');
-const GatedFileUtils = require('../../src/gatedFile.js');
-const { SDKCompressionError } = require('../../src/errors.js');
+const CompressionUtils = require('../../src/protocol/compression.js');
+const GatedFileUtils = require('../../src/actions/gated_file.js');
+const { SDKCompressionError } = require('../../src/utils/errors.js');
 const CONSTANTS = require('../../src/protocol/constants.js');
+const LifecycleManager = require('../../src/carrier/lifecycle_manager.js');
+const bitcoin = require('bitcoinjs-lib');
+const ecc = require('@bitcoinerlab/secp256k1');
 
 const sha256 = (b) => crypto.createHash('sha256').update(b).digest('hex');
 
@@ -508,9 +511,6 @@ describe('CompressionUtils (Part B)', function () {
 // nothing the commit created (a broadcast commit nothing can spend).
 describe('LifecycleManager submits against the bytes the encoder WROTE', function () {
 
-    const LifecycleManager = require('../../src/lifecycleManager.js');
-    const bitcoin = require('bitcoinjs-lib');
-    const ecc = require('@bitcoinerlab/secp256k1');
     const { ECPairFactory } = require('ecpair');
     bitcoin.initEccLib(ecc);
     const ECPair = ECPairFactory(ecc);
