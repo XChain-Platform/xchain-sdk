@@ -2414,12 +2414,13 @@ class XChainSDK {
 
 }
 
-module.exports = XChainSDK;
-// Exposed for the address-channel coverage guard: the roster onAddress registers
-// has to be reconcilable against the explorer's producer constants without a
-// second copy of it living in the test.
-module.exports.ADDRESS_EVENT_TYPES = ADDRESS_EVENT_TYPES;
-// The unconfirmed subset onMempoolAction registers, exported for the same
-// reason: a consumer (or a test) checking which frames the mempool surface
-// delivers should read the list the code registers from, not a copy of it.
-module.exports.MEMPOOL_EVENT_TYPES = MEMPOOL_EVENT_TYPES;
+module.exports = Object.assign(XChainSDK, {
+    // Exposed for the address-channel coverage guard: the roster onAddress registers
+    // has to be reconcilable against the explorer's producer constants without a
+    // second copy of it living in the test.
+    ADDRESS_EVENT_TYPES,
+    // The unconfirmed subset onMempoolAction registers, exported for the same
+    // reason: a consumer (or a test) checking which frames the mempool surface
+    // delivers should read the list the code registers from, not a copy of it.
+    MEMPOOL_EVENT_TYPES,
+});

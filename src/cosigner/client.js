@@ -337,6 +337,7 @@ class CoSignerClient {
     }
 }
 
-module.exports = CoSignerClient;
-module.exports.inProcessTransport = inProcessTransport;
-module.exports.httpTransport = httpTransport;
+module.exports = Object.assign(CoSignerClient, {
+    inProcessTransport,
+    httpTransport,
+});

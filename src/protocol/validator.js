@@ -1888,11 +1888,12 @@ class Validator {
 
 }
 
-module.exports = Validator;
-// Exported for the cross-service regression suite, which asserts this equals the
-// canonical protocol MAX_CODE_SIZE shared by the indexer and the VM.
-module.exports.MAX_CODE_SIZE = MAX_CODE_SIZE;
+module.exports = Object.assign(Validator, {
+    // Exported for the cross-service regression suite, which asserts this equals the
+    // canonical protocol MAX_CODE_SIZE shared by the indexer and the VM.
+    MAX_CODE_SIZE,
 
-// Exported for the cross-service FIAT-allow-list parity test (must equal the
-// canonical protocol.VALID_FIAT_CODES, which mirrors the indexer arbiter).
-module.exports.VALID_FIAT_CODES = VALID_FIAT_CODES;
+    // Exported for the cross-service FIAT-allow-list parity test (must equal the
+    // canonical protocol.VALID_FIAT_CODES, which mirrors the indexer arbiter).
+    VALID_FIAT_CODES,
+});

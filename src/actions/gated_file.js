@@ -377,8 +377,9 @@ class GatedFileUtils {
 }
 
 
-module.exports = GatedFileUtils;
-module.exports.HANDOFF_VERSION = HANDOFF_VERSION;
-module.exports.KEY_LEN = KEY_LEN;
-module.exports.IV_LEN = IV_LEN;
-module.exports.AUTH_TAG_LEN = AUTH_TAG_LEN;
+module.exports = Object.assign(GatedFileUtils, {
+    HANDOFF_VERSION,
+    KEY_LEN,
+    IV_LEN,
+    AUTH_TAG_LEN,
+});

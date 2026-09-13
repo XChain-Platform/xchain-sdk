@@ -513,7 +513,8 @@ class MuSig2 {
 }
 
 
-module.exports = MuSig2;
-module.exports.MuSig2 = MuSig2;
-// Exposed for integration testing against the raw library surface.
-module.exports._internal = { ecc, musig: _musig };
+module.exports = Object.assign(MuSig2, {
+    MuSig2,
+    // Exposed for integration testing against the raw library surface.
+    _internal: { ecc, musig: _musig },
+});

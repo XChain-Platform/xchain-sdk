@@ -614,6 +614,7 @@ class BettingHelpers {
 
 }
 
-module.exports = BettingHelpers;
-module.exports.BET_LIMITS = BET_LIMITS;
-module.exports.BET_DETAILS_SCHEMA = BET_DETAILS_SCHEMA;
+module.exports = Object.assign(BettingHelpers, {
+    BET_LIMITS,
+    BET_DETAILS_SCHEMA,
+});

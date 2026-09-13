@@ -506,17 +506,17 @@ class ContractUtils {
 
 }
 
-module.exports = ContractUtils;
+module.exports = Object.assign(ContractUtils, {
+    // Re-export so parity/drift guards can assert this entry point rides the same
+    // (validator-sourced) cap; see test/unit/protocol_size_caps.test.js.
+    MAX_CODE_SIZE,
 
-// Re-export so parity/drift guards can assert this entry point rides the same
-// (validator-sourced) cap; see test/unit/protocol_size_caps.test.js.
-module.exports.MAX_CODE_SIZE = MAX_CODE_SIZE;
-
-// The frozen CONTRACT_MANIFEST meta strings and the client-side grammar, exported
-// so a caller (and the deploy seams in XChainSDK / walletSession) can compare
-// against the exact consensus token instead of re-typing it.
-module.exports.META_VERDICTS             = META_VERDICTS;
-module.exports.META_NAME_MAX_BYTES       = META_NAME_MAX_BYTES;
-module.exports.META_DESCRIPTION_MAX_BYTES = META_DESCRIPTION_MAX_BYTES;
-module.exports.META_VERSION_MAX_BYTES    = META_VERSION_MAX_BYTES;
-module.exports.isValidMetaText           = isValidMetaText;
+    // The frozen CONTRACT_MANIFEST meta strings and the client-side grammar, exported
+    // so a caller (and the deploy seams in XChainSDK / walletSession) can compare
+    // against the exact consensus token instead of re-typing it.
+    META_VERDICTS,
+    META_NAME_MAX_BYTES,
+    META_DESCRIPTION_MAX_BYTES,
+    META_VERSION_MAX_BYTES,
+    isValidMetaText,
+});
