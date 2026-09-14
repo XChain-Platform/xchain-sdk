@@ -25,18 +25,17 @@
 const { expect } = require('chai');
 const { XChainSDK } = require('../../index.js');
 
+const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
+
+function assertAction(result, expectedVersion) {
+    expect(result).to.be.an('object');
+    expect(result.action).to.equal('XBRIDGE');
+    expect(String(result.version)).to.equal(String(expectedVersion));
+    expect(result.actionString).to.be.a('string').and.to.have.length.above(0);
+    expect(result.actionString.startsWith('XBRIDGE|')).to.equal(true);
+}
+
 describe('XChainSDK.xbridge()', () => {
-
-    const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
-
-    function assertAction(result, expectedVersion) {
-        expect(result).to.be.an('object');
-        expect(result.action).to.equal('XBRIDGE');
-        expect(String(result.version)).to.equal(String(expectedVersion));
-        expect(result.actionString).to.be.a('string').and.to.have.length.above(0);
-        expect(result.actionString.startsWith('XBRIDGE|')).to.equal(true);
-    }
-
     it('v0 (lock XCHAIN on BTC): camelCase params normalize to the wire fields', async () => {
         const result = await sdk.xbridge({
             version: 0,
@@ -59,7 +58,9 @@ describe('XChainSDK.xbridge()', () => {
         assertAction(result, 1);
         expect(result.actionString).to.equal('XBRIDGE|1|1ExampleAddressXXXXXXXXXXXXXXXXXXX|200');
     });
+});
 
+describe('XChainSDK.xbridge()', () => {
     it('v3 (lock a general token on its origin chain)', async () => {
         const result = await sdk.xbridge({
             version: 3,
