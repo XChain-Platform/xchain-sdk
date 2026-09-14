@@ -70,9 +70,23 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `a6300a2f`
+**Pins taken at indexer commit:** `71f3d080`
 
-(Re-anchored 2026-09-14, third pass, by the `dispense.js` comment review below. `a6300a2f`
+(Re-anchored 2026-09-14, fourth pass, by the handler-split review below. `71f3d080` is the
+indexer commit that finishes the split of nine handlers into directories and points every
+requirer at them, so nine rows change SHAPE as well as value: they are directory rows now,
+hashed over every part, and the two unsplit handlers (`dispenser.js`, `dispense.js`) keep
+their flat rows unchanged from `a6300a2f`. The indexer lands before this map, so every row
+is content of the anchor tree. A checkout without `71f3d080` reports all nine drifted, and
+the answer is the missing indexer commit, never a re-pin back. `a6300a2f` stays reachable.)
+
+(Anchor note. This pass was written first against `d38e218c`, which was based on the
+pre-stack-3 indexer tip `708b52fb`. That branch was rebased onto the landed tip `1f558d9e`
+before it was pushed, which renamed every one of its commits, so the anchor moved to
+`71f3d080` and the rows below were re-derived from that tree rather than carried over.
+`d38e218c` was never on origin and must not be cited.)
+
+(Earlier note. Re-anchored 2026-09-14, third pass, by the `dispense.js` comment review below. `a6300a2f`
 is the indexer commit that follows the snake_case rename of the consensus twins and price
 modules in comments, and `dispense.js` is the only mapped handler it or its parent `99ff4ecf`
 touches, so the other ten rows are byte-identical at `57e49dd0` and at `a6300a2f`. The indexer
@@ -228,7 +242,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff a6300a2f..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 71f3d080..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -306,17 +320,17 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send.js` | `cd2d8c27cbf57336147ef1ff992d31e5a48b07a6c0273c2b59de89abb1b646f1` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `10e59bc00502b2aab10905aa8edf539680102fe6bd6061e74c6e9eabaed32d5e` |
-| `checks/mint.js` | `src/actions/mint.js` | `4021fa16abe8952de98929fe0b632a11d56346a12911d79e59dc0e044a18ca59` |
-| `checks/issue.js` | `src/actions/issue.js` | `60cb6cc8d337cd00d13dd1440f19595ef36870aee479690bb150d30c29767c31` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `caf45dac97d11cb095f70f35222a34000b69afd835d893cc0336374193cad6df` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `4fcdfcde260301108826174742501455501cc9017dee401a68cb6fe552a96f44` |
+| `checks/mint.js` | `src/actions/mint/` | `7c8992a06f9143b876c5eb7bc554dbbe5b2ca61507c44e822b5491b8571d1c06` |
+| `checks/issue.js` | `src/actions/issue/` | `41f203693d23b02e645add2c65cecb6710044a87e44d7ed822a6cfd0ab814b71` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `39a9c0ee6a89903b48b9d9244663cc025a029d876c0fe150b6dd41428df63a9a` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `72ec1eca26499de98578d0cb0ab27f034b49cb75515c6fdb490b6390ba93dafb` |
-| `checks/trading.js` (ORDER) | `src/actions/order.js` | `4a5b7e596377b29198baac9b62f18c0893c271573addefb3351d7fc36d42421c` |
-| `checks/trading.js` (SWAP) | `src/actions/swap.js` | `ff297dbe7f2fbe6424b6ea61fd463b9ec9847de7157500345ca1f0a2be2dd398` |
-| `checks/airdrop.js` | `src/actions/airdrop.js` | `ef52e3900ae20a64a0653f3a4bf775692b1cd73d5c9c9cf82840b2b3926bd4c9` |
-| `checks/dividend.js` | `src/actions/dividend.js` | `3405fa19e629bab98b5b3c33fd0128e3e6873f551a3f722fef55197e3be22f57` |
-| `checks/batch.js` | `src/actions/batch.js` | `3c6f8204e0026f43b117a2a3060fa8d4e574bd669b4f7655d403150a55323db0` |
+| `checks/trading.js` (ORDER) | `src/actions/order/` | `644dfe6951e78b653e185bb78201bfaeadc7b04eaab5cb7c1f4ffb2682b6cc79` |
+| `checks/trading.js` (SWAP) | `src/actions/swap/` | `b8e6753cccc7a4b1c6586c66a39faea3cf86718fcc989351ca32449386390d4c` |
+| `checks/airdrop.js` | `src/actions/airdrop/` | `47d5d14dcc26ae3d181118b692b8d879b809e4754a4268ef68579f6896ffbd74` |
+| `checks/dividend.js` | `src/actions/dividend/` | `c227a04169123b47d373b00de220b3af89bded2c6d88a753436633530c17564d` |
+| `checks/batch.js` | `src/actions/batch/` | `895eb6fda8380b3019ccdaa97f7b13d97ebae20008e4285a43f7b854b1884507` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -325,6 +339,47 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-14 (fourth pass) - nine handlers become directories, no flat file beside them
+
+Baseline pins were the flat blobs at `a6300a2f`; the new pins are directory digests, hashed
+from the committed indexer tree at `71f3d080` with its handlers clean, by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/<name>/` (never by hand). Range read:
+`git -C ../xchain-indexer log --name-status 1f558d9e..HEAD -- src/actions/` (spelled as a log
+rather than the diff command, so the anchor-consistency check still finds exactly one review
+command, the one under **Pins taken at indexer commit**), which is the twelve commits that
+split ISSUE, MINT, DESTROY, BATCH, SEND, AIRDROP, DIVIDEND, ORDER and SWAP into part files,
+move each entry to `<name>/index.js`, and point every requirer at the directory. The range
+starts at `1f558d9e` rather than at the older `a6300a2f`, because stack-3 landed in between
+and 49 commits touch `src/actions/` across the wider span; `1f558d9e..HEAD` is exactly the
+handler-split work and nothing else.
+
+**What moved: the file layout, and in three handlers the naming of steps that were already
+inline.** Each handler is now `src/actions/<name>/` with `index.js` and one part per behaviour,
+and NO flat `<name>.js` remains, which is the shape this map requires of a directory row (a
+flat file beside the directory is refused, since `require('./<name>')` would resolve it first).
+No validity rule, threshold, fee, field, format version or error string changed.
+
+Machine-verified, and re-run after the rebase against the landed tip. Both trees were wired
+through `wireCoreHandlers` and `wireProtocolHandlers` onto the same stub loader, at
+`1f558d9e` (the pre-split tip) and at `71f3d080`, and the registration itself compared
+first: 50 handlers register, on the same property names, in the same order, either side.
+Then every handler class had its whole prototype surface compared: name, arity, static keys,
+and for each member its descriptor (enumerable, writable, configurable), value type,
+function name and arity. 47 of the 50 are surface-identical, and no handler LOSES a member
+or changes its class name or constructor arity. ISSUE, MINT, DESTROY, BATCH, ORDER and SWAP
+are IDENTICAL, member for member and in the same order. SEND, AIRDROP and DIVIDEND gained named step methods
+(their monolithic `parse` was cut into them): `constructor` and `parse` are unchanged, every
+added member is non-enumerable exactly as a class method is, so no `for...in` or key walk over
+an instance sees anything new. At the rebased tip the indexer unit tier runs 9774 passing,
+12 pending, 0 failing, and consensus identity is byte-identical to the landed tip's
+(`55891dfd` armed-map fingerprint, `26ba9cce` rules digest, 33 gates resolved, 0 absent):
+moving a handler between a file and a directory moves no consensus byte.
+
+**Direction: NEITHER, no admission boundary moves.** NO CLIENT CHECK MOVES. The pre-flight
+checks mirror each handler's validity rules, and this is a layout change: the rules are the
+same text in a different file. The fee walk now reads every file of a directory handler, so
+`createFeesObject` is still found for all twelve fee-charging actions.
 
 ### 2026-09-14 (third pass) - `dispense.js`, two comments follow the snake_case twin rename
 
