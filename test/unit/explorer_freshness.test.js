@@ -37,6 +37,13 @@ function sdk() {
     return new XChainSDK({ network: 'bitcoin-mainnet', explorerUrl: BASE, encoderUrl: 'http://localhost:3000', retry: false });
 }
 
+const status = (stale) => ({
+    stale:           { BTC: stale, TBTC: true },
+    last_block:      { BTC: 965947, TBTC: 151038 },
+    tip_age_seconds: { BTC: 169, TBTC: 215254 },
+    replica_halted:  { BTC: false, TBTC: true }
+});
+
 describe('ExplorerClient freshness markers', function () {
     afterEach(function () { nock.cleanAll(); });
 
@@ -88,13 +95,6 @@ describe('ExplorerClient freshness markers', function () {
 describe('XChainSDK.assertFresh', function () {
     afterEach(function () { nock.cleanAll(); });
 
-    const status = (stale) => ({
-        stale:           { BTC: stale, TBTC: true },
-        last_block:      { BTC: 965947, TBTC: 151038 },
-        tip_age_seconds: { BTC: 169, TBTC: 215254 },
-        replica_halted:  { BTC: false, TBTC: true }
-    });
-
     it('probes /status when nothing marked has been seen, and passes on a live coin', async function () {
         nock(BASE).get('/BTC/api/status').reply(200, status(false));
         let f = await sdk().assertFresh();
@@ -119,6 +119,10 @@ describe('XChainSDK.assertFresh', function () {
         let f = await sdk().assertFresh();
         expect(f.stale).to.equal(false);
     });
+});
+
+describe('XChainSDK.assertFresh', function () {
+    afterEach(function () { nock.cleanAll(); });
 
     it('passes a coin the explorer does not measure, flagged as unmeasured', async function () {
         nock(BASE).get('/BTC/api/status').reply(200, { stale: { TBTC: true } });
