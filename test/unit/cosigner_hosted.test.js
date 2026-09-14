@@ -78,6 +78,21 @@ function post(port, body, headers, path = '/v1/cosign') {
     });
 }
 
+async function startRequestServer() {
+    const acctA = makeAccount(), acctB = makeAccount();
+    const logs = [];
+    const app = createHostedCoSignerApp({
+        tenants: [
+            { id: 'alpha', token: TOKEN_A, coSigner: tenantFor(acctA) },
+            { id: 'beta',  token: TOKEN_B, coSigner: tenantFor(acctB) },
+        ],
+        logger: (...a) => logs.push(a),
+    });
+    const server = app.listenSecure({ port: 0, host: '127.0.0.1' });
+    await new Promise((resolve) => server.once('listening', resolve));
+    return { server, port: server.address().port, acctA, acctB, logs };
+}
+
 describe('hosted co-signer: construction prerequisites', function () {
 
     it('refuses two tenants sharing one window store', function () {
@@ -148,29 +163,12 @@ describe('hosted co-signer: transport', function () {
 });
 
 describe('hosted co-signer: request handling', function () {
-
     let server, port, acctA, acctB, logs;
-
-    beforeEach(function (done) {
-        acctA = makeAccount(); acctB = makeAccount();
-        logs = [];
-        const app = createHostedCoSignerApp({
-            tenants: [
-                { id: 'alpha', token: TOKEN_A, coSigner: tenantFor(acctA) },
-                { id: 'beta',  token: TOKEN_B, coSigner: tenantFor(acctB) },
-            ],
-            logger: (...a) => logs.push(a),
-        });
-        server = app.listenSecure({ port: 0, host: '127.0.0.1', onListening: () => {
-            port = server.address().port;
-            done();
-        } });
+    beforeEach(async function () {
+        ({ server, port, acctA, acctB, logs } = await startRequestServer());
     });
-
     afterEach(function (done) { server.close(done); });
-
     const bearer = (t) => ({ authorization: 'Bearer ' + t });
-
     it('co-signs for the tenant the token selects', async function () {
         const r = await post(port, {
             version: 1,
@@ -207,7 +205,15 @@ describe('hosted co-signer: request handling', function () {
         // Identical answers: nothing distinguishes "no such tenant" from "no token".
         expect(unknown.body).to.deep.equal(missing.body);
     });
+});
 
+describe('hosted co-signer: request handling', function () {
+    let server, port, acctA, acctB, logs;
+    beforeEach(async function () {
+        ({ server, port, acctA, acctB, logs } = await startRequestServer());
+    });
+    afterEach(function (done) { server.close(done); });
+    const bearer = (t) => ({ authorization: 'Bearer ' + t });
     it('requires an explicit, supported wire version', async function () {
         const psbt = buildPsbt(acctA, 'SEND|0|TOK|5|1destX|m').toHex();
         const inputs = [{ index: 0, agentPublicNonce: nonce(acctA) }];
@@ -245,38 +251,38 @@ describe('hosted co-signer: request handling', function () {
 // against a concurrency cap that could never fire, so it passed with or without
 // any limit at all. These assert the limit's actual decisions instead: which
 // request is refused, which tenant is unaffected, and what does not spend budget.
+let acctA, acctB, logs;
+const bearer = (t) => ({ authorization: 'Bearer ' + t });
+
+function appWith(opts) {
+    acctA = makeAccount(); acctB = makeAccount();
+    logs = [];
+    return createHostedCoSignerApp(Object.assign({
+        tenants: [
+            { id: 'alpha', token: TOKEN_A, coSigner: tenantFor(acctA) },
+            { id: 'beta',  token: TOKEN_B, coSigner: tenantFor(acctB) },
+        ],
+        logger: (...a) => logs.push(a),
+    }, opts));
+}
+
+async function withServer(app, fn) {
+    const srv = app.listenSecure({ port: 0, host: '127.0.0.1' });
+    await new Promise((r) => srv.once('listening', r));
+    try { return await fn(srv.address().port); }
+    finally { await new Promise((r) => srv.close(r)); }
+}
+
+// A well-formed request that the daemon will judge (and deny on policy):
+// what matters here is the STATUS, which is 200 for anything the budget lets
+// through and 429 for anything it does not.
+const body = (acct) => ({
+    version: 1,
+    psbt: buildPsbt(acct, 'SEND|0|TOK|1|bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4').toHex(),
+    inputs: [{ index: 0, agentPublicNonce: nonce(acct) }],
+});
+
 describe('hosted co-signer: per-tenant request budget', function () {
-
-    let acctA, acctB, logs;
-    const bearer = (t) => ({ authorization: 'Bearer ' + t });
-
-    function appWith(opts) {
-        acctA = makeAccount(); acctB = makeAccount();
-        logs = [];
-        return createHostedCoSignerApp(Object.assign({
-            tenants: [
-                { id: 'alpha', token: TOKEN_A, coSigner: tenantFor(acctA) },
-                { id: 'beta',  token: TOKEN_B, coSigner: tenantFor(acctB) },
-            ],
-            logger: (...a) => logs.push(a),
-        }, opts));
-    }
-
-    async function withServer(app, fn) {
-        const srv = app.listenSecure({ port: 0, host: '127.0.0.1' });
-        await new Promise((r) => srv.once('listening', r));
-        try { return await fn(srv.address().port); }
-        finally { await new Promise((r) => srv.close(r)); }
-    }
-
-    // A well-formed request that the daemon will judge (and deny on policy):
-    // what matters here is the STATUS, which is 200 for anything the budget lets
-    // through and 429 for anything it does not.
-    const body = (acct) => ({
-        version: 1,
-        psbt: buildPsbt(acct, 'SEND|0|TOK|1|bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4').toHex(),
-        inputs: [{ index: 0, agentPublicNonce: nonce(acct) }],
-    });
 
     it('refuses the request past the budget, and names the limit', async function () {
         const app = appWith({ maxRequestsPerTenant: 2, rateWindowMs: 60000 });
@@ -315,6 +321,9 @@ describe('hosted co-signer: per-tenant request budget', function () {
             expect((await post(port, body(acctA), bearer(TOKEN_A))).status).to.equal(200);
         });
     });
+});
+
+describe('hosted co-signer: per-tenant request budget', function () {
 
     it('starts a fresh window once the old one expires', async function () {
         const app = appWith({ maxRequestsPerTenant: 1, rateWindowMs: 1 });
@@ -360,6 +369,9 @@ describe('hosted co-signer: per-tenant request budget', function () {
             expect(JSON.stringify(r.body)).to.not.contain('alpha');
         });
     });
+});
+
+describe('hosted co-signer: per-tenant request budget', function () {
 
     it('accepts a body far larger than the old 256kb cap by default', async function () {
         const app = appWith({});
