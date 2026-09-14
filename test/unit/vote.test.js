@@ -18,12 +18,12 @@ const { XChainSDK, VoteHelpers } = require('../../index.js');
 const WalletSession = require('../../src/utils/wallet_session.js');
 const Formats = require('../../src/protocol/formats.js');
 
-describe('VOTE governance helpers', function () {
-    // compactTickers:false so createAction never reaches the network to resolve
-    // ticker names; we assert on serialization only.
-    const sdk = new XChainSDK({ network: 'bitcoin-mainnet', compactTickers: false });
-    const v = sdk.voting;
+// compactTickers:false so createAction never reaches the network to resolve
+// ticker names; we assert on serialization only.
+const sdk = new XChainSDK({ network: 'bitcoin-mainnet', compactTickers: false });
+const v = sdk.voting;
 
+describe('VOTE governance helpers', function () {
     it('exposes the governance surface', function () {
         expect(sdk.voting).to.be.instanceOf(VoteHelpers);
         expect(sdk.vote).to.be.a('function');
@@ -39,7 +39,9 @@ describe('VOTE governance helpers', function () {
         expect(v.TALLY_MODES).to.deep.equal(['approval', 'split']);
         expect(v.CALLBACK_ON).to.deep.equal(['pass', 'always']);
     });
+});
 
+describe('VOTE governance helpers', function () {
     describe('createPollParams (v0)', function () {
         it('builds an advisory poll and serializes to the VOTE.md wire form', async function () {
             const p = v.createPollParams({
@@ -72,7 +74,11 @@ describe('VOTE governance helpers', function () {
             expect(p.callbackOn).to.equal('pass');
             expect(p.gasEscrow).to.equal('5000');
         });
+    });
+});
 
+describe('VOTE governance helpers', function () {
+    describe('createPollParams (v0)', function () {
         it('carries callbackDelayBlocks (the finalize -> callback timelock) on a binding poll', function () {
             const p = v.createPollParams({
                 tick: 'GOVTOKEN', endBlock: 850000, options: ['YES', 'NO'],
@@ -114,7 +120,9 @@ describe('VOTE governance helpers', function () {
             })).to.throw(/callbackDelayBlocks/);
         });
     });
+});
 
+describe('VOTE governance helpers', function () {
     describe('castBallotParams (v1)', function () {
         it('formats every ballot shape', function () {
             expect(v.castBallotParams({ pollRef: 1, ballot: 1 }).ballot).to.equal('1');
@@ -149,7 +157,9 @@ describe('VOTE governance helpers', function () {
             expect(() => v.clearDelegationParams({})).to.throw(/tick is required/);
         });
     });
+});
 
+describe('VOTE governance helpers', function () {
     // The raw wrapper takes hand-rolled params, so the SDK must refuse the two
     // shapes the indexer is guaranteed to reject: the system-only v2 finalizer,
     // and a v1 ballot missing its anchor fields.
