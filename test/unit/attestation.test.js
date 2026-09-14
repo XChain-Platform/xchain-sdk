@@ -68,6 +68,10 @@ describe('AttestationHelpers.llm', function () {
         expect(() => Attestation.llm({ prompt: 123 })).to.throw(/prompt/);
     });
 
+});
+
+describe('AttestationHelpers.llm', function () {
+
     it('throws when system is a non-string object (would otherwise serialize as "[object Object]")', function () {
         expect(() => Attestation.llm({ prompt: 'x', system: { evil: true } })).to.throw(/system/);
     });
@@ -88,6 +92,10 @@ describe('AttestationHelpers.llm', function () {
     it('throws when opts is null', function () {
         expect(() => Attestation.llm(null)).to.throw(/prompt/);
     });
+
+});
+
+describe('AttestationHelpers.llm', function () {
 
     it('does not emit optional fields when undefined', function () {
         const parsed = JSON.parse(Attestation.llm({ prompt: 'x' }));
@@ -115,6 +123,10 @@ describe('AttestationHelpers.llm', function () {
     it('throws when format is not "text" or "json_object"', function () {
         expect(() => Attestation.llm({ prompt: 'x', format: 'json' })).to.throw(/format/);
     });
+
+});
+
+describe('AttestationHelpers.llm', function () {
 
     it('throws when envelopeVersion is above the ceiling', function () {
         expect(() => Attestation.llm({ prompt: 'x', envelopeVersion: 2 })).to.throw(/envelopeVersion/i);
@@ -149,6 +161,10 @@ describe('AttestationHelpers.llm', function () {
         const longPrompt = 'a'.repeat(8300);
         expect(() => Attestation.llm({ prompt: longPrompt })).to.throw(/8192/);
     });
+
+});
+
+describe('AttestationHelpers.llm', function () {
 
     it('accepts an envelope at exactly the 8192-byte cap', function () {
         // Pad the prompt so the serialized envelope lands exactly at 8192 bytes.
@@ -186,6 +202,10 @@ describe('AttestationHelpers.llm', function () {
     it('throws when temperature is not finite', function () {
         expect(() => Attestation.llm({ prompt: 'x', temperature: Infinity })).to.throw(/temperature/);
     });
+
+});
+
+describe('AttestationHelpers.llm', function () {
 
     // The hub's llm.fetch refuses anything outside [0,2], so an envelope the
     // SDK accepted here would buy an on-chain request every validator then
@@ -226,6 +246,10 @@ describe('AttestationHelpers.httpGet', function () {
         const longUrl = 'https://example.com/' + 'a'.repeat(2048);
         expect(() => Attestation.httpGet(longUrl)).to.throw(/2048/);
     });
+
+});
+
+describe('AttestationHelpers.httpGet', function () {
 
     it('accepts URL at exactly 2048 bytes', function () {
         // 2048 bytes total: 'https://example.com/' is 20 chars; pad to 2048
