@@ -57,6 +57,9 @@ describe('decoder.parse - BATCH sub-grammar', function () {
         expect(r.validation.ok).to.equal(false);
         expect(r.validation.findings.map(f => f.code)).to.include('MISSING_REQUIRED_FIELD');
     });
+});
+
+describe('decoder.parse - BATCH sub-grammar', function () {
 
     it('per-command-type caps produce BATCH_LIMIT_EXCEEDED findings, not failures', function () {
         expect(BATCH_ACTION_LIMITS.MINT).to.equal(1);
@@ -101,6 +104,9 @@ describe('decoder.parse - BATCH sub-grammar', function () {
         expect(limit).to.exist;
         expect(limit.details.count).to.equal(2);
     });
+});
+
+describe('decoder.parse - BATCH sub-grammar', function () {
 
     it('over the 250-command cap is a finding, and it is the ONLY one', function () {
         // Precedence: the arbiter checks the cap first and rejects the whole
@@ -143,6 +149,9 @@ describe('decoder.parse - BATCH sub-grammar', function () {
         expect(BATCH_ACTION_LIMITS).to.deep.equal({ BATCH: 0, MINT: 1, ISSUE: 1, DEPLOY: 1 });
         expect(BATCH_GATED_ACTION_LIMITS).to.deep.equal({ DEPLOY: 1 });
     });
+});
+
+describe('decoder.parse - BATCH sub-grammar', function () {
 
     describe('sibling conformance vs xchain-indexer batch.js', function () {
         const fs = require('fs');
@@ -177,6 +186,9 @@ describe('decoder.parse - BATCH sub-grammar', function () {
             expect(/actionLimits\['DEPLOY'\]/.test(src)).to.equal(false);
         });
     });
+});
+
+describe('decoder.parse - BATCH sub-grammar', function () {
 
     describe('D5/D7 post-flag caps', function () {
 
@@ -213,6 +225,12 @@ describe('decoder.parse - BATCH sub-grammar', function () {
             // of 3: that difference is the whole of D7.
             expect(limit.details).to.deep.include({ action: 'MINT', limit: 1, count: 2 });
         });
+    });
+});
+
+describe('decoder.parse - BATCH sub-grammar', function () {
+
+    describe('D5/D7 post-flag caps', function () {
 
         it('a caret-ambiguous MINT pair raises NOTHING, deliberately', function () {
             // `JDOG` and `^614` can name ONE token, and only an indexer can say
@@ -247,6 +265,12 @@ describe('decoder.parse - BATCH sub-grammar', function () {
             expect(limit).to.exist;
             expect(limit.details).to.deep.include({ action: 'MINT', limit: 1, count: 2 });
         });
+    });
+});
+
+describe('decoder.parse - BATCH sub-grammar', function () {
+
+    describe('D5/D7 post-flag caps', function () {
 
         it('a legacy no-VERSION MINT reads its TICK off the injected VERSION 0', function () {
             // `MINT|A|1|addr` carries no VERSION, so the arbiter splices one in
@@ -271,19 +295,22 @@ describe('decoder.parse - BATCH sub-grammar', function () {
             expect(limits[0].details.action).to.equal('COMMAND');
         });
     });
+});
 
-    /*
-     * R2b: among per-ACTION caps, the error names the action whose FIRST
-     * sub-command appears EARLIEST in the command list.
-     *
-     * This decoder reports EVERY broken per-action cap rather than stopping at
-     * the first, so R2b shows up here as the ORDER of the findings: the
-     * arbiter emits exactly one error string, and it is the one findings[0]
-     * names. A caller that surfaces the leading finding therefore predicts the
-     * chain's verdict, which is only true while this order holds. Both
-     * directions of each pair are stated, because one direction alone is
-     * satisfied by alphabetical or key-insertion order just as well.
-     */
+/*
+ * R2b: among per-ACTION caps, the error names the action whose FIRST
+ * sub-command appears EARLIEST in the command list.
+ *
+ * This decoder reports EVERY broken per-action cap rather than stopping at
+ * the first, so R2b shows up here as the ORDER of the findings: the
+ * arbiter emits exactly one error string, and it is the one findings[0]
+ * names. A caller that surfaces the leading finding therefore predicts the
+ * chain's verdict, which is only true while this order holds. Both
+ * directions of each pair are stated, because one direction alone is
+ * satisfied by alphabetical or key-insertion order just as well.
+ */
+describe('decoder.parse - BATCH sub-grammar', function () {
+
     describe('R2b per-ACTION error precedence (finding order)', function () {
         const limitDetails = (wire) => parse(wire).validation.findings
             .filter(f => f.code === 'BATCH_LIMIT_EXCEEDED')
