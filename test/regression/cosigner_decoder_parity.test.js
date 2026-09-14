@@ -68,92 +68,94 @@ function carrierPayload(actionBytes, txidHex, opts = {}) {
     return obfuscate(Buffer.concat([MAGIC, inner]), txidHex);
 }
 
+let decoder = null;
+const prevHash = Buffer.alloc(32, 7);
+const prevTxid = Buffer.from(prevHash).reverse().toString('hex');
+
+function loadDecoder() {
+    if (!XChainDecoder) {
+        if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+            throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the sibling xchain-decoder was not found at ' + DECODER_ENTRY);
+        this.skip();
+        return;
+    }
+    decoder = new XChainDecoder('bitcoin-regtest', '127.0.0.1', 3306, 'x', 'u', 'p',
+        '127.0.0.1', 18443, 'u', 'p', false, null);
+    // The extraction path is pure; only these two reach the node. Stubbing
+    // them leaves every byte-level decision (OP_RETURN selection,
+    // de-obfuscation, magic word, decompile, size measurement) running the
+    // arbiter's own unmodified code.
+    decoder.getSourceFromOutput   = async () => null;
+    decoder.findFundingFeeOutputs = async () => [];
+}
+
+// Mirror of the confirmed-block path's post-parse steps (XChainDecoder.js,
+// updateBlocks), built from the arbiter's OWN exports so a change to its
+// alias table or size cap shows up here as a failure rather than as drift.
+async function authoritative(tx) {
+    const parsed = await decoder.parseTransaction(tx, new Set(), { getAddressId: async () => null });
+    if (!parsed || !Buffer.isBuffer(parsed.data) || parsed.data.length === 0)
+        return { ok: false, reason: 'NO_ACTION' };
+    if (parsed.compiledDataLength > XChainDecoder.MAX_ACTION_DATA_LENGTH)
+        return { ok: false, reason: 'OVERSIZED' };
+
+    const canonical = XChainDecoder.canonicalizeActionPayload(parsed.data);
+    let strictUtf8 = true, canonicalString;
+    try {
+        canonicalString = new TextDecoder('utf-8', { fatal: true }).decode(canonical.buffer);
+    } catch (e) {
+        strictUtf8 = false;
+        canonicalString = new TextDecoder('utf-8').decode(canonical.buffer);
+    }
+    if (!canonical.isKnown) return { ok: false, reason: 'UNKNOWN_ACTION' };
+
+    // The raw (pre-alias-rewrite) string, which is what the co-signer
+    // reports as its actionString.
+    let rawString;
+    try { rawString = new TextDecoder('utf-8', { fatal: true }).decode(parsed.data); }
+    catch (e) { rawString = new TextDecoder('utf-8').decode(parsed.data); }
+
+    return { ok: true, actionName: canonical.actionName, rawString, canonicalString, strictUtf8 };
+}
+
+// Build the matching tx + PSBT for a set of outputs, so both decoders see
+// byte-identical transactions.
+function pair(outputs) {
+    const tx = new bitcoin.Transaction();
+    tx.addInput(Buffer.from(prevHash), 0);
+    for (const o of outputs) tx.addOutput(o.script, o.value);
+
+    const psbt = new bitcoin.Psbt();
+    psbt.addInput({
+        hash: Buffer.from(prevHash), index: 0,
+        witnessUtxo: { script: Buffer.alloc(34, 1), value: 100000 },
+    });
+    for (const o of outputs) psbt.addOutput({ script: o.script, value: o.value });
+    return { tx, psbt };
+}
+
+function opReturn(payload) {
+    return { script: bitcoin.script.compile([bitcoin.opcodes.OP_RETURN, payload]), value: 0 };
+}
+
+// THE property. Every case below routes through here.
+async function assertParity(outputs, label) {
+    const { tx, psbt } = pair(outputs);
+    const mine = decodeActionFromPsbt(psbt);
+    const theirs = await authoritative(tx);
+
+    if (!mine.ok) return { mine, theirs };          // refusing is always safe
+
+    expect(theirs.ok, `${label}: co-signer accepted a payload the arbiter treats as no-action ` +
+        `(${theirs.reason}) - it would authorize an action the chain never executes`).to.equal(true);
+    expect(mine.actionString, `${label}: recovered action bytes diverge`).to.equal(theirs.rawString);
+    expect(mine.action, `${label}: canonical action name diverges`).to.equal(theirs.actionName);
+    return { mine, theirs };
+}
+
 describe('co-signer decode parity with the authoritative decoder @regression', function () {
 
-    let decoder = null;
-    const prevHash = Buffer.alloc(32, 7);
-    const prevTxid = Buffer.from(prevHash).reverse().toString('hex');
-
-    before(function () {
-        if (!XChainDecoder) {
-            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the sibling xchain-decoder was not found at ' + DECODER_ENTRY);
-            this.skip();
-            return;
-        }
-        decoder = new XChainDecoder('bitcoin-regtest', '127.0.0.1', 3306, 'x', 'u', 'p',
-            '127.0.0.1', 18443, 'u', 'p', false, null);
-        // The extraction path is pure; only these two reach the node. Stubbing
-        // them leaves every byte-level decision (OP_RETURN selection,
-        // de-obfuscation, magic word, decompile, size measurement) running the
-        // arbiter's own unmodified code.
-        decoder.getSourceFromOutput   = async () => null;
-        decoder.findFundingFeeOutputs = async () => [];
-    });
-
-    // Mirror of the confirmed-block path's post-parse steps (XChainDecoder.js,
-    // updateBlocks), built from the arbiter's OWN exports so a change to its
-    // alias table or size cap shows up here as a failure rather than as drift.
-    async function authoritative(tx) {
-        const parsed = await decoder.parseTransaction(tx, new Set(), { getAddressId: async () => null });
-        if (!parsed || !Buffer.isBuffer(parsed.data) || parsed.data.length === 0)
-            return { ok: false, reason: 'NO_ACTION' };
-        if (parsed.compiledDataLength > XChainDecoder.MAX_ACTION_DATA_LENGTH)
-            return { ok: false, reason: 'OVERSIZED' };
-
-        const canonical = XChainDecoder.canonicalizeActionPayload(parsed.data);
-        let strictUtf8 = true, canonicalString;
-        try {
-            canonicalString = new TextDecoder('utf-8', { fatal: true }).decode(canonical.buffer);
-        } catch (e) {
-            strictUtf8 = false;
-            canonicalString = new TextDecoder('utf-8').decode(canonical.buffer);
-        }
-        if (!canonical.isKnown) return { ok: false, reason: 'UNKNOWN_ACTION' };
-
-        // The raw (pre-alias-rewrite) string, which is what the co-signer
-        // reports as its actionString.
-        let rawString;
-        try { rawString = new TextDecoder('utf-8', { fatal: true }).decode(parsed.data); }
-        catch (e) { rawString = new TextDecoder('utf-8').decode(parsed.data); }
-
-        return { ok: true, actionName: canonical.actionName, rawString, canonicalString, strictUtf8 };
-    }
-
-    // Build the matching tx + PSBT for a set of outputs, so both decoders see
-    // byte-identical transactions.
-    function pair(outputs) {
-        const tx = new bitcoin.Transaction();
-        tx.addInput(Buffer.from(prevHash), 0);
-        for (const o of outputs) tx.addOutput(o.script, o.value);
-
-        const psbt = new bitcoin.Psbt();
-        psbt.addInput({
-            hash: Buffer.from(prevHash), index: 0,
-            witnessUtxo: { script: Buffer.alloc(34, 1), value: 100000 },
-        });
-        for (const o of outputs) psbt.addOutput({ script: o.script, value: o.value });
-        return { tx, psbt };
-    }
-
-    function opReturn(payload) {
-        return { script: bitcoin.script.compile([bitcoin.opcodes.OP_RETURN, payload]), value: 0 };
-    }
-
-    // THE property. Every case below routes through here.
-    async function assertParity(outputs, label) {
-        const { tx, psbt } = pair(outputs);
-        const mine = decodeActionFromPsbt(psbt);
-        const theirs = await authoritative(tx);
-
-        if (!mine.ok) return { mine, theirs };          // refusing is always safe
-
-        expect(theirs.ok, `${label}: co-signer accepted a payload the arbiter treats as no-action ` +
-            `(${theirs.reason}) - it would authorize an action the chain never executes`).to.equal(true);
-        expect(mine.actionString, `${label}: recovered action bytes diverge`).to.equal(theirs.rawString);
-        expect(mine.action, `${label}: canonical action name diverges`).to.equal(theirs.actionName);
-        return { mine, theirs };
-    }
+    before(loadDecoder);
 
     it('agrees on an ordinary encoder-produced action (the control)', async function () {
         const s = 'SEND|0|PEPECASH|1.50000000|1destX|memo';
@@ -176,6 +178,11 @@ describe('co-signer decode parity with the authoritative decoder @regression', f
         expect(r.mine.ok).to.equal(false);
         expect(r.theirs.ok).to.equal(false);            // the arbiter drops it as an unknown action
     });
+});
+
+describe('co-signer decode parity with the authoritative decoder @regression', function () {
+
+    before(loadDecoder);
 
     it('the co-signer refuses a second OP_RETURN rather than picking one', async function () {
         // The arbiter's output loop lets the LAST two-element OP_RETURN win. A
@@ -199,6 +206,11 @@ describe('co-signer decode parity with the authoritative decoder @regression', f
         expect(r.mine.ok).to.equal(false);
         expect(r.theirs.ok).to.equal(false);
     });
+});
+
+describe('co-signer decode parity with the authoritative decoder @regression', function () {
+
+    before(loadDecoder);
 
     it('the co-signer refuses the bare-multisig carrier the arbiter accepts', async function () {
         // The arbiter recognizes a bare 1-of-3 multisig data carrier. The
@@ -228,6 +240,11 @@ describe('co-signer decode parity with the authoritative decoder @regression', f
         expect(r.mine.ok).to.equal(false);
         expect(r.mine.reason).to.equal('NOT_UTF8');
     });
+});
+
+describe('co-signer decode parity with the authoritative decoder @regression', function () {
+
+    before(loadDecoder);
 
     it('both refuse an oversized payload', async function () {
         const big = Buffer.alloc(XChainDecoder.MAX_ACTION_DATA_LENGTH + 64, 0x41);
@@ -243,6 +260,11 @@ describe('co-signer decode parity with the authoritative decoder @regression', f
         expect(r.mine.ok).to.equal(false);
         expect(r.mine.reason).to.equal('P2SH_P2WSH_UNSUPPORTED');
     });
+});
+
+describe('co-signer decode parity with the authoritative decoder @regression', function () {
+
+    before(loadDecoder);
 
     it('agrees across a randomized and adversarial corpus', async function () {
         this.timeout(30000);
