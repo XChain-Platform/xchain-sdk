@@ -78,6 +78,9 @@ describe('TickResolver', function () {
             expect(await r.resolve(undefined)).to.equal(undefined);
         });
     });
+});
+
+describe('TickResolver', function () {
 
     describe('resolveActionParams()', function () {
 
@@ -121,6 +124,12 @@ describe('TickResolver', function () {
                 expect(out.TICK).to.equal('JDOG');
             });
         }
+    });
+});
+
+describe('TickResolver', function () {
+
+    describe('resolveActionParams()', function () {
 
         for (const version of ['6', '7']) {
             it(`compacts ISSUE.TICK on format ${version} (edit-only)`, async function () {
