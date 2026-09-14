@@ -92,7 +92,9 @@ describe('psbtActionDecode.decodeActionFromPsbt', function () {
         expect(r.ok).to.equal(true);
         expect(r.action).to.equal('SEND');
     });
+});
 
+describe('psbtActionDecode.decodeActionFromPsbt', function () {
     it('feeds decoded params straight into the policy evaluator', function () {
         const r = decodeActionFromPsbt(buildPsbt('SEND|0|TOK|100|1destX|m'));
         const policy = { allowedActions: new Set(['SEND']), maxPerAction: { SEND: { TOK: '50' } } };
@@ -100,7 +102,9 @@ describe('psbtActionDecode.decodeActionFromPsbt', function () {
         expect(v.ok).to.equal(false);
         expect(v.violation.code).to.equal('POLICY_AMOUNT_EXCEEDED');
     });
+});
 
+describe('psbtActionDecode.decodeActionFromPsbt', function () {
     // fail-closed paths (a refusal to sign is always safe)
 
     it('fails closed on a PSBT with no inputs', function () {
@@ -199,7 +203,9 @@ describe('psbtActionDecode.decodeActionStringFromPsbt (self-sign byte-match)', f
         expect(d.ok).to.equal(false);
         expect(d.reason).to.equal('REST_FIELD_TOO_LONG');
     });
+});
 
+describe('psbtActionDecode.decodeActionStringFromPsbt (self-sign byte-match)', function () {
     it('recovers EXECUTE with variadic PARAMS byte-for-byte', function () {
         const s = 'EXECUTE|0|1632|add|5|7';
         const r = decodeActionStringFromPsbt(buildPsbt(s));
