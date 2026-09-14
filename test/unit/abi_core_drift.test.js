@@ -21,20 +21,53 @@ const crypto = require('crypto');
 const fs     = require('fs');
 const path   = require('path');
 
+const EXPLORER  = path.join(__dirname, '..', '..', '..', 'xchain-explorer');
 const VENDORED  = path.join(__dirname, '..', '..', 'src', 'contract', 'abi-core.js');
-const CANONICAL = path.join(__dirname, '..', '..', '..', 'xchain-explorer', 'src', 'abi-core.js');
+
+// The explorer is moving its canonical copy from src/abi-core.js to
+// src/contract/abi_core.js, and the two repos push separately, so between the
+// two pushes either spelling can be the one on disk. Newest first, and a
+// checkout carrying NEITHER is a hard failure rather than a skip: skipping
+// there would compare nothing and still read green, which is exactly the
+// failure this guard exists to make impossible.
+const CANONICAL_SPELLINGS = [
+    path.join('src', 'contract', 'abi_core.js'),
+    path.join('src', 'abi-core.js'),
+];
 
 function sha256(file) {
     return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 }
 
+// The first spelling present, or null when the explorer carries none of them.
+function resolveCanonical() {
+    for (const rel of CANONICAL_SPELLINGS) {
+        const candidate = path.join(EXPLORER, rel);
+        if (fs.existsSync(candidate)) return candidate;
+    }
+    return null;
+}
+
 describe('abi-core drift guard @regression', function () {
     it('src/contract/abi-core.js matches the canonical xchain-explorer/src/abi-core.js', function () {
-        if (!fs.existsSync(CANONICAL)) return this.skip();
+        // Absence of the whole sibling checkout is the standalone-clone case the
+        // header describes; XCHAIN_REQUIRE_SIBLINGS=1 turns it into a failure the
+        // same way the explorer-route contract guard does.
+        if (!fs.existsSync(path.join(EXPLORER, 'src'))) {
+            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1') {
+                throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but sibling xchain-explorer checkout not found at ' + EXPLORER);
+            }
+            return this.skip();
+        }
+        const canonical = resolveCanonical();
+        assert.ok(canonical,
+            'sibling xchain-explorer checkout is present but carries no canonical abi core; tried ' +
+            CANONICAL_SPELLINGS.join(' and ') + ' under ' + EXPLORER);
         assert.strictEqual(
-            sha256(VENDORED), sha256(CANONICAL),
-            'VENDOR DRIFT: abi-core.js differs from the xchain-explorer canonical; ' +
-            'edit xchain-explorer/src/abi-core.js and run xchain-explorer/bin/sync-abi-core.sh.'
+            sha256(VENDORED), sha256(canonical),
+            'VENDOR DRIFT: abi-core.js differs from the xchain-explorer canonical at ' +
+            path.relative(EXPLORER, canonical) + '; ' +
+            'edit the canonical there and run xchain-explorer/bin/sync-abi-core.sh.'
         );
     });
 
