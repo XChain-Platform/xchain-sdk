@@ -25,7 +25,9 @@
 const { expect } = require('chai');
 const { planCoinpayOutputs, checkCoinpayOutputPlan } = require('../../src/protocol/batch_limits.js');
 
-describe('batchLimits: COINPAY per-payee output planning (spec row 31)', function(){
+const COINPAY_OUTPUT_PLAN_TITLE = 'batchLimits: COINPAY per-payee output planning (spec row 31)';
+
+describe(COINPAY_OUTPUT_PLAN_TITLE, function(){
 
     describe('planCoinpayOutputs', function(){
 
@@ -70,6 +72,10 @@ describe('batchLimits: COINPAY per-payee output planning (spec row 31)', functio
         });
 
     });
+
+});
+
+describe(COINPAY_OUTPUT_PLAN_TITLE, function(){
 
     describe('checkCoinpayOutputPlan', function(){
 
@@ -126,6 +132,14 @@ describe('batchLimits: COINPAY per-payee output planning (spec row 31)', functio
             expect(result.violations).to.deep.equal([]);
         });
 
+    });
+
+});
+
+describe(COINPAY_OUTPUT_PLAN_TITLE, function(){
+
+    describe('checkCoinpayOutputPlan', function(){
+
         it('surplus above the owed amount stays in the payee\'s pool for a sibling obligation (R5b)', function(){
             // One output larger than either single obligation, covering BOTH when
             // combined: the first obligation draws 1, leaving 2 in the pool, which
@@ -157,6 +171,14 @@ describe('batchLimits: COINPAY per-payee output planning (spec row 31)', functio
                 reason: 'NO_OUTPUT',
             }]);
         });
+
+    });
+
+});
+
+describe(COINPAY_OUTPUT_PLAN_TITLE, function(){
+
+    describe('checkCoinpayOutputPlan', function(){
 
         it('resolves the FIRST matching output only, identical to findPaymentOutput, even when a LATER output would have been enough alone', function(){
             // sellerA's first output pays only 0.5, short of the 3.5 owed even though
