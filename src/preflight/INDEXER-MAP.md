@@ -70,9 +70,17 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `57e49dd0`
+**Pins taken at indexer commit:** `a6300a2f`
 
-(Re-anchored 2026-09-14, second pass, by the `batch.js` loader-seam review below. `57e49dd0`
+(Re-anchored 2026-09-14, third pass, by the `dispense.js` comment review below. `a6300a2f`
+is the indexer commit that follows the snake_case rename of the consensus twins and price
+modules in comments, and `dispense.js` is the only mapped handler it or its parent `99ff4ecf`
+touches, so the other ten rows are byte-identical at `57e49dd0` and at `a6300a2f`. The indexer
+lands before this map, so every row is a plain blob of the anchor. A checkout without
+`a6300a2f` reports the `dispense.js` row drifted: the answer is the missing indexer commit,
+never a re-pin back. The previous anchor `57e49dd0` is an ancestor and stays reachable.)
+
+(Earlier note. Re-anchored 2026-09-14, second pass, by the `batch.js` loader-seam review below. `57e49dd0`
 is the indexer commit that moves the BATCH probe-path sub-action refusal onto the action
 loader instance, and `batch.js` is the only mapped handler it touches, so the other ten
 rows are byte-identical at `5bfa3a7b` and at `57e49dd0`. The indexer lands before this map,
@@ -220,7 +228,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 57e49dd0..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff a6300a2f..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -303,7 +311,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/mint.js` | `src/actions/mint.js` | `4021fa16abe8952de98929fe0b632a11d56346a12911d79e59dc0e044a18ca59` |
 | `checks/issue.js` | `src/actions/issue.js` | `60cb6cc8d337cd00d13dd1440f19595ef36870aee479690bb150d30c29767c31` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `39a9c0ee6a89903b48b9d9244663cc025a029d876c0fe150b6dd41428df63a9a` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `d72fe8c83b81b4ce12b1c90851657e7f3610658c5acdeca3b24ded451bc35916` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `72ec1eca26499de98578d0cb0ab27f034b49cb75515c6fdb490b6390ba93dafb` |
 | `checks/trading.js` (ORDER) | `src/actions/order.js` | `4a5b7e596377b29198baac9b62f18c0893c271573addefb3351d7fc36d42421c` |
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `ff297dbe7f2fbe6424b6ea61fd463b9ec9847de7157500345ca1f0a2be2dd398` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `ef52e3900ae20a64a0653f3a4bf775692b1cd73d5c9c9cf82840b2b3926bd4c9` |
@@ -317,6 +325,31 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-14 (third pass) - `dispense.js`, two comments follow the snake_case twin rename
+
+Baseline pin was the `57e49dd0` blob (`d72fe8c8`), unchanged through `427a0b4c`; the new pin is
+`72ec1eca`, hashed from the committed indexer tree at `a6300a2f` with its handlers clean. Range
+read: the one commit `a6300a2f` over `src/actions/dispense.js`, whose parent `99ff4ecf` renames
+the modules these comments name (spelled as a single commit rather than a range command so the
+gate's anchor-consistency check still finds exactly one review command, the one under **Pins
+taken at indexer commit**). 2 lines added and 2 removed, in two hunks.
+
+**What moved: two file names inside comments, nothing executable.** One comment names the
+table-lifecycle registry as `table_lifecycle.js` instead of `tableLifecycle.js`, and one names
+the fills query module as `xchain_price_query.js` instead of `xchainPriceQuery.js`, following
+the indexer's rename of those modules to snake_case. No require, validity rule, threshold,
+field, format version or error string changed.
+
+Machine-verified. `dispense.js`'s token stream (@babel/parser, comments and whitespace excluded,
+token values compared as well as types) was taken at `427a0b4c` and at `a6300a2f`: 2731 tokens on
+each side and a residue of 0. The comparator was falsified first on a scratch copy of the new
+file: raising the first numeric literal (line 58) from 0 to 1 gave a residue of 1 at exactly
+that token, so a zero residue is evidence and not a tool that cannot say no.
+
+**Direction: NEITHER, no admission boundary moves.** NO CLIENT CHECK MOVES. `checks/dispenser.js`
+mirrors the DISPENSE validity rules, not the comments beside them. The refresh exists only so
+the hash row follows the handler to its new bytes.
 
 ### 2026-09-14 (second pass) - `batch.js`, the probe refusal read through the action loader
 
