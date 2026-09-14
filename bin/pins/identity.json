@@ -9,7 +9,7 @@
       "src/snapshot_reorg_buffer.js": "66bca8b5c9f7643a96bdb43966a8411afaaa5dedd8353b797080b35f958027ad",
       "src/state_subtree_activation.js": "fd480996a1c082f7c4024187eb9d05d7e99d8fada1816d7a6a5d978c6e10aa72",
       "src/checkpoint_commitment_activation.js": "c0d98b243f1cae170e2fb2f6316a7c628a9ff73c6e1ea6ae9a21592d9bbbe6cb",
-      "src/addressRefFields.js": "24b8aef78d7048ca02c87c326f2925b539bc844cfd1908c6bcef43e0584f4fdd",
+      "src/addressRefFields.js": "e0ffaaa0d43db2611817dc43678f090b06eede511ccfb72909433e2a7b39cf16",
       "src/checkpoint.js": "0b0e80f1372ef59fb6c8e7ec00a1f66d5e88ddca0a12584cadd087c1db595117",
       "src/contract/abi-core.js": "8222b193b5e65da7130af0bb589ff38d069f3a088f0d9f901826ffb18a3e9294",
       "test/fixtures/roundtrip-conformance.json": "d9963ac7c35bdcfab99595fec040d7791d73119cb62fef20db136f8ea56236ed",
@@ -18,9 +18,9 @@
       "test/fixtures/gate-min-amount-vectors.json": "414a68df798c8eb24532abc4e0275326cc138019541a7cd4fb3b0221eef2b3c2"
     },
     "vmCanonicalTrio": {
-      "src/contract/lint-core.js": "720d64dc3151f4105378ce47e3c6edba61155c46677a0cb02df1c773a17ad65a",
-      "src/contract/metering.js": "834552b7f6c1a86084def6b5a0094a0626a1ca078cf87208a94b01e532a3f101",
-      "src/contract/stripped-globals.js": "363aeedba1afd6e9882d9a21ab01336a3acd05b5b495928ea352084bbd75e7e9"
+      "src/contract/lint_core.js": "2b6d98fc6c0cf3a3c37e1b9dcf473d8719ddc43022be00fbdcf5b50f374d9768",
+      "src/contract/metering.js": "bcaaf2b3ad7c811c0fac868bb6be023da8977403f5f91218fa9b858b67c59a32",
+      "src/contract/stripped_globals.js": "580f415bcb94f5c98012945ab30c120f13928a0f7390c2ee4fe2a081432255fb"
     },
     "hubCanonicalCoins": {
       "src/coins/BTC.js": "900d82359d27269ebb775a207e84cac7ac0702f57f07c0239d5406f2a0ec6c90",
