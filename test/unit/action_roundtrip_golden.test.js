@@ -124,6 +124,42 @@ function buildIndexerParser(indexerRoot) {
     };
 }
 
+const indexerRoot = resolveIndexerRoot();
+let parse     = null;
+let loadMs    = null;
+let loadError = null;
+
+function loadLiveIndexer() {
+    // What this hook does is a CROSS-REPO require() sweep: the
+    // sibling xchain-indexer's src/utility.js plus every handler in its
+    // src/actions/ (~50 modules), none of them in this repo's module
+    // cache. On a cold venue checkout that has run past mocha's DEFAULT
+    // 5s hook timeout, and mocha attributes a hook failure to the FIRST
+    // test in the block, so the gate printed `"before all" hook for "the
+    // two vendored golden copies are byte-identical"` and sent an
+    // operator hunting a fixture drift that did not exist.
+    //
+    // The sweep is synchronous, so mocha's timer cannot interrupt it
+    // anyway: it can only fire late and mis-name it. So state the hook's
+    // timeout explicitly as "no mocha timer here", and let LOAD_BUDGET_MS
+    // own the deadline, reported under the load's own test name below.
+    this.timeout(0);
+    if (!indexerRoot) {
+        this.skip(); // unit tier: no sibling indexer checkout
+        return;
+    }
+    const startedAt = Date.now();
+    try {
+        stallSiblingLoadIfForced();
+        parse = buildIndexerParser(indexerRoot);
+    } catch (err) {
+        // Never rethrow: a throw here is reported against the first test
+        // in the block, which is the misattribution this item fixes.
+        loadError = err;
+    }
+    loadMs = Date.now() - startedAt;
+}
+
 describe('Action round-trip golden – SDK encoder byte-layout contract', function () {
 
     it('loads a representative set of golden vectors', function () {
@@ -140,43 +176,11 @@ describe('Action round-trip golden – SDK encoder byte-layout contract', functi
             });
         }
     });
+});
 
+describe('Action round-trip golden – SDK encoder byte-layout contract', function () {
     describe('full round-trip against a live indexer parser (when sibling present)', function () {
-        const indexerRoot = resolveIndexerRoot();
-        let parse     = null;
-        let loadMs    = null;
-        let loadError = null;
-
-        before(function () {
-            // What this hook does is a CROSS-REPO require() sweep: the
-            // sibling xchain-indexer's src/utility.js plus every handler in its
-            // src/actions/ (~50 modules), none of them in this repo's module
-            // cache. On a cold venue checkout that has run past mocha's DEFAULT
-            // 5s hook timeout, and mocha attributes a hook failure to the FIRST
-            // test in the block, so the gate printed `"before all" hook for "the
-            // two vendored golden copies are byte-identical"` and sent an
-            // operator hunting a fixture drift that did not exist.
-            //
-            // The sweep is synchronous, so mocha's timer cannot interrupt it
-            // anyway: it can only fire late and mis-name it. So state the hook's
-            // timeout explicitly as "no mocha timer here", and let LOAD_BUDGET_MS
-            // own the deadline, reported under the load's own test name below.
-            this.timeout(0);
-            if (!indexerRoot) {
-                this.skip(); // unit tier: no sibling indexer checkout
-                return;
-            }
-            const startedAt = Date.now();
-            try {
-                stallSiblingLoadIfForced();
-                parse = buildIndexerParser(indexerRoot);
-            } catch (err) {
-                // Never rethrow: a throw here is reported against the first test
-                // in the block, which is the misattribution this item fixes.
-                loadError = err;
-            }
-            loadMs = Date.now() - startedAt;
-        });
+        before(loadLiveIndexer);
 
         it('the sibling xchain-indexer parser loads within its budget', function () {
             if (!indexerRoot) this.skip();
