@@ -14,6 +14,7 @@ const { verifyCarrierScripts, REASONS } = require('../../../src/carrier/verify_c
 
 const NET = bitcoin.networks.bitcoin;
 const H160 = Buffer.alloc(20, 0xab); // stand-in for the caller HASH160
+const ACTION = 'ISSUE|0|LONGTICK|1000000|1000000|8|a description long enough to need chunking across several outputs';
 
 // Mirrors XChainEncoder's compile: <chunk> OP_DROP OP_DUP OP_HASH160
 // <hash160> OP_EQUALVERIFY OP_CHECKSIG.
@@ -74,7 +75,72 @@ function build(action, encoding, chunkSize) {
 
 describe('carrier-script verification (§5.3.2)', function () {
 
-    const ACTION = 'ISSUE|0|LONGTICK|1000000|1000000|8|a description long enough to need chunking across several outputs';
+    // The shape a real encoder emits, pinned end to end.
+    //
+    // Observed on the BTC regtest stack for a three-recipient SEND: 154 action
+    // bytes, one P2SH carrier, and a redeem script whose leading push is 156
+    // bytes - `4c 9a` (OP_PUSHDATA1, length 154) followed by the action. The
+    // verifier called that PAYLOAD_MISMATCH and the wallet's confirm surface
+    // refused to open. Written as an explicit single-chunk case rather than
+    // trusting the shared builder, so the framing this regression is about
+    // cannot quietly change with it.
+    it('accepts the OP_PUSHDATA1 framing a real chunked action arrives in', function () {
+        const action = 'SEND|1|XCHAIN|7|bcrt1qfdh24fmqxd23pax659t92hul2c5spj7jwele5q'
+            + '|3|bcrt1q58r83tq8r0mjsam2q45pvfqwk2d3krqk7fx5yp'
+            + '|1|bcrt1q9nf3v7qk5nf80lw9pwd262uta4xd4dx0yh8s28';
+        const compiled = compiledPayload(action);
+        expect(compiled.length).to.equal(action.length + 2);
+        expect(compiled[0]).to.equal(0x4c);
+        expect(compiled[1]).to.equal(action.length);
+
+        const redeem = redeemFor(compiled);
+        const psbt = psbtWith([committed('P2SH', redeem)]);
+        const r = verifyCarrierScripts({
+            psbt, carrierScripts: [redeem.toString('hex')], encoding: 'P2SH', actionString: action, network: NET,
+        });
+        expect(r.ok).to.equal(true);
+        expect(r.checked).to.equal(1);
+    });
+
+    // The mirror image, and the reason the old fixtures passed against a
+    // verifier no real transaction could satisfy: bytes that are the bare
+    // action with no push framing are not what the chain would read back, so
+    // they must not verify as the action either.
+    it('REJECTS an unframed payload, which the decoder would not read as this action', function () {
+        const action = 'BROADCAST|0|hello world, at length, so the lane is genuinely chunked past one push';
+        const redeem = redeemFor(Buffer.from(action, 'utf8'));
+        const psbt = psbtWith([committed('P2SH', redeem)]);
+        const r = verifyCarrierScripts({
+            psbt, carrierScripts: [redeem.toString('hex')], encoding: 'P2SH', actionString: action, network: NET,
+        });
+        expect(r.ok).to.equal(false);
+        expect(r.reason).to.equal(REASONS.PAYLOAD_MISMATCH);
+    });
+
+});
+
+describe('carrier-script verification (§5.3.2)', function () {
+
+    // The wallet passes PSBT HEX across its host messaging boundary, so the
+    // verifier must accept that shape and not only a live bitcoinjs object.
+    it('accepts the PSBT as hex, the shape that crosses the host boundary', function () {
+        const { carrierScripts, psbt } = build(ACTION, 'P2WSH', 20);
+        const r = verifyCarrierScripts({ psbt: psbt.toHex(), carrierScripts, encoding: 'P2WSH', actionString: ACTION, network: NET });
+        expect(r.ok).to.equal(true);
+    });
+
+    // Inline OP_RETURN keeps its own cross-check (decodeActionFromPsbt); this
+    // verifier must not claim to have checked anything there.
+    it('reports NOT_CHUNKED for OP_RETURN instead of pretending to verify', function () {
+        const { psbt } = build(ACTION, 'P2WSH', 20);
+        const r = verifyCarrierScripts({ psbt, carrierScripts: [], encoding: 'OP_RETURN', actionString: ACTION, network: NET });
+        expect(r.ok).to.equal(true);
+        expect(r.reason).to.equal(REASONS.NOT_CHUNKED);
+        expect(r.checked).to.equal(0);
+    });
+});
+
+describe('carrier-script verification (§5.3.2)', function () {
 
     ['P2SH', 'P2WSH'].forEach(encoding => {
 
@@ -128,63 +194,4 @@ describe('carrier-script verification (§5.3.2)', function () {
         });
     });
 
-    // The shape a real encoder emits, pinned end to end.
-    //
-    // Observed on the BTC regtest stack for a three-recipient SEND: 154 action
-    // bytes, one P2SH carrier, and a redeem script whose leading push is 156
-    // bytes - `4c 9a` (OP_PUSHDATA1, length 154) followed by the action. The
-    // verifier called that PAYLOAD_MISMATCH and the wallet's confirm surface
-    // refused to open. Written as an explicit single-chunk case rather than
-    // trusting the shared builder, so the framing this regression is about
-    // cannot quietly change with it.
-    it('accepts the OP_PUSHDATA1 framing a real chunked action arrives in', function () {
-        const action = 'SEND|1|XCHAIN|7|bcrt1qfdh24fmqxd23pax659t92hul2c5spj7jwele5q'
-            + '|3|bcrt1q58r83tq8r0mjsam2q45pvfqwk2d3krqk7fx5yp'
-            + '|1|bcrt1q9nf3v7qk5nf80lw9pwd262uta4xd4dx0yh8s28';
-        const compiled = compiledPayload(action);
-        expect(compiled.length).to.equal(action.length + 2);
-        expect(compiled[0]).to.equal(0x4c);
-        expect(compiled[1]).to.equal(action.length);
-
-        const redeem = redeemFor(compiled);
-        const psbt = psbtWith([committed('P2SH', redeem)]);
-        const r = verifyCarrierScripts({
-            psbt, carrierScripts: [redeem.toString('hex')], encoding: 'P2SH', actionString: action, network: NET,
-        });
-        expect(r.ok).to.equal(true);
-        expect(r.checked).to.equal(1);
-    });
-
-    // The mirror image, and the reason the old fixtures passed against a
-    // verifier no real transaction could satisfy: bytes that are the bare
-    // action with no push framing are not what the chain would read back, so
-    // they must not verify as the action either.
-    it('REJECTS an unframed payload, which the decoder would not read as this action', function () {
-        const action = 'BROADCAST|0|hello world, at length, so the lane is genuinely chunked past one push';
-        const redeem = redeemFor(Buffer.from(action, 'utf8'));
-        const psbt = psbtWith([committed('P2SH', redeem)]);
-        const r = verifyCarrierScripts({
-            psbt, carrierScripts: [redeem.toString('hex')], encoding: 'P2SH', actionString: action, network: NET,
-        });
-        expect(r.ok).to.equal(false);
-        expect(r.reason).to.equal(REASONS.PAYLOAD_MISMATCH);
-    });
-
-    // The wallet passes PSBT HEX across its host messaging boundary, so the
-    // verifier must accept that shape and not only a live bitcoinjs object.
-    it('accepts the PSBT as hex, the shape that crosses the host boundary', function () {
-        const { carrierScripts, psbt } = build(ACTION, 'P2WSH', 20);
-        const r = verifyCarrierScripts({ psbt: psbt.toHex(), carrierScripts, encoding: 'P2WSH', actionString: ACTION, network: NET });
-        expect(r.ok).to.equal(true);
-    });
-
-    // Inline OP_RETURN keeps its own cross-check (decodeActionFromPsbt); this
-    // verifier must not claim to have checked anything there.
-    it('reports NOT_CHUNKED for OP_RETURN instead of pretending to verify', function () {
-        const { psbt } = build(ACTION, 'P2WSH', 20);
-        const r = verifyCarrierScripts({ psbt, carrierScripts: [], encoding: 'OP_RETURN', actionString: ACTION, network: NET });
-        expect(r.ok).to.equal(true);
-        expect(r.reason).to.equal(REASONS.NOT_CHUNKED);
-        expect(r.checked).to.equal(0);
-    });
 });
