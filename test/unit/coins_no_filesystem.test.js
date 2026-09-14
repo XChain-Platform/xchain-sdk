@@ -34,27 +34,27 @@ const assert = require('assert');
 
 const coins = require('../../src/coins');
 
+// Capture console.log around a call, since the defect's whole visible
+// symptom was a log line rather than a thrown error.
+function withCapturedLog(fn){
+    const lines = [];
+    const original = console.log;
+    console.log = (...args) => { lines.push(args.join(' ')); };
+    try { return { value: fn(), lines }; }
+    finally { console.log = original; }
+}
+
+// A bundler shim is `process` present, `process.cwd` absent. Removing the
+// method is therefore a truer simulation than deleting the global, which
+// would also break mocha.
+function withoutProcessCwd(fn){
+    const original = process.cwd;
+    delete process.cwd;
+    try { return fn(); }
+    finally { process.cwd = original; }
+}
+
 describe('coin registry without a filesystem', function(){
-
-    // Capture console.log around a call, since the defect's whole visible
-    // symptom was a log line rather than a thrown error.
-    function withCapturedLog(fn){
-        const lines = [];
-        const original = console.log;
-        console.log = (...args) => { lines.push(args.join(' ')); };
-        try { return { value: fn(), lines }; }
-        finally { console.log = original; }
-    }
-
-    // A bundler shim is `process` present, `process.cwd` absent. Removing the
-    // method is therefore a truer simulation than deleting the global, which
-    // would also break mocha.
-    function withoutProcessCwd(fn){
-        const original = process.cwd;
-        delete process.cwd;
-        try { return fn(); }
-        finally { process.cwd = original; }
-    }
 
     it('resolves a regtest config with no filesystem, silently', function(){
         const { value, lines } = withCapturedLog(() => withoutProcessCwd(
@@ -87,6 +87,10 @@ describe('coin registry without a filesystem', function(){
             assert.ok(!key.startsWith('$'), `internal descriptor ${key} was stripped`);
         }
     });
+
+});
+
+describe('coin registry without a filesystem', function(){
 
     it('still reads the sidecar under a real Node, so the guard is not a mute button', function(){
         const fs = require('fs');
