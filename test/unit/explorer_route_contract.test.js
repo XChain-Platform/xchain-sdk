@@ -116,19 +116,24 @@ function parseMcpTypeEnums(source) {
     return out;
 }
 
+function loadRouteTable(ctx) {
+    if (!fs.existsSync(EXPLORER_ROUTES)) {
+        if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1') {
+            throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but sibling xchain-explorer checkout not found at ' + EXPLORER_ROUTES);
+        }
+        return ctx.skip();
+    }
+    const table = parseRouteTable(fs.readFileSync(EXPLORER_ROUTES, 'utf8'));
+    assert.ok(Object.keys(table).length > 20,
+        'route table parsed as ' + Object.keys(table).length + ' entries; the parser has drifted from XChainExplorer.js');
+    return table;
+}
+
 describe('explorer route contract @regression', function () {
     let table;
 
     before(function () {
-        if (!fs.existsSync(EXPLORER_ROUTES)) {
-            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1') {
-                throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but sibling xchain-explorer checkout not found at ' + EXPLORER_ROUTES);
-            }
-            return this.skip();
-        }
-        table = parseRouteTable(fs.readFileSync(EXPLORER_ROUTES, 'utf8'));
-        assert.ok(Object.keys(table).length > 20,
-            'route table parsed as ' + Object.keys(table).length + ' entries; the parser has drifted from XChainExplorer.js');
+        table = loadRouteTable(this);
     });
 
     it('every typed explorer call uses a type its route accepts', function () {
@@ -156,6 +161,14 @@ describe('explorer route contract @regression', function () {
         assert.deepStrictEqual(violations, [],
             'explorer calls using a query type the route does not accept (these 404 at runtime, ' +
             'and a 404 is read as "this resource does not exist"):\n  ' + violations.join('\n  '));
+    });
+});
+
+describe('explorer route contract @regression', function () {
+    let table;
+
+    before(function () {
+        table = loadRouteTable(this);
     });
 
     // ExplorerClient reaches every one of these through /{coin}/api/, so the api-only
@@ -193,6 +206,14 @@ describe('explorer route contract @regression', function () {
         assert.deepStrictEqual(violations, [],
             'MCP tool schemas advertising a query type the explorer route cannot serve:\n  ' +
             violations.join('\n  '));
+    });
+});
+
+describe('explorer route contract @regression', function () {
+    let table;
+
+    before(function () {
+        table = loadRouteTable(this);
     });
 
     // Guards that guard: a parser that matched nothing, or a route table that happened
