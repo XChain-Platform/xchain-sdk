@@ -73,6 +73,19 @@ describe('ControllerHelpers', function () {
                 .to.throw(/actionClass must be one of/);
         });
     });
+});
+
+describe('ControllerHelpers', function () {
+
+    let controller, sdk;
+    beforeEach(function () {
+        controller = new ControllerHelpers();
+        sdk = new XChainSDK({ network: 'bitcoin-regtest' });
+    });
+
+    function ser(action, params) {
+        return sdk.actions.createAction({ action, params }).actionString;
+    }
 
     describe('bindToken()', function () {
         it('builds camelCase ISSUE v6 params with UNBIND=0', function () {
@@ -111,6 +124,19 @@ describe('ControllerHelpers', function () {
             expect(() => controller.bindToken({ tick: 'X', controller: 1 })).to.throw(/actionClass is required/);
         });
     });
+});
+
+describe('ControllerHelpers', function () {
+
+    let controller, sdk;
+    beforeEach(function () {
+        controller = new ControllerHelpers();
+        sdk = new XChainSDK({ network: 'bitcoin-regtest' });
+    });
+
+    function ser(action, params) {
+        return sdk.actions.createAction({ action, params }).actionString;
+    }
 
     describe('unbindToken()', function () {
         it('builds ISSUE v6 params with UNBIND=1 and no controller', function () {
@@ -132,6 +158,19 @@ describe('ControllerHelpers', function () {
             expect(() => controller.unbindToken({ tick: 'X', actionClass: 'nope' })).to.throw(/actionClass must be one of/);
         });
     });
+});
+
+describe('ControllerHelpers', function () {
+
+    let controller, sdk;
+    beforeEach(function () {
+        controller = new ControllerHelpers();
+        sdk = new XChainSDK({ network: 'bitcoin-regtest' });
+    });
+
+    function ser(action, params) {
+        return sdk.actions.createAction({ action, params }).actionString;
+    }
 
     describe('bindAddress()', function () {
         it('builds ADDRESS v1 params with UNBIND=0 (no address, self-signed)', function () {
@@ -156,6 +195,19 @@ describe('ControllerHelpers', function () {
             expect(() => controller.bindAddress({ controller: 1, actionClass: 'nope' })).to.throw(/actionClass must be one of/);
         });
     });
+});
+
+describe('ControllerHelpers', function () {
+
+    let controller, sdk;
+    beforeEach(function () {
+        controller = new ControllerHelpers();
+        sdk = new XChainSDK({ network: 'bitcoin-regtest' });
+    });
+
+    function ser(action, params) {
+        return sdk.actions.createAction({ action, params }).actionString;
+    }
 
     describe('unbindAddress()', function () {
         it('builds ADDRESS v1 params with UNBIND=1', function () {
@@ -173,6 +225,15 @@ describe('ControllerHelpers', function () {
         it('rejects an unknown action class', function () {
             expect(() => controller.unbindAddress({ actionClass: 'nope' })).to.throw(/actionClass must be one of/);
         });
+    });
+});
+
+describe('ControllerHelpers', function () {
+
+    let controller, sdk;
+    beforeEach(function () {
+        controller = new ControllerHelpers();
+        sdk = new XChainSDK({ network: 'bitcoin-regtest' });
     });
 
     describe('sdk wiring', function () {
