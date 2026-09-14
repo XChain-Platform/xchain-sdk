@@ -61,10 +61,73 @@ const ANDROID  = 'https://localhost'
 const EXPLORER = 'https://explorer.xchain.io'
 const HOSTILE  = 'https://evil.example'
 
+function callerBasics () {
+    it('sends no ACAO at all when CORS is disabled, the SDK default', async function () {
+        const acao = await acaoFor(undefined, [IOS, EXPLORER, HOSTILE])
+        assert.strictEqual(acao[IOS], null)
+        assert.strictEqual(acao[EXPLORER], null)
+        assert.strictEqual(acao[HOSTILE], null)
+    })
+
+    // Asserted on the parser's return value rather than by mounting cors with
+    // it: `*` is what the cors middleware echoes verbatim to every caller, so
+    // a live wildcard mount here is indistinguishable from a service that
+    // really is wide open. The parser contract is the part under test.
+    it('passes `*` through to cors, which names it to every caller', function () {
+        assert.strictEqual(parseCorsOrigin('*'), '*')
+    })
+
+    // Measured, not assumed: given a String, `cors` does no matching at all -
+    // it names that origin to every caller, and the BROWSER is what refuses a
+    // mismatch. That is safe for one origin and is exactly why a comma list is
+    // not: the same unconditional echo produces a header nobody can accept.
+    it('names the single configured origin to every caller, leaving the browser to refuse', async function () {
+        const acao = await acaoFor(EXPLORER, [EXPLORER, IOS, HOSTILE])
+        assert.strictEqual(acao[EXPLORER], EXPLORER)
+        assert.strictEqual(acao[IOS], EXPLORER)
+        assert.strictEqual(acao[HOSTILE], EXPLORER)
+    })
+
+    // The allowlist form is strictly stronger: an unlisted origin is refused at
+    // the SERVER, without a header, rather than relying on the browser.
+    it('refuses an unlisted origin server-side once the value is a list', async function () {
+        const acao = await acaoFor(`${IOS},${EXPLORER}`, [HOSTILE])
+        assert.strictEqual(acao[HOSTILE], null)
+    })
+}
+
+function callerAllowlist () {
+    // THE REGRESSION. Before parseCorsOrigin every one of these read back the
+    // raw "a,b,c" string, including for HOSTILE.
+    it('echoes each allowlisted origin BACK TO ITSELF, never the raw list', async function () {
+        const raw  = `${IOS},${ANDROID},${EXPLORER}`
+        const acao = await acaoFor(raw, [IOS, ANDROID, EXPLORER, HOSTILE])
+
+        assert.strictEqual(acao[IOS], IOS)
+        assert.strictEqual(acao[ANDROID], ANDROID)
+        assert.strictEqual(acao[EXPLORER], EXPLORER)
+        assert.strictEqual(acao[HOSTILE], null)
+
+        // Stated separately because this is the exact shape of the old bug:
+        // a header that is present and populated and accepted by nothing.
+        for (const origin of [IOS, ANDROID, EXPLORER]) {
+            assert.notStrictEqual(acao[origin], raw,
+                'a multi-value ACAO is rejected by every browser; the header must name one origin')
+            assert.ok(!String(acao[origin]).includes(','),
+                'ACAO must never contain a comma')
+        }
+    })
+
+    it('fails CLOSED on `*` mixed with real origins rather than silently opening up', async function () {
+        const acao = await acaoFor(`*,${EXPLORER}`, [EXPLORER, HOSTILE])
+        assert.strictEqual(acao[EXPLORER], EXPLORER)
+        assert.strictEqual(acao[HOSTILE], null,
+            'a stray `*` in a list must not widen the grant to every origin')
+    })
+}
+
 describe('CORS_ORIGIN allowlist parsing', function () {
-
     describe('parseCorsOrigin', function () {
-
         it('disables CORS when the var is unset, empty, blank, or only separators', function () {
             assert.strictEqual(parseCorsOrigin(undefined), false)
             assert.strictEqual(parseCorsOrigin(null), false)
@@ -86,76 +149,18 @@ describe('CORS_ORIGIN allowlist parsing', function () {
             assert.deepStrictEqual(parseCorsOrigin(`${IOS},,${EXPLORER}`), [IOS, EXPLORER])
         })
     })
+})
 
-    describe('what a caller actually receives', function () {
+describe('CORS_ORIGIN allowlist parsing', function () {
+    describe('what a caller actually receives', callerBasics)
+    describe('what a caller actually receives', callerAllowlist)
+})
 
-        it('sends no ACAO at all when CORS is disabled, the SDK default', async function () {
-            const acao = await acaoFor(undefined, [IOS, EXPLORER, HOSTILE])
-            assert.strictEqual(acao[IOS], null)
-            assert.strictEqual(acao[EXPLORER], null)
-            assert.strictEqual(acao[HOSTILE], null)
-        })
-
-        // Asserted on the parser's return value rather than by mounting cors with
-        // it: `*` is what the cors middleware echoes verbatim to every caller, so
-        // a live wildcard mount here is indistinguishable from a service that
-        // really is wide open. The parser contract is the part under test.
-        it('passes `*` through to cors, which names it to every caller', function () {
-            assert.strictEqual(parseCorsOrigin('*'), '*')
-        })
-
-        // Measured, not assumed: given a String, `cors` does no matching at all -
-        // it names that origin to every caller, and the BROWSER is what refuses a
-        // mismatch. That is safe for one origin and is exactly why a comma list is
-        // not: the same unconditional echo produces a header nobody can accept.
-        it('names the single configured origin to every caller, leaving the browser to refuse', async function () {
-            const acao = await acaoFor(EXPLORER, [EXPLORER, IOS, HOSTILE])
-            assert.strictEqual(acao[EXPLORER], EXPLORER)
-            assert.strictEqual(acao[IOS], EXPLORER)
-            assert.strictEqual(acao[HOSTILE], EXPLORER)
-        })
-
-        // The allowlist form is strictly stronger: an unlisted origin is refused at
-        // the SERVER, without a header, rather than relying on the browser.
-        it('refuses an unlisted origin server-side once the value is a list', async function () {
-            const acao = await acaoFor(`${IOS},${EXPLORER}`, [HOSTILE])
-            assert.strictEqual(acao[HOSTILE], null)
-        })
-
-        // THE REGRESSION. Before parseCorsOrigin every one of these read back the
-        // raw "a,b,c" string, including for HOSTILE.
-        it('echoes each allowlisted origin BACK TO ITSELF, never the raw list', async function () {
-            const raw  = `${IOS},${ANDROID},${EXPLORER}`
-            const acao = await acaoFor(raw, [IOS, ANDROID, EXPLORER, HOSTILE])
-
-            assert.strictEqual(acao[IOS], IOS)
-            assert.strictEqual(acao[ANDROID], ANDROID)
-            assert.strictEqual(acao[EXPLORER], EXPLORER)
-            assert.strictEqual(acao[HOSTILE], null)
-
-            // Stated separately because this is the exact shape of the old bug:
-            // a header that is present and populated and accepted by nothing.
-            for (const origin of [IOS, ANDROID, EXPLORER]) {
-                assert.notStrictEqual(acao[origin], raw,
-                    'a multi-value ACAO is rejected by every browser; the header must name one origin')
-                assert.ok(!String(acao[origin]).includes(','),
-                    'ACAO must never contain a comma')
-            }
-        })
-
-        it('fails CLOSED on `*` mixed with real origins rather than silently opening up', async function () {
-            const acao = await acaoFor(`*,${EXPLORER}`, [EXPLORER, HOSTILE])
-            assert.strictEqual(acao[EXPLORER], EXPLORER)
-            assert.strictEqual(acao[HOSTILE], null,
-                'a stray `*` in a list must not widen the grant to every origin')
-        })
-    })
-
+describe('CORS_ORIGIN allowlist parsing', function () {
     // The parser is only reached if api.js actually calls it. Asserting the source
     // line keeps a later edit from reverting to the raw env var while every
     // behavioural test above still passes against the helper in isolation.
     describe('src/api.js wiring', function () {
-
         it('mounts cors through parseCorsOrigin, never the raw env var', function () {
             const src = require('fs').readFileSync(require('path').join(__dirname, '../../src/api.js'), 'utf8')
             // The variable is read through the config home's call-time getter, so
