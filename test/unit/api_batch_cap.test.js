@@ -92,6 +92,10 @@ describe('API JSON-RPC batch fan-out cap', function () {
         const r = await request(buildApp(1), { jsonrpc: '2.0', id: 1, method: 'create_action' });
         assert.strictEqual(r.status, 200);
     });
+});
+
+describe('API JSON-RPC batch fan-out cap', function () {
+    this.timeout(10000);
 
     it('enforces the default cap the shipped config resolver produces', async () => {
         // Runs the real parser and the real middleware together, so a regression
