@@ -109,6 +109,9 @@ describe('cosigner/account deriveMuSig2P2TR2of3 (recovery)', function () {
         // The aggregate sig verifies under the address's OUTPUT key (post-tweak).
         expect(schnorr.verify(out.signature, out.msg, acct.outputXOnly)).to.equal(true);
     });
+});
+
+describe('cosigner/account deriveMuSig2P2TR2of3 (recovery)', function () {
 
     it('refuses a swapped [daemon, agent] pair rather than deriving a different 2-of-3 tree', function () {
         const agent = key(), daemon = key(), recovery = key();
@@ -147,6 +150,9 @@ describe('cosigner/account deriveMuSig2P2TR2of3 (recovery)', function () {
         expect(() => new CoSigner({ secretKey: daemon.sk, publicKeys: [daemon.pk, agent.pk], policy }))
             .to.not.throw();
     });
+});
+
+describe('cosigner/account deriveMuSig2P2TR2of3 (recovery)', function () {
 
     it('agent+recovery satisfy leaf 1 (script-path recovery if the daemon is lost)', function () {
         const agent = key(), daemon = key(), recovery = key();
