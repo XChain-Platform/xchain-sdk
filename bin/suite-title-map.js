@@ -24,8 +24,8 @@
  * WHY IT NEEDS NO DATABASE. `mocha --dry-run` loads every spec file and walks
  * the suite tree without invoking a single hook or test body. Titles are
  * declared at load time, so they are all there; nothing connects, nothing
- * writes. That is what makes this pin cheap enough to re-take at every
- * milestone instead of once.
+ * writes. That is what makes this pin cheap enough to re-take after every
+ * structural change instead of once.
  *
  * EACH SCRIPT RUNS WITH ITS OWN ARGUMENTS, unchanged apart from the reporter
  * and the dry run. That matters more than it looks: the plain `test` script
@@ -48,12 +48,10 @@
  *   node bin/suite-title-map.js --compare <pin>    diff the tree against a pin,
  *                                                  exit 1 on any difference
  *   node bin/suite-title-map.js --compare <pin> --rename-map <file>
- *                                                  the same, with the moving
- *                                                  commit's {old: new} paths
+ *                                                  the same, with the declared
+ *                                                  renames (flat {old: new}
+ *                                                  paths, or {paths, titles})
  *                                                  applied to the pin first
- *   ... --title-rename-map <file>                  also apply {newPath: {oldTitle:
- *                                                  newTitle}} for titles a rename
- *                                                  legitimately changed
  *
  ********************************************************************/
 
@@ -217,11 +215,19 @@ function expand(map, scriptName) {
 }
 
 /**
- * Pin against tree, script by script. `renames` is the moving commit's declared
- * {oldPath: newPath}; a pin entry is compared under its new name so a pure move
- * reports no difference while a move that changed a title still does.
+ * Pin against tree, script by script. `renames` is either the moving commit's
+ * flat {oldPath: newPath}, or {paths: {oldPath: newPath}, titles: {newPath:
+ * {oldTitle: newTitle}}} when a commit also renamed what a test is called. A pin
+ * entry is compared under its new name and its declared new titles, so a pure
+ * move or a declared rename reports no difference while an undeclared title
+ * change still does. A title rename is keyed by file because the same words can
+ * name different tests in two suites, and only the one that moved is declared.
  */
-function compare(pin, fresh, renames, only, titleRenames = {}) {
+function compare(pin, fresh, renames, only) {
+    const structured = renames && typeof renames.paths === 'object' && renames.paths !== null;
+    const pathRenames = structured ? renames.paths : renames;
+    const titleRenames = (structured && renames.titles) || {};
+    renames = pathRenames;
     const differences = [];
     // A run narrowed to one script compares that script only: every other
     // script in the pin is absent because it was not collected, which is not a
@@ -238,13 +244,10 @@ function compare(pin, fresh, renames, only, titleRenames = {}) {
             continue;
         }
         const mapped = {};
-        // A declared title rename is applied under the file's NEW path, so only
-        // the exact old title named there is forgiven and any other change to
-        // that file still reports.
         for (const rel of Object.keys(before)) {
-            const target = renames[rel] || rel;
-            const retitled = titleRenames[target] || {};
-            mapped[target] = before[rel].map((t) => retitled[t] || t);
+            const moved = renames[rel] || rel;
+            const retitled = titleRenames[moved] || {};
+            mapped[moved] = before[rel].map((t) => retitled[t] || t);
         }
         const files = Array.from(new Set(Object.keys(mapped).concat(Object.keys(after)))).sort();
         for (const rel of files) {
@@ -267,7 +270,6 @@ function parseArgs(argv) {
         else if (argv[i] === '--script') { opts.script = argv[i + 1]; i += 1; }
         else if (argv[i] === '--compare') { opts.compare = path.resolve(argv[i + 1]); i += 1; }
         else if (argv[i] === '--rename-map') { opts.renameMap = path.resolve(argv[i + 1]); i += 1; }
-        else if (argv[i] === '--title-rename-map') { opts.titleRenameMap = path.resolve(argv[i + 1]); i += 1; }
         else if (argv[i] === '--help' || argv[i] === '-h') opts.help = true;
     }
     return opts;
@@ -284,8 +286,7 @@ function main() {
     if (opts.compare) {
         const pin = JSON.parse(fs.readFileSync(opts.compare, 'utf8'));
         const renames = opts.renameMap ? JSON.parse(fs.readFileSync(opts.renameMap, 'utf8')) : {};
-        const titleRenames = opts.titleRenameMap ? JSON.parse(fs.readFileSync(opts.titleRenameMap, 'utf8')) : {};
-        const differences = compare(pin, map, renames, opts.script, titleRenames);
+        const differences = compare(pin, map, renames, opts.script);
         if (!differences.length) {
             console.log(`suite identity holds against ${path.relative(REPO_ROOT, opts.compare)}`
                 + `${opts.renameMap ? ' through the declared rename map' : ''}`);
