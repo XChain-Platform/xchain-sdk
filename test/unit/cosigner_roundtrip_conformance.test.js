@@ -105,6 +105,9 @@ describe('co-signer PSBT decode vs the shared roundtrip-conformance fixture', fu
             expect(r.ok).to.equal(false);
         });
     }
+});
+
+describe('co-signer PSBT decode vs the shared roundtrip-conformance fixture', function () {
 
     for (const c of fixture.aliasCases) {
         it(`resolves the on-chain alias the arbiter rewrites: ${c.name}`, function () {
@@ -133,6 +136,9 @@ describe('co-signer PSBT decode vs the shared roundtrip-conformance fixture', fu
         }).subarray(MAGIC_WORD.length);
         expect(marker.equals(P2SH_TAG) || marker.equals(P2WSH_TAG)).to.equal(true);
     });
+});
+
+describe('co-signer PSBT decode vs the shared roundtrip-conformance fixture', function () {
 
     // Derivation-drift sentinels.
 
