@@ -95,6 +95,54 @@ const VECTORS = [
       queue: repeat(11, 'DROP'),    weight: 275, over: true },
 ];
 
+function loadBatchHandler() {
+    const roots = [process.env.XCHAIN_INDEXER_PATH,
+        path.join(__dirname, '..', '..', '..', 'xchain-indexer')].filter(Boolean);
+    const root = roots.find((r) => fs.existsSync(path.join(r, 'src', 'actions', 'batch.js')));
+    if (!root) return null;
+
+    process.env.INDEXER_COIN = process.env.INDEXER_COIN || 'BTC';
+    process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
+    let Batch, IdxUtility, IdxConfig, ProtocolChanges;
+    try {
+        Batch = require(path.join(root, 'src', 'actions', 'batch.js'));
+        IdxUtility = require(path.join(root, 'src', 'utility.js'));
+        IdxConfig = require(path.join(root, 'src', 'config.js'));
+        ProtocolChanges = require(path.join(root, 'src', 'protocol_changes.js'));
+    } catch (e) {
+        return null;
+    }
+
+    const blockTime = Math.floor(Date.now() / 1000);
+    return function () {
+        const util = new IdxUtility();
+        const config = typeof IdxConfig.getConfig === 'function' ? IdxConfig.getConfig() : IdxConfig;
+        const decoderDb = { getBlockTime: async () => blockTime };
+        const indexerDb = {
+            createBatch: async () => {},
+            createActionIndex: async () => 1,
+            isActionAllowed: async () => true,
+            getTokenInfo: async () => null,
+            getAddressBalances: async () => [],
+            getTickerId: async () => null,
+            suppressIndexIdCreation: false,
+        };
+        const changes = new ProtocolChanges({ config, util, decoderDb, indexerDb });
+        const dispatched = [];
+        const handler = new Batch({
+            config, util, decoderDb, indexerDb,
+            mapper: { createMappings: async () => {} },
+            protocolChanges: {
+                isEnabled: async (name, blockIndex) =>
+                    (name === 'ISSUANCE_FEE' ? false : changes.isEnabled(name, blockIndex)),
+            },
+            processAction: async (action) => { dispatched.push(action); },
+            actionAliases: { TRANSFER: 'SEND', ADDR: 'ADDRESS', DROP: 'AIRDROP', CAST: 'BROADCAST', MSG: 'MESSAGE' },
+        });
+        return { handler, dispatched };
+    };
+}
+
 describe('BATCH_COST_WEIGHTING: batchBuilder enforces the weighted budget', function () {
 
     describe('builder half', function () {
@@ -125,6 +173,14 @@ describe('BATCH_COST_WEIGHTING: batchBuilder enforces the weighted budget', func
                 expect(message).to.match(new RegExp(String(BATCH_WEIGHT_BUDGET)));
             });
         }
+
+    });
+
+});
+
+describe('BATCH_COST_WEIGHTING: batchBuilder enforces the weighted budget', function () {
+
+    describe('builder half', function () {
 
         it('reports the COUNT, not the weight, when both bounds are broken', function () {
             // 251 SENDs weigh 251 and count 251. The count runs first on chain,
@@ -160,62 +216,23 @@ describe('BATCH_COST_WEIGHTING: batchBuilder enforces the weighted budget', func
         });
     });
 
-    /*
-     * The arbiter half. Same vectors, driven through the real handler: its
-     * weight table, its `batchWeight` arithmetic, and one full `parse()`
-     * verdict so the over-budget case is pinned as the whole-batch rejection
-     * it really is, not merely as a number.
-     */
+});
+
+/*
+ * The arbiter half. Same vectors, driven through the real handler: its
+ * weight table, its `batchWeight` arithmetic, and one full `parse()`
+ * verdict so the over-budget case is pinned as the whole-batch rejection
+ * it really is, not merely as a number.
+ */
+describe('BATCH_COST_WEIGHTING: batchBuilder enforces the weighted budget', function () {
+
     describe('arbiter half (sibling xchain-indexer checkout)', function () {
         let makeHandler = null;
 
         before(function () {
             this.timeout(30000);
-            const roots = [process.env.XCHAIN_INDEXER_PATH,
-                path.join(__dirname, '..', '..', '..', 'xchain-indexer')].filter(Boolean);
-            const root = roots.find((r) => fs.existsSync(path.join(r, 'src', 'actions', 'batch.js')));
-            if (!root) return this.skip();
-
-            process.env.INDEXER_COIN = process.env.INDEXER_COIN || 'BTC';
-            process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
-            let Batch, IdxUtility, IdxConfig, ProtocolChanges;
-            try {
-                Batch = require(path.join(root, 'src', 'actions', 'batch.js'));
-                IdxUtility = require(path.join(root, 'src', 'utility.js'));
-                IdxConfig = require(path.join(root, 'src', 'config.js'));
-                ProtocolChanges = require(path.join(root, 'src', 'protocol_changes.js'));
-            } catch (e) {
-                return this.skip();
-            }
-
-            const blockTime = Math.floor(Date.now() / 1000);
-            makeHandler = function () {
-                const util = new IdxUtility();
-                const config = typeof IdxConfig.getConfig === 'function' ? IdxConfig.getConfig() : IdxConfig;
-                const decoderDb = { getBlockTime: async () => blockTime };
-                const indexerDb = {
-                    createBatch: async () => {},
-                    createActionIndex: async () => 1,
-                    isActionAllowed: async () => true,
-                    getTokenInfo: async () => null,
-                    getAddressBalances: async () => [],
-                    getTickerId: async () => null,
-                    suppressIndexIdCreation: false,
-                };
-                const changes = new ProtocolChanges({ config, util, decoderDb, indexerDb });
-                const dispatched = [];
-                const handler = new Batch({
-                    config, util, decoderDb, indexerDb,
-                    mapper: { createMappings: async () => {} },
-                    protocolChanges: {
-                        isEnabled: async (name, blockIndex) =>
-                            (name === 'ISSUANCE_FEE' ? false : changes.isEnabled(name, blockIndex)),
-                    },
-                    processAction: async (action) => { dispatched.push(action); },
-                    actionAliases: { TRANSFER: 'SEND', ADDR: 'ADDRESS', DROP: 'AIRDROP', CAST: 'BROADCAST', MSG: 'MESSAGE' },
-                });
-                return { handler, dispatched };
-            };
+            makeHandler = loadBatchHandler();
+            if (!makeHandler) return this.skip();
         });
 
         it('mirrors the arbiter budget and weight table byte-for-byte', function () {
@@ -239,6 +256,17 @@ describe('BATCH_COST_WEIGHTING: batchBuilder enforces the weighted budget', func
                 expect(builder, 'builder weight').to.equal(v.weight);
             });
         }
+
+    });
+
+    describe('arbiter half (sibling xchain-indexer checkout)', function () {
+        let makeHandler = null;
+
+        before(function () {
+            this.timeout(30000);
+            makeHandler = loadBatchHandler();
+            if (!makeHandler) return this.skip();
+        });
 
         it('rejects the over-budget batch whole, with the string the SDK composes against', async function () {
             this.timeout(20000);
