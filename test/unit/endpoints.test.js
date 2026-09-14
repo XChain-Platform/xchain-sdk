@@ -37,6 +37,9 @@ describe('endpoints', function () {
             expect(isRegtest('')).to.equal(false);
         });
     });
+});
+
+describe('endpoints', function () {
 
     describe('coinPrefix()', function () {
         const cases = {
@@ -65,6 +68,9 @@ describe('endpoints', function () {
             expect(coinPrefix(undefined)).to.equal(null);
         });
     });
+});
+
+describe('endpoints', function () {
 
     describe('publicDefaults()', function () {
         it('non-regtest carries the /{COIN} segment on encoder + hub, bare explorer', function () {
