@@ -89,7 +89,8 @@ describe('chunkHelper @regression', function () {
             expect(codeHashOf(uni)).to.equal(expected);
         });
     });
-
+});
+describe('chunkHelper @regression', function () {
     describe('fitsSingleDeploy', function () {
         it('true for a small contract', function () {
             expect(fitsSingleDeploy(SMALL, { gasLimit: 100000 })).to.equal(true);
@@ -109,6 +110,10 @@ describe('chunkHelper @regression', function () {
             expect(fitsSingleDeploy(borderline, { gasLimit: 0, constructorParams: ['y'.repeat(200)] }),
                 'a long constructor pushes the same source over the cap').to.equal(false);
         });
+    });
+});
+describe('chunkHelper @regression', function () {
+    describe('fitsSingleDeploy', function () {
         it('budgets the DEPLOY v1 staking tail, measured against the real composer', function () {
             // A stakeable deploy serializes as DEPLOY v1
             // (VERSION|CODE_ENCODING|GAS_LIMIT|CONSTRUCTOR_PARAMS|COOLDOWN_BLOCKS|
@@ -149,7 +154,10 @@ describe('chunkHelper @regression', function () {
             expect(fitsSingleDeploy('x'.repeat(largest + 1), { gasLimit: opts.gasLimit, constructorParams: opts.constructorParams })).to.equal(true,
                 'the v0 shape still fits, which is exactly why the tail has to be budgeted');
         });
-
+    });
+});
+describe('chunkHelper @regression', function () {
+    describe('fitsSingleDeploy', function () {
         it('budgets non-ASCII constructor params in BYTES, measured against the real composer', function () {
             // The cap bounds the COMPILED PUSH and the encoder measures the action
             // string in UTF-8 bytes, so budgeting the overhead with String.length
@@ -196,7 +204,10 @@ describe('chunkHelper @regression', function () {
             expect(frontier({ gasLimit: 100000, constructorParams: ['e'.repeat(40)] })).to.be.above(largest,
                 '40 extra wire bytes must cost source headroom, or the overhead counts code units');
         });
-
+    });
+});
+describe('chunkHelper @regression', function () {
+    describe('fitsSingleDeploy', function () {
         it('does not over-reserve for an ABSENT constructor, measured against the real composer', function () {
             // FormatSelector.serialize pops TRAILING empty fields, so a DEPLOY v0
             // with no constructor params ends at GAS_LIMIT and carries no separator
@@ -235,7 +246,8 @@ describe('chunkHelper @regression', function () {
                 'a source that compiles to exactly the cap must not be chunked');
         });
     });
-
+});
+describe('chunkHelper @regression', function () {
     describe('splitCode', function () {
         it('every slice is within MAX_DEPLOYCHUNK_PART_BYTES', function () {
             for (const part of splitCode(HUGE))
@@ -253,7 +265,8 @@ describe('chunkHelper @regression', function () {
             expect(splitCode('')).to.deep.equal(['']);
         });
     });
-
+});
+describe('chunkHelper @regression', function () {
     describe('planDeploy', function () {
         it('single-shot for a small contract (no chunks)', function () {
             const plan = planDeploy(SMALL, { gasLimit: 100000 });
@@ -298,7 +311,8 @@ describe('chunkHelper @regression', function () {
             expect(() => indexerAssemble(swapped, plan.codeHash)).to.throw(/CODE_HASH/);
         });
     });
-
+});
+describe('chunkHelper @regression', function () {
     // Size invariants: the constants must keep chunked deploy encodable + capable.
     // These constants are duplicated across docs/constants.js, the decoder, the encoder
     // and here; if MAX_DEPLOYCHUNK_PART_BYTES is bumped past the action cap, every v4
