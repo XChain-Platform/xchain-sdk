@@ -23,7 +23,7 @@
  * 2^53); without this patch the encoder cannot build such a PSBT at all.
  *
  * This is the WRITE-SIDE contract, shared with
- * xchain-encoder/src/applyBufferutilsPatch.js: the patch teaches the loaded
+ * xchain-encoder/src/build/apply_bufferutils_patch.js: the patch teaches the loaded
  * modules to carry a satoshi value as either a Number (unchanged fast path)
  * or a BigInt up to 2^64-1 (the wire format's true ceiling). Readers return
  * a Number whenever the value is exactly representable and a BigInt only

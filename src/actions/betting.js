@@ -55,7 +55,7 @@ const BET_LIMITS = {
     // DECODED bytes. DETAILS rides the wire base64-encoded (+33%) and the whole
     // ACTION string shares one 8192-byte compiled ceiling with LABEL, OUTCOMES,
     // TICK and MEMO, so this cannot be raised without re-deriving the worst-case
-    // create. xchain-decoder/test/unit/betActionGate.test.js pins the arithmetic.
+    // create. xchain-decoder/test/unit/bet_action_gate.test.js pins the arithmetic.
     MAX_BET_DETAILS_LENGTH:    4096,
     MAX_BET_DETAILS_DEPTH:     8,
     MAX_BETS_PER_FEED:         10000,
