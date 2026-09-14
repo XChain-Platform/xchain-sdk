@@ -42,6 +42,9 @@ describe('cosigner/account deriveMuSig2P2TR', function () {
         const walletStyle = bitcoin.payments.p2tr({ pubkey: aggXOnly });
         expect(acct.address).to.equal(walletStyle.address);
     });
+});
+
+describe('cosigner/account deriveMuSig2P2TR', function () {
 
     it('the co-signer + agent produce a VALID key-path spending signature for the derived address', function () {
         // End-to-end proof that the no-tweak scheme is on-chain spendable: the
