@@ -45,18 +45,18 @@ function firstConsensusError(code, opts) {
     return errs.length ? errs[0] : null;
 }
 
-describe('vendored lint_core: LINT_GLOBAL_ALIAS rules', function () {
+const aliased = {
+    'sloppy-mode this reading Promise':       ['banned-async', 'module.exports = function(){ return this.Promise; };'],
+    'sloppy-mode this reading WebAssembly':   ['banned-wasm',  'module.exports = function(){ return this.WebAssembly; };'],
+    'globalThis self-reference to Promise':   ['banned-async', 'module.exports = function(){ return globalThis.globalThis.Promise; };'],
+    'globalThis self-reference to wasm':      ['banned-wasm',  'module.exports = function(){ return globalThis["globalThis"].WebAssembly; };'],
+    'this-rooted globalThis chain':           ['banned-async', 'module.exports = function(){ return this.globalThis.Promise; };'],
+    'sloppy-mode this reading Math':          ['banned-math',  'module.exports = function(){ return this.Math.pow(2, 3); };'],
+    'globalThis self-reference to Math':      ['banned-math',  'module.exports = function(){ return globalThis.globalThis.Math.log(2); };'],
+    'this reading Math by computed key':      ['banned-math',  'module.exports = function(){ return this["Math"].sqrt(4); };']
+};
 
-    const aliased = {
-        'sloppy-mode this reading Promise':       ['banned-async', 'module.exports = function(){ return this.Promise; };'],
-        'sloppy-mode this reading WebAssembly':   ['banned-wasm',  'module.exports = function(){ return this.WebAssembly; };'],
-        'globalThis self-reference to Promise':   ['banned-async', 'module.exports = function(){ return globalThis.globalThis.Promise; };'],
-        'globalThis self-reference to wasm':      ['banned-wasm',  'module.exports = function(){ return globalThis["globalThis"].WebAssembly; };'],
-        'this-rooted globalThis chain':           ['banned-async', 'module.exports = function(){ return this.globalThis.Promise; };'],
-        'sloppy-mode this reading Math':          ['banned-math',  'module.exports = function(){ return this.Math.pow(2, 3); };'],
-        'globalThis self-reference to Math':      ['banned-math',  'module.exports = function(){ return globalThis.globalThis.Math.log(2); };'],
-        'this reading Math by computed key':      ['banned-math',  'module.exports = function(){ return this["Math"].sqrt(4); };']
-    };
+describe('vendored lint_core: LINT_GLOBAL_ALIAS rules', function () {
 
     for (const [label, [rule, code]] of Object.entries(aliased)) {
         it('flags ' + label + ' by default (author-facing linter)', function () {
@@ -70,6 +70,10 @@ describe('vendored lint_core: LINT_GLOBAL_ALIAS rules', function () {
                 'below the activation the historical verdict must be reproduced: ' + code);
         });
     }
+
+});
+
+describe('vendored lint_core: LINT_GLOBAL_ALIAS rules', function () {
 
     it('the detectors take the epoch flag directly', function () {
         const promise = 'module.exports = function(){ return this.Promise; };';
