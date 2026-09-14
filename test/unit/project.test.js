@@ -69,6 +69,14 @@ describe('ProjectHelpers', function () {
             expect(r.actionString).to.equal('LIST|0|1|our official tokens|AAA|BBB');
         });
     });
+});
+
+describe('ProjectHelpers', function () {
+    let project, sdk;
+    beforeEach(function () {
+        project = new ProjectHelpers();
+        sdk = new XChainSDK({ network: 'bitcoin-regtest' });
+    });
 
     describe('rosterEditParams()', function () {
         it('builds an ADD edit (EDIT=1) from an existing roster', function () {
@@ -108,6 +116,14 @@ describe('ProjectHelpers', function () {
             expect(() => project.attestRosterParams({ coin: 'BTC', issueActionIndex: 2 })).to.throw(/listActionIndex and issueActionIndex/);
             expect(() => project.attestRosterParams({ coin: 'BTC', listActionIndex: 1 })).to.throw(/listActionIndex and issueActionIndex/);
         });
+    });
+});
+
+describe('ProjectHelpers', function () {
+    let project, sdk;
+    beforeEach(function () {
+        project = new ProjectHelpers();
+        sdk = new XChainSDK({ network: 'bitcoin-regtest' });
     });
 
     describe('LIST ITEM rest-field (serialization regression)', function () {
