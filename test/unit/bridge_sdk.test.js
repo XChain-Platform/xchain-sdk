@@ -275,6 +275,10 @@ describe('bridge: workflow recipes', () => {
             /needs a bridged tick/);
     });
 
+});
+
+describe('bridge: workflow recipes', () => {
+
     it('setTokenBridgeability pins ISSUE v7, upper-cases the chain list and refuses an unknown coin', async () => {
         let { flows, calls } = stubWorkflows('regtest');
         await flows.setTokenBridgeability('wif', { tick: 'FUFU', bridgeChains: 'doge, ltc', minDepth: '3' });
