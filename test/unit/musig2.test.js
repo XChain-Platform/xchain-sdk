@@ -13,19 +13,14 @@ const crypto = require('crypto');
 const MuSig2 = require('../../src/cosigner/musig2.js');
 const { secp256k1, schnorr } = require('@noble/curves/secp256k1');
 
-
 // Convert hex helper
 const h = (s) => Buffer.from(s, 'hex');
 const toHex = (b) => Buffer.from(b).toString('hex');
 
+let musig;
+function resetMuSig2() { musig = new MuSig2(); }
 
-describe('MuSig2', function () {
-
-    let musig;
-
-    beforeEach(function () {
-        musig = new MuSig2();
-    });
+describe('MuSig2', function () { beforeEach(resetMuSig2);
 
     /*
      *  Structure / input validation
@@ -76,7 +71,10 @@ describe('MuSig2', function () {
             // Omitting the sessionId leaves entropy to the library; nothing to reuse.
             expect(() => musig.generateNonce({ publicKey: pk, secretKey: sk, msg: msgB })).to.not.throw();
         });
-
+    });
+});
+describe('MuSig2', function () { beforeEach(resetMuSig2);
+    describe('input validation', function () {
         it('generateNonce refuses a msg-less sessionId repeat, and the repeat would have re-issued one secret nonce', function () {
             // Round 1 normally runs BEFORE the message is known, so a msg-less
             // repeat was the ordinary shape the old inputs-digest guard waved
@@ -130,7 +128,8 @@ describe('MuSig2', function () {
             expect(() => musig.aggregateSignatures([h('ab'), h('cd')], {})).to.throw(/must be 32 bytes/);
         });
     });
-
+});
+describe('MuSig2', function () { beforeEach(resetMuSig2);
     /*
      *  2-of-2 roundtrip: the core assertion that the aggregated
      *  signature verifies under BIP340 Schnorr against the aggregated
@@ -170,7 +169,8 @@ describe('MuSig2', function () {
             expect(schnorr.verify(sig, msg, ctx.xOnlyPubkey)).to.equal(true);
         });
     });
-
+});
+describe('MuSig2', function () { beforeEach(resetMuSig2);
     /*
      *  3-of-3 roundtrip: same but with one more signer, proving the
      *  path scales beyond the 2-signer base case.
@@ -194,7 +194,8 @@ describe('MuSig2', function () {
             expect(schnorr.verify(sig, msg, ctx.xOnlyPubkey)).to.equal(true);
         });
     });
-
+});
+describe('MuSig2', function () { beforeEach(resetMuSig2);
     /*
      *  Cross-process 2-of-2 via deterministicSign: the keystone for a
      *  remote co-signer. Signer B runs on a SEPARATE MuSig2 instance and
@@ -236,7 +237,10 @@ describe('MuSig2', function () {
             const sig = agent.aggregateSignatures([sA, det.sig], session);
             expect(schnorr.verify(sig, msg, ctx.xOnlyPubkey)).to.equal(true);
         });
-
+    });
+});
+describe('MuSig2', function () { beforeEach(resetMuSig2);
+    describe('cross-process 2-of-2 (deterministicSign)', function () {
         it('accepts a pre-aggregated aggOtherNonce equivalently to otherPublicNonces', function () {
             const agent    = new MuSig2();
             const cosigner = new MuSig2();
@@ -292,7 +296,8 @@ describe('MuSig2', function () {
                 .to.throw(/msg must be 32 bytes/);
         });
     });
-
+});
+describe('MuSig2', function () { beforeEach(resetMuSig2);
     /*
      *  Partial-sig verify + tamper detection.
      */
@@ -339,7 +344,9 @@ describe('MuSig2', function () {
             })).to.equal(false);
         });
     });
+});
 
+describe('MuSig2', function () { beforeEach(resetMuSig2);
     /*
      *  Sort order: BIP327 specifies a canonical lexicographic order.
      *  sortKeys must be deterministic.
