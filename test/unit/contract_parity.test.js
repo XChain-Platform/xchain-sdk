@@ -101,6 +101,10 @@ describe('contract-lint parity + drift', function () {
         }
     });
 
+});
+
+describe('contract-lint parity + drift', function () {
+
     describe('verdict corpus: sdk.validateContract', function () {
         let sdk;
         before(function () { sdk = new XChainSDK({ network: 'bitcoin-regtest', noHub: true }); });
@@ -134,6 +138,10 @@ describe('contract-lint parity + drift', function () {
                 assert.strictEqual(sdk.validateContract(fx.code).valid, false, 'false green on ' + fx.name);
         });
     });
+
+});
+
+describe('contract-lint parity + drift', function () {
 
     describe('Move 2: logic-level rules (advisory, never deploy-blocking)', function () {
         const { CONSENSUS_RULES } = require('../../src/contract/lint_core.js');
@@ -186,6 +194,10 @@ describe('contract-lint parity + drift', function () {
         });
     });
 
+});
+
+describe('contract-lint parity + drift', function () {
+
     describe('back-compat: ContractUtils.validate() shape', function () {
         const utils = new ContractUtils();
         it('good → { valid:true }', function () {
@@ -198,6 +210,10 @@ describe('contract-lint parity + drift', function () {
             assert.ok(r.error.includes('Math.pow'));
         });
     });
+
+});
+
+describe('contract-lint parity + drift', function () {
 
     describe('the four shipped templates lint clean (acorn-coverable rules)', function () {
         const haveTemplates = fs.existsSync(CONTRACTS_DIR);
