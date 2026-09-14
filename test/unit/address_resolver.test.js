@@ -89,7 +89,9 @@ describe('AddressResolver', function () {
             expect(calls).to.equal(1);
         });
     });
+});
 
+describe('AddressResolver', function () {
     describe('resolveActionParams()', function () {
 
         // This test used to assert the OPPOSITE, and that is how the
@@ -120,7 +122,11 @@ describe('AddressResolver', function () {
             const out = await r.resolveActionParams('SEND', { destination: [ADDR, ADDR2] });
             expect(out.destination).to.deep.equal([ADDR, ADDR2]);
         });
+    });
+});
 
+describe('AddressResolver', function () {
+    describe('resolveActionParams()', function () {
         it('does not mutate the caller params object', async function () {
             const r = new AddressResolver(makeSdk({}, addressStub({ [ADDR]: 57 })));
             const input = { destination: ADDR };
