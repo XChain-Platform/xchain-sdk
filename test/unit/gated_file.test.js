@@ -61,6 +61,11 @@ describe('GatedFileUtils', function () {
             expect(decrypted.equals(plaintext)).to.equal(true);
         });
     });
+});
+
+describe('GatedFileUtils', function () {
+    let g;
+    beforeEach(function () { g = new GatedFileUtils(); });
 
     describe('encryptPack', function () {
         it('encrypts N plaintexts under one shared key', function () {
@@ -97,6 +102,11 @@ describe('GatedFileUtils', function () {
             expect(g.decryptFileBytes(ciphertexts[0], key).toString()).to.equal('only one');
         });
     });
+});
+
+describe('GatedFileUtils', function () {
+    let g;
+    beforeEach(function () { g = new GatedFileUtils(); });
 
     describe('verifyKey', function () {
         it('returns true for matching key + hash', function () {
@@ -116,6 +126,11 @@ describe('GatedFileUtils', function () {
             expect(g.verifyKey(Buffer.alloc(16), keyHash)).to.equal(false);
         });
     });
+});
+
+describe('GatedFileUtils', function () {
+    let g;
+    beforeEach(function () { g = new GatedFileUtils(); });
 
     describe('decryptFileBytes - negative paths', function () {
         it('throws on wrong key (GCM auth fail)', function () {
@@ -152,6 +167,11 @@ describe('GatedFileUtils', function () {
                 .with.property('code', 'INVALID_CIPHERTEXT');
         });
     });
+});
+
+describe('GatedFileUtils', function () {
+    let g;
+    beforeEach(function () { g = new GatedFileUtils(); });
 
     describe('serializeKeyPayload / parseKeyPayload', function () {
         it('round-trips a single-key payload from a hash → key map', function () {
@@ -197,6 +217,14 @@ describe('GatedFileUtils', function () {
             expect(buf[0]).to.equal(0x01);
             expect(buf.subarray(1).equals(key)).to.equal(true);
         });
+    });
+});
+
+describe('GatedFileUtils', function () {
+    let g;
+    beforeEach(function () { g = new GatedFileUtils(); });
+
+    describe('serializeKeyPayload / parseKeyPayload', function () {
 
         it('rejects a hash → key map where the hash does not match the key', function () {
             let { key } = g.generateKey();
@@ -240,6 +268,11 @@ describe('GatedFileUtils', function () {
             expect(parsed[0].equals(key)).to.equal(true);
         });
     });
+});
+
+describe('GatedFileUtils', function () {
+    let g;
+    beforeEach(function () { g = new GatedFileUtils(); });
 
     describe('pack end-to-end flow', function () {
         it('encrypt → serialize → parse → decrypt all members from one key entry', function () {
@@ -268,6 +301,11 @@ describe('GatedFileUtils', function () {
             }
         });
     });
+});
+
+describe('GatedFileUtils', function () {
+    let g;
+    beforeEach(function () { g = new GatedFileUtils(); });
 
     // serializeKeyPayload: object-map input + guards
     describe('serializeKeyPayload (object-map + guards)', function () {
