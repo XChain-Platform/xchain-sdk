@@ -77,6 +77,10 @@ describe('R2b: per-ACTION cap precedence on the compose side', function () {
         });
     });
 
+});
+
+describe('R2b: per-ACTION cap precedence on the compose side', function () {
+
     describe('BatchBuilder._validate (compose-time params)', function () {
 
         it('names the cap whose action appears FIRST when two are broken', function () {
