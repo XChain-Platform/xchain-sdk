@@ -70,16 +70,24 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `07663d1e`
+**Pins taken at indexer commit:** `0e53e6c7`
 
-(Re-anchored 2026-09-14, fifth pass, by the dispenser/dispense split review below. `07663d1e`
+(Re-anchored 2026-09-14, fifth pass, by the dispenser/dispense split review below. `0e53e6c7`
 is the indexer commit that moves the DISPENSER and DISPENSE entries to `<name>/index.js`
-beside the parts its two parents `ea842d00` and `4ca6952b` split out of them, with no flat
+beside the parts its two parents `d1c2105c` and `e2748a6f` split out of them, with no flat
 file left, so the last two flat rows become directory rows and all eleven are now hashed
-over every part. The other nine rows are byte-identical at `71f3d080` and at `07663d1e`
-(those three commits touch no other mapped directory). The indexer lands before this map. A
-checkout without `07663d1e` reports both rows as flat handlers turned directories, and the
-answer is the missing indexer commit, never a re-pin back. `71f3d080` stays reachable.)
+over every part. The other nine rows are byte-identical at `71f3d080` and at `0e53e6c7`
+(the eight commits between `71f3d080` and the parent `4759f9eb` touch nothing under
+`src/actions/`, and these three touch no other mapped directory). The indexer lands before
+this map. A checkout without `0e53e6c7` reports both rows as flat handlers turned
+directories, and the answer is the missing indexer commit, never a re-pin back. `71f3d080`
+stays reachable.)
+
+(Anchor note. This pass was first written against a branch based on `71f3d080`. Its three
+commits were re-picked onto the landed tip `4759f9eb` before they were pushed, with
+identical patches and identical `dispenser/`, `dispense/` and `handler_wiring.js` bytes, so
+the anchor, both pins and the verification below were re-derived from the re-picked tree.
+Only the three commit ids above are ever cited.)
 
 (Earlier note. Re-anchored 2026-09-14, fourth pass, by the handler-split review below. `71f3d080` is the
 indexer commit that finishes the split of nine handlers into directories and points every
@@ -251,7 +259,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 07663d1e..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 0e53e6c7..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -353,14 +361,14 @@ read, and what it changed on the client side, goes here.
 
 Baseline pins were the flat blobs `39a9c0ee` (`dispenser.js`) and `72ec1eca` (`dispense.js`),
 re-read unchanged at `71f3d080`; the new pins are directory digests, hashed from the committed
-indexer tree at `07663d1e` with its handlers clean, by
+indexer tree at `0e53e6c7` with its handlers clean, by
 `node bin/preflight_handler_dirs.js <indexer> src/actions/<name>/` (never by hand), and each
 recomputed independently with the `find | sort | shasum` pipeline above to the same value. Range
 read: `git -C ../xchain-indexer log --name-status 71f3d080..HEAD -- src/actions/` (a log, so the
 anchor-consistency check still finds exactly one review command), which is three commits and
-touches no other mapped directory: `ea842d00` splits DISPENSER into context, validate,
-validate_format, fees, controller_guard and settle parts, `4ca6952b` splits DISPENSE into
-context, pricing, pricing_paths and settle parts, and `07663d1e` moves both entries to
+touches no other mapped directory: `d1c2105c` splits DISPENSER into context, validate,
+validate_format, fees, controller_guard and settle parts, `e2748a6f` splits DISPENSE into
+context, pricing, pricing_paths and settle parts, and `0e53e6c7` moves both entries to
 `<name>/index.js` and points every requirer at them.
 
 **What moved: the file layout, and the naming of steps that were already inline.** The move
@@ -374,13 +382,14 @@ object the three pricing paths now own, and the caps flag-day is reached through
 or error string changed.
 
 Machine-verified. Both handlers were loaded through the loader's own `handler_wiring.js`
-require at `71f3d080`, at `4ca6952b` and at `07663d1e`, and their prototype surfaces compared
+require at `4759f9eb`, at `e2748a6f` and at `0e53e6c7`, and their prototype surfaces compared
 member by member (descriptor, value type, function name and arity): class name and
 constructor arity are unchanged, no member is lost, DISPENSER gains 20 and DISPENSE 24 named
 step methods, every one non-enumerable as a class method is, and the split and moved trees
-are identical. The indexer unit tier reads 9607 tests, 9428 passing, 179 pending, 0 failing
-at both `71f3d080` and `07663d1e` with zero titles whose outcome changed (431 passing and 2
-pending across the 39 unit files that require or read either handler, either side), and consensus identity
+are identical (`4759f9eb` is the parent the three commits landed on, and its two flat
+handlers are the `71f3d080` blobs). The indexer unit tier reads the same 9585 titles at both
+`4759f9eb` and `0e53e6c7` with no outcome moved by these commits (388 passing and 2 pending
+across the 29 unit files that require or read either handler, either side), and consensus identity
 is unmoved (`55891dfd` armed-map fingerprint, `26ba9cce` rules digest, 33 gates resolved, 0
 absent).
 
