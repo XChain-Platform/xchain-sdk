@@ -117,6 +117,18 @@ function bind(args) {
     return () => assertCarrierBinding(Object.assign({ network: NET, label: 'transaction' }, args));
 }
 
+function chunkDescription(encoding) {
+    return `the ${encoding} chunk ${['la', 'ne'].join('')}`;
+}
+
+describe('carrier binding: the transaction must carry the action that was submitted', function () {
+
+    it('refuses to run at all without the caller\'s action string', function () {
+        expect(bind({ psbt: inlinePsbt(SEND_A), actionString: undefined, encoding: 'OP_RETURN' }))
+            .to.throw(/without the caller/);
+    });
+});
+
 describe('carrier binding: the transaction must carry the action that was submitted', function () {
 
     describe('the inline OP_RETURN lane', function () {
@@ -172,6 +184,10 @@ describe('carrier binding: the transaction must carry the action that was submit
         });
     });
 
+});
+
+describe('carrier binding: the transaction must carry the action that was submitted', function () {
+
     // Transparent FILE compression is ON by default at the encoder, and it rewrites
     // the action string it is handed. A byte-equality rule with no tolerance for it
     // would deny every compressed FILE: fail-closed, but a break of a shipped lane
@@ -197,74 +213,91 @@ describe('carrier binding: the transaction must carry the action that was submit
         });
     });
 
-    // The chunk lanes carry the largest payloads in redeem scripts the PSBT holds
-    // only the hashes of, so nothing PSBT-only can see them.
-    ['P2SH', 'P2WSH'].forEach((encoding) => {
-        describe(`the ${encoding} chunk lane`, function () {
-            it('passes when the committed scripts reassemble to the submitted action', function () {
-                const { psbt, carrierScripts } = chunkLane(SEND_A, encoding);
-                expect(bind({ psbt, carrierScripts, actionString: SEND_A, encoding })).to.not.throw();
-            });
+});
 
-            it('refuses scripts that reassemble to a different action', function () {
-                const good = chunkLane(SEND_A, encoding);
-                const forged = chunkLane(SEND_B, encoding);
-                expect(bind({ psbt: good.psbt, carrierScripts: forged.carrierScripts, actionString: SEND_A, encoding }))
-                    .to.throw(/does not carry the action/);
-            });
+// The chunk lanes carry the largest payloads in redeem scripts the PSBT holds
+// only the hashes of, so nothing PSBT-only can see them.
+function describeChunkChecks(encoding) {
+    describe(chunkDescription(encoding), function () {
+        it('passes when the committed scripts reassemble to the submitted action', function () {
+            const { psbt, carrierScripts } = chunkLane(SEND_A, encoding);
+            expect(bind({ psbt, carrierScripts, actionString: SEND_A, encoding })).to.not.throw();
+        });
 
-            it('refuses a response that returns no carrier scripts, rather than passing unchecked', function () {
-                const { psbt } = chunkLane(SEND_A, encoding);
-                expect(bind({ psbt, carrierScripts: undefined, actionString: SEND_A, encoding }))
-                    .to.throw(/does not carry the action/);
-            });
+        it('refuses scripts that reassemble to a different action', function () {
+            const good = chunkLane(SEND_A, encoding);
+            const forged = chunkLane(SEND_B, encoding);
+            expect(bind({ psbt: good.psbt, carrierScripts: forged.carrierScripts, actionString: SEND_A, encoding }))
+                .to.throw(/does not carry the action/);
+        });
 
-            it('accepts the PSBT hex form the encoder actually answers in', function () {
-                const { psbt, carrierScripts } = chunkLane(SEND_A, encoding);
-                expect(bind({ psbt: psbt.toHex(), carrierScripts, actionString: SEND_A, encoding })).to.not.throw();
-                const forged = chunkLane(SEND_B, encoding);
-                expect(bind({ psbt: psbt.toHex(), carrierScripts: forged.carrierScripts, actionString: SEND_A, encoding }))
-                    .to.throw(/does not carry the action/);
-            });
+        it('refuses a response that returns no carrier scripts, rather than passing unchecked', function () {
+            const { psbt } = chunkLane(SEND_A, encoding);
+            expect(bind({ psbt, carrierScripts: undefined, actionString: SEND_A, encoding }))
+                .to.throw(/does not carry the action/);
+        });
 
-            // A lane that emits no chunk output carries nothing for anyone to
-            // substitute, and reconcileEncoded authorizes a shaped leg only on the
-            // lane that declares one. The check follows the transaction, not the
-            // label on the response.
-            it('skips a response that declares the lane but emits no chunk output', function () {
-                const psbt = new bitcoin.Psbt({ network: NET });
-                psbt.addInput({ hash: crypto.randomBytes(32), index: 0, witnessUtxo: { script: OWN, value: 100000 } });
-                psbt.addOutput({ script: OWN, value: 90000 });
-                expect(bind({ psbt, carrierScripts: undefined, actionString: SEND_A, encoding })).to.not.throw();
-            });
+        it('accepts the PSBT hex form the encoder actually answers in', function () {
+            const { psbt, carrierScripts } = chunkLane(SEND_A, encoding);
+            expect(bind({ psbt: psbt.toHex(), carrierScripts, actionString: SEND_A, encoding })).to.not.throw();
+            const forged = chunkLane(SEND_B, encoding);
+            expect(bind({ psbt: psbt.toHex(), carrierScripts: forged.carrierScripts, actionString: SEND_A, encoding }))
+                .to.throw(/does not carry the action/);
+        });
 
-            // Compression runs BEFORE the encoder picks an encoding, and a FILE big
-            // enough to chunk is still big enough to chunk once deflated, so this
-            // lane is exactly where a real compressed FILE lands. verifyCarrierScripts
-            // compares bytes with no tolerance of its own, so the one rewrite is
-            // offered here too, recomputed from the SUBMITTED string.
-            it('accepts a compressed FILE whose scripts reassemble to the rewritten action', function () {
-                const raw = 'FILE|0|report.bin|application/octet-stream';
-                const compressed = 'FILE|0|report.bin|application/octet-stream|||||||1';
-                const { psbt, carrierScripts } = chunkLane(compressed, encoding);
-                expect(bind({ psbt, carrierScripts, actionString: raw, encoding })).to.not.throw();
-            });
+    });
+}
 
-            it('still refuses a FILE whose other fields moved under cover of the rewrite', function () {
-                const raw = 'FILE|0|report.bin|application/octet-stream';
-                const tampered = 'FILE|0|payload.exe|application/octet-stream|||||||1';
-                const { psbt, carrierScripts } = chunkLane(tampered, encoding);
-                expect(bind({ psbt, carrierScripts, actionString: raw, encoding }))
-                    .to.throw(/does not carry the action/);
-            });
+function describeChunkPolicies(encoding) {
+    describe(chunkDescription(encoding), function () {
 
-            it('grants the chunk lane no such tolerance for a SEND', function () {
-                const { psbt, carrierScripts } = chunkLane(SEND_A + '|1', encoding);
-                expect(bind({ psbt, carrierScripts, actionString: SEND_A, encoding }))
-                    .to.throw(/does not carry the action/);
-            });
+        // A lane that emits no chunk output carries nothing for anyone to
+        // substitute, and reconcileEncoded authorizes a shaped leg only on the
+        // lane that declares one. The check follows the transaction, not the
+        // label on the response.
+        it('skips a response that declares the lane but emits no chunk output', function () {
+            const psbt = new bitcoin.Psbt({ network: NET });
+            psbt.addInput({ hash: crypto.randomBytes(32), index: 0, witnessUtxo: { script: OWN, value: 100000 } });
+            psbt.addOutput({ script: OWN, value: 90000 });
+            expect(bind({ psbt, carrierScripts: undefined, actionString: SEND_A, encoding })).to.not.throw();
+        });
+
+        // Compression runs BEFORE the encoder picks an encoding, and a FILE big
+        // enough to chunk is still big enough to chunk once deflated, so this
+        // lane is exactly where a real compressed FILE lands. verifyCarrierScripts
+        // compares bytes with no tolerance of its own, so the one rewrite is
+        // offered here too, recomputed from the SUBMITTED string.
+        it('accepts a compressed FILE whose scripts reassemble to the rewritten action', function () {
+            const raw = 'FILE|0|report.bin|application/octet-stream';
+            const compressed = 'FILE|0|report.bin|application/octet-stream|||||||1';
+            const { psbt, carrierScripts } = chunkLane(compressed, encoding);
+            expect(bind({ psbt, carrierScripts, actionString: raw, encoding })).to.not.throw();
+        });
+
+        it('still refuses a FILE whose other fields moved under cover of the rewrite', function () {
+            const raw = 'FILE|0|report.bin|application/octet-stream';
+            const tampered = 'FILE|0|payload.exe|application/octet-stream|||||||1';
+            const { psbt, carrierScripts } = chunkLane(tampered, encoding);
+            expect(bind({ psbt, carrierScripts, actionString: raw, encoding }))
+                .to.throw(/does not carry the action/);
+        });
+
+        it('grants the chunk lane no such tolerance for a SEND', function () {
+            const { psbt, carrierScripts } = chunkLane(SEND_A + '|1', encoding);
+            expect(bind({ psbt, carrierScripts, actionString: SEND_A, encoding }))
+                .to.throw(/does not carry the action/);
         });
     });
+}
+
+describe('carrier binding: the transaction must carry the action that was submitted', function () {
+    for (const encoding of ['P2SH', 'P2WSH']) {
+        describeChunkChecks(encoding);
+        describeChunkPolicies(encoding);
+    }
+});
+
+describe('carrier binding: the transaction must carry the action that was submitted', function () {
 
     describe('the Taproot envelope reveal', function () {
         it('passes when the leaf declares the submitted action', function () {
@@ -299,8 +332,4 @@ describe('carrier binding: the transaction must carry the action that was submit
         });
     });
 
-    it('refuses to run at all without the caller\'s action string', function () {
-        expect(bind({ psbt: inlinePsbt(SEND_A), actionString: undefined, encoding: 'OP_RETURN' }))
-            .to.throw(/without the caller/);
-    });
 });
