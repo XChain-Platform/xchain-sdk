@@ -49,9 +49,11 @@ try {
 
 // Same dual resolution for the shared cap-table predicate: the ceiling gate below
 // must apply the evaluator's own notion of an enforceable cap, not a second one.
+// The installed form names the evaluator's older path, which every published SDK
+// release still resolves, so this package keeps working against 0.18.0 as well.
 let hasEnforceableCap;
 try {
-    ({ hasEnforceableCap } = require('@dankest-llc/xchain-sdk/src/cosigner/policy_evaluator.js'));
+    ({ hasEnforceableCap } = require('@dankest-llc/xchain-sdk/src/cosigner/policyEvaluator.js'));
 } catch {
     ({ hasEnforceableCap } = require('../src/cosigner/policy_evaluator.js'));
 }
