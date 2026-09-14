@@ -42,6 +42,10 @@ describe('applyBufferutilsPatch', function () {
         assert.strictEqual(typeof new bufferutils.BufferReader(buf).readUInt64(), 'bigint');
     });
 
+});
+
+describe('applyBufferutilsPatch', function () {
+
     it('module-level helpers accept the full u64 range and reject one past it', function () {
         const buf = Buffer.alloc(8);
         bufferutils.writeUInt64LE(buf, 0xffffffffffffffffn, 0);
@@ -77,6 +81,10 @@ describe('applyBufferutilsPatch', function () {
                 'a native BigInt conversion error escaped for ' + String(value));
         }
     });
+
+});
+
+describe('applyBufferutilsPatch', function () {
 
     // Fee-accounting wrapper: bitcoinjs-lib's stock cache getter tests __FEE /
     // __FEE_RATE for truthiness, so a primed 0 (zero fee, or any fee under
