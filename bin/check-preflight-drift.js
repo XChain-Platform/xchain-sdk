@@ -15,6 +15,9 @@
  *
  * SKIPS (exit 0) when no indexer checkout is present, so single-repo
  * CI stays green; the sibling CI job (which checks out both) enforces.
+ * Under XCHAIN_REQUIRE_SIBLINGS=1 that skip becomes a finding, so a sibling
+ * job whose checkout step was dropped fails loudly instead of passing having
+ * compared nothing.
  *
  * Exit 0 = in sync (or skipped); exit 1 = drift.
  *
@@ -56,12 +59,19 @@ let OUT = CONSOLE_SINK;
 function say(...a) { OUT.log(...a); }
 function warn(...a) { OUT.error(...a); }
 
+/* Where the gate looks for the handlers, in order.
+ *
+ * An explicit XCHAIN_INDEXER_PATH is AUTHORITATIVE: falling back to the sibling when the
+ * named path does not resolve would check a different tree than the run declared, and
+ * report in-sync about handlers nobody asked about.
+ */
+function indexerRootCandidates() {
+    if (process.env.XCHAIN_INDEXER_PATH) return [process.env.XCHAIN_INDEXER_PATH];
+    return [path.join(__dirname, '..', '..', 'xchain-indexer')];
+}
+
 function resolveIndexerRoot() {
-    const candidates = [
-        process.env.XCHAIN_INDEXER_PATH,
-        path.join(__dirname, '..', '..', 'xchain-indexer'),
-    ].filter(Boolean);
-    for (const root of candidates) {
+    for (const root of indexerRootCandidates()) {
         if (fs.existsSync(path.join(root, 'src', 'actions'))) return root;
     }
     return null;
@@ -565,6 +575,17 @@ function evaluate() {
 
     const root = resolveIndexerRoot();
     if (!root) {
+        // The skip is for a standalone SDK clone. A run that declared the sibling supplied
+        // (XCHAIN_REQUIRE_SIBLINGS=1) gets a finding instead: there, an unresolved checkout
+        // means the checkout step was dropped, and this gate reporting exit 0 is exactly how
+        // a sibling job regresses to green having compared nothing.
+        if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1') {
+            warn('drift-gate: FAIL: XCHAIN_REQUIRE_SIBLINGS=1 but no xchain-indexer checkout '
+                + 'resolved. Tried:\n  ' + indexerRootCandidates().join('\n  ')
+                + '\n  Each must hold src/actions/. Check the sibling out (or set '
+                + 'XCHAIN_INDEXER_PATH), rather than letting the mapped handlers go uncompared.');
+            return 1;
+        }
         say('drift-gate: no xchain-indexer checkout; skipping the sibling checks (sibling CI enforces).');
         return failedEarly;
     }
@@ -717,7 +738,7 @@ function main(argv, evaluateFn) {
 
 if (require.main === module) main();
 module.exports = {
-    resolveIndexerRoot, parseMap, parseAnchor, parseStringSet, parseStringList, parseRegexLiteral,
+    resolveIndexerRoot, indexerRootCandidates, parseMap, parseAnchor, parseStringSet, parseStringList, parseRegexLiteral,
     deriveFeeChargingActions, checkAnchorConsistency, checkFeeQuoteSeam,
     checkConfigConstants, checkRegexMirrors, checkListMirrors, checkGasSchedules, evaluate, main,
 };

@@ -109,9 +109,13 @@ jobs:
           ssh-key: ${{ secrets.XCHAIN_INDEXER_DEPLOY_KEY }}
           path: xchain-indexer
 
+      # REQUIRE_SIBLINGS because the step above checks the sibling out: if that
+      # checkout is ever dropped or renamed, the gate must fail rather than skip
+      # its way to a green job having compared no handler at all.
       - name: Pre-flight <-> handler drift gate
         env:
           XCHAIN_INDEXER_PATH: ${{ github.workspace }}/xchain-indexer
+          XCHAIN_REQUIRE_SIBLINGS: "1"
         run: node xchain-sdk/bin/check-preflight-drift.js
 
   # Coverage ratchet: re-run the unit suite under c8 and fail if line or

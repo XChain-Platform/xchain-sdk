@@ -110,7 +110,8 @@ run_tier "drift: contract abi-core byte-identity" sync_abi_core_check
 run_tier "drift: explorer route contract" \
   env XCHAIN_REQUIRE_SIBLINGS=1 npx mocha test/unit/explorer_route_contract.test.js
 run_tier "drift: pre-flight <-> handler gate" \
-  env XCHAIN_INDEXER_PATH="$SIB/xchain-indexer" node bin/check-preflight-drift.js
+  env XCHAIN_INDEXER_PATH="$SIB/xchain-indexer" XCHAIN_REQUIRE_SIBLINGS=1 \
+  node bin/check-preflight-drift.js
 
 # --- job: coverage (needs: ci) ----------------------------------------------
 # Same sibling roster as the ci job (checked out again on GitHub, already

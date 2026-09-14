@@ -90,6 +90,40 @@ describe('drift gate run modes (§8.5)', function () {
         expect(out.split('\n').length, '--verdict stays short').to.be.lessThan(8);
     });
 
+    /* The no-checkout branch, which is the one a dropped CI checkout step lands on.
+     *
+     * Skipping there is right for a standalone SDK clone and wrong for a job that declared
+     * the sibling supplied: the gate would exit 0 having compared no handler at all, which
+     * is how a cross-repo guard regresses to green-by-skip with no signal.
+     */
+    describe('no resolvable indexer checkout', function () {
+        // Under this name nothing resolves, and an explicit XCHAIN_INDEXER_PATH is
+        // authoritative, so the sibling beside a real checkout cannot answer for it.
+        const absent = path.join(os.tmpdir(), 'drift-gate-no-such-checkout');
+
+        function runAbsent(env) {
+            const r = spawnSync(process.execPath, [GATE], {
+                cwd: SDK_ROOT,
+                encoding: 'utf8',
+                env: { ...process.env, XCHAIN_INDEXER_PATH: absent, ...env },
+            });
+            return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
+        }
+
+        it('skips green for a standalone clone', function () {
+            const { code, out } = runAbsent({ XCHAIN_REQUIRE_SIBLINGS: '' });
+            expect(code, 'standalone clone exit code').to.equal(0);
+            expect(out).to.include('skipping the sibling checks');
+        });
+
+        it('FAILS under XCHAIN_REQUIRE_SIBLINGS=1, naming the path it tried', function () {
+            const { code, out } = runAbsent({ XCHAIN_REQUIRE_SIBLINGS: '1' });
+            expect(code, 'required-sibling exit code').to.equal(1);
+            expect(out, 'names the checkout that is missing').to.include(absent);
+            expect(out, 'no longer reports a skip').to.not.include('skipping the sibling checks');
+        });
+    });
+
     // The CLEAN verdict cannot be produced from a fixture (the pins are real handler
     // bytes) and reading it off the live sibling would make this suite pass or fail on
     // whatever a second coder has in that checkout today, which is precisely the
