@@ -164,6 +164,7 @@ var Config = {
 
         // Service endpoints, used only when the caller passed no url or port.
         hubApiHost:     () => process.env.HUB_API_HOST,
+        hubPort:        () => process.env.HUB_PORT,
         explorerUrl:    () => process.env.EXPLORER_URL,
         explorerPort:   () => process.env.EXPLORER_PORT,
         encoderUrl:     () => process.env.ENCODER_URL,
@@ -173,6 +174,12 @@ var Config = {
 
         // Which origins the helper API answers cross-origin requests from.
         corsOrigin:     () => process.env.CORS_ORIGIN,
+
+        // The helper API's listening port, its key, and the raw limiter
+        // setting that api.js checks for a malformed value before warning.
+        sdkApiPort:      () => process.env.SDK_API_PORT,
+        sdkApiKey:       () => process.env.SDK_API_KEY,
+        sdkApiRateLimit: () => process.env.SDK_API_RATE_LIMIT,
 
         // Set by npm while one of its scripts runs; absent when the SDK is
         // simply required as a library.

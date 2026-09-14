@@ -383,7 +383,7 @@ class XChainSDK {
         // regtest gets no hub unless one is explicitly supplied.
         let pub     = publicDefaults(network);
         let hubUrl  = options.hubUrl  || config.env.hubApiHost() || pub.hubUrl;
-        let hubPort = options.hubPort || (process.env.HUB_PORT ? parseInt(process.env.HUB_PORT) : undefined);
+        let hubPort = options.hubPort || (config.env.hubPort() ? parseInt(config.env.hubPort()) : undefined);
         if (options.hubValidators || hubUrl) {
             this.hub = new HubConnector(Object.assign({}, options, { hubUrl, hubPort }));
         }

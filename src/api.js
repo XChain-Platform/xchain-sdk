@@ -46,31 +46,32 @@ const {
 dotenv.config();
 
 // Parse in the environmental variables
-const SDK_API_PORT = process.env.SDK_API_PORT || 3005;
+const SDK_API_PORT = Config.env.sdkApiPort() || 3005;
 // Helper-API key. Always fails closed: action-creation methods can carry key
 // material in their params, so without a configured key every method except
 // ping is rejected (401) rather than left open.
-const SDK_API_KEY  = process.env.SDK_API_KEY || '';
+const SDK_API_KEY  = Config.env.sdkApiKey() || '';
 if(!SDK_API_KEY)
     console.warn('WARNING: SDK_API_KEY is not set. All helper-API methods except ping will return 401. Set SDK_API_KEY to use the API.');
 // Batch-cap and rate-limit settings, parsed by the guard module (each one falls
-// back to a safe default on a junk value; see src/utils/api_guards.js).
-const SDK_API_MAX_BATCH      = resolveMaxBatch(process.env);
-const SDK_API_RATE_LIMIT     = resolveRateLimit(process.env);
+// back to a safe default on a junk value; see src/utils/api_guards.js). With no
+// argument, each resolver reads process.env through its own default parameter.
+const SDK_API_MAX_BATCH      = resolveMaxBatch();
+const SDK_API_RATE_LIMIT     = resolveRateLimit();
 // Say so when the limiter setting was unusable. A silent substitution is what
 // made the truncation bug expensive: the operator believed the value they typed
 // was in force, and nothing in the log said otherwise.
-if(process.env.SDK_API_RATE_LIMIT !== undefined && parseWholeNumber(process.env.SDK_API_RATE_LIMIT) === null)
+if(Config.env.sdkApiRateLimit() !== undefined && parseWholeNumber(Config.env.sdkApiRateLimit()) === null)
     console.warn('WARNING: SDK_API_RATE_LIMIT is not a whole number; using the default of ' + SDK_API_RATE_LIMIT +
                  ' requests per window. Set it to exactly 0 to disable the limiter.');
-const SDK_API_RATE_WINDOW_MS = resolveRateWindowMs(process.env);
-const NETWORK      = process.env.NETWORK;
-const EXPLORER_URL = process.env.EXPLORER_URL;
-const EXPLORER_PORT = process.env.EXPLORER_PORT;
-const ENCODER_URL  = process.env.ENCODER_URL;
-const ENCODER_PORT = process.env.ENCODER_PORT;
-const HUB_API_HOST = process.env.HUB_API_HOST;
-const HUB_PORT     = process.env.HUB_PORT;
+const SDK_API_RATE_WINDOW_MS = resolveRateWindowMs();
+const NETWORK      = Config.env.network();
+const EXPLORER_URL = Config.env.explorerUrl();
+const EXPLORER_PORT = Config.env.explorerPort();
+const ENCODER_URL  = Config.env.encoderUrl();
+const ENCODER_PORT = Config.env.encoderPort();
+const HUB_API_HOST = Config.env.hubApiHost();
+const HUB_PORT     = Config.env.hubPort();
 
 // Start up the API
 async function startApi() {
