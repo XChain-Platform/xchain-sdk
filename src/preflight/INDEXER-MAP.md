@@ -70,9 +70,20 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `2bd35c36`
+**Pins taken at indexer commit:** `5bfa3a7b`
 
-(Re-anchored 2026-09-13, third pass, by the M4 code-structure review of all eleven
+(Re-anchored 2026-09-14 by the comment-label review of six handlers below. `5bfa3a7b` is
+the indexer tip pushed with that review. Its parent `9c50f503` rewrites internal design
+labels in handler comments as plain descriptions, and `5bfa3a7b` itself moves one comment
+in `src/actions/broadcast.js`, which is not mapped, so all eleven mapped handler blobs are
+identical at the two commits. The indexer lands before this map, so every row is a plain
+blob of the anchor. A checkout without `9c50f503` reports the six re-pinned rows drifted:
+the answer is the missing indexer commit, never a re-pin back. The previous anchor
+`2bd35c36` is an ancestor and stays reachable. Five rows (`mint.js`, `dispense.js`,
+`swap.js`, `airdrop.js`, `dividend.js`) do not move: their bytes are identical before and
+after `9c50f503`.)
+
+(Earlier note. Re-anchored 2026-09-13, third pass, by the M4 code-structure review of all eleven
 handlers below. `2bd35c36` is the pushed `origin/develop` head of xchain-indexer, which
 now carries the M3 feature-directory commits, so the four M3 rows the previous note
 describes as paired working-tree hashes are plain blobs of it. The previous anchor
@@ -201,7 +212,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 2bd35c36..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 5bfa3a7b..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -239,17 +250,17 @@ found by hashing candidate blobs as above.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send.js` | `2e49cb3250a726f8628838773940a435d11f55cd3cd347313fb050b454ae0d2a` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `0be984876a9f98b7ce8b50ee9305c9d92cbad9e6d5bae8130b49019f19313ecc` |
+| `checks/send.js` (SEND) | `src/actions/send.js` | `cd2d8c27cbf57336147ef1ff992d31e5a48b07a6c0273c2b59de89abb1b646f1` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `10e59bc00502b2aab10905aa8edf539680102fe6bd6061e74c6e9eabaed32d5e` |
 | `checks/mint.js` | `src/actions/mint.js` | `4021fa16abe8952de98929fe0b632a11d56346a12911d79e59dc0e044a18ca59` |
-| `checks/issue.js` | `src/actions/issue.js` | `8c2913f3e2bd616abcdbcbb1d67037b0d06f31f4c9a6985fae587ea174d165ba` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `6d0a9599b884f760d3a2175d8d1f7f62cd349e3c70c1d56b8cfe39a3d3d6f0d7` |
+| `checks/issue.js` | `src/actions/issue.js` | `60cb6cc8d337cd00d13dd1440f19595ef36870aee479690bb150d30c29767c31` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `39a9c0ee6a89903b48b9d9244663cc025a029d876c0fe150b6dd41428df63a9a` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `d72fe8c83b81b4ce12b1c90851657e7f3610658c5acdeca3b24ded451bc35916` |
-| `checks/trading.js` (ORDER) | `src/actions/order.js` | `d87d568a808a0da05c5da4bdab7d602d04533c85151bd47b2731d55f60d8a740` |
+| `checks/trading.js` (ORDER) | `src/actions/order.js` | `4a5b7e596377b29198baac9b62f18c0893c271573addefb3351d7fc36d42421c` |
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `ff297dbe7f2fbe6424b6ea61fd463b9ec9847de7157500345ca1f0a2be2dd398` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `ef52e3900ae20a64a0653f3a4bf775692b1cd73d5c9c9cf82840b2b3926bd4c9` |
 | `checks/dividend.js` | `src/actions/dividend.js` | `3405fa19e629bab98b5b3c33fd0128e3e6873f551a3f722fef55197e3be22f57` |
-| `checks/batch.js` | `src/actions/batch.js` | `14efa63c75f94b8db0503e390b970b3aba7271a22ddb1a65fb9bbaa46f402de2` |
+| `checks/batch.js` | `src/actions/batch.js` | `1314812c4a88b9daf518574b742e8e8780e90020fcf1a14d55f4881a3ce9ad2a` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -258,6 +269,41 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-14 - `send.js` + `destroy.js` + `issue.js` + `dispenser.js` + `order.js` + `batch.js`, comment labels rewritten
+
+Baseline pin for each of the six was its `bbc1c67c` blob, which is the previous pin
+unchanged (`2e49cb32`, `0be98487`, `8c2913f3`, `6d0a9599`, `d87d568a`, `14efa63c`); the new
+pins, in table order, are `cd2d8c27`, `10e59bc0`, `60cb6cc8`, `39a9c0ee`, `4a5b7e59` and
+`1314812c`, hashed from the committed indexer tree at `9c50f503` with its handlers clean, and
+identical for all eleven handlers at the pushed tip `5bfa3a7b`.
+Range read: the one commit `9c50f503` over `src/actions/`, whose parent is `bbc1c67c`
+(spelled as a single commit rather than a range command so the gate's anchor-consistency
+check still finds exactly one review command, the one under **Pins taken at indexer
+commit**). 119 lines added and 118 removed across the six: `batch.js` 75/74, `issue.js`
+39/39, `send.js` 2/2, and one line each in `destroy.js`, `dispenser.js` and `order.js`. The
+other five mapped handlers are byte-identical across it.
+
+**What moved: comment text only.** Internal design and review labels in handler comments
+(decision, requirement, finding and acceptance-test tags, spec section and milestone
+references, and the rule tags in `send.js`, `dispenser.js` and `order.js`) are replaced by
+plain descriptions of the rule each one named, and a few sentences in the same comment
+blocks that narrated how the code came to be are restated as what the code does. No
+executable line, string literal, number, threshold, field, format version or error string
+changed on any of the six.
+
+Machine-verified. Each handler's acorn token stream (comments and whitespace excluded, token
+values compared as well as types) was taken at `bbc1c67c` and at `9c50f503` with NO
+normalisation, and the two are IDENTICAL: send 2788 tokens, destroy 1532, issue 5779,
+dispenser 4755, order 3532, batch 2996. The comparator was falsified first on scratch copies
+of the new tree, each restored byte-exact by SHA-256: flipping `packs.length > 0` to `>=` in
+`send.js`, adding a space inside the `'invalid: VERSION (unknown)'` error string in
+`dispenser.js`, and changing the `this.commandLimit = 250` literal in `batch.js` to 251 each
+failed the comparison on exactly that file, at the token naming that operator, string or
+number, so a zero is evidence and not a tool that cannot say no.
+
+**Direction: NEITHER, no admission boundary moves.** NO CLIENT CHECK MOVES. The refresh
+exists only so the six hash rows follow the handlers to their new bytes.
 
 ### 2026-09-13 (third pass) - all eleven handlers, the M4 code-structure pass
 
