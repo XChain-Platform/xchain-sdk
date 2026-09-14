@@ -33,6 +33,9 @@ describe('SDK error classes', function () {
         const e = new SDKError('E', 'msg');
         assert.deepStrictEqual(e.details, {});
     });
+});
+
+describe('SDK error classes', function () {
 
     // Every subclass: same shape, its own `name`, instanceof both itself and SDKError.
     const subclasses = [
@@ -67,6 +70,9 @@ describe('SDK error classes', function () {
             assert.deepStrictEqual(e.details, {});
         });
     }
+});
+
+describe('SDK error classes', function () {
 
     // SDKRateLimitedError is not in the list above: its constructor takes
     // (message, details) and forces code 'RATE_LIMITED', because a rate limit
