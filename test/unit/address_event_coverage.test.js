@@ -47,18 +47,20 @@ const CHANNEL_MANAGER = path.join(EXPLORER_DIR, 'src', 'ws', 'channel_manager.js
 const SIBLING_PRESENT  = fs.existsSync(path.join(EXPLORER_DIR, 'package.json'));
 const REQUIRE_SIBLINGS = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 
+function verifyExplorerFiles() {
+    if (!SIBLING_PRESENT && REQUIRE_SIBLINGS)
+        throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but no xchain-explorer checkout at ' + EXPLORER_DIR);
+    if (!SIBLING_PRESENT) return;
+    for (const file of [CHANGE_DETECTOR, CHANNEL_MANAGER]) {
+        if (!fs.existsSync(file))
+            throw new Error(path.relative(EXPLORER_DIR, file) + ' is gone from xchain-explorer; '
+                + 'repoint this contract at the file the producer moved to');
+    }
+}
+
 describe('address-channel event coverage vs the explorer producer @regression', function () {
 
-    before(function () {
-        if (!SIBLING_PRESENT && REQUIRE_SIBLINGS)
-            throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but no xchain-explorer checkout at ' + EXPLORER_DIR);
-        if (!SIBLING_PRESENT) return;
-        for (const file of [CHANGE_DETECTOR, CHANNEL_MANAGER]) {
-            if (!fs.existsSync(file))
-                throw new Error(path.relative(EXPLORER_DIR, file) + ' is gone from xchain-explorer; '
-                    + 'repoint this contract at the file the producer moved to');
-        }
-    });
+    before(verifyExplorerFiles);
 
     it('registers every lifecycle type the explorer can route to an address channel', function () {
         if (!SIBLING_PRESENT) return this.skip();
@@ -81,6 +83,11 @@ describe('address-channel event coverage vs the explorer producer @regression', 
             + '. Broadcaster._onLifecycleEvent routes every lifecycle event to the address '
             + 'channel of each address it names, so these frames are sent and silently dropped.');
     });
+});
+
+describe('address-channel event coverage vs the explorer producer @regression', function () {
+
+    before(verifyExplorerFiles);
 
     it('registers no name the explorer would reject as an unknown type', function () {
         if (!SIBLING_PRESENT) return this.skip();
