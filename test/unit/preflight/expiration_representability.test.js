@@ -94,7 +94,9 @@ describe('EXPIRATION representability: the client refuses what the chain refuses
             expect(numeric.exceedsUnsignedColumn('+' + SMALLEST_REJECTED, EXPIRATION_MAX)).to.equal(true);
         });
     });
+});
 
+describe('EXPIRATION representability: the client refuses what the chain refuses', function () {
     describe('pre-flight raises it on every action and format that carries the field', function () {
         for (const [name, wire] of Object.entries(WIRES)) {
             it(`${name}: the first unstorable expiration is a non-overridable error`, async function () {
