@@ -33,13 +33,15 @@ function parseIssue(str) {
     return out;
 }
 
-describe('NftHelpers', function () {
+let nft, sdk;
 
-    let nft, sdk;
-    beforeEach(function () {
-        nft = new NftHelpers();
-        sdk = new XChainSDK({ network: 'bitcoin-regtest' });
-    });
+function resetNftHelpers() {
+    nft = new NftHelpers();
+    sdk = new XChainSDK({ network: 'bitcoin-regtest' });
+}
+
+describe('NftHelpers', function () {
+    beforeEach(resetNftHelpers);
 
     describe('unique()', function () {
         it('builds the NFT field bundle: DECIMALS=0, LOCK_MAX_SUPPLY=1, supply 1, minted 1', function () {
@@ -95,7 +97,10 @@ describe('NftHelpers', function () {
             expect(() => nft.edition({ tick: 'X' })).to.throw(/supply .* is required/);
         });
     });
+});
 
+describe('NftHelpers', function () {
+    beforeEach(resetNftHelpers);
     describe('collectionItem()', function () {
         it('builds a child TICK parent.name as a unique 1-of-1', function () {
             const p = nft.collectionItem({ parent: 'PEPESERIES', name: 'GENESIS' });
@@ -143,7 +148,10 @@ describe('NftHelpers', function () {
             expect(() => nft.tisDocument({})).to.throw(/tick is required/);
         });
     });
+});
 
+describe('NftHelpers', function () {
+    beforeEach(resetNftHelpers);
     describe('attachContentParams()', function () {
         it('maps file/issue action indices to LINK coin1/coin2 fields', function () {
             const p = nft.attachContentParams({ coin: 'BTC', fileActionIndex: 1234, issueActionIndex: 4321, memo: 'art' });
