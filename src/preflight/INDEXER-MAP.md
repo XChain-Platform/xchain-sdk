@@ -248,6 +248,46 @@ the table pins a **SHA-256 of file content**, while git object names are
 SHA-1, so the pinned hash never appears as an object name and can only be
 found by hashing candidate blobs as above.
 
+### Directory handler rows
+
+A handler the indexer has split into `src/actions/<name>/` (an `index.js` entry
+with its parts beside it) is pinned as a DIRECTORY row: the handler column
+carries the directory path with a TRAILING SLASH, and that slash is the whole
+marker.
+
+    | `checks/batch.js` | `src/actions/batch/` | `<64-hex digest>` |
+
+The digest covers every file in the directory, recursively, so no part can be
+edited, added, removed or renamed without the row going red. It is the SHA-256
+of a manifest carrying one line per file, sorted by name in byte order:
+
+    <sha256 of that file's bytes>  <path relative to the directory>
+
+That is exactly what `shasum -a 256` (or `sha256sum`) prints, so the pin can be
+recomputed without this repo:
+
+    cd <indexer>/src/actions/batch && find . -type f | sed 's|^\./||' \
+      | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256
+
+or from here, which also prints every part it hashed:
+
+    node bin/preflight_handler_dirs.js <indexer root> src/actions/batch/
+
+Flat rows are unchanged, and every hash in the table below is still the bytes of
+one file. Three shapes are refused rather than hashed, because each would leave
+part of a handler unreviewed: a row naming a file INSIDE a handler directory (it
+pins `index.js` while the parts beside it escape), a directory row while a flat
+`<name>.js` still sits beside the directory (`require('./<name>')` resolves the
+flat file first, so the directory is not the code that runs), and a part that is
+a symbolic link, or a directory holding no files at all.
+
+A split moves more than handler logic. The fee-quote seam therefore reads every
+source file of a directory handler, so a `createFeesObject` call that moved into
+`fees.js` still enrols its action; and it reads `FEE_QUOTE_DENYLIST`,
+`FEE_QUOTE_STATIC` and `FEE_QUOTE_EXEMPT` wherever under `src/` the indexer
+declares them, requiring exactly one declaration of each, so a stale copy left
+behind by a move is a finding instead of the value that happens to be read.
+
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
 | `checks/send.js` (SEND) | `src/actions/send.js` | `cd2d8c27cbf57336147ef1ff992d31e5a48b07a6c0273c2b59de89abb1b646f1` |
