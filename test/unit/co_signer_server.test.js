@@ -33,35 +33,42 @@ function post(port, path, body, headers) {
     });
 }
 
+let server, port, acct, agentNonce, psbtHex;
+
+function setupServer(done) {
+    // A 2-of-2 account + a signable in-policy PSBT.
+    const agentSk = crypto.randomBytes(32), coSk = crypto.randomBytes(32);
+    const agentPk = secp256k1.getPublicKey(agentSk, true), coPk = secp256k1.getPublicKey(coSk, true);
+    const keys = [agentPk, coPk];
+    const aggXOnly = Buffer.from(new MuSig2().aggregateKeys(keys).xOnlyPubkey);
+    const p2tr = bitcoin.payments.p2tr({ pubkey: aggXOnly });
+
+    const prevHash = crypto.randomBytes(32);
+    const txid = Buffer.from(prevHash).reverse().toString('hex');
+    const inner = bitcoin.script.compile([Buffer.from('SEND|0|TOK|1|1destX|m', 'utf8')]);
+    const cipher = crypto.createCipheriv('aes-128-ctr', txid.substr(0, 16), txid.substr(16, 16));
+    const obf = Buffer.concat([cipher.update(Buffer.concat([Buffer.from('XCHN'), inner])), cipher.final()]);
+    const psbt = new bitcoin.Psbt();
+    psbt.addInput({ hash: prevHash, index: 0, witnessUtxo: { script: p2tr.output, value: 100000 } });
+    psbt.addOutput({ script: bitcoin.payments.embed({ data: [obf] }).output, value: 0 });
+    psbt.addOutput({ script: p2tr.output, value: 90000 });   // change back to the account
+    psbtHex = psbt.toHex();
+    agentNonce = Buffer.from(new MuSig2().generateNonce({ publicKey: agentPk, secretKey: agentSk })).toString('hex');
+
+    const co = new CoSigner({ secretKey: coSk, publicKeys: keys, policy: { allowedActions: new Set(['SEND']) } });
+    const app = createCoSignerApp(co, { token: 'sekret' });
+    server = app.listen(0, '127.0.0.1', () => { port = server.address().port; done(); });
+}
+
+function stopServer(done) { server.close(done); }
+
+function useServerHooks() {
+    before(setupServer);
+    after(stopServer);
+}
+
 describe('co-signer HTTP sidecar', function () {
-    let server, port, acct, agentNonce, psbtHex;
-
-    before(function (done) {
-        // A 2-of-2 account + a signable in-policy PSBT.
-        const agentSk = crypto.randomBytes(32), coSk = crypto.randomBytes(32);
-        const agentPk = secp256k1.getPublicKey(agentSk, true), coPk = secp256k1.getPublicKey(coSk, true);
-        const keys = [agentPk, coPk];
-        const aggXOnly = Buffer.from(new MuSig2().aggregateKeys(keys).xOnlyPubkey);
-        const p2tr = bitcoin.payments.p2tr({ pubkey: aggXOnly });
-
-        const prevHash = crypto.randomBytes(32);
-        const txid = Buffer.from(prevHash).reverse().toString('hex');
-        const inner = bitcoin.script.compile([Buffer.from('SEND|0|TOK|1|1destX|m', 'utf8')]);
-        const cipher = crypto.createCipheriv('aes-128-ctr', txid.substr(0, 16), txid.substr(16, 16));
-        const obf = Buffer.concat([cipher.update(Buffer.concat([Buffer.from('XCHN'), inner])), cipher.final()]);
-        const psbt = new bitcoin.Psbt();
-        psbt.addInput({ hash: prevHash, index: 0, witnessUtxo: { script: p2tr.output, value: 100000 } });
-        psbt.addOutput({ script: bitcoin.payments.embed({ data: [obf] }).output, value: 0 });
-        psbt.addOutput({ script: p2tr.output, value: 90000 });   // change back to the account
-        psbtHex = psbt.toHex();
-        agentNonce = Buffer.from(new MuSig2().generateNonce({ publicKey: agentPk, secretKey: agentSk })).toString('hex');
-
-        const co = new CoSigner({ secretKey: coSk, publicKeys: keys, policy: { allowedActions: new Set(['SEND']) } });
-        const app = createCoSignerApp(co, { token: 'sekret' });
-        server = app.listen(0, '127.0.0.1', () => { port = server.address().port; done(); });
-    });
-
-    after(function (done) { server.close(done); });
+    useServerHooks();
 
     it('rejects construction without a CoSigner', function () {
         expect(() => createCoSignerApp(null)).to.throw(/requires a CoSigner/);
@@ -79,6 +86,11 @@ describe('co-signer HTTP sidecar', function () {
         // Explicit escape hatch builds the (unauthenticated) app without throwing.
         expect(() => createCoSignerApp(co, { allowUnauthenticated: true })).to.not.throw();
     });
+
+});
+
+describe('co-signer HTTP sidecar', function () {
+    useServerHooks();
 
     it('401s without the bearer token', async function () {
         const r = await post(port, '/cosign', { psbt: psbtHex, inputs: [{ index: 0, agentPublicNonce: agentNonce }] });
@@ -102,6 +114,11 @@ describe('co-signer HTTP sidecar', function () {
         expect(r.body.signatures[0].sig).to.be.a('string');
         expect(r.body.signatures[0].publicNonce).to.be.a('string');
     });
+
+});
+
+describe('co-signer HTTP sidecar', function () {
+    useServerHooks();
 
     it('401s on a wrong token of the SAME length as the real one', async function () {
         const wrong = 'sekret'.split('').reverse().join('');
@@ -128,6 +145,11 @@ describe('co-signer HTTP sidecar', function () {
         expect(r.status).to.equal(401);
         expect(r.body.reason).to.equal('UNAUTHORIZED');
     });
+
+});
+
+describe('co-signer HTTP sidecar', function () {
+    useServerHooks();
 
     // The body cap must not be a hardcoded 256kb, roughly a sixth of the largest
     // envelope round the protocol permits: under such a cap an oversize body
@@ -175,6 +197,14 @@ describe('co-signer HTTP sidecar', function () {
             } finally { await new Promise((r) => srv.close(r)); }
         });
 
+    });
+});
+
+describe('co-signer HTTP sidecar', function () {
+    useServerHooks();
+
+    describe('request-body ceiling', function () {
+
         it('leaves every other parse failure on the path it already had', async function () {
             // The oversize handler must not swallow malformed JSON: that still
             // lands on Express's own 400, not on a 413 REQUEST_TOO_LARGE.
@@ -201,6 +231,14 @@ describe('co-signer HTTP sidecar', function () {
             expect(() => createCoSignerApp(co, { token: 't', maxBodyBytes: 0 })).to.throw(/maxBodyBytes/);
             expect(() => createCoSignerApp(co, { token: 't', maxBodyBytes: 1.5 })).to.throw(/maxBodyBytes/);
         });
+
+    });
+});
+
+describe('co-signer HTTP sidecar', function () {
+    useServerHooks();
+
+    describe('request-body ceiling', function () {
 
         it('reaches the agent as REQUEST_TOO_LARGE, not COSIGNER_TRANSPORT_ERROR', async function () {
             // The whole point of naming it: httpTransport prefers a JSON
