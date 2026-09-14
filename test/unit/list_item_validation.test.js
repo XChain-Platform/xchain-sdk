@@ -100,6 +100,9 @@ describe('LIST TYPE=2 (ADDRESS list) item validation', () => {
             expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.equal(false);
         });
     });
+});
+
+describe('LIST TYPE=2 (ADDRESS list) item validation', () => {
 
     describe('network boundary: an address valid on one network must not pass a validator on another', () => {
         it('rejects a mainnet BTC P2PKH item when the validator network is testnet', () => {
@@ -147,6 +150,9 @@ describe('LIST TYPE=2 (ADDRESS list) item validation', () => {
             expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.equal(false);
         });
     });
+});
+
+describe('LIST TYPE=2 (ADDRESS list) item validation', () => {
 
     describe('shared-prefix coins on testnet/regtest are accepted as "some supported coin", by design', () => {
         // BTC and LTC both use pubKeyHash 0x6f / scriptHash 0xc4 on testnet and
@@ -187,6 +193,9 @@ describe('LIST TYPE=2 (ADDRESS list) item validation', () => {
             expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.equal(true);
         });
     });
+});
+
+describe('LIST TYPE=2 (ADDRESS list) item validation', () => {
 
     describe('^id references', () => {
         it('accepts a numeric ^id item without treating it as an address', () => {
