@@ -70,9 +70,18 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `71f3d080`
+**Pins taken at indexer commit:** `07663d1e`
 
-(Re-anchored 2026-09-14, fourth pass, by the handler-split review below. `71f3d080` is the
+(Re-anchored 2026-09-14, fifth pass, by the dispenser/dispense split review below. `07663d1e`
+is the indexer commit that moves the DISPENSER and DISPENSE entries to `<name>/index.js`
+beside the parts its two parents `ea842d00` and `4ca6952b` split out of them, with no flat
+file left, so the last two flat rows become directory rows and all eleven are now hashed
+over every part. The other nine rows are byte-identical at `71f3d080` and at `07663d1e`
+(those three commits touch no other mapped directory). The indexer lands before this map. A
+checkout without `07663d1e` reports both rows as flat handlers turned directories, and the
+answer is the missing indexer commit, never a re-pin back. `71f3d080` stays reachable.)
+
+(Earlier note. Re-anchored 2026-09-14, fourth pass, by the handler-split review below. `71f3d080` is the
 indexer commit that finishes the split of nine handlers into directories and points every
 requirer at them, so nine rows change SHAPE as well as value: they are directory rows now,
 hashed over every part, and the two unsplit handlers (`dispenser.js`, `dispense.js`) keep
@@ -242,7 +251,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 71f3d080..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 07663d1e..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -324,8 +333,8 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `4fcdfcde260301108826174742501455501cc9017dee401a68cb6fe552a96f44` |
 | `checks/mint.js` | `src/actions/mint/` | `7c8992a06f9143b876c5eb7bc554dbbe5b2ca61507c44e822b5491b8571d1c06` |
 | `checks/issue.js` | `src/actions/issue/` | `41f203693d23b02e645add2c65cecb6710044a87e44d7ed822a6cfd0ab814b71` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `39a9c0ee6a89903b48b9d9244663cc025a029d876c0fe150b6dd41428df63a9a` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `72ec1eca26499de98578d0cb0ab27f034b49cb75515c6fdb490b6390ba93dafb` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `fa6a3c6a2c2bcb2fabbd0e34800e37db2ea15949496cf6f1526c990dff96add9` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `7a31e1580e936b19d4ff0ed0a8aa84ec37f5de1b2536488de58ea4e84197b1b4` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `644dfe6951e78b653e185bb78201bfaeadc7b04eaab5cb7c1f4ffb2682b6cc79` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `b8e6753cccc7a4b1c6586c66a39faea3cf86718fcc989351ca32449386390d4c` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `47d5d14dcc26ae3d181118b692b8d879b809e4754a4268ef68579f6896ffbd74` |
@@ -339,6 +348,44 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-14 (fifth pass) - `dispenser` and `dispense` become directories, no flat file beside them
+
+Baseline pins were the flat blobs `39a9c0ee` (`dispenser.js`) and `72ec1eca` (`dispense.js`),
+re-read unchanged at `71f3d080`; the new pins are directory digests, hashed from the committed
+indexer tree at `07663d1e` with its handlers clean, by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/<name>/` (never by hand), and each
+recomputed independently with the `find | sort | shasum` pipeline above to the same value. Range
+read: `git -C ../xchain-indexer log --name-status 71f3d080..HEAD -- src/actions/` (a log, so the
+anchor-consistency check still finds exactly one review command), which is three commits and
+touches no other mapped directory: `ea842d00` splits DISPENSER into context, validate,
+validate_format, fees, controller_guard and settle parts, `4ca6952b` splits DISPENSE into
+context, pricing, pricing_paths and settle parts, and `07663d1e` moves both entries to
+`<name>/index.js` and points every requirer at them.
+
+**What moved: the file layout, and the naming of steps that were already inline.** The move
+commit changes only require specifiers and comments in `src/` (the non-comment lines of its
+diff are its 16 rewritten require lines and nothing else). The two split commits move the bodies whole;
+the DISPENSE split names three deliberate edits to moved code, each so the split stays
+behaviour-neutral: its two loop-body `continue` statements become `return` now that each body
+is a function, the FIAT-not-active verdict and the non-FIAT guard read and write the per-row
+object the three pricing paths now own, and the caps flag-day is reached through
+`isDispenseCapsActive` on the handler. No validity rule, threshold, fee, field, format version
+or error string changed.
+
+Machine-verified. Both handlers were loaded through the loader's own `handler_wiring.js`
+require at `71f3d080`, at `4ca6952b` and at `07663d1e`, and their prototype surfaces compared
+member by member (descriptor, value type, function name and arity): class name and
+constructor arity are unchanged, no member is lost, DISPENSER gains 20 and DISPENSE 24 named
+step methods, every one non-enumerable as a class method is, and the split and moved trees
+are identical. The indexer unit tier reads 9607 tests, 9428 passing, 179 pending, 0 failing
+at both `71f3d080` and `07663d1e` with zero titles whose outcome changed (431 passing and 2
+pending across the 39 unit files that require or read either handler, either side), and consensus identity
+is unmoved (`55891dfd` armed-map fingerprint, `26ba9cce` rules digest, 33 gates resolved, 0
+absent).
+
+**Direction: NEITHER, no admission boundary moves.** NO CLIENT CHECK MOVES. `checks/dispenser.js`
+mirrors the same rules, now spread over the parts of two directories rather than two files.
 
 ### 2026-09-14 (fourth pass) - nine handlers become directories, no flat file beside them
 
