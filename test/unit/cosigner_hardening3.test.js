@@ -23,6 +23,8 @@ const MuSig2   = require('../../src/cosigner/musig2.js');
 const CoSigner = require('../../src/cosigner/co_signer.js');
 const { httpTransport } = require('../../src/cosigner/client.js');
 const { createCoSignerApp } = require('../../src/cosigner/server.js');
+const { decodeActionFromPsbt } = require('../../src/cosigner/psbt_action_decode.js');
+const valueDerivability = require('../../src/cosigner/value_derivability.js');
 
 function makeAccount() {
     const musig   = new MuSig2();
@@ -212,48 +214,48 @@ describe('G13: client-visible error codes', function () {
 
 // G17: faults and denials must be visible to the operator.
 
+// Real HTTP against a listening app, mirroring co_signer_server.test.js: the
+// express internals are not a stable enough surface to reach into.
+function serve(coSignerStub, opts) {
+    return new Promise((resolve) => {
+        const app = createCoSignerApp(coSignerStub, opts);
+        const server = app.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port }));
+    });
+}
+
+function post(port, body, headers) {
+    return new Promise((resolve, reject) => {
+        const data = Buffer.from(JSON.stringify(body));
+        const req = http.request({
+            host: '127.0.0.1', port, path: '/cosign', method: 'POST',
+            headers: Object.assign(
+                { 'content-type': 'application/json', 'content-length': data.length }, headers || {}),
+        }, (res) => {
+            let chunks = '';
+            res.on('data', (c) => { chunks += c; });
+            res.on('end', () => resolve({ status: res.statusCode, body: chunks ? JSON.parse(chunks) : null }));
+        });
+        req.on('error', reject);
+        req.write(data); req.end();
+    });
+}
+
+// Run one request against a throwaway sidecar and hand back its logs.
+async function run(coSignerStub, opts, body, headers) {
+    const logs = [];
+    const { server, port } = await serve(coSignerStub,
+        Object.assign({ logger: (...a) => logs.push(a) }, opts));
+    try {
+        const res = await post(port, body, headers);
+        return { res, logs };
+    } finally {
+        await new Promise((r) => server.close(r));
+    }
+}
+
+const psbtBody = { psbt: 'aabb', inputs: [{ index: 0, agentPublicNonce: 'cc' }] };
+
 describe('G17: fault and denial logging', function () {
-
-    // Real HTTP against a listening app, mirroring co_signer_server.test.js: the
-    // express internals are not a stable enough surface to reach into.
-    function serve(coSignerStub, opts) {
-        return new Promise((resolve) => {
-            const app = createCoSignerApp(coSignerStub, opts);
-            const server = app.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port }));
-        });
-    }
-
-    function post(port, body, headers) {
-        return new Promise((resolve, reject) => {
-            const data = Buffer.from(JSON.stringify(body));
-            const req = http.request({
-                host: '127.0.0.1', port, path: '/cosign', method: 'POST',
-                headers: Object.assign(
-                    { 'content-type': 'application/json', 'content-length': data.length }, headers || {}),
-            }, (res) => {
-                let chunks = '';
-                res.on('data', (c) => { chunks += c; });
-                res.on('end', () => resolve({ status: res.statusCode, body: chunks ? JSON.parse(chunks) : null }));
-            });
-            req.on('error', reject);
-            req.write(data); req.end();
-        });
-    }
-
-    // Run one request against a throwaway sidecar and hand back its logs.
-    async function run(coSignerStub, opts, body, headers) {
-        const logs = [];
-        const { server, port } = await serve(coSignerStub,
-            Object.assign({ logger: (...a) => logs.push(a) }, opts));
-        try {
-            const res = await post(port, body, headers);
-            return { res, logs };
-        } finally {
-            await new Promise((r) => server.close(r));
-        }
-    }
-
-    const psbtBody = { psbt: 'aabb', inputs: [{ index: 0, agentPublicNonce: 'cc' }] };
 
     it('logs an internal fault with its stack before answering INTERNAL_ERROR', async function () {
         // Before this, a poisoned-tick freeze and a corrupt window store both
@@ -285,6 +287,9 @@ describe('G17: fault and denial logging', function () {
         expect(logs.some((l) => l[2] && l[2].reason === 'POLICY_ACTION_DENIED'),
             'the denial was logged').to.equal(true);
     });
+});
+
+describe('G17: fault and denial logging', function () {
 
     it('logs a rejected bearer token', async function () {
         const { res, logs } = await run({ process: () => ({ approved: true }) },
@@ -324,9 +329,6 @@ describe('G17: fault and denial logging', function () {
 // Bounded rest-field EXECUTE decode (the envelope extension).
 
 describe('bounded rest-field EXECUTE decode', function () {
-
-    const { decodeActionFromPsbt } = require('../../src/cosigner/psbt_action_decode.js');
-    const valueDerivability = require('../../src/cosigner/value_derivability.js');
 
     it('an agent behind a co-signer can now call a contract at all', function () {
         // Before this, EXECUTE's only wire format ended in ...PARAMS and the
@@ -370,6 +372,9 @@ describe('bounded rest-field EXECUTE decode', function () {
             policy: { allowedActions: new Set(['EXECUTE']), maxPerAction: { EXECUTE: { '*': '10' } } } }))
             .to.throw(/can never bind/);
     });
+});
+
+describe('bounded rest-field EXECUTE decode', function () {
 
     it('still refuses every rest field that has NOT been analysed', function () {
         // The allowlist is per (action, version); LIST's ...ITEM is not on it.
