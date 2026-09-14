@@ -67,6 +67,11 @@ describe('networks', function() {
             expect(Object.isFrozen(net)).to.be.true;
             expect(Object.isFrozen(net.bip32)).to.be.true;
         });
+    });
+});
+
+describe('networks', function() {
+    describe('getNetwork()', function() {
 
         it('should have bech32 prefix for bitcoin and litecoin', function() {
             expect(getNetwork('bitcoin-mainnet').bech32).to.equal('bc');
