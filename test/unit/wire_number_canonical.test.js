@@ -53,7 +53,9 @@ describe('wire number canonicalization contract', function () {
             }
         }
     });
+});
 
+describe('wire number canonicalization contract', function () {
     // The gate refuses rather than stringifying whatever the JSON parser hands it: a
     // JS number above the double-safe range stringifies into an exact-looking decimal
     // for a value the caller never sent. JSON.parse('{"AMOUNT":9007199254740993}') is
