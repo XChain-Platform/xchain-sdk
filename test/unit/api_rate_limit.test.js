@@ -121,6 +121,10 @@ describe('API request-rate limit', function () {
             assert.strictEqual((await send({ authorization: 'Bearer key-b' })).status, 429);
         });
     });
+});
+
+describe('API request-rate limit', function () {
+    this.timeout(10000);
 
     it('bounds the unauthenticated path too (keyed on the source address)', async () => {
         const app = buildApp(1, 60000);
@@ -177,6 +181,10 @@ describe('API request-rate limit', function () {
             assert.strictEqual(app._rateBuckets.size, 0, 'a disabled limiter must not accumulate buckets');
         });
     });
+});
+
+describe('API request-rate limit', function () {
+    this.timeout(10000);
 
     it('falls back to safe defaults on a junk env value', () => {
         assert.strictEqual(resolveRateLimit({}), 300);
@@ -216,6 +224,10 @@ describe('API request-rate limit', function () {
             assert.strictEqual((await send()).status, 429, 'request 301 must be rejected, not waved through');
         });
     });
+});
+
+describe('API request-rate limit', function () {
+    this.timeout(10000);
 
     it('src/api.js mounts the limiter BEFORE the auth gate and the jsonRouter mount', () => {
         const src = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
