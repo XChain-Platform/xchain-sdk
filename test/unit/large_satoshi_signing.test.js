@@ -49,6 +49,9 @@ describe('signing PSBTs with >2^53-1-sat values', function () {
         expect(BigInt(tx.outs[0].value)).to.equal(BIG_OUT);
         expect(BigInt(tx.outs[1].value)).to.equal(BIG_IN - BIG_OUT - 10000n);
     });
+});
+
+describe('signing PSBTs with >2^53-1-sat values', function () {
 
     it('signs a legacy (nonWitnessUtxo) input above 2^53-1 (the DOGE shape)', function () {
         // Dogecoin has no segwit, so a giant DOGE UTXO always arrives as a
