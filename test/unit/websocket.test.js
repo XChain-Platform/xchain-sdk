@@ -138,8 +138,15 @@ describe('WebSocketClient', function () {
 
         it('matches the explorer sibling schema version when checked out (cross-repo drift guard)', function () {
             const path = require('path');
-            const explorerSchema = path.join(__dirname, '..', '..', '..', 'xchain-explorer', 'src', 'ws', 'schema-version.js');
-            if (!require('fs').existsSync(explorerSchema)) return this.skip();
+            const fs = require('fs');
+            const explorerDir = path.join(__dirname, '..', '..', '..', 'xchain-explorer');
+            const explorerSchema = path.join(explorerDir, 'src', 'ws', 'schema_version.js');
+            // Skip only for a standalone clone with no explorer beside it. With
+            // the checkout present, a missing file means the constant moved and
+            // this guard must follow it, never go quietly pending.
+            if (!fs.existsSync(path.join(explorerDir, 'package.json'))) return this.skip();
+            expect(fs.existsSync(explorerSchema),
+                path.relative(explorerDir, explorerSchema) + ' is gone from xchain-explorer; repoint this drift guard').to.be.true;
             const WebSocketClient = require('../../src/websocket.js');
             expect(require(explorerSchema).WS_SCHEMA_VERSION).to.equal(WebSocketClient.WS_SCHEMA_VERSION);
         });

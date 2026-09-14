@@ -17,7 +17,7 @@
  * Shared helper for identity comparisons on the explorer's BIGINT-as-string
  * wire indices (action_index, block_index, tx_index). The v2 wire contract
  * serializes every BIGINT column as a decimal STRING on REST and WS alike
- * (xchain-explorer/src/ws/schema-version.js), and Number() collapses two
+ * (xchain-explorer/src/ws/schema_version.js), and Number() collapses two
  * ADJACENT such indices onto one value above 2^53. A guard written with
  * Number() therefore matches the neighbour it exists to reject, which is
  * exactly the regression the explorer side already retired in _advanceCursor

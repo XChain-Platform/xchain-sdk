@@ -52,7 +52,7 @@ const WS_CONNECTING = 0;
 const WS_OPEN       = 1;
 
 // WS event-envelope schema version this SDK build understands. The explorer
-// stamps every frame with `schema_version` (see xchain-explorer/src/ws/schema-version.js)
+// stamps every frame with `schema_version` (see xchain-explorer/src/ws/schema_version.js)
 // so consumers can gate their parsing instead of silently mis-parsing a
 // reshaped payload; keep this in sync with the explorer's WS_SCHEMA_VERSION.
 const WS_SCHEMA_VERSION = 2;

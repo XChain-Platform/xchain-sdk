@@ -27,7 +27,9 @@
 // Skipped when the sibling xchain-explorer checkout is absent (standalone
 // clone); XCHAIN_REQUIRE_SIBLINGS=1 turns that skip into a failure, and the
 // drift-guards CI job (which already checks the explorer out, per .ci-siblings)
-// runs it that way.
+// runs it that way. With the checkout present, a missing producer file FAILS
+// naming its path: keying the skip on the file rather than the repo is how a
+// move in the explorer would silently unpin this contract.
 
 'use strict';
 
@@ -39,10 +41,10 @@ const XChainSDK = require('../../src/XChainSDK.js');
 
 const EXPLORER_DIR = process.env.XCHAIN_EXPLORER_DIR
     || path.join(__dirname, '..', '..', '..', 'xchain-explorer');
-const CHANGE_DETECTOR = path.join(EXPLORER_DIR, 'src', 'ws', 'ChangeDetector.js');
-const CHANNEL_MANAGER = path.join(EXPLORER_DIR, 'src', 'ws', 'ChannelManager.js');
+const CHANGE_DETECTOR = path.join(EXPLORER_DIR, 'src', 'ws', 'change_detector.js');
+const CHANNEL_MANAGER = path.join(EXPLORER_DIR, 'src', 'ws', 'channel_manager.js');
 
-const SIBLING_PRESENT  = fs.existsSync(CHANGE_DETECTOR) && fs.existsSync(CHANNEL_MANAGER);
+const SIBLING_PRESENT  = fs.existsSync(path.join(EXPLORER_DIR, 'package.json'));
 const REQUIRE_SIBLINGS = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 
 describe('address-channel event coverage vs the explorer producer @regression', function () {
@@ -50,6 +52,12 @@ describe('address-channel event coverage vs the explorer producer @regression', 
     before(function () {
         if (!SIBLING_PRESENT && REQUIRE_SIBLINGS)
             throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but no xchain-explorer checkout at ' + EXPLORER_DIR);
+        if (!SIBLING_PRESENT) return;
+        for (const file of [CHANGE_DETECTOR, CHANNEL_MANAGER]) {
+            if (!fs.existsSync(file))
+                throw new Error(path.relative(EXPLORER_DIR, file) + ' is gone from xchain-explorer; '
+                    + 'repoint this contract at the file the producer moved to');
+        }
     });
 
     it('registers every lifecycle type the explorer can route to an address channel', function () {
