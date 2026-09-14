@@ -92,9 +92,11 @@ describe('drift gate run modes (§8.5)', function () {
 
     /* The no-checkout branch, which is the one a dropped CI checkout step lands on.
      *
-     * Skipping there is right for a standalone SDK clone and wrong for a job that declared
-     * the sibling supplied: the gate would exit 0 having compared no handler at all, which
-     * is how a cross-repo guard regresses to green-by-skip with no signal.
+     * It FAILS unless the run declares it has no sibling. Skipping by default was the
+     * defect: the gate exited 0 having compared no handler at all, which is how a
+     * cross-repo guard regresses to green-by-skip with no signal. The full resolution
+     * behaviour is driven in drift_gate_sibling_resolution.test.js; what is kept here is
+     * the pair this suite is about, the declared skip and the strict override.
      */
     describe('no resolvable indexer checkout', function () {
         // Under this name nothing resolves, and an explicit XCHAIN_INDEXER_PATH is
@@ -110,10 +112,17 @@ describe('drift gate run modes (§8.5)', function () {
             return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
         }
 
-        it('skips green for a standalone clone', function () {
-            const { code, out } = runAbsent({ XCHAIN_REQUIRE_SIBLINGS: '' });
+        it('skips green for a DECLARED standalone clone', function () {
+            const { code, out } = runAbsent({ XCHAIN_REQUIRE_SIBLINGS: '', XCHAIN_ALLOW_NO_INDEXER: '1' });
             expect(code, 'standalone clone exit code').to.equal(0);
             expect(out).to.include('skipping the sibling checks');
+        });
+
+        it('fails when the same run does NOT declare it', function () {
+            // The skip is a choice the run makes, never something inferred from a missing
+            // directory. Same fixture, one variable dropped, opposite verdict.
+            const { code } = runAbsent({ XCHAIN_REQUIRE_SIBLINGS: '', XCHAIN_ALLOW_NO_INDEXER: '' });
+            expect(code, 'undeclared missing checkout exit code').to.equal(1);
         });
 
         it('FAILS under XCHAIN_REQUIRE_SIBLINGS=1, naming the path it tried', function () {

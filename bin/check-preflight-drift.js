@@ -13,13 +13,17 @@
  * no longer matches the recorded hash - meaning an indexer validity
  * change landed without a paired review/update of the client check.
  *
- * SKIPS (exit 0) when no indexer checkout is present, so single-repo
- * CI stays green; the sibling CI job (which checks out both) enforces.
- * Under XCHAIN_REQUIRE_SIBLINGS=1 that skip becomes a finding, so a sibling
- * job whose checkout step was dropped fails loudly instead of passing having
- * compared nothing.
+ * FAILS (exit 1) when no indexer checkout resolves, naming what it looked
+ * for and every place it looked. A SKIP there exits 0 having
+ * compared nothing, so a dropped CI checkout step, a typo in
+ * XCHAIN_INDEXER_PATH and a handler directory renamed out from under the
+ * identity test would all report as a clean single-repo run. A run that has no
+ * sibling ON PURPOSE (a standalone SDK clone) declares it with
+ * XCHAIN_ALLOW_NO_INDEXER=1, which a reader can see; XCHAIN_REQUIRE_SIBLINGS=1
+ * overrides that declaration, because a job setting both says the checkout
+ * was supplied and that is the stricter claim.
  *
- * Exit 0 = in sync (or skipped); exit 1 = drift.
+ * Exit 0 = in sync (or a declared standalone run); exit 1 = drift.
  *
  * FAIL-SOFT INSIDE `npm run ci`. A drift exiting 1 as the first link of the
  * chain kills the run before mocha loads: no test tally, no named failing
@@ -59,23 +63,11 @@ let OUT = CONSOLE_SINK;
 function say(...a) { OUT.log(...a); }
 function warn(...a) { OUT.error(...a); }
 
-/* Where the gate looks for the handlers, in order.
- *
- * An explicit XCHAIN_INDEXER_PATH is AUTHORITATIVE: falling back to the sibling when the
- * named path does not resolve would check a different tree than the run declared, and
- * report in-sync about handlers nobody asked about.
- */
-function indexerRootCandidates() {
-    if (process.env.XCHAIN_INDEXER_PATH) return [process.env.XCHAIN_INDEXER_PATH];
-    return [path.join(__dirname, '..', '..', 'xchain-indexer')];
-}
-
-function resolveIndexerRoot() {
-    for (const root of indexerRootCandidates()) {
-        if (fs.existsSync(path.join(root, 'src', 'actions'))) return root;
-    }
-    return null;
-}
+/* Where the gate looks for the handlers, why a candidate was rejected, and the report a
+ * rejection prints. In its own module because this file is already over the repo's
+ * 400-line limit and may not grow; re-exported below so callers keep one import. */
+const indexerRoot = require('./preflight_indexer_root.js');
+const { indexerRootCandidates, describeIndexerCandidates, resolveIndexerRoot } = indexerRoot;
 
 /* The table rows, each tagged 'file', 'directory' or 'malformed' by the shape of the
  * handler path it names. A directory row carries a trailing slash and is hashed over every
@@ -575,19 +567,19 @@ function evaluate() {
 
     const root = resolveIndexerRoot();
     if (!root) {
-        // The skip is for a standalone SDK clone. A run that declared the sibling supplied
-        // (XCHAIN_REQUIRE_SIBLINGS=1) gets a finding instead: there, an unresolved checkout
-        // means the checkout step was dropped, and this gate reporting exit 0 is exactly how
-        // a sibling job regresses to green having compared nothing.
-        if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1') {
-            warn('drift-gate: FAIL: XCHAIN_REQUIRE_SIBLINGS=1 but no xchain-indexer checkout '
-                + 'resolved. Tried:\n  ' + indexerRootCandidates().join('\n  ')
-                + '\n  Each must hold src/actions/. Check the sibling out (or set '
-                + 'XCHAIN_INDEXER_PATH), rather than letting the mapped handlers go uncompared.');
-            return 1;
+        // An unresolved checkout is a FINDING, not a skip. Exiting 0 here and saying so
+        // retires the gate silently: a dropped CI checkout step, a typo in
+        // XCHAIN_INDEXER_PATH and a renamed handler directory all read as "nothing to do"
+        // while every mapped handler goes uncompared. The ONE case that is legitimately not
+        // a finding is a standalone SDK clone, and a run in that case declares itself
+        // (XCHAIN_ALLOW_NO_INDEXER=1) rather than being inferred from a missing directory.
+        if (indexerRoot.noIndexerIsDeclared()) {
+            say(`drift-gate: ${indexerRoot.ALLOW_NO_INDEXER_ENV}=1 declared; skipping the sibling `
+                + 'checks. Nothing in src/preflight/INDEXER-MAP.md was compared (sibling CI enforces).');
+            return failedEarly;
         }
-        say('drift-gate: no xchain-indexer checkout; skipping the sibling checks (sibling CI enforces).');
-        return failedEarly;
+        warn(indexerRoot.unresolvedReport());
+        return 1;
     }
 
     const rows = parseMap(mapPath);
