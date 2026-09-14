@@ -104,6 +104,13 @@ describe('HubConnector hub-served consensus-hash cross-check', function(){
         let lines = await withCapturedError(async () => { await hub.getAllConfig(); });
         assert.deepStrictEqual(lines, []);
     });
+});
+
+describe('HubConnector hub-served consensus-hash cross-check', function(){
+
+    afterEach(function(){
+        nock.cleanAll();
+    });
 
     it('treats a coin the hub does not serve as version skew, not drift', async function(){
         let hub = new HubConnector();
