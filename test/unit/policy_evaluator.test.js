@@ -11,14 +11,13 @@
 const { expect } = require('chai');
 const { evaluatePolicy, GAS_TICK } = require('../../src/cosigner/policy_evaluator.js');
 
+const send = (params) => ({ action: 'SEND', params });
+
 // The pure verdict function shared by AgentSession (client guardrail) and the
 // co-signer daemon (hard enforcement). No I/O, no throws: deny is a return
 // value. These tests pin that contract independently of either caller.
 
 describe('policyEvaluator.evaluatePolicy', function () {
-
-    const send = (params) => ({ action: 'SEND', params });
-
     it('allows an in-policy action', function () {
         const policy = { allowedActions: new Set(['SEND']) };
         const v = evaluatePolicy(policy, send({ tick: 'TOK', amount: '5', destination: 'bc1qx' }));
@@ -56,7 +55,9 @@ describe('policyEvaluator.evaluatePolicy', function () {
         expect(v.violation.code).to.equal('POLICY_DESTINATION_DENIED');
         expect(v.violation.details.destination).to.equal('c');
     });
+});
 
+describe('policyEvaluator.evaluatePolicy', function () {
     it('rejects a negative amount before any cap can be bypassed', function () {
         const policy = { allowedActions: new Set(['SEND']), maxPerAction: { SEND: { TOK: '10' } } };
         const v = evaluatePolicy(policy, send({ tick: 'TOK', amount: '-1000000' }));
@@ -98,7 +99,9 @@ describe('policyEvaluator.evaluatePolicy', function () {
         expect(evaluatePolicy(policy, send({ tick: 'ANY', amount: '4' })).violation.code)
             .to.equal('POLICY_AMOUNT_EXCEEDED');
     });
+});
 
+describe('policyEvaluator.evaluatePolicy', function () {
     it('enforces the window action-count cap from the passed-in usage snapshot', function () {
         const policy = { allowedActions: new Set(['SEND']), maxPerWindow: { hours: 24, maxActions: 2 } };
         expect(evaluatePolicy(policy, send({ amount: '1' }), { count: 1, perTick: {} }).ok).to.equal(true);
@@ -151,7 +154,9 @@ describe('policyEvaluator.evaluatePolicy', function () {
     it('fail-closed default: empty allowedActions denies everything', function () {
         expect(evaluatePolicy({ allowedActions: new Set() }, send({ amount: '1' })).ok).to.equal(false);
     });
+});
 
+describe('policyEvaluator.evaluatePolicy', function () {
     // Caps must bind to each action's real value field, not only literal AMOUNT.
     describe('per-action value-field binding', function () {
 
@@ -198,7 +203,11 @@ describe('policyEvaluator.evaluatePolicy', function () {
             // A single present leg still binds (DEPOSIT only, no GAS_ESCROW): 150 > 100 -> denied.
             expect(evaluatePolicy(policy, { action: 'VOTE', params: { DEPOSIT: '150' } }).ok).to.equal(false);
         });
+    });
+});
 
+describe('policyEvaluator.evaluatePolicy', function () {
+    describe('per-action value-field binding', function () {
         // The summed legs are decoded verbatim from the WIF holder's action string, so each one
         // is validated BEFORE it is summed. Without that ordering a non-numeric leg throws out of resolveValue
         // (math.bignumber) ahead of the amount gate, and a negative leg summed cleanly, shrinking
@@ -253,7 +262,9 @@ describe('policyEvaluator.evaluatePolicy', function () {
             expect(v.evaluation.tick).to.equal('FOO');
         });
     });
+});
 
+describe('policyEvaluator.evaluatePolicy', function () {
     // The SDK compacts an indexed token's tick to its ^<id> wire form by default,
     // and the daemon evaluates params decoded from the PSBT, so the same token can
     // arrive as 'NAME' or '^123'. Identity-sensitive rules must resolve the
@@ -304,7 +315,9 @@ describe('policyEvaluator.evaluatePolicy', function () {
                 .to.equal('POLICY_AMOUNT_EXCEEDED');
         });
     });
+});
 
+describe('policyEvaluator.evaluatePolicy', function () {
     // Actions whose outflow can't be measured from params must fail closed when
     // an amount limit is set, instead of slipping past it silently.
     describe('unbounded value actions (SWEEP / AIRDROP / DIVIDEND)', function () {
