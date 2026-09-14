@@ -168,7 +168,7 @@ const TABLE = {
         // string: PARAMS are opaque method arguments and gas is metered by actual
         // VM consumption. So its value is by-reference in the strongest sense,
         // and refusing it under any amount limit is what makes the bounded rest
-        // parse safe (see BOUNDED_REST_FORMATS in psbtActionDecode.js). Being
+        // parse safe (see BOUNDED_REST_FORMATS in psbt_action_decode.js). Being
         // by-reference-only, an amount cap naming EXECUTE is also rejected at
         // construction, exactly like COINPAY.
         0: { class: UNBOUNDED, byRef: true },

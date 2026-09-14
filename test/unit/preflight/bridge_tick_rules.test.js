@@ -192,7 +192,7 @@ describe('pre-flight bridge landing: ISSUE tick rules', function () {
             expect(f.data.tick).to.equal('JDOG.SUB');
         });
 
-        // P21: a `^id` now reaches this check (tickResolver.js compacts ISSUE.TICK on
+        // P21: a `^id` now reaches this check (tick_resolver.js compacts ISSUE.TICK on
         // format 7). ctx.token forwards it verbatim to explorer.getToken, which the
         // real explorer resolves by id (xchain-explorer/src/db.js getToken(): a
         // leading '^' switches the lookup to `t1.tick_id=?`). These mocks discriminate
@@ -222,7 +222,7 @@ describe('pre-flight bridge landing: ISSUE tick rules', function () {
 
         /* Each opt-in field is now judged on TWO layers, and both are wanted.
          *
-         * src/validator.js carries the offline format-7 field rules, so a caller who
+         * src/protocol/validator.js carries the offline format-7 field rules, so a caller who
          * composes without ever running pre-flight is refused at compose time; the
          * pre-flight bridges every validator finding into the report as a
          * VALIDATOR_SEMANTICS *warning* (universal.js: only FORBIDDEN_CHARACTER is a hard

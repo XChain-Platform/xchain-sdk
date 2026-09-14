@@ -210,7 +210,7 @@ describe('MuSig2AgentSession', function () {
         return new MuSig2AgentSession(sdk, 'WIF',
             // allowUnkeyedSubmits preserves the earlier unkeyed submit shape so these
             // tests keep exercising the MuSig2 path rather than the new key requirement,
-            // which is covered in agentSession.test.js.
+            // which is covered in agent_session.test.js.
             Object.assign({ allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '100' } }, allowUnkeyedSubmits: true }, localPolicy),
             { coSigner: { transport, publicKeys: s.keys } });
     }

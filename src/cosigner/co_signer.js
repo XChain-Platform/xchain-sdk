@@ -79,7 +79,7 @@ function toBytes(v, label) {
 
 // SIGHASH_DEFAULT (0x00) is the only type honored past this gate. SIGHASH_ALL
 // (0x01) also commits to ALL outputs and would be equally safe from the output-
-// gate's point of view, but the witness-assembly side (musig2Signer.js) writes
+// gate's point of view, but the witness-assembly side (musig2_signer.js) writes
 // a bare 64-byte tapKeySig with no trailing sighash-flag byte, which BIP341
 // only permits for SIGHASH_DEFAULT; a non-default type here would sign
 // something the rest of the pipeline cannot correctly finalize. NONE/SINGLE
@@ -105,7 +105,7 @@ function exactU64(v) {
 
 // Which sighash types are signable at all: one definition, shared with the
 // envelope reveal path so the two message derivations cannot drift apart
-// (sighashPolicy.js).
+// (sighash_policy.js).
 const { sighashAllowed, disallowedSighashError } = require('./sighash_policy.js');
 
 // The five standard single-recipient payment templates. Anything else - bare
@@ -282,7 +282,7 @@ class CoSigner {
             // The 2-of-3 tree is ORDER-SENSITIVE: deriveMuSig2P2TR2of3 builds two
             // ASYMMETRIC leaves, MuSig2(agent,recovery) and MuSig2(daemon,recovery),
             // so the daemon must be publicKeys[1]. The agent half normalizes by
-            // searching for its own key (musig2AgentSession.js), so a swapped pair
+            // searching for its own key (musig2_agent_session.js), so a swapped pair
             // does not collide: it derives a different address and differently
             // composed recovery leaves, and the operator's escape hatch is not
             // where they believe it is. Refuse it here instead.
@@ -538,7 +538,7 @@ class CoSigner {
     // never constrains the miner FEE, so a malicious agent can still burn the whole
     // account by omitting (or undersizing) the change output, leaving the entire
     // remainder = sum(inputs) - sum(outputs) to miners behind a benign in-policy
-    // action. setMaximumFeeRate (musig2Signer.js/wallet.js) runs only on the
+    // action. setMaximumFeeRate (musig2_signer.js/wallet.js) runs only on the
     // attacker-controlled client, so the daemon reconciles the fee itself here from
     // data it already holds: every input's witnessUtxo.value (mandatory for the
     // sighash). Always-on, false-positive-free guards: fee uncomputable (an input
@@ -548,7 +548,7 @@ class CoSigner {
     // undersized dust-change drain, which is indistinguishable from a legitimate
     // high fee without chain knowledge) needs the operator's maxFeeSats cap.
     // Returns a denial object, or null when the fee is within bounds.
-    // Values arrive as Number OR BigInt: applyBufferutilsPatch.js teaches
+    // Values arrive as Number OR BigInt: apply_bufferutils_patch.js teaches
     // bip174/bitcoinjs to carry satoshi values above 2^53-1 (e.g. large DOGE
     // UTXOs) as BigInt (see narrowU64). The arithmetic below is done entirely
     // in BigInt so a >2^53 value is neither rejected outright nor rounded.

@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Unit tests for src/x402.js: action-string parsing (incl. spoof
+ * Unit tests for src/utils/x402.js: action-string parsing (incl. spoof
  * cases), invoice lifecycle, send/dispenser/deposit verification with
  * a stubbed explorer, the provisional sweeper, and the client loop
  * with a stubbed session. No network, no real chain.

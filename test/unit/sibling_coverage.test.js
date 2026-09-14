@@ -71,7 +71,7 @@ const SIBLINGS = [
       marker: 'packages',
       guards: 'BIP44 derivation-path parity and the XCALL constant copy' },
     // Marker is a TEMPLATE, not src/: xchain-contracts is laid out one directory
-    // per contract with no src/ at all, and contract-parity.test.js keys off
+    // per contract with no src/ at all, and contract_parity.test.js keys off
     // <name>/<name>.js. A src/ marker here reported the repo absent while it sat
     // right there, which is the same false-confidence bug pointed the other way.
     { repo: 'xchain-contracts',     envs: ['XCHAIN_CONTRACTS_DIR'],

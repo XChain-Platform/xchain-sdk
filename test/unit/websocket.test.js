@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Unit tests for WebSocketClient (src/websocket.js)
+ * Unit tests for WebSocketClient (src/clients/websocket.js)
  *
  * Uses an in-process ws.Server as a mock to test the client
  * without requiring a real xchain-explorer.

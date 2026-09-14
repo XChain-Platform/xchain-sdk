@@ -125,7 +125,7 @@ class BatchBuilder {
         // arbiter does, so `DROP` costs an AIRDROP's 25 here too.
         //
         // A REFUSAL, not a warning, matching the count cap beside it and the
-        // "WHICH SIDE OF THE FLAG" note in batchLimits.js: this mirror speaks
+        // "WHICH SIDE OF THE FLAG" note in batch_limits.js: this mirror speaks
         // for the POST-flag rule set on every network. BATCH_COST_WEIGHTING is
         // genesis-active on testnet and regtest and, since the 2026-09-09 ruling,
         // in force on mainnet too (effective 2026-08-16T00:00:00Z, through the
@@ -178,7 +178,7 @@ class BatchBuilder {
         let mint = mintTicks.length ? maxMintsPerDistinctTick(mintTicks) : { max: 0, approximate: false };
 
         // The caps themselves come from the shared mirror, so a limit change (or
-        // a new capped action) lands in batchLimits.js alone. Iterated over the
+        // a new capped action) lands in batch_limits.js alone. Iterated over the
         // OBSERVED keys in FIRST-APPEARANCE order (spec R2b), the arbiter's own
         // rule, rather than a precedence this builder invents. Worth stating where a caller reads these throws:
         // BATCH_ISSUANCE_LIMITS is ARMED on every network (mainnet at

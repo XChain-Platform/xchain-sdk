@@ -28,7 +28,7 @@
  *
  * D7 keys MINT distinctness on the RESOLVED TICKER ID; the client mirror holds
  * strings and is a DECLARED conservative approximation (see the header of
- * src/batchLimits.js). A vector that straddles one of those two declared
+ * src/protocol/batch_limits.js). A vector that straddles one of those two declared
  * divergences carries `arbiterVerdict` and `sdkVerdict` SEPARATELY plus a
  * `divergence` naming which one it pins - never a single verdict massaged
  * until both halves agree, which is how a divergence gets discovered in
@@ -65,7 +65,7 @@ const { parse } = require('../../src/decoder/parse.js');
  * THE SDK HALF IS THE SHIPPED DECODER, NOT A SECOND SCANNER.
  *
  * The SDK half drives `decoder/parse.js`, the code a consumer actually gets,
- * rather than a `scanBatch` helper kept in batchLimits.js for this test alone.
+ * rather than a `scanBatch` helper kept in batch_limits.js for this test alone.
  * Such a helper restates the arbiter's whole precedence chain a second time
  * with no caller in the SDK, and a mirror only the test reads proves the test,
  * not the product.
@@ -120,7 +120,7 @@ function mirrorMint(entries) {
 const repeat = (n, f) => Array.from({ length: n }, (_, i) => f(i));
 
 /*
- * The two divergences src/batchLimits.js DECLARES in its header. A vector may
+ * The two divergences src/protocol/batch_limits.js DECLARES in its header. A vector may
  * state a different verdict per half only by naming one of these.
  */
 const CARET_ALIAS = 'caret alias (declared divergence 1: detectable, flagged approximate)';

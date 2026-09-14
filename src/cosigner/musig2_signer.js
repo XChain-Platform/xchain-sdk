@@ -18,7 +18,7 @@
  * sdk.wallet.signPsbt: same in (unsigned PSBT hex) and out
  * ({ txHex, txid, psbtHex }), so LifecycleManager can complete a 2-of-2
  * MuSig2 key-path spend wherever it would otherwise single-WIF sign. Wired
- * via submitOpts.signer (see lifecycleManager.js).
+ * via submitOpts.signer (see lifecycle_manager.js).
  *
  * Signs every taproot input of the aggregate spend in ONE co-signer round
  * (one authorization, one budget charge, a distinct MuSig2 nonce per input).

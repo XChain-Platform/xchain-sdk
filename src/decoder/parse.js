@@ -44,7 +44,7 @@ const { MAX_ACTION_DATA_LENGTH } = require('../contract/chunk_helper.js');
 //
 // WHAT `BATCH_ACTION_LIMITS` NAMES HERE, AND WHY IT MOVED
 //
-// batchLimits.js keeps the arbiter's two tables apart, because the arbiter does:
+// batch_limits.js keeps the arbiter's two tables apart, because the arbiter does:
 // the ungated `BATCH_ACTION_LIMITS` and the flag-gated `BATCH_GATED_ACTION_LIMITS`
 // (DEPLOY, D5), merged into `BATCH_ACTION_LIMITS_ACTIVE`. This module has only
 // ever exported ONE table under the name `BATCH_ACTION_LIMITS`, and
@@ -56,7 +56,7 @@ const { MAX_ACTION_DATA_LENGTH } = require('../contract/chunk_helper.js');
 // DEPLOY. One table, and it is the one this module enforces. The split halves
 // are re-exported beside it under their own names for a caller that needs to
 // know WHICH caps are flag-dependent; the pre-flag table stays reachable at its
-// source in batchLimits.js, deliberately NOT re-exported here, because two
+// source in batch_limits.js, deliberately NOT re-exported here, because two
 // spellings of "the limits" in one module is how a consumer picks the wrong one.
 const {
     BATCH_ACTION_LIMITS_ACTIVE,
@@ -457,7 +457,7 @@ function parseBatch(rawAction, version, segments, doValidate) {
             ? maxMintsPerDistinctTick(mintTicks)
             : { max: 0, approximate: false };
         // First-appearance order over the command LIST, DECLARED by spec R2b
-        // (batchLimits.js limitKeysInListOrder owns the rule for both cap loops
+        // (batch_limits.js limitKeysInListOrder owns the rule for both cap loops
         // in this SDK). The arbiter reports only the FIRST per-action cap it
         // breaks, so this order decides which finding a caller reading
         // findings[0] sees named - a consensus string, not a presentation
@@ -473,7 +473,7 @@ function parseBatch(rawAction, version, segments, doValidate) {
             // Only the ABSENCE of a finding is ever in doubt, which is what the
             // flag tells a caller that asks. Standing down on the flag instead
             // let one unrelated caret silence a breach a literal MINT repeat
-            // had already proved. See batchLimits.js's header.
+            // had already proved. See batch_limits.js's header.
             const observed = a === 'MINT' ? mint.max : counts[a];
             if (observed > limit) {
                 // MINT's message names the DISTINCT-token unit, because `count`

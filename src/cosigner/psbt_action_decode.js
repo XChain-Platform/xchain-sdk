@@ -53,7 +53,7 @@ const { envelopeLeafFromPsbtInput, parseEnvelopeScript } = require('./envelope.j
 const { ENVELOPE_MAX_PAYLOAD } = require('../protocol/constants.js');
 
 // Mirror xchain-decoder/src/XChainDecoder.js:44-63. The action-data cap is
-// imported from chunkHelper.js (the SDK's single parity-guarded copy) so the
+// imported from chunk_helper.js (the SDK's single parity-guarded copy) so the
 // co-signer's OVERSIZED gate cannot drift from the rest of the SDK.
 //
 // These carrier constants are re-declared rather than imported because the
@@ -104,7 +104,7 @@ const VALUE_FIELDS = new Set(['TICK', 'AMOUNT', 'DESTINATION']);
  * decided by the CONTRACT'S CODE at the referenced CONTRACT_ACTION_INDEX, never
  * by the action string, and gas is metered by actual VM consumption rather than
  * declared. So the params are opaque method arguments, and the action is
- * classified UNBOUNDED in valueDerivability.js - it is refused outright whenever
+ * classified UNBOUNDED in value_derivability.js - it is refused outright whenever
  * the policy carries ANY amount limit. That is what makes under-counting
  * impossible here: not a cleverer parse, but the fact that no amount cap is ever
  * allowed to bind an action whose amount lives off-string.

@@ -15,7 +15,7 @@
  *
  * LINT_GLOBAL_ALIAS behaviour through the SDK's VENDORED lint_core.
  *
- * contract-parity.test.js already pins the vendored copy byte-identical (sha256)
+ * contract_parity.test.js already pins the vendored copy byte-identical (sha256)
  * to the xchain-vm canonical, but only when the sibling checkout is present. This
  * suite pins the BEHAVIOUR the SDK's pre-flight linter must show whether or not a
  * sibling is around: an author writing `this.WebAssembly` or

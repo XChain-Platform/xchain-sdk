@@ -266,7 +266,7 @@ async function checkIssue(ctx) {
     if (!tick || Array.isArray(tick)) return;
 
     // `tick` may now be a `^id` reference on the edit formats (row 24 lifted the
-    // validator's blanket caret refusal; tickResolver.js compacts ISSUE.TICK on
+    // validator's blanket caret refusal; tick_resolver.js compacts ISSUE.TICK on
     // formats 6/7 only). No separate id-to-name resolution step runs here: ctx.token
     // forwards the wire value verbatim to explorer.getToken, which the indexer's
     // own explorer already resolves by id (xchain-explorer/src/db.js getToken():

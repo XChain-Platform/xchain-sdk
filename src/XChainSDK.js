@@ -280,11 +280,11 @@ class XChainSDK {
         this.actions   = new Actions(this);
         // Ticker compaction: rewrites a ticker name to its smaller `^<id>` wire
         // form before serialization (on by default; { compactTickers: false } to
-        // opt out). See tickResolver.js.
+        // opt out). See tick_resolver.js.
         this.tickResolver = new TickResolver(this);
         // Address compaction: the address twin of tickResolver, rewrites an address
         // to its smaller `^<id>` wire form before serialization (on by default;
-        // { compactAddresses: false } to opt out). See addressResolver.js.
+        // { compactAddresses: false } to opt out). See address_resolver.js.
         this.addressResolver = new AddressResolver(this);
         this.contracts = new ContractUtils();
         this.musig2    = new MuSig2();
@@ -939,7 +939,7 @@ class XChainSDK {
     // Create a policy-bounded session for an AUTOMATED AGENT: same surface as
     // session(), but every submit is checked against a declarative spending
     // policy (action allowlist, per-action and per-window caps, destination
-    // allowlist, confirmation hook). Fail-closed. See src/agentSession.js.
+    // allowlist, confirmation hook). Fail-closed. See src/cosigner/agent_session.js.
     agentSession(wif, policy, opts) {
         return new AgentSession(this, wif, policy, opts);
     }
@@ -948,7 +948,7 @@ class XChainSDK {
     // MuSig2 P2TR (agent key + policy co-signer key), so the WIF holder can't
     // bypass policy with raw SDK calls - the co-signer withholds its partial on
     // out-of-policy actions. opts.coSigner = { transport, publicKeys, network? };
-    // the agent's own pubkey must be in publicKeys. See src/cosigner/musig2AgentSession.js.
+    // the agent's own pubkey must be in publicKeys. See src/cosigner/musig2_agent_session.js.
     musig2AgentSession(wif, policy, opts) {
         return new MuSig2AgentSession(this, wif, policy, opts);
     }

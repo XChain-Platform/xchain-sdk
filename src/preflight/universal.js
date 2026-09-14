@@ -31,7 +31,7 @@ const numeric = require('./numeric.js');
 
 // Wire fields that reference a TICK whose existence is checkable.
 // ISSUE is excluded at the loop below (existence is legal there: format 0
-// creates). Derived from tickRefFields.js, never restated. FILE.GATE_TICKER
+// creates). Derived from tick_ref_fields.js, never restated. FILE.GATE_TICKER
 // belongs in this check: an unknown one makes the indexer reject the whole
 // FILE, and a FILE carries its payload.
 const TICK_FIELDS = TICK_EXISTENCE_FIELDS;
@@ -107,7 +107,7 @@ const CARET_UNRESOLVABLE_BY_DECODER = (() => {
  * ^id)`, and below it the field falls through to the handler's own
  * isCryptoAddress check. A well-formed id that is simply DANGLING is the same
  * rejection with no local evidence: the explorer exposes address -> id
- * (/address/{addr}.info.address_id, which is how addressResolver.js compacts)
+ * (/address/{addr}.info.address_id, which is how address_resolver.js compacts)
  * and nothing exposes the inverse, so the client cannot tell a live id from a
  * dead one and says so instead of guessing.
  *

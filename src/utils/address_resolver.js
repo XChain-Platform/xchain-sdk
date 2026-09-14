@@ -20,7 +20,7 @@
  * resolver looks an address up via the explorer, caches the id permanently
  * (index_addresses ids never change once assigned, and they are deterministic
  * + reorg-stable), and substitutes the `^<id>` form into the action before it
- * is serialized. It is the address twin of tickResolver.js.
+ * is serialized. It is the address twin of tick_resolver.js.
  *
  * Behavior is opt-out, ON by default: the SDK tries to produce the smallest
  * transaction and falls back to the supplied address whenever the id cannot be

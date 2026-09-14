@@ -170,7 +170,7 @@ describe('decoder.parse - BATCH sub-grammar', function () {
         it('DEPLOY is absent from the indexer UNGATED table, so below the flag it stays uncapped', function () {
             // The pin above proves the SDK and the arbiter agree on DEPLOY: 1.
             // This proves the arbiter still keeps it on the GATED side, which is
-            // what makes the merge in batchLimits.js a mirror rather than a
+            // what makes the merge in batch_limits.js a mirror rather than a
             // guess. `gatedActionLimits` capitalizes its A, so the pattern reads
             // only the ungated table by construction.
             const src = fs.readFileSync(BATCH_SRC, 'utf8');
@@ -219,7 +219,7 @@ describe('decoder.parse - BATCH sub-grammar', function () {
             // whether they do. This module DECODES a string the chain may
             // already have accepted, so silence is the honest answer: raising a
             // finding here would claim a limit the chain may never have reached.
-            // The divergence is declared in batchLimits.js's header, not hidden.
+            // The divergence is declared in batch_limits.js's header, not hidden.
             const r = parse('BATCH|0|MINT|0|JDOG|1;MINT|0|^614|1');
             expect(r.ok).to.equal(true);
             expect(r.validation.findings.map(f => f.code)).to.not.include('BATCH_LIMIT_EXCEEDED');

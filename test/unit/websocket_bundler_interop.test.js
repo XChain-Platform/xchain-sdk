@@ -72,7 +72,7 @@ function makeBundledWsModule() {
     return getAugmentedNamespace(namespace);
 }
 
-// Load a pristine copy of src/websocket.js while require('ws') resolves to the
+// Load a pristine copy of src/clients/websocket.js while require('ws') resolves to the
 // supplied module object. Restores the require cache afterwards so the rest of
 // the suite keeps seeing the real `ws`.
 function loadClientWithWsModule(wsExports) {

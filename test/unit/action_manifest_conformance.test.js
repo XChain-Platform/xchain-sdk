@@ -33,7 +33,7 @@ const MANIFEST = JSON.parse(fs.readFileSync(VENDORED, 'utf8'));
 const Formats  = require('../../src/protocol/formats.js');
 
 const EDIT_HINT = 'Edit xchain-documentation/protocol/action-manifest.json, re-vendor with ' +
-                  'bin/sync-action-manifest.sh, or change src/formats.js.';
+                  'bin/sync-action-manifest.sh, or change src/protocol/formats.js.';
 
 function manifestSlice(flag) {
     return Object.entries(MANIFEST.actions).filter(([, v]) => v[flag]).map(([k]) => k).sort();

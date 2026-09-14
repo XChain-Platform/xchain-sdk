@@ -33,7 +33,7 @@ const crypto = require('crypto');
 // not a byte-identical copy (uuid:0eb83c45) - it exports 33 of the canonical 59
 // symbols and omits e.g. MAX_STANDARD_TX_WEIGHT, so no file diff guards this
 // seam and a "restore byte identity" edit would be wrong. These are the SDK's
-// single in-repo entry point (validator.js and psbtActionDecode.js import them
+// single in-repo entry point (validator.js and psbt_action_decode.js import them
 // from here); test/unit/protocol_size_caps.test.js pins them to the canonical
 // values so a one-sided bump fails locally.
 const PROTO = require('../protocol/constants.js');

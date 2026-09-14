@@ -228,7 +228,7 @@ function verifyLockedBalanceProof(proof, trustedStateRoot, chain, network, expec
         // Gate on the TRUSTED height. Past the bind above `label` IS that height,
         // so reuse it: the activation carrier's own strict parse takes only a
         // number or a digit string, and a BigInt block_index - the shape a
-        // BIGINT column arrives in, and the shape wireIndex.js exists to carry -
+        // BIGINT column arrives in, and the shape wire_index.js exists to carry -
         // would read as NaN there and refuse an armed chain. Normalizing here
         // keeps the refusal for a height the carrier genuinely cannot compare
         // (above 2^53) and drops it for the ones it can.

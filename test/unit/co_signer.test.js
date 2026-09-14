@@ -123,7 +123,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
 
     it('rejects an explicit SIGHASH_ALL (0x01) request even though it commits to all outputs', function () {
         // SIGHASH_ALL is output-safe (same commitment as SIGHASH_DEFAULT) but the
-        // witness-assembly side (musig2Signer.js) writes a bare 64-byte tapKeySig
+        // witness-assembly side (musig2_signer.js) writes a bare 64-byte tapKeySig
         // with no trailing sighash-flag byte, which BIP341 only permits for
         // SIGHASH_DEFAULT. Approving ALL here would let the co-signer authorize a
         // spend the rest of the pipeline cannot correctly finalize, so it is
@@ -639,7 +639,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
 
     // Anti-forgery: a witnessUtxo.script that isn't the daemon's own derived
     // account must be denied (PREVOUT_NOT_OUR_ACCOUNT), and denial must consume
-    // no velocity-window budget (see coSigner.js _checkPrevouts).
+    // no velocity-window budget (see co_signer.js _checkPrevouts).
     it('denies a foreign witnessUtxo.script with PREVOUT_NOT_OUR_ACCOUNT, before _checkOutputs would otherwise pass it', function () {
         const acct = makeAccount();
         const foreignSk = crypto.randomBytes(32);

@@ -30,7 +30,7 @@
 const express = require('express');
 const { safeTokenEqual } = require('../utils/safe_compare.js');
 // One body ceiling for BOTH co-signer transports, derived from the protocol's
-// envelope payload maximum rather than hardcoded here (httpBodyLimit.js).
+// envelope payload maximum rather than hardcoded here (http_body_limit.js).
 const { resolveMaxBodyBytes, tooLargeHandler } = require('./http_body_limit.js');
 
 /*
@@ -48,7 +48,7 @@ const { resolveMaxBodyBytes, tooLargeHandler } = require('./http_body_limit.js')
  *                    faults and denial reasons (G17). Defaults to the console,
  *                    which a process manager already captures durably.
  *   maxBodyBytes {number}  request-body ceiling; defaults to the derived
- *                    envelope-round maximum (httpBodyLimit.js). Anything past
+ *                    envelope-round maximum (http_body_limit.js). Anything past
  *                    it answers 413 REQUEST_TOO_LARGE, at whatever value is set.
  * @returns {express.Express}
  */
@@ -146,7 +146,7 @@ function createCoSignerApp(coSigner, opts = {}) {
     });
 
     // After the route: an oversize body is a stated capability limit, not a
-    // network fault (httpBodyLimit.js). Everything else falls through.
+    // network fault (http_body_limit.js). Everything else falls through.
     app.use(tooLargeHandler(maxBodyBytes, log));
 
     return app;

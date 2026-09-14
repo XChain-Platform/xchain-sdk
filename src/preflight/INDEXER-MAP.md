@@ -1110,7 +1110,7 @@ answer, and it is recorded here rather than edited out of that entry so the
 reversal is visible where the reasoning lives.
 
 That entry answered the posture question with "WARNING, not refusal" for BOTH
-compose-side sites. **For `batchBuilder.js` that answer is now overturned: the
+compose-side sites. **For `batch_builder.js` that answer is now overturned: the
 builder REFUSES an over-budget batch**, in the arbiter's own position (after
 the count pre-filter, before the per-ACTION cap loop), with the arbiter's own
 arithmetic. The reason the earlier answer gave is real but it does not decide
@@ -1129,7 +1129,7 @@ this site:
 `validator.js` is UNCHANGED and still carries no weight rule at all: it
 validates a finished BATCH command string, which is the decode side of the
 split above. The weight arithmetic itself lives once, in
-`batchLimits.js` (`actionWeight`, which `subCommandWeight` now calls), so the
+`batch_limits.js` (`actionWeight`, which `subCommandWeight` now calls), so the
 compose and decode sites cannot come to weigh an action two ways. Pinned by
 `test/unit/batch_builder_cost_weight.test.js`, whose arbiter half drives the same
 vectors through the real `xchain-indexer` Batch handler.
@@ -1221,7 +1221,7 @@ DEPLOY's weight and the ratified EXECUTE/XEXEC weight still unwired in the
 arbiter. Both landed (DEPLOY, EXECUTE and XEXEC at 30, budget 250), so the
 condition is met and the mirror follows where that entry said it would:
 
-- `batchLimits.js` gains `BATCH_WEIGHT_BUDGET`, `BATCH_COMMAND_WEIGHTS`,
+- `batch_limits.js` gains `BATCH_WEIGHT_BUDGET`, `BATCH_COMMAND_WEIGHTS`,
   `subCommandWeight` and `batchWeight` as the single source, byte-equal to the
   arbiter's `weightBudget` and `commandWeights`.
 - `decoder/parse.js` and `preflight/checks/batch.js` weigh a batch that already
@@ -1232,7 +1232,7 @@ condition is met and the mirror follows where that entry said it would:
   rejecting the whole batch before any per-action count is taken.
 
 **The posture question that entry raised is answered: WARNING, not refusal.**
-`batchBuilder.js` and `validator.js` are deliberately NOT given a weight
+`batch_builder.js` and `validator.js` are deliberately NOT given a weight
 refusal. `BATCH_COST_WEIGHTING` is live on testnet and regtest from genesis and
 UNARMED on mainnet, and a client has no chain height to tell them apart, so a
 refusal would false-block legal mainnet work - the direction this module's
@@ -1310,9 +1310,9 @@ rather than left to be inferred from a refreshed hash.
   a batch the chain rejects, never the reverse.
 
 - **What must happen before the mirror is built.** The remaining weight classes
-  land in the arbiter, THEN `batchLimits.js` gains the budget and the weight table
+  land in the arbiter, THEN `batch_limits.js` gains the budget and the weight table
   as its single source, and the four other `BATCH_COMMAND_LIMIT` sites follow it
-  (`batchBuilder.js`, `validator.js`, `decoder/parse.js`,
+  (`batch_builder.js`, `validator.js`, `decoder/parse.js`,
   `preflight/checks/batch.js`). Note the posture question that work has to answer
   and this entry does not: `batchBuilder` and `validator` REFUSE on the command
   cap, and a refusal on a weight that is unarmed on mainnet would false-block
@@ -1515,7 +1515,7 @@ through one shared client copy of the scan, `src/protocol/batch_limits.js`:
   plus any number of children. A caret TICK is never exempt even when it
   contains a dot. Classification reads params[1] of the NORMALIZED sub-command,
   so a legacy no-VERSION command classifies off the same TICK the executor sees.
-  Mirrored in `batchBuilder.js`, `validator.js` and `decoder/parse.js`.
+  Mirrored in `batch_builder.js`, `validator.js` and `decoder/parse.js`.
 - **250-command cap, checked FIRST.** The count is the raw `';'`-split list with
   empty elements included, and its precedence is pinned: a batch breaking the cap
   AND the ISSUE limit reports the cap. Mirrored at all four sites. Pre-flight

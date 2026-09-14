@@ -78,7 +78,7 @@ class LifecycleManager {
     //                     tick is given, and both may be used together. Results land on
     //                     result.contractState / result.contractBalance
     //   maxFeeSats      - absolute miner-fee ceiling the encoder's answer must stay
-    //                     under (reconcileEncoded.js). Unset leaves only the
+    //                     under (reconcile_encoded.js). Unset leaves only the
     //                     always-on burn guards
     //   maxPhaseFundingSats - absolute ceiling on the TOTAL value the encoder may put
     //                     into a phase's shaped funding legs. maxFeeSats
@@ -173,7 +173,7 @@ class LifecycleManager {
         // inputs, the outputs and the fee; until this gate, nothing between that
         // response and the sign call asked whether the transaction still spent the
         // caller's coin where the caller asked. Fail-closed - it throws, so nothing
-        // is signed and nothing is broadcast. See reconcileEncoded.js.
+        // is signed and nothing is broadcast. See reconcile_encoded.js.
         const reconcileIntent = {
             network:       this._reconcileNetwork(),
             customOutputs: encoderOpts.customOutputs,
@@ -236,7 +236,7 @@ class LifecycleManager {
         // `carriedRawData` for the two uses that genuinely need what is ON CHAIN:
         // the phase-2 reveal rebuild and the returned `result.actionString`. The
         // gates recompute the one legitimate COMPRESSION rewrite locally
-        // (bindActionCarrier.js), on both the inline and the chunk lane, so a real
+        // (bind_action_carrier.js), on both the inline and the chunk lane, so a real
         // compressed FILE still binds.
         assertCarrierBinding({
             psbt:           encoded.psbt,

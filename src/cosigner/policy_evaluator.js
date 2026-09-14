@@ -271,7 +271,7 @@ function deny(code, message, details, evaluation) {
  * @param {object} actionData  { action, version?, params } (params may use camelCase or UPPER_SNAKE).
  *   `version` is optional: when present (the co-signer daemon decodes it from the PSBT) the
  *   value-derivability table is enforced, so an action whose outflow the evaluator cannot read
- *   is denied instead of silently skipping every amount gate. See valueDerivability.js.
+ *   is denied instead of silently skipping every amount gate. See value_derivability.js.
  * @param {object} [windowUsage]  current window snapshot, REQUIRED when policy.maxPerWindow is set:
  *   { count:number, perTick:{ TICK: totalString } }
  * @returns {object} verdict:
@@ -330,7 +330,7 @@ function evaluatePolicy(policy, actionData, windowUsage) {
     // a magnitude comparison (gtDecimal) or a running sum (addDecimal): a negative
     // string sails past the per-action cap, LOWERS the projected window total, and
     // once recorded permanently poisons the velocity window. The amount is decoded
-    // verbatim from the WIF holder's PSBT action string (psbtActionDecode.js) with
+    // verbatim from the WIF holder's PSBT action string (psbt_action_decode.js) with
     // no numeric validation, so it is attacker-controlled and must be validated
     // here before any cap binds it. A canonical non-negative decimal only.
     if (amount !== undefined && !isNonNegativeDecimal(amount))

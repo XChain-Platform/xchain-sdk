@@ -11,7 +11,7 @@
 // SDK passthrough: a PSBT the encoder built around a satoshi value
 // above Number.MAX_SAFE_INTEGER (2^53-1, ~90.07M DOGE) must parse, sign,
 // finalize, and extract here with the value carried bit-exact (BigInt).
-// src/applyBufferutilsPatch.js (loaded by src/wallet.js) provides the
+// src/utils/apply_bufferutils_patch.js (loaded by src/utils/wallet.js) provides the
 // BigInt-safe bitcoinjs-lib/bip174 behavior; these tests pin it.
 
 const { expect } = require('chai');

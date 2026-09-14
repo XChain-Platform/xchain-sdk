@@ -25,7 +25,7 @@
  * therefore point wallet-owned value at an output of its choosing, or burn the whole
  * balance as fee, behind an action string that reads as benign.
  *
- * The daemon co-signer already reconciles its own side (coSigner.js _checkOutputs /
+ * The daemon co-signer already reconciles its own side (co_signer.js _checkOutputs /
  * _checkFee); this is the same discipline for the single-WIF path, which has no
  * daemon in it. Rules are chosen to be false-positive-free: every authorization is
  * read out of the PSBT itself or out of the caller's own submitted intent, never
@@ -395,7 +395,7 @@ function reconcileEncoded(psbtHex, intent) {
     // A cap that will not parse is a cap that cannot be enforced, and skipping the
     // comparison would silently remove the bound the caller believes it set - worse
     // than passing no cap at all, because the caller thinks it is protected. Fail
-    // closed here, like every sibling exactU64 caller (coSigner.js, recovery.js).
+    // closed here, like every sibling exactU64 caller (co_signer.js, recovery.js).
     if (intent.maxPhaseFundingSats != null && maxPhaseFunding === null)
         return deny('MALFORMED_PHASE_FUNDING_CAP',
             { maxPhaseFundingSats: String(intent.maxPhaseFundingSats),

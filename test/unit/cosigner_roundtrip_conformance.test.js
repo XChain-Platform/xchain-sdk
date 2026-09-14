@@ -11,7 +11,7 @@
 // Pins the co-signer's PSBT decode path to the SHARED encoder<->decoder
 // roundtrip-conformance fixture.
 //
-// psbtActionDecode.js re-declares the carrier constants (the XCHN magic word,
+// psbt_action_decode.js re-declares the carrier constants (the XCHN magic word,
 // the p2sh/p2wsh two-phase tags and the AES-128-CTR key/IV derivation) because
 // the authoritative decoder is service-bound and cannot be imported. Until now
 // that mirror was held together only by a comment: every other wire-format

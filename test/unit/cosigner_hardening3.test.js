@@ -214,7 +214,7 @@ describe('G13: client-visible error codes', function () {
 
 describe('G17: fault and denial logging', function () {
 
-    // Real HTTP against a listening app, mirroring coSignerServer.test.js: the
+    // Real HTTP against a listening app, mirroring co_signer_server.test.js: the
     // express internals are not a stable enough surface to reach into.
     function serve(coSignerStub, opts) {
         return new Promise((resolve) => {

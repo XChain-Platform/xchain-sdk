@@ -30,7 +30,7 @@
 // verdicts on real addresses is the property that actually protects a lock.
 //
 // Skips green when the indexer sibling is absent (standalone SDK install), unless
-// XCHAIN_REQUIRE_SIBLINGS=1, the checkpointCommitmentTwinParity.test.js convention.
+// XCHAIN_REQUIRE_SIBLINGS=1, the checkpoint_commitment_twin_parity.test.js convention.
 
 const assert = require('assert');
 const fs     = require('fs');

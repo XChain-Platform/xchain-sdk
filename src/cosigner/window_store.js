@@ -434,7 +434,7 @@ class WindowStore {
     // live entry carries that txid.
     //
     // An envelope is two transactions carrying ONE action and is charged once, at
-    // the commit (coSigner.js step 10). The reveal was still EVALUATED against the
+    // the commit (co_signer.js step 10). The reveal was still EVALUATED against the
     // full snapshot, so the evaluator projected a second expenditure for an action
     // the window had already paid for: at maxActions:1 the commit passes, consumes
     // the window, and its own reveal is then denied POLICY_WINDOW_COUNT_EXCEEDED,

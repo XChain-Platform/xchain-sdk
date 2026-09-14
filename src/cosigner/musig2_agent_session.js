@@ -31,10 +31,10 @@
  * Spend path: the local AgentSession policy still runs first as a fast
  * pre-flight, then the encoder builds the PSBT against the aggregate P2TR
  * address and the co-signer is the authoritative, WIF-independent gate
- * (see musig2Signer.js + coSigner.js).
+ * (see musig2_signer.js + co_signer.js).
  *
  * SCOPE (P3 slice 2): key-path 2-of-2, single taproot input (see
- * musig2Signer.js). The 2-of-3 recovery tap-tree and multi-input spends are
+ * musig2_signer.js). The 2-of-3 recovery tap-tree and multi-input spends are
  * later slices.
  *
  ********************************************************************/

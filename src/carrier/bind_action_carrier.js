@@ -13,7 +13,7 @@
 // Bind the ACTION a PSBT actually carries to the action the CALLER asked for,
 // at the last moment before a signature exists.
 //
-// reconcileEncoded.js proves the encoder's answer still spends the caller's coin
+// reconcile_encoded.js proves the encoder's answer still spends the caller's coin
 // where the caller asked: it reads outputs, values and the fee. It deliberately
 // never reads the data carrier, so the one thing it cannot say is whether the
 // command riding in that carrier is the command that was submitted. A
@@ -27,7 +27,7 @@
 // carrier is read back out of the bytes about to be signed and compared to the
 // caller's own action string. Re-deriving the expected carrier locally would
 // mean a second copy of the encoder's construction plus a byte-parity gate
-// forever, which verifyCarrierScripts.js already rejects by name.
+// forever, which verify_carrier_scripts.js already rejects by name.
 //
 // Fail-closed: every path either matches or throws, and "cannot read the
 // carrier" throws rather than passing, because that is the exact shape of a

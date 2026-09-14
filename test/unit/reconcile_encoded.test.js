@@ -442,7 +442,7 @@ describe('reconcileEncoded foreign-input change', function () {
 //
 // Both enforcement sites carried `&& parsed !== null`, so a typo'd ceiling
 // silently removed the bound the caller believed it had set. Every sibling
-// exactU64 caller (coSigner.js, recovery.js) fails closed on the same null.
+// exactU64 caller (co_signer.js, recovery.js) fails closed on the same null.
 // ---------------------------------------------------------------------------
 
 describe('reconcileEncoded malformed caps fail closed', function () {

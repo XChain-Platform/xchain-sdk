@@ -640,7 +640,7 @@ describe('ContractUtils', function () {
         it('rejects syntax errors', function () {
             let result = utils.validate('function( { broken');
             expect(result.valid).to.be.false;
-            // The wording comes from lint-core.js, which is vendored
+            // The wording comes from lint_core.js, which is vendored
             // byte-identical from xchain-vm and is the consensus linter: the
             // unparseable-code rule reports "unsupported syntax (ES<n> maximum)"
             // and carries acorn's own message. Assert that, not the older

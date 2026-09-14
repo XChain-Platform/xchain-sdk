@@ -28,7 +28,7 @@ const { ADDRESS_REF_FIELDS } = require('../addressRefFields.js');
 // module. The decoder's parse below is the opposite case and stays in its body.
 const { BET_LIMITS } = require('../actions/betting.js');
 // BATCH limit scan (command cap + dotted-TICK child classification), shared
-// with the builder, the decoder mirror and pre-flight. See src/batchLimits.js.
+// with the builder, the decoder mirror and pre-flight. See src/protocol/batch_limits.js.
 const {
     BATCH_ACTION_LIMITS_ACTIVE,
     BATCH_COMMAND_LIMIT,
@@ -50,13 +50,13 @@ const BATCH_LIMIT_MESSAGES = {
     ISSUE:  'BATCH can contain at most 1 top-level ISSUE action (child TICKs like JDOG.1 are exempt)',
 };
 
-// Caller-facing per-leg field of a repeated-field format (see formatSelector.js)
+// Caller-facing per-leg field of a repeated-field format (see format_selector.js)
 const LEGS_FIELD = FormatSelector.LEGS_FIELD;
 
 // Flat set of address-bearing wire fields (excludes type-gated LIST.ITEM, validated
 // per list TYPE elsewhere). A ^<id> reference to an already-indexed address is valid
 // anywhere a full address is; the indexer resolves it via getAddressId and the SDK
-// address compactor (addressResolver.js) emits this form.
+// address compactor (address_resolver.js) emits this form.
 const ADDRESS_REF_FIELD_SET = (() => {
     const s = new Set();
     for (const a of Object.keys(ADDRESS_REF_FIELDS))
@@ -88,7 +88,7 @@ const MAX_GATE_MIN_AMOUNT_LENGTH = 40;
 const MAX_CODE_SIZE      = require('./constants.js').MAX_CODE_SIZE;
 
 // Chunked-DEPLOY caps (per-carrier CODE_PART budget + max chunks per assembly).
-// Single in-repo source of truth: chunkHelper.js, whose exported copies the
+// Single in-repo source of truth: chunk_helper.js, whose exported copies the
 // cross-service regression suite asserts against the canonical values in
 // xchain-documentation/protocol/constants.js.
 const { MAX_DEPLOYCHUNK_PART_BYTES, MAX_DEPLOY_CHUNKS } = require('../contract/chunk_helper.js');
@@ -495,7 +495,7 @@ class Validator {
 
         // ADDRESS_ID reference (^57): valid for any address-bearing field, only
         // outside the full-address form. Mirrors the TICK ^id branch above; the
-        // indexer resolves ^<id> via getAddressId, and addressResolver.js emits it.
+        // indexer resolves ^<id> via getAddressId, and address_resolver.js emits it.
         if (ADDRESS_REF_FIELD_SET.has(field) && String(value).charAt(0) === '^') {
             let id = String(value).substring(1);
             if (!this.util.isNumeric(id))
@@ -1091,7 +1091,7 @@ class Validator {
         let mint = mintTicks.length ? maxMintsPerDistinctTick(mintTicks) : { max: 0, approximate: false };
 
         // The caps come from the shared mirror, so a limit change (or a new
-        // capped action) lands in batchLimits.js alone. BATCH is skipped: its
+        // capped action) lands in batch_limits.js alone. BATCH is skipped: its
         // limit of 0 was already reported per occurrence in the descent-stop
         // above. Worth stating where a caller reads these findings:
         // BATCH_ISSUANCE_LIMITS is ARMED on every network (mainnet at
@@ -1816,7 +1816,7 @@ class Validator {
      * The ISSUE format this action will be serialized as, or null when it cannot be
      * decided from the wire fields alone.
      *
-     * An absent VERSION is auto-selected downstream (formatSelector.js), so the two
+     * An absent VERSION is auto-selected downstream (format_selector.js), so the two
      * formats whose caret rule is stricter are recovered from the fields only THEY
      * carry: BRIDGE_CHAINS / MIN_DEPTH / LOCK_BRIDGE appear on format 7 alone and the
      * controller fields on format 6 alone (issue.js:105-120). Anything else answers

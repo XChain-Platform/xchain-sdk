@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Unit tests for src/agentSession.js: the policy-bounded agent wallet.
+ * Unit tests for src/cosigner/agent_session.js: the policy-bounded agent wallet.
  * WalletSession.submit is stubbed so no encoder/explorer is touched;
  * these tests exercise ONLY the policy layer and its persistence.
  *

@@ -15,7 +15,7 @@
  * XChain Platform SDK - co-signer HTTP request-body ceiling
  *
  * ONE definition for both co-signer transports (the loopback sidecar in
- * server.js and the multi-tenant hostedServer.js). They forward the §3.9
+ * server.js and the multi-tenant hosted_server.js). They forward the §3.9
  * envelope surface identically, so a body a request can legally carry on one
  * must be legal on the other; two hardcoded '256kb' literals is how they would
  * drift apart.
@@ -31,7 +31,7 @@
  * judged it happily.
  *
  * RAISING BYTES IS NOT RAISING WORK. What bounds the daemon's CPU is
- * `maxCosignInputs` (G14, coSigner.js), and that is untouched here: the body
+ * `maxCosignInputs` (G14, co_signer.js), and that is untouched here: the body
  * limit only ever bounded bytes. The residual cost of the raise is buffered
  * memory per in-progress upload, which is why `maxBodyBytes` is an option: an
  * exposed hosted deployment can tune the ceiling down WITHOUT going back to an

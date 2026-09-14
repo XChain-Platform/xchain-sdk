@@ -367,7 +367,7 @@ describe('G9: allowedDestinations enforceability', function () {
     });
 
     it('pins the 7-of-68 figure the G9 rationale quotes, derived from the format table', function () {
-        // The comment in policyEvaluator.js sizes how little of the policy
+        // The comment in policy_evaluator.js sizes how little of the policy
         // surface allowedDestinations binds, and a hand-counted figure drifts
         // the moment a format gains or loses a DESTINATION field. Derive both
         // halves from the shipped tables instead: decodableFormats() is the
@@ -384,7 +384,7 @@ describe('G9: allowedDestinations enforceability', function () {
         // DEST_ADDRESS / BTC_ADDRESS / ORIGIN_ADDRESS, none of which is the
         // DESTINATION field allowedDestinations reads, so the list still binds
         // exactly the seven formats below. Keep the figure in the rationale
-        // comment at src/cosigner/policyEvaluator.js in step with this number.
+        // comment at src/cosigner/policy_evaluator.js in step with this number.
         expect(decodable.length).to.equal(68);
         expect(carriers).to.deep.equal([
             'MESSAGE v0', 'MESSAGE v1', 'MESSAGE v2', 'MESSAGE v3',

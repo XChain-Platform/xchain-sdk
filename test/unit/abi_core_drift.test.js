@@ -11,7 +11,7 @@
 // Drift guard: the SDK's contract-ABI extraction core is a byte-identical
 // vendored copy of the canonical xchain-explorer implementation, so the SDK
 // and the explorer can never disagree on what a contract's declared abi is
-// (same pattern as the lint-core guard in contract-parity.test.js). Skipped
+// (same pattern as the lint-core guard in contract_parity.test.js). Skipped
 // when the sibling explorer checkout is absent (standalone clone); the root
 // bin/ci-all.sh guard (xchain-explorer/bin/sync-abi-core.sh --check) covers
 // the monorepo layout regardless.

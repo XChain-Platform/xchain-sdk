@@ -36,7 +36,7 @@
 // caret-led ISSUE TICK (row 24), but compacting it is only safe on the
 // formats that EDIT an existing token.
 //
-// The set is defined once in tickRefFields.js and never restated here, so it
+// The set is defined once in tick_ref_fields.js and never restated here, so it
 // stays checkable against formats.js. That module also records why
 // FILE.GATE_TICKER is held out of this set permanently: the indexer joins
 // gated_files.gate_ticker by literal string, so a `^<id>` un-gates the file.

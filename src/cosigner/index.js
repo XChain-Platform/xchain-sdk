@@ -20,7 +20,7 @@
  * and as named package exports.
  *
  * DELIBERATELY NOT re-exported here (Node-only; require them directly in a
- * Node daemon): `windowStore.js` (uses `fs` for the persisted budget) and
+ * Node daemon): `window_store.js` (uses `fs` for the persisted budget) and
  * `server.js` (`createCoSignerApp`, uses `express`). Everything below is pure
  * bitcoinjs/@noble and runs in the browser bundle the wallet ships.
  *

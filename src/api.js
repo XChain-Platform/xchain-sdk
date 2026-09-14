@@ -31,7 +31,7 @@ const { parseCorsOrigin } = require('./utils/cors_origin.js');
 const Config = require('./config.js');
 // Request guards live in their own module so the shipped middleware has exactly
 // one implementation: this file starts listening at require time, so a unit test
-// can only reach the guards through src/apiGuards.js.
+// can only reach the guards through src/utils/api_guards.js.
 const {
     parseWholeNumber,
     resolveMaxBatch,
@@ -109,13 +109,13 @@ async function startApi() {
     // CORS disabled by default. CORS_ORIGIN is a comma-separated ALLOWLIST, not a
     // single origin: handing `cors` the raw string echoes it back verbatim to every
     // caller, which is a multi-value header no browser accepts. See
-    // src/corsOrigin.js.
+    // src/utils/cors_origin.js.
     app.use(cors({ origin: parseCorsOrigin(Config.env.corsOrigin()) }));
 
     // Batch fan-out cap, BEFORE the auth gate and the router: capping ahead of
     // the auth gate bounds the unauthenticated ping path too, and ahead of the
     // router means nothing is dispatched before the count is known good. Why a
-    // byte-size limit is not enough: src/apiGuards.js.
+    // byte-size limit is not enough: src/utils/api_guards.js.
     app.use(batchCapMiddleware(SDK_API_MAX_BATCH));
 
     // Per-credential (falling back to per-IP) request-rate limit, also ahead of

@@ -202,7 +202,7 @@ function computeVerdict(findings) {
  *              carries no real transaction (`COINPAY|0|<match>` inside a batch
  *              answers `{status:null, refused:null}`).
  *
- * DECLARED LIMITATION, in the idiom batchLimits.js uses for its MINT-distinctness
+ * DECLARED LIMITATION, in the idiom batch_limits.js uses for its MINT-distinctness
  * approximation rather than left to be rediscovered: the SDK cannot turn a
  * settlement sub-command's `null` into a verdict, and neither can the endpoint.
  * A COINPAY obligation settles against the transaction OUTPUT paying its payee,

@@ -30,7 +30,7 @@
  *    xchain-indexer Batch handler when a sibling checkout is present, so the
  *    claim "the same arithmetic the indexer applies" is a comparison against
  *    running code rather than a transcription of it. It skips clean without
- *    the sibling, the same posture batchLimitsConformance.test.js takes.
+ *    the sibling, the same posture batch_limits_conformance.test.js takes.
  *
  * Every over-budget case is PAIRED with the largest batch that still fits.
  * One test alone cannot tell "the budget stopped it" from "nothing bounds

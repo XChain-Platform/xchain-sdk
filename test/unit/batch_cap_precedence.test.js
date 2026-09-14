@@ -11,7 +11,7 @@
  * R2b on the COMPOSE side: batchBuilder and validator.
  *
  * scanBatch, decoder/parse.js and the arbiter itself are covered by
- * batchLimitsConformance.test.js and batchGrammar.test.js. These two sites are
+ * batch_limits_conformance.test.js and batch_grammar.test.js. These two sites are
  * not, and they were the last two walking `Object.keys(counts)` - the exact
  * incidental ordering R2b exists to remove.
  *

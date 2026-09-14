@@ -73,7 +73,7 @@ const crypto  = require('crypto');
 const express = require('express');
 const { safeTokenEqual } = require('../utils/safe_compare.js');
 // One body ceiling for BOTH co-signer transports, derived from the protocol's
-// envelope payload maximum rather than hardcoded here (httpBodyLimit.js).
+// envelope payload maximum rather than hardcoded here (http_body_limit.js).
 const { resolveMaxBodyBytes, tooLargeHandler } = require('./http_body_limit.js');
 
 // The wire versions this endpoint implements. A request MUST name one.
@@ -101,7 +101,7 @@ function sha256(s) { return crypto.createHash('sha256').update(s, 'utf8').digest
  *            0 (the default) disables the bound entirely.
  *   rateWindowMs {number}  the fixed window for that bound; default 60000
  *   maxBodyBytes {number}  request-body ceiling; defaults to the derived
- *            envelope-round maximum (httpBodyLimit.js). Anything past it
+ *            envelope-round maximum (http_body_limit.js). Anything past it
  *            answers 413 REQUEST_TOO_LARGE, at whatever value is set. An
  *            exposed deployment tunes this DOWN rather than back to an
  *            unnamed transport failure.
@@ -273,7 +273,7 @@ function createHostedCoSignerApp(opts = {}) {
     });
 
     // After the route: an oversize body is a stated capability limit, not a
-    // network fault (httpBodyLimit.js). No `version` is echoed here, as on the
+    // network fault (http_body_limit.js). No `version` is echoed here, as on the
     // 401 path: the body never parsed, so there is no version to echo.
     app.use(tooLargeHandler(maxBodyBytes, log));
 

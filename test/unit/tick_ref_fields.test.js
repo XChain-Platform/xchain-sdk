@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// Unit coverage for src/tickRefFields.js, the canonical map of which ACTION
+// Unit coverage for src/protocol/tick_ref_fields.js, the canonical map of which ACTION
 // params name an EXISTING token and which of those the SDK may compact to the
 // `^<id>` wire form.
 //
@@ -73,9 +73,9 @@ describe('tickRefFields', function () {
         const resolverSrc = require('fs').readFileSync(require.resolve('../../src/utils/tick_resolver.js'), 'utf8');
         const preflightSrc = require('fs').readFileSync(require.resolve('../../src/preflight/universal.js'), 'utf8');
         assert.ok(/require\(['"]\.\.\/protocol\/tick_ref_fields\.js['"]\)/.test(resolverSrc),
-            'tickResolver.js must take its field set from tickRefFields.js');
+            'tick_resolver.js must take its field set from tick_ref_fields.js');
         assert.ok(/require\(['"]\.\.\/protocol\/tick_ref_fields\.js['"]\)/.test(preflightSrc),
-            'preflight/universal.js must take its field set from tickRefFields.js');
+            'preflight/universal.js must take its field set from tick_ref_fields.js');
 
         const { TICK_FIELDS } = require('../../src/preflight/universal.js');
         assert.deepStrictEqual(TICK_FIELDS, TICK_EXISTENCE_FIELDS);
@@ -86,6 +86,6 @@ describe('tickRefFields', function () {
         const classified = [...TICK_EXISTENCE_FIELDS].sort();
         assert.deepStrictEqual(inFormats, classified,
             'a tick-bearing ACTION field is unclassified (or classified but gone from formats.js): ' +
-            'add it to tickRefFields.js as compactable, or hold it back with the reason written down');
+            'add it to tick_ref_fields.js as compactable, or hold it back with the reason written down');
     });
 });
