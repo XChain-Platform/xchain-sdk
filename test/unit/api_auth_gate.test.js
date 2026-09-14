@@ -34,6 +34,7 @@ const http   = require('http');
 const express = require('express');
 const bodyParser = require('body-parser');
 const { authGateMiddleware } = require('../../src/utils/api_guards.js');
+const KEY = 'correct-horse-battery-staple';
 
 function buildApp(SDK_API_KEY) {
     const app = express();
@@ -69,7 +70,6 @@ async function request(app, { headers = {}, body } = {}) {
 
 describe('API bearer-token auth gate', function () {
     this.timeout(10000);
-    const KEY = 'correct-horse-battery-staple';
 
     it('accepts the correct token for a non-ping method', async () => {
         const r = await request(buildApp(KEY), {
@@ -104,6 +104,10 @@ describe('API bearer-token auth gate', function () {
         });
         assert.strictEqual(r.status, 401);
     });
+});
+
+describe('API bearer-token auth gate', function () {
+    this.timeout(10000);
 
     it('rejects a malformed authorization header', async () => {
         const r = await request(buildApp(KEY), {
@@ -136,6 +140,10 @@ describe('API bearer-token auth gate', function () {
         assert.strictEqual(r.status, 200);
         assert.strictEqual(r.json.result.status, 'success');
     });
+});
+
+describe('API bearer-token auth gate', function () {
+    this.timeout(10000);
 
     // The batch rule the gate's own comment justifies. Reading req.body.method
     // off an array leaves it undefined, so a regression to a single-object read
@@ -179,6 +187,10 @@ describe('API bearer-token auth gate', function () {
         });
         assert.strictEqual(r.status, 401);
     });
+});
+
+describe('API bearer-token auth gate', function () {
+    this.timeout(10000);
 
     // A caller-controlled method is not necessarily a string, and nothing
     // upstream types it: the router is the first layer that would reject a
@@ -232,6 +244,10 @@ describe('API bearer-token auth gate', function () {
         });
         assert.strictEqual(r.status, 200, 'the gate authenticates; -32600 is the router\'s call');
     });
+});
+
+describe('API bearer-token auth gate', function () {
+    this.timeout(10000);
 
     it('leaves a bodyless request open, as GET /openrpc.json presents it', async () => {
         // Express 5 leaves req.body undefined with no JSON body; an ABSENT
