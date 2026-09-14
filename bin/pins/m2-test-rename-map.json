@@ -1,4 +1,5 @@
 {
+ "test/eval/agentSession.eval.js": "test/eval/agent_session.test.js",
  "test/fuzz/decoder-dos.test.js": "test/fuzz/decoder_dos.test.js",
  "test/regression/amount-precision.test.js": "test/regression/amount_precision.test.js",
  "test/regression/cosignerDecoderParity.test.js": "test/regression/cosigner_decoder_parity.test.js",
@@ -74,6 +75,7 @@
  "test/unit/openrpc-coverage.test.js": "test/unit/openrpc_coverage.test.js",
  "test/unit/policyEvaluator.test.js": "test/unit/policy_evaluator.test.js",
  "test/unit/poolAgentInjection.test.js": "test/unit/pool_agent_injection.test.js",
+ "test/unit/preflight/_mock.js": "test/unit/preflight/helpers/mock.js",
  "test/unit/preflight/amountRepresentability.test.js": "test/unit/preflight/amount_representability.test.js",
  "test/unit/preflight/batchTier1.test.js": "test/unit/preflight/batch_tier1.test.js",
  "test/unit/preflight/bridgeTickRules.test.js": "test/unit/preflight/bridge_tick_rules.test.js",

@@ -51,6 +51,9 @@
  *                                                  the same, with the moving
  *                                                  commit's {old: new} paths
  *                                                  applied to the pin first
+ *   ... --title-rename-map <file>                  also apply {newPath: {oldTitle:
+ *                                                  newTitle}} for titles a rename
+ *                                                  legitimately changed
  *
  ********************************************************************/
 
@@ -218,7 +221,7 @@ function expand(map, scriptName) {
  * {oldPath: newPath}; a pin entry is compared under its new name so a pure move
  * reports no difference while a move that changed a title still does.
  */
-function compare(pin, fresh, renames, only) {
+function compare(pin, fresh, renames, only, titleRenames = {}) {
     const differences = [];
     // A run narrowed to one script compares that script only: every other
     // script in the pin is absent because it was not collected, which is not a
@@ -235,7 +238,14 @@ function compare(pin, fresh, renames, only) {
             continue;
         }
         const mapped = {};
-        for (const rel of Object.keys(before)) mapped[renames[rel] || rel] = before[rel];
+        // A declared title rename is applied under the file's NEW path, so only
+        // the exact old title named there is forgiven and any other change to
+        // that file still reports.
+        for (const rel of Object.keys(before)) {
+            const target = renames[rel] || rel;
+            const retitled = titleRenames[target] || {};
+            mapped[target] = before[rel].map((t) => retitled[t] || t);
+        }
         const files = Array.from(new Set(Object.keys(mapped).concat(Object.keys(after)))).sort();
         for (const rel of files) {
             if (!mapped[rel]) { differences.push({ script: name, kind: 'file_added', file: rel }); continue; }
@@ -257,6 +267,7 @@ function parseArgs(argv) {
         else if (argv[i] === '--script') { opts.script = argv[i + 1]; i += 1; }
         else if (argv[i] === '--compare') { opts.compare = path.resolve(argv[i + 1]); i += 1; }
         else if (argv[i] === '--rename-map') { opts.renameMap = path.resolve(argv[i + 1]); i += 1; }
+        else if (argv[i] === '--title-rename-map') { opts.titleRenameMap = path.resolve(argv[i + 1]); i += 1; }
         else if (argv[i] === '--help' || argv[i] === '-h') opts.help = true;
     }
     return opts;
@@ -273,7 +284,8 @@ function main() {
     if (opts.compare) {
         const pin = JSON.parse(fs.readFileSync(opts.compare, 'utf8'));
         const renames = opts.renameMap ? JSON.parse(fs.readFileSync(opts.renameMap, 'utf8')) : {};
-        const differences = compare(pin, map, renames, opts.script);
+        const titleRenames = opts.titleRenameMap ? JSON.parse(fs.readFileSync(opts.titleRenameMap, 'utf8')) : {};
+        const differences = compare(pin, map, renames, opts.script, titleRenames);
         if (!differences.length) {
             console.log(`suite identity holds against ${path.relative(REPO_ROOT, opts.compare)}`
                 + `${opts.renameMap ? ' through the declared rename map' : ''}`);
