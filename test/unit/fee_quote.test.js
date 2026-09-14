@@ -28,6 +28,8 @@ const nock = require('nock');
 const ExplorerClient = require('../../src/clients/explorer.js');
 const { XChainSDK } = require('../../index.js');
 
+let makeSdk;
+
 describe('Native-coin fee quote (client)', function () {
 
     const BASE = 'http://explorer.test:8080';
@@ -62,6 +64,10 @@ describe('Native-coin fee quote (client)', function () {
             expect(s.nativeFeeEnabled).to.equal(true);
         });
     });
+});
+
+describe('Native-coin fee quote (client)', function () {
+    afterEach(function () { nock.cleanAll(); });
 
     describe('XChainSDK', function () {
 
@@ -84,7 +90,7 @@ describe('Native-coin fee quote (client)', function () {
             return psbt.toHex();
         }
 
-        function makeSdk(quote) {
+        makeSdk = function (quote) {
             let sdk = new XChainSDK({ network: 'bitcoin-regtest' });
             sdk.explorer = {
                 _seen: null,
@@ -95,7 +101,7 @@ describe('Native-coin fee quote (client)', function () {
                 estimateFee: async function (params) { this._seen = params; return { fee: 1000, encoding: 'OP_RETURN', psbt: estimatePsbtHex() }; }
             };
             return sdk;
-        }
+        };
 
         it('quoteNativeFee splits ACTION off the wire params', async function () {
             let sdk = makeSdk();
@@ -106,6 +112,13 @@ describe('Native-coin fee quote (client)', function () {
             expect(sdk.explorer._seen.source).to.equal('src1');
             expect(q).to.have.property('actionString');
         });
+    });
+});
+
+describe('Native-coin fee quote (client)', function () {
+    afterEach(function () { nock.cleanAll(); });
+
+    describe('XChainSDK', function () {
 
         // A client re-quoting a fee it composed earlier holds the exact bytes it is
         // about to broadcast. Re-deriving them from the form params it started with would price
@@ -128,7 +141,13 @@ describe('Native-coin fee quote (client)', function () {
             await fromString.quoteNativeFee(fromData.actions.createAction(actionData).actionString);
             expect(fromString.explorer._seen).to.deep.equal(fromData.explorer._seen);
         });
+    });
+});
 
+describe('Native-coin fee quote (client)', function () {
+    afterEach(function () { nock.cleanAll(); });
+
+    describe('XChainSDK', function () {
         it('estimateFees({ payFeeInNativeCoin }) adds a FEE_DESTINATION output sized to the quote', async function () {
             let sdk = makeSdk();
             let r = await sdk.estimateFees({ action: 'ISSUE', params: { tick: 'NEWTICK', description: 'x' } }, { payFeeInNativeCoin: true, pubkey: 'pk', change: 'src1' });
@@ -159,7 +178,13 @@ describe('Native-coin fee quote (client)', function () {
             expect(r.nativeFeeQuote.valid).to.equal(null);
             expect(r.nativeFeeQuote.staticQuote).to.equal(true);
         });
+    });
+});
 
+describe('Native-coin fee quote (client)', function () {
+    afterEach(function () { nock.cleanAll(); });
+
+    describe('XChainSDK', function () {
         it('estimateFees refuses (throws) when the quote is unsupported', async function () {
             let sdk = makeSdk({ supported: false, valid: false, error: 'not supported' });
             let threw = false;
@@ -205,7 +230,13 @@ describe('Native-coin fee quote (client)', function () {
             catch (e) { threw = true; expect(e.code).to.equal('EXPLORER_BAD_FEEQUOTE'); }
             expect(threw, 'expected estimateFees to throw').to.equal(true);
         });
+    });
+});
 
+describe('Native-coin fee quote (client)', function () {
+    afterEach(function () { nock.cleanAll(); });
+
+    describe('XChainSDK', function () {
         // The indexer admission cap answers busy:true, retryable:true under transient load;
         // quoteNativeFee retries once before callers surface a hard NATIVE_FEE_INVALID.
         it('quoteNativeFee retries once on a busy/retryable quote and returns the retry result', async function () {
