@@ -88,6 +88,9 @@ describe('cosigner/recovery buildRecoverySpend', function () {
         expect(() => localPairSigner(a.acct.recovery.agentRecovery, [a.daemon.sk, a.recovery.sk]))
             .to.throw(/do not aggregate/);
     });
+});
+
+describe('cosigner/recovery buildRecoverySpend', function () {
 
     it('fails closed on a bad leaf name / missing inputs', async function () {
         const a = account();
@@ -126,6 +129,9 @@ describe('cosigner/recovery buildRecoverySpend', function () {
         const out = await buildRecoverySpend({ account: a.acct, leafName: 'agentRecovery', inputs, outputs, sign, acceptHighFee: true });
         expect(out.txHex).to.be.a('string');
     });
+});
+
+describe('cosigner/recovery buildRecoverySpend', function () {
 
     it('a >2^53 output overspend is caught, not rounded into a zero fee', async function () {
         // Under Number(), 9007199254740992 and 9007199254740993 compare EQUAL, so the
