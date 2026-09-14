@@ -124,7 +124,7 @@ describe('pre-flight constants + registry', function () {
             const rows = parseMap(path.join(__dirname, '..', '..', '..', 'src', 'preflight', 'INDEXER-MAP.md'));
             expect(rows.length, 'map has mapping rows').to.be.greaterThan(0);
             for (const { handler, hash } of rows) {
-                expect(handler).to.match(/^src\/actions\/[\w-]+\.js$/);
+                expect(handler).to.match(/^src\/actions\/[\w-]+(?:\.js|\/)$/);
                 expect(hash, handler + ' hash must be 64-hex').to.match(/^[0-9a-f]{64}$/);
             }
         });
@@ -453,7 +453,7 @@ describe('pre-flight constants + registry', function () {
             // Guard against adding a certified check without a drift-map entry.
             const { parseMap } = require('../../../bin/check-preflight-drift.js');
             const mapped = new Set(parseMap(path.join(__dirname, '..', '..', '..', 'src', 'preflight', 'INDEXER-MAP.md'))
-                .map((r) => r.handler.replace('src/actions/', '').replace('.js', '')));
+                .map((r) => r.handler.replace('src/actions/', '').replace(/(?:\.js|\/)$/, '')));
             // The action groups whose checks carry certified error-capable logic.
             for (const h of ['send', 'destroy', 'mint', 'issue', 'dispenser', 'dispense', 'order', 'swap', 'airdrop', 'dividend', 'batch']) {
                 expect(mapped.has(h), `${h} handler should be in INDEXER-MAP.md`).to.equal(true);

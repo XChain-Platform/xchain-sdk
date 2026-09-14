@@ -32,8 +32,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 const { execFileSync } = require('child_process');
+// Everything the directory shape of a handler needs: row kinds, the directory digest, the
+// whole-directory fee walk and the cross-file literal reader. Kept out of this file, which
+// is already over the repo's 400-line limit and may not grow.
+const handlerDirs = require('./preflight_handler_dirs.js');
 
 /* Output sink, so the gate can be run twice in one `npm run ci` without printing its
  * report twice.
@@ -64,14 +67,11 @@ function resolveIndexerRoot() {
     return null;
 }
 
+/* The table rows, each tagged 'file', 'directory' or 'malformed' by the shape of the
+ * handler path it names. A directory row carries a trailing slash and is hashed over every
+ * file in the directory, so a handler split into parts cannot leave them unhashed. */
 function parseMap(mapPath) {
-    const text = fs.readFileSync(mapPath, 'utf8');
-    const rows = [];
-    // | ... | `src/actions/x.js` | `<hash>` |
-    const re = /\|\s*`(src\/actions\/[^`]+)`\s*\|\s*`([0-9a-f]{64})`\s*\|/g;
-    let m;
-    while ((m = re.exec(text)) !== null) rows.push({ handler: m[1], hash: m[2] });
-    return rows;
+    return handlerDirs.parseMapRows(fs.readFileSync(mapPath, 'utf8'));
 }
 
 /* The indexer commit the pinned hashes were taken at.
@@ -171,7 +171,7 @@ function anchorIsReachable(indexerRoot, anchor) {
  */
 function parseStringSet(text, name, where) {
     // const NAME = new Set([...]) | Object.freeze([...]) | [...]
-    const re = new RegExp('const\\s+' + name + '\\s*=\\s*(?:new Set\\(|Object\\.freeze\\()?\\s*\\[([^\\]]*)\\]', 'g');
+    const re = handlerDirs.declarationPattern(name);
     const hits = [];
     let m;
     while ((m = re.exec(text)) !== null) hits.push(m[1]);
@@ -195,13 +195,7 @@ function parseStringSet(text, name, where) {
  * action charges a fee", the same contract parseStringSet holds.
  */
 const GAS_PRICED_ACTIONS = ['DEPLOY', 'EXECUTE'];
-
-function stripCommentsAndStrings(src) {
-    return src
-        .replace(/\/\*[\s\S]*?\*\//g, ' ')
-        .replace(/\/\/[^\n]*/g, ' ')
-        .replace(/(['"`])(?:\\.|(?!\1)[^\\])*\1/g, '""');
-}
+const { stripCommentsAndStrings } = handlerDirs;
 
 function deriveFeeChargingActions(indexerRoot) {
     const dir = path.join(indexerRoot, 'src', 'actions');
@@ -212,22 +206,11 @@ function deriveFeeChargingActions(indexerRoot) {
         throw new Error(`drift-gate: could not read ${dir} to derive the fee-charging set `
             + `(${e && e.message ? e.message : String(e)}). Fix the read rather than skipping the check.`);
     }
-    // A handler is either src/actions/<name>.js or, since the M3 feature-directory pass,
-    // src/actions/<name>/index.js. A flat readdir of *.js alone silently drops every
-    // directory handler, and a dropped handler reads as "charges no fee" rather than as a
-    // broken walk, so both shapes are resolved here. src/actions/index.js is the ACTION
-    // LOADER, not a handler, and is skipped so it cannot enrol itself as action INDEX.
-    const handlers = [];
-    for (const e of entries) {
-        if (e.isDirectory()) {
-            const idx = path.join(dir, e.name, 'index.js');
-            if (fs.existsSync(idx)) handlers.push({ action: e.name, file: idx });
-        } else if (e.name.endsWith('.js') && e.name !== 'index.js') {
-            handlers.push({ action: path.basename(e.name, '.js'), file: path.join(dir, e.name) });
-        }
-    }
-    const callers = handlers
-        .filter((h) => /\bcreateFeesObject\s*\(/.test(stripCommentsAndStrings(fs.readFileSync(h.file, 'utf8'))))
+    // Both handler shapes, flat file and directory, with EVERY source file of a directory
+    // handler; see feeWalkHandlers for why reading index.js alone is the same blind spot a
+    // flat readdir of *.js once was.
+    const callers = handlerDirs.feeWalkHandlers(dir, entries)
+        .filter((h) => h.files.some((f) => /\bcreateFeesObject\s*\(/.test(stripCommentsAndStrings(fs.readFileSync(f, 'utf8')))))
         .map((h) => h.action.toUpperCase());
     if (callers.length === 0) {
         throw new Error('drift-gate: no handler under xchain-indexer/src/actions/ calls createFeesObject. '
@@ -237,19 +220,22 @@ function deriveFeeChargingActions(indexerRoot) {
     return [...new Set([...callers, ...GAS_PRICED_ACTIONS])].sort();
 }
 
+// The indexer literals are read wherever the indexer declares them, not from the loader by
+// path: a split moves code into parts, and a literal that moves with it must still be
+// found, exactly once, so a stale copy left behind is a finding and not the value read.
 function checkFeeQuoteSeam(indexerRoot) {
     const actionsPath = path.join(indexerRoot, 'src', 'actions', 'index.js');
     if (!fs.existsSync(actionsPath)) {
         warn('drift-gate: xchain-indexer/src/actions/index.js not found; it defines the fee-quote lists this gate pins.');
         return 1;
     }
-    const indexerSrc = fs.readFileSync(actionsPath, 'utf8');
+    const readIndexerSet = handlerDirs.indexerLiteralReader(indexerRoot, parseStringSet);
     const sdkSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'preflight', 'constants.js'), 'utf8');
 
-    const denylist = parseStringSet(indexerSrc, 'FEE_QUOTE_DENYLIST', 'xchain-indexer/src/actions/index.js');
-    const staticSet = parseStringSet(indexerSrc, 'FEE_QUOTE_STATIC', 'xchain-indexer/src/actions/index.js');
+    const denylist = readIndexerSet('FEE_QUOTE_DENYLIST');
+    const staticSet = readIndexerSet('FEE_QUOTE_STATIC');
     const tier1 = parseStringSet(sdkSrc, 'TIER1_DENYLIST', 'src/preflight/constants.js');
-    const exempt = parseStringSet(indexerSrc, 'FEE_QUOTE_EXEMPT', 'xchain-indexer/src/actions/index.js');
+    const exempt = readIndexerSet('FEE_QUOTE_EXEMPT');
     const feeCharging = parseStringSet(sdkSrc, 'FEE_CHARGING_ACTIONS', 'src/preflight/constants.js');
 
     let failed = 0;
@@ -449,7 +435,7 @@ const LIST_MIRRORS = [
  * which is right for a membership comparison and wrong for this one.
  */
 function parseStringList(text, name, where) {
-    const re = new RegExp('const\\s+' + name + '\\s*=\\s*(?:new Set\\(|Object\\.freeze\\()?\\s*\\[([^\\]]*)\\]', 'g');
+    const re = handlerDirs.declarationPattern(name);
     const hits = [];
     let m;
     while ((m = re.exec(text)) !== null) hits.push(m[1]);
@@ -589,14 +575,7 @@ function evaluate() {
         return 1;
     }
 
-    const drift = [];
-    const missing = [];
-    for (const { handler, hash } of rows) {
-        const abs = path.join(root, handler);
-        if (!fs.existsSync(abs)) { missing.push(handler); continue; }
-        const actual = crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex');
-        if (actual !== hash) drift.push({ handler, expected: hash, actual });
-    }
+    const { missing, drift } = handlerDirs.compareRows(root, rows);
 
     // Report every independent check before exiting, never on the first failure: handler-hash
     // drift and a fee-quote seam break have different causes and different fixes, and exiting
@@ -604,14 +583,14 @@ function evaluate() {
     let failed = failedEarly;
 
     if (missing.length) {
-        warn('drift-gate: mapped handler(s) not found in the checkout:\n  ' + missing.join('\n  '));
+        warn('drift-gate: mapped handler(s) not found in the checkout, or not hashable as mapped:\n  ' + missing.join('\n  '));
         failed = 1;
     }
     if (drift.length) {
         warn('drift-gate: indexer validity logic changed without a paired pre-flight review.\n' +
             'Re-read each handler, update the matching checks/ module (or confirm no client-visible\n' +
             'change), then refresh the hash in src/preflight/INDEXER-MAP.md:\n');
-        for (const d of drift) warn(`  ${d.handler}\n    was ${d.expected}\n    now ${d.actual}`);
+        for (const d of drift) warn(handlerDirs.formatDrift(d));
         // Now that `npm run ci` runs this locally, the first suspect for a LOCAL
         // red is the sibling's uncommitted work rather than a real handler change: this
         // hashes the WORKING TREE, and two of the four handlers in the gate's first firing
