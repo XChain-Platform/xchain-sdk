@@ -70,9 +70,17 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `5bfa3a7b`
+**Pins taken at indexer commit:** `57e49dd0`
 
-(Re-anchored 2026-09-14 by the comment-label review of six handlers below. `5bfa3a7b` is
+(Re-anchored 2026-09-14, second pass, by the `batch.js` loader-seam review below. `57e49dd0`
+is the indexer commit that moves the BATCH probe-path sub-action refusal onto the action
+loader instance, and `batch.js` is the only mapped handler it touches, so the other ten
+rows are byte-identical at `5bfa3a7b` and at `57e49dd0`. The indexer lands before this map,
+so every row is a plain blob of the anchor. A checkout without `57e49dd0` reports the
+`batch.js` row drifted: the answer is the missing indexer commit, never a re-pin back.
+The previous anchor `5bfa3a7b` is an ancestor and stays reachable.)
+
+(Earlier note. Re-anchored 2026-09-14 by the comment-label review of six handlers below. `5bfa3a7b` is
 the indexer tip pushed with that review. Its parent `9c50f503` rewrites internal design
 labels in handler comments as plain descriptions, and `5bfa3a7b` itself moves one comment
 in `src/actions/broadcast.js`, which is not mapped, so all eleven mapped handler blobs are
@@ -212,7 +220,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 5bfa3a7b..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 57e49dd0..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -300,7 +308,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/trading.js` (SWAP) | `src/actions/swap.js` | `ff297dbe7f2fbe6424b6ea61fd463b9ec9847de7157500345ca1f0a2be2dd398` |
 | `checks/airdrop.js` | `src/actions/airdrop.js` | `ef52e3900ae20a64a0653f3a4bf775692b1cd73d5c9c9cf82840b2b3926bd4c9` |
 | `checks/dividend.js` | `src/actions/dividend.js` | `3405fa19e629bab98b5b3c33fd0128e3e6873f551a3f722fef55197e3be22f57` |
-| `checks/batch.js` | `src/actions/batch.js` | `1314812c4a88b9daf518574b742e8e8780e90020fcf1a14d55f4881a3ce9ad2a` |
+| `checks/batch.js` | `src/actions/batch.js` | `3c6f8204e0026f43b117a2a3060fa8d4e574bd669b4f7655d403150a55323db0` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -309,6 +317,41 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-14 (second pass) - `batch.js`, the probe refusal read through the action loader
+
+Baseline pin was the `5bfa3a7b` blob (`1314812c`); the new pin is `3c6f8204`, hashed from the
+committed indexer tree at `57e49dd0` with its handlers clean. Range read: the one commit
+`57e49dd0` over `src/actions/batch.js`, whose parent is `ee3a3e05` (spelled as a single commit
+rather than a range command so the gate's anchor-consistency check still finds exactly one
+review command, the one under **Pins taken at indexer commit**). 5 lines added and 6 removed,
+in two hunks.
+
+**What moved: where `batch.js` reads one predicate, nothing it decides.** The module-level
+wrapper `probeForbiddenSubAction(action)`, which called `require('./index.js')` at call time to
+reach `isBatchProbeForbiddenSubAction`, is removed, and the probe-path guard inside the dispatch
+loop now calls `this.actions.isBatchProbeForbiddenSubAction(action)` on the action loader
+instance the handler is constructed with. That instance method, added to
+`src/actions/index.js`, returns the same module function the wrapper reached, so the refusal is
+the same predicate over the same dispatch tables; the change removes an action requiring its own
+loader (the load-time cycle the wrapper existed to dodge). The wrapper's comment is restated to
+say where the predicate now comes from. No validity rule, no threshold, no field, no format
+version and no error string changed.
+
+Machine-verified. `batch.js`'s acorn token stream (comments and whitespace excluded, token values
+compared as well as types) was taken at `cf776e32` and at `57e49dd0` with NO normalisation: 2996
+tokens before, 2982 after, and the residue is 24 tokens, exactly the two declared edits. 18 removed
+tokens are the wrapper function (`function probeForbiddenSubAction(action){ return
+require('./index.js').isBatchProbeForbiddenSubAction(action); }`), and at the guard the name
+`probeForbiddenSubAction` becomes `this.actions.isBatchProbeForbiddenSubAction` (5 added, 1
+removed). The comparator was falsified first on a scratch copy of the new tree, restored byte-exact
+by SHA-256: changing the `this.commandLimit = 250` literal to 251 raised the residue to 26 at
+exactly that number, so a residue confined to the declared edits is evidence and not a tool that
+cannot say no.
+
+**Direction: NEITHER, no admission boundary moves.** NO CLIENT CHECK MOVES. `checks/batch.js`
+mirrors the sub-command rules, not where the handler looks the probe refusal up, and the refusal
+set is unchanged. The refresh exists only so the hash row follows the handler to its new bytes.
 
 ### 2026-09-14 - `send.js` + `destroy.js` + `issue.js` + `dispenser.js` + `order.js` + `batch.js`, comment labels rewritten
 
