@@ -153,6 +153,9 @@ describe('ISSUE format 7 is purely additive (pre-change pin)', function () {
             });
         }
     });
+});
+
+describe('ISSUE format 7 is purely additive (pre-change pin)', function () {
 
     describe('the sibling indexer parses an old-version ISSUE to the same values it always did', function () {
         const indexerRoot = resolveIndexerRoot();
