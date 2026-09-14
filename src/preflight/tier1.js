@@ -14,7 +14,7 @@
  *
  * XChain Platform SDK - pre-flight Tier 1 (server-side dry-run)
  *
- * Wraps the explorer dry-run endpoint (indexer -> _dryRunAction: the
+ * Wraps the explorer dry-run endpoint (indexer -> dryRunAction: the
  * REAL handler in a forced-rollback transaction) and classifies its
  * response per spec §4.3. Prefers the validity-first
  * `/preflight` endpoint (verdict decoupled from native-fee support,

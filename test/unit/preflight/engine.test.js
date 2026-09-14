@@ -311,21 +311,21 @@ describe('pre-flight engine', function () {
             expect(unavailable.message).to.match(/timeout/i);
         });
 
-        // A second case of an undeclared dry-run, found by driving a controller-bound token
-        // in a browser: the network was reached, answered promptly, and
-        // DECLINED to judge. `/feequote` and `/preflight` refuse to enter a
+        // A second case of an undeclared dry-run, for a controller-bound token
+        // sent from a browser: the network is reached, answers promptly, and
+        // DECLINES to judge. `/feequote` and `/preflight` refuse to enter a
         // controller guard on the public path (GUARD_INERT ->
         // FEE_QUOTE_CONTROLLER_UNSUPPORTED, xchain-indexer
-        // utility._invokeController), because running caller-influenced VM code
+        // utility.invokeController), because running caller-influenced VM code
         // there would hand an unauthenticated endpoint an unmetered compute
-        // primitive. classifyQuote calls that `no-verdict`, and applyTier1 used
-        // to push NOTHING for it - so the report was a clean pass, and the
-        // wallet's confirm screen read "Looks good" on a SEND the chain then
-        // recorded `invalid: controller (reverted)`.
+        // primitive. classifyQuote calls that `no-verdict`, and if applyTier1
+        // pushed NOTHING for it the report would be a clean pass, and the
+        // wallet's confirm screen would read "Looks good" on a SEND the chain then
+        // records as `invalid: controller (reverted)`.
         //
         // The same branch covers the other three no-verdict reasons
         // (denylisted VM actions, fee-exempt replies, unquotable ones), which
-        // were all silent in exactly the same way.
+        // would all be silent in exactly the same way.
         it('a dry-run that DECLINES to judge declares itself too', async function () {
             const sdk = mockSdk({ explorerSpec: {
                 getToken: () => ({ tick: 'JDOG', divisible: 0 }),
