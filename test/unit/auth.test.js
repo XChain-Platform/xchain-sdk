@@ -12,9 +12,9 @@ const { expect } = require('chai');
 const AuthUtils = require('../../src/utils/auth.js');
 const WalletUtils = require('../../src/utils/wallet.js');
 
-describe('AuthUtils', function() {
+const NETWORKS = ['bitcoin-regtest', 'litecoin-regtest', 'dogecoin-regtest'];
 
-    const NETWORKS = ['bitcoin-regtest', 'litecoin-regtest', 'dogecoin-regtest'];
+describe('AuthUtils', function() {
 
     describe('generateChallenge()', function() {
         const auth = new AuthUtils('bitcoin-regtest');
@@ -71,6 +71,10 @@ describe('AuthUtils', function() {
         });
     });
 
+});
+
+describe('AuthUtils', function() {
+
     describe('signMessage() + verifyOwnership() roundtrip', function() {
 
         for (const network of NETWORKS) {
@@ -125,6 +129,10 @@ describe('AuthUtils', function() {
         });
     });
 
+});
+
+describe('AuthUtils', function() {
+
     describe('verifyOwnership() - failure cases', function() {
         const wallet = new WalletUtils('bitcoin-regtest');
         const auth = new AuthUtils('bitcoin-regtest');
@@ -165,6 +173,10 @@ describe('AuthUtils', function() {
         });
     });
 
+});
+
+describe('AuthUtils', function() {
+
     describe('verifyMessage()', function() {
         it('should return { valid, error } without address field', function() {
             const wallet = new WalletUtils('bitcoin-regtest');
@@ -181,6 +193,10 @@ describe('AuthUtils', function() {
         });
     });
 
+});
+
+describe('AuthUtils', function() {
+
     describe('signMessage() - error cases', function() {
         const auth = new AuthUtils('bitcoin-regtest');
 
@@ -196,6 +212,10 @@ describe('AuthUtils', function() {
             expect(() => auth.signMessage('msg', 'not-a-wif')).to.throw(/Failed to import WIF/);
         });
     });
+
+});
+
+describe('AuthUtils', function() {
 
     describe('network handling', function() {
         it('should throw when no network configured and no override', function() {
@@ -219,6 +239,10 @@ describe('AuthUtils', function() {
             expect(result.valid).to.be.true;
         });
     });
+
+});
+
+describe('AuthUtils', function() {
 
     describe('custom message workflow', function() {
         it('should work end-to-end with a custom site-generated message', function() {
