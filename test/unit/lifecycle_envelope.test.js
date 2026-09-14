@@ -198,6 +198,9 @@ describe('Taproot envelope pair through the lifecycle', function () {
         assert.ok(Array.isArray(result.spentInputs));
         assert.ok(result.spentInputs.length >= 2, 'commit and reveal inputs both counted');
     });
+});
+
+describe('Taproot envelope pair through the lifecycle', function () {
 
     it('a p2tr leg the reveal never spends aborts BEFORE anything is broadcast', async function () {
         // Rule (d) used to authorize the commit leg on script shape alone, so a
@@ -229,6 +232,9 @@ describe('Taproot envelope pair through the lifecycle', function () {
         await assert.rejects(() => submit(new LifecycleManager(sdk)), (e) => e.code === 'PHASE_FUNDING_UNSPENT');
         assert.deepStrictEqual(trace, [], 'nothing may be signed or broadcast once the commit fails to reconcile');
     });
+});
+
+describe('Taproot envelope pair through the lifecycle', function () {
 
     it('the same pair WITHOUT the parked leg goes all the way through', async function () {
         // The other half of the pin: a legitimate commit still reconciles, so the
@@ -260,6 +266,9 @@ describe('Taproot envelope pair through the lifecycle', function () {
             { wif: FAKE_WIF, waitForIndexer: false });
         assert.deepStrictEqual(trace, ['signCommit', 'signEnvelopeReveal', 'broadcast:tx', 'broadcast:tx']);
     });
+});
+
+describe('Taproot envelope pair through the lifecycle', function () {
 
     it('a NON-envelope response is untouched by any of this', async function () {
         const { sdk, trace } = makeEnvelopeSdk();
