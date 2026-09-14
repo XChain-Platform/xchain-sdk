@@ -74,6 +74,46 @@ function expectValidKeyPathSpend(txHex, acct, value) {
     expect(schnorr.verify(sig, sighash, acct.aggregateXOnly)).to.equal(true);
 }
 
+// Fake just enough SDK for the session + LifecycleManager. createTx returns a
+// pre-built PSBT spending the aggregate; broadcastTx is captured.
+function makeSdk(s, captured) {
+    return {
+        wallet: {
+            importWIF: () => ({
+                privateKey:    Buffer.from(s.agentSk),
+                publicKey:     Buffer.from(s.agentPk),
+                publicKeyHex:  Buffer.from(s.agentPk).toString('hex'),
+                compressed:    true,
+            }),
+            deriveAddress: () => 'agentP2PKHaddr',
+            // MuSig2AgentSession falls back to this when opts.coSigner.network is
+            // omitted (fund-key-safety fix: no silent mainnet default). Match the
+            // account-derivation network the pre-fix tests implicitly relied on.
+            getBitcoinNetwork: () => bitcoin.networks.bitcoin,
+        },
+        tickResolver:    { resolveActionParams: async (a, p) => p },
+        addressResolver: { resolveActionParams: async (a, p) => p },
+        actions:         { createAction: () => ({ actionString: s.actionString, action: 'SEND', version: 0 }) },
+        _requireEncoder: () => ({
+            createTx:    async () => { captured.encodeCalls++; return { psbt: s.psbtHex, encoding: 'OP_RETURN' }; },
+            broadcastTx: async (txHex) => { captured.broadcasts.push(txHex); return { txid: 'ok' }; },
+            getUTXOs:    async () => ({ utxos: [] }),
+        }),
+    };
+}
+
+function makeSession(s, sdk, localPolicy) {
+    const co = new CoSigner({ secretKey: s.coSk, publicKeys: s.keys, tweaks: s.acct.tweaks,
+        policy: Object.assign({ allowedActions: new Set(['SEND']) }, s.coPolicy) });
+    const transport = inProcessTransport(co);
+    return new MuSig2AgentSession(sdk, 'WIF',
+        // allowUnkeyedSubmits preserves the earlier unkeyed submit shape so these
+        // tests keep exercising the MuSig2 path rather than the new key requirement,
+        // which is covered in agent_session.test.js.
+        Object.assign({ allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '100' } }, allowUnkeyedSubmits: true }, localPolicy),
+        { coSigner: { transport, publicKeys: s.keys } });
+}
+
 describe('MuSig2 signer adapter (buildMuSig2Signer)', function () {
 
     it('completes a single-input key-path spend via the co-signer', async function () {
@@ -124,7 +164,9 @@ describe('MuSig2 signer adapter (buildMuSig2Signer)', function () {
         expect(() => buildMuSig2Signer({ secretKey: Buffer.alloc(32) })).to.throw(/CoSignerClient/);
         expect(() => buildMuSig2Signer({ coSignerClient: { sign() {} } })).to.throw(/secretKey/);
     });
+});
 
+describe('MuSig2 signer adapter (buildMuSig2Signer)', function () {
     // Drop-in parity with wallet.signPsbt: non-bitcoin networks get the raised
     // absurd-fee ceiling before extractTransaction (bitcoinjs's 5000 sat/vB
     // default is calibrated for BTC unit value), bitcoin keeps the default,
@@ -174,47 +216,6 @@ describe('MuSig2 signer adapter (buildMuSig2Signer)', function () {
 });
 
 describe('MuSig2AgentSession', function () {
-
-    // Fake just enough SDK for the session + LifecycleManager. createTx returns a
-    // pre-built PSBT spending the aggregate; broadcastTx is captured.
-    function makeSdk(s, captured) {
-        return {
-            wallet: {
-                importWIF: () => ({
-                    privateKey:    Buffer.from(s.agentSk),
-                    publicKey:     Buffer.from(s.agentPk),
-                    publicKeyHex:  Buffer.from(s.agentPk).toString('hex'),
-                    compressed:    true,
-                }),
-                deriveAddress: () => 'agentP2PKHaddr',
-                // MuSig2AgentSession falls back to this when opts.coSigner.network is
-                // omitted (fund-key-safety fix: no silent mainnet default). Match the
-                // account-derivation network the pre-fix tests implicitly relied on.
-                getBitcoinNetwork: () => bitcoin.networks.bitcoin,
-            },
-            tickResolver:    { resolveActionParams: async (a, p) => p },
-            addressResolver: { resolveActionParams: async (a, p) => p },
-            actions:         { createAction: () => ({ actionString: s.actionString, action: 'SEND', version: 0 }) },
-            _requireEncoder: () => ({
-                createTx:    async () => { captured.encodeCalls++; return { psbt: s.psbtHex, encoding: 'OP_RETURN' }; },
-                broadcastTx: async (txHex) => { captured.broadcasts.push(txHex); return { txid: 'ok' }; },
-                getUTXOs:    async () => ({ utxos: [] }),
-            }),
-        };
-    }
-
-    function makeSession(s, sdk, localPolicy) {
-        const co = new CoSigner({ secretKey: s.coSk, publicKeys: s.keys, tweaks: s.acct.tweaks,
-            policy: Object.assign({ allowedActions: new Set(['SEND']) }, s.coPolicy) });
-        const transport = inProcessTransport(co);
-        return new MuSig2AgentSession(sdk, 'WIF',
-            // allowUnkeyedSubmits preserves the earlier unkeyed submit shape so these
-            // tests keep exercising the MuSig2 path rather than the new key requirement,
-            // which is covered in agent_session.test.js.
-            Object.assign({ allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '100' } }, allowUnkeyedSubmits: true }, localPolicy),
-            { coSigner: { transport, publicKeys: s.keys } });
-    }
-
     // construction
 
     it('requires a transport and the full publicKeys set', function () {
@@ -272,7 +273,9 @@ describe('MuSig2AgentSession', function () {
             { coSigner: { transport, publicKeys: s.keys, network: LTC } });
         expect(explicitSession.address).to.equal(explicitAcct.address);
     });
+});
 
+describe('MuSig2AgentSession', function () {
     it('fails closed when the agent key is not in the signer set', function () {
         const s = buildAccountAndPsbt(`SEND|0|TOK|5|${DEST}|m`);
         const captured = { broadcasts: [], encodeCalls: 0 };
@@ -290,7 +293,9 @@ describe('MuSig2AgentSession', function () {
         expect(session.address).to.equal(s.acct.address);
         expect(session.musig2Account.address).to.equal(s.acct.address);
     });
+});
 
+describe('MuSig2AgentSession', function () {
     // submit path
 
     it('submits an in-policy action and broadcasts a valid aggregate-signed tx', async function () {
@@ -338,7 +343,9 @@ describe('MuSig2AgentSession', function () {
         expect(captured.encodeCalls).to.equal(1);    // reached the encoder
         expect(captured.broadcasts).to.have.length(0);   // co-signer withheld -> no broadcast
     });
+});
 
+describe('MuSig2AgentSession', function () {
     it('recovery mode: derives a 2-of-3 address and spends it via the agent+daemon key path', async function () {
         const agentSk = crypto.randomBytes(32), daemonSk = crypto.randomBytes(32), recSk = crypto.randomBytes(32);
         const agentPk  = Buffer.from(secp256k1.getPublicKey(agentSk, true));
