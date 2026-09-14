@@ -52,6 +52,9 @@ describe('decoder.parse fuzz/DoS corpus @fuzz', function () {
         expect(r.ok).to.equal(true);
         expect(r.commands.length).to.equal(7001);
     });
+});
+
+describe('decoder.parse fuzz/DoS corpus @fuzz', function () {
 
     it('deep fake-BATCH nesting is rejected without recursion blowup', function () {
         // "BATCH|0|BATCH|0|BATCH|0|..." - only ONE level of recursion
