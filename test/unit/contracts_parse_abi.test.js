@@ -57,6 +57,13 @@ describe('ContractUtils.parseAbi()', function () {
         assert.strictEqual(utils.parseAbi(`const a = { version: 1, methods: {} }; module.exports = { abi: a, run: function(x){} };`), null);
     });
 
+});
+
+describe('ContractUtils.parseAbi()', function () {
+
+    let utils;
+    beforeEach(function () { utils = new ContractUtils(); });
+
     it('treats an abi-named FUNCTION as an ordinary method, not metadata', function () {
         assert.strictEqual(utils.parseAbi(`module.exports = { abi: function(xchain){ return 1; } };`), null);
     });
