@@ -109,11 +109,13 @@ describe('CoSignerClient (agent side)', function () {
         expect(() => new CoSigner({ secretKey: crypto.randomBytes(32), publicKeys: three, policy: { allowedActions: new Set(['SEND']) } }))
             .to.throw(/exactly the \[agent, daemon\]/);
     });
+});
 
-    // The client must bind the co-signer's returned msg to the PSBT it actually
-    // submitted (recomputed BIP341 key-path sighash), so a buggy/misconfigured
-    // co-signer fails loudly here instead of yielding a wrong-message signature
-    // that dies later as an opaque network rejection.
+// The client must bind the co-signer's returned msg to the PSBT it actually
+// submitted (recomputed BIP341 key-path sighash), so a buggy/misconfigured
+// co-signer fails loudly here instead of yielding a wrong-message signature
+// that dies later as an opaque network rejection.
+describe('CoSignerClient (agent side)', function () {
     describe('msg-to-PSBT binding', function () {
 
         // Wrap the in-process transport and tamper the returned msg(s).
