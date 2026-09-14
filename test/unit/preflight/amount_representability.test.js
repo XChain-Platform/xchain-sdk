@@ -32,6 +32,12 @@ function reportFor(wire, explorerSpec, opts = {}) {
 const has = (r, code) => r.findings.some(f => f.code === code);
 const unverified = (r, check) => (r.unverified || []).some(u => u.check === check);
 
+let util;
+
+function resetUtility() {
+    util = new Utility();
+}
+
 // The family the indexer gate refuses above its flag day, paired with the
 // decimals that make each one a live defect on the consensus side.
 const NON_NUMERAL_AMOUNTS = [
@@ -45,11 +51,7 @@ const NON_NUMERAL_AMOUNTS = [
 ];
 
 describe('amount representability: the client stays on the legacy rule', function () {
-    let util;
-
-    beforeEach(function () {
-        util = new Utility();
-    });
+    beforeEach(resetUtility);
 
     it('the SDK amount-format rule still accepts the whole non-numeral family', function () {
         for (const [decimals, amount] of NON_NUMERAL_AMOUNTS) {
@@ -75,6 +77,10 @@ describe('amount representability: the client stays on the legacy rule', functio
         expect(util.isValidAmountFormat(8, '1.5')).to.equal(true);
         expect(util.isValidAmountFormat(8, '007')).to.equal(true);
     });
+});
+
+describe('amount representability: the client stays on the legacy rule', function () {
+    beforeEach(resetUtility);
 
     it('MINT declares the representability rule instead of passing it over in silence', async function () {
         const r = await reportFor('MINT|0|JDOG|5e-19', {
