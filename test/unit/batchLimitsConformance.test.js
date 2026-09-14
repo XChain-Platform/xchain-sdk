@@ -657,7 +657,7 @@ describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
     });
 
     it('folds TICK case, because the arbiter resolves ticker ids case-insensitively', function () {
-        // xchain-indexer/src/db.js getTickerId resolves through
+        // xchain-indexer/src/db/index_tables.js getTickerId resolves through
         // `WHERE LOWER(tick)=?` (and interning resolves before it inserts), so
         // JDOG and jdog are ONE id on chain and must be ONE bucket here. Keyed on
         // the literal string, this pair passed compose-time validation and the chain
@@ -800,7 +800,7 @@ describe('BATCH limit-scan conformance (SDK mirror vs arbiter)', function () {
                 return this.skip();
             }
 
-            // Mirror of xchain-indexer/src/db.js getTickerId, over the fixed
+            // Mirror of xchain-indexer/src/db/index_tables.js getTickerId, over the fixed
             // token set above: a CANONICAL `^<id>` resolves straight to that id
             // and only when a row backs it (a dangling caret is null, never a
             // phantom id), a name resolves case-insensitively, and anything

@@ -126,7 +126,7 @@ const MAX_REFILLS = 5;
 const EXPIRATION_MAX = '18446744073709551615';
 
 // Canonical `^<id>` address-reference id, byte-for-byte the indexer's
-// CANONICAL_CARET_ID (xchain-indexer src/db.js). Anything else - `^0`, `^007`,
+// CANONICAL_CARET_ID (xchain-indexer src/db/shared.js). Anything else - `^0`, `^007`,
 // `^0x10`, `^abc`, a bare `^` - cannot resolve on ANY node, so at/after the
 // caret-ref strict-activation flag-day it is a hard `invalid: <FIELD> (unresolvable ^id)` reject.
 // No mapped handler hash covers it: the map's rows are `src/actions/*.js` only and this
@@ -320,7 +320,7 @@ const FEE_CHARGING_ACTIONS = Object.freeze([
 // TICK_NAMESPACE_ACTIVATION (the token bridge spec, R8). Both mirror
 // xchain-indexer: the floor is MIN_NEW_TOP_LEVEL_TICK_LENGTH in src/actions/issue.js
 // (covered by the mapped hash) and the roots are RESERVED_FUTURE_ROOTS in
-// src/reservedRoots.js, which NO mapped hash covers, so a change there moves this
+// src/consensus/reservedRoots.js, which NO mapped hash covers, so a change there moves this
 // list by hand. Chain tickers held for roots the platform has not integrated yet: a
 // name leaves the list only by moving into the coin set, and both refuse identically.
 const MIN_NEW_TOP_LEVEL_TICK_LENGTH = 4;

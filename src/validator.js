@@ -101,7 +101,7 @@ const TICK_REF_PREFIX = '^';
 // The one resolvable `^<id>` byte-form, vendored from the indexer's db.js and held
 // there by checkRegexMirrors in bin/check-preflight-drift.js. Imported rather than
 // restated so this file cannot drift from the copy the gate pins: getTickerId
-// (xchain-indexer/src/db.js:4090) resolves a caret TICK only in this form, so any
+// (xchain-indexer/src/db/index_tables.js:375) resolves a caret TICK only in this form, so any
 // other caret names no row on any node.
 const { CANONICAL_CARET_ID } = require('./preflight/constants.js');
 
@@ -464,7 +464,7 @@ class Validator {
 
         // FIAT validation (PRICE v1's fiat field is named FIAT, not FIAT_CODE).
         // Same allow-list, same arbiter: the indexer rejects an unlisted code with
-        // 'invalid: FIAT (unsupported)' (actions/price.js), so catching it here
+        // 'invalid: FIAT (unsupported)' (actions/price/index.js), so catching it here
         // saves a miner fee on a doomed publish.
         if (field === 'FIAT' && action === 'PRICE') {
             if (!VALID_FIAT_CODES.includes(String(value).toUpperCase()))
@@ -1761,7 +1761,7 @@ class Validator {
      *     valid ISSUE with a NULL ticker id below the flag-day.
      *
      * The third is GATED BY FORMAT, and that is the whole reason this takes `fields`.
-     * Resolution itself is canonical-only: getTickerId (xchain-indexer/src/db.js:4090)
+     * Resolution itself is canonical-only: getTickerId (xchain-indexer/src/db/index_tables.js:375)
      * resolves a caret TICK only as /^[1-9][0-9]*$/ and only to a row that exists, so
      * `^007`, `^0` and `^-1` name nothing on any node. What the chain DOES about that
      * differs by format, so the client's verdict has to as well:

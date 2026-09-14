@@ -19,7 +19,7 @@
  * the indexer's sha256(utf8(source)), and the slices MUST reassemble to canonical
  * base64 of the source; otherwise the indexer rejects the assembly. These tests
  * pin that behavior AND replay the indexer's exact assembly+verify against the plan
- * output (deploy.js: concat → base64-decode → canonical check → sha256 vs CODE_HASH),
+ * output (deploy/index.js: concat → base64-decode → canonical check → sha256 vs CODE_HASH),
  * so an SDK-side regression that would fork the deploy is caught here, runnably,
  * without the live stack.
  *
@@ -35,7 +35,7 @@ const { codeHashOf, fitsSingleDeploy, splitCode, planDeploy,
         MAX_ACTION_DATA_LENGTH, MAX_DEPLOYCHUNK_PART_BYTES, MAX_DEPLOY_CHUNKS } = chunkHelper;
 
 // Replays the indexer's chunk-assembly integrity gate (xchain-indexer
-// src/actions/deploy.js) so a parity break surfaces SDK-side. Returns the
+// src/actions/deploy/index.js) so a parity break surfaces SDK-side. Returns the
 // decoded source on success, or throws with the indexer's rejection reason.
 function indexerAssemble(parts, declaredHash) {
     const b64 = parts.join('');

@@ -26,7 +26,7 @@
  *     (issue.js:361) - the shape the handler's own parseFloat-based isNumeric
  *     lets through;
  *   - formats 6 and 7 ONLY: the id must be canonical, because resolution is
- *     canonical-only (xchain-indexer/src/db.js:4090) and those two formats refuse
+ *     canonical-only (xchain-indexer/src/db/index_tables.js:375) and those two formats refuse
  *     an unresolved tick outright (issue.js:782 and issue.js:828,
  *     `invalid: TICK (unknown)`). Formats 0 to 5 fall through to createToken and
  *     ACCEPT it, so refusing there would false-block an action consensus accepts.

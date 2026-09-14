@@ -399,7 +399,7 @@ function commandTick(command) {
  *
  * The fold reproduces the arbiter's bucket rather than approximating it:
  * ticker ids resolve through `SELECT id FROM index_tickers WHERE LOWER(tick)=?`
- * (xchain-indexer/src/db.js getTickerId, whose intern cache is keyed the same
+ * (xchain-indexer/src/db/index_tables.js getTickerId, whose intern cache is keyed the same
  * way), and interning goes through that same resolve before it inserts, so two
  * names differing only by case can never BE two ids. Keying on the literal
  * string instead split a pair the chain merges, and a batch minting `JDOG` and

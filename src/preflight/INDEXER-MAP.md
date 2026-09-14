@@ -522,7 +522,7 @@ the chain's answer is format-dependent in exactly one place:
   previously argued as covered by the blanket refusal ("strictly stronger"); with the
   blanket gone it is mirrored directly, which is the stronger arrangement anyway.
 - formats 6 and 7 only: the id must be canonical (`/^[1-9][0-9]*$/`, the vendored
-  `CANONICAL_CARET_ID`). Resolution is canonical-only (`xchain-indexer/src/db.js:4090`
+  `CANONICAL_CARET_ID`). Resolution is canonical-only (`xchain-indexer/src/db/index_tables.js:375`
   hands only that form to SQL, and only for a row that exists), and those two formats
   refuse an unresolved tick outright (`issue.js:782` and `issue.js:828`, `invalid:
   TICK (unknown)`). Below the token-bridge activation format 7 is `VERSION (unknown)`
@@ -601,7 +601,7 @@ rules are exactly that, and those are mirrored as findings.
    row lookup says so), declared as `ISSUE_TICK_NAMESPACE` when the lookup is down
    and the name is short or listed. The floor (`MIN_NEW_TOP_LEVEL_TICK_LENGTH`) and
    the 53 roots are vendored into `constants.js`. The floor lives in `issue.js` and
-   so is under this row's hash; the roots live in `src/reservedRoots.js`, which NO
+   so is under this row's hash; the roots live in `src/consensus/reservedRoots.js`, which NO
    mapped hash covers, so a change there moves the vendored list by hand until the
    drift gate grows a by-value seam for it (owed, noted in the constant's comment).
 
@@ -1786,7 +1786,7 @@ thing it stands in for cannot be read from outside that repo.
   row here. A term added to one and not the others would have quoted a client a
   native output the handler then refuses. Fixed where the arithmetic lives rather
   than here: the four sites now call one pure `util.vmGasCost(schedule, family,
-  bytes)`, and `xchain-indexer/test/unit/vmGasParity.test.js` drives the static quote
+  bytes)`, and `xchain-indexer/test/unit/vm_gas_parity.test.js` drives the static quote
   and the handler-side call from identical DEPLOY v0/v1, v2/v3, v4 and EXECUTE
   fixtures, then scans all four sources so no site can re-inline a `VM_` gas key.
   Deliberately NOT a gate leg: nothing this gate reads from the outside proves two
