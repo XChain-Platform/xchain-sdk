@@ -52,19 +52,18 @@ const CASES = [
 const NAMES = ['TOKENA', 'TOKENB'];
 const IDS   = ['^11', '^22'];
 
+// compactTickers:false so createAction never reaches out to resolve names;
+// we pass the ticker reference (name or ^id) explicitly and check serialization.
+const sdk = new XChainSDK({ network: 'bitcoin-mainnet', compactTickers: false });
+
+function buildWith(tickValues, c) {
+    const params = Object.assign({}, c.base);
+    c.tickFields.forEach((f, i) => { params[f] = tickValues[i]; });
+    // Use the synchronous inner builder: pure validate + format-select + serialize.
+    return sdk.actions.createAction({ action: c.action, params }).actionString;
+}
+
 describe('Ticker NAME vs TICK_ID (^N) equivalence', function () {
-
-    // compactTickers:false so createAction never reaches out to resolve names;
-    // we pass the ticker reference (name or ^id) explicitly and check serialization.
-    const sdk = new XChainSDK({ network: 'bitcoin-mainnet', compactTickers: false });
-
-    function buildWith(tickValues, c) {
-        const params = Object.assign({}, c.base);
-        c.tickFields.forEach((f, i) => { params[f] = tickValues[i]; });
-        // Use the synchronous inner builder: pure validate + format-select + serialize.
-        return sdk.actions.createAction({ action: c.action, params }).actionString;
-    }
-
     for (const c of CASES) {
         const names = c.tickFields.map((_, i) => NAMES[i]);
         const ids   = c.tickFields.map((_, i) => IDS[i]);
@@ -91,7 +90,9 @@ describe('Ticker NAME vs TICK_ID (^N) equivalence', function () {
             expect(normalized).to.equal(nameStr);
         });
     }
+});
 
+describe('Ticker NAME vs TICK_ID (^N) equivalence', function () {
     it('rejects a ^id with a non-numeric body on a reference field', function () {
         expect(() => sdk.actions.createAction({
             action: 'SEND', params: { TICK: '^abc', AMOUNT: '1', DESTINATION: ADDR }
