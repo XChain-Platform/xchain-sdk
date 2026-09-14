@@ -83,20 +83,22 @@ const CORPUS = [
     { coin: 'DOGE', network: 'testnet', address: 'nUWEkyCqUgBWyn6LfMxn8cTT6WKU8U1GZg' }
 ];
 
+let params = null;
+const util = new Utility();
+
+function loadAddressParams(){
+    if(!fs.existsSync(INDEXER_UTIL)){
+        if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+            throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but ' + INDEXER_UTIL + ' was not found');
+        this.skip();
+        return;
+    }
+    params = readIndexerAddressParams();
+}
+
 describe('bridge: SDK/indexer address-parameter parity', function(){
 
-    let params = null;
-    let util   = new Utility();
-
-    before(function(){
-        if(!fs.existsSync(INDEXER_UTIL)){
-            if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but ' + INDEXER_UTIL + ' was not found');
-            this.skip();
-            return;
-        }
-        params = readIndexerAddressParams();
-    });
+    before(loadAddressParams);
 
     it('covers every coin the SDK registry knows, on every network', function(){
         // A coin present in one table and absent in the other is the divergence
@@ -126,6 +128,11 @@ describe('bridge: SDK/indexer address-parameter parity', function(){
             }
         }
     });
+});
+
+describe('bridge: SDK/indexer address-parameter parity', function(){
+
+    before(loadAddressParams);
 
     it('both validators answer identically over the address corpus, on every coin and network pair', function(){
         // Equal tables still permit divergent code, so drive the property that matters:
