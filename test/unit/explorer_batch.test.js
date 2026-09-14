@@ -22,26 +22,28 @@ const ExplorerClient = require('../../src/clients/explorer.js');
 const XChainSDK = require('../../src/XChainSDK.js');
 const { SDKExplorerError, SDKRateLimitedError } = require('../../src/utils/errors.js');
 
+const HOST = 'explorer.test';
+const BASE = 'http://explorer.test:8080';
+const OPTS = {
+    network: 'bitcoin-mainnet',
+    explorerUrl: HOST,
+    explorerPort: 8080,
+    retry: false
+};
+let client;
+
+function resetClient() {
+    client = new ExplorerClient(OPTS);
+}
+
+function cleanup() {
+    nock.cleanAll();
+    sinon.restore();
+}
+
 describe('ExplorerClient batch reads', function () {
-
-    const BASE = 'http://explorer.test:8080';
-    const OPTS = {
-        network: 'bitcoin-mainnet',
-        explorerUrl: 'explorer.test',
-        explorerPort: 8080,
-        retry: false
-    };
-    let client;
-
-    beforeEach(function () {
-        client = new ExplorerClient(OPTS);
-    });
-
-    afterEach(function () {
-        nock.cleanAll();
-        sinon.restore();
-    });
-
+    beforeEach(resetClient);
+    afterEach(cleanup);
 
     describe('the request that goes out', function () {
 
@@ -85,7 +87,14 @@ describe('ExplorerClient batch reads', function () {
             await client.getBalancesBatch(['a1'], { noRetry: true });
             expect(scope.isDone()).to.equal(true);
         });
+    });
+});
 
+describe('ExplorerClient batch reads', function () {
+    beforeEach(resetClient);
+    afterEach(cleanup);
+
+    describe('the request that goes out', function () {
         it('carries the coin prefix of the client network', async function () {
             const regtest = new ExplorerClient(Object.assign({}, OPTS, { network: 'bitcoin-regtest' }));
             const scope = nock(BASE).post('/RBTC/api/coinpay_obligations', { addresses: ['a1'] }).reply(200, { a0: { balances: null, address: null, error: null }, a1: { balances: null, address: null, error: null } });
@@ -116,7 +125,11 @@ describe('ExplorerClient batch reads', function () {
             expect(fresh.tipAgeSeconds).to.equal(900);
         });
     });
+});
 
+describe('ExplorerClient batch reads', function () {
+    beforeEach(resetClient);
+    afterEach(cleanup);
 
     describe('client-side refusals (no request leaves the process)', function () {
 
@@ -159,7 +172,11 @@ describe('ExplorerClient batch reads', function () {
             expect(scope.isDone()).to.equal(true);
         });
     });
+});
 
+describe('ExplorerClient batch reads', function () {
+    beforeEach(resetClient);
+    afterEach(cleanup);
 
     describe('failures a caller has to tell apart', function () {
 
@@ -193,7 +210,14 @@ describe('ExplorerClient batch reads', function () {
             const body = await client.getBalancesBatch(['a1']);
             expect(body.a1.error.code).to.equal('DB_ERROR');
         });
+    });
+});
 
+describe('ExplorerClient batch reads', function () {
+    beforeEach(resetClient);
+    afterEach(cleanup);
+
+    describe('failures a caller has to tell apart', function () {
         it('a 429 surfaces as SDKRateLimitedError only after the honoured Retry-After wait', async function () {
             const limited = new ExplorerClient(Object.assign({}, OPTS, {
                 // Tiny caps so the honoured wait is real but costs milliseconds.
@@ -237,7 +261,11 @@ describe('ExplorerClient batch reads', function () {
             expect(thrown.details.data.code).to.equal('COIN_UNAVAILABLE');
         });
     });
+});
 
+describe('ExplorerClient batch reads', function () {
+    beforeEach(resetClient);
+    afterEach(cleanup);
 
     describe('hooks', function () {
 
@@ -282,7 +310,11 @@ describe('ExplorerClient batch reads', function () {
             expect(onRequest.called).to.equal(false);
         });
     });
+});
 
+describe('ExplorerClient batch reads', function () {
+    beforeEach(resetClient);
+    afterEach(cleanup);
 
     describe('facade delegation', function () {
 
@@ -331,7 +363,11 @@ describe('ExplorerClient batch reads', function () {
             expect(typeof client.getCoinpayObligationsBatch).to.equal('function');
         });
     });
+});
 
+describe('ExplorerClient batch reads', function () {
+    beforeEach(resetClient);
+    afterEach(cleanup);
 
     describe('typings', function () {
 
