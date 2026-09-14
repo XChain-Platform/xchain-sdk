@@ -82,7 +82,9 @@ function resolveIndexerRoot() {
  * environment override counts; a missing directory is an accident of layout, not a
  * decision, and reading it as one is what retired the gate silently. */
 function noIndexerIsDeclared() {
-    return process.env[ALLOW_NO_INDEXER_ENV] === '1'
+    // Read by its literal name (the constant above names it for messages) so the
+    // env-var doc coverage scanner sees the variable rather than a computed key.
+    return process.env.XCHAIN_ALLOW_NO_INDEXER === '1'
         && process.env.XCHAIN_REQUIRE_SIBLINGS !== '1';
 }
 
