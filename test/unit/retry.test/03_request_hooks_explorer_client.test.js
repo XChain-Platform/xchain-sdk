@@ -23,10 +23,66 @@ const ExplorerClient = require('../../../src/clients/explorer.js');
 
 // Request hook tests
 
+function registerExplorerSuccessHookTests(getClient, getLog, explorerBase) {
+    it('onRequest fires before each request', async () => {
+        nock(explorerBase)
+            .get('/BTC/api/status').reply(200, { ok: true });
+
+        await getClient().getStatus();
+        let req = getLog().find(e => e.type === 'request');
+        expect(req).to.exist;
+        expect(req.service).to.equal('explorer');
+    });
+
+    it('onResponse fires on success with status 200', async () => {
+        nock(explorerBase)
+            .get('/BTC/api/status').reply(200, { ok: true });
+
+        await getClient().getStatus();
+        let res = getLog().find(e => e.type === 'response');
+        expect(res).to.exist;
+        expect(res.status).to.equal(200);
+    });
+}
+
+function registerExplorerErrorHookTests(getClient, getLog, explorerBase) {
+    it('onError fires on HTTP error', async () => {
+        nock(explorerBase)
+            .get('/BTC/api/status').reply(500, { error: 'server error' });
+
+        try { await getClient().getStatus(); } catch (_) {}
+        let errEntry = getLog().find(e => e.type === 'error');
+        expect(errEntry).to.exist;
+    });
+
+    it('hook info includes service: explorer and method: GET', async () => {
+        nock(explorerBase)
+            .get('/BTC/api/status').reply(200, { ok: true });
+
+        await getClient().getStatus();
+        let req = getLog().find(e => e.type === 'request');
+        expect(req.service).to.equal('explorer');
+        expect(req.method).to.equal('GET');
+    });
+
+    it('no hooks configured: no crash on successful request', async () => {
+        let noHookClient = new ExplorerClient({
+            network:     'bitcoin-mainnet',
+            explorerUrl: 'hooks.test',
+            explorerPort: 8080,
+            retry: false
+        });
+
+        nock(explorerBase)
+            .get('/BTC/api/status').reply(200, { ok: true });
+
+        let result = await noHookClient.getStatus();
+        expect(result).to.deep.equal({ ok: true });
+    });
+}
+
 describe('request hooks - ExplorerClient', () => {
-
     const EXPLORER_BASE = 'http://hooks.test:8080';
-
     let log;
     let client;
 
@@ -49,58 +105,7 @@ describe('request hooks - ExplorerClient', () => {
         nock.cleanAll();
     });
 
-    it('onRequest fires before each request', async () => {
-        nock(EXPLORER_BASE)
-            .get('/BTC/api/status').reply(200, { ok: true });
-
-        await client.getStatus();
-        let req = log.find(e => e.type === 'request');
-        expect(req).to.exist;
-        expect(req.service).to.equal('explorer');
-    });
-
-    it('onResponse fires on success with status 200', async () => {
-        nock(EXPLORER_BASE)
-            .get('/BTC/api/status').reply(200, { ok: true });
-
-        await client.getStatus();
-        let res = log.find(e => e.type === 'response');
-        expect(res).to.exist;
-        expect(res.status).to.equal(200);
-    });
-
-    it('onError fires on HTTP error', async () => {
-        nock(EXPLORER_BASE)
-            .get('/BTC/api/status').reply(500, { error: 'server error' });
-
-        try { await client.getStatus(); } catch (_) {}
-        let errEntry = log.find(e => e.type === 'error');
-        expect(errEntry).to.exist;
-    });
-
-    it('hook info includes service: explorer and method: GET', async () => {
-        nock(EXPLORER_BASE)
-            .get('/BTC/api/status').reply(200, { ok: true });
-
-        await client.getStatus();
-        let req = log.find(e => e.type === 'request');
-        expect(req.service).to.equal('explorer');
-        expect(req.method).to.equal('GET');
-    });
-
-    it('no hooks configured: no crash on successful request', async () => {
-        let noHookClient = new ExplorerClient({
-            network:     'bitcoin-mainnet',
-            explorerUrl: 'hooks.test',
-            explorerPort: 8080,
-            retry: false
-        });
-
-        nock(EXPLORER_BASE)
-            .get('/BTC/api/status').reply(200, { ok: true });
-
-        let result = await noHookClient.getStatus();
-        expect(result).to.deep.equal({ ok: true });
-    });
+    registerExplorerSuccessHookTests(() => client, () => log, EXPLORER_BASE);
+    registerExplorerErrorHookTests(() => client, () => log, EXPLORER_BASE);
 
 });

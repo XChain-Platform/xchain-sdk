@@ -24,10 +24,7 @@ const {
     parseRetryAfter
 } = require('../../../src/utils/retry.js');
 
-// Pure retry helpers (parseRetryAfter / getRetryAfterDelay / getDelay) ──
-
-describe('retry helpers (pure)', function () {
-
+function registerParseRetryAfterTests() {
     describe('parseRetryAfter', function () {
         it('returns null for falsy input', function () {
             expect(parseRetryAfter(null)).to.equal(null);
@@ -55,7 +52,9 @@ describe('retry helpers (pure)', function () {
             expect(parseRetryAfter('not-a-date-or-number')).to.equal(null);
         });
     });
+}
 
+function registerRetryAfterDelayTests() {
     describe('getRetryAfterDelay', function () {
         it('returns null when the error has no response/headers', function () {
             expect(getRetryAfterDelay(null)).to.equal(null);
@@ -68,7 +67,9 @@ describe('retry helpers (pure)', function () {
             expect(getRetryAfterDelay(err)).to.equal(30000);
         });
     });
+}
 
+function registerDelayTests() {
     describe('getDelay', function () {
         it('honours a Retry-After header, capped at maxDelay', function () {
             const cfg = { ...DEFAULTS, maxDelay: 5000 };
@@ -93,4 +94,12 @@ describe('retry helpers (pure)', function () {
             expect(d).to.be.at.most(2500);
         });
     });
+}
+
+// Pure retry helpers (parseRetryAfter / getRetryAfterDelay / getDelay) ──
+
+describe('retry helpers (pure)', function () {
+    registerParseRetryAfterTests();
+    registerRetryAfterDelayTests();
+    registerDelayTests();
 });

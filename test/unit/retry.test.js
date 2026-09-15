@@ -20,14 +20,9 @@ const { expect } = require('chai');
 const { withRetry, isRetryable, getDelay } = require('../../src/utils/retry.js');
 
 
-// Section 1: Retry utility unit tests
-
-describe('retry utility', () => {
-
+function registerIsRetryableTests() {
     // isRetryable
-
     describe('isRetryable()', () => {
-
         it('returns true for HTTP 429', () => {
             expect(isRetryable({ response: { status: 429 } })).to.equal(true);
         });
@@ -63,14 +58,12 @@ describe('retry utility', () => {
         it('returns false for error with no response and no code', () => {
             expect(isRetryable({})).to.equal(false);
         });
-
     });
+}
 
-
+function registerDelayTests() {
     // getDelay
-
     describe('getDelay()', () => {
-
         it('returns a number > 0 for attempt 0', () => {
             let config = { baseDelay: 100, maxDelay: 30000, backoffFactor: 2 };
             let delay = getDelay(0, config);
@@ -101,76 +94,89 @@ describe('retry utility', () => {
                 expect(getDelay(attempt, config)).to.be.at.most(ceiling);
             }
         });
+    });
+}
 
+function registerRetrySuccessTests() {
+    it('succeeds on first try: fn called exactly once', async () => {
+        let callCount = 0;
+        let result = await withRetry(async () => {
+            callCount++;
+            return 'ok';
+        }, { maxRetries: 2, baseDelay: 10 });
+        expect(result).to.equal('ok');
+        expect(callCount).to.equal(1);
     });
 
+    it('fails once then succeeds: fn called exactly twice', async () => {
+        let callCount = 0;
+        let result = await withRetry(async () => {
+            callCount++;
+            if (callCount === 1) {
+                let err = new Error('transient');
+                err.response = { status: 503 };
+                throw err;
+            }
+            return 'recovered';
+        }, { maxRetries: 2, baseDelay: 10 });
+        expect(result).to.equal('recovered');
+        expect(callCount).to.equal(2);
+    });
+}
 
+function registerRetryFailureTests() {
+    it('fails with non-retryable error: throws immediately, fn called once', async () => {
+        let callCount = 0;
+        let err400 = new Error('bad request');
+        err400.response = { status: 400 };
+
+        let thrown;
+        try {
+            await withRetry(async () => {
+                callCount++;
+                throw err400;
+            }, { maxRetries: 2, baseDelay: 10 });
+        } catch (e) {
+            thrown = e;
+        }
+        expect(thrown).to.equal(err400);
+        expect(callCount).to.equal(1);
+    });
+
+    it('exhausts all retries: throws last error', async () => {
+        let callCount = 0;
+        let transient = new Error('service unavailable');
+        transient.response = { status: 503 };
+
+        let thrown;
+        try {
+            await withRetry(async () => {
+                callCount++;
+                throw transient;
+            }, { maxRetries: 2, baseDelay: 10 });
+        } catch (e) {
+            thrown = e;
+        }
+        expect(thrown).to.equal(transient);
+        // 1 initial + 2 retries = 3 total
+        expect(callCount).to.equal(3);
+    });
+}
+
+function registerWithRetryTests() {
     // withRetry
-
     describe('withRetry()', () => {
-
-        it('succeeds on first try: fn called exactly once', async () => {
-            let callCount = 0;
-            let result = await withRetry(async () => {
-                callCount++;
-                return 'ok';
-            }, { maxRetries: 2, baseDelay: 10 });
-            expect(result).to.equal('ok');
-            expect(callCount).to.equal(1);
-        });
-
-        it('fails once then succeeds: fn called exactly twice', async () => {
-            let callCount = 0;
-            let result = await withRetry(async () => {
-                callCount++;
-                if (callCount === 1) {
-                    let err = new Error('transient');
-                    err.response = { status: 503 };
-                    throw err;
-                }
-                return 'recovered';
-            }, { maxRetries: 2, baseDelay: 10 });
-            expect(result).to.equal('recovered');
-            expect(callCount).to.equal(2);
-        });
-
-        it('fails with non-retryable error: throws immediately, fn called once', async () => {
-            let callCount = 0;
-            let err400 = new Error('bad request');
-            err400.response = { status: 400 };
-
-            let thrown;
-            try {
-                await withRetry(async () => {
-                    callCount++;
-                    throw err400;
-                }, { maxRetries: 2, baseDelay: 10 });
-            } catch (e) {
-                thrown = e;
-            }
-            expect(thrown).to.equal(err400);
-            expect(callCount).to.equal(1);
-        });
-
-        it('exhausts all retries: throws last error', async () => {
-            let callCount = 0;
-            let transient = new Error('service unavailable');
-            transient.response = { status: 503 };
-
-            let thrown;
-            try {
-                await withRetry(async () => {
-                    callCount++;
-                    throw transient;
-                }, { maxRetries: 2, baseDelay: 10 });
-            } catch (e) {
-                thrown = e;
-            }
-            expect(thrown).to.equal(transient);
-            // 1 initial + 2 retries = 3 total
-            expect(callCount).to.equal(3);
-        });
-
+        registerRetrySuccessTests();
+        registerRetryFailureTests();
     });
+}
+
+
+// Retry utility unit tests
+
+describe('retry utility', () => {
+    registerIsRetryableTests();
+    registerDelayTests();
+    registerWithRetryTests();
 
 });
