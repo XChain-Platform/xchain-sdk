@@ -26,62 +26,97 @@ const { spawnSync } = require('child_process');
 const SDK_ROOT = path.join(__dirname, '..', '..', '..');
 const GATE = path.join(SDK_ROOT, 'bin', 'check-preflight-drift.js');
 
+// A deliberately broken indexer root: it carries src/actions/ (which is what
+// resolveIndexerRoot looks for, so the real sibling is never consulted) and
+// nothing else, so every check fails for a reason that cannot depend on what
+// a second coder has in the sibling checkout right now.
+function createFixtureRoot() {
+    const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-gate-modes-'));
+    fs.mkdirSync(path.join(fixtureRoot, 'src', 'actions'), { recursive: true });
+    return fixtureRoot;
+}
+
+function removeFixtureRoot(fixtureRoot) {
+    if (fixtureRoot) fs.rmSync(fixtureRoot, { recursive: true, force: true });
+}
+
+function runGate(args, fixtureRoot) {
+    const r = spawnSync(process.execPath, [GATE, ...args], {
+        cwd: SDK_ROOT,
+        encoding: 'utf8',
+        env: { ...process.env, XCHAIN_INDEXER_PATH: fixtureRoot },
+    });
+    return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
+}
+
+// The CLEAN verdict cannot be produced from a fixture (the pins are real handler
+// bytes) and reading it off the live sibling would make this suite pass or fail on
+// whatever a second coder has in that checkout today, which is precisely the
+// non-hermetic coupling the sibling suite refuses. So the clean side is driven
+// through main()'s injected evaluator: what is under test here is the exit code and
+// the wording each verdict selects, not the checks, which the fixture runs cover.
+function runMain(args, verdict) {
+    const script = `const g = require(${JSON.stringify(GATE)}); g.main(${JSON.stringify(args)}, () => ${verdict});`;
+    const r = spawnSync(process.execPath, ['-e', script], { cwd: SDK_ROOT, encoding: 'utf8' });
+    return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
+}
+
 describe('drift gate run modes (§8.5)', function () {
     this.timeout(20000);
 
-    // A deliberately broken indexer root: it carries src/actions/ (which is what
-    // resolveIndexerRoot looks for, so the real sibling is never consulted) and
-    // nothing else, so every check fails for a reason that cannot depend on what
-    // a second coder has in the sibling checkout right now.
     let fixtureRoot;
 
     before(function () {
-        fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-gate-modes-'));
-        fs.mkdirSync(path.join(fixtureRoot, 'src', 'actions'), { recursive: true });
+        fixtureRoot = createFixtureRoot();
     });
 
     after(function () {
-        if (fixtureRoot) fs.rmSync(fixtureRoot, { recursive: true, force: true });
+        removeFixtureRoot(fixtureRoot);
     });
-
-    function runGate(args) {
-        const r = spawnSync(process.execPath, [GATE, ...args], {
-            cwd: SDK_ROOT,
-            encoding: 'utf8',
-            env: { ...process.env, XCHAIN_INDEXER_PATH: fixtureRoot },
-        });
-        return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
-    }
 
     it('strict (no flag) still exits 1 and prints the finding', function () {
         // Unchanged behaviour, and it must stay unchanged: CI's own drift job and
         // the indexer-side gate both run the bare script and rely on the exit code.
-        const { code, out } = runGate([]);
+        const { code, out } = runGate([], fixtureRoot);
         expect(code, 'strict mode exit code').to.equal(1);
         expect(out).to.include('mapped handler(s) not found in the checkout');
     });
 
     it('--soft prints the same finding and exits 0, so the suites still run', function () {
-        const strict = runGate([]);
-        const soft = runGate(['--soft']);
+        const strict = runGate([], fixtureRoot);
+        const soft = runGate(['--soft'], fixtureRoot);
         expect(soft.code, '--soft exit code').to.equal(0);
         // Same report, not a quieter one: the soft run is what a reviewer reads.
         expect(soft.out).to.include('mapped handler(s) not found in the checkout');
         for (const line of strict.out.split('\n').filter((l) => l.trim()))
             expect(soft.out, 'soft output keeps every strict line').to.include(line);
     });
+});
+
+describe('drift gate run modes (§8.5)', function () {
+    this.timeout(20000);
+
+    let fixtureRoot;
+
+    before(function () {
+        fixtureRoot = createFixtureRoot();
+    });
+
+    after(function () {
+        removeFixtureRoot(fixtureRoot);
+    });
 
     it('--soft says the finding is not waived and names where it lands', function () {
         // The failure mode this guards is a future reader seeing exit 0 and
         // concluding the drift was tolerated.
-        const { out } = runGate(['--soft']);
+        const { out } = runGate(['--soft'], fixtureRoot);
         expect(out).to.include('NOT fatal here');
         expect(out).to.include('ci:drift:verdict');
         expect(out).to.include('Nothing above is waived');
     });
 
     it('--verdict exits 1 on the same finding without re-printing the report', function () {
-        const { code, out } = runGate(['--verdict']);
+        const { code, out } = runGate(['--verdict'], fixtureRoot);
         expect(code, '--verdict exit code').to.equal(1);
         expect(out).to.include('drift-gate: FAILED');
         // Muted: one `npm run ci` runs the gate twice, and printing the full
@@ -89,6 +124,27 @@ describe('drift gate run modes (§8.5)', function () {
         expect(out).to.not.include('mapped handler(s) not found in the checkout');
         expect(out.split('\n').length, '--verdict stays short').to.be.lessThan(8);
     });
+});
+
+describe('drift gate run modes (§8.5)', function () {
+    this.timeout(20000);
+
+    it('--verdict is silent-clean and exits 0 when there is nothing to report', function () {
+        const { code, out } = runMain(['--verdict'], 0);
+        expect(code, '--verdict clean exit code').to.equal(0);
+        expect(out).to.include('drift-gate: clean.');
+        expect(out, 'a clean verdict says nothing about failing').to.not.include('FAILED');
+    });
+
+    it('a clean gate is not softened into something else by --soft', function () {
+        const { code, out } = runMain(['--soft'], 0);
+        expect(code, '--soft clean exit code').to.equal(0);
+        expect(out, 'no not-waived banner when there is no finding').to.not.include('NOT fatal here');
+    });
+});
+
+describe('drift gate run modes (§8.5)', function () {
+    this.timeout(20000);
 
     /* The no-checkout branch, which is the one a dropped CI checkout step lands on.
      *
@@ -132,31 +188,10 @@ describe('drift gate run modes (§8.5)', function () {
             expect(out, 'no longer reports a skip').to.not.include('skipping the sibling checks');
         });
     });
+});
 
-    // The CLEAN verdict cannot be produced from a fixture (the pins are real handler
-    // bytes) and reading it off the live sibling would make this suite pass or fail on
-    // whatever a second coder has in that checkout today, which is precisely the
-    // non-hermetic coupling the sibling suite refuses. So the clean side is driven
-    // through main()'s injected evaluator: what is under test here is the exit code and
-    // the wording each verdict selects, not the checks, which the fixture runs cover.
-    function runMain(args, verdict) {
-        const script = `const g = require(${JSON.stringify(GATE)}); g.main(${JSON.stringify(args)}, () => ${verdict});`;
-        const r = spawnSync(process.execPath, ['-e', script], { cwd: SDK_ROOT, encoding: 'utf8' });
-        return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
-    }
-
-    it('--verdict is silent-clean and exits 0 when there is nothing to report', function () {
-        const { code, out } = runMain(['--verdict'], 0);
-        expect(code, '--verdict clean exit code').to.equal(0);
-        expect(out).to.include('drift-gate: clean.');
-        expect(out, 'a clean verdict says nothing about failing').to.not.include('FAILED');
-    });
-
-    it('a clean gate is not softened into something else by --soft', function () {
-        const { code, out } = runMain(['--soft'], 0);
-        expect(code, '--soft clean exit code').to.equal(0);
-        expect(out, 'no not-waived banner when there is no finding').to.not.include('NOT fatal here');
-    });
+describe('drift gate run modes (§8.5)', function () {
+    this.timeout(20000);
 
     describe('ci chain wiring', function () {
         const pkg = require(path.join(SDK_ROOT, 'package.json'));
