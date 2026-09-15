@@ -68,6 +68,9 @@ describe('pre-flight universal: ^<id> address references', function () {
             expect(fields).to.deep.equal(['TRANSFER', 'TRANSFER_SUPPLY']);
         });
     });
+});
+
+describe('pre-flight universal: ^<id> address references', function () {
 
     describe('well-formed ids (not decidable client-side)', function () {
         it('declares the dangling case unverified instead of guessing', async function () {
@@ -95,6 +98,9 @@ describe('pre-flight universal: ^<id> address references', function () {
             expect(unverified(r)).to.equal(false);
         });
     });
+});
+
+describe('pre-flight universal: ^<id> address references', function () {
 
     describe('the scoped field set is derived, not restated', function () {
         it('covers every single-value address field of the shared consensus map', function () {
@@ -112,6 +118,9 @@ describe('pre-flight universal: ^<id> address references', function () {
             expect(CARET_RESOLVED_FIELDS.DISPENSER).to.deep.equal(['GET_ADDRESS', 'ORACLE_ADDRESS']);
         });
     });
+});
+
+describe('pre-flight universal: ^<id> address references', function () {
 
     /*
      * The `noCompact` pair is decidable even when the id is well-formed, because

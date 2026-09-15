@@ -57,6 +57,9 @@ describe('addressRefFields', function () {
         // compactable via those actions.
         assert.ok(SDK_COMPACTABLE.includes('DESTINATION'));
     });
+});
+
+describe('addressRefFields', function () {
 
     // The flat SDK_COMPACTABLE assertion above is fine on its own, but
     // nothing checked what each ACTION ends up allowed to compact, and that gap
@@ -82,6 +85,9 @@ describe('addressRefFields', function () {
             }
         }
     });
+});
+
+describe('addressRefFields', function () {
 
     // The structural guard against the whole class: a field name shared by two
     // actions must not carry one action's permission into the other.
@@ -102,6 +108,9 @@ describe('addressRefFields', function () {
         for (const f of SDK_COMPACTABLE)
             assert.ok(declared.has(f), `${f} must be a declared address field`);
     });
+});
+
+describe('addressRefFields', function () {
 
     /* The consensus twin, bound from THIS side of the seam.
      *
