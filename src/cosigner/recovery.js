@@ -92,6 +92,34 @@ function localPairSigner(leaf, secretKeys) {
     };
 }
 
+function reconcileRecoveryFee(inputs, outputs) {
+    // Fee reconciliation. This is the only SDK signing path that bypasses PSBT
+    // extraction and the encoder, so bitcoinjs's absurd-fee guard never runs here.
+    // Whole-account recovery moves the entire aggregate balance, so a mis-entered
+    // outputs[].value (satoshi/decimal confusion, a dropped digit, a forgotten
+    // change output) would silently donate the remainder to miners. Guard both
+    // directions before signing anything.
+    // Satoshi values are u64: Number() rounds above 2^53, so a >90M-DOGE account
+    // reconciled here compared EQUAL to a short-changed output set, while the sighash
+    // below commits to the unrounded values (mirrors coSigner._toU64 / exactU64).
+    let totalIn = 0n;
+    for (const i of inputs) {
+        const v = exactU64(i.value);
+        if (v === null) throw new Error('recovery inputs carry a non-integer or negative value');
+        totalIn += v;
+    }
+    let totalOut = 0n;
+    for (const o of outputs) {
+        const v = exactU64(o.value);
+        if (v === null) throw new Error('recovery outputs carry a non-integer or negative value');
+        totalOut += v;
+    }
+    const fee = totalIn - totalOut;
+    if (fee < 0n)
+        throw new Error(`recovery outputs (${totalOut}) exceed inputs (${totalIn}): would be an invalid, unrelayable transaction`);
+    return fee;
+}
+
 /*
  * Build a finalized script-path recovery spend.
  *
@@ -129,30 +157,7 @@ async function buildRecoverySpend(cfg = {}) {
         tx.addOutput(script, o.value);
     }
 
-    // Fee reconciliation. This is the only SDK signing path that bypasses PSBT
-    // extraction and the encoder, so bitcoinjs's absurd-fee guard never runs here.
-    // Whole-account recovery moves the entire aggregate balance, so a mis-entered
-    // outputs[].value (satoshi/decimal confusion, a dropped digit, a forgotten
-    // change output) would silently donate the remainder to miners. Guard both
-    // directions before signing anything.
-    // Satoshi values are u64: Number() rounds above 2^53, so a >90M-DOGE account
-    // reconciled here compared EQUAL to a short-changed output set, while the sighash
-    // below commits to the unrounded values (mirrors coSigner._toU64 / exactU64).
-    let totalIn = 0n;
-    for (const i of inputs) {
-        const v = exactU64(i.value);
-        if (v === null) throw new Error('recovery inputs carry a non-integer or negative value');
-        totalIn += v;
-    }
-    let totalOut = 0n;
-    for (const o of outputs) {
-        const v = exactU64(o.value);
-        if (v === null) throw new Error('recovery outputs carry a non-integer or negative value');
-        totalOut += v;
-    }
-    const fee = totalIn - totalOut;
-    if (fee < 0n)
-        throw new Error(`recovery outputs (${totalOut}) exceed inputs (${totalIn}): would be an invalid, unrelayable transaction`);
+    const fee = reconcileRecoveryFee(inputs, outputs);
 
     // Every input spends the same account output (the prevout set the sighash
     // commits to). One tapleaf sighash + signature per input.

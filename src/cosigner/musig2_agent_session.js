@@ -55,6 +55,54 @@ function pubHex(k) {
     throw new SDKPolicyError('COSIGNER_CONFIG', 'publicKeys entries must be hex strings or byte arrays');
 }
 
+function resolveNetwork(sdk, cfg) {
+    // Network for deriving the aggregate spending account. cfg.network wins
+    // when explicit; otherwise fall back to the SDK's own configured network
+    // (wallet.js:getBitcoinNetwork - the accessor documented specifically for
+    // this caller). An omitted network must NEVER silently resolve to
+    // bitcoinjs's Bitcoin-mainnet default (bitcoin.payments.p2tr treats
+    // `network: undefined` as mainnet): that would derive a bc1p... aggregate
+    // address, session identity, and change target on a chain the SDK is not
+    // even configured for. Fail closed instead.
+    const network = cfg.network || (sdk && sdk.wallet && typeof sdk.wallet.getBitcoinNetwork === 'function'
+        ? sdk.wallet.getBitcoinNetwork()
+        : null);
+    if (!network)
+        throw new SDKPolicyError('COSIGNER_CONFIG',
+            'MuSig2AgentSession requires a network: pass opts.coSigner.network, or construct the SDK with a network so sdk.wallet.getBitcoinNetwork() can supply one');
+    return network;
+}
+
+function deriveSessionAccount(sdk, wif, publicKeys, recovery, network) {
+    // The agent's own key MUST be in the set, else its partial can never
+    // aggregate to the account key. Fail closed at construction.
+    const keyInfo = sdk.wallet.importWIF(wif);
+    const agentHex = String(keyInfo.publicKeyHex).toLowerCase();
+    const agentIdx = publicKeys.findIndex((k) => pubHex(k) === agentHex);
+    if (agentIdx < 0)
+        throw new SDKPolicyError('COSIGNER_KEY_MISMATCH',
+            "this agent's public key is not in the MuSig2 signer set");
+
+    // Derive the spending account + the key-path signing set/tweaks. With a
+    // recovery key it is a 2-of-3 tap tree (hot path = agent+daemon key-path,
+    // BIP341-tweaked); otherwise the plain 2-of-2 key-path account.
+    let account, signingKeys, signingTweaks;
+    if (recovery) {
+        if (publicKeys.length !== 2)
+            throw new SDKPolicyError('COSIGNER_CONFIG',
+                'recovery mode requires exactly the [agent, daemon] pair in publicKeys');
+        const daemon = publicKeys[1 - agentIdx];
+        account = deriveMuSig2P2TR2of3({ agent: publicKeys[agentIdx], daemon, recovery }, network);
+        signingKeys   = account.keyPath.publicKeys;
+        signingTweaks = account.keyPath.tweaks;
+    } else {
+        account = deriveMuSig2P2TR(publicKeys, network);
+        signingKeys   = publicKeys;
+        signingTweaks = account.tweaks;
+    }
+    return { account, keyInfo, signingKeys, signingTweaks };
+}
+
 class MuSig2AgentSession extends AgentSession {
 
     /*
@@ -78,21 +126,7 @@ class MuSig2AgentSession extends AgentSession {
         const transport  = cfg.transport;
         const publicKeys = cfg.publicKeys;
         const recovery   = cfg.recovery || null;
-
-        // Network for deriving the aggregate spending account. cfg.network wins
-        // when explicit; otherwise fall back to the SDK's own configured network
-        // (wallet.js:getBitcoinNetwork - the accessor documented specifically for
-        // this caller). An omitted network must NEVER silently resolve to
-        // bitcoinjs's Bitcoin-mainnet default (bitcoin.payments.p2tr treats
-        // `network: undefined` as mainnet): that would derive a bc1p... aggregate
-        // address, session identity, and change target on a chain the SDK is not
-        // even configured for. Fail closed instead.
-        const network = cfg.network || (sdk && sdk.wallet && typeof sdk.wallet.getBitcoinNetwork === 'function'
-            ? sdk.wallet.getBitcoinNetwork()
-            : null);
-        if (!network)
-            throw new SDKPolicyError('COSIGNER_CONFIG',
-                'MuSig2AgentSession requires a network: pass opts.coSigner.network, or construct the SDK with a network so sdk.wallet.getBitcoinNetwork() can supply one');
+        const network = resolveNetwork(sdk, cfg);
 
         if (typeof transport !== 'function')
             throw new SDKPolicyError('COSIGNER_CONFIG',
@@ -105,32 +139,8 @@ class MuSig2AgentSession extends AgentSession {
                 'MuSig2AgentSession requires exactly the [agent, daemon] publicKeys pair '
                 + '(a 2-of-3 account names its third key separately via opts.coSigner.recovery)');
 
-        // The agent's own key MUST be in the set, else its partial can never
-        // aggregate to the account key. Fail closed at construction.
-        const keyInfo = sdk.wallet.importWIF(wif);
-        const agentHex = String(keyInfo.publicKeyHex).toLowerCase();
-        const agentIdx = publicKeys.findIndex((k) => pubHex(k) === agentHex);
-        if (agentIdx < 0)
-            throw new SDKPolicyError('COSIGNER_KEY_MISMATCH',
-                "this agent's public key is not in the MuSig2 signer set");
-
-        // Derive the spending account + the key-path signing set/tweaks. With a
-        // recovery key it is a 2-of-3 tap tree (hot path = agent+daemon key-path,
-        // BIP341-tweaked); otherwise the plain 2-of-2 key-path account.
-        let account, signingKeys, signingTweaks;
-        if (recovery) {
-            if (publicKeys.length !== 2)
-                throw new SDKPolicyError('COSIGNER_CONFIG',
-                    'recovery mode requires exactly the [agent, daemon] pair in publicKeys');
-            const daemon = publicKeys[1 - agentIdx];
-            account = deriveMuSig2P2TR2of3({ agent: publicKeys[agentIdx], daemon, recovery }, network);
-            signingKeys   = account.keyPath.publicKeys;
-            signingTweaks = account.keyPath.tweaks;
-        } else {
-            account = deriveMuSig2P2TR(publicKeys, network);
-            signingKeys   = publicKeys;
-            signingTweaks = account.tweaks;
-        }
+        const { account, keyInfo, signingKeys, signingTweaks } =
+            deriveSessionAccount(sdk, wif, publicKeys, recovery, network);
 
         // Key the client-side policy window on the AGGREGATE address (not the agent
         // p2pkh) so it tracks the account that actually spends.
