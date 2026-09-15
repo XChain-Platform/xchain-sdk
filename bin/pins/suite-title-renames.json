@@ -106,6 +106,9 @@
     "test/unit/xbridge-sdk-builder.test.js": "test/unit/xbridge_sdk_builder.test.js"
   },
   "titles": {
+    "test/unit/abi_core_drift.test.js": {
+      "abi-core drift guard @regression src/contract/abi-core.js matches the canonical xchain-explorer/src/abi-core.js": "abi-core drift guard @regression src/contract/abi-core.js matches the canonical xchain-explorer/src/contract/abi_core.js"
+    },
     "test/unit/contract_lint_global_alias.test.js": {
       "vendored lint-core: LINT_GLOBAL_ALIAS rules accepts globalThis self-reference to Math with the epoch off (pre-activation verdict)": "vendored lint_core: LINT_GLOBAL_ALIAS rules accepts globalThis self-reference to Math with the epoch off (pre-activation verdict)",
       "vendored lint-core: LINT_GLOBAL_ALIAS rules accepts globalThis self-reference to Promise with the epoch off (pre-activation verdict)": "vendored lint_core: LINT_GLOBAL_ALIAS rules accepts globalThis self-reference to Promise with the epoch off (pre-activation verdict)",
