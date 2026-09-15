@@ -22,6 +22,7 @@
 
 const { WebSocket, WS_CONNECTING, WS_OPEN, WS_SCHEMA_VERSION } = require('./websocket/socket_constants.js');
 const { SDKExplorerError } = require('../utils/errors.js');
+const { installMethods } = require('../utils/install_methods.js');
 
 function websocketUrl(client) {
     // Tolerate baseUrl already being a full http(s) URL (e.g. derived from
@@ -200,7 +201,7 @@ class WebSocketClient {
     }
 }
 
-Object.assign(WebSocketClient.prototype, require('./websocket/subscriptions.js'), require('./websocket/message_pump.js'));
+installMethods(WebSocketClient.prototype, require('./websocket/subscriptions.js'), require('./websocket/message_pump.js'));
 
 // Public surface: consumers compare/display the schema version this build
 // understands (e.g. against the server's `schema_version` frame stamp).

@@ -41,6 +41,7 @@ const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
 const { getLogger } = require('../observability/logger.js');
+const { installMethods } = require('../utils/install_methods.js');
 const log = getLogger('xchain-sdk:cosigner');
 
 // Lock files this process currently holds, released on exit so a clean shutdown
@@ -317,6 +318,6 @@ class WindowStore {
 
 }
 
-Object.assign(WindowStore.prototype, require('./window_store/window_ledger.js'));
+installMethods(WindowStore.prototype, require('./window_store/window_ledger.js'));
 
 module.exports = WindowStore;

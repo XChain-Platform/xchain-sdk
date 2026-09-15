@@ -25,6 +25,7 @@ const ecies = require('./messaging/ecies.js');
 const sessionAndAes = require('./messaging/session_and_aes.js');
 const messageIo = require('./messaging/message_io.js');
 const keyDerivation = require('./messaging/key_derivation.js');
+const { installMethods } = require('../utils/install_methods.js');
 
 
 class MessagingUtils {
@@ -36,7 +37,7 @@ class MessagingUtils {
 
 }
 
-Object.assign(
+installMethods(
     MessagingUtils.prototype,
     ecies,
     sessionAndAes,

@@ -22,6 +22,7 @@ const axios = require('axios');
 const { SDKEncoderError, SDKRateLimitedError } = require('../utils/errors.js');
 const { withRetry, isRetryable, getRetryAfterSeconds } = require('../utils/retry.js');
 const Config = require('../config.js');
+const { installMethods } = require('../utils/install_methods.js');
 
 
 class EncoderClient {
@@ -212,7 +213,7 @@ class EncoderClient {
 
 }
 
-Object.assign(EncoderClient.prototype, require('./encoder/transactions.js'));
+installMethods(EncoderClient.prototype, require('./encoder/transactions.js'));
 
 // The optional createTx fields, named ONCE. Both high-level entry points
 // (sdk.createAction and LifecycleManager.submitAction) used to re-enumerate this

@@ -51,6 +51,7 @@ const { isPosNum, parseActionString, X402_VERSION } = require('./x402/amounts.js
 const FileInvoiceStore = require('./x402/file_invoice_store.js');
 const X402Client = require('./x402/client.js');
 const { getLogger } = require('../observability/logger.js');
+const { installMethods } = require('./install_methods.js');
 const log = getLogger('xchain-sdk:x402');
 
 function configureSchemes(gateway, o) {
@@ -233,6 +234,6 @@ class X402Gateway {
     }
 }
 
-Object.assign(X402Gateway.prototype, require('./x402/challenge.js'), require('./x402/payment_verification.js'));
+installMethods(X402Gateway.prototype, require('./x402/challenge.js'), require('./x402/payment_verification.js'));
 
 module.exports = { X402Gateway, X402Client, FileInvoiceStore, parseActionString, X402_VERSION };

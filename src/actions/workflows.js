@@ -23,6 +23,7 @@ const issuanceAndStaking = require('./workflows/issuance_and_staking.js');
 const contractDeploy = require('./workflows/contract_deploy.js');
 const contentVotesMarkets = require('./workflows/content_votes_markets.js');
 const bridge = require('./workflows/bridge.js');
+const { installMethods } = require('../utils/install_methods.js');
 
 
 class Workflows {
@@ -33,7 +34,7 @@ class Workflows {
 
 }
 
-Object.assign(
+installMethods(
     Workflows.prototype,
     issuanceAndStaking,
     contractDeploy,

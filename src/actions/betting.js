@@ -39,6 +39,7 @@ const { BET_LIMITS, BET_DETAILS_SCHEMA } = require('./betting/bet_rules.js');
 const betDetails = require('./betting/bet_details.js');
 const marketParams = require('./betting/market_params.js');
 const payoutProjection = require('./betting/payout_projection.js');
+const { installMethods } = require('../utils/install_methods.js');
 
 
 class BettingHelpers {
@@ -49,7 +50,7 @@ class BettingHelpers {
 
 }
 
-Object.assign(
+installMethods(
     BettingHelpers.prototype,
     betDetails,
     marketParams,

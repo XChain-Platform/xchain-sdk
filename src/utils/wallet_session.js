@@ -28,6 +28,7 @@
 const UTXOCache        = require('../carrier/utxo_cache.js');
 const LifecycleManager = require('../carrier/lifecycle_manager.js');
 const { SDKWalletError } = require('./errors.js');
+const { installMethods } = require('./install_methods.js');
 
 async function loadAvailableUTXOs(session, encoderOpts) {
     // An explicit `unconfirmed` is a policy the CALLER stated about
@@ -272,6 +273,6 @@ class WalletSession {
     }
 }
 
-Object.assign(WalletSession.prototype, require('./wallet_session/action_shortcuts.js'));
+installMethods(WalletSession.prototype, require('./wallet_session/action_shortcuts.js'));
 
 module.exports = WalletSession;

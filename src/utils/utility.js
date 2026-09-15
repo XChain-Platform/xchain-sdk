@@ -21,6 +21,7 @@
 const config  = require('../config.js');
 const formats = require('../protocol/formats.js');
 const { getLogger } = require('../observability/logger.js');
+const { installMethods } = require('./install_methods.js');
 const log = getLogger('xchain-sdk:utility');
 
 // Support BigInt in JSON stringify(), as a QUOTED decimal string.
@@ -191,7 +192,7 @@ class Utility {
 
 }
 
-Object.assign(Utility.prototype, require('./utility/number_format.js'), require('./utility/address_codec.js'));
+installMethods(Utility.prototype, require('./utility/number_format.js'), require('./utility/address_codec.js'));
 
 // Pure, instance-free, and exported as a static so the version-locked helpers can
 // call it directly (see the instance method above for why that matters).

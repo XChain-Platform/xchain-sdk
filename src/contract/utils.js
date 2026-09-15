@@ -46,6 +46,7 @@ const {
 // the indexer (DEPLOY) and the VM isolate limit. Imported from validator.js
 // (the parity-guarded SDK copy) so the two SDK entry points cannot diverge.
 const { MAX_CODE_SIZE } = require('../protocol/validator.js');
+const { installMethods } = require('../utils/install_methods.js');
 
 class ContractUtils {
 
@@ -185,7 +186,7 @@ class ContractUtils {
 
 }
 
-Object.assign(ContractUtils.prototype, require('./utils/exported_meta.js'));
+installMethods(ContractUtils.prototype, require('./utils/exported_meta.js'));
 
 module.exports = Object.assign(ContractUtils, {
     // Re-export so parity/drift guards can assert this entry point rides the same

@@ -18,6 +18,8 @@
  *
  ********************************************************************/
 
+const { installMethods } = require('../utils/install_methods.js');
+
 class ExplorerClient {
 
     constructor(options = {}) {
@@ -42,6 +44,6 @@ class ExplorerClient {
 
 }
 
-Object.assign(ExplorerClient.prototype, require('./explorer/transport.js'), require('./explorer/ledger_reads.js'), require('./explorer/activity_reads.js'), require('./explorer/network_reads.js'));
+installMethods(ExplorerClient.prototype, require('./explorer/transport.js'), require('./explorer/ledger_reads.js'), require('./explorer/activity_reads.js'), require('./explorer/network_reads.js'));
 
 module.exports = ExplorerClient;

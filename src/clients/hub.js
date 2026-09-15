@@ -22,6 +22,7 @@ const axios = require('axios');
 const Config = require('../config.js');
 const { agentOptsFor, NETWORK_MAP } = require('./hub/config_envelope.js');
 const { getLogger } = require('../observability/logger.js');
+const { installMethods } = require('../utils/install_methods.js');
 const log = getLogger('xchain-sdk:hub');
 
 
@@ -212,6 +213,6 @@ class HubConnector {
 
 }
 
-Object.assign(HubConnector.prototype, require('./hub/config_sync.js'));
+installMethods(HubConnector.prototype, require('./hub/config_sync.js'));
 
 module.exports = HubConnector;
