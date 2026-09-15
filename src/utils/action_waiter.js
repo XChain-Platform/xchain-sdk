@@ -19,14 +19,25 @@
  *
  ********************************************************************/
 
-const { SDKActionError, SDKConfigError } = require('./errors.js');
+const { SDKActionError } = require('./errors.js');
 // Both targeted-wait filters below decide index identity with this, never with
 // Number(): action_index arrives as a decimal string on the wire, and Number()
 // collapses two adjacent indices above 2^53 onto one value, which is exactly the
 // neighbouring action these filters exist to exclude.
 const { sameWireIndex } = require('./wire_index.js');
-const ExplorerClient = require('../clients/explorer.js');
 const { getLogger } = require('../observability/logger.js');
+const { buildExplorer } = require('./action_waiter/explorer_options.js');
+const contractValues = require('./action_waiter/contract_values.js');
+const contractWait = require('./action_waiter/contract_wait.js');
+const {
+    readStatus,
+    classifyTransactionResult,
+    unknownStatusError,
+    confirmationTimeoutError,
+    actionRejectedError,
+    classifyTargetedEvent,
+    unknownStatusWarning
+} = require('./action_waiter/transaction_result.js');
 const log = getLogger('xchain-sdk:action-waiter');
 
 // Warn-once guard for an action the indexer exposes with no status at all.
@@ -34,48 +45,17 @@ const log = getLogger('xchain-sdk:action-waiter');
 // per-wait warning would drown the useful one.
 let warnedUnknownStatus = false;
 
-// A per-action status is only evidence when the indexer actually reported one.
-// null / undefined / '' mean "not recorded or not exposed", NOT "valid".
-function readStatus(action) {
-    if (!action) return null;
-    if (typeof action.status !== 'string') return null;
-    let status = action.status.trim();
-    return status === '' ? null : status;
-}
-
-
 class ActionWaiter {
 
-    // opts.explorer     - an explorer client to poll INSTEAD of sdk.explorer
-    // opts.explorerUrl  - host/URL to build one from (with opts.explorerPort)
-    //
-    // Why: the waiter used to poll sdk.explorer unconditionally, and hub
-    // discovery points that at whatever explorer the shared stack advertises.
-    // On an ISOLATED regtest venue (its own node/decoder/indexer, no colocated
-    // explorer) every SDK-driven action then polls a stranger's explorer that
-    // will never see the transaction, and the whole run dies on
-    // CONFIRMATION_TIMEOUT with nothing wrong on-chain. Injecting the target
-    // lets one driver keep the shared SDK for encoding/broadcast while
-    // waiting on the venue that actually indexed the transaction.
+    // Keep encoding on the shared SDK while waiting on an optional target explorer.
     constructor(sdk, opts = {}) {
         this.sdk = sdk;
         this.explorer = ActionWaiter._buildExplorer(sdk, opts);
     }
 
-    // Explorer override from { explorer } or { explorerUrl, explorerPort },
-    // or null when neither is supplied. Network/timeout default to the SDK's
-    // own so an override only changes the TARGET, never the coin prefix.
+    // Build an optional explorer override without changing network defaults.
     static _buildExplorer(sdk, opts) {
-        if (!opts) return null;
-        if (opts.explorer) return opts.explorer;
-        if (!opts.explorerUrl && !opts.explorerPort) return null;
-        let sdkOpts = (sdk && sdk.options) || {};
-        return new ExplorerClient({
-            network:      opts.network      || sdkOpts.network || (sdk && sdk.network),
-            explorerUrl:  opts.explorerUrl  || 'localhost',
-            explorerPort: opts.explorerPort !== undefined ? parseInt(opts.explorerPort) : undefined,
-            timeout:      opts.explorerTimeout || sdkOpts.timeout
-        });
+        return buildExplorer(sdk, opts);
     }
 
     // Explorer this wait polls: per-call override, then the constructor
@@ -93,33 +73,19 @@ class ActionWaiter {
         return !!(ActionWaiter._buildExplorer(this.sdk, opts) || this.explorer);
     }
 
-    // Wait for a transaction (by tx_hash) to be indexed by the explorer
-    // Returns the action object from the explorer, or rejects on timeout
+    // Wait for a transaction by tx_hash and return its indexed action result.
     //
     // Options:
     //   timeout      - ms to wait before rejecting (default 120000)
     //   pollInterval - ms between explorer poll attempts (default 2000)
     //   requireValid - if true (default), reject if the action status is 'invalid'
-    //   actionIndex  - when supplied, status is resolved from that specific action
-    //                  only, preventing a neighboring action's status from leaking
-    //                  into the result (relevant for multi-action transactions)
-    //   explorer     - explorer client to poll instead of the SDK's own; or pass
-    //                  explorerUrl (+ explorerPort) to build one. Needed on
-    //                  isolated stacks whose explorer is not the one hub
-    //                  discovery advertises. An overridden wait skips
-    //                  the SDK WebSocket fast path (it follows the OTHER stack)
-    //                  and polls only.
-    //   strictStatus - if true, requireValid also refuses to ASSUME validity: a wait
-    //                  that could never read a status for the action rejects
-    //                  ACTION_STATUS_UNKNOWN at the timeout instead of resolving.
-    //                  Off by default (an unreadable status is not evidence of a
-    //                  rejection), but the only fail-closed setting for a caller
-    //                  that must not mistake silence for success.
+    //   actionIndex  - restrict status resolution to one action
+    //   explorer     - explorer client override; URL and port options also work
+    //   strictStatus - reject at timeout when no explicit status was readable
     //
-    // The resolved result carries the read itself, not just its conclusion:
+    // The result carries both the read and its status evidence:
     //   status              - normalized top-level status (see the poll comments)
-    //   statusKnown         - true only when EVERY action in the target set carried
-    //                         an explicit indexer status
+    //   statusKnown         - true when every target action has explicit status
     //   statusSource        - 'indexer' when statusKnown, otherwise 'assumed'
     //   statusUnknownActions- action_index values whose status could not be read
     async waitForTxid(txid, opts = {}) {
@@ -138,8 +104,8 @@ class ActionWaiter {
             let timer    = null;
             let pollId   = null;
             let unsub    = null;
-            // Last result whose status could not be read; only used to explain a
-            // strictStatus timeout with the action that stayed silent.
+            // Tracks the last unreadable result so the timeout error explains
+            // which action remained silent in a strictStatus wait.
             let unknownResult = null;
 
             let settle = (err, result) => {
@@ -158,10 +124,7 @@ class ActionWaiter {
             // the wrong problem.
             timer = setTimeout(() => {
                 if (strictStatus && requireValid && unknownResult) {
-                    settle(new SDKActionError('ACTION_STATUS_UNKNOWN',
-                        'Transaction ' + txid + ' is indexed but the indexer reported no status for action(s) ' +
-                        JSON.stringify(unknownResult.statusUnknownActions) + '; refusing to assume valid',
-                        { txid, action: unknownResult, actions: unknownResult.statusUnknownActions }));
+                    settle(unknownStatusError(txid, unknownResult));
                     return;
                 }
                 // Not indexed inside the window. Say what that does and does NOT
@@ -169,11 +132,7 @@ class ActionWaiter {
                 // block, which on a chain with long or irregular block times is the
                 // ordinary case rather than a fault. Callers that broadcast it
                 // themselves mark `broadcast` on this error (see lifecycleManager).
-                settle(new SDKActionError('CONFIRMATION_TIMEOUT',
-                    'Transaction ' + txid + ' was not indexed within ' + timeout + 'ms. ' +
-                    'It may still be in the mempool awaiting a block; check the transaction ' +
-                    'before rebuilding it, since re-sending would spend the same inputs again.',
-                    { txid, timeout }));
+                settle(confirmationTimeoutError(txid, timeout));
             }, timeout);
 
             // Polling fallback (runs simultaneously with WebSocket). Defined before
@@ -188,50 +147,13 @@ class ActionWaiter {
                     // Per-action status is prefixed, e.g. "valid" / "invalid: insufficient funds (FEE)".
                     let result = await explorer.getTransaction(txid, 'tx_hash');
                     if (result && result.tx_hash) {
-                        let actions = Array.isArray(result.actions) ? result.actions : [];
+                        let classification = classifyTransactionResult(result,
+                            { actionIndex: opts.actionIndex, sameWireIndex });
+                        if (classification.empty) return;
 
-                        // If a specific action_index was requested, narrow the action list to
-                        // that entry only. This prevents a neighboring action's status from
-                        // surfacing as the top-level result in multi-action transactions.
-                        let targetActions = (opts.actionIndex !== undefined)
-                            ? actions.filter(a => sameWireIndex(a.action_index, opts.actionIndex))
-                            : actions;
-
-                        // An EMPTY target set is not a verdict. A targeted wait whose
-                        // action_index is not in the transaction (yet), or a transaction the
-                        // explorer returns before its action rows exist, used to fall through
-                        // the "no invalid found" branch and resolve reporting 'valid' - the
-                        // caller could not tell a rejection from a success. Keep polling; the
-                        // honest outcome when it never appears is the timeout above.
-                        if (targetActions.length === 0) return;
-
-                        let invalid = targetActions.find(a => { let s = readStatus(a); return s !== null && /^invalid/i.test(s); });
-                        // Surface a normalized top-level status for callers/tests: the first
-                        // action whose status is not 'valid'. This covers wire rejections
-                        // ("invalid: ...") AND VM execution outcomes ('failed' / 'reverted' /
-                        // 'out_of_resource'). Previously only "invalid:" surfaced, so a failed
-                        // contract execution read as top-level 'valid' and callers had to dig
-                        // into actions[n].status. Note requireValid still rejects ONLY on
-                        // "invalid:"; an indexed-but-failed execution is a successful
-                        // SUBMISSION (the tx is on-chain and processed), so flows that wait on
-                        // delivery (attestation callbacks, batch drivers) must not throw.
-                        let nonValid = targetActions.find(a => { let s = readStatus(a); return s !== null && s !== 'valid'; });
-                        // Actions the indexer exposes with NO status (the indexer writes a parse
-                        // status onto the action's own typed row, and some legs - BET cancel and
-                        // resolve, for instance - write no row at all). 'valid' there is an
-                        // ASSUMPTION, so it is labelled as one rather than sold as a chain read.
-                        let unknown = targetActions.filter(a => readStatus(a) === null)
-                                                   .map(a => a.action_index);
-                        result.status              = nonValid ? nonValid.status : 'valid';
-                        result.statusKnown         = unknown.length === 0;
-                        result.statusSource        = result.statusKnown ? 'indexer' : 'assumed';
-                        result.statusUnknownActions = unknown;
-
-                        if (requireValid && invalid) {
-                            let reason = readStatus(invalid);
-                            settle(new SDKActionError('ACTION_REJECTED',
-                                'Action was indexed but marked invalid: ' + reason,
-                                { txid, action: result, reason }));
+                        if (requireValid && classification.invalid) {
+                            let reason = readStatus(classification.invalid);
+                            settle(actionRejectedError(txid, result, reason));
                             return;
                         }
                         if (!result.statusKnown) {
@@ -242,10 +164,7 @@ class ActionWaiter {
                             if (requireValid && strictStatus) return;
                             if (!warnedUnknownStatus) {
                                 warnedUnknownStatus = true;
-                                log.warn('[xchain-sdk] the indexer reported no status for action(s) ' +
-                                    JSON.stringify(unknown) + ' of transaction ' + txid +
-                                    '; reporting status=valid is an ASSUMPTION (result.statusKnown=false). ' +
-                                    'Pass strictStatus:true to fail closed instead.');
+                                log.warn(unknownStatusWarning(txid, classification.unknown));
                             }
                         }
                         settle(null, result);
@@ -262,34 +181,12 @@ class ActionWaiter {
                     if (!(msg && msg.data && msg.data.tx_hash === txid)) return;
 
                     if (opts.actionIndex !== undefined) {
-                        // Targeted wait: this event must be the requested action. A
-                        // multi-action tx emits one NEW_ACTION per action; without
-                        // this filter a neighboring action's event would settle the
-                        // wait with the WRONG action's status, masking the target
-                        // action's rejection as success. A non-matching event is
-                        // ignored; the target action's event, or the poll fallback,
-                        // settles.
-                        if (!sameWireIndex(msg.data.action_index, opts.actionIndex)) return;
-                        // An event without a status settles NOTHING: resolving from
-                        // it would report success the indexer never claimed. Defer to the
-                        // authoritative poll, which reads the full action row.
-                        let eventStatus = readStatus(msg.data);
-                        if (eventStatus === null) { poll(); return; }
-                        // Indexer status strings are prefixed, e.g. "invalid: insufficient funds (FEE)".
-                        if (requireValid && /^invalid/i.test(eventStatus)) {
-                            settle(new SDKActionError('ACTION_REJECTED',
-                                'Action was indexed but marked invalid: ' + eventStatus,
-                                { txid, action: msg.data, reason: eventStatus }));
-                        } else {
-                            // Copy rather than mutate: the same event object is handed to every
-                            // other NEW_ACTION listener on this socket.
-                            settle(null, Object.assign({}, msg.data, {
-                                status:              eventStatus,
-                                statusKnown:         true,
-                                statusSource:        'indexer',
-                                statusUnknownActions: []
-                            }));
-                        }
+                        let event = classifyTargetedEvent(msg.data, opts.actionIndex,
+                            requireValid, txid, sameWireIndex);
+                        if (event.ignored) return;
+                        if (event.poll) { poll(); return; }
+                        if (event.error) settle(event.error);
+                        else settle(null, event.result);
                         return;
                     }
 
@@ -363,27 +260,14 @@ class ActionWaiter {
         });
     }
 
-    /*
-     *  Contract gates
-     *
-     *  A transaction being confirmed, and even its ACTION row being visible,
-     *  is strictly earlier than the indexer EXECUTING that action against the
-     *  contract. A caller that settles in that gap builds its next transaction
-     *  on inputs the deposit already spent (the encoder answers
-     *  bad-txns-inputs-missingorspent) and, if it does land, the VM reverts
-     *  because the contract has not been credited yet. The only gate that
-     *  cannot race is the contract's OWN state: it changes when, and only
-     *  when, the indexer has executed the action.
-     */
+    // Contract state and balance gates wait for execution, which is later than
+    // transaction confirmation and action-row visibility. Reading the contract's
+    // own data avoids building on inputs whose pending action already spent them.
 
     // Poll `readOnce` until it reports satisfied, or the window expires.
     //
-    // readOnce resolves { satisfied, result, observed }: `observed` is the last
-    // read, carried into the timeout error so the caller sees what the chain
-    // actually said instead of a bare "timed out". A read that throws (404 on a
-    // contract the explorer has not seen yet, a network blip) is not a verdict;
-    // the loop keeps polling and the last error is reported at the deadline.
-    // One read always happens, even with a timeout of 0.
+    // A failed read is not a verdict. The loop always reads once and carries its
+    // last observation or error into the timeout callback.
     async _pollUntil(opts, readOnce, timeoutError) {
         let timeout      = opts.timeout > 0 ? opts.timeout : 120000;
         let pollInterval = opts.pollInterval > 0 ? opts.pollInterval : 2000;
@@ -406,58 +290,26 @@ class ActionWaiter {
         }
     }
 
-    // Wait until a contract's own state satisfies the caller's condition.
-    //
-    // contractActionIndex - the contract's ACTION_INDEX
+    // Wait until a contract's own state satisfies the requested condition.
     // opts:
     //   key          - state key to read (reads the whole state map when absent)
-    //   equals       - the value that key must hold. Compared against the PARSED
-    //                  value (the one the VM sees), so 'FUNDED' matches the
-    //                  '"FUNDED"' the explorer serves
-    //   match        - predicate(state, ctx) run instead of/alongside equals;
-    //                  ctx = { value, raw, contractActionIndex, key }
+    //   equals       - parsed value that the keyed state must hold
+    //   match        - predicate(state, ctx) used as the condition
     //   timeout      - ms before rejecting (default 120000)
     //   pollInterval - ms between reads (default 2000)
-    //   explorer / explorerUrl / explorerPort - the same target override
-    //                  waitForTxid takes, for isolated venues
-    //
-    // With `key` and neither equals nor match, the gate is "the key exists":
-    // a contract writes a key when it executes, so its appearance is itself the
-    // execution proof.
-    //
-    // Resolves { contractActionIndex, key, value, state, raw }; rejects
-    // CONTRACT_STATE_TIMEOUT carrying the last state read. `state` is the map
-    // this read returned, so it holds the WHOLE state when no key was given and
-    // just that key's row when one was: a match() that has to see other keys
-    // must be passed without a key.
+    //   explorer options - the same target override accepted by waitForTxid
+    // A key without equals or match gates on key existence. The timeout error
+    // carries the last observed state for diagnosis.
     async waitForContractState(contractActionIndex, opts = {}) {
-        if (contractActionIndex === undefined || contractActionIndex === null || contractActionIndex === '')
-            throw new SDKConfigError('MISSING_CONTRACT_INDEX',
-                'waitForContractState requires a contract ACTION_INDEX');
-        if (opts.equals !== undefined && opts.key === undefined)
-            throw new SDKConfigError('MISSING_CONTRACT_STATE_KEY',
-                'waitForContractState opts.equals needs opts.key to say WHICH key must hold it');
-        if (opts.key === undefined && typeof opts.match !== 'function')
-            throw new SDKConfigError('MISSING_CONTRACT_STATE_CONDITION',
-                'waitForContractState needs opts.key (optionally with opts.equals) or opts.match; ' +
-                'without one it would resolve on the first read and gate nothing');
+        contractWait.validateStateArgs(contractActionIndex, opts);
 
         let explorer = this._resolveExplorer(opts);
         let key      = opts.key;
 
         return this._pollUntil(opts, async () => {
             let raw   = await explorer.getContractState(contractActionIndex, key);
-            let state = ActionWaiter.normalizeContractState(raw);
-            let value = (key === undefined) ? undefined
-                      : ActionWaiter.readContractStateValue(raw, key);
-            let ctx   = { contractActionIndex, key, value, state, raw };
-
-            let satisfied;
-            if (typeof opts.match === 'function')      satisfied = !!opts.match(state, ctx);
-            else if (opts.equals !== undefined)        satisfied = sameStateValue(value, opts.equals);
-            else                                       satisfied = value !== undefined && value !== null;
-
-            return { satisfied, result: ctx, observed: state };
+            return contractWait.classifyState(ActionWaiter, raw, key, opts,
+                contractActionIndex, sameStateValue);
         }, (observed, lastError) => new SDKActionError('CONTRACT_STATE_TIMEOUT',
             'Contract ' + contractActionIndex + ' state' + (key !== undefined ? ' key ' + key : '') +
             ' did not reach the expected value within ' + (opts.timeout > 0 ? opts.timeout : 120000) + 'ms. ' +
@@ -467,134 +319,50 @@ class ActionWaiter {
               timeout: opts.timeout, cause: lastError || undefined }));
     }
 
-    // Wait until a contract HOLDS tokens: the gate a DEPOSIT needs, because a
-    // deposit credits the contract's balance without necessarily writing any
-    // contract state key of its own.
-    //
+    // Wait until a contract holds tokens, including deposits with no state write.
     // opts adds minQuantity (default: any quantity above zero) and the same
     // match/timeout/pollInterval/explorer options as waitForContractState.
-    // match(quantity, ctx) receives the quantity STRING, never a lossy Number.
-    //
-    // Resolves { contractActionIndex, tick, quantity, raw }; rejects
-    // CONTRACT_BALANCE_TIMEOUT.
+    // match(quantity, ctx) receives an exact decimal string.
     async waitForContractBalance(contractActionIndex, tick, opts = {}) {
-        if (contractActionIndex === undefined || contractActionIndex === null || contractActionIndex === '')
-            throw new SDKConfigError('MISSING_CONTRACT_INDEX',
-                'waitForContractBalance requires a contract ACTION_INDEX');
-        if (!tick)
-            throw new SDKConfigError('MISSING_TICK', 'waitForContractBalance requires a tick');
+        contractWait.validateBalanceArgs(contractActionIndex, tick);
 
         let explorer = this._resolveExplorer(opts);
-        let minimum  = (opts.minQuantity === undefined || opts.minQuantity === null || opts.minQuantity === '')
-            ? null : String(opts.minQuantity);
+        let minimum  = contractWait.minimumQuantity(opts);
 
         return this._pollUntil(opts, async () => {
             let raw      = await explorer.getContractBalance(contractActionIndex, tick);
-            let quantity = ActionWaiter.readContractQuantity(raw, tick);
-            let ctx      = { contractActionIndex, tick, quantity, raw };
-
-            let satisfied;
-            if (typeof opts.match === 'function')  satisfied = !!opts.match(quantity, ctx);
-            else if (minimum !== null)             satisfied = quantity !== null && compareAmount(quantity, minimum) >= 0;
-            else                                   satisfied = quantity !== null && compareAmount(quantity, '0') > 0;
-
-            return { satisfied, result: ctx, observed: quantity };
-        }, (observed, lastError) => new SDKActionError('CONTRACT_BALANCE_TIMEOUT',
-            'Contract ' + contractActionIndex + ' did not hold the expected ' + tick +
-            ' balance within ' + (opts.timeout > 0 ? opts.timeout : 120000) + 'ms' +
-            (minimum !== null ? ' (wanted at least ' + minimum + ', last read ' + observed + ')' : '') + '. ' +
-            'The deposit may be indexed but not yet credited to the contract.',
-            { contractActionIndex, tick, minQuantity: minimum, quantity: observed,
-              timeout: opts.timeout, cause: lastError || undefined }));
+            return contractWait.classifyBalance(ActionWaiter, raw, tick, opts,
+                contractActionIndex, minimum, compareAmount);
+        }, (observed, lastError) => contractWait.balanceTimeoutError(
+            contractActionIndex, tick, opts, minimum, observed, lastError));
     }
 
-    // Rows out of whatever the explorer served: the datatable envelope
-    // ({ total, data: [...] }), a bare array, or nothing.
+    // Unpack rows from an explorer envelope or bare array.
     static _rowsOf(raw) {
-        if (Array.isArray(raw)) return raw;
-        if (raw && Array.isArray(raw.data)) return raw.data;
-        return [];
+        return contractValues.rowsOf(raw);
     }
 
-    // A contract state value as the VM sees it. The explorer stores values as
-    // JSON text, so '"FUNDED"' is the string FUNDED and '3' is the number 3;
-    // anything that will not parse is the raw string it already is.
+    // Parse explorer JSON text into the value seen by the VM.
     static parseStateValue(value) {
-        if (value === undefined || value === null) return value === undefined ? undefined : null;
-        if (typeof value !== 'string') return value;
-        try { return JSON.parse(value); } catch (e) { return value; }
+        return contractValues.parseStateValue(value);
     }
 
-    // The contract's state as a plain { key: parsedValue } map, from the
-    // datatable rows ({ state_key, state_value }), a bare array of them, or an
-    // already-shaped map. Null-prototype so a state key like '__proto__'
-    // round-trips as data instead of hitting the object setter.
+    // Normalize explorer state shapes into a null-prototype value map.
     static normalizeContractState(raw) {
-        let state = Object.create(null);
-        let rows  = ActionWaiter._rowsOf(raw);
-        if (rows.length) {
-            for (let row of rows) {
-                if (!row || typeof row !== 'object') continue;
-                let key = (row.state_key !== undefined) ? row.state_key : row.key;
-                if (key === undefined || key === null) continue;
-                let value = (row.state_value !== undefined) ? row.state_value : row.value;
-                state[String(key)] = ActionWaiter.parseStateValue(value);
-            }
-            return state;
-        }
-        // A response that is already a map of keys (no rows to unpack). Envelope
-        // fields are not state, so they are dropped rather than offered as keys.
-        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-            for (let key of Object.keys(raw)) {
-                if (ENVELOPE_FIELDS.has(key)) continue;
-                state[key] = ActionWaiter.parseStateValue(raw[key]);
-            }
-        }
-        return state;
+        return contractValues.normalizeContractState(ActionWaiter, raw);
     }
 
-    // The value of ONE state key. The single-key route serves the same rows the
-    // whole-state route does, but an explorer answering a bare
-    // { state_value } / { value } object for a keyed read is honoured too.
-    // undefined means "the key is not there", which is not the same as a key
-    // whose value is null.
+    // Read one state key while preserving the distinction between absent and null.
     static readContractStateValue(raw, key) {
-        let rows = ActionWaiter._rowsOf(raw);
-        if (rows.length) {
-            let state = ActionWaiter.normalizeContractState(raw);
-            return Object.prototype.hasOwnProperty.call(state, String(key)) ? state[String(key)] : undefined;
-        }
-        if (raw && typeof raw === 'object') {
-            if (raw.state_value !== undefined) return ActionWaiter.parseStateValue(raw.state_value);
-            if (raw.value !== undefined)       return ActionWaiter.parseStateValue(raw.value);
-            if (Object.prototype.hasOwnProperty.call(raw, key))
-                return ActionWaiter.parseStateValue(raw[key]);
-        }
-        return undefined;
+        return contractValues.readContractStateValue(ActionWaiter, raw, key);
     }
 
-    // A contract's balance for one tick, as the exact decimal STRING the
-    // explorer serves (never a Number: token quantities carry more precision
-    // than a double holds). null when the contract holds no row for the tick.
+    // Read one tick balance as an exact decimal string, or null when absent.
     static readContractQuantity(raw, tick) {
-        let rows = ActionWaiter._rowsOf(raw);
-        if (rows.length) {
-            let row = rows.find(r => r && (r.tick === tick || r.TICK === tick));
-            if (!row) return null;
-            let q = (row.quantity !== undefined) ? row.quantity : row.amount;
-            return (q === undefined || q === null) ? null : String(q);
-        }
-        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-            let q = (raw.quantity !== undefined) ? raw.quantity : raw.amount;
-            if (q !== undefined && q !== null) return String(q);
-        }
-        return null;
+        return contractValues.readContractQuantity(ActionWaiter, raw, tick);
     }
 
 }
-
-// Envelope fields of a datatable response, which are never contract state keys.
-const ENVELOPE_FIELDS = new Set(['total', 'page', 'limit', 'offset', 'data', 'results']);
 
 // Equality against a caller's expected state value. The parsed value may be a
 // string, a number, a boolean or a structure, and a caller writing
@@ -619,12 +387,7 @@ function sameStateValue(value, expected) {
 // quantities one unit apart above 2^53 compare EQUAL - exactly the pair a
 // balance gate has to tell apart.
 function compareAmount(a, b) {
-    try {
-        const mathjs = require('mathjs');
-        return mathjs.bignumber(String(a)).cmp(mathjs.bignumber(String(b)));
-    } catch (e) {
-        return -1;
-    }
+    return contractValues.compareAmount(a, b);
 }
 
 module.exports = ActionWaiter;
