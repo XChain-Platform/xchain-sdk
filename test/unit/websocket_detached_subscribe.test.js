@@ -40,6 +40,16 @@ function rejectingWs(err) {
     };
 }
 
+// Lets any unhandled rejection actually fire before we assert. Node reports
+// an unhandled rejection once the microtask queue has drained for the current
+// turn, so two macrotask hops is the DEFINED point by which a missed rejection
+// would already have been delivered. The old fixed 50ms was that same wait,
+// guessed at: slower than it needs to be and still not a guarantee.
+const settle = async () => {
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+};
+
 describe('WS subscribe: detached rejections', () => {
     let unhandled;
     let onUnhandled;
@@ -53,16 +63,6 @@ describe('WS subscribe: detached rejections', () => {
     afterEach(() => {
         process.removeListener('unhandledRejection', onUnhandled);
     });
-
-    // Lets any unhandled rejection actually fire before we assert. Node reports
-    // an unhandled rejection once the microtask queue has drained for the current
-    // turn, so two macrotask hops is the DEFINED point by which a missed rejection
-    // would already have been delivered. The old fixed 50ms was that same wait,
-    // guessed at: slower than it needs to be and still not a guarantee.
-    const settle = async () => {
-        await new Promise((resolve) => setImmediate(resolve));
-        await new Promise((resolve) => setImmediate(resolve));
-    };
 
     it('swallows an unconfirmed subscription instead of crashing the process', async () => {
         const sdk = Object.create(XChainSDK.prototype);

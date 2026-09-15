@@ -10,11 +10,9 @@
 
 const assert = require('assert');
 const UTXOCache = require('../../src/carrier/utxo_cache.js');
+let cache;
 
 describe('UTXOCache', function () {
-
-    let cache;
-
     beforeEach(function () {
         cache = new UTXOCache();
     });
@@ -40,10 +38,16 @@ describe('UTXOCache', function () {
             assert.deepStrictEqual(cache.getAvailable(), []);
         });
     });
+});
 
-    /*
-     *  refresh()
-     */
+/*
+ *  refresh()
+ */
+
+describe('UTXOCache', function () {
+    beforeEach(function () {
+        cache = new UTXOCache();
+    });
 
     describe('refresh()', function () {
         it('loads utxos from encoder.getUTXOs result.utxos', async function () {
@@ -89,6 +93,15 @@ describe('UTXOCache', function () {
             // getAvailable must not throw on a non-array cache.
             assert.deepStrictEqual(cache.getAvailable(), []);
         });
+    });
+});
+
+describe('UTXOCache', function () {
+    beforeEach(function () {
+        cache = new UTXOCache();
+    });
+
+    describe('refresh()', function () {
 
         it('resets state when address changes', async function () {
             let encoder1 = { getUTXOs: async () => ({ utxos: [{ txid: 'tx1', vout: 0, value: 1 }] }) };
@@ -127,6 +140,15 @@ describe('UTXOCache', function () {
             // speculative list pruned, but still in _utxos; only 1 result (not 2)
             assert.strictEqual(cache.getAvailable().length, 1);
         });
+    });
+});
+
+describe('UTXOCache', function () {
+    beforeEach(function () {
+        cache = new UTXOCache();
+    });
+
+    describe('refresh()', function () {
 
         it('prunes speculative UTXOs that have since been spent', async function () {
             // A spent change output never appears in the confirmed set, so
@@ -149,10 +171,16 @@ describe('UTXOCache', function () {
             assert.strictEqual(cache.hasAvailable(), false);
         });
     });
+});
 
-    /*
-     *  getAvailable()
-     */
+/*
+ *  getAvailable()
+ */
+
+describe('UTXOCache', function () {
+    beforeEach(function () {
+        cache = new UTXOCache();
+    });
 
     describe('getAvailable()', function () {
         it('includes both confirmed and speculative UTXOs', async function () {
@@ -187,10 +215,16 @@ describe('UTXOCache', function () {
             assert.strictEqual(cache.getAvailable().length, 0);
         });
     });
+});
 
-    /*
-     *  markSpent()
-     */
+/*
+ *  markSpent()
+ */
+
+describe('UTXOCache', function () {
+    beforeEach(function () {
+        cache = new UTXOCache();
+    });
 
     describe('markSpent()', function () {
         it('marks multiple inputs spent', async function () {
@@ -218,10 +252,16 @@ describe('UTXOCache', function () {
             assert.doesNotThrow(() => cache.markSpent([]));
         });
     });
+});
 
-    /*
-     *  addSpeculative()
-     */
+/*
+ *  addSpeculative()
+ */
+
+describe('UTXOCache', function () {
+    beforeEach(function () {
+        cache = new UTXOCache();
+    });
 
     describe('addSpeculative()', function () {
         it('adds a speculative UTXO', function () {
@@ -254,10 +294,16 @@ describe('UTXOCache', function () {
             assert.strictEqual(cache.getAvailable().length, 0);
         });
     });
+});
 
-    /*
-     *  invalidate()
-     */
+/*
+ *  invalidate()
+ */
+
+describe('UTXOCache', function () {
+    beforeEach(function () {
+        cache = new UTXOCache();
+    });
 
     describe('invalidate()', function () {
         it('clears everything and marks stale', async function () {
@@ -281,10 +327,16 @@ describe('UTXOCache', function () {
             assert.strictEqual(cache.hasAvailable(), false);
         });
     });
+});
 
-    /*
-     *  address getter
-     */
+/*
+ *  address getter
+ */
+
+describe('UTXOCache', function () {
+    beforeEach(function () {
+        cache = new UTXOCache();
+    });
 
     describe('address getter', function () {
         it('returns address set during refresh', async function () {

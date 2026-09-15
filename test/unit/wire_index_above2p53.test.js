@@ -46,6 +46,7 @@ const N     = '9007199254740992';        // 2^53
 const N_1   = '9007199254740993';        // 2^53 + 1
 const CHAIN = 'BTC';
 const NET   = 'regtest';
+const TXID  = 'dd'.repeat(32);
 
 describe('wireIndex: exact identity for BIGINT-as-string wire indices', function () {
 
@@ -74,46 +75,46 @@ describe('wireIndex: exact identity for BIGINT-as-string wire indices', function
     });
 });
 
+// A §5 action inclusion proof for the SECOND action row, mirroring
+// light.test.js's buildActionProof but with the two action indices spelled
+// as the adjacent >2^53 decimal strings the explorer actually serves.
+function buildNeighbourProof() {
+    const rows = {
+        block_index: 200,
+        ledger: { credits: [], debits: [], escrows: [] },
+        actions: [{ action_index: N,   tx_index: '4000', action: 'ISSUE' },
+                  { action_index: N_1, tx_index: '4000', action: 'SEND' }],
+        contracts: { contracts: [], state: [], executions: [], emissions: [],
+                     deposits: [], withdrawals: [] }
+    };
+    const leaves = M.blockMerkleLeaves(rows);
+    const pos = 1;                                   // the N+1 row
+    const row = rows.actions[pos];
+    const mp = M.fixedMerkleProof(leaves, pos);      // no ledger leaves, so leafIndex === pos
+    return {
+        proof: {
+            chain: CHAIN, network: NET, height: '200',
+            action_index: row.action_index, tx_index: row.tx_index, action: row.action,
+            leaf: M.toHex(M.actionsLeaf(row)),
+            merkle_proof: { index: mp.index, siblings: mp.siblings },
+            block_merkle_root: M.toHex(M.blockMerkleRoot(leaves)), block_merkle_version: 1
+        },
+        blockMerkleRoot: M.toHex(M.blockMerkleRoot(leaves))
+    };
+}
+
+function servedBy(proof, blockMerkleRoot) {
+    // trustedCheckpoint path: quorum is already established, so the run reaches
+    // the binding guards without a validator-set fetch.
+    const cp = { chain: CHAIN, network: NET, block_index: '200',
+                 block_merkle_root: blockMerkleRoot };
+    const fetchImpl = async () => ({ ok: true, status: 200,
+                                     json: async () => ({ proof, checkpoint: cp }) });
+    return { cp, fetchImpl };
+}
+
 // #5250: the proof-binding guard in light.verifyAction.
 describe('light.verifyAction binds the proof to the caller query above 2^53', function () {
-
-    // A §5 action inclusion proof for the SECOND action row, mirroring
-    // light.test.js's buildActionProof but with the two action indices spelled
-    // as the adjacent >2^53 decimal strings the explorer actually serves.
-    function buildNeighbourProof() {
-        const rows = {
-            block_index: 200,
-            ledger: { credits: [], debits: [], escrows: [] },
-            actions: [{ action_index: N,   tx_index: '4000', action: 'ISSUE' },
-                      { action_index: N_1, tx_index: '4000', action: 'SEND' }],
-            contracts: { contracts: [], state: [], executions: [], emissions: [],
-                         deposits: [], withdrawals: [] }
-        };
-        const leaves = M.blockMerkleLeaves(rows);
-        const pos = 1;                                   // the N+1 row
-        const row = rows.actions[pos];
-        const mp = M.fixedMerkleProof(leaves, pos);      // no ledger leaves, so leafIndex === pos
-        return {
-            proof: {
-                chain: CHAIN, network: NET, height: '200',
-                action_index: row.action_index, tx_index: row.tx_index, action: row.action,
-                leaf: M.toHex(M.actionsLeaf(row)),
-                merkle_proof: { index: mp.index, siblings: mp.siblings },
-                block_merkle_root: M.toHex(M.blockMerkleRoot(leaves)), block_merkle_version: 1
-            },
-            blockMerkleRoot: M.toHex(M.blockMerkleRoot(leaves))
-        };
-    }
-
-    function servedBy(proof, blockMerkleRoot) {
-        // trustedCheckpoint path: quorum is already established, so the run reaches
-        // the binding guards without a validator-set fetch.
-        const cp = { chain: CHAIN, network: NET, block_index: '200',
-                     block_merkle_root: blockMerkleRoot };
-        const fetchImpl = async () => ({ ok: true, status: 200,
-                                         json: async () => ({ proof, checkpoint: cp }) });
-        return { cp, fetchImpl };
-    }
 
     it('control: the proof verifies for the index it is actually FOR', async function () {
         const { proof, blockMerkleRoot } = buildNeighbourProof();
@@ -151,9 +152,6 @@ describe('light.verifyAction binds the proof to the caller query above 2^53', fu
 
 // #5249: the targeted-wait filters in ActionWaiter.
 describe('ActionWaiter targeted wait excludes the >2^53 neighbour', function () {
-
-    const TXID = 'dd'.repeat(32);
-
     it('poll path: a neighbouring action rejection does not settle the wait', async function () {
         // Only action N+1 is in the transaction and it is INVALID; the caller waits
         // on N. Pre-fix the filter matched N+1 and rejected with a rejection that
@@ -183,6 +181,9 @@ describe('ActionWaiter targeted wait excludes the >2^53 neighbour', function () 
                 return true;
             });
     });
+});
+
+describe('ActionWaiter targeted wait excludes the >2^53 neighbour', function () {
 
     it('WebSocket path: a neighbouring NEW_ACTION event is ignored', async function () {
         const listeners = {};

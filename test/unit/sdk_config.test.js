@@ -17,9 +17,9 @@ const ENV_KEYS = ['NETWORK', 'EXPLORER_URL', 'EXPLORER_PORT', 'ENCODER_URL',
 
 const exBase = (sdk) => sdk.explorer && sdk.explorer.client.defaults.baseURL;
 const enBase = (sdk) => sdk.encoder && sdk.encoder.client.defaults.baseURL;
+let saved;
 
 describe('XChainSDK config resolution', function () {
-    let saved;
     beforeEach(function () {
         saved = {};
         for (const k of ENV_KEYS) { saved[k] = process.env[k]; delete process.env[k]; }
@@ -53,6 +53,19 @@ describe('XChainSDK config resolution', function () {
             expect(sdk.hub).to.equal(null);
         });
     });
+});
+
+describe('XChainSDK config resolution', function () {
+    beforeEach(function () {
+        saved = {};
+        for (const k of ENV_KEYS) { saved[k] = process.env[k]; delete process.env[k]; }
+    });
+    afterEach(function () {
+        for (const k of ENV_KEYS) {
+            if (saved[k] === undefined) delete process.env[k];
+            else process.env[k] = saved[k];
+        }
+    });
 
     describe('resolution precedence', function () {
         it('explicit option beats the public default', function () {
@@ -68,6 +81,19 @@ describe('XChainSDK config resolution', function () {
             const b = new XChainSDK({ network: 'bitcoin-mainnet', encoderUrl: 'https://enc.opt.example' });
             expect(enBase(b)).to.equal('https://enc.opt.example');
         });
+    });
+});
+
+describe('XChainSDK config resolution', function () {
+    beforeEach(function () {
+        saved = {};
+        for (const k of ENV_KEYS) { saved[k] = process.env[k]; delete process.env[k]; }
+    });
+    afterEach(function () {
+        for (const k of ENV_KEYS) {
+            if (saved[k] === undefined) delete process.env[k];
+            else process.env[k] = saved[k];
+        }
     });
 
     describe('lazy hub overlay (_ensureReady)', function () {
@@ -107,6 +133,19 @@ describe('XChainSDK config resolution', function () {
             await sdk._ensureReady();
             expect(exBase(sdk)).to.equal('http://localhost:8080');
         });
+    });
+});
+
+describe('XChainSDK config resolution', function () {
+    beforeEach(function () {
+        saved = {};
+        for (const k of ENV_KEYS) { saved[k] = process.env[k]; delete process.env[k]; }
+    });
+    afterEach(function () {
+        for (const k of ENV_KEYS) {
+            if (saved[k] === undefined) delete process.env[k];
+            else process.env[k] = saved[k];
+        }
     });
 
     describe('downgrade guard', function () {

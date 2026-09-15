@@ -43,6 +43,10 @@ function marker(kind) {
     return agent;
 }
 
+function restoreSinon() {
+    sinon.restore();
+}
+
 describe('injected connection agents (pool.httpAgent / pool.httpsAgent)', function () {
 
     describe('ExplorerClient', function () {
@@ -71,6 +75,12 @@ describe('injected connection agents (pool.httpAgent / pool.httpsAgent)', functi
             expect(client.client.defaults.httpsAgent).to.equal(httpsAgent);
             expect(client.client.defaults.httpAgent).to.equal(undefined);
         });
+    });
+});
+
+describe('injected connection agents (pool.httpAgent / pool.httpsAgent)', function () {
+
+    describe('ExplorerClient', function () {
 
         it('survives a hub-discovery repoint, which rebuilds the client', function () {
             // setBase() calls _buildClient() again. An injected agent that
@@ -112,6 +122,9 @@ describe('injected connection agents (pool.httpAgent / pool.httpsAgent)', functi
             expect(client.client.defaults.proxy).to.equal(false);
         });
     });
+});
+
+describe('injected connection agents (pool.httpAgent / pool.httpsAgent)', function () {
 
     describe('EncoderClient', function () {
 
@@ -153,16 +166,16 @@ describe('injected connection agents (pool.httpAgent / pool.httpsAgent)', functi
             expect(client.client.defaults.httpAgent.__socksMarker).to.equal(undefined);
         });
     });
+});
+
+describe('injected connection agents (pool.httpAgent / pool.httpsAgent)', function () {
 
     // The hub is the lane that would have been missed. It has no pooled
     // client of its own - every call is a bare `axios.post` - so the agents
     // have to be attached per request, and the endpoint list can mix
     // schemes, so the choice has to be made per URL rather than once.
     describe('HubConnector', function () {
-
-        afterEach(function () {
-            sinon.restore();
-        });
+        afterEach(restoreSinon);
 
         it('attaches the injected http agent to its bare axios.post', async function () {
             const httpAgent = marker('http');

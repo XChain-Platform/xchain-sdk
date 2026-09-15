@@ -51,6 +51,12 @@ describe('CrossChainHelper', function () {
             });
             assert.strictEqual(Object.keys(helper.sdks).length, 3);
         });
+    });
+});
+
+describe('CrossChainHelper', function () {
+
+    describe('constructor', function () {
 
         it('throws SDKConfigError when map has fewer than 2 entries', function () {
             try {
@@ -89,6 +95,9 @@ describe('CrossChainHelper', function () {
             }
         });
     });
+});
+
+describe('CrossChainHelper', function () {
 
     describe('_requireSDK()', function () {
         let helper;
@@ -117,6 +126,9 @@ describe('CrossChainHelper', function () {
             }
         });
     });
+});
+
+describe('CrossChainHelper', function () {
 
     describe('createSwap()', function () {
         it('calls session.swap on the give chain', async function () {
@@ -159,6 +171,9 @@ describe('CrossChainHelper', function () {
             }
         });
     });
+});
+
+describe('CrossChainHelper', function () {
 
     describe('link()', function () {
         it('submits link on coin1 by default', async function () {
@@ -196,6 +211,9 @@ describe('CrossChainHelper', function () {
             assert.strictEqual(usedChain, 'LTC');
         });
     });
+});
+
+describe('CrossChainHelper', function () {
 
     describe('parallel()', function () {
         it('runs all actions and returns results in order', async function () {
@@ -240,6 +258,12 @@ describe('CrossChainHelper', function () {
             }]);
             assert.deepStrictEqual(capturedEnc, { fee: 1000 });
         });
+    });
+});
+
+describe('CrossChainHelper', function () {
+
+    describe('parallel()', function () {
 
         it('on partial failure, throws but preserves the successful leg txid', async function () {
             let btcSdk = makeSdk('BTC');
@@ -287,6 +311,9 @@ describe('CrossChainHelper', function () {
             assert.strictEqual(broadcast, false, 'no leg should broadcast when a chain is unknown');
         });
     });
+});
+
+describe('CrossChainHelper', function () {
 
     describe('waitForAll()', function () {
         it('waits for actions on multiple chains', async function () {
@@ -323,6 +350,9 @@ describe('CrossChainHelper', function () {
             }
         });
     });
+});
+
+describe('CrossChainHelper', function () {
 
     describe('getAllBalances()', function () {
         it('returns balances keyed by chain', async function () {

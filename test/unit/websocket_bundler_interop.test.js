@@ -120,12 +120,21 @@ function createMockServer() {
     });
 }
 
+let server, port, client;
+
+function createClient(Klass) {
+    return new Klass({
+        network: 'bitcoin-regtest',
+        websocketUrl: '127.0.0.1',
+        websocketPort: port,
+        retry: { maxRetries: 0, baseDelay: 100, maxDelay: 200 },
+        pingInterval: 60000,
+    });
+}
+
 // Tests
 
 describe('WebSocketClient bundler interop', function () {
-
-    let server, port, client;
-
     beforeEach(async function () {
         const s = await createMockServer();
         server = s.wss;
@@ -136,16 +145,6 @@ describe('WebSocketClient bundler interop', function () {
         if (client) { client.disconnect(); client = null; }
         server.close(done);
     });
-
-    function createClient(Klass) {
-        return new Klass({
-            network: 'bitcoin-regtest',
-            websocketUrl: '127.0.0.1',
-            websocketPort: port,
-            retry: { maxRetries: 0, baseDelay: 100, maxDelay: 200 },
-            pingInterval: 60000,
-        });
-    }
 
     it('the simulated bundle really does drop the readyState constants', function () {
         const bundled = makeBundledWsModule();
@@ -180,6 +179,19 @@ describe('WebSocketClient bundler interop', function () {
 
         await client.subscribe(['address'], { address: 'bcrt1qxc797' });
         expect(seen.filter((m) => m.action === 'subscribe')).to.have.lengthOf(1);
+    });
+});
+
+describe('WebSocketClient bundler interop', function () {
+    beforeEach(async function () {
+        const s = await createMockServer();
+        server = s.wss;
+        port   = s.port;
+    });
+
+    afterEach(function (done) {
+        if (client) { client.disconnect(); client = null; }
+        server.close(done);
     });
 
     it('does not re-open a second socket when connect() is called twice', async function () {
