@@ -101,6 +101,10 @@ async function runTier1({ sdk, parsed, source, feeMode, signal, timeoutMs }) {
         return { kind: 'unavailable', reason: e && e.message ? e.message : String(e) };
     }
 
+    return classifyQuote(quote);
+}
+
+function classifyNonVerdict(quote) {
     if (!quote || typeof quote !== 'object')
         return { kind: 'unavailable', reason: 'malformed dry-run response' };
 
@@ -154,6 +158,13 @@ async function runTier1({ sdk, parsed, source, feeMode, signal, timeoutMs }) {
     // this is the legacy-feequote no-FEE_DESTINATION case.
     if (quote.supported === false)
         return { kind: 'no-verdict', reason: 'unsupported', quote };
+
+    return null;
+}
+
+function classifyQuote(quote) {
+    const nonVerdict = classifyNonVerdict(quote);
+    if (nonVerdict) return nonVerdict;
 
     if (typeof quote.valid !== 'boolean')
         return { kind: 'unavailable', reason: 'no verdict field in response' };
