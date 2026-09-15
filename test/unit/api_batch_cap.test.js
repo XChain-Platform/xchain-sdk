@@ -19,8 +19,8 @@
  * thousands of {"method":"ping"} calls, so a single request amplified into
  * thousands of concurrent backend RPCs.
  *
- * src/api.js starts a live server at require time, so these tests mount the
- * SHIPPED middleware from src/utils/api_guards.js (the same function src/api.js
+ * src/api/index.js starts a live server at require time, so these tests mount the
+ * SHIPPED middleware from src/utils/api_guards.js (the same function src/api/index.js
  * mounts) rather than a copy of it, and a source check pins that api.js still
  * mounts it ahead of the auth gate and the router.
  *
@@ -117,7 +117,7 @@ describe('API JSON-RPC batch fan-out cap', function () {
     });
 
     it('src/api.js mounts the batch cap BEFORE the auth gate and the jsonRouter mount', () => {
-        const src = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
+        const src = fs.readFileSync(path.join(__dirname, '../../src/api/index.js'), 'utf8');
         const capIdx    = src.indexOf('app.use(batchCapMiddleware(');
         // Anchored on the MOUNT, not on a compare inside the gate body: the gate
         // now lives in src/utils/api_guards.js, and an anchor that can go missing makes
@@ -132,7 +132,7 @@ describe('API JSON-RPC batch fan-out cap', function () {
     });
 
     it('keeps ONE implementation of the cap: api.js holds no inline copy', () => {
-        const src = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
+        const src = fs.readFileSync(path.join(__dirname, '../../src/api/index.js'), 'utf8');
         // A second inline copy is how the behavioural tests above stop covering
         // the shipped path, so the tests refuse to let one come back.
         assert.ok(!/req\.body\.length\s*>/.test(src),

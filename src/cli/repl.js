@@ -19,13 +19,13 @@
  *
  * Usage:
  *   npm run repl
- *   node -e "require('./src/repl').startREPL({ network: 'bitcoin-regtest' })"
+ *   node -e "require('./src/cli/repl').startREPL({ network: 'bitcoin-regtest' })"
  *
  ********************************************************************/
 
 const repl = require('repl');
-const XChainSDK = require('./XChainSDK.js');
-const CrossChainHelper = require('./actions/cross_chain.js');
+const XChainSDK = require('../XChainSDK.js');
+const CrossChainHelper = require('../actions/cross_chain.js');
 
 
 async function startREPL(options = {}) {
@@ -174,7 +174,7 @@ function installShutdown(server, sdk) {
 }
 
 
-// CLI entry point: run directly with `node src/repl.js`
+// CLI entry point: run directly with `node src/cli/repl.js`
 if (require.main === module) {
     startREPL().catch(err => {
         console.error('REPL failed to start:', err.message);

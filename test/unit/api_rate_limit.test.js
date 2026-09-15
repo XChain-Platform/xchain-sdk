@@ -18,8 +18,8 @@
  * a valid, shared or leaked credential, and the batch cap bounds one request's
  * fan-out rather than the request rate.
  *
- * src/api.js starts a live server at require time, so these tests mount the
- * SHIPPED limiter from src/utils/api_guards.js (the same function src/api.js mounts)
+ * src/api/index.js starts a live server at require time, so these tests mount the
+ * SHIPPED limiter from src/utils/api_guards.js (the same function src/api/index.js mounts)
  * rather than a copy of it, and a source check pins that api.js still mounts it
  * ahead of the auth gate and the router.
  *
@@ -41,7 +41,7 @@ const {
 const { waitFor } = require('../helpers/wait.js');
 
 // Tests that exercise per-credential bucketing pass the credentials the app
-// would accept (src/api.js passes a safeTokenEqual-against-SDK_API_KEY
+// would accept (src/api/index.js passes a safeTokenEqual-against-SDK_API_KEY
 // predicate); with no predicate every caller is bucketed by source address.
 const KNOWN_KEYS = (token) => token === 'key-a' || token === 'key-b' ||
                               token === 'k1' || token === 'k2' || token === 'super-secret-token';
@@ -230,7 +230,7 @@ describe('API request-rate limit', function () {
     this.timeout(10000);
 
     it('src/api.js mounts the limiter BEFORE the auth gate and the jsonRouter mount', () => {
-        const src = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
+        const src = fs.readFileSync(path.join(__dirname, '../../src/api/index.js'), 'utf8');
         const rateIdx   = src.indexOf('app.use(rateLimitMiddleware(');
         // Anchored on the MOUNT, not on a compare inside the gate body: the gate
         // now lives in src/utils/api_guards.js, and an anchor that can go missing makes
@@ -245,7 +245,7 @@ describe('API request-rate limit', function () {
     });
 
     it('keeps ONE implementation of the limiter: api.js holds no inline copy', () => {
-        const src = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
+        const src = fs.readFileSync(path.join(__dirname, '../../src/api/index.js'), 'utf8');
         assert.ok(!/rateBuckets/.test(src),
             'src/api.js re-implements the limiter inline; it must mount rateLimitMiddleware instead');
     });

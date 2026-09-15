@@ -20,12 +20,12 @@
 // that reaches the root-mounted express-json-rpc-router without a parsed JSON body
 // (a GET health probe, an empty POST, or a POST with a non-JSON Content-Type) has
 // req.body === undefined. The router then throws "req.body is required", which with
-// no error handler surfaces as an HTTP 500 + stack trace. src/api.js normalizes
+// no error handler surfaces as an HTTP 500 + stack trace. src/api/index.js normalizes
 // req.body to {} just before the router to restore the body-parser 1.x behavior.
 //
 // This reconstructs the exact middleware chain using THIS service's own dependency
 // versions, proves the regression exists without the guard, and proves the guard
-// fixes it. It also asserts src/api.js still wires the guard before the router so
+// fixes it. It also asserts src/api/index.js still wires the guard before the router so
 // the fix cannot silently regress.
 
 const assert = require('assert');
@@ -91,7 +91,7 @@ describe('JSON-RPC body guard (Express 5 / body-parser 2.x regression)', functio
     });
 
     it('src/api.js wires the guard before the jsonRouter mount', () => {
-        const src = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
+        const src = fs.readFileSync(path.join(__dirname, '../../src/api/index.js'), 'utf8');
         const guardIdx = src.indexOf('if (req.body === undefined) req.body = {}');
         const routerIdx = src.indexOf('jsonRouter(');
         assert.notStrictEqual(guardIdx, -1, 'req.body guard missing from src/api.js');

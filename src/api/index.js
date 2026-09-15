@@ -25,10 +25,10 @@ const bodyParser = require('body-parser');
 const helmet     = require('helmet');
 const cors       = require('cors');
 const jsonRouter = require('express-json-rpc-router');
-const XChainSDK  = require('./XChainSDK');
-const { safeTokenEqual } = require('./utils/safe_compare.js');
-const { parseCorsOrigin } = require('./utils/cors_origin.js');
-const Config = require('./config.js');
+const XChainSDK  = require('../XChainSDK');
+const { safeTokenEqual } = require('../utils/safe_compare.js');
+const { parseCorsOrigin } = require('../utils/cors_origin.js');
+const Config = require('../config.js');
 // Request guards live in their own module so the shipped middleware has exactly
 // one implementation: this file starts listening at require time, so a unit test
 // can only reach the guards through src/utils/api_guards.js.
@@ -40,8 +40,8 @@ const {
     batchCapMiddleware,
     rateLimitMiddleware,
     authGateMiddleware
-} = require('./utils/api_guards.js');
-const { getLogger } = require('./observability/logger.js');
+} = require('../utils/api_guards.js');
+const { getLogger } = require('../observability/logger.js');
 const log = getLogger('xchain-sdk:api');
 
 // Parse in .env config data
@@ -407,7 +407,7 @@ async function startApi() {
     // documentation and no query path depends on it.
     let openrpcSpec = null;
     try {
-        openrpcSpec = require('fs').readFileSync(require('path').join(__dirname, '../docs/openrpc.json'));
+        openrpcSpec = require('fs').readFileSync(require('path').join(__dirname, '../../docs/openrpc.json'));
     } catch (e) {
         log.warn('SDK API: docs/openrpc.json is unreadable (%s); /openrpc.json will answer 503', e.code || e.message);
     }

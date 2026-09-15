@@ -12,7 +12,7 @@
  *
  **********************************************************************
  * Drift guard: docs/openrpc.json must list exactly the methods exposed by
- * the controller in src/api.js. Regenerate with: node docs/openrpc.build.js
+ * the controller in src/api/index.js. Regenerate with: node docs/openrpc.build.js
  */
 
 'use strict';
@@ -23,7 +23,7 @@ const assert = require('assert');
 
 describe('openrpc.json method coverage', () => {
 
-    const src  = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
+    const src  = fs.readFileSync(path.join(__dirname, '../../src/api/index.js'), 'utf8');
     const spec = JSON.parse(fs.readFileSync(path.join(__dirname, '../../docs/openrpc.json'), 'utf8'));
 
     const block = src.slice(src.indexOf('const controller = {'), src.indexOf('jsonRouter('));

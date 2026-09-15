@@ -66,7 +66,7 @@ const src = {
 };
 
 const configAndEntry = {
-    files: ['src/config.js', 'src/api.js', 'src/migrate.js', 'src/index.js', 'bin/**/*.js'],
+    files: ['src/config.js', 'src/api/index.js', 'src/migrate.js', 'src/index.js', 'bin/**/*.js'],
     rules: {
         'no-console': 'off',
         'no-restricted-syntax': ['error',
