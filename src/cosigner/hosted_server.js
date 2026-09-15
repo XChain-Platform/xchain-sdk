@@ -75,6 +75,8 @@ const { safeTokenEqual } = require('../utils/safe_compare.js');
 // One body ceiling for BOTH co-signer transports, derived from the protocol's
 // envelope payload maximum rather than hardcoded here (http_body_limit.js).
 const { resolveMaxBodyBytes, tooLargeHandler } = require('./http_body_limit.js');
+const { getLogger } = require('../observability/logger.js');
+const logger = getLogger('xchain-sdk:cosigner');
 
 // The wire versions this endpoint implements. A request MUST name one.
 const SUPPORTED_WIRE_VERSIONS = new Set([1]);
@@ -138,7 +140,7 @@ function createHostedCoSignerApp(opts = {}) {
             try { sink(level, message, context); return; } catch (e) { /* a log sink must never break enforcement */ }
         }
         const line = `[cosigner-hosted] ${message}` + (context ? ' ' + JSON.stringify(context) : '');
-        if (level === 'error') console.error(line); else console.warn(line);
+        if (level === 'error') logger.error(line); else logger.warn(line);
     };
 
     // byTokenHash keys on sha256(token) so tenant selection is a single hash

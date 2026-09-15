@@ -26,6 +26,8 @@ const { SDKActionError, SDKConfigError } = require('./errors.js');
 // neighbouring action these filters exist to exclude.
 const { sameWireIndex } = require('./wire_index.js');
 const ExplorerClient = require('../clients/explorer.js');
+const { getLogger } = require('../observability/logger.js');
+const log = getLogger('xchain-sdk:action-waiter');
 
 // Warn-once guard for an action the indexer exposes with no status at all.
 // Once per process: BET cancel/resolve legs hit this on every wait, and a
@@ -240,7 +242,7 @@ class ActionWaiter {
                             if (requireValid && strictStatus) return;
                             if (!warnedUnknownStatus) {
                                 warnedUnknownStatus = true;
-                                console.warn('[xchain-sdk] the indexer reported no status for action(s) ' +
+                                log.warn('[xchain-sdk] the indexer reported no status for action(s) ' +
                                     JSON.stringify(unknown) + ' of transaction ' + txid +
                                     '; reporting status=valid is an ASSUMPTION (result.statusKnown=false). ' +
                                     'Pass strictStatus:true to fail closed instead.');

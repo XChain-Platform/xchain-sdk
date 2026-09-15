@@ -50,6 +50,8 @@ const AuthUtils = require('./auth.js');
 const { isPosNum, parseActionString, X402_VERSION } = require('./x402/amounts.js');
 const FileInvoiceStore = require('./x402/file_invoice_store.js');
 const X402Client = require('./x402/client.js');
+const { getLogger } = require('../observability/logger.js');
+const log = getLogger('xchain-sdk:x402');
 
 function configureSchemes(gateway, o) {
     gateway.send = o.send ? {
@@ -123,7 +125,7 @@ class X402Gateway {
             ? (Buffer.isBuffer(o.challengeSecret) ? o.challengeSecret : Buffer.from(String(o.challengeSecret)))
             : crypto.randomBytes(32);
         if (this.requireSignature && !o.challengeSecret && (this.dispenser || this.deposit))
-            console.warn('x402: no challengeSecret set; using a random per-process secret. Dispenser/deposit challenges will not survive a restart or work across multiple nodes. Set challengeSecret in production.');
+            log.warn('x402: no challengeSecret set; using a random per-process secret. Dispenser/deposit challenges will not survive a restart or work across multiple nodes. Set challengeSecret in production.');
         this.challengeTtlMs   = o.challengeTtlMs || 5 * 60 * 1000;
         this._usedChallenges  = new Map();   // challenge nonce -> expiresAt (one-time-use replay guard)
     }
@@ -170,7 +172,7 @@ class X402Gateway {
                 // log it: a consistently-throwing _findConfirmedSend/store.update leaves a
                 // genuinely-paid invoice stuck in provisional_0conf forever (never promoted,
                 // never failed, no operator notification) while the loop looks healthy.
-                console.error('x402 sweep: invoice ' + inv.nonce + ' (payer ' + inv.payer + ') failed this cycle:', e);
+                log.error('x402 sweep: invoice ' + inv.nonce + ' (payer ' + inv.payer + ') failed this cycle:', e);
             }
         }
     }
@@ -180,7 +182,7 @@ class X402Gateway {
         this._sweepTimer = setInterval(() => {
             // A whole-sweep failure (e.g. listByStatus throwing) must not crash the timer,
             // but log it instead of eating it so a stuck sweeper is visible after one cycle.
-            this.sweep().catch((e) => console.error('x402 sweep: cycle failed:', e));
+            this.sweep().catch((e) => log.error('x402 sweep: cycle failed:', e));
         }, intervalMs || 30000);
         if (this._sweepTimer.unref) this._sweepTimer.unref();
     }

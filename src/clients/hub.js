@@ -21,6 +21,8 @@
 const axios = require('axios');
 const Config = require('../config.js');
 const { agentOptsFor, NETWORK_MAP } = require('./hub/config_envelope.js');
+const { getLogger } = require('../observability/logger.js');
+const log = getLogger('xchain-sdk:hub');
 
 
 class HubConnector {
@@ -193,7 +195,7 @@ class HubConnector {
                 if (callback) callback(this.configs);
             } catch (err) {
                 // Silently continue: hub unavailability during polling is non-fatal
-                console.warn('Hub poll failed:', err);
+                log.warn('Hub poll failed:', err);
             }
         }, this.pollInterval);
         // Don't prevent process exit

@@ -28,6 +28,8 @@ const {
     hubEnvelopeMarks,
     agentOptsFor
 } = require('./config_envelope.js');
+const { getLogger } = require('../../observability/logger.js');
+const log = getLogger('xchain-sdk:hub');
 
 async function fetchConfigResult(connector, url, cursorValid, sinceCursor, headers) {
     let result = await connector._postGetAllConfigs(url, sinceCursor, headers);
@@ -55,7 +57,7 @@ async function fetchConfigResult(connector, url, cursorValid, sinceCursor, heade
         // lost config state is an operator event), drop the cache, reset the
         // cursor, and re-fetch the full tree from the same endpoint once.
         let served = hubEnvelopeMarks(result);
-        console.error('XChain SDK HubConnector: HUB CONFIG REGRESSION: ' + url + ' served seq ' +
+        log.error('XChain SDK HubConnector: HUB CONFIG REGRESSION: ' + url + ' served seq ' +
                       served.seq + '/watermark ' + served.watermark + ', below last-seen ' +
                       connector.lastSeq + '/' + connector.lastWatermark +
                       ' (hub restart or restore from an older snapshot); discarding cached config and re-fetching the full tree.');
@@ -210,7 +212,7 @@ module.exports = {
         if(key === (this._lastConsensusMismatchKey || '')) return;
         this._lastConsensusMismatchKey = key;
         if(mismatches.length)
-            console.error('XChain SDK HubConnector: CONSENSUS HASH MISMATCH: the hub serves consensus config differing from this package\'s bundled coin files (' +
+            log.error('XChain SDK HubConnector: CONSENSUS HASH MISMATCH: the hub serves consensus config differing from this package\'s bundled coin files (' +
                 mismatches.join('; ') + '). Hub consensus values are never applied (they are pinned locally); upgrade the lagging side.');
     }
 };

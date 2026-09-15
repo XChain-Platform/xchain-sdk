@@ -38,6 +38,8 @@ const GatedFileUtils = require('./actions/gated_file.js');
 const CompressionUtils = require('./protocol/compression.js');
 const NftHelpers     = require('./actions/nft.js');
 const ProjectHelpers = require('./actions/project.js');
+const { getLogger } = require('./observability/logger.js');
+const log = getLogger('xchain-sdk');
 const ControllerHelpers = require('./actions/controller.js');
 const VoteHelpers    = require('./actions/vote.js');
 const BettingHelpers = require('./actions/betting.js');
@@ -471,7 +473,7 @@ class XChainSDK {
         } catch (err) {
             // Non-fatal when we already have usable clients (explicit/default).
             if (this.explorer && this.encoder) {
-                console.warn('Hub unavailable, using explicit/default config:', err.message || err);
+                log.warn('Hub unavailable, using explicit/default config:', err.message || err);
                 return;
             }
             throw err;
@@ -559,7 +561,7 @@ class XChainSDK {
             if (!this._downgradeWarned) this._downgradeWarned = {};
             if (!this._downgradeWarned[service]) {
                 this._downgradeWarned[service] = true;
-                console.warn('Ignoring hub ' + service + ' endpoint (' + incomingUrl + '): would downgrade the https default to an insecure transport. Publish a full https:// URL in the hub config, or set allowInsecureEndpoints:true.');
+                log.warn('Ignoring hub ' + service + ' endpoint (' + incomingUrl + '): would downgrade the https default to an insecure transport. Publish a full https:// URL in the hub config, or set allowInsecureEndpoints:true.');
             }
             return true;
         }
@@ -574,7 +576,7 @@ class XChainSDK {
     }
 
     async start() {
-        console.log('Starting up ' + this.name + ' v' + this.version + '...');
+        log.log('Starting up ' + this.name + ' v' + this.version + '...');
         if (this.hub) await this.init();
 
         while (true) {
@@ -817,7 +819,7 @@ class XChainSDK {
 
         const result = this.validateContract(code);
         for (const w of result.warnings)
-            console.warn('DEPLOY lint warning: ' + w.message);
+            log.warn('DEPLOY lint warning: ' + w.message);
 
         // Constructor footgun: a contract that exports `initialize` (a constructor)
         // deployed with no CONSTRUCTOR_PARAMS runs no constructor, so it silently
@@ -829,7 +831,7 @@ class XChainSDK {
             const cp = params ? (params.CONSTRUCTOR_PARAMS !== undefined ? params.CONSTRUCTOR_PARAMS : params.constructorParams) : undefined;
             const ctorParamsAbsent = cp === undefined || cp === null || cp === '' || (Array.isArray(cp) && cp.length === 0);
             if (ctorParamsAbsent && this.contracts.getExportedMethodNames(code).includes('initialize'))
-                console.warn('DEPLOY warning: contract exports initialize() but no CONSTRUCTOR_PARAMS were provided; ' +
+                log.warn('DEPLOY warning: contract exports initialize() but no CONSTRUCTOR_PARAMS were provided; ' +
                     'it will deploy uninitialized (and is rejected on-chain once the DEPLOY_INIT_STRICT flag-day activates). ' +
                     'Pass constructorParams (an empty value runs a zero-arg initialize).');
         } catch (e) { /* best-effort nudge; never block a deploy on it */ }
@@ -843,7 +845,7 @@ class XChainSDK {
 
         if (mode === 'warn') {
             for (const e of result.errors)
-                console.warn('DEPLOY lint error: ' + e.message);
+                log.warn('DEPLOY lint error: ' + e.message);
             this._preflightContractMeta(code, mode);
             return;
         }
@@ -897,12 +899,12 @@ class XChainSDK {
         try { verdict = this.contracts.checkExportedMeta(code); } catch (e) { return; }
 
         for (const a of verdict.advisories)
-            console.warn('DEPLOY meta advisory: ' + a);
+            log.warn('DEPLOY meta advisory: ' + a);
 
         if (!verdict.error) return;
 
         if (mode === 'warn') {
-            console.warn('DEPLOY meta error: ' + verdict.error);
+            log.warn('DEPLOY meta error: ' + verdict.error);
             return;
         }
         const isRequired = verdict.error === CONTRACT_META_VERDICTS.REQUIRED;
@@ -2016,7 +2018,7 @@ class XChainSDK {
             const pending = ws.subscribe(channels, params);
             if (pending && typeof pending.catch === 'function') {
                 pending.catch((err) => {
-                    console.warn(
+                    log.warn(
                         'Subscription to [' + channels.join(', ') + '] was not confirmed: '
                         + (err && err.message ? err.message : err)
                         + ' (it will be replayed on reconnect)',
@@ -2024,7 +2026,7 @@ class XChainSDK {
                 });
             }
         } catch (err) {
-            console.warn(
+            log.warn(
                 'Subscription to [' + channels.join(', ') + '] failed: '
                 + (err && err.message ? err.message : err),
             );

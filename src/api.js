@@ -41,6 +41,8 @@ const {
     rateLimitMiddleware,
     authGateMiddleware
 } = require('./utils/api_guards.js');
+const { getLogger } = require('./observability/logger.js');
+const log = getLogger('xchain-sdk:api');
 
 // Parse in .env config data
 dotenv.config();
@@ -52,7 +54,7 @@ const SDK_API_PORT = Config.env.sdkApiPort() || 3005;
 // ping is rejected (401) rather than left open.
 const SDK_API_KEY  = Config.env.sdkApiKey() || '';
 if(!SDK_API_KEY)
-    console.warn('WARNING: SDK_API_KEY is not set. All helper-API methods except ping will return 401. Set SDK_API_KEY to use the API.');
+    log.warn('WARNING: SDK_API_KEY is not set. All helper-API methods except ping will return 401. Set SDK_API_KEY to use the API.');
 // Batch-cap and rate-limit settings, parsed by the guard module (each one falls
 // back to a safe default on a junk value; see src/utils/api_guards.js). With no
 // argument, each resolver reads process.env through its own default parameter.
@@ -62,7 +64,7 @@ const SDK_API_RATE_LIMIT     = resolveRateLimit();
 // made the truncation bug expensive: the operator believed the value they typed
 // was in force, and nothing in the log said otherwise.
 if(Config.env.sdkApiRateLimit() !== undefined && parseWholeNumber(Config.env.sdkApiRateLimit()) === null)
-    console.warn('WARNING: SDK_API_RATE_LIMIT is not a whole number; using the default of ' + SDK_API_RATE_LIMIT +
+    log.warn('WARNING: SDK_API_RATE_LIMIT is not a whole number; using the default of ' + SDK_API_RATE_LIMIT +
                  ' requests per window. Set it to exactly 0 to disable the limiter.');
 const SDK_API_RATE_WINDOW_MS = resolveRateWindowMs();
 const NETWORK      = Config.env.network();
@@ -91,9 +93,9 @@ async function startApi() {
     if (sdk.hub) {
         try {
             await sdk.init();
-            console.log('Hub config loaded successfully');
+            log.log('Hub config loaded successfully');
         } catch (err) {
-            console.warn('Hub init failed, continuing with explicit config:', err);
+            log.warn('Hub init failed, continuing with explicit config:', err);
         }
     }
 
@@ -407,7 +409,7 @@ async function startApi() {
     try {
         openrpcSpec = require('fs').readFileSync(require('path').join(__dirname, '../docs/openrpc.json'));
     } catch (e) {
-        console.warn('SDK API: docs/openrpc.json is unreadable (%s); /openrpc.json will answer 503', e.code || e.message);
+        log.warn('SDK API: docs/openrpc.json is unreadable (%s); /openrpc.json will answer 503', e.code || e.message);
     }
     app.get('/openrpc.json', (req, res) => {
         if (!openrpcSpec)
@@ -429,7 +431,7 @@ async function startApi() {
 
     // Start the server
     app.listen(SDK_API_PORT, () => {
-        console.log('SDK API listening on port ' + SDK_API_PORT);
+        log.log('SDK API listening on port ' + SDK_API_PORT);
     });
 
 }

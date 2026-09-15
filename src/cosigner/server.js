@@ -32,6 +32,8 @@ const { safeTokenEqual } = require('../utils/safe_compare.js');
 // One body ceiling for BOTH co-signer transports, derived from the protocol's
 // envelope payload maximum rather than hardcoded here (http_body_limit.js).
 const { resolveMaxBodyBytes, tooLargeHandler } = require('./http_body_limit.js');
+const { getLogger } = require('../observability/logger.js');
+const logger = getLogger('xchain-sdk:cosigner');
 
 function createLogger(opts) {
     // Operator-visible log sink (G17). Defaults to the console, which under a
@@ -44,7 +46,7 @@ function createLogger(opts) {
             try { sink(level, message, context); return; } catch (e) { /* a log sink must never break enforcement */ }
         }
         const line = `[cosigner] ${message}` + (context ? ' ' + JSON.stringify(context) : '');
-        if (level === 'error') console.error(line); else console.warn(line);
+        if (level === 'error') logger.error(line); else logger.warn(line);
     };
 }
 
@@ -139,7 +141,7 @@ function createCoSignerApp(coSigner, opts = {}) {
     if (!token) {
         if (opts.allowUnauthenticated !== true)
             throw new Error('createCoSignerApp requires a non-empty opts.token (set COSIGNER_TOKEN), or pass { allowUnauthenticated: true } to run the endpoint deliberately unauthenticated');
-        console.warn('[cosigner] WARNING: /cosign is running UNAUTHENTICATED (allowUnauthenticated=true). Never do this in production; the sidecar signs spending authority.');
+        logger.warn('[cosigner] WARNING: /cosign is running UNAUTHENTICATED (allowUnauthenticated=true). Never do this in production; the sidecar signs spending authority.');
     }
 
     const log = createLogger(opts);

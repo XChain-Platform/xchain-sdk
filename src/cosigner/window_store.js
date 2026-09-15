@@ -40,6 +40,8 @@
 const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
+const { getLogger } = require('../observability/logger.js');
+const log = getLogger('xchain-sdk:cosigner');
 
 // Lock files this process currently holds, released on exit so a clean shutdown
 // (or an uncaught throw) never leaves a stale lock that an operator has to clear
@@ -89,7 +91,7 @@ function reclaimStaleLock(lockFile, pid) {
     // rename claims one directory entry atomically, so only one
     // contender can carry the file away, and the carried record is then
     // checked against the dead holder that authorized the takeover.
-    console.warn(`[cosigner] taking over a stale window-store lock at ${lockFile} (dead pid ${pid})`);
+    log.warn(`[cosigner] taking over a stale window-store lock at ${lockFile} (dead pid ${pid})`);
     const carried = `${lockFile}.stale.${process.pid}.${crypto.randomBytes(6).toString('hex')}`;
     try { fs.renameSync(lockFile, carried); }
     catch (e2) { return; }   // another starter carried it away; the retry re-reads
@@ -310,7 +312,7 @@ class WindowStore {
         if (this._onFault) {
             try { this._onFault(message, context); return; } catch (e) { /* observer must never break enforcement */ }
         }
-        console.error(`[cosigner] ${message}`, context || '');
+        log.error(`[cosigner] ${message}`, context || '');
     }
 
 }

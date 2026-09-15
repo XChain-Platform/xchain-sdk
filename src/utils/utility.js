@@ -20,6 +20,8 @@
 
 const config  = require('../config.js');
 const formats = require('../protocol/formats.js');
+const { getLogger } = require('../observability/logger.js');
+const log = getLogger('xchain-sdk:utility');
 
 // Support BigInt in JSON stringify(), as a QUOTED decimal string.
 // JSON.rawJSON emitted a bare numeric token, so JSON.parse rounded any satoshi value
@@ -63,12 +65,12 @@ class Utility {
     }
 
     throwError(error){
-        console.error('throwError:', error);
+        log.error('throwError:', error);
         throw error;
     }
 
     logError(error, info){
-        console.error('logError: ' + error, info);
+        log.error('logError: ' + error, info);
         // Deliberately fatal: every logged error is also rethrown.
         this.throwError(error);
     }
@@ -93,7 +95,7 @@ class Utility {
         var niceString = (timeName!=null) ? timeName : 'Time';
         if(timeString!='')
             niceString += '\t: (' + timeString + ')';
-        console.log(niceString);
+        log.log(niceString);
     }
 
     millisecondsToTimeString(ms){
