@@ -13,8 +13,7 @@ const { expect } = require('chai');
 const path = require('path');
 const constants = require('../../../src/preflight/constants.js');
 
-describe('pre-flight constants + registry', function () {
-
+function registerRegistryTests() {
     it('every quantified constant is exported (no literals in code)', function () {
         expect(constants.DEFAULT_TIMEOUT_MS).to.equal(4000);
         expect(constants.RECHECK_TIMEOUT_MS).to.equal(2000);
@@ -47,16 +46,30 @@ describe('pre-flight constants + registry', function () {
         const registry = new Set(Object.values(constants.FINDING_CODES));
         const re = /\b(?:addFinding|addUnverified|markRun)\(\s*(['"])([A-Z0-9_]+)\1/g;
         const offenders = [];
-        for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.js'))) {
-            const src = fs.readFileSync(path.join(dir, f), 'utf8');
+        // Check modules can nest (checks/batch/ holds per-command helpers), so the
+        // scan walks every subdirectory rather than only the top level, or a
+        // literal in a nested file passes unseen.
+        function collectCheckFiles(d) {
+            const found = [];
+            for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
+                const full = path.join(d, entry.name);
+                if (entry.isDirectory()) found.push(...collectCheckFiles(full));
+                else if (entry.isFile() && entry.name.endsWith('.js')) found.push(full);
+            }
+            return found;
+        }
+        for (const full of collectCheckFiles(dir)) {
+            const src = fs.readFileSync(full, 'utf8');
             let m;
             while ((m = re.exec(src)) !== null) {
-                if (registry.has(m[2])) offenders.push(`${f}: '${m[2]}'`);
+                if (registry.has(m[2])) offenders.push(`${path.relative(dir, full)}: '${m[2]}'`);
             }
         }
         expect(offenders, 'registry codes passed as literals: ' + offenders.join(', ')).to.deep.equal([]);
     });
+}
 
+function registerDenylistTests() {
     it('TIER1_DENYLIST mirrors the indexer VM denylist', function () {
         expect(constants.TIER1_DENYLIST).to.deep.equal(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
     });
@@ -110,354 +123,9 @@ describe('pre-flight constants + registry', function () {
         for (const a of ['DEPLOY', 'EXECUTE', 'XEXEC'])
             expect(constants.TIER1_SUBCOMMAND_PREFLIGHT, a).to.not.include(a);
     });
+}
 
-    describe('drift map (§8.5)', function () {
-        // The SDK unit suite is hermetic: it must NOT compare INDEXER-MAP.md
-        // hashes against the live xchain-indexer sibling, which a second coder
-        // edits independently (a moving target would break this suite on every
-        // unrelated handler change). The live-hash comparison lives in the
-        // standalone bin/check-preflight-drift.js, run by the indexer's own CI
-        // (spec §8.5: "CI on xchain-indexer"). Here we only assert the map is
-        // well-formed so a malformed/empty map is still caught.
-        it('INDEXER-MAP.md parses into well-formed rows', function () {
-            const { parseMap } = require('../../../bin/check-preflight-drift.js');
-            const rows = parseMap(path.join(__dirname, '..', '..', '..', 'src', 'preflight', 'INDEXER-MAP.md'));
-            expect(rows.length, 'map has mapping rows').to.be.greaterThan(0);
-            for (const { handler, hash } of rows) {
-                expect(handler).to.match(/^src\/actions\/[\w-]+(?:\.js|\/)$/);
-                expect(hash, handler + ' hash must be 64-hex').to.match(/^[0-9a-f]{64}$/);
-            }
-        });
-
-        /* The map's two halves must name one commit.
-         *
-         * The anchor line is machine-read; the review command below it is the human
-         * baseline. They came apart twice - 2026-08-23 moved the table and missed the
-         * line, 2026-08-25 moved the line and missed the command - and both times the
-         * automated half stayed green because it reads the correct line. The REAL map is
-         * asserted here (this is a pure text check over an in-repo file, so it stays
-         * hermetic), and the failing direction is driven from temp fixtures.
-         */
-        describe('anchor / review-command consistency', function () {
-            const fs = require('fs');
-            const os = require('os');
-            const { checkAnchorConsistency } = require('../../../bin/check-preflight-drift.js');
-
-            const REAL_MAP = path.join(__dirname, '..', '..', '..', 'src', 'preflight', 'INDEXER-MAP.md');
-            let dir;
-
-            function fixture(text) {
-                dir = fs.mkdtempSync(path.join(os.tmpdir(), 'anchor-consistency-'));
-                const p = path.join(dir, 'INDEXER-MAP.md');
-                fs.writeFileSync(p, text);
-                return p;
-            }
-
-            afterEach(function () {
-                if (dir) fs.rmSync(dir, { recursive: true, force: true });
-                dir = null;
-            });
-
-            it('the shipped INDEXER-MAP.md anchors its review command on its own pin', function () {
-                expect(checkAnchorConsistency(REAL_MAP)).to.equal(0);
-            });
-
-            it('fails when the review command names a different commit than the anchor line', function () {
-                const real = fs.readFileSync(REAL_MAP, 'utf8');
-                const stale = real.replace(/diff [0-9a-f]{7,40}\.\.HEAD/, 'diff 2d9cbbbf..HEAD');
-                expect(stale, 'fixture must actually differ from the real map').to.not.equal(real);
-                expect(checkAnchorConsistency(fixture(stale))).to.equal(1);
-            });
-
-            it('fails CLOSED when the review command is missing or unreadable', function () {
-                const real = fs.readFileSync(REAL_MAP, 'utf8');
-                const gutted = real.replace(/git -C \S*xchain-indexer diff [0-9a-f]{7,40}\.\.HEAD -- src\/actions\//,
-                    '(see the review log)');
-                expect(gutted).to.not.equal(real);
-                expect(checkAnchorConsistency(fixture(gutted))).to.equal(1);
-            });
-
-            it('fails CLOSED when the map records no anchor at all', function () {
-                const real = fs.readFileSync(REAL_MAP, 'utf8');
-                const anchorless = real.replace('**Pins taken at indexer commit:**', '**Pins were taken at:**');
-                expect(anchorless).to.not.equal(real);
-                expect(checkAnchorConsistency(fixture(anchorless))).to.equal(1);
-            });
-        });
-
-        // The gate's two by-VALUE seams, driven against SYNTHETIC fixtures so the
-        // suite stays hermetic (the live sibling is a moving target, per the note above).
-        describe('by-value seams', function () {
-            const fs = require('fs');
-            const os = require('os');
-            const { checkFeeQuoteSeam, checkConfigConstants, checkGasSchedules } = require('../../../bin/check-preflight-drift.js');
-
-            let root;
-            const sdkCoin = (c) => path.join(__dirname, '..', '..', '..', 'src', 'coins', c + '.js');
-
-            // The handler basenames a passing fixture must carry, derived from the SDK list
-            // rather than typed out again: the gate now reads the fee-charging set off the
-            // indexer's createFeesObject call sites, and DEPLOY/EXECUTE charge off the gas
-            // schedule instead, so they have no handler here.
-            const feeCallers = constants.FEE_CHARGING_ACTIONS
-                .filter((a) => a !== 'DEPLOY' && a !== 'EXECUTE')
-                .map((a) => a.toLowerCase());
-
-            function fakeIndexer({ exempt, gasOverrides, callers, maxRefills }) {
-                root = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-gate-'));
-                fs.mkdirSync(path.join(root, 'src', 'coins'), { recursive: true });
-                fs.mkdirSync(path.join(root, 'src', 'actions'), { recursive: true });
-                for (const name of (callers || feeCallers)) {
-                    fs.writeFileSync(path.join(root, 'src', 'actions', name + '.js'),
-                        'let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);\n');
-                }
-                // A handler that charges nothing, so the walk is proven to select rather than
-                // to sweep the directory.
-                fs.writeFileSync(path.join(root, 'src', 'actions', 'send.js'),
-                    '// createFeesObject is named here in prose only; SEND charges no protocol fee.\n');
-                fs.writeFileSync(path.join(root, 'src', 'config.js'),
-                    "config['MAX_REFILLS'] = " + (maxRefills === undefined ? constants.MAX_REFILLS : maxRefills) + ';\n');
-                fs.writeFileSync(path.join(root, 'src', 'actions', 'index.js'),
-                    "const FEE_QUOTE_DENYLIST = new Set(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);\n"
-                    + "const FEE_QUOTE_STATIC = new Set(['DEPLOY', 'EXECUTE']);\n"
-                    + 'const FEE_QUOTE_EXEMPT = new Set([' + exempt.map((a) => "'" + a + "'").join(', ') + ']);\n');
-                for (const c of ['BTC', 'LTC', 'DOGE']) {
-                    const real = require(sdkCoin(c));
-                    const schedule = Object.assign({}, real.GAS_SCHEDULE, (gasOverrides || {})[c] || {});
-                    fs.writeFileSync(path.join(root, 'src', 'coins', c + '.js'),
-                        'module.exports = { GAS_SCHEDULE: ' + JSON.stringify(schedule) + ' };\n');
-                }
-                return root;
-            }
-
-            afterEach(function () {
-                if (root) fs.rmSync(root, { recursive: true, force: true });
-                root = null;
-            });
-
-            it('passes when the fixtures agree with the SDK', function () {
-                const r = fakeIndexer({ exempt: ['COINPAY', 'DISPENSE'] });
-                expect(checkFeeQuoteSeam(r)).to.equal(0);
-                expect(checkConfigConstants(r)).to.equal(0);
-                expect(checkGasSchedules(r)).to.equal(0);
-            });
-
-            // The direction the BET omission actually took. An indexer handler
-            // charges a fee and the SDK list does not know, so NATIVE_FEE_FORFEIT is withheld.
-            it('fails when a fee-charging handler is missing from FEE_CHARGING_ACTIONS', function () {
-                const r = fakeIndexer({ exempt: ['COINPAY'], callers: feeCallers.filter((c) => c !== 'bet') });
-                expect(checkFeeQuoteSeam(r)).to.equal(1);
-            });
-
-            it('fails when FEE_CHARGING_ACTIONS lists an action no handler charges for', function () {
-                const r = fakeIndexer({ exempt: ['COINPAY'], callers: feeCallers.concat('coinpay') });
-                expect(checkFeeQuoteSeam(r)).to.equal(1);
-            });
-
-            it('fails CLOSED when the call-site walk finds no caller at all', function () {
-                const r = fakeIndexer({ exempt: ['COINPAY'], callers: [] });
-                // "found none" must never read as "nothing charges a fee"; it throws, and
-                // main() reports the throw as a gate failure.
-                expect(() => checkFeeQuoteSeam(r)).to.throw(/createFeesObject/);
-            });
-
-            // The cap lives in indexer config.js, which no mapped handler hash
-            // covers, because dispenser.js only reads it by symbol.
-            it('fails when MAX_REFILLS drifts from the indexer config value', function () {
-                const r = fakeIndexer({ exempt: ['COINPAY'], maxRefills: constants.MAX_REFILLS + 1 });
-                expect(checkConfigConstants(r)).to.equal(1);
-            });
-
-            it('fails CLOSED when the indexer MAX_REFILLS literal cannot be read exactly once', function () {
-                const r = fakeIndexer({ exempt: ['COINPAY'] });
-                fs.writeFileSync(path.join(r, 'src', 'config.js'), '// the cap moved somewhere else\n');
-                expect(() => checkConfigConstants(r)).to.throw(/exactly one/);
-            });
-
-            it('fails when an action is both indexer-EXEMPT and SDK fee-charging', function () {
-                // The exact BET-forfeiture shape, inverted: a forfeiture warning for an action
-                // that charges nothing. BET is in FEE_CHARGING_ACTIONS.
-                const r = fakeIndexer({ exempt: ['COINPAY', 'BET'] });
-                expect(checkFeeQuoteSeam(r)).to.equal(1);
-            });
-
-            it('fails when a coin GAS_SCHEDULE value drifts', function () {
-                const r = fakeIndexer({ exempt: ['COINPAY'], gasOverrides: { DOGE: { VM_STATE_WRITE: 999999 } } });
-                expect(checkGasSchedules(r)).to.equal(1);
-            });
-
-            it('fails CLOSED when a coin module carries no GAS_SCHEDULE at all', function () {
-                const r = fakeIndexer({ exempt: ['COINPAY'] });
-                require('fs').writeFileSync(path.join(r, 'src', 'coins', 'LTC.js'), 'module.exports = {};\n');
-                expect(checkGasSchedules(r)).to.equal(1);
-            });
-        });
-
-        /* The regex-mirror seam, which no mapped hash can cover either.
-         *
-         * CANONICAL_CARET_ID is declared in xchain-indexer/src/db/shared.js, and the map's
-         * rows are `src/actions/*.js` only, so without this leg every pinned hash stays
-         * green while the rule the SDK judges `^<id>` references against moves underneath
-         * it. Driven against SYNTHETIC indexer fixtures for the same reason the seams
-         * above are: the live sibling is a moving target.
-         */
-        describe('mirrored regex rules', function () {
-            const fs = require('fs');
-            const os = require('os');
-            const { checkRegexMirrors } = require('../../../bin/check-preflight-drift.js');
-
-            let root;
-            // The path is spelled out rather than read back from REGEX_MIRRORS: pinning
-            // the fixture to the table would make every case pass whatever the table
-            // said, which is the one thing this leg must not do.
-            function fakeIndexerDb(body, at) {
-                root = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-gate-regex-'));
-                const rel = at || 'src/db/shared.js';
-                fs.mkdirSync(path.join(root, path.dirname(rel)), { recursive: true });
-                if (body !== null) fs.writeFileSync(path.join(root, rel), body);
-                return root;
-            }
-
-            afterEach(function () {
-                if (root) fs.rmSync(root, { recursive: true, force: true });
-                root = null;
-            });
-
-            it('passes when the indexer literal matches the SDK constant', function () {
-                const live = '/' + constants.CANONICAL_CARET_ID.source + '/'
-                    + constants.CANONICAL_CARET_ID.flags;
-                expect(checkRegexMirrors(fakeIndexerDb(
-                    'const CANONICAL_CARET_ID = ' + live + ';\n'))).to.equal(0);
-            });
-
-            it('fails when the indexer widens the canonical caret-id rule', function () {
-                // The live divergence this case must catch: `^0` and `^007` would
-                // become resolvable on chain while the SDK still reports
-                // CARET_REF_UNRESOLVABLE for them.
-                expect(checkRegexMirrors(fakeIndexerDb(
-                    'const CANONICAL_CARET_ID = /^[0-9]+$/;\n'))).to.equal(1);
-            });
-
-            it('fails when only the regex FLAGS differ', function () {
-                const live = constants.CANONICAL_CARET_ID.source;
-                expect(checkRegexMirrors(fakeIndexerDb(
-                    'const CANONICAL_CARET_ID = /' + live + '/i;\n'))).to.equal(1);
-            });
-
-            it('fails CLOSED when the indexer literal cannot be read exactly once', function () {
-                // A rename or a second declaration must never read as "it agrees" - the
-                // same contract parseStringSet and parseIntLiteral hold.
-                expect(() => checkRegexMirrors(fakeIndexerDb(
-                    'const CANONICAL_CARET_ID_V2 = /^[1-9][0-9]*$/;\n'))).to.throw(/exactly one/);
-                expect(() => checkRegexMirrors(fakeIndexerDb(
-                    'const CANONICAL_CARET_ID = /^a$/;\nconst CANONICAL_CARET_ID = /^b$/;\n')))
-                    .to.throw(/exactly one/);
-            });
-
-            it('fails when the indexer file declaring the rule is absent', function () {
-                expect(checkRegexMirrors(fakeIndexerDb(null))).to.equal(1);
-            });
-
-            it('fails when the rule sits at src/db.js rather than the declared path', function () {
-                // The gate follows the declared path, it does not search for the rule. An
-                // indexer whose declaration sits anywhere else is one this SDK is not
-                // pinned against, and reading that as agreement is the false-green way.
-                const live = '/' + constants.CANONICAL_CARET_ID.source + '/'
-                    + constants.CANONICAL_CARET_ID.flags;
-                expect(checkRegexMirrors(fakeIndexerDb(
-                    'const CANONICAL_CARET_ID = ' + live + ';\n', 'src/db.js'))).to.equal(1);
-            });
-        });
-
-        /* The vendored-LIST seam, the third class no mapped hash can cover.
-         *
-         * RESERVED_FUTURE_ROOTS is declared in xchain-indexer/src/consensus/reservedRoots.js and read
-         * by issue.js through a symbol, so every pinned handler hash stays green while the
-         * reserved set moves underneath the SDK copy the ISSUE pre-flight judges a create
-         * against. Driven against SYNTHETIC indexer fixtures, like the seams above, because
-         * the live sibling is a moving target.
-         */
-        describe('mirrored indexer lists', function () {
-            const fs = require('fs');
-            const os = require('os');
-            const { checkListMirrors } = require('../../../bin/check-preflight-drift.js');
-
-            let root;
-            function fakeIndexerRoots(body) {
-                root = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-gate-list-'));
-                fs.mkdirSync(path.join(root, 'src', 'consensus'), { recursive: true });
-                if (body !== null) fs.writeFileSync(path.join(root, 'src', 'consensus', 'reservedRoots.js'), body);
-                return root;
-            }
-
-            // The SDK's own list, re-emitted in the indexer's declaration shape.
-            const declare = (roots) => 'const RESERVED_FUTURE_ROOTS = Object.freeze(['
-                + roots.map((r) => `'${r}'`).join(', ') + ']);\n';
-            const live = () => [...constants.RESERVED_FUTURE_ROOTS];
-
-            afterEach(function () {
-                if (root) fs.rmSync(root, { recursive: true, force: true });
-                root = null;
-            });
-
-            it('passes when the indexer list matches the SDK copy entry for entry', function () {
-                expect(checkListMirrors(fakeIndexerRoots(declare(live())))).to.equal(0);
-            });
-
-            it('fails when the indexer reserves a root the SDK does not know about', function () {
-                // The live direction: a chain is added to the reserved set and the SDK stays
-                // silent on a create the chain now refuses.
-                expect(checkListMirrors(fakeIndexerRoots(declare(live().concat('XYZW'))))).to.equal(1);
-            });
-
-            it('fails when the SDK carries a root the indexer has released', function () {
-                expect(checkListMirrors(fakeIndexerRoots(declare(live().slice(1))))).to.equal(1);
-            });
-
-            // Same members, different order: a set comparison passes this and the two copies
-            // are pinned order-identical, so it is a finding.
-            it('fails when the two lists agree on membership but not on order', function () {
-                const reordered = live();
-                reordered.push(reordered.shift());
-                expect(checkListMirrors(fakeIndexerRoots(declare(reordered)))).to.equal(1);
-            });
-
-            // A duplicate is what a set comparison structurally cannot see: it dedupes one
-            // side down to the other's length and reports agreement.
-            it('fails when one side repeats an entry', function () {
-                const dupe = live();
-                dupe.splice(1, 0, dupe[0]);
-                expect(checkListMirrors(fakeIndexerRoots(declare(dupe)))).to.equal(1);
-            });
-
-            it('fails CLOSED when the indexer literal cannot be read exactly once', function () {
-                expect(() => checkListMirrors(fakeIndexerRoots(
-                    "const RESERVED_ROOTS_V2 = Object.freeze(['ETH']);\n"))).to.throw(/exactly one/);
-                expect(() => checkListMirrors(fakeIndexerRoots(
-                    declare(['ETH']) + declare(['SOL'])))).to.throw(/exactly one/);
-            });
-
-            // "Parsed as empty" must never land as "the two agree": an empty list would
-            // compare equal against any other unreadable one.
-            it('fails CLOSED when the list parses as empty', function () {
-                expect(() => checkListMirrors(fakeIndexerRoots(
-                    'const RESERVED_FUTURE_ROOTS = Object.freeze([]);\n'))).to.throw(/EMPTY/);
-            });
-
-            it('fails when the indexer file declaring the list is absent', function () {
-                expect(checkListMirrors(fakeIndexerRoots(null))).to.equal(1);
-            });
-        });
-
-        it('every checks/ action module is mapped (or intentionally misc-only)', function () {
-            // Guard against adding a certified check without a drift-map entry.
-            const { parseMap } = require('../../../bin/check-preflight-drift.js');
-            const mapped = new Set(parseMap(path.join(__dirname, '..', '..', '..', 'src', 'preflight', 'INDEXER-MAP.md'))
-                .map((r) => r.handler.replace('src/actions/', '').replace(/(?:\.js|\/)$/, '')));
-            // The action groups whose checks carry certified error-capable logic.
-            for (const h of ['send', 'destroy', 'mint', 'issue', 'dispenser', 'dispense', 'order', 'swap', 'airdrop', 'dividend', 'batch']) {
-                expect(mapped.has(h), `${h} handler should be in INDEXER-MAP.md`).to.equal(true);
-            }
-        });
-    });
+describe('pre-flight constants + registry', function () {
+    registerRegistryTests();
+    registerDenylistTests();
 });
