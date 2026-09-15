@@ -130,6 +130,131 @@
       "test/unit/format_selector.test/07_format_selector_explicit_version_rest_fields.test.js",
       "test/unit/format_selector.test/08_format_selector_select_pinned_version_never_silently_drops_field.test.js",
       "test/unit/format_selector.test/09_format_selector_select_explicit_version_must_be_canonical_integer.test.js"
+    ],
+    "test/unit/hub.test.js": [
+      "test/unit/hub.test.js",
+      "test/unit/hub.test/01_get_all_config.test.js",
+      "test/unit/hub.test/02_ping.test.js",
+      "test/unit/hub.test/03_get_capability_thresholds.test.js",
+      "test/unit/hub.test/04_extract_service_endpoints.test.js",
+      "test/unit/hub.test/05_start_polling_stop_polling.test.js"
+    ],
+    "test/unit/mcp.test.js": [
+      "test/unit/mcp.test.js",
+      "test/unit/mcp.test/01_mcp_server_write_tools.test.js"
+    ],
+    "test/unit/multi_leg_formats.test.js": [
+      "test/unit/multi_leg_formats.test.js",
+      "test/unit/multi_leg_formats.test/01_serialize_expands_legs_positionally.test.js",
+      "test/unit/multi_leg_formats.test/02_select_with_legs.test.js",
+      "test/unit/multi_leg_formats.test/03_validator_rules_for_legs.test.js",
+      "test/unit/multi_leg_formats.test/04_create_action_with_legs.test.js",
+      "test/unit/multi_leg_formats.test/05_multi_leg_round_trip.test.js",
+      "test/unit/multi_leg_formats.test/06_indexer_leg_extraction_conformance.test.js"
+    ],
+    "test/unit/preflight/batch_tier1.test.js": [
+      "test/unit/preflight/batch_tier1.test.js",
+      "test/unit/preflight/batch_tier1.test/01_a_refused_sub_action_is_a_clear_answer.test.js",
+      "test/unit/preflight/batch_tier1.test/02_normalizing_the_arbiter_sub_command_list.test.js",
+      "test/unit/preflight/batch_tier1.test/03_a_valid_batch_does_not_mean_its_commands_succeed.test.js",
+      "test/unit/preflight/batch_tier1.test/04_an_unjudged_sub_command_is_neither_a_pass_nor_a_failure.test.js",
+      "test/unit/preflight/batch_tier1.test/05_per_command_precedence.test.js",
+      "test/unit/preflight/batch_tier1.test/06_oracle_fees_are_disclosed_not_judged.test.js",
+      "test/unit/preflight/batch_tier1.test/07_end_to_end_through_sdk_preflight.test.js",
+      "test/unit/preflight/batch_tier1.test/08_an_invalid_batch_header.test.js"
+    ],
+    "test/unit/preflight/batch.test.js": [
+      "test/unit/preflight/batch.test.js",
+      "test/unit/preflight/batch.test/01_pre_flight_batch_issuance_fee_budget.test.js",
+      "test/unit/preflight/batch.test/02_pre_flight_batch_command_cap.test.js",
+      "test/unit/preflight/batch.test/03_pre_flight_batch_fee_budget_priced_classes_beyond_issue.test.js",
+      "test/unit/preflight/batch.test/04_pre_flight_batch_cost_weight_budget.test.js"
+    ],
+    "test/unit/preflight/checks.test.js": [
+      "test/unit/preflight/checks.test.js",
+      "test/unit/preflight/checks.test/01_issue_existence_reject_ownership_gate.test.js",
+      "test/unit/preflight/checks.test/02_mint_two_caps_no_fee.test.js",
+      "test/unit/preflight/checks.test/03_mint_issue_against_real_nested_token_document.test.js",
+      "test/unit/preflight/checks.test/04_sweep_empty_valid_no_op.test.js",
+      "test/unit/preflight/checks.test/05_airdrop_null_amount_warning_never_error.test.js",
+      "test/unit/preflight/checks.test/06_dispense_tier_1_cannot_validate_moves_native_coin.test.js",
+      "test/unit/preflight/checks.test/07_dispenser_create_pricing_amount_positivity_mirror.test.js",
+      "test/unit/preflight/checks.test/08_dispenser_refill_refill_cap_oracle_fee.test.js",
+      "test/unit/preflight/checks.test/09_dispenser_ownership_escrow_edit.test.js",
+      "test/unit/preflight/checks.test/10_vote_re_vote_legal_state_unverified.test.js",
+      "test/unit/preflight/checks.test/11_execute_no_method_existence_check_in_handler.test.js",
+      "test/unit/preflight/checks.test/12_broadcast_message_no_chain_state_preconditions.test.js",
+      "test/unit/preflight/checks.test/13_coinpay_fee_exempt_tier_1_gives_no_verdict.test.js",
+      "test/unit/preflight/checks.test/14_native_fee_forfeiture_disclosure.test.js",
+      "test/unit/preflight/checks.test/15_op_return_carrier_cap_parity_with_compose_time_gate.test.js"
+    ],
+    "test/unit/reconcile_encoded.test.js": [
+      "test/unit/reconcile_encoded.test.js",
+      "test/unit/reconcile_encoded.test/01_reconcile_encoded_funding_leg_pins.test.js",
+      "test/unit/reconcile_encoded.test/02_reconcile_encoded_caller_identity_change.test.js",
+      "test/unit/reconcile_encoded.test/03_reconcile_encoded_foreign_input_change.test.js",
+      "test/unit/reconcile_encoded.test/04_reconcile_encoded_malformed_caps_fail_closed.test.js"
+    ],
+    "test/unit/retry.test.js": [
+      "test/unit/retry.test.js",
+      "test/unit/retry.test/01_explorer_client_retry_integration.test.js",
+      "test/unit/retry.test/02_encoder_client_retry_integration.test.js",
+      "test/unit/retry.test/03_request_hooks_explorer_client.test.js",
+      "test/unit/retry.test/04_request_hooks_encoder_client.test.js",
+      "test/unit/retry.test/05_retry_helpers_pure.test.js",
+      "test/unit/retry.test/06_retry_429_defaults_and_delay.test.js",
+      "test/unit/retry.test/07_retry_429_header_helpers.test.js",
+      "test/unit/retry.test/08_retry_429_budget.test.js",
+      "test/unit/retry.test/09_explorer_client_surviving_429.test.js",
+      "test/unit/retry.test/10_explorer_client_429_headers.test.js",
+      "test/unit/retry.test/11_explorer_client_429_hooks.test.js",
+      "test/unit/retry.test/12_encoder_client_surviving_429.test.js",
+      "test/unit/retry.test/13_encoder_client_429_hooks.test.js"
+    ],
+    "test/unit/roundtrip.test.js": [
+      "test/unit/roundtrip.test.js",
+      "test/unit/roundtrip.test/01_round_trip_serialize_then_parse_back.test.js"
+    ],
+    "test/unit/wallet_session.test.js": [
+      "test/unit/wallet_session.test.js",
+      "test/unit/wallet_session.test/01_submit.test.js",
+      "test/unit/wallet_session.test/02_unconfirmed_policy_vs_the_injected_cache.test.js",
+      "test/unit/wallet_session.test/03_hydrate_utxos.test.js",
+      "test/unit/wallet_session.test/04_action_convenience_methods.test.js",
+      "test/unit/wallet_session.test/05_explorer_convenience_methods.test.js",
+      "test/unit/wallet_session.test/06_estimate_fees.test.js"
+    ],
+    "test/unit/agent_session.test.js": [
+      "test/unit/agent_session.test.js",
+      "test/unit/agent_session.test/01_windows_and_persistence.test.js"
+    ],
+    "test/unit/co_signer.test.js": [
+      "test/unit/co_signer.test.js",
+      "test/unit/co_signer.test/01_output_and_fee_caps.test.js",
+      "test/unit/co_signer.test/02_multi_input_prevouts_and_exact_fee_cap.test.js",
+      "test/unit/co_signer.test/03_window_store_fail_closed_budget.test.js"
+    ],
+    "test/unit/cosigner_envelope.test.js": [
+      "test/unit/cosigner_envelope.test.js",
+      "test/unit/cosigner_envelope.test/01_delta_b_the_reveal_signs_the_leaf.test.js",
+      "test/unit/cosigner_envelope.test/02_delta_a_the_cancel_signs_the_tweaked_key_path.test.js",
+      "test/unit/cosigner_envelope.test/03_the_commit_round.test.js",
+      "test/unit/cosigner_envelope.test/04_mixed_carriers_on_an_envelope_role.test.js",
+      "test/unit/cosigner_envelope.test/05_refusals_that_keep_the_shipped_guarantees.test.js",
+      "test/unit/cosigner_envelope.test/06_budget_one_action_two_transactions_one_charge.test.js",
+      "test/unit/cosigner_envelope.test/07_the_composed_commit_tree.test.js",
+      "test/unit/cosigner_envelope.test/08_all_three_envelope_rounds_complete_on_a_2_of_3.test.js",
+      "test/unit/cosigner_envelope.test/09_the_property_the_composition_exists_for.test.js",
+      "test/unit/cosigner_envelope.test/10_both_halves_derive_the_tree_neither_is_told_it.test.js",
+      "test/unit/cosigner_envelope.test/11_the_2_of_2_account_is_untouched.test.js",
+      "test/unit/cosigner_envelope.test/12_the_envelope_survives_the_wire.test.js",
+      "test/unit/cosigner_envelope.test/13_sdk_create_tx_passthrough.test.js"
+    ],
+    "test/unit/cosigner_hardening.test.js": [
+      "test/unit/cosigner_hardening.test.js",
+      "test/unit/cosigner_hardening.test/01_g2_value_derivability_allowlist.test.js",
+      "test/unit/cosigner_hardening.test/02_g3_tap_tree_provenance.test.js",
+      "test/unit/cosigner_hardening.test/03_g5_window_store_single_writer_lock.test.js"
     ]
   }
 }
