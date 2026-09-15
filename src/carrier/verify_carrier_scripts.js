@@ -101,6 +101,29 @@ function chunkOf(redeem) {
     return Buffer.isBuffer(decompiled[0]) ? decompiled[0] : null;
 }
 
+function verifiedChunks(carrierScripts, enc, net, present) {
+    const chunks = [];
+    for (const hex of carrierScripts) {
+        let redeem;
+        try { redeem = Buffer.from(String(hex), 'hex'); } catch (e) { redeem = null; }
+        if (!redeem || !redeem.length)
+            return { ok: false, reason: REASONS.SCRIPT_UNPARSEABLE, checked: chunks.length };
+
+        // [1] BINDING
+        let committed;
+        try { committed = committedScriptFor(enc, redeem, net); }
+        catch (e) { return { ok: false, reason: REASONS.SCRIPT_UNPARSEABLE, checked: chunks.length }; }
+        if (!present.some(s => Buffer.isBuffer(s) && s.equals(committed)))
+            return { ok: false, reason: REASONS.OUTPUT_NOT_FOUND, checked: chunks.length };
+
+        const chunk = chunkOf(redeem);
+        if (!chunk)
+            return { ok: false, reason: REASONS.SCRIPT_UNPARSEABLE, checked: chunks.length };
+        chunks.push(chunk);
+    }
+    return chunks;
+}
+
 /**
  * @param {object}   args
  * @param {object}   args.psbt            a bitcoinjs Psbt (the one about to be signed)
@@ -134,26 +157,8 @@ function verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString, ne
         ? network
         : bitcoin.networks.bitcoin;
     const present = outputScriptsOf(psbt);
-    const chunks = [];
-
-    for (const hex of carrierScripts) {
-        let redeem;
-        try { redeem = Buffer.from(String(hex), 'hex'); } catch (e) { redeem = null; }
-        if (!redeem || !redeem.length)
-            return { ok: false, reason: REASONS.SCRIPT_UNPARSEABLE, checked: chunks.length };
-
-        // [1] BINDING
-        let committed;
-        try { committed = committedScriptFor(enc, redeem, net); }
-        catch (e) { return { ok: false, reason: REASONS.SCRIPT_UNPARSEABLE, checked: chunks.length }; }
-        if (!present.some(s => Buffer.isBuffer(s) && s.equals(committed)))
-            return { ok: false, reason: REASONS.OUTPUT_NOT_FOUND, checked: chunks.length };
-
-        const chunk = chunkOf(redeem);
-        if (!chunk)
-            return { ok: false, reason: REASONS.SCRIPT_UNPARSEABLE, checked: chunks.length };
-        chunks.push(chunk);
-    }
+    const chunks = verifiedChunks(carrierScripts, enc, net, present);
+    if (!Array.isArray(chunks)) return chunks;
 
     // [2] CONTENT. Chunks concatenate in the order the encoder emitted them,
     // which is the order the decoder reassembles them in.

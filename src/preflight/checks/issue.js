@@ -144,6 +144,26 @@ function checkTickRules(ctx, tick, token) {
         { tick, rule: isFuture ? 'reserved-root' : 'length' });
 }
 
+function checkBridgeChains(ctx, plane) {
+    // BRIDGE_CHAINS: a comma list of OTHER chain coins, or the sentinel '-' for none.
+    // Empty means unchanged, as every ISSUE field. Entries are upper-cased and not
+    // trimmed, exactly as the handler splits them.
+    ctx.markRun(FINDING_CODES.VALIDATOR_SEMANTICS);
+    const chains = ctx.field('BRIDGE_CHAINS');
+    if (chains && chains !== '-') {
+        for (const chain of chains.split(',')) {
+            const c = chain.toUpperCase();
+            if (!ALLOWED_COINS.includes(c) || (plane && c === plane.coin)) {
+                ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'error',
+                    `BRIDGE_CHAINS entry "${chain}" is not another chain coin (one of ${ALLOWED_COINS.join(', ')}, `
+                    + 'excluding this chain).',
+                    { field: 'BRIDGE_CHAINS', value: chain });
+                break;
+            }
+        }
+    }
+}
+
 // ISSUE format 7, the issuer's bridge opt-in. Every refusal raised here holds on
 // every plane: below the token-bridge activation the whole format is refused as an
 // unknown VERSION, and above it each rule refuses on its own.
@@ -176,23 +196,7 @@ function checkBridgeOptIn(ctx, tick, token) {
             { tick: resolved, rule: 'subasset' });
     }
 
-    // BRIDGE_CHAINS: a comma list of OTHER chain coins, or the sentinel '-' for none.
-    // Empty means unchanged, as every ISSUE field. Entries are upper-cased and not
-    // trimmed, exactly as the handler splits them.
-    ctx.markRun(FINDING_CODES.VALIDATOR_SEMANTICS);
-    const chains = ctx.field('BRIDGE_CHAINS');
-    if (chains && chains !== '-') {
-        for (const chain of chains.split(',')) {
-            const c = chain.toUpperCase();
-            if (!ALLOWED_COINS.includes(c) || (plane && c === plane.coin)) {
-                ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'error',
-                    `BRIDGE_CHAINS entry "${chain}" is not another chain coin (one of ${ALLOWED_COINS.join(', ')}, `
-                    + 'excluding this chain).',
-                    { field: 'BRIDGE_CHAINS', value: chain });
-                break;
-            }
-        }
-    }
+    checkBridgeChains(ctx, plane);
 
     // MIN_DEPTH is a raise-only confirmation depth: digits only.
     const minDepth = ctx.field('MIN_DEPTH');

@@ -64,24 +64,7 @@ function tokenField(token, names) {
     return null;
 }
 
-async function checkMint(ctx) {
-    const tick = ctx.field('TICK');
-    const amount = ctx.field('AMOUNT');
-    if (!tick || Array.isArray(tick)) return;
-
-    const token = await ctx.token(tick);
-    if (token === undefined || token === null) {
-        // Universal token-exists already errored on null; nothing
-        // further is checkable either way.
-        if (token === undefined) ctx.addUnverified(FINDING_CODES.MINT_OVER_MAX, 'token lookup unavailable');
-        return;
-    }
-
-    if (amount && !numeric.isPositive(amount)) {
-        ctx.addFinding(FINDING_CODES.AMOUNT_NOT_POSITIVE, 'warning',
-            'Mint amount is not positive.', { amount });
-    }
-
+function checkMintLimit(ctx, tick, amount, token) {
     // mint.js (xchain-indexer) stores MAX_MINT as 0 when an ISSUE omits it,
     // and treats 0 as "no per-tx cap" (guards with bcgt(MAX_MINT,0)) rather
     // than a real zero-mint cap; mirror that here or every mint on a
@@ -94,7 +77,9 @@ async function checkMint(ctx) {
             `Mint amount ${amount} exceeds the per-transaction MAX_MINT ${maxMint} for ${tick}.`,
             { tick, amount, maxMint });
     }
+}
 
+function checkSupplyLimit(ctx, tick, amount, token) {
     const maxSupply = tokenField(token, ['supply.max', 'max_supply', 'MAX_SUPPLY', 'maxSupply']);
     const supply = tokenField(token, ['supply.current', 'supply', 'SUPPLY', 'current_supply', 'total_supply']);
     // MAX_SUPPLY=0 is the UNCAPPED sentinel, exactly as MAX_MINT=0 is above, and it
@@ -122,7 +107,9 @@ async function checkMint(ctx) {
                 { tick, amount, maxSupply, supply, headroom });
         }
     }
+}
 
+function checkMintAmountFormat(ctx, tick, amount, token) {
     // Amount format vs the tick's decimals (vendored consensus rule).
     const decimals = tokenField(token, ['supply.decimals', 'info.decimals', 'decimals', 'DECIMALS']);
     if (decimals !== null && amount && !numeric.isValidAmountFormat(decimals, amount)) {
@@ -130,6 +117,29 @@ async function checkMint(ctx) {
             `Mint amount ${amount} is not a valid amount at ${decimals} decimals.`,
             { tick, amount, decimals });
     }
+}
+
+async function checkMint(ctx) {
+    const tick = ctx.field('TICK');
+    const amount = ctx.field('AMOUNT');
+    if (!tick || Array.isArray(tick)) return;
+
+    const token = await ctx.token(tick);
+    if (token === undefined || token === null) {
+        // Universal token-exists already errored on null; nothing
+        // further is checkable either way.
+        if (token === undefined) ctx.addUnverified(FINDING_CODES.MINT_OVER_MAX, 'token lookup unavailable');
+        return;
+    }
+
+    if (amount && !numeric.isPositive(amount)) {
+        ctx.addFinding(FINDING_CODES.AMOUNT_NOT_POSITIVE, 'warning',
+            'Mint amount is not positive.', { amount });
+    }
+
+    checkMintLimit(ctx, tick, amount, token);
+    checkSupplyLimit(ctx, tick, amount, token);
+    checkMintAmountFormat(ctx, tick, amount, token);
 
     // The amount-format check above is the LEGACY rule (see numeric.js). Above its
     // flag-day the indexer additionally requires the amount text to denote the number
