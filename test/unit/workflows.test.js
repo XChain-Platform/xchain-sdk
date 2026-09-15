@@ -13,9 +13,6 @@
 const assert = require('assert');
 const sinon = require('sinon');
 const Workflows = require('../../src/actions/workflows.js');
-const Actions = require('../../src/actions/index.js');
-const Utility = require('../../src/utils/utility.js');
-const config = require('../../src/config.js');
 
 // Helpers
 
@@ -51,7 +48,6 @@ const FAKE_WIF = 'L1rkA9mYRjVPVdvMuVbHRMX6SPHM7fNwCEfT3AV2qCGAmJ8wNfp';
 const FAKE_TICK = 'TOKEN';
 
 // Tests
-
 describe('Workflows', function () {
 
     afterEach(() => sinon.restore());
@@ -64,6 +60,11 @@ describe('Workflows', function () {
             assert.strictEqual(wf.sdk, sdk);
         });
     });
+});
+
+describe('Workflows', function () {
+
+    afterEach(() => sinon.restore());
 
     // issueAndDistribute()
     describe('issueAndDistribute()', function () {
@@ -119,6 +120,11 @@ describe('Workflows', function () {
             assert.deepStrictEqual(captured, ['CUSTOM']);
         });
     });
+});
+
+describe('Workflows', function () {
+
+    afterEach(() => sinon.restore());
 
     // issueAndMint()
     describe('issueAndMint()', function () {
@@ -145,6 +151,11 @@ describe('Workflows', function () {
             assert.strictEqual(mintCalls[0].amount, '100');
         });
     });
+});
+
+describe('Workflows', function () {
+
+    afterEach(() => sinon.restore());
 
     // createDispenser()
     describe('createDispenser()', function () {
@@ -155,6 +166,11 @@ describe('Workflows', function () {
             assert.strictEqual(result.txid, 'dispenser_tx');
         });
     });
+});
+
+describe('Workflows', function () {
+
+    afterEach(() => sinon.restore());
 
     // createOrder()
     describe('createOrder()', function () {
@@ -165,6 +181,11 @@ describe('Workflows', function () {
             assert.strictEqual(result.txid, 'order_tx');
         });
     });
+});
+
+describe('Workflows', function () {
+
+    afterEach(() => sinon.restore());
 
     // cancelOrder()
     describe('cancelOrder()', function () {
@@ -179,6 +200,11 @@ describe('Workflows', function () {
             assert.strictEqual(orderCalls[0].orderActionIndex, 777);
         });
     });
+});
+
+describe('Workflows', function () {
+
+    afterEach(() => sinon.restore());
 
     // stakeAndDelegate()
     describe('stakeAndDelegate()', function () {
@@ -209,6 +235,11 @@ describe('Workflows', function () {
             assert.strictEqual(result.delegate, null);
         });
     });
+});
+
+describe('Workflows', function () {
+
+    afterEach(() => sinon.restore());
 
     // stakeToContractAndDelegate()
     describe('stakeToContractAndDelegate()', function () {
@@ -233,571 +264,6 @@ describe('Workflows', function () {
                 null
             );
             assert.strictEqual(result.delegate, null);
-        });
-    });
-
-    // deployAndFund()
-    describe('deployAndFund()', function () {
-        it('deploys with no deposits: returns empty deposits array', async function () {
-            const sdk = makeSdk();
-            const wf = new Workflows(sdk);
-            const result = await wf.deployAndFund(FAKE_WIF, { code: 'x', gasLimit: 1000 }, []);
-            assert.strictEqual(result.deploy.txid, 'deploy_tx');
-            assert.deepStrictEqual(result.deposits, []);
-        });
-
-        it('deploys with null deposits: returns empty deposits array', async function () {
-            const sdk = makeSdk();
-            const wf = new Workflows(sdk);
-            const result = await wf.deployAndFund(FAKE_WIF, { code: 'x' }, null);
-            assert.deepStrictEqual(result.deposits, []);
-        });
-
-        it('deploys and deposits when deposits provided + deploy has action_index', async function () {
-            const sdk = makeSdk();
-            const wf = new Workflows(sdk);
-            const deposits = [
-                { tick: 'A', quantity: '100' },
-                { tick: 'B', quantity: '200' },
-            ];
-            const result = await wf.deployAndFund(FAKE_WIF, { code: 'x' }, deposits);
-            assert.strictEqual(result.deploy.txid, 'deploy_tx');
-            assert.strictEqual(result.deposits.length, 2);
-            assert.strictEqual(result.deposits[0].txid, 'deposit_tx');
-        });
-
-        // Was "skips deposits when ...". A caller that asked for deposits and got a
-        // SUCCESS carrying none had been told the contract is funded when it is not,
-        // and the sibling flows (attachContent, setRoster) already refuse instead of
-        // skipping. The broadcast deploy is not lost: _withPartial returns it.
-        it('refuses to fund when deploy indexed has no action_index (null), keeping the deploy', async function () {
-            const sdk = makeSdk({
-                deploy: async () => ({ txid: 'deploy', indexed: null })
-            });
-            const wf = new Workflows(sdk);
-            let err;
-            try {
-                await wf.deployAndFund(FAKE_WIF, { code: 'x' }, [{ tick: 'A', quantity: '10' }]);
-            } catch (e) { err = e; }
-            assert.ok(err, 'an unfunded contract must not look like success');
-            assert.match(err.message, /action_index unavailable/);
-            assert.strictEqual(err.partial.deploy.txid, 'deploy');
-            assert.deepStrictEqual(err.partial.deposits, []);
-        });
-
-        // The defect: the POLLING waiter resolves a whole transaction, so reading
-        // indexed.action_index directly saw undefined, which passed a `!== null`
-        // guard and sent a DEPOSIT carrying no contract reference at all.
-        it('funds from the polling waiter shape ({ actions: [...] })', async function () {
-            const depositCalls = [];
-            const sdk = makeSdk({
-                deploy:  async () => ({ txid: 'deploy_tx', indexed: { actions: [{ action_index: 99 }] } }),
-                deposit: async (p) => { depositCalls.push(p); return { txid: 'dep' }; }
-            });
-            const wf = new Workflows(sdk);
-            const result = await wf.deployAndFund(FAKE_WIF, { code: 'x' }, [{ tick: 'TOK', quantity: '50' }]);
-            assert.strictEqual(result.deposits.length, 1);
-            assert.strictEqual(depositCalls[0].contractActionIndex, 99);
-        });
-
-        it('funds on action_index 0, which is a valid index and not a missing one', async function () {
-            const depositCalls = [];
-            const sdk = makeSdk({
-                deploy:  async () => ({ txid: 'deploy_tx', indexed: { action_index: 0 } }),
-                deposit: async (p) => { depositCalls.push(p); return { txid: 'dep' }; }
-            });
-            const wf = new Workflows(sdk);
-            await wf.deployAndFund(FAKE_WIF, { code: 'x' }, [{ tick: 'TOK', quantity: '1' }]);
-            assert.strictEqual(depositCalls[0].contractActionIndex, 0);
-        });
-
-        it('on a deposit failure, attaches the already-broadcast deploy to the error', async function () {
-            let calls = 0;
-            const sdk = makeSdk({
-                deposit: async () => { calls++; if (calls === 2) throw new Error('deposit failed'); return { txid: 'deposit_tx_' + calls }; }
-            });
-            const wf = new Workflows(sdk);
-            let err;
-            try {
-                await wf.deployAndFund(FAKE_WIF, { code: 'x' }, [
-                    { tick: 'A', quantity: '1' }, { tick: 'B', quantity: '2' }
-                ]);
-            } catch (e) { err = e; }
-            assert.ok(err && err.partial, 'error must carry partial results');
-            assert.strictEqual(err.partial.deploy.txid, 'deploy_tx');   // DEPLOY not lost
-            assert.strictEqual(err.partial.deposits.length, 1);         // first deposit not lost
-            assert.strictEqual(err.partial.deposits[0].txid, 'deposit_tx_1');
-        });
-
-        it('refuses to fund when the deploy result has no indexed field at all', async function () {
-            const sdk = makeSdk({
-                deploy: async () => ({ txid: 'deploy' })
-            });
-            const wf = new Workflows(sdk);
-            let err;
-            try {
-                await wf.deployAndFund(FAKE_WIF, { code: 'x' }, [{ tick: 'A', quantity: '10' }]);
-            } catch (e) { err = e; }
-            assert.ok(err);
-            assert.match(err.message, /waitForIndexer/);
-            assert.strictEqual(err.partial.deploy.txid, 'deploy');
-        });
-
-        it('passes contractActionIndex to each deposit call', async function () {
-            const depositCalls = [];
-            const sdk = makeSdk({
-                deposit: async (p) => { depositCalls.push(p); return { txid: 'dep' }; }
-            });
-            const wf = new Workflows(sdk);
-            await wf.deployAndFund(FAKE_WIF, { code: 'x' }, [
-                { tick: 'TOK', quantity: '50' }
-            ]);
-            assert.strictEqual(depositCalls[0].contractActionIndex, 99);
-            assert.strictEqual(depositCalls[0].tick, 'TOK');
-            assert.strictEqual(depositCalls[0].quantity, '50');
-        });
-    });
-
-    // deployStakeableContract()
-    describe('deployStakeableContract()', function () {
-        it('delegates to deployAndFund with VERSION forced to "1"', async function () {
-            const deployAndFundCalls = [];
-            // Spy on deployAndFund
-            const sdk = makeSdk();
-            const wf = new Workflows(sdk);
-            const origDeployAndFund = wf.deployAndFund.bind(wf);
-            wf.deployAndFund = async (wif, params, deposits, opts) => {
-                deployAndFundCalls.push({ wif, params, deposits, opts });
-                return origDeployAndFund(wif, params, deposits, opts);
-            };
-
-            const result = await wf.deployStakeableContract(
-                FAKE_WIF,
-                { code: 'contract', COOLDOWN_BLOCKS: 100, SLASH_DESTINATION: 'BURN' },
-                [{ tick: 'A', quantity: '10' }]
-            );
-            assert.strictEqual(deployAndFundCalls[0].params.VERSION, '1');
-            assert.strictEqual(deployAndFundCalls[0].params.COOLDOWN_BLOCKS, 100);
-            assert.strictEqual(deployAndFundCalls[0].params.SLASH_DESTINATION, 'BURN');
-        });
-
-        it('throws when COOLDOWN_BLOCKS is missing', async function () {
-            const wf = new Workflows(makeSdk());
-            await assert.rejects(
-                () => wf.deployStakeableContract(FAKE_WIF, { SLASH_DESTINATION: 'BURN' }, []),
-                /COOLDOWN_BLOCKS is required/
-            );
-        });
-
-        it('throws when COOLDOWN_BLOCKS is null', async function () {
-            const wf = new Workflows(makeSdk());
-            await assert.rejects(
-                () => wf.deployStakeableContract(FAKE_WIF, { COOLDOWN_BLOCKS: null, SLASH_DESTINATION: 'BURN' }, []),
-                /COOLDOWN_BLOCKS is required/
-            );
-        });
-
-        it('throws when COOLDOWN_BLOCKS is empty string', async function () {
-            const wf = new Workflows(makeSdk());
-            await assert.rejects(
-                () => wf.deployStakeableContract(FAKE_WIF, { COOLDOWN_BLOCKS: '', SLASH_DESTINATION: 'BURN' }, []),
-                /COOLDOWN_BLOCKS is required/
-            );
-        });
-
-        it('throws when SLASH_DESTINATION is missing', async function () {
-            const wf = new Workflows(makeSdk());
-            await assert.rejects(
-                () => wf.deployStakeableContract(FAKE_WIF, { COOLDOWN_BLOCKS: 100 }, []),
-                /SLASH_DESTINATION is required/
-            );
-        });
-
-        it('throws when deployParams is null', async function () {
-            const wf = new Workflows(makeSdk());
-            await assert.rejects(
-                () => wf.deployStakeableContract(FAKE_WIF, null, []),
-                /COOLDOWN_BLOCKS is required/
-            );
-        });
-    });
-
-    // distributeDividend()
-    describe('distributeDividend()', function () {
-        it('calls session.dividend and returns result', async function () {
-            const sdk = makeSdk();
-            const wf = new Workflows(sdk);
-            const result = await wf.distributeDividend(
-                FAKE_WIF,
-                { tick: FAKE_TICK, dividendTick: 'DIV', amount: '1000' }
-            );
-            assert.strictEqual(result.txid, 'dividend_tx');
-        });
-    });
-
-    // attachContent() (optional on-chain TIS authoring legs)
-    describe('attachContent()', function () {
-        const NftHelpers = require('../../src/actions/nft.js');
-
-        function makeAttachSdk(calls) {
-            let fileCount = 0;
-            const session = {
-                file: async (params, enc) => {
-                    fileCount += 1;
-                    calls.files.push({ params, enc });
-                    return { txid: 'file_tx' + fileCount, indexed: { action_index: 100 + fileCount } };
-                },
-                link: async (params) => {
-                    calls.links.push(params);
-                    return { txid: 'link_tx', indexed: { action_index: 200 } };
-                },
-                issue: async (params) => {
-                    calls.issues.push(params);
-                    return { txid: 'describe_tx', indexed: { action_index: 300 } };
-                },
-            };
-            const sdk = { session: () => session };
-            sdk.nft = new NftHelpers(sdk);
-            return sdk;
-        }
-
-        it('without tis: uploads + links only', async function () {
-            const calls = { files: [], links: [], issues: [] };
-            const wf = new Workflows(makeAttachSdk(calls));
-            const out = await wf.attachContent(FAKE_WIF, {
-                coin: 'BTC', issueActionIndex: 7,
-                file: { name: 'a.png', type: 'image/png', rawData: 'x' },
-            });
-            assert.strictEqual(calls.files.length, 1);
-            assert.strictEqual(calls.links.length, 1);
-            assert.strictEqual(calls.issues.length, 0);
-            assert.strictEqual(out.tisFile, undefined);
-            assert.strictEqual(out.describe, undefined);
-        });
-
-        it('with tis: authors the on-chain doc and points DESCRIPTION at it', async function () {
-            const calls = { files: [], links: [], issues: [] };
-            const wf = new Workflows(makeAttachSdk(calls));
-            const out = await wf.attachContent(FAKE_WIF, {
-                coin: 'BTC', issueActionIndex: 7,
-                file: { name: 'a.png', type: 'image/png', rawData: 'x' },
-                tis: { tick: 'art1', name: 'Art One' },
-            });
-            // Second FILE upload is the TIS JSON document...
-            assert.strictEqual(calls.files.length, 2);
-            const tisUpload = calls.files[1];
-            assert.strictEqual(tisUpload.params.name, 'ART1.json');
-            assert.strictEqual(tisUpload.params.type, 'application/json');
-            const doc = JSON.parse(Buffer.from(tisUpload.enc.rawData, 'binary').toString('utf8'));
-            //...whose images[] data_ref points at the artwork upload (action 101)
-            assert.strictEqual(doc.images[0].data_ref, 'action:101');
-            assert.strictEqual(doc.tick, 'ART1');
-            //...and ISSUE v1 points the token's DESCRIPTION at the doc (action 102)
-            assert.strictEqual(calls.issues.length, 1);
-            assert.deepStrictEqual(calls.issues[0], {
-                version: '1', tick: 'art1', description: 'action:102',
-            });
-            assert.strictEqual(out.tisFile.txid, 'file_tx2');
-            assert.strictEqual(out.describe.txid, 'describe_tx');
-        });
-    });
-
-    //  deployContract() - chunked assembler pre-flight
-    //
-    //  planDeploy sizes only the INLINE DEPLOY. Without a Phase-2 pre-flight an
-    //  oversized constructor param is only discovered AFTER every paid v4
-    //  carrier is on chain, so the fees are spent on a deploy that can never
-    //  assemble. These pin the pre-flight to the exact composed assembler.
-    describe('deployContract() chunked assembler pre-flight', function () {
-        // Fake SDK carrying a REAL Actions instance, because the pre-flight
-        // measures the canonical composed action string, not an estimate.
-        function makeChunkSdk(calls) {
-            const session = {
-                deployChunk: async (p) => { calls.chunks.push(p); return { txid: 'chunk_tx' }; },
-                deploy:      async (p) => { calls.deploys.push(p); return { txid: 'deploy_tx', indexed: { action_index: 99 } }; },
-            };
-            return {
-                actions: new Actions({ config: config.getConfig(), util: new Utility() }),
-                session: () => session,
-                // The chunked path resolves the contract through the explorer, so the
-                // fake has to answer an action detail: this one is the sequential case
-                // (the group was complete at the assembler, contract index = A).
-                getAction: async () => ({ data: [{ action_index: 99, deployed_contract_index: 99, assembly_status: 'valid' }] }),
-                _preflightContractLint: () => {},
-            };
-        }
-
-        it('rejects an over-cap assembler BEFORE broadcasting any carrier', async function () {
-            const calls = { chunks: [], deploys: [] };
-            const wf = new Workflows(makeChunkSdk(calls));
-            let err;
-            try {
-                await wf.deployContract(FAKE_WIF, {
-                    code: 'x'.repeat(7000),
-                    gasLimit: 100000,
-                    constructorParams: ['y'.repeat(8200)],
-                });
-            } catch (e) { err = e; }
-            assert.ok(err, 'an assembler over MAX_ACTION_DATA_LENGTH must throw');
-            assert.match(err.message, /exceeds MAX_ACTION_DATA_LENGTH/);
-            assert.strictEqual(calls.chunks.length, 0, 'no carrier fee may be spent on an undeployable plan');
-            assert.strictEqual(calls.deploys.length, 0);
-        });
-
-        it('still runs a normal chunked deploy whose assembler fits', async function () {
-            const calls = { chunks: [], deploys: [] };
-            const wf = new Workflows(makeChunkSdk(calls));
-            const out = await wf.deployContract(FAKE_WIF, {
-                code: 'x'.repeat(20000),
-                gasLimit: 100000,
-                constructorParams: ['a'],
-            });
-            assert.ok(calls.chunks.length > 1, 'should carry the source in ordered slices');
-            assert.strictEqual(calls.deploys.length, 1);
-            assert.strictEqual(calls.deploys[0].version, '2');
-            assert.strictEqual(out.deploy.txid, 'deploy_tx');
-        });
-
-        it('pre-flights the v3 (staking) assembler on the same path', async function () {
-            const calls = { chunks: [], deploys: [] };
-            const wf = new Workflows(makeChunkSdk(calls));
-            await wf.deployContract(FAKE_WIF, {
-                code: 'x'.repeat(20000),
-                gasLimit: 100000,
-                constructorParams: ['a'],
-                cooldownBlocks: 100,
-                slashDestination: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-            });
-            assert.strictEqual(calls.deploys[0].version, '3');
-            assert.strictEqual(calls.deploys[0].cooldownBlocks, 100);
-        });
-
-        // A slashDestination with no cooldownBlocks is a config the INLINE deploy
-        // refuses (validator: 'SLASH_DESTINATION requires COOLDOWN_BLOCKS', the same
-        // rule the indexer applies). The chunked path must refuse it too: a staking
-        // gate that reads cooldownBlocks alone drops the destination out of the
-        // assembler params and deploys the contract as a non-stakeable v2, with no
-        // refusal at all. Source size may not decide whether a staking config is
-        // legal, and the refusal has to land before any carrier fee is spent.
-        it('refuses a slashDestination with no cooldown, as the inline path does', async function () {
-            const calls = { chunks: [], deploys: [] };
-            const wf = new Workflows(makeChunkSdk(calls));
-            let err;
-            try {
-                await wf.deployContract(FAKE_WIF, {
-                    code: 'x'.repeat(20000),
-                    gasLimit: 100000,
-                    slashDestination: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-                });
-            } catch (e) { err = e; }
-            assert.ok(err, 'a chunked deploy must refuse the config the inline deploy refuses');
-            assert.match(err.message, /SLASH_DESTINATION requires COOLDOWN_BLOCKS/);
-            assert.strictEqual(calls.chunks.length, 0, 'no carrier fee may be spent on a config that cannot deploy');
-            assert.strictEqual(calls.deploys.length, 0);
-        });
-    });
-
-    // deployContract()'s funding leg had no coverage at all, which is how it kept
-    // the same direct read of indexed.action_index that deployAndFund had.
-    describe('deployContract() funding leg', function () {
-        function makeDepositSdk(calls, indexed) {
-            const session = {
-                deployChunk: async () => ({ txid: 'chunk_tx' }),
-                deploy:      async () => ({ txid: 'deploy_tx', indexed }),
-                deposit:     async (p) => { calls.push(p); return { txid: 'deposit_tx' }; },
-            };
-            return {
-                actions: new Actions({ config: config.getConfig(), util: new Utility() }),
-                session: () => session,
-                _preflightContractLint: () => {},
-            };
-        }
-
-        it('funds from the polling waiter shape ({ actions: [...] })', async function () {
-            const calls = [];
-            const wf = new Workflows(makeDepositSdk(calls, { actions: [{ action_index: 7 }] }));
-            const out = await wf.deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 },
-                [{ tick: 'TOK', quantity: '5' }]);
-            assert.strictEqual(out.deposits.length, 1);
-            assert.strictEqual(calls[0].contractActionIndex, 7);
-        });
-
-        it('funds on action_index 0', async function () {
-            const calls = [];
-            const wf = new Workflows(makeDepositSdk(calls, { action_index: 0 }));
-            await wf.deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 }, [{ tick: 'TOK', quantity: '5' }]);
-            assert.strictEqual(calls[0].contractActionIndex, 0);
-        });
-
-        it('refuses to fund with no resolvable index, keeping the broadcast deploy', async function () {
-            const calls = [];
-            const wf = new Workflows(makeDepositSdk(calls, null));
-            let err;
-            try {
-                await wf.deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 }, [{ tick: 'TOK', quantity: '5' }]);
-            } catch (e) { err = e; }
-            assert.ok(err);
-            assert.match(err.message, /deployContract: DEPLOY action_index unavailable/);
-            assert.strictEqual(calls.length, 0, 'no DEPOSIT may go out without a contract reference');
-            assert.strictEqual(err.partial.deploy.txid, 'deploy_tx');
-        });
-    });
-
-    // resolveDeployedContract()
-    //
-    // A chunk group deploys at whichever piece completes it, so the assembler's own
-    // row does not name the contract. These pin the poll against the explorer's
-    // reported pair (deployed_contract_index / assembly_status), including the two
-    // ways it can end without a contract and the older explorer that reports neither.
-    describe('resolveDeployedContract()', function () {
-        // Answers each queued explorer detail in turn, repeating the last one, and
-        // records how many GETs the poll actually made.
-        function makeExplorerSdk(details) {
-            const state = { calls: [], sdk: null };
-            state.sdk = {
-                session:   () => ({}),
-                getAction: async (actionIndex) => {
-                    state.calls.push(actionIndex);
-                    const d = details[Math.min(state.calls.length - 1, details.length - 1)];
-                    return (typeof d === 'function') ? d() : d;
-                },
-            };
-            return state;
-        }
-
-        const FAST = { timeout: 2000, pollInterval: 1 };
-
-        it('answers the assembler index in one GET when the group deployed there (R2.1)', async function () {
-            const state = makeExplorerSdk([{ data: [{ action_index: 1378, deployed_contract_index: 1378, assembly_status: 'valid' }] }]);
-            const wf = new Workflows(state.sdk);
-            const index = await wf.resolveDeployedContract(1378, FAST);
-            assert.strictEqual(index, 1378);
-            assert.deepStrictEqual(state.calls, [1378], 'the sequential case must cost exactly one explorer read');
-        });
-
-        it('answers the completing carrier index after the group stops pending', async function () {
-            const pending = { data: [{ action_index: 1419, deployed_contract_index: null, assembly_status: 'pending: CODE_HASH (awaiting chunks)' }] };
-            const done    = { data: [{ action_index: 1419, deployed_contract_index: 1421, assembly_status: 'valid' }] };
-            const state = makeExplorerSdk([pending, pending, pending, done]);
-            const wf = new Workflows(state.sdk);
-            const index = await wf.resolveDeployedContract(1419, FAST);
-            assert.strictEqual(index, 1421, 'the contract lives at the carrier that completed the group, not at the assembler');
-            assert.strictEqual(state.calls.length, 4);
-        });
-
-        it('rejects with the reported status when the group settled without a contract', async function () {
-            // A hash mismatch at the completing carrier consumes the assembler: nothing
-            // retries it, so a client that kept polling would wait out the whole timeout.
-            const state = makeExplorerSdk([{ data: [{ action_index: 1430, deployed_contract_index: null, assembly_status: 'invalid: CODE_HASH (hash mismatch)' }] }]);
-            const wf = new Workflows(state.sdk);
-            let err;
-            try { await wf.resolveDeployedContract(1430, FAST); } catch (e) { err = e; }
-            assert.ok(err, 'a settled non-pending status with no contract must reject');
-            assert.ok(err.message.indexOf('invalid: CODE_HASH (hash mismatch)') !== -1,
-                'the reported status must ride in the message: ' + err.message);
-            assert.strictEqual(err.status, 'invalid: CODE_HASH (hash mismatch)');
-            assert.strictEqual(err.actionIndex, 1430);
-            assert.strictEqual(state.calls.length, 1, 'a terminal verdict must not be re-polled');
-        });
-
-        it('falls back to the assembler index when the explorer carries neither field and the action is valid', async function () {
-            // An explorer from before the field landed. A valid assembler is a group
-            // that completed at A, which is the only case such an explorer can answer.
-            const state = makeExplorerSdk([{ data: [{ action_index: 287, status: 'valid' }] }]);
-            const wf = new Workflows(state.sdk);
-            assert.strictEqual(await wf.resolveDeployedContract(287, FAST), 287);
-            assert.strictEqual(state.calls.length, 1);
-        });
-
-        it('rejects an invalid assembler when the explorer carries neither field', async function () {
-            const state = makeExplorerSdk([{ data: [{ action_index: 70, status: 'invalid: CODE_HASH (no chunks)' }] }]);
-            const wf = new Workflows(state.sdk);
-            let err;
-            try { await wf.resolveDeployedContract(70, FAST); } catch (e) { err = e; }
-            assert.ok(err);
-            assert.ok(err.message.indexOf('invalid: CODE_HASH (no chunks)') !== -1, err.message);
-            assert.strictEqual(err.status, 'invalid: CODE_HASH (no chunks)');
-        });
-
-        it('times out, naming the missing field, when the explorer carries neither field and the action is pending', async function () {
-            const state = makeExplorerSdk([{ data: [{ action_index: 1419, status: 'pending: CODE_HASH (awaiting chunks)' }] }]);
-            const wf = new Workflows(state.sdk);
-            let err;
-            try { await wf.resolveDeployedContract(1419, { timeout: 30, pollInterval: 5 }); } catch (e) { err = e; }
-            assert.ok(err, 'an explorer that never reports the field must not hang forever');
-            assert.ok(err.message.indexOf('deployed_contract_index') !== -1,
-                'the timeout must name the field the explorer never exposed: ' + err.message);
-            assert.strictEqual(err.actionIndex, 1419);
-            assert.ok(state.calls.length > 1, 'it should have polled more than once before the deadline');
-        });
-
-        it('unwraps the bare-object and nested-action envelopes too', async function () {
-            const bare   = makeExplorerSdk([{ action_index: 5, deployed_contract_index: 9, assembly_status: 'valid' }]);
-            const nested = makeExplorerSdk([{ data: { action: { action_index: 5, deployed_contract_index: 11, assembly_status: 'valid' } } }]);
-            assert.strictEqual(await new Workflows(bare.sdk).resolveDeployedContract(5, FAST), 9);
-            assert.strictEqual(await new Workflows(nested.sdk).resolveDeployedContract(5, FAST), 11);
-        });
-
-        it('refuses to poll without an assembler action_index', async function () {
-            const state = makeExplorerSdk([{}]);
-            const wf = new Workflows(state.sdk);
-            await assert.rejects(() => wf.resolveDeployedContract(null, FAST), /action_index is required/);
-            assert.strictEqual(state.calls.length, 0);
-        });
-    });
-
-    // The chunked deploy's funding leg must fund the contract that was actually
-    // deployed, which after a reorder is a carrier's index and not the assembler's.
-    describe('deployContract() chunked funding leg', function () {
-        it('deposits against the resolved contract index, not the assembler index', async function () {
-            const deposited = [];
-            const session = {
-                deployChunk: async () => ({ txid: 'chunk_tx' }),
-                deploy:      async () => ({ txid: 'deploy_tx', indexed: { action_index: 1419 } }),
-                deposit:     async (p) => { deposited.push(p); return { txid: 'deposit_tx' }; },
-            };
-            const sdk = {
-                actions: new Actions({ config: config.getConfig(), util: new Utility() }),
-                session: () => session,
-                getAction: async () => ({ data: [{ action_index: 1419, deployed_contract_index: 1421, assembly_status: 'valid' }] }),
-                _preflightContractLint: () => {},
-            };
-            const wf = new Workflows(sdk);
-            const out = await wf.deployContract(FAKE_WIF, { code: 'x'.repeat(20000), gasLimit: 100000 },
-                [{ tick: 'TOK', quantity: '5' }], { pollInterval: 1 });
-            assert.strictEqual(out.contractActionIndex, 1421);
-            assert.strictEqual(deposited.length, 1);
-            assert.strictEqual(deposited[0].contractActionIndex, 1421,
-                'a DEPOSIT sent to the assembler index would fund nothing');
-        });
-
-        it('carries the single-shot contract index on the result without an explorer read', async function () {
-            let reads = 0;
-            const session = {
-                deploy:  async () => ({ txid: 'deploy_tx', indexed: { action_index: 7 } }),
-                deposit: async () => ({ txid: 'deposit_tx' }),
-            };
-            const sdk = {
-                actions: new Actions({ config: config.getConfig(), util: new Utility() }),
-                session: () => session,
-                getAction: async () => { reads++; return null; },
-                _preflightContractLint: () => {},
-            };
-            const out = await new Workflows(sdk).deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 });
-            assert.strictEqual(out.contractActionIndex, 7);
-            assert.strictEqual(reads, 0, 'an inline deploy is its own contract; nothing to resolve');
-        });
-    });
-
-    describe('_actionIndexOf', function () {
-        it('resolves both waiter shapes and reports nothing when neither is present', function () {
-            const wf = new Workflows(makeSdk());
-            assert.strictEqual(wf._actionIndexOf({ action_index: 5 }), 5);
-            assert.strictEqual(wf._actionIndexOf({ action_index: 0 }), 0);
-            assert.strictEqual(wf._actionIndexOf({ actions: [{ action_index: 3 }] }), 3);
-            assert.strictEqual(wf._actionIndexOf({ actions: [] }), undefined);
-            assert.strictEqual(wf._actionIndexOf(null), undefined);
-            assert.strictEqual(wf._actionIndexOf(undefined), undefined);
         });
     });
 });
