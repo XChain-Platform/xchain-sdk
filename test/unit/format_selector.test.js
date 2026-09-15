@@ -59,6 +59,9 @@ describe('FormatSelector.select(): basic action-type selection', function () {
         });
 
     });
+});
+
+describe('FormatSelector.select(): basic action-type selection', function () {
 
     // ISSUE
     describe('ISSUE', function () {
@@ -111,6 +114,9 @@ describe('FormatSelector.select(): basic action-type selection', function () {
         });
 
     });
+});
+
+describe('FormatSelector.select(): basic action-type selection', function () {
 
     // ORDER
     describe('ORDER', function () {
@@ -152,6 +158,9 @@ describe('FormatSelector.select(): basic action-type selection', function () {
         });
 
     });
+});
+
+describe('FormatSelector.select(): basic action-type selection', function () {
 
     // SLEEP
     describe('SLEEP', function () {
@@ -187,10 +196,7 @@ describe('FormatSelector.select(): basic action-type selection', function () {
         });
 
     });
-
 });
-
-
 // select() - picks the smallest (shortest) format
 
 describe('FormatSelector.select(): picks the smallest format', function () {
@@ -272,6 +278,9 @@ describe('FormatSelector.select(): error cases', function () {
             .to.throw(SDKFormatError)
             .and.satisfy(err => err.code === 'NO_MATCHING_FORMAT');
     });
+});
+
+describe('FormatSelector.select(): error cases', function () {
 
     it('NO_MATCHING_FORMAT error includes action and populatedFields in details', function () {
         let caught;
@@ -307,7 +316,6 @@ describe('FormatSelector.select(): error cases', function () {
         expect(caught).to.be.instanceOf(SDKFormatError);
         expect(caught.name).to.equal('SDKFormatError');
     });
-
 });
 
 
@@ -348,422 +356,4 @@ describe('FormatSelector.serialize(): basic serialization', function () {
         expect(result).to.equal('SLEEP|0|900000');
     });
 
-});
-
-
-// serialize() - trailing empty fields are trimmed
-
-describe('FormatSelector.serialize(): trailing empty fields are trimmed', function () {
-
-    it('SEND v0 without MEMO has no trailing pipe', function () {
-        const result = FormatSelector.serialize('SEND', 0, {
-            TICK: 'TOKEN', AMOUNT: '100', DESTINATION: 'addr1'
-        });
-        expect(result).to.equal('SEND|0|TOKEN|100|addr1');
-        expect(result.endsWith('|')).to.be.false;
-    });
-
-    it('SWEEP v0 with only DESTINATION trims trailing empty fields', function () {
-        // v0: VERSION|DESTINATION|BALANCES|OWNERSHIPS|ORDERS|SWAPS|DISPENSERS|MEMO
-        // All flags and MEMO are empty → trimmed
-        const result = FormatSelector.serialize('SWEEP', 0, { DESTINATION: 'myaddr' });
-        expect(result).to.equal('SWEEP|0|myaddr');
-        expect(result.endsWith('|')).to.be.false;
-    });
-
-    it('BROADCAST v0 with only MESSAGE trims empty VALUE', function () {
-        // v0: VERSION|MESSAGE|VALUE (VALUE is empty and trailing, so trimmed)
-        const result = FormatSelector.serialize('BROADCAST', 0, { MESSAGE: 'ping' });
-        expect(result).to.equal('BROADCAST|0|ping');
-    });
-
-    it('does not trim fields that are empty but not trailing', function () {
-        // SLEEP v1: VERSION|RESUME_BLOCK|TICK|MEMO
-        // If RESUME_BLOCK is provided and TICK is empty but MEMO is provided,
-        // TICK must appear as an empty segment between them.
-        const result = FormatSelector.serialize('SLEEP', 1, {
-            RESUME_BLOCK: '800000', TICK: '', MEMO: 'wake up'
-        });
-        expect(result).to.equal('SLEEP|1|800000||wake up');
-    });
-
-});
-
-
-// serialize() - VERSION is auto-populated
-
-describe('FormatSelector.serialize(): VERSION is auto-populated', function () {
-
-    it('VERSION appears as the first pipe-separated field after the action name', function () {
-        const result = FormatSelector.serialize('SEND', 0, {
-            TICK: 'TOKEN', AMOUNT: '1', DESTINATION: 'addr1'
-        });
-        const parts = result.split('|');
-        // parts[0] = action name, parts[1] = VERSION value
-        expect(parts[0]).to.equal('SEND');
-        expect(parts[1]).to.equal('0');
-    });
-
-    it('correct version number appears for v1', function () {
-        const result = FormatSelector.serialize('ISSUE', 1, { TICK: 'TOKEN' });
-        const parts = result.split('|');
-        expect(parts[1]).to.equal('1');
-    });
-
-    it('correct version number appears for v3', function () {
-        // SEND v3 is a repeated-field format, so it is built from LEGS
-        const result = FormatSelector.serialize('SEND', 3, {
-            LEGS: [{ TICK: 'TOKEN', AMOUNT: '1', DESTINATION: 'addr1' }]
-        });
-        const parts = result.split('|');
-        expect(parts[1]).to.equal('3');
-    });
-
-});
-
-
-// serialize() - empty / missing fields become empty strings between pipes
-
-describe('FormatSelector.serialize(): empty / missing fields become empty strings', function () {
-
-    it('ORDER v0 with GIVE_TICK and GET_TICK but no GIVE_COIN produces empty segment for GIVE_COIN', function () {
-        // v0: VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_OWNERSHIP|GET_COIN|GET_TICK|GET_AMOUNT|GET_OWNERSHIP|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
-        const result = FormatSelector.serialize('ORDER', 0, {
-            GIVE_TICK: 'TOK1',
-            GET_TICK: 'TOK2'
-        });
-        const parts = result.split('|');
-        // parts[0]=ORDER, parts[1]=0, parts[2]=GIVE_COIN, parts[3]=GIVE_TICK, parts[4]=GIVE_AMOUNT, parts[5]=GIVE_OWNERSHIP, parts[6]=GET_COIN, parts[7]=GET_TICK
-        expect(parts[2]).to.equal('');      // GIVE_COIN is empty
-        expect(parts[3]).to.equal('TOK1'); // GIVE_TICK is present
-        expect(parts[4]).to.equal('');      // GIVE_AMOUNT is empty
-        expect(parts[5]).to.equal('');      // GIVE_OWNERSHIP is empty
-        expect(parts[6]).to.equal('');      // GET_COIN is empty
-        expect(parts[7]).to.equal('TOK2'); // GET_TICK is present
-    });
-
-    it('undefined field becomes empty string', function () {
-        const result = FormatSelector.serialize('SEND', 0, {
-            TICK: 'TOKEN', AMOUNT: undefined, DESTINATION: 'addr1'
-        });
-        const parts = result.split('|');
-        // parts: SEND|0|TOKEN||addr1
-        expect(parts[3]).to.equal(''); // AMOUNT is undefined → empty string
-        expect(parts[4]).to.equal('addr1');
-    });
-
-    it('null field becomes empty string', function () {
-        const result = FormatSelector.serialize('SEND', 0, {
-            TICK: 'TOKEN', AMOUNT: null, DESTINATION: 'addr1'
-        });
-        const parts = result.split('|');
-        expect(parts[3]).to.equal(''); // AMOUNT is null → empty string
-    });
-
-});
-
-
-// getFormatFields()
-
-describe('FormatSelector.getFormatFields()', function () {
-
-    it('returns correct ordered array for SEND v0', function () {
-        const result = FormatSelector.getFormatFields('SEND', 0);
-        expect(result).to.deep.equal(['VERSION', 'TICK', 'AMOUNT', 'DESTINATION', 'MEMO']);
-    });
-
-    it('returns correct ordered array for ISSUE v1', function () {
-        const result = FormatSelector.getFormatFields('ISSUE', 1);
-        expect(result).to.deep.equal(['VERSION', 'TICK', 'DESCRIPTION', 'MEMO']);
-    });
-
-    it('returns correct ordered array for SLEEP v0', function () {
-        const result = FormatSelector.getFormatFields('SLEEP', 0);
-        expect(result).to.deep.equal(['VERSION', 'RESUME_BLOCK', 'MEMO']);
-    });
-
-    it('returns correct ordered array for SLEEP v1', function () {
-        const result = FormatSelector.getFormatFields('SLEEP', 1);
-        expect(result).to.deep.equal(['VERSION', 'RESUME_BLOCK', 'TICK', 'MEMO']);
-    });
-
-    it('returns array (not a string)', function () {
-        const result = FormatSelector.getFormatFields('SEND', 0);
-        expect(result).to.be.an('array');
-    });
-
-    it('repeating-field formats include duplicates in the array', function () {
-        // SEND v1: VERSION|TICK|AMOUNT|DESTINATION|AMOUNT|DESTINATION|MEMO
-        const result = FormatSelector.getFormatFields('SEND', 1);
-        const amountCount = result.filter(f => f === 'AMOUNT').length;
-        const destCount = result.filter(f => f === 'DESTINATION').length;
-        expect(amountCount).to.equal(2);
-        expect(destCount).to.equal(2);
-    });
-
-});
-
-
-// getPopulatedFields()
-
-describe('FormatSelector.getPopulatedFields()', function () {
-
-    it('returns keys whose values are non-null, non-undefined, non-empty strings', function () {
-        const result = FormatSelector.getPopulatedFields({
-            TICK: 'TOKEN', AMOUNT: '100', DESTINATION: 'addr1'
-        });
-        expect(result).to.include.members(['TICK', 'AMOUNT', 'DESTINATION']);
-        expect(result).to.have.length(3);
-    });
-
-    it('filters out null values', function () {
-        const result = FormatSelector.getPopulatedFields({ TICK: 'TOKEN', AMOUNT: null });
-        expect(result).to.deep.equal(['TICK']);
-    });
-
-    it('filters out undefined values', function () {
-        const result = FormatSelector.getPopulatedFields({ TICK: 'TOKEN', AMOUNT: undefined });
-        expect(result).to.deep.equal(['TICK']);
-    });
-
-    it('filters out empty string values', function () {
-        const result = FormatSelector.getPopulatedFields({ TICK: 'TOKEN', AMOUNT: '' });
-        expect(result).to.deep.equal(['TICK']);
-    });
-
-    it('returns an empty array when all fields are empty', function () {
-        const result = FormatSelector.getPopulatedFields({ TICK: null, AMOUNT: undefined, MEMO: '' });
-        expect(result).to.deep.equal([]);
-    });
-
-    it('returns an empty array for an empty object', function () {
-        const result = FormatSelector.getPopulatedFields({});
-        expect(result).to.deep.equal([]);
-    });
-
-    it('includes fields with numeric zero value (0)', function () {
-        // 0 is not null/undefined/empty-string, so it should be kept
-        const result = FormatSelector.getPopulatedFields({ DECIMALS: 0, TICK: 'TOKEN' });
-        expect(result).to.include('DECIMALS');
-    });
-
-    it('includes fields with boolean false value', function () {
-        // false is not null/undefined/empty-string, so it should be kept
-        const result = FormatSelector.getPopulatedFields({ LOCK_MINT: false, TICK: 'TOKEN' });
-        expect(result).to.include('LOCK_MINT');
-    });
-
-});
-
-
-// estimateLength()
-
-describe('FormatSelector.estimateLength()', function () {
-
-    it('returns a positive integer', function () {
-        const len = FormatSelector.estimateLength('SEND', 0, {
-            TICK: 'TOKEN', AMOUNT: '100', DESTINATION: 'addr1'
-        });
-        expect(len).to.be.a('number');
-        expect(len).to.be.greaterThan(0);
-        expect(Number.isInteger(len)).to.be.true;
-    });
-
-    it('computes correct byte count for SEND v0 with TOKEN/100/addr1', function () {
-        // FORMAT: SEND|VERSION|TICK|AMOUNT|DESTINATION|MEMO
-        // Serialized (trailing MEMO trimmed): SEND|0|TOKEN|100|addr1
-        // estimateLength does NOT trim; it counts all fields including trailing empty ones.
-        // Fields: VERSION=0(1), TICK=TOKEN(5), AMOUNT=100(3), DESTINATION=addr1(5), MEMO='empty'(0)
-        // Pipes between fields: 4 (one between each of the 5 format fields)
-        // action prefix: SEND|(5 chars)
-        // total = 5 + 1 + 5 + 3 + 5 + 0 + 4 = 23
-        const len = FormatSelector.estimateLength('SEND', 0, {
-            TICK: 'TOKEN', AMOUNT: '100', DESTINATION: 'addr1'
-        });
-        expect(len).to.equal(23);
-    });
-
-    it('longer field values produce larger estimates', function () {
-        const short = FormatSelector.estimateLength('SEND', 0, {
-            TICK: 'A', AMOUNT: '1', DESTINATION: 'B'
-        });
-        const long = FormatSelector.estimateLength('SEND', 0, {
-            TICK: 'LONGTOKEN', AMOUNT: '999999999', DESTINATION: 'a_very_long_address_string'
-        });
-        expect(long).to.be.greaterThan(short);
-    });
-
-    it('returns a smaller estimate for a shorter format version', function () {
-        // ISSUE v1 (4 fields) vs ISSUE v0 (25 fields) with only TICK populated
-        const lenV1 = FormatSelector.estimateLength('ISSUE', 1, { TICK: 'TOKEN' });
-        const lenV0 = FormatSelector.estimateLength('ISSUE', 0, { TICK: 'TOKEN' });
-        expect(lenV1).to.be.lessThan(lenV0);
-    });
-
-    it('is consistent with actual serialized output length (no trailing trim)', function () {
-        // estimateLength counts all format slots including trailing empty ones, so it may be
-        // >= the trimmed serialized length. Confirm it is at least as large.
-        const fields = { TICK: 'TOKEN', AMOUNT: '50', DESTINATION: 'addr1' };
-        const estimated = FormatSelector.estimateLength('SEND', 0, fields);
-        const serialized = FormatSelector.serialize('SEND', 0, fields);
-        expect(estimated).to.be.at.least(serialized.length);
-    });
-
-});
-
-// Explicit version + rest-field handling
-describe('FormatSelector: explicit version + rest fields', function () {
-
-    it('honours a valid explicit version', function () {
-        const result = FormatSelector.select('SEND', { TICK: 'X', AMOUNT: '1', DESTINATION: 'a' }, 0);
-        expect(result.version).to.equal(0);
-    });
-
-    it('throws INVALID_VERSION for an undefined explicit version', function () {
-        expect(() => FormatSelector.select('SEND', { TICK: 'X' }, 99))
-            .to.throw(SDKFormatError).that.has.property('code', 'INVALID_VERSION');
-    });
-
-    it('serialize expands a rest-field into individual pipe segments', function () {
-        // DEPLOY v0 = VERSION|CODE_ENCODING|GAS_LIMIT|...CONSTRUCTOR_PARAMS
-        const out = FormatSelector.serialize('DEPLOY', 0, {
-            CODE_ENCODING: 'base64', GAS_LIMIT: '100', CONSTRUCTOR_PARAMS: ['a', 'b', 'c'],
-        });
-        expect(out).to.equal('DEPLOY|0|base64|100|a|b|c');
-    });
-
-    it('serialize emits nothing for an empty/absent rest-field array', function () {
-        const out = FormatSelector.serialize('DEPLOY', 0, { CODE_ENCODING: 'base64', GAS_LIMIT: '100' });
-        expect(out).to.equal('DEPLOY|0|base64|100');
-    });
-
-    it('serialize coerces null/undefined rest-field items to empty segments', function () {
-        const out = FormatSelector.serialize('DEPLOY', 0, {
-            CODE_ENCODING: 'b', GAS_LIMIT: '1', CONSTRUCTOR_PARAMS: ['x', null, 'z'],
-        });
-        expect(out).to.equal('DEPLOY|0|b|1|x||z');
-    });
-
-    it('estimateLength accounts for rest-field array contents', function () {
-        const withParams = FormatSelector.estimateLength('DEPLOY', 0, {
-            CODE_ENCODING: 'base64', GAS_LIMIT: '100', CONSTRUCTOR_PARAMS: ['aaaa', 'bbbb'],
-        });
-        const without = FormatSelector.estimateLength('DEPLOY', 0, {
-            CODE_ENCODING: 'base64', GAS_LIMIT: '100',
-        });
-        expect(withParams).to.be.greaterThan(without);
-    });
-});
-
-// #3918: a PINNED version obeys the same no-data-loss rule as auto-selection.
-// STAKE v3 alone carries TARGET_CONTRACT_INDEX|TICK; pinning v1 used to serialize
-// those routing fields away and stake to the wrong destination, silently.
-
-describe('FormatSelector.select(): a pinned version never silently drops a field (#3918)', function () {
-
-    const STAKE_ROUTED = {
-        AMOUNT: '100', SIGNING_PUBKEY: 'aa'.repeat(32),
-        TARGET_CONTRACT_INDEX: '42', TICK: 'XCHAIN',
-    };
-
-    it('STAKE v1 has no slot for TARGET_CONTRACT_INDEX/TICK, so pinning it throws', function () {
-        expect(() => FormatSelector.select('STAKE', STAKE_ROUTED, 1))
-            .to.throw(SDKFormatError, /has no slot for/);
-    });
-
-    it('the error is NO_MATCHING_FORMAT and names the dropped fields in its detail', function () {
-        try {
-            FormatSelector.select('STAKE', STAKE_ROUTED, 1);
-            expect.fail('should have thrown');
-        } catch (e) {
-            expect(e.code).to.equal('NO_MATCHING_FORMAT');
-            expect(e.details.userFieldsNotInFormat).to.include('TARGET_CONTRACT_INDEX');
-            expect(e.details.userFieldsNotInFormat).to.include('TICK');
-            expect(e.details.version).to.equal(1);
-        }
-    });
-
-    it('UNSTAKE v0 is the same shape of defect and throws too', function () {
-        expect(() => FormatSelector.select('UNSTAKE', {
-            AMOUNT: '5', SIGNING_PUBKEY: 'bb'.repeat(32),
-            TARGET_CONTRACT_INDEX: '7', TICK: 'XCHAIN',
-        }, 0)).to.throw(SDKFormatError, /has no slot for/);
-    });
-
-    it('STAKE v1 and v2 (identical field lists) still both select for a fitting payload', function () {
-        const fitting = { AMOUNT: '100', SIGNING_PUBKEY: 'aa'.repeat(32) };
-        expect(FormatSelector.select('STAKE', fitting, 1).version).to.equal(1);
-        expect(FormatSelector.select('STAKE', fitting, 2).version).to.equal(2);
-    });
-
-    it('auto-selection (no pin) still finds STAKE v3 for the routed payload', function () {
-        expect(FormatSelector.select('STAKE', STAKE_ROUTED).version).to.equal(3);
-    });
-});
-
-// select() - explicit VERSION shape
-//
-// VERSION is a non-negative integer on the wire. The old code ran a bare
-// Number() over whatever the caller passed, which read true, [1], '0x1', '1e0',
-// '1.0' and ' 1 ' as version 1, and '' and [] as version 0. The format lookup
-// bounded the RESULT to a defined version so nothing misbehaved, but this SDK
-// is published and the accepted shape of a public input should not be whatever
-// Number() manages to salvage.
-
-describe('FormatSelector.select(): explicit VERSION must be a canonical integer', function () {
-
-    const ACCEPTED = [
-        ['integer number', 1, 1],
-        ['zero', 0, 0],
-        ['decimal-integer string', '1', 1],
-        ['zero string', '0', 0],
-        // A leading zero cannot mean a different version, so rejecting it would
-        // only break callers for no gain.
-        ['leading-zero string', '01', 1],
-    ];
-
-    for (const [label, input, expected] of ACCEPTED) {
-        it('accepts a ' + label, function () {
-            const r = FormatSelector.select('SEND', { TICK: 'T', AMOUNT: '1', DESTINATION: 'd' }, input);
-            expect(r.version).to.equal(expected);
-        });
-    }
-
-    const REJECTED = [
-        ['boolean true', true],
-        ['hex string', '0x1'],
-        ['exponent string', '1e0'],
-        ['decimal-point string', '1.0'],
-        ['whitespace-padded string', ' 1 '],
-        ['empty string', ''],
-        ['array', [1]],
-        ['empty array', []],
-        ['object', {}],
-        ['fractional number', 1.5],
-        ['negative number', -1],
-        ['NaN', NaN],
-    ];
-
-    for (const [label, input] of REJECTED) {
-        it('rejects a ' + label + ' with INVALID_VERSION', function () {
-            expect(() => FormatSelector.select('SEND', { TICK: 'T', AMOUNT: '1', DESTINATION: 'd' }, input))
-                .to.throw(SDKFormatError, /VERSION must be a non-negative integer/);
-        });
-    }
-
-    it('still rejects a well-shaped version the action does not define', function () {
-        expect(() => FormatSelector.select('SEND', { TICK: 'T', AMOUNT: '1', DESTINATION: 'd' }, 99))
-            .to.throw(SDKFormatError, /Version 99 is not defined for SEND/);
-    });
-
-    it('the error names the value it refused, so the caller can see what it sent', function () {
-        try {
-            FormatSelector.select('SEND', { TICK: 'T', AMOUNT: '1', DESTINATION: 'd' }, '0x1');
-            expect.fail('should have thrown');
-        } catch (e) {
-            expect(e.code).to.equal('INVALID_VERSION');
-            expect(e.message).to.include('"0x1"');
-            expect(e.details.version).to.equal('0x1');
-        }
-    });
 });
