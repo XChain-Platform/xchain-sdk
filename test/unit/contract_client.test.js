@@ -70,6 +70,14 @@ describe('ContractClient', function () {
             }
         });
 
+    });
+
+});
+
+describe('ContractClient', function () {
+
+    describe('constructor', function () {
+
         // An index Number() cannot hold exactly must FAIL CLOSED. Before the guard
         // '9007199254740993' was stored as ...992, so every deposit, withdraw,
         // execute and wait on the client silently addressed a neighbouring
@@ -110,6 +118,10 @@ describe('ContractClient', function () {
         });
     });
 
+});
+
+describe('ContractClient', function () {
+
     describe('call()', function () {
         it('delegates to sdk.execute with correct params', async function () {
             let sdk = makeSdk();
@@ -129,6 +141,10 @@ describe('ContractClient', function () {
         });
     });
 
+});
+
+describe('ContractClient', function () {
+
     describe('deposit()', function () {
         it('delegates to sdk.deposit with correct params', async function () {
             let sdk = makeSdk();
@@ -141,6 +157,10 @@ describe('ContractClient', function () {
         });
     });
 
+});
+
+describe('ContractClient', function () {
+
     describe('withdraw()', function () {
         it('delegates to sdk.withdraw with correct params', async function () {
             let sdk = makeSdk();
@@ -152,6 +172,10 @@ describe('ContractClient', function () {
             assert.strictEqual(result.params.quantity, '50');
         });
     });
+
+});
+
+describe('ContractClient', function () {
 
     describe('getInfo()', function () {
         it('fetches and caches contract info', async function () {
@@ -176,6 +200,10 @@ describe('ContractClient', function () {
         });
     });
 
+});
+
+describe('ContractClient', function () {
+
     describe('getState()', function () {
         it('returns state for a specific key', async function () {
             let sdk = makeSdk();
@@ -191,6 +219,10 @@ describe('ContractClient', function () {
             assert.deepStrictEqual(result, { key1: 'v1' });
         });
     });
+
+});
+
+describe('ContractClient', function () {
 
     // The settle gate: a caller holding a bound client asks the CONTRACT
     // whether the action executed, never the transaction whether it confirmed.
@@ -221,6 +253,10 @@ describe('ContractClient', function () {
         });
     });
 
+});
+
+describe('ContractClient', function () {
+
     describe('getExecutions()', function () {
         it('returns execution history', async function () {
             let sdk = makeSdk();
@@ -230,6 +266,10 @@ describe('ContractClient', function () {
             assert.strictEqual(result.data[0].method, 'run');
         });
     });
+
+});
+
+describe('ContractClient', function () {
 
     describe('getBalance()', function () {
         it('returns balance for a specific tick', async function () {
@@ -249,6 +289,10 @@ describe('ContractClient', function () {
         });
     });
 
+});
+
+describe('ContractClient', function () {
+
     describe('getManifest()', function () {
         it('delegates to explorer.getContractManifest with the bound index', async function () {
             let capturedIdx;
@@ -263,6 +307,10 @@ describe('ContractClient', function () {
             assert.deepStrictEqual(m, { permissions: ['MINT'], maxTakeBps: 100 });
         });
     });
+
+});
+
+describe('ContractClient', function () {
 
     describe('parseManifest()', function () {
         // Contract identity (meta_*) rides the same explorer object as the permissions
@@ -294,6 +342,14 @@ describe('ContractClient', function () {
                 { permissions: null, maxTakeBps: null, ...NO_META }
             );
         });
+
+    });
+
+});
+
+describe('ContractClient', function () {
+
+    describe('parseManifest()', function () {
 
         it('admits meta_name, meta_description, meta_version and a parsed meta object', function () {
             assert.deepStrictEqual(

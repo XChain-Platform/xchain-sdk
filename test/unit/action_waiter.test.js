@@ -138,6 +138,12 @@ describe('ActionWaiter.waitForTxid status honesty', function () {
             (err) => err.code === 'CONFIRMATION_TIMEOUT');
     });
 
+});
+
+describe('ActionWaiter.waitForTxid status honesty', function () {
+
+    const TXID = 'cc'.repeat(32);
+
     it('flags an action the indexer reports without a status as unread, not confirmed', async function () {
         // BET cancel/resolve (indexer bet.js: formats 1 and 3 write no typed row)
         // reach the explorer with a NULL status. Reporting that as 'valid' is an
@@ -192,25 +198,25 @@ describe('ActionWaiter.waitForTxid status honesty', function () {
 // WebSocket fast-path: a live WS emits one NEW_ACTION per action. The handler
 // must honor opts.actionIndex the same way the poll path does, or a neighboring
 // action's event settles the wait with the wrong action's status.
+// Fake SDK with an event-emitting WS. `txResult` is what the explorer poll
+// returns (default null = poll never resolves). For a TARGETED wait the WS path
+// settles directly, so the poll result is irrelevant; for an UNTARGETED wait the
+// WS event triggers an authoritative poll, so the tx must be supplied there.
+function makeWsWaiter(txResult = null) {
+    const listeners = {};
+    const ws = {
+        isConnected: () => true,
+        on:  (evt, fn) => { (listeners[evt] = listeners[evt] || []).push(fn); },
+        off: (evt, fn) => { listeners[evt] = (listeners[evt] || []).filter(f => f !== fn); },
+        emit:(evt, msg) => { (listeners[evt] || []).slice().forEach(fn => fn(msg)); },
+    };
+    const sdk = { ws, _requireExplorer: () => ({ getTransaction: async () => txResult }) };
+    return { waiter: new ActionWaiter(sdk), ws };
+}
+
 describe('ActionWaiter.waitForTxid WebSocket actionIndex filtering', function () {
 
     const TXID = 'bb'.repeat(32);
-
-    // Fake SDK with an event-emitting WS. `txResult` is what the explorer poll
-    // returns (default null = poll never resolves). For a TARGETED wait the WS path
-    // settles directly, so the poll result is irrelevant; for an UNTARGETED wait the
-    // WS event triggers an authoritative poll, so the tx must be supplied there.
-    function makeWsWaiter(txResult = null) {
-        const listeners = {};
-        const ws = {
-            isConnected: () => true,
-            on:  (evt, fn) => { (listeners[evt] = listeners[evt] || []).push(fn); },
-            off: (evt, fn) => { listeners[evt] = (listeners[evt] || []).filter(f => f !== fn); },
-            emit:(evt, msg) => { (listeners[evt] || []).slice().forEach(fn => fn(msg)); },
-        };
-        const sdk = { ws, _requireExplorer: () => ({ getTransaction: async () => txResult }) };
-        return { waiter: new ActionWaiter(sdk), ws };
-    }
 
     it('ignores a neighbor action_index event and settles on the target action', async function () {
         const { waiter, ws } = makeWsWaiter();
@@ -230,6 +236,12 @@ describe('ActionWaiter.waitForTxid WebSocket actionIndex filtering', function ()
         const result = await p;
         assert.strictEqual(result.action_index, '2');
     });
+
+});
+
+describe('ActionWaiter.waitForTxid WebSocket actionIndex filtering', function () {
+
+    const TXID = 'bb'.repeat(32);
 
     it('without actionIndex, a WS event triggers an authoritative poll of the whole tx', async function () {
         // Untargeted wait: the WS event is only a "tx is indexed" signal. The result
@@ -264,6 +276,12 @@ describe('ActionWaiter.waitForTxid WebSocket actionIndex filtering', function ()
         ws.emit('NEW_ACTION', { data: { tx_hash: TXID, action_index: 0, status: 'valid' } });
         await assert.rejects(() => p, /ACTION_REJECTED|invalid/);
     });
+
+});
+
+describe('ActionWaiter.waitForTxid WebSocket actionIndex filtering', function () {
+
+    const TXID = 'bb'.repeat(32);
 
     it('a targeted event carrying NO status defers to the poll instead of settling', async function () {
         // The WS payload for some actions arrives without a status. Settling from it

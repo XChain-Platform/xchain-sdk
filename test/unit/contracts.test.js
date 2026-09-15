@@ -56,6 +56,16 @@ describe('ContractUtils', function () {
         });
     });
 
+});
+
+describe('ContractUtils', function () {
+
+    let utils;
+
+    beforeEach(function () {
+        utils = new ContractUtils();
+    });
+
     describe('decode()', function () {
         it('decodes a valid base64 string', function () {
             let b64 = Buffer.from('world', 'utf8').toString('base64');
@@ -92,6 +102,16 @@ describe('ContractUtils', function () {
         });
     });
 
+});
+
+describe('ContractUtils', function () {
+
+    let utils;
+
+    beforeEach(function () {
+        utils = new ContractUtils();
+    });
+
     describe('checkCodeSize()', function () {
         it('returns withinLimit=true for small code', function () {
             let result = utils.checkCodeSize('let x = 1;');
@@ -120,6 +140,16 @@ describe('ContractUtils', function () {
         });
     });
 
+});
+
+describe('ContractUtils', function () {
+
+    let utils;
+
+    beforeEach(function () {
+        utils = new ContractUtils();
+    });
+
     describe('validate()', function () {
         it('returns valid=true for valid JS', function () {
             let result = utils.validate('var x = 1; x + 2;');
@@ -144,6 +174,20 @@ describe('ContractUtils', function () {
             assert.strictEqual(result.valid, false);
             assert.ok(result.error.includes('65536'));
         });
+
+    });
+
+});
+
+describe('ContractUtils', function () {
+
+    let utils;
+
+    beforeEach(function () {
+        utils = new ContractUtils();
+    });
+
+    describe('validate()', function () {
 
         it('returns valid=false when source contains __gas', function () {
             // This branch only fires if acorn is installed and parses successfully
@@ -182,6 +226,16 @@ describe('ContractUtils', function () {
         });
     });
 
+});
+
+describe('ContractUtils', function () {
+
+    let utils;
+
+    beforeEach(function () {
+        utils = new ContractUtils();
+    });
+
     describe('checkFloatUsage()', function () {
         it('returns empty array for integer-only code', function () {
             let warnings = utils.checkFloatUsage('var x = 1;');
@@ -201,6 +255,16 @@ describe('ContractUtils', function () {
             let warnings = utils.checkFloatUsage('}{{{');
             assert.ok(Array.isArray(warnings));
         });
+    });
+
+});
+
+describe('ContractUtils', function () {
+
+    let utils;
+
+    beforeEach(function () {
+        utils = new ContractUtils();
     });
 
     describe('_countForStatements()', function () {
@@ -224,6 +288,16 @@ describe('ContractUtils', function () {
             let count = utils._countForStatements('for (var k in obj) {}');
             assert.strictEqual(count, 0);
         });
+    });
+
+});
+
+describe('ContractUtils', function () {
+
+    let utils;
+
+    beforeEach(function () {
+        utils = new ContractUtils();
     });
 
     describe('suggestGasLimit()', function () {

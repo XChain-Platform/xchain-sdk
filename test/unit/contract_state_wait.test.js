@@ -114,6 +114,14 @@ describe('ActionWaiter contract state gate', function () {
             assert.strictEqual(result.state.raised, 900);
         });
 
+    });
+
+});
+
+describe('ActionWaiter contract state gate', function () {
+
+    describe('waitForContractState', function () {
+
         it('with a key alone, gates on the key EXISTING', async function () {
             const waiter = makeWaiter({ state: [
                 stateEnvelope([]),
@@ -147,6 +155,14 @@ describe('ActionWaiter contract state gate', function () {
                 assert.strictEqual(err.details.state.status, 'OPEN');
             }
         });
+
+    });
+
+});
+
+describe('ActionWaiter contract state gate', function () {
+
+    describe('waitForContractState', function () {
 
         it('settles on the first read when the state already holds', async function () {
             const waiter = makeWaiter({ state: [stateEnvelope([['status', 'FUNDED']])] });
@@ -187,6 +203,10 @@ describe('ActionWaiter contract state gate', function () {
         });
     });
 
+});
+
+describe('ActionWaiter contract state gate', function () {
+
     describe('waitForContractBalance', function () {
 
         it('waits until the deposit is CREDITED, not until the tx is indexed', async function () {
@@ -225,6 +245,14 @@ describe('ActionWaiter contract state gate', function () {
             assert.strictEqual(waiter._calls.balance, 2);
         });
 
+    });
+
+});
+
+describe('ActionWaiter contract state gate', function () {
+
+    describe('waitForContractBalance', function () {
+
         it('ignores another tick the contract happens to hold', async function () {
             const waiter = makeWaiter({ balance: [
                 balanceEnvelope([['OTHER', '9000']]),
@@ -258,6 +286,10 @@ describe('ActionWaiter contract state gate', function () {
             }
         });
     });
+
+});
+
+describe('ActionWaiter contract state gate', function () {
 
     describe('state normalization', function () {
 

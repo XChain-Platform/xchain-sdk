@@ -100,6 +100,10 @@ describe('ActionWaiter explorer target injection', function () {
         assert.strictEqual(ctorCalls, 0, 'the constructor target must be superseded');
     });
 
+});
+
+describe('ActionWaiter explorer target injection', function () {
+
     it('explorerUrl + explorerPort build a client aimed at the venue', function () {
         const { sdk } = sharedOnlySdk();
         const waiter = new ActionWaiter(sdk, { explorerUrl: '127.0.0.1', explorerPort: 3520 });
@@ -124,6 +128,10 @@ describe('ActionWaiter explorer target injection', function () {
         assert.strictEqual(result.action_index, 7);
         assert.strictEqual(calls.shared, 0);
     });
+
+});
+
+describe('ActionWaiter explorer target injection', function () {
 
     it('an overridden wait ignores the SDK WebSocket (it follows the OTHER stack)', async function () {
         // A foreign stack's NEW_ACTION for the same txid must not settle a wait

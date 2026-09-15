@@ -153,6 +153,10 @@ describe('Security: ticker references cannot smuggle wire delimiters', function 
     expect(errors.some(e => e.code === 'FORBIDDEN_CHARACTER')).to.equal(true);
   });
 
+});
+
+describe('Security: ticker references cannot smuggle wire delimiters', function () {
+
   it('still rejects a delimiter inside a ^ID reference, as a bad id', function () {
     // The '^' branch is covered by its own numeric check rather than the new one:
     // isNumeric tests the whole remainder, so '1|memo' is not numeric. Pinned so
