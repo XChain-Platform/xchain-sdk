@@ -29,30 +29,8 @@
 const { FINDING_CODES, MAX_REFILLS, EXPIRATION_MAX } = require('../constants.js');
 const numeric = require('../numeric.js');
 const { resolveDispenserState, resolveGiveRemaining } = require('../resolvers.js');
-const { getCoinConfig } = require('../../coins/index.js');
-
-// Decimal places of the chain coin a GET_COIN names, read from the vendored coin
-// registry so the precision rule below cannot drift from the indexer's
-// COIN_DECIMALS. Null for anything that is not a native coin code.
-function nativeCoinDecimals(coin) {
-    const m = /^[TR]?(BTC|LTC|DOGE)$/.exec(String(coin || '').toUpperCase());
-    if (!m) return null;
-    try { return getCoinConfig(m[1], 'mainnet').decimals; } catch (e) { return null; }
-}
-
-// Strictly-positive test that answers false, never throws, on a value the
-// bignumber parser rejects: the indexer's own positivity rule reads a
-// non-numeric string as "not greater than zero" too.
-function isStrictlyPositive(v) {
-    try { return numeric.isPositive(v); } catch (e) { return false; }
-}
-
-// A dispenser prices itself when it names neither a FIAT_CODE nor an
-// ORACLE_ADDRESS; only then is GET_AMOUNT the price and subject to the
-// amount-positivity rules.
-function isSelfPriced(fiatCode, oracleAddress) {
-    return !fiatCode && !oracleAddress;
-}
+const { checkGiveAmount, checkSelfPrice, declareAmountRepresentability, checkDispensePrice }
+    = require('./dispenser/amount_rules.js');
 
 /*
  * PRICE v1 oracle usage fee. A Mode B dispenser - one naming an
@@ -111,125 +89,31 @@ function checkExpirationRange(ctx) {
         { field: 'EXPIRATION', value: expiration, constraint: { min: '0', max: EXPIRATION_MAX } });
 }
 
-async function checkDispenser(ctx) {
-    checkExpirationRange(ctx);
-    const version = String(ctx.parsed.version);
-    if (version === '0') {
-        // Open: flat hasBalance(GIVE_ESCROW), skipped when
-        // GIVE_OWNERSHIP=1 (dispenser.js). EXPIRATION is block TIME,
-        // not height - local warning only.
-        const giveTick = ctx.field('GIVE_TICK');
-        const escrow = ctx.field('GIVE_ESCROW');
-        const giveOwnership = ctx.field('GIVE_OWNERSHIP') === '1';
-        if (!giveOwnership && giveTick && escrow && ctx.source) {
-            const balance = await ctx.balance(ctx.source, giveTick);
-            if (balance === null) {
-                ctx.addUnverified(FINDING_CODES.BALANCE_INSUFFICIENT, 'balance lookup unavailable for ' + giveTick);
-            } else {
-                ctx.markRun(FINDING_CODES.BALANCE_INSUFFICIENT);
-                if (!numeric.gte(balance, escrow)) {
-                    // §4.7 netting, same treatment as the SEND check.
-                    const inFlight = ctx.deltaApplied(giveTick);
-                    const netted = numeric.isPositive(inFlight);
-                    ctx.addFinding(FINDING_CODES.BALANCE_INSUFFICIENT, 'error',
-                        netted
-                            ? `Balance of ${giveTick} (${balance} after ${inFlight} already committed from this wallet) `
-                                + `does not cover the escrow (${escrow}).`
-                            : `Balance of ${giveTick} (${balance}) does not cover the escrow (${escrow}).`,
-                        { tick: giveTick, balance, escrow, ...(netted ? { localDeltaApplied: inFlight } : {}) });
-                }
-            }
+// The balance half of the escrow check on a create, given the balance the
+// caller looked up (null when that lookup was unavailable).
+function reportEscrowBalance(ctx, giveTick, escrow, balance) {
+    if (balance === null) {
+        ctx.addUnverified(FINDING_CODES.BALANCE_INSUFFICIENT, 'balance lookup unavailable for ' + giveTick);
+    } else {
+        ctx.markRun(FINDING_CODES.BALANCE_INSUFFICIENT);
+        if (!numeric.gte(balance, escrow)) {
+            // §4.7 netting, same treatment as the SEND check.
+            const inFlight = ctx.deltaApplied(giveTick);
+            const netted = numeric.isPositive(inFlight);
+            ctx.addFinding(FINDING_CODES.BALANCE_INSUFFICIENT, 'error',
+                netted
+                    ? `Balance of ${giveTick} (${balance} after ${inFlight} already committed from this wallet) `
+                        + `does not cover the escrow (${escrow}).`
+                    : `Balance of ${giveTick} (${balance}) does not cover the escrow (${escrow}).`,
+                { tick: giveTick, balance, escrow, ...(netted ? { localDeltaApplied: inFlight } : {}) });
         }
-        // A balance dispenser must hand out something. Mirrors the Format-0
-        // create rule in xchain-indexer/src/actions/dispenser.js: an absent or
-        // non-positive GIVE_AMOUNT with GIVE_OWNERSHIP=0 opens a dispenser that
-        // settles buyer payments as VALID fills crediting nothing, because every
-        // downstream guard reads a non-positive GIVE_AMOUNT as "ownership
-        // dispenser" and skips, while the auto-close threshold is that same
-        // non-positive value, so it never closes and keeps absorbing payments.
-        //
-        // Warning rather than error, and deliberately so: the handler gates the
-        // rejection behind dispenser_give_amount_activation, and preflight runs at
-        // AUTHORING time with no block time to test the flag-day against. Below
-        // the activation the chain still accepts this create, so calling it an
-        // error would refuse a transaction the network takes. Above it, the
-        // warning is the only notice a client gets before spending the fee. Same
-        // treatment, and the same reasoning, as the `^id` caret-ref activation.
-        if (!giveOwnership) {
-            const giveAmount = ctx.field('GIVE_AMOUNT');
-            if (!giveAmount || !numeric.isPositive(giveAmount)) {
-                ctx.addFinding(FINDING_CODES.AMOUNT_NOT_POSITIVE, 'warning',
-                    'GIVE_AMOUNT is required and must be greater than 0 for a balance dispenser '
-                        + '(GIVE_OWNERSHIP=0); at or above the activation the indexer rejects this create, '
-                        + 'and below it the dispenser opens but credits nothing while absorbing payments.',
-                    { giveAmount: giveAmount ?? null, giveOwnership: '0' });
-            }
-        }
-        // A dispenser that names its own price must name a positive, well-formed
-        // one. Mirrors the two Format-0 rules xchain-indexer/src/actions/dispenser.js
-        // enforces behind dispenser_amount_positivity_activation: a native-coin-priced
-        // GET_AMOUNT (empty GET_TICK) is checked against COIN_DECIMALS, which the
-        // token-priced path always did and this path never had, and a GET_AMOUNT on
-        // a dispenser with neither FIAT_CODE nor ORACLE_ADDRESS must be strictly
-        // positive (the ORDER-AMT-1 shape). A negative price that reaches storage
-        // settles dust payments as valid fills and manufactures escrow on close.
-        //
-        // Warning rather than error, for exactly the GIVE_AMOUNT reasoning above:
-        // the handler gates both on the block's consensus time and pre-flight has
-        // no block time, so it cannot certify which side of the flag-day this
-        // create lands on. The 2026-09-09 ruling armed the gate at genesis on
-        // every network (dispenser_amount_positivity_activation reads `mainnet: 0`),
-        // so the unarmed-mainnet half of this reasoning no longer applies.
-        const getAmount = ctx.field('GET_AMOUNT');
-        if (isSelfPriced(ctx.field('FIAT_CODE'), ctx.field('ORACLE_ADDRESS'))) {
-            const decimals = ctx.field('GET_TICK') ? null : nativeCoinDecimals(ctx.field('GET_COIN'));
-            if (getAmount && decimals !== null && !numeric.isValidAmountFormat(decimals, getAmount)) {
-                ctx.addFinding(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'warning',
-                    `GET_AMOUNT (${getAmount}) is not a valid ${ctx.field('GET_COIN')} amount at ${decimals} decimals; `
-                        + 'at or above the activation the indexer rejects this create.',
-                    { getAmount, getCoin: ctx.field('GET_COIN'), decimals });
-            } else if (!getAmount || !isStrictlyPositive(getAmount)) {
-                ctx.addFinding(FINDING_CODES.AMOUNT_NOT_POSITIVE, 'warning',
-                    'GET_AMOUNT is required and must be greater than 0 on a dispenser that names its own price '
-                        + '(no FIAT_CODE, no ORACLE_ADDRESS); at or above the activation the indexer rejects this create, '
-                        + 'and below it a non-positive price settles dust payments as valid fills.',
-                    { getAmount: getAmount ?? null });
-            }
-        }
-        // GIVE_AMOUNT, GIVE_ESCROW, GET_AMOUNT and FIAT_AMOUNT are all judged above (or
-        // by validator.js) against the LEGACY amount-format rule, see numeric.js. Above
-        // its flag-day the indexer also requires each of them to denote the number the
-        // ledger credits, which pre-flight cannot decide: it needs the activation state
-        // of the block that will carry the create. Declared rather than raised, because
-        // neither mainnet nor testnet is armed and rejecting here would block a create
-        // both planes accept.
-        ctx.addUnverified('AMOUNT_REPRESENTABILITY',
-            'above its flag-day every amount on this create must be a plain decimal numeral denoting the '
-            + 'number the ledger credits, so exponent notation and an integer too wide for the ledger '
-            + 'aggregation are rejected instead of crediting a different number; the activation state of '
-            + 'the including block is server-side only, and neither mainnet nor testnet is armed for it');
-        ctx.addUnverified('DISPENSER_ORIGIN_STANDING',
-            'origin-standing / UTXO-freshness gate is server-side (and unreliable even on the quote path)');
-        noteOracleFee(ctx, ctx.field('ORACLE_ADDRESS'));
-        return;
     }
+}
 
-    // v1 cancel / v2 edit: dispenser exists; owner is SOURCE or
-    // GET_ADDRESS (dispenser.js:298-302); live lifecycle read from the
-    // action route's state block (warning-max).
-    const idx = ctx.field('DISPENSER_ACTION_INDEX');
-    if (!idx) return;
-    const { found, state, dispenser } = await resolveDispenserState(ctx, idx);
-    ctx.markRun(FINDING_CODES.DISPENSER_NOT_FOUND);
-    if (found === undefined) {
-        ctx.addUnverified(FINDING_CODES.DISPENSER_NOT_FOUND, 'dispenser lookup unavailable');
-        return;
-    }
-    if (found === false) {
-        ctx.addFinding(FINDING_CODES.DISPENSER_NOT_FOUND, 'error',
-            `Dispenser #${idx} does not exist.`, { dispenserActionIndex: idx });
-        return;
-    }
+// A cancel or edit against a dispenser the lookup found: warn when its
+// resolved state is not open, and when SOURCE is neither its owner nor its
+// GET_ADDRESS.
+function reportEditStanding(ctx, idx, state, dispenser) {
     if (state === null) {
         ctx.addUnverified(FINDING_CODES.DISPENSER_LIFECYCLE, 'the lookup carried no dispenser status');
     } else if (state !== 'open') {
@@ -246,11 +130,11 @@ async function checkDispenser(ctx) {
                 { dispenserActionIndex: idx, owner, getAddress });
         }
     }
+}
 
-    // A v2 edit that tops up GIVE_ESCROW is a REFILL, and refills carry two
-    // rules a plain edit does not: the MAX_REFILLS cap and, on a Mode
-    // B dispenser, the oracle usage fee on the amount being added.
-    if (version !== '2') return;
+// The GIVE_ESCROW half of a v2 edit: the ownership-escrow rule first, then
+// the refill rules when the edit actually tops the escrow up.
+function checkEditEscrow(ctx, idx, dispenser) {
     const topUp = ctx.field('GIVE_ESCROW');
 
     // An ownership dispenser never holds balance escrow, on edit as on create.
@@ -293,6 +177,78 @@ async function checkDispenser(ctx) {
     // is indistinguishable from a passing one.
     ctx.addUnverified(FINDING_CODES.DISPENSER_MAX_REFILLS,
         `the ${MAX_REFILLS}-refill cap is not derivable client-side: /dispenser_edits/ exposes no give_escrow`);
+}
+
+async function checkDispenser(ctx) {
+    checkExpirationRange(ctx);
+    const version = String(ctx.parsed.version);
+    if (version === '0') {
+        // Open: flat hasBalance(GIVE_ESCROW), skipped when
+        // GIVE_OWNERSHIP=1 (dispenser.js). EXPIRATION is block TIME,
+        // not height - local warning only.
+        const giveTick = ctx.field('GIVE_TICK');
+        const escrow = ctx.field('GIVE_ESCROW');
+        const giveOwnership = ctx.field('GIVE_OWNERSHIP') === '1';
+        if (!giveOwnership && giveTick && escrow && ctx.source) {
+            const balance = await ctx.balance(ctx.source, giveTick);
+            reportEscrowBalance(ctx, giveTick, escrow, balance);
+        }
+        if (!giveOwnership) checkGiveAmount(ctx);
+        checkSelfPrice(ctx);
+        declareAmountRepresentability(ctx);
+        ctx.addUnverified('DISPENSER_ORIGIN_STANDING',
+            'origin-standing / UTXO-freshness gate is server-side (and unreliable even on the quote path)');
+        noteOracleFee(ctx, ctx.field('ORACLE_ADDRESS'));
+        return;
+    }
+
+    // v1 cancel / v2 edit: dispenser exists; owner is SOURCE or
+    // GET_ADDRESS (dispenser.js:298-302); live lifecycle read from the
+    // action route's state block (warning-max).
+    const idx = ctx.field('DISPENSER_ACTION_INDEX');
+    if (!idx) return;
+    const { found, state, dispenser } = await resolveDispenserState(ctx, idx);
+    ctx.markRun(FINDING_CODES.DISPENSER_NOT_FOUND);
+    if (found === undefined) {
+        ctx.addUnverified(FINDING_CODES.DISPENSER_NOT_FOUND, 'dispenser lookup unavailable');
+        return;
+    }
+    if (found === false) {
+        ctx.addFinding(FINDING_CODES.DISPENSER_NOT_FOUND, 'error',
+            `Dispenser #${idx} does not exist.`, { dispenserActionIndex: idx });
+        return;
+    }
+    reportEditStanding(ctx, idx, state, dispenser);
+
+    // A v2 edit that tops up GIVE_ESCROW is a REFILL, and refills carry two
+    // rules a plain edit does not: the MAX_REFILLS cap and, on a Mode
+    // B dispenser, the oracle usage fee on the amount being added.
+    if (version !== '2') return;
+    checkEditEscrow(ctx, idx, dispenser);
+}
+
+// Settlement PRICING sits underneath this declaration without changing what
+// Tier 2 can see. A gated change (BATCH_ISSUANCE_LIMITS, xchain-indexer
+// src/actions/dispense.js) makes one payment settle a bounded number of fills
+// rather than buying a full multiplier against every dispenser it reaches: the
+// handler keeps a running consumed-value tally and prices each dispenser
+// against what is LEFT, so where the flag day is armed a later dispenser behind
+// the same paid address can fail on a payment that settles it below the
+// threshold. It also records the attributed cost as the dispense row's
+// GET_AMOUNT rather than the whole payment.
+//
+// Neither is checkable here, and not merely inconvenient to check: the tally is
+// keyed on COIN_AMOUNT and on the SET of open dispensers behind the paid
+// address, and pre-flight is handed an action string naming one dispenser,
+// before any transaction (and therefore any payment value) exists. Nothing this
+// check reads changes either - give-remaining is the GIVE-token side and the
+// record correction has no client consumer here.
+// The tally's SCALE is conditional too, on its own flag-day: a token-denominated
+// payment nets at the paying tick's decimals rather than at 8, which moves the
+// fill count only where a sub-satoshi price rounds. Same unreadable inputs.
+function declareSettlementMatch(ctx) {
+    ctx.addUnverified('DISPENSE_SETTLEMENT_MATCH',
+        'exact settlement-output matching is structural and unknowable before the transaction exists');
 }
 
 async function checkDispense(ctx) {
@@ -338,50 +294,9 @@ async function checkDispense(ctx) {
             { dispenserActionIndex: idx, remaining, giveAmount });
     }
 
-    // The settlement half of dispenser_amount_positivity_activation
-    // (xchain-indexer src/actions/dispense.js): the fill count must be strictly
-    // positive, not merely non-zero, and a GET_AMOUNT the divide cannot parse is
-    // rejected at the divide. Against a SELF-PRICED dispenser the count is
-    // floor(payment / GET_AMOUNT), so a stored price that is non-numeric or not
-    // positive fails every dispense, whatever the payment. The FIAT and oracle
-    // paths price from elsewhere and are not predictable here.
-    //
-    // Warning, not error: the count rule is time-gated and pre-flight has no block
-    // time, while a create that stored such a price predates the activation by
-    // construction.
-    const getAmount = dispenser.get_amount ?? dispenser.GET_AMOUNT;
-    const selfPriced = isSelfPriced(dispenser.fiat_code ?? dispenser.FIAT_CODE,
-        dispenser.oracle_address ?? dispenser.ORACLE_ADDRESS);
-    if (selfPriced && getAmount !== undefined && getAmount !== null && String(getAmount) !== ''
-        && !isStrictlyPositive(String(getAmount))) {
-        ctx.addFinding(FINDING_CODES.AMOUNT_NOT_POSITIVE, 'warning',
-            `Dispenser #${idx} prices at GET_AMOUNT ${getAmount}, which is not a positive amount; `
-                + 'at or above the activation every dispense against it is rejected at settlement, '
-                + 'AFTER your native coin moves.',
-            { dispenserActionIndex: idx, getAmount: String(getAmount) });
-    }
+    checkDispensePrice(ctx, idx, dispenser);
 
-    // Settlement PRICING sits underneath this declaration without changing what
-    // Tier 2 can see. A gated change (BATCH_ISSUANCE_LIMITS, xchain-indexer
-    // src/actions/dispense.js) makes one payment settle a bounded number of fills
-    // rather than buying a full multiplier against every dispenser it reaches: the
-    // handler keeps a running consumed-value tally and prices each dispenser
-    // against what is LEFT, so where the flag day is armed a later dispenser behind
-    // the same paid address can fail on a payment that settles it below the
-    // threshold. It also records the attributed cost as the dispense row's
-    // GET_AMOUNT rather than the whole payment.
-    //
-    // Neither is checkable here, and not merely inconvenient to check: the tally is
-    // keyed on COIN_AMOUNT and on the SET of open dispensers behind the paid
-    // address, and pre-flight is handed an action string naming one dispenser,
-    // before any transaction (and therefore any payment value) exists. Nothing this
-    // check reads changes either - give-remaining is the GIVE-token side and the
-    // record correction has no client consumer here.
-    // The tally's SCALE is conditional too, on its own flag-day: a token-denominated
-    // payment nets at the paying tick's decimals rather than at 8, which moves the
-    // fill count only where a sub-satoshi price rounds. Same unreadable inputs.
-    ctx.addUnverified('DISPENSE_SETTLEMENT_MATCH',
-        'exact settlement-output matching is structural and unknowable before the transaction exists');
+    declareSettlementMatch(ctx);
 }
 
 module.exports = { checkDispenser, checkDispense };
