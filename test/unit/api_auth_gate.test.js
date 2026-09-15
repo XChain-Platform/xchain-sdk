@@ -15,7 +15,7 @@
  * XChain Platform SDK - API bearer-token auth gate tests
  *
  * These mount the SHIPPED gate from src/utils/api_guards.js (the same function
- * src/api.js mounts), not a reconstruction of it: src/api.js starts a live
+ * src/api/index.js mounts), not a reconstruction of it: src/api/index.js starts a live
  * server at require time (dotenv.config() + app.listen(SDK_API_PORT)) and so
  * cannot be require()'d by a unit test, which is exactly why the guards live in
  * their own module. A copied middleware here would stay green while the shipped
@@ -266,7 +266,7 @@ describe('API bearer-token auth gate', function () {
     });
 
     it('src/api.js mounts the shipped gate before the jsonRouter mount', () => {
-        const src = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
+        const src = fs.readFileSync(path.join(__dirname, '../../src/api/index.js'), 'utf8');
         const gateIdx   = src.indexOf('app.use(authGateMiddleware(');
         const routerIdx = src.indexOf('jsonRouter(');
         assert.notStrictEqual(gateIdx, -1, 'auth gate not mounted in src/api.js');
@@ -283,7 +283,7 @@ describe('API bearer-token auth gate', function () {
     });
 
     it('keeps ONE implementation of the gate: api.js holds no inline copy', () => {
-        const src = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
+        const src = fs.readFileSync(path.join(__dirname, '../../src/api/index.js'), 'utf8');
         // A second inline copy is how the behavioural tests above stop covering
         // the shipped path, so the tests refuse to let one come back.
         assert.ok(!/safeTokenEqual\(got,/.test(src),

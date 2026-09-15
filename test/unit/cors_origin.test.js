@@ -30,7 +30,7 @@ const express = require('express')
 const cors    = require('cors')
 const { parseCorsOrigin } = require('../../src/utils/cors_origin.js')
 
-// Mount cors exactly as src/api.js does (including its unset default of `false`,
+// Mount cors exactly as src/api/index.js does (including its unset default of `false`,
 // meaning CORS off) and ask what a browser would receive.
 async function acaoFor (rawEnv, origins) {
     const app = express()
@@ -162,7 +162,7 @@ describe('CORS_ORIGIN allowlist parsing', function () {
     // behavioural test above still passes against the helper in isolation.
     describe('src/api.js wiring', function () {
         it('mounts cors through parseCorsOrigin, never the raw env var', function () {
-            const src = require('fs').readFileSync(require('path').join(__dirname, '../../src/api.js'), 'utf8')
+            const src = require('fs').readFileSync(require('path').join(__dirname, '../../src/api/index.js'), 'utf8')
             // The variable is read through the config home's call-time getter, so
             // the wiring to pin is the parser wrapped around that read.
             assert.ok(/cors\(\{\s*origin:\s*parseCorsOrigin\(Config\.env\.corsOrigin\(\)\)/.test(src),

@@ -44,7 +44,7 @@ const chunkHelper      = require('./src/contract/chunk_helper.js');
 const CheckpointVerifier = require('./src/checkpoint.js');
 const LightClient        = require('./src/protocol/light_client.js');
 const PinnedCheckpoints  = require('./src/protocol/pinned_checkpoints.js');
-const { startREPL }   = require('./src/repl.js');
+const { startREPL }   = require('./src/cli/repl.js');
 const {
     SDKError,
     SDKValidationError,

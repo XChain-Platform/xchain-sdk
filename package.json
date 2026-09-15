@@ -78,7 +78,7 @@
     "hono": "^4.13.5"
   },
   "scripts": {
-    "api": "node ./src/api.js",
+    "api": "node ./src/api/index.js",
     "comment:lint": "The file-level half of the code-style rules, from the vendored eslint.config.js. Advisory: the pre-push structure gate is what actually binds, and it depends on neither eslint nor that file.",
     "lint": "eslint src test bin",
     "test": "mocha --timeout 5000 --recursive 'test/unit/**/*.test.js'",
@@ -107,7 +107,7 @@
     "test:fuzz": "mocha --timeout 0 --recursive 'test/fuzz/**/*.test.js'",
     "test:chaos": "mocha --timeout 10000 --recursive 'test/chaos/**/*.test.js'",
     "test:all": "mocha --timeout 0 --recursive test/",
-    "repl": "node src/repl.js",
+    "repl": "node src/cli/repl.js",
     "build": "npx browserify index.js -s XChainSDK -t [ babelify --presets [ @babel/preset-env ] --global ] | npx uglify-js --compress --mangle -o dist/xchain_sdk.min.js",
     "build:dev": "npx browserify index.js -s XChainSDK -t [ babelify --presets [ @babel/preset-env ] --global ] -o dist/xchain_sdk.js",
     "test:eval": "mocha --timeout 30000 --recursive 'test/eval/**/*.test.js'"

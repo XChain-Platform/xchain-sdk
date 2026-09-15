@@ -136,7 +136,7 @@ function createCoSignerApp(coSigner, opts = {}) {
     const token = opts.token || null;
     // Fail CLOSED on a missing token: a misconfigured sidecar (unset
     // COSIGNER_TOKEN) must not silently serve unauthenticated MuSig2 signatures.
-    // Mirrors the fail-closed auth gate in src/api.js. The gate is skippable
+    // Mirrors the fail-closed auth gate in src/api/index.js. The gate is skippable
     // only by a deliberate allowUnauthenticated:true (tests/regtest).
     if (!token) {
         if (opts.allowUnauthenticated !== true)
