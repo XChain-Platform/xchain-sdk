@@ -115,6 +115,54 @@ function createHostedCoSignerApp(opts = {}) {
     if (!tenants || tenants.length === 0)
         throw new Error('createHostedCoSignerApp requires a non-empty tenants array');
 
+    // Parse the rate bound, build the log, then index and vet every tenant
+    const { maxRequests, rateWindowMs } = resolveRateBound(opts);
+    const log = createHostedLog(opts);
+    const byTokenHash = indexTenants(tenants);
+
+    const maxBodyBytes = resolveMaxBodyBytes(opts.maxBodyBytes);
+
+    const app = express();
+    app.use(express.json({ limit: maxBodyBytes }));
+
+    app.post('/v1/cosign', createCosignHandler(byTokenHash, maxRequests, rateWindowMs, log));
+
+    // After the route: an oversize body is a stated capability limit, not a
+    // network fault (http_body_limit.js). No `version` is echoed here, as on the
+    // 401 path: the body never parsed, so there is no version to echo.
+    app.use(tooLargeHandler(maxBodyBytes, log));
+
+    /*
+     * Bind the app, refusing an insecure network listener.
+     *
+     * @param {object} args  { port, host, tls: { key, cert, ... } }
+     * @returns {http.Server|https.Server}
+     */
+    app.listenSecure = function listenSecure(args = {}) {
+        const host = args.host || '127.0.0.1';
+        const tls  = args.tls || null;
+        const loopback = LOOPBACK_HOSTS.has(host);
+
+        if (!loopback && !tls)
+            throw new Error(`refusing to bind ${host} without TLS: the bearer token IS spending authority ` +
+                'and every request carries transaction metadata, so a cleartext network listener leaks both. ' +
+                'Pass { tls: { key, cert } }, or bind 127.0.0.1 and terminate TLS in front.');
+        if (tls && (!tls.key || !tls.cert))
+            throw new Error('tls needs both key and cert');
+
+        if (tls) {
+            const https = require('https');
+            return https.createServer(tls, app).listen(args.port, host, args.onListening);
+        }
+        return app.listen(args.port, host, args.onListening);
+    };
+
+    return app;
+}
+
+// Parse the optional per-tenant request bound, refusing the removed
+// in-flight cap by name before either value is read.
+function resolveRateBound(opts) {
     // Removed, not ignored: an operator who set this believed a concurrency cap
     // was protecting the shared core, and it never could (HONEST LIMITS above).
     // Silently dropping the option would leave that belief in place, so this
@@ -134,6 +182,12 @@ function createHostedCoSignerApp(opts = {}) {
     if (!Number.isInteger(rateWindowMs) || rateWindowMs < 1)
         throw new Error('rateWindowMs must be a positive integer');
 
+    return { maxRequests, rateWindowMs };
+}
+
+// Build the (level, message, context) log every path uses: the operator's
+// sink when one was passed, otherwise the SDK logger.
+function createHostedLog(opts) {
     const sink = typeof opts.logger === 'function' ? opts.logger : null;
     const log = (level, message, context) => {
         if (sink) {
@@ -142,7 +196,12 @@ function createHostedCoSignerApp(opts = {}) {
         const line = `[cosigner-hosted] ${message}` + (context ? ' ' + JSON.stringify(context) : '');
         if (level === 'error') logger.error(line); else logger.warn(line);
     };
+    return log;
+}
 
+// Map sha256(token) to each tenant record, refusing a tenant that is unfit
+// to host: a bad id or token, no CoSigner, a shared store or no input cap.
+function indexTenants(tenants) {
     // byTokenHash keys on sha256(token) so tenant selection is a single hash
     // lookup rather than a walk comparing against every tenant's secret. The
     // full-token constant-time compare still runs afterwards, so a hash
@@ -193,13 +252,13 @@ function createHostedCoSignerApp(opts = {}) {
             rate: { count: 0, resetAt: 0 },
         });
     }
+    return byTokenHash;
+}
 
-    const maxBodyBytes = resolveMaxBodyBytes(opts.maxBodyBytes);
-
-    const app = express();
-    app.use(express.json({ limit: maxBodyBytes }));
-
-    app.post('/v1/cosign', (req, res) => {
+// Build the /v1/cosign handler: resolve the tenant from its token, charge
+// its request budget, refuse an unknown wire version or a malformed body.
+function createCosignHandler(byTokenHash, maxRequests, rateWindowMs, log) {
+    return (req, res) => {
         const auth = req.get('authorization') || '';
         const presented = auth.startsWith('Bearer ') ? auth.slice(7) : null;
 
@@ -250,61 +309,35 @@ function createHostedCoSignerApp(opts = {}) {
                 detail: 'psbt (hex) and a non-empty inputs[] of { index, agentPublicNonce } are required' });
         }
 
-        let result;
-        try {
-            result = tenant.coSigner.process({
-                psbt: body.psbt, inputs: body.inputs, sighashType: body.sighashType,
-                // §3.9, forwarded verbatim exactly as the single-tenant
-                // sidecar does. Dropping it here would not be a hole (the daemon
-                // fails closed on an envelope it was not given) but it would make
-                // the same request succeed on one surface and fail on the other.
-                envelope: body.envelope,
-            });
-        } catch (e) {
-            log('error', 'internal fault while processing a hosted co-sign request', {
-                tenant: tenant.id, message: e && e.message, code: e && e.code, stack: e && e.stack,
-            });
-            return res.status(500).json({ approved: false, reason: 'INTERNAL_ERROR', version: body.version });
-        }
-
-        if (result && result.approved !== true)
-            log('warn', 'hosted co-sign request denied',
-                { tenant: tenant.id, reason: result.reason, detail: result.detail });
-
-        return res.status(200).json(Object.assign({ version: body.version }, result));
-    });
-
-    // After the route: an oversize body is a stated capability limit, not a
-    // network fault (http_body_limit.js). No `version` is echoed here, as on the
-    // 401 path: the body never parsed, so there is no version to echo.
-    app.use(tooLargeHandler(maxBodyBytes, log));
-
-    /*
-     * Bind the app, refusing an insecure network listener.
-     *
-     * @param {object} args  { port, host, tls: { key, cert, ... } }
-     * @returns {http.Server|https.Server}
-     */
-    app.listenSecure = function listenSecure(args = {}) {
-        const host = args.host || '127.0.0.1';
-        const tls  = args.tls || null;
-        const loopback = LOOPBACK_HOSTS.has(host);
-
-        if (!loopback && !tls)
-            throw new Error(`refusing to bind ${host} without TLS: the bearer token IS spending authority ` +
-                'and every request carries transaction metadata, so a cleartext network listener leaks both. ' +
-                'Pass { tls: { key, cert } }, or bind 127.0.0.1 and terminate TLS in front.');
-        if (tls && (!tls.key || !tls.cert))
-            throw new Error('tls needs both key and cert');
-
-        if (tls) {
-            const https = require('https');
-            return https.createServer(tls, app).listen(args.port, host, args.onListening);
-        }
-        return app.listen(args.port, host, args.onListening);
+        return signAndRespond(tenant, body, log, res);
     };
+}
 
-    return app;
+// Hand a vetted request to its tenant's CoSigner and answer the verdict:
+// 200 with the result (logging a denial), or 500 when the daemon throws.
+function signAndRespond(tenant, body, log, res) {
+    let result;
+    try {
+        result = tenant.coSigner.process({
+            psbt: body.psbt, inputs: body.inputs, sighashType: body.sighashType,
+            // §3.9, forwarded verbatim exactly as the single-tenant
+            // sidecar does. Dropping it here would not be a hole (the daemon
+            // fails closed on an envelope it was not given) but it would make
+            // the same request succeed on one surface and fail on the other.
+            envelope: body.envelope,
+        });
+    } catch (e) {
+        log('error', 'internal fault while processing a hosted co-sign request', {
+            tenant: tenant.id, message: e && e.message, code: e && e.code, stack: e && e.stack,
+        });
+        return res.status(500).json({ approved: false, reason: 'INTERNAL_ERROR', version: body.version });
+    }
+
+    if (result && result.approved !== true)
+        log('warn', 'hosted co-sign request denied',
+            { tenant: tenant.id, reason: result.reason, detail: result.detail });
+
+    return res.status(200).json(Object.assign({ version: body.version }, result));
 }
 
 module.exports = { createHostedCoSignerApp, SUPPORTED_WIRE_VERSIONS, DEFAULT_RATE_WINDOW_MS };
