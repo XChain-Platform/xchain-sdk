@@ -22,6 +22,7 @@
  ********************************************************************/
 
 const crypto = require('crypto');
+const bitcoin = require('bitcoinjs-lib');
 const bitcoinMessage = require('bitcoinjs-message');
 const { ECPairFactory } = require('ecpair');
 const ecc = require('@bitcoinerlab/secp256k1');
@@ -135,7 +136,6 @@ class AuthUtils {
             );
 
             // Derive the address for the return value
-            const bitcoin = require('bitcoinjs-lib');
             let address;
             if (opts.segwitNative) {
                 address = bitcoin.payments.p2wpkh({ pubkey: keyPair.publicKey, network: net }).address;
