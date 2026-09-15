@@ -40,15 +40,20 @@ function codes(findings, code) {
     return findings.filter((f) => f.code === code);
 }
 
+function acceptedCommandFindings() {
+    const f = clientError(FC.TOKEN_NOT_FOUND, 1);
+    const findings = applyTier1([f], verdictWith(
+        [{ position: 0, action: 'SEND', status: 'valid', refused: null },
+            { position: 1, action: 'SEND', status: 'valid', refused: null }]));
+    return { f, findings };
+}
+
 describe('BATCH pre-flight (Tier 1 sub-command verdicts)', function () {
 
     describe('per-command precedence: Tier 1 outranks Tier 2 only where it judged', function () {
 
         it('a client error on a command the network ACCEPTED is downgraded', function () {
-            const f = clientError(FC.TOKEN_NOT_FOUND, 1);
-            const findings = applyTier1([f], verdictWith(
-                [{ position: 0, action: 'SEND', status: 'valid', refused: null },
-                    { position: 1, action: 'SEND', status: 'valid', refused: null }]));
+            const { f, findings } = acceptedCommandFindings();
             expect(f.severity).to.equal('info');
             expect(f._downgradedBy).to.equal('dryrun-valid');
             expect(computeVerdict(findings)).to.equal('pass');
