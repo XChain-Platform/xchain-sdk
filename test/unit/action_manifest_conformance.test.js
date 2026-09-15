@@ -72,34 +72,7 @@ describe('ACTION manifest conformance: sdk userEncodable set @regression', funct
             '. ' + EDIT_HINT);
     });
 
-    // The version arrays are only load-bearing if they are present and shaped
-    // right on exactly the authorable actions; a missing or malformed array
-    // would otherwise degrade the per-version check into a silent no-op.
-    describe('userEncodableVersions shape', function () {
-        it('every userEncodable action carries a sorted, unique, non-empty version array', function () {
-            const bad = [];
-            for (const action of manifestSlice('userEncodable')) {
-                const v = MANIFEST.actions[action].userEncodableVersions;
-                if (!Array.isArray(v) || v.length === 0) { bad.push(action + ': missing or empty'); continue; }
-                if (!v.every(n => Number.isInteger(n) && n >= 0)) { bad.push(action + ': non-integer version'); continue; }
-                if (new Set(v).size !== v.length) { bad.push(action + ': duplicate version'); continue; }
-                if (v.some((n, i) => i > 0 && n <= v[i - 1])) bad.push(action + ': not ascending');
-            }
-            assert.deepStrictEqual(bad, [],
-                'action-manifest.json userEncodableVersions is malformed: ' + JSON.stringify(bad) +
-                '. Every userEncodable action needs one ascending array of the FORMAT versions a user may author.');
-        });
-
-        it('no non-userEncodable action carries a version array', function () {
-            const stray = Object.entries(MANIFEST.actions)
-                .filter(([, v]) => !v.userEncodable && v.userEncodableVersions !== undefined)
-                .map(([k]) => k);
-            assert.deepStrictEqual(stray, [],
-                'userEncodableVersions on an action that is not userEncodable: ' + JSON.stringify(stray) +
-                '. Either flip userEncodable or drop the array; a version list on a non-authorable action ' +
-                'claims an authoring surface no guard checks.');
-        });
-    });
+    registerUserEncodableVersionsShapeTests();
 
     it('each Formats[ACTION] version set exactly equals its manifest userEncodableVersions', function () {
         const drift = {};
@@ -131,13 +104,59 @@ describe('ACTION manifest conformance: sdk userEncodable set @regression', funct
             'a matching version set must report clean');
     });
 
-    // Cross-check the audit itself against the indexer when the sibling is on
-    // disk. The manifest arrays were hand-audited against xchain-indexer's
-    // handlers, and a wrong entry fakes drift in this repo forever; this catches
-    // the mechanically checkable half, a version listed as authorable that the
-    // indexer cannot parse at all. The other half (a version the indexer parses
-    // but only accepts when it synthesized it, e.g. VOTE v2) stays a documented
-    // hand audit, recorded in the manifest notes.
+    registerIndexerHandlerAuditTests();
+
+    describe('byte-identity to canonical manifest', function () {
+        const DOCS = process.env.XCHAIN_DOCS_DIR || path.join(__dirname, '..', '..', '..', 'xchain-documentation');
+        const CANON = path.join(DOCS, 'protocol', 'action-manifest.json');
+        before(function () { if (!fs.existsSync(CANON)) { if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1') throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but canonical action-manifest.json not found at ' + CANON); this.skip(); } });
+        it('vendored test/fixtures/action-manifest.json is byte-identical to canonical', function () {
+            assert.strictEqual(fs.readFileSync(VENDORED, 'utf8'), fs.readFileSync(CANON, 'utf8'),
+                'vendored action-manifest.json drifted from canonical; edit ' +
+                'xchain-documentation/protocol/action-manifest.json and re-vendor all copies.');
+        });
+    });
+});
+
+// The version arrays are only load-bearing if they are present and shaped
+// right on exactly the authorable actions; a missing or malformed array
+// would otherwise degrade the per-version check into a silent no-op.
+function registerUserEncodableVersionsShapeTests() {
+    describe('userEncodableVersions shape', function () {
+        it('every userEncodable action carries a sorted, unique, non-empty version array', function () {
+            const bad = [];
+            for (const action of manifestSlice('userEncodable')) {
+                const v = MANIFEST.actions[action].userEncodableVersions;
+                if (!Array.isArray(v) || v.length === 0) { bad.push(action + ': missing or empty'); continue; }
+                if (!v.every(n => Number.isInteger(n) && n >= 0)) { bad.push(action + ': non-integer version'); continue; }
+                if (new Set(v).size !== v.length) { bad.push(action + ': duplicate version'); continue; }
+                if (v.some((n, i) => i > 0 && n <= v[i - 1])) bad.push(action + ': not ascending');
+            }
+            assert.deepStrictEqual(bad, [],
+                'action-manifest.json userEncodableVersions is malformed: ' + JSON.stringify(bad) +
+                '. Every userEncodable action needs one ascending array of the FORMAT versions a user may author.');
+        });
+
+        it('no non-userEncodable action carries a version array', function () {
+            const stray = Object.entries(MANIFEST.actions)
+                .filter(([, v]) => !v.userEncodable && v.userEncodableVersions !== undefined)
+                .map(([k]) => k);
+            assert.deepStrictEqual(stray, [],
+                'userEncodableVersions on an action that is not userEncodable: ' + JSON.stringify(stray) +
+                '. Either flip userEncodable or drop the array; a version list on a non-authorable action ' +
+                'claims an authoring surface no guard checks.');
+        });
+    });
+}
+
+// Cross-check the audit itself against the indexer when the sibling is on
+// disk. The manifest arrays were hand-audited against xchain-indexer's
+// handlers, and a wrong entry fakes drift in this repo forever; this catches
+// the mechanically checkable half, a version listed as authorable that the
+// indexer cannot parse at all. The other half (a version the indexer parses
+// but only accepts when it synthesized it, e.g. VOTE v2) stays a documented
+// hand audit, recorded in the manifest notes.
+function registerIndexerHandlerAuditTests() {
     describe('audit against the indexer handlers', function () {
         const INDEXER = process.env.XCHAIN_INDEXER_DIR ||
                         path.join(__dirname, '..', '..', '..', 'xchain-indexer');
@@ -150,10 +169,9 @@ describe('ACTION manifest conformance: sdk userEncodable set @regression', funct
             }
         });
 
-        // A handler is either a flat module or a feature directory with an
-        // index.js. Both are one handler to the indexer's own loader, so the audit
-        // has to resolve both or a moved handler reads as an action the indexer
-        // cannot process at all, which is the opposite of what the move did.
+        // The indexer loader accepts flat handler modules and feature directories
+        // whose entry is index.js. Resolving both forms keeps the audit aligned
+        // with the loader and prevents false unsupported-action reports.
         function handlerFile(action) {
             const base = path.join(ACTIONS_DIR, action.toLowerCase());
             for (const candidate of [base + '.js', path.join(base, 'index.js')])
@@ -181,15 +199,4 @@ describe('ACTION manifest conformance: sdk userEncodable set @regression', funct
                 'user-encodable would force an SDK Format that can only build dead transactions.');
         });
     });
-
-    describe('byte-identity to canonical manifest', function () {
-        const DOCS = process.env.XCHAIN_DOCS_DIR || path.join(__dirname, '..', '..', '..', 'xchain-documentation');
-        const CANON = path.join(DOCS, 'protocol', 'action-manifest.json');
-        before(function () { if (!fs.existsSync(CANON)) { if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1') throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but canonical action-manifest.json not found at ' + CANON); this.skip(); } });
-        it('vendored test/fixtures/action-manifest.json is byte-identical to canonical', function () {
-            assert.strictEqual(fs.readFileSync(VENDORED, 'utf8'), fs.readFileSync(CANON, 'utf8'),
-                'vendored action-manifest.json drifted from canonical; edit ' +
-                'xchain-documentation/protocol/action-manifest.json and re-vendor all copies.');
-        });
-    });
-});
+}
