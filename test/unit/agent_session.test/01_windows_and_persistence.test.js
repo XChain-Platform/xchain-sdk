@@ -1,0 +1,318 @@
+/*********************************************************************
+ *
+ * Copyright © 2025–2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ **********************************************************************
+ *
+ * Unit tests for src/cosigner/agent_session.js: the policy-bounded agent wallet.
+ * WalletSession.submit is stubbed so no encoder/explorer is touched;
+ * these tests exercise ONLY the policy layer and its persistence.
+ *
+ ********************************************************************/
+
+'use strict';
+
+const fs     = require('fs');
+const os     = require('os');
+const path   = require('path');
+const sinon  = require('sinon');
+const { expect } = require('chai');
+
+const WalletSession  = require('../../../src/utils/wallet_session.js');
+const AgentSession   = require('../../../src/cosigner/agent_session.js');
+const { SDKPolicyError } = require('../../../src/utils/errors.js');
+const { UNRESOLVED_TICK_BUCKET } = require('../../../src/cosigner/policy_evaluator.js');
+
+// Fake just enough of XChainSDK for the WalletSession constructor.
+const fakeSdk = {
+    wallet: {
+        importWIF: () => ({ publicKeyHex: '02ab', publicKey: Buffer.from('02ab', 'hex'), compressed: true }),
+        deriveAddress: () => 'agent1testaddress',
+    },
+};
+
+let tmpDir, stateFile, submitStub;
+
+// allowUnbounded / allowUnkeyedSubmits are explicit opt-outs, defaulted ON
+// here so every test below keeps exercising the behavior it was written
+// for; the new requirements get their own tests, which construct WITHOUT
+// these flags.
+const mk = (policy) => new AgentSession(fakeSdk, 'WIF', Object.assign({
+    allowedActions: ['SEND', 'MINT'],
+    allowUnbounded: true,
+    allowUnkeyedSubmits: true,
+    stateFile,
+}, policy));
+
+const expectDeny = async (fn, code) => {
+    try { await fn(); } catch (err) {
+        expect(err).to.be.instanceOf(SDKPolicyError);
+        expect(err.code).to.equal(code);
+        return err;
+    }
+    throw new Error(`expected SDKPolicyError ${code}`);
+};
+
+function registerHooks() {
+    beforeEach(() => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-session-'));
+        stateFile = path.join(tmpDir, 'usage.json');
+        // Stub the unlocked encode/sign/broadcast body both submit() paths funnel
+        // through (AgentSession.submit runs its policy check + record around
+        // super._submitInner under the shared serialization tail).
+        submitStub = sinon.stub(WalletSession.prototype, '_submitInner')
+            .resolves({ txid: 'tx123', status: 'valid' });
+    });
+
+    afterEach(() => {
+        submitStub.restore();
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+}
+
+describe('AgentSession (policy-bounded wallet)', () => {
+    registerHooks();
+
+    // windows + persistence
+
+    it('accumulates window usage and denies once the per-tick window cap would be crossed', async () => {
+        const s = mk({ maxPerWindow: { hours: 24, perTick: { TOK: '10' } } });
+        await s.send({ tick: 'TOK', amount: '4' });
+        await s.send({ tick: 'TOK', amount: '6' });                    // total 10 = cap
+        const err = await expectDeny(() => s.send({ tick: 'TOK', amount: '0.1' }),
+            'POLICY_WINDOW_AMOUNT_EXCEEDED');
+        expect(err.details.windowTotal).to.equal('10');
+    });
+
+    it('enforces the window action-count cap', async () => {
+        const s = mk({ maxPerWindow: { hours: 1, maxActions: 2 } });
+        await s.send({ tick: 'TOK', amount: '1' });
+        await s.mint({ tick: 'TOK', amount: '1' });
+        await expectDeny(() => s.send({ tick: 'TOK', amount: '1' }), 'POLICY_WINDOW_COUNT_EXCEEDED');
+    });
+
+    it('serializes concurrent submits so the window count cap cannot be bypassed', async () => {
+        // maxActions=2; fire three at once. The check (reads the window) and the
+        // record (writes it) must be atomic with the broadcast, or all three
+        // evaluate against the empty window and exceed the cap.
+        const s = mk({ maxPerWindow: { hours: 1, maxActions: 2 } });
+        const outcomes = await Promise.allSettled([
+            s.send({ tick: 'TOK', amount: '1' }),
+            s.send({ tick: 'TOK', amount: '1' }),
+            s.send({ tick: 'TOK', amount: '1' }),
+        ]);
+        const fulfilled = outcomes.filter((o) => o.status === 'fulfilled');
+        const rejected  = outcomes.filter((o) => o.status === 'rejected');
+        expect(fulfilled.length).to.equal(2);   // exactly the cap
+        expect(rejected.length).to.equal(1);
+        expect(rejected[0].reason).to.be.instanceOf(SDKPolicyError);
+        expect(rejected[0].reason.code).to.equal('POLICY_WINDOW_COUNT_EXCEEDED');
+        expect(submitStub.callCount).to.equal(2);   // only two actually broadcast
+    });
+});
+
+describe('AgentSession (policy-bounded wallet)', () => {
+    registerHooks();
+
+    it('window usage survives a restart (new instance, same state file)', async () => {
+        await mk({ maxPerWindow: { hours: 24, perTick: { TOK: '10' } } })
+            .send({ tick: 'TOK', amount: '9' });
+        const reborn = mk({ maxPerWindow: { hours: 24, perTick: { TOK: '10' } } });
+        await expectDeny(() => reborn.send({ tick: 'TOK', amount: '2' }),
+            'POLICY_WINDOW_AMOUNT_EXCEEDED');
+    });
+
+    it('expired entries fall out of the window', async () => {
+        const s = mk({ maxPerWindow: { hours: 1, perTick: { TOK: '10' } } });
+        const clock = sinon.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
+        try {
+            await s.send({ tick: 'TOK', amount: '10' });
+            clock.tick(61 * 60 * 1000);
+            const res = await s.send({ tick: 'TOK', amount: '10' });   // old entry expired
+            expect(res.policy.windowUsage.perTick.TOK).to.equal('10');
+            expect(res.policy.windowUsage.count).to.equal(1);
+        } finally { clock.restore(); }
+    });
+
+    // G8 on the CLIENT store. windowStore.snapshot() was hardened for this; its
+    // client twin was not, so a wildcard window cap read a used total of '0'
+    // forever and bound each transaction on its own.
+    it('a repeated no-TICK action exhausts a wildcard window cap instead of resetting it', async () => {
+        const s = new AgentSession(fakeSdk, 'WIF', {
+            allowedActions: ['COLLECT'], allowUnkeyedSubmits: true, stateFile,
+            maxPerWindow: { hours: 24, perTick: { '*': '10' } },
+        });
+        const collect = (amount) => s.submit({ action: 'COLLECT', params: { amount } });
+        const res = await collect('6');                                // 6 <= 10
+        expect(res.policy.windowUsage.perTick[UNRESOLVED_TICK_BUCKET]).to.equal('6');
+        await expectDeny(() => collect('6'), 'POLICY_WINDOW_AMOUNT_EXCEEDED');   // 12 > 10
+        expect(submitStub.calledOnce).to.equal(true);
+    });
+});
+
+describe('AgentSession (policy-bounded wallet)', () => {
+    registerHooks();
+
+    // G1 on the CLIENT store. Nothing validates the tick charset on this path
+    // (validateDecodedParams guards the daemon decode alone), so a caller-chosen
+    // tick reaches the accumulator as a key verbatim.
+    it('survives prototype-named ticks and counts a __proto__ tick toward its cap', async () => {
+        const s = mk({ maxPerWindow: { hours: 24, perTick: { '*': '10' } } });
+        // 'constructor' on a plain {} read back an inherited FUNCTION, and
+        // addDecimal(fn, amount) threw on every later evaluation.
+        await s.send({ tick: 'constructor', amount: '1' });
+        await s.send({ tick: 'toString', amount: '1' });
+        const res = await s.send({ tick: 'valueOf', amount: '1' });
+        expect(res.policy.windowUsage.perTick.constructor).to.equal('1');
+        // '__proto__' made the write a silent prototype-set, so the spend never
+        // counted and its cap never bound.
+        await s.send({ tick: '__proto__', amount: '6' });
+        const proto = await s.send({ tick: '__proto__', amount: '3' });
+        expect(proto.policy.windowUsage.perTick.__proto__).to.equal('9');
+        await expectDeny(() => s.send({ tick: '__proto__', amount: '2' }),
+            'POLICY_WINDOW_AMOUNT_EXCEEDED');
+    });
+
+    it('fails CLOSED on a corrupt state file', async () => {
+        fs.writeFileSync(stateFile, 'not json{');
+        const s = mk({ maxPerWindow: { hours: 24, perTick: { TOK: '10' } } });
+        await expectDeny(() => s.send({ tick: 'TOK', amount: '1' }), 'POLICY_STATE_CORRUPT');
+        expect(submitStub.called).to.equal(false);
+    });
+
+    // confirmation + observer hooks
+
+    it('asks for confirmation above the threshold and honors the answer', async () => {
+        const handler = sinon.stub();
+        handler.onFirstCall().resolves(true).onSecondCall().resolves(false);
+        const s = mk({ confirmAbove: { perTick: { '*': '5' }, handler } });
+
+        await s.send({ tick: 'TOK', amount: '6' });                    // confirmed
+        expect(handler.firstCall.args[0]).to.include({ action: 'SEND', tick: 'TOK', amount: '6' });
+        await expectDeny(() => s.send({ tick: 'TOK', amount: '7' }), 'POLICY_CONFIRMATION_DENIED');
+        await s.send({ tick: 'TOK', amount: '5' });                    // under threshold: no ask
+        expect(handler.callCount).to.equal(2);
+    });
+
+    it('notifies onPolicyViolation for every denial, and a throwing observer cannot unblock enforcement', async () => {
+        const seen = [];
+        const s = mk({
+            onPolicyViolation: (v) => { seen.push(v.code); throw new Error('observer boom'); },
+        });
+        await expectDeny(() => s.sweep({}), 'POLICY_ACTION_DENIED');
+        expect(seen).to.deep.equal(['POLICY_ACTION_DENIED']);
+    });
+});
+
+describe('AgentSession (policy-bounded wallet)', () => {
+    registerHooks();
+
+    // idempotency key (at-most-once on retry)
+
+    it('refuses a repeat submit with the same idempotencyKey, carrying the prior txid', async () => {
+        const s = mk();
+        const r = await s.send({ tick: 'TOK', amount: '5' }, undefined, { idempotencyKey: 'k1' });
+        expect(r.txid).to.equal('tx123');
+        const err = await expectDeny(
+            () => s.send({ tick: 'TOK', amount: '5' }, undefined, { idempotencyKey: 'k1' }),
+            'POLICY_DUPLICATE_SUBMIT');
+        expect(err.details.txid).to.equal('tx123');
+        expect(submitStub.calledOnce).to.equal(true);   // second submit never broadcast
+    });
+
+    // Keys outlive the spend window, on their own horizon: the duplicate guard reads
+    // the _pruned() list, so dropping every entry past maxPerWindow.hours lets an
+    // identical retry one window later broadcast and pay a SECOND time while
+    // submit_action advertises at-most-once.
+    it('remembers an idempotency key past the spend window', async () => {
+        const s = mk({ maxPerWindow: { hours: 1, perTick: { TOK: '10' } } });
+        const clock = sinon.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
+        try {
+            await s.send({ tick: 'TOK', amount: '5' }, undefined, { idempotencyKey: 'k-window' });
+            clock.tick(25 * 60 * 60 * 1000);                    // 25h: well past the window
+            const err = await expectDeny(
+                () => s.send({ tick: 'TOK', amount: '5' }, undefined, { idempotencyKey: 'k-window' }),
+                'POLICY_DUPLICATE_SUBMIT');
+            expect(err.details.txid).to.equal('tx123');
+            expect(submitStub.calledOnce).to.equal(true);       // no second broadcast
+        } finally { clock.restore(); }
+    });
+});
+
+describe('AgentSession (policy-bounded wallet)', () => {
+    registerHooks();
+
+    // The one way this retention could deny a legitimate payment: a retained key row
+    // that still counts against maxActions or the per-tick total.
+    it('a retained key row consumes no window budget', async () => {
+        const s = mk({ maxPerWindow: { hours: 1, maxActions: 1, perTick: { TOK: '10' } } });
+        const clock = sinon.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
+        try {
+            await s.send({ tick: 'TOK', amount: '10' }, undefined, { idempotencyKey: 'k-budget-1' });
+            clock.tick(61 * 60 * 1000);
+            const res = await s.send({ tick: 'TOK', amount: '10' }, undefined, { idempotencyKey: 'k-budget-2' });
+            expect(res.policy.windowUsage.count).to.equal(1);
+            expect(res.policy.windowUsage.perTick.TOK).to.equal('10');
+            expect(submitStub.calledTwice).to.equal(true);
+        } finally { clock.restore(); }
+    });
+
+    it('releases the key once the retention horizon passes', async () => {
+        const s = mk({ maxPerWindow: { hours: 1, perTick: { TOK: '10' } }, idempotencyHours: 2 });
+        const clock = sinon.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
+        try {
+            await s.send({ tick: 'TOK', amount: '5' }, undefined, { idempotencyKey: 'k-horizon' });
+            clock.tick(3 * 60 * 60 * 1000);                     // past the 2h horizon
+            await s.send({ tick: 'TOK', amount: '5' }, undefined, { idempotencyKey: 'k-horizon' });
+            expect(submitStub.calledTwice).to.equal(true);
+        } finally { clock.restore(); }
+    });
+
+    it('rejects a non-positive idempotencyHours at construction', () => {
+        expect(() => mk({ idempotencyHours: 0 })).to.throw(SDKPolicyError);
+        expect(() => mk({ idempotencyHours: 'lots' })).to.throw(SDKPolicyError);
+    });
+});
+
+describe('AgentSession (policy-bounded wallet)', () => {
+    registerHooks();
+
+    it('without an idempotencyKey, repeat submits both broadcast (unchanged behavior)', async () => {
+        const s = mk();
+        await s.send({ tick: 'TOK', amount: '1' });
+        await s.send({ tick: 'TOK', amount: '1' });
+        expect(submitStub.calledTwice).to.equal(true);
+    });
+
+    it('patches the txid from a post-broadcast throw so a later duplicate refusal can return it', async () => {
+        const s = mk();
+        // First submit throws AFTER broadcast, carrying the txid in err.details.
+        submitStub.onFirstCall().rejects(Object.assign(new Error('CONFIRMATION_TIMEOUT'),
+            { details: { txid: 'landed-tx' } }));
+        let thrown;
+        try { await s.send({ tick: 'TOK', amount: '2' }, undefined, { idempotencyKey: 'k2' }); }
+        catch (e) { thrown = e; }
+        expect(thrown).to.be.instanceOf(Error);           // original error re-thrown
+        // A retry with the same key is refused and returns the txid that landed.
+        const err = await expectDeny(
+            () => s.send({ tick: 'TOK', amount: '2' }, undefined, { idempotencyKey: 'k2' }),
+            'POLICY_DUPLICATE_SUBMIT');
+        expect(err.details.txid).to.equal('landed-tx');
+    });
+
+    // exports
+
+    it('is exported from the SDK entry point with its error class', () => {
+        const sdkIndex = require('../../../index.js');
+        expect(sdkIndex.AgentSession).to.equal(AgentSession);
+        expect(sdkIndex.SDKPolicyError).to.equal(SDKPolicyError);
+    });
+});
