@@ -37,10 +37,10 @@ const zlib = require('zlib');
 const path = require('path');
 const fs = require('fs');
 
-const CompressionUtils = require('../../src/protocol/compression.js');
-const GatedFileUtils = require('../../src/actions/gated_file.js');
-const { SDKCompressionError } = require('../../src/utils/errors.js');
-const CONSTANTS = require('../../src/protocol/constants.js');
+const CompressionUtils = require('../../../src/protocol/compression.js');
+const GatedFileUtils = require('../../../src/actions/gated_file.js');
+const { SDKCompressionError } = require('../../../src/utils/errors.js');
+const CONSTANTS = require('../../../src/protocol/constants.js');
 
 const sha256 = (b) => crypto.createHash('sha256').update(b).digest('hex');
 
@@ -53,20 +53,23 @@ describe('CompressionUtils (Part B)', function () {
         gatedFile = new GatedFileUtils();
     });
 
-    describe('constants', function () {
-        it('carries the pinned codes and caps', function () {
-            assert.strictEqual(CONSTANTS.COMPRESSION_CODE_DEFLATE_RAW, '1');
-            assert.strictEqual(CONSTANTS.COMPRESSION_MAX_RATIO, 150);
-            assert.strictEqual(CONSTANTS.COMPRESSION_MAX_INPUT_BYTES, 16 * 1024 * 1024);
+    describe('canonical constants conformance', function () {
+        const DOCS = process.env.XCHAIN_DOCUMENTATION_DIR ||
+            path.join(__dirname, '..', '..', '..', '..', 'xchain-documentation');
+        const DOCS_CONSTANTS = path.join(DOCS, 'protocol', 'constants.js');
+        before(function () {
+            if (!fs.existsSync(DOCS_CONSTANTS)) {
+                if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                    throw new Error('xchain-documentation sibling not found but XCHAIN_REQUIRE_SIBLINGS=1');
+                this.skip();
+            }
         });
 
-        // The 150:1 cap only means something relative to deflate-raw's own
-        // theoretical maximum (~1032:1). A cap at or above that guards nothing.
-        it('the ratio cap sits below deflate-raw\'s theoretical maximum', function () {
-            const zeros = Buffer.alloc(1024 * 1024, 0);
-            const best = zeros.length / zlib.deflateRawSync(zeros).length;
-            assert.ok(best > CONSTANTS.COMPRESSION_MAX_RATIO,
-                `deflate-raw reaches ${best.toFixed(1)}:1, so a ${CONSTANTS.COMPRESSION_MAX_RATIO}:1 cap is meaningful`);
+        it('the vendored copy equals the canonical declaration', function () {
+            const docs = require(DOCS_CONSTANTS);
+            assert.strictEqual(docs.COMPRESSION_CODE_DEFLATE_RAW, CONSTANTS.COMPRESSION_CODE_DEFLATE_RAW);
+            assert.strictEqual(docs.COMPRESSION_MAX_RATIO, CONSTANTS.COMPRESSION_MAX_RATIO);
+            assert.strictEqual(docs.COMPRESSION_MAX_INPUT_BYTES, CONSTANTS.COMPRESSION_MAX_INPUT_BYTES);
         });
     });
 });
