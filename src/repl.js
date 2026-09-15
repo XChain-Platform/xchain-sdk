@@ -29,9 +29,23 @@ const CrossChainHelper = require('./actions/cross_chain.js');
 
 
 async function startREPL(options = {}) {
+    let sdkOptions = buildSDKOptions(options);
+    let sdk = new XChainSDK(sdkOptions);
 
+    await initializeHub(sdk);
+    printWelcome(sdkOptions);
+
+    let server = startServer();
+    injectHelpers(server, sdk);
+    defineCommands(server, sdk, sdkOptions);
+    installShutdown(server, sdk);
+
+    return server;
+}
+
+function buildSDKOptions(options) {
     // Build options from env vars and explicit options
-    let sdkOptions = {
+    return {
         network:     options.network     || process.env.NETWORK     || 'bitcoin-regtest',
         explorerUrl: options.explorerUrl || process.env.EXPLORER_URL,
         explorerPort: options.explorerPort || process.env.EXPLORER_PORT,
@@ -40,9 +54,9 @@ async function startREPL(options = {}) {
         hubUrl:      options.hubUrl      || process.env.HUB_URL,
         ...options
     };
+}
 
-    let sdk = new XChainSDK(sdkOptions);
-
+async function initializeHub(sdk) {
     // Try hub init if configured
     if (sdk.hub) {
         try {
@@ -52,7 +66,9 @@ async function startREPL(options = {}) {
             console.log('Hub connection failed:', e);
         }
     }
+}
 
+function printWelcome(sdkOptions) {
     console.log('');
     console.log('  XChain SDK REPL');
     console.log('  Network: ' + sdkOptions.network);
@@ -67,21 +83,33 @@ async function startREPL(options = {}) {
     console.log('    .status        - Show SDK configuration');
     console.log('    .fields ACTION - Show fields for an action');
     console.log('');
+}
 
-    let server = repl.start({
+function startServer() {
+    return repl.start({
         prompt: 'xchain> ',
         useGlobal: false,
         // Enable await in REPL
         breakEvalOnSigint: true
     });
+}
 
+function injectHelpers(server, sdk) {
     // Inject helpers into context
     server.context.sdk     = sdk;
     server.context.session = (wif, opts) => sdk.session(wif, opts);
     server.context.keygen  = () => sdk.generateKeyPair();
     server.context.CrossChainHelper = CrossChainHelper;
+}
 
+function defineCommands(server, sdk, sdkOptions) {
     // Custom commands
+    defineActionsCommand(server, sdk);
+    defineStatusCommand(server, sdk, sdkOptions);
+    defineFieldsCommand(server, sdk);
+}
+
+function defineActionsCommand(server, sdk) {
     server.defineCommand('actions', {
         help: 'List all available action types',
         action() {
@@ -91,7 +119,9 @@ async function startREPL(options = {}) {
             this.displayPrompt();
         }
     });
+}
 
+function defineStatusCommand(server, sdk, sdkOptions) {
     server.defineCommand('status', {
         help: 'Show SDK configuration status',
         action() {
@@ -105,7 +135,9 @@ async function startREPL(options = {}) {
             this.displayPrompt();
         }
     });
+}
 
+function defineFieldsCommand(server, sdk) {
     server.defineCommand('fields', {
         help: 'Show fields for an action (e.g., .fields SEND)',
         action(action) {
@@ -131,14 +163,14 @@ async function startREPL(options = {}) {
             this.displayPrompt();
         }
     });
+}
 
+function installShutdown(server, sdk) {
     // Clean shutdown
     server.on('exit', () => {
         sdk.stop();
         process.exit(0);
     });
-
-    return server;
 }
 
 

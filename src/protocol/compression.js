@@ -175,51 +175,7 @@ class CompressionUtils {
 
         let ceiling = Math.max(1, Math.ceil(input.length * maxRatio));
 
-        return await new Promise((resolve) => {
-            let stream = zlib.createInflateRaw();
-            let chunks = [];
-            let total = 0;
-            let settled = false;
-
-            const finish = (result) => {
-                if (settled) return;
-                settled = true;
-                // Release the partial output explicitly: on the abort path it
-                // is exactly the memory the guard is defending.
-                chunks = null;
-                resolve(result);
-            };
-
-            stream.on('data', (chunk) => {
-                total += chunk.length;
-                if (total > ceiling) {
-                    // Streamed abort: stop consuming the moment the guard trips,
-                    // before the remaining output is ever materialized.
-                    stream.destroy();
-                    return finish(storedForm(input, 'RATIO_GUARD_TRIPPED'));
-                }
-                if (chunks) chunks.push(chunk);
-            });
-
-            stream.on('end', () => {
-                if (settled) return;
-                let bytes = Buffer.concat(chunks, total);
-                finish({
-                    bytes,
-                    inflated: true,
-                    storedForm: false,
-                    error: null,
-                    storedLength: input.length,
-                    originalLength: bytes.length
-                });
-            });
-
-            // Truncated, corrupt, or simply-not-deflate bytes (a lying
-            // COMPRESSION field) land here.
-            stream.on('error', () => finish(storedForm(input, 'INVALID_DEFLATE_STREAM')));
-
-            stream.end(input);
-        });
+        return await inflateStream(input, ceiling);
     }
 
     /**
@@ -337,6 +293,54 @@ function storedForm(input, error) {
         storedLength: input.length,
         originalLength: input.length
     };
+}
+
+function inflateStream(input, ceiling) {
+    return new Promise((resolve) => {
+        let stream = zlib.createInflateRaw();
+        let chunks = [];
+        let total = 0;
+        let settled = false;
+
+        const finish = (result) => {
+            if (settled) return;
+            settled = true;
+            // Release the partial output explicitly: on the abort path it
+            // is exactly the memory the guard is defending.
+            chunks = null;
+            resolve(result);
+        };
+
+        stream.on('data', (chunk) => {
+            total += chunk.length;
+            if (total > ceiling) {
+                // Streamed abort: stop consuming the moment the guard trips,
+                // before the remaining output is ever materialized.
+                stream.destroy();
+                return finish(storedForm(input, 'RATIO_GUARD_TRIPPED'));
+            }
+            if (chunks) chunks.push(chunk);
+        });
+
+        stream.on('end', () => {
+            if (settled) return;
+            let bytes = Buffer.concat(chunks, total);
+            finish({
+                bytes,
+                inflated: true,
+                storedForm: false,
+                error: null,
+                storedLength: input.length,
+                originalLength: bytes.length
+            });
+        });
+
+        // Truncated, corrupt, or simply-not-deflate bytes (a lying
+        // COMPRESSION field) land here.
+        stream.on('error', () => finish(storedForm(input, 'INVALID_DEFLATE_STREAM')));
+
+        stream.end(input);
+    });
 }
 
 module.exports = Object.assign(CompressionUtils, {
