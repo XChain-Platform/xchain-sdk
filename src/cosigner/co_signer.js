@@ -68,6 +68,7 @@ const { exactU64 } = outputPolicy;
 const { toBytes, taprootKeyPathSighash } = signRequest;
 const { deriveMuSig2P2TR2of3 } = require('./account.js');
 const { isCapInert } = require('./value_derivability.js');
+const { installMethods } = require('../utils/install_methods.js');
 
 // Taproot operations (p2tr derivation, key-path sighash) require an ECC backend.
 // initEccLib sets a bitcoinjs global; idempotent and safe to call on module load.
@@ -270,7 +271,7 @@ class CoSigner {
 
 }
 
-Object.assign(CoSigner.prototype,
+installMethods(CoSigner.prototype,
     outputPolicy,
     signRequest);
 

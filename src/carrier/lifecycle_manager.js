@@ -24,6 +24,7 @@ const EncoderClient = require('../clients/encoder.js');
 const { SDKActionError, SDKConfigError } = require('../utils/errors.js');
 const { reconcileEncoded, psbtPrevouts } = require('./reconcile_encoded.js');
 const { assertCarrierBinding, assertEnvelopeCarrierBinding } = require('./bind_action_carrier.js');
+const { installMethods } = require('../utils/install_methods.js');
 
 // Actions that execute against a CONTRACT. For these, "the transaction is
 // confirmed" is not the event a caller is waiting for: the indexer executes the
@@ -519,6 +520,6 @@ class LifecycleManager {
 
 }
 
-Object.assign(LifecycleManager.prototype, require('./lifecycle_manager/settlement_reads.js'));
+installMethods(LifecycleManager.prototype, require('./lifecycle_manager/settlement_reads.js'));
 
 module.exports = LifecycleManager;

@@ -22,6 +22,7 @@ const formats = require('./formats.js');
 const config  = require('../config.js');
 const { SDKValidationError, SDKContractError } = require('../utils/errors.js');
 const { MAX_DEPLOYCHUNK_PART_BYTES } = require('../contract/chunk_helper.js');
+const { installMethods } = require('../utils/install_methods.js');
 const {
     LEGS_FIELD,
     ADDRESS_REF_FIELD_SET,
@@ -717,7 +718,7 @@ class Validator {
 
 }
 
-Object.assign(Validator.prototype, require('./validator/legs_and_actions.js'), require('./validator/batch_and_bet.js'), require('./validator/market_and_contract.js'), require('./validator/tick_and_text.js'));
+installMethods(Validator.prototype, require('./validator/legs_and_actions.js'), require('./validator/batch_and_bet.js'), require('./validator/market_and_contract.js'), require('./validator/tick_and_text.js'));
 
 module.exports = Object.assign(Validator, {
     // Exported for the cross-service regression suite, which asserts this equals the
