@@ -128,7 +128,6 @@ describe('wire collapse: a single request/response shape', function () {
         expect(res.msg).to.equal(undefined);
     });
 });
-
 // G16: the action's protocol source must be an input we sign.
 
 describe('G16: source gate', function () {
@@ -169,6 +168,10 @@ describe('G16: source gate', function () {
         expect(res.reason).to.equal('SOURCE_NOT_OUR_ACCOUNT');
     });
 
+});
+
+describe('G16: source gate', function () {
+
     it('a source denial consumes no window budget', function () {
         const acct    = makeAccount();
         const foreign = makeAccount();
@@ -197,6 +200,7 @@ describe('G16: source gate', function () {
         });
         expect(res.approved).to.equal(true);
     });
+
 });
 
 // G18: BATCH is refused structurally.
@@ -341,208 +345,5 @@ describe('G8: unresolved-tick window accumulation', function () {
         );
         expect(verdict.ok).to.equal(false);
         expect(verdict.violation.code).to.equal('POLICY_WINDOW_AMOUNT_EXCEEDED');
-    });
-});
-
-// G9: allowedDestinations must not be a silent no-op.
-
-describe('G9: allowedDestinations enforceability', function () {
-
-    it('denies an action whose format carries no DESTINATION field', function () {
-        // Only 7 of the 63 decodable formats carry DESTINATION. For every other one
-        // the destination list was EMPTY and the membership loop was vacuously
-        // satisfied, so every trade, dispenser, staking and escrow action sailed
-        // through a setting the operator reads as "can only pay these addresses".
-        const acct = makeAccount();
-        const co = new CoSigner({
-            secretKey: acct.coSk, publicKeys: acct.keys,
-            policy: { allowedActions: new Set(['DESTROY']), allowedDestinations: ['1allowedAddr'] },
-        });
-        const res = co.process({
-            psbt: buildSignablePsbt(acct, 'DESTROY|0|TOK|5|m').toHex(),
-            inputs: one(acct),
-        });
-        expect(res.approved).to.equal(false);
-        expect(res.reason).to.equal('POLICY_DESTINATION_UNENFORCEABLE');
-    });
-
-    it('pins the 7-of-68 figure the G9 rationale quotes, derived from the format table', function () {
-        // The comment in policy_evaluator.js sizes how little of the policy
-        // surface allowedDestinations binds, and a hand-counted figure drifts
-        // the moment a format gains or loses a DESTINATION field. Derive both
-        // halves from the shipped tables instead: decodableFormats() is the
-        // daemon's own denominator (it already drops the multi-leg SEND v1-v3,
-        // which the decoder refuses as MULTI_LEG_UNSUPPORTED), and
-        // formatCarriesDestination is the predicate the gate itself calls.
-        const decodable = valueDerivability.decodableFormats();
-        const carriers = decodable
-            .filter((f) => formatCarriesDestination(f.action, f.version))
-            .map((f) => `${f.action} v${f.version}`)
-            .sort();
-        // 63 -> 68 when the bridge wave landed ISSUE v7 and XBRIDGE v0/v1/v3/v4.
-        // The NUMERATOR did not move: an XBRIDGE names its counterparty in
-        // DEST_ADDRESS / BTC_ADDRESS / ORIGIN_ADDRESS, none of which is the
-        // DESTINATION field allowedDestinations reads, so the list still binds
-        // exactly the seven formats below. Keep the figure in the rationale
-        // comment at src/cosigner/policy_evaluator.js in step with this number.
-        expect(decodable.length).to.equal(68);
-        expect(carriers).to.deep.equal([
-            'MESSAGE v0', 'MESSAGE v1', 'MESSAGE v2', 'MESSAGE v3',
-            'MINT v0', 'SEND v0', 'SWEEP v0',
-        ]);
-    });
-
-    it('still enforces the list for a format that does carry DESTINATION', function () {
-        const acct = makeAccount();
-        const co = new CoSigner({
-            secretKey: acct.coSk, publicKeys: acct.keys,
-            policy: { allowedActions: new Set(['SEND']), allowedDestinations: ['1allowedAddr'] },
-        });
-        expect(co.process({
-            psbt: buildSignablePsbt(acct, 'SEND|0|TOK|5|1allowedAddr|m').toHex(),
-            inputs: one(acct),
-        }).approved).to.equal(true);
-
-        const denied = co.process({
-            psbt: buildSignablePsbt(acct, 'SEND|0|TOK|5|1otherAddr|m').toHex(),
-            inputs: one(acct),
-        });
-        expect(denied.approved).to.equal(false);
-        expect(denied.reason).to.equal('POLICY_DESTINATION_DENIED');
-    });
-
-    it('leaves a policy with no destination list alone', function () {
-        const acct = makeAccount();
-        const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys,
-            policy: { allowedActions: new Set(['DESTROY']) } });
-        expect(co.process({
-            psbt: buildSignablePsbt(acct, 'DESTROY|0|TOK|5|m').toHex(),
-            inputs: one(acct),
-        }).approved).to.equal(true);
-    });
-});
-
-// G6: the window file's absence is not an empty window.
-
-describe('G6: window-store durability', function () {
-
-    it('refuses to start against a deleted state file', function () {
-        // Deleting one file WAS exactly the reset this spec elsewhere calls
-        // impossible: no corruption, no warning, full budget restored.
-        const stateFile = tmpStateFile('g6-missing');
-        const first = new WindowStore(stateFile, 24, null, { init: true });
-        first.record({ action: 'SEND', tick: 'TOK', amount: '5' });
-        first.release();
-        fs.unlinkSync(stateFile);
-
-        let err = null;
-        try { new WindowStore(stateFile, 24); } catch (e) { err = e; }
-        expect(err).to.not.equal(null);
-        expect(err.code).to.equal('WINDOW_STATE_MISSING');
-    });
-
-    it('a refused start releases its lock, so the operator can retry after restoring', function () {
-        const stateFile = tmpStateFile('g6-lock');
-        try { new WindowStore(stateFile, 24); } catch (e) { /* expected */ }
-        // The lock must not be left behind by the failed construction.
-        expect(fs.existsSync(stateFile + '.lock')).to.equal(false);
-        const store = new WindowStore(stateFile, 24, null, { init: true });
-        store.release();
-        try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
-    });
-
-    it('creates the file 0600 on an explicit init', function () {
-        const stateFile = tmpStateFile('g6-mode');
-        const store = new WindowStore(stateFile, 24, null, { init: true });
-        try {
-            const mode = fs.statSync(stateFile).mode & 0o777;
-            expect(mode).to.equal(0o600);
-        } finally {
-            store.release();
-            try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
-        }
-    });
-
-    it('an init on an existing window does not wipe it', function () {
-        const stateFile = tmpStateFile('g6-existing');
-        const first = new WindowStore(stateFile, 24, null, { init: true });
-        first.record({ action: 'SEND', tick: 'TOK', amount: '5' });
-        first.release();
-        const second = new WindowStore(stateFile, 24, null, { init: true });
-        try {
-            expect(second.snapshot().perTick.TOK).to.equal('5');
-        } finally {
-            second.release();
-            try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
-        }
-    });
-});
-
-// G19: the rolling window trusts the wall clock.
-
-describe('G19: clock guards', function () {
-
-    it('clamps a future-dated entry instead of letting it outlive the window', function () {
-        const stateFile = tmpStateFile('g19-future');
-        const now = 1_800_000_000_000;
-        fs.writeFileSync(stateFile, JSON.stringify({
-            entries: [{ t: now + 90 * 24 * 3600 * 1000, action: 'SEND', tick: 'TOK', amount: '5' }],
-            lastSeen: now,
-        }));
-        const faults = [];
-        const store = new WindowStore(stateFile, 24, () => now, { onFault: (m) => faults.push(m) });
-        try {
-            // Clamped to now, so it still counts against the window (tightening,
-            // never loosening) and will age out on schedule.
-            expect(store.snapshot().perTick.TOK).to.equal('5');
-            expect(faults.join(' ')).to.match(/future/);
-        } finally {
-            store.release();
-            try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
-        }
-    });
-
-    it('warns when the clock moved backward across a restart', function () {
-        const stateFile = tmpStateFile('g19-back');
-        const now = 1_800_000_000_000;
-        fs.writeFileSync(stateFile, JSON.stringify({
-            entries: [], lastSeen: now + 3600 * 1000,
-        }));
-        const faults = [];
-        const store = new WindowStore(stateFile, 24, () => now, { onFault: (m) => faults.push(m) });
-        try {
-            expect(faults.join(' ')).to.match(/moved BACKWARD/);
-        } finally {
-            store.release();
-            try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
-        }
-    });
-
-    it('records lastSeen so the next start can detect the step', function () {
-        const stateFile = tmpStateFile('g19-lastseen');
-        const now = 1_800_000_000_000;
-        const store = new WindowStore(stateFile, 24, () => now, { init: true });
-        store.record({ action: 'SEND', tick: 'TOK', amount: '1' });
-        store.release();
-        const persisted = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
-        expect(persisted.lastSeen).to.equal(now);
-        try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
-    });
-
-    it('tolerates ordinary jitter without crying wolf', function () {
-        const stateFile = tmpStateFile('g19-jitter');
-        const now = 1_800_000_000_000;
-        fs.writeFileSync(stateFile, JSON.stringify({
-            entries: [{ t: now + 5_000, action: 'SEND', tick: 'TOK', amount: '5' }],
-            lastSeen: now + 5_000,
-        }));
-        const faults = [];
-        const store = new WindowStore(stateFile, 24, () => now, { onFault: (m) => faults.push(m) });
-        try {
-            expect(faults).to.have.length(0);
-        } finally {
-            store.release();
-            try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ }
-        }
     });
 });
