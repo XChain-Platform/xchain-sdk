@@ -196,9 +196,7 @@ function tagBatchCommand(parsed, details) {
     return Object.assign({}, details, { commandIndex: details.index });
 }
 
-async function runUniversal(ctx, opts = {}) {
-    const { parsed } = ctx;
-
+function checkValidatorSemantics(ctx, parsed) {
     // 1. Parse/validator semantics (already parsed upstream; findings
     // ride along on the ParsedAction).
     ctx.markRun(FINDING_CODES.VALIDATOR_SEMANTICS);
@@ -221,7 +219,9 @@ async function runUniversal(ctx, opts = {}) {
             ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'warning', f.message, details);
         }
     }
+}
 
+function checkEncodingFitsCarrier(ctx, parsed, opts) {
     // 2. Encoding fits carrier (only when the caller told us the
     // intended encoding; compose-time _validateEncoding covers the
     // OP_RETURN path, this covers all carriers uniformly).
@@ -236,7 +236,9 @@ async function runUniversal(ctx, opts = {}) {
                 { encoding: enc, bytes, cap });
         }
     }
+}
 
+async function checkTokenExistence(ctx, parsed) {
     // 3. Token exists, per referenced TICK (network-sourced: a hostile
     // explorer could fabricate a 404, so the error is overridable).
     const nativeTicker = nativeTickerFromCoin(ctx.sdk && ctx.sdk.explorer && ctx.sdk.explorer.coin);
@@ -254,10 +256,9 @@ async function runUniversal(ctx, opts = {}) {
             }
         }
     }
+}
 
-    // 4. `^<id>` address references (local; no network).
-    checkAddressRefs(ctx);
-
+function addNativeFeeForfeitureNotice(ctx, parsed) {
     // 5. Native-fee forfeiture notice: fee-charging actions on chains
     // with mandatory native fees forfeit the native output if the
     // action is invalid. Always shown for fee-charging actions
@@ -267,6 +268,19 @@ async function runUniversal(ctx, opts = {}) {
             'This action charges a protocol fee. If the chain rejects the action, any attached native-coin fee output is forfeited.',
             { action: parsed.action });
     }
+}
+
+async function runUniversal(ctx, opts = {}) {
+    const { parsed } = ctx;
+
+    checkValidatorSemantics(ctx, parsed);
+    checkEncodingFitsCarrier(ctx, parsed, opts);
+    await checkTokenExistence(ctx, parsed);
+
+    // 4. `^<id>` address references (local; no network).
+    checkAddressRefs(ctx);
+
+    addNativeFeeForfeitureNotice(ctx, parsed);
 
     return ctx;
 }
