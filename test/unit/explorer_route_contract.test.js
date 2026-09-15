@@ -38,7 +38,7 @@ const fs     = require('fs');
 const path   = require('path');
 
 const EXPLORER_ROUTES = path.join(
-    __dirname, '..', '..', '..', 'xchain-explorer', 'src', 'XChainExplorer.js');
+    __dirname, '..', '..', '..', 'xchain-explorer', 'src', 'explorer', 'routes', 'api_methods.js');
 const SRC = path.join(__dirname, '..', '..', 'src');
 const MCP_SERVER = path.join(__dirname, '..', '..', 'mcp', 'server.js');
 
@@ -125,7 +125,7 @@ function loadRouteTable(ctx) {
     }
     const table = parseRouteTable(fs.readFileSync(EXPLORER_ROUTES, 'utf8'));
     assert.ok(Object.keys(table).length > 20,
-        'route table parsed as ' + Object.keys(table).length + ' entries; the parser has drifted from XChainExplorer.js');
+        'route table parsed as ' + Object.keys(table).length + ' entries; the parser has drifted from api_methods.js');
     return table;
 }
 
