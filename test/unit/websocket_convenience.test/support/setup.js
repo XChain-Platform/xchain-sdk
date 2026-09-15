@@ -18,12 +18,10 @@
 
 'use strict';
 
-const { expect }  = require('chai');
-const WebSocket   = require('ws');
-const { XChainSDK } = require('../../index.js');
-const { SDKConfigError } = require('../../src/utils/errors.js');
-
-// Mock Server
+const sinon = require('sinon');
+const WebSocket = require('ws');
+const { XChainSDK } = require('../../../../index.js');
+const { waitForCalls } = require('../../../helpers/wait.js');
 
 function createMockServer() {
     return new Promise((resolve) => {
@@ -68,58 +66,33 @@ function createMockServer() {
     });
 }
 
-// Tests
-
-describe('XChainSDK – WebSocket convenience methods', function () {
-
-    let server, port, sdk;
-
-    beforeEach(async function () {
-        const s = await createMockServer();
-        server = s.wss;
-        port   = s.port;
-
-        sdk = new XChainSDK({
-            network: 'bitcoin-regtest',
-            websocketUrl: '127.0.0.1',
-            websocketPort: port
-        });
+async function createFixture() {
+    const { wss: server, port } = await createMockServer();
+    const sdk = new XChainSDK({
+        network: 'bitcoin-regtest',
+        websocketUrl: '127.0.0.1',
+        websocketPort: port
     });
+    return { server, port, sdk };
+}
 
-    afterEach(function (done) {
-        if (sdk) sdk.stop();
-        server.close(done);
-    });
+function closeFixture(sdk, server, done) {
+    if (sdk) sdk.stop();
+    server.close(done);
+}
 
-    // Initialization
+// Deterministic barrier for a NEGATIVE assertion (this callback must NOT
+// fire). There is no condition to poll for something that never happens, so
+// send a frame that IS observably handled and wait for THAT: one socket
+// delivers in order, so once the barrier lands the frame under test has
+// already been dispatched (or correctly ignored). A fixed sleep only made
+// the race less likely; this removes it.
+async function passBarrier(sdk, server) {
+    const mark = sinon.spy();
+    const unsub = sdk.onBlock(mark);
+    server._lastClient.send(JSON.stringify({ type: 'NEW_BLOCK', data: { block_index: 0 } }));
+    await waitForCalls(mark, 1, { message: 'barrier NEW_BLOCK never arrived' });
+    unsub();
+}
 
-    describe('initialization', function () {
-
-        it('creates ws client when explorerUrl is configured', function () {
-            const s = new XChainSDK({
-                network: 'bitcoin-regtest',
-                explorerUrl: 'localhost',
-                explorerPort: 8080
-            });
-            expect(s.ws).to.not.be.null;
-            expect(s.ws.coin).to.equal('RBTC');
-        });
-
-        it('ws is null when no URL configured', function () {
-            const s = new XChainSDK({ network: 'bitcoin-regtest' });
-            expect(s.ws).to.be.null;
-        });
-
-        it('_requireWs throws when ws is null', function () {
-            const s = new XChainSDK({ network: 'bitcoin-regtest' });
-            expect(() => s._requireWs()).to.throw(SDKConfigError);
-        });
-
-        it('stop() disconnects WebSocket', async function () {
-            await sdk.connectWs();
-            expect(sdk.ws.isConnected()).to.be.true;
-            sdk.stop();
-            expect(sdk.ws.isConnected()).to.be.false;
-        });
-    });
-});
+module.exports = { closeFixture, createFixture, passBarrier };
