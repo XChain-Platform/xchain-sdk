@@ -115,6 +115,9 @@ describe('SPV sub-tree activation constants: client export @regression', functio
             assert.ok(!/:mainnet$/.test(key),
                 'the escrow leaf ships SHADOWING on MAINNET (' + key + ') in a CLIENT release');
     });
+});
+
+describe('SPV sub-tree activation constants: client export @regression', function(){
 
     it('no escrow shadow window is open, so a client never computes a leaf twice', function(){
         // The map is empty. The BTC:testnet entry that sat at 148000 was dead the
@@ -172,6 +175,9 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         }
         assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_SHADOW, {}, 'the scratch window was not cleaned up');
     });
+});
+
+describe('SPV sub-tree activation constants: client export @regression', function(){
 
     it('the slot list matches this repo\'s merkle.STATE_SUBTREES tail', function(){
         // The tail order IS the leaf order of the top-level tree, so a client that
@@ -212,6 +218,9 @@ describe('SPV sub-tree activation constants: client export @regression', functio
                 assert.strictEqual(SUB.isSubtreeActive('contract_state_root', h, 'testnet', coin), true,
                     coin + ':testnet must read live to a client at ' + h);
     });
+});
+
+describe('SPV sub-tree activation constants: client export @regression', function(){
 
     it('a client reading the maps gets the SAME answer the fleet commits (arming is visible)', function(){
         // The export is useless if it cannot report a live slot, so prove the
@@ -252,6 +261,9 @@ describe('SPV sub-tree activation constants: client export @regression', functio
             assert.strictEqual(SUB.STATE_SUBTREE_ACTIVATION.contract_state_root[k], 0);
         }
     });
+});
+
+describe('SPV sub-tree activation constants: client export @regression', function(){
 
     it('GOLDEN: this repo\'s copy has not moved on its own', function(){
         // Layer 1. A bump anywhere must be a coordinated four-repo change; this
@@ -304,6 +316,9 @@ describe('SPV sub-tree activation constants: client export @regression', functio
                 'xchain-sync, xchain-sdk and xchain-explorer. If this change is intended, update ' +
                 'ALL FOUR copies and set GOLDEN to the new hash in the same commit.');
     });
+});
+
+describe('SPV sub-tree activation constants: client export @regression', function(){
 
     Object.keys(SIBLINGS).forEach(function(repo){
         it('is byte-identical to ' + repo + '\'s copy (cross-repo consensus constant)', function(){
