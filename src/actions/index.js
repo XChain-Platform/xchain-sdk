@@ -46,6 +46,126 @@ function compiledPushSize(n) {
     return n <= 75 ? n + 1 : n <= 255 ? n + 2 : n + 3;
 }
 
+function resolveActionInput(context, data) {
+    // [1] Validate request structure
+    if (!data || !data.action)
+        throw new SDKValidationError('MISSING_ACTION', 'Request must include an action field');
+
+    let actionName = String(data.action).toUpperCase();
+    let params     = data.params || data.fields || {};
+
+    // [2] Validate ACTION type exists
+    if (!context.actions.includes(actionName))
+        throw new SDKValidationError('UNKNOWN_ACTION', 'Unknown ACTION type: ' + actionName, { action: actionName, validActions: context.actions });
+
+    return { actionName, params };
+}
+
+function normalizeActionFields(context, actionName, params) {
+    // [3] Normalize field names (camelCase -> UPPER_SNAKE_CASE)
+    let fields = context.util.normalizeFields(params);
+
+    // [3b] DEPLOY pre-processing: base64-encode raw 'code' into CODE_ENCODING.
+    // base64 (1.33x) instead of hex (2x): the action string is pipe-delimited and
+    // base64's alphabet (A-Za-z0-9+/=) has no '|', so it stays delimiter-safe while
+    // cutting the on-chain payload by a third (lifts the single-tx contract ceiling).
+    if (actionName === 'DEPLOY' && fields.CODE !== undefined && fields.CODE !== null && fields.CODE_ENCODING === undefined) {
+        let code = String(fields.CODE);
+        fields.CODE_ENCODING = Buffer.from(code, 'utf8').toString('base64');
+        delete fields.CODE;
+    }
+
+    // [3c] EXECUTE/DEPLOY: ensure PARAMS/CONSTRUCTOR_PARAMS stay as arrays (skip number casting)
+    if (actionName === 'EXECUTE' && fields.PARAMS !== undefined) {
+        if (!Array.isArray(fields.PARAMS))
+            fields.PARAMS = [String(fields.PARAMS)];
+        else
+            fields.PARAMS = fields.PARAMS.map(p => String(p));
+    }
+    if (actionName === 'DEPLOY' && fields.CONSTRUCTOR_PARAMS !== undefined) {
+        if (!Array.isArray(fields.CONSTRUCTOR_PARAMS))
+            fields.CONSTRUCTOR_PARAMS = [String(fields.CONSTRUCTOR_PARAMS)];
+        else
+            fields.CONSTRUCTOR_PARAMS = fields.CONSTRUCTOR_PARAMS.map(p => String(p));
+    }
+
+    // [3d] LIST: ITEM is a rest-field; coerce to an array of strings so a
+    // multi-item list serializes as individual pipe segments (a lone string
+    // stays a single-item list, preserving the old call shape)
+    if (actionName === 'LIST' && fields.ITEM !== undefined && fields.ITEM !== null) {
+        if (!Array.isArray(fields.ITEM))
+            fields.ITEM = [String(fields.ITEM)];
+        else
+            fields.ITEM = fields.ITEM.map(i => String(i));
+    }
+
+    // [3e] LEGS (multi-destination SEND, multi-tick DESTROY/AIRDROP): each
+    // leg is its own field map, so it needs the same camelCase->UPPER_SNAKE
+    // and numeric normalization the top-level map gets. Mis-shaped entries
+    // pass through untouched for the validator to report.
+    return context._normalizeLegs(fields);
+}
+
+function applyActionVersion(context, data, fields) {
+    // [3f] A top-level `version` is the same request spelled the other way (the
+    // shape sdk.decoder.parse() output and pre-flight callers carry). Fold it
+    // into fields.VERSION HERE, before casting and validation, so the
+    // version-dependent rules in validator.js check the version that will
+    // actually be serialized: they read fields.VERSION only, and an unfolded
+    // top-level spelling lets VOTE/DELEGATE/DEPLOY validate against the
+    // auto-selected format and then serialize a different one, costing a miner
+    // fee on an action the indexer rejects. A params-level VERSION still wins,
+    // and 0 is a valid version, so the tests are against undefined/null/''.
+    if ((fields.VERSION === undefined || fields.VERSION === null || fields.VERSION === '')
+        && data.version !== undefined && data.version !== null && data.version !== '')
+        fields.VERSION = data.version;
+
+    // [4] Cast numeric fields
+    return context.util.setNumberFormats(fields);
+}
+
+function serializeAction(context, actionName, fields, validate) {
+    // [5] Validate fields against action-specific rules.
+    // Skipped for pre-flight: see the `validate` note on this method.
+    if (validate) context.validator.validateOrThrow(actionName, fields);
+
+    // [6] Select optimal format version
+    // Callers may force a specific version by passing `version` in params (e.g. STAKE v1 vs v2).
+    // VERSION is otherwise an auto-field set by the selector from the format key.
+    // Both spellings arrive here as fields.VERSION: the top-level one was folded
+    // in at [3f] so validation above saw it too.
+    let explicitVersion = undefined;
+    if (fields.VERSION !== undefined && fields.VERSION !== null && fields.VERSION !== '') {
+        explicitVersion = fields.VERSION;
+        delete fields.VERSION;
+    }
+    let selected = FormatSelector.select(actionName, fields, explicitVersion);
+
+    // [6b] DEPLOY stakeable formats (v1/v3) carry CONSTRUCTOR_PARAMS as a
+    // single plain field, unlike the rest-field ('...CONSTRUCTOR_PARAMS')
+    // v0/v2 formats. serialize() String()-joins an array pushed into a
+    // plain field, so ['alice','1000'] would silently reach the wire as
+    // one comma-joined segment ('alice,1000') and the indexer/VM would
+    // hand the contract constructor ONE corrupted arg on an immutable
+    // deploy. Fail loudly instead. Keyed off the selected format's field
+    // shape (plain vs rest), not hard-coded version numbers, so it stays
+    // correct if the format list evolves.
+    if (actionName === 'DEPLOY'
+        && Array.isArray(fields.CONSTRUCTOR_PARAMS) && fields.CONSTRUCTOR_PARAMS.length > 1
+        && selected.formatFields.includes('CONSTRUCTOR_PARAMS')) {
+        throw new SDKValidationError(
+            'INVALID_FIELD_VALUE',
+            'DEPLOY v' + selected.version + ' (stakeable) carries CONSTRUCTOR_PARAMS as a single wire field and accepts at most one entry; got ' + fields.CONSTRUCTOR_PARAMS.length + '. Pack multiple values into one param your constructor parses, or use a non-stakeable format (v0/v2).',
+            { field: 'CONSTRUCTOR_PARAMS', action: actionName, version: selected.version, count: fields.CONSTRUCTOR_PARAMS.length }
+        );
+    }
+
+    // [7] Serialize to pipe-delimited string
+    let actionString = FormatSelector.serialize(actionName, selected.version, fields);
+
+    return { action: actionName, version: selected.version, actionString, fields };
+}
+
 
 class Actions {
 
@@ -76,8 +196,8 @@ class Actions {
 
     /**
      * The pure { action, params } -> wire-string core: steps [1] through [7],
-     * no network and no encoder. Shared with `sdk.preflight`, which used to
-     * re-implement a SUBSET of it and silently forgot a behaviour each time
+     * no network and no encoder. Shared with `sdk.preflight`, whose separate
+     * incomplete implementation silently forgot a behaviour each time
      * one was added here (camelCase normalization, then params-level VERSION
      * lifting, and LEGS was next in line). Two copies of "how params become a
      * wire string" is how a pre-flight verdict ends up describing a different
@@ -92,120 +212,10 @@ class Actions {
      * result carries, so a result can be fed straight back in.
      */
     composeActionString(data, { validate = true } = {}) {
-        // [1] Validate request structure
-        if (!data || !data.action)
-            throw new SDKValidationError('MISSING_ACTION', 'Request must include an action field');
-
-        let actionName = String(data.action).toUpperCase();
-        let params     = data.params || data.fields || {};
-
-        // [2] Validate ACTION type exists
-        if (!this.actions.includes(actionName))
-            throw new SDKValidationError('UNKNOWN_ACTION', 'Unknown ACTION type: ' + actionName, { action: actionName, validActions: this.actions });
-
-        // [3] Normalize field names (camelCase -> UPPER_SNAKE_CASE)
-        let fields = this.util.normalizeFields(params);
-
-        // [3b] DEPLOY pre-processing: base64-encode raw 'code' into CODE_ENCODING.
-        // base64 (1.33x) instead of hex (2x): the action string is pipe-delimited and
-        // base64's alphabet (A-Za-z0-9+/=) has no '|', so it stays delimiter-safe while
-        // cutting the on-chain payload by a third (lifts the single-tx contract ceiling).
-        if (actionName === 'DEPLOY' && fields.CODE !== undefined && fields.CODE !== null && fields.CODE_ENCODING === undefined) {
-            let code = String(fields.CODE);
-            fields.CODE_ENCODING = Buffer.from(code, 'utf8').toString('base64');
-            delete fields.CODE;
-        }
-
-        // [3c] EXECUTE/DEPLOY: ensure PARAMS/CONSTRUCTOR_PARAMS stay as arrays (skip number casting)
-        if (actionName === 'EXECUTE' && fields.PARAMS !== undefined) {
-            if (!Array.isArray(fields.PARAMS))
-                fields.PARAMS = [String(fields.PARAMS)];
-            else
-                fields.PARAMS = fields.PARAMS.map(p => String(p));
-        }
-        if (actionName === 'DEPLOY' && fields.CONSTRUCTOR_PARAMS !== undefined) {
-            if (!Array.isArray(fields.CONSTRUCTOR_PARAMS))
-                fields.CONSTRUCTOR_PARAMS = [String(fields.CONSTRUCTOR_PARAMS)];
-            else
-                fields.CONSTRUCTOR_PARAMS = fields.CONSTRUCTOR_PARAMS.map(p => String(p));
-        }
-
-        // [3d] LIST: ITEM is a rest-field; coerce to an array of strings so a
-        // multi-item list serializes as individual pipe segments (a lone string
-        // stays a single-item list, preserving the old call shape)
-        if (actionName === 'LIST' && fields.ITEM !== undefined && fields.ITEM !== null) {
-            if (!Array.isArray(fields.ITEM))
-                fields.ITEM = [String(fields.ITEM)];
-            else
-                fields.ITEM = fields.ITEM.map(i => String(i));
-        }
-
-        // [3e] LEGS (multi-destination SEND, multi-tick DESTROY/AIRDROP): each
-        // leg is its own field map, so it needs the same camelCase->UPPER_SNAKE
-        // and numeric normalization the top-level map gets. Mis-shaped entries
-        // pass through untouched for the validator to report.
-        fields = this._normalizeLegs(fields);
-
-        // [3f] A top-level `version` is the same request spelled the other way (the
-        // shape sdk.decoder.parse() output and pre-flight callers carry). Fold it
-        // into fields.VERSION HERE, before casting and validation, so the
-        // version-dependent rules in validator.js check the version that will
-        // actually be serialized: they read fields.VERSION only, and an unfolded
-        // top-level spelling lets VOTE/DELEGATE/DEPLOY validate against the
-        // auto-selected format and then serialize a different one, costing a miner
-        // fee on an action the indexer rejects. A params-level VERSION still wins,
-        // and 0 is a valid version, so the tests are against undefined/null/''.
-        if ((fields.VERSION === undefined || fields.VERSION === null || fields.VERSION === '')
-            && data.version !== undefined && data.version !== null && data.version !== '')
-            fields.VERSION = data.version;
-
-        // [4] Cast numeric fields
-        fields = this.util.setNumberFormats(fields);
-
-        // [5] Validate fields against action-specific rules.
-        // Skipped for pre-flight: see the `validate` note on this method.
-        if (validate) this.validator.validateOrThrow(actionName, fields);
-
-        // [6] Select optimal format version
-        // Callers may force a specific version by passing `version` in params (e.g. STAKE v1 vs v2).
-        // VERSION is otherwise an auto-field set by the selector from the format key.
-        // Both spellings arrive here as fields.VERSION: the top-level one was folded
-        // in at [3f] so validation above saw it too.
-        let explicitVersion = undefined;
-        if (fields.VERSION !== undefined && fields.VERSION !== null && fields.VERSION !== '') {
-            explicitVersion = fields.VERSION;
-            delete fields.VERSION;
-        }
-        let selected = FormatSelector.select(actionName, fields, explicitVersion);
-
-        // [6b] DEPLOY stakeable formats (v1/v3) carry CONSTRUCTOR_PARAMS as a
-        // single plain field, unlike the rest-field ('...CONSTRUCTOR_PARAMS')
-        // v0/v2 formats. serialize() String()-joins an array pushed into a
-        // plain field, so ['alice','1000'] would silently reach the wire as
-        // one comma-joined segment ('alice,1000') and the indexer/VM would
-        // hand the contract constructor ONE corrupted arg on an immutable
-        // deploy. Fail loudly instead. Keyed off the selected format's field
-        // shape (plain vs rest), not hard-coded version numbers, so it stays
-        // correct if the format list evolves.
-        if (actionName === 'DEPLOY'
-            && Array.isArray(fields.CONSTRUCTOR_PARAMS) && fields.CONSTRUCTOR_PARAMS.length > 1
-            && selected.formatFields.includes('CONSTRUCTOR_PARAMS')) {
-            throw new SDKValidationError(
-                'INVALID_FIELD_VALUE',
-                'DEPLOY v' + selected.version + ' (stakeable) carries CONSTRUCTOR_PARAMS as a single wire field and accepts at most one entry; got ' + fields.CONSTRUCTOR_PARAMS.length + '. Pack multiple values into one param your constructor parses, or use a non-stakeable format (v0/v2).',
-                { field: 'CONSTRUCTOR_PARAMS', action: actionName, version: selected.version, count: fields.CONSTRUCTOR_PARAMS.length }
-            );
-        }
-
-        // [7] Serialize to pipe-delimited string
-        let actionString = FormatSelector.serialize(actionName, selected.version, fields);
-
-        return {
-            action:       actionName,
-            version:      selected.version,
-            actionString: actionString,
-            fields:       fields
-        };
+        const { actionName, params } = resolveActionInput(this, data);
+        let fields = normalizeActionFields(this, actionName, params);
+        fields = applyActionVersion(this, data, fields);
+        return serializeAction(this, actionName, fields, validate);
     }
 
     // Main entry point: create an action string from user input

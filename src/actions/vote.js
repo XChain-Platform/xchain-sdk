@@ -36,6 +36,67 @@ function isSet(v) {
     return v !== undefined && v !== null && String(v).trim() !== '';
 }
 
+function pollSettings(owner, values, ctx) {
+    const opts = owner._optionArray(values.options, ctx);
+
+    // MAX_SELECTIONS defaults to 1; must be 1..optionCount.
+    let ms = isSet(values.maxSelections) ? Number(values.maxSelections) : 1;
+    if (!Number.isInteger(ms) || ms < 1 || ms > opts.length) {
+        throw new Error(`${ctx}: maxSelections must be an integer between 1 and the option count (${opts.length})`);
+    }
+
+    const tm = isSet(values.tallyMode) ? String(values.tallyMode) : 'approval';
+    if (!TALLY_MODES.includes(tm)) throw new Error(`${ctx}: tallyMode must be one of ${TALLY_MODES.join(', ')}`);
+
+    const wm = isSet(values.weightMode) ? String(values.weightMode) : 'balance';
+    if (!WEIGHT_MODES.includes(wm)) throw new Error(`${ctx}: weightMode must be one of ${WEIGHT_MODES.join(', ')}`);
+
+    // quadratic needs a per-voter floor or a holder can split across
+    // addresses to inflate total weight (VOTE.md Rules).
+    if (wm === 'quadratic' && !(Number(values.minVoteBalance) > 0)) {
+        throw new Error(`${ctx}: quadratic weighting requires minVoteBalance > 0`);
+    }
+    if (isSet(values.quorum)) owner._assertFraction(values.quorum, 'quorum', ctx);
+    if (isSet(values.decideThreshold)) owner._assertFraction(values.decideThreshold, 'decideThreshold', ctx);
+    if (isSet(values.minVoters) && (!Number.isInteger(Number(values.minVoters)) || Number(values.minVoters) < 0)) {
+        throw new Error(`${ctx}: minVoters must be a non-negative integer`);
+    }
+
+    return { opts, ms, tm, wm };
+}
+
+function addPollCallback(p, values, ctx) {
+    // Callback fields make the poll binding. CALLBACK_METHOD is required
+    // once a contract is set; the other three are optional.
+    if (isSet(values.callbackContract)) {
+        if (!isSet(values.callbackMethod)) {
+            throw new Error(`${ctx}: callbackMethod is required when callbackContract is set (binding poll)`);
+        }
+        p.callbackContract = String(values.callbackContract);
+        p.callbackMethod = String(values.callbackMethod);
+        if (isSet(values.callbackParams)) {
+            p.callbackParams = Array.isArray(values.callbackParams) ? JSON.stringify(values.callbackParams) : String(values.callbackParams);
+        }
+        const cbOn = isSet(values.callbackOn) ? String(values.callbackOn) : 'pass';
+        if (!CALLBACK_ON.includes(cbOn)) throw new Error(`${ctx}: callbackOn must be one of ${CALLBACK_ON.join(', ')}`);
+        p.callbackOn = cbOn;
+        if (isSet(values.gasEscrow)) p.gasEscrow = String(values.gasEscrow);
+        // Timelock between finalization and the callback firing. Honored
+        // only from the VOTE_CALLBACK_TIMELOCK flag-day; below it the
+        // indexer NULLS the field and still accepts the poll, so a caller
+        // that sets it early publishes a permanent poll whose delay does
+        // not exist. The activation check is the caller's (it needs the
+        // chain's block time); this builder only validates the shape.
+        if (isSet(values.callbackDelayBlocks)) {
+            const cbd = Number(values.callbackDelayBlocks);
+            if (!Number.isInteger(cbd) || cbd < 0) {
+                throw new Error(`${ctx}: callbackDelayBlocks must be a non-negative integer`);
+            }
+            p.callbackDelayBlocks = String(cbd);
+        }
+    }
+}
+
 class VoteHelpers {
 
     // Exposed so callers can populate dropdowns / validate without hardcoding.
@@ -56,39 +117,19 @@ class VoteHelpers {
         if (!isSet(tick))     throw new Error(`${ctx}: tick is required`);
         if (!isSet(endBlock)) throw new Error(`${ctx}: endBlock is required (a future block)`);
 
-        const opts = this._optionArray(options, ctx);
-
-        // MAX_SELECTIONS defaults to 1; must be 1..optionCount.
-        let ms = isSet(maxSelections) ? Number(maxSelections) : 1;
-        if (!Number.isInteger(ms) || ms < 1 || ms > opts.length) {
-            throw new Error(`${ctx}: maxSelections must be an integer between 1 and the option count (${opts.length})`);
-        }
-
-        const tm = isSet(tallyMode) ? String(tallyMode) : 'approval';
-        if (!TALLY_MODES.includes(tm)) throw new Error(`${ctx}: tallyMode must be one of ${TALLY_MODES.join(', ')}`);
-
-        const wm = isSet(weightMode) ? String(weightMode) : 'balance';
-        if (!WEIGHT_MODES.includes(wm)) throw new Error(`${ctx}: weightMode must be one of ${WEIGHT_MODES.join(', ')}`);
-
-        // quadratic needs a per-voter floor or a holder can split across
-        // addresses to inflate total weight (VOTE.md Rules).
-        if (wm === 'quadratic' && !(Number(minVoteBalance) > 0)) {
-            throw new Error(`${ctx}: quadratic weighting requires minVoteBalance > 0`);
-        }
-        if (isSet(quorum)) this._assertFraction(quorum, 'quorum', ctx);
-        if (isSet(decideThreshold)) this._assertFraction(decideThreshold, 'decideThreshold', ctx);
-        if (isSet(minVoters) && (!Number.isInteger(Number(minVoters)) || Number(minVoters) < 0)) {
-            throw new Error(`${ctx}: minVoters must be a non-negative integer`);
-        }
+        const settings = pollSettings(this, {
+            options, maxSelections, tallyMode, weightMode, minVoteBalance,
+            quorum, decideThreshold, minVoters,
+        }, ctx);
 
         const p = {
             version: 0,
             tick: String(tick).trim(),
             endBlock: String(endBlock),
-            options: opts.join(','),
-            maxSelections: String(ms),
-            tallyMode: tm,
-            weightMode: wm,
+            options: settings.opts.join(','),
+            maxSelections: String(settings.ms),
+            tallyMode: settings.tm,
+            weightMode: settings.wm,
         };
         if (isSet(quorum))          p.quorum = String(quorum);
         if (isSet(minVoters))       p.minVoters = String(minVoters);
@@ -97,35 +138,10 @@ class VoteHelpers {
         if (isSet(question))        p.question = String(question);
         if (isSet(deposit))         p.deposit = String(deposit);
 
-        // Callback fields make the poll binding. CALLBACK_METHOD is required
-        // once a contract is set; the other three are optional.
-        if (isSet(callbackContract)) {
-            if (!isSet(callbackMethod)) {
-                throw new Error(`${ctx}: callbackMethod is required when callbackContract is set (binding poll)`);
-            }
-            p.callbackContract = String(callbackContract);
-            p.callbackMethod = String(callbackMethod);
-            if (isSet(callbackParams)) {
-                p.callbackParams = Array.isArray(callbackParams) ? JSON.stringify(callbackParams) : String(callbackParams);
-            }
-            const cbOn = isSet(callbackOn) ? String(callbackOn) : 'pass';
-            if (!CALLBACK_ON.includes(cbOn)) throw new Error(`${ctx}: callbackOn must be one of ${CALLBACK_ON.join(', ')}`);
-            p.callbackOn = cbOn;
-            if (isSet(gasEscrow)) p.gasEscrow = String(gasEscrow);
-            // Timelock between finalization and the callback firing. Honored
-            // only from the VOTE_CALLBACK_TIMELOCK flag-day; below it the
-            // indexer NULLS the field and still accepts the poll, so a caller
-            // that sets it early publishes a permanent poll whose delay does
-            // not exist. The activation check is the caller's (it needs the
-            // chain's block time); this builder only validates the shape.
-            if (isSet(callbackDelayBlocks)) {
-                const cbd = Number(callbackDelayBlocks);
-                if (!Number.isInteger(cbd) || cbd < 0) {
-                    throw new Error(`${ctx}: callbackDelayBlocks must be a non-negative integer`);
-                }
-                p.callbackDelayBlocks = String(cbd);
-            }
-        }
+        addPollCallback(p, {
+            callbackContract, callbackMethod, callbackParams, callbackOn,
+            gasEscrow, callbackDelayBlocks,
+        }, ctx);
         return p;
     }
 

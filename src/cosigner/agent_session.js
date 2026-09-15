@@ -52,49 +52,92 @@ const { SDKPolicyError } = require('../utils/errors.js');
 // observer + file-backed window store around it.
 const { evaluatePolicy, addDecimal, hasEnforceableCap, UNRESOLVED_TICK_BUCKET } = require('./policy_evaluator.js');
 
+function validatePolicy(policy) {
+    if (!Array.isArray(policy.allowedActions) || policy.allowedActions.length === 0)
+        throw new SDKPolicyError('POLICY_INVALID',
+            'AgentSession requires a non-empty allowedActions list (fail-closed: nothing is allowed by default)');
+    const win = policy.maxPerWindow || null;
+    if (win && (!Number.isFinite(win.hours) || win.hours <= 0))
+        throw new SDKPolicyError('POLICY_INVALID', 'maxPerWindow.hours must be a positive number');
+    if (policy.confirmAbove && typeof policy.confirmAbove.handler !== 'function')
+        throw new SDKPolicyError('POLICY_INVALID', 'confirmAbove requires a handler function');
+    // How long an idempotency key is REMEMBERED, which is not how long a spend
+    // window lasts (see _pruned).
+    if (policy.idempotencyHours !== undefined
+        && (!Number.isFinite(policy.idempotencyHours) || policy.idempotencyHours <= 0))
+        throw new SDKPolicyError('POLICY_INVALID', 'idempotencyHours must be a positive number');
+    // Require at least one enforceable ceiling, BREAKING for a policy that ships
+    // an action allowlist with no monetary ceiling: such a policy bounds nothing,
+    // so an automated agent can execute an allowed value-moving action without
+    // limit. Running without a ceiling is an explicit, auditable opt-in rather
+    // than the state a caller reaches by omission. Same shape as the X402Client
+    // fail-closed default: the default is safe, unbounded is a word someone types.
+    //
+    // The cap tables are tested for an ENFORCEABLE entry, not for truthiness:
+    // `maxPerAction: {}`, `{ SEND: {} }` and `maxPerWindow.perTick: {}` are all
+    // truthy objects that capFor resolves to undefined for every lookup, so a
+    // truthiness test passes each one through this gate while every amount
+    // comparison in policyEvaluator is skipped - an allowlisted SEND of any size,
+    // under a policy the operator reads as capped.
+    const hasCeiling = hasEnforceableCap(policy.maxPerAction, { twoLevel: true })
+        || hasEnforceableCap(win && win.perTick)
+        || !!policy.confirmAbove;
+    if (!hasCeiling && policy.allowUnbounded !== true)
+        throw new SDKPolicyError('POLICY_INVALID',
+            'AgentSession requires at least one spend ceiling: maxPerAction, maxPerWindow.perTick, ' +
+            'or confirmAbove. An allowlist alone bounds WHICH actions run, never how much they move, ' +
+            'and a cap table with no usable entry (e.g. {} or { SEND: {} }) is not a ceiling. ' +
+            'Set allowUnbounded: true to run without one.');
+    return win;
+}
+function authorizeSubmission(session, evaluation, submitOpts) {
+    // Record the window entry on AUTHORIZATION, before the irreversible broadcast,
+    // then patch in the real txid on success. Mirrors coSigner._recordBudget /
+    // windowStore ("consume the budget on authorization"): _submitInner can throw
+    // AFTER the money has moved (a CONFIRMATION_TIMEOUT on the 120s indexer wait, a
+    // P2SH phase-2 failure, a lost broadcast ACK), and if usage were recorded only
+    // afterward that throw would leave the spend on-chain with the window un-consumed
+    // and the cap silently under-counting -- exactly the case a retrying agent hits.
+    // A pre-broadcast failure (createTx/signPsbt) conservatively burns budget too;
+    // that is the deliberate fail-closed trade the co-signer already makes, and it
+    // keeps this from being the one guardrail whose ceiling stops binding on error.
+    // At-most-once on the automated rail. When the caller supplies a stable
+    // idempotencyKey, a retry after a post-broadcast throw is REFUSED rather
+    // than re-broadcast: _submitInner can throw after the tx already landed
+    // (CONFIRMATION_TIMEOUT on the indexer wait, a lost ACK), and a naive
+    // agent retry would otherwise build and pay a SECOND transaction. The
+    // refusal carries the prior txid (when known) so the agent can resume
+    // waiting on the existing payment instead of re-sending. Opt-in: absent a
+    // key, behavior is unchanged. Fail-closed and needs no indexer to hold.
+    const idempotencyKey = submitOpts && submitOpts.idempotencyKey;
+    // BREAKING: the key is REQUIRED rather than honored when offered.
+    // Opt-in idempotency protects only the callers who already knew to
+    // ask, and the caller who does not know is exactly the automated agent that
+    // retries a timed-out submit and pays twice. Refusing here costs a caller one
+    // argument; the alternative costs a duplicate payment. allowUnkeyedSubmits
+    // restores the old behavior for a caller who has decided that is acceptable.
+    if ((idempotencyKey === undefined || idempotencyKey === null) && !session.policy.allowUnkeyedSubmits)
+        session._deny('POLICY_IDEMPOTENCY_REQUIRED',
+            'a spend-capable submit needs a stable submitOpts.idempotencyKey so a retry after a lost ' +
+            'acknowledgement is refused instead of paying twice. Set allowUnkeyedSubmits: true to opt out.',
+            { action: evaluation.action });
+    if (idempotencyKey !== undefined && idempotencyKey !== null) {
+        const keyStr = String(idempotencyKey);
+        const prior = session._pruned().entries.find((e) => e.key === keyStr);
+        if (prior)
+            session._deny('POLICY_DUPLICATE_SUBMIT',
+                `a submission with idempotencyKey ${keyStr} was already recorded` +
+                ` (keys are remembered for ${session.policy.idempotencyHours}h)` +
+                (prior.txid ? ` (txid ${prior.txid})` : '') +
+                '; not broadcasting again. Resume the existing payment instead of retrying.',
+                { idempotencyKey: keyStr, txid: prior.txid || null });
+    }
+    return session._recordUsage(evaluation, null, idempotencyKey);
+}
 class AgentSession extends WalletSession {
-
     constructor(sdk, wif, policy = {}, opts = {}) {
         super(sdk, wif, opts);
-
-        if (!Array.isArray(policy.allowedActions) || policy.allowedActions.length === 0)
-            throw new SDKPolicyError('POLICY_INVALID',
-                'AgentSession requires a non-empty allowedActions list (fail-closed: nothing is allowed by default)');
-
-        const win = policy.maxPerWindow || null;
-        if (win && (!Number.isFinite(win.hours) || win.hours <= 0))
-            throw new SDKPolicyError('POLICY_INVALID', 'maxPerWindow.hours must be a positive number');
-        if (policy.confirmAbove && typeof policy.confirmAbove.handler !== 'function')
-            throw new SDKPolicyError('POLICY_INVALID', 'confirmAbove requires a handler function');
-        // How long an idempotency key is REMEMBERED, which is not how long a spend
-        // window lasts (see _pruned).
-        if (policy.idempotencyHours !== undefined
-            && (!Number.isFinite(policy.idempotencyHours) || policy.idempotencyHours <= 0))
-            throw new SDKPolicyError('POLICY_INVALID', 'idempotencyHours must be a positive number');
-
-        // Require at least one enforceable ceiling, BREAKING for a policy that ships
-        // an action allowlist with no monetary ceiling: such a policy bounds nothing,
-        // so an automated agent can execute an allowed value-moving action without
-        // limit. Running without a ceiling is an explicit, auditable opt-in rather
-        // than the state a caller reaches by omission. Same shape as the X402Client
-        // fail-closed default: the default is safe, unbounded is a word someone types.
-        //
-        // The cap tables are tested for an ENFORCEABLE entry, not for truthiness:
-        // `maxPerAction: {}`, `{ SEND: {} }` and `maxPerWindow.perTick: {}` are all
-        // truthy objects that capFor resolves to undefined for every lookup, so a
-        // truthiness test passes each one through this gate while every amount
-        // comparison in policyEvaluator is skipped - an allowlisted SEND of any size,
-        // under a policy the operator reads as capped.
-        const hasCeiling = hasEnforceableCap(policy.maxPerAction, { twoLevel: true })
-            || hasEnforceableCap(win && win.perTick)
-            || !!policy.confirmAbove;
-        if (!hasCeiling && policy.allowUnbounded !== true)
-            throw new SDKPolicyError('POLICY_INVALID',
-                'AgentSession requires at least one spend ceiling: maxPerAction, maxPerWindow.perTick, ' +
-                'or confirmAbove. An allowlist alone bounds WHICH actions run, never how much they move, ' +
-                'and a cap table with no usable entry (e.g. {} or { SEND: {} }) is not a ceiling. ' +
-                'Set allowUnbounded: true to run without one.');
-
+        const win = validatePolicy(policy);
         this.policy = {
             allowedActions:      new Set(policy.allowedActions.map((a) => String(a).toUpperCase())),
             allowedDestinations: policy.allowedDestinations ? new Set(policy.allowedDestinations) : null,
@@ -330,49 +373,7 @@ class AgentSession extends WalletSession {
                     { action: evaluation.action, tick: evaluation.tick, amount: evaluation.amount });
         }
 
-        // Record the window entry on AUTHORIZATION, before the irreversible broadcast,
-        // then patch in the real txid on success. Mirrors coSigner._recordBudget /
-        // windowStore ("consume the budget on authorization"): _submitInner can throw
-        // AFTER the money has moved (a CONFIRMATION_TIMEOUT on the 120s indexer wait, a
-        // P2SH phase-2 failure, a lost broadcast ACK), and if usage were recorded only
-        // afterward that throw would leave the spend on-chain with the window un-consumed
-        // and the cap silently under-counting -- exactly the case a retrying agent hits.
-        // A pre-broadcast failure (createTx/signPsbt) conservatively burns budget too;
-        // that is the deliberate fail-closed trade the co-signer already makes, and it
-        // keeps this from being the one guardrail whose ceiling stops binding on error.
-        // At-most-once on the automated rail. When the caller supplies a stable
-        // idempotencyKey, a retry after a post-broadcast throw is REFUSED rather
-        // than re-broadcast: _submitInner can throw after the tx already landed
-        // (CONFIRMATION_TIMEOUT on the indexer wait, a lost ACK), and a naive
-        // agent retry would otherwise build and pay a SECOND transaction. The
-        // refusal carries the prior txid (when known) so the agent can resume
-        // waiting on the existing payment instead of re-sending. Opt-in: absent a
-        // key, behavior is unchanged. Fail-closed and needs no indexer to hold.
-        const idempotencyKey = submitOpts && submitOpts.idempotencyKey;
-        // BREAKING: the key is now REQUIRED rather than honoured when
-        // offered. Opt-in idempotency protects only the callers who already knew to
-        // ask, and the caller who does not know is exactly the automated agent that
-        // retries a timed-out submit and pays twice. Refusing here costs a caller one
-        // argument; the alternative costs a duplicate payment. allowUnkeyedSubmits
-        // restores the old behavior for a caller who has decided that is acceptable.
-        if ((idempotencyKey === undefined || idempotencyKey === null) && !this.policy.allowUnkeyedSubmits)
-            this._deny('POLICY_IDEMPOTENCY_REQUIRED',
-                'a spend-capable submit needs a stable submitOpts.idempotencyKey so a retry after a lost ' +
-                'acknowledgement is refused instead of paying twice. Set allowUnkeyedSubmits: true to opt out.',
-                { action: evaluation.action });
-        if (idempotencyKey !== undefined && idempotencyKey !== null) {
-            const keyStr = String(idempotencyKey);
-            const prior = this._pruned().entries.find((e) => e.key === keyStr);
-            if (prior)
-                this._deny('POLICY_DUPLICATE_SUBMIT',
-                    `a submission with idempotencyKey ${keyStr} was already recorded` +
-                    ` (keys are remembered for ${this.policy.idempotencyHours}h)` +
-                    (prior.txid ? ` (txid ${prior.txid})` : '') +
-                    '; not broadcasting again. Resume the existing payment instead of retrying.',
-                    { idempotencyKey: keyStr, txid: prior.txid || null });
-        }
-
-        const entry = this._recordUsage(evaluation, null, idempotencyKey);
+        const entry = authorizeSubmission(this, evaluation, submitOpts);
         let result;
         try {
             result = await super._submitInner(actionData, encoderOpts, submitOpts);
