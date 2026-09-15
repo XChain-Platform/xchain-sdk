@@ -22,6 +22,29 @@
 const { SDKFormatError } = require('../../utils/errors.js');
 const { LEGS_FIELD } = require('./field_names.js');
 
+// Serialize a repeated-field format from its legs. `selector` is the receiver
+// serialize() was called on, so every lookup resolves exactly as it did inline.
+function serializeRepeated(selector, action, version, fields, group, legs) {
+    /*
+     * Repeated-field format (multi-leg SEND/DESTROY/AIRDROP). A FLAT
+     * field map cannot express leg 2: walking the format list would
+     * read the same fields[NAME] for every repetition and emit a
+     * well-formed action that pays leg 1 twice. Refuse loudly.
+     */
+    if (!legs)
+        throw new SDKFormatError(
+            'REPEATED_FORMAT_REQUIRES_LEGS',
+            action + ' v' + version + ' is a multi-leg format (' + group.group.join('|')
+                + ' repeats) and cannot be built from a flat field map. Pass '
+                + LEGS_FIELD + ': [{ ' + group.group.map(f => f.toLowerCase()).join(', ') + ' }, ...] instead.',
+            { action, version, group: group.group, prefix: group.prefix, suffix: group.suffix }
+        );
+    let parts = selector._buildRepeatedParts(action, version, fields, group, legs);
+    while (parts.length > 2 && parts[parts.length - 1] === '')
+        parts.pop();
+    return parts.join('|');
+}
+
 // Methods are called as FormatSelector.<name>(), so `this` is the class exactly
 // as it was when they were declared static in its body.
 module.exports = {
@@ -91,26 +114,9 @@ module.exports = {
         let group = this.getRepeatedGroup(action, version);
         let legs  = this.getLegs(fields);
 
-        if (group) {
-            /*
-             * Repeated-field format (multi-leg SEND/DESTROY/AIRDROP). A FLAT
-             * field map cannot express leg 2: walking the format list would
-             * read the same fields[NAME] for every repetition and emit a
-             * well-formed action that pays leg 1 twice. Refuse loudly.
-             */
-            if (!legs)
-                throw new SDKFormatError(
-                    'REPEATED_FORMAT_REQUIRES_LEGS',
-                    action + ' v' + version + ' is a multi-leg format (' + group.group.join('|')
-                        + ' repeats) and cannot be built from a flat field map. Pass '
-                        + LEGS_FIELD + ': [{ ' + group.group.map(f => f.toLowerCase()).join(', ') + ' }, ...] instead.',
-                    { action, version, group: group.group, prefix: group.prefix, suffix: group.suffix }
-                );
-            let parts = this._buildRepeatedParts(action, version, fields, group, legs);
-            while (parts.length > 2 && parts[parts.length - 1] === '')
-                parts.pop();
-            return parts.join('|');
-        }
+        // Repeated-field format: built from the legs, never from the flat map
+        if (group)
+            return serializeRepeated(this, action, version, fields, group, legs);
 
         // Single-leg format fed a one-leg array: fold the leg into the flat
         // map so `legs:[{...}]` works across every version of an action.
