@@ -93,6 +93,9 @@ describe('CheckpointVerifier (SDK)', function () {
         assert.strictEqual(result.validSigs, 3);
         assert.strictEqual(result.quorum, 3);
     });
+});
+
+describe('CheckpointVerifier (SDK)', function () {
 
     it('floors quorum at a simple majority: N=3 requires 2, not bare 2f+1=1', function () {
         // Spec (ANCHOR.md): quorum = max(2f+1, ceil((N+1)/2)). At N=3 bare 2f+1
@@ -137,6 +140,9 @@ describe('CheckpointVerifier (SDK)', function () {
         assert.strictEqual(result.valid, false);
         assert.strictEqual(result.validSigs, 0);
     });
+});
+
+describe('CheckpointVerifier (SDK)', function () {
 
     it('an empty validator set can never be valid', function () {
         let key = makeKeypair();
@@ -167,25 +173,25 @@ describe('CheckpointVerifier (SDK)', function () {
     });
 });
 
+// Each key of a source carries the SAME source + weight (DELEGATE v0 additive,
+// source-deduped): mirrors the hub/indexer snapshot shape.
+function vset(entries) {
+    let out = [];
+    for (let e of entries)
+        for (let k of e.keys)
+            out.push({ pubkey: k.pubkeyHex, source: e.source, weight: String(e.weight) });
+    return out;
+}
+function signAll(keys, canonical) {
+    return JSON.stringify(keys.map(k => ({ pubkey: k.pubkeyHex, sig: signHex(k.privateKey, canonical) })));
+}
+
 // Stake-weighted regime (STAKE_WEIGHTED_QUORUM / WI-1). On a network where the
 // flag-day is active (regtest activation = 0) the SDK must apply the same
 // source-deduped 3·Σ > 2·S predicate the hub finalizes on, NOT the count 2f+1 -
 // otherwise it false-rejects a stake-heavy minority the federation anchored, and
 // unsafe-accepts a key-count majority that lacks stake majority.
 describe('CheckpointVerifier - stake-weighted quorum (SDK)', function () {
-
-    // Each key of a source carries the SAME source + weight (DELEGATE v0 additive,
-    // source-deduped): mirrors the hub/indexer snapshot shape.
-    function vset(entries) {
-        let out = [];
-        for (let e of entries)
-            for (let k of e.keys)
-                out.push({ pubkey: k.pubkeyHex, source: e.source, weight: String(e.weight) });
-        return out;
-    }
-    function signAll(keys, canonical) {
-        return JSON.stringify(keys.map(k => ({ pubkey: k.pubkeyHex, sig: signHex(k.privateKey, canonical) })));
-    }
 
     it('weighted PASS: a single-source stake-heavy minority (>2/3 stake, below count) verifies', function () {
         // 4 distinct sources; A holds 70 of 100 stake. Only A's one key signs.
@@ -223,6 +229,9 @@ describe('CheckpointVerifier - stake-weighted quorum (SDK)', function () {
         assert.ok(result.validSigs >= result.quorum, 'would pass the count threshold');  // 3 >= 3
         assert.strictEqual(result.valid, false);                                        // 3·5 ≯ 2·100
     });
+});
+
+describe('CheckpointVerifier - stake-weighted quorum (SDK)', function () {
 
     it('weighted regime fails closed when the set carries no weight/source', function () {
         // An un-upgraded explorer (or a legacy bare-pubkey list) cannot prove stake
@@ -270,6 +279,9 @@ describe('CheckpointVerifier - stake-weighted quorum (SDK)', function () {
         ];
         assert.strictEqual(Checkpoint.verifyCheckpoint(cp, negative).valid, false, 'negative weight');
     });
+});
+
+describe('CheckpointVerifier - stake-weighted quorum (SDK)', function () {
 
     // canonicalCheckpoint appends the commitment suffix only when all four
     // fields are present, which is correct THERE (the bytes must match the hub), but it
