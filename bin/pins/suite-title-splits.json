@@ -398,6 +398,43 @@
       "test/unit/websocket.test/02_invalid_json_message.test.js",
       "test/unit/websocket.test/03_emit_and_connection_lost.test.js",
       "test/unit/websocket.test/04_latest_action_index_tracking.test.js"
+    ],
+    "test/unit/workflows.test.js": [
+      "test/unit/workflows.test.js",
+      "test/unit/workflows.test/01_deploy_and_fund.test.js",
+      "test/unit/workflows.test/02_deploy_stakeable_contract.test.js",
+      "test/unit/workflows.test/03_distribute_dividend.test.js",
+      "test/unit/workflows.test/04_attach_content.test.js",
+      "test/unit/workflows.test/05_deploy_contract_chunked_assembler_pre_flight.test.js",
+      "test/unit/workflows.test/06_deploy_contract_funding_leg.test.js",
+      "test/unit/workflows.test/07_resolve_deployed_contract.test.js",
+      "test/unit/workflows.test/08_deploy_contract_chunked_funding_leg.test.js",
+      "test/unit/workflows.test/09_action_index_of.test.js"
+    ],
+    "test/unit/x402.test.js": [
+      "test/unit/x402.test.js",
+      "test/unit/x402.test/01_x402_gateway.test.js",
+      "test/unit/x402.test/02_x402_gateway_payer_signature_binding.test.js",
+      "test/unit/x402.test/03_x402_client.test.js"
+    ],
+    "test/unit/xchain_sdk.test.js": [
+      "test/unit/xchain_sdk.test.js",
+      "test/unit/xchain_sdk.test/01_create_action.test.js",
+      "test/unit/xchain_sdk.test/02_deploy_pre_flight_constructor_params_warning.test.js",
+      "test/unit/xchain_sdk.test/03_encoder_methods.test.js",
+      "test/unit/xchain_sdk.test/04_explorer_query_re_exports.test.js",
+      "test/unit/xchain_sdk.test/05_wallet_methods.test.js",
+      "test/unit/xchain_sdk.test/06_explorer_passthrough_methods.test.js",
+      "test/unit/xchain_sdk.test/07_websocket_methods.test.js",
+      "test/unit/xchain_sdk.test/08_apply_endpoints.test.js",
+      "test/unit/xchain_sdk.test/09_action_shortcut_methods.test.js"
+    ],
+    "test/unit/preflight/engine.test.js": [
+      "test/unit/preflight/engine.test.js",
+      "test/unit/preflight/engine.test/01_input_normalization.test.js",
+      "test/unit/preflight/engine.test/02_report_shape_4_2.test.js",
+      "test/unit/preflight/engine.test/03_tier_precedence_4_2.test.js",
+      "test/unit/preflight/engine.test/04_severity_trust_model_4_2.test.js"
     ]
   }
 }
