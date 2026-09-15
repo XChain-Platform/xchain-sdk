@@ -10,5 +10,126 @@
       "test/unit/big_suite/writes.test.js"
     ]
   },
-  "splits": {}
+  "splits": {
+    "test/boundary/boundary.test.js": [
+      "test/boundary/boundary.test.js",
+      "test/boundary/boundary.test/01_tick_name_length_boundary.test.js",
+      "test/boundary/boundary.test/02_decimals_boundary.test.js",
+      "test/boundary/boundary.test/03_max_supply_boundary.test.js",
+      "test/boundary/boundary.test/04_description_length_boundary.test.js",
+      "test/boundary/boundary.test/05_message_plaintext_message_length_boundary.test.js",
+      "test/boundary/boundary.test/06_fiat_amount_format_boundary.test.js",
+      "test/boundary/boundary.test/07_address_destination_length_boundary.test.js",
+      "test/boundary/boundary.test/08_lock_field_boundary.test.js"
+    ],
+    "test/chaos/chaos.test.js": [
+      "test/chaos/chaos.test.js",
+      "test/chaos/chaos.test/01_encoder_client_network_chaos.test.js",
+      "test/chaos/chaos.test/02_hub_connector_network_chaos.test.js"
+    ],
+    "test/fuzz/fuzz.test.js": [
+      "test/fuzz/fuzz.test.js",
+      "test/fuzz/fuzz.test/01_garbage_types_for_send_param_fields.test.js",
+      "test/fuzz/fuzz.test/02_extreme_string_lengths.test.js",
+      "test/fuzz/fuzz.test/03_unicode_and_special_characters_in_memo.test.js",
+      "test/fuzz/fuzz.test/04_prototype_pollution_attempts.test.js",
+      "test/fuzz/fuzz.test/05_validator_with_garbage_inputs.test.js",
+      "test/fuzz/fuzz.test/06_format_selector_with_garbage_inputs.test.js",
+      "test/fuzz/fuzz.test/07_rapid_fire_random_actions.test.js"
+    ],
+    "test/integration/vm.test.js": [
+      "test/integration/vm.test.js",
+      "test/integration/vm.test/01_format_selector_rest_field_support.test.js",
+      "test/integration/vm.test/02_validator_vm_action_rules.test.js",
+      "test/integration/vm.test/03_contract_utils.test.js",
+      "test/integration/vm.test/04_contract_client.test.js",
+      "test/integration/vm.test/05_vm_module_exports.test.js",
+      "test/integration/vm.test/06_xchain_sdk_vm_convenience_methods.test.js",
+      "test/integration/vm.test/07_batch_builder_vm_actions.test.js",
+      "test/integration/vm.test/08_vm_actions_round_trip_serialize_verify.test.js",
+      "test/integration/vm.test/09_vm_actions_encoding_pre_flight.test.js",
+      "test/integration/vm.test/10_vm_actions_introspection.test.js"
+    ],
+    "test/unit/actions.test.js": [
+      "test/unit/actions.test.js",
+      "test/unit/actions.test/01_format_version_selection.test.js",
+      "test/unit/actions.test/02_create_action_result_structure.test.js",
+      "test/unit/actions.test/03_error_cases.test.js",
+      "test/unit/actions.test/04_pre_flight_encoding_validation.test.js",
+      "test/unit/actions.test/05_validate_action_dry_run.test.js",
+      "test/unit/actions.test/06_introspection.test.js",
+      "test/unit/actions.test/07_edge_cases.test.js",
+      "test/unit/actions.test/08_deploy_stakeable_constructor_params_guard.test.js",
+      "test/unit/actions.test/09_fiat_priced_dispenser_pipeline_round_prices.test.js",
+      "test/unit/actions.test/10_partial_unstake_claim_optional_amount.test.js",
+      "test/unit/actions.test/11_top_level_version_reaches_version_dependent_validation.test.js"
+    ],
+    "test/unit/batch_limits_conformance.test.js": [
+      "test/unit/batch_limits_conformance.test.js",
+      "test/unit/batch_limits_conformance.test/01_sdk_half.test.js",
+      "test/unit/batch_limits_conformance.test/02_arbiter_half_sibling_xchain_indexer_checkout.test.js",
+      "test/unit/batch_limits_conformance.test/03_weight_conformance_sdk_half.test.js",
+      "test/unit/batch_limits_conformance.test/04_weight_conformance_arbiter_half.test.js"
+    ],
+    "test/unit/betting.test.js": [
+      "test/unit/betting.test.js",
+      "test/unit/betting.test/01_bet_compose.test.js",
+      "test/unit/betting.test/02_bet_client_side_validation.test.js",
+      "test/unit/betting.test/03_bet_details_market_definition.test.js",
+      "test/unit/betting.test/04_bet_action_level_validation.test.js",
+      "test/unit/betting.test/05_bet_payout_projection.test.js",
+      "test/unit/betting.test/06_bet_client_surfaces.test.js"
+    ],
+    "test/unit/compression.test.js": [
+      "test/unit/compression.test.js",
+      "test/unit/compression.test/01_round_trip.test.js",
+      "test/unit/compression.test/02_compress_if_smaller_try_keep_if_smaller.test.js",
+      "test/unit/compression.test/03_inflate_is_fail_closed_spec_5_5.test.js",
+      "test/unit/compression.test/04_action_string_derivation_spec_5_1.test.js",
+      "test/unit/compression.test/05_gated_files_compress_then_encrypt_spec_5_4.test.js",
+      "test/unit/compression.test/06_golden_vectors.test.js",
+      "test/unit/compression.test/07_canonical_constants_conformance.test.js",
+      "test/unit/compression.test/08_lifecycle_manager_submits_against_the_bytes_the_encoder_wrote.test.js"
+    ],
+    "test/unit/contract_meta_preflight.test.js": [
+      "test/unit/contract_meta_preflight.test.js",
+      "test/unit/contract_meta_preflight.test/01_check_exported_meta.test.js",
+      "test/unit/contract_meta_preflight.test/02_sdk_deploy_pre_flight.test.js",
+      "test/unit/contract_meta_preflight.test/03_wallet_session_deploy_pre_flight.test.js",
+      "test/unit/contract_meta_preflight.test/04_workflows_deploy_pre_flight.test.js"
+    ],
+    "test/unit/convenience.test.js": [
+      "test/unit/convenience.test.js",
+      "test/unit/convenience.test/01_convenience_action_methods.test.js",
+      "test/unit/convenience.test/02_batch_builder.test.js"
+    ],
+    "test/unit/cosigner_hardening2.test.js": [
+      "test/unit/cosigner_hardening2.test.js",
+      "test/unit/cosigner_hardening2.test/01_g9_allowed_destinations_enforceability.test.js",
+      "test/unit/cosigner_hardening2.test/02_g6_window_store_durability.test.js",
+      "test/unit/cosigner_hardening2.test/03_g19_clock_guards.test.js"
+    ],
+    "test/unit/decoder/describe.test.js": [
+      "test/unit/decoder/describe.test.js",
+      "test/unit/decoder/describe.test/01_every_action_in_formats_js_has_a_describer.test.js",
+      "test/unit/decoder/describe.test/02_multi_destroy.test.js",
+      "test/unit/decoder/describe.test/03_address.test.js",
+      "test/unit/decoder/describe.test/04_adversarial_fixtures.test.js",
+      "test/unit/decoder/describe.test/05_an_address_row_is_not_amount_checked.test.js",
+      "test/unit/decoder/describe.test/06_xbridge.test.js",
+      "test/unit/decoder/describe.test/07_issue_v7_bridgeability_opt_in.test.js"
+    ],
+    "test/unit/format_selector.test.js": [
+      "test/unit/format_selector.test.js",
+      "test/unit/format_selector.test/01_format_selector_serialize_trailing_empty_fields_are_trimmed.test.js",
+      "test/unit/format_selector.test/02_format_selector_serialize_version_is_auto_populated.test.js",
+      "test/unit/format_selector.test/03_format_selector_serialize_empty_missing_fields_become_empty_strings.test.js",
+      "test/unit/format_selector.test/04_format_selector_get_format_fields.test.js",
+      "test/unit/format_selector.test/05_format_selector_get_populated_fields.test.js",
+      "test/unit/format_selector.test/06_format_selector_estimate_length.test.js",
+      "test/unit/format_selector.test/07_format_selector_explicit_version_rest_fields.test.js",
+      "test/unit/format_selector.test/08_format_selector_select_pinned_version_never_silently_drops_field.test.js",
+      "test/unit/format_selector.test/09_format_selector_select_explicit_version_must_be_canonical_integer.test.js"
+    ]
+  }
 }
