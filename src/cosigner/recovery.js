@@ -34,6 +34,7 @@
 
 const bitcoin = require('bitcoinjs-lib');
 const ecc     = require('@bitcoinerlab/secp256k1');
+const { secp256k1 } = require('@noble/curves/secp256k1');
 const MuSig2  = require('./musig2.js');
 const { exactU64 } = require('./co_signer.js');
 // Teach bitcoinjs to serialize a satoshi value above 2^53. Idempotent via
@@ -70,7 +71,6 @@ function localPairSigner(leaf, secretKeys) {
     if (!Array.isArray(secretKeys) || secretKeys.length !== 2)
         throw new Error('localPairSigner requires the pair of secret keys, in leaf order');
     const sk = secretKeys.map((k, i) => toBytes(k, `secretKeys[${i}]`));
-    const { secp256k1 } = require('@noble/curves/secp256k1');
     // Sanity: the supplied keys must aggregate to the leaf key (else the witness
     // would never satisfy the script). Fail loudly rather than emit a dead tx.
     const pub = sk.map((s) => Buffer.from(secp256k1.getPublicKey(s, true)));
