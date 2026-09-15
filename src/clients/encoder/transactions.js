@@ -19,6 +19,7 @@
  ********************************************************************/
 
 const { SDKEncoderError } = require('../../utils/errors.js');
+const bitcoin = require('bitcoinjs-lib');
 
 function buildCreateTxParams(params) {
     // `data` is optional. A transaction with no ACTION is a plain
@@ -277,7 +278,6 @@ module.exports = {
         // unable to run the check the submit path runs.
         if (result.carrierScripts) feeInfo.carrierScripts = result.carrierScripts;
         try {
-            const bitcoin = require('bitcoinjs-lib');
             let psbt = bitcoin.Psbt.fromHex(result.psbt);
 
             let inputTotal = 0;
