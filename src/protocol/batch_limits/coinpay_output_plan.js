@@ -17,7 +17,7 @@
 const mathjs = require('mathjs');
 
 /*
- * Per-payee COINPAY payment-output planning (spec row 31).
+ * Per-payee COINPAY payment-output planning.
  *
  * Inside a batch, each COINPAY obligation resolves its own payment output by FIRST
  * MATCH on the payee address over the batch's vout-sorted output set
@@ -36,9 +36,10 @@ const mathjs = require('mathjs');
  * (indexer, so the per-payee resolution below ever runs - mainnet at the SAME instant).
  * Both were armed together on 2026-08-14 precisely so no window exists where one is
  * live and the other is not. BELOW that instant a batched COINPAY settles nothing
- * regardless of the output plan (row 21), so this planner's rule has no live consensus
- * consequence on mainnet history; at and above it, the rule is load-bearing and a
- * composer that ignores it loses a settlement.
+ * regardless of the output plan, because the capture gate that would carry a batched
+ * COINPAY's payment output to the indexer is itself unarmed, so this planner's rule has
+ * no live consensus consequence on mainnet history; at and above it, the rule is
+ * load-bearing and a composer that ignores it loses a settlement.
  *
  * WHAT THIS CANNOT VERIFY FROM STRINGS ALONE: matching is exact string equality
  * between the `payee` / `address` you pass here and the address the FINISHED

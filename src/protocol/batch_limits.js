@@ -26,8 +26,9 @@
  * FIRST MATCH on the payee address (xchain-indexer/src/actions/coinpay.js
  * findPaymentOutput), so a batch settling two obligations to one seller
  * must pay that seller ONE combined output, not two. `planCoinpayOutputs`
- * and `checkCoinpayOutputPlan` near the bottom of this file state that rule
- * as pure, testable units, in the same shape as everything above.
+ * and `checkCoinpayOutputPlan` in batch_limits/coinpay_output_plan.js state
+ * that rule as pure, testable units, in the same shape as the rest of this
+ * module.
  *
  * The rules, verbatim from the arbiter:
  *
@@ -112,8 +113,22 @@
 
 'use strict';
 
-const { ACTION_ALIASES } = require('../decoder/aliases.js');
-const mathjs = require('mathjs');
+// Keep the weight constants and their readers here: xchain-documentation's constant-claims
+// test reads their `const` lines from this file as text. Keep mintTickKey here: the
+// structure gate declares this path as the home of the SQL its comment quotes.
+const {
+    BATCH_ACTION_LIMITS,
+    BATCH_GATED_ACTION_LIMITS,
+    BATCH_ACTION_LIMITS_ACTIVE,
+    UNRESOLVED_TICK_KEY,
+    CHILD_ISSUE_KEY,
+    LEGACY_FORMAT_ACTIONS,
+    isLegacyActionFormat,
+    expandAlias,
+} = require('./batch_limits/limit_tables.js');
+const { classifyIssueTick, formatVersion, classifyCommand } = require('./batch_limits/command_classification.js');
+const { commandTick, limitKeysInListOrder, paramsTick } = require('./batch_limits/tick_limits.js');
+const { planCoinpayOutputs, checkCoinpayOutputPlan } = require('./batch_limits/coinpay_output_plan.js');
 
 // Global per-BATCH command cap (indexer batch.js `commandLimit`).
 const BATCH_COMMAND_LIMIT = 250;
@@ -140,10 +155,11 @@ const BATCH_WEIGHT_BUDGET = 250;
 // arbiter short-circuits a format-4 DEPLOY into chunk storage before the VM
 // path ever runs, so it really is a row write; 30 would charge constructor
 // cost for work that has none. The format byte is read with the arbiter's own
-// derivation (`formatVersion` below), and only off the WIRE STRING: the
-// compose-side `actionWeight` sees a queued NAME with no serialized format
-// yet, so it keeps DEPLOY's full 30 there, which is the arbiter's own
-// fallback direction (unparseable falls through to the full weight).
+// derivation (`formatVersion`, in batch_limits/command_classification.js), and
+// only off the WIRE STRING: the compose-side `actionWeight` sees a queued NAME
+// with no serialized format yet, so it keeps DEPLOY's full 30 there, which is
+// the arbiter's own fallback direction (unparseable falls through to the full
+// weight).
 //
 // THE INVARIANT, mirrored from the arbiter: every weight is an integer >= 1.
 // That is what makes the cheap count check a sound pre-filter for the weighted
@@ -156,128 +172,6 @@ const BATCH_COMMAND_WEIGHTS = Object.freeze({
     EXECUTE:  30,
     XEXEC:    30,
 });
-
-// Per-ACTION caps, byte-equal to the indexer's UNGATED `actionLimits`
-// (0 = forbidden inside a BATCH). FILE is deliberately ABSENT: its
-// at-most-one rule is a client-side transport fact (one rawData payload per
-// transaction), not an arbiter limit, and adding it here would make the
-// conformance test compare the SDK against a table the indexer does not have.
-//
-// MINT's 1 is re-read at/after the flag as "1 per DISTINCT token" (D7), which
-// is why the number stays here and only what it is COMPARED AGAINST moves.
-const BATCH_ACTION_LIMITS = Object.freeze({
-    BATCH: 0,
-    MINT:  1,
-    ISSUE: 1,
-});
-
-// Caps the arbiter merges over the table above at/after BATCH_ISSUANCE_LIMITS,
-// byte-equal to the indexer's `gatedActionLimits` (D5). Kept as a SEPARATE
-// table for the same reason the arbiter keeps one: DEPLOY is uncapped below
-// the flag, and folding it into the ungated table would state a rule that
-// never applied there.
-const BATCH_GATED_ACTION_LIMITS = Object.freeze({
-    DEPLOY: 1,
-});
-
-// What this mirror actually enforces (see the header: the post-flag rule set).
-const BATCH_ACTION_LIMITS_ACTIVE = Object.freeze(
-    Object.assign({}, BATCH_ACTION_LIMITS, BATCH_GATED_ACTION_LIMITS));
-
-// Distinctness bucket for a MINT TICK carrying no positive evidence of a
-// token. A Symbol for the arbiter's reason: it can never collide with a real
-// key however a wire tick is spelled.
-const UNRESOLVED_TICK_KEY = Symbol('BATCH_UNRESOLVED_TICK');
-
-// Counting bucket for child (dotted-TICK) ISSUEs. Byte-equal to the indexer's
-// `childIssueKey`; deliberately not a legal ACTION name so it can never
-// collide with a BATCH_ACTION_LIMITS entry and child issuance stays uncapped.
-const CHILD_ISSUE_KEY = 'ISSUE.CHILD';
-
-// The three actions whose params take the implied legacy VERSION-0 injection
-// (indexer batch.js normalizeSubAction).
-const LEGACY_FORMAT_ACTIONS = ['ISSUE', 'MINT', 'SEND'];
-
-// Mirror of xchain-indexer/src/utility.js isLegacyActionFormat: params[0] is
-// either a VERSION or, in the pre-VERSION wire form, the TICK. A VERSION is at
-// most two characters and numeric; anything else means the field is a TICK and
-// the implied VERSION 0 has to be injected in front of it.
-function isLegacyActionFormat(params) {
-    const version = params[0];
-    if (String(version).length > 2) return true;
-    if (typeof version === 'string' && !(!isNaN(parseFloat(version)) && isFinite(version))) return true;
-    return false;
-}
-
-// Alias rewrite, case-sensitive exactly as the arbiter performs it.
-function expandAlias(action) {
-    return Object.prototype.hasOwnProperty.call(ACTION_ALIASES, action)
-        ? ACTION_ALIASES[action]
-        : action;
-}
-
-// NOTE ON THE ACTIVATION SCAN, which this module deliberately does NOT mirror.
-//
-// The arbiter rejects a whole batch with `invalid: ACTION (unknown)` when any
-// sub-command names something its `protocolChanges.isEnabled(action)` scan does
-// not recognize (the empty string an empty command yields included), before any
-// limit is counted. The client side answers that question in the DECODER, where
-// each sub-command is parsed anyway: decoder/parse.js raises
-// BATCH_COMMAND_INVALID with an UNKNOWN_ACTION / EMPTY code off the real parse
-// attempt. This module deliberately exposes no second, narrower `formats`-keyed
-// predicate: with the decoder answering the question for every caller, a
-// third way to ask it would have no consumer outside a test.
-
-/*
- * Classify one ISSUE TICK value.
- *
- * Returns CHILD_ISSUE_KEY only on positive evidence of a child issuance: a
- * TICK that exists, does not lead with '^', and contains a '.'. Everything
- * else counts against the top-level limit of 1.
- */
-function classifyIssueTick(tick) {
-    if (tick === undefined || tick === null) return 'ISSUE';
-    const t = String(tick);
-    if (t.charAt(0) === '^') return 'ISSUE';
-    return t.includes('.') ? CHILD_ISSUE_KEY : 'ISSUE';
-}
-
-/*
- * Classify one RAW wire sub-command (`ACTION|VERSION|F1|...`, no BATCH prefix)
- * into the key the limit scan counts it under.
- *
- * Mirrors the arbiter's two-step read: the leading token is alias-expanded
- * (case-sensitively, never upper-cased), and only an ISSUE is looked at
- * further - on a PRIVATE split copy, because the legacy VERSION-0 injection
- * mutates the array in place. Never throws: an unreadable command falls back
- * to its unclassified name, which is the arbiter's own fallback.
- */
-/*
- * FORMAT version of one raw wire field, mirroring the arbiter's ONE derivation
- * (xchain-indexer/src/utility.js `getFormatVersion`): the same call its
- * dispatcher uses to set FORMAT and its weight scan uses for the chunk-carrier
- * DEPLOY discount, reproduced branch for branch so the two sides can never
- * read one wire byte two ways. Quotes are stripped, a numeric string up to 255
- * parses as its integer, an absent or empty field means format 0, and
- * anything else (a float, an object, out of range, non-numeric) is null.
- */
-function formatVersion(format) {
-    const type = typeof format;
-    // Reject objects (prevents crash on broken toString)
-    if (type === 'object' && format !== null) return null;
-    if (type === 'number' && Number.isInteger(format) && format <= 255) return format;
-    // Default to format 0 if none is given
-    if (type === 'undefined' || (type === 'string' && format === '')) return 0;
-    // Strip out any quotes and double-quotes
-    if (type === 'string') format = format.replace(/\"|\'/g, '');
-    // Convert any numeric strings to integers (use parseFloat to detect
-    // decimals), through the arbiter's own isNumeric/isFloat idioms.
-    const numeric = typeof format === 'bigint' || (!isNaN(parseFloat(format)) && isFinite(format));
-    const parsed = parseFloat(format);
-    const isFloat = parsed === +parsed && parsed !== (parsed | 0);
-    if (numeric && !isFloat && format <= 255) return parseInt(format);
-    return null;
-}
 
 /*
  * Cost weight of ONE raw sub-command string (indexer `subCommandWeight`).
@@ -351,42 +245,6 @@ function batchWeight(commands) {
     return total;
 }
 
-function classifyCommand(command) {
-    const action = expandAlias(String(command).split('|')[0]);
-    if (action !== 'ISSUE') return action;
-    try {
-        const params = String(command).split('|').slice(1);
-        if (LEGACY_FORMAT_ACTIONS.includes(action) && isLegacyActionFormat(params))
-            params.splice(0, 0, 0);
-        return classifyIssueTick(params[1]);
-    } catch (e) {
-        return action;
-    }
-}
-
-/*
- * Read the TICK a sub-command's handler will parse, out of a RAW wire command.
- *
- * Mirror of the arbiter's `subCommandTick`: params[1] of the NORMALIZED
- * sub-command, on a PRIVATE split copy because the legacy VERSION-0 injection
- * splices in place, trimmed, and '' when there is no TICK at all. Never
- * throws; callers read '' as "no positive evidence", never as a token named
- * the empty string.
- */
-function commandTick(command) {
-    try {
-        const action = expandAlias(String(command).split('|')[0]);
-        const params = String(command).split('|').slice(1);
-        if (LEGACY_FORMAT_ACTIONS.includes(action) && isLegacyActionFormat(params))
-            params.splice(0, 0, 0);
-        const tick = params[1];
-        if (tick === undefined || tick === null) return '';
-        return String(tick).trim();
-    } catch (e) {
-        return '';
-    }
-}
-
 /*
  * Distinctness key for ONE MINT TICK, client-side.
  *
@@ -457,182 +315,6 @@ function maxMintsPerDistinctTick(ticks) {
         if (count > max) max = count;
     }
     return { max, approximate: carets > 0 && plain > 0 };
-}
-
-/*
- * The DISTINCT classification keys of a command list, in the order each one's
- * FIRST command appears.
- *
- * This is the ONE expression of spec R2b for the client side: among per-ACTION
- * caps, the error names the action whose first sub-command appears EARLIEST in
- * the batch's command list. The SDK's cap loop (decoder/parse.js) walks this
- * list, and the arbiter walks its own list-driven copy, so the two agree by
- * rule instead of by coincidence.
- *
- * Derived from the LIST rather than from a tally's keys deliberately. A plain
- * object enumerates string keys by insertion, which HAPPENED to match this
- * order, but nothing said so: a refactor to a Map, a sort, or a second counting
- * pass would have moved a consensus error string with no rule to stop it, and
- * an integer-like key (which an unknown ACTION name can be) jumps the queue on
- * a plain object regardless of insertion. Do not fold this back into
- * `Object.keys(counts)`.
- */
-function limitKeysInListOrder(entries) {
-    const seen = new Set();
-    const order = [];
-    for (const entry of entries) {
-        const key = classifyCommand(entry);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        order.push(key);
-    }
-    return order;
-}
-
-/*
- * Read a TICK out of a compose-time params OBJECT (the builder's shape, before
- * anything is serialized). Matches the canonical field under any of the key
- * spellings createAction accepts (TICK / tick / Tick), and only that field:
- * GIVE_TICK and friends normalize to different names.
- */
-function paramsTick(params) {
-    if (!params || typeof params !== 'object') return undefined;
-    for (const key of Object.keys(params))
-        if (key.replace(/_/g, '').toLowerCase() === 'tick') return params[key];
-    return undefined;
-}
-
-/*
- * Per-payee COINPAY payment-output planning (spec row 31).
- *
- * Inside a batch, each COINPAY obligation resolves its own payment output by FIRST
- * MATCH on the payee address over the batch's vout-sorted output set
- * (xchain-indexer/src/actions/coinpay.js `findPaymentOutput`), and the consumed-value
- * ledger then draws down THAT one output for every obligation owed to the same payee
- * (`coinPayeeConsumed`). So an obligation to a payee who is ALSO paid by a second,
- * later output can never reach that second output: only the first-matching one is ever
- * read, no matter how many obligations remain unsettled. A composer settling two
- * obligations to the same seller in one batch must therefore combine both amounts into
- * ONE output for that payee, never split them across two.
- *
- * This applies only on the BATCHED path, and only once BOTH gates the behaviour
- * depends on are armed: `BATCH_SUBCOMMAND_OUTPUT_CAPTURE_ACTIVATION` (decoder, so a
- * batched COINPAY's payment output reaches the indexer at all - genesis-active on
- * testnet/regtest, mainnet at 2026-08-16T00:00:00Z) and `BATCH_ISSUANCE_LIMITS`
- * (indexer, so the per-payee resolution below ever runs - mainnet at the SAME instant).
- * Both were armed together on 2026-08-14 precisely so no window exists where one is
- * live and the other is not. BELOW that instant a batched COINPAY settles nothing
- * regardless of the output plan (row 21), so this planner's rule has no live consensus
- * consequence on mainnet history; at and above it, the rule is load-bearing and a
- * composer that ignores it loses a settlement.
- *
- * WHAT THIS CANNOT VERIFY FROM STRINGS ALONE: matching is exact string equality
- * between the `payee` / `address` you pass here and the address the FINISHED
- * transaction's output will actually carry, mirroring the indexer's own
- * `output.address === address` test with no normalization on either side. A payee
- * address written two different but equivalent ways (case, an alternate valid
- * encoding) is two different pools here and on chain; this planner declares that
- * rather than attempting address canonicalization it has no chain context to perform
- * correctly, the same honesty `mintTickKey`'s caret declaration states above.
- */
-
-/*
- * Derive the minimal per-payee output plan for a list of COINPAY obligations.
- *
- * obligations: [{ payee, amount }], amount a decimal string or number.
- * Returns: [{ payee, amount }], ONE entry per DISTINCT payee in first-appearance
- * order, amount the decimal-string SUM of every obligation owed to that payee.
- *
- * This is the shape a composer should build payment outputs from: one output per
- * returned entry. Distinct payees' outputs may land at any relative vout (matching is
- * per-address, not per-position); it is entries for the SAME payee that must never be
- * split across two outputs.
- */
-function planCoinpayOutputs(obligations) {
-    const order = [];
-    const totals = new Map();
-    for (const obligation of (obligations || [])) {
-        if (!obligation || obligation.payee === undefined || obligation.payee === null) continue;
-        const payee = String(obligation.payee);
-        const amount = (obligation.amount === undefined || obligation.amount === null) ? '0' : obligation.amount;
-        if (!totals.has(payee)) {
-            totals.set(payee, mathjs.bignumber(0));
-            order.push(payee);
-        }
-        totals.set(payee, mathjs.add(totals.get(payee), mathjs.bignumber(String(amount))));
-    }
-    return order.map(payee => ({
-        payee,
-        amount: mathjs.format(totals.get(payee), { notation: 'fixed' }),
-    }));
-}
-
-/*
- * Check a PLANNED output set against a list of obligations, resolving each one exactly
- * as the arbiter does: the output that settles an obligation is the FIRST entry in
- * `outputs` (array order stands in for vout order) whose address equals the
- * obligation's payee, and every obligation naming that SAME payee draws on that SAME
- * output (owed amounts summed; surplus above the total owed stays in the pool - R5b).
- *
- * obligations: [{ payee, amount }]
- * outputs:     [{ address, amount }], in the order they will appear as outputs
- *              (lowest vout first)
- *
- * Returns { ok, violations }. `violations` is a list of
- * { payee, owed, available, reason }, `reason` one of:
- *   'NO_OUTPUT'    no output in the set pays this payee at all
- *   'INSUFFICIENT' the first matching output's amount is less than the SUM owed to
- *                  this payee across every obligation naming it
- *
- * A payee paid by two or more outputs in `outputs` is not itself flagged as a shape
- * error (extra outputs to an already-settled payee are simply invisible to
- * settlement, not rejected); it is comparing owed amounts against only the FIRST
- * match that surfaces the composition mistake this function exists to catch -
- * splitting one payee's combined amount across two outputs reads here as
- * INSUFFICIENT against the first (smaller) one, exactly as it would on chain.
- */
-function checkCoinpayOutputPlan(obligations, outputs) {
-    const list = Array.isArray(outputs) ? outputs : [];
-    const owed = new Map();
-    const order = [];
-    for (const obligation of (obligations || [])) {
-        if (!obligation || obligation.payee === undefined || obligation.payee === null) continue;
-        const payee = String(obligation.payee);
-        const amount = (obligation.amount === undefined || obligation.amount === null) ? '0' : obligation.amount;
-        if (!owed.has(payee)) {
-            owed.set(payee, mathjs.bignumber(0));
-            order.push(payee);
-        }
-        owed.set(payee, mathjs.add(owed.get(payee), mathjs.bignumber(String(amount))));
-    }
-
-    const violations = [];
-    for (const payee of order) {
-        // FIRST match only, identical to xchain-indexer/src/actions/coinpay.js
-        // findPaymentOutput: a second output paying the same address is never read.
-        const output = list.find(entry => entry && String(entry.address) === payee);
-        const total = owed.get(payee);
-        if (!output) {
-            violations.push({
-                payee,
-                owed: mathjs.format(total, { notation: 'fixed' }),
-                available: '0',
-                reason: 'NO_OUTPUT',
-            });
-            continue;
-        }
-        const rawAvailable = (output.amount === undefined || output.amount === null) ? '0' : output.amount;
-        const available = mathjs.bignumber(String(rawAvailable));
-        if (mathjs.smaller(available, total)) {
-            violations.push({
-                payee,
-                owed: mathjs.format(total, { notation: 'fixed' }),
-                available: mathjs.format(available, { notation: 'fixed' }),
-                reason: 'INSUFFICIENT',
-            });
-        }
-    }
-    return { ok: violations.length === 0, violations };
 }
 
 module.exports = {
