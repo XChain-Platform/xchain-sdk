@@ -106,7 +106,7 @@ describe('hosted co-signer: construction prerequisites', function () {
         expect(() => createHostedCoSignerApp({ tenants: [
             { id: 'a', token: TOKEN_A, coSigner: tenantFor(a, { policy, windowStore: shared }) },
             { id: 'b', token: TOKEN_B, coSigner: tenantFor(b, { policy, windowStore: shared }) },
-        ] })).to.throw(/shares a window store/);
+        ] })).to.throw(/tenants\[1\] \("b"\) shares a window store/);
     });
 
     it('refuses a tenant with no input cap', function () {

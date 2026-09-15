@@ -107,7 +107,7 @@ function sha256(s) { return crypto.createHash('sha256').update(s, 'utf8').digest
  *            answers 413 REQUEST_TOO_LARGE, at whatever value is set. An
  *            exposed deployment tunes this DOWN rather than back to an
  *            unnamed transport failure.
- *   logger   {function}  (level, message, context) sink; defaults to console
+ *   logger   {function}  (level, message, context) sink; defaults to the SDK logger
  * @returns {express.Express} with a `.listenSecure()` helper attached
  */
 function createHostedCoSignerApp(opts = {}) {
