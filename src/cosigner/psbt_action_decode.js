@@ -46,27 +46,15 @@
 
 'use strict';
 
-const crypto         = require('crypto');
 const bitcoin        = require('bitcoinjs-lib');
 const FormatSelector = require('../protocol/format_selector.js');
 const { envelopeLeafFromPsbtInput, parseEnvelopeScript } = require('./envelope.js');
 const { ENVELOPE_MAX_PAYLOAD } = require('../protocol/constants.js');
-
-// Mirror xchain-decoder/src/XChainDecoder.js:44-63. The action-data cap is
-// imported from chunk_helper.js (the SDK's single parity-guarded copy) so the
-// co-signer's OVERSIZED gate cannot drift from the rest of the SDK.
-//
-// These carrier constants are re-declared rather than imported because the
-// arbiter is service-bound (see the file header), so they are pinned instead by
-// test/unit/cosigner_roundtrip_conformance.test.js, which decodes the SHARED
-// encoder->decoder roundtrip-conformance fixture through this module. If the
-// encoder/decoder ever changes the magic word, the P2SH/P2WSH tags or the
-// key/IV derivation, the regenerated fixture stops decoding here and that test
-// fails, instead of hardware co-signer decode silently breaking in the field.
-const MAGIC_WORD = Buffer.from('XCHN');
-const P2SH_TAG   = Buffer.from('p2sh');
-const P2WSH_TAG  = Buffer.from('p2wsh');
 const { MAX_ACTION_DATA_LENGTH } = require('../contract/chunk_helper.js');
+const {
+    fail, MAGIC_WORD, P2SH_TAG, P2WSH_TAG, OBFUSCATION,
+    extractInlineActionString, extractEnvelopeActionString,
+} = require('./psbt_action_decode/action_string_extract.js');
 
 // Documented on-chain action aliases, expanded BEFORE format lookup / policy:
 // a spec-following client may encode any of these leading tokens and produce a
@@ -121,158 +109,6 @@ function boundedRestFormat(action, version) {
     return BOUNDED_REST_FORMATS.get(`${action} ${version}`) || null;
 }
 
-function fail(reason, detail) { return { ok: false, reason, detail: detail || null }; }
-
-// AES-128-CTR de-obfuscation, key/iv = first 16 / next 16 hex chars of the
-// first input's txid. Verbatim from XChainDecoder.removeObfuscation (and the
-// inverse of XChainEncoder.obfuscate). The derivation lives in this one frozen
-// descriptor so the conformance test can assert against the code that actually
-// runs rather than against a second copy of the offsets.
-const OBFUSCATION = Object.freeze({
-    algorithm: 'aes-128-ctr',
-    keyOffset: 0,  keyLength: 16,
-    ivOffset:  16, ivLength:  16,
-});
-
-function deobfuscate(data, txidHex) {
-    const key = txidHex.substr(OBFUSCATION.keyOffset, OBFUSCATION.keyLength);
-    const iv  = txidHex.substr(OBFUSCATION.ivOffset,  OBFUSCATION.ivLength);
-    const d   = crypto.createDecipheriv(OBFUSCATION.algorithm, key, iv);
-    return Buffer.concat([d.update(data), d.final()]);
-}
-
-/*
- * Decode an XChain action from a PSBT.
- *
- * @param {bitcoin.Psbt|string} psbtOrHex  a bitcoinjs Psbt or its hex
- * @param {object} [opts]   { network } for hex parsing
- * @returns {object}
- *   { ok:true,  action, version, params:{FIELD:value}, actionString }
- *   { ok:false, reason, detail }   (fail closed - the co-signer must refuse)
- */
-// Recover ONLY the raw inline OP_RETURN action-string bytes from a PSBT, exactly
-// as the encoder wrote them, with NO format/field/rest/multi-leg judgment. This
-// is the pure byte-recovery half shared by both public decoders (deobfuscate ->
-// magic word -> inline script push -> utf8). It fails closed on anything that is
-// not a single well-formed inline OP_RETURN action payload (no/multi OP_RETURN,
-// the P2SH/P2WSH two-phase tag, oversized, decompile or utf8 failure). Callers
-// that need policy judgment layer the format/rest/multi-leg gates on top.
-//
-// @returns { ok:true, actionString } | { ok:false, reason, detail }
-function extractInlineActionString(psbtOrHex, opts = {}) {
-    let psbt;
-    try {
-        psbt = (typeof psbtOrHex === 'string')
-            ? bitcoin.Psbt.fromHex(psbtOrHex, opts.network ? { network: opts.network } : undefined)
-            : psbtOrHex;
-    } catch (e) { return fail('PSBT_PARSE_FAILED', e.message); }
-
-    if (!psbt || !psbt.txInputs || psbt.txInputs.length === 0) return fail('NO_INPUTS');
-
-    // Obfuscation key = first input's txid (display order = reverse of the
-    // internal hash). Mirrors XChainDecoder.js:384.
-    const firstInputTxid = Buffer.from(psbt.txInputs[0].hash).reverse().toString('hex');
-
-    // Exactly one OP_RETURN data output is expected; >1 is non-standard anyway.
-    let payload = null, opReturnCount = 0;
-    for (const out of psbt.txOutputs) {
-        let decomp;
-        try { decomp = bitcoin.script.decompile(out.script); } catch (e) { continue; }
-        if (decomp && decomp.length === 2 &&
-            decomp[0] === bitcoin.opcodes.OP_RETURN && Buffer.isBuffer(decomp[1])) {
-            opReturnCount++;
-            payload = decomp[1];
-        }
-    }
-    if (opReturnCount === 0) return fail('NO_OP_RETURN');
-    if (opReturnCount > 1)  return fail('MULTI_OP_RETURN');
-
-    let plain;
-    try { plain = deobfuscate(payload, firstInputTxid); }
-    catch (e) { return fail('DEOBFUSCATION_FAILED', e.message); }
-
-    if (plain.length < MAGIC_WORD.length || !plain.subarray(0, MAGIC_WORD.length).equals(MAGIC_WORD))
-        return fail('NO_MAGIC_WORD');
-
-    const body = plain.subarray(MAGIC_WORD.length);
-
-    // P2SH/P2WSH funding tx: the OP_RETURN carries only the tag; the action
-    // params live in the separate reveal tx, not in this PSBT.
-    if (body.equals(P2SH_TAG) || body.equals(P2WSH_TAG)) return fail('P2SH_P2WSH_UNSUPPORTED');
-    if (body.length > MAX_ACTION_DATA_LENGTH) return fail('OVERSIZED');
-
-    // The inline payload is a compiled script push of the action-string bytes.
-    let decompiled;
-    try { decompiled = bitcoin.script.decompile(body); }
-    catch (e) { return fail('INNER_DECOMPILE_FAILED', e.message); }
-    if (!decompiled || decompiled.length === 0 || !Buffer.isBuffer(decompiled[0]))
-        return fail('INNER_DECOMPILE_FAILED');
-
-    let actionString;
-    try { actionString = new TextDecoder('utf-8', { fatal: true }).decode(decompiled[0]); }
-    catch (e) { return fail('NOT_UTF8'); }
-
-    return { ok: true, actionString };
-}
-
-/*
- * Recover the action-string bytes from a Taproot ENVELOPE reveal PSBT
- * (§3.9 delta c). The envelope carries the action in input 0's tapleaf
- * script instead of an OP_RETURN, and carries it RAW (§3.3: there is no
- * deobfuscation step for the envelope, and none is possible - the key would be
- * the commit txid, which the commit output's own contents determine).
- *
- * The refusals below mirror the authoritative decoder's §3.8 arbitration
- * exactly, because a co-signer that read an action the chain will not execute
- * (or missed one it will) is the whole failure mode this decoder exists to
- * avoid: an envelope anywhere other than input 0, more than one envelope
- * input, or an envelope mixed with any OP_RETURN carrier is NOT an action.
- *
- * @returns { ok:true, actionString } | { ok:false, reason, detail }
- */
-function extractEnvelopeActionString(psbt) {
-    if (!psbt || !psbt.data || !Array.isArray(psbt.data.inputs) || psbt.data.inputs.length === 0)
-        return fail('NO_INPUTS');
-
-    const envelopeIndexes = [];
-    for (let i = 0; i < psbt.data.inputs.length; i++) {
-        if (envelopeLeafFromPsbtInput(psbt.data.inputs[i])) envelopeIndexes.push(i);
-    }
-    if (envelopeIndexes.length === 0) return fail('NO_ENVELOPE');
-    // Both are deterministic no-action outcomes on chain (§3.8), so they must be
-    // refusals here rather than a decode of whichever one we happened to find.
-    if (envelopeIndexes.length > 1) return fail('MULTI_ENVELOPE');
-    if (envelopeIndexes[0] !== 0) return fail('ENVELOPE_NOT_INPUT_ZERO');
-
-    // Mixed carriers are no-action on chain. Any OP_RETURN output at all is
-    // refused here rather than only an XCHN-magic one: the co-signer's job is to
-    // be a strict subset of the decoder, and refusing more is always safe.
-    for (const out of psbt.txOutputs) {
-        let decomp;
-        try { decomp = bitcoin.script.decompile(out.script); } catch (e) { continue; }
-        if (decomp && decomp.length >= 1 && decomp[0] === bitcoin.opcodes.OP_RETURN)
-            return fail('ENVELOPE_MIXED_CARRIER');
-    }
-
-    const leaf = envelopeLeafFromPsbtInput(psbt.data.inputs[0]);
-    if (leaf.payload.length > ENVELOPE_MAX_PAYLOAD) return fail('OVERSIZED');
-
-    // The payload is the compiled data stream: the action-string push, then the
-    // rawData push. Identical to what the decoder decompiles (XChainDecoder.js:
-    // `dataBuffer = envelopeInputs[0].payload`, feeding the shared decompile).
-    let decompiled;
-    try { decompiled = bitcoin.script.decompile(leaf.payload); }
-    catch (e) { return fail('INNER_DECOMPILE_FAILED', e.message); }
-    if (!decompiled || decompiled.length === 0 || !Buffer.isBuffer(decompiled[0]))
-        return fail('INNER_DECOMPILE_FAILED');
-
-    let actionString;
-    try { actionString = new TextDecoder('utf-8', { fatal: true }).decode(decompiled[0]); }
-    catch (e) { return fail('NOT_UTF8'); }
-
-    return { ok: true, actionString, envelope: leaf };
-}
-
 function decodeActionFromPsbt(psbtOrHex, opts = {}) {
     // An envelope reveal carries no OP_RETURN action at all, so route on the
     // shape of the PSBT rather than on a caller-supplied flag. The inline path
@@ -316,12 +152,7 @@ function decodeEnvelopeAction(script) {
     return judgeActionString(actionString);
 }
 
-// The single judgment path shared by the inline, envelope-reveal and
-// envelope-commit routes: format lookup, rest/multi-leg refusals, BATCH,
-// param extraction and charset validation.
-function judgeActionString(actionString) {
-    const segments = actionString.split('|');
-    if (segments.length < 2) return fail('MALFORMED_ACTION_STRING');
+function resolveActionFormat(segments) {
     // Resolve documented aliases to the canonical action, exactly as the
     // authoritative decoder/indexer do before validating/recording. Mirrors
     // XChainDecoder.js:1384-1386: the raw action token is NOT case-folded
@@ -335,7 +166,7 @@ function judgeActionString(actionString) {
     const rawAction = String(segments[0]);
     // Own-property read: a raw action token of 'constructor' / 'toString' would
     // otherwise resolve to an inherited Object.prototype function and be carried
-    // forward as the "action" (same prototype-chain class as G1).
+    // forward as the "action", exposing the same prototype-chain vulnerability.
     const action  = ownLookup(ACTION_ALIASES, rawAction) ?? rawAction;
     const version = Number(segments[1]);
     if (!Number.isInteger(version) || version < 0) return fail('BAD_VERSION');
@@ -345,6 +176,10 @@ function judgeActionString(actionString) {
     catch (e) { return fail('UNKNOWN_ACTION', `${action} v${version}`); }
     if (!Array.isArray(fieldNames) || fieldNames[0] !== 'VERSION') return fail('UNEXPECTED_FORMAT');
 
+    return { ok: true, action, version, fieldNames };
+}
+
+function validateActionShape(action, version, fieldNames) {
     // Reject variable-length (rest) fields and repeated value fields up front:
     // both are multi-value shapes the single-leg evaluator can't safely judge.
     const bounded = boundedRestFormat(action, version);
@@ -373,16 +208,17 @@ function judgeActionString(actionString) {
     catch (e) { return fail('MULTI_LEG_UNSUPPORTED', e.message); }
     if (repeated) return fail('MULTI_LEG_UNSUPPORTED', repeated.group.join('|'));
 
+    return { ok: true, bounded };
+}
+
+function parseActionParams(actionString, action, version, bounded) {
     // BATCH bundles N sub-commands into one action. The evaluator judges a
     // SINGLE leg - one action, one amount, one tick - so it cannot bound a
     // bundle at all, and there is no version of it that it could.
     //
-    // This used to be a segment-count heuristic (`segments.length > 3`), resting
-    // on the observation that every real sub-action contains a '|'. A
-    // three-segment BATCH therefore slipped through and reached the evaluator
-    // with no amount, no tick and no destination, so it was entirely uncapped
-    // whenever BATCH was in allowedActions (G18). Refuse it structurally: the
-    // action is what disqualifies it, not the shape of a particular payload.
+    // A segment-count heuristic is insufficient because a three-segment BATCH
+    // can reach the evaluator with no amount, tick or destination. Refuse it
+    // structurally: the action disqualifies it, not a particular payload shape.
     if (action === 'BATCH') return fail('BATCH_UNSUPPORTED');
 
     // Field extraction delegates to the canonical decoder.parse():
@@ -408,7 +244,7 @@ function judgeActionString(actionString) {
             return fail('REST_FIELD_TOO_LONG', `${base} has ${restValue.length} entries (max ${bounded.maxParams})`);
     }
 
-    // G1: charset-check every decoded param that becomes a lookup key downstream
+    // Charset-check every decoded param that becomes a lookup key downstream
     // (TICK and the per-leg *_TICK fields). A tick the protocol could never mint
     // has no legitimate reason to reach a policy table or the persisted window,
     // where it is a poison-pill: one approved action writes the entry, and every
@@ -419,6 +255,22 @@ function judgeActionString(actionString) {
         return fail('PARAM_INVALID', `${paramCheck.field}=${paramCheck.value}`);
 
     return { ok: true, action, version, params: parsed.params, actionString };
+}
+
+// The single judgment path shared by the inline, envelope-reveal and
+// envelope-commit routes: format lookup, rest/multi-leg refusals, BATCH,
+// param extraction and charset validation.
+function judgeActionString(actionString) {
+    const segments = actionString.split('|');
+    if (segments.length < 2) return fail('MALFORMED_ACTION_STRING');
+
+    const format = resolveActionFormat(segments);
+    if (!format.ok) return format;
+
+    const shape = validateActionShape(format.action, format.version, format.fieldNames);
+    if (!shape.ok) return shape;
+
+    return parseActionParams(actionString, format.action, format.version, shape.bounded);
 }
 
 /*
