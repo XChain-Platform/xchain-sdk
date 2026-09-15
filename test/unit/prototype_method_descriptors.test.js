@@ -13,8 +13,8 @@
 // Pin the prototypes of the classes split into part modules: Object.assign made
 // moved methods enumerable, so for...in and Object.keys started listing them.
 
-// BASE_DESCRIPTORS is each prototype at sdk 95b10404, before the splits. Rows are
-// [key, enumerable, writable, configurable, typeof value, function length].
+// BASE_DESCRIPTORS is each prototype before its split, inlined as literals under
+// prototype_method_descriptors.test/fixtures/; each table names the tree it came from.
 
 const assert = require('assert');
 
@@ -23,89 +23,28 @@ const CLASSES = {
     LifecycleManager: () => require('../../src/carrier/lifecycle_manager.js'),
     Validator: () => require('../../src/protocol/validator.js'),
     CoSigner: () => require('../../src/cosigner/co_signer.js'),
+    EncoderClient: () => require('../../src/clients/encoder.js'),
+    HubConnector: () => require('../../src/clients/hub.js'),
+    WebSocketClient: () => require('../../src/clients/websocket.js'),
+    ExplorerClient: () => require('../../src/clients/explorer.js'),
+    ContractUtils: () => require('../../src/contract/utils.js'),
+    Utility: () => require('../../src/utils/utility.js'),
+    WalletSession: () => require('../../src/utils/wallet_session.js'),
+    X402Gateway: () => require('../../src/utils/x402.js').X402Gateway,
+    WindowStore: () => require('../../src/cosigner/window_store.js'),
+    MessagingUtils: () => require('../../src/actions/messaging.js'),
+    BettingHelpers: () => require('../../src/actions/betting.js'),
+    Workflows: () => require('../../src/actions/workflows.js'),
 };
 
-const BASE_DESCRIPTORS = {
-    WalletUtils: [
-        ['_maxFeeRate', false, true, true, 'function', 1],
-        ['_resolveNet', false, true, true, 'function', 1],
-        ['_xchainRevealFinalizer', false, true, true, 'function', 1],
-        ['broadcastTx', false, true, true, 'function', 2],
-        ['constructor', false, true, true, 'function', 1],
-        ['decomposePsbt', false, true, true, 'function', 1],
-        ['deriveAddress', false, true, true, 'function', 1],
-        ['deriveMultisigAddress', false, true, true, 'function', 1],
-        ['finalizeMultisigPsbt', false, true, true, 'function', 2],
-        ['generateKeyPair', false, true, true, 'function', 0],
-        ['getBitcoinNetwork', false, true, true, 'function', 1],
-        ['getUTXOs', false, true, true, 'function', 2],
-        ['importWIF', false, true, true, 'function', 1],
-        ['signEcdsa', false, true, true, 'function', 2],
-        ['signEnvelopeRevealPsbt', false, true, true, 'function', 3],
-        ['signMultisigPsbt', false, true, true, 'function', 2],
-        ['signPsbt', false, true, true, 'function', 3],
-        ['signRevealPsbt', false, true, true, 'function', 3],
-        ['txidOf', false, true, true, 'function', 1],
-        ['validateAddress', false, true, true, 'function', 2],
-    ],
-    LifecycleManager: [
-        ['_awaitContract', false, true, true, 'function', 5],
-        ['_extractChangeOutputs', false, true, true, 'function', 2],
-        ['_extractSpentInputs', false, true, true, 'function', 1],
-        ['_reconcileNetwork', false, true, true, 'function', 0],
-        ['constructor', false, true, true, 'function', 1],
-        ['submitAction', false, true, true, 'function', 1],
-    ],
-    Validator: [
-        ['_checkDelimiters', false, true, true, 'function', 2],
-        ['_error', false, true, true, 'function', 2],
-        ['_isEmpty', false, true, true, 'function', 1],
-        ['_isValidListAddress', false, true, true, 'function', 1],
-        ['_issueFormat', false, true, true, 'function', 1],
-        ['_legsOf', false, true, true, 'function', 1],
-        ['_scanDelimiters', false, true, true, 'function', 2],
-        ['_validateAction', false, true, true, 'function', 2],
-        ['_validateBatch', false, true, true, 'function', 1],
-        ['_validateBatchCommand', false, true, true, 'function', 2],
-        ['_validateBet', false, true, true, 'function', 1],
-        ['_validateBetDetails', false, true, true, 'function', 3],
-        ['_validateBridgeOptIn', false, true, true, 'function', 1],
-        ['_validateBroadcast', false, true, true, 'function', 1],
-        ['_validateControllerBind', false, true, true, 'function', 1],
-        ['_validateDelegate', false, true, true, 'function', 1],
-        ['_validateDeploy', false, true, true, 'function', 1],
-        ['_validateDeployCarrier', false, true, true, 'function', 1],
-        ['_validateDispenser', false, true, true, 'function', 1],
-        ['_validateField', false, true, true, 'function', 4],
-        ['_validateIssueTickRef', false, true, true, 'function', 2],
-        ['_validateLegsShape', false, true, true, 'function', 2],
-        ['_validateList', false, true, true, 'function', 1],
-        ['_validateListAddressItems', false, true, true, 'function', 1],
-        ['_validateOrder', false, true, true, 'function', 1],
-        ['_validateSwap', false, true, true, 'function', 1],
-        ['_validateTickName', false, true, true, 'function', 2],
-        ['_validateVote', false, true, true, 'function', 1],
-        ['_withLeg', false, true, true, 'function', 2],
-        ['constructor', false, true, true, 'function', 2],
-        ['validate', false, true, true, 'function', 2],
-        ['validateOrThrow', false, true, true, 'function', 2],
-    ],
-    CoSigner: [
-        ['_checkFee', false, true, true, 'function', 1],
-        ['_checkOutputs', false, true, true, 'function', 3],
-        ['_checkPrevouts', false, true, true, 'function', 3],
-        ['_checkSource', false, true, true, 'function', 3],
-        ['_deny', false, true, true, 'function', 2],
-        ['_normalizeAllowedOutputs', false, true, true, 'function', 1],
-        ['_recordBudget', false, true, true, 'function', 2],
-        ['_toU64', false, true, true, 'function', 1],
-        ['constructor', false, true, true, 'function', 0],
-        ['process', false, true, true, 'function', 0],
-    ],
-};
+const BASE_DESCRIPTORS = Object.assign({},
+    require('./prototype_method_descriptors.test/fixtures/descriptors_95b10404.js'),
+    require('./prototype_method_descriptors.test/fixtures/descriptors_clients.js'),
+    require('./prototype_method_descriptors.test/fixtures/descriptors_utils_and_actions.js'));
 
 // CoSigner's split moved five plain utility functions into its parts, and
-// the part objects carry them, so they now sit on the prototype too.
+// the part objects carry them, so they now sit on the prototype too. The other
+// fifteen splits added no key.
 const SPLIT_ADDED = {
     CoSigner: [
         ['exactU64', false, true, true, 'function', 1],
