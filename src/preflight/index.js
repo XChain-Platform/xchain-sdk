@@ -182,51 +182,7 @@ async function runPreflight(sdk, actionData, opts = {}) {
     const chain = opts.chain || opts.chainId || (sdk.config && sdk.config.network) || null;
     const timeoutMs = opts.timeoutMs || DEFAULT_TIMEOUT_MS;
 
-    const producer = async () => {
-        const ctx = new CheckContext({
-            sdk, parsed, source: opts.source, mode,
-            signal: opts.signal, timeoutMs, localDeltas: opts.localDeltas,
-            feeMode: opts.feeMode,
-        });
-
-        // Tier 1 (skipped entirely in 'local' mode) and Tier 2 run
-        // concurrently against the shared timeout budget.
-        const tier1Promise = mode === 'local'
-            ? Promise.resolve({ kind: 'no-verdict', reason: 'local-only mode' })
-            // `feeMode` rides through to the network dry run: the verdict differs
-            // between paying the protocol fee from an XCHAIN balance and paying it
-            // as a coin output, and a caller that has already chosen must not be
-            // judged against the chain default (see runTier1).
-            : runTier1({ sdk, parsed, source: opts.source, feeMode: opts.feeMode,
-                signal: opts.signal, timeoutMs })
-                .catch(e => ({ kind: 'unavailable', reason: e && e.message ? e.message : String(e) }));
-
-        const tier2Promise = (async () => {
-            await runUniversal(ctx, { encoding: opts.encoding });
-            await runActionChecks(ctx);
-        })();
-
-        const [tier1] = await Promise.all([tier1Promise, tier2Promise]);
-
-        const findings = applyTier1(ctx.findings, tier1);
-        const verdict = computeVerdict(findings);
-        const quote = (tier1 && tier1.quote) || null;
-        const stateHeight = (tier1 && typeof tier1.blockIndex === 'number') ? tier1.blockIndex : null;
-
-        const report = {
-            schemaVersion: REPORT_SCHEMA_VERSION,
-            verdict,
-            restricted: false,
-            checksRun: Array.from(ctx.checksRun),
-            findings,
-            unverified: ctx.unverified,
-            quote,
-            stateHeight,
-            elapsedMs: nowMs() - started,
-            _stampedAt: nowMs(),
-        };
-        return report;
-    };
+    const producer = () => produceReport({ sdk, parsed, opts, mode, timeoutMs, started });
 
     const report = await sdk._preflightCoalescer.run({
         chainId: chain, actionString: parsed.actionString, source: opts.source,
@@ -238,6 +194,54 @@ async function runPreflight(sdk, actionData, opts = {}) {
         throw new SDKPreflightError(
             'Pre-flight rejected this action: ' + summarizeErrors(report.findings), report);
     }
+    return report;
+}
+
+// The shared report the coalescer hands every joiner: both tiers run, Tier-1
+// precedence folds into the findings, and the verdict is taken from the result.
+async function produceReport({ sdk, parsed, opts, mode, timeoutMs, started }) {
+    const ctx = new CheckContext({
+        sdk, parsed, source: opts.source, mode,
+        signal: opts.signal, timeoutMs, localDeltas: opts.localDeltas,
+        feeMode: opts.feeMode,
+    });
+
+    // Tier 1 (skipped entirely in 'local' mode) and Tier 2 run
+    // concurrently against the shared timeout budget.
+    const tier1Promise = mode === 'local'
+        ? Promise.resolve({ kind: 'no-verdict', reason: 'local-only mode' })
+        // `feeMode` rides through to the network dry run: the verdict differs
+        // between paying the protocol fee from an XCHAIN balance and paying it
+        // as a coin output, and a caller that has already chosen must not be
+        // judged against the chain default (see runTier1).
+        : runTier1({ sdk, parsed, source: opts.source, feeMode: opts.feeMode,
+            signal: opts.signal, timeoutMs })
+            .catch(e => ({ kind: 'unavailable', reason: e && e.message ? e.message : String(e) }));
+
+    const tier2Promise = (async () => {
+        await runUniversal(ctx, { encoding: opts.encoding });
+        await runActionChecks(ctx);
+    })();
+
+    const [tier1] = await Promise.all([tier1Promise, tier2Promise]);
+
+    const findings = applyTier1(ctx.findings, tier1);
+    const verdict = computeVerdict(findings);
+    const quote = (tier1 && tier1.quote) || null;
+    const stateHeight = (tier1 && typeof tier1.blockIndex === 'number') ? tier1.blockIndex : null;
+
+    const report = {
+        schemaVersion: REPORT_SCHEMA_VERSION,
+        verdict,
+        restricted: false,
+        checksRun: Array.from(ctx.checksRun),
+        findings,
+        unverified: ctx.unverified,
+        quote,
+        stateHeight,
+        elapsedMs: nowMs() - started,
+        _stampedAt: nowMs(),
+    };
     return report;
 }
 

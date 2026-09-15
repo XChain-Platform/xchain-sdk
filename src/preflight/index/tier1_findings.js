@@ -132,94 +132,110 @@ function pushSubCommandFindings(findings, subs) {
 function applyTier1(findings, tier1) {
     if (!tier1) return findings;
     if (tier1.kind === 'verdict' && tier1.valid === true) {
-        // A batch answers at two levels and the outer one is not a verdict on the
-        // inner ones (indexer actions/batch.js restores the BATCH's own status
-        // after the dispatch loop). Report both, and say which is which.
-        const cls = tier1.subCommands ? pushSubCommandFindings(findings, tier1.subCommands) : null;
-        findings.push({ code: FINDING_CODES.DRYRUN_VALID, severity: 'info', source: 'dryrun',
-            message: cls
-                ? (cls.allValid
-                    ? `The network dry-run accepted this batch and all ${tier1.subCommands.length} of its commands.`
-                    : 'The network dry-run accepted this batch transaction, but NOT every command in it'
-                      + ` (${cls.valid.size} of ${tier1.subCommands.length} accepted); see the per-command findings.`)
-                : 'The network dry-run accepted this action.',
-            data: cls ? { subCommandCount: tier1.subCommands.length, accepted: cls.valid.size } : {} });
-        if (tier1.oracleFeesOwed)
-            findings.push({ code: FINDING_CODES.DRYRUN_ORACLE_FEES_OWED, severity: 'info',
-                source: 'dryrun',
-                message: 'This batch owes oracle usage fees the pre-flight discloses rather than checks: '
-                    + Object.entries(tier1.oracleFeesOwed).map(([a, v]) => `${v} to ${a}`).join(', ')
-                    + '. Size those outputs yourself; the dry-run has no outputs to check them against.',
-                data: { oracleFeesOwed: tier1.oracleFeesOwed } });
-        for (const f of findings) {
-            if (f.severity === 'error' && f.source === 'client') {
-                // §4.7 + per-sub-command precedence. Tier 1 outranks a Tier-2 error
-                // only where it actually judged the thing the error is about. For a
-                // batch that is PER COMMAND: a finding tagged with a commandIndex is
-                // outranked only if the network accepted THAT command, and an
-                // untagged (batch-level) finding only if it accepted every command.
-                // Without this the outer valid:true would silently flatten the whole
-                // Tier-2 batch projection - measured shape: a batch whose only
-                // command is an unknown-tick SEND answers valid:true, so the SDK's
-                // own TOKEN_NOT_FOUND error would have been demoted to info and the
-                // report rendered as a clean network approval.
-                if (cls) {
-                    const ci = f.data ? f.data.commandIndex : undefined;
-                    const outranked = Number.isInteger(ci) ? cls.valid.has(ci) : cls.allValid;
-                    if (!outranked) continue;
-                }
-                const localOnly = !!(f.data && f.data.localDeltaApplied);
-                f.severity = localOnly ? 'warning' : 'info';
-                f._downgradedBy = localOnly ? 'dryrun-valid-local-delta' : 'dryrun-valid';
-                if (localOnly) delete f.overridable;   // warnings carry no override flag (§4.2)
-            }
-        }
+        applyValidVerdict(findings, tier1);
     } else if (tier1.kind === 'verdict' && tier1.valid === false) {
-        // An invalid batch header runs no sub-commands, so there is normally nothing
-        // here; reported anyway rather than dropped, because a response that carries
-        // both is telling the caller something and silently discarding half of it is
-        // how the outer-level-only reading got wrong in the first place.
-        if (tier1.subCommands) pushSubCommandFindings(findings, tier1.subCommands);
-        findings.push({ code: FINDING_CODES.DRYRUN_INVALID, severity: 'error', source: 'dryrun',
-            overridable: true,
-            message: 'The network reports this will fail: ' + (tier1.status || tier1.error || 'rejected'),
-            data: { status: tier1.status, error: tier1.error } });
+        applyInvalidVerdict(findings, tier1);
     } else if (tier1.kind === 'unavailable') {
         findings.push({ code: FINDING_CODES.DRYRUN_UNAVAILABLE, severity: 'info', source: 'dryrun',
             message: 'The network dry-run was unavailable (' + tier1.reason + '); relying on client checks.', data: {} });
     } else if (tier1.kind === 'no-verdict') {
-        // The network answered and DECLINED to judge: a controller-bound action
-        // whose guard the public dry-run refuses to enter (guardInert), a
-        // denylisted VM action, a fee-exempt reply that never ran the handler,
-        // or an unquotable one. "Tier-2 stands" is right about PRECEDENCE and
-        // was wrong about DISCLOSURE - pushing no finding at all left the report
-        // a clean pass, so a client rendered it identically to a network
-        // approval. That is the same regression in its second home: measured
-        // on a controller-bound token's SEND, whose confirm screen read "Looks
-        // good" on a transfer the chain then refused `controller (reverted)`.
-        // Same code as the unreachable case on purpose: every client already
-        // routes DRYRUN_UNAVAILABLE to its "not an approval" presentation, and a
-        // new code would leave each of them showing the old, wrong screen until
-        // it learned about it.
-        //
-        // 'local-only mode' arrives here too, and it is a different sentence:
-        // nothing declined anything, the caller asked for no network check. Both
-        // still owe the same disclosure, so they share the code and differ in
-        // the words - a message that called a deliberate opt-out a refusal would
-        // be the mirror of the bug being fixed.
-        const declined = tier1.reason !== 'local-only mode';
-        findings.push({ code: FINDING_CODES.DRYRUN_UNAVAILABLE, severity: 'info', source: 'dryrun',
-            message: (declined
-                ? 'The network declined to judge this action ('
-                : 'The network was not consulted (')
-                + tier1.reason + '); relying on client checks.',
-            // When a batch was refused over ONE of its sub-actions, the name is
-            // the actionable half of the answer, so it rides in `data` and not
-            // only in the prose: a confirm screen can point at the offending
-            // command, which a message string does not let it do.
-            data: tier1.deniedSubAction ? { deniedSubAction: tier1.deniedSubAction } : {} });
+        pushNoVerdictFinding(findings, tier1);
     }
     return findings;
+}
+
+// The valid-verdict branch of applyTier1: disclose the approval, then demote
+// the Tier-2 client errors it outranks.
+function applyValidVerdict(findings, tier1) {
+    // A batch answers at two levels and the outer one is not a verdict on the
+    // inner ones (indexer actions/batch.js restores the BATCH's own status
+    // after the dispatch loop). Report both, and say which is which.
+    const cls = tier1.subCommands ? pushSubCommandFindings(findings, tier1.subCommands) : null;
+    findings.push({ code: FINDING_CODES.DRYRUN_VALID, severity: 'info', source: 'dryrun',
+        message: cls
+            ? (cls.allValid
+                ? `The network dry-run accepted this batch and all ${tier1.subCommands.length} of its commands.`
+                : 'The network dry-run accepted this batch transaction, but NOT every command in it'
+                  + ` (${cls.valid.size} of ${tier1.subCommands.length} accepted); see the per-command findings.`)
+            : 'The network dry-run accepted this action.',
+        data: cls ? { subCommandCount: tier1.subCommands.length, accepted: cls.valid.size } : {} });
+    if (tier1.oracleFeesOwed)
+        findings.push({ code: FINDING_CODES.DRYRUN_ORACLE_FEES_OWED, severity: 'info',
+            source: 'dryrun',
+            message: 'This batch owes oracle usage fees the pre-flight discloses rather than checks: '
+                + Object.entries(tier1.oracleFeesOwed).map(([a, v]) => `${v} to ${a}`).join(', ')
+                + '. Size those outputs yourself; the dry-run has no outputs to check them against.',
+            data: { oracleFeesOwed: tier1.oracleFeesOwed } });
+    for (const f of findings) {
+        if (f.severity === 'error' && f.source === 'client') {
+            // §4.7 + per-sub-command precedence. Tier 1 outranks a Tier-2 error
+            // only where it actually judged the thing the error is about. For a
+            // batch that is PER COMMAND: a finding tagged with a commandIndex is
+            // outranked only if the network accepted THAT command, and an
+            // untagged (batch-level) finding only if it accepted every command.
+            // Without this the outer valid:true would silently flatten the whole
+            // Tier-2 batch projection - measured shape: a batch whose only
+            // command is an unknown-tick SEND answers valid:true, so the SDK's
+            // own TOKEN_NOT_FOUND error would have been demoted to info and the
+            // report rendered as a clean network approval.
+            if (cls) {
+                const ci = f.data ? f.data.commandIndex : undefined;
+                const outranked = Number.isInteger(ci) ? cls.valid.has(ci) : cls.allValid;
+                if (!outranked) continue;
+            }
+            const localOnly = !!(f.data && f.data.localDeltaApplied);
+            f.severity = localOnly ? 'warning' : 'info';
+            f._downgradedBy = localOnly ? 'dryrun-valid-local-delta' : 'dryrun-valid';
+            if (localOnly) delete f.overridable;   // warnings carry no override flag (§4.2)
+        }
+    }
+}
+
+// The invalid-verdict branch of applyTier1.
+function applyInvalidVerdict(findings, tier1) {
+    // An invalid batch header runs no sub-commands, so there is normally nothing
+    // here; reported anyway rather than dropped, because a response that carries
+    // both is telling the caller something and silently discarding half of it is
+    // how the outer-level-only reading got wrong in the first place.
+    if (tier1.subCommands) pushSubCommandFindings(findings, tier1.subCommands);
+    findings.push({ code: FINDING_CODES.DRYRUN_INVALID, severity: 'error', source: 'dryrun',
+        overridable: true,
+        message: 'The network reports this will fail: ' + (tier1.status || tier1.error || 'rejected'),
+        data: { status: tier1.status, error: tier1.error } });
+}
+
+// The no-verdict branch of applyTier1, which also carries local-only mode.
+function pushNoVerdictFinding(findings, tier1) {
+    // The network answered and DECLINED to judge: a controller-bound action
+    // whose guard the public dry-run refuses to enter (guardInert), a
+    // denylisted VM action, a fee-exempt reply that never ran the handler,
+    // or an unquotable one. "Tier-2 stands" is right about PRECEDENCE and
+    // was wrong about DISCLOSURE - pushing no finding at all left the report
+    // a clean pass, so a client rendered it identically to a network
+    // approval. That is the same regression in its second home: measured
+    // on a controller-bound token's SEND, whose confirm screen read "Looks
+    // good" on a transfer the chain then refused `controller (reverted)`.
+    // Same code as the unreachable case on purpose: every client already
+    // routes DRYRUN_UNAVAILABLE to its "not an approval" presentation, and a
+    // new code would leave each of them showing the old, wrong screen until
+    // it learned about it.
+    //
+    // 'local-only mode' arrives here too, and it is a different sentence:
+    // nothing declined anything, the caller asked for no network check. Both
+    // still owe the same disclosure, so they share the code and differ in
+    // the words - a message that called a deliberate opt-out a refusal would
+    // be the mirror of the bug being fixed.
+    const declined = tier1.reason !== 'local-only mode';
+    findings.push({ code: FINDING_CODES.DRYRUN_UNAVAILABLE, severity: 'info', source: 'dryrun',
+        message: (declined
+            ? 'The network declined to judge this action ('
+            : 'The network was not consulted (')
+            + tier1.reason + '); relying on client checks.',
+        // When a batch was refused over ONE of its sub-actions, the name is
+        // the actionable half of the answer, so it rides in `data` and not
+        // only in the prose: a confirm screen can point at the offending
+        // command, which a message string does not let it do.
+        data: tier1.deniedSubAction ? { deniedSubAction: tier1.deniedSubAction } : {} });
 }
 
 module.exports = { classifySubCommands, pushSubCommandFindings, applyTier1 };
