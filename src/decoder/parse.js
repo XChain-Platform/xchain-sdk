@@ -197,6 +197,31 @@ function parseBatch(rawAction, version, segments, doValidate) {
     // never disagree about which entries are MINTs (D7 caps MINT per DISTINCT
     // token, so the count alone no longer answers the question).
     const mintTicks = [];
+    const decodeError = decodeBatchEntries(entries, doValidate, commands, counts, mintTicks);
+    if (decodeError) return decodeError;
+
+    // Caps -> validation findings, not parse failures.
+    const extraFindings = [];
+    if (!appendGlobalBatchFinding(entries, extraFindings))
+        appendPerActionFindings(entries, counts, mintTicks, extraFindings);
+
+    const result = {
+        ok: true,
+        action: 'BATCH',
+        version,
+        params: { COMMAND: tail },
+        rest: null,
+        commands,
+        actionString: canonicalize('BATCH', segments.slice(1)),
+        validation: null,
+    };
+    if (doValidate)
+        result.validation = runValidation('BATCH', { COMMAND: tail }, ['VERSION', 'COMMAND'], extraFindings);
+    return result;
+}
+
+// Decode entries in one synchronous pass so command results and counts cannot diverge.
+function decodeBatchEntries(entries, doValidate, commands, counts, mintTicks) {
     for (const entry of entries) {
         const sub = entry === ''
             ? failure('EMPTY', 'empty BATCH command')
@@ -228,9 +253,11 @@ function parseBatch(rawAction, version, segments, doValidate) {
         if (key === 'MINT') mintTicks.push(commandTick(entry));
         commands.push(sub);
     }
+    return null;
+}
 
-    // Caps -> validation findings, not parse failures.
-    const extraFindings = [];
+// Apply count and weight checks together because either one suppresses per-action caps.
+function appendGlobalBatchFinding(entries, extraFindings) {
     // The global command cap runs FIRST and alone: on-chain it rejects the whole
     // batch before any per-action count is taken, so emitting a per-action
     // finding alongside it would describe a rule the chain never reached.
@@ -276,63 +303,55 @@ function parseBatch(rawAction, version, segments, doValidate) {
             details: { action: 'COMMAND', limit: BATCH_WEIGHT_BUDGET, count: entries.length, weight },
         });
     } else {
-        // D7: MINT's cap is per DISTINCT token, so what the cap is compared
-        // against is the largest number of MINTs naming ONE token, not the raw
-        // occurrence count. Minting twelve different tokens in one transaction
-        // takes nothing from anyone; twelve MINTs of one contended token do.
-        const mint = mintTicks.length
-            ? maxMintsPerDistinctTick(mintTicks)
-            : { max: 0, approximate: false };
-        // First-appearance order over the command LIST, DECLARED by spec R2b
-        // (batch_limits.js limitKeysInListOrder owns the rule for both cap loops
-        // in this SDK). The arbiter reports only the FIRST per-action cap it
-        // breaks, so this order decides which finding a caller reading
-        // findings[0] sees named - a consensus string, not a presentation
-        // detail. Iterating `counts` matched it by key-insertion accident only.
-        for (const a of limitKeysInListOrder(entries)) {
-            const limit = BATCH_ACTION_LIMITS[a];
-            if (limit === undefined) continue;
-            // `mint.approximate` is NOT a reason to stay silent, and the
-            // asymmetry is why. Keying on case-folded strings can only SPLIT
-            // what the arbiter merges - a caret and a name may be one token, never
-            // two - so this maximum is a LOWER BOUND on the arbiter's, and a
-            // lower bound over the cap is a CERTAIN breach worth reporting.
-            // Only the ABSENCE of a finding is ever in doubt, which is what the
-            // flag tells a caller that asks. Standing down on the flag instead
-            // let one unrelated caret silence a breach a literal MINT repeat
-            // had already proved. See batch_limits.js's header.
-            const observed = a === 'MINT' ? mint.max : counts[a];
-            if (observed > limit) {
-                // MINT's message names the DISTINCT-token unit, because `count`
-                // is the largest run naming one token and a reader who took it
-                // for the number of MINTs in the batch would go looking for
-                // sub-commands that are not there.
-                const plural = limit === 1 ? '' : 's';
-                const subject = a === 'ISSUE' ? 'top-level ISSUE command' + plural
-                    : a === 'MINT' ? 'MINT per DISTINCT token'
-                    : a + ' command' + plural;
-                extraFindings.push({
-                    code: 'BATCH_LIMIT_EXCEEDED',
-                    message: 'BATCH allows at most ' + limit + ' ' + subject + '; got ' + observed,
-                    details: { action: a, limit, count: observed },
-                });
-            }
+        return false;
+    }
+    return true;
+}
+
+// Apply per-action caps in command order so the first finding matches consensus.
+function appendPerActionFindings(entries, counts, mintTicks, extraFindings) {
+    // D7: MINT's cap is per DISTINCT token, so what the cap is compared
+    // against is the largest number of MINTs naming ONE token, not the raw
+    // occurrence count. Minting twelve different tokens in one transaction
+    // takes nothing from anyone; twelve MINTs of one contended token do.
+    const mint = mintTicks.length
+        ? maxMintsPerDistinctTick(mintTicks)
+        : { max: 0, approximate: false };
+    // First-appearance order over the command LIST, DECLARED by spec R2b
+    // (batch_limits.js limitKeysInListOrder owns the rule for both cap loops
+    // in this SDK). The arbiter reports only the FIRST per-action cap it
+    // breaks, so this order decides which finding a caller reading
+    // findings[0] sees named - a consensus string, not a presentation
+    // detail. Iterating `counts` matched it by key-insertion accident only.
+    for (const a of limitKeysInListOrder(entries)) {
+        const limit = BATCH_ACTION_LIMITS[a];
+        if (limit === undefined) continue;
+        // `mint.approximate` is NOT a reason to stay silent, and the
+        // asymmetry is why. Keying on case-folded strings can only SPLIT
+        // what the arbiter merges - a caret and a name may be one token, never
+        // two - so this maximum is a LOWER BOUND on the arbiter's, and a
+        // lower bound over the cap is a CERTAIN breach worth reporting.
+        // Only the ABSENCE of a finding is ever in doubt, which is what the
+        // flag tells a caller that asks. Standing down on the flag instead
+        // let one unrelated caret silence a breach a literal MINT repeat
+        // had already proved. See batch_limits.js's header.
+        const observed = a === 'MINT' ? mint.max : counts[a];
+        if (observed > limit) {
+            // MINT's message names the DISTINCT-token unit, because `count`
+            // is the largest run naming one token and a reader who took it
+            // for the number of MINTs in the batch would go looking for
+            // sub-commands that are not there.
+            const plural = limit === 1 ? '' : 's';
+            const subject = a === 'ISSUE' ? 'top-level ISSUE command' + plural
+                : a === 'MINT' ? 'MINT per DISTINCT token'
+                : a + ' command' + plural;
+            extraFindings.push({
+                code: 'BATCH_LIMIT_EXCEEDED',
+                message: 'BATCH allows at most ' + limit + ' ' + subject + '; got ' + observed,
+                details: { action: a, limit, count: observed },
+            });
         }
     }
-
-    const result = {
-        ok: true,
-        action: 'BATCH',
-        version,
-        params: { COMMAND: tail },
-        rest: null,
-        commands,
-        actionString: canonicalize('BATCH', segments.slice(1)),
-        validation: null,
-    };
-    if (doValidate)
-        result.validation = runValidation('BATCH', { COMMAND: tail }, ['VERSION', 'COMMAND'], extraFindings);
-    return result;
 }
 
 module.exports = {
