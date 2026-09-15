@@ -19,7 +19,7 @@ const { checkListMirrors } = require('../../../../bin/check-preflight-drift.js')
 function buildIndexerRoots(body) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-gate-list-'));
     fs.mkdirSync(path.join(root, 'src', 'consensus'), { recursive: true });
-    if (body !== null) fs.writeFileSync(path.join(root, 'src', 'consensus', 'reservedRoots.js'), body);
+    if (body !== null) fs.writeFileSync(path.join(root, 'src', 'consensus', 'reserved_roots.js'), body);
     return root;
 }
 
@@ -87,7 +87,7 @@ function registerListFailureTests(fakeIndexerRoots) {
 
 /* The vendored-LIST seam, the third class no mapped hash can cover.
  *
- * RESERVED_FUTURE_ROOTS is declared in xchain-indexer/src/consensus/reservedRoots.js and read
+ * RESERVED_FUTURE_ROOTS is declared in xchain-indexer/src/consensus/reserved_roots.js and read
  * by issue.js through a symbol, so every pinned handler hash stays green while the
  * reserved set moves underneath the SDK copy the ISSUE pre-flight judges a create
  * against. Driven against SYNTHETIC indexer fixtures, like the seams above, because

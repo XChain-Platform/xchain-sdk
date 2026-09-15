@@ -409,7 +409,7 @@ function checkRegexMirrors(indexerRoot) {
 
 /* Indexer LIST constants this SDK vendors, compared ORDER INCLUDED.
  *
- * RESERVED_FUTURE_ROOTS lives in xchain-indexer/src/consensus/reservedRoots.js, which no mapped hash
+ * RESERVED_FUTURE_ROOTS lives in xchain-indexer/src/consensus/reserved_roots.js, which no mapped hash
  * row can cover (every row carries a literal src/actions/ prefix) and which issue.js reads
  * by symbol, so the handler's hash does not move when a root is added or dropped. That is
  * the MAX_REFILLS blind spot one file further out, and it matters more here: the SDK's
@@ -427,7 +427,7 @@ function checkRegexMirrors(indexerRoot) {
 const LIST_MIRRORS = [
     {
         name: 'RESERVED_FUTURE_ROOTS',
-        indexerFile: 'src/consensus/reservedRoots.js',
+        indexerFile: 'src/consensus/reserved_roots.js',
         why: 'src/preflight/checks/issue.js refuses a new top-level ISSUE against this list',
     },
 ];

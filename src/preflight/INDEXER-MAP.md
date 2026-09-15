@@ -70,7 +70,16 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `0e53e6c7`
+**Pins taken at indexer commit:** `4d5e2d0a`
+
+(Re-anchored 2026-09-15, sixth pass, by the `reserved_roots.js` rename review below. `4d5e2d0a`
+is the indexer landing tip that carries `cc462708`, the commit that renames
+`src/consensus/reservedRoots.js` to `src/consensus/reserved_roots.js` and repoints the one
+require of it inside `src/actions/issue/issuance_limits.js`. Only the `issue` row moves; the
+other ten rows are byte-identical at `0e53e6c7` and at `4d5e2d0a`. A checkout without
+`cc462708` reports the `issue` row as drifted AND the RESERVED_FUTURE_ROOTS mirror as unreadable
+(the drift gate reads the list by its new path and fails closed), and the answer is the
+missing indexer commit, never a re-pin back. `0e53e6c7` stays reachable.)
 
 (Re-anchored 2026-09-14, fifth pass, by the dispenser/dispense split review below. `0e53e6c7`
 is the indexer commit that moves the DISPENSER and DISPENSE entries to `<name>/index.js`
@@ -259,7 +268,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 0e53e6c7..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 4d5e2d0a..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -340,7 +349,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (SEND) | `src/actions/send/` | `caf45dac97d11cb095f70f35222a34000b69afd835d893cc0336374193cad6df` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `4fcdfcde260301108826174742501455501cc9017dee401a68cb6fe552a96f44` |
 | `checks/mint.js` | `src/actions/mint/` | `7c8992a06f9143b876c5eb7bc554dbbe5b2ca61507c44e822b5491b8571d1c06` |
-| `checks/issue.js` | `src/actions/issue/` | `41f203693d23b02e645add2c65cecb6710044a87e44d7ed822a6cfd0ab814b71` |
+| `checks/issue.js` | `src/actions/issue/` | `e75a3af1927b73a09053393915716f6bb0d000d676b7ca28cd95d7042d845a3b` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `fa6a3c6a2c2bcb2fabbd0e34800e37db2ea15949496cf6f1526c990dff96add9` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `7a31e1580e936b19d4ff0ed0a8aa84ec37f5de1b2536488de58ea4e84197b1b4` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `644dfe6951e78b653e185bb78201bfaeadc7b04eaab5cb7c1f4ffb2682b6cc79` |
@@ -356,6 +365,29 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-15 (sixth pass) - `reservedRoots.js` becomes `reserved_roots.js`, one require line in `issue/` follows it
+
+Baseline pin was the `issue` directory digest `41f20369` at `0e53e6c7`; the new pin is
+`e75a3af1`, hashed from the committed indexer tree at `4d5e2d0a` with its handlers clean, by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/issue/` (never by hand). Range read:
+`git -C ../xchain-indexer log --name-status 0e53e6c7..HEAD -- src/actions/` (a log, so the
+anchor-consistency check still finds exactly one review command), which is thirteen commits.
+Twelve of them touch no mapped directory except `batch/validate.js` and `dispenser/index.js`,
+which `e785db5e` edits in a comment citation and `4f781a52` puts back byte for byte (the net
+diff of both files over the range is empty). The thirteenth, `cc462708`, renames
+`src/consensus/reservedRoots.js` to `src/consensus/reserved_roots.js` and repoints its three
+requirers, one of which is `src/actions/issue/issuance_limits.js`: the whole diff of
+`src/actions/issue/` over the range is that one require specifier.
+
+**What moved: a file name outside the handler, and the require that names it.** No validity
+rule, threshold, fee, field, format version or error string changed; the 53 reserved roots are
+the same list read by its new path (`RESERVED_FUTURE_ROOTS: 53` before and after), and the
+drift gate's LIST mirror and its fixture builder now spell that path, since the gate fails
+closed on a file it cannot read.
+
+**Direction: NEITHER, no admission boundary moves.** NO CLIENT CHECK MOVES. `checks/issue.js`
+mirrors the same rules against the same list.
 
 ### 2026-09-14 (fifth pass) - `dispenser` and `dispense` become directories, no flat file beside them
 
