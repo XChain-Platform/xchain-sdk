@@ -31,7 +31,7 @@ class ProjectHelpers {
     //
     // ticks - array of TICK names to include
     rosterParams({ ticks } = {}) {
-        let items = this._tickArray(ticks, 'project.rosterParams');
+        let items = this.tickArray(ticks, 'project.rosterParams');
         return { type: '1', item: items };
     }
 
@@ -49,7 +49,7 @@ class ProjectHelpers {
             throw new Error('project.rosterEditParams: pass add OR remove, not both (one EDIT per LIST action)');
         if (!add && !remove)
             throw new Error('project.rosterEditParams: add or remove is required');
-        let items = this._tickArray(add || remove, 'project.rosterEditParams');
+        let items = this.tickArray(add || remove, 'project.rosterEditParams');
         return {
             edit:            add ? '1' : '2',
             listActionIndex: String(listActionIndex),
@@ -82,7 +82,7 @@ class ProjectHelpers {
     }
 
     // Normalize + validate a tick array
-    _tickArray(ticks, context) {
+    tickArray(ticks, context) {
         if (ticks !== undefined && ticks !== null && !Array.isArray(ticks))
             ticks = [ticks];
         if (!Array.isArray(ticks) || ticks.length === 0)

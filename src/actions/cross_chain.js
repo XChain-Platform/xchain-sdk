@@ -44,7 +44,7 @@ class CrossChainHelper {
     }
 
     // Get the SDK for a given chain identifier
-    _requireSDK(chain) {
+    requireSDK(chain) {
         let key = String(chain).toUpperCase();
         let sdk = this.sdks[key];
         if (!sdk)
@@ -71,7 +71,7 @@ class CrossChainHelper {
     //
     // Returns: { swap: <submitResult> }
     async createSwap(params, opts = {}) {
-        let sdk = this._requireSDK(params.giveCoin);
+        let sdk = this.requireSDK(params.giveCoin);
         let session = sdk.session(params.wif, opts);
 
         let swapResult = await session.swap({
@@ -105,7 +105,7 @@ class CrossChainHelper {
     // Returns: <submitResult>
     async link(params, opts = {}) {
         let submitChain = params.submitOn || params.coin1;
-        let sdk = this._requireSDK(submitChain);
+        let sdk = this.requireSDK(submitChain);
         let session = sdk.session(params.wif, opts);
 
         return session.link({
@@ -137,14 +137,14 @@ class CrossChainHelper {
     // that DID broadcast) so the caller can reconcile.
     async parallel(actions) {
         // Fail fast on config errors before broadcasting anything.
-        let plans = actions.map(a => ({ action: a, sdk: this._requireSDK(a.chain) }));
+        let plans = actions.map(a => ({ action: a, sdk: this.requireSDK(a.chain) }));
 
         let settled = await Promise.allSettled(plans.map(({ action, sdk }) => {
             let session = sdk.session(action.wif, action.submitOpts);
             return session.submit(action.actionData, action.encoderOpts || {}, action.submitOpts || {});
         }));
 
-        return this._resolveSettled(settled, actions, 'CROSS_CHAIN_PARTIAL_FAILURE', 'actions');
+        return this.resolveSettled(settled, actions, 'CROSS_CHAIN_PARTIAL_FAILURE', 'actions');
     }
 
     // Wait for actions on multiple chains simultaneously.
@@ -156,19 +156,19 @@ class CrossChainHelper {
     // succeeds. On a partial failure, throws an SDKActionError carrying every
     // leg's outcome (see parallel) so the legs that DID confirm are not discarded.
     async waitForAll(waits, opts = {}) {
-        let plans = waits.map(w => ({ wait: w, sdk: this._requireSDK(w.chain) }));
+        let plans = waits.map(w => ({ wait: w, sdk: this.requireSDK(w.chain) }));
 
         let settled = await Promise.allSettled(plans.map(({ wait, sdk }) =>
             sdk.waitForAction(wait.txid, opts)));
 
-        return this._resolveSettled(settled, waits, 'CROSS_CHAIN_WAIT_PARTIAL_FAILURE', 'waits');
+        return this.resolveSettled(settled, waits, 'CROSS_CHAIN_WAIT_PARTIAL_FAILURE', 'waits');
     }
 
     // Shared reducer for the multi-chain fan-outs. Returns the in-order value array
     // when every leg fulfilled (unchanged contract); otherwise throws an
     // SDKActionError with per-leg outcomes on `details.results` so no successful
     // leg's result is silently dropped.
-    _resolveSettled(settled, items, code, noun) {
+    resolveSettled(settled, items, code, noun) {
         let failures = settled.filter(s => s.status === 'rejected');
         if (failures.length === 0)
             return settled.map(s => s.value);

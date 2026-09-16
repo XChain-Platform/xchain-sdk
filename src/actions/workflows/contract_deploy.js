@@ -34,7 +34,7 @@ function prepareDeploy(owner, deployParams, opts) {
     // 'SLASH_DESTINATION requires COOLDOWN_BLOCKS', mirroring the indexer)
     // silently became a non-stakeable contract whenever the source was large
     // enough to chunk. Carrying the field through instead reaches that same
-    // refusal in _assertAssemblerFits, before any carrier is broadcast.
+    // refusal in assertAssemblerFits, before any carrier is broadcast.
     const populated = (v) => (v !== undefined && v !== null && v !== '');
     const hasStaking = populated(cooldown) || populated(slashDst);
 
@@ -68,7 +68,7 @@ function prepareDeploy(owner, deployParams, opts) {
             assembleParams.cooldownBlocks = cooldown;
             assembleParams.slashDestination = slashDst;
         }
-        owner._assertAssemblerFits(assembleParams);
+        owner.assertAssemblerFits(assembleParams);
     }
     return { plan, assembleParams };
 }
@@ -79,7 +79,7 @@ async function executeDeploy(owner, session, deployParams, deposits, opts, prepa
         p.deploy = await session.deploy(deployParams, {}, opts);
         // An inline deploy IS the contract's action, so its own indexed row
         // answers the index and there is nothing to resolve.
-        p.contractActionIndex = owner._actionIndexOf(p.deploy.indexed);
+        p.contractActionIndex = owner.actionIndexOf(p.deploy.indexed);
     } else {
         // Phase 1: each ordered base64 slice as its own DEPLOY v4 carrier, confirmed in turn so
         // they are all on-chain (at lower action_index) before the assembling DEPLOY runs.
@@ -99,7 +99,7 @@ async function executeDeploy(owner, session, deployParams, deposits, opts, prepa
         // explorer. Skipped when the assembler's index is unresolvable, which
         // is the caller submitting without an indexer wait: there is then no
         // action to look up and the deposit leg below refuses as it always has.
-        const assemblerActionIndex = owner._actionIndexOf(p.deploy.indexed);
+        const assemblerActionIndex = owner.actionIndexOf(p.deploy.indexed);
         if (assemblerActionIndex !== undefined && assemblerActionIndex !== null)
             p.contractActionIndex = await owner.resolveDeployedContract(assemblerActionIndex, opts);
     }
@@ -137,7 +137,7 @@ function inspectDeploymentDetail(owner, detail, assemblerActionIndex) {
         if (status !== undefined && status !== null) {
             observed = String(status);
             if (!/^pending/i.test(observed))
-                throw owner._deployedContractFailure(assemblerActionIndex, observed);
+                throw owner.deployedContractFailure(assemblerActionIndex, observed);
         }
     } else {
         // An explorer from before the field landed reports only the
@@ -148,7 +148,7 @@ function inspectDeploymentDetail(owner, detail, assemblerActionIndex) {
         const status = (detail.status === undefined || detail.status === null) ? '' : String(detail.status);
         if (status) observed = status;
         if (/^valid/i.test(status)) return { contractActionIndex: assemblerActionIndex, observed };
-        if (/^invalid/i.test(status)) throw owner._deployedContractFailure(assemblerActionIndex, status);
+        if (/^invalid/i.test(status)) throw owner.deployedContractFailure(assemblerActionIndex, status);
     }
     return { contractActionIndex: null, observed };
 }
@@ -180,7 +180,7 @@ module.exports = {
     // Returns: { deploy: <submitResult>, deposits: [<submitResult>, ...] }
     async deployAndFund(wif, deployParams, deposits, opts = {}) {
         let session = this.sdk.session(wif, opts);
-        return this._withPartial({ deploy: null, deposits: [] }, async (p) => {
+        return this.withPartial({ deploy: null, deposits: [] }, async (p) => {
             p.deploy = await session.deploy(deployParams, {}, opts);
 
             if (deposits && deposits.length > 0) {
@@ -189,14 +189,14 @@ module.exports = {
                 // a whole TRANSACTION ({ actions: [{ action_index }] }) rather than a
                 // single action; `undefined` then passed a `!== null` guard and a DEPOSIT
                 // was assembled with no contract reference at all, after the deploy had
-                // been broadcast and paid for. _actionIndexOf resolves both shapes, which
+                // been broadcast and paid for. actionIndexOf resolves both shapes, which
                 // is what every other flow in this file already uses it for.
-                let contractActionIndex = this._actionIndexOf(p.deploy.indexed);
+                let contractActionIndex = this.actionIndexOf(p.deploy.indexed);
                 // Nullish, not falsy: index 0 is a valid index and must fund. Throwing
                 // rather than skipping matches attachContent and setRoster, because a
                 // caller that asked for deposits and got a SUCCESS carrying none was told
                 // the contract is funded when it is not. The throw sits inside
-                // _withPartial, so the broadcast deploy comes back as err.partial.
+                // withPartial, so the broadcast deploy comes back as err.partial.
                 if (contractActionIndex === undefined || contractActionIndex === null)
                     throw new Error('deployAndFund: DEPLOY action_index unavailable; submit with waitForIndexer enabled');
 
@@ -229,7 +229,7 @@ module.exports = {
     async deployContract(wif, deployParams = {}, deposits, opts = {}) {
         const session = this.sdk.session(wif, opts);
         const prepared = prepareDeploy(this, deployParams, opts);
-        return this._withPartial(
+        return this.withPartial(
             { deploy: null, chunks: [], deposits: [], contractActionIndex: null },
             (p) => executeDeploy(this, session, deployParams, deposits, opts, prepared, p)
         );
@@ -252,7 +252,7 @@ module.exports = {
     //   pollInterval - ms between reads (default 2000, the ActionWaiter's own)
     //
     // Returns the deployed contract's action_index, verbatim as the explorer
-    // reports it (the same string-or-number shape _actionIndexOf hands back).
+    // reports it (the same string-or-number shape actionIndexOf hands back).
     // Throws when the group settled without a contract; the error carries the
     // reported status as `err.status` and A as `err.actionIndex`. A read that
     // throws is not a verdict (the ActionWaiter's own rule): the poll continues
@@ -271,7 +271,7 @@ module.exports = {
             let detail = null;
             let read   = false;
             try {
-                detail = await this._actionDetailOf(assemblerActionIndex);
+                detail = await this.actionDetailOf(assemblerActionIndex);
                 lastError = null;
                 read = true;
             } catch (e) {
@@ -294,7 +294,7 @@ module.exports = {
     // The terminal verdict of a chunk group that settled without a contract. The
     // reported status rides in the message AND on `err.status` so a caller can
     // branch on it without parsing prose.
-    _deployedContractFailure(assemblerActionIndex, status) {
+    deployedContractFailure(assemblerActionIndex, status) {
         let err = new Error('resolveDeployedContract: DEPLOY ' + assemblerActionIndex
             + ' deployed no contract: ' + status);
         err.status      = status;
@@ -306,7 +306,7 @@ module.exports = {
     // envelope it arrives in: the route wraps the row as { data }, the explorer's
     // own getAction answers a single-element array, and some responses nest the
     // row under `action`. Mirrors the unwrap the e2e drills already use.
-    async _actionDetailOf(actionIndex) {
+    async actionDetailOf(actionIndex) {
         let body = await this.sdk.getAction(actionIndex);
         if (!body) return null;
         let d = (body.data !== undefined && body.data !== null) ? body.data : body;

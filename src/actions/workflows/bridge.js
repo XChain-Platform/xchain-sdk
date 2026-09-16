@@ -48,30 +48,30 @@ module.exports = {
 
     // Network the bridge helpers validate addresses against. An explicit
     // opts.network wins, then the SDK's configured network, then the environment.
-    _bridgeNetwork(opts = {}) {
+    bridgeNetwork(opts = {}) {
         return opts.network || (this.sdk.options && this.sdk.options.network) || Config.env.network() || null;
     },
 
     // The Utility instance to validate with. Falls back to a fresh one so the
     // helpers work against the stub sdk their unit tests hand them.
-    _bridgeUtil() {
+    bridgeUtil() {
         return (this.sdk && this.sdk.util) ? this.sdk.util : new Utility();
     },
 
     // Normalize a caller's params to the UPPER_SNAKE wire names once, up front, so
     // these helpers read the same field a composed action would (camelCase in,
     // DEST_ADDRESS out) instead of guessing at the caller's spelling.
-    _bridgeParams(params) {
-        return this._bridgeUtil().normalizeFields(params || {});
+    bridgeParams(params) {
+        return this.bridgeUtil().normalizeFields(params || {});
     },
 
     // Refuse an address that is not valid on the chain the value lands on.
-    _assertBridgeAddress(field, address, coin, network) {
+    assertBridgeAddress(field, address, coin, network) {
         if (!network)
             throw new Error('XBRIDGE ' + field + ' cannot be checked without a network: pass opts.network or construct the SDK with one');
         if (!coin || !coins.ALLOWED_COINS.includes(String(coin).toUpperCase()))
             throw new Error('XBRIDGE ' + field + ' names an unsupported coin: ' + String(coin));
-        if (!this._bridgeUtil().isCryptoAddress(address, String(coin).toUpperCase(), network))
+        if (!this.bridgeUtil().isCryptoAddress(address, String(coin).toUpperCase(), network))
             throw new Error('XBRIDGE ' + field + ' "' + String(address) + '" is not a valid ' + String(coin).toUpperCase()
                 + ' ' + network + ' address. A bridge credit cannot be recalled, so the lock is refused here.');
     },
@@ -84,8 +84,8 @@ module.exports = {
     //
     // Returns: <submitResult>
     async bridgeLock(wif, params, opts = {}) {
-        let fields = this._bridgeParams(params);
-        this._assertBridgeAddress('DEST_ADDRESS', fields.DEST_ADDRESS, fields.DEST_COIN, this._bridgeNetwork(opts));
+        let fields = this.bridgeParams(params);
+        this.assertBridgeAddress('DEST_ADDRESS', fields.DEST_ADDRESS, fields.DEST_COIN, this.bridgeNetwork(opts));
         let session = this.sdk.session(wif, opts);
         return session.submit({ action: 'XBRIDGE', params: Utility.withForcedVersion('0', fields) }, {}, opts);
     },
@@ -94,8 +94,8 @@ module.exports = {
     //
     // params - { btcAddress, amount, memo }
     async bridgeBurn(wif, params, opts = {}) {
-        let fields = this._bridgeParams(params);
-        this._assertBridgeAddress('BTC_ADDRESS', fields.BTC_ADDRESS, 'BTC', this._bridgeNetwork(opts));
+        let fields = this.bridgeParams(params);
+        this.assertBridgeAddress('BTC_ADDRESS', fields.BTC_ADDRESS, 'BTC', this.bridgeNetwork(opts));
         let session = this.sdk.session(wif, opts);
         return session.submit({ action: 'XBRIDGE', params: Utility.withForcedVersion('1', fields) }, {}, opts);
     },
@@ -110,13 +110,13 @@ module.exports = {
     // way. The dot rule is the same one the handler applies: milestone 1 bridges no
     // subassets, so any dotted native tick cannot be rooted on the destination.
     async bridgeTokenLock(wif, params, opts = {}) {
-        let fields = this._bridgeParams(params);
+        let fields = this.bridgeParams(params);
         let tick   = String(fields.TICK === undefined || fields.TICK === null ? '' : fields.TICK);
         if (!tick)
             throw new Error('XBRIDGE v3 requires a TICK; use bridgeLock() for the gas token');
         if (tick.indexOf('.') !== -1)
             throw new Error('XBRIDGE v3 cannot bridge "' + tick + '": a dotted tick is a subasset or a bridged copy, and neither is bridgeable in this milestone');
-        this._assertBridgeAddress('DEST_ADDRESS', fields.DEST_ADDRESS, fields.DEST_COIN, this._bridgeNetwork(opts));
+        this.assertBridgeAddress('DEST_ADDRESS', fields.DEST_ADDRESS, fields.DEST_COIN, this.bridgeNetwork(opts));
         let session = this.sdk.session(wif, opts);
         return session.submit({ action: 'XBRIDGE', params: Utility.withForcedVersion('3', fields) }, {}, opts);
     },
@@ -130,11 +130,11 @@ module.exports = {
     // the burn is broadcast on. Reading it from the tick is also what makes a
     // wrong-chain address impossible to express.
     async bridgeTokenBurn(wif, params, opts = {}) {
-        let fields = this._bridgeParams(params);
-        let parsed = this._bridgeUtil().parseBridgedTick(fields.TICK);
+        let fields = this.bridgeParams(params);
+        let parsed = this.bridgeUtil().parseBridgedTick(fields.TICK);
         if (!parsed)
             throw new Error('XBRIDGE v4 needs a bridged tick of the form <ORIGIN>.<NAME>; got "' + String(fields.TICK) + '"');
-        this._assertBridgeAddress('ORIGIN_ADDRESS', fields.ORIGIN_ADDRESS, parsed.origin, this._bridgeNetwork(opts));
+        this.assertBridgeAddress('ORIGIN_ADDRESS', fields.ORIGIN_ADDRESS, parsed.origin, this.bridgeNetwork(opts));
         let session = this.sdk.session(wif, opts);
         return session.submit({ action: 'XBRIDGE', params: Utility.withForcedVersion('4', fields) }, {}, opts);
     },
@@ -148,7 +148,7 @@ module.exports = {
     // here: a caller who means "close every door" must say '-', and a caller who
     // means "leave it alone" must omit the field.
     async setTokenBridgeability(wif, params, opts = {}) {
-        let fields = this._bridgeParams(params);
+        let fields = this.bridgeParams(params);
         if (fields.BRIDGE_CHAINS !== undefined && fields.BRIDGE_CHAINS !== null && String(fields.BRIDGE_CHAINS) !== '-') {
             let chains = String(fields.BRIDGE_CHAINS).split(',').map(c => c.trim());
             if (!chains.length || chains.some(c => !c))
@@ -171,7 +171,7 @@ module.exports = {
     // action-string core so the measurement cannot drift from what would actually
     // go on the wire, and gate on the same compiled-push quantity fitsSingleDeploy
     // uses (payload + OP_PUSHDATA2 prefix, exact in the 8192-byte neighbourhood).
-    _assertAssemblerFits(assembleParams) {
+    assertAssemblerFits(assembleParams) {
         let composed  = this.sdk.actions.composeActionString({ action: 'DEPLOY', params: Object.assign({}, assembleParams) });
         let compiled  = Buffer.byteLength(composed.actionString, 'utf8') + chunkHelper.OP_RETURN_PUSH_OVERHEAD;
         if (compiled > chunkHelper.MAX_ACTION_DATA_LENGTH)
@@ -186,7 +186,7 @@ module.exports = {
     // the results already broadcast are attached to the error as `err.partial` so the
     // caller can reconcile instead of losing their txids. On success the worker's
     // return value (normally `partial` itself) is returned unchanged.
-    async _withPartial(partial, worker) {
+    async withPartial(partial, worker) {
         try {
             return await worker(partial);
         } catch (err) {
@@ -200,7 +200,7 @@ module.exports = {
     // Extract an action_index from a submitAction `indexed` result, tolerating both
     // shapes the waiter can resolve: a transaction ({ actions: [{ action_index }] })
     // on the polling path, or a single action ({ action_index }) on the WS path.
-    _actionIndexOf(indexed) {
+    actionIndexOf(indexed) {
         if (!indexed) return undefined;
         if (indexed.action_index !== undefined && indexed.action_index !== null) return indexed.action_index;
         if (Array.isArray(indexed.actions) && indexed.actions.length) return indexed.actions[0].action_index;

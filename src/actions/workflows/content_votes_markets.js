@@ -87,7 +87,7 @@ module.exports = {
     // Returns: { file, link, tisFile?, describe? } (each a <submitResult>)
     async attachContent(wif, params, opts = {}) {
         let session = this.sdk.session(wif, opts);
-        return this._withPartial({ file: null, link: null }, async (p) => {
+        return this.withPartial({ file: null, link: null }, async (p) => {
             p.file = await session.file({
                 name:  params.file.name,
                 type:  params.file.type,
@@ -96,8 +96,8 @@ module.exports = {
             }, params.file.rawData !== undefined ? { rawData: params.file.rawData } : {}, opts);
 
             // The waiter resolves a TRANSACTION object on the polling path and a single-action
-            // object on the WS path; _actionIndexOf handles both shapes.
-            let fileActionIndex = this._actionIndexOf(p.file.indexed);
+            // object on the WS path; actionIndexOf handles both shapes.
+            let fileActionIndex = this.actionIndexOf(p.file.indexed);
             if (fileActionIndex === undefined || fileActionIndex === null)
                 throw new Error('attachContent: FILE action_index unavailable; submit with waitForIndexer enabled');
 
@@ -123,7 +123,7 @@ module.exports = {
                 type:  'application/json',
                 title: 'Token information'
             }, { rawData: Buffer.from(json, 'utf8').toString('binary') }, opts);
-            let tisActionIndex = this._actionIndexOf(p.tisFile.indexed);
+            let tisActionIndex = this.actionIndexOf(p.tisFile.indexed);
             if (tisActionIndex === undefined || tisActionIndex === null)
                 throw new Error('attachContent: TIS FILE action_index unavailable; submit with waitForIndexer enabled');
 
@@ -161,10 +161,10 @@ module.exports = {
         let listParams = params.edit
             ? this.sdk.project.rosterEditParams(params.edit)
             : this.sdk.project.rosterParams({ ticks: params.ticks });
-        return this._withPartial({ list: null, link: null }, async (p) => {
+        return this.withPartial({ list: null, link: null }, async (p) => {
             p.list = await session.list(listParams, {}, opts);
 
-            let listActionIndex = this._actionIndexOf(p.list.indexed);
+            let listActionIndex = this.actionIndexOf(p.list.indexed);
             if (listActionIndex === undefined || listActionIndex === null)
                 throw new Error('setRoster: LIST action_index unavailable; submit with waitForIndexer enabled');
 
@@ -189,7 +189,7 @@ module.exports = {
     async createPoll(wif, params, opts = {}) {
         let session = this.sdk.session(wif, opts);
         let result = await session.vote(this.sdk.voting.createPollParams(params), {}, opts);
-        return { result, pollRef: this._actionIndexOf(result.indexed) };
+        return { result, pollRef: this.actionIndexOf(result.indexed) };
     },
 
     // Cast a ballot against an existing poll (VOTE v1).
@@ -218,7 +218,7 @@ module.exports = {
     async openMarket(wif, params, opts = {}) {
         let session = this.sdk.session(wif, opts);
         let result  = await session.bet(this.sdk.betting.createMarketParams(params), {}, opts);
-        return { result, feedRef: this._actionIndexOf(result.indexed) };
+        return { result, feedRef: this.actionIndexOf(result.indexed) };
     },
 
     // Place a bet on an existing market (BET v2). Bets are FINAL once placed:

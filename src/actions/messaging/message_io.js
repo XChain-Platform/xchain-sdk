@@ -183,7 +183,7 @@ async function decryptMessageEntry(owner, entry, msg, address, opts, explorer, p
             // Not an ECIES message for us; the ECDH fallback runs below.
         }
         if (entry.text === null) {
-            const plaintext = await owner._tryEcdhDecrypt(msg, address, opts.wif, explorer, pubkeyCache);
+            const plaintext = await owner.tryEcdhDecrypt(msg, address, opts.wif, explorer, pubkeyCache);
             if (plaintext !== null) {
                 entry.bytes = plaintext;
                 entry.text = plaintext.toString('utf8');
@@ -314,7 +314,7 @@ module.exports = {
      *        per-call pubkey cache plus the remaining network-lookup budget
      * @returns {Promise<Buffer|null>}
      */
-    async _tryEcdhDecrypt(msg, address, wif, explorer, pubkeyCache) {
+    async tryEcdhDecrypt(msg, address, wif, explorer, pubkeyCache) {
         let counterparty = msg.source === address ? msg.destination : msg.source;
         if (!counterparty) return null;
 

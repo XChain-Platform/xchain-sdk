@@ -54,7 +54,7 @@ describe('ControllerHelpers', function () {
 
         // The two the list was missing, and the reason each matters. Asserted
         // through the BUILDERS rather than the list, because the list is only
-        // the dropdown: `_assertActionClass` is what threw, so a fix that
+        // the dropdown: `assertActionClass` is what threw, so a fix that
         // widened the list and not the guard would look right and still refuse.
         it('can author an `all` bind, the catch-all the policy layer is built around', function () {
             const wire = ser('ISSUE', controller.bindToken({ tick: 'MYTOKEN', controller: 42, actionClass: 'all' }));

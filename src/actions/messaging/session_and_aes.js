@@ -75,8 +75,8 @@ module.exports = {
             : Buffer.from(theirPublicKey, 'hex');
 
         let secret = opts.legacy
-            ? this._deriveECDHSecretLegacy(keyPair.privateKey, pubkeyBuf)
-            : this._deriveEcdhSessionKey(keyPair.privateKey, pubkeyBuf);
+            ? this.deriveECDHSecretLegacy(keyPair.privateKey, pubkeyBuf)
+            : this.deriveEcdhSessionKey(keyPair.privateKey, pubkeyBuf);
         return { sharedSecret: secret.toString('hex') };
     },
 
@@ -91,7 +91,7 @@ module.exports = {
         if (!plaintext || typeof plaintext !== 'string')
             throw new SDKMessagingError('INVALID_MESSAGE', 'Plaintext message string is required.');
 
-        let key = this._toBuffer(sharedSecret, 'sharedSecret');
+        let key = this.toBuffer(sharedSecret, 'sharedSecret');
         return this._aesEncrypt(plaintext, key);
     },
 
@@ -103,7 +103,7 @@ module.exports = {
      * @returns {{ plaintext: string }}
      */
     sessionDecrypt(ciphertext, sharedSecret) {
-        let key = this._toBuffer(sharedSecret, 'sharedSecret');
+        let key = this.toBuffer(sharedSecret, 'sharedSecret');
         return this._aesDecrypt(ciphertext, key);
     },
 
@@ -119,7 +119,7 @@ module.exports = {
         if (!Buffer.isBuffer(plaintext) || plaintext.length === 0)
             throw new SDKMessagingError('INVALID_MESSAGE', 'Plaintext Buffer is required.');
 
-        let key = this._toBuffer(sharedSecret, 'sharedSecret');
+        let key = this.toBuffer(sharedSecret, 'sharedSecret');
         return this._aesEncryptBytes(plaintext, key);
     },
 
@@ -132,7 +132,7 @@ module.exports = {
      * @returns {{ plaintext: Buffer }}
      */
     sessionDecryptBytes(ciphertext, sharedSecret) {
-        let key = this._toBuffer(sharedSecret, 'sharedSecret');
+        let key = this.toBuffer(sharedSecret, 'sharedSecret');
         return this._aesDecryptBytes(ciphertext, key);
     },
 
@@ -147,7 +147,7 @@ module.exports = {
         if (!plaintext || typeof plaintext !== 'string')
             throw new SDKMessagingError('INVALID_MESSAGE', 'Plaintext message string is required.');
 
-        let key = this._normalizeKey(sharedKey);
+        let key = this.normalizeKey(sharedKey);
         return this._aesEncrypt(plaintext, key);
     },
 
@@ -159,7 +159,7 @@ module.exports = {
      * @returns {{ plaintext: string }}
      */
     aesDecrypt(ciphertext, sharedKey) {
-        let key = this._normalizeKey(sharedKey);
+        let key = this.normalizeKey(sharedKey);
         return this._aesDecrypt(ciphertext, key);
     },
 
@@ -175,7 +175,7 @@ module.exports = {
         if (!Buffer.isBuffer(plaintext) || plaintext.length === 0)
             throw new SDKMessagingError('INVALID_MESSAGE', 'Plaintext Buffer is required.');
 
-        let key = this._normalizeKey(sharedKey);
+        let key = this.normalizeKey(sharedKey);
         return this._aesEncryptBytes(plaintext, key);
     },
 
@@ -188,7 +188,7 @@ module.exports = {
      * @returns {{ plaintext: Buffer }}
      */
     aesDecryptBytes(ciphertext, sharedKey) {
-        let key = this._normalizeKey(sharedKey);
+        let key = this.normalizeKey(sharedKey);
         return this._aesDecryptBytes(ciphertext, key);
     },
 

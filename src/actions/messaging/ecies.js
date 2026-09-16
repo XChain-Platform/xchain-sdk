@@ -61,7 +61,7 @@ module.exports = {
             throw new SDKMessagingError('INVALID_PUBKEY', 'Recipient public key is not a valid secp256k1 point.');
 
         let ephemeral = ECPair.makeRandom({ compressed: true });
-        let sharedSecret = this._deriveEciesKey(ephemeral.privateKey, pubkeyBuf);
+        let sharedSecret = this.deriveEciesKey(ephemeral.privateKey, pubkeyBuf);
 
         let iv = crypto.randomBytes(IV_LEN);
         let cipher = crypto.createCipheriv('aes-256-gcm', sharedSecret, iv);
@@ -102,7 +102,7 @@ module.exports = {
         }
 
         let { iv, authTag, encrypted, sharedSecret } =
-            this._unpackEcies(ciphertextBuf, keyPair.privateKey);
+            this.unpackEcies(ciphertextBuf, keyPair.privateKey);
 
         try {
             let decipher = crypto.createDecipheriv('aes-256-gcm', sharedSecret, iv);
@@ -140,7 +140,7 @@ module.exports = {
             throw new SDKMessagingError('INVALID_PUBKEY', 'Recipient public key is not a valid secp256k1 point.');
 
         let ephemeral = ECPair.makeRandom({ compressed: true });
-        let sharedSecret = this._deriveEciesKey(ephemeral.privateKey, pubkeyBuf);
+        let sharedSecret = this.deriveEciesKey(ephemeral.privateKey, pubkeyBuf);
 
         let iv = crypto.randomBytes(IV_LEN);
         let cipher = crypto.createCipheriv('aes-256-gcm', sharedSecret, iv);
@@ -181,7 +181,7 @@ module.exports = {
         }
 
         let { iv, authTag, encrypted, sharedSecret } =
-            this._unpackEcies(ciphertextBuf, keyPair.privateKey);
+            this.unpackEcies(ciphertextBuf, keyPair.privateKey);
 
         try {
             let decipher = crypto.createDecipheriv('aes-256-gcm', sharedSecret, iv);

@@ -106,8 +106,8 @@ function normalizeMarketAmounts(fee, refundWindow, minAmount, ctx) {
 }
 
 function normalizeMarketLists(owner, allowList, blockList, ctx) {
-    const allowOut = isSet(allowList) ? owner._actionIndex(allowList, 'ALLOW_LIST', ctx) : '';
-    const blockOut = isSet(blockList) ? owner._actionIndex(blockList, 'BLOCK_LIST', ctx) : '';
+    const allowOut = isSet(allowList) ? owner.actionIndex(allowList, 'ALLOW_LIST', ctx) : '';
+    const blockOut = isSet(blockList) ? owner.actionIndex(blockList, 'BLOCK_LIST', ctx) : '';
     if (allowOut !== '' && blockOut !== '' && allowOut === blockOut)
         fail('INVALID_FIELD_VALUE',
             `${ctx}: allowList and blockList are the same list (${allowOut}). Nobody could ever bet on that market`,
@@ -175,7 +175,7 @@ module.exports = {
         const ctx = 'betting.cancelMarketParams';
         return {
             version:         1,
-            feedActionIndex: this._actionIndex(feedActionIndex, 'FEED_ACTION_INDEX', ctx),
+            feedActionIndex: this.actionIndex(feedActionIndex, 'FEED_ACTION_INDEX', ctx),
             memo:            isSet(memo) ? String(memo) : ''
         };
     },
@@ -186,7 +186,7 @@ module.exports = {
     // Pass `outcomes` to resolve a label to its index and to range-check it.
     placeBetParams({ feedActionIndex, outcome, amount, outcomes, memo } = {}) {
         const ctx = 'betting.placeBetParams';
-        const feed = this._actionIndex(feedActionIndex, 'FEED_ACTION_INDEX', ctx);
+        const feed = this.actionIndex(feedActionIndex, 'FEED_ACTION_INDEX', ctx);
 
         const index = this.outcomeIndex(outcome, outcomes, ctx);
 
@@ -209,7 +209,7 @@ module.exports = {
         const ctx = 'betting.resolveMarketParams';
         return {
             version:         3,
-            feedActionIndex: this._actionIndex(feedActionIndex, 'FEED_ACTION_INDEX', ctx),
+            feedActionIndex: this.actionIndex(feedActionIndex, 'FEED_ACTION_INDEX', ctx),
             outcome:         String(this.outcomeIndex(outcome, outcomes, ctx)),
             memo:            isSet(memo) ? String(memo) : ''
         };

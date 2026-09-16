@@ -42,7 +42,7 @@ describe('MessagingUtils @crypto @regression', function () {
         it('[REGRESSION] derives byte-identically to the Node crypto.hkdfSync builtin', function () {
             if (typeof crypto.hkdfSync !== 'function') this.skip();
             const alice = keypair(), bob = keypair();
-            const product = msg._ecdhProduct(alice.privateKey, bob.publicKey);
+            const product = msg.ecdhProduct(alice.privateKey, bob.publicKey);
             const cases = [
                 ['xchain-messaging-kdf-v1', 'xchain-ecies-v1', 32],
                 ['xchain-messaging-kdf-v1', 'xchain-ecdh-session-v1', 32],
@@ -53,7 +53,7 @@ describe('MessagingUtils @crypto @regression', function () {
                 const builtin = Buffer.from(crypto.hkdfSync(
                     'sha256', product, Buffer.from(salt, 'utf8'), Buffer.from(info, 'utf8'), len,
                 ));
-                const ours = msg._hkdfSha256Test(
+                const ours = msg.hkdfSha256Test(
                     product, Buffer.from(salt, 'utf8'), Buffer.from(info, 'utf8'), len,
                 );
                 expect(ours.length).to.equal(len);
@@ -69,7 +69,7 @@ describe('MessagingUtils @crypto @regression', function () {
             crypto.hkdfSync = undefined;
             try {
                 const alice = keypair(), bob = keypair();
-                const key = msg._deriveEciesKey(alice.privateKey, bob.publicKey);
+                const key = msg.deriveEciesKey(alice.privateKey, bob.publicKey);
                 expect(Buffer.isBuffer(key)).to.equal(true);
                 expect(key.length).to.equal(32);
             } finally {
@@ -93,8 +93,8 @@ describe('MessagingUtils @crypto @regression', function () {
             const priv = alice.privateKey;
             const pub  = bob.publicKey;
 
-            const eciesKey = msg._deriveEciesKey(priv, pub);
-            const ecdhKey  = msg._deriveEcdhSessionKey(priv, pub);
+            const eciesKey = msg.deriveEciesKey(priv, pub);
+            const ecdhKey  = msg.deriveEcdhSessionKey(priv, pub);
 
             expect(Buffer.isBuffer(eciesKey)).to.equal(true);
             expect(eciesKey.length).to.equal(32);
@@ -102,7 +102,7 @@ describe('MessagingUtils @crypto @regression', function () {
             // Same ECDH product, different info label => different key.
             expect(eciesKey.equals(ecdhKey)).to.equal(false);
             // And both differ from the legacy bare-SHA256 derivation.
-            const legacy = msg._deriveECDHSecretLegacy(priv, pub);
+            const legacy = msg.deriveECDHSecretLegacy(priv, pub);
             expect(eciesKey.equals(legacy)).to.equal(false);
             expect(ecdhKey.equals(legacy)).to.equal(false);
         });
@@ -119,7 +119,7 @@ describe('MessagingUtils @crypto @regression', function () {
             // keyed by SHA256(raw ecdh product), exactly the legacy layout.
             const bob = keypair();
             const ephemeral = keypair();
-            const legacyKey = msg._deriveECDHSecretLegacy(ephemeral.privateKey, bob.publicKey);
+            const legacyKey = msg.deriveECDHSecretLegacy(ephemeral.privateKey, bob.publicKey);
             const iv = crypto.randomBytes(12);
             const cipher = crypto.createCipheriv('aes-256-gcm', legacyKey, iv);
             const enc = Buffer.concat([cipher.update('legacy hi', 'utf8'), cipher.final()]);
@@ -142,7 +142,7 @@ describe('MessagingUtils @crypto @regression', function () {
         it('round-trips a legacy v0 binary (bytes) ECIES blob', function () {
             const bob = keypair();
             const ephemeral = keypair();
-            const legacyKey = msg._deriveECDHSecretLegacy(ephemeral.privateKey, bob.publicKey);
+            const legacyKey = msg.deriveECDHSecretLegacy(ephemeral.privateKey, bob.publicKey);
             const payload = crypto.randomBytes(33);
             const iv = crypto.randomBytes(12);
             const cipher = crypto.createCipheriv('aes-256-gcm', legacyKey, iv);

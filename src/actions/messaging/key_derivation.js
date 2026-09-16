@@ -31,7 +31,7 @@ const {
 
 module.exports = {
     // Compute the raw ECDH product (uniform input keying material for the KDF).
-    _ecdhProduct(privateKey, publicKey) {
+    ecdhProduct(privateKey, publicKey) {
         let ecdh = crypto.createECDH('secp256k1');
         ecdh.setPrivateKey(privateKey);
         return ecdh.computeSecret(publicKey);
@@ -39,8 +39,8 @@ module.exports = {
 
     // v0 legacy derivation: bare SHA256 over the raw ECDH product, no domain
     // separation. Kept ONLY for decrypting old-version blobs / legacy sessions.
-    _deriveECDHSecretLegacy(privateKey, publicKey) {
-        let raw = this._ecdhProduct(privateKey, publicKey);
+    deriveECDHSecretLegacy(privateKey, publicKey) {
+        let raw = this.ecdhProduct(privateKey, publicKey);
         return crypto.createHash('sha256').update(raw).digest();
     },
 
@@ -48,25 +48,25 @@ module.exports = {
     // and a per-method `info` label. The differing `info` per method is what
     // guarantees cross-method domain separation: a key that leaks from one
     // method cannot be replayed to read messages protected by the other.
-    _hkdfFromEcdh(privateKey, publicKey, info) {
-        let raw = this._ecdhProduct(privateKey, publicKey);
+    hkdfFromEcdh(privateKey, publicKey, info) {
+        let raw = this.ecdhProduct(privateKey, publicKey);
         return hkdfSha256(raw, HKDF_SALT, info, HKDF_KEY_LEN);
     },
 
     // Test-only handle on the module-private HKDF, so the suite can pin it
     // against Node's builtin on arbitrary salt/info/length vectors.
-    _hkdfSha256Test(ikm, salt, info, length) {
+    hkdfSha256Test(ikm, salt, info, length) {
         return hkdfSha256(ikm, salt, info, length);
     },
 
     // v1 ECIES key (info = xchain-ecies-v1)
-    _deriveEciesKey(privateKey, publicKey) {
-        return this._hkdfFromEcdh(privateKey, publicKey, HKDF_INFO_ECIES);
+    deriveEciesKey(privateKey, publicKey) {
+        return this.hkdfFromEcdh(privateKey, publicKey, HKDF_INFO_ECIES);
     },
 
     // v1 ECDH-session key (info = xchain-ecdh-session-v1)
-    _deriveEcdhSessionKey(privateKey, publicKey) {
-        return this._hkdfFromEcdh(privateKey, publicKey, HKDF_INFO_ECDH);
+    deriveEcdhSessionKey(privateKey, publicKey) {
+        return this.hkdfFromEcdh(privateKey, publicKey, HKDF_INFO_ECDH);
     },
 
     // Unpack a (possibly versioned) ECIES envelope and derive the matching key.
@@ -74,7 +74,7 @@ module.exports = {
     //   v0: [ephemeralPubkey(33)][iv(12)][authTag(16)][encrypted]       -> legacy SHA256
     // A compressed pubkey always starts with 0x02/0x03, so byte 0 == 0x01
     // unambiguously identifies a v1 blob.
-    _unpackEcies(buf, recipientPrivateKey) {
+    unpackEcies(buf, recipientPrivateKey) {
         let version, offset;
         if (buf.length > 0 && buf[0] === KDF_VERSION_V1) {
             version = KDF_VERSION_V1;
@@ -102,8 +102,8 @@ module.exports = {
             throw new SDKMessagingError('INVALID_CIPHERTEXT', 'ECIES ephemeral public key is not a valid secp256k1 point.');
 
         let sharedSecret = version === KDF_VERSION_V1
-            ? this._deriveEciesKey(recipientPrivateKey, ephemeralPubkey)
-            : this._deriveECDHSecretLegacy(recipientPrivateKey, ephemeralPubkey);
+            ? this.deriveEciesKey(recipientPrivateKey, ephemeralPubkey)
+            : this.deriveECDHSecretLegacy(recipientPrivateKey, ephemeralPubkey);
 
         return { version, iv, authTag, encrypted, sharedSecret };
     },
@@ -162,16 +162,16 @@ module.exports = {
         }
     },
 
-    _normalizeKey(key) {
+    normalizeKey(key) {
         if (!key)
             throw new SDKMessagingError('INVALID_KEY', 'Encryption key is required.');
 
-        let buf = this._toBuffer(key, 'key');
+        let buf = this.toBuffer(key, 'key');
         if (buf.length === 32) return buf;
         return crypto.createHash('sha256').update(buf).digest();
     },
 
-    _toBuffer(value, name) {
+    toBuffer(value, name) {
         if (Buffer.isBuffer(value)) return value;
         if (typeof value === 'string') return Buffer.from(value, 'hex');
         throw new SDKMessagingError('INVALID_TYPE', `${name} must be a hex string or Buffer.`);

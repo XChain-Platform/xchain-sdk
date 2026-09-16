@@ -167,7 +167,7 @@ module.exports = {
         };
     },
 
-    _actionIndex(value, field, ctx) {
+    actionIndex(value, field, ctx) {
         if (!isSet(value))
             fail('MISSING_REQUIRED_FIELD', `${ctx}: ${field} is required`, { field });
         const str = String(value).trim();

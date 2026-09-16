@@ -46,7 +46,7 @@ const net = require('net');
 // bodies to be textually identical once comments are stripped. Editing one
 // side reddens CI until the other matches, and renaming this function fails
 // that gate loudly rather than silently unguarding the seam.
-function _isForbiddenAddress(addr){
+function isForbiddenAddress(addr){
     let ip = String(addr).toLowerCase();
     if (ip.startsWith('::ffff:')){
         const rest = ip.slice(7);
@@ -204,7 +204,7 @@ function buildHttpGetPayload(opts){
     // URL.hostname keeps brackets around IPv6 literals ([::1]); strip them so
     // net.isIP recognizes the literal.
     let host = parsed.hostname.replace(/^\[|\]$/g, '');
-    if (!allowPrivate && net.isIP(host) && _isForbiddenAddress(host)){
+    if (!allowPrivate && net.isIP(host) && isForbiddenAddress(host)){
         throw new Error('AttestationHelpers.httpGet: refusing non-public address ' + host + ' (SSRF guard); pass { allowPrivate: true } for regtest/e2e');
     }
     return url;

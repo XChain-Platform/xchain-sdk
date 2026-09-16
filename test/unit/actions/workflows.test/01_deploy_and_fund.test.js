@@ -86,7 +86,7 @@ describe('Workflows', function () {
         // Was "skips deposits when ...". A caller that asked for deposits and got a
         // SUCCESS carrying none had been told the contract is funded when it is not,
         // and the sibling flows (attachContent, setRoster) already refuse instead of
-        // skipping. The broadcast deploy is not lost: _withPartial returns it.
+        // skipping. The broadcast deploy is not lost: withPartial returns it.
         it('refuses to fund when deploy indexed has no action_index (null), keeping the deploy', async function () {
             const sdk = makeSdk({
                 deploy: async () => ({ txid: 'deploy', indexed: null })

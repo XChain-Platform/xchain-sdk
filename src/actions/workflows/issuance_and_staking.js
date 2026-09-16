@@ -32,7 +32,7 @@ module.exports = {
     // Returns: { issue: <submitResult>, sends: [<submitResult>, ...] }
     async issueAndDistribute(wif, issueParams, distributions, opts = {}) {
         let session = this.sdk.session(wif, opts);
-        return this._withPartial({ issue: null, sends: [] }, async (p) => {
+        return this.withPartial({ issue: null, sends: [] }, async (p) => {
             p.issue = await session.issue(issueParams, {}, opts);
             for (let dist of distributions) {
                 p.sends.push(await session.send({
@@ -56,7 +56,7 @@ module.exports = {
     // Returns: { issue: <submitResult>, mint: <submitResult> }
     async issueAndMint(wif, issueParams, mintParams, opts = {}) {
         let session = this.sdk.session(wif, opts);
-        return this._withPartial({ issue: null, mint: null }, async (p) => {
+        return this.withPartial({ issue: null, mint: null }, async (p) => {
             p.issue = await session.issue(issueParams, {}, opts);
             p.mint  = await session.mint({ tick: issueParams.tick, ...mintParams }, {}, opts);
             return p;
@@ -110,7 +110,7 @@ module.exports = {
     // Returns: { stake: <submitResult>, delegate: <submitResult>|null }
     async stakeAndDelegate(wif, stakeParams, delegateParams, opts = {}) {
         let session = this.sdk.session(wif, opts);
-        return this._withPartial({ stake: null, delegate: null }, async (p) => {
+        return this.withPartial({ stake: null, delegate: null }, async (p) => {
             p.stake = await session.stake(stakeParams, {}, opts);
             if (delegateParams)
                 p.delegate = await session.delegate(delegateParams, {}, opts);
@@ -128,7 +128,7 @@ module.exports = {
     // Returns: { stake: <submitResult>, delegate: <submitResult>|null }
     async stakeToContractAndDelegate(wif, stakeParams, delegateParams, opts = {}) {
         let session = this.sdk.session(wif, opts);
-        return this._withPartial({ stake: null, delegate: null }, async (p) => {
+        return this.withPartial({ stake: null, delegate: null }, async (p) => {
             p.stake = await session.stakeToContract(stakeParams, {}, opts);
             if (delegateParams)
                 p.delegate = await session.delegateForContract(delegateParams, {}, opts);

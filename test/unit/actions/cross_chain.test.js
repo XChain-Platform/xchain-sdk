@@ -99,25 +99,25 @@ describe('CrossChainHelper', function () {
 
 describe('CrossChainHelper', function () {
 
-    describe('_requireSDK()', function () {
+    describe('requireSDK()', function () {
         let helper;
         beforeEach(function () {
             helper = new CrossChainHelper({ BTC: makeSdk('BTC'), LTC: makeSdk('LTC') });
         });
 
         it('returns SDK for known chain', function () {
-            let sdk = helper._requireSDK('BTC');
+            let sdk = helper.requireSDK('BTC');
             assert.ok(sdk);
         });
 
         it('is case-insensitive (uppercases key)', function () {
-            let sdk = helper._requireSDK('btc');
+            let sdk = helper.requireSDK('btc');
             assert.ok(sdk);
         });
 
         it('throws SDKConfigError for unknown chain', function () {
             try {
-                helper._requireSDK('DOGE');
+                helper.requireSDK('DOGE');
                 assert.fail('should have thrown');
             } catch (e) {
                 assert.strictEqual(e.name, 'SDKConfigError');

@@ -53,15 +53,15 @@ describe('Workflows', function () {
 
     afterEach(() => sinon.restore());
 
-    describe('_actionIndexOf', function () {
+    describe('actionIndexOf', function () {
         it('resolves both waiter shapes and reports nothing when neither is present', function () {
             const wf = new Workflows(makeSdk());
-            assert.strictEqual(wf._actionIndexOf({ action_index: 5 }), 5);
-            assert.strictEqual(wf._actionIndexOf({ action_index: 0 }), 0);
-            assert.strictEqual(wf._actionIndexOf({ actions: [{ action_index: 3 }] }), 3);
-            assert.strictEqual(wf._actionIndexOf({ actions: [] }), undefined);
-            assert.strictEqual(wf._actionIndexOf(null), undefined);
-            assert.strictEqual(wf._actionIndexOf(undefined), undefined);
+            assert.strictEqual(wf.actionIndexOf({ action_index: 5 }), 5);
+            assert.strictEqual(wf.actionIndexOf({ action_index: 0 }), 0);
+            assert.strictEqual(wf.actionIndexOf({ actions: [{ action_index: 3 }] }), 3);
+            assert.strictEqual(wf.actionIndexOf({ actions: [] }), undefined);
+            assert.strictEqual(wf.actionIndexOf(null), undefined);
+            assert.strictEqual(wf.actionIndexOf(undefined), undefined);
         });
     });
 });

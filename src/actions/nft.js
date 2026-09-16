@@ -37,7 +37,7 @@ class NftHelpers {
     // Returns an ISSUE param object (camelCase; the SDK normalizes to UPPER_SNAKE).
     unique({ tick, description, transfer, memo } = {}) {
         if (!tick) throw new Error('nft.unique: tick is required');
-        return this._issue({ tick, maxSupply: '1', mintSupply: '1', description, transfer, memo });
+        return this.issue({ tick, maxSupply: '1', mintSupply: '1', description, transfer, memo });
     }
 
     // Build ISSUE params for an edition of N identical, indivisible prints.
@@ -55,7 +55,7 @@ class NftHelpers {
         if (!tick) throw new Error('nft.edition: tick is required');
         if (supply === undefined || supply === null || String(supply) === '')
             throw new Error('nft.edition: supply (maxSupply) is required');
-        let params = this._issue({ tick, maxSupply: String(supply), description, transfer, memo });
+        let params = this.issue({ tick, maxSupply: String(supply), description, transfer, memo });
         if (mint) {
             // Fair-mint edition: open a public MINT window. The cap locks at issuance
             // with zero minted supply (LOCK_MAX_SUPPLY now validates a declared cap, not
@@ -165,7 +165,7 @@ class NftHelpers {
     // Shared ISSUE skeleton enforcing the NFT field bundle: DECIMALS=0 +
     // LOCK_MAX_SUPPLY=1. Drops undefined optionals so the SDK's trailing-field
     // stripping keeps the serialization compact.
-    _issue({ tick, maxSupply, mintSupply, description, transfer, memo }) {
+    issue({ tick, maxSupply, mintSupply, description, transfer, memo }) {
         let params = {
             tick,
             maxSupply:      String(maxSupply),

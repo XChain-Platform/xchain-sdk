@@ -223,7 +223,7 @@ function checkValidatorSemantics(ctx, parsed) {
 
 function checkEncodingFitsCarrier(ctx, parsed, opts) {
     // 2. Encoding fits carrier (only when the caller told us the
-    // intended encoding; compose-time _validateEncoding covers the
+    // intended encoding; compose-time validateEncoding covers the
     // OP_RETURN path, this covers all carriers uniformly).
     ctx.markRun(FINDING_CODES.ENCODING_TOO_LARGE);
     if (opts.encoding) {

@@ -37,7 +37,7 @@ function isSet(v) {
 }
 
 function pollSettings(owner, values, ctx) {
-    const opts = owner._optionArray(values.options, ctx);
+    const opts = owner.optionArray(values.options, ctx);
 
     // MAX_SELECTIONS defaults to 1; must be 1..optionCount.
     let ms = isSet(values.maxSelections) ? Number(values.maxSelections) : 1;
@@ -56,8 +56,8 @@ function pollSettings(owner, values, ctx) {
     if (wm === 'quadratic' && !(Number(values.minVoteBalance) > 0)) {
         throw new Error(`${ctx}: quadratic weighting requires minVoteBalance > 0`);
     }
-    if (isSet(values.quorum)) owner._assertFraction(values.quorum, 'quorum', ctx);
-    if (isSet(values.decideThreshold)) owner._assertFraction(values.decideThreshold, 'decideThreshold', ctx);
+    if (isSet(values.quorum)) owner.assertFraction(values.quorum, 'quorum', ctx);
+    if (isSet(values.decideThreshold)) owner.assertFraction(values.decideThreshold, 'decideThreshold', ctx);
     if (isSet(values.minVoters) && (!Number.isInteger(Number(values.minVoters)) || Number(values.minVoters) < 0)) {
         throw new Error(`${ctx}: minVoters must be a non-negative integer`);
     }
@@ -146,14 +146,14 @@ class VoteHelpers {
     }
 
     // Build VOTE v1 params (cast a ballot against an existing poll). `ballot`
-    // accepts several shapes; see _formatBallot.
+    // accepts several shapes; see formatBallot.
     castBallotParams({ pollRef, ballot, memo } = {}) {
         const ctx = 'voting.castBallotParams';
         if (!isSet(pollRef)) throw new Error(`${ctx}: pollRef is required (the poll's action_index)`);
         const p = {
             version: 1,
             pollRef: String(pollRef),
-            ballot: this._formatBallot(ballot, ctx),
+            ballot: this.formatBallot(ballot, ctx),
         };
         if (isSet(memo)) p.memo = String(memo);
         return p;
@@ -184,7 +184,7 @@ class VoteHelpers {
     //   - split as entry objects:     [{ option: 0, share: 60 }, { option: 2, share: 40 }] -> '0:60,2:40'
     //   - split as an option->share map: { 0: 60, 2: 40 } -> '0:60,2:40'
     //   - a pre-formatted string:     '0:60,2:40' (passed through, trimmed)
-    _formatBallot(ballot, ctx) {
+    formatBallot(ballot, ctx) {
         if (ballot === undefined || ballot === null || ballot === '') {
             throw new Error(`${ctx}: ballot is required`);
         }
@@ -208,7 +208,7 @@ class VoteHelpers {
         throw new Error(`${ctx}: invalid ballot ${JSON.stringify(ballot)}`);
     }
 
-    _optionArray(options, ctx) {
+    optionArray(options, ctx) {
         let arr = options;
         if (typeof options === 'string') arr = options.split(',');
         if (!Array.isArray(arr)) throw new Error(`${ctx}: options is required (array of at least two labels)`);
@@ -218,7 +218,7 @@ class VoteHelpers {
         return labels;
     }
 
-    _assertFraction(value, name, ctx) {
+    assertFraction(value, name, ctx) {
         const n = Number(value);
         if (!(n > 0 && n <= 1)) throw new Error(`${ctx}: ${name} must be a fraction 0 < x <= 1`);
     }

@@ -40,7 +40,7 @@
 // This list was the routing set minus `ownership`, so the two classes an issuer
 // most often wants - `all` for a blanket policy, `ownership` to stop a token's
 // deed being swept to an unapproved address - could not be authored through any
-// SDK client at all: `_assertActionClass` threw before a wire string existed.
+// SDK client at all: `assertActionClass` threw before a wire string existed.
 const ACTION_CLASSES = ['transfer', 'trade', 'burn', 'mint', 'stake', 'ownership', 'all'];
 
 class ControllerHelpers {
@@ -64,8 +64,8 @@ class ControllerHelpers {
         if (!tick) throw new Error('controller.bindToken: tick is required');
         if (controller === undefined || controller === null || String(controller) === '')
             throw new Error('controller.bindToken: controller is required');
-        this._assertActionClass(actionClass, 'controller.bindToken');
-        return this._tokenParams({ tick, controller, actionClass, cooldownBlocks, unbind: '0', memo });
+        this.assertActionClass(actionClass, 'controller.bindToken');
+        return this.tokenParams({ tick, controller, actionClass, cooldownBlocks, unbind: '0', memo });
     }
 
     // Unbind a TOKEN's action class from its guard contract (ISSUE v6, UNBIND=1).
@@ -76,8 +76,8 @@ class ControllerHelpers {
     // memo        - (optional)
     unbindToken({ tick, actionClass, memo } = {}) {
         if (!tick) throw new Error('controller.unbindToken: tick is required');
-        this._assertActionClass(actionClass, 'controller.unbindToken');
-        return this._tokenParams({ tick, actionClass, unbind: '1', memo });
+        this.assertActionClass(actionClass, 'controller.unbindToken');
+        return this.tokenParams({ tick, actionClass, unbind: '1', memo });
     }
 
     // Bind MY ACCOUNT's action class to a guard contract (ADDRESS v1, UNBIND=0).
@@ -91,8 +91,8 @@ class ControllerHelpers {
     bindAddress({ controller, actionClass, cooldownBlocks, memo } = {}) {
         if (controller === undefined || controller === null || String(controller) === '')
             throw new Error('controller.bindAddress: controller is required');
-        this._assertActionClass(actionClass, 'controller.bindAddress');
-        return this._addressParams({ controller, actionClass, cooldownBlocks, unbind: '0', memo });
+        this.assertActionClass(actionClass, 'controller.bindAddress');
+        return this.addressParams({ controller, actionClass, cooldownBlocks, unbind: '0', memo });
     }
 
     // Unbind MY ACCOUNT's action class from its guard contract (ADDRESS v1, UNBIND=1).
@@ -100,13 +100,13 @@ class ControllerHelpers {
     // actionClass - which class to unbind (required)
     // memo        - (optional)
     unbindAddress({ actionClass, memo } = {}) {
-        this._assertActionClass(actionClass, 'controller.unbindAddress');
-        return this._addressParams({ actionClass, unbind: '1', memo });
+        this.assertActionClass(actionClass, 'controller.unbindAddress');
+        return this.addressParams({ actionClass, unbind: '1', memo });
     }
 
     // Shared ISSUE v6 skeleton. Drops undefined optionals so the SDK's
     // trailing-field stripping keeps the serialization compact.
-    _tokenParams({ tick, controller, actionClass, cooldownBlocks, unbind, memo }) {
+    tokenParams({ tick, controller, actionClass, cooldownBlocks, unbind, memo }) {
         let params = { tick, actionClass: String(actionClass).toLowerCase(), unbind: String(unbind) };
         if (controller     !== undefined && controller     !== null) params.controller     = String(controller);
         if (cooldownBlocks !== undefined && cooldownBlocks !== null) params.cooldownBlocks = String(cooldownBlocks);
@@ -115,7 +115,7 @@ class ControllerHelpers {
     }
 
     // Shared ADDRESS v1 skeleton.
-    _addressParams({ controller, actionClass, cooldownBlocks, unbind, memo }) {
+    addressParams({ controller, actionClass, cooldownBlocks, unbind, memo }) {
         let params = { actionClass: String(actionClass).toLowerCase(), unbind: String(unbind) };
         if (controller     !== undefined && controller     !== null) params.controller     = String(controller);
         if (cooldownBlocks !== undefined && cooldownBlocks !== null) params.cooldownBlocks = String(cooldownBlocks);
@@ -123,7 +123,7 @@ class ControllerHelpers {
         return params;
     }
 
-    _assertActionClass(actionClass, context) {
+    assertActionClass(actionClass, context) {
         if (!actionClass) throw new Error(context + ': actionClass is required');
         if (ACTION_CLASSES.indexOf(String(actionClass).toLowerCase()) === -1)
             throw new Error(context + ': actionClass must be one of: ' + ACTION_CLASSES.join(', '));

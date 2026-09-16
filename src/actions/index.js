@@ -26,7 +26,7 @@ const Config            = require('../config.js');
 
 // Encoding byte limits for pre-flight validation. Only P2SH is read from this
 // table today (the oversize suggestion below); the OP_RETURN gate is
-// compiledPushSize()-based in _validateEncoding, so the entry here is kept in
+// compiledPushSize()-based in validateEncoding, so the entry here is kept in
 // step with that rule rather than left at the old raw 80-4 figure, which is
 // where src/preflight/constants.js copied its off-by-one from.
 const ENCODING_LIMITS = {
@@ -103,7 +103,7 @@ function normalizeActionFields(context, actionName, params) {
     // leg is its own field map, so it needs the same camelCase->UPPER_SNAKE
     // and numeric normalization the top-level map gets. Mis-shaped entries
     // pass through untouched for the validator to report.
-    return context._normalizeLegs(fields);
+    return context.normalizeLegs(fields);
 }
 
 function applyActionVersion(context, data, fields) {
@@ -226,7 +226,7 @@ class Actions {
 
         // [8] Pre-flight encoding validation (if encoder options provided)
         if (encoder && encoder.encoding) {
-            this._validateEncoding(composed.actionString, encoder);
+            this.validateEncoding(composed.actionString, encoder);
         }
 
         // [9] Build result
@@ -241,7 +241,7 @@ class Actions {
     }
 
     // Normalize each entry of the per-leg array in place of the caller's copy
-    _normalizeLegs(fields) {
+    normalizeLegs(fields) {
         let legs = fields[FormatSelector.LEGS_FIELD];
         if (!Array.isArray(legs)) return fields;
         fields[FormatSelector.LEGS_FIELD] = legs.map(leg => {
@@ -252,7 +252,7 @@ class Actions {
     }
 
     // Pre-flight validation of encoding choice against action string size
-    _validateEncoding(actionString, encoder) {
+    validateEncoding(actionString, encoder) {
         let encoding  = String(encoder.encoding).toUpperCase();
         let dataBytes = Buffer.byteLength(actionString, 'utf8');
 
@@ -289,7 +289,7 @@ class Actions {
     validateAction(action, params) {
         let actionName = String(action).toUpperCase();
         let fields     = this.util.normalizeFields(params || {});
-        fields         = this._normalizeLegs(fields);
+        fields         = this.normalizeLegs(fields);
         fields         = this.util.setNumberFormats(fields);
         let errors     = this.validator.validate(actionName, fields);
         if (errors.length === 0)
