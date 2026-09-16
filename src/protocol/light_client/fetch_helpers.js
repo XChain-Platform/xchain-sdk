@@ -65,7 +65,7 @@ function pinnedEntry(opts, coin){
 // Trailing slashes trimmed by loop rather than /\/+$/: the quantified group
 // backtracks polynomially on a long run of slashes in a caller-supplied URL.
 function baseUrl(u){ let s = String(u || ''); while (s.endsWith('/')) s = s.slice(0, -1); return s; }
-async function _json(f, url){
+async function fetchJson(f, url){
     let r = await f(url);
     if (!r.ok) throw new Error('LightClient: explorer returned HTTP ' + r.status);
     return r.json();
@@ -107,4 +107,4 @@ function _no(reason){ return { verified: false, amount: null, reason: reason }; 
 
 function scaled(a){ const [i, f] = M.canonicalAmount(String(a)).split('.'); return BigInt(i) * 1000000000000000000n + BigInt(f); }
 
-module.exports = { resolveFetch, pinnedEntry, baseUrl, _json, _hx, expectedMismatch, _no, scaled };
+module.exports = { resolveFetch, pinnedEntry, baseUrl, fetchJson, _hx, expectedMismatch, _no, scaled };

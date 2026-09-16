@@ -38,7 +38,7 @@
 
 const checkpoint = require('../../checkpoint.js');
 const ckptCommit = require('../../checkpoint_commitment_activation.js');
-const { _hx, resolveFetch, baseUrl, _json } = require('./fetch_helpers.js');
+const { _hx, resolveFetch, baseUrl, fetchJson } = require('./fetch_helpers.js');
 const { resolveValidatorSet } = require('./quorum_resolution.js');
 
 // Default DOGE confirmation depth a cold-start anchor must be buried under before
@@ -259,7 +259,7 @@ async function fetchAnchoredCheckpoint(opts){
     const minDepth = (opts.minDepth != null) ? Number(opts.minDepth) : DEFAULT_ANCHOR_MIN_DEPTH;
     const url = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(dogeCoin)) +
                 '/api/anchors/' + encodeURIComponent(String(opts.targetChain)) + '/chain';
-    const body = await _json(f, url);
+    const body = await fetchJson(f, url);
     let rows = Array.isArray(body) ? body : ((body && (body.data || body.results || body.rows)) || []);
     // v0 section rows only (the checkpoint bundle, spec anchor-v0-single-wire §2.1);
     // v1 (archive head) and v2 (chunk) carry no SPV checkpoint and are skipped here,

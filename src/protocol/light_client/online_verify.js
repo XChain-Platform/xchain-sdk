@@ -42,7 +42,7 @@ const M = require('../../merkle.js');
 // adjacent indices above 2^53 onto one value, so the binding guards below would
 // match the neighbouring action or height they exist to reject.
 const { sameWireIndex } = require('../../utils/wire_index.js');
-const { resolveFetch, baseUrl, _json, _hx } = require('./fetch_helpers.js');
+const { resolveFetch, baseUrl, fetchJson, _hx } = require('./fetch_helpers.js');
 const { verifyBalanceProof, verifyLockedBalanceProof, verifyActionProof } = require('./proof_checks.js');
 const { resolveQuorum } = require('./quorum_resolution.js');
 
@@ -64,7 +64,7 @@ async function verifyBalance(opts){
     const url = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.coin)) +
                 '/api/proof/balance/' + encodeURIComponent(String(opts.address)) +
                 '/' + encodeURIComponent(String(opts.tick)) + hq;
-    const body = await _json(f, url);
+    const body = await fetchJson(f, url);
     if (!body || !body.proof) throw new Error('LightClient: no proof in response');
     const proof = body.proof;
     const resolved = await resolveBalanceCheckpoint(f, opts, body, proof);
@@ -150,7 +150,7 @@ async function verifyLockedBalance(opts){
     const url = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.coin)) +
                 '/api/proof/locked-balance/' + encodeURIComponent(String(opts.address)) +
                 '/' + encodeURIComponent(String(opts.tick)) + hq;
-    const body = await _json(f, url);
+    const body = await fetchJson(f, url);
     if (body && !body.proof && typeof body.error === 'string' && body.error)
         return { verified: false, amount: null, reason: body.error,
                  height: null, checkpoint: null, quorum: null, weighted: null };
@@ -201,7 +201,7 @@ async function verifyAction(opts){
     const f = resolveFetch(opts.fetchImpl);
     const url = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.coin)) +
                 '/api/proof/action/' + encodeURIComponent(String(opts.actionIndex));
-    const body = await _json(f, url);
+    const body = await fetchJson(f, url);
     if (!body || !body.proof) throw new Error('LightClient: no proof in response');
     const proof = body.proof;
     let cp, q;
