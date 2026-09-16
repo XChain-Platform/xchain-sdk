@@ -109,7 +109,7 @@ class ContractUtils {
     // double-charges per iteration (body + update expression). for-in / for-of /
     // while / do-while have no update slot and are excluded. Prefers an AST walk;
     // degrades to a header-shape regex when acorn is unavailable.
-    _countForStatements(sourceCode) {
+    countForStatements(sourceCode) {
         let code = String(sourceCode);
         let parser = loadAcorn();
         let walker = loadAcornWalk();
@@ -151,7 +151,7 @@ class ContractUtils {
         // `for (...; (__gas(1), i++))`, so each iteration is charged twice. Loops
         // without an update slot are charged once. Count each C-style `for` an extra
         // time so its estimated budget reflects the doubled charge.
-        let forLoops = this._countForStatements(code);
+        let forLoops = this.countForStatements(code);
 
         let complexity = ((loops + forLoops) * 20000) + (functions * 5000) + (emits * 5000) + (stateOps * 2000);
 

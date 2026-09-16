@@ -17,7 +17,7 @@
 module.exports = {
     // 4139f308d5, the parent of split 5e5d5660e2.
     ContractUtils: [
-        ['_countForStatements', false, true, true, 'function', 1],
+        ['countForStatements', false, true, true, 'function', 1],
         ['checkCodeSize', false, true, true, 'function', 1],
         ['checkExportedMeta', false, true, true, 'function', 1],
         ['checkFloatUsage', false, true, true, 'function', 1],

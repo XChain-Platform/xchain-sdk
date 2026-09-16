@@ -267,25 +267,25 @@ describe('ContractUtils', function () {
         utils = new ContractUtils();
     });
 
-    describe('_countForStatements()', function () {
+    describe('countForStatements()', function () {
         it('counts zero for empty code', function () {
-            assert.strictEqual(utils._countForStatements('var x = 1;'), 0);
+            assert.strictEqual(utils.countForStatements('var x = 1;'), 0);
         });
 
         it('counts a single C-style for loop', function () {
-            let count = utils._countForStatements('for (var i=0; i<10; i++) {}');
+            let count = utils.countForStatements('for (var i=0; i<10; i++) {}');
             assert.strictEqual(count, 1);
         });
 
         it('counts multiple C-style for loops', function () {
             let code = 'for(var i=0;i<3;i++){} for(var j=0;j<5;j++){}';
-            let count = utils._countForStatements(code);
+            let count = utils.countForStatements(code);
             assert.strictEqual(count, 2);
         });
 
         it('does NOT count for-in loops (no semicolons in header)', function () {
             // for-in does not have semicolons, so it falls outside the regex pattern
-            let count = utils._countForStatements('for (var k in obj) {}');
+            let count = utils.countForStatements('for (var k in obj) {}');
             assert.strictEqual(count, 0);
         });
     });
