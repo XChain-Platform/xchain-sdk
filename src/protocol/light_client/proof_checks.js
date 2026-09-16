@@ -37,7 +37,7 @@
 'use strict';
 
 const M   = require('../../merkle.js');
-const SUB = require('../../state_subtree_activation.js');
+const SUB = require('../../consensus/gates/state_subtree_gate.js');
 const { sameWireIndex, toWireIndex } = require('../../utils/wire_index.js');
 const { lowerHex, expectedMismatch, unverified } = require('./fetch_helpers.js');
 

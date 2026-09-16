@@ -47,14 +47,17 @@ const crypto = require('crypto');
 const fs     = require('fs');
 const path   = require('path');
 
-const SUB = require('../../../src/state_subtree_activation.js');
+const SUB = require('../../../src/consensus/gates/state_subtree_gate.js');
 const M   = require('../../../src/merkle.js');
 
-const SELF = path.resolve(__dirname, '../../../src/state_subtree_activation.js');
+// The gate sits at the same tail in every repo that carries it since W5, so every
+// pair below is a raw byte compare.
+const GATE_FILE = 'src/consensus/gates/state_subtree_gate.js';
+const SELF = path.resolve(__dirname, '../../..', GATE_FILE);
 const SIBLINGS = {
-    'xchain-indexer':  path.resolve(__dirname, '../../../..', 'xchain-indexer/src/state_subtree_activation.js'),
-    'xchain-sync':     path.resolve(__dirname, '../../../..', 'xchain-sync/src/state_subtree_activation.js'),
-    'xchain-explorer': path.resolve(__dirname, '../../../..', 'xchain-explorer/src/state_subtree_activation.js')
+    'xchain-indexer':  path.resolve(__dirname, '../../../..', 'xchain-indexer', GATE_FILE),
+    'xchain-sync':     path.resolve(__dirname, '../../../..', 'xchain-sync', GATE_FILE),
+    'xchain-explorer': path.resolve(__dirname, '../../../..', 'xchain-explorer', GATE_FILE)
 };
 const SIBLING_REQUIRED = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 
@@ -313,10 +316,13 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         // registry reads (copy('state_subtree_activation.<EXPORT>')); the values
         // are unchanged, only the source of the constants moved. All four
         // copies (indexer, sync, sdk, explorer) carry the same shim bytes.
-        const GOLDEN = '4f58de7d49298ca6a07d0e50d57a09488722dcfac206903ecc2580aad0f4ed86';
+        // Moved (W5 consolidation, row 21): the shim is src/consensus/gates/
+        // state_subtree_gate.js in every repo; only its registry require line
+        // changed with the move (../gate_registry), the values did not.
+        const GOLDEN = '9f07ece9abad3b9abb7770ecb1d06aeb0161fa08170bd24b8f74ed41f31662d8';
         const actual = sha256File(SELF);
         if(actual !== GOLDEN)
-            assert.fail('src/state_subtree_activation.js changed (sha256 ' + actual + ').\n' +
+            assert.fail(GATE_FILE + ' changed (sha256 ' + actual + ').\n' +
                 'This file is a consensus constant carried byte-identically by xchain-indexer, ' +
                 'xchain-sync, xchain-sdk and xchain-explorer. If this change is intended, update ' +
                 'ALL FOUR copies and set GOLDEN to the new hash in the same commit.');
@@ -333,7 +339,7 @@ describe('SPV sub-tree activation constants: client export @regression', functio
                 return this.skip();
             }
             assert.strictEqual(fs.readFileSync(SELF, 'utf8'), fs.readFileSync(SIBLINGS[repo], 'utf8'),
-                'state_subtree_activation.js drifted between xchain-sdk and ' + repo + '. The heights a ' +
+                'state_subtree_gate.js drifted between xchain-sdk and ' + repo + '. The heights a ' +
                 'client reads MUST equal the heights the fleet commits: a lagging SDK copy reports a live ' +
                 'slot as inert, which is the same wrong answer as shipping no export at all.');
         });

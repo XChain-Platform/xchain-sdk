@@ -37,7 +37,11 @@
 'use strict';
 
 const checkpoint = require('../../checkpoint.js');
-const ckptCommit = require('../../checkpoint_commitment_activation.js');
+// The CHECKPOINT_COMMITMENT flag day is a registry row read by its literal key (W5);
+// the predicate is activeAt over the checkpoint's BTC-anchored snapshot_block, the
+// same read checkpoint.js makes when it appends the roots to the signed canonical.
+const gateRegistry = require('../../consensus/gate_registry');
+const CHECKPOINT_COMMITMENT_KEY = 'checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION';
 const { lowerHex, resolveFetch, baseUrl, fetchJson } = require('./fetch_helpers.js');
 const { resolveValidatorSet } = require('./quorum_resolution.js');
 
@@ -212,7 +216,7 @@ function verifyAnchoredCheckpoint(opts){
     // rootless checkpoint be republished as a buried v3 carrying attacker-chosen roots:
     // the original signature still verifies against the rootless canonical, and SPV
     // adopts roots no validator ever signed. Mirror the append condition exactly.
-    if (!ckptCommit.isCheckpointCommitmentActive(cp.snapshot_block, cp.network)
+    if (!gateRegistry.activeAt(CHECKPOINT_COMMITMENT_KEY, cp.network, null, cp.snapshot_block, null)
         || !ANCHOR_VERSION_RE.test(String(cp.state_root_version))
         || !ANCHOR_VERSION_RE.test(String(cp.block_merkle_version)))
         return reject('ROOTS_NOT_SIGNED');

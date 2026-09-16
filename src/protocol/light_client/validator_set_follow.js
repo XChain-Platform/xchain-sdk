@@ -38,8 +38,8 @@
 
 const M          = require('../../merkle.js');
 const checkpoint = require('../../checkpoint.js');
-const swq        = require('../../stake_weighted_quorum.js');
-const srb        = require('../../snapshot_reorg_buffer.js');
+const swq        = require('../../consensus/stake_weighted_quorum.js');
+const srb        = require('../../consensus/snapshot_reorg_buffer.js');
 const { resolveFetch, baseUrl, fetchJson, scaled, lowerHex } = require('./fetch_helpers.js');
 const { verifyValidatorSetProof } = require('./proof_checks.js');
 

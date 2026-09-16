@@ -17,7 +17,7 @@
 const assert  = require('assert');
 const crypto  = require('crypto');
 const Checkpoint = require('../../../src/checkpoint.js');
-const eq         = require('../../../src/equivocation_header.js');
+const eq         = require('../../../src/consensus/equivocation_header.js');
 
 // Raw-hex Ed25519 keypair via Node crypto (SPKI/PKCS8 DER stripping mirrors
 // ValidatorIdentity's prefixes).

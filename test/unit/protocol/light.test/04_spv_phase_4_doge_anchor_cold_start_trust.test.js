@@ -313,6 +313,26 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
         assert.strictEqual(r2.reason, 'CHECKPOINT_QUORUM_FAILED');
     });
 
+    it('verifyAnchoredCheckpoint REJECTS roots on a snapshot below the CHECKPOINT_COMMITMENT flag day', function () {
+        // The append condition is the registry row read through activeAt (W5): a
+        // mainnet snapshot_block one below the armed height keeps the roots out of
+        // the signed canonical, so a rooted row there carries roots nobody signed,
+        // whatever its version fields say. The registry's own row is the oracle.
+        const registry = require('../../../../src/consensus/gate_registry');
+        const armed = registry.get('checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION').mainnet;
+        assert.ok(Number.isInteger(armed) && armed > 0, 'mainnet is armed to a concrete height');
+        const { cp, validators } = makeSignedSection({ network: 'mainnet' });
+        cp.snapshot_block = armed - 1;
+        const below = light.verifyAnchoredCheckpoint({ checkpoint: cp, validators, confirmations: 300, minDepth: 60 });
+        assert.strictEqual(below.verified, false);
+        assert.strictEqual(below.reason, 'ROOTS_NOT_SIGNED');
+        // At the armed height the same row passes the flag-day gate and fails
+        // further down (the fixture signature was over snapshot_block 100).
+        cp.snapshot_block = armed;
+        const at = light.verifyAnchoredCheckpoint({ checkpoint: cp, validators, confirmations: 300, minDepth: 60 });
+        assert.notStrictEqual(at.reason, 'ROOTS_NOT_SIGNED');
+    });
+
     it('verifyAnchoredCheckpoint REJECTS a root that is not a 32-byte hex value', function () {
         const { cp, validators } = makeSignedSection();
         cp.state_root = 'not-a-root';
