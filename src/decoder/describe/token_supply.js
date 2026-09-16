@@ -67,6 +67,26 @@ function decodeMint(p, chainSuffix) {
     };
 }
 
+// Build aligned burn records once so all rendered fields use the same leg boundaries.
+function buildDestroyLegs(p, version) {
+    // Multi-destroy. v2 carries one MEMO per leg; v1 carries a single
+    // trailing MEMO for the whole action.
+    const ticks = toArray(p.TICK);
+    const amounts = toArray(p.AMOUNT);
+    const memos = toArray(p.MEMO);
+    const perLegMemo = version === '2';
+    const n = Math.max(ticks.length, amounts.length, 1);
+    const legs = [];
+    for (let i = 0; i < n; i += 1) {
+        legs.push({
+            tick: str(ticks[i] !== undefined ? ticks[i] : ''),
+            amount: str(amounts[i] !== undefined ? amounts[i] : ''),
+            memo: perLegMemo ? str(memos[i] !== undefined ? memos[i] : '') : '',
+        });
+    }
+    return legs;
+}
+
 /*
  * DESTROY describer. v0 single is VERSION|TICK|AMOUNT|MEMO; v1/v2 are
  * multi-destroy (repeating TICK/AMOUNT, v2 adding a per-leg MEMO), which
@@ -103,22 +123,8 @@ function decodeDestroy(p, chainSuffix) {
             ],
         };
     }
-    // Multi-destroy. v2 carries one MEMO per leg; v1 carries a single
-    // trailing MEMO for the whole action.
-    const ticks = toArray(p.TICK);
-    const amounts = toArray(p.AMOUNT);
-    const memos = toArray(p.MEMO);
     const perLegMemo = version === '2';
-    const n = Math.max(ticks.length, amounts.length, 1);
-
-    const legs = [];
-    for (let i = 0; i < n; i += 1) {
-        legs.push({
-            tick: str(ticks[i] !== undefined ? ticks[i] : ''),
-            amount: str(amounts[i] !== undefined ? amounts[i] : ''),
-            memo: perLegMemo ? str(memos[i] !== undefined ? memos[i] : '') : '',
-        });
-    }
+    const legs = buildDestroyLegs(p, version);
     const sharedMemo = perLegMemo ? '' : str(p.MEMO);
     const anyMemo = sharedMemo || legs.map((l) => l.memo).join('');
 
@@ -144,180 +150,172 @@ function decodeDestroy(p, chainSuffix) {
     };
 }
 
-/*
- * ISSUE describer. Seven format versions: v0 create-or-configure,
- * v1 description edit, v2 mint params, v3 locks, v4 callback,
- * v5 allow/block lists, v6 controller bind/unbind.
- */
-function decodeIssue(p, chainSuffix) {
-    const version = str(p.VERSION) || '0';
-    const tick = str(p.TICK);
-    const memo = str(p.MEMO);
+// Render the description edit branch separately so version dispatch stays compact.
+function decodeIssueDescription(p, chainSuffix, tick, memo, baseWarnings) {
+    const description = str(p.DESCRIPTION);
+    return {
+        summary: `Update description of ${tick || '?'}${chainSuffix}`,
+        details: [
+            { label: 'Token', value: tick },
+            { label: 'New description', value: description },
+            ...(memo ? [{ label: 'Memo', value: memo }] : []),
+        ],
+        warnings: baseWarnings,
+    };
+}
 
-    const baseWarnings = [
-        ...(!tick ? ['Token ticker is empty.'] : []),
-        ...(memo && /[|;]/.test(memo)
-            ? ['Memo contains | or ;: the protocol will reject this transaction.']
-            : []),
-    ];
+// Render mint parameter edits separately so version dispatch stays compact.
+function decodeIssueMintParams(p, chainSuffix, tick, memo, baseWarnings) {
+    const maxMint = str(p.MAX_MINT);
+    const mintSupply = str(p.MINT_SUPPLY);
+    const transferSupply = str(p.TRANSFER_SUPPLY);
+    const mintAddressMax = str(p.MINT_ADDRESS_MAX);
+    const mintStart = str(p.MINT_START_BLOCK);
+    const mintStop = str(p.MINT_STOP_BLOCK);
+    return {
+        summary: `Update mint parameters of ${tick || '?'}${chainSuffix}`,
+        details: [
+            { label: 'Token', value: tick },
+            ...(maxMint ? [{ label: 'Max mint per tx', value: maxMint }] : []),
+            ...(mintSupply ? [{ label: 'Mint now', value: mintSupply }] : []),
+            ...(transferSupply ? [{ label: 'Transfer minted supply to', value: transferSupply }] : []),
+            ...(mintAddressMax ? [{ label: 'Max mint per address', value: mintAddressMax }] : []),
+            ...(mintStart ? [{ label: 'Mint start block', value: mintStart }] : []),
+            ...(mintStop ? [{ label: 'Mint stop block', value: mintStop }] : []),
+            ...(memo ? [{ label: 'Memo', value: memo }] : []),
+        ],
+        warnings: baseWarnings,
+    };
+}
 
-    if (version === '1') {
-        const description = str(p.DESCRIPTION);
-        return {
-            summary: `Update description of ${tick || '?'}${chainSuffix}`,
-            details: [
-                { label: 'Token', value: tick },
-                { label: 'New description', value: description },
-                ...(memo ? [{ label: 'Memo', value: memo }] : []),
-            ],
-            warnings: baseWarnings,
-        };
-    }
+// Render permanent lock edits separately so their warning remains paired with the flags.
+function decodeIssueLocks(p, chainSuffix, tick, memo, baseWarnings) {
+    const lockFlags = collectLockFlags(p);
+    return {
+        summary: lockFlags.length > 0
+            ? `Lock ${tick || '?'} (${lockFlags.join(', ')})${chainSuffix}`
+            : `Update lock parameters of ${tick || '?'}${chainSuffix}`,
+        details: [
+            { label: 'Token', value: tick },
+            ...(lockFlags.length > 0
+                ? [{ label: 'Locking', value: lockFlags.join(', ') }]
+                : []),
+            ...(memo ? [{ label: 'Memo', value: memo }] : []),
+        ],
+        warnings: [
+            ...(lockFlags.length > 0
+                ? ['Locking is permanent. These properties cannot be changed after this transaction confirms.']
+                : []),
+            ...baseWarnings,
+        ],
+    };
+}
 
-    if (version === '2') {
-        const maxMint = str(p.MAX_MINT);
-        const mintSupply = str(p.MINT_SUPPLY);
-        const transferSupply = str(p.TRANSFER_SUPPLY);
-        const mintAddressMax = str(p.MINT_ADDRESS_MAX);
-        const mintStart = str(p.MINT_START_BLOCK);
-        const mintStop = str(p.MINT_STOP_BLOCK);
-        return {
-            summary: `Update mint parameters of ${tick || '?'}${chainSuffix}`,
-            details: [
-                { label: 'Token', value: tick },
-                ...(maxMint ? [{ label: 'Max mint per tx', value: maxMint }] : []),
-                ...(mintSupply ? [{ label: 'Mint now', value: mintSupply }] : []),
-                ...(transferSupply ? [{ label: 'Transfer minted supply to', value: transferSupply }] : []),
-                ...(mintAddressMax ? [{ label: 'Max mint per address', value: mintAddressMax }] : []),
-                ...(mintStart ? [{ label: 'Mint start block', value: mintStart }] : []),
-                ...(mintStop ? [{ label: 'Mint stop block', value: mintStop }] : []),
-                ...(memo ? [{ label: 'Memo', value: memo }] : []),
-            ],
-            warnings: baseWarnings,
-        };
-    }
+// Render callback parameter edits separately so version dispatch stays compact.
+function decodeIssueCallback(p, chainSuffix, tick, memo, baseWarnings) {
+    const callbackBlock = str(p.CALLBACK_BLOCK);
+    const callbackTick = str(p.CALLBACK_TICK);
+    const callbackAmount = str(p.CALLBACK_AMOUNT);
+    return {
+        summary: `Update callback parameters of ${tick || '?'}${chainSuffix}`,
+        details: [
+            { label: 'Token', value: tick },
+            ...(callbackBlock ? [{ label: 'Callback at block', value: callbackBlock }] : []),
+            ...(callbackTick ? [{ label: 'Callback token', value: callbackTick }] : []),
+            ...(callbackAmount ? [{ label: 'Callback amount', value: callbackAmount }] : []),
+            ...(memo ? [{ label: 'Memo', value: memo }] : []),
+        ],
+        warnings: baseWarnings,
+    };
+}
 
-    if (version === '3') {
-        const lockFlags = collectLockFlags(p);
-        return {
-            summary: lockFlags.length > 0
-                ? `Lock ${tick || '?'} (${lockFlags.join(', ')})${chainSuffix}`
-                : `Update lock parameters of ${tick || '?'}${chainSuffix}`,
-            details: [
-                { label: 'Token', value: tick },
-                ...(lockFlags.length > 0
-                    ? [{ label: 'Locking', value: lockFlags.join(', ') }]
-                    : []),
-                ...(memo ? [{ label: 'Memo', value: memo }] : []),
-            ],
-            warnings: [
-                ...(lockFlags.length > 0
-                    ? ['Locking is permanent. These properties cannot be changed after this transaction confirms.']
-                    : []),
-                ...baseWarnings,
-            ],
-        };
-    }
+// Render list policy edits separately so version dispatch stays compact.
+function decodeIssueLists(p, chainSuffix, tick, memo, baseWarnings) {
+    const allowList = str(p.ALLOW_LIST);
+    const blockList = str(p.BLOCK_LIST);
+    return {
+        summary: `Update allow/block list for ${tick || '?'}${chainSuffix}`,
+        details: [
+            { label: 'Token', value: tick },
+            ...(allowList ? [{ label: 'Allow list', value: allowList }] : []),
+            ...(blockList ? [{ label: 'Block list', value: blockList }] : []),
+            ...(memo ? [{ label: 'Memo', value: memo }] : []),
+        ],
+        warnings: baseWarnings,
+    };
+}
 
-    if (version === '4') {
-        const callbackBlock = str(p.CALLBACK_BLOCK);
-        const callbackTick = str(p.CALLBACK_TICK);
-        const callbackAmount = str(p.CALLBACK_AMOUNT);
-        return {
-            summary: `Update callback parameters of ${tick || '?'}${chainSuffix}`,
-            details: [
-                { label: 'Token', value: tick },
-                ...(callbackBlock ? [{ label: 'Callback at block', value: callbackBlock }] : []),
-                ...(callbackTick ? [{ label: 'Callback token', value: callbackTick }] : []),
-                ...(callbackAmount ? [{ label: 'Callback amount', value: callbackAmount }] : []),
-                ...(memo ? [{ label: 'Memo', value: memo }] : []),
-            ],
-            warnings: baseWarnings,
-        };
-    }
+// Render controller policy edits separately so bind and unbind warnings remain branch-local.
+function decodeIssueController(p, chainSuffix, tick, memo, baseWarnings) {
+    // Controller bind/unbind (programmable policy layer).
+    const controller = str(p.CONTROLLER);
+    const actionClass = str(p.ACTION_CLASS);
+    const cooldown = str(p.COOLDOWN_BLOCKS);
+    const unbind = str(p.UNBIND) === '1';
+    return {
+        summary: unbind
+            ? `Unbind controller from ${tick || '?'}${actionClass ? ` (${actionClass})` : ''}${chainSuffix}`
+            : `Bind ${tick || '?'} to controller${controller ? ` #${controller}` : ''}${actionClass ? ` (${actionClass})` : ''}${chainSuffix}`,
+        details: [
+            { label: 'Token', value: tick },
+            ...(controller ? [{ label: 'Controller contract', value: controller }] : []),
+            ...(actionClass ? [{ label: 'Action class', value: actionClass }] : []),
+            ...(cooldown ? [{ label: 'Cooldown blocks', value: cooldown }] : []),
+            ...(memo ? [{ label: 'Memo', value: memo }] : []),
+        ],
+        warnings: [
+            unbind
+                ? 'Unbinding removes the controller policy after the cooldown elapses.'
+                : 'A controller contract will be able to veto or gate this token\'s actions for the bound class.',
+            ...baseWarnings,
+        ],
+    };
+}
 
-    if (version === '5') {
-        const allowList = str(p.ALLOW_LIST);
-        const blockList = str(p.BLOCK_LIST);
-        return {
-            summary: `Update allow/block list for ${tick || '?'}${chainSuffix}`,
-            details: [
-                { label: 'Token', value: tick },
-                ...(allowList ? [{ label: 'Allow list', value: allowList }] : []),
-                ...(blockList ? [{ label: 'Block list', value: blockList }] : []),
-                ...(memo ? [{ label: 'Memo', value: memo }] : []),
-            ],
-            warnings: baseWarnings,
-        };
-    }
+// Render bridge opt-in edits separately so irreversible settings remain explicit.
+function decodeIssueBridge(p, chainSuffix, tick, memo, baseWarnings) {
+    // Bridgeability opt-in (xchain-token-bridge.md section 7). Without this
+    // branch a v7 fell through to the v0 create-or-update path below and read
+    // "Configure token FUFU": a confirm screen that says nothing about opting
+    // the token into cross-chain movement, and nothing about LOCK_BRIDGE, which
+    // freezes both fields for the life of the token.
+    const chains = str(p.BRIDGE_CHAINS);
+    const minDepth = str(p.MIN_DEPTH);
+    const lockBridge = str(p.LOCK_BRIDGE) === '1';
+    // '-' is the clear sentinel; an EMPTY field means "leave unchanged", which
+    // is why a caller can never clear a list with ''.
+    const clearing = chains === '-';
+    return {
+        summary: clearing
+            ? `Disable bridging for ${tick || '?'}${chainSuffix}`
+            : chains
+                ? `Allow ${tick || '?'} to bridge to ${chains}${chainSuffix}`
+                : `Update bridge settings of ${tick || '?'}${chainSuffix}`,
+        details: [
+            { label: 'Token', value: tick },
+            ...(chains
+                ? [{ label: 'Bridgeable to', value: clearing ? 'nothing (bridging off)' : chains }]
+                : []),
+            ...(minDepth ? [{ label: 'Minimum confirmations', value: minDepth }] : []),
+            ...(lockBridge ? [{ label: 'Lock bridge settings', value: 'yes' }] : []),
+            ...(memo ? [{ label: 'Memo', value: memo }] : []),
+        ],
+        warnings: [
+            ...(lockBridge
+                ? ['Locking is permanent. The bridge chains and minimum confirmations '
+                    + 'cannot be changed after this transaction confirms.']
+                : []),
+            ...(!clearing && chains
+                ? ['Holders will be able to move this token to the named chains, '
+                    + 'where its supply is a bridged copy this chain does not control.']
+                : []),
+            ...baseWarnings,
+        ],
+    };
+}
 
-    if (version === '6') {
-        // Controller bind/unbind (programmable policy layer).
-        const controller = str(p.CONTROLLER);
-        const actionClass = str(p.ACTION_CLASS);
-        const cooldown = str(p.COOLDOWN_BLOCKS);
-        const unbind = str(p.UNBIND) === '1';
-        return {
-            summary: unbind
-                ? `Unbind controller from ${tick || '?'}${actionClass ? ` (${actionClass})` : ''}${chainSuffix}`
-                : `Bind ${tick || '?'} to controller${controller ? ` #${controller}` : ''}${actionClass ? ` (${actionClass})` : ''}${chainSuffix}`,
-            details: [
-                { label: 'Token', value: tick },
-                ...(controller ? [{ label: 'Controller contract', value: controller }] : []),
-                ...(actionClass ? [{ label: 'Action class', value: actionClass }] : []),
-                ...(cooldown ? [{ label: 'Cooldown blocks', value: cooldown }] : []),
-                ...(memo ? [{ label: 'Memo', value: memo }] : []),
-            ],
-            warnings: [
-                unbind
-                    ? 'Unbinding removes the controller policy after the cooldown elapses.'
-                    : 'A controller contract will be able to veto or gate this token\'s actions for the bound class.',
-                ...baseWarnings,
-            ],
-        };
-    }
-
-    if (version === '7') {
-        // Bridgeability opt-in (xchain-token-bridge.md section 7). Without this
-        // branch a v7 fell through to the v0 create-or-update path below and read
-        // "Configure token FUFU": a confirm screen that says nothing about opting
-        // the token into cross-chain movement, and nothing about LOCK_BRIDGE, which
-        // freezes both fields for the life of the token.
-        const chains = str(p.BRIDGE_CHAINS);
-        const minDepth = str(p.MIN_DEPTH);
-        const lockBridge = str(p.LOCK_BRIDGE) === '1';
-        // '-' is the clear sentinel; an EMPTY field means "leave unchanged", which
-        // is why a caller can never clear a list with ''.
-        const clearing = chains === '-';
-        return {
-            summary: clearing
-                ? `Disable bridging for ${tick || '?'}${chainSuffix}`
-                : chains
-                    ? `Allow ${tick || '?'} to bridge to ${chains}${chainSuffix}`
-                    : `Update bridge settings of ${tick || '?'}${chainSuffix}`,
-            details: [
-                { label: 'Token', value: tick },
-                ...(chains
-                    ? [{ label: 'Bridgeable to', value: clearing ? 'nothing (bridging off)' : chains }]
-                    : []),
-                ...(minDepth ? [{ label: 'Minimum confirmations', value: minDepth }] : []),
-                ...(lockBridge ? [{ label: 'Lock bridge settings', value: 'yes' }] : []),
-                ...(memo ? [{ label: 'Memo', value: memo }] : []),
-            ],
-            warnings: [
-                ...(lockBridge
-                    ? ['Locking is permanent. The bridge chains and minimum confirmations '
-                        + 'cannot be changed after this transaction confirms.']
-                    : []),
-                ...(!clearing && chains
-                    ? ['Holders will be able to move this token to the named chains, '
-                        + 'where its supply is a bridged copy this chain does not control.']
-                    : []),
-                ...baseWarnings,
-            ],
-        };
-    }
-
+// Render create and ownership changes separately so version dispatch stays below its limit.
+function decodeIssueBase(p, chainSuffix, tick, memo, baseWarnings) {
     // Version 0: full create-or-update.
     const maxSupply = str(p.MAX_SUPPLY);
     const maxMint = str(p.MAX_MINT);
@@ -333,7 +331,6 @@ function decodeIssue(p, chainSuffix) {
 
     const isCreate = maxSupply !== '' || mintSupply !== '';
     const isTransferOnly = !isCreate && transfer !== '' && maxMint === '' && description === '';
-
     let summary;
     if (isCreate) {
         summary = maxSupply
@@ -344,7 +341,6 @@ function decodeIssue(p, chainSuffix) {
     } else {
         summary = `Configure token ${tick || '?'}${chainSuffix}`;
     }
-
     const details = [
         { label: 'Token', value: tick },
         ...(maxSupply ? [{ label: 'Max supply', value: maxSupply }] : []),
@@ -371,6 +367,33 @@ function decodeIssue(p, chainSuffix) {
     ];
 
     return { summary, details, warnings };
+}
+
+/*
+ * ISSUE describer. Seven format versions: v0 create-or-configure,
+ * v1 description edit, v2 mint params, v3 locks, v4 callback,
+ * v5 allow/block lists, v6 controller bind/unbind.
+ */
+function decodeIssue(p, chainSuffix) {
+    const version = str(p.VERSION) || '0';
+    const tick = str(p.TICK);
+    const memo = str(p.MEMO);
+
+    const baseWarnings = [
+        ...(!tick ? ['Token ticker is empty.'] : []),
+        ...(memo && /[|;]/.test(memo)
+            ? ['Memo contains | or ;: the protocol will reject this transaction.']
+            : []),
+    ];
+
+    if (version === '1') return decodeIssueDescription(p, chainSuffix, tick, memo, baseWarnings);
+    if (version === '2') return decodeIssueMintParams(p, chainSuffix, tick, memo, baseWarnings);
+    if (version === '3') return decodeIssueLocks(p, chainSuffix, tick, memo, baseWarnings);
+    if (version === '4') return decodeIssueCallback(p, chainSuffix, tick, memo, baseWarnings);
+    if (version === '5') return decodeIssueLists(p, chainSuffix, tick, memo, baseWarnings);
+    if (version === '6') return decodeIssueController(p, chainSuffix, tick, memo, baseWarnings);
+    if (version === '7') return decodeIssueBridge(p, chainSuffix, tick, memo, baseWarnings);
+    return decodeIssueBase(p, chainSuffix, tick, memo, baseWarnings);
 }
 
 module.exports = { decodeMint, decodeDestroy, decodeIssue };
