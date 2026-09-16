@@ -109,7 +109,7 @@ function validateBetPolicy(validator, fields, limits, errors) {
     // DETAILS: strict base64 of a JSON object, size- and depth-capped,
     // with any `outcomes` key matching OUTCOMES byte-for-byte.
     if (!validator.isEmpty(fields.DETAILS))
-        errors.push(...validator._validateBetDetails(String(fields.DETAILS), fields.OUTCOMES, limits));
+        errors.push(...validator.validateBetDetailsShape(String(fields.DETAILS), fields.OUTCOMES, limits));
 }
 
 // Validates lifecycle fields separately because they select cancel, resolve, or place.

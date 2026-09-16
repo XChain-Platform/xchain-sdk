@@ -101,10 +101,10 @@ module.exports = {
                 errors.push(...this.validateBridgeOptIn(fields));
                 break;
             case 'BATCH':
-                errors.push(...this._validateBatch(fields));
+                errors.push(...this.validateBatchFields(fields));
                 break;
             case 'BET':
-                errors.push(...this._validateBet(fields));
+                errors.push(...this.validateBetFields(fields));
                 break;
             case 'BROADCAST':
                 errors.push(...this.validateBroadcast(fields));

@@ -22,7 +22,7 @@ const { validateBatch } = require('./batch_rules.js');
 const { validateBet } = require('./bet_rules.js');
 const { validateBetDetails } = require('./bet_details.js');
 module.exports = {
-    _validateBatch(fields) {
+    validateBatchFields(fields) {
         return validateBatch(this, fields);
     },
     // Validate ONE raw BATCH child command through the AUTHORITATIVE action path.
@@ -38,7 +38,7 @@ module.exports = {
     // load time. By the time any BATCH is validated both halves are resolved, so
     // deferring breaks the cycle instead of papering over it. Recursion is bounded:
     // a BATCH child is rejected above and never reaches here, so a child parse can
-    // never re-enter _validateBatch.
+    // never re-enter validateBatchFields.
     validateBatchCommand(cmd, index) {
         const { parse } = require('../../decoder/parse.js');
         let res;
@@ -70,13 +70,13 @@ module.exports = {
     // The three FEED_ACTION_INDEX formats are told apart by the fields present,
     // matching the format table: cancel carries neither OUTCOME nor AMOUNT,
     // resolve carries OUTCOME, place carries OUTCOME + AMOUNT.
-    _validateBet(fields) {
+    validateBetFields(fields) {
         return validateBet(this, fields);
     },
     // DETAILS shape rules, shared by the create path. Kept separate because the
     // explorer and wallet render paths need the same checks against on-chain
     // (therefore hostile) input; betting.js parseBetDetails is the throwing twin.
-    _validateBetDetails(details, outcomes, limits) {
+    validateBetDetailsShape(details, outcomes, limits) {
         return validateBetDetails(this, details, outcomes, limits);
     }
 };

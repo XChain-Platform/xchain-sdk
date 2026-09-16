@@ -72,7 +72,7 @@ function validateFlatFields(validator, action, fields) {
         // Default-deny delimiter guard, applied to every field before its
         // type-specific validation (see DELIMITER_EXEMPT_FIELDS).
         errors.push(...validator.checkDelimiters(field, value));
-        errors.push(...validator._validateField(action, field, value, fields));
+        errors.push(...validator.validateFieldValue(action, field, value, fields));
     }
     return errors;
 }
@@ -89,7 +89,7 @@ function validateLegFields(validator, action, fields, legs) {
             if (validator.isEmpty(value)) continue;
             for (let err of validator.checkDelimiters(field, value))
                 errors.push(validator.withLeg(err, i));
-            for (let err of validator._validateField(action, field, value, merged))
+            for (let err of validator.validateFieldValue(action, field, value, merged))
                 errors.push(validator.withLeg(err, i));
         }
     }
@@ -141,7 +141,7 @@ class Validator {
         return errors;
     }
 
-    _validateField(action, field, value, allFields) {
+    validateFieldValue(action, field, value, allFields) {
         return validateField(this, action, field, value, allFields);
     }
 

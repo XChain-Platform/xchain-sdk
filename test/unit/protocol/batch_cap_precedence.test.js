@@ -51,7 +51,7 @@ function builderThrow(queue) {
 
 describe('R2b: per-ACTION cap precedence on the compose side', function () {
 
-    describe('validator._validateBatch (wire strings)', function () {
+    describe('validator.validateBatchFields (wire strings)', function () {
 
         it('names the cap whose action appears FIRST when two are broken', function () {
             // Two DEPLOYs and two undotted ISSUEs. DEPLOY leads.

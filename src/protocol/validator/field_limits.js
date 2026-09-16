@@ -90,7 +90,7 @@ const FORBIDDEN_TEXT_CHARS = ['|', ';'];
 // (tick-name / GATE_TICKER / per-element PARAMS), so they opt out here to avoid
 // double-reporting. An exemption is only ever as good as the validation it names:
 // the ticker fields' own check covered ISSUE TICK and '^' ID references and left an
-// ordinary non-ISSUE ticker name unvalidated, which is the injection _validateField
+// ordinary non-ISSUE ticker name unvalidated, which is the injection validateFieldValue
 // now closes at its third branch. Adding a field here means proving, at the branch
 // that claims it, that every value shape reaches a delimiter check.
 const DELIMITER_EXEMPT_FIELDS = new Set([
