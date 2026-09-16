@@ -108,7 +108,7 @@ module.exports = {
         return { version, iv, authTag, encrypted, sharedSecret };
     },
 
-    _aesEncrypt(plaintext, key) {
+    aesEncryptWithKey(plaintext, key) {
         let iv = crypto.randomBytes(IV_LEN);
         let cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
         let encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
@@ -119,7 +119,7 @@ module.exports = {
         return { ciphertext: ciphertext.toString('hex') };
     },
 
-    // Binary counterpart to _aesEncrypt: same envelope, no utf8 conversion.
+    // Binary counterpart to aesEncryptWithKey: same envelope, no utf8 conversion.
     _aesEncryptBytes(plaintext, key) {
         let iv = crypto.randomBytes(IV_LEN);
         let cipher = crypto.createCipheriv('aes-256-gcm', key, iv);

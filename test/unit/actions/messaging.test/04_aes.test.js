@@ -65,7 +65,7 @@ describe('MessagingUtils @crypto @regression', function () {
 
         it('uses a distinct IV per aesEncrypt call (nonce uniqueness)', function () {
             const key = crypto.randomBytes(32);
-            // _aesEncrypt packs: iv(12) + authTag(16) + encrypted
+            // aesEncryptWithKey packs: iv(12) + authTag(16) + encrypted
             const IV_LEN = 12;
             const c1 = Buffer.from(msg.aesEncrypt('same', key).ciphertext, 'hex');
             const c2 = Buffer.from(msg.aesEncrypt('same', key).ciphertext, 'hex');
