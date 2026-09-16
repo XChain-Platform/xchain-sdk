@@ -34,7 +34,7 @@
  * fails that enumeration test. Untrusted-input hardening (bidi/zero-width
  * neutralization, canonical amount flags, own-address/contact
  * marking) is applied centrally to the finished output - see
- * hardening.js and _harden() below.
+ * hardening.js and harden() below.
  *
  ********************************************************************/
 

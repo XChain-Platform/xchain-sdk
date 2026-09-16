@@ -34,7 +34,7 @@
  * fails that enumeration test. Untrusted-input hardening (bidi/zero-width
  * neutralization, canonical amount flags, own-address/contact
  * marking) is applied centrally to the finished output - see
- * hardening.js and _harden() below.
+ * hardening.js and harden() below.
  *
  ********************************************************************/
 
@@ -112,7 +112,7 @@ function describe(parsed, ctx = {}) {
     else if (action === 'XBRIDGE') decoded = decodeXbridge(p, chainSuffix);
     else decoded = genericFallback(action, p, chainSuffix);
 
-    return _harden(decoded, p, ctx);
+    return harden(decoded, p, ctx);
 }
 
 /*
@@ -121,7 +121,7 @@ function describe(parsed, ctx = {}) {
  * finished DecodedAction so every describer (including the generic
  * fallback and future additions) is covered by construction.
  */
-function _harden(decoded, p, ctx) {
+function harden(decoded, p, ctx) {
     const warnings = [];
     const summary = sanitizeText(decoded.summary, warnings);
 
@@ -158,7 +158,7 @@ function _harden(decoded, p, ctx) {
     // Describer warnings sanitized too (they may quote raw input).
     for (const w of decoded.warnings) warnings.push(sanitizeText(w));
 
-    // _harden flags surface FIRST (tamper indicators outrank per-field
+    // harden flags surface FIRST (tamper indicators outrank per-field
     // advisories), deduplicated.
     const merged = [...new Set(warnings)];
     return { summary, details, warnings: merged };
