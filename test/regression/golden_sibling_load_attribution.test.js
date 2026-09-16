@@ -35,7 +35,7 @@ const fs              = require('fs');
 const path            = require('path');
 
 const SDK_ROOT     = path.join(__dirname, '..', '..');
-const GOLDEN_TEST  = path.join(SDK_ROOT, 'test', 'unit', 'action_roundtrip_golden.test.js');
+const GOLDEN_TEST  = path.join(SDK_ROOT, 'test', 'unit', 'actions', 'action_roundtrip_golden.test.js');
 const MOCHA_BIN    = path.join(SDK_ROOT, 'node_modules', 'mocha', 'bin', 'mocha.js');
 const LOAD_TEST    = 'the sibling xchain-indexer parser loads within its budget';
 
