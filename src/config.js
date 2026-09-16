@@ -184,11 +184,12 @@ var Config = {
         // Which origins the helper API answers cross-origin requests from.
         corsOrigin:     () => process.env.CORS_ORIGIN,
 
-        // The helper API's listening port, its key, and the raw limiter
-        // setting that api.js checks for a malformed value before warning.
-        sdkApiPort:      () => process.env.SDK_API_PORT,
-        sdkApiKey:       () => process.env.SDK_API_KEY,
-        sdkApiRateLimit: () => process.env.SDK_API_RATE_LIMIT,
+        // Helper API limits stay raw so each resolver can apply its own rules.
+        sdkApiPort:         () => process.env.SDK_API_PORT,
+        sdkApiKey:          () => process.env.SDK_API_KEY,
+        sdkApiMaxBatch:     () => process.env.SDK_API_MAX_BATCH,
+        sdkApiRateLimit:    () => process.env.SDK_API_RATE_LIMIT,
+        sdkApiRateWindowMs: () => process.env.SDK_API_RATE_WINDOW_MS,
 
         // Set by npm while one of its scripts runs; absent when the SDK is
         // simply required as a library.
