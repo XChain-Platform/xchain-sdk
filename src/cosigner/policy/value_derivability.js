@@ -53,12 +53,12 @@
 
 'use strict';
 
-const Formats        = require('../protocol/formats.js');
-const FormatSelector = require('../protocol/format_selector.js');
+const Formats        = require('../../protocol/formats.js');
+const FormatSelector = require('../../protocol/format_selector.js');
 const { ownLookup }  = require('./param_charset.js');
 // The decoder's bounded rest-field allowlist, so decodableFormats() measures the
 // SAME surface the daemon actually reaches.
-const { BOUNDED_REST_FORMATS } = require('./psbt_action_decode.js');
+const { BOUNDED_REST_FORMATS } = require('../psbt_action_decode.js');
 
 // The signing account can give up no token/native amount that the action
 // string does not already state. Covers pure config/authority/data actions and

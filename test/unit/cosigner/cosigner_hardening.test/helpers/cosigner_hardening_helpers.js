@@ -22,7 +22,7 @@ const WindowStore = require('../../../../../src/cosigner/window_store.js');
 const { evaluatePolicy } = require('../../../../../src/cosigner/policy_evaluator.js');
 const { decodeActionFromPsbt } = require('../../../../../src/cosigner/psbt_action_decode.js');
 const { deriveMuSig2P2TR2of3 } = require('../../../../../src/cosigner/account.js');
-const valueDerivability = require('../../../../../src/cosigner/value_derivability.js');
+const valueDerivability = require('../../../../../src/cosigner/policy/value_derivability.js');
 
 function makeAccount() {
     const musig   = new MuSig2();

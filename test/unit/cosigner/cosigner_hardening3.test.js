@@ -24,7 +24,7 @@ const CoSigner = require('../../../src/cosigner/co_signer.js');
 const { httpTransport } = require('../../../src/cosigner/client.js');
 const { createCoSignerApp } = require('../../../src/cosigner/server.js');
 const { decodeActionFromPsbt } = require('../../../src/cosigner/psbt_action_decode.js');
-const valueDerivability = require('../../../src/cosigner/value_derivability.js');
+const valueDerivability = require('../../../src/cosigner/policy/value_derivability.js');
 
 function makeAccount() {
     const musig   = new MuSig2();

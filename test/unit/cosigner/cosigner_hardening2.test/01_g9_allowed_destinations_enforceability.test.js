@@ -17,7 +17,7 @@ const MuSig2      = require('../../../../src/cosigner/musig2.js');
 const CoSigner    = require('../../../../src/cosigner/co_signer.js');
 const { evaluatePolicy, UNRESOLVED_TICK_BUCKET, formatCarriesDestination } =
     require('../../../../src/cosigner/policy_evaluator.js');
-const valueDerivability = require('../../../../src/cosigner/value_derivability.js');
+const valueDerivability = require('../../../../src/cosigner/policy/value_derivability.js');
 
 function makeAccount() {
     const musig   = new MuSig2();

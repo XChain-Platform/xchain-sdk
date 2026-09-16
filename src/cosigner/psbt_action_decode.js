@@ -67,7 +67,7 @@ const { parse: parseActionString } = require('../decoder/parse.js');
 // Decoded params are attacker-controlled and several of them become lookup
 // keys in the policy tables and the window store, so they are charset-checked
 // here, at the decode boundary, before anything downstream can key on them.
-const { validateDecodedParams, ownLookup } = require('./param_charset.js');
+const { validateDecodedParams, ownLookup } = require('./policy/param_charset.js');
 
 // Repeated value-bearing fields mean a multi-output action (e.g. SEND v1/v2/v3).
 // The single-leg policy evaluator reads one tick/amount, so a flat dict would

@@ -16,7 +16,7 @@
 
 const { create, all } = require('mathjs');
 
-const { ownLookup } = require('../param_charset.js');
+const { ownLookup } = require('../policy/param_charset.js');
 
 const math = create(all, { number: 'BigNumber', precision: 64 });
 
