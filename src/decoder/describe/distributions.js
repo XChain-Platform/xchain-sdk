@@ -98,6 +98,30 @@ function decodeList(p, chainSuffix) {
     };
 }
 
+// Build aligned drop records once so every rendered section uses the same tuple boundaries.
+function buildAirdropDrops(p, version, memoArr) {
+    // Multi-airdrop variants (v1 / v2 / v3). Fields arrive as arrays
+    // when the format repeats slots.
+    const ticks = toArray(p.TICK);
+    const amounts = toArray(p.AMOUNT);
+    const lists = toArray(p.LIST_ACTION_INDEX);
+    const n = Math.max(ticks.length, amounts.length, 1);
+
+    const drops = [];
+    for (let i = 0; i < n; i += 1) {
+        const t = str(ticks[i] !== undefined ? ticks[i] : '');
+        const a = str(amounts[i] !== undefined ? amounts[i] : '');
+        // v1 reuses a single LIST_ACTION_INDEX across all TICK/AMOUNT
+        // pairs; v2/v3 carry one per tuple.
+        const li = version === '1'
+            ? str(lists[0] !== undefined ? lists[0] : '')
+            : str(lists[i] !== undefined ? lists[i] : '');
+        const m = version === '3' ? str(memoArr[i] !== undefined ? memoArr[i] : '') : '';
+        drops.push({ tick: t, amount: a, list: li, memo: m });
+    }
+    return drops;
+}
+
 /*
  * AIRDROP describer. Four format versions: v0 single; v1 multi-token
  * single-list; v2 multi-token multi-list; v3 = v2 + per-tuple MEMO.
@@ -138,25 +162,7 @@ function decodeAirdrop(p, chainSuffix) {
         };
     }
 
-    // Multi-airdrop variants (v1 / v2 / v3). Fields arrive as arrays
-    // when the format repeats slots.
-    const ticks = toArray(p.TICK);
-    const amounts = toArray(p.AMOUNT);
-    const lists = toArray(p.LIST_ACTION_INDEX);
-    const n = Math.max(ticks.length, amounts.length, 1);
-
-    const drops = [];
-    for (let i = 0; i < n; i += 1) {
-        const t = str(ticks[i] !== undefined ? ticks[i] : '');
-        const a = str(amounts[i] !== undefined ? amounts[i] : '');
-        // v1 reuses a single LIST_ACTION_INDEX across all TICK/AMOUNT
-        // pairs; v2/v3 carry one per tuple.
-        const li = version === '1'
-            ? str(lists[0] !== undefined ? lists[0] : '')
-            : str(lists[i] !== undefined ? lists[i] : '');
-        const m = version === '3' ? str(memoArr[i] !== undefined ? memoArr[i] : '') : '';
-        drops.push({ tick: t, amount: a, list: li, memo: m });
-    }
+    const drops = buildAirdropDrops(p, version, memoArr);
 
     const summaryLine = drops
         .map((d) => `${d.amount || '?'} ${d.tick || '?'} → list${d.list ? ` #${d.list}` : ''}`)
@@ -210,6 +216,92 @@ function decodeDividend(p, chainSuffix) {
                 : []),
         ],
     };
+}
+
+// Normalize create fields together so pricing, details, and warnings share one snapshot.
+function dispenserCreateValues(p) {
+    const values = {
+        giveCoin: str(p.GIVE_COIN),
+        giveTick: str(p.GIVE_TICK),
+        giveAmount: str(p.GIVE_AMOUNT),
+        giveEscrow: str(p.GIVE_ESCROW),
+        getCoin: str(p.GET_COIN),
+        getTick: str(p.GET_TICK),
+        getAmount: str(p.GET_AMOUNT),
+        getAddress: str(p.GET_ADDRESS),
+        fiatCode: str(p.FIAT_CODE),
+        fiatAmount: str(p.FIAT_AMOUNT),
+        oracle: str(p.ORACLE_ADDRESS),
+        expiration: str(p.EXPIRATION),
+        allowList: str(p.ALLOW_LIST),
+        blockList: str(p.BLOCK_LIST),
+    };
+    values.payPriceLabel = values.oracle
+        ? `an oracle-priced ${values.fiatCode || 'fiat'} amount`
+        : values.fiatAmount && values.fiatCode
+            ? `${values.fiatAmount} ${values.fiatCode}`
+            : values.getTick
+                ? `${values.getAmount || '?'} ${values.getTick}`
+                : `${values.getAmount || '?'} ${values.getCoin || '?'}`;
+    values.fillsEstimate = values.giveAmount && values.giveEscrow && Number(values.giveAmount) > 0
+        ? Math.floor(Number(values.giveEscrow) / Number(values.giveAmount))
+        : null;
+    return values;
+}
+
+// Assemble create details separately so the create branch remains readable without changing order.
+function dispenserCreateDetails(v, memo) {
+    return [
+        { label: 'Token (give)', value: v.giveTick },
+        ...(v.giveCoin ? [{ label: 'Token chain', value: v.giveCoin }] : []),
+        ...(v.giveAmount ? [{ label: 'Per-fill amount', value: v.giveAmount }] : []),
+        ...(v.giveEscrow ? [{ label: 'Escrow (locked)', value: v.giveEscrow }] : []),
+        ...(v.fillsEstimate !== null ? [{ label: 'Estimated fills', value: String(v.fillsEstimate) }] : []),
+        ...(v.getAmount ? [{ label: 'Trigger amount', value: v.getAmount }] : []),
+        ...(v.getTick ? [{ label: 'Buyer pays (token)', value: v.getTick }] : []),
+        ...(!v.getTick && v.getCoin ? [{ label: 'Buyer pays (coin)', value: v.getCoin }] : []),
+        ...(v.fiatCode ? [{ label: 'Priced in', value: v.fiatCode }] : []),
+        ...(v.fiatAmount ? [{ label: 'Fiat amount', value: v.fiatAmount }] : []),
+        ...(v.oracle ? [{ label: 'Oracle address', value: v.oracle }] : []),
+        ...(v.getAddress ? [{ label: 'Dispenser address', value: v.getAddress }] : []),
+        ...(v.expiration ? [{ label: 'Expiration (unix)', value: v.expiration }] : []),
+        ...(v.allowList ? [{ label: 'Allow list', value: v.allowList }] : []),
+        ...(v.blockList ? [{ label: 'Block list', value: v.blockList }] : []),
+        ...(memo ? [{ label: 'Memo', value: memo }] : []),
+    ];
+}
+
+// Assemble create warnings separately so all validation messages retain their protocol order.
+function dispenserCreateWarnings(v, baseWarnings) {
+    return [
+        ...(!v.giveTick ? ['Give-token ticker is empty.'] : []),
+        ...(!v.giveAmount || Number(v.giveAmount) <= 0
+            ? ['Per-fill amount is not positive.']
+            : []),
+        ...(!v.giveEscrow || Number(v.giveEscrow) <= 0
+            ? ['Escrow amount is not positive.']
+            : []),
+        ...(v.giveAmount && v.giveEscrow && Number(v.giveEscrow) < Number(v.giveAmount)
+            ? ['Escrow is smaller than a single fill, so the dispenser will never dispense.']
+            : []),
+        ...(!v.getAmount ? ['Trigger amount is empty.'] : []),
+        ...(!v.getTick && !v.getCoin
+            ? ['Buyer payment is ambiguous. Set either a token or a coin for the buyer to pay.']
+            : []),
+        ...(v.oracle && !v.fiatCode
+            ? ['Oracle pricing requires a fiat currency. The oracle publishes token prices in that fiat.']
+            : []),
+        ...baseWarnings,
+    ];
+}
+
+// Render the create result from normalized values so the public dispatcher stays below its limit.
+function decodeDispenserCreate(p, chainSuffix, memo, baseWarnings) {
+    const v = dispenserCreateValues(p);
+    const summary = `Create dispenser${chainSuffix}: lock ${v.giveEscrow || '?'} ${v.giveTick || '?'}, give ${v.giveAmount || '?'} ${v.giveTick || '?'} per ${v.payPriceLabel}`;
+    const details = dispenserCreateDetails(v, memo);
+    const warnings = dispenserCreateWarnings(v, baseWarnings);
+    return { summary, details, warnings };
 }
 
 /*
@@ -266,76 +358,7 @@ function decodeDispenser(p, chainSuffix) {
     }
 
     // Version 0: create.
-    const giveCoin = str(p.GIVE_COIN);
-    const giveTick = str(p.GIVE_TICK);
-    const giveAmount = str(p.GIVE_AMOUNT);
-    const giveEscrow = str(p.GIVE_ESCROW);
-    const getCoin = str(p.GET_COIN);
-    const getTick = str(p.GET_TICK);
-    const getAmount = str(p.GET_AMOUNT);
-    const getAddress = str(p.GET_ADDRESS);
-    const fiatCode = str(p.FIAT_CODE);
-    const fiatAmount = str(p.FIAT_AMOUNT);
-    const oracle = str(p.ORACLE_ADDRESS);
-    const expiration = str(p.EXPIRATION);
-    const allowList = str(p.ALLOW_LIST);
-    const blockList = str(p.BLOCK_LIST);
-
-    const payPriceLabel = oracle
-        ? `an oracle-priced ${fiatCode || 'fiat'} amount`
-        : fiatAmount && fiatCode
-            ? `${fiatAmount} ${fiatCode}`
-            : getTick
-                ? `${getAmount || '?'} ${getTick}`
-                : `${getAmount || '?'} ${getCoin || '?'}`;
-
-    const fillsEstimate = giveAmount && giveEscrow && Number(giveAmount) > 0
-        ? Math.floor(Number(giveEscrow) / Number(giveAmount))
-        : null;
-
-    const summary = `Create dispenser${chainSuffix}: lock ${giveEscrow || '?'} ${giveTick || '?'}, give ${giveAmount || '?'} ${giveTick || '?'} per ${payPriceLabel}`;
-
-    const details = [
-        { label: 'Token (give)', value: giveTick },
-        ...(giveCoin ? [{ label: 'Token chain', value: giveCoin }] : []),
-        ...(giveAmount ? [{ label: 'Per-fill amount', value: giveAmount }] : []),
-        ...(giveEscrow ? [{ label: 'Escrow (locked)', value: giveEscrow }] : []),
-        ...(fillsEstimate !== null ? [{ label: 'Estimated fills', value: String(fillsEstimate) }] : []),
-        ...(getAmount ? [{ label: 'Trigger amount', value: getAmount }] : []),
-        ...(getTick ? [{ label: 'Buyer pays (token)', value: getTick }] : []),
-        ...(!getTick && getCoin ? [{ label: 'Buyer pays (coin)', value: getCoin }] : []),
-        ...(fiatCode ? [{ label: 'Priced in', value: fiatCode }] : []),
-        ...(fiatAmount ? [{ label: 'Fiat amount', value: fiatAmount }] : []),
-        ...(oracle ? [{ label: 'Oracle address', value: oracle }] : []),
-        ...(getAddress ? [{ label: 'Dispenser address', value: getAddress }] : []),
-        ...(expiration ? [{ label: 'Expiration (unix)', value: expiration }] : []),
-        ...(allowList ? [{ label: 'Allow list', value: allowList }] : []),
-        ...(blockList ? [{ label: 'Block list', value: blockList }] : []),
-        ...(memo ? [{ label: 'Memo', value: memo }] : []),
-    ];
-
-    const warnings = [
-        ...(!giveTick ? ['Give-token ticker is empty.'] : []),
-        ...(!giveAmount || Number(giveAmount) <= 0
-            ? ['Per-fill amount is not positive.']
-            : []),
-        ...(!giveEscrow || Number(giveEscrow) <= 0
-            ? ['Escrow amount is not positive.']
-            : []),
-        ...(giveAmount && giveEscrow && Number(giveEscrow) < Number(giveAmount)
-            ? ['Escrow is smaller than a single fill, so the dispenser will never dispense.']
-            : []),
-        ...(!getAmount ? ['Trigger amount is empty.'] : []),
-        ...(!getTick && !getCoin
-            ? ['Buyer payment is ambiguous. Set either a token or a coin for the buyer to pay.']
-            : []),
-        ...(oracle && !fiatCode
-            ? ['Oracle pricing requires a fiat currency. The oracle publishes token prices in that fiat.']
-            : []),
-        ...baseWarnings,
-    ];
-
-    return { summary, details, warnings };
+    return decodeDispenserCreate(p, chainSuffix, memo, baseWarnings);
 }
 
 module.exports = { decodeList, decodeAirdrop, decodeDividend, decodeDispenser };
