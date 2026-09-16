@@ -59,7 +59,7 @@ module.exports = {
      * @param {{ maximumFeeRate?: number }} [opts]
      * @returns {number|null} sat/vB ceiling, or null to keep bitcoinjs's default
      */
-    _maxFeeRate(opts) {
+    resolveMaxFeeRate(opts) {
         if (opts && Number.isFinite(opts.maximumFeeRate) && opts.maximumFeeRate > 0)
             return opts.maximumFeeRate;
         return String(this.network || '').startsWith('bitcoin') ? null : 10000000;
@@ -132,7 +132,7 @@ module.exports = {
             return { txHex: null, txid: null, psbtHex: psbt.toHex() };
         }
 
-        const maxFeeRate = this._maxFeeRate(opts);
+        const maxFeeRate = this.resolveMaxFeeRate(opts);
         if (maxFeeRate) psbt.setMaximumFeeRate(maxFeeRate);
         const tx = psbt.extractTransaction();
 
@@ -243,7 +243,7 @@ module.exports = {
             throw new SDKWalletError('FINALIZE_FAILED', `Envelope reveal finalization failed: ${err.message}`);
         }
 
-        const maxFeeRate = this._maxFeeRate(opts);
+        const maxFeeRate = this.resolveMaxFeeRate(opts);
         if (maxFeeRate) psbt.setMaximumFeeRate(maxFeeRate);
         const tx = psbt.extractTransaction();
         return {
@@ -301,7 +301,7 @@ module.exports = {
             throw new SDKWalletError('FINALIZE_FAILED', `Reveal PSBT finalization failed: ${err.message}`);
         }
 
-        const maxFeeRate = this._maxFeeRate(opts);
+        const maxFeeRate = this.resolveMaxFeeRate(opts);
         if (maxFeeRate) psbt.setMaximumFeeRate(maxFeeRate);
         const tx = psbt.extractTransaction();
         return {

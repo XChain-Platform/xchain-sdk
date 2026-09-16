@@ -176,7 +176,7 @@ async function buildRecoverySpend(cfg = {}) {
     }
 
     // Absurd-fee ceiling (sat/vB), computed after the witnesses are attached so
-    // the vsize is accurate. Mirrors WalletUtils._maxFeeRate / bitcoinjs's 5000
+    // the vsize is accurate. Mirrors WalletUtils.resolveMaxFeeRate / bitcoinjs's 5000
     // sat/vB default. Low-unit-value chains (e.g. DOGE) whose ordinary fee-rate
     // exceeds this must pass an explicit cfg.maximumFeeRate, or set
     // cfg.acceptHighFee to bypass the check entirely.

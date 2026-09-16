@@ -45,7 +45,7 @@ const BITCOIN_BECH32 = new Set(['bc', 'tb', 'bcrt']);
 
 /*
  * Fee ceiling (sat/vB) applied before extractTransaction, tracking
- * wallet.js#_maxFeeRate so this signer stays a drop-in for signPsbt on a
+ * wallet.js#resolveMaxFeeRate so this signer stays a drop-in for signPsbt on a
  * RESOLVED network: an explicit maximumFeeRate wins; the bitcoin family keeps
  * bitcoinjs's 5000 sat/vB default; every other resolved network gets the
  * raised 10,000,000 ceiling (real drain protection lives upstream in the
@@ -60,7 +60,7 @@ const BITCOIN_BECH32 = new Set(['bc', 'tb', 'bcrt']);
  * `network` (or an explicit maximumFeeRate) to sign ordinary high-rate fees;
  * a musig2AgentSession test twin pins this no-network behavior intentionally.
  */
-function _maxFeeRate(network, maximumFeeRate) {
+function resolveMaxFeeRate(network, maximumFeeRate) {
     if (Number.isFinite(maximumFeeRate) && maximumFeeRate > 0) return maximumFeeRate;
     if (!network || BITCOIN_BECH32.has(network.bech32)) return null;
     return 10000000;
@@ -97,7 +97,7 @@ function buildMuSig2Signer(config = {}) {
             psbt.updateInput(s.index, { tapKeySig: toBuf(s.signature) });
             psbt.finalizeInput(s.index);
         }
-        const maxFeeRate = _maxFeeRate(network, maximumFeeRate);
+        const maxFeeRate = resolveMaxFeeRate(network, maximumFeeRate);
         if (maxFeeRate) psbt.setMaximumFeeRate(maxFeeRate);
         const tx = psbt.extractTransaction();
         return { txHex: tx.toHex(), txid: tx.getId(), psbtHex: psbt.toHex() };
