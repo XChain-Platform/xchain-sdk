@@ -34,7 +34,7 @@ describe('LifecycleManager', function () {
         it('rejects with the indexer-recorded reason when the action is invalid', async function () {
             const sdk = makeSdk({
                 ws: null,
-                _requireExplorer: () => explorerReturning({
+                requireExplorer: () => explorerReturning({
                     tx_hash: 'deadbeef',
                     actions: [{ action: 'BET', action_index: 7, status: 'invalid: OUTCOME (range)' }],
                 }),
@@ -53,7 +53,7 @@ describe('LifecycleManager', function () {
         it('reports whether the resolved status was read from the indexer or assumed', async function () {
             const sdk = makeSdk({
                 ws: null,
-                _requireExplorer: () => explorerReturning({
+                requireExplorer: () => explorerReturning({
                     tx_hash: 'deadbeef',
                     actions: [{ action: 'SEND', action_index: 7, status: 'valid' }],
                 }),
@@ -76,7 +76,7 @@ describe('LifecycleManager', function () {
         it('forwards strictStatus so a caller can fail closed on an unreadable status', async function () {
             const sdk = makeSdk({
                 ws: null,
-                _requireExplorer: () => explorerReturning({
+                requireExplorer: () => explorerReturning({
                     tx_hash: 'deadbeef',
                     // Status-less action row: the indexer wrote no typed row for this leg.
                     actions: [{ action: 'BET', action_index: 7, status: null }],

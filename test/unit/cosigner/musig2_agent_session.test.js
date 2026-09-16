@@ -94,7 +94,7 @@ function makeSdk(s, captured) {
         tickResolver:    { resolveActionParams: async (a, p) => p },
         addressResolver: { resolveActionParams: async (a, p) => p },
         actions:         { createAction: () => ({ actionString: s.actionString, action: 'SEND', version: 0 }) },
-        _requireEncoder: () => ({
+        requireEncoder: () => ({
             createTx:    async () => { captured.encodeCalls++; return { psbt: s.psbtHex, encoding: 'OP_RETURN' }; },
             broadcastTx: async (txHex) => { captured.broadcasts.push(txHex); return { txid: 'ok' }; },
             getUTXOs:    async () => ({ utxos: [] }),

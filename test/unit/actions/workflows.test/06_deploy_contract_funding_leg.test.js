@@ -32,7 +32,7 @@ function makeDepositSdk(calls, indexed) {
     return {
         actions: new Actions({ config: config.getConfig(), util: new Utility() }),
         session: () => session,
-        _preflightContractLint: () => {},
+        preflightContractLint: () => {},
     };
 }
 

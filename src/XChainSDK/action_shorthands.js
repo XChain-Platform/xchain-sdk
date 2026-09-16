@@ -45,7 +45,7 @@ module.exports = {
         let result = this.actions.createAction(data);
 
         if (data.encoder && data.encoder.pubkey) {
-            let encoder = this._requireEncoder();
+            let encoder = this.requireEncoder();
             // Forward every optional createTx field through the ONE shared list
             // (EncoderClient.CREATE_TX_OPTION_FIELDS), never a hand-copied subset:
             // the hand-copied version had silently fallen behind createTx and was

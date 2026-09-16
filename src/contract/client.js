@@ -87,7 +87,7 @@ class ContractClient {
 
     // Get contract metadata from explorer
     async getInfo() {
-        let explorer = this.sdk._requireExplorer();
+        let explorer = this.sdk.requireExplorer();
         let info = await explorer.getContract(this.contractActionIndex);
         this._info = info;
         return info;
@@ -95,7 +95,7 @@ class ContractClient {
 
     // Get contract state (all keys or a specific key)
     async getState(key) {
-        let explorer = this.sdk._requireExplorer();
+        let explorer = this.sdk.requireExplorer();
         return explorer.getContractState(this.contractActionIndex, key);
     }
 
@@ -114,13 +114,13 @@ class ContractClient {
 
     // Get contract execution history
     async getExecutions(opts) {
-        let explorer = this.sdk._requireExplorer();
+        let explorer = this.sdk.requireExplorer();
         return explorer.getExecutions(this.contractActionIndex, 'contract', opts);
     }
 
     // Get contract token balances (all ticks or a specific tick)
     async getBalance(tick) {
-        let explorer = this.sdk._requireExplorer();
+        let explorer = this.sdk.requireExplorer();
         return explorer.getContractBalance(this.contractActionIndex, tick);
     }
 
@@ -129,7 +129,7 @@ class ContractClient {
     // means no declared allowlist (unrestricted); maxTakeBps=null means the global cap
     // applies. Delegates to the explorer's normalizing reader.
     async getManifest() {
-        let explorer = this.sdk._requireExplorer();
+        let explorer = this.sdk.requireExplorer();
         return explorer.getContractManifest(this.contractActionIndex);
     }
 

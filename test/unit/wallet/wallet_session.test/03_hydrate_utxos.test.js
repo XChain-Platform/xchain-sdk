@@ -31,7 +31,7 @@ function makeSdk(overrides = {}) {
             importWIF:     () => fakeKeyInfo,
             deriveAddress: () => 'mTestAddr123'
         },
-        _requireEncoder: () => encoder,
+        requireEncoder: () => encoder,
         getBalances:    async (addr, opts) => [{ tick: 'TOK', quantity: '100' }],
         getHistory:     async (addr, type, opts) => [{ action: 'SEND' }],
         getCredits:     async (addr, type, opts) => [{ credit: 1 }],
@@ -49,7 +49,7 @@ const TRACKED = { txid: 'a'.repeat(64), vout: 0, value: 100000, scriptPubKey: '7
 
 function trackerSdk(view) {
     return makeSdk({
-        _requireEncoder: () => ({ getUTXOs: async () => ({ utxos: view.map(u => ({ ...u })) }) })
+        requireEncoder: () => ({ getUTXOs: async () => ({ utxos: view.map(u => ({ ...u })) }) })
     });
 }
 
@@ -121,7 +121,7 @@ describe('WalletSession', function () {
         it('returns an empty list without touching the tracker', async function () {
             let called = false;
             let sdk = makeSdk({
-                _requireEncoder: () => ({ getUTXOs: async () => { called = true; return { utxos: [] }; } })
+                requireEncoder: () => ({ getUTXOs: async () => { called = true; return { utxos: [] }; } })
             });
             let session = new WalletSession(sdk, WIF_MAINNET);
             assert.deepStrictEqual(await session.hydrateUTXOs([]), []);

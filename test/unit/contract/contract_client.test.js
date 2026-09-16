@@ -25,7 +25,7 @@ function makeSdk(overrides = {}) {
         execute:  async (params, encoder) => ({ submitted: true, params }),
         deposit:  async (params, encoder) => ({ submitted: true, params }),
         withdraw: async (params, encoder) => ({ submitted: true, params }),
-        _requireExplorer: () => explorer,
+        requireExplorer: () => explorer,
         ...overrides
     };
 }

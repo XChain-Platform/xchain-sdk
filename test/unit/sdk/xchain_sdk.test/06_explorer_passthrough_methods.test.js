@@ -60,7 +60,7 @@ function registerEnvHooks() {
     });
 }
 
-    // All these methods just call _requireExplorer().<method>(args)
+    // All these methods just call requireExplorer().<method>(args)
     const explorerMethods = [
         { m: 'getBalances',           args: ['addr1', {}] },
         { m: 'getAddress',            args: ['addr1'] },

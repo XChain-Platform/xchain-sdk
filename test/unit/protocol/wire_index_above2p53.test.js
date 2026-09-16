@@ -156,7 +156,7 @@ describe('ActionWaiter targeted wait excludes the >2^53 neighbour', function () 
         // Only action N+1 is in the transaction and it is INVALID; the caller waits
         // on N. Pre-fix the filter matched N+1 and rejected with a rejection that
         // was never the target action's.
-        const sdk = { ws: null, _requireExplorer: () => ({ getTransaction: async () => ({
+        const sdk = { ws: null, requireExplorer: () => ({ getTransaction: async () => ({
             tx_hash: TXID,
             actions: [{ action: 'SEND', action_index: N_1, status: 'invalid: neighbour' }],
         }) }) };
@@ -167,7 +167,7 @@ describe('ActionWaiter targeted wait excludes the >2^53 neighbour', function () 
     });
 
     it('poll path: the target action still settles the wait', async function () {
-        const sdk = { ws: null, _requireExplorer: () => ({ getTransaction: async () => ({
+        const sdk = { ws: null, requireExplorer: () => ({ getTransaction: async () => ({
             tx_hash: TXID,
             actions: [{ action: 'SEND', action_index: N_1, status: 'valid' },
                       { action: 'SEND', action_index: N,   status: 'invalid: mine' }],
@@ -193,7 +193,7 @@ describe('ActionWaiter targeted wait excludes the >2^53 neighbour', function () 
             off: (evt, fn) => { listeners[evt] = (listeners[evt] || []).filter(f => f !== fn); },
             emit:(evt, msg) => { (listeners[evt] || []).slice().forEach(fn => fn(msg)); },
         };
-        const sdk = { ws, _requireExplorer: () => ({ getTransaction: async () => null }) };
+        const sdk = { ws, requireExplorer: () => ({ getTransaction: async () => null }) };
         const waiter = new ActionWaiter(sdk);
         const p = waiter.waitForTxid(TXID, { timeout: 1200, pollInterval: 50, actionIndex: N });
         // Pre-fix this event settled the wait as 'valid', masking whatever the
@@ -210,7 +210,7 @@ describe('ActionWaiter targeted wait excludes the >2^53 neighbour', function () 
             off: (evt, fn) => { listeners[evt] = (listeners[evt] || []).filter(f => f !== fn); },
             emit:(evt, msg) => { (listeners[evt] || []).slice().forEach(fn => fn(msg)); },
         };
-        const sdk = { ws, _requireExplorer: () => ({ getTransaction: async () => null }) };
+        const sdk = { ws, requireExplorer: () => ({ getTransaction: async () => null }) };
         const waiter = new ActionWaiter(sdk);
         const p = waiter.waitForTxid(TXID, { timeout: 2000, pollInterval: 50, actionIndex: N });
         ws.emit('NEW_ACTION', { data: { tx_hash: TXID, action_index: N, status: 'valid' } });

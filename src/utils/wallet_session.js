@@ -180,7 +180,7 @@ class WalletSession {
 
     // Refresh UTXO set from the UTXO tracker
     async refreshUTXOs() {
-        let encoder = this.sdk._requireEncoder();
+        let encoder = this.sdk.requireEncoder();
         return this._utxoCache.refresh(this.address, encoder);
     }
 

@@ -38,7 +38,7 @@ function normalizeSubmission(manager, actionData, opts) {
     let contractAction = CONTRACT_ACTIONS.has(String(actionData && actionData.action).toUpperCase());
     if (strictStatus === undefined) strictStatus = contractAction;
 
-    let encoder = manager.sdk._requireEncoder();
+    let encoder = manager.sdk.requireEncoder();
     let progress = onProgress || (() => {});
     return {
         wif, waitForIndexer, timeout, pollInterval, requireValid, strictStatus, explorer,

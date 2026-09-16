@@ -70,18 +70,18 @@ describe('XChainSDK', function () {
         it('warns when the contract exports initialize() but no CONSTRUCTOR_PARAMS are provided', function () {
             const sdk = makeSDK();
             const spy = sinon.stub(console, 'warn');
-            sdk._preflightContractLint({ CODE: SRC_WITH_INIT }, 'warn');
+            sdk.preflightContractLint({ CODE: SRC_WITH_INIT }, 'warn');
             expect(warned(spy, CTOR_RE)).to.be.true;
         });
 
         it('does not warn when CONSTRUCTOR_PARAMS are provided (UPPER or camelCase)', function () {
             const sdk = makeSDK();
             let spy = sinon.stub(console, 'warn');
-            sdk._preflightContractLint({ CODE: SRC_WITH_INIT, CONSTRUCTOR_PARAMS: ['0xabc'] }, 'warn');
+            sdk.preflightContractLint({ CODE: SRC_WITH_INIT, CONSTRUCTOR_PARAMS: ['0xabc'] }, 'warn');
             expect(warned(spy, CTOR_RE)).to.be.false;
             spy.restore();
             spy = sinon.stub(console, 'warn');
-            sdk._preflightContractLint({ CODE: SRC_WITH_INIT, constructorParams: ['0xabc'] }, 'warn');
+            sdk.preflightContractLint({ CODE: SRC_WITH_INIT, constructorParams: ['0xabc'] }, 'warn');
             expect(warned(spy, CTOR_RE)).to.be.false;
         });
     });
@@ -104,25 +104,25 @@ describe('XChainSDK', function () {
         it('treats an empty CONSTRUCTOR_PARAMS value ("" or []) as absent and still warns', function () {
             const sdk = makeSDK();
             let spy = sinon.stub(console, 'warn');
-            sdk._preflightContractLint({ CODE: SRC_WITH_INIT, CONSTRUCTOR_PARAMS: '' }, 'warn');
+            sdk.preflightContractLint({ CODE: SRC_WITH_INIT, CONSTRUCTOR_PARAMS: '' }, 'warn');
             expect(warned(spy, CTOR_RE)).to.be.true;
             spy.restore();
             spy = sinon.stub(console, 'warn');
-            sdk._preflightContractLint({ CODE: SRC_WITH_INIT, CONSTRUCTOR_PARAMS: [] }, 'warn');
+            sdk.preflightContractLint({ CODE: SRC_WITH_INIT, CONSTRUCTOR_PARAMS: [] }, 'warn');
             expect(warned(spy, CTOR_RE)).to.be.true;
         });
 
         it('does not warn when the contract has no initialize export', function () {
             const sdk = makeSDK();
             const spy = sinon.stub(console, 'warn');
-            sdk._preflightContractLint({ CODE: SRC_NO_INIT }, 'warn');
+            sdk.preflightContractLint({ CODE: SRC_NO_INIT }, 'warn');
             expect(warned(spy, CTOR_RE)).to.be.false;
         });
 
         it('skips the warning entirely when lint is off', function () {
             const sdk = makeSDK();
             const spy = sinon.stub(console, 'warn');
-            sdk._preflightContractLint({ CODE: SRC_WITH_INIT }, 'off');
+            sdk.preflightContractLint({ CODE: SRC_WITH_INIT }, 'off');
             expect(spy.called).to.be.false;
         });
     });

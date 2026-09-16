@@ -72,7 +72,7 @@ describe('MessagingUtils @crypto @regression', function () {
         });
 
         it('throws INVALID_METHOD for unknown method number', async function () {
-            const fakeSdk = { _requireExplorer: () => ({ getPublicKey: async () => null }) };
+            const fakeSdk = { requireExplorer: () => ({ getPublicKey: async () => null }) };
             await msg.send({ wif: 'wif', coin: 'BTC', destination: 'addr', message: 'hi', encoder: {}, method: 99 }, fakeSdk)
                 .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('INVALID_METHOD'));
         });
@@ -102,7 +102,7 @@ describe('MessagingUtils @crypto @regression', function () {
                     signPsbt:    () => ({ txHex: 'txhex', txid: 'txecdhbin' }),
                     broadcastTx: async () => ({})
                 },
-                _requireEncoder: () => ({}),
+                requireEncoder: () => ({}),
             };
             const result = await msg.send(
                 { wif: 'wif', coin: 'BTC', destination: 'addr', message: payload, encoder: {}, method: 2, sharedSecret: secret },
@@ -124,7 +124,7 @@ describe('MessagingUtils @crypto @regression', function () {
                     signPsbt:    () => ({ txHex: 'txhex', txid: 'txaesbin' }),
                     broadcastTx: async () => ({})
                 },
-                _requireEncoder: () => ({}),
+                requireEncoder: () => ({}),
             };
             const result = await msg.send(
                 { wif: 'wif', coin: 'BTC', destination: 'addr', message: payload, encoder: {}, method: 3, sharedKey: key },
@@ -156,7 +156,7 @@ describe('MessagingUtils @crypto @regression', function () {
 
         it('throws PUBKEY_NOT_FOUND when ECIES and explorer finds no pubkey', async function () {
             const fakeSdk = {
-                _requireExplorer: () => ({ getPublicKey: async () => null })
+                requireExplorer: () => ({ getPublicKey: async () => null })
             };
             await msg.send({ wif: 'wif', coin: 'BTC', destination: 'addr', message: 'hi', encoder: {}, method: 1 }, fakeSdk)
                 .then(() => { throw new Error('should throw'); }, e => expect(e.code).to.equal('PUBKEY_NOT_FOUND'));
@@ -171,7 +171,7 @@ describe('MessagingUtils @crypto @regression', function () {
                     signPsbt:    () => ({ txHex: 'txhex', txid: 'txabc' }),
                     broadcastTx: async () => ({})
                 },
-                _requireEncoder: () => ({}),
+                requireEncoder: () => ({}),
             };
             const result = await msg.send(
                 { wif: 'wif', coin: 'BTC', destination: 'addr', message: 'hello', encoder: {}, method: null },
@@ -200,7 +200,7 @@ describe('MessagingUtils @crypto @regression', function () {
                     signPsbt:    () => ({ txHex: 'txhex', txid: 'txecdh' }),
                     broadcastTx: async () => ({})
                 },
-                _requireEncoder: () => ({}),
+                requireEncoder: () => ({}),
             };
             const result = await msg.send(
                 { wif: 'wif', coin: 'BTC', destination: 'addr', message: 'hi', encoder: {}, method: 2, sharedSecret: secret },
@@ -219,7 +219,7 @@ describe('MessagingUtils @crypto @regression', function () {
                     signPsbt:    () => ({ txHex: 'txhex', txid: 'txaes' }),
                     broadcastTx: async () => ({})
                 },
-                _requireEncoder: () => ({}),
+                requireEncoder: () => ({}),
             };
             const result = await msg.send(
                 { wif: 'wif', coin: 'BTC', destination: 'addr', message: 'secret', encoder: {}, method: 3, sharedKey: key },
@@ -250,7 +250,7 @@ describe('MessagingUtils @crypto @regression', function () {
             const dest = new WalletUtils(NETWORK).deriveAddress(bob.publicKeyHex);
             let encodedActionString = null;
             const fakeSdk = {
-                _requireExplorer: () => ({ getPublicKey: async () => ({ pubkey: bob.publicKeyHex }) }),
+                requireExplorer: () => ({ getPublicKey: async () => ({ pubkey: bob.publicKeyHex }) }),
                 createAction:     async (data) => {
                     const res = realActions.createAction(data);
                     encodedActionString = res.actionString;
@@ -260,7 +260,7 @@ describe('MessagingUtils @crypto @regression', function () {
                     signPsbt:    () => ({ txHex: 'txhex', txid: 'txecies' }),
                     broadcastTx: async () => ({})
                 },
-                _requireEncoder: () => ({}),
+                requireEncoder: () => ({}),
             };
             const result = await msg.send(
                 { wif: 'wif', coin: 'BTC', destination: dest, message: 'hello', encoder: {}, method: 1 },
@@ -288,13 +288,13 @@ describe('MessagingUtils @crypto @regression', function () {
         it('returns txid for binary ECIES send (Buffer message)', async function () {
             const bob = keypair();
             const fakeSdk = {
-                _requireExplorer: () => ({ getPublicKey: async () => ({ pubkey: bob.publicKeyHex }) }),
+                requireExplorer: () => ({ getPublicKey: async () => ({ pubkey: bob.publicKeyHex }) }),
                 createAction:     async () => ({ psbt: 'psbtHex', actionString: 'XC|MSG' }),
                 wallet: {
                     signPsbt:    () => ({ txHex: 'txhex', txid: 'txbinary' }),
                     broadcastTx: async () => ({})
                 },
-                _requireEncoder: () => ({}),
+                requireEncoder: () => ({}),
             };
             const result = await msg.send(
                 { wif: 'wif', coin: 'BTC', destination: 'addr', message: Buffer.from('key_bytes'), encoder: {}, method: 1 },

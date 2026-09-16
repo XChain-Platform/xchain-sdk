@@ -110,9 +110,9 @@ describe('XChainSDK – WebSocket convenience methods', function () {
             expect(s.ws).to.be.null;
         });
 
-        it('_requireWs throws when ws is null', function () {
+        it('requireWs throws when ws is null', function () {
             const s = new XChainSDK({ network: 'bitcoin-regtest' });
-            expect(() => s._requireWs()).to.throw(SDKConfigError);
+            expect(() => s.requireWs()).to.throw(SDKConfigError);
         });
 
         it('stop() disconnects WebSocket', async function () {

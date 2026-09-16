@@ -31,7 +31,7 @@ function makeSdk(overrides = {}) {
             importWIF:     () => fakeKeyInfo,
             deriveAddress: () => 'mTestAddr123'
         },
-        _requireEncoder: () => encoder,
+        requireEncoder: () => encoder,
         getBalances:    async (addr, opts) => [{ tick: 'TOK', quantity: '100' }],
         getHistory:     async (addr, type, opts) => [{ action: 'SEND' }],
         getCredits:     async (addr, type, opts) => [{ credit: 1 }],
@@ -52,7 +52,7 @@ const MEMPOOL   = { txid: 'b'.repeat(64), vout: 1, value: 5000000, scriptPubKey:
 function trackerSdk(views) {
     let calls = 0;
     let sdk = makeSdk({
-        _requireEncoder: () => ({
+        requireEncoder: () => ({
             getUTXOs: async () => {
                 let view = views[Math.min(calls, views.length - 1)];
                 calls += 1;

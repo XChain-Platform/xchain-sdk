@@ -148,7 +148,7 @@ function makeSdk(overrides = {}, encoderOverrides = {}) {
     const encoder = Object.assign({}, defaultEncoder, encoderOverrides);
 
     const defaultSdk = {
-        _requireEncoder: () => encoder,
+        requireEncoder: () => encoder,
         actions: {
             createAction: () => ({
                 actionString: 'XCHAIN|SEND|...',

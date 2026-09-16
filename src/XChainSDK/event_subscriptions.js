@@ -33,7 +33,7 @@ module.exports = {
         if (!CANONICAL_ACTION_INDEX.test(index))
             throw new Error('onBetFeed: feedActionIndex must be a numeric ACTION_INDEX, got ' + JSON.stringify(feedActionIndex));
 
-        const ws = this._requireWs();
+        const ws = this.requireWs();
         // Guard on `feed_action_index`, NOT `action_index`. A BET frame's own
         // action_index is the individual bet; the parent market rides in
         // feed_action_index, which the ChangeDetector enriches for exactly this
@@ -58,7 +58,7 @@ module.exports = {
         // 'bet_feed:<index>' is rejected outright with `Unknown channel`, the same
         // trap documented on websocket.js subscribeBetFeed().
         const params = { action_index: index, snapshot: true };
-        this._subscribeDetached(ws, ['bet_feed'], params);
+        this.subscribeDetached(ws, ['bet_feed'], params);
         return oneShotTeardown(() => {
             ws.off('BET', onLifecycle);
             ws.off('BET_EXPIRED', onLifecycle);
@@ -79,7 +79,7 @@ module.exports = {
         if (!CANONICAL_CALL_ID.test(id))
             throw new Error('onXcall: callId must be a 64-character hex string, got ' + JSON.stringify(callId));
 
-        const ws = this._requireWs();
+        const ws = this.requireWs();
         // Compare the frame's own call_id case-insensitively, because only the
         // Broadcaster's ROUTING key is lower-cased, never the id inside `data`.
         // Fail open on a frame that carries no call_id, matching frameIdMatches:
@@ -106,7 +106,7 @@ module.exports = {
         // Bare channel name with the id in params, like every sibling entity: a
         // composite 'xcall:<id>' is rejected outright with `Unknown channel`.
         const params = { call_id: id, snapshot: true };
-        this._subscribeDetached(ws, ['xcall'], params);
+        this.subscribeDetached(ws, ['xcall'], params);
         return oneShotTeardown(() => {
             ws.off('XCALL_COMPLETED', onLifecycle);
             ws.off('XCALL_EXPIRED', onLifecycle);
@@ -120,13 +120,13 @@ module.exports = {
     // an entity with current state.
     // Returns an unsubscribe function.
     onAttestation(callback) {
-        const ws = this._requireWs();
+        const ws = this.requireWs();
         // v0 is the request, v1 the response; the explorer splits them into two
         // type names because the raw action row carries no version to tell them
         // apart. No entity guard: a global channel has nothing to scope to.
         ws.on('ATTESTATION_REQUEST', callback);
         ws.on('ATTESTATION_RESPONSE', callback);
-        this._subscribeDetached(ws, ['attestation']);
+        this.subscribeDetached(ws, ['attestation']);
         return oneShotTeardown(() => {
             ws.off('ATTESTATION_REQUEST', callback);
             ws.off('ATTESTATION_RESPONSE', callback);
@@ -137,11 +137,11 @@ module.exports = {
     // Shortcut: listen for COINPAY_REQUIRED events on an address
     // Returns an unsubscribe function
     onCoinpayRequired(address, callback) {
-        const ws = this._requireWs();
+        const ws = this.requireWs();
         const onEvent = entityGuarded((msg) => frameIsForAddress(msg, address), callback);
         ws.on('COINPAY_REQUIRED', onEvent);
         const params = { address, types: ['COINPAY_REQUIRED'] };
-        this._subscribeDetached(ws, ['address'], params);
+        this.subscribeDetached(ws, ['address'], params);
         return oneShotTeardown(() => {
             ws.off('COINPAY_REQUIRED', onEvent);
             ws.unsubscribe(['address'], params);
@@ -151,11 +151,11 @@ module.exports = {
     // Shortcut: listen for ORDER_MATCH events on an address
     // Returns an unsubscribe function
     onOrderMatch(address, callback, opts) {
-        const ws = this._requireWs();
+        const ws = this.requireWs();
         const onEvent = entityGuarded((msg) => frameIsForAddress(msg, address), callback);
         ws.on('ORDER_MATCH', onEvent);
         const params = { address, types: ['ORDER_MATCH'] };
-        this._subscribeDetached(ws, ['address'], params);
+        this.subscribeDetached(ws, ['address'], params);
         return oneShotTeardown(() => {
             ws.off('ORDER_MATCH', onEvent);
             ws.unsubscribe(['address'], params);
@@ -202,9 +202,9 @@ module.exports = {
     // Listen for network stats updates
     // Returns an unsubscribe function
     onNetworkStats(callback) {
-        const ws = this._requireWs();
+        const ws = this.requireWs();
         ws.on('NETWORK_STATS', callback);
-        this._subscribeDetached(ws, ['network']);
+        this.subscribeDetached(ws, ['network']);
         return oneShotTeardown(() => {
             ws.off('NETWORK_STATS', callback);
             ws.unsubscribe(['network']);

@@ -97,10 +97,10 @@ module.exports = {
      */
 
     async encodeTx(params) {
-        return this._requireEncoder().createTx(params);
+        return this.requireEncoder().createTx(params);
     },
 
     async spendP2sh(params) {
-        return this._requireEncoder().spendP2sh(params);
+        return this.requireEncoder().spendP2sh(params);
     },
 };

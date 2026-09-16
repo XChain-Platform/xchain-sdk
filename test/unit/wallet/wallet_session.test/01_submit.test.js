@@ -31,7 +31,7 @@ function makeSdk(overrides = {}) {
             importWIF:     () => fakeKeyInfo,
             deriveAddress: () => 'mTestAddr123'
         },
-        _requireEncoder: () => encoder,
+        requireEncoder: () => encoder,
         getBalances:    async (addr, opts) => [{ tick: 'TOK', quantity: '100' }],
         getHistory:     async (addr, type, opts) => [{ action: 'SEND' }],
         getCredits:     async (addr, type, opts) => [{ credit: 1 }],
@@ -93,7 +93,7 @@ describe('WalletSession', function () {
         it('serializes concurrent submits so they cannot reserve the same UTXO', async function () {
             // Two UTXOs available; each submit spends utxo1 (per the stub below).
             let sdk = makeSdk({
-                _requireEncoder: () => ({
+                requireEncoder: () => ({
                     getUTXOs: async () => ({ utxos: [
                         { txid: 'utxo1', vout: 0, value: 100000 },
                         { txid: 'utxo2', vout: 0, value: 100000 }
@@ -157,7 +157,7 @@ describe('WalletSession', function () {
         it('does NOT refresh when caller provides explicit utxos', async function () {
             let getUTXOsCalled = false;
             let sdk = makeSdk({
-                _requireEncoder: () => ({
+                requireEncoder: () => ({
                     getUTXOs: async () => { getUTXOsCalled = true; return { utxos: [] }; }
                 })
             });
@@ -195,7 +195,7 @@ describe('WalletSession', function () {
         it('registers the change output so the next submit spends it (chain, not siblings)', async function () {
             let calls = 0;
             let sdk = makeSdk({
-                _requireEncoder: () => ({
+                requireEncoder: () => ({
                     getUTXOs: async () => {
                         calls += 1;
                         return { utxos: [{ txid: 'utxo1', vout: 0, value: 100000, scriptPubKey: '76a914aa88ac' }] };
@@ -276,7 +276,7 @@ describe('WalletSession', function () {
             // resolves to no UTXOs there (setRoster / attachContent leg 2).
             let calls = 0;
             let sdk = makeSdk({
-                _requireEncoder: () => ({
+                requireEncoder: () => ({
                     getUTXOs: async () => {
                         calls += 1;
                         return { utxos: calls === 1

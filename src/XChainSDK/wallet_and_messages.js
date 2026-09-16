@@ -33,8 +33,8 @@ module.exports = {
     signPsbt(psbtHex, wif)              { return this.wallet.signPsbt(psbtHex, wif); },
     decomposePsbt(psbtHex)              { return this.wallet.decomposePsbt(psbtHex); },
     txidOf(txHex)                       { return this.wallet.txidOf(txHex); },
-    async broadcastTx(txHex)            { return this.wallet.broadcastTx(txHex, this._requireEncoder()); },
-    async getUTXOs(address)             { return this.wallet.getUTXOs(address, this._requireEncoder()); },
+    async broadcastTx(txHex)            { return this.wallet.broadcastTx(txHex, this.requireEncoder()); },
+    async getUTXOs(address)             { return this.wallet.getUTXOs(address, this.requireEncoder()); },
     validateAddress(address, network)   { return this.wallet.validateAddress(address, network); },
     importWIF(wif)                      { return this.wallet.importWIF(wif); },
     generateKeyPair(opts)               { return this.wallet.generateKeyPair(opts); },
@@ -57,8 +57,8 @@ module.exports = {
      */
 
     async sendMessage(params) { return this.messaging.send(params, this); },
-    async getPublicKey(address) { return this.messaging.getPublicKey(address, this._requireExplorer()); },
-    async getMessagesForAddress(address, opts) { return this.messaging.getMessages(address, opts, this._requireExplorer()); },
+    async getPublicKey(address) { return this.messaging.getPublicKey(address, this.requireExplorer()); },
+    async getMessagesForAddress(address, opts) { return this.messaging.getMessages(address, opts, this.requireExplorer()); },
 
     /*
      *  Token-gated content (FILE with GATE_TICKER set).
@@ -66,11 +66,11 @@ module.exports = {
      */
 
     // Fetch the raw ciphertext bytes for a gated FILE by ACTION_INDEX.
-    async getGatedFileRaw(actionIndex, coin = null) { return this._requireExplorer().getGatedFileRaw(actionIndex, coin); },
+    async getGatedFileRaw(actionIndex, coin = null) { return this.requireExplorer().getGatedFileRaw(actionIndex, coin); },
 
     // Absolute URL of a FILE action's raw bytes on the configured explorer:
     // the resolution target for TIS data_ref entries and on-chain TIS docs.
-    fileRawUrl(actionIndex, coin = null) { return this._requireExplorer().fileRawUrl(actionIndex, coin); },
+    fileRawUrl(actionIndex, coin = null) { return this.requireExplorer().fileRawUrl(actionIndex, coin); },
 
     /**
      * Fetch messages for an address across all chains (BTC, LTC, DOGE).
@@ -78,7 +78,7 @@ module.exports = {
      * and queries them in parallel.
      */
     async getAllMessagesForAddress(address, opts) {
-        let explorer = this._requireExplorer();
+        let explorer = this.requireExplorer();
         let network = this.options.network || config.env.network();
         // Messages are looked up per network, so without one we would not know which chain to ask.
         if (!network) throw new SDKConfigError('NETWORK_NOT_CONFIGURED', 'Network is required for cross-chain message queries.');

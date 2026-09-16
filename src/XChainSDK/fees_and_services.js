@@ -128,7 +128,7 @@ module.exports = {
     // The quote is attached as feeResult.nativeFeeQuote.
     async estimateFees(actionData, encoderOpts = {}) {
         let result = this.actions.createAction(actionData);
-        let encoder = this._requireEncoder();
+        let encoder = this.requireEncoder();
 
         let customOutputs  = Array.isArray(encoderOpts.customOutputs) ? encoderOpts.customOutputs.slice() : [];
         let nativeFeeQuote = null;
@@ -175,21 +175,21 @@ module.exports = {
             source:        opts.source,
             feeOutputSats: opts.feeOutputSats
         };
-        let quote = await this._fetchFeeQuote(request);
+        let quote = await this.fetchFeeQuote(request);
         // The indexer's admission cap answers `busy:true, retryable:true` under transient
         // load; one short-delay retry rides that out before callers turn the (valid:false)
         // busy quote into a hard NATIVE_FEE_INVALID refusal.
         if (quote.busy === true && quote.retryable === true) {
             let delayMs = opts.busyRetryDelayMs != null ? Number(opts.busyRetryDelayMs) : 1000;
             await new Promise(resolve => setTimeout(resolve, delayMs));
-            quote = await this._fetchFeeQuote(request);
+            quote = await this.fetchFeeQuote(request);
         }
         quote.actionString = actionString;
         return quote;
     },
 
-    async _fetchFeeQuote(request) {
-        let quote = await this._requireExplorer().getFeeQuote(request);
+    async fetchFeeQuote(request) {
+        let quote = await this.requireExplorer().getFeeQuote(request);
         // An explorer that doesn't serve this coin can answer 200 with an HTML page or an
         // unrelated JSON body; treating that as a quote builds a doomed fee-forfeiting tx.
         if (!quote || typeof quote !== 'object' || Array.isArray(quote) || typeof quote.supported !== 'boolean') {
@@ -200,25 +200,25 @@ module.exports = {
     },
 
     async getFeeSchedule() {
-        return this._requireExplorer().getFeeSchedule();
+        return this.requireExplorer().getFeeSchedule();
     },
 
     async pingEncoder() {
-        return this._requireEncoder().ping();
+        return this.requireEncoder().ping();
     },
 
     // Check encoder hard-dependency health (UTXO tracker reachability + sync state).
     // Returns { tracker_reachable, tracker_synced, tracker_lag }. A passing pingEncoder
     // does not guarantee create_tx will succeed; this call does.
     async healthEncoder() {
-        return this._requireEncoder().health();
+        return this.requireEncoder().health();
     },
 
     // Suggested network fee tiers (base-unit/vByte) at low/medium/high confirmation
     // targets from the coin node's estimatesmartfee. Multiply a tier value by 1000 to
     // pass as feePerKb to submitAction or encodeTx.
     async getFeeTiers() {
-        return this._requireEncoder().getFeeTiers();
+        return this.requireEncoder().getFeeTiers();
     },
 
 

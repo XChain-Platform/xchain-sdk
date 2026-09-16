@@ -31,7 +31,7 @@ function makeSdk(overrides = {}) {
             importWIF:     () => fakeKeyInfo,
             deriveAddress: () => 'mTestAddr123'
         },
-        _requireEncoder: () => encoder,
+        requireEncoder: () => encoder,
         getBalances:    async (addr, opts) => [{ tick: 'TOK', quantity: '100' }],
         getHistory:     async (addr, type, opts) => [{ action: 'SEND' }],
         getCredits:     async (addr, type, opts) => [{ credit: 1 }],

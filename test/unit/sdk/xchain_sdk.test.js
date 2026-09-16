@@ -161,7 +161,7 @@ describe('XChainSDK', function () {
             await sdk.init(); // should not throw
         });
 
-        it('calls _discover when hub is configured', async function () {
+        it('calls discover when hub is configured', async function () {
             const sdk = makeSDK();
             // Create a fake hub
             sdk.hub = {
@@ -238,39 +238,39 @@ describe('XChainSDK', function () {
 describe('XChainSDK', function () {
     registerEnvHooks();
 
-    // _requireExplorer / _requireEncoder / _requireWs
+    // requireExplorer / requireEncoder / requireWs
 
     describe('guards', function () {
 
-        it('_requireExplorer throws EXPLORER_NOT_CONFIGURED when explorer is null', function () {
+        it('requireExplorer throws EXPLORER_NOT_CONFIGURED when explorer is null', function () {
             const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
             // Regtest has no encoder so use a fresh SDK with no URL
             const plain = new XChainSDK({});
             plain.explorer = null;
             try {
-                plain._requireExplorer();
+                plain.requireExplorer();
                 expect.fail('should throw');
             } catch (e) {
                 expect(e.code).to.equal('EXPLORER_NOT_CONFIGURED');
             }
         });
 
-        it('_requireEncoder throws ENCODER_NOT_CONFIGURED when encoder is null', function () {
+        it('requireEncoder throws ENCODER_NOT_CONFIGURED when encoder is null', function () {
             const sdk = new XChainSDK({});
             sdk.encoder = null;
             try {
-                sdk._requireEncoder();
+                sdk.requireEncoder();
                 expect.fail('should throw');
             } catch (e) {
                 expect(e.code).to.equal('ENCODER_NOT_CONFIGURED');
             }
         });
 
-        it('_requireWs throws WEBSOCKET_NOT_CONFIGURED when ws is null', function () {
+        it('requireWs throws WEBSOCKET_NOT_CONFIGURED when ws is null', function () {
             const sdk = makeSDK();
             sdk.ws = null;
             try {
-                sdk._requireWs();
+                sdk.requireWs();
                 expect.fail('should throw');
             } catch (e) {
                 expect(e.code).to.equal('WEBSOCKET_NOT_CONFIGURED');

@@ -60,7 +60,7 @@ function makeWaiter(script) {
         getContractState:   async () => next('state', script.state || [null]),
         getContractBalance: async () => next('balance', script.balance || [null]),
     };
-    const sdk = { ws: null, _requireExplorer: () => explorer };
+    const sdk = { ws: null, requireExplorer: () => explorer };
     const waiter = new ActionWaiter(sdk);
     waiter._calls = calls;
     return waiter;

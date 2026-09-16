@@ -19,7 +19,7 @@
 // Validator.validate(action, fields) is the SDK's gate between dapp-supplied
 // (often user-supplied) action data and the on-chain ACTION string. Its contract
 // is to RETURN an array of structured errors (never to throw) so a dapp can
-// surface validation failures. _isDowngrade is the transport-security control
+// surface validation failures. isDowngrade is the transport-security control
 // that stops a malicious/compromised hub from silently moving a dapp off https.
 // These attack both surfaces.
 
@@ -196,33 +196,33 @@ describe('Security: ticker references cannot smuggle wire delimiters', function 
   });
 });
 
-describe('Security: _isDowngrade endpoint transport guard', function () {
+describe('Security: isDowngrade endpoint transport guard', function () {
   let sdk;
   beforeEach(function () { sdk = new XChainSDK({}); });
 
   it('blocks an https default being downgraded to http by hub discovery', function () {
-    expect(sdk._isDowngrade('explorer', { baseUrl: 'https://explorer.xchain.io' }, 'http://evil.example')).to.equal(true);
+    expect(sdk.isDowngrade('explorer', { baseUrl: 'https://explorer.xchain.io' }, 'http://evil.example')).to.equal(true);
   });
 
   it('allows https → https (no downgrade)', function () {
-    expect(sdk._isDowngrade('explorer', { baseUrl: 'https://a' }, 'https://b')).to.equal(false);
+    expect(sdk.isDowngrade('explorer', { baseUrl: 'https://a' }, 'https://b')).to.equal(false);
   });
 
   it('leaves http/localhost dev bases unchanged (not a downgrade)', function () {
-    expect(sdk._isDowngrade('explorer', { baseUrl: 'http://localhost:3000' }, 'http://localhost:4000')).to.equal(false);
+    expect(sdk.isDowngrade('explorer', { baseUrl: 'http://localhost:3000' }, 'http://localhost:4000')).to.equal(false);
   });
 
   it('respects the allowInsecureEndpoints opt-out', function () {
     const insecure = new XChainSDK({ allowInsecureEndpoints: true });
-    expect(insecure._isDowngrade('explorer', { baseUrl: 'https://a' }, 'http://b')).to.equal(false);
+    expect(insecure.isDowngrade('explorer', { baseUrl: 'https://a' }, 'http://b')).to.equal(false);
   });
 
   it('does not throw on malformed incoming URLs (null/empty/garbage)', function () {
     for (const u of [null, undefined, '', 'not a url', 'javascript:alert(1)', '//evil']) {
-      expect(() => sdk._isDowngrade('explorer', { baseUrl: 'https://a' }, u)).to.not.throw();
+      expect(() => sdk.isDowngrade('explorer', { baseUrl: 'https://a' }, u)).to.not.throw();
     }
     // A non-https garbage URL is correctly treated as insecure → blocked.
-    expect(sdk._isDowngrade('explorer', { baseUrl: 'https://a' }, 'javascript:alert(1)')).to.equal(true);
+    expect(sdk.isDowngrade('explorer', { baseUrl: 'https://a' }, 'javascript:alert(1)')).to.equal(true);
   });
 
   // The secure-scheme check requires a strict `https://` prefix, so a scheme-less
@@ -231,6 +231,6 @@ describe('Security: _isDowngrade endpoint transport guard', function () {
   // secure; impact was low since it would fail to connect downstream, but the
   // strict prefix is tighter.)
   it('SECURITY: scheme check requires https:// (not just startsWith https)', function () {
-    expect(sdk._isDowngrade('explorer', { baseUrl: 'https://a' }, 'httpsevil.example')).to.equal(true);
+    expect(sdk.isDowngrade('explorer', { baseUrl: 'https://a' }, 'httpsevil.example')).to.equal(true);
   });
 });

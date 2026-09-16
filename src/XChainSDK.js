@@ -178,13 +178,13 @@ class XChainSDK {
         // Under 'enforce', a 'fail' verdict throws SDKPreflightError.
         Preflight.attach(this, options.preflight === undefined ? true : options.preflight);
 
-        // Service clients (initialized by _initClients or init)
+        // Service clients (initialized by initClients or init)
         this.explorer = null;
         this.encoder  = null;
         this.hub      = null;
         this.ws       = null;
 
-        // Lazy hub-discovery state (see _ensureReady).
+        // Lazy hub-discovery state (see ensureReady).
         this._readyPromise = null;
         this._polling      = false;
 
@@ -200,7 +200,7 @@ class XChainSDK {
             this.hub = new HubConnector(Object.assign({}, options, { hubUrl, hubPort }));
         }
 
-        this._initClients(options);
+        this.initClients(options);
     }
 
 }

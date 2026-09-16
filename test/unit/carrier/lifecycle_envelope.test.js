@@ -125,7 +125,7 @@ function makeEnvelopeSdk({ revealSignThrows = false, revealBroadcastThrows = fal
     };
 
     const sdk = {
-        _requireEncoder: () => encoder,
+        requireEncoder: () => encoder,
         actions: { createAction: () => ({ actionString: 'XCHAIN|FILE|...', action: 'FILE', version: 0 }) },
         tickResolver:    { resolveActionParams: async (a, p) => p },
         addressResolver: { resolveActionParams: async (a, p) => p },
@@ -224,7 +224,7 @@ describe('Taproot envelope pair through the lifecycle', function () {
         reveal.addOutput({ script: fundingScript, value: 7_500 });
         withEnvelopeLeaf(reveal);
 
-        sdk._requireEncoder = () => ({
+        sdk.requireEncoder = () => ({
             createTx:    async () => ({ psbt: commit.toHex(), revealPsbt: reveal.toHex(), envelope: RECOVERY, encoding: 'TAPROOT' }),
             broadcastTx: async () => { trace.push('broadcast:tx'); return {}; },
             spendP2sh:   async () => ({}),
@@ -255,7 +255,7 @@ describe('Taproot envelope pair through the lifecycle', function () {
         reveal.addOutput({ script: fundingScript, value: 7_500 });
         withEnvelopeLeaf(reveal);
 
-        sdk._requireEncoder = () => ({
+        sdk.requireEncoder = () => ({
             createTx:    async () => ({ psbt: commit.toHex(), revealPsbt: reveal.toHex(), envelope: RECOVERY, encoding: 'TAPROOT' }),
             broadcastTx: async () => { trace.push('broadcast:tx'); return {}; },
             spendP2sh:   async () => ({}),
@@ -272,7 +272,7 @@ describe('Taproot envelope pair through the lifecycle', function () {
 
     it('a NON-envelope response is untouched by any of this', async function () {
         const { sdk, trace } = makeEnvelopeSdk();
-        sdk._requireEncoder = () => ({
+        sdk.requireEncoder = () => ({
             createTx:    async () => ({ psbt: buildSignedTx().psbtHex, encoding: 'OP_RETURN' }),
             broadcastTx: async () => { trace.push('broadcast:tx'); return {}; },
             spendP2sh:   async () => ({}),

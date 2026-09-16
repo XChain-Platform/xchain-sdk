@@ -101,7 +101,7 @@ module.exports = {
     //   'off'            : skip entirely
     // Chunked/hash-only deploys (no inline CODE) are skipped here; deployContract()
     // lints the assembled source before chunking instead.
-    _preflightContractLint(params, mode) {
+    preflightContractLint(params, mode) {
         mode = mode || 'block';
         if (mode === 'off') return;
 
@@ -115,7 +115,7 @@ module.exports = {
             // fee-saving refusal, so it also runs over the camelCase spelling the session
             // and workflow seams take: a nameless deploy({ code }) is refused like a
             // nameless deploy({ CODE }).
-            this._preflightContractMeta(this._contractSourceFromParams(params), mode);
+            this._preflightContractMeta(this.contractSourceFromParams(params), mode);
             return;
         }
 
@@ -163,7 +163,7 @@ module.exports = {
     // UPPER_SNAKE wire spelling and the camelCase one the session/workflow seams take
     // (actions.js normalizes them later, after the point a pre-flight is worth
     // anything), so `code` is pre-flighted the same way `CODE` is.
-    _contractSourceFromParams(params) {
+    contractSourceFromParams(params) {
         if (!params) return undefined;
         if (typeof params.CODE === 'string') return params.CODE;
         if (typeof params.code === 'string') return params.code;
@@ -224,7 +224,7 @@ module.exports = {
     },
 
     async deploy(params, encoder, opts = {}) {
-        this._preflightContractLint(params, opts.lint);
+        this.preflightContractLint(params, opts.lint);
         return this.createAction({ action: 'DEPLOY', params, encoder });
     },
     async execute(params, encoder)   { return this.createAction({ action: 'EXECUTE', params, encoder }); },

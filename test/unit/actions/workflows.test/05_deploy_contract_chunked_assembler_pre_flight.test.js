@@ -41,7 +41,7 @@ function makeChunkSdk(calls) {
         // fake has to answer an action detail: this one is the sequential case
         // (the group was complete at the assembler, contract index = A).
         getAction: async () => ({ data: [{ action_index: 99, deployed_contract_index: 99, assembly_status: 'valid' }] }),
-        _preflightContractLint: () => {},
+        preflightContractLint: () => {},
     };
 }
 

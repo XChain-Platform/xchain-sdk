@@ -96,7 +96,7 @@ describe('XChainSDK config resolution', function () {
         }
     });
 
-    describe('lazy hub overlay (_ensureReady)', function () {
+    describe('lazy hub overlay (ensureReady)', function () {
         // Build an SDK whose hub returns the given endpoints, with polling stubbed.
         function withHub(endpoints, getAllConfig) {
             const sdk = new XChainSDK({ network: 'bitcoin-mainnet' });
@@ -108,29 +108,29 @@ describe('XChainSDK config resolution', function () {
 
         it('overlays an https endpoint onto the live client', async function () {
             const sdk = withHub({ explorerUrl: 'https://explorer.internal', explorerPort: 9443 });
-            await sdk._ensureReady();
+            await sdk.ensureReady();
             expect(exBase(sdk)).to.equal('https://explorer.internal');
         });
 
         it('is memoized: discovery runs at most once', async function () {
             let calls = 0;
             const sdk = withHub({ explorerUrl: 'https://explorer.internal' }, async () => { calls++; return {}; });
-            await sdk._ensureReady();
-            await sdk._ensureReady();
+            await sdk.ensureReady();
+            await sdk.ensureReady();
             expect(calls).to.equal(1);
         });
 
         it('swallows hub failure and keeps the hardcoded default', async function () {
             const sdk = withHub({}, async () => { throw new Error('hub down'); });
             let threw = false;
-            try { await sdk._ensureReady(); } catch (e) { threw = true; }
+            try { await sdk.ensureReady(); } catch (e) { threw = true; }
             expect(threw).to.equal(false);
             expect(exBase(sdk)).to.equal('https://explorer.xchain.io');
         });
 
-        it('no hub (regtest) -> _ensureReady is a no-op', async function () {
+        it('no hub (regtest) -> ensureReady is a no-op', async function () {
             const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
-            await sdk._ensureReady();
+            await sdk.ensureReady();
             expect(exBase(sdk)).to.equal('http://localhost:8080');
         });
     });
@@ -154,7 +154,7 @@ describe('XChainSDK config resolution', function () {
             sdk.hub.getAllConfig = async () => ({});
             sdk.hub.extractServiceEndpoints = () => endpoints;
             sdk.hub.startPolling = () => {};
-            return sdk._ensureReady().then(() => sdk);
+            return sdk.ensureReady().then(() => sdk);
         }
 
         it('does NOT downgrade an https default to a bare host', async function () {

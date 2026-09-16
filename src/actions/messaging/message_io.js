@@ -45,7 +45,7 @@ function validateSendParams(params, sdk) {
 
 async function encryptEcies(owner, params, sdk, messageIsBytes) {
     // ECIES: look up recipient pubkey and encrypt
-    const explorer = sdk._requireExplorer();
+    const explorer = sdk.requireExplorer();
     const recipientPubkey = await owner.getPublicKey(params.destination, explorer);
     if (!recipientPubkey)
         throw new SDKMessagingError('PUBKEY_NOT_FOUND',
@@ -231,7 +231,7 @@ module.exports = {
         });
 
         let signed = sdk.wallet.signPsbt(actionResult.psbt, params.wif);
-        let broadcast = await sdk.wallet.broadcastTx(signed.txHex, sdk._requireEncoder());
+        let broadcast = await sdk.wallet.broadcastTx(signed.txHex, sdk.requireEncoder());
 
         return {
             txid: signed.txid,

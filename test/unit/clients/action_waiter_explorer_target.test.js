@@ -37,7 +37,7 @@ function sharedOnlySdk(opts = {}) {
     const sdk = {
         ws: opts.ws || null,
         options: { network: 'dogecoin-regtest', timeout: 1234 },
-        _requireExplorer: () => ({
+        requireExplorer: () => ({
             getTransaction: async () => { calls.shared++; return null; },
             getAction:      async () => { calls.shared++; return null; }
         })

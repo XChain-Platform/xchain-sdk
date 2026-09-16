@@ -111,7 +111,7 @@ function makeSdk(encoderOverrides, calls) {
         broadcastTx: async () => { calls.push('broadcast'); return { txid: signed.txid }; },
     }, encoderOverrides);
     return {
-        _requireEncoder: () => encoder,
+        requireEncoder: () => encoder,
         actions: { createAction: () => ({ actionString: FILE_ACTION, action: 'FILE', version: 0 }) },
         tickResolver:    { resolveActionParams: async (a, p) => p },
         addressResolver: { resolveActionParams: async (a, p) => p },

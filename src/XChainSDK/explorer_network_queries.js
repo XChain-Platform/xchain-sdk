@@ -30,95 +30,95 @@ module.exports = {
      */
 
     async getStakes(query, type, opts) {
-        return this._requireExplorer().getStakes(query, type, opts);
+        return this.requireExplorer().getStakes(query, type, opts);
     },
 
     async getUnstakes(query, type, opts) {
-        return this._requireExplorer().getUnstakes(query, type, opts);
+        return this.requireExplorer().getUnstakes(query, type, opts);
     },
 
     async getStakeKeyRevocations(query, type, opts) {
-        return this._requireExplorer().getStakeKeyRevocations(query, type, opts);
+        return this.requireExplorer().getStakeKeyRevocations(query, type, opts);
     },
 
     async getCollects(query, type, opts) {
-        return this._requireExplorer().getCollects(query, type, opts);
+        return this.requireExplorer().getCollects(query, type, opts);
     },
 
     async getDelegations(query, type, opts) {
-        return this._requireExplorer().getDelegations(query, type, opts);
+        return this.requireExplorer().getDelegations(query, type, opts);
     },
 
     async getValidators(opts) {
-        return this._requireExplorer().getValidators(opts);
+        return this.requireExplorer().getValidators(opts);
     },
 
     async getValidatorRewards(query, type, opts) {
-        return this._requireExplorer().getValidatorRewards(query, type, opts);
+        return this.requireExplorer().getValidatorRewards(query, type, opts);
     },
 
     async getContractStakes(query, type, opts) {
-        return this._requireExplorer().getContractStakes(query, type, opts);
+        return this.requireExplorer().getContractStakes(query, type, opts);
     },
 
     async getContractUnstakes(query, type, opts) {
-        return this._requireExplorer().getContractUnstakes(query, type, opts);
+        return this.requireExplorer().getContractUnstakes(query, type, opts);
     },
 
     async getContractDelegations(query, type, opts) {
-        return this._requireExplorer().getContractDelegations(query, type, opts);
+        return this.requireExplorer().getContractDelegations(query, type, opts);
     },
 
     async getSlashEvents(query, type, opts) {
-        return this._requireExplorer().getSlashEvents(query, type, opts);
+        return this.requireExplorer().getSlashEvents(query, type, opts);
     },
 
     async getCapabilitySlashEvents(query, type, opts) {
-        return this._requireExplorer().getCapabilitySlashEvents(query, type, opts);
+        return this.requireExplorer().getCapabilitySlashEvents(query, type, opts);
     },
 
     async getControllers(opts) {
-        return this._requireExplorer().getControllers(opts);
+        return this.requireExplorer().getControllers(opts);
     },
 
     async getDeployChunks(opts) {
-        return this._requireExplorer().getDeployChunks(opts);
+        return this.requireExplorer().getDeployChunks(opts);
     },
 
     async getFullNodeVerifications(query, type, opts) {
-        return this._requireExplorer().getFullNodeVerifications(query, type, opts);
+        return this.requireExplorer().getFullNodeVerifications(query, type, opts);
     },
 
     async getCrossChainMatches(query, type, opts) {
-        return this._requireExplorer().getCrossChainMatches(query, type, opts);
+        return this.requireExplorer().getCrossChainMatches(query, type, opts);
     },
 
     async getCrossChainSettlements(query, type, opts) {
-        return this._requireExplorer().getCrossChainSettlements(query, type, opts);
+        return this.requireExplorer().getCrossChainSettlements(query, type, opts);
     },
 
     async getAnchors(query, type, opts) {
-        return this._requireExplorer().getAnchors(query, type, opts);
+        return this.requireExplorer().getAnchors(query, type, opts);
     },
 
     async getOraclePrices(query, type, opts) {
-        return this._requireExplorer().getOraclePrices(query, type, opts);
+        return this.requireExplorer().getOraclePrices(query, type, opts);
     },
 
     async getValidatorCapabilities(query, type, opts) {
-        return this._requireExplorer().getValidatorCapabilities(query, type, opts);
+        return this.requireExplorer().getValidatorCapabilities(query, type, opts);
     },
 
     async getGovernanceProposals(query, type, opts) {
-        return this._requireExplorer().getGovernanceProposals(query, type, opts);
+        return this.requireExplorer().getGovernanceProposals(query, type, opts);
     },
 
     async getGovernanceVotes(query, type, opts) {
-        return this._requireExplorer().getGovernanceVotes(query, type, opts);
+        return this.requireExplorer().getGovernanceVotes(query, type, opts);
     },
 
     async getPolls(query, type, opts) {
-        return this._requireExplorer().getPolls(query, type, opts);
+        return this.requireExplorer().getPolls(query, type, opts);
     },
 
     // BET reads (§11.1). These proxies were missing while explorer.js already
@@ -129,31 +129,31 @@ module.exports = {
     // at runtime, which only surfaced when the market browser was driven against a
     // real stack.
     async getBetFeeds(query, type, opts) {
-        return this._requireExplorer().getBetFeeds(query, type, opts);
+        return this.requireExplorer().getBetFeeds(query, type, opts);
     },
 
     async getBetFeed(feedIndex, opts) {
-        return this._requireExplorer().getBetFeed(feedIndex, opts);
+        return this.requireExplorer().getBetFeed(feedIndex, opts);
     },
 
     async getBets(query, type, opts) {
-        return this._requireExplorer().getBets(query, type, opts);
+        return this.requireExplorer().getBets(query, type, opts);
     },
 
     async getOracleStats(address, opts) {
-        return this._requireExplorer().getOracleStats(address, opts);
+        return this.requireExplorer().getOracleStats(address, opts);
     },
 
     async getPoll(pollIndex, opts) {
-        return this._requireExplorer().getPoll(pollIndex, opts);
+        return this.requireExplorer().getPoll(pollIndex, opts);
     },
 
     async getPollResults(pollIndex, opts) {
-        return this._requireExplorer().getPollResults(pollIndex, opts);
+        return this.requireExplorer().getPollResults(pollIndex, opts);
     },
 
     async getVotes(query, type, opts) {
-        return this._requireExplorer().getVotes(query, type, opts);
+        return this.requireExplorer().getVotes(query, type, opts);
     },
 
     /*
@@ -161,31 +161,31 @@ module.exports = {
      */
 
     async getCheckpoints(opts) {
-        return this._requireExplorer().getCheckpoints(opts);
+        return this.requireExplorer().getCheckpoints(opts);
     },
 
     async getCheckpointRange(from, to, opts) {
-        return this._requireExplorer().getCheckpointRange(from, to, opts);
+        return this.requireExplorer().getCheckpointRange(from, to, opts);
     },
 
     async getCheckpointVerify(blockIndex) {
-        return this._requireExplorer().getCheckpointVerify(blockIndex);
+        return this.requireExplorer().getCheckpointVerify(blockIndex);
     },
 
     async getBalanceProof(address, tick, opts) {
-        return this._requireExplorer().getBalanceProof(address, tick, opts);
+        return this.requireExplorer().getBalanceProof(address, tick, opts);
     },
 
     async getActionProof(actionIndex) {
-        return this._requireExplorer().getActionProof(actionIndex);
+        return this.requireExplorer().getActionProof(actionIndex);
     },
 
     async getValidatorSetProof(opts) {
-        return this._requireExplorer().getValidatorSetProof(opts);
+        return this.requireExplorer().getValidatorSetProof(opts);
     },
 
     async getContractStateProof(contractIndex, key) {
-        return this._requireExplorer().getContractStateProof(contractIndex, key);
+        return this.requireExplorer().getContractStateProof(contractIndex, key);
     },
 
     // Fetch the checkpoint at blockIndex through the pooled, retry-aware
@@ -193,7 +193,7 @@ module.exports = {
     // then re-verify it LOCALLY with Ed25519. The server's `verified` flag is
     // ignored; only local crypto decides.
     async verifyCheckpoint(blockIndex) {
-        let body = await this._requireExplorer().getCheckpointVerify(blockIndex);
+        let body = await this.requireExplorer().getCheckpointVerify(blockIndex);
         // Nothing to verify if the explorer sent no checkpoint back; fail loudly rather than report success.
         if (!body || !body.checkpoint) throw new Error('verifyCheckpoint: no checkpoint in response');
         let result = CheckpointVerifier.verifyCheckpoint(body.checkpoint, body.validators || []);
@@ -206,31 +206,31 @@ module.exports = {
      */
 
     async getMarkets(tick) {
-        return this._requireExplorer().getMarkets(tick);
+        return this.requireExplorer().getMarkets(tick);
     },
 
     async getMarket(tick1, tick2) {
-        return this._requireExplorer().getMarket(tick1, tick2);
+        return this.requireExplorer().getMarket(tick1, tick2);
     },
 
     async getMarketHistory(tick1, tick2, address, opts) {
-        return this._requireExplorer().getMarketHistory(tick1, tick2, address, opts);
+        return this.requireExplorer().getMarketHistory(tick1, tick2, address, opts);
     },
 
     async getMarketOrders(tick1, tick2, address, opts) {
-        return this._requireExplorer().getMarketOrders(tick1, tick2, address, opts);
+        return this.requireExplorer().getMarketOrders(tick1, tick2, address, opts);
     },
 
     async getOrderbook(tick1, tick2) {
-        return this._requireExplorer().getOrderbook(tick1, tick2);
+        return this.requireExplorer().getOrderbook(tick1, tick2);
     },
 
     async getPrices(query, type, opts) {
-        return this._requireExplorer().getPrices(query, type, opts);
+        return this.requireExplorer().getPrices(query, type, opts);
     },
 
     async getPriceSnapshots(query, type, opts) {
-        return this._requireExplorer().getPriceSnapshots(query, type, opts);
+        return this.requireExplorer().getPriceSnapshots(query, type, opts);
     },
 
 
@@ -247,7 +247,7 @@ module.exports = {
     // decoder_lag_blocks are null for a coin when the decoder tip is unavailable. See
     // ExplorerClient.getStatus for the full field list.
     async getStatus() {
-        return this._requireExplorer().getStatus();
+        return this.requireExplorer().getStatus();
     },
 
     // Freshness of the explorer's indexed tip for this SDK's coin, as the
@@ -259,7 +259,7 @@ module.exports = {
     // history call, or call assertFresh() on a path that must not build on
     // stale state.
     freshness() {
-        return this._requireExplorer().freshness();
+        return this.requireExplorer().freshness();
     },
 
     // Resolve the freshness of this SDK's coin, probing /status when no marked
@@ -270,7 +270,7 @@ module.exports = {
     // /status probe also makes this work against an explorer that predates the
     // per-response markers, since `stale` has been on /status longer.
     async assertFresh(opts = {}) {
-        let explorer = this._requireExplorer();
+        let explorer = this.requireExplorer();
         let maxAgeMs = Number.isFinite(Number(opts.maxAgeMs)) ? Number(opts.maxAgeMs) : 60000;
         let f = explorer.freshness();
         if (!f || (Date.now() - f.observedAt) >= maxAgeMs) {
@@ -299,7 +299,7 @@ module.exports = {
 
     // Unconfirmed mempool actions, type ∈ {address, token}.
     async getMempool(query, type, opts) {
-        return this._requireExplorer().getMempool(query, type, opts);
+        return this.requireExplorer().getMempool(query, type, opts);
     },
 
     // The unconfirmed transactions involving ONE address: the address-typed,
@@ -338,7 +338,7 @@ module.exports = {
         // 100 matches the SDK's own existing mempool caller (x402's payment
         // verifier) and sits well inside the explorer's 500-row window.
         const options = Object.assign({ limit: 100 }, opts || {});
-        const res  = await this._requireExplorer().getMempool(address, 'address', options);
+        const res  = await this.requireExplorer().getMempool(address, 'address', options);
         const rows = (res && Array.isArray(res.data)) ? res.data : [];
         return rows.map((row) => ({
             tx_hash:    row.tx_hash    === undefined ? null : row.tx_hash,
@@ -356,10 +356,10 @@ module.exports = {
     // Network-wide summary (chain heights, indexer status, peer counts,
     // recommended finality confirmations). See ExplorerClient.getNetwork.
     async getNetwork(opts) {
-        return this._requireExplorer().getNetwork(opts);
+        return this.requireExplorer().getNetwork(opts);
     },
 
     async search(query, type) {
-        return this._requireExplorer().search(query, type);
+        return this.requireExplorer().search(query, type);
     },
 };

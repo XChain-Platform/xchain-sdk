@@ -49,9 +49,9 @@ function registerEnvHooks() {
 describe('XChainSDK', function () {
     registerEnvHooks();
 
-    // _applyEndpoints: creates clients when they don't exist
+    // applyEndpoints: creates clients when they don't exist
 
-    describe('_applyEndpoints', function () {
+    describe('applyEndpoints', function () {
 
         it('creates explorer client from hub endpoints when explorer is null', async function () {
             // Use a network that has no explorer URL without a hub so explorer starts null,
@@ -68,7 +68,7 @@ describe('XChainSDK', function () {
                 explorerPort: 8080
             });
             sdk.hub.startPolling = sinon.stub();
-            sdk._applyEndpoints();
+            sdk.applyEndpoints();
             expect(sdk.explorer).to.be.ok;
         });
 
@@ -85,7 +85,7 @@ describe('XChainSDK', function () {
             };
             // Use a minimal options object so options.explorerUrl is not set
             sdk.options = { network: 'bitcoin-regtest', retry: false };
-            sdk._applyEndpoints();
+            sdk.applyEndpoints();
             expect(setBaseSpy.calledOnce).to.be.true;
         });
     });
@@ -94,7 +94,7 @@ describe('XChainSDK', function () {
 describe('XChainSDK', function () {
     registerEnvHooks();
 
-    describe('_applyEndpoints', function () {
+    describe('applyEndpoints', function () {
 
         it('creates encoder client from hub endpoints when encoder is null', async function () {
             const sdk = new XChainSDK({
@@ -107,7 +107,7 @@ describe('XChainSDK', function () {
                 encoderPort: 3000
             });
             sdk.hub.startPolling = sinon.stub();
-            await sdk._ensureReady();
+            await sdk.ensureReady();
             expect(sdk.encoder).to.be.ok;
         });
 
@@ -123,7 +123,7 @@ describe('XChainSDK', function () {
                 startPolling: sinon.stub()
             };
             sdk.options = { network: 'bitcoin-regtest', retry: false };
-            sdk._applyEndpoints();
+            sdk.applyEndpoints();
             expect(setBaseSpy.calledOnce).to.be.true;
         });
     });
@@ -151,9 +151,9 @@ describe('XChainSDK', function () {
 describe('XChainSDK', function () {
     registerEnvHooks();
 
-    // _isDowngrade: warns only once per service
+    // isDowngrade: warns only once per service
 
-    describe('_isDowngrade', function () {
+    describe('isDowngrade', function () {
 
         it('logs warn only once per service even if called multiple times', async function () {
             const sdk = new XChainSDK({ network: 'bitcoin-mainnet' });
@@ -164,10 +164,10 @@ describe('XChainSDK', function () {
             });
             sdk.hub.startPolling = sinon.stub();
             const warnSpy = sinon.stub(console, 'warn');
-            await sdk._ensureReady();
-            // Call _applyEndpoints again; second warning should be suppressed
+            await sdk.ensureReady();
+            // Call applyEndpoints again; second warning should be suppressed
             sdk._discovering = null;  // reset to allow re-apply
-            sdk._applyEndpoints();
+            sdk.applyEndpoints();
             // warn should have been called at most once for 'explorer'
             const explorerWarns = warnSpy.args.filter(a => String(a[0]).includes('explorer'));
             expect(explorerWarns.length).to.equal(1);

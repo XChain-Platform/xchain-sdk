@@ -33,7 +33,7 @@ const ActionWaiter = require('../../../src/utils/action_waiter.js');
 function makeWaiter(txResult) {
     const sdk = {
         ws: null,
-        _requireExplorer: () => ({
+        requireExplorer: () => ({
             getTransaction: async () => txResult,
         }),
     };
@@ -210,7 +210,7 @@ function makeWsWaiter(txResult = null) {
         off: (evt, fn) => { listeners[evt] = (listeners[evt] || []).filter(f => f !== fn); },
         emit:(evt, msg) => { (listeners[evt] || []).slice().forEach(fn => fn(msg)); },
     };
-    const sdk = { ws, _requireExplorer: () => ({ getTransaction: async () => txResult }) };
+    const sdk = { ws, requireExplorer: () => ({ getTransaction: async () => txResult }) };
     return { waiter: new ActionWaiter(sdk), ws };
 }
 

@@ -163,7 +163,7 @@ describe('LifecycleManager strictFreshness', function () {
         const trace = [];
         return {
             trace,
-            _requireEncoder: () => ({ createTx: async () => { trace.push('createTx'); throw new Error('stop here'); } }),
+            requireEncoder: () => ({ createTx: async () => { trace.push('createTx'); throw new Error('stop here'); } }),
             assertFresh: async () => {
                 trace.push('assertFresh');
                 if (stale) throw new SDKExplorerError('COIN_DATA_STALE', 'behind', {});

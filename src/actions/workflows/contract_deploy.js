@@ -42,7 +42,7 @@ function prepareDeploy(owner, deployParams, opts) {
     // single-shot and chunked paths share one verdict (default 'block'; pass
     // opts.lint = 'warn' | 'off' to relax). Skipped when the caller pre-encoded.
     if (code !== undefined && code !== null)
-        owner.sdk._preflightContractLint({ CODE: String(code) }, opts.lint);
+        owner.sdk.preflightContractLint({ CODE: String(code) }, opts.lint);
 
     // No raw code (caller pre-encoded) → defer to the normal single-shot deploy.
     // The staking fields go in too: they are what selects DEPLOY v1, and a plan

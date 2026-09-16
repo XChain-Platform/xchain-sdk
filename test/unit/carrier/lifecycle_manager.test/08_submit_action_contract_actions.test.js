@@ -31,7 +31,7 @@ const { FAKE_WIF, makeSdk } = require('./helpers/lifecycle_manager.js');
 // A fake SDK whose createAction reports the contract action under test.
 function contractSdk(action, explorer) {
     const sdk = makeSdk({
-        _requireExplorer: () => explorer,
+        requireExplorer: () => explorer,
     });
     sdk.actions = {
         createAction: () => ({ actionString: 'XCHAIN|' + action + '|...', action, version: 1 }),

@@ -39,7 +39,7 @@ describe('Workflows', function () {
                 actions: new Actions({ config: config.getConfig(), util: new Utility() }),
                 session: () => session,
                 getAction: async () => ({ data: [{ action_index: 1419, deployed_contract_index: 1421, assembly_status: 'valid' }] }),
-                _preflightContractLint: () => {},
+                preflightContractLint: () => {},
             };
             const wf = new Workflows(sdk);
             const out = await wf.deployContract(FAKE_WIF, { code: 'x'.repeat(20000), gasLimit: 100000 },
@@ -60,7 +60,7 @@ describe('Workflows', function () {
                 actions: new Actions({ config: config.getConfig(), util: new Utility() }),
                 session: () => session,
                 getAction: async () => { reads++; return null; },
-                _preflightContractLint: () => {},
+                preflightContractLint: () => {},
             };
             const out = await new Workflows(sdk).deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 });
             assert.strictEqual(out.contractActionIndex, 7);

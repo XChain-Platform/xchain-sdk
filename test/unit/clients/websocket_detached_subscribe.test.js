@@ -68,7 +68,7 @@ describe('WS subscribe: detached rejections', () => {
         const sdk = Object.create(XChainSDK.prototype);
         const err = new Error('No response for request id: sub-1');
 
-        expect(() => sdk._subscribeDetached(rejectingWs(err), ['blocks'])).to.not.throw();
+        expect(() => sdk.subscribeDetached(rejectingWs(err), ['blocks'])).to.not.throw();
 
         await settle();
         expect(unhandled, 'an orphaned subscribe rejection escaped').to.deep.equal([]);
@@ -81,7 +81,7 @@ describe('WS subscribe: detached rejections', () => {
             on() {}, off() {}, unsubscribe() {},
         };
 
-        expect(() => sdk._subscribeDetached(throwingWs, ['address'], { address: 'x' }))
+        expect(() => sdk.subscribeDetached(throwingWs, ['address'], { address: 'x' }))
             .to.not.throw();
 
         await settle();

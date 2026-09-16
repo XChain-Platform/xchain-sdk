@@ -127,8 +127,8 @@ module.exports = {
     _preflightContractMeta(params, opts) {
         let sdk = this.sdk;
         if (!sdk || typeof sdk._preflightContractMeta !== 'function'
-                 || typeof sdk._contractSourceFromParams !== 'function') return;
-        sdk._preflightContractMeta(sdk._contractSourceFromParams(params), (opts || {}).preflight);
+                 || typeof sdk.contractSourceFromParams !== 'function') return;
+        sdk._preflightContractMeta(sdk.contractSourceFromParams(params), (opts || {}).preflight);
     },
     async execute(params, enc, opts)   { return this.submit({ action: 'EXECUTE', params }, enc, opts); },
     async deposit(params, enc, opts)   { return this.submit({ action: 'DEPOSIT', params }, enc, opts); },

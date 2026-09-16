@@ -62,7 +62,7 @@ class ActionWaiter {
     // override, then the SDK's own (which throws when unconfigured).
     resolveExplorer(opts) {
         let perCall = ActionWaiter._buildExplorer(this.sdk, opts);
-        return perCall || this.explorer || this.sdk._requireExplorer();
+        return perCall || this.explorer || this.sdk.requireExplorer();
     }
 
     // True when this wait reads an explorer other than the SDK's own. The
