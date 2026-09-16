@@ -26,6 +26,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const Config = require('../config.js');
 const { safeTokenEqual } = require('./safe_compare.js');
 
 /*
@@ -37,7 +38,7 @@ const { safeTokenEqual } = require('./safe_compare.js');
  * @param {object} [env]
  * @returns {number}
  */
-function resolveMaxBatch(env = process.env) {
+function resolveMaxBatch(env = { SDK_API_MAX_BATCH: Config.env.sdkApiMaxBatch() }) {
     const n = parseInt(env.SDK_API_MAX_BATCH, 10);
     return (Number.isFinite(n) && n > 0) ? n : 20;
 }
@@ -68,7 +69,7 @@ function parseWholeNumber(raw) {
  * @param {object} [env]
  * @returns {number}
  */
-function resolveRateLimit(env = process.env) {
+function resolveRateLimit(env = { SDK_API_RATE_LIMIT: Config.env.sdkApiRateLimit() }) {
     const n = parseWholeNumber(env.SDK_API_RATE_LIMIT);
     return (n === null) ? 300 : n;
 }
@@ -79,7 +80,7 @@ function resolveRateLimit(env = process.env) {
  * @param {object} [env]
  * @returns {number}
  */
-function resolveRateWindowMs(env = process.env) {
+function resolveRateWindowMs(env = { SDK_API_RATE_WINDOW_MS: Config.env.sdkApiRateWindowMs() }) {
     const n = parseInt(env.SDK_API_RATE_WINDOW_MS, 10);
     return (Number.isFinite(n) && n > 0) ? n : 60000;
 }
