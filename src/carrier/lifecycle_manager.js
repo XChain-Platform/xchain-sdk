@@ -20,20 +20,25 @@
  ********************************************************************/
 
 const ActionWaiter = require('../utils/action_waiter.js');
-const EncoderClient = require('../clients/encoder.js');
-const { SDKActionError, SDKConfigError } = require('../utils/errors.js');
-const { reconcileEncoded, psbtPrevouts } = require('./reconcile_encoded.js');
-const { assertCarrierBinding, assertEnvelopeCarrierBinding } = require('./bind_action_carrier.js');
 const { installMethods } = require('../utils/install_methods.js');
-
-// Actions that execute against a CONTRACT. For these, "the transaction is
-// confirmed" is not the event a caller is waiting for: the indexer executes the
-// action in a later pass, and the deposit/execution is only real once that pass
-// has written the action's status row. Two things follow, both below:
-// strictStatus defaults on (a status the indexer never wrote is not evidence of
-// success), and opts.awaitContract can gate on the contract's own state.
-const CONTRACT_ACTIONS = new Set(['DEPOSIT', 'EXECUTE', 'WITHDRAW']);
-
+const {
+    buildTransactionRequest,
+    normalizeSubmission,
+    readCarriedAction,
+    reconcileTransaction,
+    validateCustomSigner,
+} = require('./lifecycle_manager/submission_setup.js');
+const {
+    buildEnvelopeBroadcastError,
+    buildPhase2Request,
+    buildWaitOptions,
+    finishEnvelope,
+    finishPhase2,
+    markConfirmationTimeout,
+    prepareEnvelope,
+    preparePhase2,
+    shapeResult,
+} = require('./lifecycle_manager/submission_results.js');
 
 class LifecycleManager {
 
@@ -51,459 +56,85 @@ class LifecycleManager {
     //   timeout         - ms to wait for indexer (default 120000)
     //   pollInterval    - ms between indexer polls (default 2000)
     //   requireValid    - reject if action status is 'invalid' (default true)
-    //   strictStatus    - with requireValid, also refuse to ASSUME validity: reject
-    //                     ACTION_STATUS_UNKNOWN when no indexer status could be read
-    //                     for the action (see actionWaiter). Defaults to FALSE for
-    //                     ordinary actions and TRUE for the contract actions
-    //                     (DEPOSIT/EXECUTE/WITHDRAW): the explorer exposes a
-    //                     transaction's action rows as soon as the decoder writes
-    //                     them, which is BEFORE the indexer executes them against the
-    //                     contract, so resolving on a status the indexer never wrote
-    //                     returns while the deposit is still pending and the caller's
-    //                     next transaction spends inputs it already used. The indexer
-    //                     writes a status row for all three (valid or invalid), so
-    //                     waiting for one costs nothing on a healthy stack. Pass
-    //                     strictStatus:false to opt back out.
-    //   strictFreshness - refuse (SDKExplorerError COIN_DATA_STALE) when the explorer's
-    //                     indexed tip for this coin is behind, before anything is
-    //                     encoded or signed; see sdk.assertFresh(). Off by default:
-    //                     the explorer serves a stale coin marked rather than
-    //                     refused, and the encoder sizes the spend from its own node
-    //   awaitContract   - gate on the CONTRACT'S OWN state before returning, which is
-    //                     the only signal that cannot race the indexer:
-    //                       { contractActionIndex, key, equals, match,   (state gate)
-    //                         tick, minQuantity,                         (balance gate)
-    //                         timeout, pollInterval }
-    //                     contractActionIndex defaults to the action's own. The state
-    //                     gate runs when key or match is given, the balance gate when
-    //                     tick is given, and both may be used together. Results land on
-    //                     result.contractState / result.contractBalance
-    //   maxFeeSats      - absolute miner-fee ceiling the encoder's answer must stay
-    //                     under (reconcile_encoded.js). Unset leaves only the
-    //                     always-on burn guards
-    //   maxPhaseFundingSats - absolute ceiling on the TOTAL value the encoder may put
-    //                     into a phase's shaped funding legs. maxFeeSats
-    //                     does not cover them, because a funding output counts as
-    //                     output value, not as fee
-    //   explorer        - explorer client the indexer wait polls instead of the SDK's
-    //   explorerUrl     - host/URL (with explorerPort) to build that client from;
-    //                     for isolated stacks with no colocated explorer
-    //   onProgress      - callback(step, data) for lifecycle step notifications
+    //   strictStatus    - with requireValid, reject ACTION_STATUS_UNKNOWN when
+    //                     no indexer status can be read. Defaults to false for
+    //                     ordinary actions and true for contract actions.
+    //   strictFreshness - refuse stale explorer data before encoding or signing
+    //   awaitContract   - gate on contract state or balance before returning:
+    //                       { contractActionIndex, key, equals, match,
+    //                         tick, minQuantity, timeout, pollInterval }
+    //                     Results land on result.contractState or
+    //                     result.contractBalance.
+    //   maxFeeSats      - absolute miner-fee ceiling for the encoder response
+    //   maxPhaseFundingSats - absolute ceiling for shaped funding outputs
+    //   explorer        - explorer client polled during the indexer wait
+    //   explorerUrl     - explorer URL for constructing that client
+    //   onProgress      - callback(step, data) for lifecycle notifications
+    //
+    // The reveal for either envelope or chunk encoding is signed before its
+    // corresponding broadcast. This ordering prevents an avoidable stranded
+    // commit, while a reveal broadcast error retains recovery information.
     //
     // Returns: {
     //   txid, actionString, encoding, action (from indexer if waited),
     //   signed { txHex, txid, psbtHex }, spentInputs [{ txid, vout }]
     // }
     async submitAction(actionData, encoderOpts = {}, opts = {}) {
-        let { wif, waitForIndexer, timeout, pollInterval, requireValid, strictStatus, onProgress,
-              explorer, explorerUrl, explorerPort } = opts;
-        if (!wif) throw new SDKConfigError('MISSING_WIF', 'submitAction requires opts.wif (WIF private key)');
-        if (waitForIndexer === undefined) waitForIndexer = true;
-
-        // See the strictStatus note above: a contract action defaults to
-        // fail-closed, everything else keeps the historical default.
-        let contractAction = CONTRACT_ACTIONS.has(String(actionData && actionData.action).toUpperCase());
-        if (strictStatus === undefined) strictStatus = contractAction;
-
-        let encoder = this.sdk._requireEncoder();
-        let progress = onProgress || (() => {});
-
-        // strictFreshness: refuse to build on an explorer whose indexed tip is
-        // behind. The explorer serves a stale coin (marked, never refused), and
-        // the encoder sizes the transaction from its own node, so a stale
-        // explorer does not by itself make a spend wrong; but a caller whose
-        // params came from explorer reads (a balance, a dispenser state, an
-        // order book) can ask for the read to be current before anything is
-        // signed. Off by default so a wallet keeps working through an indexer
-        // stall; the wallet shows the delay instead.
-        if (opts.strictFreshness)
-            await this.sdk.assertFresh();
-
-        // Create and validate action string. Compact ticker names AND
-        // addresses to their `^<id>` wire form first (on by default; each
-        // resolveActionParams returns the params unchanged when compaction is
-        // disabled or an id can't be resolved).
+        const setup = normalizeSubmission(this, actionData, opts);
+        const { encoder, progress, wif } = setup;
+        if (opts.strictFreshness) await this.sdk.assertFresh();
         progress('creating', { action: actionData.action });
         let resolvedParams = await this.sdk.tickResolver.resolveActionParams(actionData.action, actionData.params);
         resolvedParams = await this.sdk.addressResolver.resolveActionParams(actionData.action, resolvedParams);
-        let createResult = this.sdk.actions.createAction(Object.assign({}, actionData, { params: resolvedParams }));
-
-        progress('encoding', { actionString: createResult.actionString });
-        let txParams = {
-            data:   createResult.actionString,
-            pubkey: encoderOpts.pubkey
-        };
-        // Map optional encoder fields through the ONE shared list, not a copy of it:
-        // this hand-written list had fallen behind createTx and was dropping
-        // attachPrevTx, feeQuote, compress, options and sourceAddress on the floor.
-        EncoderClient.pickCreateTxOptions(encoderOpts, txParams);
-
-        let encoded = await encoder.createTx(txParams);
-
-        // What the transaction the encoder just built ACTUALLY carries.
-        //
-        // Transparent FILE compression runs inside create_tx: it rewrites the
-        // action string's COMPRESSION field and deflates the payload, so from
-        // this line on `createResult.actionString` and `encoderOpts.rawData`
-        // describe the REQUEST, not the bytes. Reading the request instead of
-        // the answer broke both ends of a compressible FILE upload - the carrier
-        // binding gate below refused the transaction it had just asked for, and
-        // the phase-2 reveal was rebuilt from the caller's uncompressed payload,
-        // which compiles a different carrier and can never spend the commit.
-        //
-        // Fail closed when the encoder says it compressed but will not say what
-        // it wrote: an encoder too old to report the bytes cannot be gated or
-        // revealed against, and the recoverable outcome is a refusal here, before
-        // anything is signed, rather than a stranded commit afterwards.
-        let carriedActionString = createResult.actionString;
-        let carriedRawData = encoderOpts.rawData;
-        const encoderCompressed = !!(encoded.compression && encoded.compression.compressed);
-        if (encoderCompressed) {
-            if (typeof encoded.compression.data !== 'string' || !encoded.compression.data.length
-                || typeof encoded.compression.rawData !== 'string')
-                throw new SDKActionError('COMPRESSION_BYTES_UNREPORTED',
-                    'the encoder compressed the payload but did not report the action string and ' +
-                    'stored bytes it wrote, so neither the carrier gate nor the reveal can be built ' +
-                    'from them; refusing before anything is signed');
-            carriedActionString = encoded.compression.data;
-            carriedRawData = encoded.compression.rawData;
-        }
-
-        // Reconcile the encoder's answer against what was submitted, BEFORE
-        // any signature exists. createTx is an RPC to a remote service that picks the
-        // inputs, the outputs and the fee; until this gate, nothing between that
-        // response and the sign call asked whether the transaction still spent the
-        // caller's coin where the caller asked. Fail-closed - it throws, so nothing
-        // is signed and nothing is broadcast. See reconcile_encoded.js.
-        const reconcileIntent = {
-            network:       this._reconcileNetwork(),
-            customOutputs: encoderOpts.customOutputs,
-            // The caller's own change destination, submitted intent like customOutputs.
-            // Named explicitly because a P2SH change address is shape-identical to a
-            // chunk funding leg and must not be pinned as one.
-            changeAddresses: encoderOpts.change,
-            // A reveal spends only the encoder-derived leg, so it has no funding
-            // script of its own for rule (b) to authorize change against; the encoder
-            // sends that change to `change || <the caller identity's default address>`,
-            // and both halves of that are submitted intent.
-            callerIdentities: encoderOpts.pubkey,
-            // Opt-in, and deliberately NOT defaulted from encoderOpts.fee: that field
-            // is a REQUESTED fixed fee, and an encoder that rounds up to a relay
-            // minimum is not misbehaving, so treating it as a ceiling would reject
-            // legitimate transactions. Without a cap the always-on guards still stand
-            // (negative fee, and the full burn where nothing comes back).
-            maxFeeSats:    opts.maxFeeSats,
-            // Opt-in ceiling on the encoder-derived funding legs. Those
-            // outputs are authorized by SHAPE, and maxFeeSats cannot bound them: a
-            // parked output raises totalOut, which lowers the computed fee. The legs
-            // are dust-scale prefunding for the next phase, so a caller that sets this
-            // sets a small number.
-            maxPhaseFundingSats: opts.maxPhaseFundingSats,
-        };
-        const phase1 = reconcileEncoded(encoded.psbt, Object.assign({}, reconcileIntent, {
-            label: 'transaction',
-            // A two-phase action funds encoder-derived P2SH/P2WSH chunk outputs here;
-            // an envelope funds its one-shot P2TR commit.
-            phaseShapes: (encoded.encoding === 'P2SH' || encoded.encoding === 'P2WSH') ? ['p2sh', 'p2wsh']
-                : (encoded.revealPsbt ? ['p2tr'] : []),
-            // An envelope answers with BOTH transactions, so its commit leg is pinned
-            // to what the reveal actually spends rather than left on shape alone. A
-            // reveal whose prevouts cannot be read yields null here, which authorizes
-            // nothing: taproot script-path signing needs witnessUtxo, so a legitimate
-            // reveal always carries them.
-            phaseSpends: encoded.revealPsbt ? (psbtPrevouts(encoded.revealPsbt) || []) : null,
-        }));
-        if (encoded.revealPsbt)
-            reconcileEncoded(encoded.revealPsbt, Object.assign({}, reconcileIntent, {
-                label: 'envelope reveal',
-                requiredSpends: phase1.phaseFunding,
-            }));
-
-        // Bind the CARRIER to the action that was submitted, which the gate above
-        // deliberately never reads: reconcileEncoded is PSBT-structural and
-        // false-positive-free by charter, so it accounts for outputs, values and the
-        // fee and says nothing about the command riding in the data carrier. Keeping
-        // every native output and the fee identical while swapping a SEND's amount and
-        // destination therefore reconciled cleanly, and this path signed the
-        // substituted command. Fail-closed, and BEFORE either signing branch: a custom
-        // signer runs its own policy over the same unbound bytes.
-        // The AUTHORIZATION baseline is the string the caller SUBMITTED, never the
-        // string the encoder reports it wrote. Those are two different values and
-        // only one of them is authorization: feeding the gate the encoder's own
-        // `compression.data` made it compare the encoder's transaction against the
-        // encoder's own claim about that transaction, so an answer carrying a
-        // substituted SEND plus a matching `compression.data` passed this gate and
-        // reached signing. The reported bytes stay in `carriedActionString` /
-        // `carriedRawData` for the two uses that genuinely need what is ON CHAIN:
-        // the phase-2 reveal rebuild and the returned `result.actionString`. The
-        // gates recompute the one legitimate COMPRESSION rewrite locally
-        // (bind_action_carrier.js), on both the inline and the chunk lane, so a real
-        // compressed FILE still binds.
-        assertCarrierBinding({
-            psbt:           encoded.psbt,
-            actionString:   createResult.actionString,
-            encoding:       encoded.encoding,
-            carrierScripts: encoded.carrierScripts,
-            network:        this._reconcileNetwork(),
-            label:          'transaction',
-        });
-
+        const transaction = buildTransactionRequest(this, actionData, encoderOpts, resolvedParams, progress);
+        const { createResult, txParams } = transaction;
+        const encoded = await encoder.createTx(txParams);
+        const carriedAction = readCarriedAction(encoded, createResult, encoderOpts);
+        const reconcileState = reconcileTransaction(this, encoded, createResult, encoderOpts, opts);
         progress('signing', { encoding: encoded.encoding });
         let signed;
         if (typeof opts.signer === 'function') {
-            // Custom signer (e.g. the MuSig2 co-signer): consumes the unsigned PSBT
-            // and returns the same { txHex, txid, psbtHex } shape as signPsbt. It is
-            // fail-closed - a policy denial or unenforceable shape throws here,
-            // aborting before any broadcast. A two-phase P2SH/P2WSH large action
-            // can't be completed through a custom signer (the co-signer reads only
-            // the OP_RETURN carrier), so reject it up front rather than broadcast a
-            // half-enforced phase 1.
-            if (encoded.encoding === 'P2SH' || encoded.encoding === 'P2WSH')
-                throw new SDKActionError('SIGNER_ENCODING_UNSUPPORTED',
-                    `custom signer cannot complete ${encoded.encoding} two-phase encoding`);
-            // Same reasoning for the Taproot envelope. Its reveal is a
-            // BIP341 script-path spend over the envelope leaf, which a custom
-            // signer that only reads the OP_RETURN carrier cannot produce. Refuse
-            // BEFORE anything is broadcast rather than commit and then discover it.
-            if (encoded.revealPsbt)
-                throw new SDKActionError('SIGNER_ENCODING_UNSUPPORTED',
-                    'custom signer cannot complete a TAPROOT envelope reveal (BIP341 script-path)');
+            validateCustomSigner(encoded);
             signed = await opts.signer(encoded.psbt, { encoding: encoded.encoding });
-        } else {
-            signed = this.sdk.wallet.signPsbt(encoded.psbt, wif);
-        }
-
-        // A TAPROOT envelope comes back as a PAIR from
-        // this one call, and the ordering rule is not a nicety: "the reveal must be
-        // signable before the commit is broadcast; anything else manufactures a
-        // stranded-funds event, not an error message". Broadcasting the commit first
-        // and only then discovering the reveal cannot be signed leaves the coin in a
-        // one-time P2TR output whose sole exit is the §3.5 key-path cancel. So sign
-        // the reveal HERE, while nothing is on chain yet and a throw costs nothing.
-        let revealSigned = null;
-        if (encoded.revealPsbt) {
-            // The reveal is where the envelope's action bytes first appear in a
-            // transaction at all (the commit output is only a hash of the leaf), so
-            // it is the only place a substituted envelope action can be caught. Bind
-            // it here, while the commit is still unbroadcast and a throw costs
-            // nothing but the round trip.
-            assertEnvelopeCarrierBinding({
-                // Submitted string, for the reason stated at the phase-1 gate.
-                actionString: createResult.actionString,
-                revealPsbt:   encoded.revealPsbt,
-                network:      this._reconcileNetwork(),
-            });
-            revealSigned = this.sdk.wallet.signEnvelopeRevealPsbt(encoded.revealPsbt, wif);
-            // §3.5 requires {commit outpoint, internal key, tapleaf hash} to be
-            // durably persisted BEFORE the commit is broadcast, because the key-path
-            // cancel cannot be reconstructed without them and the funds are then
-            // stranded in an address nothing can re-derive. The SDK has no storage of
-            // its own, so it hands the encoder's recovery record to the caller HERE,
-            // at the last moment where nothing is on chain yet, and a caller that
-            // persists on this event satisfies the rule.
-            progress('envelope_recovery_record', { recovery: encoded.envelope || null });
-        }
-
+        } else signed = this.sdk.wallet.signPsbt(encoded.psbt, wif);
+        const revealSigned = prepareEnvelope(this, encoded, createResult, wif, progress);
         progress('broadcasting', { txid: signed.txid });
         await encoder.broadcastTx(signed.txHex);
-
-        // Every transaction this action actually puts on the wire, in order.
-        // The change each one pays back to the caller is harvested below, after
-        // the last phase, so a caller can spend it immediately instead of
-        // waiting for the tracker to confirm it.
-        let broadcastHexes = [signed.txHex];
-
-        // Extract spent inputs from the signed PSBT for UTXO cache tracking
+        const broadcastHexes = [signed.txHex];
         let spentInputs = this._extractSpentInputs(encoded.psbt);
-
-        // The envelope reveal, already signed above. The decoder indexes the
-        // REVEAL, so its txid is the action's identity (§3.1), not the commit's.
         let finalTxidEnvelope = null;
         if (revealSigned) {
             progress('envelope_revealing', { commitTxid: signed.txid });
-            try {
-                await encoder.broadcastTx(revealSigned.txHex);
-            } catch (err) {
-                // The commit is already on chain and the reveal is not. This is the
-                // one stranding path signing-first cannot remove, so it must never
-                // surface as a bare network error: carry the §3.5 recovery record and
-                // the signed reveal out with it, so the caller can retry the
-                // broadcast or run create_envelope_cancel_tx. Losing this object is
-                // losing the funds.
-                throw new SDKActionError('ENVELOPE_REVEAL_BROADCAST_FAILED',
-                    `commit ${signed.txid} is broadcast but the reveal was rejected: ${err && err.message ? err.message : err}. ` +
-                    'Retry the reveal broadcast, or cancel the commit via the key path using the recovery record.',
-                    { commitTxid: signed.txid, recovery: encoded.envelope || null,
-                      revealTxHex: revealSigned.txHex, cause: err });
-            }
-            spentInputs = spentInputs.concat(this._extractSpentInputs(encoded.revealPsbt));
-            broadcastHexes.push(revealSigned.txHex);
-            finalTxidEnvelope = revealSigned.txid;
+            try { await encoder.broadcastTx(revealSigned.txHex); }
+            catch (error) { throw buildEnvelopeBroadcastError(error, signed, encoded, revealSigned); }
+            ({ spentInputs, finalTxidEnvelope } = finishEnvelope(
+                this, encoded, revealSigned, spentInputs, broadcastHexes));
         }
-
         let finalTxid = signed.txid;
         if (encoded.encoding === 'P2SH' || encoded.encoding === 'P2WSH') {
             progress('p2sh_spending', { phase1Txid: signed.txid });
-
-            // Phase 2 spends the P2SH/P2WSH output created by phase 1. The encoder
-            // identifies that output from the phase-1 transaction itself, so p2shHash
-            // is the broadcast phase-1 txid and p2shHex is its raw hex (the encoder's
-            // create_tx response carries only { psbt, encoding }; there is no separate
-            // hash field). Matches the connector flow in xchain-e2e-test transactionHelper.
-            // customOutputs (e.g. the native-fee protocol-fee output) must ride
-            // the reveal, because the indexer treats the reveal as the action and
-            // reads the fee output from it. The encoder fences double-pay: for a
-            // P2SH/P2WSH funding tx it funds these outputs into the P2SH outputs
-            // WITHOUT emitting them, then emits them here on the reveal. So passing
-            // the same customOutputs to both phases is correct, not a double charge.
-            let spendResult = await encoder.spendP2sh({
-                pubkey:           encoderOpts.pubkey,
-                p2shHash:         signed.txid,
-                p2shHex:          signed.txHex,
-                // The bytes phase 1 COMMITTED to, not the ones submitted. The
-                // encoder chunks script.compile([data, rawData]) and the reveal
-                // must reproduce those chunks exactly; handing it the caller's
-                // uncompressed payload (or a marker without the deflated bytes
-                // behind it) compiles a different carrier, and a reveal that does
-                // not hash to the commit's outputs can never spend them.
-                data:             carriedActionString,
-                encoding:         encoded.encoding,
-                rawData:          carriedRawData,
-                // These bytes are ALREADY deflated and the action already declares
-                // the codec. Stated rather than left to the deployment default,
-                // which would otherwise re-enter the compression pass and depend on
-                // a guard refusing by accident to leave them alone.
-                ...(encoderCompressed ? { compress: false } : {}),
-                compressedPubKey: encoderOpts.compressedPubKey,
-                change:           encoderOpts.change,
-                fee:              encoderOpts.fee,
-                feePerKb:         encoderOpts.feePerKb,
-                customOutputs:    encoderOpts.customOutputs
-            });
-
-            // Phase 2 is a second encoder answer and gets the same gate as phase 1.
-            // It emits the customOutputs (which phase 1 funded without emitting), so
-            // it carries no further encoder-derived funding leg of its own. It also
-            // has to spend back every leg phase 1 paid on shape alone: a
-            // chunk phase 2 does not reveal is both undecodable and value the encoder
-            // kept, so an unspent leg aborts here instead of being signed away.
-            reconcileEncoded(spendResult.psbt, Object.assign({}, reconcileIntent, {
-                label: 'phase-2 reveal',
-                requiredSpends: phase1.phaseFunding,
-            }));
-
-            // The phase-2 carrier is the reveal's tag marker plus the redeem scripts
-            // its INPUTS reveal, and those inputs can only be the legs phase 1
-            // committed to (requiredSpends above, and bitcoinjs will not sign a
-            // redeem script that does not hash to the prevout), so the payload is
-            // already bound by phase 1's carrier-script check. What is not bound is a
-            // SECOND carrier smuggled into this transaction, which this catches:
-            // encoding is left off deliberately, because spendP2sh returns no
-            // carrierScripts of its own and there is nothing here to hash them to.
-            assertCarrierBinding({
-                psbt:         spendResult.psbt,
-                // Submitted string, for the reason stated at the phase-1 gate. No
-                // encoding is passed, so only the inline check runs and its
-                // COMPRESSION tolerance covers the compressed FILE lane.
-                actionString: createResult.actionString,
-                network:      this._reconcileNetwork(),
-                label:        'phase-2 reveal',
-            });
-
-            // Phase-2 inputs are non-standard P2SH/P2WSH reveal inputs; they need
-            // the custom finalizer, not the default single-sig finalizeAllInputs.
-            let spendSigned = this.sdk.wallet.signRevealPsbt(spendResult.psbt, wif);
+            const spendResult = await encoder.spendP2sh(
+                buildPhase2Request(signed, encoded, encoderOpts, carriedAction));
+            const spendSigned = preparePhase2(this, spendResult, reconcileState, createResult, wif);
             await encoder.broadcastTx(spendSigned.txHex);
-            broadcastHexes.push(spendSigned.txHex);
-
-            // Track phase 2 spent inputs
-            let phase2Inputs = this._extractSpentInputs(spendResult.psbt);
-            spentInputs = spentInputs.concat(phase2Inputs);
-
-            // The indexer looks for the phase 2 transaction
-            finalTxid = spendSigned.txid;
-            signed = spendSigned;
+            ({ finalTxid, signed, spentInputs } = finishPhase2(
+                this, spendResult, spendSigned, broadcastHexes, spentInputs));
         }
-        if (finalTxidEnvelope) {                      // the reveal IS the action
-            finalTxid = finalTxidEnvelope;
-            signed = revealSigned;
-        }
-
-        // The change this action paid back to the caller and did not spend again
-        // in a later phase. Without it, a caller's next action has nothing left
-        // in its cache and falls back to whatever the tracker has CONFIRMED, so
-        // consecutive submits pick independent inputs and land as siblings
-        // instead of a parent-child chain. A later phase legitimately spends an
-        // earlier phase's output (the envelope reveal, the P2SH phase-2 reveal),
-        // so anything already in spentInputs is dropped here rather than handed
-        // back as spendable.
-        let spentSet = new Set(spentInputs.map(i => i.txid + ':' + i.vout));
-        // encoderOpts.change is the caller's own change destination; with none
-        // given the encoder returns change to the caller identity (pubkey, which
-        // on this path is an ADDRESS - see submit() in walletSession).
-        let changeAddress = encoderOpts.change || encoderOpts.pubkey;
-        let changeOutputs = [];
-        for (let hex of broadcastHexes) {
-            for (let out of this._extractChangeOutputs(hex, changeAddress)) {
-                if (!spentSet.has(out.txid + ':' + out.vout)) changeOutputs.push(out);
-            }
-        }
-
-        let result = {
-            txid:          finalTxid,
-            // The string that is ON CHAIN and therefore the one the indexer read,
-            // which after a compression pass is not the one submitted. A caller
-            // correlating this against the indexed action needs the written form.
-            actionString:  carriedActionString,
-            action:        createResult.action,
-            version:       createResult.version,
-            encoding:      encoded.encoding,
-            signed:        signed,
-            spentInputs:   spentInputs,
-            changeOutputs: changeOutputs,
-            indexed:       null
-        };
-
-        if (waitForIndexer) {
+        const result = shapeResult(this, {
+            finalTxid, finalTxidEnvelope, revealSigned, signed, spentInputs, broadcastHexes,
+            encoderOpts, createResult, encoded, carriedActionString: carriedAction.carriedActionString,
+        });
+        finalTxid = result.txid;
+        if (setup.waitForIndexer) {
             progress('waiting', { txid: finalTxid });
-            // The explorer override rides through to the waiter so an isolated
-            // venue is waited on where it is actually indexed, not on whatever
-            // explorer hub discovery advertised.
-            let waiter = new ActionWaiter(this.sdk);
+            const waiter = new ActionWaiter(this.sdk);
             let indexed;
-            try {
-                indexed = await waiter.waitForTxid(finalTxid, {
-                    timeout:      timeout || 120000,
-                    pollInterval: pollInterval || 2000,
-                    requireValid: requireValid !== false,
-                    strictStatus: strictStatus === true,
-                    explorer:     explorer,
-                    explorerUrl:  explorerUrl,
-                    explorerPort: explorerPort
-                });
-            } catch (err) {
-                // The broadcast above SUCCEEDED, so a wait that expires is not a
-                // failed action: the transaction is on the network and needs a
-                // block. Chains with long or irregular block times exceed any
-                // default routinely. Mark it so a caller can report "accepted,
-                // awaiting confirmation" instead of presenting it as a failure,
-                // and so a retry does not double-spend the inputs by rebuilding.
-                if (err && err.code === 'CONFIRMATION_TIMEOUT'){
-                    err.broadcast = true;
-                    err.txid      = finalTxid;
-                    if (err.details && typeof err.details === 'object'){
-                        err.details.broadcast = true;
-                    }
-                }
-                throw err;
-            }
+            try { indexed = await waiter.waitForTxid(finalTxid, buildWaitOptions(setup)); }
+            catch (error) { markConfirmationTimeout(error, finalTxid); throw error; }
             result.indexed = indexed;
             progress('confirmed', { txid: finalTxid, action: indexed });
         }
-
-        if (opts.awaitContract)
-            await this._awaitContract(result, actionData, opts, progress, finalTxid);
-
+        if (opts.awaitContract) await this._awaitContract(result, actionData, opts, progress, finalTxid);
         return result;
     }
 
