@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `README.md` documents the `src/api` submodule's `createApp`/`startApi` exports for a consumer that wants to mount the JSON-RPC server itself, and `index.d.ts` types both.
+
 ## [0.18.0] - 2026-09-11
 
 ### Added
