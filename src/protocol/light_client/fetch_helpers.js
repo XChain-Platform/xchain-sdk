@@ -98,7 +98,7 @@ function expectedMismatch(expected, actual){
     }
     return null;
 }
-function _no(reason){ return { verified: false, amount: null, reason: reason }; }
+function unverified(reason){ return { verified: false, amount: null, reason: reason }; }
 // ── Validator-set proof + forward-following (spec §7, Phase 5) ────────────────
 // The keystone of a self-verifying client: instead of trusting an explorer for the
 // signer set, the client PROVES each signer's (source, weight) and the source-deduped
@@ -107,4 +107,4 @@ function _no(reason){ return { verified: false, amount: null, reason: reason }; 
 
 function scaled(a){ const [i, f] = M.canonicalAmount(String(a)).split('.'); return BigInt(i) * 1000000000000000000n + BigInt(f); }
 
-module.exports = { resolveFetch, pinnedEntry, baseUrl, fetchJson, lowerHex, expectedMismatch, _no, scaled };
+module.exports = { resolveFetch, pinnedEntry, baseUrl, fetchJson, lowerHex, expectedMismatch, unverified, scaled };

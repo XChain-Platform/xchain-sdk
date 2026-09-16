@@ -39,7 +39,7 @@
 const M   = require('../../merkle.js');
 const SUB = require('../../state_subtree_activation.js');
 const { sameWireIndex, toWireIndex } = require('../../utils/wire_index.js');
-const { lowerHex, expectedMismatch, _no } = require('./fetch_helpers.js');
+const { lowerHex, expectedMismatch, unverified } = require('./fetch_helpers.js');
 
 // Verify a §4.4 BalanceProof binds to a TRUSTED state_root (one already proven to
 // be in a quorum-signed checkpoint). chain/network come from the trusted
@@ -50,26 +50,26 @@ const { lowerHex, expectedMismatch, _no } = require('./fetch_helpers.js');
 //   the argument becomes required at the next major version.
 function verifyBalanceProof(proof, trustedStateRoot, chain, network, expected){
     try {
-        if (!proof || !proof.smt_proof || !proof.sub_root_path) return _no('MALFORMED_PROOF');
+        if (!proof || !proof.smt_proof || !proof.sub_root_path) return unverified('MALFORMED_PROOF');
         // Bind to the REQUESTED (address, tick) when the caller supplies it; the
         // check below only proves the proof is self-consistent. See expectedMismatch.
-        if (expectedMismatch(expected, proof)) return _no('REQUESTED_IDENTITY_MISMATCH');
+        if (expectedMismatch(expected, proof)) return unverified('REQUESTED_IDENTITY_MISMATCH');
         // The proven key must be exactly balanceKey(chain, network, address, tick):
         // a server cannot answer for (A,T) with a proof for some other key.
         const keyBuf    = M.balanceKey(chain, network, proof.address, proof.tick);
-        if (lowerHex(proof.smt_proof.key) !== M.toHex(keyBuf)) return _no('KEY_MISMATCH');
+        if (lowerHex(proof.smt_proof.key) !== M.toHex(keyBuf)) return unverified('KEY_MISMATCH');
         const leaf   = proof.smt_proof.leaf_value;             // hex string or null (non-inclusion)
         const amount = M.canonicalAmount(proof.amount);
         if (leaf == null){
-            if (amount !== M.canonicalAmount('0')) return _no('NONINCLUSION_NONZERO_AMOUNT');
+            if (amount !== M.canonicalAmount('0')) return unverified('NONINCLUSION_NONZERO_AMOUNT');
         } else {
             // The committed leaf must be exactly amountLeaf(amount): binds the
             // returned amount to the proof, so the server's `amount` cannot lie.
-            if (M.toHex(M.amountLeaf(amount)) !== lowerHex(leaf)) return _no('LEAF_AMOUNT_MISMATCH');
+            if (M.toHex(M.amountLeaf(amount)) !== lowerHex(leaf)) return unverified('LEAF_AMOUNT_MISMATCH');
         }
         // The SMT proof must reconstruct the claimed balances_root...
         if (!M.verifyCompressedSmtProof(proof.balances_root, keyBuf, leaf, proof.smt_proof.compressed))
-            return _no('SMT_PROOF_INVALID');
+            return unverified('SMT_PROOF_INVALID');
         // ...and that balances_root must bind into the TRUSTED state_root via the
         // fixed 5-leaf sub-root path. A forged balances_root cannot bind here
         // (collision resistance), so the whole chain is anchored to the quorum.
@@ -81,12 +81,12 @@ function verifyBalanceProof(proof, trustedStateRoot, chain, network, expected){
         // a false ZERO balance for an address that actually holds funds -- a
         // solvency/censorship-denial primitive, not just liveness.
         if (proof.sub_root_path.index !== M.STATE_SUBTREES.indexOf('balances_root'))
-            return _no('SUBROOT_SLOT_MISMATCH');
+            return unverified('SUBROOT_SLOT_MISMATCH');
         if (!M.verifyFixedMerkleProof(trustedStateRoot, M.toBuf(proof.balances_root),
                                       proof.sub_root_path.index, proof.sub_root_path.siblings))
-            return _no('SUBROOT_BIND_INVALID');
+            return unverified('SUBROOT_BIND_INVALID');
         return { verified: true, amount, reason: null };
-    } catch (e){ return _no('VERIFY_ERROR:' + (e && e.message)); }
+    } catch (e){ return unverified('VERIFY_ERROR:' + (e && e.message)); }
 }
 
 // Verify a locked-balance (XCHAIN_ESC) proof binds to a TRUSTED state_root (SPV
@@ -140,18 +140,18 @@ function verifyBalanceProof(proof, trustedStateRoot, chain, network, expected){
 //   required at the next major version.
 function verifyLockedBalanceProof(proof, trustedStateRoot, chain, network, expected, trustedHeight){
     try {
-        if (!proof || !proof.smt_proof || !proof.sub_root_path) return _no('MALFORMED_PROOF');
-        if (expectedMismatch(expected, proof)) return _no('REQUESTED_IDENTITY_MISMATCH');
+        if (!proof || !proof.smt_proof || !proof.sub_root_path) return unverified('MALFORMED_PROOF');
+        if (expectedMismatch(expected, proof)) return unverified('REQUESTED_IDENTITY_MISMATCH');
         // The label must still PARSE as a wire index, strict, fail-closed. It no
         // longer decides anything, but a server that cannot even name the height it
         // is answering about has produced a proof nobody can place, and letting that
         // through would drop the strict-parse rule the header states.
         const label = toWireIndex(proof.height);
-        if (label === null) return _no('ESCROW_LEAF_NOT_COMMITTED');
+        if (label === null) return unverified('ESCROW_LEAF_NOT_COMMITTED');
         const haveTrustedHeight = (trustedHeight !== undefined && trustedHeight !== null
                                    && trustedHeight !== '');
         if (haveTrustedHeight && !sameWireIndex(label, trustedHeight))
-            return _no('PROOF_HEIGHT_MISMATCH');
+            return unverified('PROOF_HEIGHT_MISMATCH');
         // Gate on the TRUSTED height. Past the bind above `label` IS that height,
         // so reuse it: the activation carrier's own strict parse takes only a
         // number or a digit string, and a BigInt block_index - the shape a
@@ -162,31 +162,31 @@ function verifyLockedBalanceProof(proof, trustedStateRoot, chain, network, expec
         const gateWire   = haveTrustedHeight ? label : 0n;
         const gateHeight = (gateWire <= BigInt(Number.MAX_SAFE_INTEGER)) ? Number(gateWire) : NaN;
         if (!SUB.isEscrowLockedLeafActive(gateHeight, network, chain))
-            return _no('ESCROW_LEAF_NOT_COMMITTED');
+            return unverified('ESCROW_LEAF_NOT_COMMITTED');
         // The proven key must be exactly escrowKey(chain, network, address, tick),
         // with chain/network from the TRUSTED checkpoint, never the proof.
         const keyBuf = M.escrowKey(chain, network, proof.address, proof.tick);
-        if (lowerHex(proof.smt_proof.key) !== M.toHex(keyBuf)) return _no('KEY_MISMATCH');
+        if (lowerHex(proof.smt_proof.key) !== M.toHex(keyBuf)) return unverified('KEY_MISMATCH');
         const leaf   = proof.smt_proof.leaf_value;
         const amount = M.canonicalAmount(proof.amount);
         if (leaf == null){
-            if (amount !== M.canonicalAmount('0')) return _no('NONINCLUSION_NONZERO_AMOUNT');
+            if (amount !== M.canonicalAmount('0')) return unverified('NONINCLUSION_NONZERO_AMOUNT');
         } else {
             // amountLeaf, the SAME encoding the spendable leaf uses, so a client
             // verifies both leaves of an (address, tick) the same way.
-            if (M.toHex(M.amountLeaf(amount)) !== lowerHex(leaf)) return _no('LEAF_AMOUNT_MISMATCH');
+            if (M.toHex(M.amountLeaf(amount)) !== lowerHex(leaf)) return unverified('LEAF_AMOUNT_MISMATCH');
         }
         if (!M.verifyCompressedSmtProof(proof.balances_root, keyBuf, leaf, proof.smt_proof.compressed))
-            return _no('SMT_PROOF_INVALID');
+            return unverified('SMT_PROOF_INVALID');
         // PIN the slot (balances_root, the same slot the spendable proof pins),
         // for the same reason verifyBalanceProof does.
         if (proof.sub_root_path.index !== M.STATE_SUBTREES.indexOf('balances_root'))
-            return _no('SUBROOT_SLOT_MISMATCH');
+            return unverified('SUBROOT_SLOT_MISMATCH');
         if (!M.verifyFixedMerkleProof(trustedStateRoot, M.toBuf(proof.balances_root),
                                       proof.sub_root_path.index, proof.sub_root_path.siblings))
-            return _no('SUBROOT_BIND_INVALID');
+            return unverified('SUBROOT_BIND_INVALID');
         return { verified: true, amount, reason: null };
-    } catch (e){ return _no('VERIFY_ERROR:' + (e && e.message)); }
+    } catch (e){ return unverified('VERIFY_ERROR:' + (e && e.message)); }
 }
 
 // Verify a contract-state proof binds to a TRUSTED state_root (SPV sub-tree spec
@@ -252,17 +252,17 @@ function verifyContractStateProof(proof, trustedStateRoot, chain, network, expec
 // Returns { verified, reason }.
 function verifyActionProof(proof, trustedBlockMerkleRoot){
     try {
-        if (!proof || !proof.merkle_proof) return _no('MALFORMED_PROOF');
+        if (!proof || !proof.merkle_proof) return unverified('MALFORMED_PROOF');
         // Recompute the action leaf from the proof's own fields: the server cannot
         // bind a leaf it did not also describe.
         const leaf = M.toHex(M.actionsLeaf({ action_index: proof.action_index,
             tx_index: proof.tx_index, action: (proof.action == null) ? '' : proof.action }));
-        if (lowerHex(proof.leaf) !== leaf) return _no('LEAF_MISMATCH');
+        if (lowerHex(proof.leaf) !== leaf) return unverified('LEAF_MISMATCH');
         if (!M.verifyFixedMerkleProof(trustedBlockMerkleRoot, M.toBuf(leaf),
                                       proof.merkle_proof.index, proof.merkle_proof.siblings))
-            return _no('MERKLE_PROOF_INVALID');
+            return unverified('MERKLE_PROOF_INVALID');
         return { verified: true, reason: null };
-    } catch (e){ return _no('VERIFY_ERROR:' + (e && e.message)); }
+    } catch (e){ return unverified('VERIFY_ERROR:' + (e && e.message)); }
 }
 // Pure: verify a /proof/validator-set response binds into a TRUSTED state_root.
 // Returns { verified, capabilities: { cap: { validators:[{pubkey,source,weight}], total } }, reason }.
