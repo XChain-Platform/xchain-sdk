@@ -26,7 +26,8 @@
  * The SDK linter is author-facing, so its default is ON (warn me now about what
  * will be rejected), while the chain applies the rule only at/after the per-coin
  * activation height (xchain-vm LINT_GLOBAL_ALIAS_ACTIVATION /
- * xchain-indexer vm_lint_global_alias_activation.js), which is still unarmed on
+ * xchain-indexer registry row vm_lint_global_alias_activation.VM_LINT_GLOBAL_ALIAS_ACTIVATION
+ * in src/protocol_changes/gates_3.js), which is still unarmed on
  * mainnet.
  ********************************************************************/
 'use strict';

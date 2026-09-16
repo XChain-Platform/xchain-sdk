@@ -102,7 +102,8 @@ const REPORT_SCHEMA_VERSION = 1;
 
 // Dispenser refill cap (indexer config.js MAX_REFILLS). A
 // format-2 DISPENSER_EDIT that tops up GIVE_ESCROW is a refill, and the
-// 6th is rejected once dispenser_caps_activation is live. The cap cannot
+// 6th is rejected once the registry row dispenser_caps_activation.DISPENSER_CAPS_ACTIVATION
+// (xchain-indexer src/protocol_changes/gates_1.js) is live. The cap cannot
 // be CHECKED client-side (no endpoint exposes per-edit give_escrow, see
 // checks/dispenser.js), so this exists only to name the number in the
 // unverified declaration. The authoritative value is config['MAX_REFILLS']

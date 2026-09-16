@@ -57,7 +57,8 @@ function isSelfPriced(fiatCode, oracleAddress) {
 // non-positive value, so it never closes and keeps absorbing payments.
 //
 // Warning rather than error, and deliberately so: the handler gates the
-// rejection behind dispenser_give_amount_activation, and preflight runs at
+// rejection behind the registry row dispenser_give_amount_activation.DISPENSER_GIVE_AMOUNT_ACTIVATION
+// (xchain-indexer src/protocol_changes/gates_1.js), and preflight runs at
 // AUTHORING time with no block time to test the flag-day against. Below
 // the activation the chain still accepts this create, so calling it an
 // error would refuse a transaction the network takes. Above it, the
@@ -76,7 +77,8 @@ function checkGiveAmount(ctx) {
 
 // A dispenser that names its own price must name a positive, well-formed
 // one. Mirrors the two Format-0 rules xchain-indexer/src/actions/dispenser.js
-// enforces behind dispenser_amount_positivity_activation: a native-coin-priced
+// enforces behind the registry row dispenser_amount_positivity_activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION
+// (xchain-indexer src/protocol_changes/gates_1.js): a native-coin-priced
 // GET_AMOUNT (empty GET_TICK) is checked against COIN_DECIMALS, which the
 // token-priced path always did and this path never had, and a GET_AMOUNT on
 // a dispenser with neither FIAT_CODE nor ORACLE_ADDRESS must be strictly
@@ -87,7 +89,7 @@ function checkGiveAmount(ctx) {
 // the handler gates both on the block's consensus time and pre-flight has
 // no block time, so it cannot certify which side of the flag-day this
 // create lands on. The 2026-09-09 ruling armed the gate at genesis on
-// every network (dispenser_amount_positivity_activation reads `mainnet: 0`),
+// every network (the dispenser_amount_positivity_activation row reads `mainnet: 0`),
 // so the unarmed-mainnet half of this reasoning no longer applies.
 function checkSelfPrice(ctx) {
     const getAmount = ctx.field('GET_AMOUNT');
@@ -123,7 +125,7 @@ function declareAmountRepresentability(ctx) {
         + 'the including block is server-side only, and neither mainnet nor testnet is armed for it');
 }
 
-// The settlement half of dispenser_amount_positivity_activation
+// The settlement half of the dispenser_amount_positivity_activation row
 // (xchain-indexer src/actions/dispense.js): the fill count must be strictly
 // positive, not merely non-zero, and a GET_AMOUNT the divide cannot parse is
 // rejected at the divide. Against a SELF-PRICED dispenser the count is

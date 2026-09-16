@@ -25,7 +25,8 @@ describe('pre-flight Tier-2 per-action matrix', function () {
             expect(has(r, 'DISPENSER_NOT_OPEN', 'error')).to.equal(true);
         });
 
-        // Settlement half of dispenser_amount_positivity_activation: against a
+        // Settlement half of the dispenser_amount_positivity_activation row
+        // (xchain-indexer src/protocol_changes/gates_1.js): against a
         // self-priced dispenser the fill count is floor(payment / GET_AMOUNT), so a
         // stored price that is not positive fails every dispense after the coin moves.
         it('a self-priced dispenser storing a non-positive GET_AMOUNT is warned, never blocked', async function () {

@@ -810,6 +810,8 @@ Baseline pin `62c8d7c7` for both. Range read:
 `git -C ../xchain-indexer diff 62c8d7c7..97e7ae1f -- src/actions/issue.js src/actions/destroy.js`,
 plus the three modules the diff adds (`token_bridge_activation.js`,
 `token_policy_activation.js`, `tick_namespace_activation.js`) and `reservedRoots.js`.
+(Since W4 of the activation registry, `tick_namespace_activation.js` is the registry row
+`tick_namespace_activation.TICK_NAMESPACE_ACTIVATION` in `src/protocol_changes/gates_3.js`.)
 This is the base bridge spec and the token bridge spec landing on the indexer side.
 Both handlers owe client changes, and one constant does too: `XBRIDGE` joins
 `FEE_CHARGING_ACTIONS`, because `xbridge.js` charges through `createFeesObject` on
@@ -1052,7 +1054,10 @@ The other four handlers that moved in the same range (`attest.js`,
 
 Read `18954ab3..0d7074ad` over both handlers plus the two activation modules the
 diff adds, `gated_handoff_ref_activation.js` and
-`dispense_payment_tally_scale_activation.js`. Both are flag-day gated with
+`dispense_payment_tally_scale_activation.js` (since W4 of the activation registry:
+the registry row `gated_handoff_ref_activation.GATED_HANDOFF_REF_ACTIVATION` in
+`src/protocol_changes/gates_2.js`, and `src/actions/dispense/dispense_payment_tally_scale_gate.js`).
+Both are flag-day gated with
 mainnet on the unarmed house sentinel (9999999999) and testnet/regtest from
 genesis, so both reviews turn on the same question the leg-amount entry below
 turns on: what a client may assert when the rule binds on one plane and not on
@@ -1122,7 +1127,9 @@ Anchor moves to `0d7074ad`.
 byte-identical to the `334d8117` pin.
 
 `send.js` and `destroy.js` both gain the leg-amount consolidation rule behind
-`consolidation_leg_amount_activation.js`. Above its flag-day a leg whose RAW
+`consolidation_leg_amount_activation.js` (since W4 of the activation registry, the
+registry row `consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION` in
+`src/protocol_changes/gates_1.js`). Above its flag-day a leg whose RAW
 amount fails `isValidAmountFormat` for its tick is held out of the merge on its
 own key, so it reaches the handler's existing per-leg check instead of being
 summed into a total that passes. Two 0.5 legs of a 0-decimals token merged to
@@ -1820,7 +1827,8 @@ COMMITTED state on both sides before anything was refreshed.
 Nine handlers, one dominant rule. **Caret-ref strict activation** turns
 an unresolvable wire `^<id>` address reference into a hard
 `invalid: <FIELD> (unresolvable ^id)` at/after each chain's flag-day
-(`caret_ref_strict_activation.js`; regtest armed from genesis, mainnet on a
+(`caret_ref_strict_activation.js`, since W4 of the activation registry
+`src/db/database/caret_ref_strict_gate.js`; regtest armed from genesis, mainnet on a
 later flag-day train). It lands on `mint.js` DESTINATION, `issue.js` TRANSFER and
 TRANSFER_SUPPLY, `order.js` and `swap.js` GET_ADDRESS, and `dispenser.js`
 GET_ADDRESS and ORACLE_ADDRESS. Client-visible, and partly client-decidable,

@@ -56,7 +56,8 @@
  * the block that will carry this action, which pre-flight cannot read.
  * The 2026-09-09 ruling armed it at genesis on EVERY network - the
  * authority map reads `mainnet: 0` alongside testnet and regtest
- * (xchain-indexer/src/consolidation_leg_amount_activation.js) - so the
+ * (registry row `consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION`
+ * in xchain-indexer/src/protocol_changes/gates_1.js) - so the
  * old reason for declaring it, that an unconditional error would reject
  * on mainnet what mainnet still accepts, no longer holds. Promoting it
  * to a mirrored error is a client-behaviour change with its own blast
