@@ -15,7 +15,7 @@ const sinon = require('sinon');
 const LifecycleManager = require('../../../../src/carrier/lifecycle_manager.js');
 const { buildTestPsbtHex, makeSdk } = require('./helpers/lifecycle_manager.js');
 
-// _extractSpentInputs()
+// extractSpentInputs()
 
 // Tests
 
@@ -23,12 +23,12 @@ describe('LifecycleManager', function () {
 
     afterEach(() => sinon.restore());
 
-    describe("_extractSpentInputs()", function () {
+    describe("extractSpentInputs()", function () {
         it('returns array of {txid, vout} objects from a valid PSBT hex', function () {
             const sdk = makeSdk();
             const lm = new LifecycleManager(sdk);
             const psbtHex = buildTestPsbtHex();
-            const inputs = lm._extractSpentInputs(psbtHex);
+            const inputs = lm.extractSpentInputs(psbtHex);
             assert.ok(Array.isArray(inputs));
             assert.ok(inputs.length >= 1);
             assert.ok(typeof inputs[0].txid === 'string' && inputs[0].txid.length === 64);
@@ -38,14 +38,14 @@ describe('LifecycleManager', function () {
         it('returns empty array for invalid PSBT hex (does not throw)', function () {
             const sdk = makeSdk();
             const lm = new LifecycleManager(sdk);
-            const result = lm._extractSpentInputs('not-valid-psbt-hex');
+            const result = lm.extractSpentInputs('not-valid-psbt-hex');
             assert.deepStrictEqual(result, []);
         });
 
         it('returns empty array for empty string', function () {
             const sdk = makeSdk();
             const lm = new LifecycleManager(sdk);
-            assert.deepStrictEqual(lm._extractSpentInputs(''), []);
+            assert.deepStrictEqual(lm.extractSpentInputs(''), []);
         });
     });
 });

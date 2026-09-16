@@ -101,7 +101,7 @@ class LifecycleManager {
         progress('broadcasting', { txid: signed.txid });
         await encoder.broadcastTx(signed.txHex);
         const broadcastHexes = [signed.txHex];
-        let spentInputs = this._extractSpentInputs(encoded.psbt);
+        let spentInputs = this.extractSpentInputs(encoded.psbt);
         let finalTxidEnvelope = null;
         if (revealSigned) {
             progress('envelope_revealing', { commitTxid: signed.txid });
@@ -141,7 +141,7 @@ class LifecycleManager {
     // The contract an action targets, from its own params. Accepts the camelCase
     // form callers write and the upper-case wire form, so a params object built
     // either way gates on the right contract.
-    static _contractIndexOf(actionData) {
+    static contractIndexOf(actionData) {
         let params = (actionData && actionData.params) || {};
         let index = params.contractActionIndex;
         if (index === undefined) index = params.CONTRACT_ACTION_INDEX;

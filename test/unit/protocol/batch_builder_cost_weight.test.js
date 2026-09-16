@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
  **********************************************************************
- * BATCH_COST_WEIGHTING on the COMPOSE side: batchBuilder._validate().
+ * BATCH_COST_WEIGHTING on the COMPOSE side: batchBuilder.validate().
  *
  * The builder counted commands and nothing else, so it composed batches the
  * chain rejects whole: nine EXECUTEs weigh 270 and eleven AIRDROPs weigh 275,
@@ -50,13 +50,13 @@ const {
 } = require('../../../src/protocol/batch_limits.js');
 
 // Queue `entries` ([action, params] pairs) on a fresh builder and return the
-// message of whatever _validate() throws, or null when it accepts the batch.
+// message of whatever validate() throws, or null when it accepts the batch.
 function validateQueue(entries) {
     const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
     const batch = sdk.batch();
     for (const [action, params] of entries) batch.add(action, params || {});
     try {
-        batch._validate();
+        batch.validate();
         return null;
     } catch (e) {
         return e.message;

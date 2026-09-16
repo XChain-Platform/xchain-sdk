@@ -99,7 +99,7 @@ describe('LifecycleManager', function () {
             tx.addOutput(bitcoin.address.toOutputScript(chain.changeAddress), big);
 
             const lm  = new LifecycleManager(makeSdk());
-            const out = lm._extractChangeOutputs(tx.toHex(), chain.changeAddress);
+            const out = lm.extractChangeOutputs(tx.toHex(), chain.changeAddress);
             assert.strictEqual(out.length, 1);
             assert.strictEqual(out[0].value, '9007199254740993');
             assert.doesNotThrow(() => JSON.stringify(out));

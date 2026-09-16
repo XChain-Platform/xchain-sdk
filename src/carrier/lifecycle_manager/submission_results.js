@@ -32,7 +32,7 @@ function prepareEnvelope(manager, encoded, createResult, wif, progress) {
         assertEnvelopeCarrierBinding({
             actionString: createResult.actionString,
             revealPsbt:   encoded.revealPsbt,
-            network:      manager._reconcileNetwork(),
+            network:      manager.reconcileNetwork(),
         });
         revealSigned = manager.sdk.wallet.signEnvelopeRevealPsbt(encoded.revealPsbt, wif);
         // Recovery material must be persisted before broadcasting the commit,
@@ -53,7 +53,7 @@ function buildEnvelopeBroadcastError(error, signed, encoded, revealSigned) {
 
 // Record a successful envelope reveal synchronously before choosing the final action txid.
 function finishEnvelope(manager, encoded, revealSigned, spentInputs, broadcastHexes) {
-    spentInputs = spentInputs.concat(manager._extractSpentInputs(encoded.revealPsbt));
+    spentInputs = spentInputs.concat(manager.extractSpentInputs(encoded.revealPsbt));
     broadcastHexes.push(revealSigned.txHex);
     return { spentInputs, finalTxidEnvelope: revealSigned.txid };
 }
@@ -92,7 +92,7 @@ function preparePhase2(manager, spendResult, reconcileState, createResult, wif) 
     assertCarrierBinding({
         psbt:         spendResult.psbt,
         actionString: createResult.actionString,
-        network:      manager._reconcileNetwork(),
+        network:      manager.reconcileNetwork(),
         label:        'phase-2 reveal',
     });
 
@@ -103,7 +103,7 @@ function preparePhase2(manager, spendResult, reconcileState, createResult, wif) 
 // Update phase-2 tracking synchronously after its broadcast has succeeded.
 function finishPhase2(manager, spendResult, spendSigned, broadcastHexes, spentInputs) {
     broadcastHexes.push(spendSigned.txHex);
-    let phase2Inputs = manager._extractSpentInputs(spendResult.psbt);
+    let phase2Inputs = manager.extractSpentInputs(spendResult.psbt);
     spentInputs = spentInputs.concat(phase2Inputs);
     return { finalTxid: spendSigned.txid, signed: spendSigned, spentInputs };
 }
@@ -122,7 +122,7 @@ function shapeResult(manager, state) {
     let changeAddress = state.encoderOpts.change || state.encoderOpts.pubkey;
     let changeOutputs = [];
     for (let hex of state.broadcastHexes) {
-        for (let out of manager._extractChangeOutputs(hex, changeAddress)) {
+        for (let out of manager.extractChangeOutputs(hex, changeAddress)) {
             if (!spentSet.has(out.txid + ':' + out.vout)) changeOutputs.push(out);
         }
     }

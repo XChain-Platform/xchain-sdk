@@ -89,7 +89,7 @@ function reconcileTransaction(manager, encoded, createResult, encoderOpts, opts)
     // createTx is a remote response that chooses inputs, outputs and fees. The
     // structural gate validates that response against the submitted spend intent.
     const reconcileIntent = {
-        network:       manager._reconcileNetwork(),
+        network:       manager.reconcileNetwork(),
         customOutputs: encoderOpts.customOutputs,
         // A caller-provided change destination is submitted intent and must not
         // be mistaken for a shaped phase-funding output.
@@ -126,7 +126,7 @@ function reconcileTransaction(manager, encoded, createResult, encoderOpts, opts)
         actionString:   createResult.actionString,
         encoding:       encoded.encoding,
         carrierScripts: encoded.carrierScripts,
-        network:        manager._reconcileNetwork(),
+        network:        manager.reconcileNetwork(),
         label:          'transaction',
     });
     return { reconcileIntent, phase1 };

@@ -36,7 +36,7 @@ module.exports = {
         let gate  = opts.awaitContract;
         let index = (gate.contractActionIndex !== undefined && gate.contractActionIndex !== null)
             ? gate.contractActionIndex
-            : this.constructor._contractIndexOf(actionData);
+            : this.constructor.contractIndexOf(actionData);
         if (index === undefined || index === null || index === '')
             throw new SDKConfigError('MISSING_CONTRACT_INDEX',
                 'opts.awaitContract needs a contractActionIndex; this action does not carry one');
@@ -90,7 +90,7 @@ module.exports = {
     // The bitcoinjs network the reconcile gate parses submitted addresses against.
     // Undefined (bitcoinjs default) when the SDK was built without one: an address
     // that then fails to parse authorizes nothing, so the gate stays fail-closed.
-    _reconcileNetwork() {
+    reconcileNetwork() {
         try { return this.sdk.wallet.getBitcoinNetwork(); }
         catch (e) { return undefined; }
     },
@@ -105,7 +105,7 @@ module.exports = {
     //
     // Reads the SIGNED tx hex rather than the PSBT, because a chained spend
     // needs the real txid, which only exists once the inputs are final.
-    _extractChangeOutputs(txHex, changeAddress) {
+    extractChangeOutputs(txHex, changeAddress) {
         if (!txHex || !changeAddress) return [];
         try {
             // Compare SCRIPTS, not decoded addresses. address.fromOutputScript
@@ -117,7 +117,7 @@ module.exports = {
             // cannot parse (a hex pubkey passed as `pubkey`), which is the
             // fail-closed answer: no change tracked, same as before.
             let changeScript = bitcoin.address
-                .toOutputScript(changeAddress, this._reconcileNetwork())
+                .toOutputScript(changeAddress, this.reconcileNetwork())
                 .toString('hex');
             let tx   = bitcoin.Transaction.fromHex(txHex);
             let txid = tx.getId();
@@ -145,7 +145,7 @@ module.exports = {
         }
     },
 
-    _extractSpentInputs(psbtHex) {
+    extractSpentInputs(psbtHex) {
         try {
             let psbt = bitcoin.Psbt.fromHex(psbtHex);
             return psbt.txInputs.map(input => ({

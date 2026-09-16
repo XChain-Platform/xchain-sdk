@@ -38,9 +38,9 @@ module.exports = {
     ],
     LifecycleManager: [
         ['_awaitContract', false, true, true, 'function', 5],
-        ['_extractChangeOutputs', false, true, true, 'function', 2],
-        ['_extractSpentInputs', false, true, true, 'function', 1],
-        ['_reconcileNetwork', false, true, true, 'function', 0],
+        ['extractChangeOutputs', false, true, true, 'function', 2],
+        ['extractSpentInputs', false, true, true, 'function', 1],
+        ['reconcileNetwork', false, true, true, 'function', 0],
         ['constructor', false, true, true, 'function', 1],
         ['submitAction', false, true, true, 'function', 1],
     ],

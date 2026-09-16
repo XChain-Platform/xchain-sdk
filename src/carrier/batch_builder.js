@@ -208,7 +208,7 @@ class BatchBuilder {
     file(params)      { return this.add('FILE', params); }
 
     // Validate BATCH constraints before building
-    _validate() {
+    validate() {
         if (this._actions.length === 0)
             throw new SDKValidationError('BATCH_EMPTY', 'BATCH must contain at least one action');
 
@@ -252,7 +252,7 @@ class BatchBuilder {
     // encoder.pubkey is supplied and a PSBT needs to be built. Callers MUST await:
     //   const batchAction = await sdk.batch().send(...).mint(...).build();
     async build(encoderOpts) {
-        this._validate();
+        this.validate();
 
         // Build each sub-action through the full pipeline (validate + format select + serialize).
         // The serialize step itself is synchronous (sdk.actions.createAction); the

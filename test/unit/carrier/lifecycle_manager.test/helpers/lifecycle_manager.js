@@ -13,7 +13,7 @@
 // Helpers: minimal fake SDK and collaborators
 
 // A valid signed P2WPKH tx hex that bitcoinjs-lib can parse (so
-// _extractSpentInputs works without a real PSBT). We build it using
+// extractSpentInputs works without a real PSBT). We build it using
 // bitcoinjs-lib itself so the bytes are structurally correct.
 let _cachedPsbtHex = null;
 function buildTestPsbtHex() {
@@ -83,7 +83,7 @@ function buildSignedTx() {
  * the funding transaction paid the caller.
  *
  * Everything is on the bitcoinjs DEFAULT network, because the fake SDK has no
- * wallet.getBitcoinNetwork and _reconcileNetwork therefore falls back to it.
+ * wallet.getBitcoinNetwork and reconcileNetwork therefore falls back to it.
  */
 function buildChangeChain() {
     const bitcoin = require('bitcoinjs-lib');
@@ -124,7 +124,7 @@ function buildChangeChain() {
         changeScript:  change.output.toString('hex'),
         // The same key as a raw hex pubkey. The reconcile gate derives the
         // caller's default-type scripts from it, so a change output still
-        // reconciles; _extractChangeOutputs cannot parse it as an address.
+        // reconciles; extractChangeOutputs cannot parse it as an address.
         pubkeyHex:     Buffer.from(kp.publicKey).toString('hex'),
         phase1: { psbtHex: psbt1Hex, txHex: tx1.toHex(), txid: tx1.getId() },
         phase2: { psbtHex: psbt2Hex, txHex: tx2.toHex(), txid: tx2.getId() },

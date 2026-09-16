@@ -42,7 +42,7 @@ function builderThrow(queue) {
     const batch = sdk.batch();
     for (const [action, params] of queue) batch.add(action, params);
     try {
-        batch._validate();
+        batch.validate();
         return null;
     } catch (e) {
         return e.message;
@@ -81,7 +81,7 @@ describe('R2b: per-ACTION cap precedence on the compose side', function () {
 
 describe('R2b: per-ACTION cap precedence on the compose side', function () {
 
-    describe('BatchBuilder._validate (compose-time params)', function () {
+    describe('BatchBuilder.validate (compose-time params)', function () {
 
         it('names the cap whose action appears FIRST when two are broken', function () {
             const msg = builderThrow([
