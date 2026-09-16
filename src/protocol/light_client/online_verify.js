@@ -42,7 +42,7 @@ const M = require('../../merkle.js');
 // adjacent indices above 2^53 onto one value, so the binding guards below would
 // match the neighbouring action or height they exist to reject.
 const { sameWireIndex } = require('../../utils/wire_index.js');
-const { resolveFetch, baseUrl, fetchJson, _hx } = require('./fetch_helpers.js');
+const { resolveFetch, baseUrl, fetchJson, lowerHex } = require('./fetch_helpers.js');
 const { verifyBalanceProof, verifyLockedBalanceProof, verifyActionProof } = require('./proof_checks.js');
 const { resolveQuorum } = require('./quorum_resolution.js');
 
@@ -88,9 +88,9 @@ async function verifyBalance(opts){
     // question than the caller asked and must not verify.
     if (opts.atHeight != null && opts.atHeight !== '' && Number(cp.block_index) < Number(opts.atHeight))
         return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_BELOW_ATHEIGHT' }, base);
-    const trusted = _hx(cp.state_root);
+    const trusted = lowerHex(cp.state_root);
     if (!trusted) return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_PRE_COMMITMENT' }, base);
-    if (_hx(proof.chain) !== _hx(cp.chain) || _hx(proof.network) !== _hx(cp.network))
+    if (lowerHex(proof.chain) !== lowerHex(cp.chain) || lowerHex(proof.network) !== lowerHex(cp.network))
         return Object.assign({ verified: false, amount: null, reason: 'PROOF_CHECKPOINT_CHAIN_MISMATCH' }, base);
     // Bind the proof to the ACTUAL query. verifyBalanceProof only checks the proven
     // key against balanceKey(chain, network, proof.address, proof.tick) -- the
@@ -101,7 +101,7 @@ async function verifyBalance(opts){
     // address A with a genuinely-committed proof for a different address B and its
     // real balance. (verifyAction guards the analogous case via ACTION_INDEX_MISMATCH.)
     const expectedKey = M.toHex(M.balanceKey(cp.chain, cp.network, String(opts.address), String(opts.tick)));
-    if (!proof.smt_proof || _hx(proof.smt_proof.key) !== expectedKey)
+    if (!proof.smt_proof || lowerHex(proof.smt_proof.key) !== expectedKey)
         return Object.assign({ verified: false, amount: null, reason: 'BALANCE_QUERY_MISMATCH' }, base);
     // Bind inside the verifier too: the expectedKey check above guards the proven
     // key, `expected` guards the echoed address/tick fields the caller will read.
@@ -176,14 +176,14 @@ async function verifyLockedBalance(opts){
         return Object.assign({ verified: false, amount: null, reason: 'PROOF_HEIGHT_MISMATCH' }, base);
     if (opts.atHeight != null && opts.atHeight !== '' && Number(cp.block_index) < Number(opts.atHeight))
         return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_BELOW_ATHEIGHT' }, base);
-    const trusted = _hx(cp.state_root);
+    const trusted = lowerHex(cp.state_root);
     if (!trusted) return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_PRE_COMMITMENT' }, base);
-    if (_hx(proof.chain) !== _hx(cp.chain) || _hx(proof.network) !== _hx(cp.network))
+    if (lowerHex(proof.chain) !== lowerHex(cp.chain) || lowerHex(proof.network) !== lowerHex(cp.network))
         return Object.assign({ verified: false, amount: null, reason: 'PROOF_CHECKPOINT_CHAIN_MISMATCH' }, base);
     // Bind the proven key to the CALLER's query in the ESC domain, the escrow
     // counterpart of BALANCE_QUERY_MISMATCH.
     const expectedKey = M.toHex(M.escrowKey(cp.chain, cp.network, String(opts.address), String(opts.tick)));
-    if (!proof.smt_proof || _hx(proof.smt_proof.key) !== expectedKey)
+    if (!proof.smt_proof || lowerHex(proof.smt_proof.key) !== expectedKey)
         return Object.assign({ verified: false, amount: null, reason: 'LOCKED_QUERY_MISMATCH' }, base);
     const v = verifyLockedBalanceProof(proof, trusted, cp.chain, cp.network,
                                        { address: String(opts.address), tick: String(opts.tick) },
@@ -227,7 +227,7 @@ async function verifyAction(opts){
     // actionProof emits height as Number(cp.block_index) for that same cp.
     if (!sameWireIndex(proof.height, cp.block_index))
         return Object.assign({ verified: false, reason: 'PROOF_HEIGHT_MISMATCH' }, base);
-    const trusted = _hx(cp.block_merkle_root);
+    const trusted = lowerHex(cp.block_merkle_root);
     if (!trusted) return Object.assign({ verified: false, reason: 'CHECKPOINT_PRE_COMMITMENT' }, base);
     // The ONLY check binding this proof to the action the caller asked about, and
     // verifyActionProof cannot back it up: that verifier recomputes the leaf FROM

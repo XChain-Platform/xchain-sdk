@@ -38,7 +38,7 @@
 
 const checkpoint = require('../../checkpoint.js');
 const { sameWireIndex } = require('../../utils/wire_index.js');
-const { baseUrl, fetchJson, pinnedEntry, _hx } = require('./fetch_helpers.js');
+const { baseUrl, fetchJson, pinnedEntry, lowerHex } = require('./fetch_helpers.js');
 const { followForward } = require('./validator_set_follow.js');
 
 // ── Trust: turn a server-served checkpoint into a quorum-verified one ──────────
@@ -110,14 +110,14 @@ async function resolveQuorum(f, opts, cp){
         if (q.valid) return q;                                 // launch epoch: pinned set still signs
     }
     const pcp = entry.checkpoint;
-    if (pcp && pcp.state_root != null && _hx(cp.chain) === 'btc'
+    if (pcp && pcp.state_root != null && lowerHex(cp.chain) === 'btc'
         && Number(cp.block_index) > Number(pcp.block_index)){
         const ff = await followForward({ explorerUrl: opts.explorerUrl, btcCoin: opts.coin,
             trustedCheckpoint: pcp, toHeight: Number(cp.block_index), fetchImpl: f });
         const t = ff && ff.trusted;
         if (t && sameWireIndex(t.block_index, cp.block_index)
-            && _hx(t.state_root) === _hx(cp.state_root)
-            && _hx(t.block_merkle_root) === _hx(cp.block_merkle_root))
+            && lowerHex(t.state_root) === lowerHex(cp.state_root)
+            && lowerHex(t.block_merkle_root) === lowerHex(cp.block_merkle_root))
             return { valid: true, quorum: null, weighted: null };
     }
     return { valid: false, quorum: null, weighted: null };

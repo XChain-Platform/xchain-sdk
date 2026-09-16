@@ -70,7 +70,7 @@ async function fetchJson(f, url){
     if (!r.ok) throw new Error('LightClient: explorer returned HTTP ' + r.status);
     return r.json();
 }
-function _hx(x){ return String(x == null ? '' : x).toLowerCase(); }
+function lowerHex(x){ return String(x == null ? '' : x).toLowerCase(); }
 
 // Bind a proof to the question the CALLER asked, not merely to the one the server
 // echoed. Every verifier below re-derives its SMT key from fields carried IN the
@@ -107,4 +107,4 @@ function _no(reason){ return { verified: false, amount: null, reason: reason }; 
 
 function scaled(a){ const [i, f] = M.canonicalAmount(String(a)).split('.'); return BigInt(i) * 1000000000000000000n + BigInt(f); }
 
-module.exports = { resolveFetch, pinnedEntry, baseUrl, fetchJson, _hx, expectedMismatch, _no, scaled };
+module.exports = { resolveFetch, pinnedEntry, baseUrl, fetchJson, lowerHex, expectedMismatch, _no, scaled };

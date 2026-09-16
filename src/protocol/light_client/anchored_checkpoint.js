@@ -38,7 +38,7 @@
 
 const checkpoint = require('../../checkpoint.js');
 const ckptCommit = require('../../checkpoint_commitment_activation.js');
-const { _hx, resolveFetch, baseUrl, fetchJson } = require('./fetch_helpers.js');
+const { lowerHex, resolveFetch, baseUrl, fetchJson } = require('./fetch_helpers.js');
 const { resolveValidatorSet } = require('./quorum_resolution.js');
 
 // Default DOGE confirmation depth a cold-start anchor must be buried under before
@@ -110,11 +110,11 @@ function parseAnchorV0(wire){
         if (i + 12 >= p.length) throw new Error('LightClient: truncated ANCHOR section ' + s);
         const sec = {
             chain: String(p[i] || '').toUpperCase(), network,
-            block_index: Number(p[i + 1]), block_hash: _hx(p[i + 2]),
-            ledger_hash: _hx(p[i + 3]), actions_hash: _hx(p[i + 4]), contract_hash: _hx(p[i + 5]),
+            block_index: Number(p[i + 1]), block_hash: lowerHex(p[i + 2]),
+            ledger_hash: lowerHex(p[i + 3]), actions_hash: lowerHex(p[i + 4]), contract_hash: lowerHex(p[i + 5]),
             checkpoint_seq: Number(p[i + 6]), snapshot_block: Number(p[i + 7]),
-            state_root: _hx(p[i + 8]), state_root_version: Number(p[i + 9]),
-            block_merkle_root: _hx(p[i + 10]), block_merkle_version: Number(p[i + 11]),
+            state_root: lowerHex(p[i + 8]), state_root_version: Number(p[i + 9]),
+            block_merkle_root: lowerHex(p[i + 10]), block_merkle_version: Number(p[i + 11]),
             validator_signatures: []
         };
         const n = parseInt(p[i + 12], 10);
@@ -131,7 +131,7 @@ function parseAnchorV0(wire){
     // Tail: one publisher attestation for the whole bundle. It is a reward
     // artifact, not part of SPV trust, and a degraded round legitimately lands
     // ATTEST_SIG_COUNT 0, so an absent or empty tail is not an error.
-    const publisher = _hx(p[i]) || null;
+    const publisher = lowerHex(p[i]) || null;
     const attestCount = parseInt(p[i + 1], 10);
     const attestations = [];
     if (Number.isFinite(attestCount) && attestCount > 0){

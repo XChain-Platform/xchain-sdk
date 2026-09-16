@@ -40,7 +40,7 @@ const M          = require('../../merkle.js');
 const checkpoint = require('../../checkpoint.js');
 const swq        = require('../../stake_weighted_quorum.js');
 const srb        = require('../../snapshot_reorg_buffer.js');
-const { resolveFetch, baseUrl, fetchJson, scaled, _hx } = require('./fetch_helpers.js');
+const { resolveFetch, baseUrl, fetchJson, scaled, lowerHex } = require('./fetch_helpers.js');
 const { verifyValidatorSetProof } = require('./proof_checks.js');
 
 // Network: fetch + verify the validator-set proof at BTC snapshot height S.
@@ -143,7 +143,7 @@ async function followForward(opts){
             // declared height is used verbatim and already-anchored checkpoints read as before.
             const setBlock = srb.buriedSnapshotBlock(next.snapshot_block, next.network);
             const vs = await verifyValidatorSet({ explorerUrl: opts.explorerUrl, btcCoin,
-                snapshotBlock: setBlock, trustedStateRoot: _hx(trusted.state_root), fetchImpl: f });
+                snapshotBlock: setBlock, trustedStateRoot: lowerHex(trusted.state_root), fetchImpl: f });
             if (!vs.verified) return { trusted, adopted, reason: 'VALIDATOR_SET_UNVERIFIED@' + next.block_index, stoppedAt: next.block_index };
             const q = verifyCheckpointWithProvenSet(next, vs.capabilities.oracle_publish);
             if (!q.valid) return { trusted, adopted, reason: 'QUORUM_FAILED@' + next.block_index, stoppedAt: next.block_index };

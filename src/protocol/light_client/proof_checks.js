@@ -39,7 +39,7 @@
 const M   = require('../../merkle.js');
 const SUB = require('../../state_subtree_activation.js');
 const { sameWireIndex, toWireIndex } = require('../../utils/wire_index.js');
-const { _hx, expectedMismatch, _no } = require('./fetch_helpers.js');
+const { lowerHex, expectedMismatch, _no } = require('./fetch_helpers.js');
 
 // Verify a §4.4 BalanceProof binds to a TRUSTED state_root (one already proven to
 // be in a quorum-signed checkpoint). chain/network come from the trusted
@@ -57,7 +57,7 @@ function verifyBalanceProof(proof, trustedStateRoot, chain, network, expected){
         // The proven key must be exactly balanceKey(chain, network, address, tick):
         // a server cannot answer for (A,T) with a proof for some other key.
         const keyBuf    = M.balanceKey(chain, network, proof.address, proof.tick);
-        if (_hx(proof.smt_proof.key) !== M.toHex(keyBuf)) return _no('KEY_MISMATCH');
+        if (lowerHex(proof.smt_proof.key) !== M.toHex(keyBuf)) return _no('KEY_MISMATCH');
         const leaf   = proof.smt_proof.leaf_value;             // hex string or null (non-inclusion)
         const amount = M.canonicalAmount(proof.amount);
         if (leaf == null){
@@ -65,7 +65,7 @@ function verifyBalanceProof(proof, trustedStateRoot, chain, network, expected){
         } else {
             // The committed leaf must be exactly amountLeaf(amount): binds the
             // returned amount to the proof, so the server's `amount` cannot lie.
-            if (M.toHex(M.amountLeaf(amount)) !== _hx(leaf)) return _no('LEAF_AMOUNT_MISMATCH');
+            if (M.toHex(M.amountLeaf(amount)) !== lowerHex(leaf)) return _no('LEAF_AMOUNT_MISMATCH');
         }
         // The SMT proof must reconstruct the claimed balances_root...
         if (!M.verifyCompressedSmtProof(proof.balances_root, keyBuf, leaf, proof.smt_proof.compressed))
@@ -166,7 +166,7 @@ function verifyLockedBalanceProof(proof, trustedStateRoot, chain, network, expec
         // The proven key must be exactly escrowKey(chain, network, address, tick),
         // with chain/network from the TRUSTED checkpoint, never the proof.
         const keyBuf = M.escrowKey(chain, network, proof.address, proof.tick);
-        if (_hx(proof.smt_proof.key) !== M.toHex(keyBuf)) return _no('KEY_MISMATCH');
+        if (lowerHex(proof.smt_proof.key) !== M.toHex(keyBuf)) return _no('KEY_MISMATCH');
         const leaf   = proof.smt_proof.leaf_value;
         const amount = M.canonicalAmount(proof.amount);
         if (leaf == null){
@@ -174,7 +174,7 @@ function verifyLockedBalanceProof(proof, trustedStateRoot, chain, network, expec
         } else {
             // amountLeaf, the SAME encoding the spendable leaf uses, so a client
             // verifies both leaves of an (address, tick) the same way.
-            if (M.toHex(M.amountLeaf(amount)) !== _hx(leaf)) return _no('LEAF_AMOUNT_MISMATCH');
+            if (M.toHex(M.amountLeaf(amount)) !== lowerHex(leaf)) return _no('LEAF_AMOUNT_MISMATCH');
         }
         if (!M.verifyCompressedSmtProof(proof.balances_root, keyBuf, leaf, proof.smt_proof.compressed))
             return _no('SMT_PROOF_INVALID');
@@ -221,7 +221,7 @@ function verifyContractStateProof(proof, trustedStateRoot, chain, network, expec
         // with chain/network from the TRUSTED checkpoint rather than the proof: a
         // server must not be able to answer for one key with another key's proof.
         const keyBuf = M.contractStateKey(chain, network, proof.contract_index, proof.state_key);
-        if (_hx(proof.smt_proof.key) !== M.toHex(keyBuf)) return no('KEY_MISMATCH');
+        if (lowerHex(proof.smt_proof.key) !== M.toHex(keyBuf)) return no('KEY_MISMATCH');
 
         const leaf = proof.smt_proof.leaf_value;
         const val  = (proof.state_value == null) ? null : String(proof.state_value);
@@ -231,7 +231,7 @@ function verifyContractStateProof(proof, trustedStateRoot, chain, network, expec
             if (val === null) return no('INCLUSION_WITHOUT_VALUE');
             // Binds the returned value to the committed leaf, so the server's
             // `state_value` cannot lie about what the contract stored.
-            if (M.toHex(M.leafHash(val)) !== _hx(leaf)) return no('LEAF_VALUE_MISMATCH');
+            if (M.toHex(M.leafHash(val)) !== lowerHex(leaf)) return no('LEAF_VALUE_MISMATCH');
         }
         if (!M.verifyCompressedSmtProof(proof.contract_state_root, keyBuf, leaf, proof.smt_proof.compressed))
             return no('SMT_PROOF_INVALID');
@@ -257,7 +257,7 @@ function verifyActionProof(proof, trustedBlockMerkleRoot){
         // bind a leaf it did not also describe.
         const leaf = M.toHex(M.actionsLeaf({ action_index: proof.action_index,
             tx_index: proof.tx_index, action: (proof.action == null) ? '' : proof.action }));
-        if (_hx(proof.leaf) !== leaf) return _no('LEAF_MISMATCH');
+        if (lowerHex(proof.leaf) !== leaf) return _no('LEAF_MISMATCH');
         if (!M.verifyFixedMerkleProof(trustedBlockMerkleRoot, M.toBuf(leaf),
                                       proof.merkle_proof.index, proof.merkle_proof.siblings))
             return _no('MERKLE_PROOF_INVALID');
@@ -287,7 +287,7 @@ function verifyValidatorSetProof(proof, trustedStateRoot){
             for (const v of (c.validators || [])){
                 // The committed leaf must be exactly stakeMemberLeaf(source, weight) and
                 // the SMT proof must reconstruct stakes_root for stakeKey(pubkey, cap).
-                if (_hx(v.smt_proof && v.smt_proof.leaf_value) !== M.toHex(M.stakeMemberLeaf(v.source, v.weight)))
+                if (lowerHex(v.smt_proof && v.smt_proof.leaf_value) !== M.toHex(M.stakeMemberLeaf(v.source, v.weight)))
                     return { verified: false, capabilities: {}, reason: 'MEMBER_LEAF_MISMATCH:' + v.pubkey };
                 if (!M.verifyCompressedSmtProof(proof.stakes_root, M.stakeKey(String(v.pubkey), cap), v.smt_proof.leaf_value, v.smt_proof.compressed))
                     return { verified: false, capabilities: {}, reason: 'MEMBER_PROOF_INVALID:' + v.pubkey };
@@ -296,7 +296,7 @@ function verifyValidatorSetProof(proof, trustedStateRoot){
             // The committed total S (proven via __total__) is the quorum denominator.
             let total = '0';
             if (c.total_proof){
-                if (_hx(c.total_proof.leaf_value) !== M.toHex(M.stakeTotalLeaf(c.total)))
+                if (lowerHex(c.total_proof.leaf_value) !== M.toHex(M.stakeTotalLeaf(c.total)))
                     return { verified: false, capabilities: {}, reason: 'TOTAL_LEAF_MISMATCH:' + cap };
                 if (!M.verifyCompressedSmtProof(proof.stakes_root, M.stakeKey(M.STAKE_TOTAL_PUBKEY, cap), c.total_proof.leaf_value, c.total_proof.compressed))
                     return { verified: false, capabilities: {}, reason: 'TOTAL_PROOF_INVALID:' + cap };
