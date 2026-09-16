@@ -64,10 +64,9 @@ const ecc     = require('@bitcoinerlab/secp256k1');
 const MuSig2  = require('./musig2.js');
 const outputPolicy = require('./co_signer/output_policy.js');
 const signRequest = require('./co_signer/sign_request.js');
+const constructorSetup = require('./co_signer/constructor_setup.js');
 const { exactU64 } = outputPolicy;
-const { toBytes, taprootKeyPathSighash } = signRequest;
-const { deriveMuSig2P2TR2of3 } = require('./account.js');
-const { isCapInert } = require('./value_derivability.js');
+const { taprootKeyPathSighash } = signRequest;
 const { installMethods } = require('../utils/install_methods.js');
 
 // Taproot operations (p2tr derivation, key-path sighash) require an ECC backend.
@@ -96,175 +95,17 @@ class CoSigner {
      *                   count and the PSBT's total input count (G14)
      */
     constructor(config = {}) {
-        this.secretKey  = toBytes(config.secretKey, 'secretKey');
-        if (this.secretKey.length !== 32) throw new Error('secretKey must be 32 bytes');
-        // EXACTLY two: the daemon returns ONE partial and the agent aggregates it
-        // with its own, so a larger set funds an address the cooperative path can
-        // never spend. The 2-of-3 account names its third key as recoveryPublicKey.
-        if (!Array.isArray(config.publicKeys) || config.publicKeys.length !== 2)
-            throw new Error('publicKeys must be exactly the [agent, daemon] pair '
-                + '(a 2-of-3 account names its third key as recoveryPublicKey)');
-        this.publicKeys = config.publicKeys;
-        // This daemon's OWN key must be in the signer set, and the set's order is a
-        // claim it has to check rather than adopt. Fail closed at construction, the
-        // mirror of MuSig2AgentSession's COSIGNER_KEY_MISMATCH on the agent side.
-        const ownPub = ecc.pointFromScalar(this.secretKey, true);
-        if (!ownPub) throw new Error('secretKey is not a valid secp256k1 private key');
-        const ownHex  = Buffer.from(ownPub).toString('hex').toLowerCase();
-        const keyHex  = this.publicKeys.map((k, i) =>
-            Buffer.from(toBytes(k, 'publicKeys[' + i + ']')).toString('hex').toLowerCase());
-        this.ownKeyIndex = keyHex.indexOf(ownHex);
-        if (this.ownKeyIndex < 0)
-            throw new Error("this co-signer's secretKey does not derive any key in publicKeys, so its "
-                + 'partial can never aggregate to the account key (publicKeys is the [agent, daemon] '
-                + "pair and must contain this daemon's public key)");
-        if (!config.policy || !config.policy.allowedActions)
-            throw new Error('a normalized policy with allowedActions is required');
-        this.policy = config.policy;
-        if (this.policy.maxPerWindow && !config.windowStore)
-            throw new Error('policy.maxPerWindow requires a windowStore (server-side budget)');
-        this.windowStore = config.windowStore || null;
-        this.network = config.network || null;
-
-        // G2: an amount cap keyed on an action whose every decodable format
-        // defines its value by ACTION_INDEX reference can never fire - the
-        // daemon cannot read the referenced object, so the amount is always
-        // undefined and every amount gate skips. Left alone that is a policy the
-        // operator believes is enforced and which is in fact decorative. Reject
-        // it here, at construction, rather than at sign time.
-        // maxPerAction is the only policy table keyed by ACTION (maxPerWindow.perTick
-        // and confirmAbove.perTick are keyed by tick), so it is the only place an
-        // action name can be written into an amount limit.
-        if (config.policy.maxPerAction) {
-            for (const action of Object.keys(config.policy.maxPerAction))
-                if (isCapInert(action))
-                    throw new Error(`policy.maxPerAction.${action} can never bind: every decodable ` +
-                        `${action} format defines its value by reference to an on-chain object the ` +
-                        `co-signer cannot read, so the cap would be silently inert. Remove the cap ` +
-                        `(the output gate + maxFeeSats bound ${action}), or disallow the action.`);
-        }
-
-        // G3: the taproot tweak is DERIVED here, never accepted from the caller.
-        // `tweak = taggedHash('TapTweak', internal || merkleRoot)` is an opaque
-        // 32 bytes: a daemon handed that value cannot tell which tap tree it
-        // commits to, so whoever supplies it chooses the tree. A compromised
-        // agent supplying a tweak computed over a tree containing
-        // `<agentPubkey> OP_CHECKSIG` yields exactly the funded address, passes
-        // every gate, and then spends the whole account unilaterally through a
-        // script path - no daemon, no policy, no window, and on-chain
-        // indistinguishable from a cooperative spend. So `tweaks` is gone as a
-        // configuration surface, and the 2-of-3 account is configured by naming
-        // the third PUBLIC KEY, which the daemon can verify by re-deriving the
-        // whole tree (and therefore the address) itself.
-        if (config.tweaks !== undefined && !(Array.isArray(config.tweaks) && config.tweaks.length === 0))
-            throw new Error('config.tweaks is not accepted: a supplied taproot tweak is an unverifiable ' +
-                'commitment to an arbitrary script tree (an agent-chosen tree grants the agent a ' +
-                'unilateral script-path spend). Configure a 2-of-3 account with recoveryPublicKey ' +
-                'instead, and the daemon derives the tree itself.');
-
-        this.recoveryPublicKey = config.recoveryPublicKey || null;
-        if (this.recoveryPublicKey) {
-            if (this.publicKeys.length !== 2)
-                throw new Error('recoveryPublicKey requires exactly the [agent, daemon] pair in publicKeys ' +
-                    '(the recovery key is the third party and is named separately)');
-            // The 2-of-3 tree is ORDER-SENSITIVE: deriveMuSig2P2TR2of3 builds two
-            // ASYMMETRIC leaves, MuSig2(agent,recovery) and MuSig2(daemon,recovery),
-            // so the daemon must be publicKeys[1]. The agent half normalizes by
-            // searching for its own key (musig2_agent_session.js), so a swapped pair
-            // does not collide: it derives a different address and differently
-            // composed recovery leaves, and the operator's escape hatch is not
-            // where they believe it is. Refuse it here instead.
-            if (this.ownKeyIndex !== 1)
-                throw new Error('a 2-of-3 co-signer must occupy publicKeys[1]: publicKeys is the '
-                    + '[agent, daemon] pair IN THAT ORDER, and the two recovery leaves are derived '
-                    + "asymmetrically from it, so a swapped pair commits leaves nobody expects. This "
-                    + "daemon's key is at index " + this.ownKeyIndex + '; swap publicKeys.');
-            let tree;
-            try {
-                tree = deriveMuSig2P2TR2of3({
-                    agent:    this.publicKeys[0],
-                    daemon:   this.publicKeys[1],
-                    recovery: this.recoveryPublicKey,
-                }, this.network || undefined);
-            } catch (e) {
-                throw new Error('failed to derive the 2-of-3 tap tree from publicKeys/recoveryPublicKey: ' + e.message);
-            }
-            this.tweaks = tree.keyPath.tweaks;
-            this.tapTree = tree;
-        } else {
-            // Plain 2-of-2: the BIP-327 aggregate IS the taproot output key, with
-            // no tweak. That is hidden-leaf-safe by construction - producing a
-            // valid control block against an untweaked output key would need a
-            // discrete-log relation - precisely because the output key is a key
-            // aggregate with key coefficients no single participant can steer.
-            this.tweaks = [];
-            this.tapTree = null;
-        }
+        constructorSetup.setIdentity(this, config);
+        constructorSetup.validateActionCaps(config);
+        constructorSetup.setTapTree(this, config);
         this.allowConfirmable = config.allowConfirmable === true;
         // Operator-authorized non-change outputs (COINPAY native legs, the
         // protocol-fee output). Everything NOT in this set, change-to-self, or the
         // OP_RETURN carrier is treated as a drain and refused (see _checkOutputs).
         this.allowedOutputs = this._normalizeAllowedOutputs(config.allowedOutputs || []);
-        // Anti-burn fee reconciliation (see _checkFee). maxFeeSats is an optional
-        // operator-set absolute cap (satoshis). It is the only bound that can
-        // safely be tightened past the always-on guards, because a legitimate fee
-        // fraction is chain-specific (a low-unit-value chain can pay ~all of a
-        // small input as fee), so no proportional default can tell a legitimate
-        // high fee from a drain without operator knowledge.
-        // Parsed with exactU64, not Number(). Both enforcement sites
-        // below compare in BigInt, so a Number() hop rounded the cap BEFORE it was
-        // enforced and the daemon could approve a fee above what the operator set.
-        // This is the same parse allowedOutputs[].maxValue already uses; the cap is
-        // now a BigInt, so the two _deny details that embed it stringify it.
-        this.maxFeeSats = (config.maxFeeSats === undefined || config.maxFeeSats === null)
-            ? null : exactU64(config.maxFeeSats);
-        if (this.maxFeeSats === null && config.maxFeeSats !== undefined && config.maxFeeSats !== null)
-            throw new Error('maxFeeSats must be a non-negative integer (number, bigint, or digit string)');
-        // G14: the body-size limit bounds BYTES, not WORK. Sighash derivation
-        // re-copies every prevout script and value per signed input, so the cost is
-        // quadratic in the PSBT's input count, plus one deterministicSign each. A
-        // single crafted request could occupy the single-threaded sidecar for
-        // seconds and a modest stream of them is a sustained freeze - which, per the
-        // threat model, is permanently stuck funds on a plain 2-of-2. Cap both the
-        // requested count and the PSBT's TOTAL input count, since the sighash walks
-        // every input whether or not we sign it.
-        this.maxCosignInputs = (config.maxCosignInputs === undefined || config.maxCosignInputs === null)
-            ? DEFAULT_MAX_COSIGN_INPUTS : Number(config.maxCosignInputs);
-        if (!Number.isInteger(this.maxCosignInputs) || this.maxCosignInputs < 1)
-            throw new Error('maxCosignInputs must be a positive integer');
-
+        constructorSetup.setLimits(this, config, DEFAULT_MAX_COSIGN_INPUTS);
         this.musig = new MuSig2();
-
-        // The account scriptPubKey this daemon actually spends from, derived ONLY
-        // from the participant keys, never trusted from a caller-supplied
-        // witnessUtxo.script (see _checkPrevouts). Covers both the plain 2-of-2 key
-        // path (no tweak) and the tweaked 2-of-3 cooperative key path, whose tweak
-        // this constructor derived above from the three participant keys.
-        //
-        // There is deliberately no `accountScript` config override. It had no
-        // consumer, its only effect was to WEAKEN the prevout gate (the one gate
-        // that proves the inputs being signed really belong to this account), and
-        // the best case for a wrong value was a liveness break. Tests derive the
-        // script exactly as production does.
-        try {
-            const agg = this.musig.aggregateKeys(this.publicKeys, this.tweaks);
-            const p2tr = bitcoin.payments.p2tr({
-                pubkey:  Buffer.from(agg.xOnlyPubkey),
-                network: this.network || undefined,
-            });
-            this.accountScript = p2tr.output;
-            // The account's OUTPUT key: the bare aggregate on a 2-of-2, the
-            // tap-tweaked key on a 2-of-3. What a key-path signature verifies under.
-            this.aggregateXOnly = Buffer.from(agg.xOnlyPubkey);
-            // The UNTWEAKED cooperative aggregate MuSig2(agent, daemon), which is
-            // the envelope commit tree's internal key and its leaf's OP_CHECKSIG
-            // key in BOTH account shapes. On a 2-of-2 it is the same
-            // bytes as aggregateXOnly; on a 2-of-3 it is the account tap tree's
-            // internal key, so a reveal stays a no-tweak session either way.
-            this.internalXOnly = Buffer.from(this.musig.aggregateKeys(this.publicKeys, []).xOnlyPubkey);
-        } catch (e) {
-            throw new Error('failed to derive the account scriptPubKey from the participant keys: ' + e.message);
-        }
+        constructorSetup.setAccount(this);
     }
 
     _deny(reason, detail) { return { approved: false, reason, detail: detail || null }; }
