@@ -1,0 +1,386 @@
+// Copyright © 2025–2026 Dankest, LLC
+// Based on XChain Platform by Dankest, LLC – https://dankest.llc
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+// This file is part of XChain Platform. Licensed under the GNU Affero
+// General Public License v3.0 or later; see LICENSE.md. A commercial
+// license (without AGPL source-disclosure terms) is available -
+// contact legal@dankest.llc.
+
+const assert = require('assert');
+const ContractClient = require('../../../src/contract/client.js');
+
+// Build a minimal stub SDK with injected collaborators
+function makeSdk(overrides = {}) {
+    let explorer = {
+        getContract:       async (idx) => ({ action_index: idx, tick: 'MYCON', source: 'addr1' }),
+        getContractState:  async (idx, key) => key ? { value: 'stateVal' } : { key1: 'v1' },
+        getExecutions:     async (idx, type, opts) => ({ total: 2, data: [{ method: 'run' }] }),
+        getContractBalance: async (idx, tick) => tick ? { tick, quantity: '1000' } : [{ tick: 'TOK', quantity: '500' }],
+        getContractManifest: async (idx) => ({ permissions: ['SEND'], maxTakeBps: 250 }),
+        ...overrides.explorer
+    };
+    return {
+        execute:  async (params, encoder) => ({ submitted: true, params }),
+        deposit:  async (params, encoder) => ({ submitted: true, params }),
+        withdraw: async (params, encoder) => ({ submitted: true, params }),
+        _requireExplorer: () => explorer,
+        ...overrides
+    };
+}
+
+describe('ContractClient', function () {
+
+    describe('constructor', function () {
+        it('stores sdk and contractActionIndex', function () {
+            let sdk = makeSdk();
+            let client = new ContractClient(sdk, 42);
+            assert.strictEqual(client.contractActionIndex, 42);
+            assert.strictEqual(client.sdk, sdk);
+            assert.strictEqual(client._info, null);
+        });
+
+        it('coerces contractActionIndex to number', function () {
+            let client = new ContractClient(makeSdk(), '99');
+            assert.strictEqual(client.contractActionIndex, 99);
+        });
+
+        it('accepts contractActionIndex of 0', function () {
+            let client = new ContractClient(makeSdk(), 0);
+            assert.strictEqual(client.contractActionIndex, 0);
+        });
+
+        it('throws SDKContractError when contractActionIndex is missing', function () {
+            try {
+                new ContractClient(makeSdk());
+                assert.fail('should have thrown');
+            } catch (e) {
+                assert.strictEqual(e.name, 'SDKContractError');
+                assert.strictEqual(e.code, 'INVALID_CONTRACT_INDEX');
+            }
+        });
+
+        it('throws SDKContractError when contractActionIndex is null', function () {
+            try {
+                new ContractClient(makeSdk(), null);
+                assert.fail('should have thrown');
+            } catch (e) {
+                assert.strictEqual(e.name, 'SDKContractError');
+            }
+        });
+
+    });
+
+});
+
+describe('ContractClient', function () {
+
+    describe('constructor', function () {
+
+        // An index Number() cannot hold exactly must FAIL CLOSED. Before the guard
+        // '9007199254740993' was stored as ...992, so every deposit, withdraw,
+        // execute and wait on the client silently addressed a neighbouring
+        // contract that the indexer resolves as a legitimate target.
+        it('rejects an index above the exactly-representable range', function () {
+            for (let input of ['9007199254740993', 9007199254740993, '18446744073709551615']) {
+                try {
+                    new ContractClient(makeSdk(), input);
+                    assert.fail('should have thrown for ' + String(input));
+                } catch (e) {
+                    assert.strictEqual(e.name, 'SDKContractError');
+                    assert.strictEqual(e.code, 'INVALID_CONTRACT_INDEX');
+                    assert.ok(/exactly-representable/.test(e.message), 'message names the range: ' + e.message);
+                }
+            }
+        });
+
+        it('accepts the largest exactly-representable index', function () {
+            let client = new ContractClient(makeSdk(), '9007199254740991');
+            assert.strictEqual(client.contractActionIndex, 9007199254740991);
+        });
+
+        it('accepts a bigint index and stores it as a number', function () {
+            let client = new ContractClient(makeSdk(), 42n);
+            assert.strictEqual(client.contractActionIndex, 42);
+        });
+
+        it('rejects non-canonical index spellings rather than coercing them', function () {
+            for (let input of ['   ', true, '12.5', '100abc', -1, '-1', '0x10', '1e3']) {
+                try {
+                    new ContractClient(makeSdk(), input);
+                    assert.fail('should have thrown for ' + String(input));
+                } catch (e) {
+                    assert.strictEqual(e.name, 'SDKContractError', 'for ' + String(input));
+                    assert.strictEqual(e.code, 'INVALID_CONTRACT_INDEX');
+                }
+            }
+        });
+    });
+
+});
+
+describe('ContractClient', function () {
+
+    describe('call()', function () {
+        it('delegates to sdk.execute with correct params', async function () {
+            let sdk = makeSdk();
+            let client = new ContractClient(sdk, 7);
+            let result = await client.call('run', [1, 2], {});
+            assert.strictEqual(result.submitted, true);
+            assert.strictEqual(result.params.contractActionIndex, 7);
+            assert.strictEqual(result.params.method, 'run');
+            assert.deepStrictEqual(result.params.params, [1, 2]);
+        });
+
+        it('defaults params to [] when not provided', async function () {
+            let sdk = makeSdk();
+            let client = new ContractClient(sdk, 3);
+            let result = await client.call('noop');
+            assert.deepStrictEqual(result.params.params, []);
+        });
+    });
+
+});
+
+describe('ContractClient', function () {
+
+    describe('deposit()', function () {
+        it('delegates to sdk.deposit with correct params', async function () {
+            let sdk = makeSdk();
+            let client = new ContractClient(sdk, 5);
+            let result = await client.deposit('TOKEN', '100', {});
+            assert.strictEqual(result.submitted, true);
+            assert.strictEqual(result.params.contractActionIndex, 5);
+            assert.strictEqual(result.params.tick, 'TOKEN');
+            assert.strictEqual(result.params.quantity, '100');
+        });
+    });
+
+});
+
+describe('ContractClient', function () {
+
+    describe('withdraw()', function () {
+        it('delegates to sdk.withdraw with correct params', async function () {
+            let sdk = makeSdk();
+            let client = new ContractClient(sdk, 8);
+            let result = await client.withdraw('TOKEN', '50', {});
+            assert.strictEqual(result.submitted, true);
+            assert.strictEqual(result.params.contractActionIndex, 8);
+            assert.strictEqual(result.params.tick, 'TOKEN');
+            assert.strictEqual(result.params.quantity, '50');
+        });
+    });
+
+});
+
+describe('ContractClient', function () {
+
+    describe('getInfo()', function () {
+        it('fetches and caches contract info', async function () {
+            let sdk = makeSdk();
+            let client = new ContractClient(sdk, 42);
+            let info = await client.getInfo();
+            assert.strictEqual(info.action_index, 42);
+            // cached
+            assert.strictEqual(client._info, info);
+        });
+
+        it('calls explorer.getContract with contractActionIndex', async function () {
+            let capturedIdx;
+            let sdk = makeSdk({
+                explorer: {
+                    getContract: async (idx) => { capturedIdx = idx; return { action_index: idx }; }
+                }
+            });
+            let client = new ContractClient(sdk, 13);
+            await client.getInfo();
+            assert.strictEqual(capturedIdx, 13);
+        });
+    });
+
+});
+
+describe('ContractClient', function () {
+
+    describe('getState()', function () {
+        it('returns state for a specific key', async function () {
+            let sdk = makeSdk();
+            let client = new ContractClient(sdk, 1);
+            let result = await client.getState('mykey');
+            assert.deepStrictEqual(result, { value: 'stateVal' });
+        });
+
+        it('returns all state when no key given', async function () {
+            let sdk = makeSdk();
+            let client = new ContractClient(sdk, 1);
+            let result = await client.getState();
+            assert.deepStrictEqual(result, { key1: 'v1' });
+        });
+    });
+
+});
+
+describe('ContractClient', function () {
+
+    // The settle gate: a caller holding a bound client asks the CONTRACT
+    // whether the action executed, never the transaction whether it confirmed.
+    describe('waitForState() / waitForBalance()', function () {
+        it('waitForState delegates to the SDK gate, bound to this contract', async function () {
+            let seen = null;
+            let sdk = makeSdk({
+                waitForContractState: async (idx, opts) => { seen = { idx, opts }; return { value: 'FUNDED' }; }
+            });
+            let client = new ContractClient(sdk, 73);
+            let result = await client.waitForState({ key: 'status', equals: 'FUNDED' });
+            assert.strictEqual(result.value, 'FUNDED');
+            assert.strictEqual(seen.idx, 73);
+            assert.strictEqual(seen.opts.equals, 'FUNDED');
+        });
+
+        it('waitForBalance delegates with the tick', async function () {
+            let seen = null;
+            let sdk = makeSdk({
+                waitForContractBalance: async (idx, tick, opts) => { seen = { idx, tick, opts }; return { quantity: '1000' }; }
+            });
+            let client = new ContractClient(sdk, 73);
+            let result = await client.waitForBalance('PAY514', { minQuantity: '1000' });
+            assert.strictEqual(result.quantity, '1000');
+            assert.strictEqual(seen.idx, 73);
+            assert.strictEqual(seen.tick, 'PAY514');
+            assert.strictEqual(seen.opts.minQuantity, '1000');
+        });
+    });
+
+});
+
+describe('ContractClient', function () {
+
+    describe('getExecutions()', function () {
+        it('returns execution history', async function () {
+            let sdk = makeSdk();
+            let client = new ContractClient(sdk, 1);
+            let result = await client.getExecutions({ page: 1 });
+            assert.strictEqual(result.total, 2);
+            assert.strictEqual(result.data[0].method, 'run');
+        });
+    });
+
+});
+
+describe('ContractClient', function () {
+
+    describe('getBalance()', function () {
+        it('returns balance for a specific tick', async function () {
+            let sdk = makeSdk();
+            let client = new ContractClient(sdk, 1);
+            let result = await client.getBalance('TOK');
+            assert.strictEqual(result.tick, 'TOK');
+            assert.strictEqual(result.quantity, '1000');
+        });
+
+        it('returns all balances when no tick given', async function () {
+            let sdk = makeSdk();
+            let client = new ContractClient(sdk, 1);
+            let result = await client.getBalance();
+            assert.ok(Array.isArray(result));
+            assert.strictEqual(result[0].tick, 'TOK');
+        });
+    });
+
+});
+
+describe('ContractClient', function () {
+
+    describe('getManifest()', function () {
+        it('delegates to explorer.getContractManifest with the bound index', async function () {
+            let capturedIdx;
+            let sdk = makeSdk({
+                explorer: {
+                    getContractManifest: async (idx) => { capturedIdx = idx; return { permissions: ['MINT'], maxTakeBps: 100 }; }
+                }
+            });
+            let client = new ContractClient(sdk, 17);
+            let m = await client.getManifest();
+            assert.strictEqual(capturedIdx, 17);
+            assert.deepStrictEqual(m, { permissions: ['MINT'], maxTakeBps: 100 });
+        });
+    });
+
+});
+
+describe('ContractClient', function () {
+
+    describe('parseManifest()', function () {
+        // Contract identity (meta_*) rides the same explorer object as the permissions
+        // manifest, so every case carries its four identity keys; a contract deployed
+        // before CONTRACT_META_REQUIRED has none and reads null.
+        const NO_META = { name: null, description: null, version: null, meta: null };
+
+        it('parses a permissions JSON string and numeric max_take_bps', function () {
+            assert.deepStrictEqual(
+                ContractClient.parseManifest({ permissions: '["SEND","MINT"]', max_take_bps: 300 }),
+                { permissions: ['SEND', 'MINT'], maxTakeBps: 300, ...NO_META }
+            );
+        });
+        it('passes through an already-parsed array', function () {
+            assert.deepStrictEqual(
+                ContractClient.parseManifest({ permissions: ['SEND'], max_take_bps: null }),
+                { permissions: ['SEND'], maxTakeBps: null, ...NO_META }
+            );
+        });
+        it('returns nulls for a manifest-less contract', function () {
+            assert.deepStrictEqual(ContractClient.parseManifest({}), { permissions: null, maxTakeBps: null, ...NO_META });
+        });
+        it('returns nulls for null input', function () {
+            assert.deepStrictEqual(ContractClient.parseManifest(null), { permissions: null, maxTakeBps: null, ...NO_META });
+        });
+        it('treats unparseable permissions as null (no throw)', function () {
+            assert.deepStrictEqual(
+                ContractClient.parseManifest({ permissions: 'not-json', max_take_bps: '' }),
+                { permissions: null, maxTakeBps: null, ...NO_META }
+            );
+        });
+
+    });
+
+});
+
+describe('ContractClient', function () {
+
+    describe('parseManifest()', function () {
+
+        it('admits meta_name, meta_description, meta_version and a parsed meta object', function () {
+            assert.deepStrictEqual(
+                ContractClient.parseManifest({
+                    permissions: ['SEND'],
+                    max_take_bps: 250,
+                    meta_name: 'Escrow',
+                    meta_description: 'Two-party escrow with an arbiter',
+                    meta_version: '1.0.0',
+                    meta: { name: 'Escrow', description: 'Two-party escrow with an arbiter', version: '1.0.0' }
+                }),
+                {
+                    permissions: ['SEND'],
+                    maxTakeBps: 250,
+                    name: 'Escrow',
+                    description: 'Two-party escrow with an arbiter',
+                    version: '1.0.0',
+                    meta: { name: 'Escrow', description: 'Two-party escrow with an arbiter', version: '1.0.0' }
+                }
+            );
+        });
+
+        it('parses a meta delivered as a JSON string, and nulls a malformed one', function () {
+            assert.deepStrictEqual(
+                ContractClient.parseManifest({ meta_name: 'Vault', meta: '{"name":"Vault","tags":["defi"]}' }).meta,
+                { name: 'Vault', tags: ['defi'] }
+            );
+            assert.strictEqual(ContractClient.parseManifest({ meta: '{not json' }).meta, null);
+            assert.strictEqual(ContractClient.parseManifest({ meta: '[1,2]' }).meta, null);
+            assert.strictEqual(ContractClient.parseManifest({ meta_name: '' }).name, null);
+        });
+    });
+
+});

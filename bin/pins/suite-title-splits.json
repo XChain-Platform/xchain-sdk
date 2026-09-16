@@ -50,64 +50,64 @@
       "test/integration/vm.test/09_vm_actions_encoding_pre_flight.test.js",
       "test/integration/vm.test/10_vm_actions_introspection.test.js"
     ],
-    "test/unit/actions.test.js": [
-      "test/unit/actions.test.js",
-      "test/unit/actions.test/01_format_version_selection.test.js",
-      "test/unit/actions.test/02_create_action_result_structure.test.js",
-      "test/unit/actions.test/03_error_cases.test.js",
-      "test/unit/actions.test/04_pre_flight_encoding_validation.test.js",
-      "test/unit/actions.test/05_validate_action_dry_run.test.js",
-      "test/unit/actions.test/06_introspection.test.js",
-      "test/unit/actions.test/07_edge_cases.test.js",
-      "test/unit/actions.test/08_deploy_stakeable_constructor_params_guard.test.js",
-      "test/unit/actions.test/09_fiat_priced_dispenser_pipeline_round_prices.test.js",
-      "test/unit/actions.test/10_partial_unstake_claim_optional_amount.test.js",
-      "test/unit/actions.test/11_top_level_version_reaches_version_dependent_validation.test.js"
+    "test/unit/actions/actions.test.js": [
+      "test/unit/actions/actions.test.js",
+      "test/unit/actions/actions.test/01_format_version_selection.test.js",
+      "test/unit/actions/actions.test/02_create_action_result_structure.test.js",
+      "test/unit/actions/actions.test/03_error_cases.test.js",
+      "test/unit/actions/actions.test/04_pre_flight_encoding_validation.test.js",
+      "test/unit/actions/actions.test/05_validate_action_dry_run.test.js",
+      "test/unit/actions/actions.test/06_introspection.test.js",
+      "test/unit/actions/actions.test/07_edge_cases.test.js",
+      "test/unit/actions/actions.test/08_deploy_stakeable_constructor_params_guard.test.js",
+      "test/unit/actions/actions.test/09_fiat_priced_dispenser_pipeline_round_prices.test.js",
+      "test/unit/actions/actions.test/10_partial_unstake_claim_optional_amount.test.js",
+      "test/unit/actions/actions.test/11_top_level_version_reaches_version_dependent_validation.test.js"
     ],
-    "test/unit/batch_limits_conformance.test.js": [
-      "test/unit/batch_limits_conformance.test.js",
-      "test/unit/batch_limits_conformance.test/01_sdk_half.test.js",
-      "test/unit/batch_limits_conformance.test/02_arbiter_half_sibling_xchain_indexer_checkout.test.js",
-      "test/unit/batch_limits_conformance.test/03_weight_conformance_sdk_half.test.js",
-      "test/unit/batch_limits_conformance.test/04_weight_conformance_arbiter_half.test.js"
+    "test/unit/protocol/batch_limits_conformance.test.js": [
+      "test/unit/protocol/batch_limits_conformance.test.js",
+      "test/unit/protocol/batch_limits_conformance.test/01_sdk_half.test.js",
+      "test/unit/protocol/batch_limits_conformance.test/02_arbiter_half_sibling_xchain_indexer_checkout.test.js",
+      "test/unit/protocol/batch_limits_conformance.test/03_weight_conformance_sdk_half.test.js",
+      "test/unit/protocol/batch_limits_conformance.test/04_weight_conformance_arbiter_half.test.js"
     ],
-    "test/unit/betting.test.js": [
-      "test/unit/betting.test.js",
-      "test/unit/betting.test/01_bet_compose.test.js",
-      "test/unit/betting.test/02_bet_client_side_validation.test.js",
-      "test/unit/betting.test/03_bet_details_market_definition.test.js",
-      "test/unit/betting.test/04_bet_action_level_validation.test.js",
-      "test/unit/betting.test/05_bet_payout_projection.test.js",
-      "test/unit/betting.test/06_bet_client_surfaces.test.js"
+    "test/unit/actions/betting.test.js": [
+      "test/unit/actions/betting.test.js",
+      "test/unit/actions/betting.test/01_bet_compose.test.js",
+      "test/unit/actions/betting.test/02_bet_client_side_validation.test.js",
+      "test/unit/actions/betting.test/03_bet_details_market_definition.test.js",
+      "test/unit/actions/betting.test/04_bet_action_level_validation.test.js",
+      "test/unit/actions/betting.test/05_bet_payout_projection.test.js",
+      "test/unit/actions/betting.test/06_bet_client_surfaces.test.js"
     ],
-    "test/unit/compression.test.js": [
-      "test/unit/compression.test.js",
-      "test/unit/compression.test/01_round_trip.test.js",
-      "test/unit/compression.test/02_compress_if_smaller_try_keep_if_smaller.test.js",
-      "test/unit/compression.test/03_inflate_is_fail_closed_spec_5_5.test.js",
-      "test/unit/compression.test/04_action_string_derivation_spec_5_1.test.js",
-      "test/unit/compression.test/05_gated_files_compress_then_encrypt_spec_5_4.test.js",
-      "test/unit/compression.test/06_golden_vectors.test.js",
-      "test/unit/compression.test/07_canonical_constants_conformance.test.js",
-      "test/unit/compression.test/08_lifecycle_manager_submits_against_the_bytes_the_encoder_wrote.test.js"
+    "test/unit/protocol/compression.test.js": [
+      "test/unit/protocol/compression.test.js",
+      "test/unit/protocol/compression.test/01_round_trip.test.js",
+      "test/unit/protocol/compression.test/02_compress_if_smaller_try_keep_if_smaller.test.js",
+      "test/unit/protocol/compression.test/03_inflate_is_fail_closed_spec_5_5.test.js",
+      "test/unit/protocol/compression.test/04_action_string_derivation_spec_5_1.test.js",
+      "test/unit/protocol/compression.test/05_gated_files_compress_then_encrypt_spec_5_4.test.js",
+      "test/unit/protocol/compression.test/06_golden_vectors.test.js",
+      "test/unit/protocol/compression.test/07_canonical_constants_conformance.test.js",
+      "test/unit/protocol/compression.test/08_lifecycle_manager_submits_against_the_bytes_the_encoder_wrote.test.js"
     ],
-    "test/unit/contract_meta_preflight.test.js": [
-      "test/unit/contract_meta_preflight.test.js",
-      "test/unit/contract_meta_preflight.test/01_check_exported_meta.test.js",
-      "test/unit/contract_meta_preflight.test/02_sdk_deploy_pre_flight.test.js",
-      "test/unit/contract_meta_preflight.test/03_wallet_session_deploy_pre_flight.test.js",
-      "test/unit/contract_meta_preflight.test/04_workflows_deploy_pre_flight.test.js"
+    "test/unit/contract/contract_meta_preflight.test.js": [
+      "test/unit/contract/contract_meta_preflight.test.js",
+      "test/unit/contract/contract_meta_preflight.test/01_check_exported_meta.test.js",
+      "test/unit/contract/contract_meta_preflight.test/02_sdk_deploy_pre_flight.test.js",
+      "test/unit/contract/contract_meta_preflight.test/03_wallet_session_deploy_pre_flight.test.js",
+      "test/unit/contract/contract_meta_preflight.test/04_workflows_deploy_pre_flight.test.js"
     ],
-    "test/unit/convenience.test.js": [
-      "test/unit/convenience.test.js",
-      "test/unit/convenience.test/01_convenience_action_methods.test.js",
-      "test/unit/convenience.test/02_batch_builder.test.js"
+    "test/unit/sdk/convenience.test.js": [
+      "test/unit/sdk/convenience.test.js",
+      "test/unit/sdk/convenience.test/01_convenience_action_methods.test.js",
+      "test/unit/sdk/convenience.test/02_batch_builder.test.js"
     ],
-    "test/unit/cosigner_hardening2.test.js": [
-      "test/unit/cosigner_hardening2.test.js",
-      "test/unit/cosigner_hardening2.test/01_g9_allowed_destinations_enforceability.test.js",
-      "test/unit/cosigner_hardening2.test/02_g6_window_store_durability.test.js",
-      "test/unit/cosigner_hardening2.test/03_g19_clock_guards.test.js"
+    "test/unit/cosigner/cosigner_hardening2.test.js": [
+      "test/unit/cosigner/cosigner_hardening2.test.js",
+      "test/unit/cosigner/cosigner_hardening2.test/01_g9_allowed_destinations_enforceability.test.js",
+      "test/unit/cosigner/cosigner_hardening2.test/02_g6_window_store_durability.test.js",
+      "test/unit/cosigner/cosigner_hardening2.test/03_g19_clock_guards.test.js"
     ],
     "test/unit/decoder/describe.test.js": [
       "test/unit/decoder/describe.test.js",
@@ -119,38 +119,38 @@
       "test/unit/decoder/describe.test/06_xbridge.test.js",
       "test/unit/decoder/describe.test/07_issue_v7_bridgeability_opt_in.test.js"
     ],
-    "test/unit/format_selector.test.js": [
-      "test/unit/format_selector.test.js",
-      "test/unit/format_selector.test/01_format_selector_serialize_trailing_empty_fields_are_trimmed.test.js",
-      "test/unit/format_selector.test/02_format_selector_serialize_version_is_auto_populated.test.js",
-      "test/unit/format_selector.test/03_format_selector_serialize_empty_missing_fields_become_empty_strings.test.js",
-      "test/unit/format_selector.test/04_format_selector_get_format_fields.test.js",
-      "test/unit/format_selector.test/05_format_selector_get_populated_fields.test.js",
-      "test/unit/format_selector.test/06_format_selector_estimate_length.test.js",
-      "test/unit/format_selector.test/07_format_selector_explicit_version_rest_fields.test.js",
-      "test/unit/format_selector.test/08_format_selector_select_pinned_version_never_silently_drops_field.test.js",
-      "test/unit/format_selector.test/09_format_selector_select_explicit_version_must_be_canonical_integer.test.js"
+    "test/unit/protocol/format_selector.test.js": [
+      "test/unit/protocol/format_selector.test.js",
+      "test/unit/protocol/format_selector.test/01_format_selector_serialize_trailing_empty_fields_are_trimmed.test.js",
+      "test/unit/protocol/format_selector.test/02_format_selector_serialize_version_is_auto_populated.test.js",
+      "test/unit/protocol/format_selector.test/03_format_selector_serialize_empty_missing_fields_become_empty_strings.test.js",
+      "test/unit/protocol/format_selector.test/04_format_selector_get_format_fields.test.js",
+      "test/unit/protocol/format_selector.test/05_format_selector_get_populated_fields.test.js",
+      "test/unit/protocol/format_selector.test/06_format_selector_estimate_length.test.js",
+      "test/unit/protocol/format_selector.test/07_format_selector_explicit_version_rest_fields.test.js",
+      "test/unit/protocol/format_selector.test/08_format_selector_select_pinned_version_never_silently_drops_field.test.js",
+      "test/unit/protocol/format_selector.test/09_format_selector_select_explicit_version_must_be_canonical_integer.test.js"
     ],
-    "test/unit/hub.test.js": [
-      "test/unit/hub.test.js",
-      "test/unit/hub.test/01_get_all_config.test.js",
-      "test/unit/hub.test/02_ping.test.js",
-      "test/unit/hub.test/03_get_capability_thresholds.test.js",
-      "test/unit/hub.test/04_extract_service_endpoints.test.js",
-      "test/unit/hub.test/05_start_polling_stop_polling.test.js"
+    "test/unit/clients/hub.test.js": [
+      "test/unit/clients/hub.test.js",
+      "test/unit/clients/hub.test/01_get_all_config.test.js",
+      "test/unit/clients/hub.test/02_ping.test.js",
+      "test/unit/clients/hub.test/03_get_capability_thresholds.test.js",
+      "test/unit/clients/hub.test/04_extract_service_endpoints.test.js",
+      "test/unit/clients/hub.test/05_start_polling_stop_polling.test.js"
     ],
-    "test/unit/mcp.test.js": [
-      "test/unit/mcp.test.js",
-      "test/unit/mcp.test/01_mcp_server_write_tools.test.js"
+    "test/unit/mcp/mcp.test.js": [
+      "test/unit/mcp/mcp.test.js",
+      "test/unit/mcp/mcp.test/01_mcp_server_write_tools.test.js"
     ],
-    "test/unit/multi_leg_formats.test.js": [
-      "test/unit/multi_leg_formats.test.js",
-      "test/unit/multi_leg_formats.test/01_serialize_expands_legs_positionally.test.js",
-      "test/unit/multi_leg_formats.test/02_select_with_legs.test.js",
-      "test/unit/multi_leg_formats.test/03_validator_rules_for_legs.test.js",
-      "test/unit/multi_leg_formats.test/04_create_action_with_legs.test.js",
-      "test/unit/multi_leg_formats.test/05_multi_leg_round_trip.test.js",
-      "test/unit/multi_leg_formats.test/06_indexer_leg_extraction_conformance.test.js"
+    "test/unit/protocol/multi_leg_formats.test.js": [
+      "test/unit/protocol/multi_leg_formats.test.js",
+      "test/unit/protocol/multi_leg_formats.test/01_serialize_expands_legs_positionally.test.js",
+      "test/unit/protocol/multi_leg_formats.test/02_select_with_legs.test.js",
+      "test/unit/protocol/multi_leg_formats.test/03_validator_rules_for_legs.test.js",
+      "test/unit/protocol/multi_leg_formats.test/04_create_action_with_legs.test.js",
+      "test/unit/protocol/multi_leg_formats.test/05_multi_leg_round_trip.test.js",
+      "test/unit/protocol/multi_leg_formats.test/06_indexer_leg_extraction_conformance.test.js"
     ],
     "test/unit/preflight/batch_tier1.test.js": [
       "test/unit/preflight/batch_tier1.test.js",
@@ -188,73 +188,73 @@
       "test/unit/preflight/checks.test/14_native_fee_forfeiture_disclosure.test.js",
       "test/unit/preflight/checks.test/15_op_return_carrier_cap_parity_with_compose_time_gate.test.js"
     ],
-    "test/unit/reconcile_encoded.test.js": [
-      "test/unit/reconcile_encoded.test.js",
-      "test/unit/reconcile_encoded.test/01_reconcile_encoded_funding_leg_pins.test.js",
-      "test/unit/reconcile_encoded.test/02_reconcile_encoded_caller_identity_change.test.js",
-      "test/unit/reconcile_encoded.test/03_reconcile_encoded_foreign_input_change.test.js",
-      "test/unit/reconcile_encoded.test/04_reconcile_encoded_malformed_caps_fail_closed.test.js"
+    "test/unit/carrier/reconcile_encoded.test.js": [
+      "test/unit/carrier/reconcile_encoded.test.js",
+      "test/unit/carrier/reconcile_encoded.test/01_reconcile_encoded_funding_leg_pins.test.js",
+      "test/unit/carrier/reconcile_encoded.test/02_reconcile_encoded_caller_identity_change.test.js",
+      "test/unit/carrier/reconcile_encoded.test/03_reconcile_encoded_foreign_input_change.test.js",
+      "test/unit/carrier/reconcile_encoded.test/04_reconcile_encoded_malformed_caps_fail_closed.test.js"
     ],
-    "test/unit/retry.test.js": [
-      "test/unit/retry.test.js",
-      "test/unit/retry.test/01_explorer_client_retry_integration.test.js",
-      "test/unit/retry.test/02_encoder_client_retry_integration.test.js",
-      "test/unit/retry.test/03_request_hooks_explorer_client.test.js",
-      "test/unit/retry.test/04_request_hooks_encoder_client.test.js",
-      "test/unit/retry.test/05_retry_helpers_pure.test.js",
-      "test/unit/retry.test/06_retry_429_defaults_and_delay.test.js",
-      "test/unit/retry.test/07_retry_429_header_helpers.test.js",
-      "test/unit/retry.test/08_retry_429_budget.test.js",
-      "test/unit/retry.test/09_explorer_client_surviving_429.test.js",
-      "test/unit/retry.test/10_explorer_client_429_headers.test.js",
-      "test/unit/retry.test/11_explorer_client_429_hooks.test.js",
-      "test/unit/retry.test/12_encoder_client_surviving_429.test.js",
-      "test/unit/retry.test/13_encoder_client_429_hooks.test.js"
+    "test/unit/clients/retry.test.js": [
+      "test/unit/clients/retry.test.js",
+      "test/unit/clients/retry.test/01_explorer_client_retry_integration.test.js",
+      "test/unit/clients/retry.test/02_encoder_client_retry_integration.test.js",
+      "test/unit/clients/retry.test/03_request_hooks_explorer_client.test.js",
+      "test/unit/clients/retry.test/04_request_hooks_encoder_client.test.js",
+      "test/unit/clients/retry.test/05_retry_helpers_pure.test.js",
+      "test/unit/clients/retry.test/06_retry_429_defaults_and_delay.test.js",
+      "test/unit/clients/retry.test/07_retry_429_header_helpers.test.js",
+      "test/unit/clients/retry.test/08_retry_429_budget.test.js",
+      "test/unit/clients/retry.test/09_explorer_client_surviving_429.test.js",
+      "test/unit/clients/retry.test/10_explorer_client_429_headers.test.js",
+      "test/unit/clients/retry.test/11_explorer_client_429_hooks.test.js",
+      "test/unit/clients/retry.test/12_encoder_client_surviving_429.test.js",
+      "test/unit/clients/retry.test/13_encoder_client_429_hooks.test.js"
     ],
-    "test/unit/roundtrip.test.js": [
-      "test/unit/roundtrip.test.js",
-      "test/unit/roundtrip.test/01_round_trip_serialize_then_parse_back.test.js"
+    "test/unit/actions/roundtrip.test.js": [
+      "test/unit/actions/roundtrip.test.js",
+      "test/unit/actions/roundtrip.test/01_round_trip_serialize_then_parse_back.test.js"
     ],
-    "test/unit/wallet_session.test.js": [
-      "test/unit/wallet_session.test.js",
-      "test/unit/wallet_session.test/01_submit.test.js",
-      "test/unit/wallet_session.test/02_unconfirmed_policy_vs_the_injected_cache.test.js",
-      "test/unit/wallet_session.test/03_hydrate_utxos.test.js",
-      "test/unit/wallet_session.test/04_action_convenience_methods.test.js",
-      "test/unit/wallet_session.test/05_explorer_convenience_methods.test.js",
-      "test/unit/wallet_session.test/06_estimate_fees.test.js"
+    "test/unit/wallet/wallet_session.test.js": [
+      "test/unit/wallet/wallet_session.test.js",
+      "test/unit/wallet/wallet_session.test/01_submit.test.js",
+      "test/unit/wallet/wallet_session.test/02_unconfirmed_policy_vs_the_injected_cache.test.js",
+      "test/unit/wallet/wallet_session.test/03_hydrate_utxos.test.js",
+      "test/unit/wallet/wallet_session.test/04_action_convenience_methods.test.js",
+      "test/unit/wallet/wallet_session.test/05_explorer_convenience_methods.test.js",
+      "test/unit/wallet/wallet_session.test/06_estimate_fees.test.js"
     ],
-    "test/unit/agent_session.test.js": [
-      "test/unit/agent_session.test.js",
-      "test/unit/agent_session.test/01_windows_and_persistence.test.js"
+    "test/unit/cosigner/agent_session.test.js": [
+      "test/unit/cosigner/agent_session.test.js",
+      "test/unit/cosigner/agent_session.test/01_windows_and_persistence.test.js"
     ],
-    "test/unit/co_signer.test.js": [
-      "test/unit/co_signer.test.js",
-      "test/unit/co_signer.test/01_output_and_fee_caps.test.js",
-      "test/unit/co_signer.test/02_multi_input_prevouts_and_exact_fee_cap.test.js",
-      "test/unit/co_signer.test/03_window_store_fail_closed_budget.test.js"
+    "test/unit/cosigner/co_signer.test.js": [
+      "test/unit/cosigner/co_signer.test.js",
+      "test/unit/cosigner/co_signer.test/01_output_and_fee_caps.test.js",
+      "test/unit/cosigner/co_signer.test/02_multi_input_prevouts_and_exact_fee_cap.test.js",
+      "test/unit/cosigner/co_signer.test/03_window_store_fail_closed_budget.test.js"
     ],
-    "test/unit/cosigner_envelope.test.js": [
-      "test/unit/cosigner_envelope.test.js",
-      "test/unit/cosigner_envelope.test/01_delta_b_the_reveal_signs_the_leaf.test.js",
-      "test/unit/cosigner_envelope.test/02_delta_a_the_cancel_signs_the_tweaked_key_path.test.js",
-      "test/unit/cosigner_envelope.test/03_the_commit_round.test.js",
-      "test/unit/cosigner_envelope.test/04_mixed_carriers_on_an_envelope_role.test.js",
-      "test/unit/cosigner_envelope.test/05_refusals_that_keep_the_shipped_guarantees.test.js",
-      "test/unit/cosigner_envelope.test/06_budget_one_action_two_transactions_one_charge.test.js",
-      "test/unit/cosigner_envelope.test/07_the_composed_commit_tree.test.js",
-      "test/unit/cosigner_envelope.test/08_all_three_envelope_rounds_complete_on_a_2_of_3.test.js",
-      "test/unit/cosigner_envelope.test/09_the_property_the_composition_exists_for.test.js",
-      "test/unit/cosigner_envelope.test/10_both_halves_derive_the_tree_neither_is_told_it.test.js",
-      "test/unit/cosigner_envelope.test/11_the_2_of_2_account_is_untouched.test.js",
-      "test/unit/cosigner_envelope.test/12_the_envelope_survives_the_wire.test.js",
-      "test/unit/cosigner_envelope.test/13_sdk_create_tx_passthrough.test.js"
+    "test/unit/cosigner/cosigner_envelope.test.js": [
+      "test/unit/cosigner/cosigner_envelope.test.js",
+      "test/unit/cosigner/cosigner_envelope.test/01_delta_b_the_reveal_signs_the_leaf.test.js",
+      "test/unit/cosigner/cosigner_envelope.test/02_delta_a_the_cancel_signs_the_tweaked_key_path.test.js",
+      "test/unit/cosigner/cosigner_envelope.test/03_the_commit_round.test.js",
+      "test/unit/cosigner/cosigner_envelope.test/04_mixed_carriers_on_an_envelope_role.test.js",
+      "test/unit/cosigner/cosigner_envelope.test/05_refusals_that_keep_the_shipped_guarantees.test.js",
+      "test/unit/cosigner/cosigner_envelope.test/06_budget_one_action_two_transactions_one_charge.test.js",
+      "test/unit/cosigner/cosigner_envelope.test/07_the_composed_commit_tree.test.js",
+      "test/unit/cosigner/cosigner_envelope.test/08_all_three_envelope_rounds_complete_on_a_2_of_3.test.js",
+      "test/unit/cosigner/cosigner_envelope.test/09_the_property_the_composition_exists_for.test.js",
+      "test/unit/cosigner/cosigner_envelope.test/10_both_halves_derive_the_tree_neither_is_told_it.test.js",
+      "test/unit/cosigner/cosigner_envelope.test/11_the_2_of_2_account_is_untouched.test.js",
+      "test/unit/cosigner/cosigner_envelope.test/12_the_envelope_survives_the_wire.test.js",
+      "test/unit/cosigner/cosigner_envelope.test/13_sdk_create_tx_passthrough.test.js"
     ],
-    "test/unit/cosigner_hardening.test.js": [
-      "test/unit/cosigner_hardening.test.js",
-      "test/unit/cosigner_hardening.test/01_g2_value_derivability_allowlist.test.js",
-      "test/unit/cosigner_hardening.test/02_g3_tap_tree_provenance.test.js",
-      "test/unit/cosigner_hardening.test/03_g5_window_store_single_writer_lock.test.js"
+    "test/unit/cosigner/cosigner_hardening.test.js": [
+      "test/unit/cosigner/cosigner_hardening.test.js",
+      "test/unit/cosigner/cosigner_hardening.test/01_g2_value_derivability_allowlist.test.js",
+      "test/unit/cosigner/cosigner_hardening.test/02_g3_tap_tree_provenance.test.js",
+      "test/unit/cosigner/cosigner_hardening.test/03_g5_window_store_single_writer_lock.test.js"
     ],
     "test/unit/encoder.test.js": [
       "test/unit/encoder.test.js",
@@ -278,156 +278,156 @@
       "test/unit/encoder.test/18_get_fee_tiers.test.js",
       "test/unit/encoder.test/19_encoder_api_key.test.js"
     ],
-    "test/unit/explorer.test.js": [
-      "test/unit/explorer.test.js",
-      "test/unit/explorer.test/01_url_construction.test.js",
-      "test/unit/explorer.test/02_get_contract_manifest.test.js",
-      "test/unit/explorer.test/03_error_handling.test.js",
-      "test/unit/explorer.test/04_set_base.test.js",
-      "test/unit/explorer.test/05_ready_hook.test.js",
-      "test/unit/explorer.test/06_hooks.test.js",
-      "test/unit/explorer.test/07_timeout_errors.test.js",
-      "test/unit/explorer.test/08_balance_address_methods.test.js",
-      "test/unit/explorer.test/09_transaction_history_methods.test.js",
-      "test/unit/explorer.test/10_action_specific_methods.test.js",
-      "test/unit/explorer.test/11_fee_methods.test.js",
-      "test/unit/explorer.test/12_contract_vm_methods.test.js",
-      "test/unit/explorer.test/13_attestation_methods.test.js",
-      "test/unit/explorer.test/14_betting_reads.test.js",
-      "test/unit/explorer.test/15_market_methods.test.js",
-      "test/unit/explorer.test/16_utility_methods.test.js",
-      "test/unit/explorer.test/17_get_gated_file_raw.test.js",
-      "test/unit/explorer.test/18_search_error_handling.test.js",
-      "test/unit/explorer.test/19_build_params_additional_params.test.js",
-      "test/unit/explorer.test/20_public_methods.test.js"
+    "test/unit/clients/explorer.test.js": [
+      "test/unit/clients/explorer.test.js",
+      "test/unit/clients/explorer.test/01_url_construction.test.js",
+      "test/unit/clients/explorer.test/02_get_contract_manifest.test.js",
+      "test/unit/clients/explorer.test/03_error_handling.test.js",
+      "test/unit/clients/explorer.test/04_set_base.test.js",
+      "test/unit/clients/explorer.test/05_ready_hook.test.js",
+      "test/unit/clients/explorer.test/06_hooks.test.js",
+      "test/unit/clients/explorer.test/07_timeout_errors.test.js",
+      "test/unit/clients/explorer.test/08_balance_address_methods.test.js",
+      "test/unit/clients/explorer.test/09_transaction_history_methods.test.js",
+      "test/unit/clients/explorer.test/10_action_specific_methods.test.js",
+      "test/unit/clients/explorer.test/11_fee_methods.test.js",
+      "test/unit/clients/explorer.test/12_contract_vm_methods.test.js",
+      "test/unit/clients/explorer.test/13_attestation_methods.test.js",
+      "test/unit/clients/explorer.test/14_betting_reads.test.js",
+      "test/unit/clients/explorer.test/15_market_methods.test.js",
+      "test/unit/clients/explorer.test/16_utility_methods.test.js",
+      "test/unit/clients/explorer.test/17_get_gated_file_raw.test.js",
+      "test/unit/clients/explorer.test/18_search_error_handling.test.js",
+      "test/unit/clients/explorer.test/19_build_params_additional_params.test.js",
+      "test/unit/clients/explorer.test/20_public_methods.test.js"
     ],
-    "test/unit/lifecycle_manager.test.js": [
-      "test/unit/lifecycle_manager.test.js",
-      "test/unit/lifecycle_manager.test/01_submit_action_wait_for_indexer_false.test.js",
-      "test/unit/lifecycle_manager.test/02_submit_action_the_carrier_must_hold_the_action_that_was_submitted.test.js",
-      "test/unit/lifecycle_manager.test/03_submit_action_p2sh_two_phase_encoding.test.js",
-      "test/unit/lifecycle_manager.test/04_submit_action_wait_for_indexer_true.test.js",
-      "test/unit/lifecycle_manager.test/05_submit_action_rejected_actions.test.js",
-      "test/unit/lifecycle_manager.test/06_extract_spent_inputs.test.js",
-      "test/unit/lifecycle_manager.test/07_submit_action_indexing_wait_expires.test.js",
-      "test/unit/lifecycle_manager.test/08_submit_action_contract_actions.test.js"
+    "test/unit/carrier/lifecycle_manager.test.js": [
+      "test/unit/carrier/lifecycle_manager.test.js",
+      "test/unit/carrier/lifecycle_manager.test/01_submit_action_wait_for_indexer_false.test.js",
+      "test/unit/carrier/lifecycle_manager.test/02_submit_action_the_carrier_must_hold_the_action_that_was_submitted.test.js",
+      "test/unit/carrier/lifecycle_manager.test/03_submit_action_p2sh_two_phase_encoding.test.js",
+      "test/unit/carrier/lifecycle_manager.test/04_submit_action_wait_for_indexer_true.test.js",
+      "test/unit/carrier/lifecycle_manager.test/05_submit_action_rejected_actions.test.js",
+      "test/unit/carrier/lifecycle_manager.test/06_extract_spent_inputs.test.js",
+      "test/unit/carrier/lifecycle_manager.test/07_submit_action_indexing_wait_expires.test.js",
+      "test/unit/carrier/lifecycle_manager.test/08_submit_action_contract_actions.test.js"
     ],
-    "test/unit/light.test.js": [
-      "test/unit/light.test.js",
-      "test/unit/light.test/01_spv_phase_4_sdk_light_pure_verifiers.test.js",
-      "test/unit/light.test/02_spv_phase_4_sdk_light_verify_balance_end_to_end_signed_checkpoint_mocked_fetch.test.js",
-      "test/unit/light.test/03_spv_phase_4_light_js_validator_set_cache_convenience_verify_tier.test.js",
-      "test/unit/light.test/04_spv_phase_4_doge_anchor_cold_start_trust.test.js",
-      "test/unit/light.test/05_spv_phase_4_doge_anchor_cold_start_trust.test.js",
-      "test/unit/light.test/06_spv_phase_5_validator_set_proof_trustless_quorum.test.js",
-      "test/unit/light.test/07_spv_d4_pinned_launch_trust_root.test.js",
-      "test/unit/light.test/08_spv_7_3_rotation_aware_pinned_path_follow_forward.test.js"
+    "test/unit/protocol/light.test.js": [
+      "test/unit/protocol/light.test.js",
+      "test/unit/protocol/light.test/01_spv_phase_4_sdk_light_pure_verifiers.test.js",
+      "test/unit/protocol/light.test/02_spv_phase_4_sdk_light_verify_balance_end_to_end_signed_checkpoint_mocked_fetch.test.js",
+      "test/unit/protocol/light.test/03_spv_phase_4_light_js_validator_set_cache_convenience_verify_tier.test.js",
+      "test/unit/protocol/light.test/04_spv_phase_4_doge_anchor_cold_start_trust.test.js",
+      "test/unit/protocol/light.test/05_spv_phase_4_doge_anchor_cold_start_trust.test.js",
+      "test/unit/protocol/light.test/06_spv_phase_5_validator_set_proof_trustless_quorum.test.js",
+      "test/unit/protocol/light.test/07_spv_d4_pinned_launch_trust_root.test.js",
+      "test/unit/protocol/light.test/08_spv_7_3_rotation_aware_pinned_path_follow_forward.test.js"
     ],
-    "test/unit/mempool_surface.test.js": [
-      "test/unit/mempool_surface.test.js",
-      "test/unit/mempool_surface.test/01_the_per_address_guard.test.js",
-      "test/unit/mempool_surface.test/02_the_shared_refcounted_address_subscription.test.js",
-      "test/unit/mempool_surface.test/03_a_teardown_releases_exactly_the_subscription_it_opened.test.js",
-      "test/unit/mempool_surface.test/04_get_unconfirmed.test.js"
+    "test/unit/sdk/mempool_surface.test.js": [
+      "test/unit/sdk/mempool_surface.test.js",
+      "test/unit/sdk/mempool_surface.test/01_the_per_address_guard.test.js",
+      "test/unit/sdk/mempool_surface.test/02_the_shared_refcounted_address_subscription.test.js",
+      "test/unit/sdk/mempool_surface.test/03_a_teardown_releases_exactly_the_subscription_it_opened.test.js",
+      "test/unit/sdk/mempool_surface.test/04_get_unconfirmed.test.js"
     ],
-    "test/unit/messaging.test.js": [
-      "test/unit/messaging.test.js",
-      "test/unit/messaging.test/01_ecies_bytes.test.js",
-      "test/unit/messaging.test/02_ecdh.test.js",
-      "test/unit/messaging.test/03_kdf_v1_hkdf_sha256_versioning_and_domain_separation.test.js",
-      "test/unit/messaging.test/04_aes.test.js",
-      "test/unit/messaging.test/05_ecdh_aes_bytes.test.js",
-      "test/unit/messaging.test/06_get_messages.test.js",
-      "test/unit/messaging.test/07_get_messages_ecdh_pubkey_lookup_cap.test.js",
-      "test/unit/messaging.test/08_get_all_messages.test.js",
-      "test/unit/messaging.test/09_ecies_bytes_additional_error_paths.test.js",
-      "test/unit/messaging.test/10_derive_shared_secret_error_paths.test.js",
-      "test/unit/messaging.test/11_get_public_key.test.js",
-      "test/unit/messaging.test/12_get_messages_encrypted_without_wif.test.js",
-      "test/unit/messaging.test/13_send_validation_guards.test.js"
+    "test/unit/actions/messaging.test.js": [
+      "test/unit/actions/messaging.test.js",
+      "test/unit/actions/messaging.test/01_ecies_bytes.test.js",
+      "test/unit/actions/messaging.test/02_ecdh.test.js",
+      "test/unit/actions/messaging.test/03_kdf_v1_hkdf_sha256_versioning_and_domain_separation.test.js",
+      "test/unit/actions/messaging.test/04_aes.test.js",
+      "test/unit/actions/messaging.test/05_ecdh_aes_bytes.test.js",
+      "test/unit/actions/messaging.test/06_get_messages.test.js",
+      "test/unit/actions/messaging.test/07_get_messages_ecdh_pubkey_lookup_cap.test.js",
+      "test/unit/actions/messaging.test/08_get_all_messages.test.js",
+      "test/unit/actions/messaging.test/09_ecies_bytes_additional_error_paths.test.js",
+      "test/unit/actions/messaging.test/10_derive_shared_secret_error_paths.test.js",
+      "test/unit/actions/messaging.test/11_get_public_key.test.js",
+      "test/unit/actions/messaging.test/12_get_messages_encrypted_without_wif.test.js",
+      "test/unit/actions/messaging.test/13_send_validation_guards.test.js"
     ],
-    "test/unit/validator.test.js": [
-      "test/unit/validator.test.js",
-      "test/unit/validator.test/01_validator_max_supply_validation.test.js",
-      "test/unit/validator.test/02_validator_price_v1_oracle_publish.test.js",
-      "test/unit/validator.test/03_validator_vote_binding_poll_numeric_fields.test.js",
-      "test/unit/validator.test/04_validator_dispenser_create_required_fields.test.js",
-      "test/unit/validator.test/05_validator_unknown_action.test.js",
-      "test/unit/validator.test/06_validator_file_gate_min_amount_pc_29.test.js"
+    "test/unit/protocol/validator.test.js": [
+      "test/unit/protocol/validator.test.js",
+      "test/unit/protocol/validator.test/01_validator_max_supply_validation.test.js",
+      "test/unit/protocol/validator.test/02_validator_price_v1_oracle_publish.test.js",
+      "test/unit/protocol/validator.test/03_validator_vote_binding_poll_numeric_fields.test.js",
+      "test/unit/protocol/validator.test/04_validator_dispenser_create_required_fields.test.js",
+      "test/unit/protocol/validator.test/05_validator_unknown_action.test.js",
+      "test/unit/protocol/validator.test/06_validator_file_gate_min_amount_pc_29.test.js"
     ],
-    "test/unit/wallet.test.js": [
-      "test/unit/wallet.test.js",
-      "test/unit/wallet.test/01_validate_address.test.js",
-      "test/unit/wallet.test/02_sign_psbt.test.js",
-      "test/unit/wallet.test/03_max_fee_rate.test.js",
-      "test/unit/wallet.test/04_decompose_psbt.test.js",
-      "test/unit/wallet.test/05_broadcast_tx.test.js",
-      "test/unit/wallet.test/06_get_utxos.test.js",
-      "test/unit/wallet.test/07_broadcast_tx_success_and_error_paths.test.js",
-      "test/unit/wallet.test/08_sign_ecdsa.test.js",
-      "test/unit/wallet.test/09_derive_multisig_address.test.js",
-      "test/unit/wallet.test/10_txid_of.test.js",
-      "test/unit/wallet.test/11_sign_multisig_psbt_and_finalize_multisig_psbt.test.js",
-      "test/unit/wallet.test/12_validate_address_extended.test.js",
-      "test/unit/wallet.test/13_derive_address_extended.test.js",
-      "test/unit/wallet.test/14_sign_reveal_psbt.test.js",
-      "test/unit/wallet.test/15_decompose_psbt_op_return_and_missing_utxo_paths.test.js",
-      "test/unit/wallet.test/16_get_bitcoin_network.test.js"
+    "test/unit/wallet/wallet.test.js": [
+      "test/unit/wallet/wallet.test.js",
+      "test/unit/wallet/wallet.test/01_validate_address.test.js",
+      "test/unit/wallet/wallet.test/02_sign_psbt.test.js",
+      "test/unit/wallet/wallet.test/03_max_fee_rate.test.js",
+      "test/unit/wallet/wallet.test/04_decompose_psbt.test.js",
+      "test/unit/wallet/wallet.test/05_broadcast_tx.test.js",
+      "test/unit/wallet/wallet.test/06_get_utxos.test.js",
+      "test/unit/wallet/wallet.test/07_broadcast_tx_success_and_error_paths.test.js",
+      "test/unit/wallet/wallet.test/08_sign_ecdsa.test.js",
+      "test/unit/wallet/wallet.test/09_derive_multisig_address.test.js",
+      "test/unit/wallet/wallet.test/10_txid_of.test.js",
+      "test/unit/wallet/wallet.test/11_sign_multisig_psbt_and_finalize_multisig_psbt.test.js",
+      "test/unit/wallet/wallet.test/12_validate_address_extended.test.js",
+      "test/unit/wallet/wallet.test/13_derive_address_extended.test.js",
+      "test/unit/wallet/wallet.test/14_sign_reveal_psbt.test.js",
+      "test/unit/wallet/wallet.test/15_decompose_psbt_op_return_and_missing_utxo_paths.test.js",
+      "test/unit/wallet/wallet.test/16_get_bitcoin_network.test.js"
     ],
-    "test/unit/websocket_convenience.test.js": [
-      "test/unit/websocket_convenience.test.js",
-      "test/unit/websocket_convenience.test/01_on_block.test.js",
-      "test/unit/websocket_convenience.test/02_on_action.test.js",
-      "test/unit/websocket_convenience.test/03_on_address.test.js",
-      "test/unit/websocket_convenience.test/04_on_token.test.js",
-      "test/unit/websocket_convenience.test/05_on_market.test.js",
-      "test/unit/websocket_convenience.test/06_on_dispenser.test.js",
-      "test/unit/websocket_convenience.test/07_on_bet_feed.test.js",
-      "test/unit/websocket_convenience.test/08_on_xcall.test.js",
-      "test/unit/websocket_convenience.test/09_on_attestation.test.js",
-      "test/unit/websocket_convenience.test/10_on_coinpay_required.test.js",
-      "test/unit/websocket_convenience.test/11_on_order_match.test.js",
-      "test/unit/websocket_convenience.test/12_per_entity_isolation_of_live_frames_regression.test.js",
-      "test/unit/websocket_convenience.test/13_on_network_stats.test.js",
-      "test/unit/websocket_convenience.test/14_unsubscribe_return_value.test.js",
-      "test/unit/websocket_convenience.test/15_statuses_filter_is_not_advertised_regression.test.js"
+    "test/unit/clients/websocket_convenience.test.js": [
+      "test/unit/clients/websocket_convenience.test.js",
+      "test/unit/clients/websocket_convenience.test/01_on_block.test.js",
+      "test/unit/clients/websocket_convenience.test/02_on_action.test.js",
+      "test/unit/clients/websocket_convenience.test/03_on_address.test.js",
+      "test/unit/clients/websocket_convenience.test/04_on_token.test.js",
+      "test/unit/clients/websocket_convenience.test/05_on_market.test.js",
+      "test/unit/clients/websocket_convenience.test/06_on_dispenser.test.js",
+      "test/unit/clients/websocket_convenience.test/07_on_bet_feed.test.js",
+      "test/unit/clients/websocket_convenience.test/08_on_xcall.test.js",
+      "test/unit/clients/websocket_convenience.test/09_on_attestation.test.js",
+      "test/unit/clients/websocket_convenience.test/10_on_coinpay_required.test.js",
+      "test/unit/clients/websocket_convenience.test/11_on_order_match.test.js",
+      "test/unit/clients/websocket_convenience.test/12_per_entity_isolation_of_live_frames_regression.test.js",
+      "test/unit/clients/websocket_convenience.test/13_on_network_stats.test.js",
+      "test/unit/clients/websocket_convenience.test/14_unsubscribe_return_value.test.js",
+      "test/unit/clients/websocket_convenience.test/15_statuses_filter_is_not_advertised_regression.test.js"
     ],
-    "test/unit/websocket.test.js": [
-      "test/unit/websocket.test.js",
-      "test/unit/websocket.test/01_event_handlers.test.js",
-      "test/unit/websocket.test/02_invalid_json_message.test.js",
-      "test/unit/websocket.test/03_emit_and_connection_lost.test.js",
-      "test/unit/websocket.test/04_latest_action_index_tracking.test.js"
+    "test/unit/clients/websocket.test.js": [
+      "test/unit/clients/websocket.test.js",
+      "test/unit/clients/websocket.test/01_event_handlers.test.js",
+      "test/unit/clients/websocket.test/02_invalid_json_message.test.js",
+      "test/unit/clients/websocket.test/03_emit_and_connection_lost.test.js",
+      "test/unit/clients/websocket.test/04_latest_action_index_tracking.test.js"
     ],
-    "test/unit/workflows.test.js": [
-      "test/unit/workflows.test.js",
-      "test/unit/workflows.test/01_deploy_and_fund.test.js",
-      "test/unit/workflows.test/02_deploy_stakeable_contract.test.js",
-      "test/unit/workflows.test/03_distribute_dividend.test.js",
-      "test/unit/workflows.test/04_attach_content.test.js",
-      "test/unit/workflows.test/05_deploy_contract_chunked_assembler_pre_flight.test.js",
-      "test/unit/workflows.test/06_deploy_contract_funding_leg.test.js",
-      "test/unit/workflows.test/07_resolve_deployed_contract.test.js",
-      "test/unit/workflows.test/08_deploy_contract_chunked_funding_leg.test.js",
-      "test/unit/workflows.test/09_action_index_of.test.js"
+    "test/unit/actions/workflows.test.js": [
+      "test/unit/actions/workflows.test.js",
+      "test/unit/actions/workflows.test/01_deploy_and_fund.test.js",
+      "test/unit/actions/workflows.test/02_deploy_stakeable_contract.test.js",
+      "test/unit/actions/workflows.test/03_distribute_dividend.test.js",
+      "test/unit/actions/workflows.test/04_attach_content.test.js",
+      "test/unit/actions/workflows.test/05_deploy_contract_chunked_assembler_pre_flight.test.js",
+      "test/unit/actions/workflows.test/06_deploy_contract_funding_leg.test.js",
+      "test/unit/actions/workflows.test/07_resolve_deployed_contract.test.js",
+      "test/unit/actions/workflows.test/08_deploy_contract_chunked_funding_leg.test.js",
+      "test/unit/actions/workflows.test/09_action_index_of.test.js"
     ],
-    "test/unit/x402.test.js": [
-      "test/unit/x402.test.js",
-      "test/unit/x402.test/01_x402_gateway.test.js",
-      "test/unit/x402.test/02_x402_gateway_payer_signature_binding.test.js",
-      "test/unit/x402.test/03_x402_client.test.js"
+    "test/unit/wallet/x402.test.js": [
+      "test/unit/wallet/x402.test.js",
+      "test/unit/wallet/x402.test/01_x402_gateway.test.js",
+      "test/unit/wallet/x402.test/02_x402_gateway_payer_signature_binding.test.js",
+      "test/unit/wallet/x402.test/03_x402_client.test.js"
     ],
-    "test/unit/xchain_sdk.test.js": [
-      "test/unit/xchain_sdk.test.js",
-      "test/unit/xchain_sdk.test/01_create_action.test.js",
-      "test/unit/xchain_sdk.test/02_deploy_pre_flight_constructor_params_warning.test.js",
-      "test/unit/xchain_sdk.test/03_encoder_methods.test.js",
-      "test/unit/xchain_sdk.test/04_explorer_query_re_exports.test.js",
-      "test/unit/xchain_sdk.test/05_wallet_methods.test.js",
-      "test/unit/xchain_sdk.test/06_explorer_passthrough_methods.test.js",
-      "test/unit/xchain_sdk.test/07_websocket_methods.test.js",
-      "test/unit/xchain_sdk.test/08_apply_endpoints.test.js",
-      "test/unit/xchain_sdk.test/09_action_shortcut_methods.test.js"
+    "test/unit/sdk/xchain_sdk.test.js": [
+      "test/unit/sdk/xchain_sdk.test.js",
+      "test/unit/sdk/xchain_sdk.test/01_create_action.test.js",
+      "test/unit/sdk/xchain_sdk.test/02_deploy_pre_flight_constructor_params_warning.test.js",
+      "test/unit/sdk/xchain_sdk.test/03_encoder_methods.test.js",
+      "test/unit/sdk/xchain_sdk.test/04_explorer_query_re_exports.test.js",
+      "test/unit/sdk/xchain_sdk.test/05_wallet_methods.test.js",
+      "test/unit/sdk/xchain_sdk.test/06_explorer_passthrough_methods.test.js",
+      "test/unit/sdk/xchain_sdk.test/07_websocket_methods.test.js",
+      "test/unit/sdk/xchain_sdk.test/08_apply_endpoints.test.js",
+      "test/unit/sdk/xchain_sdk.test/09_action_shortcut_methods.test.js"
     ],
     "test/unit/preflight/engine.test.js": [
       "test/unit/preflight/engine.test.js",
