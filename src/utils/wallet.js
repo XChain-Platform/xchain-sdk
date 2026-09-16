@@ -34,7 +34,7 @@ class WalletUtils {
         this._netParams = network ? getNetwork(network) : null;
     }
 
-    _resolveNet(network) {
+    resolveNet(network) {
         if (network) return getNetwork(network);
         if (this._netParams) return this._netParams;
         throw new SDKWalletError('NETWORK_NOT_CONFIGURED',

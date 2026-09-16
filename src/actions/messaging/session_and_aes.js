@@ -34,7 +34,7 @@ module.exports = {
         if (!wif || typeof wif !== 'string')
             throw new SDKMessagingError('INVALID_WIF', 'WIF private key is required.');
 
-        let net = this._resolveNet();
+        let net = this.resolveNet();
         let keyPair;
         try {
             keyPair = ECPair.fromWIF(wif, net);
@@ -62,7 +62,7 @@ module.exports = {
         if (!theirPublicKey)
             throw new SDKMessagingError('INVALID_PUBKEY', 'Their public key is required.');
 
-        let net = this._resolveNet();
+        let net = this.resolveNet();
         let keyPair;
         try {
             keyPair = ECPair.fromWIF(wif, net);

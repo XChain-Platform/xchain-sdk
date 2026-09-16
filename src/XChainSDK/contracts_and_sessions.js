@@ -115,7 +115,7 @@ module.exports = {
             // fee-saving refusal, so it also runs over the camelCase spelling the session
             // and workflow seams take: a nameless deploy({ code }) is refused like a
             // nameless deploy({ CODE }).
-            this._preflightContractMeta(this.contractSourceFromParams(params), mode);
+            this.preflightContractMeta(this.contractSourceFromParams(params), mode);
             return;
         }
 
@@ -141,14 +141,14 @@ module.exports = {
         if (result.valid) {
             // Contract identity is judged AFTER the lint verdict because the chain judges
             // it after validateSyntax: a contract broken on both reports the syntax error.
-            this._preflightContractMeta(code, mode);
+            this.preflightContractMeta(code, mode);
             return;
         }
 
         if (mode === 'warn') {
             for (const e of result.errors)
                 log.warn('DEPLOY lint error: ' + e.message);
-            this._preflightContractMeta(code, mode);
+            this.preflightContractMeta(code, mode);
             return;
         }
         // 'block'
@@ -185,7 +185,7 @@ module.exports = {
     // byte grammar). Computed meta and any shape the static walk cannot read are
     // advisories: the chain evaluates meta in the isolate, and the SDK must never
     // refuse a contract the chain would accept.
-    _preflightContractMeta(code, mode) {
+    preflightContractMeta(code, mode) {
         // `false` is accepted as 'off' because the session's submit options already
         // carry a `preflight` key for the action pre-flight engine, whose off value is
         // false; a caller who turned that off never meant to be blocked here either.

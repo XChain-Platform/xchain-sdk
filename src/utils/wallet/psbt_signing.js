@@ -90,7 +90,7 @@ module.exports = {
             throw new SDKWalletError('INVALID_WIF', 'WIF private key is required.');
         }
 
-        const net = this._resolveNet();
+        const net = this.resolveNet();
         const { keyPair, psbt } = createSigningContext(psbtHex, wif, net);
 
         // Scoped signing: when an explicit input set is given, sign/finalize ONLY
@@ -213,7 +213,7 @@ module.exports = {
             throw new SDKWalletError('INVALID_WIF', 'WIF private key is required.');
         }
 
-        const net = this._resolveNet();
+        const net = this.resolveNet();
         let keyPair;
         try {
             keyPair = ECPair.fromWIF(wif, net);
@@ -271,7 +271,7 @@ module.exports = {
             throw new SDKWalletError('INVALID_WIF', 'WIF private key is required.');
         }
 
-        const net = this._resolveNet();
+        const net = this.resolveNet();
         let keyPair;
         try {
             keyPair = ECPair.fromWIF(wif, net);

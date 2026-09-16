@@ -81,7 +81,7 @@ module.exports = {
     ],
     // ad1b06077c, the parent of split b93e97ae11.
     WalletSession: [
-        ['_preflightContractMeta', false, true, true, 'function', 2],
+        ['preflightContractMeta', false, true, true, 'function', 2],
         ['submitInner', false, true, true, 'function', 1],
         ['address', false, true, true, 'function', 3],
         ['airdrop', false, true, true, 'function', 3],
@@ -187,7 +187,7 @@ module.exports = {
         ['hkdfFromEcdh', false, true, true, 'function', 3],
         ['hkdfSha256Test', false, true, true, 'function', 4],
         ['normalizeKey', false, true, true, 'function', 1],
-        ['_resolveNet', false, true, true, 'function', 1],
+        ['resolveNet', false, true, true, 'function', 1],
         ['toBuffer', false, true, true, 'function', 2],
         ['tryEcdhDecrypt', false, true, true, 'function', 5],
         ['unpackEcies', false, true, true, 'function', 2],

@@ -98,7 +98,7 @@ module.exports = {
             throw new SDKWalletError('INVALID_WIF', 'WIF string is required.');
         }
 
-        const net = this._resolveNet();
+        const net = this.resolveNet();
         let keyPair;
 
         try {
@@ -133,7 +133,7 @@ module.exports = {
      * @returns {{ wif: string, privateKey: Buffer, publicKey: Buffer, publicKeyHex: string, compressed: boolean }}
      */
     generateKeyPair(opts = {}) {
-        const net = this._resolveNet();
+        const net = this.resolveNet();
         const compressed = opts.compressed !== false;
 
         const keyPair = ECPair.makeRandom({ network: net, compressed: compressed });
@@ -156,7 +156,7 @@ module.exports = {
      * @returns {string}
      */
     deriveAddress(publicKey, opts = {}) {
-        const net = this._resolveNet();
+        const net = this.resolveNet();
         const type = opts.type || 'p2pkh';
 
         let pubKeyBuf;
@@ -231,7 +231,7 @@ module.exports = {
         if (typeof params.scriptTemplate !== 'string' || params.scriptTemplate.length === 0)
             throw new SDKWalletError('INVALID_INPUT', 'scriptTemplate must be a non-empty string');
 
-        const net = this._resolveNet(params.network);
+        const net = this.resolveNet(params.network);
         const scheme = params.scheme;
 
         if (scheme === 'taproot-musig2') {

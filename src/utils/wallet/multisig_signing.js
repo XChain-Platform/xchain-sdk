@@ -84,7 +84,7 @@ module.exports = {
         if (!wif || typeof wif !== 'string') {
             throw new SDKWalletError('INVALID_WIF', 'signMultisigPsbt: WIF is required');
         }
-        const net = this._resolveNet();
+        const net = this.resolveNet();
         let keyPair;
         try {
             keyPair = ECPair.fromWIF(wif, net);
@@ -118,7 +118,7 @@ module.exports = {
         if (!psbtHex || typeof psbtHex !== 'string') {
             throw new SDKWalletError('INVALID_PSBT', 'finalizeMultisigPsbt: PSBT hex is required');
         }
-        const net = this._resolveNet();
+        const net = this.resolveNet();
         let psbt;
         try {
             psbt = bitcoin.Psbt.fromHex(psbtHex, { network: net });

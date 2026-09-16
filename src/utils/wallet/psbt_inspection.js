@@ -291,7 +291,7 @@ module.exports = {
             throw new SDKWalletError('INVALID_PSBT', 'PSBT hex string is required.');
         }
 
-        const net = this._resolveNet();
+        const net = this.resolveNet();
         const psbt = parsePsbt(psbtHex, net);
         const inputs = decomposeInputs(psbt, net);
         const outputs = decomposeOutputs(psbt, net);

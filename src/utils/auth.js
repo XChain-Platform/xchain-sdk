@@ -40,7 +40,7 @@ class AuthUtils {
     }
 
     // Resolve network params: instance default or per-call override
-    _resolveNet(network) {
+    resolveNet(network) {
         if (network) return getNetwork(network);
         if (this._netParams) return this._netParams;
         throw new SDKAuthError('NETWORK_NOT_CONFIGURED',
@@ -107,7 +107,7 @@ class AuthUtils {
             throw new SDKAuthError('INVALID_WIF', 'WIF private key is required for signing.');
         }
 
-        const net = this._resolveNet(opts.network);
+        const net = this.resolveNet(opts.network);
         let keyPair;
 
         try {
@@ -183,7 +183,7 @@ class AuthUtils {
 
         let net;
         try {
-            net = this._resolveNet(network);
+            net = this.resolveNet(network);
         } catch (err) {
             return { valid: false, address: address, error: err.message };
         }

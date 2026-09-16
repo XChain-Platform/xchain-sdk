@@ -27,7 +27,7 @@ const { SDKMessagingError } = require('../../utils/errors.js');
 const { ECPair, IV_LEN, KDF_VERSION_V1 } = require('./kdf_constants.js');
 
 module.exports = {
-    _resolveNet(network) {
+    resolveNet(network) {
         if (network) return getNetwork(network);
         if (this._netParams) return this._netParams;
         throw new SDKMessagingError('NETWORK_NOT_CONFIGURED',
@@ -93,7 +93,7 @@ module.exports = {
             ? ciphertext
             : Buffer.from(ciphertext, 'hex');
 
-        let net = this._resolveNet();
+        let net = this.resolveNet();
         let keyPair;
         try {
             keyPair = ECPair.fromWIF(wif, net);
@@ -172,7 +172,7 @@ module.exports = {
             ? ciphertext
             : Buffer.from(ciphertext, 'hex');
 
-        let net = this._resolveNet();
+        let net = this.resolveNet();
         let keyPair;
         try {
             keyPair = ECPair.fromWIF(wif, net);

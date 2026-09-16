@@ -105,7 +105,7 @@ module.exports = {
     // sdk.deploy() has its own `lint` seam; this is the session's, and the two run the
     // same branch.
     async deploy(params, enc, opts)      {
-        this._preflightContractMeta(params, opts);
+        this.preflightContractMeta(params, opts);
         return this.submit({ action: 'DEPLOY', params }, enc, opts);
     },
     // One base64 code slice of a chunked deploy. DEPLOY v4 carrier (see sdk.deployContract / chunkHelper).
@@ -113,7 +113,7 @@ module.exports = {
     // undecidable and advises; the pre-flight bites on the assembling piece that does carry
     // the whole source, which is where the chain judges a chunked deploy too.
     async deployChunk(params, enc, opts) {
-        this._preflightContractMeta(params, opts);
+        this.preflightContractMeta(params, opts);
         return this.submit({ action: 'DEPLOY', params: Utility.withForcedVersion('4', params) }, enc, opts);
     },
 
@@ -124,11 +124,11 @@ module.exports = {
     // courtesy check that only ever saves a fee. The refusal path itself is driven
     // against a real XChainSDK in test/unit/contract_meta_preflight.test.js, so a
     // renamed facade method fails there rather than silently disarming this.
-    _preflightContractMeta(params, opts) {
+    preflightContractMeta(params, opts) {
         let sdk = this.sdk;
-        if (!sdk || typeof sdk._preflightContractMeta !== 'function'
+        if (!sdk || typeof sdk.preflightContractMeta !== 'function'
                  || typeof sdk.contractSourceFromParams !== 'function') return;
-        sdk._preflightContractMeta(sdk.contractSourceFromParams(params), (opts || {}).preflight);
+        sdk.preflightContractMeta(sdk.contractSourceFromParams(params), (opts || {}).preflight);
     },
     async execute(params, enc, opts)   { return this.submit({ action: 'EXECUTE', params }, enc, opts); },
     async deposit(params, enc, opts)   { return this.submit({ action: 'DEPOSIT', params }, enc, opts); },
