@@ -94,7 +94,7 @@ function validateCallbackDelay(validator, action, field, value, allFields, error
 
 // Applies one contiguous field-rule group while preserving finding order.
 function validateMethod(validator, action, field, value, allFields, errors) {
-    // METHOD validation (non-empty; delimiter safety via _checkDelimiters)
+    // METHOD validation (non-empty; delimiter safety via checkDelimiters)
     if (field === 'METHOD') {
         if (typeof value !== 'string' || value.length === 0)
             errors.push(validator._error('INVALID_FIELD_VALUE', 'METHOD must be a non-empty string', { field, value }));

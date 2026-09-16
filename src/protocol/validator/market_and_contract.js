@@ -25,19 +25,19 @@ const { VALID_COINS, ACTION_REQUIRED_FIELDS } = require('./field_limits.js');
 
 module.exports = {
     // DEPLOY-specific validation (version-dependent)
-    _validateDeploy(fields) {
+    validateDeploy(fields) {
         // v4 = chunk carrier: validate the slice fields only; no GAS_LIMIT / inline code / staking.
         if (Number(fields.VERSION) === 4)
-            return this._validateDeployCarrier(fields);
+            return this.validateDeployCarrier(fields);
 
         let errors = [];
         // GAS_LIMIT is required for an actual deploy (inline v0/v1 + chunked-assemble v2/v3).
-        if (this._isEmpty(fields.GAS_LIMIT))
+        if (this.isEmpty(fields.GAS_LIMIT))
             errors.push(this._error('MISSING_REQUIRED_FIELD', 'DEPLOY requires GAS_LIMIT', { field: 'GAS_LIMIT' }));
         // Inline (v0/v1) carries CODE_ENCODING; chunked-assemble (v2/v3) carries CODE_HASH and
         // assembles the code from prior v4 carriers. Exactly one must be present.
-        let hasInline = !this._isEmpty(fields.CODE_ENCODING);
-        let hasHash   = !this._isEmpty(fields.CODE_HASH);
+        let hasInline = !this.isEmpty(fields.CODE_ENCODING);
+        let hasHash   = !this.isEmpty(fields.CODE_HASH);
         if (!hasInline && !hasHash)
             errors.push(this._error('MISSING_REQUIRED_FIELD', 'DEPLOY requires CODE_ENCODING (inline) or CODE_HASH (chunked)', { action: 'DEPLOY' }));
         else if (hasInline && hasHash)
@@ -46,8 +46,8 @@ module.exports = {
         // (The indexer applies the same rule and additionally defaults SLASH_DESTINATION->BURN
         // when COOLDOWN_BLOCKS is set without a destination, so we don't enforce SLASH_DESTINATION
         // as required when COOLDOWN_BLOCKS is present.)
-        let hasCooldown = !this._isEmpty(fields.COOLDOWN_BLOCKS);
-        let hasDest     = !this._isEmpty(fields.SLASH_DESTINATION);
+        let hasCooldown = !this.isEmpty(fields.COOLDOWN_BLOCKS);
+        let hasDest     = !this.isEmpty(fields.SLASH_DESTINATION);
         if (hasDest && !hasCooldown)
             errors.push(this._error('DEPLOY_CONSTRAINT', 'SLASH_DESTINATION requires COOLDOWN_BLOCKS', { cooldown: fields.COOLDOWN_BLOCKS, destination: fields.SLASH_DESTINATION }));
         return errors;
@@ -56,21 +56,21 @@ module.exports = {
     // DEPLOY v4 (chunk carrier) validation: required slice fields + CHUNK_INDEX < TOTAL_CHUNKS <= MAX_DEPLOY_CHUNKS.
     // (Field-level format checks for CODE_HASH/CODE_PART/CHUNK_INDEX/TOTAL_CHUNKS run in the
     // per-field pass.)
-    _validateDeployCarrier(fields) {
+    validateDeployCarrier(fields) {
         let errors = [];
         for (let f of ['CODE_HASH', 'CHUNK_INDEX', 'TOTAL_CHUNKS', 'CODE_PART'])
-            if (this._isEmpty(fields[f]))
+            if (this.isEmpty(fields[f]))
                 errors.push(this._error('MISSING_REQUIRED_FIELD', 'DEPLOY v4 (chunk carrier) requires ' + f, { field: f }));
         let total = Number(fields.TOTAL_CHUNKS);
         let idx   = Number(fields.CHUNK_INDEX);
-        if (!this._isEmpty(fields.TOTAL_CHUNKS) && (total < 1 || total > MAX_DEPLOY_CHUNKS))
+        if (!this.isEmpty(fields.TOTAL_CHUNKS) && (total < 1 || total > MAX_DEPLOY_CHUNKS))
             errors.push(this._error('DEPLOY_CHUNK_CONSTRAINT', 'TOTAL_CHUNKS must be in [1, ' + MAX_DEPLOY_CHUNKS + ']', { total }));
-        if (!this._isEmpty(fields.CHUNK_INDEX) && !this._isEmpty(fields.TOTAL_CHUNKS) && idx >= total)
+        if (!this.isEmpty(fields.CHUNK_INDEX) && !this.isEmpty(fields.TOTAL_CHUNKS) && idx >= total)
             errors.push(this._error('DEPLOY_CHUNK_CONSTRAINT', 'CHUNK_INDEX must be < TOTAL_CHUNKS', { index: idx, total }));
         return errors;
     },
 
-    _validateDispenser(fields) {
+    validateDispenser(fields) {
         let errors = [];
         // If not a cancel/edit (no DISPENSER_ACTION_INDEX), full create requires
         // give-side fields + GET_AMOUNT, plus either GET_TICK (token-paid) or
@@ -78,21 +78,21 @@ module.exports = {
         // the native coin; GET_TICK is empty in that mode per DISPENSER.md).
         // Ownership dispensers (GIVE_OWNERSHIP=1) are single-shot: GIVE_AMOUNT
         // and GIVE_ESCROW must be EMPTY in that mode, and GET_AMOUNT is the price.
-        if (this._isEmpty(fields.DISPENSER_ACTION_INDEX)) {
+        if (this.isEmpty(fields.DISPENSER_ACTION_INDEX)) {
             let isOwnershipGive = (Number(fields.GIVE_OWNERSHIP || 0) === 1);
             let required = ['GIVE_TICK', 'GET_AMOUNT'];
             if (!isOwnershipGive) required.push('GIVE_AMOUNT');
             for (let field of required) {
-                if (this._isEmpty(fields[field]))
+                if (this.isEmpty(fields[field]))
                     errors.push(this._error('MISSING_REQUIRED_FIELD', 'DISPENSER create requires field: ' + field, { field }));
             }
             if (isOwnershipGive) {
-                if (!this._isEmpty(fields.GIVE_AMOUNT))
+                if (!this.isEmpty(fields.GIVE_AMOUNT))
                     errors.push(this._error('INVALID_FIELD_VALUE', 'GIVE_AMOUNT must be empty when GIVE_OWNERSHIP=1', { field: 'GIVE_AMOUNT' }));
-                if (!this._isEmpty(fields.GIVE_ESCROW))
+                if (!this.isEmpty(fields.GIVE_ESCROW))
                     errors.push(this._error('INVALID_FIELD_VALUE', 'GIVE_ESCROW must be empty when GIVE_OWNERSHIP=1', { field: 'GIVE_ESCROW' }));
             }
-            if (this._isEmpty(fields.GET_TICK) && this._isEmpty(fields.GET_COIN))
+            if (this.isEmpty(fields.GET_TICK) && this.isEmpty(fields.GET_COIN))
                 errors.push(this._error('MISSING_REQUIRED_FIELD',
                     'DISPENSER create requires GET_TICK (token-paid) or GET_COIN (coin-paid)',
                     { field: 'GET_COIN' }));
@@ -100,58 +100,58 @@ module.exports = {
         return errors;
     },
 
-    _validateOrder(fields) {
+    validateOrder(fields) {
         let errors = [];
-        if (this._isEmpty(fields.ORDER_ACTION_INDEX)) {
+        if (this.isEmpty(fields.ORDER_ACTION_INDEX)) {
             // At least one side must have a TICK (can't trade coin for coin)
-            if (this._isEmpty(fields.GIVE_TICK) && this._isEmpty(fields.GET_TICK))
+            if (this.isEmpty(fields.GIVE_TICK) && this.isEmpty(fields.GET_TICK))
                 errors.push(this._error('MISSING_REQUIRED_FIELD', 'ORDER create requires at least one of GIVE_TICK or GET_TICK'));
             // Amounts required unless the corresponding side is an ownership offer/bid
             let isOwnershipGive = (Number(fields.GIVE_OWNERSHIP || 0) === 1);
             let isOwnershipGet  = (Number(fields.GET_OWNERSHIP  || 0) === 1);
-            if (!isOwnershipGive && this._isEmpty(fields.GIVE_AMOUNT))
+            if (!isOwnershipGive && this.isEmpty(fields.GIVE_AMOUNT))
                 errors.push(this._error('MISSING_REQUIRED_FIELD', 'ORDER create requires field: GIVE_AMOUNT', { field: 'GIVE_AMOUNT' }));
-            if (!isOwnershipGet  && this._isEmpty(fields.GET_AMOUNT))
+            if (!isOwnershipGet  && this.isEmpty(fields.GET_AMOUNT))
                 errors.push(this._error('MISSING_REQUIRED_FIELD', 'ORDER create requires field: GET_AMOUNT', { field: 'GET_AMOUNT' }));
-            if (isOwnershipGive && !this._isEmpty(fields.GIVE_AMOUNT))
+            if (isOwnershipGive && !this.isEmpty(fields.GIVE_AMOUNT))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'GIVE_AMOUNT must be empty when GIVE_OWNERSHIP=1', { field: 'GIVE_AMOUNT' }));
-            if (isOwnershipGet  && !this._isEmpty(fields.GET_AMOUNT))
+            if (isOwnershipGet  && !this.isEmpty(fields.GET_AMOUNT))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'GET_AMOUNT must be empty when GET_OWNERSHIP=1', { field: 'GET_AMOUNT' }));
-            if (isOwnershipGive && this._isEmpty(fields.GIVE_TICK))
+            if (isOwnershipGive && this.isEmpty(fields.GIVE_TICK))
                 errors.push(this._error('MISSING_REQUIRED_FIELD', 'ORDER with GIVE_OWNERSHIP=1 requires GIVE_TICK', { field: 'GIVE_TICK' }));
-            if (isOwnershipGet  && this._isEmpty(fields.GET_TICK))
+            if (isOwnershipGet  && this.isEmpty(fields.GET_TICK))
                 errors.push(this._error('MISSING_REQUIRED_FIELD', 'ORDER with GET_OWNERSHIP=1 requires GET_TICK', { field: 'GET_TICK' }));
         }
         return errors;
     },
 
-    _validateSwap(fields) {
+    validateSwap(fields) {
         let errors = [];
-        if (this._isEmpty(fields.SWAP_ACTION_INDEX)) {
+        if (this.isEmpty(fields.SWAP_ACTION_INDEX)) {
             let isOwnershipGive = (Number(fields.GIVE_OWNERSHIP || 0) === 1);
             let isOwnershipGet  = (Number(fields.GET_OWNERSHIP  || 0) === 1);
             let required = ['GIVE_TICK', 'GET_TICK'];
             if (!isOwnershipGive) required.push('GIVE_AMOUNT');
             if (!isOwnershipGet)  required.push('GET_AMOUNT');
             for (let field of required) {
-                if (this._isEmpty(fields[field]))
+                if (this.isEmpty(fields[field]))
                     errors.push(this._error('MISSING_REQUIRED_FIELD', 'SWAP create requires field: ' + field, { field }));
             }
-            if (isOwnershipGive && !this._isEmpty(fields.GIVE_AMOUNT))
+            if (isOwnershipGive && !this.isEmpty(fields.GIVE_AMOUNT))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'GIVE_AMOUNT must be empty when GIVE_OWNERSHIP=1', { field: 'GIVE_AMOUNT' }));
-            if (isOwnershipGet  && !this._isEmpty(fields.GET_AMOUNT))
+            if (isOwnershipGet  && !this.isEmpty(fields.GET_AMOUNT))
                 errors.push(this._error('INVALID_FIELD_VALUE', 'GET_AMOUNT must be empty when GET_OWNERSHIP=1', { field: 'GET_AMOUNT' }));
         }
         return errors;
     },
 
-    _validateList(fields) {
+    validateList(fields) {
         let errors = [];
-        let isEdit = !this._isEmpty(fields.LIST_ACTION_INDEX) || !this._isEmpty(fields.EDIT);
+        let isEdit = !this.isEmpty(fields.LIST_ACTION_INDEX) || !this.isEmpty(fields.EDIT);
         // LIST v0 (create) requires TYPE; LIST v1 (edit) requires EDIT + LIST_ACTION_INDEX
         if (!isEdit) {
             // Create mode: TYPE is required
-            if (this._isEmpty(fields.TYPE))
+            if (this.isEmpty(fields.TYPE))
                 errors.push(this._error('MISSING_REQUIRED_FIELD', 'LIST create requires field: TYPE', { field: 'TYPE' }));
         }
 
@@ -168,19 +168,19 @@ module.exports = {
         // as today) or wrong (assume ADDRESS and reject a legitimate TICK item);
         // the indexer, which does hold that state, is the arbiter for edits.
         if (!isEdit && Number(fields.TYPE) === 2)
-            errors.push(...this._validateListAddressItems(fields));
+            errors.push(...this.validateListAddressItems(fields));
 
         return errors;
     },
 
-    // TYPE=2 LIST.ITEM validation, see _validateList for scope.
-    _validateListAddressItems(fields) {
+    // TYPE=2 LIST.ITEM validation, see validateList for scope.
+    validateListAddressItems(fields) {
         let errors = [];
         let raw = fields.ITEM;
-        if (this._isEmpty(raw)) return errors;
+        if (this.isEmpty(raw)) return errors;
         let items = Array.isArray(raw) ? raw : [raw];
         for (let item of items) {
-            if (this._isEmpty(item)) continue;
+            if (this.isEmpty(item)) continue;
             // ^<id> reference to an already-indexed address. addressRefFields.js
             // marks LIST.ITEM `listType:true`: the indexer still assigns it an
             // address id like any other address-bearing field even though the SDK
@@ -192,7 +192,7 @@ module.exports = {
                     errors.push(this._error('INVALID_ADDRESS_ID', 'LIST ITEM ID reference must be numeric: ' + item, { field: 'ITEM', value: item }));
                 continue;
             }
-            if (!this._isValidListAddress(item))
+            if (!this.isValidListAddress(item))
                 errors.push(this._error('INVALID_FIELD_VALUE',
                     'LIST ITEM must be a valid address' + (this.network ? ' on ' + this.network : '') +
                     ' for a supported coin (' + VALID_COINS.join(', ') + ')',
@@ -225,7 +225,7 @@ module.exports = {
     // the historical length-only heuristic (isCryptoAddress's own doc comment)
     // rather than refusing every list-address action for a caller who never
     // configured one.
-    _isValidListAddress(address) {
+    isValidListAddress(address) {
         if (!this.network)
             return this.util.isCryptoAddress(address);
         // `network` reaches us in either spelling: a bare tier ('regtest') from
@@ -244,15 +244,15 @@ module.exports = {
         return false;
     },
 
-    // VOTE-specific validation (version-dependent, mirroring _validateDeploy).
+    // VOTE-specific validation (version-dependent, mirroring validateDeploy).
     // The raw vote() wrapper lets a caller hand-roll params, and VOTE's anchor fields
     // differ per version, so a flat ACTION_REQUIRED_FIELDS entry cannot express them.
     // Field lists track src/protocol/formats.js and xchain-documentation/protocol/actions/vote.md.
-    _validateVote(fields) {
+    validateVote(fields) {
         let errors = [];
         let needs = (list, label) => {
             for (let field of list)
-                if (this._isEmpty(fields[field]))
+                if (this.isEmpty(fields[field]))
                     errors.push(this._error('MISSING_REQUIRED_FIELD',
                         label + ' requires field: ' + field, { action: 'VOTE', field }));
         };
@@ -267,7 +267,7 @@ module.exports = {
         // Asking select() also keeps this from drifting when a format
         // is added or removed. A payload no format can carry throws NO_MATCHING_FORMAT
         // at serialization with its own diagnostic, so nothing is asserted here.
-        let version = this._isEmpty(fields.VERSION) ? null : Number(fields.VERSION);
+        let version = this.isEmpty(fields.VERSION) ? null : Number(fields.VERSION);
         if (version === null) {
             try { version = FormatSelector.select('VOTE', fields).version; }
             catch (e) { return errors; }
@@ -299,7 +299,7 @@ module.exports = {
         return errors;
     },
 
-    // DELEGATE-specific validation (version-dependent, mirroring _validateVote above).
+    // DELEGATE-specific validation (version-dependent, mirroring validateVote above).
     // ACTION_REQUIRED_FIELDS carried `DELEGATE: []`, and the flat table structurally
     // cannot express these: the rotate flavors (v0/v1) carry NEW_SIGNING_PUBKEY while
     // the revoke flavors (v2/v3) carry SIGNING_PUBKEY, so no field is common to all
@@ -307,11 +307,11 @@ module.exports = {
     // which the indexer refuses as 'invalid: SIGNING_PUBKEY (required)' with the miner
     // fee already spent. Field lists track src/protocol/formats.js and
     // xchain-indexer/src/actions/delegate.js.
-    _validateDelegate(fields) {
+    validateDelegate(fields) {
         let errors = [];
         let needs = (list, label) => {
             for (let field of list)
-                if (this._isEmpty(fields[field]))
+                if (this.isEmpty(fields[field]))
                     errors.push(this._error('MISSING_REQUIRED_FIELD',
                         label + ' requires field: ' + field, { action: 'DELEGATE', field }));
         };
@@ -320,10 +320,10 @@ module.exports = {
         // discriminate: SIGNING_PUBKEY means a revoke, TARGET_CONTRACT_INDEX/TICK mean
         // the contract-targeted pair. With nothing populated, auto-selection lands on
         // the smallest format (v0), which is what the caller is then held to.
-        let version = this._isEmpty(fields.VERSION) ? null : Number(fields.VERSION);
+        let version = this.isEmpty(fields.VERSION) ? null : Number(fields.VERSION);
         if (version === null) {
-            let targeted = !this._isEmpty(fields.TARGET_CONTRACT_INDEX) || !this._isEmpty(fields.TICK);
-            let revoke   = !this._isEmpty(fields.SIGNING_PUBKEY) && this._isEmpty(fields.NEW_SIGNING_PUBKEY);
+            let targeted = !this.isEmpty(fields.TARGET_CONTRACT_INDEX) || !this.isEmpty(fields.TICK);
+            let revoke   = !this.isEmpty(fields.SIGNING_PUBKEY) && this.isEmpty(fields.NEW_SIGNING_PUBKEY);
             version      = (revoke ? 2 : 0) + (targeted ? 1 : 0);
         }
 

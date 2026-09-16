@@ -44,7 +44,7 @@ const M = require('../../merkle.js');
 const { sameWireIndex } = require('../../utils/wire_index.js');
 const { _fetch, _base, _json, _hx } = require('./fetch_helpers.js');
 const { verifyBalanceProof, verifyLockedBalanceProof, verifyActionProof } = require('./proof_checks.js');
-const { _resolveQuorum } = require('./quorum_resolution.js');
+const { resolveQuorum } = require('./quorum_resolution.js');
 
 // ── Public network API ────────────────────────────────────────────────────────
 
@@ -52,7 +52,7 @@ const { _resolveQuorum } = require('./quorum_resolution.js');
 //  When neither validators nor trustedCheckpoint is given, the pinned launch set
 //  for `coin` (spec D4) is used if one is registered, else the explorer's set.
 //  A checkpoint past the pinned epoch is verified by rolling the pinned trust
-//  root forward across validator rotation (§7.3); see _resolveQuorum.
+//  root forward across validator rotation (§7.3); see resolveQuorum.
 //  -> { verified, amount, height, reason, checkpoint, quorum, weighted }
 // Returns the verified amount as-of the proven (nearest checkpointed >= atHeight)
 // height, echoed in `height`. A zero balance verifies as non-inclusion. Throws
@@ -124,7 +124,7 @@ async function resolveBalanceCheckpoint(f, opts, body, proof){
     } else {
         if (!body.checkpoint) throw new Error('LightClient: no checkpoint in response');
         cp = body.checkpoint;
-        q = await _resolveQuorum(f, opts, cp);
+        q = await resolveQuorum(f, opts, cp);
     }
     return { cp, q };
 }
@@ -166,7 +166,7 @@ async function verifyLockedBalance(opts){
     } else {
         if (!body.checkpoint) throw new Error('LightClient: no checkpoint in response');
         cp = body.checkpoint;
-        q = await _resolveQuorum(f, opts, cp);
+        q = await resolveQuorum(f, opts, cp);
     }
     // Height reported from the quorum-signed checkpoint, never the response label,
     // for the reason verifyBalance gives.
@@ -194,7 +194,7 @@ async function verifyLockedBalance(opts){
 // verifyAction({ explorerUrl, coin, actionIndex, validators?, trustedCheckpoint?, pinnedResolver?, fetchImpl? })
 //  Same pinned-launch-set (spec D4) fallback as verifyBalance when no validators
 //  and no trustedCheckpoint are supplied, including the rotation-aware
-//  forward-following of a post-epoch checkpoint (§7.3; see _resolveQuorum).
+//  forward-following of a post-epoch checkpoint (§7.3; see resolveQuorum).
 //  -> { verified, height, action, action_index, tx_index, reason, checkpoint, quorum, weighted }
 async function verifyAction(opts){
     opts = opts || {};
@@ -216,7 +216,7 @@ async function verifyAction(opts){
     } else {
         if (!body.checkpoint) throw new Error('LightClient: no checkpoint in response');
         cp = body.checkpoint;
-        q = await _resolveQuorum(f, opts, cp);
+        q = await resolveQuorum(f, opts, cp);
     }
     // Height comes from the quorum-signed checkpoint, not the response label (see verifyBalance).
     const base = { height: Number(cp.block_index), action: proof.action, action_index: Number(proof.action_index),

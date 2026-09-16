@@ -34,7 +34,7 @@ const {
 function validateRequiredFields(validator, action, fields, legs) {
     let errors = [];
     let actionIndexField = ACTION_INDEX_FIELDS[action];
-    let isIndexOperation = actionIndexField && !validator._isEmpty(fields[actionIndexField]);
+    let isIndexOperation = actionIndexField && !validator.isEmpty(fields[actionIndexField]);
 
     if (!isIndexOperation) {
         let required = ACTION_REQUIRED_FIELDS[action] || [];
@@ -44,7 +44,7 @@ function validateRequiredFields(validator, action, fields, legs) {
             // the top level (SEND v1) or inside every leg (v2/v3).
             if (legs) {
                 let missingIn = legs
-                    .map((leg, i) => (validator._isEmpty(leg[field]) && validator._isEmpty(fields[field])) ? i : -1)
+                    .map((leg, i) => (validator.isEmpty(leg[field]) && validator.isEmpty(fields[field])) ? i : -1)
                     .filter(i => i !== -1);
                 if (missingIn.length > 0)
                     errors.push(validator._error('MISSING_REQUIRED_FIELD',
@@ -52,7 +52,7 @@ function validateRequiredFields(validator, action, fields, legs) {
                         { action, field, legs: missingIn }));
                 continue;
             }
-            if (validator._isEmpty(fields[field])) {
+            if (validator.isEmpty(fields[field])) {
                 errors.push(validator._error('MISSING_REQUIRED_FIELD',
                     action + ' requires field: ' + field,
                     { action, field }));
@@ -67,11 +67,11 @@ function validateFlatFields(validator, action, fields) {
     for (let field in fields) {
         let value = fields[field];
         if (field === LEGS_FIELD) continue;   // shape-checked separately, values checked per leg
-        if (validator._isEmpty(value)) continue;
+        if (validator.isEmpty(value)) continue;
 
         // Default-deny delimiter guard, applied to every field before its
         // type-specific validation (see DELIMITER_EXEMPT_FIELDS).
-        errors.push(...validator._checkDelimiters(field, value));
+        errors.push(...validator.checkDelimiters(field, value));
         errors.push(...validator._validateField(action, field, value, fields));
     }
     return errors;
@@ -86,11 +86,11 @@ function validateLegFields(validator, action, fields, legs) {
         delete merged[LEGS_FIELD];
         for (let field in leg) {
             let value = leg[field];
-            if (validator._isEmpty(value)) continue;
-            for (let err of validator._checkDelimiters(field, value))
-                errors.push(validator._withLeg(err, i));
+            if (validator.isEmpty(value)) continue;
+            for (let err of validator.checkDelimiters(field, value))
+                errors.push(validator.withLeg(err, i));
             for (let err of validator._validateField(action, field, value, merged))
-                errors.push(validator._withLeg(err, i));
+                errors.push(validator.withLeg(err, i));
         }
     }
     return errors;
@@ -131,12 +131,12 @@ class Validator {
 
         // Multi-leg shape (LEGS): validated before the flat rules so a leg can
         // satisfy a required field the top-level map does not carry.
-        let legs = this._legsOf(fields);
-        errors.push(...this._validateLegsShape(action, fields));
+        let legs = this.legsOf(fields);
+        errors.push(...this.validateLegsShape(action, fields));
         errors.push(...validateRequiredFields(this, action, fields, legs));
         errors.push(...validateFlatFields(this, action, fields));
         errors.push(...validateLegFields(this, action, fields, legs));
-        errors.push(...this._validateAction(action, fields));
+        errors.push(...this.validateAction(action, fields));
 
         return errors;
     }

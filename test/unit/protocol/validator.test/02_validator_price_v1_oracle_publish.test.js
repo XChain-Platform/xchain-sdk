@@ -252,7 +252,7 @@ describe('Validator: LIST ITEM delimiter guards', function () {
 // delimiter safety load-bearing in a way a trailing memo's is not: a pipe in
 // the memo shifts every following segment, so the first item is read as a
 // memo fragment and the list silently gains and loses members. The default-deny
-// _checkDelimiters guard already covers every field, so these pin the coverage
+// checkDelimiters guard already covers every field, so these pin the coverage
 // rather than add a rule.
 describe('Validator: LIST MEMO delimiter guards', function () {
 

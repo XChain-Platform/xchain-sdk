@@ -57,7 +57,7 @@ function _fetch(impl){
 // the right key for every proof call, but the anchor cold start reads a DOGE
 // endpoint for a checkpoint belonging to ANOTHER chain, so that caller passes
 // the target chain's coin prefix explicitly.
-function _pinnedEntry(opts, coin){
+function pinnedEntry(opts, coin){
     if (opts.validators || opts.trustedCheckpoint) return null;
     const resolve = opts.pinnedResolver || pinned.getPinnedCheckpoint;
     return resolve(coin === undefined ? opts.coin : coin) || null;
@@ -89,7 +89,7 @@ function _hx(x){ return String(x == null ? '' : x).toLowerCase(); }
 // the next major version, so new callers should always pass it. Only the fields
 // present are compared, each as a string, so a numeric contract_index and its
 // decimal spelling agree.
-function _expectedMismatch(expected, actual){
+function expectedMismatch(expected, actual){
     if (!expected) return null;
     for (const field of Object.keys(expected)){
         const want = expected[field];
@@ -105,6 +105,6 @@ function _no(reason){ return { verified: false, amount: null, reason: reason }; 
 // total S against a trusted, committed BTC `stakes_root`, then checks the weighted
 // quorum `3·Σ(distinct signer-source weight) > 2·S` locally. Breaks the §7.1 circularity.
 
-function _scaled(a){ const [i, f] = M.canonicalAmount(String(a)).split('.'); return BigInt(i) * 1000000000000000000n + BigInt(f); }
+function scaled(a){ const [i, f] = M.canonicalAmount(String(a)).split('.'); return BigInt(i) * 1000000000000000000n + BigInt(f); }
 
-module.exports = { _fetch, _pinnedEntry, _base, _json, _hx, _expectedMismatch, _no, _scaled };
+module.exports = { _fetch, pinnedEntry, _base, _json, _hx, expectedMismatch, _no, scaled };

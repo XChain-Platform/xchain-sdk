@@ -102,9 +102,9 @@ function validateFileGateMinAmount(validator, action, field, value, allFields, e
 
 // Applies one contiguous field-rule group while preserving finding order.
 function validateMessageFields(validator, action, field, value, allFields, errors) {
-    // FILE NAME/TYPE/TITLE delimiter safety is handled by _checkDelimiters.
+    // FILE NAME/TYPE/TITLE delimiter safety is handled by checkDelimiters.
 
-    // MESSAGE content length validation (delimiter safety via _checkDelimiters)
+    // MESSAGE content length validation (delimiter safety via checkDelimiters)
     if (field === 'PLAINTEXT_MESSAGE' || field === 'ENCRYPTED_MESSAGE' || field === 'ENCRYPTION_KEY') {
         if (String(value).length > MAX_MESSAGE_LENGTH)
             errors.push(validator._error('INVALID_FIELD_VALUE', field + ' must be ' + MAX_MESSAGE_LENGTH + ' characters or less', { field, value: String(value).length, constraint: { max: MAX_MESSAGE_LENGTH } }));
@@ -140,7 +140,7 @@ function validateListType(validator, action, field, value, allFields, errors) {
 // Applies one contiguous field-rule group while preserving finding order.
 function validateListEdit(validator, action, field, value, allFields, errors) {
     // LIST ITEM (rest-field), VOTE free-text fields, and ALLOW_LIST/BLOCK_LIST
-    // delimiter safety are all handled by the default-deny _checkDelimiters guard
+    // delimiter safety are all handled by the default-deny checkDelimiters guard
     // (which iterates array/rest values element-by-element).
 
     if (field === 'EDIT') {
@@ -199,7 +199,7 @@ function validatePositiveAmounts(validator, action, field, value, allFields, err
     // from passing this exception.
     const fiatPricedDispenser = action === 'DISPENSER' && field === 'GET_AMOUNT'
         && Number(value) === 0
-        && (!validator._isEmpty(allFields?.FIAT_CODE) || !validator._isEmpty(allFields?.ORACLE_ADDRESS));
+        && (!validator.isEmpty(allFields?.FIAT_CODE) || !validator.isEmpty(allFields?.ORACLE_ADDRESS));
     if (field === 'AMOUNT' || field === 'GIVE_AMOUNT' || field === 'GET_AMOUNT' ||
         field === 'GIVE_ESCROW' || field === 'CALLBACK_AMOUNT') {
         if (!fiatPricedDispenser && validator.util.isNumeric(value) && Number(value) <= 0)

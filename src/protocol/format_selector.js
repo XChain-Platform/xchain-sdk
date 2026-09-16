@@ -84,7 +84,7 @@ class FormatSelector {
 // Resolve a caller-pinned VERSION for select(). `selector` is the receiver select()
 // was called on, so every lookup resolves exactly as it did inline.
 function selectPinned(selector, action, fields, explicitVersion) {
-    let v = FormatSelector._canonicalVersion(explicitVersion);
+    let v = FormatSelector.canonicalVersion(explicitVersion);
     if (v === null)
         throw new SDKFormatError(
             'INVALID_VERSION',
@@ -159,7 +159,7 @@ function versionCandidate(selector, action, version, fields, populatedFields, le
     }
     if (!allFieldsFit) return null;
 
-    if (legs && !selector._legsFit(group, uniqueSlots, legs)) return null;
+    if (legs && !selector.legsFit(group, uniqueSlots, legs)) return null;
 
     // This version is eligible: estimate output length
     let estimatedLength = selector.estimateLength(action, version, fields);
@@ -196,9 +196,9 @@ function noMatchingFormatError(selector, action, actionFormats, populatedFields,
 // that need class syntax or name the class; the rest come from the part files.
 const STATIC_ORDER = [
     'getFormatFields', 'LEGS_FIELD', 'getRepeatedGroup', 'isRepeatedFormat', 'isRestField',
-    'baseFieldName', 'getPopulatedFields', 'getLegs', '_legValue', '_sharedValue', '_legsFit',
-    '_flattenSingleLeg', '_repeatedFieldNames', '_buildRepeatedParts', 'estimateLength',
-    '_canonicalVersion', 'select', 'serialize'
+    'baseFieldName', 'getPopulatedFields', 'getLegs', '_legValue', 'sharedValue', 'legsFit',
+    'flattenSingleLeg', 'repeatedFieldNames', 'buildRepeatedParts', 'estimateLength',
+    'canonicalVersion', 'select', 'serialize'
 ];
 
 // Install part methods as statics with the descriptor a class `static` method has

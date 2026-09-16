@@ -72,7 +72,7 @@ const MAX_CODE_SIZE      = require('../constants.js').MAX_CODE_SIZE;
 // Must stay an exact match for the indexer's TICK_CHARACTERS (xchain-indexer
 // src/config.js); the SDK must never be more permissive than consensus.
 // Forbidden: \ | ; . / (a leading ^ switches the value from a NAME to an id
-// reference and is judged by _validateIssueTickRef instead, never by this regex).
+// reference and is judged by validateIssueTickRef instead, never by this regex).
 const TICK_REGEX = /^[a-zA-Z0-9~!@#$%^&*()_+\-={}[\]:<>.?]+$/;
 // The caret that marks a wire value as an INDEX REFERENCE rather than a name.
 const TICK_REF_PREFIX = '^';
@@ -84,7 +84,7 @@ const FORBIDDEN_TEXT_CHARS = ['|', ';'];
 // the pipe-delimited action string (`ACTION|VERSION|F1|F2|...`), so NO field may
 // carry the '|' field separator or the ';' BATCH command separator, or it
 // corrupts the field layout (and ';' inside a BATCH injects a whole command).
-// `_checkDelimiters` enforces this on every field; the set below is the small,
+// `checkDelimiters` enforces this on every field; the set below is the small,
 // principled exemption list: BATCH COMMAND legitimately holds both delimiters,
 // and the rest carry their own delimiter validation under a distinct error code
 // (tick-name / GATE_TICKER / per-element PARAMS), so they opt out here to avoid
@@ -126,7 +126,7 @@ const ACTION_REQUIRED_FIELDS = {
     DELEGATE:           [],
     // DEPLOY required fields are version-dependent (inline v0/v1 + assemble v2/v3 need
     // GAS_LIMIT; the v4 chunk carrier needs CODE_HASH/CHUNK_INDEX/TOTAL_CHUNKS/CODE_PART
-    // but no GAS_LIMIT), so they are all enforced per-version in _validateDeploy.
+    // but no GAS_LIMIT), so they are all enforced per-version in validateDeploy.
     DEPLOY:             [],
     DEPOSIT:            ['CONTRACT_ACTION_INDEX', 'TICK', 'QUANTITY'],
     DESTROY:            ['TICK', 'AMOUNT'],
@@ -148,7 +148,7 @@ const ACTION_REQUIRED_FIELDS = {
     SWEEP:              ['DESTINATION'],
     UNSTAKE:            ['SIGNING_PUBKEY'],
     // VOTE anchors are version-split with no field common to all versions (v0 create
-    // vs v1 ballot vs v3 delegate), so they are enforced per-version in _validateVote.
+    // vs v1 ballot vs v3 delegate), so they are enforced per-version in validateVote.
     VOTE:               [],
     WITHDRAW:           ['CONTRACT_ACTION_INDEX', 'TICK', 'QUANTITY']
 };

@@ -163,7 +163,7 @@ module.exports = {
      * for every leg (the silent-overpay failure mode). A version whose group
      * covers the field is the caller's fix, and select() prefers it already.
      */
-    _sharedValue(fieldName, fields, legs, action, version) {
+    sharedValue(fieldName, fields, legs, action, version) {
         let value = (fields[fieldName] !== null && fields[fieldName] !== undefined && fields[fieldName] !== '')
             ? fields[fieldName] : undefined;
         for (let i = 0; i < legs.length; i++) {
@@ -193,7 +193,7 @@ module.exports = {
      *   agrees on it (one wire slot). That is what makes SEND v1 (shared TICK)
      *   ineligible for two different ticks while v2 stays eligible.
      */
-    _legsFit(group, uniqueSlots, legs) {
+    legsFit(group, uniqueSlots, legs) {
         let legFields = new Set();
         for (let leg of legs)
             for (let key of Object.keys(leg))
@@ -222,21 +222,21 @@ module.exports = {
     // Merge a lone leg into the flat field map (leg values win) and drop LEGS,
     // so a single-leg format serializes identically whether the caller passed
     // flat fields or a one-entry legs array
-    _flattenSingleLeg(fields, leg) {
+    flattenSingleLeg(fields, leg) {
         let merged = Object.assign({}, fields, leg);
         delete merged[LEGS_FIELD];
         return merged;
     },
 
     // Field names a repeated format can carry (per-leg group + shared slots)
-    _repeatedFieldNames(group) {
+    repeatedFieldNames(group) {
         return new Set([...group.prefix, ...group.group, ...group.suffix].filter(f => !AUTO_FIELDS.includes(f)));
     },
 
     // Build the untrimmed value segments of a repeated-field format from legs.
     // parts[0] is the action name, exactly as the flat path builds it.
-    _buildRepeatedParts(action, version, fields, group, legs) {
-        let known = this._repeatedFieldNames(group);
+    buildRepeatedParts(action, version, fields, group, legs) {
+        let known = this.repeatedFieldNames(group);
         for (let i = 0; i < legs.length; i++) {
             for (let key of Object.keys(legs[i])) {
                 if (!known.has(key))
@@ -251,14 +251,14 @@ module.exports = {
         let parts = [action];
         for (let fieldName of group.prefix) {
             parts.push(fieldName === 'VERSION' ? String(version)
-                : this._sharedValue(fieldName, fields, legs, action, version));
+                : this.sharedValue(fieldName, fields, legs, action, version));
         }
         for (let i = 0; i < legs.length; i++) {
             for (let fieldName of group.group)
                 parts.push(this._legValue(fieldName, legs[i], fields, i));
         }
         for (let fieldName of group.suffix)
-            parts.push(this._sharedValue(fieldName, fields, legs, action, version));
+            parts.push(this.sharedValue(fieldName, fields, legs, action, version));
         return parts;
     }
 

@@ -39,21 +39,21 @@
 const M   = require('../../merkle.js');
 const SUB = require('../../state_subtree_activation.js');
 const { sameWireIndex, toWireIndex } = require('../../utils/wire_index.js');
-const { _hx, _expectedMismatch, _no } = require('./fetch_helpers.js');
+const { _hx, expectedMismatch, _no } = require('./fetch_helpers.js');
 
 // Verify a §4.4 BalanceProof binds to a TRUSTED state_root (one already proven to
 // be in a quorum-signed checkpoint). chain/network come from the trusted
 // checkpoint, never the proof. Returns { verified, amount, reason }.
 //
 // @param {Object} [expected] The REQUESTED { address, tick } to bind the proof to
-//   (see _expectedMismatch). @deprecated Calling without `expected` is deprecated;
+//   (see expectedMismatch). @deprecated Calling without `expected` is deprecated;
 //   the argument becomes required at the next major version.
 function verifyBalanceProof(proof, trustedStateRoot, chain, network, expected){
     try {
         if (!proof || !proof.smt_proof || !proof.sub_root_path) return _no('MALFORMED_PROOF');
         // Bind to the REQUESTED (address, tick) when the caller supplies it; the
-        // check below only proves the proof is self-consistent. See _expectedMismatch.
-        if (_expectedMismatch(expected, proof)) return _no('REQUESTED_IDENTITY_MISMATCH');
+        // check below only proves the proof is self-consistent. See expectedMismatch.
+        if (expectedMismatch(expected, proof)) return _no('REQUESTED_IDENTITY_MISMATCH');
         // The proven key must be exactly balanceKey(chain, network, address, tick):
         // a server cannot answer for (A,T) with a proof for some other key.
         const keyBuf    = M.balanceKey(chain, network, proof.address, proof.tick);
@@ -133,7 +133,7 @@ function verifyBalanceProof(proof, trustedStateRoot, chain, network, expected){
 // could have lied about.
 //
 // @param {Object} [expected] The REQUESTED { address, tick } to bind the proof to
-//   (see _expectedMismatch). @deprecated Calling without `expected` is deprecated;
+//   (see expectedMismatch). @deprecated Calling without `expected` is deprecated;
 //   the argument becomes required at the next major version.
 // @param {number|string} [trustedHeight] block_index of the TRUSTED checkpoint.
 //   @deprecated Omitting it is deprecated and gates at height 0; it becomes
@@ -141,7 +141,7 @@ function verifyBalanceProof(proof, trustedStateRoot, chain, network, expected){
 function verifyLockedBalanceProof(proof, trustedStateRoot, chain, network, expected, trustedHeight){
     try {
         if (!proof || !proof.smt_proof || !proof.sub_root_path) return _no('MALFORMED_PROOF');
-        if (_expectedMismatch(expected, proof)) return _no('REQUESTED_IDENTITY_MISMATCH');
+        if (expectedMismatch(expected, proof)) return _no('REQUESTED_IDENTITY_MISMATCH');
         // The label must still PARSE as a wire index, strict, fail-closed. It no
         // longer decides anything, but a server that cannot even name the height it
         // is answering about has produced a proof nobody can place, and letting that
@@ -207,7 +207,7 @@ function verifyLockedBalanceProof(proof, trustedStateRoot, chain, network, expec
 // (CONTRACT_STATE_NOT_COMMITTED), and that refusal is the signal to respect.
 //
 // @param {Object} [expected] The REQUESTED { contract_index, state_key } to bind
-//   the proof to (see _expectedMismatch). @deprecated Calling without `expected`
+//   the proof to (see expectedMismatch). @deprecated Calling without `expected`
 //   is deprecated; the argument becomes required at the next major version.
 function verifyContractStateProof(proof, trustedStateRoot, chain, network, expected){
     const no = (reason) => ({ verified: false, state_value: null, reason: reason });
@@ -215,8 +215,8 @@ function verifyContractStateProof(proof, trustedStateRoot, chain, network, expec
         if (!proof || !proof.smt_proof || !proof.sub_root_path) return no('MALFORMED_PROOF');
         // Bind to the REQUESTED (contract_index, state_key) when the caller supplies
         // it. Without this a server answers a different key with a valid proof, which
-        // is exactly what the explorer's double-decode did. See _expectedMismatch.
-        if (_expectedMismatch(expected, proof)) return no('REQUESTED_IDENTITY_MISMATCH');
+        // is exactly what the explorer's double-decode did. See expectedMismatch.
+        if (expectedMismatch(expected, proof)) return no('REQUESTED_IDENTITY_MISMATCH');
         // The proven key must be exactly contractStateKey(chain, network, index, key),
         // with chain/network from the TRUSTED checkpoint rather than the proof: a
         // server must not be able to answer for one key with another key's proof.

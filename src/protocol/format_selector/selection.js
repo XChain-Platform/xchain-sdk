@@ -39,7 +39,7 @@ function serializeRepeated(selector, action, version, fields, group, legs) {
                 + LEGS_FIELD + ': [{ ' + group.group.map(f => f.toLowerCase()).join(', ') + ' }, ...] instead.',
             { action, version, group: group.group, prefix: group.prefix, suffix: group.suffix }
         );
-    let parts = selector._buildRepeatedParts(action, version, fields, group, legs);
+    let parts = selector.buildRepeatedParts(action, version, fields, group, legs);
     while (parts.length > 2 && parts[parts.length - 1] === '')
         parts.pop();
     return parts.join('|');
@@ -55,9 +55,9 @@ module.exports = {
         let group = this.getRepeatedGroup(action, version);
         let legs  = this.getLegs(fields);
         if (group && legs)
-            return this._buildRepeatedParts(action, version, fields, group, legs).join('|').length;
+            return this.buildRepeatedParts(action, version, fields, group, legs).join('|').length;
         if (legs && legs.length === 1)
-            fields = this._flattenSingleLeg(fields, legs[0]);
+            fields = this.flattenSingleLeg(fields, legs[0]);
         let formatFields = this.getFormatFields(action, version);
         // Start with "ACTION|"
         let length = action.length + 1;
@@ -100,7 +100,7 @@ module.exports = {
     // accepted shape of a public input should not be "whatever Number() salvages".
     // A leading-zero string ('01') IS accepted: it cannot mean a different
     // version, so rejecting it would only break callers for no gain.
-    _canonicalVersion(value) {
+    canonicalVersion(value) {
         if (typeof value === 'number')
             return (Number.isInteger(value) && value >= 0) ? value : null;
         if (typeof value === 'string')
@@ -127,7 +127,7 @@ module.exports = {
                     action + ' v' + version + ' carries a single leg but ' + legs.length + ' were provided',
                     { action, version, legCount: legs.length }
                 );
-            fields = this._flattenSingleLeg(fields, legs[0]);
+            fields = this.flattenSingleLeg(fields, legs[0]);
         }
 
         let formatFields = this.getFormatFields(action, version);

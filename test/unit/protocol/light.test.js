@@ -137,7 +137,7 @@ function buildContractStateProof(contractIndex, stateKey, valueStr) {
     };
     return { proof, stateRoot };
 }
-// The validator-set cache (light.js `_explorerValidators`) is keyed on
+// The validator-set cache (light.js `explorerValidators`) is keyed on
 // (explorer, coin, checkpoint height), and several describe blocks below reuse
 // 'https://x' / COIN / height 100. Clear it before every test so one test's
 // cached /verify response can never answer another test's fetch assertion.

@@ -45,7 +45,7 @@
 'use strict';
 
 // Canonical TICK charset. Byte-for-byte the same rule the SDK validator
-// enforces on the authoring side (validator.js `_validateTickName`), which is
+// enforces on the authoring side (validator.js `validateTickName`), which is
 // itself pinned to the indexer's TICK_CHARACTERS (consensus). The co-signer
 // must never be MORE permissive than consensus: a name consensus would reject
 // is a name no real token can have, so accepting it here only widens the set

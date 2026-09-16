@@ -23,7 +23,7 @@ const { CANONICAL_CARET_ID } = require('../../preflight/constants.js');
 const { MAX_TICK_LENGTH, TICK_REGEX, TICK_REF_PREFIX, FORBIDDEN_TEXT_CHARS, DELIMITER_EXEMPT_FIELDS } = require('./field_limits.js');
 
 module.exports = {
-    _validateTickName(value, fields) {
+    validateTickName(value, fields) {
         let errors = [];
         let name = String(value);
 
@@ -31,7 +31,7 @@ module.exports = {
         // judges the two by different rules, so they take different branches. Running
         // the name rules over `^12` refused every reference the chain resolves.
         if (name.startsWith(TICK_REF_PREFIX))
-            return this._validateIssueTickRef(name, fields || {});
+            return this.validateIssueTickRef(name, fields || {});
 
         if (name.length === 0 || name.length > MAX_TICK_LENGTH)
             errors.push(this._error('INVALID_TICK_NAME', 'TICK name must be 1-' + MAX_TICK_LENGTH + ' characters', { value, length: name.length }));
@@ -88,7 +88,7 @@ module.exports = {
      *     action consensus accepts, the false-block this validator's non-ISSUE ticker
      *     branch already refuses to commit.
      */
-    _validateIssueTickRef(ref, fields) {
+    validateIssueTickRef(ref, fields) {
         let errors = [];
         let id     = ref.substring(1);
 
@@ -99,7 +99,7 @@ module.exports = {
         // TICK opts out of the blanket delimiter guard in favour of this validation,
         // so the scan runs from inside it (the id rules below would catch '|' and ';'
         // as non-numeric, but the caller gets the delimiter's own code and message).
-        errors.push(...this._scanDelimiters('TICK', ref));
+        errors.push(...this.scanDelimiters('TICK', ref));
 
         if (!this.util.isNumeric(id)) {
             errors.push(this._error('INVALID_TICK_ID',
@@ -109,7 +109,7 @@ module.exports = {
                 'TICK ID reference cannot contain a dot: ' + ref + ' reads as a number but names no ticker id',
                 { field: 'TICK', value: ref }));
         } else {
-            let format = this._issueFormat(fields);
+            let format = this.issueFormat(fields);
             if ((format === 6 || format === 7) && !CANONICAL_CARET_ID.test(id))
                 errors.push(this._error('INVALID_TICK_ID',
                     'TICK ID reference ' + ref + ' is not a canonical ^<id> (no leading zero, id >= 1), so it '
@@ -132,16 +132,16 @@ module.exports = {
      * null and takes the permissive branch, which is the safe direction: a missed
      * format costs a warning the chain will repeat, a wrong one costs a false block.
      */
-    _issueFormat(fields) {
-        if (!this._isEmpty(fields.VERSION)) {
+    issueFormat(fields) {
+        if (!this.isEmpty(fields.VERSION)) {
             let version = Number(fields.VERSION);
             return Number.isInteger(version) ? version : null;
         }
-        if (!this._isEmpty(fields.BRIDGE_CHAINS) || !this._isEmpty(fields.MIN_DEPTH)
-            || !this._isEmpty(fields.LOCK_BRIDGE))
+        if (!this.isEmpty(fields.BRIDGE_CHAINS) || !this.isEmpty(fields.MIN_DEPTH)
+            || !this.isEmpty(fields.LOCK_BRIDGE))
             return 7;
-        if (!this._isEmpty(fields.CONTROLLER) || !this._isEmpty(fields.ACTION_CLASS)
-            || !this._isEmpty(fields.UNBIND) || !this._isEmpty(fields.COOLDOWN_BLOCKS))
+        if (!this.isEmpty(fields.CONTROLLER) || !this.isEmpty(fields.ACTION_CLASS)
+            || !this.isEmpty(fields.UNBIND) || !this.isEmpty(fields.COOLDOWN_BLOCKS))
             return 6;
         return null;
     },
@@ -150,19 +150,19 @@ module.exports = {
     // field separator or the ';' BATCH command separator (see DELIMITER_EXEMPT_FIELDS
     // for the handful that opt out). Handles string and array/rest-field values,
     // checking each element, so a corrupted roster/allow-list entry is caught too.
-    _checkDelimiters(field, value) {
+    checkDelimiters(field, value) {
         if (DELIMITER_EXEMPT_FIELDS.has(field)) return [];
-        return this._scanDelimiters(field, value);
+        return this.scanDelimiters(field, value);
     },
 
     // The scan itself, with no exemption check. Split out so a field that opts out
     // of the blanket guard can still be scanned from inside the validation it opted
     // out IN FAVOUR OF, and report the same code and message as every other field.
-    _scanDelimiters(field, value) {
+    scanDelimiters(field, value) {
         let errors = [];
         let items = Array.isArray(value) ? value : [value];
         for (let item of items) {
-            if (this._isEmpty(item)) continue;
+            if (this.isEmpty(item)) continue;
             let text = String(item);
             for (let ch of FORBIDDEN_TEXT_CHARS) {
                 if (text.includes(ch))
@@ -174,7 +174,7 @@ module.exports = {
         return errors;
     },
 
-    _isEmpty(value) {
+    isEmpty(value) {
         return value === null || value === undefined || value === '';
     },
 

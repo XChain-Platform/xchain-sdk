@@ -40,7 +40,7 @@ const M          = require('../../merkle.js');
 const checkpoint = require('../../checkpoint.js');
 const swq        = require('../../stake_weighted_quorum.js');
 const srb        = require('../../snapshot_reorg_buffer.js');
-const { _fetch, _base, _json, _scaled, _hx } = require('./fetch_helpers.js');
+const { _fetch, _base, _json, scaled, _hx } = require('./fetch_helpers.js');
 const { verifyValidatorSetProof } = require('./proof_checks.js');
 
 // Network: fetch + verify the validator-set proof at BTC snapshot height S.
@@ -105,7 +105,7 @@ function verifyCheckpointWithProvenSet(cp, provenOraclePublish){
         try {
             total = M.canonicalAmount(String(swq.totalStake(validators)));
             const committed = M.canonicalAmount(String((provenOraclePublish && provenOraclePublish.total) || '0'));
-            if (_scaled(total) !== _scaled(committed)) valid = false;
+            if (scaled(total) !== scaled(committed)) valid = false;
         } catch (e){ valid = false; }
     }
     return { valid, total };

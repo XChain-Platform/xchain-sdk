@@ -85,12 +85,12 @@ function scanBatchCommands(validator, commands, errors) {
 
         // Nested BATCH is reported HERE rather than with the counted caps
         // below because this is also where descent stops: handing a child
-        // BATCH to _validateBatchCommand would re-enter this method.
+        // BATCH to validateBatchCommand would re-enter this method.
         if (key === 'BATCH') {
             errors.push(validator._error('BATCH_CONSTRAINT', 'BATCH cannot contain nested BATCH actions'));
             continue;                         // never descend into a forbidden child
         }
-        errors.push(...validator._validateBatchCommand(cmd, i));
+        errors.push(...validator.validateBatchCommand(cmd, i));
     }
     return { counts, mintTicks, fileCount };
 }
@@ -137,7 +137,7 @@ function appendMintAliasFinding(validator, mint, mintTicks, errors) {
 // Coordinates synchronous batch checks without changing their return shape.
 function validateBatch(validator, fields) {
     let errors = [];
-    if (validator._isEmpty(fields.COMMAND)) return errors;
+    if (validator.isEmpty(fields.COMMAND)) return errors;
 
     let commands = String(fields.COMMAND).split(';');
     if (!validateBatchEnvelope(validator, commands, errors)) return errors;

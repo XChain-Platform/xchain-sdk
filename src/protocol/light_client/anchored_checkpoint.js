@@ -39,7 +39,7 @@
 const checkpoint = require('../../checkpoint.js');
 const ckptCommit = require('../../checkpoint_commitment_activation.js');
 const { _hx, _fetch, _base, _json } = require('./fetch_helpers.js');
-const { _resolveValidatorSet } = require('./quorum_resolution.js');
+const { resolveValidatorSet } = require('./quorum_resolution.js');
 
 // Default DOGE confirmation depth a cold-start anchor must be buried under before
 // it is trusted. DOGE blocks ~1 min and ANCHORs land ~daily, so a recent valid
@@ -248,7 +248,7 @@ function verifyAnchoredCheckpoint(opts){
 // (reason UNTRUSTED_DOGE_DEPTH) rather than accept a depth nobody proved.
 //
 // THE SIGNER SET follows the same ladder as every other network call
-// (_resolveValidatorSet). `targetCoin` names the explorer coin prefix of
+// (resolveValidatorSet). `targetCoin` names the explorer coin prefix of
 // `targetChain` for the pinned lookup and the /verify fetch; omit it only when
 // `validators` is supplied, since without either the call fails closed with
 // CHECKPOINT_QUORUM_FAILED.
@@ -299,7 +299,7 @@ async function fetchAnchoredCheckpoint(opts){
     // explicit set, nothing pinned and no targetCoin, the set stays null and the
     // call fails closed on quorum rather than guessing a prefix from the chain name.
     const targetCoin = (opts.targetCoin == null || String(opts.targetCoin) === '') ? null : opts.targetCoin;
-    const validators = await _resolveValidatorSet(f, opts, cp, targetCoin);
+    const validators = await resolveValidatorSet(f, opts, cp, targetCoin);
     const res = verifyAnchoredCheckpoint({ checkpoint: cp, validators, confirmations, minDepth });
     return Object.assign({}, res, { anchor: rec, dogeTxid: rec.tx_hash || null, depthSource });
 }

@@ -25,14 +25,14 @@ const { BET_LIMITS } = require('../../actions/betting.js');
 // Validates market labels together because they define the displayed outcomes.
 function validateBetLabels(validator, fields, limits, errors) {
     // LABEL length. Presence is handled by ACTION_REQUIRED_FIELDS.
-    if (!validator._isEmpty(fields.LABEL) && String(fields.LABEL).length > limits.MAX_BET_LABEL_LENGTH)
+    if (!validator.isEmpty(fields.LABEL) && String(fields.LABEL).length > limits.MAX_BET_LABEL_LENGTH)
         errors.push(validator._error('INVALID_FIELD_VALUE',
             'LABEL must be ' + limits.MAX_BET_LABEL_LENGTH + ' characters or less',
             { field: 'LABEL', value: String(fields.LABEL).length, constraint: { max: limits.MAX_BET_LABEL_LENGTH } }));
 
     // OUTCOMES: 2..MAX entries, each non-empty, length-capped, and
     // byte-unique after trim. Case variants are legal, so not checked.
-    if (!validator._isEmpty(fields.OUTCOMES)) {
+    if (!validator.isEmpty(fields.OUTCOMES)) {
         const labels = String(fields.OUTCOMES).split(',').map(o => o.trim());
         if (labels.length < 2 || labels.length > limits.MAX_BET_OUTCOMES)
             errors.push(validator._error('INVALID_FIELD_VALUE',
@@ -51,7 +51,7 @@ function validateBetLabels(validator, fields, limits, errors) {
     // Betting is token-only: an empty TICK means native coin, which
     // cannot be escrowed at parse. Presence is required above, so this
     // only catches a whitespace-only tick.
-    if (!validator._isEmpty(fields.TICK) && String(fields.TICK).trim() === '')
+    if (!validator.isEmpty(fields.TICK) && String(fields.TICK).trim() === '')
         errors.push(validator._error('INVALID_FIELD_VALUE',
             'TICK is required: betting is token-only and native coin is not supported',
             { field: 'TICK' }));
@@ -60,7 +60,7 @@ function validateBetLabels(validator, fields, limits, errors) {
 // Validates numeric market terms in their wire-field order.
 function validateBetTerms(validator, fields, limits, errors) {
     // FEE is a PERCENT of the pot (1.00 = 1%), at most 2 decimals.
-    if (!validator._isEmpty(fields.FEE)) {
+    if (!validator.isEmpty(fields.FEE)) {
         const fee = String(fields.FEE).trim();
         if (!/^\d+(\.\d{1,2})?$/.test(fee))
             errors.push(validator._error('INVALID_FIELD_VALUE',
@@ -74,14 +74,14 @@ function validateBetTerms(validator, fields, limits, errors) {
 
     // DEADLINE is a Unix timestamp. "In the future" is a block-time
     // question the indexer owns; only the shape is checked here.
-    if (!validator._isEmpty(fields.DEADLINE)) {
+    if (!validator.isEmpty(fields.DEADLINE)) {
         const dl = Number(fields.DEADLINE);
         if (!Number.isInteger(dl) || dl <= 0)
             errors.push(validator._error('INVALID_FIELD_VALUE',
                 'DEADLINE must be a positive integer Unix timestamp',
                 { field: 'DEADLINE', value: fields.DEADLINE }));
     }
-    if (!validator._isEmpty(fields.REFUND_WINDOW)) {
+    if (!validator.isEmpty(fields.REFUND_WINDOW)) {
         const rw = Number(fields.REFUND_WINDOW);
         if (!Number.isInteger(rw) || rw < limits.MIN_BET_REFUND_WINDOW || rw > limits.MAX_BET_REFUND_WINDOW)
             errors.push(validator._error('INVALID_FIELD_VALUE',
@@ -89,7 +89,7 @@ function validateBetTerms(validator, fields, limits, errors) {
                 ' and ' + limits.MAX_BET_REFUND_WINDOW + ' seconds',
                 { field: 'REFUND_WINDOW', value: fields.REFUND_WINDOW }));
     }
-    if (!validator._isEmpty(fields.MIN_AMOUNT)) {
+    if (!validator.isEmpty(fields.MIN_AMOUNT)) {
         if (!validator.util.isNumeric(fields.MIN_AMOUNT) || Number(fields.MIN_AMOUNT) <= 0)
             errors.push(validator._error('INVALID_FIELD_VALUE',
                 'MIN_AMOUNT must be a positive amount',
@@ -100,7 +100,7 @@ function validateBetTerms(validator, fields, limits, errors) {
 // Applies list compatibility and structured details after scalar market terms.
 function validateBetPolicy(validator, fields, limits, errors) {
     // The same list in both slots builds a market nobody can ever bet on.
-    if (!validator._isEmpty(fields.ALLOW_LIST) && !validator._isEmpty(fields.BLOCK_LIST) &&
+    if (!validator.isEmpty(fields.ALLOW_LIST) && !validator.isEmpty(fields.BLOCK_LIST) &&
         String(fields.ALLOW_LIST).trim() === String(fields.BLOCK_LIST).trim())
         errors.push(validator._error('INVALID_FIELD_VALUE',
             'BLOCK_LIST must differ from ALLOW_LIST: the same list in both slots bars every address',
@@ -108,7 +108,7 @@ function validateBetPolicy(validator, fields, limits, errors) {
 
     // DETAILS: strict base64 of a JSON object, size- and depth-capped,
     // with any `outcomes` key matching OUTCOMES byte-for-byte.
-    if (!validator._isEmpty(fields.DETAILS))
+    if (!validator.isEmpty(fields.DETAILS))
         errors.push(...validator._validateBetDetails(String(fields.DETAILS), fields.OUTCOMES, limits));
 }
 
@@ -123,13 +123,13 @@ function validateBetLifecycle(validator, fields, errors) {
     // OUTCOME is a zero-based index. Its upper bound depends on the
     // market's outcome count, which is on-chain state, so only the
     // non-negative-integer shape is checkable here.
-    if (!validator._isEmpty(fields.OUTCOME) || fields.OUTCOME === 0 || fields.OUTCOME === '0') {
+    if (!validator.isEmpty(fields.OUTCOME) || fields.OUTCOME === 0 || fields.OUTCOME === '0') {
         if (!/^\d+$/.test(String(fields.OUTCOME).trim()))
             errors.push(validator._error('INVALID_FIELD_VALUE',
                 'OUTCOME must be a zero-based integer index into the market OUTCOMES',
                 { field: 'OUTCOME', value: fields.OUTCOME }));
     }
-    if (!validator._isEmpty(fields.AMOUNT)) {
+    if (!validator.isEmpty(fields.AMOUNT)) {
         if (!validator.util.isNumeric(fields.AMOUNT) || Number(fields.AMOUNT) <= 0)
             errors.push(validator._error('INVALID_FIELD_VALUE',
                 'AMOUNT must be a positive stake',
@@ -139,7 +139,7 @@ function validateBetLifecycle(validator, fields, errors) {
     // A place-bet needs an outcome to stake on. Without this an AMOUNT
     // with no OUTCOME selects format 1 (cancel) and silently becomes a
     // different action than the caller meant.
-    if (!validator._isEmpty(fields.AMOUNT) && validator._isEmpty(fields.OUTCOME) &&
+    if (!validator.isEmpty(fields.AMOUNT) && validator.isEmpty(fields.OUTCOME) &&
         fields.OUTCOME !== 0 && fields.OUTCOME !== '0')
         errors.push(validator._error('MISSING_REQUIRED_FIELD',
             'BET place-bet requires OUTCOME alongside AMOUNT',
@@ -150,7 +150,7 @@ function validateBetLifecycle(validator, fields, errors) {
 function validateBet(validator, fields) {
     let errors = [];
     const limits = BET_LIMITS;
-    const isCreate = validator._isEmpty(fields.FEED_ACTION_INDEX);
+    const isCreate = validator.isEmpty(fields.FEED_ACTION_INDEX);
     if (isCreate) {
         validateBetLabels(validator, fields, limits, errors);
         validateBetTerms(validator, fields, limits, errors);

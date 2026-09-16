@@ -10,7 +10,7 @@
 //
 // Unit: DELEGATE (signing-capability rotate/revoke) raw wrapper. Pins the
 // PUBLIC surface, which is where the fee is spent: validator.test.js proves
-// _validateDelegate's per-version field lists, and this file proves the same
+// validateDelegate's per-version field lists, and this file proves the same
 // rules actually reach a caller who goes through sdk.delegate(). VOTE's half of
 // the same defect is pinned in vote.test.js.
 

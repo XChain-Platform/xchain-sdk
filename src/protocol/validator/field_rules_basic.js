@@ -34,8 +34,8 @@ function validateTickFields(validator, action, field, value, allFields, errors) 
         if (action === 'ISSUE' && field === 'TICK') {
             // Full TICK validation on ISSUE. A caret-led value is an id
             // reference rather than a name and is judged as one (see
-            // _validateTickName's first branch).
-            errors.push(...validator._validateTickName(value, allFields));
+            // validateTickName's first branch).
+            errors.push(...validator.validateTickName(value, allFields));
         } else if (String(value).startsWith('^')) {
             // TICK_ID reference (^123), only valid outside of ISSUE. A delimiter
             // inside the id is already fatal here: isNumeric tests the WHOLE
@@ -53,21 +53,21 @@ function validateTickFields(validator, action, field, value, allFields, errors) 
             // an injected amount and destination, and a ';' here injects a whole
             // BATCH sub-command.
             //
-            // Delimiters only, deliberately: full _validateTickName on a non-ISSUE
+            // Delimiters only, deliberately: full validateTickName on a non-ISSUE
             // reference would make the SDK stricter than consensus and refuse tick
             // names that already exist on chain (the regression the FIAT_AMOUNT note
             // below records shipping once). '|' and ';' are outside TICK_REGEX
             // anyway, so nothing legitimate loses.
-            errors.push(...validator._scanDelimiters(field, value));
+            errors.push(...validator.scanDelimiters(field, value));
         }
     }
 }
 
 // Applies one contiguous field-rule group while preserving finding order.
 function validateDescriptionField(validator, action, field, value, allFields, errors) {
-    // MEMO delimiter safety is handled by the default-deny _checkDelimiters guard.
+    // MEMO delimiter safety is handled by the default-deny checkDelimiters guard.
 
-    // DESCRIPTION validation (delimiter safety via _checkDelimiters)
+    // DESCRIPTION validation (delimiter safety via checkDelimiters)
     if (field === 'DESCRIPTION') {
         if (String(value).length > MAX_DESC_LENGTH)
             errors.push(validator._error('INVALID_FIELD_VALUE', 'DESCRIPTION must be ' + MAX_DESC_LENGTH + ' characters or less', { field, value: String(value).length, constraint: { max: MAX_DESC_LENGTH } }));
@@ -122,7 +122,7 @@ function validateMaxSupplyField(validator, action, field, value, allFields, erro
         // nothing is asserted rather than a 0 being invented.
         let declaredDecimals = allFields ? allFields['DECIMALS'] : undefined;
         let fraction = String(value).split('.')[1];
-        if (!validator._isEmpty(declaredDecimals) && fraction && fraction.length > MAX_DECIMALS)
+        if (!validator.isEmpty(declaredDecimals) && fraction && fraction.length > MAX_DECIMALS)
             errors.push(validator._error('INVALID_FIELD_VALUE', 'MAX_SUPPLY cannot carry more than ' + MAX_DECIMALS + ' fractional digits', { field, value, constraint: { maxFractionalDigits: MAX_DECIMALS } }));
     }
 }

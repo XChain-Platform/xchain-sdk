@@ -68,7 +68,7 @@ function detailsDepth(value, level) {
 function validateDetailsOutcomes(validator, parsed, outcomes, errors) {
     // The cross-check that stops a market's human-readable outcomes drifting
     // from the ones bets are actually settled against.
-    if (parsed.outcomes !== undefined && !validator._isEmpty(outcomes)) {
+    if (parsed.outcomes !== undefined && !validator.isEmpty(outcomes)) {
         const canonical = String(outcomes).split(',').map(o => o.trim());
         if (!Array.isArray(parsed.outcomes)) {
             errors.push(validator._error('INVALID_FIELD_VALUE',

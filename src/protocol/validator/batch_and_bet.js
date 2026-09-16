@@ -39,7 +39,7 @@ module.exports = {
     // deferring breaks the cycle instead of papering over it. Recursion is bounded:
     // a BATCH child is rejected above and never reaches here, so a child parse can
     // never re-enter _validateBatch.
-    _validateBatchCommand(cmd, index) {
+    validateBatchCommand(cmd, index) {
         const { parse } = require('../../decoder/parse.js');
         let res;
         try {

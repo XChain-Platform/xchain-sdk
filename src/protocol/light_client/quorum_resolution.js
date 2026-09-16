@@ -38,7 +38,7 @@
 
 const checkpoint = require('../../checkpoint.js');
 const { sameWireIndex } = require('../../utils/wire_index.js');
-const { _base, _json, _pinnedEntry, _hx } = require('./fetch_helpers.js');
+const { _base, _json, pinnedEntry, _hx } = require('./fetch_helpers.js');
 const { followForward } = require('./validator_set_follow.js');
 
 // ── Trust: turn a server-served checkpoint into a quorum-verified one ──────────
@@ -48,8 +48,8 @@ const { followForward } = require('./validator_set_follow.js');
 // minimized path; otherwise it is fetched from the explorer's verify endpoint
 // (convenience, weaker: trusts the explorer for the SET, still verifies sigs +
 // quorum locally). Returns the verifyCheckpoint result.
-async function _verifyQuorum(f, explorerUrl, coin, cp, suppliedValidators){
-    const validators = suppliedValidators || await _explorerValidators(f, explorerUrl, coin, cp);
+async function verifyQuorum(f, explorerUrl, coin, cp, suppliedValidators){
+    const validators = suppliedValidators || await explorerValidators(f, explorerUrl, coin, cp);
     return checkpoint.verifyCheckpoint(cp, validators);
 }
 
@@ -70,7 +70,7 @@ function clearValidatorSetCache(){ validatorSetCache.clear(); }
 // Cached by PROMISE so concurrent callers at one key (the wallet fans proof
 // jobs through a pool of 6) share one in-flight read instead of each firing a
 // request; a rejected fetch is evicted immediately so a blip is not pinned.
-async function _explorerValidators(f, explorerUrl, coin, cp){
+async function explorerValidators(f, explorerUrl, coin, cp){
     const key = _base(explorerUrl) + '|' + String(coin) + '|' + String(cp.block_index);
     const cached = validatorSetCache.get(key);
     if (cached) return cached;
@@ -100,10 +100,10 @@ async function _explorerValidators(f, explorerUrl, coin, cp){
 //   3. nothing pinned -> the explorer /verify convenience path (weakest).
 // Returns a checkpoint.verifyCheckpoint-shaped { valid, quorum, weighted }.
 // Transport failures propagate (throw), exactly like the convenience path.
-async function _resolveQuorum(f, opts, cp){
+async function resolveQuorum(f, opts, cp){
     if (opts.validators) return checkpoint.verifyCheckpoint(cp, opts.validators);
-    const entry = _pinnedEntry(opts);
-    if (!entry) return _verifyQuorum(f, opts.explorerUrl, opts.coin, cp, null);
+    const entry = pinnedEntry(opts);
+    if (!entry) return verifyQuorum(f, opts.explorerUrl, opts.coin, cp, null);
     const pinnedVals = (Array.isArray(entry.validators) && entry.validators.length) ? entry.validators : null;
     if (pinnedVals){
         const q = checkpoint.verifyCheckpoint(cp, pinnedVals);
@@ -126,7 +126,7 @@ async function _resolveQuorum(f, opts, cp){
 // The same ladder, but returning the SET instead of a verdict, for the caller
 // that must hand a set to a verifier which owns the quorum decision itself (the
 // DOGE-anchor cold start, whose verifier also gates burial depth and the signed
-// commitment fields). Order matches _resolveQuorum: explicit set, then the
+// commitment fields). Order matches resolveQuorum: explicit set, then the
 // pinned launch set for `coin`, then the explorer's /verify set.
 //
 // `coin` is the explorer coin prefix of the chain the CHECKPOINT belongs to,
@@ -136,16 +136,16 @@ async function _resolveQuorum(f, opts, cp){
 // checkpoint closed with a misleading count.
 //
 // A pinned entry without a usable set also returns null rather than falling
-// through to /verify, for the reason _resolveQuorum never falls through either:
+// through to /verify, for the reason resolveQuorum never falls through either:
 // a coin whose trust root is pinned must not be silently downgraded to the
 // explorer's word. Transport failures propagate (throw).
-async function _resolveValidatorSet(f, opts, cp, coin){
+async function resolveValidatorSet(f, opts, cp, coin){
     if (opts.validators) return opts.validators;
-    const entry = _pinnedEntry(opts, coin);
+    const entry = pinnedEntry(opts, coin);
     if (entry)
         return (Array.isArray(entry.validators) && entry.validators.length) ? entry.validators : null;
     if (coin == null || String(coin) === '') return null;
-    return _explorerValidators(f, opts.explorerUrl, coin, cp);
+    return explorerValidators(f, opts.explorerUrl, coin, cp);
 }
 
-module.exports = { _verifyQuorum, VALIDATOR_SET_CACHE_MAX, validatorSetCache, clearValidatorSetCache, _explorerValidators, _resolveQuorum, _resolveValidatorSet };
+module.exports = { verifyQuorum, VALIDATOR_SET_CACHE_MAX, validatorSetCache, clearValidatorSetCache, explorerValidators, resolveQuorum, resolveValidatorSet };

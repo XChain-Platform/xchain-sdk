@@ -91,7 +91,7 @@ describe('Validator: VOTE binding-poll numeric fields', function () {
 });
 
 // VOTE PER-VERSION REQUIRED FIELDS
-// VOTE's anchors are version-split, so they live in _validateVote rather than in
+// VOTE's anchors are version-split, so they live in validateVote rather than in
 // the flat ACTION_REQUIRED_FIELDS table. Field lists track vote.md's Formats section.
 
 describe('Validator: VOTE per-version required fields', function () {

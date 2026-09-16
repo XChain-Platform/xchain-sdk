@@ -24,8 +24,8 @@ const { LEGS_FIELD } = require('./field_limits.js');
 
 module.exports = {
     // The caller's per-leg array, or null when this is a flat single-leg call.
-    // Shape problems are reported by _validateLegsShape, not thrown here.
-    _legsOf(fields) {
+    // Shape problems are reported by validateLegsShape, not thrown here.
+    legsOf(fields) {
         let legs = fields[LEGS_FIELD];
         if (!Array.isArray(legs) || legs.length === 0) return null;
         if (!legs.every(leg => leg && typeof leg === 'object' && !Array.isArray(leg))) return null;
@@ -34,7 +34,7 @@ module.exports = {
 
     // Tag a per-leg finding with its leg index so the caller can point at the
     // offending recipient rather than the whole action
-    _withLeg(error, index) {
+    withLeg(error, index) {
         error.message = error.message + ' (leg ' + index + ')';
         error.details = Object.assign({}, error.details, { leg: index });
         return error;
@@ -47,7 +47,7 @@ module.exports = {
      * usable array of per-leg field maps. Whether a given format VERSION can
      * carry these legs is FormatSelector's call, not the validator's.
      */
-    _validateLegsShape(action, fields) {
+    validateLegsShape(action, fields) {
         let errors = [];
         let legs   = fields[LEGS_FIELD];
         if (legs === null || legs === undefined) return errors;
@@ -86,19 +86,19 @@ module.exports = {
         return errors;
     },
 
-    _validateAction(action, fields) {
+    validateAction(action, fields) {
         let errors = [];
 
         switch (action) {
             case 'ADDRESS':
                 // ISSUE v6 / ADDRESS v1 controller bind/unbind cross-field rules (no-op for a
                 // plain ISSUE/ADDRESS that carries no controller fields).
-                errors.push(...this._validateControllerBind(fields));
+                errors.push(...this.validateControllerBind(fields));
                 break;
             case 'ISSUE':
-                errors.push(...this._validateControllerBind(fields));
+                errors.push(...this.validateControllerBind(fields));
                 // ISSUE v7 bridge opt-in cross-field rules (no-op for every other format).
-                errors.push(...this._validateBridgeOptIn(fields));
+                errors.push(...this.validateBridgeOptIn(fields));
                 break;
             case 'BATCH':
                 errors.push(...this._validateBatch(fields));
@@ -107,28 +107,28 @@ module.exports = {
                 errors.push(...this._validateBet(fields));
                 break;
             case 'BROADCAST':
-                errors.push(...this._validateBroadcast(fields));
+                errors.push(...this.validateBroadcast(fields));
                 break;
             case 'DELEGATE':
-                errors.push(...this._validateDelegate(fields));
+                errors.push(...this.validateDelegate(fields));
                 break;
             case 'DEPLOY':
-                errors.push(...this._validateDeploy(fields));
+                errors.push(...this.validateDeploy(fields));
                 break;
             case 'DISPENSER':
-                errors.push(...this._validateDispenser(fields));
+                errors.push(...this.validateDispenser(fields));
                 break;
             case 'LIST':
-                errors.push(...this._validateList(fields));
+                errors.push(...this.validateList(fields));
                 break;
             case 'ORDER':
-                errors.push(...this._validateOrder(fields));
+                errors.push(...this.validateOrder(fields));
                 break;
             case 'SWAP':
-                errors.push(...this._validateSwap(fields));
+                errors.push(...this.validateSwap(fields));
                 break;
             case 'VOTE':
-                errors.push(...this._validateVote(fields));
+                errors.push(...this.validateVote(fields));
                 break;
         }
 
@@ -139,7 +139,7 @@ module.exports = {
     // controller). Only applies when controller fields are present; a plain ISSUE/ADDRESS is
     // unaffected. Stateless client-side pre-check only (the indexer owns "already bound", contract
     // existence, etc.). UNBIND=1 drops a binding (CONTROLLER then ignored); a bind requires CONTROLLER.
-    _validateControllerBind(fields) {
+    validateControllerBind(fields) {
         let errors = [];
         let hasController = !this.util.isNull(fields['CONTROLLER']);
         let hasClass      = !this.util.isNull(fields['ACTION_CLASS']);
@@ -171,20 +171,20 @@ module.exports = {
      * LOCK_BRIDGE=1 frozen-field refusals, needs the token row and lives in
      * src/preflight/checks/issue.js. Nothing is asserted about it here rather than guessed.
      */
-    _validateBridgeOptIn(fields) {
+    validateBridgeOptIn(fields) {
         let errors = [];
         // An absent VERSION is auto-selected downstream, and BRIDGE_CHAINS / MIN_DEPTH /
         // LOCK_BRIDGE appear on format 7 alone, so carrying one of them IS this format.
-        let version = this._isEmpty(fields.VERSION) ? null : Number(fields.VERSION);
+        let version = this.isEmpty(fields.VERSION) ? null : Number(fields.VERSION);
         if (version === null) {
-            let carriesBridgeField = !this._isEmpty(fields['BRIDGE_CHAINS'])
-                || !this._isEmpty(fields['MIN_DEPTH'])
-                || !this._isEmpty(fields['LOCK_BRIDGE']);
+            let carriesBridgeField = !this.isEmpty(fields['BRIDGE_CHAINS'])
+                || !this.isEmpty(fields['MIN_DEPTH'])
+                || !this.isEmpty(fields['LOCK_BRIDGE']);
             if (!carriesBridgeField) return errors;
         } else if (version !== 7) {
             return errors;
         }
-        let tick = this._isEmpty(fields['TICK']) ? '' : String(fields['TICK']);
+        let tick = this.isEmpty(fields['TICK']) ? '' : String(fields['TICK']);
         if (tick.charAt(0) !== '^' && tick.includes('.'))
             errors.push(this._error('ISSUE_CONSTRAINT',
                 'subassets are not bridgeable yet, so the indexer refuses the ISSUE v7 bridge opt-in for ' + tick,
@@ -192,10 +192,10 @@ module.exports = {
         return errors;
     },
 
-    _validateBroadcast(fields) {
+    validateBroadcast(fields) {
         let errors = [];
         // Must have either MESSAGE or BROADCAST_ACTION_INDEX
-        if (this._isEmpty(fields.MESSAGE) && this._isEmpty(fields.BROADCAST_ACTION_INDEX))
+        if (this.isEmpty(fields.MESSAGE) && this.isEmpty(fields.BROADCAST_ACTION_INDEX))
             errors.push(this._error('MISSING_REQUIRED_FIELD', 'BROADCAST requires MESSAGE or BROADCAST_ACTION_INDEX'));
         return errors;
     }
