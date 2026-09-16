@@ -764,7 +764,7 @@ rules. The other mapped handlers are byte-identical across both lineages.
 
 **One client rule DID move, in the other direction: the caret TICK.** Re-reading the
 handler for this review surfaced a place where the SDK was stricter than consensus.
-`_validateTickName` refused EVERY `^`-led ISSUE TICK on every format, and the handler
+`validateTickName` refused EVERY `^`-led ISSUE TICK on every format, and the handler
 refuses no such thing: it validates a caret TICK as an id (`issue.js:349`, non-numeric
 is `invalid: TICK (id)`; `issue.js:361`, a dot in the id is `invalid: TICK (caret
 dot)`) and then resolves it through `getTickerId` exactly as it resolves a spelled-out
@@ -1432,7 +1432,7 @@ Separately, `LIST` gained a `MEMO` field in place on formats v0/v1 in
 this table - LIST is a `checks/misc.js` unverified-only action ("per-item
 validity is recorded per-item on-chain, never a reject"), which the MEMO
 addition does not change. Its client-side safety is the default-deny
-`_checkDelimiters` guard, which already covers every field and is now
+`checkDelimiters` guard, which already covers every field and is now
 pinned for MEMO specifically by `test/unit/validator.test.js`.
 
 ### 2026-08-15 (sixth pass) - `dispense.js`, against indexer HEAD `07aaf8e`
@@ -1680,7 +1680,7 @@ did carry real change, and they are separated out below.
   `invalid: TICK (caret dot)`: the handler's own caret guard is `isNumeric`,
   which is parseFloat-based, so `^12.5` read as a number and landed a valid ISSUE
   with a NULL ticker id. Client-visible, and no mirror is owed because
-  `validator._validateTickName` refuses EVERY `^`-led ISSUE TICK, which is
+  `validator.validateTickName` refuses EVERY `^`-led ISSUE TICK, which is
   strictly stronger than the caret-dot subset. That argument is the load-bearing
   one on this row and it was previously only prose, so it is now PINNED by
   `test/unit/validator.test.js` ("rejects a caret ISSUE TICK whose tail contains
@@ -1797,7 +1797,7 @@ through one shared client copy of the scan, `src/protocol/batch_limits.js`:
 Also read but NOT re-pinned: `src/actions/issue.js`, which gained the caret-dot
 TICK rejection and the intern gating in the same train. No client change is owed
 and none was made: the SDK validator already refuses ANY `^`-led TICK on ISSUE
-(`_validateTickName`), which is strictly stronger than the caret-dot rule, and
+(`validateTickName`), which is strictly stronger than the caret-dot rule, and
 the intern gating is a database side effect with no wire-visible verdict. Its row
 keeps its stale hash rather than gaining a refresh this review did not earn.
 **[SUPERSEDED 2026-09-12, second entry above. "Strictly stronger" was also
