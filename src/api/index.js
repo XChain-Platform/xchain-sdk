@@ -30,8 +30,8 @@ const { safeTokenEqual } = require('../utils/safe_compare.js');
 const { parseCorsOrigin } = require('../utils/cors_origin.js');
 const Config = require('../config.js');
 // Request guards live in their own module so the shipped middleware has exactly
-// one implementation: this file starts listening at require time, so a unit test
-// can only reach the guards through src/utils/api_guards.js.
+// one implementation: the guard tests mount src/utils/api_guards.js directly and
+// pin, by reading this file, that createApp wires the same functions in order.
 const {
     parseWholeNumber,
     resolveMaxBatch,
@@ -171,28 +171,10 @@ function loadOpenRpcSpec() {
     }
 }
 
-// Start up the API
-async function startApi() {
-    // Initialize the SDK
-    const sdk = new XChainSDK({
-        network:      NETWORK,
-        explorerUrl:  EXPLORER_URL,
-        explorerPort: EXPLORER_PORT ? parseInt(EXPLORER_PORT) : undefined,
-        encoderUrl:   ENCODER_URL,
-        encoderPort:  ENCODER_PORT ? parseInt(ENCODER_PORT) : undefined,
-        hubUrl:       HUB_API_HOST,
-        hubPort:      HUB_PORT ? parseInt(HUB_PORT) : undefined
-    });
-    // Run async init (hub discovery) if hub is configured
-    if (sdk.hub) {
-        try {
-            await sdk.init();
-            log.log('Hub config loaded successfully');
-        } catch (err) {
-            log.warn('Hub init failed, continuing with explicit config:', err);
-        }
-    }
-    // Create and configure the app synchronously before registering deferred handlers.
+// Builds the express app around an initialised SDK: every guard, the controller
+// and the routes, in the security order the guard tests pin. Synchronous and
+// listener-free, so a consumer can mount the result under its own server.
+function createApp(sdk) {
     const app = express();
     configureBaseMiddleware(app);
 
@@ -225,11 +207,44 @@ async function startApi() {
     app.use((req, res, next) => { if (req.body === undefined) req.body = {}; next(); });
     // Allow JSON-RPC requests
     app.use(jsonRouter({ methods: controller }));
+    return app;
+}
+
+// Start up the API: build the SDK from the environment, run its hub discovery,
+// then listen on `port` (SDK_API_PORT unless a consumer passes its own). Resolves
+// to the http.Server as listen() is issued, so the caller can await 'listening' and close it.
+async function startApi({ port = SDK_API_PORT } = {}) {
+    // Initialize the SDK
+    const sdk = new XChainSDK({
+        network:      NETWORK,
+        explorerUrl:  EXPLORER_URL,
+        explorerPort: EXPLORER_PORT ? parseInt(EXPLORER_PORT) : undefined,
+        encoderUrl:   ENCODER_URL,
+        encoderPort:  ENCODER_PORT ? parseInt(ENCODER_PORT) : undefined,
+        hubUrl:       HUB_API_HOST,
+        hubPort:      HUB_PORT ? parseInt(HUB_PORT) : undefined
+    });
+    // Run async init (hub discovery) if hub is configured
+    if (sdk.hub) {
+        try {
+            await sdk.init();
+            log.log('Hub config loaded successfully');
+        } catch (err) {
+            log.warn('Hub init failed, continuing with explicit config:', err);
+        }
+    }
+    // Create and configure the app synchronously before registering deferred handlers.
+    const app = createApp(sdk);
 
     // Start the server
-    app.listen(SDK_API_PORT, () => {
-        log.log('SDK API listening on port ' + SDK_API_PORT);
+    return app.listen(port, () => {
+        log.log('SDK API listening on port ' + port);
     });
 }
 
-startApi();
+module.exports = { createApp, startApi };
+
+// Only the CLI entry (`npm run api`, `node ./src/api/index.js`) opens the
+// listener at load. A require() of this module gets the exports and no socket.
+if (require.main === module)
+    startApi();

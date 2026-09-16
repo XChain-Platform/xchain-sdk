@@ -15,9 +15,11 @@
  * XChain Platform SDK - Helper-API request guards
  *
  * The batch fan-out cap, the request-rate limiter and the bearer-token auth
- * gate used by src/api/index.js, in their own module because src/api/index.js starts a live
- * server at require time (dotenv.config() + app.listen) and therefore cannot be
- * require()'d by a unit test. Keeping the guards here gives the shipped
+ * gate used by src/api/index.js, in their own module so each guard can be
+ * mounted and driven on its own, without the SDK, the controller or the other
+ * guards in front of it (src/api/index.js used to open its listener at require
+ * time, which is what first forced the split; it now exports createApp and
+ * startApi and listens only as the CLI entry). Keeping the guards here gives the shipped
  * middleware ONE implementation that both api/index.js and the tests load, instead of
  * a copy in each test file that stays green when the real guard regresses.
  *
