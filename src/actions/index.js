@@ -188,7 +188,7 @@ class Actions {
     // open to `true` when the network is unset or unrecognized so the common
     // segwit path is unchanged; only a network explicitly marked
     // supportsSegwit:false (e.g. DOGE) flips this to false.
-    _supportsSegwit() {
+    networkSupportsSegwit() {
         if (!this.network) return true;
         try { return getNetwork(this.network).supportsSegwit !== false; }
         catch (e) { return true; }
@@ -265,7 +265,7 @@ class Actions {
             if (compiledPushSize(dataBytes) + 4 > 80) {
                 // Non-segwit chains (DOGE) cannot use P2WSH; suggest P2SH there.
                 let suggestion = dataBytes <= ENCODING_LIMITS.P2SH ? 'P2SH'
-                    : (this._supportsSegwit() ? 'P2WSH' : 'P2SH');
+                    : (this.networkSupportsSegwit() ? 'P2WSH' : 'P2SH');
                 throw new SDKValidationError(
                     'ENCODING_DATA_TOO_LARGE',
                     'ACTION string is ' + dataBytes + ' bytes but OP_RETURN supports max 75 bytes of action data once compiled (80 - 4 byte magic word - push prefix). Use ' + suggestion + ' or omit encoding for auto-selection.',
