@@ -81,7 +81,7 @@ class TickResolver {
     // Resolve `promise`, but reject if it has not settled within `ms`. The
     // underlying promise's eventual rejection is swallowed so a capped-out
     // lookup never surfaces as an unhandled rejection.
-    _withCap(promise, ms) {
+    withCap(promise, ms) {
         promise.catch(() => {});
         return new Promise((resolve, reject) => {
             let timer = setTimeout(() => reject(new Error('tick-lookup timeout')), ms);
@@ -113,7 +113,7 @@ class TickResolver {
             // block on backoff) and a hard time cap so a hung host can never
             // stall action generation. Compaction is an optimization, never a
             // dependency.
-            let token = await this._withCap(this.sdk.explorer.getToken(str, { noRetry: true }), LOOKUP_CAP_MS);
+            let token = await this.withCap(this.sdk.explorer.getToken(str, { noRetry: true }), LOOKUP_CAP_MS);
             let info  = token && (Array.isArray(token) ? (token[0] || {}).info : token.info);
             if (info && info.tick_id !== undefined && info.tick_id !== null)
                 id = String(info.tick_id);

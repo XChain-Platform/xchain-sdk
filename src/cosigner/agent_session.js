@@ -93,7 +93,7 @@ function validatePolicy(policy) {
 function authorizeSubmission(session, evaluation, submitOpts) {
     // Record the window entry on AUTHORIZATION, before the irreversible broadcast,
     // then patch in the real txid on success. Mirrors coSigner.recordBudget /
-    // windowStore ("consume the budget on authorization"): _submitInner can throw
+    // windowStore ("consume the budget on authorization"): submitInner can throw
     // AFTER the money has moved (a CONFIRMATION_TIMEOUT on the 120s indexer wait, a
     // P2SH phase-2 failure, a lost broadcast ACK), and if usage were recorded only
     // afterward that throw would leave the spend on-chain with the window un-consumed
@@ -103,7 +103,7 @@ function authorizeSubmission(session, evaluation, submitOpts) {
     // keeps this from being the one guardrail whose ceiling stops binding on error.
     // At-most-once on the automated rail. When the caller supplies a stable
     // idempotencyKey, a retry after a post-broadcast throw is REFUSED rather
-    // than re-broadcast: _submitInner can throw after the tx already landed
+    // than re-broadcast: submitInner can throw after the tx already landed
     // (CONFIRMATION_TIMEOUT on the indexer wait, a lost ACK), and a naive
     // agent retry would otherwise build and pay a SECOND transaction. The
     // refusal carries the prior txid (when known) so the agent can resume
@@ -345,7 +345,7 @@ class AgentSession extends WalletSession {
         // -- silently defeating the bounded-blast-radius the AgentSession exists
         // to provide. Serialize the whole enforce+submit+record on the shared
         // per-session tail (the parent's submit uses the same tail). We call the
-        // parent's UNLOCKED _submitInner inside, not super.submit, so we don't
+        // parent's UNLOCKED submitInner inside, not super.submit, so we don't
         // re-enqueue on the tail we already hold (which would deadlock).
         let run = this._submitTail.then(() => this.enforceAndSubmit(actionData, encoderOpts, submitOpts));
         this._submitTail = run.then(() => {}, () => {});
@@ -376,7 +376,7 @@ class AgentSession extends WalletSession {
         const entry = authorizeSubmission(this, evaluation, submitOpts);
         let result;
         try {
-            result = await super._submitInner(actionData, encoderOpts, submitOpts);
+            result = await super.submitInner(actionData, encoderOpts, submitOpts);
         } catch (err) {
             // A throw AFTER broadcast carries the txid (e.g. CONFIRMATION_TIMEOUT).
             // Patch it onto the provisional entry so the audit record is not left

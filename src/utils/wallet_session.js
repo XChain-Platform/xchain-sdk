@@ -259,14 +259,14 @@ class WalletSession {
     // several sends concurrently, they queue rather than racing the shared UTXO
     // cache into a double-spend. A failed submit does not block the queue.
     async submit(actionData, encoderOpts = {}, submitOpts = {}) {
-        let run = this._submitTail.then(() => this._submitInner(actionData, encoderOpts, submitOpts));
+        let run = this._submitTail.then(() => this.submitInner(actionData, encoderOpts, submitOpts));
         // Advance the tail regardless of this submit's outcome so one failure
         // (or rejection) never wedges every later send behind it.
         this._submitTail = run.then(() => {}, () => {});
         return run;
     }
 
-    async _submitInner(actionData, encoderOpts = {}, submitOpts = {}) {
+    async submitInner(actionData, encoderOpts = {}, submitOpts = {}) {
         let { utxos, refusesUnconfirmed } = await loadAvailableUTXOs(this, encoderOpts);
         let mergedEncoder = buildEncoderOptions(this, encoderOpts, utxos, refusesUnconfirmed);
         return submitAndTrack(this, actionData, mergedEncoder, submitOpts);

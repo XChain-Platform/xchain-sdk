@@ -145,9 +145,9 @@ class X402Gateway {
         if (!proof) return { ok: false, code: 'X402_NO_PROOF' };
         if (proof.coin && String(proof.coin).toUpperCase() !== this.coin)
             return { ok: false, code: 'X402_WRONG_COIN' };
-        if (proof.scheme === 'xchain-send' && this.send)            return this._verifySend(proof, resource);
-        if (proof.scheme === 'xchain-dispenser' && this.dispenser)  return this._verifyDispenser(proof, resource);
-        if (proof.scheme === 'xchain-deposit' && this.deposit)      return this._verifyDeposit(proof, resource);
+        if (proof.scheme === 'xchain-send' && this.send)            return this.verifySend(proof, resource);
+        if (proof.scheme === 'xchain-dispenser' && this.dispenser)  return this.verifyDispenser(proof, resource);
+        if (proof.scheme === 'xchain-deposit' && this.deposit)      return this.verifyDeposit(proof, resource);
         return { ok: false, code: 'X402_UNSUPPORTED_SCHEME' };
     }
 
@@ -159,7 +159,7 @@ class X402Gateway {
         const provisional = await this.store.listByStatus('provisional_0conf');
         for (const inv of provisional) {
             try {
-                const confirmed = await this._findConfirmedSend(Object.assign({}, inv, { status: 'pending' }), inv.payer);
+                const confirmed = await this.findConfirmedSend(Object.assign({}, inv, { status: 'pending' }), inv.payer);
                 if (confirmed) {
                     await this.store.update(inv.nonce, (i) => Object.assign({}, i, { status: 'confirmed', blockIndex: confirmed.block_index, usedAt: i.grantedAt }));
                 } else if (Date.now() - inv.grantedAt > this.confirmWindowMs) {
@@ -170,7 +170,7 @@ class X402Gateway {
                 }
             } catch (e) {
                 // Isolate per-invoice failures so one bad invoice can't stall the sweep, but
-                // log it: a consistently-throwing _findConfirmedSend/store.update leaves a
+                // log it: a consistently-throwing findConfirmedSend/store.update leaves a
                 // genuinely-paid invoice stuck in provisional_0conf forever (never promoted,
                 // never failed, no operator notification) while the loop looks healthy.
                 log.error('x402 sweep: invoice ' + inv.nonce + ' (payer ' + inv.payer + ') failed this cycle:', e);

@@ -55,10 +55,10 @@ module.exports = {
     //
     // `ids` (optional, mempool path only) carries the invoice payTo/tick resolved to their
     // numeric index ids, so a raw decoder-mempool output that carries the SDK's compacted
-    // `^<id>` wire form (see _findMempoolSend) matches its literal invoice value. The confirmed
+    // `^<id>` wire form (see findMempoolSend) matches its literal invoice value. The confirmed
     // REST path passes no ids: the explorer has already expanded index ids to canonical
     // address/tick, so those rows only ever match the literal form.
-    _outputMatches(invoice, out, ids) {
+    outputMatches(invoice, out, ids) {
         const dest   = String(out.destination == null ? '' : out.destination);
         const destOk = dest === invoice.payTo
             || (ids && ids.payToId && dest === '^' + ids.payToId);
@@ -77,7 +77,7 @@ module.exports = {
     // expands ids; the decoder does not). Resolving our own payTo/tick to ids lets the 0-conf
     // matcher accept either the literal or the `^<id>` form. A lookup failure just leaves the id
     // null and falls back to literal-only matching (never throws, never blocks verification).
-    async _resolveWireIds(invoice) {
+    async resolveWireIds(invoice) {
         this._wireIdCache = this._wireIdCache || { addr: new Map(), tick: new Map() };
         const ids = { payToId: null, tickId: null };
         if (!this.explorer) return ids;
@@ -106,7 +106,7 @@ module.exports = {
         return ids;
     },
 
-    async _verifySend(proof) {
+    async verifySend(proof) {
         const nonce = String(proof.invoice || '');
         const payer = String(proof.payer || '');
         if (!/^[0-9a-f]{32}$/.test(nonce)) return { ok: false, code: 'X402_BAD_INVOICE' };
@@ -118,7 +118,7 @@ module.exports = {
         // real payer's claim. The nonce is server-issued, fresh and single-use,
         // so it doubles as the signing challenge.
         if (this.requireSignature) {
-            const sig = this._verifyPayerSignature(payer, nonce, proof.payerSignature);
+            const sig = this.verifyPayerSignature(payer, nonce, proof.payerSignature);
             if (!sig.ok) return { ok: false, code: sig.code };
         }
 
@@ -130,7 +130,7 @@ module.exports = {
             return { ok: false, code: 'X402_INVOICE_EXPIRED' };
 
         // Confirmed path first (strongest evidence).
-        const confirmed = await this._findConfirmedSend(invoice, payer);
+        const confirmed = await this.findConfirmedSend(invoice, payer);
         if (confirmed) {
             const updated = await this.store.update(nonce, (inv) => {
                 if (['used', 'confirmed', 'provisional_0conf'].includes(inv.status))
@@ -144,7 +144,7 @@ module.exports = {
         // 0-conf path (only when the invoice allows it): decoder mempool rows,
         // parsed with full multi-output pairing. PRE-VALIDATION (provisional).
         if (invoice.minConfirmations === 0) {
-            const hit = await this._findMempoolSend(invoice, payer);
+            const hit = await this.findMempoolSend(invoice, payer);
             if (hit) {
                 const updated = await this.store.update(nonce, (inv) => {
                     if (['used', 'confirmed', 'provisional_0conf'].includes(inv.status))
@@ -158,40 +158,40 @@ module.exports = {
         return { ok: false, code: 'X402_PAYMENT_NOT_FOUND' };
     },
 
-    async _findConfirmedSend(invoice, payer) {
+    async findConfirmedSend(invoice, payer) {
         const res = await this.explorer.getSends(invoice.payTo, 'destination', { limit: 100 });
         const rows = (res && res.data) || [];
         for (const row of rows) {
             if (row.source !== payer) continue;
             if (row.status && String(row.status).toLowerCase() !== 'valid') continue;
-            if (this._outputMatches(invoice, { tick: row.tick, amount: row.amount, destination: row.destination || invoice.payTo, memo: row.memo }))
+            if (this.outputMatches(invoice, { tick: row.tick, amount: row.amount, destination: row.destination || invoice.payTo, memo: row.memo }))
                 return row;
         }
         return null;
     },
 
-    async _findMempoolSend(invoice, payer) {
+    async findMempoolSend(invoice, payer) {
         // Query the mempool by the PAYER (the on-chain source), not payTo. The decoder mempool
         // prefilter matches an `address` query against the source OR any exact pipe-segment of the
         // raw action string; when the payer's SDK compacts the destination to `^<id>` (the default),
         // payTo is not a segment, so a payTo query would never return the row. The payer is always
         // the source, so a payer query returns it regardless of destination compaction. payTo is
-        // still enforced below via _outputMatches (literal or resolved `^<id>`).
+        // still enforced below via outputMatches (literal or resolved `^<id>`).
         const res = await this.explorer.getMempool(payer, 'address', { limit: 100 });
         const rows = (res && res.data) || [];
-        const ids = await this._resolveWireIds(invoice);   // for compacted `^<id>` dest/tick matching
+        const ids = await this.resolveWireIds(invoice);   // for compacted `^<id>` dest/tick matching
         for (const row of rows) {
             if (row.source !== payer) continue;            // anti-frontrun: payer must be the on-chain source
             const parsed = parseActionString(row.data);
             if (!parsed || parsed.action !== 'SEND') continue;
             for (const out of parsed.outputs)
-                if (this._outputMatches(invoice, out, ids))
+                if (this.outputMatches(invoice, out, ids))
                     return { tx_hash: row.tx_hash };
         }
         return null;
     },
 
-    async _verifyDispenser(proof, resource) {
+    async verifyDispenser(proof, resource) {
         const payer = String(proof.payer || '');
         if (!payer) return { ok: false, code: 'X402_NO_PAYER' };
 
@@ -200,11 +200,11 @@ module.exports = {
         // resource-bound challenge; the token is one-time-use so a captured
         // (challenge, signature) pair cannot be replayed.
         if (this.requireSignature) {
-            const ch = this._checkChallenge(proof.challenge, 'xchain-dispenser', resource);
+            const ch = this.checkChallenge(proof.challenge, 'xchain-dispenser', resource);
             if (!ch.ok) return { ok: false, code: ch.code };
-            const sig = this._verifyPayerSignature(payer, proof.challenge, proof.payerSignature);
+            const sig = this.verifyPayerSignature(payer, proof.challenge, proof.payerSignature);
             if (!sig.ok) return { ok: false, code: sig.code };
-            const consumed = this._consumeChallenge(ch.nonce, ch.exp);
+            const consumed = this.consumeChallenge(ch.nonce, ch.exp);
             if (!consumed.ok) return { ok: false, code: consumed.code };
         }
 
@@ -221,16 +221,16 @@ module.exports = {
     /* deposit scheme: confirmed SENDs to depositAddress fund the payer's
        balance; a local ledger records spend. Debit under a per-payer mutex. */
 
-    _ledgerFile(payer) { return path.join(this.deposit.ledgerDir, payer + '.json'); },
+    ledgerFile(payer) { return path.join(this.deposit.ledgerDir, payer + '.json'); },
 
-    _readLedger(payer) {
-        const file = this._ledgerFile(payer);
+    readLedger(payer) {
+        const file = this.ledgerFile(payer);
         if (!fs.existsSync(file)) return { payer, spent: '0', entries: [] };
         try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
         catch (e) { throw new SDKX402Error('X402_STATE_CORRUPT', `deposit ledger ${file} unreadable: ${e.message}`); }
     },
 
-    async _verifyDeposit(proof, resource) {
+    async verifyDeposit(proof, resource) {
         const payer = String(proof.payer || '');
         if (!payer) return { ok: false, code: 'X402_NO_PAYER' };
 
@@ -238,11 +238,11 @@ module.exports = {
         // can name a real depositor and spend THAT depositor's prepaid credit.
         // Consumed one-time so a captured proof cannot re-debit within the TTL.
         if (this.requireSignature) {
-            const ch = this._checkChallenge(proof.challenge, 'xchain-deposit', resource);
+            const ch = this.checkChallenge(proof.challenge, 'xchain-deposit', resource);
             if (!ch.ok) return { ok: false, code: ch.code };
-            const sig = this._verifyPayerSignature(payer, proof.challenge, proof.payerSignature);
+            const sig = this.verifyPayerSignature(payer, proof.challenge, proof.payerSignature);
             if (!sig.ok) return { ok: false, code: sig.code };
-            const consumed = this._consumeChallenge(ch.nonce, ch.exp);
+            const consumed = this.consumeChallenge(ch.nonce, ch.exp);
             if (!consumed.ok) return { ok: false, code: consumed.code };
         }
 
@@ -257,15 +257,15 @@ module.exports = {
                     && (!row.status || String(row.status).toLowerCase() === 'valid')
                     && isPosNum(row.amount))
                     deposited = deposited.plus(bn(row.amount));
-            const ledger = this._readLedger(payer);
+            const ledger = this.readLedger(payer);
             const available = deposited.minus(bn(ledger.spent));
             if (!gte(available.toString(), this.deposit.pricePerCall))
                 return { ok: false, code: 'X402_DEPOSIT_EXHAUSTED', available: available.toString() };
             ledger.spent = bn(ledger.spent).plus(bn(this.deposit.pricePerCall)).toString();
             ledger.entries.push({ t: Date.now(), amount: this.deposit.pricePerCall, resource: resource || null });
-            fs.mkdirSync(path.dirname(this._ledgerFile(payer)), { recursive: true });
-            fs.writeFileSync(this._ledgerFile(payer) + '.tmp', JSON.stringify(ledger));
-            fs.renameSync(this._ledgerFile(payer) + '.tmp', this._ledgerFile(payer));
+            fs.mkdirSync(path.dirname(this.ledgerFile(payer)), { recursive: true });
+            fs.writeFileSync(this.ledgerFile(payer) + '.tmp', JSON.stringify(ledger));
+            fs.renameSync(this.ledgerFile(payer) + '.tmp', this.ledgerFile(payer));
             return { ok: true, status: 'deposit_debited', provisional: false, remaining: available.minus(bn(this.deposit.pricePerCall)).toString() };
         });
         this._depositLocks.set(payer, run.catch(() => {}));

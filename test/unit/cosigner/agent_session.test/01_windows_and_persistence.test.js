@@ -67,8 +67,8 @@ function registerHooks() {
         stateFile = path.join(tmpDir, 'usage.json');
         // Stub the unlocked encode/sign/broadcast body both submit() paths funnel
         // through (AgentSession.submit runs its policy check + record around
-        // super._submitInner under the shared serialization tail).
-        submitStub = sinon.stub(WalletSession.prototype, '_submitInner')
+        // super.submitInner under the shared serialization tail).
+        submitStub = sinon.stub(WalletSession.prototype, 'submitInner')
             .resolves({ txid: 'tx123', status: 'valid' });
     });
 

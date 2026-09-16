@@ -17,7 +17,7 @@ module.exports = {
     WalletUtils: [
         ['_maxFeeRate', false, true, true, 'function', 1],
         ['_resolveNet', false, true, true, 'function', 1],
-        ['_xchainRevealFinalizer', false, true, true, 'function', 1],
+        ['xchainRevealFinalizer', false, true, true, 'function', 1],
         ['broadcastTx', false, true, true, 'function', 2],
         ['constructor', false, true, true, 'function', 1],
         ['decomposePsbt', false, true, true, 'function', 1],

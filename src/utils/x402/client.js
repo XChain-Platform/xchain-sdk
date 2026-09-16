@@ -85,7 +85,7 @@ class X402Client {
 
     // Sign `message` with the session key so it verifies against the payer
     // address. Throws (via signForAddress) if no network is resolvable.
-    _sign(message) {
+    sign(message) {
         return signForAddress(this._auth, message, this.session.wif, this.session.address, this.network || undefined);
     }
 
@@ -107,7 +107,7 @@ class X402Client {
         return Buffer.from(JSON.stringify(proof)).toString('base64url');
     }
 
-    _pickScheme(accepts) {
+    pickScheme(accepts) {
         // Prefer pay-per-call; deposit/dispenser need prior on-chain setup the
         // caller manages out of band (we still pass their proofs through).
         return accepts.find((a) => a.scheme === 'xchain-send') || null;
@@ -119,7 +119,7 @@ class X402Client {
     // moved, so the caller must NOT blindly re-enter fetchUrl (that re-pays); the
     // `resume` descriptor lets them re-present the SAME payment via
     // fetchUrl(url, init, { resume }).
-    _ambiguous(url, resumeDesc, cause) {
+    ambiguous(url, resumeDesc, cause) {
         const details = { txid: resumeDesc.txid, paid: true, resource: url, resume: resumeDesc };
         if (cause && (cause.code || cause.message)) details.cause = cause.code || cause.message;
         return new SDKX402Error('X402_PAYMENT_AMBIGUOUS',
@@ -131,7 +131,7 @@ class X402Client {
     // Re-present an existing payment (fresh or resumed) to the gateway until it is
     // accepted. Never broadcasts; on exhaustion it surfaces the ambiguous signal
     // carrying the txid so the caller resumes rather than re-pays.
-    async _presentPayment(url, init, { coin, invoice, txid, requireSignature }) {
+    async presentPayment(url, init, { coin, invoice, txid, requireSignature }) {
         // Prove control of the paying address by signing the single-use invoice
         // nonce, so the gateway can bind the payment to us (and a mempool watcher
         // who copied the public memo cannot front-run the claim).
@@ -139,7 +139,7 @@ class X402Client {
             x402Version: X402_VERSION, scheme: 'xchain-send', coin,
             txid, invoice, payer: this.session.address,
         };
-        if (requireSignature) proofBody.payerSignature = this._sign(invoice);
+        if (requireSignature) proofBody.payerSignature = this.sign(invoice);
         const proof = Buffer.from(JSON.stringify(proofBody)).toString('base64url');
 
         // Retry until the gateway sees the payment (mempool propagation +
@@ -150,7 +150,7 @@ class X402Client {
             if (res.status !== 402) return res;
             await new Promise((r) => setTimeout(r, this.retryDelayMs));
         }
-        throw this._ambiguous(url, { invoice, txid, coin, requireSignature: !!requireSignature });
+        throw this.ambiguous(url, { invoice, txid, coin, requireSignature: !!requireSignature });
     }
 
     // opts.resume = { invoice, txid, coin, requireSignature } from a prior
@@ -163,7 +163,7 @@ class X402Client {
             if (!resume.invoice || !resume.txid)
                 throw new SDKX402Error('X402_CONFIG', 'resume requires { invoice, txid }');
             // No fresh fetch, no fresh nonce, no session.send: re-present only.
-            return this._presentPayment(url, init, {
+            return this.presentPayment(url, init, {
                 coin: resume.coin, invoice: resume.invoice, txid: resume.txid,
                 requireSignature: !!resume.requireSignature,
             });
@@ -174,7 +174,7 @@ class X402Client {
 
         const challenge = await res.json();
         const accepts = (challenge && challenge.accepts) || [];
-        const offer = this._pickScheme(accepts);
+        const offer = this.pickScheme(accepts);
         if (!offer) throw new SDKX402Error('X402_NO_USABLE_SCHEME', 'no xchain-send offer in challenge', { accepts });
         if (this.maxAmount !== null && !gte(this.maxAmount, offer.amount))
             throw new SDKX402Error('X402_PRICE_TOO_HIGH', `offer ${offer.amount} ${offer.tick} exceeds maxAmount ${this.maxAmount}`, { offer });
@@ -193,12 +193,12 @@ class X402Client {
                 {}, zeroConf ? { waitForIndexer: false } : {});
         } catch (err) {
             const txid = err && err.details && err.details.txid;
-            if (txid) throw this._ambiguous(url,
+            if (txid) throw this.ambiguous(url,
                 { invoice: offer.invoice, txid, coin: offer.coin, requireSignature: !!offer.requireSignature }, err);
             throw err;
         }
 
-        return this._presentPayment(url, init, {
+        return this.presentPayment(url, init, {
             coin: offer.coin, invoice: offer.invoice, txid: payResult.txid,
             requireSignature: offer.requireSignature,
         });

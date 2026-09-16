@@ -66,7 +66,7 @@ function setupGateway() {
         getMempool:  sinon.stub().resolves({ data: [] }),
         getBalances: sinon.stub().resolves({ data: [] }),
         // Index-id resolution for the 0-conf compaction matcher: payTo 'gateAddr' -> id 3,
-        // tick 'TOK' -> id 7. Present so _resolveWireIds can accept `^<id>` wire forms.
+        // tick 'TOK' -> id 7. Present so resolveWireIds can accept `^<id>` wire forms.
         getAddress:  sinon.stub().resolves({ info: { address_id: 3 } }),
         getToken:    sinon.stub().resolves({ info: { tick_id: 7 } }),
     };
@@ -148,7 +148,7 @@ describe('x402', () => {
             // The reference X402Client pays via session.send(), which by default compacts payTo and
             // tick to their `^<id>` wire form. The decoder records that raw compacted string in the
             // mempool `data` column (only the indexer expands ids). Query is keyed on the payer (the
-            // on-chain source), and _resolveWireIds maps gateAddr->^3, TOK->^7 so the output matches.
+            // on-chain source), and resolveWireIds maps gateAddr->^3, TOK->^7 so the output matches.
             const gw = mkGateway({ send: { tick: 'TOK', amount: '5', payTo: 'gateAddr', minConfirmations: 0 } });
             await issueInvoice(gw);
             explorer.getMempool.resolves({ data: [{ tx_hash: 'txZZ', source: 'payerAddr', action: 'SEND', data: `SEND|0|^7|5|^3|${NONCE}` }] });

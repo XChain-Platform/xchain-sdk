@@ -86,7 +86,7 @@ class UTXOCache {
     // This lets the next transaction use the change output immediately
     // without waiting for confirmation, which is what chains consecutive
     // sends from one session into parent -> child instead of siblings.
-    // Called by WalletSession._submitInner with the lifecycle result's
+    // Called by WalletSession.submitInner with the lifecycle result's
     // changeOutputs.
     //
     // Deduplicated on the outpoint: registering the same change twice would

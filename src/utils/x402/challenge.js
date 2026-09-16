@@ -53,7 +53,7 @@ module.exports = {
     // Issue an HMAC-authenticated, expiring challenge token bound to the scheme,
     // coin and resource. Stateless: the MAC lets the gateway trust its own token
     // on the retry without server-side issuance state.
-    _issueChallenge(scheme, resource) {
+    issueChallenge(scheme, resource) {
         const body = { n: crypto.randomBytes(16).toString('hex'), exp: Date.now() + this.challengeTtlMs,
                        s: scheme, c: this.coin, r: resource == null ? null : String(resource) };
         const payload = Buffer.from(JSON.stringify(body)).toString('base64url');
@@ -63,7 +63,7 @@ module.exports = {
 
     // Validate a challenge token WITHOUT consuming it (MAC, expiry, scheme/coin/
     // resource binding). Returns { ok, nonce, exp } or { ok:false, code }.
-    _checkChallenge(token, scheme, resource) {
+    checkChallenge(token, scheme, resource) {
         if (typeof token !== 'string' || token.indexOf('.') < 0) return { ok: false, code: 'X402_CHALLENGE_MISSING' };
         const dot = token.lastIndexOf('.');
         const payload = token.slice(0, dot);
@@ -85,7 +85,7 @@ module.exports = {
 
     // Consume a challenge nonce one time (replay guard). Prunes expired entries so
     // the map stays bounded to the live TTL window.
-    _consumeChallenge(nonce, exp) {
+    consumeChallenge(nonce, exp) {
         const now = Date.now();
         for (const [n, e] of this._usedChallenges) if (e <= now) this._usedChallenges.delete(n);
         if (this._usedChallenges.has(nonce)) return { ok: false, code: 'X402_CHALLENGE_REPLAYED' };
@@ -94,7 +94,7 @@ module.exports = {
     },
 
     // Verify a Bitcoin message signature by `payer` over `message`.
-    _verifyPayerSignature(payer, message, signature) {
+    verifyPayerSignature(payer, message, signature) {
         if (!this._auth) return { ok: false, code: 'X402_CONFIG' };
         if (typeof signature !== 'string' || !signature) return { ok: false, code: 'X402_SIGNATURE_REQUIRED' };
         let r;
@@ -136,7 +136,7 @@ module.exports = {
                 dispenserAddress: this.dispenser.dispenserAddress,
                 requireSignature: this.requireSignature,
                 // The payer signs this challenge to prove control of its address.
-                challenge: this.requireSignature ? this._issueChallenge('xchain-dispenser', resource) : undefined,
+                challenge: this.requireSignature ? this.issueChallenge('xchain-dispenser', resource) : undefined,
             });
         if (this.deposit)
             accepts.push({
@@ -144,7 +144,7 @@ module.exports = {
                 tick: this.deposit.tick, depositAddress: this.deposit.depositAddress,
                 pricePerCall: this.deposit.pricePerCall,
                 requireSignature: this.requireSignature,
-                challenge: this.requireSignature ? this._issueChallenge('xchain-deposit', resource) : undefined,
+                challenge: this.requireSignature ? this.issueChallenge('xchain-deposit', resource) : undefined,
             });
         return { x402Version: X402_VERSION, error: this.description, resource: resource || null, accepts };
     },

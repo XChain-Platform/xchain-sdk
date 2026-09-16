@@ -73,7 +73,7 @@ class AddressResolver {
     // Resolve `promise`, but reject if it has not settled within `ms`. The
     // underlying promise's eventual rejection is swallowed so a capped-out
     // lookup never surfaces as an unhandled rejection.
-    _withCap(promise, ms) {
+    withCap(promise, ms) {
         promise.catch(() => {});
         return new Promise((resolve, reject) => {
             let timer = setTimeout(() => reject(new Error('address-lookup timeout')), ms);
@@ -108,7 +108,7 @@ class AddressResolver {
             // Best-effort lookup: no retry (fail fast and fall back rather than
             // block on backoff) and a hard time cap so a hung host can never stall
             // action generation. Compaction is an optimization, never a dependency.
-            let res  = await this._withCap(this.sdk.explorer.getAddress(str, { noRetry: true }), LOOKUP_CAP_MS);
+            let res  = await this.withCap(this.sdk.explorer.getAddress(str, { noRetry: true }), LOOKUP_CAP_MS);
             let info = res && (Array.isArray(res) ? (res[0] || {}).info : res.info);
             if (info && info.address_id !== undefined && info.address_id !== null)
                 id = String(info.address_id);

@@ -60,7 +60,7 @@ class ActionWaiter {
 
     // Explorer this wait polls: per-call override, then the constructor
     // override, then the SDK's own (which throws when unconfigured).
-    _resolveExplorer(opts) {
+    resolveExplorer(opts) {
         let perCall = ActionWaiter._buildExplorer(this.sdk, opts);
         return perCall || this.explorer || this.sdk._requireExplorer();
     }
@@ -69,7 +69,7 @@ class ActionWaiter {
     // SDK's WebSocket follows the SDK's explorer, so its events describe a
     // DIFFERENT stack: a targeted wait could otherwise settle from a foreign
     // event. Overridden waits poll only.
-    _explorerOverridden(opts) {
+    explorerOverridden(opts) {
         return !!(ActionWaiter._buildExplorer(this.sdk, opts) || this.explorer);
     }
 
@@ -96,8 +96,8 @@ class ActionWaiter {
         // Resolve ONCE, outside the poll loop: a per-call explorerUrl would
         // otherwise build a fresh client (and a fresh keep-alive agent) on
         // every poll tick.
-        let explorerTarget = this._resolveExplorer(opts);
-        let useWebSocket   = !this._explorerOverridden(opts);
+        let explorerTarget = this.resolveExplorer(opts);
+        let useWebSocket   = !this.explorerOverridden(opts);
 
         return new Promise((resolve, reject) => {
             let settled  = false;
@@ -220,7 +220,7 @@ class ActionWaiter {
     async waitForActionIndex(actionIndex, opts = {}) {
         let timeout      = opts.timeout || 120000;
         let pollInterval = opts.pollInterval || 2000;
-        let explorerTarget = this._resolveExplorer(opts);
+        let explorerTarget = this.resolveExplorer(opts);
 
         return new Promise((resolve, reject) => {
             let settled = false;
@@ -268,7 +268,7 @@ class ActionWaiter {
     //
     // A failed read is not a verdict. The loop always reads once and carries its
     // last observation or error into the timeout callback.
-    async _pollUntil(opts, readOnce, timeoutError) {
+    async pollUntil(opts, readOnce, timeoutError) {
         let timeout      = opts.timeout > 0 ? opts.timeout : 120000;
         let pollInterval = opts.pollInterval > 0 ? opts.pollInterval : 2000;
         let deadline     = Date.now() + timeout;
@@ -303,10 +303,10 @@ class ActionWaiter {
     async waitForContractState(contractActionIndex, opts = {}) {
         contractWait.validateStateArgs(contractActionIndex, opts);
 
-        let explorer = this._resolveExplorer(opts);
+        let explorer = this.resolveExplorer(opts);
         let key      = opts.key;
 
-        return this._pollUntil(opts, async () => {
+        return this.pollUntil(opts, async () => {
             let raw   = await explorer.getContractState(contractActionIndex, key);
             return contractWait.classifyState(ActionWaiter, raw, key, opts,
                 contractActionIndex, sameStateValue);
@@ -326,10 +326,10 @@ class ActionWaiter {
     async waitForContractBalance(contractActionIndex, tick, opts = {}) {
         contractWait.validateBalanceArgs(contractActionIndex, tick);
 
-        let explorer = this._resolveExplorer(opts);
+        let explorer = this.resolveExplorer(opts);
         let minimum  = contractWait.minimumQuantity(opts);
 
-        return this._pollUntil(opts, async () => {
+        return this.pollUntil(opts, async () => {
             let raw      = await explorer.getContractBalance(contractActionIndex, tick);
             return contractWait.classifyBalance(ActionWaiter, raw, tick, opts,
                 contractActionIndex, minimum, compareAmount);
@@ -338,7 +338,7 @@ class ActionWaiter {
     }
 
     // Unpack rows from an explorer envelope or bare array.
-    static _rowsOf(raw) {
+    static rowsOf(raw) {
         return contractValues.rowsOf(raw);
     }
 

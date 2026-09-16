@@ -40,7 +40,7 @@ function parseStateValue(value) {
 // Normalize state through the class hooks so static overrides keep working.
 function normalizeContractState(ActionWaiter, raw) {
     let state = Object.create(null);
-    let rows  = ActionWaiter._rowsOf(raw);
+    let rows  = ActionWaiter.rowsOf(raw);
     if (rows.length) {
         for (let row of rows) {
             if (!row || typeof row !== 'object') continue;
@@ -62,7 +62,7 @@ function normalizeContractState(ActionWaiter, raw) {
 
 // Read one state key through the class hooks so static overrides keep working.
 function readContractStateValue(ActionWaiter, raw, key) {
-    let rows = ActionWaiter._rowsOf(raw);
+    let rows = ActionWaiter.rowsOf(raw);
     if (rows.length) {
         let state = ActionWaiter.normalizeContractState(raw);
         return Object.prototype.hasOwnProperty.call(state, String(key)) ? state[String(key)] : undefined;
@@ -78,7 +78,7 @@ function readContractStateValue(ActionWaiter, raw, key) {
 
 // Read an exact decimal balance string without lossy number conversion.
 function readContractQuantity(ActionWaiter, raw, tick) {
-    let rows = ActionWaiter._rowsOf(raw);
+    let rows = ActionWaiter.rowsOf(raw);
     if (rows.length) {
         let row = rows.find(r => r && (r.tick === tick || r.TICK === tick));
         if (!row) return null;

@@ -58,7 +58,7 @@ class FileInvoiceStore {
         const day = new Date(createdAt).toISOString().slice(0, 10);
         return path.join(this.dir, day, nonce + '.json');
     }
-    async _locked(nonce, fn) {
+    async locked(nonce, fn) {
         const tail = this._locks.get(nonce) || Promise.resolve();
         const next = tail.then(fn, fn);
         this._locks.set(nonce, next.catch(() => {}));
@@ -72,7 +72,7 @@ class FileInvoiceStore {
         return invoice;
     }
     // Find by nonce (scan day dirs newest-first; invoices are short-lived).
-    _find(nonce) {
+    find(nonce) {
         if (!/^[0-9a-f]{32}$/.test(nonce)) return null;
         if (!fs.existsSync(this.dir)) return null;
         for (const day of fs.readdirSync(this.dir).sort().reverse()) {
@@ -84,12 +84,12 @@ class FileInvoiceStore {
         }
         return null;
     }
-    async get(nonce) { const hit = this._find(nonce); return hit ? hit.invoice : null; }
+    async get(nonce) { const hit = this.find(nonce); return hit ? hit.invoice : null; }
     // Atomically transition an invoice; mutate() returns the new invoice or
     // throws. Runs under the per-nonce mutex.
     async update(nonce, mutate) {
-        return this._locked(nonce, async () => {
-            const hit = this._find(nonce);
+        return this.locked(nonce, async () => {
+            const hit = this.find(nonce);
             if (!hit) return null;
             const updated = await mutate(hit.invoice);
             fs.writeFileSync(hit.file + '.tmp', JSON.stringify(updated));

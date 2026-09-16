@@ -155,7 +155,7 @@ module.exports = {
      *
      * @param {object} net  bitcoinjs network params
      */
-    _xchainRevealFinalizer(net) {
+    xchainRevealFinalizer(net) {
         return (inputIndex, input, script, isSegwit, isP2SH, isP2WSH) => {
             if (!input.partialSig || !input.partialSig[0]) {
                 throw new SDKWalletError('FINALIZE_FAILED',
@@ -292,7 +292,7 @@ module.exports = {
             throw new SDKWalletError('SIGN_FAILED', `PSBT signing failed: ${err.message}`);
         }
 
-        const finalizer = this._xchainRevealFinalizer(net);
+        const finalizer = this.xchainRevealFinalizer(net);
         try {
             for (let i = 0; i < psbt.data.inputs.length; i += 1) {
                 psbt.finalizeInput(i, finalizer);
