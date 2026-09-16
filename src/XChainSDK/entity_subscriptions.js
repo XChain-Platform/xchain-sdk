@@ -62,7 +62,7 @@ module.exports = {
     //
     // The caller genuinely cannot act on this: it holds an unsubscribe fn, not a
     // promise. Losing the subscription is also self-healing, because the WS
-    // client replays its tracked subscriptions on reconnect (_resubscribe). So
+    // client replays its tracked subscriptions on reconnect (resubscribe). So
     // warn and carry on. Callers who DO want to await confirmation still can:
     // ws.subscribe() keeps rejecting for them.
     _subscribeDetached(ws, channels, params) {

@@ -41,7 +41,7 @@ const WebSocket = typeof wsModule === 'function'
 // KEYS (`default`, `WebSocket`) onto a constructible function. Static class
 // properties such as OPEN and CONNECTING are not namespace keys, so they are
 // dropped: in the wallet bundle `WebSocket.OPEN` evaluated to undefined, every
-// `readyState === WebSocket.OPEN` guard was permanently false, and _send()
+// `readyState === WebSocket.OPEN` guard was permanently false, and send()
 // silently dropped every frame on an open, healthy socket. Result: no
 // subscription was ever confirmed and every wallet notification channel was
 // dead, with a 10s "No response for request id" warning as the only symptom.

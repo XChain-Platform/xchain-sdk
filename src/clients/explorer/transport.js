@@ -31,7 +31,7 @@ module.exports = {
     // (Re)build the axios client + keep-alive agent for the current target.
     // Picks an https agent for https bases (axios ignores httpAgent on https),
     // so connection pooling applies to public hosts too.
-    _buildClient() {
+    buildClient() {
         let pool   = this._pool;
         let baseURL = this.baseUrl.startsWith('http') ? this.baseUrl : 'http://' + this.baseUrl + ':' + this.port;
         let isHttps = baseURL.startsWith('https');
@@ -67,10 +67,10 @@ module.exports = {
         if (newUrl === this.baseUrl && newPort === this.port) return;
         this.baseUrl = newUrl;
         this.port    = newPort;
-        this._buildClient();
+        this.buildClient();
     },
 
-    _deriveCoinPrefix(network) {
+    deriveCoinPrefix(network) {
         if (!network) return 'BTC';
         let prefix = coinPrefix(network);
         if (!prefix)
@@ -78,7 +78,7 @@ module.exports = {
         return prefix;
     },
 
-    _buildParams(opts = {}) {
+    buildParams(opts = {}) {
         let params = {};
         if (opts.page !== undefined)        params.page = opts.page;
         if (opts.limit !== undefined)       params.limit = opts.limit;
@@ -96,7 +96,7 @@ module.exports = {
         return params;
     },
 
-    async _get(path, opts = {}) {
+    async get(path, opts = {}) {
         if (this._readyHook) await this._readyHook();
         let url = '/' + this.coin + '/api' + path;
         let self = this;
@@ -110,7 +110,7 @@ module.exports = {
         // Disable retry if retry === false, or per-call via opts.noRetry (used by
         // best-effort callers like ticker compaction that must fail fast and fall
         // back rather than block on backoff). noRetry is not a query param, so
-        // _buildParams (whitelist) ignores it.
+        // buildParams (whitelist) ignores it.
         let retryConfig = (this.retry === false || (opts && opts.noRetry)) ? { maxRetries: 0 } : this.retry;
 
         try {
@@ -118,31 +118,31 @@ module.exports = {
                 if (self.hooks.onRequest)
                     self.hooks.onRequest({ service: 'explorer', method: 'GET', url });
                 try {
-                    let response = await self.client.get(url, { params: self._buildParams(opts) });
+                    let response = await self.client.get(url, { params: self.buildParams(opts) });
                     if (self.hooks.onResponse)
                         self.hooks.onResponse({ service: 'explorer', method: 'GET', url, status: response.status });
-                    self._recordFreshness(response);
+                    self.recordFreshness(response);
                     return response.data;
                 } catch (err) {
                     if (self.hooks.onError)
                         self.hooks.onError({ service: 'explorer', method: 'GET', url, error: err.message });
                     // Re-throw raw error so withRetry can inspect retryability; wrap only when not retryable
                     if (isRetryable(err)) throw err;
-                    self._handleError(err, url);
+                    self.handleError(err, url);
                 }
             }, retryConfig, onRetry);
         } catch (err) {
             // After all retries, wrap any raw (non-SDK) error into a typed SDKExplorerError
             if (err instanceof SDKExplorerError) throw err;
-            self._handleError(err, url);
+            self.handleError(err, url);
         }
     },
 
-    // POST twin of _get, for the batch reads: the same ready hook, retry
+    // POST twin of get, for the batch reads: the same ready hook, retry
     // policy, hooks, freshness record and error typing, so a caller cannot tell
     // the two transports apart by how a failure arrives. Retrying is safe here
     // because the only bodies the SDK posts to the explorer are reads.
-    async _post(path, body, opts = {}) {
+    async post(path, body, opts = {}) {
         if (this._readyHook) await this._readyHook();
         let url = '/' + this.coin + '/api' + path;
         let self = this;
@@ -153,8 +153,8 @@ module.exports = {
             this.hooks.onRetry({ service: 'explorer', method: 'POST', url, attempt, delay, error: err.message, status: err.response ? err.response.status : null });
         } : null;
 
-        // Same escape hatches as _get: retry === false on the client, or
-        // opts.noRetry per call. noRetry is not a query param, so _buildParams
+        // Same escape hatches as get: retry === false on the client, or
+        // opts.noRetry per call. noRetry is not a query param, so buildParams
         // (whitelist) ignores it.
         let retryConfig = (this.retry === false || (opts && opts.noRetry)) ? { maxRetries: 0 } : this.retry;
 
@@ -163,23 +163,23 @@ module.exports = {
                 if (self.hooks.onRequest)
                     self.hooks.onRequest({ service: 'explorer', method: 'POST', url });
                 try {
-                    let response = await self.client.post(url, body, { params: self._buildParams(opts) });
+                    let response = await self.client.post(url, body, { params: self.buildParams(opts) });
                     if (self.hooks.onResponse)
                         self.hooks.onResponse({ service: 'explorer', method: 'POST', url, status: response.status });
-                    self._recordFreshness(response);
+                    self.recordFreshness(response);
                     return response.data;
                 } catch (err) {
                     if (self.hooks.onError)
                         self.hooks.onError({ service: 'explorer', method: 'POST', url, error: err.message });
                     // Re-throw raw error so withRetry can inspect retryability; wrap only when not retryable
                     if (isRetryable(err)) throw err;
-                    self._handleError(err, url);
+                    self.handleError(err, url);
                 }
             }, retryConfig, onRetry);
         } catch (err) {
             // After all retries, wrap any raw (non-SDK) error into a typed SDKExplorerError
             if (err instanceof SDKExplorerError) throw err;
-            self._handleError(err, url);
+            self.handleError(err, url);
         }
     },
 
@@ -190,7 +190,7 @@ module.exports = {
     // refusing it, so this is how a consumer learns that what it just read is a
     // true record up to a tip that is behind. A response with no marker (an
     // older explorer) leaves the record untouched.
-    _recordFreshness(response) {
+    recordFreshness(response) {
         let headers = (response && response.headers) || {};
         let marker  = headers['xchain-freshness'];
         let body    = response && response.data;
@@ -217,7 +217,7 @@ module.exports = {
         return this._freshness ? Object.assign({}, this._freshness) : null;
     },
 
-    _handleError(err, url) {
+    handleError(err, url) {
         if (err.response) {
             // A 429 reaching here already survived retry.js's honoured wait, so
             // it is the caller's to handle. Keep the "Explorer returned HTTP

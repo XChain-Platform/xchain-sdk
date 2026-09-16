@@ -32,7 +32,7 @@ const { getLogger } = require('../../observability/logger.js');
 const log = getLogger('xchain-sdk:hub');
 
 async function fetchConfigResult(connector, url, cursorValid, sinceCursor, headers) {
-    let result = await connector._postGetAllConfigs(url, sinceCursor, headers);
+    let result = await connector.postGetAllConfigs(url, sinceCursor, headers);
     if (result === undefined) return undefined;
     // The hub returns its FAILURE payload through the same JSON-RPC
     // `result` member ({ error: "..." }, no configs), with no
@@ -47,7 +47,7 @@ async function fetchConfigResult(connector, url, cursorValid, sinceCursor, heade
         // or the first fetch): replace the cache, never merge across hubs.
         connector.lastWatermark = 0;
         connector.configs       = null;
-    } else if (connector._hubConfigRegressed(result)) {
+    } else if (connector.hubConfigRegressed(result)) {
         // Hub restart / restore from an older snapshot: the served watermark or
         // seq is BELOW what this endpoint gave us before. The delta we asked for
         // (cursor from the lost window) cannot carry rows the restored hub now
@@ -63,7 +63,7 @@ async function fetchConfigResult(connector, url, cursorValid, sinceCursor, heade
                       ' (hub restart or restore from an older snapshot); discarding cached config and re-fetching the full tree.');
         connector.lastWatermark = 0;
         connector.configs       = null;
-        result = await connector._postGetAllConfigs(url, 0, headers);
+        result = await connector.postGetAllConfigs(url, 0, headers);
         if (result === undefined) return undefined;
         if (isHubErrorEnvelope(result)) throw new Error('hub returned error result: ' + result.error);
     }
@@ -97,7 +97,7 @@ module.exports = {
                 let result = await fetchConfigResult(this, url, cursorValid, sinceCursor, headers);
                 if (result === undefined) continue;
                 this._lastGoodIdx = idx;
-                this.configs = this._applyConfigResult(result);
+                this.configs = this.applyConfigResult(result);
                 // Bind the (possibly advanced) cursor to the endpoint that answered.
                 this._watermarkEndpointIdx = idx;
                 this.lastFetch = Date.now();
@@ -117,7 +117,7 @@ module.exports = {
     // POST one getallconfigs call with the given cursor and return the JSON-RPC
     // result member (undefined when the response carries none; throws on transport
     // failure so the failover loop records it).
-    async _postGetAllConfigs(url, sinceCursor, headers) {
+    async postGetAllConfigs(url, sinceCursor, headers) {
         let payload = {
             jsonrpc: '2.0',
             method:  'getallconfigs',
@@ -134,9 +134,9 @@ module.exports = {
     // True when a watermarked envelope from the cursor's own endpoint reports a
     // seq or watermark BELOW the last one it served us (hub restart / restore
     // from an older snapshot). A missing watermark is the full tree (handled by
-    // _applyConfigResult) and a zero watermark means an empty configs table, so
+    // applyConfigResult) and a zero watermark means an empty configs table, so
     // neither counts; the next poll re-fetches in full either way.
-    _hubConfigRegressed(result) {
+    hubConfigRegressed(result) {
         let marks = hubEnvelopeMarks(result);
         if (marks.watermark === null) return false;
         return (marks.watermark > 0 && marks.watermark < this.lastWatermark) ||
@@ -151,8 +151,8 @@ module.exports = {
     // watermark): those are always the full tree, so we REPLACE. Callers
     // (extractServiceEndpoints) see the same full-map shape regardless of hub
     // version. seq stays 0 against an old hub.
-    _applyConfigResult(result) {
-        this._checkHubConsensusHash(result && typeof result === 'object' ? result.coin_consensus_hashes : null);
+    applyConfigResult(result) {
+        this.checkHubConsensusHash(result && typeof result === 'object' ? result.coin_consensus_hashes : null);
 
         let payload, seq, watermark;
         if (result && typeof result === 'object' && result.configs && typeof result.configs === 'object' && ('seq' in result)) {
@@ -191,7 +191,7 @@ module.exports = {
     // from a divergent bundle surfaces at the first config fetch instead of later as
     // an opaque refused-or-wrong encode. Widened to every coin and network because
     // the SDK bundles all three and is pointed at whatever venue the caller chose.
-    _checkHubConsensusHash(hubHashes){
+    checkHubConsensusHash(hubHashes){
         if(!hubHashes || typeof hubHashes !== 'object') return;   // older hub: field absent
         let mismatches = [];
         for(const network of coins.NETWORKS){

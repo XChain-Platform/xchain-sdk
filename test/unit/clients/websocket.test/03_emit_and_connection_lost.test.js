@@ -113,10 +113,10 @@ function registerHooks() {
     });
 }
 
-// _emit and connection_lost event
+// emit and connection_lost event
 describe('WebSocketClient', function () {
     registerHooks();
-    describe('_emit and connection_lost', function () {
+    describe('emit and connection_lost', function () {
 
         it('emits connection_lost when reconnect attempts exhausted', async function () {
             client = createClient(port);
@@ -128,33 +128,33 @@ describe('WebSocketClient', function () {
             // Exhaust all reconnect attempts by pre-setting the counter
             client.reconnectAttempts = client.maxReconnectAttempts;
 
-            // Force close from server (not intentional from client); triggers _reconnect
+            // Force close from server (not intentional from client); triggers reconnect
             // which immediately sees reconnectAttempts >= maxReconnectAttempts and emits connection_lost
             server._lastClient.close();
             await waitFor(() => lostFired, { message: 'connection_lost never fired' });
             expect(lostFired).to.be.true;
         });
 
-        it('_emit dispatches to registered handlers', function () {
+        it('emit dispatches to registered handlers', function () {
             const spy = sinon.spy();
             const c = new WebSocketClient({ network: 'bitcoin-regtest' });
             c.on('test_event', spy);
-            c._emit('test_event', { value: 42 });
+            c.emit('test_event', { value: 42 });
             expect(spy.calledOnce).to.be.true;
             expect(spy.firstCall.args[0].data.value).to.equal(42);
             expect(spy.firstCall.args[0].type).to.equal('test_event');
         });
 
-        it('_emit is a no-op when no handlers registered', function () {
+        it('emit is a no-op when no handlers registered', function () {
             const c = new WebSocketClient({ network: 'bitcoin-regtest' });
-            expect(() => c._emit('no_handler', {})).to.not.throw();
+            expect(() => c.emit('no_handler', {})).to.not.throw();
         });
     });
 });
-// _startPing fires
+// startPing fires
 describe('WebSocketClient', function () {
     registerHooks();
-    describe('_startPing', function () {
+    describe('startPing', function () {
 
         it('sends ping messages on interval', async function () {
             let pingCount = 0;
@@ -181,7 +181,7 @@ describe('WebSocketClient', function () {
     });
 });
 
-// onWsReconnect hook + _resubscribe
+// onWsReconnect hook + resubscribe
 describe('WebSocketClient', function () {
     registerHooks();
     describe('reconnect and resubscribe', function () {

@@ -97,7 +97,7 @@ describe('ExplorerClient', function () {
         it('outer catch wraps retryable error that exhausted retries', async function () {
             // Use sinon to inject an ECONNRESET error so isRetryable=true but
             // retry:false means maxRetries=0, so it exhausts immediately and
-            // reaches the outer catch -> _handleError
+            // reaches the outer catch -> handleError
             const noRetry = new ExplorerClient({
                 network: 'bitcoin-mainnet',
                 explorerUrl: 'explorer.test',

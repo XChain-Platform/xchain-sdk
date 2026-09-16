@@ -20,7 +20,7 @@
  * (xchain-explorer/src/ws/schema_version.js), and Number() collapses two
  * ADJACENT such indices onto one value above 2^53. A guard written with
  * Number() therefore matches the neighbour it exists to reject, which is
- * exactly the regression the explorer side already retired in _advanceCursor
+ * exactly the regression the explorer side already retired in advanceCursor
  * (src/clients/websocket.js) and ChangeDetector._nextCursor.
  *
  * Comparison only: this module deliberately does not re-type any value a

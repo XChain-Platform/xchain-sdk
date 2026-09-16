@@ -43,7 +43,7 @@ function attachSocketListeners(client, url, resolve, reject) {
         client.connected = true;
         client.reconnectAttempts = 0;
         client._schemaWarned = false;
-        client._startPing();
+        client.startPing();
         if (client.hooks.onWsConnect) {
             try { client.hooks.onWsConnect({ url }); } catch (e) {}
         }
@@ -57,7 +57,7 @@ function attachSocketListeners(client, url, resolve, reject) {
             return;
         }
 
-        client._onMessage(msg);
+        client.onMessage(msg);
 
         if (!welcomed && msg.type === 'WELCOME') {
             welcomed = true;
@@ -67,7 +67,7 @@ function attachSocketListeners(client, url, resolve, reject) {
 
     client.ws.on('close', (code) => {
         client.connected = false;
-        client._stopPing();
+        client.stopPing();
 
         if (client.hooks.onWsDisconnect) {
             try { client.hooks.onWsDisconnect({ code }); } catch (e) {}
@@ -79,7 +79,7 @@ function attachSocketListeners(client, url, resolve, reject) {
         }
 
         if (!client.intentionalClose) {
-            client._reconnect();
+            client.reconnect();
         }
     });
 
@@ -109,7 +109,7 @@ class WebSocketClient {
         this.baseUrl  = options.websocketUrl  || options.explorerUrl || 'localhost';
         this.port     = options.websocketPort || options.explorerPort || 8080;
         this.protocol = options.websocketProtocol || 'ws';
-        this.coin     = this._deriveCoinPrefix(options.network);
+        this.coin     = this.deriveCoinPrefix(options.network);
         this.hooks    = options.hooks || {};
 
         // Reconnection config
@@ -171,8 +171,8 @@ class WebSocketClient {
     // Disconnect intentionally
     disconnect() {
         this.intentionalClose = true;
-        this._stopPing();
-        this._rejectAllPending('Connection closed');
+        this.stopPing();
+        this.rejectAllPending('Connection closed');
         if (this.ws) {
             this.ws.close();
             this.ws = null;

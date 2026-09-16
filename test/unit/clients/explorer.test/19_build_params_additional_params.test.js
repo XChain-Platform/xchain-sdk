@@ -33,7 +33,7 @@ describe('ExplorerClient', function () {
     beforeEach(resetClient);
     afterEach(cleanNock);
 
-    describe('_buildParams additional params', function () {
+    describe('buildParams additional params', function () {
         it('passes start, length, tick, txid, blockIndex params', async function () {
             nock(BASE)
                 .get('/BTC/api/balances/addr1')

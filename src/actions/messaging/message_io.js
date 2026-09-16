@@ -129,7 +129,7 @@ function messagePaginationOpts(opts) {
 
 function unwrapMessages(rawMessages) {
     // The explorer serves every list endpoint as `{ data: [...], total }`,
-    // and `_get` hands that body back untouched. Requiring a bare array here
+    // and `get` hands that body back untouched. Requiring a bare array here
     // meant a real explorer response always failed the check and the inbox
     // returned EMPTY - so a MESSAGE that is on-chain, valid and addressed to
     // you was invisible in the wallet, silently. Accept both shapes:

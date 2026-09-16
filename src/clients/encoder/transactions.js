@@ -171,7 +171,7 @@ module.exports = {
             rpcParams.utxos = fetchedUtxos;
         }
 
-        return this._rpc('create_tx', rpcParams);
+        return this.rpc('create_tx', rpcParams);
     },
 
     // P2SH/P2WSH two-phase helper: spend an existing P2SH/P2WSH output
@@ -232,7 +232,7 @@ module.exports = {
         // alone and depended on a guard firing by accident.
         if (params.compress !== undefined)         rpcParams.compress = params.compress;
 
-        return this._rpc('create_tx', rpcParams);
+        return this.rpc('create_tx', rpcParams);
     },
 
     // Broadcast a signed raw transaction hex to the coin node
@@ -245,7 +245,7 @@ module.exports = {
         if (!txHex)
             throw new SDKEncoderError('MISSING_TX_HEX', 'broadcastTx requires txHex (signed transaction hex)');
 
-        return this._rpc('broadcast_tx', { tx_hex: txHex });
+        return this.rpc('broadcast_tx', { tx_hex: txHex });
     },
 
     // Estimate fee for a transaction without signing or broadcasting.
@@ -324,7 +324,7 @@ module.exports = {
         if (!address)
             throw new SDKEncoderError('MISSING_ADDRESS', 'getUTXOs requires address');
 
-        return this._rpc('get_utxos', { address: address });
+        return this.rpc('get_utxos', { address: address });
     }
 
 };

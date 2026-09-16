@@ -24,7 +24,7 @@ describe('BET client surfaces', function () {
         const calls = [];
         // Stub the transport: this asserts the PATH each helper builds, which is
         // the half that silently 404s if it drifts from the explorer route map.
-        s.explorer = { _get: async (path) => { calls.push(path); return {}; } };
+        s.explorer = { get: async (path) => { calls.push(path); return {}; } };
         Object.setPrototypeOf(s.explorer, require('../../../../src/clients/explorer.js').prototype);
 
         await s.explorer.getBetFeeds('open', 'status');

@@ -71,7 +71,7 @@ describe('UTXOCache', function () {
         });
 
         it('treats an undefined result as no-UTXOs instead of throwing (malformed response)', async function () {
-            // _rpc returns body.result, which is undefined for an empty/result-less
+            // rpc returns body.result, which is undefined for an empty/result-less
             // encoder response; refresh must not crash on `result.utxos`.
             let encoder = { getUTXOs: async () => undefined };
             let result = await cache.refresh('addrX', encoder);

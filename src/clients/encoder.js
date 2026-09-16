@@ -41,7 +41,7 @@ class EncoderClient {
         // xchain-encoder whose operator set API_KEY 401s every method except
         // GET /openrpc.json, so without this the SDK could not talk to a keyed
         // deployment at all. Read here rather than per request because
-        // _buildClient() is also the hub-discovery rebuild path, and a header
+        // buildClient() is also the hub-discovery rebuild path, and a header
         // attached at call time would have to be re-derived there. Guarded for
         // browser bundles where process is undefined. Note the exposure this
         // buys: with no pinned encoderUrl the hub overlay repoints the client,
@@ -50,7 +50,7 @@ class EncoderClient {
             Config.env.encoderApiKey() || '';
 
         // Build the pooled axios client for the current baseUrl/port.
-        this._buildClient();
+        this.buildClient();
 
         this._rpcId = 0;
 
@@ -63,7 +63,7 @@ class EncoderClient {
     // (Re)build the axios client + keep-alive agent for the current target.
     // Picks an https agent for https bases (axios ignores httpAgent on https),
     // so connection pooling applies to public hosts too.
-    _buildClient() {
+    buildClient() {
         let pool    = this._pool;
         let baseURL = this.baseUrl.startsWith('http') ? this.baseUrl : 'http://' + this.baseUrl + ':' + this.port;
         let isHttps = baseURL.startsWith('https');
@@ -103,10 +103,10 @@ class EncoderClient {
         if (newUrl === this.baseUrl && newPort === this.port) return;
         this.baseUrl = newUrl;
         this.port    = newPort;
-        this._buildClient();
+        this.buildClient();
     }
 
-    async _rpc(method, params = {}) {
+    async rpc(method, params = {}) {
         if (this._readyHook) await this._readyHook();
         let self = this;
         let retryConfig = this.retry === false ? { maxRetries: 0 } : this.retry;
@@ -154,17 +154,17 @@ class EncoderClient {
                         self.hooks.onError({ service: 'encoder', method, error: err.message });
                     // Re-throw raw error so withRetry can inspect retryability; wrap only when not retryable
                     if (isRetryable(err)) throw err;
-                    self._handleError(err, method);
+                    self.handleError(err, method);
                 }
             }, retryConfig, onRetry);
         } catch (err) {
             // After all retries, wrap any raw (non-SDK) error into a typed SDKEncoderError
             if (err instanceof SDKEncoderError) throw err;
-            self._handleError(err, method);
+            self.handleError(err, method);
         }
     }
 
-    _handleError(err, method) {
+    handleError(err, method) {
         if (err.response) {
             // A 429 reaching here already survived retry.js's honoured wait, so
             // it is the caller's to handle. The "Encoder returned HTTP 429 for
@@ -190,7 +190,7 @@ class EncoderClient {
     }
 
     async ping() {
-        return this._rpc('ping');
+        return this.rpc('ping');
     }
 
     // Reports whether the encoder's hard dependencies are healthy. The
@@ -198,7 +198,7 @@ class EncoderClient {
     // whether the encoder can actually build transactions; a green ping() does
     // not guarantee a reachable UTXO tracker. Maps to the encoder's `health` RPC.
     async health() {
-        return this._rpc('health');
+        return this.rpc('health');
     }
 
     // Returns suggested fee tiers (base-unit per vByte: sat/litoshi/koinu) from
@@ -208,7 +208,7 @@ class EncoderClient {
     // Note: this is distinct from estimateFee(), which builds a tx and parses the PSBT
     // to compute the actual fee amount of that specific transaction.
     async getFeeTiers() {
-        return this._rpc('estimate_fee');
+        return this.rpc('estimate_fee');
     }
 
 }

@@ -161,7 +161,7 @@ bindMempoolSuite('the shared, refcounted address subscription', bindContext, fun
         await barrier();
         state.reset();
 
-        sdk.ws._resubscribe();
+        sdk.ws.resubscribe();
         await barrier();
 
         const replayed = state.subscribeFrames

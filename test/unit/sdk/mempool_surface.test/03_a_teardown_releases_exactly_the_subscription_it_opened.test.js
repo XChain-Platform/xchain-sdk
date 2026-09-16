@@ -135,7 +135,7 @@ bindMempoolSuite('a teardown releases exactly the subscription it opened', bindC
         await barrier();
         state.reset();
 
-        sdk.ws._resubscribe();
+        sdk.ws.resubscribe();
         await barrier();
 
         expect(addressSubscribes(), 'the address channel came back on reconnect').to.have.lengthOf(0);

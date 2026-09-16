@@ -41,7 +41,7 @@ class UTXOCache {
 
         // Accept both response shapes ({utxos:[...]} or a bare [...]), and default
         // to an empty set for anything else. getUTXOs returns undefined when the
-        // encoder's response body is empty/malformed (_rpc returns body.result,
+        // encoder's response body is empty/malformed (rpc returns body.result,
         // which is undefined for a result-less or empty body); reading `.utxos`
         // off that undefined threw a cryptic TypeError before the intended `|| []`
         // default could apply. Treat a malformed response as no-UTXOs (safe: the

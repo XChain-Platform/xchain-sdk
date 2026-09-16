@@ -22,7 +22,7 @@
  * not namespace keys, so they are silently dropped.
  *
  * Before the fix, websocket.js compared `readyState === WebSocket.OPEN`. With
- * that constant undefined the comparison was permanently false, so _send()
+ * that constant undefined the comparison was permanently false, so send()
  * dropped every frame on a perfectly healthy open socket: no subscription was
  * ever confirmed, every wallet notification channel was dead, and the only
  * symptom was a 10s "No response for request id: sub-N" warning.

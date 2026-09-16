@@ -26,7 +26,7 @@ class ExplorerClient {
         this.baseUrl = options.explorerUrl || 'localhost';
         this.port    = options.explorerPort || 8080;
         this.timeout = options.timeout || 30000;
-        this.coin    = this._deriveCoinPrefix(options.network);
+        this.coin    = this.deriveCoinPrefix(options.network);
         this._pool   = options.pool || {};
 
         // Lazy-readiness hook (awaited once before the first request so the SDK
@@ -34,7 +34,7 @@ class ExplorerClient {
         this._readyHook = options.readyHook || null;
 
         // Build the pooled axios client for the current baseUrl/port.
-        this._buildClient();
+        this.buildClient();
 
         // Retry configuration (can be overridden via options)
         this.retry = options.retry !== undefined ? options.retry : {};

@@ -33,7 +33,7 @@ describe('SDK create_tx passthrough', function () {
         // A real client with only the transport replaced, so the parameter
         // mapping under test is the shipped one.
         const enc = new EncoderClient({});
-        enc._rpc = async (method, params) => {
+        enc.rpc = async (method, params) => {
             captured.method = method; captured.params = params;
             return { psbt: 'aa', encoding: 'P2WSH' };
         };

@@ -244,10 +244,10 @@ describe('WebSocketClient', function () {
     });
 });
 
-// _sendWithResponse timeout
+// sendWithResponse timeout
 describe('WebSocketClient', function () {
     registerHooks();
-    describe('_sendWithResponse timeout', function () {
+    describe('sendWithResponse timeout', function () {
 
         it('rejects with WS_TIMEOUT when server does not respond', async function () {
             client = createClient(port);
@@ -255,7 +255,7 @@ describe('WebSocketClient', function () {
 
             // Send a message that the server won't respond to (use a short timeout)
             try {
-                await client._sendWithResponse('test-id-999', { action: 'unknown' }, 100);
+                await client.sendWithResponse('test-id-999', { action: 'unknown' }, 100);
                 expect.fail('should have thrown');
             } catch (e) {
                 expect(e).to.be.instanceOf(SDKExplorerError);
@@ -265,10 +265,10 @@ describe('WebSocketClient', function () {
     });
 });
 
-// _rejectAllPending: rejects pending on disconnect
+// rejectAllPending: rejects pending on disconnect
 describe('WebSocketClient', function () {
     registerHooks();
-    describe('_rejectAllPending', function () {
+    describe('rejectAllPending', function () {
 
         it('rejects pending request-responses when disconnect() is called', async function () {
             client = createClient(port);
@@ -276,7 +276,7 @@ describe('WebSocketClient', function () {
 
             // Start a long request that won't complete
             let rejected = false;
-            const p = client._sendWithResponse('pending-id', { action: 'noreply' }, 10000)
+            const p = client.sendWithResponse('pending-id', { action: 'noreply' }, 10000)
                 .catch((e) => { rejected = true; });
 
             // Disconnect while request is pending
@@ -297,9 +297,9 @@ describe('WebSocketClient', function () {
             await client.connect();
 
             const id = 'myreq-1';
-            const p = client._sendWithResponse(id, { action: 'test', id }, 5000);
+            const p = client.sendWithResponse(id, { action: 'test', id }, 5000);
 
-            // _sendWithResponse registers _pending[id] synchronously inside its
+            // sendWithResponse registers _pending[id] synchronously inside its
             // Promise executor, so the only precondition is that registration,
             // not an elapsed duration.
             await waitFor(() => client._pending[id] !== undefined, { message: 'request was never registered as pending' });
@@ -321,7 +321,7 @@ describe('WebSocketClient', function () {
     });
 });
 
-// _onMessage WELCOME when lastActionIndex = 0
+// onMessage WELCOME when lastActionIndex = 0
 describe('WebSocketClient', function () {
     registerHooks();
     describe('WELCOME with lastActionIndex=0', function () {
@@ -357,9 +357,9 @@ describe('WebSocketClient', function () {
             expect(c.lastActionIndex).to.equal('0');
 
             const sent = [];
-            c._send = (m) => sent.push(m);
+            c.send = (m) => sent.push(m);
             c._subscriptions = [{ channels: ['blocks'], params: {} }];
-            c._resubscribe();
+            c.resubscribe();
 
             expect(sent).to.have.lengthOf(1);
             expect(sent[0].params).to.not.have.property('since_action_index');

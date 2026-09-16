@@ -132,10 +132,10 @@ describe('WebSocketClient', function () {
         });
     });
 });
-// _send when not connected (no-op)
+// send when not connected (no-op)
 describe('WebSocketClient', function () {
     registerHooks();
-    describe('_send when not connected', function () {
+    describe('send when not connected', function () {
 
         it('does not throw when send called on disconnected ws', function () {
             client = new WebSocketClient({
@@ -146,7 +146,7 @@ describe('WebSocketClient', function () {
                 pingInterval: 60000
             });
             // ws is null; should not throw
-            expect(() => client._send({ action: 'ping' })).to.not.throw();
+            expect(() => client.send({ action: 'ping' })).to.not.throw();
         });
     });
 });
@@ -179,10 +179,10 @@ describe('WebSocketClient', function () {
     });
 });
 
-// _resubscribe: direct unit test
+// resubscribe: direct unit test
 describe('WebSocketClient', function () {
     registerHooks();
-    describe('_resubscribe', function () {
+    describe('resubscribe', function () {
         it('sends subscribe messages for all tracked subscriptions', async function () {
             client = createClient(port);
             await client.connect();
@@ -196,8 +196,8 @@ describe('WebSocketClient', function () {
                 received.push(msg);
             });
 
-            // Call _resubscribe directly
-            client._resubscribe();
+            // Call resubscribe directly
+            client.resubscribe();
             await waitFor(() => received.filter(m => m.action === 'subscribe').length >= 2,
                 { message: 'the server never received both replayed subscribes' });
 
@@ -219,7 +219,7 @@ describe('WebSocketClient', function () {
                 received.push(msg);
             });
 
-            client._resubscribe();
+            client.resubscribe();
             await waitFor(() => received.filter(m => m.action === 'subscribe').length >= 1,
                 { message: 'the server never received the replayed subscribe' });
 
@@ -231,7 +231,7 @@ describe('WebSocketClient', function () {
 
 describe('WebSocketClient', function () {
     registerHooks();
-    describe('_resubscribe', function () {
+    describe('resubscribe', function () {
         // The whole point of #4154: the cursor that goes back out on reconnect is the
         // byte-identical index the server sent, not a Number round-trip of it.
         it('replays an above-2^53 cursor byte-for-byte as since_action_index', async function () {
@@ -246,7 +246,7 @@ describe('WebSocketClient', function () {
                 received.push(JSON.parse(data.toString()));
             });
 
-            client._resubscribe();
+            client.resubscribe();
             await waitFor(() => received.filter(m => m.action === 'subscribe').length >= 1,
                 { message: 'the server never received the replayed subscribe' });
 

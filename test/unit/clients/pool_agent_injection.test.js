@@ -83,7 +83,7 @@ describe('injected connection agents (pool.httpAgent / pool.httpsAgent)', functi
     describe('ExplorerClient', function () {
 
         it('survives a hub-discovery repoint, which rebuilds the client', function () {
-            // setBase() calls _buildClient() again. An injected agent that
+            // setBase() calls buildClient() again. An injected agent that
             // was only applied at construction would be silently dropped the
             // moment the SDK overlaid hub-published endpoints - traffic goes
             // direct from then on, with nothing to see.

@@ -29,7 +29,7 @@ module.exports = {
     // is never released, and that property has to survive refcounting. A looser
     // key (channel-only, or entity-only) would let one caller's teardown release
     // a subscription that was opened with a different server-side filter.
-    _subscriptionKey(channels, params) {
+    subscriptionKey(channels, params) {
         // One JSON array rather than two strings joined by a separator: a
         // separator has to be a character neither side can contain, and the
         // obvious pick (a NUL) makes this file BINARY to grep and ripgrep, which
@@ -65,7 +65,7 @@ module.exports = {
     // first one's filter, and either teardown ends the single shared server-side
     // subscription.
     subscribe(channels, params) {
-        const key      = this._subscriptionKey(channels, params);
+        const key      = this.subscriptionKey(channels, params);
         const existing = this._subscriptions.find(sub => sub.key === key);
         if (existing) {
             existing.refs += 1;
@@ -84,10 +84,10 @@ module.exports = {
         const msg = { action: 'subscribe', id, channels };
         if (params) msg.params = params;
 
-        const pending = this._sendWithResponse(id, msg);
+        const pending = this.sendWithResponse(id, msg);
 
         // Track for reconnect replay. `params` is stored by reference, as it
-        // always was, so _resubscribe and the key see the same object.
+        // always was, so resubscribe and the key see the same object.
         this._subscriptions.push({ key, channels, params: params || {}, refs: 1, pending });
 
         return pending;
@@ -131,7 +131,7 @@ module.exports = {
     // sends the frame, exactly as before, so a caller can cancel a subscription
     // it did not open through subscribe().
     unsubscribe(channels, params) {
-        const key   = this._subscriptionKey(channels, params);
+        const key   = this.subscriptionKey(channels, params);
         const index = this._subscriptions.findIndex(sub => sub.key === key);
         if (index !== -1) {
             const entry = this._subscriptions[index];
@@ -148,13 +148,13 @@ module.exports = {
         const msg = { action: 'unsubscribe', channels };
         if (params) msg.params = params;
 
-        this._send(msg);
+        this.send(msg);
     },
 
     // Returns a Promise resolved by SUBSCRIPTION_LIST response
     listSubscriptions() {
         const id = 'list-' + (this.nextId++);
-        return this._sendWithResponse(id, { action: 'list_subscriptions', id });
+        return this.sendWithResponse(id, { action: 'list_subscriptions', id });
     },
 
     on(eventType, callback) {

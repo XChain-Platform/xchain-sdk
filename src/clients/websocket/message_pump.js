@@ -46,15 +46,15 @@ function warnOnSchemaMismatch(client, msg) {
 module.exports = {
     // Internal methods
 
-    _onMessage(msg) {
+    onMessage(msg) {
         warnOnSchemaMismatch(this, msg);
 
         // Track action indexes for catch-up. WELCOME's latest_action_index rides the
         // same path, so a fresh client seeds from WELCOME here rather than in a second
         // branch below that could drift from this one.
         if (msg.data) {
-            this._advanceCursor(msg.data.action_index);
-            this._advanceCursor(msg.data.latest_action_index);
+            this.advanceCursor(msg.data.action_index);
+            this.advanceCursor(msg.data.latest_action_index);
         }
 
         // Handle system messages
@@ -102,13 +102,13 @@ module.exports = {
         }
     },
 
-    _send(data) {
+    send(data) {
         if (this.ws && this.ws.readyState === WS_OPEN) {
             this.ws.send(JSON.stringify(data));
         }
     },
 
-    _sendWithResponse(id, msg, timeoutMs) {
+    sendWithResponse(id, msg, timeoutMs) {
         timeoutMs = timeoutMs || 10000;
         return new Promise((resolve, reject) => {
             const timer = setTimeout(() => {
@@ -117,11 +117,11 @@ module.exports = {
             }, timeoutMs);
 
             this._pending[id] = { resolve, reject, timeout: timer };
-            this._send(msg);
+            this.send(msg);
         });
     },
 
-    _rejectAllPending(reason) {
+    rejectAllPending(reason) {
         for (const id of Object.keys(this._pending)) {
             const p = this._pending[id];
             clearTimeout(p.timeout);
@@ -130,10 +130,10 @@ module.exports = {
         }
     },
 
-    _reconnect() {
+    reconnect() {
         if (this.intentionalClose) return;
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            this._emit('connection_lost', {});
+            this.emit('connection_lost', {});
             return;
         }
 
@@ -150,9 +150,9 @@ module.exports = {
         setTimeout(async () => {
             try {
                 await this.connect();
-                this._resubscribe();
+                this.resubscribe();
             } catch (e) {
-                // connect() failed; will trigger another _reconnect via close handler
+                // connect() failed; will trigger another reconnect via close handler
             }
         }, delay);
     },
@@ -162,7 +162,7 @@ module.exports = {
     // string: nothing here converts to Number, and nothing serializes a BigInt (which
     // JSON.stringify throws on). A value that is not a non-negative integer literal is
     // not a cursor and is ignored, which also absorbs null/undefined.
-    _advanceCursor(raw) {
+    advanceCursor(raw) {
         if (raw === null || raw === undefined) return;
         const val = String(raw);
         if (!/^[0-9]+$/.test(val)) return;
@@ -170,7 +170,7 @@ module.exports = {
             this.lastActionIndex = val;
     },
 
-    _resubscribe() {
+    resubscribe() {
         for (const sub of this._subscriptions) {
             const params = Object.assign({}, sub.params);
             // Same gate as before the cursor became a string: a chain still at index 0
@@ -179,25 +179,25 @@ module.exports = {
             if (this.lastActionIndex !== null && BigInt(this.lastActionIndex) > 0n) {
                 params.since_action_index = this.lastActionIndex;
             }
-            this._send({ action: 'subscribe', channels: sub.channels, params });
+            this.send({ action: 'subscribe', channels: sub.channels, params });
         }
     },
 
-    _startPing() {
-        this._stopPing();
+    startPing() {
+        this.stopPing();
         this._pingTimer = setInterval(() => {
-            this._send({ action: 'ping' });
+            this.send({ action: 'ping' });
         }, this._pingIntervalMs);
     },
 
-    _stopPing() {
+    stopPing() {
         if (this._pingTimer) {
             clearInterval(this._pingTimer);
             this._pingTimer = null;
         }
     },
 
-    _emit(type, data) {
+    emit(type, data) {
         const msg = { type, timestamp: Date.now(), data };
         if (this._handlers[type]) {
             for (const cb of this._handlers[type]) {
@@ -206,7 +206,7 @@ module.exports = {
         }
     },
 
-    _deriveCoinPrefix(network) {
+    deriveCoinPrefix(network) {
         if (!network) return 'BTC';
         let prefix = COIN_PREFIX_MAP[network];
         if (!prefix)
