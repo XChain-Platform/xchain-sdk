@@ -202,6 +202,13 @@ var Config = {
         // crash, exactly as the guard at the old call sites did.
         encoderApiKey:  () => (typeof process !== 'undefined' && process.env ? process.env.ENCODER_API_KEY : undefined),
         hubApiKey:      () => (typeof process !== 'undefined' && process.env ? process.env.HUB_API_KEY : undefined),
+
+        // The activation registry's regtest arming variables (src/consensus/
+        // gate_registry.js): a venue opts a regtest gate in by setting one of
+        // these rather than by a committed height, per gate_registry/regtest_env.js.
+        rollcallRegtestActivation:        () => process.env.XC_ROLLCALL_REGTEST_ACTIVATION,
+        rollcallGatesRegtestActivation:   () => process.env.XC_ROLLCALL_GATES_REGTEST_ACTIVATION,
+        mirrorAdmissionRegtestActivation: () => process.env.XC_MIRROR_ADMISSION_ACTIVATION,
     },
 
 }

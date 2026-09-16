@@ -308,7 +308,12 @@ describe('SPV sub-tree activation constants: client export @regression', functio
         // its own collation height. ESCROW_LOCKED_LEAF_SHADOW emptied in the same change: its
         // BTC:testnet 148000 entry could never open once the leaf armed at genesis there, so
         // it was unreachable code that read as an open window.
-        const GOLDEN = 'fd480996a1c082f7c4024187eb9d05d7e99d8fada1816d7a6a5d978c6e10aa72';
+        // Moved (registry conversion): the literal STATE_SUBTREE_ACTIVATION,
+        // ESCROW_LOCKED_LEAF_ACTIVATION and shadow maps were replaced by
+        // registry reads (copy('state_subtree_activation.<EXPORT>')); the values
+        // are unchanged, only the source of the constants moved. All four
+        // copies (indexer, sync, sdk, explorer) carry the same shim bytes.
+        const GOLDEN = '4f58de7d49298ca6a07d0e50d57a09488722dcfac206903ecc2580aad0f4ed86';
         const actual = sha256File(SELF);
         if(actual !== GOLDEN)
             assert.fail('src/state_subtree_activation.js changed (sha256 ' + actual + ').\n' +
