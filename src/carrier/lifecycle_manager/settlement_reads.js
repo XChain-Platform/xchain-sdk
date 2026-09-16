@@ -20,6 +20,7 @@
  ********************************************************************/
 
 const ActionWaiter = require('../../utils/action_waiter.js');
+const bitcoin = require('bitcoinjs-lib');
 const { SDKConfigError } = require('../../utils/errors.js');
 
 module.exports = {
@@ -107,7 +108,6 @@ module.exports = {
     _extractChangeOutputs(txHex, changeAddress) {
         if (!txHex || !changeAddress) return [];
         try {
-            const bitcoin = require('bitcoinjs-lib');
             // Compare SCRIPTS, not decoded addresses. address.fromOutputScript
             // throws on every non-standard output a transaction here carries
             // (the OP_RETURN carrier, the bare-multisig data outputs, a P2SH
@@ -147,7 +147,6 @@ module.exports = {
 
     _extractSpentInputs(psbtHex) {
         try {
-            const bitcoin = require('bitcoinjs-lib');
             let psbt = bitcoin.Psbt.fromHex(psbtHex);
             return psbt.txInputs.map(input => ({
                 txid: Buffer.from(input.hash).reverse().toString('hex'),

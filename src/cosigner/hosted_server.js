@@ -70,6 +70,7 @@
 'use strict';
 
 const crypto  = require('crypto');
+const https   = require('https');
 const express = require('express');
 const { safeTokenEqual } = require('../utils/safe_compare.js');
 // One body ceiling for BOTH co-signer transports, derived from the protocol's
@@ -151,7 +152,6 @@ function createHostedCoSignerApp(opts = {}) {
             throw new Error('tls needs both key and cert');
 
         if (tls) {
-            const https = require('https');
             return https.createServer(tls, app).listen(args.port, host, args.onListening);
         }
         return app.listen(args.port, host, args.onListening);
