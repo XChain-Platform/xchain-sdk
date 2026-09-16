@@ -61,7 +61,7 @@ function checkTransaction(self, psbt, inputs, seenIdx, env, req) {
     //    spends THIS account's derived scriptPubKey, not a caller-supplied
     //    witnessUtxo pointing at a foreign script. Must run before any budget
     //    consumption below.
-    const prevoutDenial = self._checkPrevouts(psbt, inputs.map((it) => it.index),
+    const prevoutDenial = self.checkPrevouts(psbt, inputs.map((it) => it.index),
         env && env.role !== 'commit' ? env.commit.output : null);
     if (prevoutDenial) return prevoutDenial;
 
@@ -74,7 +74,7 @@ function checkTransaction(self, psbt, inputs, seenIdx, env, req) {
     //     for an action the chain credits to a different address, and the
     //     window (which doubles as the approval audit log) would record spends
     //     this account never made. Require input 0 to be one of ours.
-    const sourceDenial = self._checkSource(psbt, seenIdx,
+    const sourceDenial = self.checkSource(psbt, seenIdx,
         env && env.role !== 'commit' ? env.commit.output : null);
     if (sourceDenial) return sourceDenial;
 
@@ -82,19 +82,19 @@ function checkTransaction(self, psbt, inputs, seenIdx, env, req) {
     //    goes, so refuse any output that is not the data carrier, change-to-self,
     //    or operator-authorized. Blocks a benign-action / drain-output craft.
     //    Once, since all signed inputs share accountScript by the check above.
-    const outDenial = self._checkOutputs(psbt, inputs[0].index, env);
+    const outDenial = self.checkOutputs(psbt, inputs[0].index, env);
     if (outDenial) return outDenial;
 
     // 7. Fee gate: the output gate stops diversion but not a change-omission
     //    burn that hands the whole account balance to miners as fee.
-    const feeDenial = self._checkFee(psbt);
+    const feeDenial = self.checkFee(psbt);
     if (feeDenial) return feeDenial;
 
     // 8. Reject any sighash type that does not commit to every output. A
     //    NONE/SINGLE/ANYONECANPAY partial would let the agent reassemble a
     //    drain tx that still verifies, bypassing the output gate above.
     if (!sighashAllowed(req.sighashType))
-        return self._deny('SIGHASH_TYPE_NOT_ALLOWED', { sighashType: req.sighashType });
+        return self.deny('SIGHASH_TYPE_NOT_ALLOWED', { sighashType: req.sighashType });
     return null;
 }
 
@@ -126,7 +126,7 @@ function signInputs(self, psbt, inputs, env, req) {
                 ? envelopeScriptPathSighash(psbt, it.index, req.sighashType, env.commit.leafHash)
                 : taprootKeyPathSighash(psbt, it.index, req.sighashType);
         }
-        catch (e) { return { denial: self._deny('CANNOT_DERIVE_SIGHASH', e.message) }; }
+        catch (e) { return { denial: self.deny('CANNOT_DERIVE_SIGHASH', e.message) }; }
         let det;
         try {
             det = self.musig.deterministicSign({
@@ -136,7 +136,7 @@ function signInputs(self, psbt, inputs, env, req) {
                 tweaks:            envTweaks,
                 msg,
             });
-        } catch (e) { return { denial: self._deny('SIGN_FAILED', e.message) }; }
+        } catch (e) { return { denial: self.deny('SIGN_FAILED', e.message) }; }
         signatures.push({
             index:       it.index,
             publicNonce: Buffer.from(det.publicNonce).toString('hex'),

@@ -80,7 +80,7 @@ module.exports = {
         //     CANCEL is charged nothing for the same reason and one more: it
         //     returns funds to the account, and making recovery cost budget
         //     would let an agent exhaust its own window by cancelling.
-        if (!env || env.role === 'commit') this._recordBudget(psbt, verdict.evaluation);
+        if (!env || env.role === 'commit') this.recordBudget(psbt, verdict.evaluation);
 
         return { approved: true, action: decoded.action, signatures,
                  envelopeRole: env ? env.role : undefined };
@@ -91,22 +91,22 @@ module.exports = {
     // proves the second for every signed input, so membership is the load-bearing
     // half, and the script re-check keeps this correct if the gates are ever
     // reordered.
-    // `expectedScript` mirrors _checkPrevouts: an envelope REVEAL or CANCEL has
+    // `expectedScript` mirrors checkPrevouts: an envelope REVEAL or CANCEL has
     // the commit outpoint at input 0 by construction (§3.5 pins it there, and
     // the decoder's recognition depends on it), so the script to expect is the
     // commit's. The gate itself is unchanged in force: input 0 must still be one
     // of the inputs we sign, and must still spend a script this daemon derived
     // rather than one the caller named.
-    _checkSource(psbt, signed, expectedScript) {
+    checkSource(psbt, signed, expectedScript) {
         const expected = expectedScript || this.accountScript;
         if (!signed.has(0))
-            return this._deny('SOURCE_NOT_OUR_ACCOUNT',
+            return this.deny('SOURCE_NOT_OUR_ACCOUNT',
                 { detail: 'input 0 is the action\'s protocol source but is not one of the inputs being co-signed' });
         const inp = psbt.data.inputs[0];
         if (!inp || !inp.witnessUtxo || !inp.witnessUtxo.script)
-            return this._deny('SOURCE_NOT_OUR_ACCOUNT', { detail: 'input 0 has no witnessUtxo' });
+            return this.deny('SOURCE_NOT_OUR_ACCOUNT', { detail: 'input 0 has no witnessUtxo' });
         if (!inp.witnessUtxo.script.equals(expected))
-            return this._deny('SOURCE_NOT_OUR_ACCOUNT', {
+            return this.deny('SOURCE_NOT_OUR_ACCOUNT', {
                 expected: expected.toString('hex'),
                 got:      inp.witnessUtxo.script.toString('hex'),
             });
@@ -116,7 +116,7 @@ module.exports = {
     // Record one window entry for the whole tx (single authorization). The txid is
     // fixed pre-signature for segwit/taproot inputs, so it is a stable audit key;
     // best-effort (null if reconstruction fails). No-op without a window store.
-    _recordBudget(psbt, evaluation) {
+    recordBudget(psbt, evaluation) {
         if (!this.windowStore) return;
         let txid = null;
         try {

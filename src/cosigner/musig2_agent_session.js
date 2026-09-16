@@ -165,7 +165,7 @@ class MuSig2AgentSession extends AgentSession {
 
     // Inject the co-signer-backed signer so LifecycleManager completes the spend via
     // MuSig2 instead of the single-WIF path. The local AgentSession policy still runs
-    // first (super.submit -> _evaluate); the co-signer is the authoritative gate.
+    // first (super.submit -> evaluate); the co-signer is the authoritative gate.
     async submit(actionData, encoderOpts = {}, submitOpts = {}) {
         return super.submit(actionData, encoderOpts,
             Object.assign({}, submitOpts, { signer: this._musig2Signer }));

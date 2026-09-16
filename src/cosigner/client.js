@@ -205,7 +205,7 @@ class CoSignerClient {
     // Build this round's envelope context from the agent's OWN copy of the
     // script, mirroring the daemon's derivation exactly (both call the same
     // module). Returns null when the round is not an envelope round.
-    _envelopeContext(psbtHex, envelopeScript, network) {
+    envelopeContext(psbtHex, envelopeScript, network) {
         if (!envelopeScript) return null;
         const script = Buffer.isBuffer(envelopeScript) ? envelopeScript : Buffer.from(String(envelopeScript), 'hex');
         const commit = deriveEnvelopeCommit({
@@ -236,7 +236,7 @@ class CoSignerClient {
     async sign(req = {}) {
         const secretKey = toBytes(req.secretKey, 'secretKey');
         const agentPub  = secp256k1.getPublicKey(secretKey, true);
-        const env = this._envelopeContext(req.psbt, req.envelopeScript, req.network);
+        const env = this.envelopeContext(req.psbt, req.envelopeScript, req.network);
 
         // Round 1: agent nonce (secret nonce stays in this.musig).
         const agentNonce = this.musig.generateNonce({ publicKey: agentPub, secretKey });
@@ -298,7 +298,7 @@ class CoSignerClient {
     async signAll(req = {}) {
         const secretKey = toBytes(req.secretKey, 'secretKey');
         const agentPub  = secp256k1.getPublicKey(secretKey, true);
-        const env = this._envelopeContext(req.psbt, req.envelopeScript, req.network);
+        const env = this.envelopeContext(req.psbt, req.envelopeScript, req.network);
         const indexes = (Array.isArray(req.inputIndexes) && req.inputIndexes.length) ? req.inputIndexes : [0];
 
         // Round 1: a unique agent nonce per input (secret nonces stay in this.musig).

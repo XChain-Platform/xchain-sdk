@@ -42,7 +42,7 @@
  *     amount cap has ever bound them. Treating them as outflow would make
  *     every action underivable and the table useless.
  *   - The MINER fee, which the action string never constrains and which the
- *     daemon bounds separately and independently in `_checkFee` / maxFeeSats.
+ *     daemon bounds separately and independently in `checkFee` / maxFeeSats.
  *
  * "Moves no amount" (NONE) is a statement about VALUE, not about danger. An
  * ADDRESS v1 controller bind or a DELEGATE hands over authority and is NONE

@@ -47,7 +47,7 @@ const { addDecimal, UNRESOLVED_TICK_BUCKET } = require('../policy_evaluator.js')
 const CLOCK_SKEW_TOLERANCE_MS = 60 * 1000;
 
 module.exports = {
-    _load() {
+    load() {
         if (this._usage) return this._usage;
         // G6: an ABSENT state file is a hard error, not an empty window. The old
         // behaviour made `rm window.json` exactly the budget reset this document
@@ -65,7 +65,7 @@ module.exports = {
                 throw err;
             }
             this._usage = { entries: [], lastSeen: this._now() };
-            this._persist(this._usage);
+            this.persist(this._usage);
             return this._usage;
         }
         let parsed;
@@ -79,7 +79,7 @@ module.exports = {
             err.code = 'WINDOW_STATE_CORRUPT';
             throw err;
         }
-        // Fail CLOSED on a structurally bad ROW, not just a bad file. _pruned's
+        // Fail CLOSED on a structurally bad ROW, not just a bad file. pruned's
         // `e.t >= cutoff` silently drops a row with a non-finite t (undefined >= n is
         // false), and snapshot() quarantines an unaddable amount out of perTick: both
         // LOWER a consumed budget, which is the wrong direction.
@@ -101,7 +101,7 @@ module.exports = {
                 throw err;
             }
         }
-        this._applyClockGuards(parsed);
+        this.applyClockGuards(parsed);
         this._usage = parsed;
         return this._usage;
     },
@@ -113,10 +113,10 @@ module.exports = {
     // budget but signals the same lost control. Neither can be prevented from in
     // here - the operator has to own the host clock - but both can be made loud,
     // and a future-dated entry can be refused outright.
-    _applyClockGuards(parsed) {
+    applyClockGuards(parsed) {
         const now = this._now();
         if (Number.isFinite(parsed.lastSeen) && parsed.lastSeen > now + CLOCK_SKEW_TOLERANCE_MS)
-            this._fault('the host clock moved BACKWARD across a restart: the window was last written ' +
+            this.fault('the host clock moved BACKWARD across a restart: the window was last written ' +
                 `${Math.round((parsed.lastSeen - now) / 1000)}s in the future. Entries are retained, so the ` +
                 'budget is not re-opened, but a clock the daemon does not control can also step FORWARD, ' +
                 'which ages entries out early and does re-open it. The host clock must be operator-' +
@@ -132,13 +132,13 @@ module.exports = {
             }
         }
         if (clamped)
-            this._fault(`${clamped} window entr${clamped === 1 ? 'y was' : 'ies were'} timestamped in the ` +
+            this.fault(`${clamped} window entr${clamped === 1 ? 'y was' : 'ies were'} timestamped in the ` +
                 'future and had their timestamps clamped to now. A future-dated entry cannot be produced by ' +
                 'this daemon under a sane clock.', { clamped });
     },
 
-    _pruned() {
-        const usage = this._load();
+    pruned() {
+        const usage = this.load();
         const cutoff = this._now() - this._hours * 3600 * 1000;
         usage.entries = usage.entries.filter((e) => e.t >= cutoff);
         return usage;
@@ -160,7 +160,7 @@ module.exports = {
     // quarantined and reported, never allowed to throw the whole daemon down.
     // It still counts toward `count`, so quarantining tightens the count cap - but it
     // LOOSENS the per-tick cap, since the un-added amount never reaches perTick, which
-    // is why _load now refuses such a row outright. Kept here as belt-and-
+    // is why load now refuses such a row outright. Kept here as belt-and-
     // braces for a file written by an older build.
     // The same snapshot with ONE already-charged entry left out, or null when no
     // live entry carries that txid.
@@ -178,15 +178,15 @@ module.exports = {
     // projection and the caller fails closed.
     snapshotExcludingTxid(txid) {
         if (typeof txid !== 'string' || txid.length === 0) return null;
-        const live = this._pruned().entries;
+        const live = this.pruned().entries;
         if (!live.some((e) => e.txid === txid)) return null;
         return this.snapshot({ excludeTxid: txid });
     },
 
     snapshot(opts) {
         const excludeTxid = (opts && typeof opts.excludeTxid === 'string') ? opts.excludeTxid : null;
-        const usage = this._pruned();
-        // NEVER assign back into `usage`: _pruned returns the LOADED usage object
+        const usage = this.pruned();
+        // NEVER assign back into `usage`: pruned returns the LOADED usage object
         // and writing its entries here would delete the excluded entry from the
         // store's own live state, turning a read into a silent budget refund.
         const entries = excludeTxid
@@ -206,7 +206,7 @@ module.exports = {
                 perTick[key] = addDecimal(perTick[key] || '0', e.amount);
             } catch (err) {
                 this._quarantined.push(e);
-                this._fault(`window entry quarantined (tick=${String(e.tick).slice(0, 32)}): ${err.message}`,
+                this.fault(`window entry quarantined (tick=${String(e.tick).slice(0, 32)}): ${err.message}`,
                     { action: e.action, txid: e.txid || null });
             }
         }
@@ -223,14 +223,14 @@ module.exports = {
     // never completes the aggregate (can't double-spend the cap).
     record({ action, tick, amount, txid }) {
         this.assertLockOwned();
-        const usage = this._pruned();
+        const usage = this.pruned();
         const now = this._now();
         // G19: a backward clock step between writes would let a later entry sort
         // before an earlier one and age out first. Say so; the operator owns the
         // host clock, and this is the only place the daemon can see it move.
         const newest = usage.entries.reduce((m, e) => (Number.isFinite(e.t) && e.t > m ? e.t : m), -Infinity);
         if (Number.isFinite(newest) && now + CLOCK_SKEW_TOLERANCE_MS < newest)
-            this._fault('the host clock moved BACKWARD while the daemon was running ' +
+            this.fault('the host clock moved BACKWARD while the daemon was running ' +
                 `(${Math.round((newest - now) / 1000)}s); the rolling window trusts wall-clock time`,
                 { newest, now });
         // Never write a row this store's own loader would refuse to read back:
@@ -246,7 +246,7 @@ module.exports = {
         }
         usage.entries.push({ t: now, action, tick, amount, txid });
         usage.lastSeen = Math.max(now, Number.isFinite(usage.lastSeen) ? usage.lastSeen : now);
-        this._persist(usage);
+        this.persist(usage);
         this._usage = usage;
     },
 
@@ -259,7 +259,7 @@ module.exports = {
     // the same re-opening as a deleted file, just rarer and harder to notice.
     // The file is 0600: the window is both the spending budget and the approval
     // audit log, and nothing but the daemon uid has any business in it.
-    _persist(usage) {
+    persist(usage) {
         this.assertLockOwned();
         fs.mkdirSync(path.dirname(this._stateFile), { recursive: true });
         const tmp = this._stateFile + '.tmp';
@@ -278,7 +278,7 @@ module.exports = {
             const dfd = fs.openSync(path.dirname(this._stateFile), 'r');
             try { fs.fsyncSync(dfd); } finally { fs.closeSync(dfd); }
         } catch (e) {
-            this._fault(`could not fsync the window-store directory (${e.message}); a host crash could ` +
+            this.fault(`could not fsync the window-store directory (${e.message}); a host crash could ` +
                 'still lose the most recent charge', { stateFile: this._stateFile });
         }
     }

@@ -86,7 +86,7 @@ function reclaimStaleLock(lockFile, pid) {
     // constructors return, both stores hold the file, and because each
     // rewrites the whole file from its own cache they discard each
     // other's consumption history and silently restore the full
-    // spending budget. _publishLock's hardlink atomicity covers
+    // spending budget. publishLock's hardlink atomicity covers
     // publication, not reclamation, so it never saw this.
     //
     // rename claims one directory entry atomically, so only one
@@ -156,11 +156,11 @@ class WindowStore {
         // file, both read back as a plausible holder.
         this._lockNonce = crypto.randomBytes(16).toString('hex');
         this._init = opts.init === true;
-        if (opts.lock !== false) this._acquireLock();
+        if (opts.lock !== false) this.acquireLock();
         // Load EAGERLY so an absent or unreadable window is a startup failure the
         // operator sees at boot, not a surprise on the first co-sign request.
         try {
-            this._load();
+            this.load();
         } catch (e) {
             this.release();
             throw e;
@@ -182,8 +182,8 @@ class WindowStore {
     //
     // Falls back to the old create-then-write on mounts with no hardlink support
     // (some network and FUSE filesystems), where the empty-file window returns and
-    // the fail-closed unreadable-holder branch in _acquireLock is what covers it.
-    _publishLock(lockFile) {
+    // the fail-closed unreadable-holder branch in acquireLock is what covers it.
+    publishLock(lockFile) {
         const tmp    = `${lockFile}.${process.pid}.tmp`;
         // `pid` and `t` keep their exact shape: external tooling reads them. The
         // nonce is additive, and is what assertLockOwned compares against.
@@ -210,7 +210,7 @@ class WindowStore {
     }
 
     // Exclusive advisory lock: a lockfile carrying the holder's pid, published
-    // atomically by _publishLock so it is never observable empty or half-written.
+    // atomically by publishLock so it is never observable empty or half-written.
     // A lockfile whose recorded pid is PROVABLY not alive is a crash leftover and
     // is taken over (with a loud note), because refusing to start after a crash
     // would turn a liveness blip into an operator-only recovery.
@@ -219,12 +219,12 @@ class WindowStore {
     // the lock: "I cannot tell who holds this" and "nobody holds this" are different
     // answers, and only the second one makes taking it over safe. Fail closed and
     // make the operator look, because the failure this guards is silent budget reset.
-    _acquireLock() {
+    acquireLock() {
         const lockFile = this._stateFile + '.lock';
         fs.mkdirSync(path.dirname(this._stateFile), { recursive: true });
         for (let attempt = 0; attempt < 2; attempt++) {
             try {
-                this._publishLock(lockFile);
+                this.publishLock(lockFile);
                 this._lockFile = lockFile;
                 HELD_LOCKS.add(lockFile);
                 installExitHook();
@@ -303,13 +303,13 @@ class WindowStore {
             `(the lock at ${this._lockFile} names another holder). Writing the window from this store's ` +
             `cache would discard another daemon's consumption history and re-open the spending budget; ` +
             `refusing. Confirm which daemon owns this state file.`;
-        this._fault(message, { stateFile: this._stateFile, lockFile: this._lockFile });
+        this.fault(message, { stateFile: this._stateFile, lockFile: this._lockFile });
         const err = new Error(message);
         err.code = 'WINDOW_STORE_FENCED';
         throw err;
     }
 
-    _fault(message, context) {
+    fault(message, context) {
         if (this._onFault) {
             try { this._onFault(message, context); return; } catch (e) { /* observer must never break enforcement */ }
         }

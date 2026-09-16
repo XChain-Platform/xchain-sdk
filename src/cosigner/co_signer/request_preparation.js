@@ -30,22 +30,22 @@ function readRequest(self, req) {
         psbt = (typeof req.psbt === 'string')
             ? bitcoin.Psbt.fromHex(req.psbt, self.network ? { network: self.network } : undefined)
             : req.psbt;
-    } catch (e) { return { denial: self._deny('PSBT_PARSE_FAILED', e.message) }; }
-    if (!psbt) return { denial: self._deny('NO_PSBT') };
+    } catch (e) { return { denial: self.deny('PSBT_PARSE_FAILED', e.message) }; }
+    if (!psbt) return { denial: self.deny('NO_PSBT') };
 
     const inputs = req.inputs;
     if (!Array.isArray(inputs) || inputs.length === 0)
-        return { denial: self._deny('NO_INPUTS_REQUESTED') };
+        return { denial: self.deny('NO_INPUTS_REQUESTED') };
 
     // G14, before ANY per-input work: cap the requested count and the PSBT's
     // total input count. The second matters as much as the first, because the
     // BIP341 sighash commits to every prevout, so a one-element request against
     // a 5000-input PSBT still costs the full quadratic walk.
     if (inputs.length > self.maxCosignInputs)
-        return { denial: self._deny('TOO_MANY_INPUTS',
+        return { denial: self.deny('TOO_MANY_INPUTS',
             { requested: inputs.length, max: self.maxCosignInputs }) };
     if (psbt.txInputs.length > self.maxCosignInputs)
-        return { denial: self._deny('TOO_MANY_INPUTS',
+        return { denial: self.deny('TOO_MANY_INPUTS',
             { psbtInputs: psbt.txInputs.length, max: self.maxCosignInputs }) };
     return { psbt, inputs };
 }
@@ -60,15 +60,15 @@ function validateInputs(self, psbt, inputs) {
     for (const it of inputs) {
         const i = it.index;
         if (!Number.isInteger(i) || i < 0 || i >= psbt.txInputs.length)
-            return { denial: self._deny('INPUT_INDEX_OUT_OF_RANGE', { index: i }) };
-        if (seenIdx.has(i)) return { denial: self._deny('DUPLICATE_INPUT_INDEX', { index: i }) };
+            return { denial: self.deny('INPUT_INDEX_OUT_OF_RANGE', { index: i }) };
+        if (seenIdx.has(i)) return { denial: self.deny('DUPLICATE_INPUT_INDEX', { index: i }) };
         seenIdx.add(i);
         const wu = psbt.data.inputs[i] && psbt.data.inputs[i].witnessUtxo;
         if (!wu || !wu.script)
-            return { denial: self._deny('CANNOT_CHECK_OUTPUTS', 'missing witnessUtxo for input ' + i) };
+            return { denial: self.deny('CANNOT_CHECK_OUTPUTS', 'missing witnessUtxo for input ' + i) };
         if (accountScript === null) accountScript = wu.script;
         else if (!wu.script.equals(accountScript))
-            return { denial: self._deny('MIXED_INPUT_SCRIPTS', { index: i }) };
+            return { denial: self.deny('MIXED_INPUT_SCRIPTS', { index: i }) };
     }
     return { seenIdx };
 }
@@ -96,7 +96,7 @@ function deriveEnvelope(self, req, psbt) {
             script = Buffer.isBuffer(req.envelope.script)
                 ? req.envelope.script : Buffer.from(String(req.envelope.script), 'hex');
         } catch (e) {
-            return { denial: self._deny('ENVELOPE_SCRIPT_INVALID', 'envelope.script is not hex') };
+            return { denial: self.deny('ENVELOPE_SCRIPT_INVALID', 'envelope.script is not hex') };
         }
         let commit;
         try {
@@ -106,12 +106,12 @@ function deriveEnvelope(self, req, psbt) {
                 recoveryLeaves: self.tapTree ? self.tapTree.recovery : null,
                 network:        self.network || undefined,
             });
-        } catch (e) { return { denial: self._deny('ENVELOPE_SCRIPT_INVALID', e.message) }; }
+        } catch (e) { return { denial: self.deny('ENVELOPE_SCRIPT_INVALID', e.message) }; }
         const role = classifyEnvelopeRole(psbt, commit);
         // No role means the PSBT neither funds this envelope nor spends its
         // commit: the script would be decoration, and the action it declares
         // would be one the transaction never carries.
-        if (!role) return { denial: self._deny('ENVELOPE_NOT_COMMITTED',
+        if (!role) return { denial: self.deny('ENVELOPE_NOT_COMMITTED',
             'this PSBT neither creates nor spends the commit output this envelope script derives') };
         env = { commit, role, script };
     }
@@ -119,8 +119,8 @@ function deriveEnvelope(self, req, psbt) {
 }
 
 // The txid of the COMMIT a reveal spends, or null. §3.5 pins the commit outpoint
-// at input 0 (the decoder's recognition depends on it, and _checkPrevouts and
-// _checkSource both rely on the same placement), so the commit txid is input 0's
+// at input 0 (the decoder's recognition depends on it, and checkPrevouts and
+// checkSource both rely on the same placement), so the commit txid is input 0's
 // prevout hash, byte-reversed into display order the way the window store records
 // it. Best-effort: a malformed PSBT returns null and the caller keeps the full
 // window projection rather than guessing.
@@ -145,7 +145,7 @@ function evaluateRequest(self, psbt, env) {
     const decoded = (env && (env.role === 'commit' || env.role === 'cancel'))
         ? decodeEnvelopeAction(env.script)
         : decodeActionFromPsbt(psbt, { network: self.network });
-    if (!decoded.ok) return { denial: self._deny('DECODE_' + decoded.reason, decoded.detail) };
+    if (!decoded.ok) return { denial: self.deny('DECODE_' + decoded.reason, decoded.detail) };
 
     // 3. Policy, against the server-side window snapshot. The decoded VERSION
     //    is passed too: the evaluator needs the exact (action, version) to know
@@ -160,7 +160,7 @@ function evaluateRequest(self, psbt, env) {
     //    from allowedActions) permanently strands whatever sits in an
     //    unrevealed commit, turning a recovery path into a way to lose funds.
     //    "Publishes no action at all" is a premise the OUTPUT GATE has to keep
-    //    true: _checkOutputs refuses every OP_RETURN on an envelope role, so a
+    //    true: checkOutputs refuses every OP_RETURN on an envelope role, so a
     //    cancel cannot carry one. Weaken that refusal and this skip becomes an
     //    unjudged signing path.
     //
@@ -186,11 +186,11 @@ function evaluateRequest(self, psbt, env) {
     if (!env || env.role !== 'cancel') {
         verdict = evaluatePolicy(self.policy,
             { action: decoded.action, version: decoded.version, params: decoded.params }, windowUsage);
-        if (!verdict.ok) return { denial: self._deny(verdict.violation.code, verdict.violation.details) };
+        if (!verdict.ok) return { denial: self.deny(verdict.violation.code, verdict.violation.details) };
 
         // 4. Confirm-required actions: a headless daemon cannot prompt, so deny by default.
         if (verdict.evaluation.needsConfirmation && !self.allowConfirmable)
-            return { denial: self._deny('CONFIRMATION_REQUIRED',
+            return { denial: self.deny('CONFIRMATION_REQUIRED',
                 { action: decoded.action, amount: verdict.evaluation.amount }) };
     }
     return { decoded, verdict };

@@ -48,7 +48,7 @@ function exactU64(v) {
 
 // The five standard single-recipient payment templates. Anything else - bare
 // multisig above all - is refused as an allowedOutputs entry (see
-// _normalizeAllowedOutputs, G7). Matching is structural, on the decompiled
+// normalizeAllowedOutputs, G7). Matching is structural, on the decompiled
 // script, so it cannot be fooled by an address encoding.
 function isStandardPaymentScript(script) {
     if (!Buffer.isBuffer(script)) return false;
@@ -100,9 +100,9 @@ function inspectDataCarrier(coSigner, out, index, env) {
     let decomp = null;
     try { decomp = bitcoin.script.decompile(out.script); } catch (e) { /* non-standard */ }
     if (!decomp || decomp[0] !== bitcoin.opcodes.OP_RETURN) return { handled: false };
-    if (env) return { handled: true, denial: coSigner._deny('ENVELOPE_MIXED_CARRIER', { index }) };
+    if (env) return { handled: true, denial: coSigner.deny('ENVELOPE_MIXED_CARRIER', { index }) };
     if (Number(out.value) > 0)
-        return { handled: true, denial: coSigner._deny('OP_RETURN_CARRIES_VALUE', { index, value: out.value }) };
+        return { handled: true, denial: coSigner.deny('OP_RETURN_CARRIES_VALUE', { index, value: out.value }) };
     return { handled: true, denial: null };
 }
 
@@ -114,15 +114,15 @@ function inspectDataCarrier(coSigner, out, index, env) {
 //      would be a second, ungated envelope on the same transaction.
 function checkEnvelopeCommitOutput(coSigner, out, index, commitOutputsSeen) {
     if (commitOutputsSeen > 0)
-        return coSigner._deny('UNAUTHORIZED_OUTPUT', { index, detail: 'more than one envelope commit output' });
+        return coSigner.deny('UNAUTHORIZED_OUTPUT', { index, detail: 'more than one envelope commit output' });
     if (coSigner.maxFeeSats === null)
-        return coSigner._deny('ENVELOPE_COMMIT_UNBOUNDED',
+        return coSigner.deny('ENVELOPE_COMMIT_UNBOUNDED',
             'an envelope commit prefunds the reveal fee, so maxFeeSats must be set to bound it');
     // Same exact-u64 comparison as the allowed-output caps below:
     // a value Number() cannot hold exactly must not be compared as a Number.
-    const commitValue = coSigner._toU64(out.value);
+    const commitValue = coSigner.toU64(out.value);
     if (commitValue === null || commitValue > coSigner.maxFeeSats)
-        return coSigner._deny('OUTPUT_OVER_CAP',
+        return coSigner.deny('OUTPUT_OVER_CAP',
             { index, value: String(out.value), maxValue: String(coSigner.maxFeeSats), detail: 'envelope commit output' });
     return null;
 }
@@ -131,22 +131,22 @@ function checkEnvelopeCommitOutput(coSigner, out, index, commitOutputsSeen) {
 function checkAllowedOutput(coSigner, out, index, match, spent) {
     // Exact u64 arithmetic end to end: a value this policy
     // cannot represent exactly is refused rather than rounded into the cap.
-    const value = coSigner._toU64(out.value);
+    const value = coSigner.toU64(out.value);
     if (value === null)
-        return coSigner._deny('OUTPUT_OVER_CAP',
+        return coSigner.deny('OUTPUT_OVER_CAP',
             { index, value: String(out.value), maxValue: String(match.maxValue), detail: 'output value is not an exact non-negative integer' });
     const total = (spent.get(match) || 0n) + value;
     spent.set(match, total);
     // maxValue is mandatory since G7, so this is always a real bound.
     if (total > match.maxValue)
-        return coSigner._deny('OUTPUT_OVER_CAP', { index, value: String(out.value), total: String(total), maxValue: String(match.maxValue) });
+        return coSigner.deny('OUTPUT_OVER_CAP', { index, value: String(out.value), total: String(total), maxValue: String(match.maxValue) });
     return null;
 }
 
 module.exports = {
     // Normalize the allow-list once at construction (throws on bad config, never at
     // sign time). Each entry: { address | script, maxValue? }.
-    _normalizeAllowedOutputs(list) {
+    normalizeAllowedOutputs(list) {
         if (!Array.isArray(list)) throw new Error('allowedOutputs must be an array');
         return list.map((o, i) => {
             let script;
@@ -185,7 +185,7 @@ module.exports = {
             // BigInt, not Number: satoshi caps are u64, and Number(9007199254740993n)
             // is 9007199254740992, so an output ONE unit above a >2^53 cap compared
             // equal and was approved. The rest of this file already reconciles fees
-            // in BigInt for the same reason (see _toU64).
+            // in BigInt for the same reason (see toU64).
             const maxValue = exactU64(o.maxValue);
             if (maxValue === null)
                 throw new Error(`allowedOutputs[${i}].maxValue must be a non-negative integer (number, bigint, or digit string)`);
@@ -206,10 +206,10 @@ module.exports = {
     // all), and on a REVEAL/CANCEL "change back to self" means the ACCOUNT
     // script rather than the input's own script, which is the one-shot commit
     // output and must never be treated as a safe place to return value to.
-    _checkOutputs(psbt, idx, env) {
+    checkOutputs(psbt, idx, env) {
         const inp = psbt.data.inputs[idx];
         if (!inp || !inp.witnessUtxo || !inp.witnessUtxo.script)
-            return this._deny('CANNOT_CHECK_OUTPUTS', 'signed input has no witnessUtxo');
+            return this.deny('CANNOT_CHECK_OUTPUTS', 'signed input has no witnessUtxo');
         const accountScript = env ? this.accountScript : inp.witnessUtxo.script;
         // Running total PER allow-list entry, so N outputs matching the SAME
         // entry are capped on their sum, not each independently (otherwise a
@@ -240,12 +240,12 @@ module.exports = {
                 continue;
             }
             // Anything else is an unauthorized native-coin drain.
-            return this._deny('UNAUTHORIZED_OUTPUT', { index: i, value: out.value });
+            return this.deny('UNAUTHORIZED_OUTPUT', { index: i, value: out.value });
         }
         return null;
     },
 
-    // Anti-burn gate: _checkOutputs blocks value DIVERSION, but the action string
+    // Anti-burn gate: checkOutputs blocks value DIVERSION, but the action string
     // never constrains the miner FEE, so a malicious agent can still burn the whole
     // account by omitting (or undersizing) the change output, leaving the entire
     // remainder = sum(inputs) - sum(outputs) to miners behind a benign in-policy
@@ -263,41 +263,41 @@ module.exports = {
     // bip174/bitcoinjs to carry satoshi values above 2^53-1 (e.g. large DOGE
     // UTXOs) as BigInt (see narrowU64). The arithmetic below is done entirely
     // in BigInt so a >2^53 value is neither rejected outright nor rounded.
-    _toU64(v) {
+    toU64(v) {
         if (typeof v === 'bigint') return v;
         if (typeof v === 'number' && Number.isInteger(v) && v >= 0) return BigInt(v);
         return null;
     },
 
-    _checkFee(psbt) {
+    checkFee(psbt) {
         let totalIn = 0n;
         for (let i = 0; i < psbt.txInputs.length; i++) {
             const wu = psbt.data.inputs[i] && psbt.data.inputs[i].witnessUtxo;
-            const v = wu ? this._toU64(wu.value) : null;
+            const v = wu ? this.toU64(wu.value) : null;
             if (v === null)
-                return this._deny('CANNOT_CHECK_FEE', 'input ' + i + ' has no witnessUtxo value');
+                return this.deny('CANNOT_CHECK_FEE', 'input ' + i + ' has no witnessUtxo value');
             totalIn += v;
         }
         let totalOut = 0n;
         for (const out of psbt.txOutputs) {
-            const v = this._toU64(out.value);
+            const v = this.toU64(out.value);
             if (v === null)
-                return this._deny('CANNOT_CHECK_FEE', 'non-numeric or non-integral output value');
+                return this.deny('CANNOT_CHECK_FEE', 'non-numeric or non-integral output value');
             totalOut += v;
         }
         const fee = totalIn - totalOut;
         if (fee < 0n)
-            return this._deny('OUTPUTS_EXCEED_INPUTS', { totalIn: totalIn.toString(), totalOut: totalOut.toString() });
+            return this.deny('OUTPUTS_EXCEED_INPUTS', { totalIn: totalIn.toString(), totalOut: totalOut.toString() });
         if (totalIn > 0n && totalOut === 0n)
-            return this._deny('FEE_BURNS_ENTIRE_INPUT', { totalIn: totalIn.toString(), fee: fee.toString() });
+            return this.deny('FEE_BURNS_ENTIRE_INPUT', { totalIn: totalIn.toString(), fee: fee.toString() });
         if (this.maxFeeSats !== null && fee > this.maxFeeSats)
-            return this._deny('FEE_EXCEEDS_CAP', { fee: fee.toString(), maxFeeSats: String(this.maxFeeSats) });
+            return this.deny('FEE_EXCEEDS_CAP', { fee: fee.toString(), maxFeeSats: String(this.maxFeeSats) });
         return null;
     },
 
-    // Anti-forgery gate: _checkOutputs/_checkFee both trust the caller-supplied
+    // Anti-forgery gate: checkOutputs/checkFee both trust the caller-supplied
     // witnessUtxo.script/value as ground truth for the account being spent, but
-    // never verify it actually IS this daemon's account before _recordBudget
+    // never verify it actually IS this daemon's account before recordBudget
     // permanently consumes velocity-window budget. A caller could hand a
     // witnessUtxo pointing at a foreign/attacker-chosen script, sail through
     // the output/fee gates (which only ever compare against that same
@@ -313,15 +313,15 @@ module.exports = {
     // leaf it has parsed and read the action out of, so it is equally proven to
     // belong to this account. Passing it explicitly keeps the gate a real check
     // in both cases rather than something the envelope path skips.
-    _checkPrevouts(psbt, indices, expectedScript) {
+    checkPrevouts(psbt, indices, expectedScript) {
         const expected = expectedScript || this.accountScript;
         for (const idx of indices) {
             const inp = psbt.data.inputs[idx];
             if (!inp || !inp.witnessUtxo || !inp.witnessUtxo.script)
-                return this._deny('CANNOT_CHECK_OUTPUTS', 'signed input has no witnessUtxo');
+                return this.deny('CANNOT_CHECK_OUTPUTS', 'signed input has no witnessUtxo');
             const got = inp.witnessUtxo.script;
             if (!got.equals(expected))
-                return this._deny('PREVOUT_NOT_OUR_ACCOUNT', {
+                return this.deny('PREVOUT_NOT_OUR_ACCOUNT', {
                     index:    idx,
                     expected: expected.toString('hex'),
                     got:      got.toString('hex'),

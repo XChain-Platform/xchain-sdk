@@ -101,7 +101,7 @@ function reconcileRecoveryFee(inputs, outputs) {
     // directions before signing anything.
     // Satoshi values are u64: Number() rounds above 2^53, so a >90M-DOGE account
     // reconciled here compared EQUAL to a short-changed output set, while the sighash
-    // below commits to the unrounded values (mirrors coSigner._toU64 / exactU64).
+    // below commits to the unrounded values (mirrors coSigner.toU64 / exactU64).
     let totalIn = 0n;
     for (const i of inputs) {
         const v = exactU64(i.value);

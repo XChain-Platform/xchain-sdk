@@ -25,8 +25,8 @@
  * therefore point wallet-owned value at an output of its choosing, or burn the whole
  * balance as fee, behind an action string that reads as benign.
  *
- * The daemon co-signer already reconciles its own side (co_signer.js _checkOutputs /
- * _checkFee); this is the same discipline for the single-WIF path, which has no
+ * The daemon co-signer already reconciles its own side (co_signer.js checkOutputs /
+ * checkFee); this is the same discipline for the single-WIF path, which has no
  * daemon in it. Rules are chosen to be false-positive-free: every authorization is
  * read out of the PSBT itself or out of the caller's own submitted intent, never
  * guessed from the encoder's answer.

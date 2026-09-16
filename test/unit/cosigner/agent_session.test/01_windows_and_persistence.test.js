@@ -229,7 +229,7 @@ describe('AgentSession (policy-bounded wallet)', () => {
     });
 
     // Keys outlive the spend window, on their own horizon: the duplicate guard reads
-    // the _pruned() list, so dropping every entry past maxPerWindow.hours lets an
+    // the pruned() list, so dropping every entry past maxPerWindow.hours lets an
     // identical retry one window later broadcast and pay a SECOND time while
     // submit_action advertises at-most-once.
     it('remembers an idempotency key past the spend window', async () => {

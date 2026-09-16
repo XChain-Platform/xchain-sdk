@@ -26,11 +26,11 @@
  *   - The message signed is DERIVED from the PSBT (the BIP341 key-path
  *     sighash), never trusted from the caller. So the caller cannot show
  *     a benign PSBT for policy yet obtain a signature over a different tx.
- *   - The tx OUTPUTS are gated too (_checkOutputs): the action string can't
+ *   - The tx OUTPUTS are gated too (checkOutputs): the action string can't
  *     constrain where the native coin goes, so only the OP_RETURN carrier,
  *     change back to the spent account, and operator-authorized outputs are
  *     allowed. This blocks a benign-action-with-drain-output craft.
- *   - The miner FEE is reconciled too (_checkFee): the action string never
+ *   - The miner FEE is reconciled too (checkFee): the action string never
  *     constrains the fee, so an omitted/undersized change output would hand the
  *     whole account balance to miners as fee. The daemon computes
  *     sum(inputs) - sum(outputs) from the mandatory witnessUtxos and refuses a
@@ -101,14 +101,14 @@ class CoSigner {
         this.allowConfirmable = config.allowConfirmable === true;
         // Operator-authorized non-change outputs (COINPAY native legs, the
         // protocol-fee output). Everything NOT in this set, change-to-self, or the
-        // OP_RETURN carrier is treated as a drain and refused (see _checkOutputs).
-        this.allowedOutputs = this._normalizeAllowedOutputs(config.allowedOutputs || []);
+        // OP_RETURN carrier is treated as a drain and refused (see checkOutputs).
+        this.allowedOutputs = this.normalizeAllowedOutputs(config.allowedOutputs || []);
         constructorSetup.setLimits(this, config, DEFAULT_MAX_COSIGN_INPUTS);
         this.musig = new MuSig2();
         constructorSetup.setAccount(this);
     }
 
-    _deny(reason, detail) { return { approved: false, reason, detail: detail || null }; }
+    deny(reason, detail) { return { approved: false, reason, detail: detail || null }; }
 
 }
 

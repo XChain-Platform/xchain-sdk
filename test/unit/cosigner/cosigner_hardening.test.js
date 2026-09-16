@@ -143,7 +143,7 @@ describe('G1: decoded params are untrusted input', function () {
     });
 
     it('a row with a non-finite timestamp is refused (it would be pruned away silently)', function () {
-        // _pruned filters on `e.t >= cutoff`; undefined >= n is false, so the row
+        // pruned filters on `e.t >= cutoff`; undefined >= n is false, so the row
         // vanishes from both count and perTick, handing back spent budget.
         const stateFile = tmpStateFile('nofinite-t');
         fs.writeFileSync(stateFile, JSON.stringify({ entries: [

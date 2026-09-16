@@ -62,7 +62,7 @@ function validatePolicy(policy) {
     if (policy.confirmAbove && typeof policy.confirmAbove.handler !== 'function')
         throw new SDKPolicyError('POLICY_INVALID', 'confirmAbove requires a handler function');
     // How long an idempotency key is REMEMBERED, which is not how long a spend
-    // window lasts (see _pruned).
+    // window lasts (see pruned).
     if (policy.idempotencyHours !== undefined
         && (!Number.isFinite(policy.idempotencyHours) || policy.idempotencyHours <= 0))
         throw new SDKPolicyError('POLICY_INVALID', 'idempotencyHours must be a positive number');
@@ -92,7 +92,7 @@ function validatePolicy(policy) {
 }
 function authorizeSubmission(session, evaluation, submitOpts) {
     // Record the window entry on AUTHORIZATION, before the irreversible broadcast,
-    // then patch in the real txid on success. Mirrors coSigner._recordBudget /
+    // then patch in the real txid on success. Mirrors coSigner.recordBudget /
     // windowStore ("consume the budget on authorization"): _submitInner can throw
     // AFTER the money has moved (a CONFIRMATION_TIMEOUT on the 120s indexer wait, a
     // P2SH phase-2 failure, a lost broadcast ACK), and if usage were recorded only
@@ -117,22 +117,22 @@ function authorizeSubmission(session, evaluation, submitOpts) {
     // argument; the alternative costs a duplicate payment. allowUnkeyedSubmits
     // restores the old behavior for a caller who has decided that is acceptable.
     if ((idempotencyKey === undefined || idempotencyKey === null) && !session.policy.allowUnkeyedSubmits)
-        session._deny('POLICY_IDEMPOTENCY_REQUIRED',
+        session.deny('POLICY_IDEMPOTENCY_REQUIRED',
             'a spend-capable submit needs a stable submitOpts.idempotencyKey so a retry after a lost ' +
             'acknowledgement is refused instead of paying twice. Set allowUnkeyedSubmits: true to opt out.',
             { action: evaluation.action });
     if (idempotencyKey !== undefined && idempotencyKey !== null) {
         const keyStr = String(idempotencyKey);
-        const prior = session._pruned().entries.find((e) => e.key === keyStr);
+        const prior = session.pruned().entries.find((e) => e.key === keyStr);
         if (prior)
-            session._deny('POLICY_DUPLICATE_SUBMIT',
+            session.deny('POLICY_DUPLICATE_SUBMIT',
                 `a submission with idempotencyKey ${keyStr} was already recorded` +
                 ` (keys are remembered for ${session.policy.idempotencyHours}h)` +
                 (prior.txid ? ` (txid ${prior.txid})` : '') +
                 '; not broadcasting again. Resume the existing payment instead of retrying.',
                 { idempotencyKey: keyStr, txid: prior.txid || null });
     }
-    return session._recordUsage(evaluation, null, idempotencyKey);
+    return session.recordUsage(evaluation, null, idempotencyKey);
 }
 class AgentSession extends WalletSession {
     constructor(sdk, wif, policy = {}, opts = {}) {
@@ -186,8 +186,8 @@ class AgentSession extends WalletSession {
     // Is a halt in force? The file is re-read on EVERY submit rather than cached:
     // the point of the switch is that an operator can drop it beside a session
     // that is already running, so a cached answer would defeat it. A read error
-    // other than "absent" halts too (fail-closed, matching _loadUsage).
-    _haltReason() {
+    // other than "absent" halts too (fail-closed, matching loadUsage).
+    haltReason() {
         if (this.paused) return 'this session is paused (resume() to continue)';
         try {
             fs.accessSync(this._killSwitchFile);
@@ -200,7 +200,7 @@ class AgentSession extends WalletSession {
 
     /* ── policy evaluation ─────────────────────────────────────────── */
 
-    _deny(code, message, details) {
+    deny(code, message, details) {
         const violation = Object.assign({ code, message, address: this.address }, details);
         if (this.policy.onPolicyViolation) {
             try { this.policy.onPolicyViolation(violation); } catch (e) { /* observer must never break enforcement */ }
@@ -208,19 +208,19 @@ class AgentSession extends WalletSession {
         throw new SDKPolicyError(code, message, violation);
     }
 
-    _evaluate(actionData) {
+    evaluate(actionData) {
         // Pass the live window snapshot to the pure evaluator (it does no I/O).
         // Only read the window when the policy actually has a window rule.
         const windowUsage = this.policy.maxPerWindow ? this._windowUsage() : undefined;
         const verdict = evaluatePolicy(this.policy, actionData, windowUsage);
         if (!verdict.ok)
-            this._deny(verdict.violation.code, verdict.violation.message, verdict.violation.details);
+            this.deny(verdict.violation.code, verdict.violation.message, verdict.violation.details);
         return verdict.evaluation;
     }
 
     /* ── window persistence ────────────────────────────────────────── */
 
-    _loadUsage() {
+    loadUsage() {
         if (this._usage) return this._usage;
         try {
             if (fs.existsSync(this._stateFile)) {
@@ -247,8 +247,8 @@ class AgentSession extends WalletSession {
     // amount are dropped so an aged-out row can never be summed into a spend cap
     // even if some future caller sums the raw list. _windowUsage() filters by the
     // window cutoff regardless, which is the belt to this brace.
-    _pruned() {
-        const usage = this._loadUsage();
+    pruned() {
+        const usage = this.loadUsage();
         const win = this.policy.maxPerWindow;
         if (win) {
             const now = Date.now();
@@ -281,13 +281,13 @@ class AgentSession extends WalletSession {
     // future amount-without-TICK shape). Skipping them made a wildcard window cap
     // read a used total of '0' forever, binding each transaction independently.
     //
-    // The window cutoff is applied HERE as well as in _pruned(), because _pruned()
+    // The window cutoff is applied HERE as well as in pruned(), because pruned()
     // now retains aged-out keyed rows for the at-most-once guard. Counting those
     // rows would let a spent-and-expired submission keep consuming maxActions and
     // perTick budget forever, which is the one way this retention could deny a
     // legitimate payment.
     _windowUsage() {
-        const usage = this._pruned();
+        const usage = this.pruned();
         const win = this.policy.maxPerWindow;
         const cutoff = win ? Date.now() - win.hours * 3600 * 1000 : -Infinity;
         const inWindow = usage.entries.filter((e) => e.t >= cutoff);
@@ -303,8 +303,8 @@ class AgentSession extends WalletSession {
 
     // Append one window entry and persist. Returns the pushed entry (a live reference
     // into this._usage) so the caller can patch its txid in once the broadcast lands.
-    _recordUsage(evaluation, txid, key) {
-        const usage = this._pruned();
+    recordUsage(evaluation, txid, key) {
+        const usage = this.pruned();
         const entry = {
             t: Date.now(), action: evaluation.action,
             tick: evaluation.tick, amount: evaluation.amount, txid,
@@ -313,7 +313,7 @@ class AgentSession extends WalletSession {
         // byte-identical to the legacy shape when the feature is unused.
         if (key !== undefined && key !== null) entry.key = String(key);
         usage.entries.push(entry);
-        this._persistUsage(usage);
+        this.persistUsage(usage);
         return entry;
     }
 
@@ -321,13 +321,13 @@ class AgentSession extends WalletSession {
     // the broadcast succeeds. `entry` is a live reference inside this._usage (submits
     // are serialized on _submitTail, so nothing re-prunes it between record and patch),
     // so mutate it in place and re-persist. No-op when there is no txid to record.
-    _patchUsageTxid(entry, txid) {
+    patchUsageTxid(entry, txid) {
         if (!entry || !txid) return;
         entry.txid = txid;
-        this._persistUsage(this._usage);
+        this.persistUsage(this._usage);
     }
 
-    _persistUsage(usage) {
+    persistUsage(usage) {
         fs.mkdirSync(path.dirname(this._stateFile), { recursive: true });
         const tmp = this._stateFile + '.tmp';
         fs.writeFileSync(tmp, JSON.stringify(usage));
@@ -338,8 +338,8 @@ class AgentSession extends WalletSession {
     /* ── enforcement chokepoint ────────────────────────────────────── */
 
     async submit(actionData, encoderOpts = {}, submitOpts = {}) {
-        // The window-cap check (_evaluate reads the usage window) and the record
-        // (_recordUsage writes it) must be atomic with the broadcast, or two
+        // The window-cap check (evaluate reads the usage window) and the record
+        // (recordUsage writes it) must be atomic with the broadcast, or two
         // concurrent submits both evaluate against the same pre-record snapshot,
         // both pass, and together exceed maxPerWindow (maxActions / per-tick caps)
         // -- silently defeating the bounded-blast-radius the AgentSession exists
@@ -347,19 +347,19 @@ class AgentSession extends WalletSession {
         // per-session tail (the parent's submit uses the same tail). We call the
         // parent's UNLOCKED _submitInner inside, not super.submit, so we don't
         // re-enqueue on the tail we already hold (which would deadlock).
-        let run = this._submitTail.then(() => this._enforceAndSubmit(actionData, encoderOpts, submitOpts));
+        let run = this._submitTail.then(() => this.enforceAndSubmit(actionData, encoderOpts, submitOpts));
         this._submitTail = run.then(() => {}, () => {});
         return run;
     }
 
-    async _enforceAndSubmit(actionData, encoderOpts, submitOpts) {
+    async enforceAndSubmit(actionData, encoderOpts, submitOpts) {
         // FIRST, before evaluation, budget consumption or any broadcast: a halted
         // session must refuse without side effects.
-        const halt = this._haltReason();
+        const halt = this.haltReason();
         if (halt)
-            this._deny('POLICY_HALTED', `AgentSession is halted: ${halt}`, { killSwitchFile: this._killSwitchFile });
+            this.deny('POLICY_HALTED', `AgentSession is halted: ${halt}`, { killSwitchFile: this._killSwitchFile });
 
-        const evaluation = this._evaluate(actionData);
+        const evaluation = this.evaluate(actionData);
 
         if (evaluation.needsConfirmation) {
             const ok = await this.policy.confirmAbove.handler({
@@ -368,7 +368,7 @@ class AgentSession extends WalletSession {
                 windowUsage: this._windowUsage(),
             });
             if (!ok)
-                this._deny('POLICY_CONFIRMATION_DENIED',
+                this.deny('POLICY_CONFIRMATION_DENIED',
                     `${evaluation.action} of ${evaluation.amount} ${evaluation.tick || ''} was not confirmed`,
                     { action: evaluation.action, tick: evaluation.tick, amount: evaluation.amount });
         }
@@ -381,10 +381,10 @@ class AgentSession extends WalletSession {
             // A throw AFTER broadcast carries the txid (e.g. CONFIRMATION_TIMEOUT).
             // Patch it onto the provisional entry so the audit record is not left
             // with txid:null and a later duplicate-key refusal can return it.
-            if (err && err.details && err.details.txid) this._patchUsageTxid(entry, err.details.txid);
+            if (err && err.details && err.details.txid) this.patchUsageTxid(entry, err.details.txid);
             throw err;
         }
-        this._patchUsageTxid(entry, result && result.txid);
+        this.patchUsageTxid(entry, result && result.txid);
 
         // Surface what was evaluated so callers (MCP write tools) can report
         // remaining budget without re-deriving policy state.

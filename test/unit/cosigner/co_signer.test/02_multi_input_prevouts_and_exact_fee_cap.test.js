@@ -141,8 +141,8 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
 describe('CoSigner (MuSig2 hard-enforcement service)', function () {
     // Anti-forgery: a witnessUtxo.script that isn't the daemon's own derived
     // account must be denied (PREVOUT_NOT_OUR_ACCOUNT), and denial must consume
-    // no velocity-window budget (see co_signer.js _checkPrevouts).
-    it('denies a foreign witnessUtxo.script with PREVOUT_NOT_OUR_ACCOUNT, before _checkOutputs would otherwise pass it', function () {
+    // no velocity-window budget (see co_signer.js checkPrevouts).
+    it('denies a foreign witnessUtxo.script with PREVOUT_NOT_OUR_ACCOUNT, before checkOutputs would otherwise pass it', function () {
         const acct = makeAccount();
         const foreignSk = crypto.randomBytes(32);
         const foreignPk = secp256k1.getPublicKey(foreignSk, true);
@@ -150,7 +150,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         const psbt = buildSignablePsbt(acct, 'SEND|0|TOK|1|1destX|m');
         // Overwrite the witnessUtxo to point at a DIFFERENT (foreign) account's
         // script, while everything else (action, change output) still looks benign
-        // to _checkOutputs/_checkFee because they only ever compare against the
+        // to checkOutputs/checkFee because they only ever compare against the
         // same caller-supplied script.
         psbt.data.inputs[0].witnessUtxo.script = foreignAggAcct.p2trScript;
         const agentNonce = new MuSig2().generateNonce({ publicKey: acct.agentPk, secretKey: acct.agentSk });

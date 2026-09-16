@@ -139,7 +139,7 @@ function setTapTree(self, config) {
     }
 }
 
-// Anti-burn fee reconciliation (see _checkFee). maxFeeSats is an optional
+// Anti-burn fee reconciliation (see checkFee). maxFeeSats is an optional
 // operator-set absolute cap (satoshis). It is the only bound that can
 // safely be tightened past the always-on guards, because a legitimate fee
 // fraction is chain-specific (a low-unit-value chain can pay ~all of a
@@ -149,7 +149,7 @@ function setTapTree(self, config) {
 // below compare in BigInt, so a Number() hop rounded the cap BEFORE it was
 // enforced and the daemon could approve a fee above what the operator set.
 // This is the same parse allowedOutputs[].maxValue already uses; the cap is
-// now a BigInt, so the two _deny details that embed it stringify it.
+// now a BigInt, so the two deny details that embed it stringify it.
 // G14: the body-size limit bounds BYTES, not WORK. Sighash derivation
 // re-copies every prevout script and value per signed input, so the cost is
 // quadratic in the PSBT's input count, plus one deterministicSign each. A
@@ -172,7 +172,7 @@ function setLimits(self, config, defaultMaxCosignInputs) {
 
 // The account scriptPubKey this daemon actually spends from, derived ONLY
 // from the participant keys, never trusted from a caller-supplied
-// witnessUtxo.script (see _checkPrevouts). Covers both the plain 2-of-2 key
+// witnessUtxo.script (see checkPrevouts). Covers both the plain 2-of-2 key
 // path (no tweak) and the tweaked 2-of-3 cooperative key path, whose tweak
 // this constructor derived above from the three participant keys.
 //
