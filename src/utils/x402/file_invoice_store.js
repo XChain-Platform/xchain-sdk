@@ -54,7 +54,7 @@ class FileInvoiceStore {
         this.dir = dir;
         this._locks = new Map();    // nonce -> tail Promise (per-nonce mutex)
     }
-    _file(nonce, createdAt) {
+    invoicePath(nonce, createdAt) {
         const day = new Date(createdAt).toISOString().slice(0, 10);
         return path.join(this.dir, day, nonce + '.json');
     }
@@ -65,7 +65,7 @@ class FileInvoiceStore {
         return next;
     }
     async create(invoice) {
-        const file = this._file(invoice.nonce, invoice.createdAt);
+        const file = this.invoicePath(invoice.nonce, invoice.createdAt);
         fs.mkdirSync(path.dirname(file), { recursive: true });
         fs.writeFileSync(file + '.tmp', JSON.stringify(invoice));
         fs.renameSync(file + '.tmp', file);
