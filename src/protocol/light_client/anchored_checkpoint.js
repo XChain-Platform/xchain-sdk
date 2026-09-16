@@ -38,7 +38,7 @@
 
 const checkpoint = require('../../checkpoint.js');
 const ckptCommit = require('../../checkpoint_commitment_activation.js');
-const { _hx, _fetch, _base, _json } = require('./fetch_helpers.js');
+const { _hx, _fetch, baseUrl, _json } = require('./fetch_helpers.js');
 const { resolveValidatorSet } = require('./quorum_resolution.js');
 
 // Default DOGE confirmation depth a cold-start anchor must be buried under before
@@ -257,7 +257,7 @@ async function fetchAnchoredCheckpoint(opts){
     const f = _fetch(opts.fetchImpl);
     const dogeCoin = opts.dogeCoin || 'DOGE';
     const minDepth = (opts.minDepth != null) ? Number(opts.minDepth) : DEFAULT_ANCHOR_MIN_DEPTH;
-    const url = _base(opts.explorerUrl) + '/' + encodeURIComponent(String(dogeCoin)) +
+    const url = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(dogeCoin)) +
                 '/api/anchors/' + encodeURIComponent(String(opts.targetChain)) + '/chain';
     const body = await _json(f, url);
     let rows = Array.isArray(body) ? body : ((body && (body.data || body.results || body.rows)) || []);

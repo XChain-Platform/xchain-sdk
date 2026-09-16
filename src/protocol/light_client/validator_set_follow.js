@@ -40,14 +40,14 @@ const M          = require('../../merkle.js');
 const checkpoint = require('../../checkpoint.js');
 const swq        = require('../../stake_weighted_quorum.js');
 const srb        = require('../../snapshot_reorg_buffer.js');
-const { _fetch, _base, _json, scaled, _hx } = require('./fetch_helpers.js');
+const { _fetch, baseUrl, _json, scaled, _hx } = require('./fetch_helpers.js');
 const { verifyValidatorSetProof } = require('./proof_checks.js');
 
 // Network: fetch + verify the validator-set proof at BTC snapshot height S.
 async function verifyValidatorSet(opts){
     opts = opts || {};
     const f = _fetch(opts.fetchImpl);
-    const url = _base(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.btcCoin || 'BTC')) +
+    const url = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.btcCoin || 'BTC')) +
                 '/api/proof/validator-set?height=' + encodeURIComponent(String(opts.snapshotBlock));
     const body = await _json(f, url);
     if (!body || !body.proof) throw new Error('LightClient: no validator-set proof in response');
@@ -125,7 +125,7 @@ async function followForward(opts){
     const to   = Number(opts.toHeight != null ? opts.toHeight : trusted.block_index);
     const adopted = [];
     if (to >= from){
-        const rangeUrl = _base(opts.explorerUrl) + '/' + encodeURIComponent(String(btcCoin)) +
+        const rangeUrl = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(btcCoin)) +
                          '/api/checkpoints/range?from=' + from + '&to=' + to;
         const rangeBody = await _json(f, rangeUrl);
         const steps = (rangeBody && rangeBody.checkpoints) || [];

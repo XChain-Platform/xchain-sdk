@@ -42,7 +42,7 @@ const M = require('../../merkle.js');
 // adjacent indices above 2^53 onto one value, so the binding guards below would
 // match the neighbouring action or height they exist to reject.
 const { sameWireIndex } = require('../../utils/wire_index.js');
-const { _fetch, _base, _json, _hx } = require('./fetch_helpers.js');
+const { _fetch, baseUrl, _json, _hx } = require('./fetch_helpers.js');
 const { verifyBalanceProof, verifyLockedBalanceProof, verifyActionProof } = require('./proof_checks.js');
 const { resolveQuorum } = require('./quorum_resolution.js');
 
@@ -61,7 +61,7 @@ async function verifyBalance(opts){
     opts = opts || {};
     const f = _fetch(opts.fetchImpl);
     const hq = (opts.atHeight != null && opts.atHeight !== '') ? ('?height=' + encodeURIComponent(String(opts.atHeight))) : '';
-    const url = _base(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.coin)) +
+    const url = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.coin)) +
                 '/api/proof/balance/' + encodeURIComponent(String(opts.address)) +
                 '/' + encodeURIComponent(String(opts.tick)) + hq;
     const body = await _json(f, url);
@@ -147,7 +147,7 @@ async function verifyLockedBalance(opts){
     opts = opts || {};
     const f = _fetch(opts.fetchImpl);
     const hq = (opts.atHeight != null && opts.atHeight !== '') ? ('?height=' + encodeURIComponent(String(opts.atHeight))) : '';
-    const url = _base(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.coin)) +
+    const url = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.coin)) +
                 '/api/proof/locked-balance/' + encodeURIComponent(String(opts.address)) +
                 '/' + encodeURIComponent(String(opts.tick)) + hq;
     const body = await _json(f, url);
@@ -199,7 +199,7 @@ async function verifyLockedBalance(opts){
 async function verifyAction(opts){
     opts = opts || {};
     const f = _fetch(opts.fetchImpl);
-    const url = _base(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.coin)) +
+    const url = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.coin)) +
                 '/api/proof/action/' + encodeURIComponent(String(opts.actionIndex));
     const body = await _json(f, url);
     if (!body || !body.proof) throw new Error('LightClient: no proof in response');

@@ -38,7 +38,7 @@
 
 const checkpoint = require('../../checkpoint.js');
 const { sameWireIndex } = require('../../utils/wire_index.js');
-const { _base, _json, pinnedEntry, _hx } = require('./fetch_helpers.js');
+const { baseUrl, _json, pinnedEntry, _hx } = require('./fetch_helpers.js');
 const { followForward } = require('./validator_set_follow.js');
 
 // ── Trust: turn a server-served checkpoint into a quorum-verified one ──────────
@@ -71,10 +71,10 @@ function clearValidatorSetCache(){ validatorSetCache.clear(); }
 // jobs through a pool of 6) share one in-flight read instead of each firing a
 // request; a rejected fetch is evicted immediately so a blip is not pinned.
 async function explorerValidators(f, explorerUrl, coin, cp){
-    const key = _base(explorerUrl) + '|' + String(coin) + '|' + String(cp.block_index);
+    const key = baseUrl(explorerUrl) + '|' + String(coin) + '|' + String(cp.block_index);
     const cached = validatorSetCache.get(key);
     if (cached) return cached;
-    const url = _base(explorerUrl) + '/' + encodeURIComponent(String(coin)) +
+    const url = baseUrl(explorerUrl) + '/' + encodeURIComponent(String(coin)) +
                 '/api/checkpoint/' + encodeURIComponent(String(cp.block_index)) + '/verify';
     const p = _json(f, url).then((vb) => (vb && vb.validators) || []);
     p.catch(() => { validatorSetCache.delete(key); });
