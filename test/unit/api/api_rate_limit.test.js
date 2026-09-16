@@ -18,10 +18,12 @@
  * a valid, shared or leaked credential, and the batch cap bounds one request's
  * fan-out rather than the request rate.
  *
- * src/api/index.js starts a live server at require time, so these tests mount the
- * SHIPPED limiter from src/utils/api_guards.js (the same function src/api/index.js mounts)
- * rather than a copy of it, and a source check pins that api.js still mounts it
- * ahead of the auth gate and the router.
+ * These tests mount the SHIPPED limiter from src/utils/api_guards.js (the same
+ * function src/api/index.js mounts) rather than a copy of it, so the limiter is
+ * driven alone, without the SDK or the other guards in front of it, and a
+ * source check pins that api.js still mounts it ahead of the auth gate and the
+ * router. (src/api/index.js used to start a live server at require time; it now
+ * exports createApp and startApi and listens only as the CLI entry.)
  *
  ********************************************************************/
 

@@ -15,10 +15,12 @@
  * XChain Platform SDK - API bearer-token auth gate tests
  *
  * These mount the SHIPPED gate from src/utils/api_guards.js (the same function
- * src/api/index.js mounts), not a reconstruction of it: src/api/index.js starts a live
- * server at require time (dotenv.config() + app.listen(SDK_API_PORT)) and so
- * cannot be require()'d by a unit test, which is exactly why the guards live in
- * their own module. A copied middleware here would stay green while the shipped
+ * src/api/index.js mounts), not a reconstruction of it: mounting the guard alone
+ * drives it without the SDK, the controller or the other guards in front of it
+ * (src/api/index.js used to start a live server at require time, which is why
+ * the guards were first moved into their own module; it now exports createApp
+ * and startApi and listens only as the CLI entry, see api_listener.test.js).
+ * A copied middleware here would stay green while the shipped
  * gate regressed, and it did: the batch-smuggling rule the gate's own comment
  * justifies had no case at all, and the untyped method compare that answered an
  * HTML 500 on a pre-auth path was copied into the reconstruction verbatim.
