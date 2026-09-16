@@ -44,7 +44,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: XChain-Platform/xchain-hub
-          ref: ${{ github.ref == 'refs/heads/master' && 'master' || 'develop' }}
+          # Release-aware like the shared-workflow call above: on a release PR each
+          # canonical sibling is read at the sibling release branch, because develop
+          # keeps moving under the frozen train (the indexer handler map this gate
+          # grades is re-pinned at every indexer develop landing).
+          ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || (github.ref == 'refs/heads/master' && 'master' || 'develop') }}
           ssh-key: ${{ secrets.XCHAIN_HUB_DEPLOY_KEY }}
           path: xchain-hub
 
@@ -75,7 +79,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: XChain-Platform/xchain-explorer
-          ref: ${{ github.ref == 'refs/heads/master' && 'master' || 'develop' }}
+          # Release-aware like the shared-workflow call above: on a release PR each
+          # canonical sibling is read at the sibling release branch, because develop
+          # keeps moving under the frozen train (the indexer handler map this gate
+          # grades is re-pinned at every indexer develop landing).
+          ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || (github.ref == 'refs/heads/master' && 'master' || 'develop') }}
           ssh-key: ${{ secrets.XCHAIN_EXPLORER_DEPLOY_KEY }}
           path: xchain-explorer
 
@@ -105,7 +113,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: XChain-Platform/xchain-indexer
-          ref: ${{ github.ref == 'refs/heads/master' && 'master' || 'develop' }}
+          # Release-aware like the shared-workflow call above: on a release PR each
+          # canonical sibling is read at the sibling release branch, because develop
+          # keeps moving under the frozen train (the indexer handler map this gate
+          # grades is re-pinned at every indexer develop landing).
+          ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || (github.ref == 'refs/heads/master' && 'master' || 'develop') }}
           ssh-key: ${{ secrets.XCHAIN_INDEXER_DEPLOY_KEY }}
           path: xchain-indexer
 
