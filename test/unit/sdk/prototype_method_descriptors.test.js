@@ -38,7 +38,7 @@ const CLASSES = {
 };
 
 const BASE_DESCRIPTORS = Object.assign({},
-    require('./prototype_method_descriptors.test/fixtures/descriptors_95b10404.js'),
+    require('./prototype_method_descriptors.test/fixtures/descriptors_core.js'),
     require('./prototype_method_descriptors.test/fixtures/descriptors_clients.js'),
     require('./prototype_method_descriptors.test/fixtures/descriptors_utils_and_actions.js'));
 

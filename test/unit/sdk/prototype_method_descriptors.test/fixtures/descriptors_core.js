@@ -10,7 +10,8 @@
 
 'use strict';
 
-// Each prototype at sdk 95b10404, before the splits.
+// The expected descriptor rows per core prototype (WalletUtils, LifecycleManager,
+// Validator, CoSigner), kept current by every rename, not a frozen pre-split snapshot.
 // Rows are [key, enumerable, writable, configurable, typeof value, function length].
 
 module.exports = {
