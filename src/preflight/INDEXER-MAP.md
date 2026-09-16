@@ -70,7 +70,34 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `4d5e2d0a`
+**Pins taken at indexer commit:** `c5f9ba85`
+
+(Re-anchored 2026-09-15, seventh pass, by the activation-registry (W4) landing review below.
+`c5f9ba85` is the indexer tip that carries the W4 migration retiring five per-flag activation
+modules in favor of the shared registry aliased at `src/consensus/gate_registry.js` (itself
+`require('../protocol_changes')`): `consolidation_leg_amount_activation.js`,
+`gated_handoff_ref_activation.js`, `tick_namespace_activation.js`, `dispenser_freshness_activation.js`,
+`dispenser_freshness_shape_activation.js`, `dispenser_caps_activation.js`,
+`dispenser_give_amount_activation.js`, `dispenser_oracle_price_activation.js`,
+`dispenser_amount_positivity_activation.js` and `dispense_payment_tally_scale_activation.js`. Every
+call site that used to do `require('../../<name>_activation.js')` and call its own
+`is<Name>Active(...)` now calls `gateRegistry.activeAt('<name>_activation.<CONSTANT>', network,
+coin, blockIndex, blockTime)` (or `copy()`/`get()` for a bare constant), so five mapped
+directories drifted on a real byte change to a pre-existing handler file, not merely a moved
+comment: `send/legs.js`, `send/gated_handoff.js`, `destroy/legs.js`, `issue/wire.js`,
+`dispenser/index.js`, `dispenser/validate.js`, `dispenser/validate_format.js`,
+`dispense/context.js`, `dispense/index.js` and `dispense/pricing.js` each swap their require
+line and their gate-check call expression. `dispense/` additionally gains
+`dispense_payment_tally_scale_gate.js`, the old shared `src/dispense_payment_tally_scale_activation.js`
+moved INTO the handler directory and rewritten to read its three constants off the registry by
+key rather than declaring them locally, which is the one case in this pass where a NEW file
+landing inside a mapped directory would have moved that row's hash even had every pre-existing
+file stayed byte-identical. The registry rows carry the same per-network activation values the
+retired modules declared (this is the migration commit itself, already reviewed as part of the
+Activation Registry build; nothing here changes an activation window), so no client-visible
+validity logic moved and no `checks/` module needs an update - only the five hashes below. The
+other six rows (`mint`, `order`, `swap`, `airdrop`, `dividend`, `batch`) are byte-identical at
+`4d5e2d0a` and at `c5f9ba85`. `4d5e2d0a` stays reachable.)
 
 (Re-anchored 2026-09-15, sixth pass, by the `reserved_roots.js` rename review below. `4d5e2d0a`
 is the indexer landing tip that carries `cc462708`, the commit that renames
@@ -268,7 +295,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 4d5e2d0a..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff c5f9ba85..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -346,12 +373,12 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `caf45dac97d11cb095f70f35222a34000b69afd835d893cc0336374193cad6df` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `4fcdfcde260301108826174742501455501cc9017dee401a68cb6fe552a96f44` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `fb94d4c1808146cb427a0a02f8e277620f2f02a6fadb1b42d5b7f57c1812dfe4` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `6f15d0f22e60fe328ff12188f519281b88aa61114ef1163b07df3bbba63d2d8f` |
 | `checks/mint.js` | `src/actions/mint/` | `7c8992a06f9143b876c5eb7bc554dbbe5b2ca61507c44e822b5491b8571d1c06` |
-| `checks/issue.js` | `src/actions/issue/` | `e75a3af1927b73a09053393915716f6bb0d000d676b7ca28cd95d7042d845a3b` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `fa6a3c6a2c2bcb2fabbd0e34800e37db2ea15949496cf6f1526c990dff96add9` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `7a31e1580e936b19d4ff0ed0a8aa84ec37f5de1b2536488de58ea4e84197b1b4` |
+| `checks/issue.js` | `src/actions/issue/` | `848d23ebb5702f9b22d31a6be795d8b6177f565adf7fb1a26d525dcb331bf0ed` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `7f65cdaa58d433d3415f43f7b5997ae028baa00b6ba47fe38b11af392fcc04b9` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `66b5a180f0829cbfc25a1c1e7b8b698a376c89c0ced5e5237e4cbb5059243311` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `644dfe6951e78b653e185bb78201bfaeadc7b04eaab5cb7c1f4ffb2682b6cc79` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `b8e6753cccc7a4b1c6586c66a39faea3cf86718fcc989351ca32449386390d4c` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `47d5d14dcc26ae3d181118b692b8d879b809e4754a4268ef68579f6896ffbd74` |
