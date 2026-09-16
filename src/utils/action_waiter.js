@@ -50,18 +50,13 @@ class ActionWaiter {
     // Keep encoding on the shared SDK while waiting on an optional target explorer.
     constructor(sdk, opts = {}) {
         this.sdk = sdk;
-        this.explorer = ActionWaiter._buildExplorer(sdk, opts);
-    }
-
-    // Build an optional explorer override without changing network defaults.
-    static _buildExplorer(sdk, opts) {
-        return buildExplorer(sdk, opts);
+        this.explorer = buildExplorer(sdk, opts);
     }
 
     // Explorer this wait polls: per-call override, then the constructor
     // override, then the SDK's own (which throws when unconfigured).
     resolveExplorer(opts) {
-        let perCall = ActionWaiter._buildExplorer(this.sdk, opts);
+        let perCall = buildExplorer(this.sdk, opts);
         return perCall || this.explorer || this.sdk.requireExplorer();
     }
 
@@ -70,7 +65,7 @@ class ActionWaiter {
     // DIFFERENT stack: a targeted wait could otherwise settle from a foreign
     // event. Overridden waits poll only.
     explorerOverridden(opts) {
-        return !!(ActionWaiter._buildExplorer(this.sdk, opts) || this.explorer);
+        return !!(buildExplorer(this.sdk, opts) || this.explorer);
     }
 
     // Wait for a transaction by tx_hash and return its indexed action result.
