@@ -21,8 +21,7 @@ const core = new Actions({ config: {}, util: new Utility() });
 const A1 = 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh';
 const A2 = '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2';
 
-describe('pre-flight engine', function () {
-
+function registerBasicInputNormalization() {
     describe('input normalization', function () {
         it('unparseable string throws SDKFormatError, not SDKPreflightError', async function () {
             const sdk = mockSdk();
@@ -45,7 +44,9 @@ describe('pre-flight engine', function () {
             expect(r).to.have.property('verdict');
         });
     });
+}
 
+function registerCamelCaseInputNormalization() {
     describe('input normalization', function () {
         // The case above used canonical UPPER_SNAKE keys, which is why this
         // gap survived: createAction takes camelCase and normalizes it, so the
@@ -86,7 +87,9 @@ describe('pre-flight engine', function () {
             expect(camel.checksRun).to.deep.equal(upper.checksRun);
         });
     });
+}
 
+function registerSharedComposeCoreCases() {
     // The three cases above were each fixed one at a time, because
     // pre-flight re-implemented a SUBSET of createAction's params ->
     // wire-string core. The cases below pin the unification itself:
@@ -133,7 +136,9 @@ describe('pre-flight engine', function () {
             });
         });
     });
+}
 
+function registerComposeCoreDifferences() {
     describe('input normalization', function () {
         describe('shares ONE compose core with createAction', function () {
             // A top-level `version` is pre-flight's spelling, params.VERSION is
@@ -160,4 +165,11 @@ describe('pre-flight engine', function () {
             });
         });
     });
+}
+
+describe('pre-flight engine', function () {
+    registerBasicInputNormalization();
+    registerCamelCaseInputNormalization();
+    registerSharedComposeCoreCases();
+    registerComposeCoreDifferences();
 });
