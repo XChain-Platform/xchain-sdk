@@ -143,7 +143,7 @@ module.exports = {
 
     // Value of a per-leg field: the leg's own value, falling back to a shared
     // top-level value (so a caller may hoist a constant TICK out of the legs)
-    _legValue(fieldName, leg, fields, index) {
+    legFieldValue(fieldName, leg, fields, index) {
         let value = (leg[fieldName] !== null && leg[fieldName] !== undefined) ? leg[fieldName] : fields[fieldName];
         if (value === null || value === undefined) return '';
         if (Array.isArray(value))
@@ -255,7 +255,7 @@ module.exports = {
         }
         for (let i = 0; i < legs.length; i++) {
             for (let fieldName of group.group)
-                parts.push(this._legValue(fieldName, legs[i], fields, i));
+                parts.push(this.legFieldValue(fieldName, legs[i], fields, i));
         }
         for (let fieldName of group.suffix)
             parts.push(this.sharedValue(fieldName, fields, legs, action, version));

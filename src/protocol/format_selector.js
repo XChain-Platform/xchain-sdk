@@ -196,7 +196,7 @@ function noMatchingFormatError(selector, action, actionFormats, populatedFields,
 // that need class syntax or name the class; the rest come from the part files.
 const STATIC_ORDER = [
     'getFormatFields', 'LEGS_FIELD', 'getRepeatedGroup', 'isRepeatedFormat', 'isRestField',
-    'baseFieldName', 'getPopulatedFields', 'getLegs', '_legValue', 'sharedValue', 'legsFit',
+    'baseFieldName', 'getPopulatedFields', 'getLegs', 'legFieldValue', 'sharedValue', 'legsFit',
     'flattenSingleLeg', 'repeatedFieldNames', 'buildRepeatedParts', 'estimateLength',
     'canonicalVersion', 'select', 'serialize'
 ];
