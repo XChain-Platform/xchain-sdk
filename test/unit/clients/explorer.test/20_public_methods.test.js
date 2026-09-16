@@ -68,7 +68,7 @@ describe('ExplorerClient', function () {
             });
         }
 
-        it('has 123 public methods', function () {
+        it('has 133 public methods', function () {
             // 113 = 112 + getPreflight (validity-first pre-flight proxy).
             // 117 = 113 + the four BET reads: getBetFeeds, getBetFeed,
             // getBets, getOracleStats.
@@ -78,9 +78,13 @@ describe('ExplorerClient', function () {
             // getCoinpayObligationsBatch.
             // 123 = 121 + the two non-throwing token existence reads:
             // findToken, tokenExists.
+            // 133 = 123 + the ten transport and read helpers that dropped their
+            // underscore: buildClient, deriveCoinPrefix, buildParams, get, post,
+            // recordFreshness, handleError, assertBatchAddresses, assertBatchBody,
+            // siblingCoin.
             let publicMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(publicMethods).to.have.length(123);
+            expect(publicMethods).to.have.length(133);
         });
     });
 });

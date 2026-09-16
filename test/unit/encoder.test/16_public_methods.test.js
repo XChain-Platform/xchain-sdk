@@ -19,10 +19,12 @@ describe('EncoderClient', function () {
     });
 
     describe('public methods', function () {
-        it('has 9 public methods', function () {
+        it('has 12 public methods', function () {
             let methods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(methods).to.have.length(9);
+            // 12 = 9 + the three transport helpers that dropped their underscore:
+            // buildClient, rpc, handleError.
+            expect(methods).to.have.length(12);
             expect(methods).to.include('ping');
             expect(methods).to.include('createTx');
             expect(methods).to.include('spendP2sh');
