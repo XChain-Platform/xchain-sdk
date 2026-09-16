@@ -64,7 +64,9 @@ describe('pre-flight Tier 1 classification', function () {
         expect(out.kind).to.equal('no-verdict');
         expect(out.reason).to.equal('guardInert');
     });
+});
 
+describe('pre-flight Tier 1 classification', function () {
     // The legacy feequote shape, verbatim from indexer actions.js computeFeeQuote:
     // the sentinel is copied onto `status` and `error` is rewritten into a human
     // sentence that does not contain it, alongside supported:false. Matching only
@@ -110,7 +112,9 @@ describe('pre-flight Tier 1 classification', function () {
         expect(out.reason).to.equal('denylisted');
         expect(called, 'no round trip, no mutex acquisition').to.equal(false);
     });
+});
 
+describe('pre-flight Tier 1 classification', function () {
     it('busy/retryable responses are unavailable', async function () {
         const out = await tier1For('SEND|0|JDOG|1|addr', { busy: true });
         expect(out.kind).to.equal('unavailable');
@@ -132,7 +136,9 @@ describe('pre-flight Tier 1 classification', function () {
         const out = await runTier1({ sdk: {}, parsed, source: 's', timeoutMs: 1000 });
         expect(out.kind).to.equal('unavailable');
     });
+});
 
+describe('pre-flight Tier 1 classification', function () {
     describe('/preflight endpoint preference', function () {
         it('prefers getPreflight when the explorer exposes it', async function () {
             let usedPreflight = false, usedFeeQuote = false;

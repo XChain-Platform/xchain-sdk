@@ -24,8 +24,48 @@
 
 'use strict';
 
-const { FINDING_CODES } = require('../constants.js');
+const { FINDING_CODES, EXPIRATION_MAX } = require('../constants.js');
 const numeric = require('../numeric.js');
+
+/*
+ * The EXPIRATION representability bound, mirrored from the handlers that carry
+ * the field (xchain-indexer src/actions/order.js, swap.js, dispenser.js; the
+ * dispenser copy lives in checks/dispenser.js and shares this reasoning).
+ *
+ * An EXPIRATION outside [0, EXPIRATION_MAX] is `invalid: EXPIRATION (format)`.
+ * It is not normalized to NULL on the way to storage, so a client that says
+ * nothing here tells the author "valid" for a payload every node refuses, and
+ * the value it would have stored - no expiration at all - is an escrow that
+ * never expires rather than the one they asked for.
+ *
+ * EVERY FORMAT THAT CARRIES THE FIELD, not just the create. The handler guards
+ * this with isNull alone, with no format test, so a format-2 edit is judged by
+ * the same rule; format 1 (cancel) carries no EXPIRATION and arrives here with
+ * an empty field, which is what isNull answers true for. That is why this runs
+ * ahead of the version fork in checkGiveBalance rather than inside it.
+ *
+ * ERROR, and so non-overridable, which VALIDATOR_SEMANTICS certifies as a local
+ * code. The rule rides no activation table: its verdict is the same on every
+ * plane at every height, this map's standing test for an error rather than a
+ * warning. The negative half is refused even by a node predating the bound,
+ * which reads a negative expiration as `invalid: EXPIRATION (past)`.
+ *
+ * The bound is exactly the handler's and no wider: a value the predicate cannot
+ * prove out of range keeps its current verdict (numeric.js), and an EXPIRATION
+ * that is merely far in the future, or already past, is not this check's to
+ * judge - the tip it is measured against is server-side, which is what the
+ * EXPIRY_IN_PAST notice below says.
+ */
+function checkExpirationRange(ctx) {
+    const expiration = ctx.field('EXPIRATION');
+    if (expiration === '') return;
+    ctx.markRun(FINDING_CODES.VALIDATOR_SEMANTICS);
+    if (!numeric.exceedsUnsignedColumn(expiration, EXPIRATION_MAX)) return;
+    ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'error',
+        `EXPIRATION (${expiration}) is outside the range the chain can store (0 to ${EXPIRATION_MAX}); `
+        + 'the indexer rejects this action as invalid: EXPIRATION (format).',
+        { field: 'EXPIRATION', value: expiration, constraint: { min: '0', max: EXPIRATION_MAX } });
+}
 
 async function checkGiveBalance(ctx, noun) {
     const version = String(ctx.parsed.version);
@@ -78,7 +118,7 @@ async function checkGiveBalance(ctx, noun) {
         'allow/block lists and list-for-sale veto are server-side only');
 }
 
-async function checkOrder(ctx) { await checkGiveBalance(ctx, 'ORDER'); }
-async function checkSwap(ctx)  { await checkGiveBalance(ctx, 'SWAP'); }
+async function checkOrder(ctx) { checkExpirationRange(ctx); await checkGiveBalance(ctx, 'ORDER'); }
+async function checkSwap(ctx)  { checkExpirationRange(ctx); await checkGiveBalance(ctx, 'SWAP'); }
 
 module.exports = { checkOrder, checkSwap };

@@ -1,0 +1,186 @@
+/*********************************************************************
+ *
+ * Copyright © 2025–2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ **********************************************************************
+ *
+ * XChain Platform SDK - Interactive REPL
+ *
+ * Drops developers into an interactive session with a pre-configured
+ * SDK instance for exploration and prototyping.
+ *
+ * Usage:
+ *   npm run repl
+ *   node -e "require('./src/cli/repl').startREPL({ network: 'bitcoin-regtest' })"
+ *
+ ********************************************************************/
+
+const repl = require('repl');
+const XChainSDK = require('../XChainSDK.js');
+const CrossChainHelper = require('../actions/cross_chain.js');
+
+
+async function startREPL(options = {}) {
+    let sdkOptions = buildSDKOptions(options);
+    let sdk = new XChainSDK(sdkOptions);
+
+    await initializeHub(sdk);
+    printWelcome(sdkOptions);
+
+    let server = startServer();
+    injectHelpers(server, sdk);
+    defineCommands(server, sdk, sdkOptions);
+    installShutdown(server, sdk);
+
+    return server;
+}
+
+function buildSDKOptions(options) {
+    // Build options from env vars and explicit options
+    return {
+        network:     options.network     || process.env.NETWORK     || 'bitcoin-regtest',
+        explorerUrl: options.explorerUrl || process.env.EXPLORER_URL,
+        explorerPort: options.explorerPort || process.env.EXPLORER_PORT,
+        encoderUrl:  options.encoderUrl  || process.env.ENCODER_URL,
+        encoderPort: options.encoderPort || process.env.ENCODER_PORT,
+        hubUrl:      options.hubUrl      || process.env.HUB_URL,
+        ...options
+    };
+}
+
+async function initializeHub(sdk) {
+    // Try hub init if configured
+    if (sdk.hub) {
+        try {
+            await sdk.init();
+            console.log('Hub connected and config loaded.');
+        } catch (e) {
+            console.log('Hub connection failed:', e);
+        }
+    }
+}
+
+function printWelcome(sdkOptions) {
+    console.log('');
+    console.log('  XChain SDK REPL');
+    console.log('  Network: ' + sdkOptions.network);
+    console.log('');
+    console.log('  Available in scope:');
+    console.log('    sdk            - XChainSDK instance');
+    console.log('    session(wif)   - Create a WalletSession');
+    console.log('    keygen()       - Generate a new keypair');
+    console.log('');
+    console.log('  Commands:');
+    console.log('    .actions       - List all action types');
+    console.log('    .status        - Show SDK configuration');
+    console.log('    .fields ACTION - Show fields for an action');
+    console.log('');
+}
+
+function startServer() {
+    return repl.start({
+        prompt: 'xchain> ',
+        useGlobal: false,
+        // Enable await in REPL
+        breakEvalOnSigint: true
+    });
+}
+
+function injectHelpers(server, sdk) {
+    // Inject helpers into context
+    server.context.sdk     = sdk;
+    server.context.session = (wif, opts) => sdk.session(wif, opts);
+    server.context.keygen  = () => sdk.generateKeyPair();
+    server.context.CrossChainHelper = CrossChainHelper;
+}
+
+function defineCommands(server, sdk, sdkOptions) {
+    // Custom commands
+    defineActionsCommand(server, sdk);
+    defineStatusCommand(server, sdk, sdkOptions);
+    defineFieldsCommand(server, sdk);
+}
+
+function defineActionsCommand(server, sdk) {
+    server.defineCommand('actions', {
+        help: 'List all available action types',
+        action() {
+            let actions = sdk.getActions();
+            console.log('\n  ' + actions.join(', ') + '\n');
+            console.log('  ' + actions.length + ' actions available\n');
+            this.displayPrompt();
+        }
+    });
+}
+
+function defineStatusCommand(server, sdk, sdkOptions) {
+    server.defineCommand('status', {
+        help: 'Show SDK configuration status',
+        action() {
+            console.log('');
+            console.log('  Network:   ' + sdkOptions.network);
+            console.log('  Explorer:  ' + (sdk.explorer ? sdk.explorer.baseUrl + ':' + sdk.explorer.port : 'not configured'));
+            console.log('  Encoder:   ' + (sdk.encoder ? sdk.encoder.baseUrl + ':' + sdk.encoder.port : 'not configured'));
+            console.log('  WebSocket: ' + (sdk.ws ? (sdk.ws.isConnected() ? 'connected' : 'disconnected') : 'not configured'));
+            console.log('  Hub:       ' + (sdk.hub ? 'configured' : 'not configured'));
+            console.log('');
+            this.displayPrompt();
+        }
+    });
+}
+
+function defineFieldsCommand(server, sdk) {
+    server.defineCommand('fields', {
+        help: 'Show fields for an action (e.g., .fields SEND)',
+        action(action) {
+            if (!action) {
+                console.log('  Usage: .fields ACTION_NAME');
+                this.displayPrompt();
+                return;
+            }
+            try {
+                let formats = sdk.getActionFormats(action.toUpperCase());
+                if (!formats) {
+                    console.log('  Unknown action: ' + action);
+                } else {
+                    console.log('');
+                    for (let version in formats) {
+                        console.log('  v' + version + ': ' + formats[version]);
+                    }
+                    console.log('');
+                }
+            } catch (e) {
+                console.log('  Error:', e);
+            }
+            this.displayPrompt();
+        }
+    });
+}
+
+function installShutdown(server, sdk) {
+    // Clean shutdown
+    server.on('exit', () => {
+        sdk.stop();
+        process.exit(0);
+    });
+}
+
+
+// CLI entry point: run directly with `node src/cli/repl.js`
+if (require.main === module) {
+    startREPL().catch(err => {
+        console.error('REPL failed to start:', err.message);
+        process.exit(1);
+    });
+}
+
+
+module.exports = { startREPL };

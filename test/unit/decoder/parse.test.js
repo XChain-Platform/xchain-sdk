@@ -9,7 +9,7 @@
 
 const { expect } = require('chai');
 const { parse } = require('../../../src/decoder/parse.js');
-const { MAX_ACTION_DATA_LENGTH } = require('../../../src/chunkHelper.js');
+const { MAX_ACTION_DATA_LENGTH } = require('../../../src/contract/chunk_helper.js');
 
 describe('decoder.parse', function () {
 
@@ -44,6 +44,9 @@ describe('decoder.parse', function () {
             expect(r.validation.findings).to.not.be.empty;
         });
     });
+});
+
+describe('decoder.parse', function () {
 
     describe('rule 1: input-size gate first', function () {
         it('TOO_LONG on oversized input before any split', function () {
@@ -72,6 +75,9 @@ describe('decoder.parse', function () {
             expect(parse('transfer|0|JDOG|1|a').code).to.equal('UNKNOWN_ACTION');
         });
     });
+});
+
+describe('decoder.parse', function () {
 
     describe('rule 4: alias expansion', function () {
         for (const [alias, canonical] of Object.entries({ TRANSFER: 'SEND', ADDR: 'ADDRESS', DROP: 'AIRDROP', CAST: 'BROADCAST', MSG: 'MESSAGE' })) {
@@ -114,6 +120,9 @@ describe('decoder.parse', function () {
             expect(parse('SEND|0|JDOG|1|addr||').code).to.equal('FIELD_COUNT_MISMATCH');
         });
     });
+});
+
+describe('decoder.parse', function () {
 
     describe('rule 6: rest-fields', function () {
         it('LIST v0 collects rest items', function () {
@@ -156,6 +165,9 @@ describe('decoder.parse', function () {
             expect(r).to.deep.include({ ok: false, code: 'FIELD_COUNT_MISMATCH' });
         });
     });
+});
+
+describe('decoder.parse', function () {
 
     describe('multi-leg formats collect repeated fields into arrays', function () {
         it('SEND v1 (AMOUNT|DESTINATION repeated)', function () {
@@ -186,6 +198,9 @@ describe('decoder.parse', function () {
             expect(parse('PRICE|0|BTC|JDOG|USD|1').code).to.equal('UNKNOWN_VERSION');
         });
     });
+});
+
+describe('decoder.parse', function () {
 
     describe('input forms', function () {
         it('empty string / null / undefined are EMPTY', function () {

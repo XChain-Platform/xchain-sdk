@@ -25,7 +25,7 @@
 
 // Encoding carrier caps ride the existing single sources: chunkHelper
 // (protocol constants) + the compose-time limits in actions.js.
-const { MAX_ACTION_DATA_LENGTH } = require('../chunkHelper.js');
+const { MAX_ACTION_DATA_LENGTH } = require('../contract/chunk_helper.js');
 
 // Per-carrier data budgets (bytes of action string). Mirrors the compose-time
 // gate in actions.js (P2SH/P2WSH 520-44 script overhead per chunk; MULTISIGN
@@ -102,7 +102,8 @@ const REPORT_SCHEMA_VERSION = 1;
 
 // Dispenser refill cap (indexer config.js MAX_REFILLS). A
 // format-2 DISPENSER_EDIT that tops up GIVE_ESCROW is a refill, and the
-// 6th is rejected once dispenser_caps_activation is live. The cap cannot
+// 6th is rejected once the registry row dispenser_caps_activation.DISPENSER_CAPS_ACTIVATION
+// (xchain-indexer src/protocol_changes/gates_1.js) is live. The cap cannot
 // be CHECKED client-side (no endpoint exposes per-edit give_escrow, see
 // checks/dispenser.js), so this exists only to name the number in the
 // unverified declaration. The authoritative value is config['MAX_REFILLS']
@@ -112,8 +113,21 @@ const REPORT_SCHEMA_VERSION = 1;
 // change to it, by value.
 const MAX_REFILLS = 5;
 
+// Largest EXPIRATION the chain can store: the BIGINT UNSIGNED ceiling, byte-for-byte
+// config['INTEGER_FIELDS']['EXPIRATION'] in xchain-indexer/src/config.js (U64_MAX).
+// A decimal digit STRING, never a number: 18446744073709551615 does not survive a
+// double, so a Number literal here would compare one short of the real ceiling and
+// call the largest storable expiration invalid.
+//
+// The handlers that read it (src/actions/{order,swap,dispenser}.js) refuse an
+// EXPIRATION outside [0, this] as `invalid: EXPIRATION (format)` rather than
+// normalizing it to NULL, which is what makes it a client-checkable rule; the
+// mapped hashes of those three handlers cover the rejection, and this constant is
+// the value they reject against.
+const EXPIRATION_MAX = '18446744073709551615';
+
 // Canonical `^<id>` address-reference id, byte-for-byte the indexer's
-// CANONICAL_CARET_ID (xchain-indexer src/db.js). Anything else - `^0`, `^007`,
+// CANONICAL_CARET_ID (xchain-indexer src/db/shared.js). Anything else - `^0`, `^007`,
 // `^0x10`, `^abc`, a bare `^` - cannot resolve on ANY node, so at/after the
 // caret-ref strict-activation flag-day it is a hard `invalid: <FIELD> (unresolvable ^id)` reject.
 // No mapped handler hash covers it: the map's rows are `src/actions/*.js` only and this
@@ -227,7 +241,7 @@ const TIER2_ERROR_CAPABLE = Object.freeze({
 
 /*
  * Tier-1 exclusions (spec §4.3): indexer FEE_QUOTE_DENYLIST mirror.
- * Kept in lockstep with FEE_QUOTE_DENYLIST in xchain-indexer/src/actions.js, enforced by
+ * Kept in lockstep with FEE_QUOTE_DENYLIST in xchain-indexer/src/actions/index.js, enforced by
  * bin/check-preflight-drift.js (named, not line-pinned: the line pin had already drifted).
  *
  * XEXEC IS DEFENCE-IN-DEPTH, AND DELIBERATELY UNREACHABLE
@@ -237,7 +251,7 @@ const TIER2_ERROR_CAPABLE = Object.freeze({
  * the arbiter EMITS: it is mirror-injected from the hub mirror rather than
  * decoded off the wire (test/fixtures/action-manifest.json classifies it
  * `mirror-injected`, with no `wireDecoded` and no `userEncodable`). It therefore
- * has no entry in src/formats.js, so `decoder.parse('XEXEC|...')` returns
+ * has no entry in src/protocol/formats.js, so `decoder.parse('XEXEC|...')` returns
  * UNKNOWN_ACTION for every wire form and `runTier1` is never handed a parsed
  * action named XEXEC. A client composes EXECUTE; the chain, not the client,
  * produces the XEXEC leg on the far side.
@@ -295,10 +309,29 @@ const TIER1_SUBCOMMAND_PREFLIGHT = Object.freeze(['BATCH']);
 
 // Fee-charging user actions (spec §4.4 "protocol-fee reality"). Membership mirrors
 // the indexer handlers that call createFeesObject, plus the gas-priced VM pair
-// (DEPLOY/EXECUTE). BET was missing for its whole life.
+// (DEPLOY/EXECUTE). BET was missing for its whole life. XBRIDGE charges on the
+// lock and burn legs a client composes (the base bridge spec); the settle leg is
+// system-injected and never reaches pre-flight.
 const FEE_CHARGING_ACTIONS = Object.freeze([
     'ISSUE', 'SWEEP', 'DISPENSER', 'DIVIDEND', 'AIRDROP', 'CALLBACK',
-    'ORDER', 'SWAP', 'DEPLOY', 'EXECUTE', 'BET',
+    'ORDER', 'SWAP', 'DEPLOY', 'EXECUTE', 'BET', 'XBRIDGE',
+]);
+
+// Tick-namespace rules an ISSUE create is judged by at/above the indexer's
+// TICK_NAMESPACE_ACTIVATION (the token bridge spec, R8). Both mirror
+// xchain-indexer: the floor is MIN_NEW_TOP_LEVEL_TICK_LENGTH in src/actions/issue.js
+// (covered by the mapped hash) and the roots are RESERVED_FUTURE_ROOTS in
+// src/consensus/reservedRoots.js, which NO mapped hash covers, so a change there moves this
+// list by hand. Chain tickers held for roots the platform has not integrated yet: a
+// name leaves the list only by moving into the coin set, and both refuse identically.
+const MIN_NEW_TOP_LEVEL_TICK_LENGTH = 4;
+const RESERVED_FUTURE_ROOTS = Object.freeze([
+    'ADA', 'ALGO', 'APT', 'ARB', 'ATOM', 'AVAX', 'BCH', 'BNB', 'BSV', 'BTG',
+    'CRO', 'DGB', 'DOT', 'EOS', 'ETC', 'ETH', 'FIL', 'FIRO', 'GRS', 'ICP',
+    'INJ', 'KAS', 'MNT', 'NEO', 'NMC', 'OP', 'POL', 'PPC', 'RVN', 'SEI',
+    'SOL', 'STX', 'SUI', 'TIA', 'TON', 'TRX', 'VET', 'VTC', 'XCP', 'XDP',
+    'XEC', 'XLM', 'XMR', 'XRP', 'XTZ', 'ZEC', 'ZK',
+    'BASE', 'DASH', 'HBAR', 'HOOD', 'HYPE', 'NEAR',
 ]);
 
 module.exports = {
@@ -310,10 +343,13 @@ module.exports = {
     ENCODING_LIMITS,
     MAX_ACTION_DATA_LENGTH,
     MAX_REFILLS,
+    EXPIRATION_MAX,
     CANONICAL_CARET_ID,
     FINDING_CODES,
     TIER2_ERROR_CAPABLE,
     TIER1_DENYLIST,
     TIER1_SUBCOMMAND_PREFLIGHT,
     FEE_CHARGING_ACTIONS,
+    MIN_NEW_TOP_LEVEL_TICK_LENGTH,
+    RESERVED_FUTURE_ROOTS,
 };

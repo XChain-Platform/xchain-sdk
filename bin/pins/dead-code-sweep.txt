@@ -1,0 +1,86 @@
+xchain-sdk dead-code sweep
+==========================
+
+Taken at 957d9490eb59f7a40ce13c66a9356733b5217100 with `node bin/reachability.js
+--siblings <platform tree>`, then falsified candidate by candidate with
+`command grep -r` across all 22 xchain-* checkouts plus the platform tooling
+directory. The tool-layer search honours .ignore files and comes back falsely
+empty, so every line below is from `command grep`.
+
+VERDICT: NOTHING IS DELETED. Four files are unreachable from this repo's own
+runtime closure; all four are held from outside it, and three of the four are
+held by something no repo-local walk can see. That is the whole point of the
+falsification step, and this repo is the case that proves it.
+
+WHY A LIBRARY IS DIFFERENT. package.json's `files` publishes the entire src/
+tree, so any module in it is loadable by a consumer as
+`@dankest-llc/xchain-sdk/src/<path>`. A file nothing in this checkout requires
+is dead to this checkout and is not thereby dead to npm. Two of the four
+candidates are exactly that shape, and one of them is deep-imported by name in
+the published documentation.
+
+TOOL SUMMARY
+------------
+src/*.js tracked:                    116
+runtime entry points:                bin/check-preflight-drift.js, index.js,
+                                     scripts/cosigner-init-window.js,
+                                     scripts/npm-sync-check.js,
+                                     scripts/sync-templates.js,
+                                     src/api.js, src/repl.js
+tooling entry points:                5
+test entry points:                   161
+declared dynamic edges:              0
+reachable from package runtime:      112
+NOT reachable from package runtime:  4
+test-only:                           4
+unreferenced across the platform:    3
+
+CANDIDATE 1: src/cosigner/server.js                          KEPT
+-----------------------------------------------------------------
+A published deep-import entry point, named as such in the documentation repo:
+
+  xchain-documentation/ai-agents/agent-wallets.md:123
+    const { createCoSignerApp } = require('@dankest-llc/xchain-sdk/src/cosigner/server.js');
+
+It is the HTTP sidecar half of the co-signer interface and it is reached only
+by consumers, never by this package's own main. Held also by three suites here
+(coSignerServer, cosignerHardening3, cosignerEnvelope) and cross-referenced by
+src/utils/safeCompare.js.
+
+CANDIDATE 2: src/cosigner/hostedServer.js                    KEPT
+-----------------------------------------------------------------
+The multi-tenant, TLS-gated variant of the same surface: a shipped offering
+rather than an experiment, and published in the tarball beside server.js. Its
+two suites (cosignerHosted, cosignerEnvelope) construct it through
+createHostedCoSignerApp, and src/cosigner/httpBodyLimit.js documents it as one
+of its two callers.
+
+CANDIDATE 3: src/cosigner/httpBodyLimit.js                   KEPT
+-----------------------------------------------------------------
+Not a candidate on its own terms: the reverse-edge walk already shows both
+servers requiring it directly.
+
+  src/cosigner/server.js:34       const { resolveMaxBodyBytes, tooLargeHandler } = require('./httpBodyLimit.js');
+  src/cosigner/hostedServer.js:77 const { resolveMaxBodyBytes, tooLargeHandler } = require('./httpBodyLimit.js');
+
+It reads unreachable only because its two callers do, and it is the single
+place both transports derive their body ceiling from.
+
+CANDIDATE 4: src/derivation.js                               KEPT
+-----------------------------------------------------------------
+Pinned BY PATH from another repo's suite, which is the failure class this step
+exists to catch: deleting it breaks a sibling's CI, later, attributed to the
+sibling.
+
+  xchain-wallet/test/integration/hd/wallet-sdk-derivation-parity.test.js:139
+    const sdkDerivationPath = sdkFile('src', 'derivation.js');
+
+It is the backend-side anchor of the wallet-to-backend SLIP-44 parity contract,
+so it also may not be RENAMED without repointing that test. Its name is already
+compliant, so nothing in this restructure moves it.
+
+NOISE EXCLUDED, AND WHY
+-----------------------
+xchain-node/modules/ and xchain-node/tmp/ are gitignored local clones of these
+repos. Every hit inside them is a copy of a hit already counted here, nothing
+they contain reaches a commit, and they are not this restructure's surface.

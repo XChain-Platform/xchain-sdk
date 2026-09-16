@@ -20,7 +20,7 @@
  * and as named package exports.
  *
  * DELIBERATELY NOT re-exported here (Node-only; require them directly in a
- * Node daemon): `windowStore.js` (uses `fs` for the persisted budget) and
+ * Node daemon): `window_store.js` (uses `fs` for the persisted budget) and
  * `server.js` (`createCoSignerApp`, uses `express`). Everything below is pure
  * bitcoinjs/@noble and runs in the browser bundle the wallet ships.
  *
@@ -29,12 +29,12 @@
 'use strict';
 
 const { deriveMuSig2P2TR, deriveMuSig2P2TR2of3 } = require('./account.js');
-const CoSigner = require('./coSigner.js');
+const CoSigner = require('./co_signer.js');
 const CoSignerClient = require('./client.js');
-const { buildMuSig2Signer } = require('./musig2Signer.js');
+const { buildMuSig2Signer } = require('./musig2_signer.js');
 const { buildRecoverySpend, localPairSigner, tapleafHash } = require('./recovery.js');
-const { evaluatePolicy } = require('./policyEvaluator.js');
-const { decodeActionFromPsbt, decodeEnvelopeAction } = require('./psbtActionDecode.js');
+const { evaluatePolicy } = require('./policy_evaluator.js');
+const { decodeActionFromPsbt, decodeEnvelopeAction } = require('./psbt_action_decode.js');
 const {
     parseEnvelopeScript, deriveEnvelopeCommit, envelopeScriptPathSighash,
     envelopeLeafFromPsbtInput, classifyEnvelopeRole, envelopeLeafHash,

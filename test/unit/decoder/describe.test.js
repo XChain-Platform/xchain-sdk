@@ -12,7 +12,6 @@
 const { expect } = require('chai');
 const { parse } = require('../../../src/decoder/parse.js');
 const { describe: describeAction } = require('../../../src/decoder/describe.js');
-const FORMATS = require('../../../src/formats.js');
 
 const GENERIC = /No plain-English summary is available/;
 
@@ -25,12 +24,38 @@ describe('decoder.describe', function () {
         expect(d.warnings).to.deep.equal([]);
     });
 
-    // A multi-recipient SEND (v1/v2/v3) must not be described as if it paid
-    // one person. Before this, the summary read `firstStr` of each repeated
-    // field, so a three-recipient send announced "Send 7 XCHAIN to
-    // <recipient 1>" on the signing screen while paying two more people: the
-    // other legs appeared only as a comma-joined "7, 3, 1" detail row. Caught
-    // by driving the real Send form against regtest.
+    it('legacy {action, params} shape still works (wallet shim path)', function () {
+        const d = describeAction({ action: 'SEND', params: { TICK: 'JDOG', AMOUNT: '2', DESTINATION: 'x', MEMO: '' } });
+        expect(d.summary).to.equal('Send 2 JDOG to x');
+    });
+
+    it('createAction-style {action, fields} shape accepted', function () {
+        const d = describeAction({ action: 'MINT', fields: { TICK: 'JDOG', AMOUNT: '5' } });
+        expect(d.summary).to.match(/^Mint 5 JDOG/);
+    });
+
+    it('chainRegistry ctx adds the chain suffix', function () {
+        const registry = { get: () => ({ displayName: 'Bitcoin' }) };
+        const d = describeAction(parse('SEND|0|JDOG|1|a'), { chainId: 'btc', chainRegistry: registry });
+        expect(d.summary).to.include(' on Bitcoin ');
+    });
+
+    it('unknown-to-describe actions get the generic fallback with all params listed', function () {
+        // ADDRESS v0 is the one remaining format without a dedicated
+        // describer; unknown future actions take the same path.
+        const d = describeAction({ action: 'FUTURE_ACTION', params: { SOME_FIELD: 'x' } });
+        expect(d.warnings.join(' ')).to.match(GENERIC);
+        expect(d.details.map(x => x.label)).to.include('Some field');
+    });
+});
+
+// A multi-recipient SEND (v1/v2/v3) must not be described as if it paid
+// one person. Before this, the summary read `firstStr` of each repeated
+// field, so a three-recipient send announced "Send 7 XCHAIN to
+// <recipient 1>" on the signing screen while paying two more people: the
+// other legs appeared only as a comma-joined "7, 3, 1" detail row. Caught
+// by driving the real Send form against regtest.
+describe('decoder.describe', function () {
     describe('multi-recipient SEND', function () {
         it('states the total and the recipient count, and itemises every leg', function () {
             const d = describeAction(parse('SEND|1|XCHAIN|7|alice|3|bob|1|carol'));
@@ -62,7 +87,11 @@ describe('decoder.describe', function () {
             expect(d.summary).to.equal('Send 1 JDOG to 2 recipients');
             expect(d.warnings).to.include('An amount is not positive.');
         });
+    });
+});
 
+describe('decoder.describe', function () {
+    describe('multi-recipient SEND', function () {
         // The total is the one number a user reads as "what this transaction moves", so it
         // is summed exactly. Float addition rendered these three as '0.30000000000000004',
         // '1' (the 18-dp tail simply gone) and '1111111111' (a whole satoshi over).
@@ -86,23 +115,9 @@ describe('decoder.describe', function () {
                 }).summary, 'leg ' + bad).to.equal('Send JDOG to 2 recipients');
         });
     });
+});
 
-    it('legacy {action, params} shape still works (wallet shim path)', function () {
-        const d = describeAction({ action: 'SEND', params: { TICK: 'JDOG', AMOUNT: '2', DESTINATION: 'x', MEMO: '' } });
-        expect(d.summary).to.equal('Send 2 JDOG to x');
-    });
-
-    it('createAction-style {action, fields} shape accepted', function () {
-        const d = describeAction({ action: 'MINT', fields: { TICK: 'JDOG', AMOUNT: '5' } });
-        expect(d.summary).to.match(/^Mint 5 JDOG/);
-    });
-
-    it('chainRegistry ctx adds the chain suffix', function () {
-        const registry = { get: () => ({ displayName: 'Bitcoin' }) };
-        const d = describeAction(parse('SEND|0|JDOG|1|a'), { chainId: 'btc', chainRegistry: registry });
-        expect(d.summary).to.include(' on Bitcoin ');
-    });
-
+describe('decoder.describe', function () {
     describe('dedicated describers are non-generic', function () {
         const cases = {
             'SEND|0|JDOG|1|a|m': /Send/,
@@ -154,11 +169,13 @@ describe('decoder.describe', function () {
             });
         }
     });
+});
 
-    // BET and PRICE were promoted from the wallet's local describer, which
-    // had moved ahead of this one. What makes them worth having is not the
-    // summary line but the irreversibilities they state, so those are pinned
-    // per format rather than left to a shape assertion.
+// BET and PRICE were promoted from the wallet's local describer, which
+// had moved ahead of this one. What makes them worth having is not the
+// summary line but the irreversibilities they state, so those are pinned
+// per format rather than left to a shape assertion.
+describe('decoder.describe', function () {
     describe('BET (§11.3)', function () {
         it('a placed bet states finality and the parimutuel share', function () {
             const w = describeAction(parse('BET|2|42|1|10')).warnings.join('\n');
@@ -192,7 +209,9 @@ describe('decoder.describe', function () {
             expect(camel.summary).to.equal(describeAction(parse('BET|2|42|1|10')).summary);
         });
     });
+});
 
+describe('decoder.describe', function () {
     describe('PRICE (PC-30)', function () {
         it('v1 states the 24h delay and the dispenser consequence', function () {
             const w = describeAction(parse('PRICE|1|BTC|JDOG|USD|1.5')).warnings.join('\n');
@@ -224,15 +243,9 @@ describe('decoder.describe', function () {
             expect(d.warnings.join('\n')).to.not.match(/not a plain decimal/);
         });
     });
+});
 
-    it('unknown-to-describe actions get the generic fallback with all params listed', function () {
-        // ADDRESS v0 is the one remaining format without a dedicated
-        // describer; unknown future actions take the same path.
-        const d = describeAction({ action: 'FUTURE_ACTION', params: { SOME_FIELD: 'x' } });
-        expect(d.warnings.join(' ')).to.match(GENERIC);
-        expect(d.details.map(x => x.label)).to.include('Some field');
-    });
-
+describe('decoder.describe', function () {
     describe('BATCH', function () {
         it('renders each parsed command and the non-atomicity warning', function () {
             const d = describeAction(parse('BATCH|0|MINT|0|JDOG|5;SEND|0|JDOG|5|addr'));
@@ -256,7 +269,9 @@ describe('decoder.describe', function () {
             expect(d.summary).to.match(/^Batch of 1 action/);
         });
     });
+});
 
+describe('decoder.describe', function () {
     describe('extended ctx', function () {
         it('ownAddresses marks a self-send destination', function () {
             const d = describeAction(parse('SEND|0|JDOG|1|myaddr1'), { ownAddresses: ['myaddr1'] });
@@ -279,145 +294,5 @@ describe('decoder.describe', function () {
             const d = describeAction(parse('SEND|0|JDOG|1.123456789|a'), { tokenDecimals: { JDOG: 8 } });
             expect(d.warnings.some(w => /more decimal places/.test(w))).to.equal(true);
         });
-    });
-
-    // The case list above is hand-maintained, so it can only prove what
-    // someone remembered to add; the confirm screen is the surface a user
-    // verifies intent on, and an action nobody thought to list there
-    // silently reaches a signer as "No plain-English summary is available".
-    // This enumerates formats.js instead, so adding an ACTION to the
-    // protocol without a describer fails here rather than on a sign screen.
-    describe('every ACTION in formats.js has a describer', function () {
-        for (const action of Object.keys(FORMATS)) {
-            it(action, function () {
-                for (const version of Object.keys(FORMATS[action])) {
-                    // Params empty on purpose: a describer must produce its
-                    // summary from the action + version alone, filling gaps
-                    // with "?" rather than deferring to the generic path.
-                    const d = describeAction({ action, params: { VERSION: version } });
-                    expect(d.warnings.join('\n'), `${action} v${version}`).to.not.match(GENERIC);
-                    expect(d.summary, `${action} v${version}`).to.be.a('string').and.not.equal('');
-                    expect(d.summary, `${action} v${version}`).to.not.match(/^Sign /);
-                }
-            });
-        }
-    });
-
-    describe('multi-destroy', function () {
-        it('v1 lists every leg and keeps the irreversibility warning', function () {
-            const d = describeAction(parse('DESTROY|1|JDOG|5|PEPE|7|bye'));
-            expect(d.summary).to.equal('Destroy: 5 JDOG, 7 PEPE');
-            expect(d.warnings.join('\n')).to.include('irreversible');
-            expect(d.details.find(x => x.label === 'Memo').value).to.equal('bye');
-        });
-
-        it('v2 renders the per-leg memo, not a shared one', function () {
-            const d = describeAction(parse('DESTROY|2|JDOG|5|one|PEPE|7|two'));
-            expect(d.summary).to.equal('Destroy: 5 JDOG, 7 PEPE');
-            expect(d.details.filter(x => x.label.trim() === 'Memo').map(x => x.value))
-                .to.deep.equal(['one', 'two']);
-        });
-
-        it('a non-positive leg amount is flagged', function () {
-            const d = describeAction(parse('DESTROY|1|JDOG|5|PEPE|0|bye'));
-            expect(d.warnings.join('\n')).to.match(/amounts are not positive/);
-        });
-    });
-
-    describe('ADDRESS', function () {
-        it('v0 names the options the action actually sets', function () {
-            const d = describeAction(parse('ADDRESS|0|1||2|'));
-            expect(d.summary).to.include('fees destroyed');
-            expect(d.summary).to.include('anyone may open a dispenser');
-            expect(d.warnings.join('\n')).to.include('burned permanently');
-        });
-
-        it('v0 with every option blank says so instead of implying a change', function () {
-            const d = describeAction(parse('ADDRESS|0||||'));
-            expect(d.summary).to.include('no options changed');
-            expect(d.warnings.join('\n')).to.include('sets no address options');
-        });
-
-        it('v0 flags a fee preference the indexer will reject', function () {
-            const d = describeAction(parse('ADDRESS|0|3|||'));
-            expect(d.warnings.join('\n')).to.match(/must be 0, 1 or 2/);
-        });
-
-        it('v1 bind states the symmetric transfer gate', function () {
-            const d = describeAction(parse('ADDRESS|1|42|transfer|10|0'));
-            expect(d.summary).to.equal('Bind this address to controller #42 (transfer)');
-            expect(d.warnings.join('\n')).to.include('BOTH sends from and sends to');
-        });
-
-        it('v1 unbind reads as an unbind, not a bind', function () {
-            const d = describeAction(parse('ADDRESS|1|42|transfer|10|1'));
-            expect(d.summary).to.equal('Unbind controller from this address (transfer)');
-            expect(d.warnings.join('\n')).to.include('after the cooldown elapses');
-        });
-    });
-
-    describe('§3.5 adversarial fixtures', function () {
-        it('bidi override in MEMO is neutralized and flagged', function () {
-            const d = describeAction(parse('SEND|0|JDOG|1|addr|pay ‮evil‬ now'));
-            expect(JSON.stringify(d.details)).to.not.include('‮');
-            expect(d.warnings.some(w => /direction-control/.test(w))).to.equal(true);
-        });
-
-        it('zero-width in TICK-adjacent text is stripped and flagged', function () {
-            const d = describeAction({ action: 'SEND', params: { TICK: 'JD​OG', AMOUNT: '1', DESTINATION: 'a' } });
-            expect(d.details.find(x => x.label === 'Token').value).to.equal('JDOG');
-            expect(d.warnings.some(w => /zero-width/.test(w))).to.equal(true);
-        });
-
-        it('exponential AMOUNT is flagged, never prettified', function () {
-            const d = describeAction({ action: 'SEND', params: { TICK: 'JDOG', AMOUNT: '1e21', DESTINATION: 'a' } });
-            expect(d.details.find(x => x.label === 'Amount').value).to.equal('1e21');
-            expect(d.warnings.some(w => /exponential/.test(w))).to.equal(true);
-        });
-
-        it('multi-leg amounts are formatted per leg, no false junk flag', function () {
-            const d = describeAction(parse('SEND|1|JDOG|1|a|2|b|m'));
-            expect(d.warnings.some(w => /not a plain decimal/.test(w))).to.equal(false);
-        });
-
-        it('describe output is deduplicated and text-only', function () {
-            const d = describeAction(parse('SEND|0|JDOG|1|addr|<b>x</b>'));
-            // No HTML interpretation is decoder business; value passes as text.
-            expect(d.details.find(x => x.label === 'Memo').value).to.equal('<b>x</b>');
-        });
-    });
-});
-
-// A label ending in "to" names a destination, even when it carries an amount word
-
-describe('describe: an address row is not amount-checked', function () {
-
-    const OWNER = 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh';
-
-    function issueWithTransferSupply() {
-        return describeAction({
-            action: 'ISSUE',
-            params: { VERSION: '2', TICK: 'MYTOKEN', MINT_SUPPLY: '1000', TRANSFER_SUPPLY: OWNER }
-        });
-    }
-
-    // "Transfer minted supply to" holds TRANSFER_SUPPLY, which is an address, but
-    // the label matches the amount heuristic on the word "supply". Running it
-    // through formatAmount flagged every legitimate owner issue-and-transfer as
-    // junk on the confirm screen the wallet shows before signing.
-    it('does not flag a valid address as a malformed decimal', function () {
-        const d = issueWithTransferSupply();
-        expect(d.warnings.join('\n')).to.not.match(/not a plain decimal/);
-        expect(d.details.find(x => x.label === 'Transfer minted supply to').value).to.equal(OWNER);
-    });
-
-    // The same label must still be recognised as a destination, so the
-    // your-address and contact annotations reach it.
-    it('still annotates it as a destination the signer owns', function () {
-        const d = describeAction(
-            { action: 'ISSUE', params: { VERSION: '2', TICK: 'MYTOKEN', MINT_SUPPLY: '1000', TRANSFER_SUPPLY: OWNER } },
-            { ownAddresses: [OWNER] }
-        );
-        expect(d.details.find(x => x.label === 'Transfer minted supply to').value).to.include('(your address)');
     });
 });

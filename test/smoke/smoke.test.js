@@ -12,54 +12,57 @@ const { expect } = require('chai');
 const axios = require('axios');
 const http = require('http');
 
+let server;
+const PORT = 19876; // Unlikely to collide
+
+function startServer(done) {
+    // Boot the SDK API server programmatically
+    const express    = require('express');
+    const bodyParser = require('body-parser');
+    const helmet     = require('helmet');
+    const cors       = require('cors');
+    const jsonRouter = require('express-json-rpc-router');
+    const XChainSDK  = require('../../src/XChainSDK');
+
+    const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
+
+    const app = express();
+    app.use(helmet());
+    app.use(bodyParser.json());
+    app.use(cors());
+
+    const controller = {
+        async ping() { return { status: 'success' }; },
+        async create_action(params) { return sdk.createAction(params); },
+        async validate_action(params) { return sdk.validateAction(params.action, params.params); },
+        async get_actions() { return sdk.getActions(); },
+        async get_action_formats(params) { return sdk.getActionFormats(params.action); },
+        async get_action_fields(params) { return sdk.getActionFields(params.action, params.version); }
+    };
+
+    app.use(jsonRouter({ methods: controller }));
+
+    server = app.listen(PORT, done);
+}
+
+function stopServer(done) {
+    server.close(done);
+}
+
+async function rpc(method, params) {
+    let response = await axios.post('http://localhost:' + PORT, {
+        jsonrpc: '2.0',
+        method: method,
+        params: params || {},
+        id: 1
+    });
+    return response.data;
+}
+
 describe('Smoke: API server end-to-end', function () {
 
-    let server;
-    const PORT = 19876; // Unlikely to collide
-
-    before(function (done) {
-        // Boot the SDK API server programmatically
-        const express    = require('express');
-        const bodyParser = require('body-parser');
-        const helmet     = require('helmet');
-        const cors       = require('cors');
-        const jsonRouter = require('express-json-rpc-router');
-        const XChainSDK  = require('../../src/XChainSDK');
-
-        const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
-
-        const app = express();
-        app.use(helmet());
-        app.use(bodyParser.json());
-        app.use(cors());
-
-        const controller = {
-            async ping() { return { status: 'success' }; },
-            async create_action(params) { return sdk.createAction(params); },
-            async validate_action(params) { return sdk.validateAction(params.action, params.params); },
-            async get_actions() { return sdk.getActions(); },
-            async get_action_formats(params) { return sdk.getActionFormats(params.action); },
-            async get_action_fields(params) { return sdk.getActionFields(params.action, params.version); }
-        };
-
-        app.use(jsonRouter({ methods: controller }));
-
-        server = app.listen(PORT, done);
-    });
-
-    after(function (done) {
-        server.close(done);
-    });
-
-    async function rpc(method, params) {
-        let response = await axios.post('http://localhost:' + PORT, {
-            jsonrpc: '2.0',
-            method: method,
-            params: params || {},
-            id: 1
-        });
-        return response.data;
-    }
+    before(startServer);
+    after(stopServer);
 
     // Basic connectivity
 
@@ -105,6 +108,12 @@ describe('Smoke: API server end-to-end', function () {
         });
         expect(res.error).to.exist;
     });
+});
+
+describe('Smoke: API server end-to-end', function () {
+
+    before(startServer);
+    after(stopServer);
 
     // Validation via RPC
 
@@ -150,6 +159,12 @@ describe('Smoke: API server end-to-end', function () {
         expect(res.result).to.include('DEPLOY');
         expect(res.result).to.include('EXECUTE');
     });
+});
+
+describe('Smoke: API server end-to-end', function () {
+
+    before(startServer);
+    after(stopServer);
 
     it('get_action_formats returns versions for ISSUE', async function () {
         let res = await rpc('get_action_formats', { action: 'ISSUE' });

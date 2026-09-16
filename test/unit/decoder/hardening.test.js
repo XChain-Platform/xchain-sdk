@@ -44,6 +44,9 @@ describe('decoder hardening', function () {
             expect(flags).to.deep.equal([]);
         });
     });
+});
+
+describe('decoder hardening', function () {
 
     describe('formatAmount', function () {
         it('flags exponential notation, never prettifies', function () {
@@ -90,6 +93,9 @@ describe('decoder hardening', function () {
             expect(flags).to.deep.equal([]);
         });
     });
+});
+
+describe('decoder hardening', function () {
 
     describe('truncateAddress', function () {
         it('shared head-8/tail-6 window', function () {

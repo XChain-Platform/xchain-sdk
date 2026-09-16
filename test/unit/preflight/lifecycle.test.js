@@ -51,6 +51,11 @@ describe('pre-flight lifecycle', function () {
             ]);
             expect(runs).to.equal(2);
         });
+    });
+});
+
+describe('pre-flight lifecycle', function () {
+    describe('coalescing', function () {
 
         it('identical localDeltas still share one producer', async function () {
             const c = new Coalescer();
@@ -88,7 +93,9 @@ describe('pre-flight lifecycle', function () {
             expect(resolved).to.equal(1); // shared producer ran once and completed
         });
     });
+});
 
+describe('pre-flight lifecycle', function () {
     describe('staleness', function () {
         it('a report older than the window is stale', function () {
             const now = 1000000;

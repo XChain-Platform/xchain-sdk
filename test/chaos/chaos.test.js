@@ -24,16 +24,12 @@
 
 const { expect }      = require('chai');
 const nock            = require('nock');
-const ExplorerClient  = require('../../src/explorer.js');
-const EncoderClient   = require('../../src/encoder.js');
-const HubConnector    = require('../../src/hub.js');
+const ExplorerClient  = require('../../src/clients/explorer.js');
 const {
     SDKError,
     SDKExplorerError,
-    SDKEncoderError,
-    SDKHubError,
     SDKRateLimitedError
-} = require('../../src/errors.js');
+} = require('../../src/utils/errors.js');
 
 // Note: nock.disableNetConnect is set inside each describe block, not globally,
 // to avoid interfering with other test files (e.g. smoke tests using real HTTP).
@@ -49,26 +45,8 @@ function makeExplorer(extraOpts = {}) {
     }, extraOpts));
 }
 
-function makeEncoder(extraOpts = {}) {
-    return new EncoderClient(Object.assign({
-        encoderUrl:  'chaos.test',
-        encoderPort: 3000,
-        retry: false
-    }, extraOpts));
-}
-
-function makeHub(extraOpts = {}) {
-    return new HubConnector(Object.assign({
-        hubUrl:  'chaos.test',
-        hubPort: 8001,
-        retry: false
-    }, extraOpts));
-}
-
 // Coin prefix for bitcoin-mainnet is BTC
 const EXPLORER_BASE  = 'http://chaos.test:8080';
-const ENCODER_BASE   = 'http://chaos.test:3000';
-const HUB_BASE       = 'http://chaos.test:8001';
 const COIN_PATH      = '/BTC/api';
 
 // 1. EXPLORER CHAOS (12 tests)
@@ -125,6 +103,15 @@ describe('ExplorerClient – network chaos', function () {
         expect(result === '' || result === null || result === undefined || typeof result === 'object').to.equal(true);
     });
 
+});
+
+describe('ExplorerClient – network chaos', function () {
+    this.timeout(5000);
+
+    before(() => nock.disableNetConnect());
+    after(() => nock.enableNetConnect());
+    afterEach(() => nock.cleanAll());
+
     // (c) Valid JSON but wrong structure
     it('c) wrong JSON structure – returns as-is without crashing', async () => {
         nock(EXPLORER_BASE)
@@ -170,6 +157,15 @@ describe('ExplorerClient – network chaos', function () {
             expect(err.code).to.equal('EXPLORER_HTTP_502');
         }
     });
+
+});
+
+describe('ExplorerClient – network chaos', function () {
+    this.timeout(5000);
+
+    before(() => nock.disableNetConnect());
+    after(() => nock.enableNetConnect());
+    afterEach(() => nock.cleanAll());
 
     // (f) HTTP 500 with stack trace body
     it('f) HTTP 500 – throws SDKExplorerError with code EXPLORER_HTTP_500', async () => {
@@ -219,6 +215,15 @@ describe('ExplorerClient – network chaos', function () {
         }
     });
 
+});
+
+describe('ExplorerClient – network chaos', function () {
+    this.timeout(5000);
+
+    before(() => nock.disableNetConnect());
+    after(() => nock.enableNetConnect());
+    afterEach(() => nock.cleanAll());
+
     // (i) Timeout (nock delay + short axios timeout)
     // NOTE: nock .delay() simulates slow responses; the axios ECONNABORTED path
     // is triggered when timeout fires before response headers arrive.
@@ -251,6 +256,15 @@ describe('ExplorerClient – network chaos', function () {
         const result = await client.getStatus();
         expect(result).to.be.an('array').with.lengthOf(10000);
     });
+
+});
+
+describe('ExplorerClient – network chaos', function () {
+    this.timeout(5000);
+
+    before(() => nock.disableNetConnect());
+    after(() => nock.enableNetConnect());
+    afterEach(() => nock.cleanAll());
 
     // (k) Response with null body
     it('k) null body – does not crash', async () => {
@@ -290,287 +304,6 @@ describe('ExplorerClient – network chaos', function () {
                 expect(r.value).to.be.an('object');
             }
         }
-    });
-
-});
-
-// 2. ENCODER CHAOS (10 tests)
-
-describe('EncoderClient – network chaos', function () {
-    this.timeout(5000);
-
-    before(() => nock.disableNetConnect());
-    after(() => nock.enableNetConnect());
-    afterEach(() => nock.cleanAll());
-
-    // (a) Malformed JSON-RPC response: axios returns the raw string without
-    //     throwing, so body.error is undefined and body.result is undefined.
-    //     The client returns undefined (graceful degradation, no crash).
-    it('a) malformed JSON – does not crash', async () => {
-        nock(ENCODER_BASE)
-            .post('/')
-            .reply(200, 'garbage', { 'content-type': 'text/plain' });
-
-        const client = makeEncoder();
-        let result = await client.createTx({ data: 'TEST', pubkey: 'pub' });
-        // Graceful: returns undefined rather than crashing
-        expect(result === undefined || result === null).to.be.true;
-    });
-
-    // (b) Valid JSON but missing result AND error fields
-    it('b) JSON-RPC missing result and error – does not crash, returns undefined/null', async () => {
-        nock(ENCODER_BASE)
-            .post('/')
-            .reply(200, { jsonrpc: '2.0', id: 1 });
-
-        const client = makeEncoder();
-        // body.error is falsy, body.result is undefined → returns undefined
-        const result = await client.createTx({ data: 'TEST', pubkey: 'pub' });
-        expect(result === undefined || result === null).to.equal(true);
-    });
-
-    // (c) JSON-RPC error with no message field
-    it('c) JSON-RPC error no message – throws SDKEncoderError with ENCODER_RPC_ERROR', async () => {
-        nock(ENCODER_BASE)
-            .post('/')
-            .reply(200, { jsonrpc: '2.0', error: { code: -32600 }, id: 1 });
-
-        const client = makeEncoder();
-        try {
-            await client.createTx({ data: 'TEST', pubkey: 'pub' });
-            throw new Error('Expected SDKEncoderError but call succeeded');
-        } catch (err) {
-            expect(err).to.be.instanceof(SDKEncoderError);
-            expect(err.code).to.equal('ENCODER_RPC_ERROR');
-        }
-    });
-
-    // (d) JSON-RPC error with complex object (no message, has data)
-    it('d) JSON-RPC complex error object – throws SDKEncoderError', async () => {
-        nock(ENCODER_BASE)
-            .post('/')
-            .reply(200, { jsonrpc: '2.0', error: { code: -32000, data: { details: 'stuff' } }, id: 1 });
-
-        const client = makeEncoder();
-        try {
-            await client.createTx({ data: 'TEST', pubkey: 'pub' });
-            throw new Error('Expected SDKEncoderError but call succeeded');
-        } catch (err) {
-            expect(err).to.be.instanceof(SDKEncoderError);
-            expect(err.code).to.equal('ENCODER_RPC_ERROR');
-        }
-    });
-
-    // (e) HTTP 503 Service Unavailable
-    it('e) HTTP 503 – throws SDKEncoderError with code ENCODER_HTTP_503', async () => {
-        nock(ENCODER_BASE)
-            .post('/')
-            .reply(503);
-
-        const client = makeEncoder();
-        try {
-            await client.createTx({ data: 'TEST', pubkey: 'pub' });
-            throw new Error('Expected SDKEncoderError but call succeeded');
-        } catch (err) {
-            expect(err).to.be.instanceof(SDKEncoderError);
-            expect(err.code).to.equal('ENCODER_HTTP_503');
-        }
-    });
-
-    // (f) Connection refused
-    it('f) ECONNREFUSED – throws SDKEncoderError with code ENCODER_NETWORK', async () => {
-        nock(ENCODER_BASE)
-            .post('/')
-            .replyWithError('ECONNREFUSED');
-
-        const client = makeEncoder();
-        try {
-            await client.createTx({ data: 'TEST', pubkey: 'pub' });
-            throw new Error('Expected SDKEncoderError but call succeeded');
-        } catch (err) {
-            expect(err).to.be.instanceof(SDKEncoderError);
-            expect(err.code).to.equal('ENCODER_NETWORK');
-        }
-    });
-
-    // (g) Timeout
-    // NOTE: nock .delay() + axios timeout interaction can be timing-sensitive in CI.
-    it('g) timeout – throws SDKEncoderError with ENCODER_TIMEOUT or ENCODER_NETWORK', async () => {
-        nock(ENCODER_BASE)
-            .post('/')
-            .delay(500)
-            .reply(200, {});
-
-        const client = makeEncoder({ timeout: 100 });
-        try {
-            await client.createTx({ data: 'TEST', pubkey: 'pub' });
-            throw new Error('Expected SDKEncoderError but call succeeded');
-        } catch (err) {
-            expect(err).to.be.instanceof(SDKEncoderError);
-            expect(['ENCODER_TIMEOUT', 'ENCODER_NETWORK']).to.include(err.code);
-        }
-    });
-
-    // (h) Null result
-    it('h) null result – returns null without crashing', async () => {
-        nock(ENCODER_BASE)
-            .post('/')
-            .reply(200, { jsonrpc: '2.0', result: null, id: 1 });
-
-        const client = makeEncoder();
-        const result = await client.createTx({ data: 'TEST', pubkey: 'pub' });
-        expect(result).to.equal(null);
-    });
-
-    // (i) Unexpected string result
-    it('i) string result – returns the string without crashing', async () => {
-        nock(ENCODER_BASE)
-            .post('/')
-            .reply(200, { jsonrpc: '2.0', result: 'just a string', id: 1 });
-
-        const client = makeEncoder();
-        const result = await client.createTx({ data: 'TEST', pubkey: 'pub' });
-        expect(result).to.equal('just a string');
-    });
-
-    // (j) Multiple concurrent requests
-    it('j) multiple concurrent requests – all resolve or reject cleanly', async () => {
-        // Half succeed, half fail, to exercise both paths
-        for (let i = 0; i < 3; i++) {
-            nock(ENCODER_BASE)
-                .post('/')
-                .reply(200, { jsonrpc: '2.0', result: { psbt: 'abc' + i }, id: i + 1 });
-        }
-        for (let i = 0; i < 2; i++) {
-            nock(ENCODER_BASE)
-                .post('/')
-                .reply(503);
-        }
-
-        const client = makeEncoder();
-        const calls = Array.from({ length: 5 }, () =>
-            client.createTx({ data: 'TEST', pubkey: 'pub' })
-        );
-
-        const results = await Promise.allSettled(calls);
-        for (const r of results) {
-            if (r.status === 'rejected') {
-                expect(r.reason).to.be.instanceof(SDKEncoderError);
-            } else {
-                expect(r.value).to.be.an('object');
-            }
-        }
-    });
-
-});
-
-// 3. HUB CHAOS (6 tests)
-
-describe('HubConnector – network chaos', function () {
-    this.timeout(5000);
-
-    before(() => nock.disableNetConnect());
-    after(() => nock.enableNetConnect());
-    afterEach(() => nock.cleanAll());
-
-    // (a) Hub returns empty config
-    it('a) empty config result – getAllConfig returns null; extractServiceEndpoints returns {}', async () => {
-        nock(HUB_BASE)
-            .post('/')
-            .reply(200, { jsonrpc: '2.0', result: {}, id: 1 });
-
-        const hub = makeHub();
-        // result is {} which is truthy, so getAllConfig stores and returns it
-        const config = await hub.getAllConfig();
-        expect(config).to.deep.equal({});
-
-        // With an empty config object, extractServiceEndpoints should return {}
-        const endpoints = hub.extractServiceEndpoints('bitcoin-mainnet');
-        expect(endpoints).to.deep.equal({});
-    });
-
-    // (b) Hub returns malformed config structure (coin value is a string, not an object)
-    it('b) malformed config structure – extractServiceEndpoints does not crash', async () => {
-        nock(HUB_BASE)
-            .post('/')
-            .reply(200, { jsonrpc: '2.0', result: { bitcoin: 'not an object' }, id: 1 });
-
-        const hub = makeHub();
-        await hub.getAllConfig();
-
-        // coinConfig['mainnet'] on a string is undefined → should return {}
-        const endpoints = hub.extractServiceEndpoints('bitcoin-mainnet');
-        expect(endpoints).to.deep.equal({});
-    });
-
-    // (c) Hub returns null result
-    //
-    // This asserted `getAllConfig() === null` back when a single hub URL either
-    // answered or returned null. Multi-endpoint failover changed the contract:
-    // a null result is a failed endpoint, the loop moves to the next one, and
-    // when every endpoint is exhausted the call raises HUB_UNAVAILABLE rather
-    // than handing back a null the caller would have to re-check. A silent null
-    // is exactly what the failover exists to stop, so assert the refusal.
-    it('c) null result – getAllConfig exhausts the endpoints and throws HUB_UNAVAILABLE', async () => {
-        nock(HUB_BASE)
-            .post('/')
-            .reply(200, { jsonrpc: '2.0', result: null, id: 1 });
-
-        const hub = makeHub();
-        let caught = null;
-        try {
-            await hub.getAllConfig();
-        } catch (err) {
-            caught = err;
-        }
-        expect(caught, 'a null result must not resolve silently').to.not.equal(null);
-        expect(caught.code).to.equal('HUB_UNAVAILABLE');
-        expect(caught.message).to.match(/no result/);
-    });
-
-    // (d) Hub unreachable (ECONNREFUSED)
-    it('d) hub unreachable – throws SDKHubError with code HUB_UNAVAILABLE', async () => {
-        nock(HUB_BASE)
-            .post('/')
-            .replyWithError('ECONNREFUSED');
-
-        const hub = makeHub();
-        try {
-            await hub.getAllConfig();
-            throw new Error('Expected SDKHubError but call succeeded');
-        } catch (err) {
-            expect(err).to.be.instanceof(SDKHubError);
-            expect(err.code).to.equal('HUB_UNAVAILABLE');
-        }
-    });
-
-    // (e) Hub timeout
-    // NOTE: nock .delay() + axios timeout interaction can be timing-sensitive in CI.
-    it('e) hub timeout – throws SDKHubError', async () => {
-        nock(HUB_BASE)
-            .post('/')
-            .delay(10000)
-            .reply(200, {});
-
-        // Pass timeout via constructor options; HubConnector reads options.timeout
-        const hub = makeHub({ timeout: 100 });
-        try {
-            await hub.getAllConfig();
-            throw new Error('Expected SDKHubError but call succeeded');
-        } catch (err) {
-            expect(err).to.be.instanceof(SDKHubError);
-        }
-    });
-
-    // (f) ping returns false on network failure, does not throw
-    it('f) ping – returns false on failure, does not throw', async () => {
-        nock(HUB_BASE)
-            .post('/')
-            .replyWithError('fail');
-
-        const hub = makeHub();
-        const result = await hub.ping();
-        expect(result).to.equal(false);
     });
 
 });

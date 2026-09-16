@@ -34,11 +34,12 @@
 
 const bitcoin = require('bitcoinjs-lib');
 const ecc     = require('@bitcoinerlab/secp256k1');
-const MuSig2  = require('../musig2.js');
-const { exactU64 } = require('./coSigner.js');
+const { secp256k1 } = require('@noble/curves/secp256k1');
+const MuSig2  = require('./musig2.js');
+const { exactU64 } = require('./co_signer.js');
 // Teach bitcoinjs to serialize a satoshi value above 2^53. Idempotent via
 // the module cache; without it a BigInt output value throws at write time.
-require('../applyBufferutilsPatch');
+require('../utils/apply_bufferutils_patch');
 
 bitcoin.initEccLib(ecc);
 
@@ -70,7 +71,6 @@ function localPairSigner(leaf, secretKeys) {
     if (!Array.isArray(secretKeys) || secretKeys.length !== 2)
         throw new Error('localPairSigner requires the pair of secret keys, in leaf order');
     const sk = secretKeys.map((k, i) => toBytes(k, `secretKeys[${i}]`));
-    const { secp256k1 } = require('@noble/curves/secp256k1');
     // Sanity: the supplied keys must aggregate to the leaf key (else the witness
     // would never satisfy the script). Fail loudly rather than emit a dead tx.
     const pub = sk.map((s) => Buffer.from(secp256k1.getPublicKey(s, true)));
@@ -90,6 +90,34 @@ function localPairSigner(leaf, secretKeys) {
         const pb = b.partialSign({ secretKey: sk[1], publicNonce: nb, sessionKey: sb });
         return Buffer.from(a.aggregateSignatures([pa, pb], sa));
     };
+}
+
+function reconcileRecoveryFee(inputs, outputs) {
+    // Fee reconciliation. This is the only SDK signing path that bypasses PSBT
+    // extraction and the encoder, so bitcoinjs's absurd-fee guard never runs here.
+    // Whole-account recovery moves the entire aggregate balance, so a mis-entered
+    // outputs[].value (satoshi/decimal confusion, a dropped digit, a forgotten
+    // change output) would silently donate the remainder to miners. Guard both
+    // directions before signing anything.
+    // Satoshi values are u64: Number() rounds above 2^53, so a >90M-DOGE account
+    // reconciled here compared EQUAL to a short-changed output set, while the sighash
+    // below commits to the unrounded values (mirrors coSigner.toU64 / exactU64).
+    let totalIn = 0n;
+    for (const i of inputs) {
+        const v = exactU64(i.value);
+        if (v === null) throw new Error('recovery inputs carry a non-integer or negative value');
+        totalIn += v;
+    }
+    let totalOut = 0n;
+    for (const o of outputs) {
+        const v = exactU64(o.value);
+        if (v === null) throw new Error('recovery outputs carry a non-integer or negative value');
+        totalOut += v;
+    }
+    const fee = totalIn - totalOut;
+    if (fee < 0n)
+        throw new Error(`recovery outputs (${totalOut}) exceed inputs (${totalIn}): would be an invalid, unrelayable transaction`);
+    return fee;
 }
 
 /*
@@ -129,30 +157,7 @@ async function buildRecoverySpend(cfg = {}) {
         tx.addOutput(script, o.value);
     }
 
-    // Fee reconciliation. This is the only SDK signing path that bypasses PSBT
-    // extraction and the encoder, so bitcoinjs's absurd-fee guard never runs here.
-    // Whole-account recovery moves the entire aggregate balance, so a mis-entered
-    // outputs[].value (satoshi/decimal confusion, a dropped digit, a forgotten
-    // change output) would silently donate the remainder to miners. Guard both
-    // directions before signing anything.
-    // Satoshi values are u64: Number() rounds above 2^53, so a >90M-DOGE account
-    // reconciled here compared EQUAL to a short-changed output set, while the sighash
-    // below commits to the unrounded values (mirrors coSigner._toU64 / exactU64).
-    let totalIn = 0n;
-    for (const i of inputs) {
-        const v = exactU64(i.value);
-        if (v === null) throw new Error('recovery inputs carry a non-integer or negative value');
-        totalIn += v;
-    }
-    let totalOut = 0n;
-    for (const o of outputs) {
-        const v = exactU64(o.value);
-        if (v === null) throw new Error('recovery outputs carry a non-integer or negative value');
-        totalOut += v;
-    }
-    const fee = totalIn - totalOut;
-    if (fee < 0n)
-        throw new Error(`recovery outputs (${totalOut}) exceed inputs (${totalIn}): would be an invalid, unrelayable transaction`);
+    const fee = reconcileRecoveryFee(inputs, outputs);
 
     // Every input spends the same account output (the prevout set the sighash
     // commits to). One tapleaf sighash + signature per input.
@@ -171,7 +176,7 @@ async function buildRecoverySpend(cfg = {}) {
     }
 
     // Absurd-fee ceiling (sat/vB), computed after the witnesses are attached so
-    // the vsize is accurate. Mirrors WalletUtils._maxFeeRate / bitcoinjs's 5000
+    // the vsize is accurate. Mirrors WalletUtils.resolveMaxFeeRate / bitcoinjs's 5000
     // sat/vB default. Low-unit-value chains (e.g. DOGE) whose ordinary fee-rate
     // exceeds this must pass an explicit cfg.maximumFeeRate, or set
     // cfg.acceptHighFee to bypass the check entirely.

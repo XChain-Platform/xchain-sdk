@@ -47,6 +47,17 @@ try {
     XChainSDKClass = require('../src/XChainSDK.js');
 }
 
+// Same dual resolution for the shared cap-table predicate: the ceiling gate below
+// must apply the evaluator's own notion of an enforceable cap, not a second one.
+// The installed form names the evaluator's older path, which every published SDK
+// release still resolves, so this package keeps working against 0.18.0 as well.
+let hasEnforceableCap;
+try {
+    ({ hasEnforceableCap } = require('@dankest-llc/xchain-sdk/src/cosigner/policyEvaluator.js'));
+} catch {
+    ({ hasEnforceableCap } = require('../src/cosigner/policy_evaluator.js'));
+}
+
 // Explorer-style coin prefixes → SDK network strings. Mainnet/testnet default
 // to the public *.xchain.io hosts (SDK zero-config); R* regtest prefixes
 // default to localhost services, overridable via the usual SDK env vars.
@@ -145,8 +156,13 @@ function buildServer(options = {}) {
         { coin: coinParam, tick: z.string().describe('Token tick (symbol)') },
         ({ coin, tick }) => sdkFor(coin).getToken(tick));
 
-    tool('search_tokens', 'Search tokens. type: token = by tick prefix, subtoken = children of a parent tick, nft = unique tokens only, address = tokens issued by an address, block = tokens issued in a block.',
-        { coin: coinParam, query: z.string(), type: z.enum(['token', 'subtoken', 'nft', 'address', 'block']).default('token'), ...pageOpts },
+    // No `nft` lane. The explorer's /tokens route accepts block, address, token and
+    // subtoken only, so `type: 'nft'` matched no route and every such search 404'd;
+    // a 404 reads as "nothing found", so the tool answered a question it had itself
+    // advertised with a confident, wrong empty result. Unique-token discovery lives
+    // on the separate collectibles feed, which this SDK has no binding for yet.
+    tool('search_tokens', 'Search tokens. type: token = by tick prefix, subtoken = children of a parent tick, address = tokens issued by an address, block = tokens issued in a block.',
+        { coin: coinParam, query: z.string(), type: z.enum(['token', 'subtoken', 'address', 'block']).default('token'), ...pageOpts },
         ({ coin, query, type, page, limit }) => sdkFor(coin).getTokens(query, type, { page, limit }));
 
     tool('get_holders', 'Holders of a token with balances.',
@@ -179,8 +195,12 @@ function buildServer(options = {}) {
         { coin: coinParam, block: z.number().int().min(0) },
         ({ coin, block }) => sdkFor(coin).getBlock(block));
 
-    tool('search', 'General search across addresses, tokens, broadcasts, and transactions.',
-        { coin: coinParam, query: z.string(), type: z.enum(['address', 'token', 'broadcast', 'transaction']).optional() },
+    // Require `type`, and carry the fifth category the route serves: a schema that
+    // lets it be omitted interpolates the string 'undefined' into
+    // /{coin}/explorer/search/{query}/undefined, which matches no route, and the
+    // caller reads that 404 as an empty result set rather than as a malformed call.
+    tool('search', 'General search across addresses, tokens, broadcasts, contracts, and transactions.',
+        { coin: coinParam, query: z.string(), type: z.enum(['address', 'broadcast', 'contract', 'token', 'transaction']) },
         ({ coin, query, type }) => sdkFor(coin).search(query, type));
 
     /* ── dispensers / markets ───────────────────────────────────────── */
@@ -266,11 +286,17 @@ function buildServer(options = {}) {
     // likewise a COUNT cap, not an amount ceiling, and does not satisfy this.
     if (wallet) {
         const pol = wallet.policy;
-        const hasAmountCap = !!pol.maxPerAction
-            || !!(pol.maxPerWindow && pol.maxPerWindow.perTick);
+        // Enforceability, not truthiness: `maxPerAction: {}`, `{ SEND: {} }` and
+        // `maxPerWindow: { perTick: {} }` are truthy objects that resolve no cap for
+        // any lookup, so each one passed this gate while every amount comparison in
+        // policyEvaluator was skipped - an unbounded SEND under a policy the operator
+        // wrote as capped. hasEnforceableCap is the evaluator's own predicate.
+        const hasAmountCap = hasEnforceableCap(pol.maxPerAction, { twoLevel: true })
+            || hasEnforceableCap(pol.maxPerWindow && pol.maxPerWindow.perTick);
         if (!hasAmountCap)
             throw new Error('mcp wallet policy must set a binding amount ceiling '
-                + '(maxPerAction or maxPerWindow.perTick): the MCP rail has no human in the loop, '
+                + '(maxPerAction or maxPerWindow.perTick, holding at least one usable cap entry): '
+                + 'the MCP rail has no human in the loop, '
                 + 'so a policy with no spend ceiling is refused (fail-closed)');
     }
 
@@ -292,7 +318,7 @@ function buildServer(options = {}) {
                 return {
                     address: s.address,
                     balances: await s.getBalances(),
-                    window_usage: s._windowUsage(),
+                    window_usage: s.computeWindowUsage(),
                 };
             });
 
@@ -302,7 +328,9 @@ function buildServer(options = {}) {
                 + 'before signing, with a POLICY_* code. Treat policy refusals as final, not retryable. '
                 + 'At most once: repeating a call with the same coin, action and params is REFUSED with '
                 + 'POLICY_DUPLICATE_SUBMIT and the original txid, so a call that timed out is safe to repeat '
-                + 'and will never pay twice. To make a DELIBERATE second identical payment, pass a new '
+                + 'and does not pay twice. The guard is bounded by the policy\'s idempotency retention horizon '
+                + '(30 days by default), not unlimited: an identical call made after the key has aged out is '
+                + 'treated as a new payment. To make a DELIBERATE second identical payment, pass a new '
                 + 'idempotency_key.',
             inputSchema: {
                 coin: coinParam,

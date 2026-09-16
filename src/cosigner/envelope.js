@@ -30,7 +30,7 @@
  *       one. The leaf's OP_CHECKSIG key is the bare aggregate, so the MuSig2
  *       session for a reveal carries NO tweak.
  *   (c) an action that lives in the leaf script rather than in an OP_RETURN
- *       (see psbtActionDecode.js).
+ *       (see psbt_action_decode.js).
  *
  * G3 is why the tweak is derived and never accepted: a raw `tweaks` value is
  * an unverifiable commitment to an arbitrary tap tree, and whoever supplies
@@ -83,9 +83,9 @@
 
 const bitcoin = require('bitcoinjs-lib');
 const ecc     = require('@bitcoinerlab/secp256k1');
-// Shared with coSigner.js's key-path derivation: one definition of which
+// Shared with co_signer.js's key-path derivation: one definition of which
 // sighash types this signer will produce a message for.
-const { sighashAllowed, disallowedSighashError } = require('./sighashPolicy.js');
+const { sighashAllowed, disallowedSighashError } = require('./policy/sighash_policy.js');
 
 bitcoin.initEccLib(ecc);
 
@@ -269,7 +269,7 @@ function deriveEnvelopeCommit(args = {}) {
  * the sighash commits to all prevouts.
  */
 function envelopeScriptPathSighash(psbt, inputIndex, hashType, leafHash) {
-    // Defense in depth, identical to the key-path twin in coSigner.js: never
+    // Defense in depth, identical to the key-path twin in co_signer.js: never
     // derive a signing message under a sighash type that does not commit to
     // every output. process()'s step-8 gate rejects it earlier with a clearer
     // code, but this export is public, and a reveal partial signed under

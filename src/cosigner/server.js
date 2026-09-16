@@ -28,10 +28,88 @@
 'use strict';
 
 const express = require('express');
-const { safeTokenEqual } = require('../utils/safeCompare.js');
+const { safeTokenEqual } = require('../utils/safe_compare.js');
 // One body ceiling for BOTH co-signer transports, derived from the protocol's
-// envelope payload maximum rather than hardcoded here (httpBodyLimit.js).
-const { resolveMaxBodyBytes, tooLargeHandler } = require('./httpBodyLimit.js');
+// envelope payload maximum rather than hardcoded here (http_body_limit.js).
+const { resolveMaxBodyBytes, tooLargeHandler } = require('./http_body_limit.js');
+const { getLogger } = require('../observability/logger.js');
+const logger = getLogger('xchain-sdk:cosigner');
+
+function createLogger(opts) {
+    // Operator-visible log sink (G17). Defaults to the console, which under a
+    // process manager (pm2/systemd) is already a durable operator log. Injectable
+    // so a deployment can route it somewhere with retention, and so tests can
+    // assert that faults and denials are actually reported.
+    const sink = typeof opts.logger === 'function' ? opts.logger : null;
+    return (level, message, context) => {
+        if (sink) {
+            try { sink(level, message, context); return; } catch (e) { /* a log sink must never break enforcement */ }
+        }
+        const line = `[cosigner] ${message}` + (context ? ' ' + JSON.stringify(context) : '');
+        if (level === 'error') logger.error(line); else logger.warn(line);
+    };
+}
+
+function handleCoSignRequest(req, res, coSigner, token, log) {
+    // Loopback bearer-token gate (defence in depth even on localhost).
+    if (token) {
+        const auth = req.get('authorization') || '';
+        const got = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+        if (!safeTokenEqual(got, token)) {
+            // G17: a bad bearer token is a denial too, and the one an operator
+            // most needs a trail of (a rotated token, or a probe).
+            log('warn', 'co-sign request rejected: bad bearer token', { present: got !== null });
+            return res.status(401).json({ approved: false, reason: 'UNAUTHORIZED' });
+        }
+    }
+    const body = req.body || {};
+    // ONE request shape (wire collapse, 2026-07-27): { psbt, inputs[], sighashType? }.
+    // The legacy single-input body ({ agentPublicNonce, inputIndex }) is gone -
+    // a one-element inputs array says the same thing, and two shapes meant two
+    // validation paths for every fix applied here. CoSignerClient.sign() does
+    // the wrapping, so single-input callers are unaffected.
+    if (typeof body.psbt !== 'string' || !Array.isArray(body.inputs) || body.inputs.length === 0) {
+        log('warn', 'co-sign request rejected: malformed body', {
+            hasPsbt: typeof body.psbt === 'string', inputs: Array.isArray(body.inputs) ? body.inputs.length : null,
+        });
+        return res.status(400).json({ approved: false, reason: 'BAD_REQUEST',
+            detail: 'psbt (hex) and a non-empty inputs[] of { index, agentPublicNonce } are required' });
+    }
+
+    let result;
+    try {
+        // `envelope` (§3.9) is forwarded verbatim when present: the
+        // daemon validates it (grammar, own-key commitment, and whether the
+        // PSBT actually funds or spends it), so nothing here needs to judge
+        // it, and forwarding an absent field must stay a no-op for every
+        // ordinary request.
+        result = coSigner.process({
+            psbt: body.psbt, inputs: body.inputs, sighashType: body.sighashType,
+            envelope: body.envelope,
+        });
+    } catch (e) {
+        // CoSigner.process is fail-closed by return value; a throw here is an
+        // unexpected internal fault. Surface as a denial, never as a sign.
+        //
+        // G17: LOG it, with the stack, before answering. The wire response stays
+        // deliberately detail-free (it goes to the agent), but discarding the
+        // error entirely meant a poisoned-tick freeze and a corrupt window store
+        // both presented to the operator as an unexplained 500 with no way to
+        // tell them apart. The diagnosis belongs in the log, not on the wire.
+        log('error', 'internal fault while processing a co-sign request', {
+            message: e && e.message, code: e && e.code, stack: e && e.stack,
+        });
+        return res.status(500).json({ approved: false, reason: 'INTERNAL_ERROR' });
+    }
+    // G17: denials are not persisted anywhere (the window store records only
+    // APPROVALS), so without this there is no refusal trail at all - an operator
+    // debugging "the agent cannot spend" had nothing to read.
+    if (result && result.approved !== true)
+        log('warn', 'co-sign request denied', { reason: result.reason, detail: result.detail });
+    // A policy/decode denial is a normal 200 with approved:false (it is a
+    // legitimate answer, not an HTTP error).
+    return res.status(200).json(result);
+}
 
 /*
  * Build an Express app exposing POST /cosign.
@@ -48,7 +126,7 @@ const { resolveMaxBodyBytes, tooLargeHandler } = require('./httpBodyLimit.js');
  *                    faults and denial reasons (G17). Defaults to the console,
  *                    which a process manager already captures durably.
  *   maxBodyBytes {number}  request-body ceiling; defaults to the derived
- *                    envelope-round maximum (httpBodyLimit.js). Anything past
+ *                    envelope-round maximum (http_body_limit.js). Anything past
  *                    it answers 413 REQUEST_TOO_LARGE, at whatever value is set.
  * @returns {express.Express}
  */
@@ -58,95 +136,25 @@ function createCoSignerApp(coSigner, opts = {}) {
     const token = opts.token || null;
     // Fail CLOSED on a missing token: a misconfigured sidecar (unset
     // COSIGNER_TOKEN) must not silently serve unauthenticated MuSig2 signatures.
-    // Mirrors the fail-closed auth gate in src/api.js. The gate is skippable
+    // Mirrors the fail-closed auth gate in src/api/index.js. The gate is skippable
     // only by a deliberate allowUnauthenticated:true (tests/regtest).
     if (!token) {
         if (opts.allowUnauthenticated !== true)
             throw new Error('createCoSignerApp requires a non-empty opts.token (set COSIGNER_TOKEN), or pass { allowUnauthenticated: true } to run the endpoint deliberately unauthenticated');
-        console.warn('[cosigner] WARNING: /cosign is running UNAUTHENTICATED (allowUnauthenticated=true). Never do this in production; the sidecar signs spending authority.');
+        logger.warn('[cosigner] WARNING: /cosign is running UNAUTHENTICATED (allowUnauthenticated=true). Never do this in production; the sidecar signs spending authority.');
     }
 
-    // Operator-visible log sink (G17). Defaults to the console, which under a
-    // process manager (pm2/systemd) is already a durable operator log. Injectable
-    // so a deployment can route it somewhere with retention, and so tests can
-    // assert that faults and denials are actually reported.
-    const sink = typeof opts.logger === 'function' ? opts.logger : null;
-    const log = (level, message, context) => {
-        if (sink) {
-            try { sink(level, message, context); return; } catch (e) { /* a log sink must never break enforcement */ }
-        }
-        const line = `[cosigner] ${message}` + (context ? ' ' + JSON.stringify(context) : '');
-        if (level === 'error') console.error(line); else console.warn(line);
-    };
+    const log = createLogger(opts);
 
     const maxBodyBytes = resolveMaxBodyBytes(opts.maxBodyBytes);
 
     const app = express();
     app.use(express.json({ limit: maxBodyBytes }));
 
-    app.post('/cosign', (req, res) => {
-        // Loopback bearer-token gate (defence in depth even on localhost).
-        if (token) {
-            const auth = req.get('authorization') || '';
-            const got = auth.startsWith('Bearer ') ? auth.slice(7) : null;
-            if (!safeTokenEqual(got, token)) {
-                // G17: a bad bearer token is a denial too, and the one an operator
-                // most needs a trail of (a rotated token, or a probe).
-                log('warn', 'co-sign request rejected: bad bearer token', { present: got !== null });
-                return res.status(401).json({ approved: false, reason: 'UNAUTHORIZED' });
-            }
-        }
-        const body = req.body || {};
-        // ONE request shape (wire collapse, 2026-07-27): { psbt, inputs[], sighashType? }.
-        // The legacy single-input body ({ agentPublicNonce, inputIndex }) is gone -
-        // a one-element inputs array says the same thing, and two shapes meant two
-        // validation paths for every fix applied here. CoSignerClient.sign() does
-        // the wrapping, so single-input callers are unaffected.
-        if (typeof body.psbt !== 'string' || !Array.isArray(body.inputs) || body.inputs.length === 0) {
-            log('warn', 'co-sign request rejected: malformed body', {
-                hasPsbt: typeof body.psbt === 'string', inputs: Array.isArray(body.inputs) ? body.inputs.length : null,
-            });
-            return res.status(400).json({ approved: false, reason: 'BAD_REQUEST',
-                detail: 'psbt (hex) and a non-empty inputs[] of { index, agentPublicNonce } are required' });
-        }
-
-        let result;
-        try {
-            // `envelope` (§3.9) is forwarded verbatim when present: the
-            // daemon validates it (grammar, own-key commitment, and whether the
-            // PSBT actually funds or spends it), so nothing here needs to judge
-            // it, and forwarding an absent field must stay a no-op for every
-            // ordinary request.
-            result = coSigner.process({
-                psbt: body.psbt, inputs: body.inputs, sighashType: body.sighashType,
-                envelope: body.envelope,
-            });
-        } catch (e) {
-            // CoSigner.process is fail-closed by return value; a throw here is an
-            // unexpected internal fault. Surface as a denial, never as a sign.
-            //
-            // G17: LOG it, with the stack, before answering. The wire response stays
-            // deliberately detail-free (it goes to the agent), but discarding the
-            // error entirely meant a poisoned-tick freeze and a corrupt window store
-            // both presented to the operator as an unexplained 500 with no way to
-            // tell them apart. The diagnosis belongs in the log, not on the wire.
-            log('error', 'internal fault while processing a co-sign request', {
-                message: e && e.message, code: e && e.code, stack: e && e.stack,
-            });
-            return res.status(500).json({ approved: false, reason: 'INTERNAL_ERROR' });
-        }
-        // G17: denials are not persisted anywhere (the window store records only
-        // APPROVALS), so without this there is no refusal trail at all - an operator
-        // debugging "the agent cannot spend" had nothing to read.
-        if (result && result.approved !== true)
-            log('warn', 'co-sign request denied', { reason: result.reason, detail: result.detail });
-        // A policy/decode denial is a normal 200 with approved:false (it is a
-        // legitimate answer, not an HTTP error).
-        return res.status(200).json(result);
-    });
+    app.post('/cosign', (req, res) => handleCoSignRequest(req, res, coSigner, token, log));
 
     // After the route: an oversize body is a stated capability limit, not a
-    // network fault (httpBodyLimit.js). Everything else falls through.
+    // network fault (http_body_limit.js). Everything else falls through.
     app.use(tooLargeHandler(maxBodyBytes, log));
 
     return app;

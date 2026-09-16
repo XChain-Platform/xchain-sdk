@@ -1,7 +1,7 @@
 {
   "name": "@dankest-llc/xchain-sdk",
   "description": "xchain-sdk generates XChain Platform ACTION commands and encodes them into unsigned blockchain transactions as well as pulls data from the XChain APIs such as balances and transaction history.",
-  "version": "0.18.0",
+  "version": "0.19.0",
   "comment:homepage": "The npm package page links wherever this points, and it points at the platform site (xchain.io's deep-link backlinks 301 away to tokenscan.io, so operator-controlled touchpoints are what still build its authority).",
   "homepage": "https://xchain.io/",
   "publishConfig": {
@@ -57,6 +57,7 @@
     "browserify": "^17.0.1",
     "c8": "^11.0.0",
     "chai": "^4.5.0",
+    "eslint": "^9.39.5",
     "mocha": "^11.7.5",
     "nock": "^14.0.0",
     "sinon": "^21.0.3",
@@ -77,13 +78,15 @@
     "hono": "^4.13.5"
   },
   "scripts": {
-    "api": "node ./src/api.js",
+    "api": "node ./src/api/index.js",
+    "comment:lint": "The file-level half of the code-style rules, from the vendored eslint.config.js. Advisory: the pre-push structure gate is what actually binds, and it depends on neither eslint nor that file.",
+    "lint": "eslint src test bin",
     "test": "mocha --timeout 5000 --recursive 'test/unit/**/*.test.js'",
     "sync:templates": "node scripts/sync-templates.js",
     "comment:release:npm-check": "Release-ceremony gate: fails while registry.npmjs.org serves a version other than this repo's, for the SDK and for mcp/. Run as the closing act of the publish step; red means an unpublished or half-published cut. Needs network by design, so it is not part of the ci chain.",
     "release:npm-check": "node scripts/npm-sync-check.js",
     "cosigner:init-window": "node scripts/cosigner-init-window.js",
-    "comment:ci:drift": "Pre-flight <-> indexer-handler drift gate (spec 8.5), strict: it answers what the suites structurally cannot, whether the Tier-2 mirrors still match the handlers they mirror, and exits 1 when they do not. What the CI drift jobs on both repos run, and what to run by hand. SKIPS clean with no sibling xchain-indexer checkout, so a single-repo clone is unaffected. It used to run in CI only, so a local `npm run ci` never showed it and it sat red on master unread for two weeks; the ci chain now runs it locally too, in the soft/verdict pair below.",
+    "comment:ci:drift": "Pre-flight <-> indexer-handler drift gate (spec 8.5), strict: it answers what the suites structurally cannot, whether the Tier-2 mirrors still match the handlers they mirror, and exits 1 when they do not. What the CI drift jobs on both repos run, and what to run by hand. FAILS when no sibling xchain-indexer checkout resolves, naming every path it tried: a clean skip there exits 0 having compared nothing, which turns a dropped checkout step into a green run. A clone that has no sibling on purpose sets XCHAIN_ALLOW_NO_INDEXER=1; CI does not need it, because .ci-siblings declares xchain-indexer. It used to run in CI only, so a local `npm run ci` never showed it and it sat red on master unread for two weeks; the ci chain now runs it locally too, in the soft/verdict pair below.",
     "ci:drift": "node bin/check-preflight-drift.js",
     "comment:ci:drift:soft": "The same gate, reporting without exiting 1. It opens the ci chain in this mode because a fatal first link would kill the run before mocha loads: no tally and no named failing test, which the shared pre-push gate reads as THE SUITE NEVER RAN, unable to tell a bad commit from a bad venue. Soft is not a waiver; ci:drift:verdict closes the chain and fails it.",
     "ci:drift:soft": "node bin/check-preflight-drift.js --soft",
@@ -104,10 +107,10 @@
     "test:fuzz": "mocha --timeout 0 --recursive 'test/fuzz/**/*.test.js'",
     "test:chaos": "mocha --timeout 10000 --recursive 'test/chaos/**/*.test.js'",
     "test:all": "mocha --timeout 0 --recursive test/",
-    "repl": "node src/repl.js",
+    "repl": "node src/cli/repl.js",
     "build": "npx browserify index.js -s XChainSDK -t [ babelify --presets [ @babel/preset-env ] --global ] | npx uglify-js --compress --mangle -o dist/xchain_sdk.min.js",
     "build:dev": "npx browserify index.js -s XChainSDK -t [ babelify --presets [ @babel/preset-env ] --global ] -o dist/xchain_sdk.js",
-    "test:eval": "mocha --timeout 30000 --recursive 'test/eval/**/*.eval.js'"
+    "test:eval": "mocha --timeout 30000 --recursive 'test/eval/**/*.test.js'"
   },
   "engines": {
     "node": ">=22.0.0"

@@ -32,7 +32,7 @@
 
 const fs   = require('fs');
 const path = require('path');
-const WindowStore = require('../src/cosigner/windowStore.js');
+const WindowStore = require('../src/cosigner/window_store.js');
 
 const [stateFile, hoursArg] = process.argv.slice(2);
 

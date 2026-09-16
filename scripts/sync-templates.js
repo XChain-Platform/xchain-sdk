@@ -6,7 +6,7 @@
 // them in a browser bundle without fs at runtime. Re-run after any template or
 // pattern change:  npm run sync:templates
 //
-// A drift guard (test/unit/template-parity.test.js) fails the build if the
+// A drift guard (test/unit/template_parity.test.js) fails the build if the
 // embedded copy and the canonical xchain-contracts source diverge, but it
 // only runs when a sibling xchain-contracts checkout sits beside this repo
 // (`.ci-siblings` declares it), and CI resolves that sibling from ITS
@@ -72,7 +72,7 @@ function render(templates, patterns) {
         '//',
         '// Each value is the base64-encoded UTF-8 source of a canonical xchain-contracts',
         '// template/pattern, embedded so sdk.scaffold() works in a browser bundle (no fs).',
-        '// A drift guard (test/unit/template-parity.test.js) enforces byte-parity with the',
+        '// A drift guard (test/unit/template_parity.test.js) enforces byte-parity with the',
         '// xchain-contracts repo.',
         '',
         'module.exports = {',

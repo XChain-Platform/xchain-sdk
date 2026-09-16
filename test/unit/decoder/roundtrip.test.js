@@ -24,9 +24,9 @@ const fs = require('fs');
 const path = require('path');
 
 const config  = require('../../../src/config.js');
-const Utility = require('../../../src/utility.js');
-const Actions = require('../../../src/actions.js');
-const formats = require('../../../src/formats.js');
+const Utility = require('../../../src/utils/utility.js');
+const Actions = require('../../../src/actions/index.js');
+const formats = require('../../../src/protocol/formats.js');
 const { parse, BATCH_ACTION_LIMITS } = require('../../../src/decoder/parse.js');
 const { describe: describeAction } = require('../../../src/decoder/describe.js');
 const { ACTION_ALIASES } = require('../../../src/decoder/aliases.js');
@@ -38,6 +38,68 @@ const MANIFEST = JSON.parse(fs.readFileSync(
 
 function makeActions() {
     return new Actions({ config: config.getConfig(), util: new Utility() });
+}
+
+// Every userEncodable action that BATCH permits (respecting
+// actionLimits and excluding BATCH itself) appears once inside a
+// COMMAND blob and must parse back with its own serialization
+// intact - catching per-action drift inside the nested blob.
+const perAction = {
+    SEND:      'SEND|0|JDOG|1|addr',
+    MINT:      'MINT|0|JDOG|5',
+    ISSUE:     'ISSUE|0|NEWTOK|1000',
+    DESTROY:   'DESTROY|0|JDOG|1',
+    SWEEP:     'SWEEP|0|dest',
+    BROADCAST: 'BROADCAST|0|hello world',
+    DIVIDEND:  'DIVIDEND|0|JDOG|GAS|1',
+    AIRDROP:   'AIRDROP|0|JDOG|1|55',
+    // A place-bet: the only BET format a BATCH realistically carries, and
+    // the one whose OUTCOME/AMOUNT pair a nested-blob field shift would
+    // scramble into a cancel.
+    BET:       'BET|2|42|0|25.5',
+    ORDER:     'ORDER|1|42',
+    SWAP:      'SWAP|1|42',
+    DISPENSER: 'DISPENSER|1|42',
+    SLEEP:     'SLEEP|0|999999',
+    CALLBACK:  'CALLBACK|0|JDOG',
+    COLLECT:   'COLLECT|0',
+    COINPAY:   'COINPAY|0|42',
+    DEPOSIT:   'DEPOSIT|0|7|JDOG|1',
+    WITHDRAW:  'WITHDRAW|0|7|JDOG|1',
+    STAKE:     'STAKE|1|100|' + 'ab'.repeat(32),
+    UNSTAKE:   'UNSTAKE|0|' + 'ab'.repeat(32),
+    DELEGATE:  'DELEGATE|0|' + 'ab'.repeat(32),
+    VOTE:      'VOTE|1|55|1',
+    LINK:      'LINK|0|BTC|1|DOGE|2',
+    ADDRESS:   'ADDRESS|0|1|0|1',
+    PRICE:     'PRICE|1|BTC|JDOG|USD|1.5',
+    MESSAGE:   'MESSAGE|3|BTC|addr|hi there',
+    FILE:      'FILE|0|name.txt|text/plain|title',
+    LIST:      'LIST|0|1|AAA',
+    EXECUTE:   'EXECUTE|0|9|method|p1',
+    DEPLOY:    'DEPLOY|0|aGVsbG8=|100000',
+    // XBRIDGE v0 (lock the gas token for a credit on another chain): the
+    // only bridge leg a user-built BATCH realistically carries. v2 and v5
+    // are system-injected and are not in formats.js at all.
+    XBRIDGE:   'XBRIDGE|0|DOGE|addr|100',
+};
+
+function registerBatchFixtures(entries) {
+    for (const [action, sub] of entries) {
+        it(`BATCH containing ${action}`, function () {
+            const wire = `BATCH|0|${sub}`;
+            const r = parse(wire);
+            expect(r.ok, wire).to.equal(true);
+            expect(r.commands).to.have.length(1);
+            const cmd = r.commands[0];
+            expect(cmd.ok, JSON.stringify(cmd)).to.equal(true);
+            expect(cmd.action).to.equal(action);
+            // Sub-action canonicalization is stable inside the blob.
+            expect(cmd.actionString).to.equal(sub);
+            expect(BATCH_ACTION_LIMITS[action] === undefined ||
+                   BATCH_ACTION_LIMITS[action] >= 1).to.equal(true);
+        });
+    }
 }
 
 describe('decoder round-trip guarantee', function () {
@@ -74,6 +136,9 @@ describe('decoder round-trip guarantee', function () {
             });
         }
     });
+});
+
+describe('decoder round-trip guarantee', function () {
 
     describe('parse -> canonicalize fixpoint', function () {
         const wires = [
@@ -105,74 +170,31 @@ describe('decoder round-trip guarantee', function () {
         });
         it('cosigner psbtActionDecode consumes the same table (single source)', function () {
             const src = fs.readFileSync(
-                path.join(__dirname, '..', '..', '..', 'src', 'cosigner', 'psbtActionDecode.js'), 'utf8');
+                path.join(__dirname, '..', '..', '..', 'src', 'cosigner', 'psbt_action_decode.js'), 'utf8');
             expect(src).to.include("require('../decoder/aliases.js')");
             expect(src).to.not.match(/TRANSFER:\s*'SEND'/);
         });
     });
+});
+
+describe('decoder round-trip guarantee', function () {
 
     describe('one BATCH fixture per permitted action type (spec §3.4)', function () {
-        // Every userEncodable action that BATCH permits (respecting
-        // actionLimits and excluding BATCH itself) appears once inside a
-        // COMMAND blob and must parse back with its own serialization
-        // intact - catching per-action drift inside the nested blob.
-        const perAction = {
-            SEND:      'SEND|0|JDOG|1|addr',
-            MINT:      'MINT|0|JDOG|5',
-            ISSUE:     'ISSUE|0|NEWTOK|1000',
-            DESTROY:   'DESTROY|0|JDOG|1',
-            SWEEP:     'SWEEP|0|dest',
-            BROADCAST: 'BROADCAST|0|hello world',
-            DIVIDEND:  'DIVIDEND|0|JDOG|GAS|1',
-            AIRDROP:   'AIRDROP|0|JDOG|1|55',
-            // A place-bet: the only BET format a BATCH realistically carries, and
-            // the one whose OUTCOME/AMOUNT pair a nested-blob field shift would
-            // scramble into a cancel.
-            BET:       'BET|2|42|0|25.5',
-            ORDER:     'ORDER|1|42',
-            SWAP:      'SWAP|1|42',
-            DISPENSER: 'DISPENSER|1|42',
-            SLEEP:     'SLEEP|0|999999',
-            CALLBACK:  'CALLBACK|0|JDOG',
-            COLLECT:   'COLLECT|0',
-            COINPAY:   'COINPAY|0|42',
-            DEPOSIT:   'DEPOSIT|0|7|JDOG|1',
-            WITHDRAW:  'WITHDRAW|0|7|JDOG|1',
-            STAKE:     'STAKE|1|100|' + 'ab'.repeat(32),
-            UNSTAKE:   'UNSTAKE|0|' + 'ab'.repeat(32),
-            DELEGATE:  'DELEGATE|0|' + 'ab'.repeat(32),
-            VOTE:      'VOTE|1|55|1',
-            LINK:      'LINK|0|BTC|1|DOGE|2',
-            ADDRESS:   'ADDRESS|0|1|0|1',
-            PRICE:     'PRICE|1|BTC|JDOG|USD|1.5',
-            MESSAGE:   'MESSAGE|3|BTC|addr|hi there',
-            FILE:      'FILE|0|name.txt|text/plain|title',
-            LIST:      'LIST|0|1|AAA',
-            EXECUTE:   'EXECUTE|0|9|method|p1',
-            DEPLOY:    'DEPLOY|0|aGVsbG8=|100000',
-        };
-
         it('covers every userEncodable action except BATCH', function () {
             const encodable = Object.keys(formats).filter(a => a !== 'BATCH').sort();
             expect(Object.keys(perAction).sort()).to.deep.equal(encodable);
         });
-
-        for (const [action, sub] of Object.entries(perAction)) {
-            it(`BATCH containing ${action}`, function () {
-                const wire = `BATCH|0|${sub}`;
-                const r = parse(wire);
-                expect(r.ok, wire).to.equal(true);
-                expect(r.commands).to.have.length(1);
-                const cmd = r.commands[0];
-                expect(cmd.ok, JSON.stringify(cmd)).to.equal(true);
-                expect(cmd.action).to.equal(action);
-                // Sub-action canonicalization is stable inside the blob.
-                expect(cmd.actionString).to.equal(sub);
-                expect(BATCH_ACTION_LIMITS[action] === undefined ||
-                       BATCH_ACTION_LIMITS[action] >= 1).to.equal(true);
-            });
-        }
     });
+});
+
+describe('decoder round-trip guarantee', function () {
+
+    describe('one BATCH fixture per permitted action type (spec §3.4)', function () {
+        registerBatchFixtures(Object.entries(perAction));
+    });
+});
+
+describe('decoder round-trip guarantee', function () {
 
     describe('describe() coverage', function () {
         it('returns a non-empty summary for every userEncodable action', function () {

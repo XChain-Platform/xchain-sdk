@@ -13,10 +13,17 @@
  * no longer matches the recorded hash - meaning an indexer validity
  * change landed without a paired review/update of the client check.
  *
- * SKIPS (exit 0) when no indexer checkout is present, so single-repo
- * CI stays green; the sibling CI job (which checks out both) enforces.
+ * FAILS (exit 1) when no indexer checkout resolves, naming what it looked
+ * for and every place it looked. A SKIP there exits 0 having
+ * compared nothing, so a dropped CI checkout step, a typo in
+ * XCHAIN_INDEXER_PATH and a handler directory renamed out from under the
+ * identity test would all report as a clean single-repo run. A run that has no
+ * sibling ON PURPOSE (a standalone SDK clone) declares it with
+ * XCHAIN_ALLOW_NO_INDEXER=1, which a reader can see; XCHAIN_REQUIRE_SIBLINGS=1
+ * overrides that declaration, because a job setting both says the checkout
+ * was supplied and that is the stricter claim.
  *
- * Exit 0 = in sync (or skipped); exit 1 = drift.
+ * Exit 0 = in sync (or a declared standalone run); exit 1 = drift.
  *
  * FAIL-SOFT INSIDE `npm run ci`. A drift exiting 1 as the first link of the
  * chain kills the run before mocha loads: no test tally, no named failing
@@ -32,8 +39,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 const { execFileSync } = require('child_process');
+// Everything the directory shape of a handler needs: row kinds, the directory digest, the
+// whole-directory fee walk and the cross-file literal reader. Kept out of this file, which
+// is already over the repo's 400-line limit and may not grow.
+const handlerDirs = require('./preflight_handler_dirs.js');
 
 /* Output sink, so the gate can be run twice in one `npm run ci` without printing its
  * report twice.
@@ -53,25 +63,17 @@ let OUT = CONSOLE_SINK;
 function say(...a) { OUT.log(...a); }
 function warn(...a) { OUT.error(...a); }
 
-function resolveIndexerRoot() {
-    const candidates = [
-        process.env.XCHAIN_INDEXER_PATH,
-        path.join(__dirname, '..', '..', 'xchain-indexer'),
-    ].filter(Boolean);
-    for (const root of candidates) {
-        if (fs.existsSync(path.join(root, 'src', 'actions'))) return root;
-    }
-    return null;
-}
+/* Where the gate looks for the handlers, why a candidate was rejected, and the report a
+ * rejection prints. In its own module because this file is already over the repo's
+ * 400-line limit and may not grow; re-exported below so callers keep one import. */
+const indexerRoot = require('./preflight_indexer_root.js');
+const { indexerRootCandidates, describeIndexerCandidates, resolveIndexerRoot } = indexerRoot;
 
+/* The table rows, each tagged 'file', 'directory' or 'malformed' by the shape of the
+ * handler path it names. A directory row carries a trailing slash and is hashed over every
+ * file in the directory, so a handler split into parts cannot leave them unhashed. */
 function parseMap(mapPath) {
-    const text = fs.readFileSync(mapPath, 'utf8');
-    const rows = [];
-    // | ... | `src/actions/x.js` | `<hash>` |
-    const re = /\|\s*`(src\/actions\/[^`]+)`\s*\|\s*`([0-9a-f]{64})`\s*\|/g;
-    let m;
-    while ((m = re.exec(text)) !== null) rows.push({ handler: m[1], hash: m[2] });
-    return rows;
+    return handlerDirs.parseMapRows(fs.readFileSync(mapPath, 'utf8'));
 }
 
 /* The indexer commit the pinned hashes were taken at.
@@ -159,19 +161,19 @@ function anchorIsReachable(indexerRoot, anchor) {
 /* The fee-quote seam, which the hash rows above structurally cannot cover.
  *
  * Every mapped row is a per-handler file under src/actions/, so the row regex carries a
- * literal `src/actions/` prefix and can never match the TOP-LEVEL src/actions.js. That is the
+ * literal `src/actions/` prefix and can never match the ACTION LOADER src/actions/index.js. That is the
  * file defining FEE_QUOTE_DENYLIST and FEE_QUOTE_STATIC, and until now the only thing binding
  * them to the SDK's TIER1_DENYLIST was a hand-written comment, which had already drifted.
  *
- * Compared by VALUE rather than by hash on purpose. Hashing all of actions.js would fire on
+ * Compared by VALUE rather than by hash on purpose. Hashing all of the loader would fire on
  * every unrelated edit to a large file, and anchor-scoped hashing can silently lose coverage
  * when a marker moves, which is the worse failure for financial logic. The invariant that
- * actually matters is not "actions.js is unchanged", it is that the two lists agree, so check
+ * actually matters is not "the loader is unchanged", it is that the two lists agree, so check
  * exactly that and fail closed when either literal cannot be read.
  */
 function parseStringSet(text, name, where) {
     // const NAME = new Set([...]) | Object.freeze([...]) | [...]
-    const re = new RegExp('const\\s+' + name + '\\s*=\\s*(?:new Set\\(|Object\\.freeze\\()?\\s*\\[([^\\]]*)\\]', 'g');
+    const re = handlerDirs.declarationPattern(name);
     const hits = [];
     let m;
     while ((m = re.exec(text)) !== null) hits.push(m[1]);
@@ -195,27 +197,23 @@ function parseStringSet(text, name, where) {
  * action charges a fee", the same contract parseStringSet holds.
  */
 const GAS_PRICED_ACTIONS = ['DEPLOY', 'EXECUTE'];
-
-function stripCommentsAndStrings(src) {
-    return src
-        .replace(/\/\*[\s\S]*?\*\//g, ' ')
-        .replace(/\/\/[^\n]*/g, ' ')
-        .replace(/(['"`])(?:\\.|(?!\1)[^\\])*\1/g, '""');
-}
+const { stripCommentsAndStrings } = handlerDirs;
 
 function deriveFeeChargingActions(indexerRoot) {
     const dir = path.join(indexerRoot, 'src', 'actions');
     let entries;
     try {
-        entries = fs.readdirSync(dir);
+        entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch (e) {
         throw new Error(`drift-gate: could not read ${dir} to derive the fee-charging set `
             + `(${e && e.message ? e.message : String(e)}). Fix the read rather than skipping the check.`);
     }
-    const callers = entries
-        .filter((f) => f.endsWith('.js'))
-        .filter((f) => /\bcreateFeesObject\s*\(/.test(stripCommentsAndStrings(fs.readFileSync(path.join(dir, f), 'utf8'))))
-        .map((f) => path.basename(f, '.js').toUpperCase());
+    // Both handler shapes, flat file and directory, with EVERY source file of a directory
+    // handler; see feeWalkHandlers for why reading index.js alone is the same blind spot a
+    // flat readdir of *.js once was.
+    const callers = handlerDirs.feeWalkHandlers(dir, entries)
+        .filter((h) => h.files.some((f) => /\bcreateFeesObject\s*\(/.test(stripCommentsAndStrings(fs.readFileSync(f, 'utf8')))))
+        .map((h) => h.action.toUpperCase());
     if (callers.length === 0) {
         throw new Error('drift-gate: no handler under xchain-indexer/src/actions/ calls createFeesObject. '
             + 'That is how a protocol fee is charged, so an empty walk means this check stopped working, '
@@ -224,19 +222,22 @@ function deriveFeeChargingActions(indexerRoot) {
     return [...new Set([...callers, ...GAS_PRICED_ACTIONS])].sort();
 }
 
+// The indexer literals are read wherever the indexer declares them, not from the loader by
+// path: a split moves code into parts, and a literal that moves with it must still be
+// found, exactly once, so a stale copy left behind is a finding and not the value read.
 function checkFeeQuoteSeam(indexerRoot) {
-    const actionsPath = path.join(indexerRoot, 'src', 'actions.js');
+    const actionsPath = path.join(indexerRoot, 'src', 'actions', 'index.js');
     if (!fs.existsSync(actionsPath)) {
-        warn('drift-gate: xchain-indexer/src/actions.js not found; it defines the fee-quote lists this gate pins.');
+        warn('drift-gate: xchain-indexer/src/actions/index.js not found; it defines the fee-quote lists this gate pins.');
         return 1;
     }
-    const indexerSrc = fs.readFileSync(actionsPath, 'utf8');
+    const readIndexerSet = handlerDirs.indexerLiteralReader(indexerRoot, parseStringSet);
     const sdkSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'preflight', 'constants.js'), 'utf8');
 
-    const denylist = parseStringSet(indexerSrc, 'FEE_QUOTE_DENYLIST', 'xchain-indexer/src/actions.js');
-    const staticSet = parseStringSet(indexerSrc, 'FEE_QUOTE_STATIC', 'xchain-indexer/src/actions.js');
+    const denylist = readIndexerSet('FEE_QUOTE_DENYLIST');
+    const staticSet = readIndexerSet('FEE_QUOTE_STATIC');
     const tier1 = parseStringSet(sdkSrc, 'TIER1_DENYLIST', 'src/preflight/constants.js');
-    const exempt = parseStringSet(indexerSrc, 'FEE_QUOTE_EXEMPT', 'xchain-indexer/src/actions.js');
+    const exempt = readIndexerSet('FEE_QUOTE_EXEMPT');
     const feeCharging = parseStringSet(sdkSrc, 'FEE_CHARGING_ACTIONS', 'src/preflight/constants.js');
 
     let failed = 0;
@@ -346,12 +347,12 @@ function checkConfigConstants(indexerRoot) {
 
 /* Indexer REGEX rules this SDK mirrors as literals.
  *
- * The same class as CONFIG_CAPS, one file further out. A rule declared in
- * xchain-indexer/src/db.js is invisible to every hash row above (the row regex carries a
- * literal src/actions/ prefix), and adding a row for db.js would not fix it: that file is
- * ~16k lines, so the row would move on nearly every unrelated indexer edit and train
- * blind re-pinning, and a hash proves "the file is unchanged" rather than "the two
- * regexes agree", which is the invariant that actually matters.
+ * The same class as CONFIG_CAPS, one file further out. CANONICAL_CARET_ID is declared in
+ * xchain-indexer/src/db/shared.js, the module the per-feature mixins under src/db/ import
+ * it from, and no hash row above can reach it: the row regex carries a literal
+ * src/actions/ prefix, so no row can name a file under src/db/ at all. A hash would also
+ * prove "the file is unchanged" rather than "the two regexes agree", which is the
+ * invariant that actually matters, so this seam pins the literal and not the file.
  *
  * Compared by VALUE - source AND flags - and fails CLOSED when either literal cannot be
  * read exactly once, the contract parseStringSet and parseIntLiteral already hold.
@@ -359,7 +360,7 @@ function checkConfigConstants(indexerRoot) {
 const REGEX_MIRRORS = [
     {
         name: 'CANONICAL_CARET_ID',
-        indexerFile: 'src/db.js',
+        indexerFile: 'src/db/shared.js',
         why: 'src/preflight/universal.js decides CARET_REF_UNRESOLVABLE on this rule',
     },
 ];
@@ -403,6 +404,88 @@ function checkRegexMirrors(indexerRoot) {
     }
     if (!failed)
         say(`drift-gate: mirrored indexer regex rule(s) in sync (${REGEX_MIRRORS.map((r) => r.name).join(', ')}).`);
+    return failed;
+}
+
+/* Indexer LIST constants this SDK vendors, compared ORDER INCLUDED.
+ *
+ * RESERVED_FUTURE_ROOTS lives in xchain-indexer/src/consensus/reserved_roots.js, which no mapped hash
+ * row can cover (every row carries a literal src/actions/ prefix) and which issue.js reads
+ * by symbol, so the handler's hash does not move when a root is added or dropped. That is
+ * the MAX_REFILLS blind spot one file further out, and it matters more here: the SDK's
+ * vendored copy in src/preflight/constants.js is what the ISSUE pre-flight refuses a new
+ * top-level create against, so a silent drift either warns on a name the chain allows or
+ * stays silent on one the chain refuses - after the miner fee is spent.
+ *
+ * Compared as an ORDERED list rather than a set, for the reason the indexer's own comment
+ * gives for pinning the order against xchain-documentation: an unordered compare passes
+ * while one side silently reorders, and it also cannot see a DUPLICATE (a set compare
+ * swallows a repeated name on one side while the two lengths disagree). Fails CLOSED when
+ * either literal cannot be read exactly once, or reads as empty - "could not parse it"
+ * must never land as "it agrees", the contract every seam above holds.
+ */
+const LIST_MIRRORS = [
+    {
+        name: 'RESERVED_FUTURE_ROOTS',
+        indexerFile: 'src/consensus/reserved_roots.js',
+        why: 'src/preflight/checks/issue.js refuses a new top-level ISSUE against this list',
+    },
+];
+
+/* Match `const NAME = [...]` (bare, `Object.freeze([...])` or `new Set([...])`) and return
+ * the quoted entries IN SOURCE ORDER, duplicates kept. parseStringSet sorts and dedupes,
+ * which is right for a membership comparison and wrong for this one.
+ */
+function parseStringList(text, name, where) {
+    const re = handlerDirs.declarationPattern(name);
+    const hits = [];
+    let m;
+    while ((m = re.exec(text)) !== null) hits.push(m[1]);
+    if (hits.length !== 1) {
+        throw new Error(`drift-gate: expected exactly one ${name} declaration in ${where}, found ${hits.length}. `
+            + 'That literal is what this gate compares; find where it moved before editing this check.');
+    }
+    const entries = [...hits[0].matchAll(/['"]([^'"]*)['"]/g)].map((x) => x[1]);
+    if (entries.length === 0) {
+        throw new Error(`drift-gate: ${name} in ${where} read as an EMPTY list. An empty reserved list would `
+            + 'compare equal against another unreadable one and report a seam that is not being checked; '
+            + 'fix the read rather than trusting a green gate.');
+    }
+    return entries;
+}
+
+function checkListMirrors(indexerRoot) {
+    const sdkSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'preflight', 'constants.js'), 'utf8');
+
+    let failed = 0;
+    const summary = [];
+    for (const { name, indexerFile, why } of LIST_MIRRORS) {
+        const abs = path.join(indexerRoot, indexerFile);
+        if (!fs.existsSync(abs)) {
+            warn(`drift-gate: xchain-indexer/${indexerFile} not found; it declares the ${name} list this gate pins.`);
+            failed = 1;
+            continue;
+        }
+        const indexerList = parseStringList(fs.readFileSync(abs, 'utf8'), name, `xchain-indexer/${indexerFile}`);
+        const sdkList = parseStringList(sdkSrc, name, 'src/preflight/constants.js');
+        if (indexerList.join(',') !== sdkList.join(',')) {
+            const onlyIndexer = indexerList.filter((x) => !sdkList.includes(x));
+            const onlySdk = sdkList.filter((x) => !indexerList.includes(x));
+            warn(`drift-gate: ${name} differs between xchain-indexer and this SDK:\n`
+                + `  indexer ${indexerFile}: ${indexerList.length} entr(ies)\n`
+                + `  sdk     src/preflight/constants.js: ${sdkList.length} entr(ies)`);
+            if (onlyIndexer.length) warn(`  in the indexer only: ${onlyIndexer.join(', ')}`);
+            if (onlySdk.length) warn(`  in the SDK only:     ${onlySdk.join(', ')}`);
+            if (!onlyIndexer.length && !onlySdk.length)
+                warn('  same members, different ORDER or a repeated entry; the two copies are pinned order-identical.');
+            warn(`  ${why}, so the SDK would judge a create against a list the chain no longer applies.`);
+            failed = 1;
+            continue;
+        }
+        summary.push(`${name}: ${sdkList.length}`);
+    }
+    if (!failed)
+        say(`drift-gate: mirrored indexer list(s) in sync (${summary.join(', ')}).`);
     return failed;
 }
 
@@ -484,8 +567,19 @@ function evaluate() {
 
     const root = resolveIndexerRoot();
     if (!root) {
-        say('drift-gate: no xchain-indexer checkout; skipping the sibling checks (sibling CI enforces).');
-        return failedEarly;
+        // An unresolved checkout is a FINDING, not a skip. Exiting 0 here and saying so
+        // retires the gate silently: a dropped CI checkout step, a typo in
+        // XCHAIN_INDEXER_PATH and a renamed handler directory all read as "nothing to do"
+        // while every mapped handler goes uncompared. The ONE case that is legitimately not
+        // a finding is a standalone SDK clone, and a run in that case declares itself
+        // (XCHAIN_ALLOW_NO_INDEXER=1) rather than being inferred from a missing directory.
+        if (indexerRoot.noIndexerIsDeclared()) {
+            say(`drift-gate: ${indexerRoot.ALLOW_NO_INDEXER_ENV}=1 declared; skipping the sibling `
+                + 'checks. Nothing in src/preflight/INDEXER-MAP.md was compared (sibling CI enforces).');
+            return failedEarly;
+        }
+        warn(indexerRoot.unresolvedReport());
+        return 1;
     }
 
     const rows = parseMap(mapPath);
@@ -494,14 +588,7 @@ function evaluate() {
         return 1;
     }
 
-    const drift = [];
-    const missing = [];
-    for (const { handler, hash } of rows) {
-        const abs = path.join(root, handler);
-        if (!fs.existsSync(abs)) { missing.push(handler); continue; }
-        const actual = crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex');
-        if (actual !== hash) drift.push({ handler, expected: hash, actual });
-    }
+    const { missing, drift } = handlerDirs.compareRows(root, rows);
 
     // Report every independent check before exiting, never on the first failure: handler-hash
     // drift and a fee-quote seam break have different causes and different fixes, and exiting
@@ -509,14 +596,14 @@ function evaluate() {
     let failed = failedEarly;
 
     if (missing.length) {
-        warn('drift-gate: mapped handler(s) not found in the checkout:\n  ' + missing.join('\n  '));
+        warn('drift-gate: mapped handler(s) not found in the checkout, or not hashable as mapped:\n  ' + missing.join('\n  '));
         failed = 1;
     }
     if (drift.length) {
         warn('drift-gate: indexer validity logic changed without a paired pre-flight review.\n' +
             'Re-read each handler, update the matching checks/ module (or confirm no client-visible\n' +
             'change), then refresh the hash in src/preflight/INDEXER-MAP.md:\n');
-        for (const d of drift) warn(`  ${d.handler}\n    was ${d.expected}\n    now ${d.actual}`);
+        for (const d of drift) warn(handlerDirs.formatDrift(d));
         // Now that `npm run ci` runs this locally, the first suspect for a LOCAL
         // red is the sibling's uncommitted work rather than a real handler change: this
         // hashes the WORKING TREE, and two of the four handlers in the gate's first firing
@@ -569,6 +656,12 @@ function evaluate() {
         failed = 1;
     }
     try {
+        if (checkListMirrors(root)) failed = 1;
+    } catch (e) {
+        warn(e && e.message ? e.message : String(e));
+        failed = 1;
+    }
+    try {
         if (checkGasSchedules(root)) failed = 1;
     } catch (e) {
         warn(e && e.message ? e.message : String(e));
@@ -594,7 +687,7 @@ function evaluate() {
  *
  * The pairing is what matters. `npm run ci` must open with --soft and close with --verdict:
  * open with strict and a drift is fatal at load again; drop the close and a drift ships
- * green. test/unit/preflight/driftGateModes.test.js asserts both halves of that wiring.
+ * green. test/unit/preflight/drift_gate_modes.test.js asserts both halves of that wiring.
  */
 function main(argv, evaluateFn) {
     const args = argv || process.argv.slice(2);
@@ -637,7 +730,7 @@ function main(argv, evaluateFn) {
 
 if (require.main === module) main();
 module.exports = {
-    resolveIndexerRoot, parseMap, parseAnchor, parseStringSet, parseRegexLiteral,
+    resolveIndexerRoot, indexerRootCandidates, parseMap, parseAnchor, parseStringSet, parseStringList, parseRegexLiteral,
     deriveFeeChargingActions, checkAnchorConsistency, checkFeeQuoteSeam,
-    checkConfigConstants, checkRegexMirrors, checkGasSchedules, evaluate, main,
+    checkConfigConstants, checkRegexMirrors, checkListMirrors, checkGasSchedules, evaluate, main,
 };

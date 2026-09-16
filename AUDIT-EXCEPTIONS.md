@@ -56,7 +56,7 @@ and fails quietly.
 The call chain was walked rather than inferred, and can be re-walked:
 
 ```
-src/auth.js:128            bitcoinMessage.sign(...)
+src/utils/auth.js:128      bitcoinMessage.sign(...)
 bitcoinjs-message/index.js:130   secp256k1.sign(hash, privateKey, { data })
 secp256k1/index.js               require('./bindings') THROWS -> require('./elliptic')
 secp256k1/lib/elliptic/index.js:199  exports.sign(message, privateKey, noncefn, data)
@@ -68,7 +68,7 @@ RFC 6979 generator: the exact code the advisory is about.
 
 ### What it touches
 
-Two call sites, both in `src/auth.js`:
+Two call sites, both in `src/utils/auth.js`:
 
 - `bitcoinMessage.sign()` (auth.js:128) - **affected**, this is nonce generation.
   Reached through `signMessage()`, and through `x402.js` payment auth.

@@ -29,22 +29,28 @@
 
 'use strict';
 
-const formats        = require('../formats.js');
-const FormatSelector = require('../formatSelector.js');
-const Validator      = require('../validator.js');
-const Utility        = require('../utility.js');
+const formats        = require('../protocol/formats.js');
+const FormatSelector = require('../protocol/format_selector.js');
 const { ACTION_ALIASES } = require('./aliases.js');
-const { MAX_ACTION_DATA_LENGTH } = require('../chunkHelper.js');
+const { MAX_ACTION_DATA_LENGTH } = require('../contract/chunk_helper.js');
+const {
+    failure,
+    toText,
+    parseVersion,
+    mapFields,
+    canonicalize,
+    runValidation,
+} = require('./parse/field_mapping.js');
 
 // BATCH limit scan, vendored from the consensus arbiter
 // (xchain-indexer/src/actions/batch.js) through the one shared client copy in
-// src/batchLimits.js; the conformance unit test guards drift by CLASSIFICATION
+// src/protocol/batch_limits.js; the conformance unit test guards drift by CLASSIFICATION
 // and COUNT, not just by the table's values. BATCH:0 = nested BATCH
 // categorically forbidden (a parse failure, not a limit finding).
 //
 // WHAT `BATCH_ACTION_LIMITS` NAMES HERE, AND WHY IT MOVED
 //
-// batchLimits.js keeps the arbiter's two tables apart, because the arbiter does:
+// batch_limits.js keeps the arbiter's two tables apart, because the arbiter does:
 // the ungated `BATCH_ACTION_LIMITS` and the flag-gated `BATCH_GATED_ACTION_LIMITS`
 // (DEPLOY, D5), merged into `BATCH_ACTION_LIMITS_ACTIVE`. This module has only
 // ever exported ONE table under the name `BATCH_ACTION_LIMITS`, and
@@ -56,7 +62,7 @@ const { MAX_ACTION_DATA_LENGTH } = require('../chunkHelper.js');
 // DEPLOY. One table, and it is the one this module enforces. The split halves
 // are re-exported beside it under their own names for a caller that needs to
 // know WHICH caps are flag-dependent; the pre-flag table stays reachable at its
-// source in batchLimits.js, deliberately NOT re-exported here, because two
+// source in batch_limits.js, deliberately NOT re-exported here, because two
 // spellings of "the limits" in one module is how a consumer picks the wrong one.
 const {
     BATCH_ACTION_LIMITS_ACTIVE,
@@ -68,188 +74,9 @@ const {
     limitKeysInListOrder,
     commandTick,
     maxMintsPerDistinctTick,
-} = require('../batchLimits.js');
+} = require('../protocol/batch_limits.js');
 
 const BATCH_ACTION_LIMITS = BATCH_ACTION_LIMITS_ACTIVE;
-
-// One shared validator instance for semantic findings (opts.validate).
-// Validator only needs the utility helpers; no per-parse state.
-const validator = new Validator(new Utility());
-
-function failure(code, detail) {
-    return { ok: false, code, detail: detail === undefined ? null : detail };
-}
-
-// Decode Buffer input as strict UTF-8; strings pass through.
-function toText(input) {
-    if (typeof input === 'string') return { text: input };
-    if (Buffer.isBuffer(input)) {
-        try {
-            return { text: new TextDecoder('utf-8', { fatal: true }).decode(input) };
-        } catch (e) {
-            return { error: failure('BAD_UTF8', e.message) };
-        }
-    }
-    return { error: failure('EMPTY', 'input must be a string or Buffer') };
-}
-
-// VERSION segment must be a non-negative integer token, matching the
-// on-chain decoder's Number()+isInteger gate (psbtActionDecode BAD_VERSION).
-function parseVersion(segment) {
-    if (segment === undefined || segment === '') return null;
-    const v = Number(segment);
-    if (!Number.isInteger(v) || v < 0) return null;
-    return v;
-}
-
-/*
- * Map value segments onto a format's field list.
- *
- * - fieldNames[0] is always 'VERSION' and aligns with valueSegs[0].
- * - The serializer trims trailing empty fields, so fewer segments than
- *   fields is normal: pad the tail with ''.
- * - A field name repeated in the format (multi-leg SEND v1/v2/v3,
- *   AIRDROP v1-v3, DESTROY v1/v2) collects its slot values into an
- *   array in slot order.
- * - A rest-field ('...NAME', always terminal in formats.js) absorbs
- *   every remaining segment as an array (possibly empty: compose emits
- *   zero segments for an empty rest-field).
- *
- * Returns { params, rest } or { error }.
- */
-function mapFields(fieldNames, valueSegs, group) {
-    const params = {};
-    let rest = null;
-
-    const restIndex = fieldNames.findIndex(f => FormatSelector.isRestField(f));
-    const fixedCount = restIndex === -1 ? fieldNames.length : restIndex;
-
-    // A repeated-field format carries N legs on the wire, not the two its
-    // format string spells out, so its length is derived from the segments.
-    if (group && restIndex === -1)
-        return mapRepeatedFields(group, valueSegs);
-
-    if (restIndex === -1 && valueSegs.length > fieldNames.length) {
-        return { error: failure('FIELD_COUNT_MISMATCH',
-            valueSegs.length + ' values vs ' + fieldNames.length + ' fields') };
-    }
-    if (restIndex !== -1 && restIndex !== fieldNames.length - 1) {
-        // No such format exists today; fail closed if one ever does.
-        return { error: failure('MALFORMED_REST', fieldNames[restIndex]) };
-    }
-
-    const repeated = new Set();
-    const seen = new Set();
-    for (let i = 0; i < fixedCount; i++) {
-        const name = fieldNames[i];
-        if (name === 'VERSION') continue;
-        if (seen.has(name)) repeated.add(name); else seen.add(name);
-    }
-
-    for (let i = 0; i < fixedCount; i++) {
-        const name = fieldNames[i];
-        if (name === 'VERSION') continue;
-        const value = i < valueSegs.length ? valueSegs[i] : '';
-        if (repeated.has(name)) {
-            if (!Array.isArray(params[name])) params[name] = [];
-            params[name].push(value);
-        } else {
-            params[name] = value;
-        }
-    }
-
-    if (restIndex !== -1) {
-        const baseName = FormatSelector.baseFieldName(fieldNames[restIndex]);
-        rest = valueSegs.slice(fixedCount);
-        params[baseName] = rest;
-    }
-
-    return { params, rest };
-}
-
-/*
- * Map value segments of a repeated-field format (multi-leg SEND v1/v2/v3,
- * DESTROY v1/v2, AIRDROP v1-v3) onto prefix | group * N | suffix.
- *
- * The leg count is whatever the segments imply: the smallest N whose full
- * layout is long enough to hold them. That is exact rather than heuristic
- * because the serializer only ever trims TRAILING empty segments, so a string
- * with more segments than N legs would fill must belong to N+1 legs.
- *
- * Emits both shapes: params[GROUP_FIELD] as a slot-ordered array (the
- * pre-existing contract) and `legs` as one object per leg, which is what
- * FormatSelector.serialize takes back in.
- */
-function mapRepeatedFields(group, valueSegs) {
-    const per = group.group.length;
-    const base = group.prefix.length + group.suffix.length;
-    let legCount = 1;
-    while (base + (legCount * per) < valueSegs.length) legCount++;
-
-    const total = base + (legCount * per);
-    const segs = valueSegs.slice();
-    while (segs.length < total) segs.push('');   // undo the serializer's trailing trim
-
-    const params = {};
-    let at = 0;
-    for (const name of group.prefix) {
-        if (name !== 'VERSION') params[name] = segs[at];
-        at++;
-    }
-    const legs = [];
-    for (let i = 0; i < legCount; i++) {
-        const leg = {};
-        for (const name of group.group) {
-            leg[name] = segs[at++];
-            if (!Array.isArray(params[name])) params[name] = [];
-            params[name].push(leg[name]);
-        }
-        legs.push(leg);
-    }
-    for (const name of group.suffix)
-        params[name] = segs[at++];
-
-    return { params, rest: null, legs };
-}
-
-// Canonical round-trippable string: canonical action name + the value
-// segments with the trailing-empty trim FormatSelector.serialize
-// applies (floor: ACTION|VERSION).
-function canonicalize(action, valueSegs) {
-    const parts = valueSegs.slice();
-    while (parts.length > 1 && parts[parts.length - 1] === '') parts.pop();
-    return [action, ...parts].join('|');
-}
-
-// Project multi-leg arrays to their first slot for validator input:
-// validator.js rules are single-leg shaped (TICK/AMOUNT scalars), and
-// findings are advisory - first-leg projection keeps them meaningful
-// without false-flagging legitimate multi-leg strings. Rest-field
-// arrays (ITEM/PARAMS/CONSTRUCTOR_PARAMS) pass through: the validator
-// handles those natively.
-function validatorFields(params, fieldNames) {
-    const restBases = new Set(fieldNames.filter(f => FormatSelector.isRestField(f))
-        .map(f => FormatSelector.baseFieldName(f)));
-    const projected = {};
-    for (const key of Object.keys(params)) {
-        const value = params[key];
-        projected[key] = (Array.isArray(value) && !restBases.has(key) && value.length > 0)
-            ? value[0]
-            : value;
-    }
-    return projected;
-}
-
-function runValidation(action, params, fieldNames, extraFindings) {
-    let findings = [];
-    try {
-        findings = validator.validate(action, validatorFields(params, fieldNames)) || [];
-    } catch (e) {
-        findings = [{ code: 'VALIDATOR_ERROR', message: e.message, details: {} }];
-    }
-    findings = findings.concat(extraFindings || []);
-    return { ok: findings.length === 0, findings };
-}
 
 /*
  * decoder.parse - see file header.
@@ -370,6 +197,31 @@ function parseBatch(rawAction, version, segments, doValidate) {
     // never disagree about which entries are MINTs (D7 caps MINT per DISTINCT
     // token, so the count alone no longer answers the question).
     const mintTicks = [];
+    const decodeError = decodeBatchEntries(entries, doValidate, commands, counts, mintTicks);
+    if (decodeError) return decodeError;
+
+    // Caps -> validation findings, not parse failures.
+    const extraFindings = [];
+    if (!appendGlobalBatchFinding(entries, extraFindings))
+        appendPerActionFindings(entries, counts, mintTicks, extraFindings);
+
+    const result = {
+        ok: true,
+        action: 'BATCH',
+        version,
+        params: { COMMAND: tail },
+        rest: null,
+        commands,
+        actionString: canonicalize('BATCH', segments.slice(1)),
+        validation: null,
+    };
+    if (doValidate)
+        result.validation = runValidation('BATCH', { COMMAND: tail }, ['VERSION', 'COMMAND'], extraFindings);
+    return result;
+}
+
+// Decode entries in one synchronous pass so command results and counts cannot diverge.
+function decodeBatchEntries(entries, doValidate, commands, counts, mintTicks) {
     for (const entry of entries) {
         const sub = entry === ''
             ? failure('EMPTY', 'empty BATCH command')
@@ -401,9 +253,11 @@ function parseBatch(rawAction, version, segments, doValidate) {
         if (key === 'MINT') mintTicks.push(commandTick(entry));
         commands.push(sub);
     }
+    return null;
+}
 
-    // Caps -> validation findings, not parse failures.
-    const extraFindings = [];
+// Apply count and weight checks together because either one suppresses per-action caps.
+function appendGlobalBatchFinding(entries, extraFindings) {
     // The global command cap runs FIRST and alone: on-chain it rejects the whole
     // batch before any per-action count is taken, so emitting a per-action
     // finding alongside it would describe a rule the chain never reached.
@@ -430,9 +284,12 @@ function parseBatch(rawAction, version, segments, doValidate) {
         // weight is an integer >= 1, so this only ever weighs a batch that
         // already fits the count.
         //
-        // FLAG-GATED, unlike the count cap above: this rule is live on testnet
-        // and regtest from genesis and UNARMED on mainnet, and pre-flight has no
-        // chain height to tell them apart. It is a finding rather than a
+        // FLAG-GATED, unlike the count cap above: this rule runs from genesis on
+        // testnet and regtest, and on mainnet from 2026-08-16T00:00:00Z, the
+        // issuance-limits instant the weighting gate nests inside (the
+        // 2026-09-09 ruling set BATCH_COST_WEIGHTING_MAINNET_TIME to 0). Both are
+        // past, and pre-flight still has no chain height or block time to say
+        // which gate an action lands under. It is a finding rather than a
         // refusal for exactly that reason - see `checkCommandCap` in
         // preflight/checks/batch.js, which carries the same posture, and the
         // module doctrine it cites: the mirror may accept a batch the chain
@@ -440,67 +297,61 @@ function parseBatch(rawAction, version, segments, doValidate) {
         extraFindings.push({
             code: 'BATCH_LIMIT_EXCEEDED',
             message: 'BATCH commands weigh ' + weight + '; the chain rejects the whole batch above '
-                + BATCH_WEIGHT_BUDGET + ' once cost weighting is armed',
+                + BATCH_WEIGHT_BUDGET
+                + ' (cost weighting is in force on every network: testnet and regtest from genesis, '
+                + 'mainnet from 2026-08-16T00:00:00Z)',
             details: { action: 'COMMAND', limit: BATCH_WEIGHT_BUDGET, count: entries.length, weight },
         });
     } else {
-        // D7: MINT's cap is per DISTINCT token, so what the cap is compared
-        // against is the largest number of MINTs naming ONE token, not the raw
-        // occurrence count. Minting twelve different tokens in one transaction
-        // takes nothing from anyone; twelve MINTs of one contended token do.
-        const mint = mintTicks.length
-            ? maxMintsPerDistinctTick(mintTicks)
-            : { max: 0, approximate: false };
-        // First-appearance order over the command LIST, DECLARED by spec R2b
-        // (batchLimits.js limitKeysInListOrder owns the rule for both cap loops
-        // in this SDK). The arbiter reports only the FIRST per-action cap it
-        // breaks, so this order decides which finding a caller reading
-        // findings[0] sees named - a consensus string, not a presentation
-        // detail. Iterating `counts` matched it by key-insertion accident only.
-        for (const a of limitKeysInListOrder(entries)) {
-            const limit = BATCH_ACTION_LIMITS[a];
-            if (limit === undefined) continue;
-            // `mint.approximate` is NOT a reason to stay silent, and the
-            // asymmetry is why. Keying on case-folded strings can only SPLIT
-            // what the arbiter merges - a caret and a name may be one token, never
-            // two - so this maximum is a LOWER BOUND on the arbiter's, and a
-            // lower bound over the cap is a CERTAIN breach worth reporting.
-            // Only the ABSENCE of a finding is ever in doubt, which is what the
-            // flag tells a caller that asks. Standing down on the flag instead
-            // let one unrelated caret silence a breach a literal MINT repeat
-            // had already proved. See batchLimits.js's header.
-            const observed = a === 'MINT' ? mint.max : counts[a];
-            if (observed > limit) {
-                // MINT's message names the DISTINCT-token unit, because `count`
-                // is the largest run naming one token and a reader who took it
-                // for the number of MINTs in the batch would go looking for
-                // sub-commands that are not there.
-                const plural = limit === 1 ? '' : 's';
-                const subject = a === 'ISSUE' ? 'top-level ISSUE command' + plural
-                    : a === 'MINT' ? 'MINT per DISTINCT token'
-                    : a + ' command' + plural;
-                extraFindings.push({
-                    code: 'BATCH_LIMIT_EXCEEDED',
-                    message: 'BATCH allows at most ' + limit + ' ' + subject + '; got ' + observed,
-                    details: { action: a, limit, count: observed },
-                });
-            }
+        return false;
+    }
+    return true;
+}
+
+// Apply per-action caps in command order so the first finding matches consensus.
+function appendPerActionFindings(entries, counts, mintTicks, extraFindings) {
+    // D7: MINT's cap is per DISTINCT token, so what the cap is compared
+    // against is the largest number of MINTs naming ONE token, not the raw
+    // occurrence count. Minting twelve different tokens in one transaction
+    // takes nothing from anyone; twelve MINTs of one contended token do.
+    const mint = mintTicks.length
+        ? maxMintsPerDistinctTick(mintTicks)
+        : { max: 0, approximate: false };
+    // First-appearance order over the command LIST, DECLARED by spec R2b
+    // (batch_limits.js limitKeysInListOrder owns the rule for both cap loops
+    // in this SDK). The arbiter reports only the FIRST per-action cap it
+    // breaks, so this order decides which finding a caller reading
+    // findings[0] sees named - a consensus string, not a presentation
+    // detail. Iterating `counts` matched it by key-insertion accident only.
+    for (const a of limitKeysInListOrder(entries)) {
+        const limit = BATCH_ACTION_LIMITS[a];
+        if (limit === undefined) continue;
+        // `mint.approximate` is NOT a reason to stay silent, and the
+        // asymmetry is why. Keying on case-folded strings can only SPLIT
+        // what the arbiter merges - a caret and a name may be one token, never
+        // two - so this maximum is a LOWER BOUND on the arbiter's, and a
+        // lower bound over the cap is a CERTAIN breach worth reporting.
+        // Only the ABSENCE of a finding is ever in doubt, which is what the
+        // flag tells a caller that asks. Standing down on the flag instead
+        // let one unrelated caret silence a breach a literal MINT repeat
+        // had already proved. See batch_limits.js's header.
+        const observed = a === 'MINT' ? mint.max : counts[a];
+        if (observed > limit) {
+            // MINT's message names the DISTINCT-token unit, because `count`
+            // is the largest run naming one token and a reader who took it
+            // for the number of MINTs in the batch would go looking for
+            // sub-commands that are not there.
+            const plural = limit === 1 ? '' : 's';
+            const subject = a === 'ISSUE' ? 'top-level ISSUE command' + plural
+                : a === 'MINT' ? 'MINT per DISTINCT token'
+                : a + ' command' + plural;
+            extraFindings.push({
+                code: 'BATCH_LIMIT_EXCEEDED',
+                message: 'BATCH allows at most ' + limit + ' ' + subject + '; got ' + observed,
+                details: { action: a, limit, count: observed },
+            });
         }
     }
-
-    const result = {
-        ok: true,
-        action: 'BATCH',
-        version,
-        params: { COMMAND: tail },
-        rest: null,
-        commands,
-        actionString: canonicalize('BATCH', segments.slice(1)),
-        validation: null,
-    };
-    if (doValidate)
-        result.validation = runValidation('BATCH', { COMMAND: tail }, ['VERSION', 'COMMAND'], extraFindings);
-    return result;
 }
 
 module.exports = {

@@ -45,7 +45,7 @@
 
 const bitcoin = require('bitcoinjs-lib');
 const ecc     = require('@bitcoinerlab/secp256k1');
-const MuSig2  = require('../musig2.js');
+const MuSig2  = require('./musig2.js');
 
 bitcoin.initEccLib(ecc);
 

@@ -26,12 +26,12 @@
 
 const { FINDING_CODES, ENCODING_LIMITS, FEE_CHARGING_ACTIONS, CANONICAL_CARET_ID } = require('./constants.js');
 const { ADDRESS_REF_FIELDS } = require('../addressRefFields.js');
-const { TICK_EXISTENCE_FIELDS } = require('../tickRefFields.js');
+const { TICK_EXISTENCE_FIELDS } = require('../protocol/tick_ref_fields.js');
 const numeric = require('./numeric.js');
 
 // Wire fields that reference a TICK whose existence is checkable.
 // ISSUE is excluded at the loop below (existence is legal there: format 0
-// creates). Derived from tickRefFields.js, never restated. FILE.GATE_TICKER
+// creates). Derived from tick_ref_fields.js, never restated. FILE.GATE_TICKER
 // belongs in this check: an unknown one makes the indexer reject the whole
 // FILE, and a FILE carries its payload.
 const TICK_FIELDS = TICK_EXISTENCE_FIELDS;
@@ -107,7 +107,7 @@ const CARET_UNRESOLVABLE_BY_DECODER = (() => {
  * ^id)`, and below it the field falls through to the handler's own
  * isCryptoAddress check. A well-formed id that is simply DANGLING is the same
  * rejection with no local evidence: the explorer exposes address -> id
- * (/address/{addr}.info.address_id, which is how addressResolver.js compacts)
+ * (/address/{addr}.info.address_id, which is how address_resolver.js compacts)
  * and nothing exposes the inverse, so the client cannot tell a live id from a
  * dead one and says so instead of guessing.
  *
@@ -196,9 +196,7 @@ function tagBatchCommand(parsed, details) {
     return Object.assign({}, details, { commandIndex: details.index });
 }
 
-async function runUniversal(ctx, opts = {}) {
-    const { parsed } = ctx;
-
+function checkValidatorSemantics(ctx, parsed) {
     // 1. Parse/validator semantics (already parsed upstream; findings
     // ride along on the ParsedAction).
     ctx.markRun(FINDING_CODES.VALIDATOR_SEMANTICS);
@@ -221,9 +219,11 @@ async function runUniversal(ctx, opts = {}) {
             ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'warning', f.message, details);
         }
     }
+}
 
+function checkEncodingFitsCarrier(ctx, parsed, opts) {
     // 2. Encoding fits carrier (only when the caller told us the
-    // intended encoding; compose-time _validateEncoding covers the
+    // intended encoding; compose-time validateEncoding covers the
     // OP_RETURN path, this covers all carriers uniformly).
     ctx.markRun(FINDING_CODES.ENCODING_TOO_LARGE);
     if (opts.encoding) {
@@ -236,7 +236,9 @@ async function runUniversal(ctx, opts = {}) {
                 { encoding: enc, bytes, cap });
         }
     }
+}
 
+async function checkTokenExistence(ctx, parsed) {
     // 3. Token exists, per referenced TICK (network-sourced: a hostile
     // explorer could fabricate a 404, so the error is overridable).
     const nativeTicker = nativeTickerFromCoin(ctx.sdk && ctx.sdk.explorer && ctx.sdk.explorer.coin);
@@ -254,10 +256,9 @@ async function runUniversal(ctx, opts = {}) {
             }
         }
     }
+}
 
-    // 4. `^<id>` address references (local; no network).
-    checkAddressRefs(ctx);
-
+function addNativeFeeForfeitureNotice(ctx, parsed) {
     // 5. Native-fee forfeiture notice: fee-charging actions on chains
     // with mandatory native fees forfeit the native output if the
     // action is invalid. Always shown for fee-charging actions
@@ -267,6 +268,19 @@ async function runUniversal(ctx, opts = {}) {
             'This action charges a protocol fee. If the chain rejects the action, any attached native-coin fee output is forfeited.',
             { action: parsed.action });
     }
+}
+
+async function runUniversal(ctx, opts = {}) {
+    const { parsed } = ctx;
+
+    checkValidatorSemantics(ctx, parsed);
+    checkEncodingFitsCarrier(ctx, parsed, opts);
+    await checkTokenExistence(ctx, parsed);
+
+    // 4. `^<id>` address references (local; no network).
+    checkAddressRefs(ctx);
+
+    addNativeFeeForfeitureNotice(ctx, parsed);
 
     return ctx;
 }

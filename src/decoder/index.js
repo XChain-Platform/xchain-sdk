@@ -35,13 +35,13 @@
 // way to know DEPLOY's is the flag-dependent one.
 const { parse, BATCH_ACTION_LIMITS, BATCH_GATED_ACTION_LIMITS } = require('./parse.js');
 const { describe } = require('./describe.js');
-const { actionDisplayLabel } = require('./actionDisplayLabel.js');
+const { actionDisplayLabel } = require('./action_display_label.js');
 const { ACTION_ALIASES } = require('./aliases.js');
 const hardening = require('./hardening.js');
-const { decodeActionFromPsbt, decodeActionStringFromPsbt } = require('../cosigner/psbtActionDecode.js');
+const { decodeActionFromPsbt, decodeActionStringFromPsbt } = require('../cosigner/psbt_action_decode.js');
 // §5.3.2 companion to decodeActionFromPsbt: that one cross-checks an INLINE
 // OP_RETURN action, this one covers the chunk lanes it fails closed on.
-const { verifyCarrierScripts, REASONS: CARRIER_REASONS } = require('../carrier/verifyCarrierScripts.js');
+const { verifyCarrierScripts, REASONS: CARRIER_REASONS } = require('../carrier/verify_carrier_scripts.js');
 
 module.exports = {
     parse,

@@ -40,7 +40,12 @@ rewritten for deferred assembly, and `batch.js` + `dispense.js` re-pinned at
 re-reviewed on 2026-09-11 for the amount-representability gate, read against
 indexer HEAD `88f4efaf` plus its paired change (see the review
 log below), and `dispenser.js` re-pinned at `62c8d7c7` later the same day
-after the freshness-shape fail-closed change (no client change). Hashes
+after the freshness-shape fail-closed change (no client change), and `issue.js` +
+`destroy.js` re-reviewed at `97e7ae1f` on 2026-09-12 for the bridge landing (four
+client checks added, see the review log), and `issue.js` re-reviewed AGAIN later the
+same day against the now-pushed `97e7ae1f`, which confirmed the pin and moved no
+hash but did move a client rule (the caret TICK, see the second 2026-09-12 entry in
+the review log). Hashes
 are of the indexer handler source files, resolved via
 `XCHAIN_INDEXER_PATH` or the sibling `../xchain-indexer` checkout. The
 gate SKIPS (does not fail) when no indexer checkout is present, so
@@ -65,9 +70,179 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `62c8d7c7`
+**Pins taken at indexer commit:** `c5f9ba85`
 
-(Re-anchored 2026-09-11, second pass, by the `dispenser.js` re-pin below.
+(Re-anchored 2026-09-15, seventh pass, by the activation-registry (W4) landing review below.
+`c5f9ba85` is the indexer tip that carries the W4 migration retiring five per-flag activation
+modules in favor of the shared registry aliased at `src/consensus/gate_registry.js` (itself
+`require('../protocol_changes')`): `consolidation_leg_amount_activation.js`,
+`gated_handoff_ref_activation.js`, `tick_namespace_activation.js`, `dispenser_freshness_activation.js`,
+`dispenser_freshness_shape_activation.js`, `dispenser_caps_activation.js`,
+`dispenser_give_amount_activation.js`, `dispenser_oracle_price_activation.js`,
+`dispenser_amount_positivity_activation.js` and `dispense_payment_tally_scale_activation.js`. Every
+call site that used to do `require('../../<name>_activation.js')` and call its own
+`is<Name>Active(...)` now calls `gateRegistry.activeAt('<name>_activation.<CONSTANT>', network,
+coin, blockIndex, blockTime)` (or `copy()`/`get()` for a bare constant), so five mapped
+directories drifted on a real byte change to a pre-existing handler file, not merely a moved
+comment: `send/legs.js`, `send/gated_handoff.js`, `destroy/legs.js`, `issue/wire.js`,
+`dispenser/index.js`, `dispenser/validate.js`, `dispenser/validate_format.js`,
+`dispense/context.js`, `dispense/index.js` and `dispense/pricing.js` each swap their require
+line and their gate-check call expression. `dispense/` additionally gains
+`dispense_payment_tally_scale_gate.js`, the old shared `src/dispense_payment_tally_scale_activation.js`
+moved INTO the handler directory and rewritten to read its three constants off the registry by
+key rather than declaring them locally, which is the one case in this pass where a NEW file
+landing inside a mapped directory would have moved that row's hash even had every pre-existing
+file stayed byte-identical. The registry rows carry the same per-network activation values the
+retired modules declared (this is the migration commit itself, already reviewed as part of the
+Activation Registry build; nothing here changes an activation window), so no client-visible
+validity logic moved and no `checks/` module needs an update - only the five hashes below. The
+other six rows (`mint`, `order`, `swap`, `airdrop`, `dividend`, `batch`) are byte-identical at
+`4d5e2d0a` and at `c5f9ba85`. `4d5e2d0a` stays reachable.)
+
+(Re-anchored 2026-09-15, sixth pass, by the `reserved_roots.js` rename review below. `4d5e2d0a`
+is the indexer landing tip that carries `cc462708`, the commit that renames
+`src/consensus/reservedRoots.js` to `src/consensus/reserved_roots.js` and repoints the one
+require of it inside `src/actions/issue/issuance_limits.js`. Only the `issue` row moves; the
+other ten rows are byte-identical at `0e53e6c7` and at `4d5e2d0a`. A checkout without
+`cc462708` reports the `issue` row as drifted AND the RESERVED_FUTURE_ROOTS mirror as unreadable
+(the drift gate reads the list by its new path and fails closed), and the answer is the
+missing indexer commit, never a re-pin back. `0e53e6c7` stays reachable.)
+
+(Re-anchored 2026-09-14, fifth pass, by the dispenser/dispense split review below. `0e53e6c7`
+is the indexer commit that moves the DISPENSER and DISPENSE entries to `<name>/index.js`
+beside the parts its two parents `d1c2105c` and `e2748a6f` split out of them, with no flat
+file left, so the last two flat rows become directory rows and all eleven are now hashed
+over every part. The other nine rows are byte-identical at `71f3d080` and at `0e53e6c7`
+(the eight commits between `71f3d080` and the parent `4759f9eb` touch nothing under
+`src/actions/`, and these three touch no other mapped directory). The indexer lands before
+this map. A checkout without `0e53e6c7` reports both rows as flat handlers turned
+directories, and the answer is the missing indexer commit, never a re-pin back. `71f3d080`
+stays reachable.)
+
+(Anchor note. This pass was first written against a branch based on `71f3d080`. Its three
+commits were re-picked onto the landed tip `4759f9eb` before they were pushed, with
+identical patches and identical `dispenser/`, `dispense/` and `handler_wiring.js` bytes, so
+the anchor, both pins and the verification below were re-derived from the re-picked tree.
+Only the three commit ids above are ever cited.)
+
+(Earlier note. Re-anchored 2026-09-14, fourth pass, by the handler-split review below. `71f3d080` is the
+indexer commit that finishes the split of nine handlers into directories and points every
+requirer at them, so nine rows change SHAPE as well as value: they are directory rows now,
+hashed over every part, and the two unsplit handlers (`dispenser.js`, `dispense.js`) keep
+their flat rows unchanged from `a6300a2f`. The indexer lands before this map, so every row
+is content of the anchor tree. A checkout without `71f3d080` reports all nine drifted, and
+the answer is the missing indexer commit, never a re-pin back. `a6300a2f` stays reachable.)
+
+(Anchor note. This pass was written first against `d38e218c`, which was based on the
+pre-stack-3 indexer tip `708b52fb`. That branch was rebased onto the landed tip `1f558d9e`
+before it was pushed, which renamed every one of its commits, so the anchor moved to
+`71f3d080` and the rows below were re-derived from that tree rather than carried over.
+`d38e218c` was never on origin and must not be cited.)
+
+(Earlier note. Re-anchored 2026-09-14, third pass, by the `dispense.js` comment review below. `a6300a2f`
+is the indexer commit that follows the snake_case rename of the consensus twins and price
+modules in comments, and `dispense.js` is the only mapped handler it or its parent `99ff4ecf`
+touches, so the other ten rows are byte-identical at `57e49dd0` and at `a6300a2f`. The indexer
+lands before this map, so every row is a plain blob of the anchor. A checkout without
+`a6300a2f` reports the `dispense.js` row drifted: the answer is the missing indexer commit,
+never a re-pin back. The previous anchor `57e49dd0` is an ancestor and stays reachable.)
+
+(Earlier note. Re-anchored 2026-09-14, second pass, by the `batch.js` loader-seam review below. `57e49dd0`
+is the indexer commit that moves the BATCH probe-path sub-action refusal onto the action
+loader instance, and `batch.js` is the only mapped handler it touches, so the other ten
+rows are byte-identical at `5bfa3a7b` and at `57e49dd0`. The indexer lands before this map,
+so every row is a plain blob of the anchor. A checkout without `57e49dd0` reports the
+`batch.js` row drifted: the answer is the missing indexer commit, never a re-pin back.
+The previous anchor `5bfa3a7b` is an ancestor and stays reachable.)
+
+(Earlier note. Re-anchored 2026-09-14 by the comment-label review of six handlers below. `5bfa3a7b` is
+the indexer tip pushed with that review. Its parent `9c50f503` rewrites internal design
+labels in handler comments as plain descriptions, and `5bfa3a7b` itself moves one comment
+in `src/actions/broadcast.js`, which is not mapped, so all eleven mapped handler blobs are
+identical at the two commits. The indexer lands before this map, so every row is a plain
+blob of the anchor. A checkout without `9c50f503` reports the six re-pinned rows drifted:
+the answer is the missing indexer commit, never a re-pin back. The previous anchor
+`2bd35c36` is an ancestor and stays reachable. Five rows (`mint.js`, `dispense.js`,
+`swap.js`, `airdrop.js`, `dividend.js`) do not move: their bytes are identical before and
+after `9c50f503`.)
+
+(Earlier note. Re-anchored 2026-09-13, third pass, by the M4 code-structure review of all eleven
+handlers below. `2bd35c36` is the pushed `origin/develop` head of xchain-indexer, which
+now carries the M3 feature-directory commits, so the four M3 rows the previous note
+describes as paired working-tree hashes are plain blobs of it. The previous anchor
+`63f49c38` is its ancestor and stays reachable. ALL ELEVEN rows are now hashes of the
+PAIRED WORKING TREE of the M4 pass rather than of this anchor: the indexer half (file
+renames, private methods losing their underscore, and `console.*` calls moved onto the
+observability logger) and this half land together, so a checkout at `2bd35c36` reports
+all eleven rows drifted, and the answer is the missing indexer commits, never a re-pin
+back. The review-log entry below records that the eleven diffs reduce to those three
+declared transformations with zero token residue.)
+
+(Earlier note. Re-anchored 2026-09-13, second pass, by the comment-merge review of `send.js` and
+`airdrop.js`. `63f49c38` is the pushed `origin/develop` head, which now carries the
+`docs(...)` commits that merged the explanation back onto rewritten comment lines;
+the previous anchor `e8ae831e` is its ancestor and stays reachable. Seven rows are
+plain blobs of `63f49c38`: the five that have not moved since `e8ae831e`
+(`destroy.js`, `mint.js`, `order.js`, `swap.js`, `dividend.js`) plus `send.js` and
+`airdrop.js`, whose pins move in this pass because a comment commit changed their
+bytes. Four rows, `issue.js`, `dispenser.js`, `dispense.js` and `batch.js`, are
+hashes of the PAIRED WORKING TREE of the M3 feature-directory pass rather than of
+this anchor, exactly like the 2026-09-11 nine: the indexer half and this half land
+together, so a checkout without the M3 commits reports those four drifted and the
+answer is the missing indexer commit, never a re-pin back. The M3 commits leave
+`send.js` and `airdrop.js` byte-identical, so those two rows are in sync against
+the pushed tree and against the M3 tree alike. The two review-log entries below
+record what the diffs contain: for the four, relative-require and comment-path
+repoints; for the two, comment text only.
+
+Earlier note. Re-anchored 2026-09-13 by the EXPIRATION representability review of `dispenser.js`,
+`order.js` and `swap.js` below. `3353ae26` is the tree those three rows were hashed
+from; the bound itself arrives four commits earlier at `c0752359`, and nothing under
+`src/actions/` moves between the two, so a reviewer may diff from either and see the
+same handlers. The eight unchanged rows are plain HEAD hashes of this tree as well,
+which the gate confirms by exiting 0 against it.
+
+READ THIS BEFORE TREATING A RED ROW AS DRIFT: at the time of the re-anchor
+`3353ae26` had not been pushed, so a checkout at `origin/develop` carries neither it
+nor the three new handler hashes and reports all three rows drifted. That is the
+missing indexer commit, not drift, and the answer is the paragraph above this one,
+never a re-pin back. The previous anchor `97e7ae1f` is `origin/develop` and stays
+reachable; the three rows are the only ones that move off it.
+
+Earlier note. Re-anchored 2026-09-12 by the bridge-landing review of `issue.js` and
+`destroy.js` below. `97e7ae1f` is the indexer commit that lands the XBRIDGE handler
+and the bridge's ISSUE and DESTROY rules; a reviewer diffing `97e7ae1f..HEAD` sees
+only what moves after this pin. The other six files under `src/actions/` that move
+in `62c8d7c7..97e7ae1f` (`list.js`, `slash.js`, `sleep.js`, `stake.js`, `sweep.js`,
+`xbridge.js`) are unmapped rows.
+
+CONFIRMED LATER THE SAME DAY, and read this before you re-pin anything from a local
+run. `97e7ae1f` was written here while it still sat on a landing branch; it is now
+the PUSHED `origin/develop` head of xchain-indexer, so the anchor is authoritative
+and every row above is a plain HEAD hash of it. Against that tree the gate exits 0.
+
+What it does NOT exit 0 against is a local `xchain-indexer` checkout sitting on the
+platform's TWIN lineage, and that is not drift. The public lineage is produced by
+squashing and scrubbing the local one, and the scrub rewrites comments, so the two
+copies of `src/actions/issue.js` differ by comment text alone (a pair of internal
+tracker id tags the public scrub strips, plus a reworded reserved-tick paragraph)
+and hash differently:
+`75a86a10` on `origin/develop`, `3744f957` on the local twin. The executable code is
+identical, which the second 2026-09-12 review-log entry records line by line. DO NOT
+re-pin to the local hash to silence a local red: CI on BOTH repos clones the sibling
+at `develop` from GitHub, so that pin goes red in the venue that blocks pushes and
+stays red, because the scrub keeps the two spellings apart. Reproduce the venue's
+verdict instead, with the env var CI itself sets:
+
+    git -C ../xchain-indexer archive origin/develop | tar -x -C /tmp/indexer-develop
+    XCHAIN_INDEXER_PATH=/tmp/indexer-develop node bin/check-preflight-drift.js
+
+and see what the twin actually carries with
+`git -C ../xchain-indexer diff origin/develop..HEAD -- src/actions/issue.js`. A local
+red that this pair explains is a checkout that needs reconciling with origin, not a
+handler that needs reviewing.
+
+Earlier note. Re-anchored 2026-09-11, second pass, by the `dispenser.js` re-pin below.
 `62c8d7c7` is the indexer develop head that pin was read against. It contains
 the amount-representability change, landed as `e3398122`, which the nine-row
 review earlier the same day read as a paired working-tree change against
@@ -120,7 +295,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 62c8d7c7..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff c5f9ba85..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -156,19 +331,59 @@ the table pins a **SHA-256 of file content**, while git object names are
 SHA-1, so the pinned hash never appears as an object name and can only be
 found by hashing candidate blobs as above.
 
+### Directory handler rows
+
+A handler the indexer has split into `src/actions/<name>/` (an `index.js` entry
+with its parts beside it) is pinned as a DIRECTORY row: the handler column
+carries the directory path with a TRAILING SLASH, and that slash is the whole
+marker.
+
+    | `checks/batch.js` | `src/actions/batch/` | `<64-hex digest>` |
+
+The digest covers every file in the directory, recursively, so no part can be
+edited, added, removed or renamed without the row going red. It is the SHA-256
+of a manifest carrying one line per file, sorted by name in byte order:
+
+    <sha256 of that file's bytes>  <path relative to the directory>
+
+That is exactly what `shasum -a 256` (or `sha256sum`) prints, so the pin can be
+recomputed without this repo:
+
+    cd <indexer>/src/actions/batch && find . -type f | sed 's|^\./||' \
+      | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256
+
+or from here, which also prints every part it hashed:
+
+    node bin/preflight_handler_dirs.js <indexer root> src/actions/batch/
+
+Flat rows are unchanged, and every hash in the table below is still the bytes of
+one file. Three shapes are refused rather than hashed, because each would leave
+part of a handler unreviewed: a row naming a file INSIDE a handler directory (it
+pins `index.js` while the parts beside it escape), a directory row while a flat
+`<name>.js` still sits beside the directory (`require('./<name>')` resolves the
+flat file first, so the directory is not the code that runs), and a part that is
+a symbolic link, or a directory holding no files at all.
+
+A split moves more than handler logic. The fee-quote seam therefore reads every
+source file of a directory handler, so a `createFeesObject` call that moved into
+`fees.js` still enrols its action; and it reads `FEE_QUOTE_DENYLIST`,
+`FEE_QUOTE_STATIC` and `FEE_QUOTE_EXEMPT` wherever under `src/` the indexer
+declares them, requiring exactly one declaration of each, so a stale copy left
+behind by a move is a finding instead of the value that happens to be read.
+
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send.js` | `288332b9d583646e56462faf516bc762c657049cfb65ede3ae2a29d446705130` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy.js` | `2d4d3179eab5ccdd323dc86475ed48e6f10928261c25624e7fc5223ae9142a41` |
-| `checks/mint.js` | `src/actions/mint.js` | `7e0ef940547b47700181b97f9ed64c4e9cf499b3705244ceba67c351044fa11b` |
-| `checks/issue.js` | `src/actions/issue.js` | `3066ece8ba87ea2ef18cd7453f4d96e9ad70d4af0f6c32cb5551bf782d3aad01` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser.js` | `22634d973dbffe3d000fcdc2fd3d01f2c9e5f28eb1c2e4ad957e6a043db11f4a` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense.js` | `c349a43c1181026ca03a69d1960fd4cf1542fa8f9e1e1090c53959342d366372` |
-| `checks/trading.js` (ORDER) | `src/actions/order.js` | `870a0a5f687a79bd6e323903fc95151a94abdeaf1c43dd876910c3d8b030d8e4` |
-| `checks/trading.js` (SWAP) | `src/actions/swap.js` | `1d9493a28d1e54e1cb3961a8d5723064e728271e599ae76951174f9f5c5b2331` |
-| `checks/airdrop.js` | `src/actions/airdrop.js` | `cafa9417a86ae310b2c7f89534210c1b1fb08dc25115ed4e4d7d0ce6da858f59` |
-| `checks/dividend.js` | `src/actions/dividend.js` | `6d13a64a82686a85d1967b56e9b2d80cffb864234e11af5f7699ca236bf3d4e4` |
-| `checks/batch.js` | `src/actions/batch.js` | `2bb1b542d584bcea2f015c3f2421099666b31904b31e88e685f32c6021f66195` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `fb94d4c1808146cb427a0a02f8e277620f2f02a6fadb1b42d5b7f57c1812dfe4` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `6f15d0f22e60fe328ff12188f519281b88aa61114ef1163b07df3bbba63d2d8f` |
+| `checks/mint.js` | `src/actions/mint/` | `7c8992a06f9143b876c5eb7bc554dbbe5b2ca61507c44e822b5491b8571d1c06` |
+| `checks/issue.js` | `src/actions/issue/` | `848d23ebb5702f9b22d31a6be795d8b6177f565adf7fb1a26d525dcb331bf0ed` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `7f65cdaa58d433d3415f43f7b5997ae028baa00b6ba47fe38b11af392fcc04b9` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `66b5a180f0829cbfc25a1c1e7b8b698a376c89c0ced5e5237e4cbb5059243311` |
+| `checks/trading.js` (ORDER) | `src/actions/order/` | `644dfe6951e78b653e185bb78201bfaeadc7b04eaab5cb7c1f4ffb2682b6cc79` |
+| `checks/trading.js` (SWAP) | `src/actions/swap/` | `b8e6753cccc7a4b1c6586c66a39faea3cf86718fcc989351ca32449386390d4c` |
+| `checks/airdrop.js` | `src/actions/airdrop/` | `47d5d14dcc26ae3d181118b692b8d879b809e4754a4268ef68579f6896ffbd74` |
+| `checks/dividend.js` | `src/actions/dividend/` | `c227a04169123b47d373b00de220b3af89bded2c6d88a753436633530c17564d` |
+| `checks/batch.js` | `src/actions/batch/` | `895eb6fda8380b3019ccdaa97f7b13d97ebae20008e4285a43f7b854b1884507` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) are intentionally NOT mapped: there is nothing to drift from.
@@ -177,6 +392,559 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-15 (sixth pass) - `reservedRoots.js` becomes `reserved_roots.js`, one require line in `issue/` follows it
+
+Baseline pin was the `issue` directory digest `41f20369` at `0e53e6c7`; the new pin is
+`e75a3af1`, hashed from the committed indexer tree at `4d5e2d0a` with its handlers clean, by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/issue/` (never by hand). Range read:
+`git -C ../xchain-indexer log --name-status 0e53e6c7..HEAD -- src/actions/` (a log, so the
+anchor-consistency check still finds exactly one review command), which is thirteen commits.
+Twelve of them touch no mapped directory except `batch/validate.js` and `dispenser/index.js`,
+which `e785db5e` edits in a comment citation and `4f781a52` puts back byte for byte (the net
+diff of both files over the range is empty). The thirteenth, `cc462708`, renames
+`src/consensus/reservedRoots.js` to `src/consensus/reserved_roots.js` and repoints its three
+requirers, one of which is `src/actions/issue/issuance_limits.js`: the whole diff of
+`src/actions/issue/` over the range is that one require specifier.
+
+**What moved: a file name outside the handler, and the require that names it.** No validity
+rule, threshold, fee, field, format version or error string changed; the 53 reserved roots are
+the same list read by its new path (`RESERVED_FUTURE_ROOTS: 53` before and after), and the
+drift gate's LIST mirror and its fixture builder now spell that path, since the gate fails
+closed on a file it cannot read.
+
+**Direction: NEITHER, no admission boundary moves.** NO CLIENT CHECK MOVES. `checks/issue.js`
+mirrors the same rules against the same list.
+
+### 2026-09-14 (fifth pass) - `dispenser` and `dispense` become directories, no flat file beside them
+
+Baseline pins were the flat blobs `39a9c0ee` (`dispenser.js`) and `72ec1eca` (`dispense.js`),
+re-read unchanged at `71f3d080`; the new pins are directory digests, hashed from the committed
+indexer tree at `0e53e6c7` with its handlers clean, by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/<name>/` (never by hand), and each
+recomputed independently with the `find | sort | shasum` pipeline above to the same value. Range
+read: `git -C ../xchain-indexer log --name-status 71f3d080..HEAD -- src/actions/` (a log, so the
+anchor-consistency check still finds exactly one review command), which is three commits and
+touches no other mapped directory: `d1c2105c` splits DISPENSER into context, validate,
+validate_format, fees, controller_guard and settle parts, `e2748a6f` splits DISPENSE into
+context, pricing, pricing_paths and settle parts, and `0e53e6c7` moves both entries to
+`<name>/index.js` and points every requirer at them.
+
+**What moved: the file layout, and the naming of steps that were already inline.** The move
+commit changes only require specifiers and comments in `src/` (the non-comment lines of its
+diff are its 16 rewritten require lines and nothing else). The two split commits move the bodies whole;
+the DISPENSE split names three deliberate edits to moved code, each so the split stays
+behaviour-neutral: its two loop-body `continue` statements become `return` now that each body
+is a function, the FIAT-not-active verdict and the non-FIAT guard read and write the per-row
+object the three pricing paths now own, and the caps flag-day is reached through
+`isDispenseCapsActive` on the handler. No validity rule, threshold, fee, field, format version
+or error string changed.
+
+Machine-verified. Both handlers were loaded through the loader's own `handler_wiring.js`
+require at `4759f9eb`, at `e2748a6f` and at `0e53e6c7`, and their prototype surfaces compared
+member by member (descriptor, value type, function name and arity): class name and
+constructor arity are unchanged, no member is lost, DISPENSER gains 20 and DISPENSE 24 named
+step methods, every one non-enumerable as a class method is, and the split and moved trees
+are identical (`4759f9eb` is the parent the three commits landed on, and its two flat
+handlers are the `71f3d080` blobs). The indexer unit tier reads the same 9585 titles at both
+`4759f9eb` and `0e53e6c7` with no outcome moved by these commits (388 passing and 2 pending
+across the 29 unit files that require or read either handler, either side), and consensus identity
+is unmoved (`55891dfd` armed-map fingerprint, `26ba9cce` rules digest, 33 gates resolved, 0
+absent).
+
+**Direction: NEITHER, no admission boundary moves.** NO CLIENT CHECK MOVES. `checks/dispenser.js`
+mirrors the same rules, now spread over the parts of two directories rather than two files.
+
+### 2026-09-14 (fourth pass) - nine handlers become directories, no flat file beside them
+
+Baseline pins were the flat blobs at `a6300a2f`; the new pins are directory digests, hashed
+from the committed indexer tree at `71f3d080` with its handlers clean, by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/<name>/` (never by hand). Range read:
+`git -C ../xchain-indexer log --name-status 1f558d9e..HEAD -- src/actions/` (spelled as a log
+rather than the diff command, so the anchor-consistency check still finds exactly one review
+command, the one under **Pins taken at indexer commit**), which is the twelve commits that
+split ISSUE, MINT, DESTROY, BATCH, SEND, AIRDROP, DIVIDEND, ORDER and SWAP into part files,
+move each entry to `<name>/index.js`, and point every requirer at the directory. The range
+starts at `1f558d9e` rather than at the older `a6300a2f`, because stack-3 landed in between
+and 49 commits touch `src/actions/` across the wider span; `1f558d9e..HEAD` is exactly the
+handler-split work and nothing else.
+
+**What moved: the file layout, and in three handlers the naming of steps that were already
+inline.** Each handler is now `src/actions/<name>/` with `index.js` and one part per behaviour,
+and NO flat `<name>.js` remains, which is the shape this map requires of a directory row (a
+flat file beside the directory is refused, since `require('./<name>')` would resolve it first).
+No validity rule, threshold, fee, field, format version or error string changed.
+
+Machine-verified, and re-run after the rebase against the landed tip. Both trees were wired
+through `wireCoreHandlers` and `wireProtocolHandlers` onto the same stub loader, at
+`1f558d9e` (the pre-split tip) and at `71f3d080`, and the registration itself compared
+first: 50 handlers register, on the same property names, in the same order, either side.
+Then every handler class had its whole prototype surface compared: name, arity, static keys,
+and for each member its descriptor (enumerable, writable, configurable), value type,
+function name and arity. 47 of the 50 are surface-identical, and no handler LOSES a member
+or changes its class name or constructor arity. ISSUE, MINT, DESTROY, BATCH, ORDER and SWAP
+are IDENTICAL, member for member and in the same order. SEND, AIRDROP and DIVIDEND gained named step methods
+(their monolithic `parse` was cut into them): `constructor` and `parse` are unchanged, every
+added member is non-enumerable exactly as a class method is, so no `for...in` or key walk over
+an instance sees anything new. At the rebased tip the indexer unit tier runs 9774 passing,
+12 pending, 0 failing, and consensus identity is byte-identical to the landed tip's
+(`55891dfd` armed-map fingerprint, `26ba9cce` rules digest, 33 gates resolved, 0 absent):
+moving a handler between a file and a directory moves no consensus byte.
+
+**Direction: NEITHER, no admission boundary moves.** NO CLIENT CHECK MOVES. The pre-flight
+checks mirror each handler's validity rules, and this is a layout change: the rules are the
+same text in a different file. The fee walk now reads every file of a directory handler, so
+`createFeesObject` is still found for all twelve fee-charging actions.
+
+### 2026-09-14 (third pass) - `dispense.js`, two comments follow the snake_case twin rename
+
+Baseline pin was the `57e49dd0` blob (`d72fe8c8`), unchanged through `427a0b4c`; the new pin is
+`72ec1eca`, hashed from the committed indexer tree at `a6300a2f` with its handlers clean. Range
+read: the one commit `a6300a2f` over `src/actions/dispense.js`, whose parent `99ff4ecf` renames
+the modules these comments name (spelled as a single commit rather than a range command so the
+gate's anchor-consistency check still finds exactly one review command, the one under **Pins
+taken at indexer commit**). 2 lines added and 2 removed, in two hunks.
+
+**What moved: two file names inside comments, nothing executable.** One comment names the
+table-lifecycle registry as `table_lifecycle.js` instead of `tableLifecycle.js`, and one names
+the fills query module as `xchain_price_query.js` instead of `xchainPriceQuery.js`, following
+the indexer's rename of those modules to snake_case. No require, validity rule, threshold,
+field, format version or error string changed.
+
+Machine-verified. `dispense.js`'s token stream (@babel/parser, comments and whitespace excluded,
+token values compared as well as types) was taken at `427a0b4c` and at `a6300a2f`: 2731 tokens on
+each side and a residue of 0. The comparator was falsified first on a scratch copy of the new
+file: raising the first numeric literal (line 58) from 0 to 1 gave a residue of 1 at exactly
+that token, so a zero residue is evidence and not a tool that cannot say no.
+
+**Direction: NEITHER, no admission boundary moves.** NO CLIENT CHECK MOVES. `checks/dispenser.js`
+mirrors the DISPENSE validity rules, not the comments beside them. The refresh exists only so
+the hash row follows the handler to its new bytes.
+
+### 2026-09-14 (second pass) - `batch.js`, the probe refusal read through the action loader
+
+Baseline pin was the `5bfa3a7b` blob (`1314812c`); the new pin is `3c6f8204`, hashed from the
+committed indexer tree at `57e49dd0` with its handlers clean. Range read: the one commit
+`57e49dd0` over `src/actions/batch.js`, whose parent is `ee3a3e05` (spelled as a single commit
+rather than a range command so the gate's anchor-consistency check still finds exactly one
+review command, the one under **Pins taken at indexer commit**). 5 lines added and 6 removed,
+in two hunks.
+
+**What moved: where `batch.js` reads one predicate, nothing it decides.** The module-level
+wrapper `probeForbiddenSubAction(action)`, which called `require('./index.js')` at call time to
+reach `isBatchProbeForbiddenSubAction`, is removed, and the probe-path guard inside the dispatch
+loop now calls `this.actions.isBatchProbeForbiddenSubAction(action)` on the action loader
+instance the handler is constructed with. That instance method, added to
+`src/actions/index.js`, returns the same module function the wrapper reached, so the refusal is
+the same predicate over the same dispatch tables; the change removes an action requiring its own
+loader (the load-time cycle the wrapper existed to dodge). The wrapper's comment is restated to
+say where the predicate now comes from. No validity rule, no threshold, no field, no format
+version and no error string changed.
+
+Machine-verified. `batch.js`'s acorn token stream (comments and whitespace excluded, token values
+compared as well as types) was taken at `cf776e32` and at `57e49dd0` with NO normalisation: 2996
+tokens before, 2982 after, and the residue is 24 tokens, exactly the two declared edits. 18 removed
+tokens are the wrapper function (`function probeForbiddenSubAction(action){ return
+require('./index.js').isBatchProbeForbiddenSubAction(action); }`), and at the guard the name
+`probeForbiddenSubAction` becomes `this.actions.isBatchProbeForbiddenSubAction` (5 added, 1
+removed). The comparator was falsified first on a scratch copy of the new tree, restored byte-exact
+by SHA-256: changing the `this.commandLimit = 250` literal to 251 raised the residue to 26 at
+exactly that number, so a residue confined to the declared edits is evidence and not a tool that
+cannot say no.
+
+**Direction: NEITHER, no admission boundary moves.** NO CLIENT CHECK MOVES. `checks/batch.js`
+mirrors the sub-command rules, not where the handler looks the probe refusal up, and the refusal
+set is unchanged. The refresh exists only so the hash row follows the handler to its new bytes.
+
+### 2026-09-14 - `send.js` + `destroy.js` + `issue.js` + `dispenser.js` + `order.js` + `batch.js`, comment labels rewritten
+
+Baseline pin for each of the six was its `bbc1c67c` blob, which is the previous pin
+unchanged (`2e49cb32`, `0be98487`, `8c2913f3`, `6d0a9599`, `d87d568a`, `14efa63c`); the new
+pins, in table order, are `cd2d8c27`, `10e59bc0`, `60cb6cc8`, `39a9c0ee`, `4a5b7e59` and
+`1314812c`, hashed from the committed indexer tree at `9c50f503` with its handlers clean, and
+identical for all eleven handlers at the pushed tip `5bfa3a7b`.
+Range read: the one commit `9c50f503` over `src/actions/`, whose parent is `bbc1c67c`
+(spelled as a single commit rather than a range command so the gate's anchor-consistency
+check still finds exactly one review command, the one under **Pins taken at indexer
+commit**). 119 lines added and 118 removed across the six: `batch.js` 75/74, `issue.js`
+39/39, `send.js` 2/2, and one line each in `destroy.js`, `dispenser.js` and `order.js`. The
+other five mapped handlers are byte-identical across it.
+
+**What moved: comment text only.** Internal design and review labels in handler comments
+(decision, requirement, finding and acceptance-test tags, spec section and milestone
+references, and the rule tags in `send.js`, `dispenser.js` and `order.js`) are replaced by
+plain descriptions of the rule each one named, and a few sentences in the same comment
+blocks that narrated how the code came to be are restated as what the code does. No
+executable line, string literal, number, threshold, field, format version or error string
+changed on any of the six.
+
+Machine-verified. Each handler's acorn token stream (comments and whitespace excluded, token
+values compared as well as types) was taken at `bbc1c67c` and at `9c50f503` with NO
+normalisation, and the two are IDENTICAL: send 2788 tokens, destroy 1532, issue 5779,
+dispenser 4755, order 3532, batch 2996. The comparator was falsified first on scratch copies
+of the new tree, each restored byte-exact by SHA-256: flipping `packs.length > 0` to `>=` in
+`send.js`, adding a space inside the `'invalid: VERSION (unknown)'` error string in
+`dispenser.js`, and changing the `this.commandLimit = 250` literal in `batch.js` to 251 each
+failed the comparison on exactly that file, at the token naming that operator, string or
+number, so a zero is evidence and not a tool that cannot say no.
+
+**Direction: NEITHER, no admission boundary moves.** NO CLIENT CHECK MOVES. The refresh
+exists only so the six hash rows follow the handlers to their new bytes.
+
+### 2026-09-13 (third pass) - all eleven handlers, the M4 code-structure pass
+
+Baseline pin for every row was the `2bd35c36` blob (`efa3cfb5`, `0b4c8890`, `9da46290`,
+`99192fbf`, `3cd1dc72`, `b3a784ab`, `2edfeffb`, `9cbf5c44`, `64217726`, `41fc9777`,
+`bd8a0885`); the new pins, in table order, are `2e49cb32`, `0be98487`, `4021fa16`,
+`8c2913f3`, `6d0a9599`, `d72fe8c8`, `d87d568a`, `ff297dbe`, `ef52e390`, `3405fa19` and
+`14efa63c`, hashed from the M4 indexer tree at `c6242000` with its handlers clean, and unchanged at
+`6ee8615c`, whose one commit touches no mapped handler. Range
+read: `git -C ../xchain-indexer diff origin/develop..HEAD -- src/actions/` restricted to
+the eleven mapped files, with `origin/develop` at `2bd35c36` (spelled by name so the gate's
+anchor-consistency check still finds exactly one review command, the one under **Pins
+taken at indexer commit**). 38 lines added and 26 removed across the eleven, from five
+commits: the file renames, the method renames, the logger rewrite, a test-file rename that
+reached a comment, and a comment merge.
+
+**What moved: three declared mechanical transformations, nothing else.** (1) A relative
+`require` re-aimed at a renamed module: `dispenser.js` and `dispense.js` now read
+`../chain/dispenser_divergence_metrics.js` for `../chain/dispenserDivergenceMetrics.js`.
+(2) A private method losing its underscore: `dispenser.js` declares and calls
+`logStaleFreshness` for `_logStaleFreshness`, a name no other file calls. (3) Every
+`console.*` call rewritten onto the observability logger (`console.log(` becomes
+`getLogger().info(` with the message text unchanged; 19 sites: five in `dispenser.js`,
+three each in `order.js` and `swap.js`, one in each of the other eight), plus the one
+`const { getLogger } = require('../observability/index.js');` import the rewrite inserts
+per file. Every other changed line is inside a comment (`batch.js` names
+`setActionParamHandler` and a snake_case test file; `swap.js` gains one comment line). No
+validity rule, no threshold, no field, no format version and no error string changed on
+any of the eleven.
+
+Machine-verified, because a rename and a logging rewrite are exactly where a real change
+could hide. Each handler's acorn token stream (comments and whitespace excluded, token
+values compared as well as types) was taken at `2bd35c36`, normalised by those three
+transformations as the M4 codemods' own maps declare them (the rename-files plan, the
+rename-methods `renamed` list, and the console-to-logger level map with its per-file site
+counts, which had to match) and by nothing else, then compared with the M4 tip. Residue is
+ZERO on all eleven: send 2778 tokens, destroy 1522, mint 1844, issue 5769, dispenser
+4745, dispense 2720, order 3522, swap 3252, airdrop 2309, dividend 1797, batch 2986, each
+pair hashing to one value. The comparator was falsified first: flipping `packs.length > 0`
+to `>=` in a scratch copy of the new `send.js` and adding a space inside the
+`'invalid: VERSION (unknown)'` error string in `dispenser.js` each reported exactly one
+residue token naming that operator or string, and restoring one un-rewritten
+`console.log` reported 306, so a zero is evidence and not a tool that cannot say no.
+
+**Direction: NEITHER, no admission boundary moves.** NO CLIENT CHECK MOVES. The logger
+calls are the status lines each handler prints after its verdict is already decided, and
+the renamed method is the log-only freshness diagnostic; neither is an input to validity.
+The refresh exists only so the hash rows follow the handlers to their new bytes.
+
+### 2026-09-13 (second pass) - `send.js` + `airdrop.js`, the comment-merge commits
+
+`send.js` moves from `22efd8bf` to `efa3cfb5`, `airdrop.js` from `49f1b498` to
+`64217726`. Both pins were `e8ae831e` blobs, and each handler was touched exactly once
+since, by `577c4966`, one of six `docs(...)` commits that merged the explanation back
+onto comment lines an earlier scrub had rewritten. Those commits are on the pushed head
+this pass re-anchors to, so both new pins are plain blobs of the anchor. Range read:
+`git -C ../xchain-indexer diff e8ae831e..origin/develop -- src/actions/send.js
+src/actions/airdrop.js` (spelled against `origin/develop` rather than against `HEAD` so
+the gate's anchor-consistency check still finds exactly one review command, the one under
+**Pins taken at indexer commit**).
+
+**What moved: comment text, nothing executable.** Four hunks, three in `airdrop.js` and
+one in `send.js`, and every changed line in all four is inside a comment. `airdrop.js`
+restates why `recipients` and `approved` are Sets rather than arrays and what the
+XCHAIN-mode fee debit below them is for; `send.js` restates the conditional-handoff
+paragraph in the present tense and spells out that leg consolidation by (DESTINATION,
+TICK) is what closes the split-into-many-small-sends bypass. No validity rule, no
+threshold, no field, no format version and no error string changed on either handler, so
+no `checks/` module owes a change.
+
+Machine-verified as well as read, because "I read it and it was only comments" is the
+claim this gate exists to distrust. Each handler's acorn token stream, which excludes
+comments and whitespace by construction and compares token values as well as token types,
+is identical across the change: `send.js` 2776 tokens before and after, `airdrop.js` 2307,
+each pair hashing to one value. The comparison was itself falsified before it was trusted,
+by flipping `packs.length > 0` to `>=` in a scratch copy of the new `send.js`: it reported
+that operator as the first differing token, so an identical stream is evidence rather than
+a tool that cannot say no. The indexer working tree was clean at the time, so the hashed
+bytes are committed bytes and not a local edit.
+
+### 2026-09-13 - `issue.js` + `dispenser.js` + `dispense.js` + `batch.js`, the M3 feature-directory move
+
+Baseline pin for all four rows was the `e8ae831e` blob (`7c9ba429`, `9b66a86d`,
+`52c8e9ff`, `212fcc13`); the new pins are `99192fbf`, `3cd1dc72`, `b3a784ab` and
+`bd8a0885`. Range read: `git -C ../xchain-indexer diff origin/develop..HEAD -- src/actions/issue.js
+src/actions/dispenser.js src/actions/dispense.js src/actions/batch.js` (`e8ae831e` was
+`origin/develop` on the day this entry was written, and is an ancestor of the anchor now
+in force; spelled by name here so the gate's anchor-consistency check still finds exactly
+one review command, the one under **Pins taken at indexer commit**).
+
+**What moved: nothing executable.** Every changed line in the four handlers is a
+relative `require` re-aimed at a module that moved under a feature directory, or a
+comment naming that module's old path. `issue.js` now reads `../consensus/reservedRoots.js`
+and names `actions/execute/index.js`; `dispenser.js` and `dispense.js` read
+`../chain/dispenserDivergenceMetrics.js`; `batch.js` reads `../consensus/fault_guard.js`
+and reaches the loader as `./index.js` instead of `../actions.js`. Each pair resolves
+to the same module as before. No validity rule, no threshold, no field, no format
+version and no error string changed on any of the four.
+
+**Direction: NEITHER, no admission boundary moves.** NO CLIENT CHECK MOVES. The
+mirrored logic in `checks/issue.js`, `checks/dispenser.js` and `checks/batch.js` is
+untouched and still mirrors the same rules; the refresh exists only so the hash rows
+follow the handlers to their new bytes.
+
+**Two seams the move did touch, both repaired in the same change set and not
+client-visible.** The gate's own fee-quote leg read the loader at `src/actions.js`,
+which is now `src/actions/index.js`; and `deriveFeeChargingActions` walked
+`src/actions/` with a flat `*.js` readdir, which silently drops every handler that
+became a directory. Both are fixed in `bin/check-preflight-drift.js`, the second so
+that a dropped handler can never again read as "charges no fee": falsified by
+restoring the flat walk, which reds the gate naming XBRIDGE as an SDK entry with no
+indexer caller.
+
+### 2026-09-13 - `dispenser.js` + `order.js` + `swap.js`, the EXPIRATION representability bound
+
+Baseline pin for all three rows was the pushed `origin/develop` blob (`22634d97`,
+`870a0a5f`, `1d9493a2`); the new pins are `ca0b1d13`, `3bfe764c` and `927a2773`.
+Range read: `git -C ../xchain-indexer diff origin/develop..HEAD -- src/actions/dispenser.js
+src/actions/order.js src/actions/swap.js`, which is 21 added lines and not one removed
+or changed one: the same seven-line block in each handler, plus the two things it
+reads, `exceedsUnsignedColumn` in `src/utility.js` and `config['INTEGER_FIELDS']` in
+`src/config.js`. Nothing else in the three handlers moved, so this review covers the
+whole of what the pins now carry.
+
+**The rule.** An `EXPIRATION` outside `[0, 18446744073709551615]` (the field's
+`INTEGER_FIELDS` entry, the BIGINT UNSIGNED ceiling) is `invalid: EXPIRATION (format)`.
+The block sits immediately after the existing integer-format check and before every
+format-gated rule, guarded by `isNull` alone, so it binds on the create and on the
+format-2 edit alike, and skips format 1, which carries no such field. **Direction:
+WIDENS rejection.** What it replaced was worse than a rejection rather than milder
+than one: an otherwise valid payload normalized to a NULL expiration on the way to
+storage, which is an escrow or a dispenser that never expires.
+
+**The client owed a mirror, and it is an error.** `checks/trading.js` (ORDER, SWAP)
+and `checks/dispenser.js` read `EXPIRATION` with no bound at all, so pre-flight
+answered "valid" for a payload every node now refuses. Both modules gain
+`checkExpirationRange`, raising `VALIDATOR_SEMANTICS` at severity error, which that
+code certifies as local and therefore non-overridable. Error rather than warning
+because the rule rides no activation table: unlike the dispenser-family and
+amount-representability rules this map holds at warning, its verdict is identical on
+every plane at every height, which is this map's standing test. The negative half is
+refused even by a node that predates the bound, which reads a negative expiration as
+`invalid: EXPIRATION (past)` further down the same handler; only the above-ceiling
+half is new, and the transitional window for it is one fleet roll of a value no
+honest composer produces.
+
+**Exactly as wide as the handler, and no wider.** Three deliberate non-claims:
+
+- The predicate is vendored whole into `preflight/numeric.js` as
+  `exceedsUnsignedColumn`, including the part that reads like a defect and is not:
+  it answers false for any spelling it cannot prove out of range, so a value the
+  chain accepts today keeps its verdict and the mirror cannot become stricter than
+  consensus.  
+- The ceiling is a decimal digit STRING in `preflight/constants.js`
+  (`EXPIRATION_MAX`), never a number. Through a double the largest storable
+  expiration and the first unstorable one are the same value, so a numeric literal
+  would refuse the largest legal expiration. The boundary pair is asserted in both
+  directions, and the suite pins the collapse itself so the reason cannot be
+  forgotten.  
+- A non-numeric or fractional `EXPIRATION` is left alone here. The handler refuses it
+  with the same error string one check earlier, but through `isNumeric`/`isInteger`,
+  which this block does not mirror; claiming it here would be a verdict the
+  predicate cannot prove. So is an expiration that is merely in the past: the tip it
+  is measured against is server-side, which is what the existing `EXPIRY_IN_PAST`
+  notice already says.
+
+Pinned by `test/unit/preflight/expiration_representability.test.js` (33 cases): the
+boundary pair at the predicate and through a full report, negative and zero, the
+exponent branch, the unprovable family, and every action and format that carries the
+field, create and edit, ORDER, SWAP and DISPENSER.
+
+### 2026-09-12 (second pass) - `issue.js` re-read against the pushed `97e7ae1f`, and the caret TICK
+
+The drift gate was red on a LOCAL run with `src/actions/issue.js` reading `3744f957`
+against the pinned `75a86a10`, and the anchor reported unreachable. Both findings
+have one cause and it is not a handler change: the sibling checkout sat on the
+platform's twin lineage (local `develop` `85c61af7`, five commits that never reached
+origin), while `97e7ae1f` had by then been pushed and IS `origin/develop`. Against
+the pushed tree the map was, and is, exactly in sync: all eleven rows, the fee-quote
+seam, `MAX_REFILLS`, `CANONICAL_CARET_ID`, `RESERVED_FUTURE_ROOTS` (53) and the three
+gas schedules. So NO ROW MOVED and the anchor stands; the recipe for reproducing that
+verdict is in the anchor note above.
+
+**The paired review, done against the content that differs.** The whole difference
+between the pinned blob and the local twin is three comment hunks in `issue.js`
+(`git -C ../xchain-indexer diff origin/develop..HEAD -- src/actions/issue.js`): the
+reserved-tick paragraph reworded from "an exact-case indexOf would let `ISSUE btc`
+through" to "the check used to be an exact-case indexOf", the regtest-exemption
+paragraph reworded the same way, and two internal tracker id tags the public scrub
+strips.
+Not one executable line differs, so no validity rule moved and no client twin is
+owed. Every rule the first 2026-09-12 entry mirrored was re-checked against the
+handler and stands: the case-folded reserved list (`issue.js:403`), the gas tick off
+BTC (`issue.js:433`), the tick-namespace floor and the reserved roots
+(`issue.js:472-483`) and the four format-7 field rules (`issue.js:828-888`), against
+`checks/issue.js` `checkTickRules` / `checkBridgeOptIn` and, since row 19 of the
+bridge build, `validator.js`'s own `LOCK_BRIDGE` / `BRIDGE_CHAINS` / `MIN_DEPTH`
+rules. The other mapped handlers are byte-identical across both lineages.
+
+**One client rule DID move, in the other direction: the caret TICK.** Re-reading the
+handler for this review surfaced a place where the SDK was stricter than consensus.
+`validateTickName` refused EVERY `^`-led ISSUE TICK on every format, and the handler
+refuses no such thing: it validates a caret TICK as an id (`issue.js:349`, non-numeric
+is `invalid: TICK (id)`; `issue.js:361`, a dot in the id is `invalid: TICK (caret
+dot)`) and then resolves it through `getTickerId` exactly as it resolves a spelled-out
+name, which is what `issue.js:848-853` says outright for format 7 and what
+`issue.js:472-483` assumes when it exempts a caret from the four-character floor. The
+SDK was therefore refusing edits the chain accepts, and `src/utils/tick_resolver.js` holds
+`ISSUE.TICK` out of the compaction set for that reason alone.
+
+The validator now judges a caret ISSUE TICK as a reference, GATED BY FORMAT, because
+the chain's answer is format-dependent in exactly one place:
+
+- every format: a non-numeric id, and a `.` inside the id. Both are refused before the
+  handler branches, so both are refused here on every format. The caret-dot rule was
+  previously argued as covered by the blanket refusal ("strictly stronger"); with the
+  blanket gone it is mirrored directly, which is the stronger arrangement anyway.
+- formats 6 and 7 only: the id must be canonical (`/^[1-9][0-9]*$/`, the vendored
+  `CANONICAL_CARET_ID`). Resolution is canonical-only (`xchain-indexer/src/db/index_tables.js:375`
+  hands only that form to SQL, and only for a row that exists), and those two formats
+  refuse an unresolved tick outright (`issue.js:782` and `issue.js:828`, `invalid:
+  TICK (unknown)`). Below the token-bridge activation format 7 is `VERSION (unknown)`
+  instead, so the refusal holds on every plane at every height and an error here
+  false-blocks nothing.
+- formats 0 to 5: NOT refused, deliberately. The handler falls through to
+  `createToken` there and the ISSUE lands valid (with a NULL ticker id, the defect the
+  caret-dot rule closed one shape of), so a client error would refuse an action
+  consensus accepts, the false-block invariant this validator's non-ISSUE ticker
+  branch already declines to break.
+
+`VERSION` is auto-selected downstream, so the gate recovers formats 7 and 6 from the
+fields only they carry (`BRIDGE_CHAINS` / `MIN_DEPTH` / `LOCK_BRIDGE`, and the
+controller fields); anything undecidable takes the permissive branch, which is the
+safe direction. Pinned by `test/unit/issue_tick_ref.test.js` (21 cases, both directions
+per format) plus the two amended cases in `test/unit/validator.test.js` and the ISSUE
+cases in `test/unit/ticker_id_equivalence.test.js`. Pre-flight needed no change:
+`checks/issue.js` already reads the RESOLVED name for the subasset rule and already
+exempts a caret from the namespace floor. The explorer's own `getToken` must resolve
+`^<id>` for the Tier-2 row lookup to see such a token at all; that is server-side and
+outside this map.
+
+### 2026-09-12 - `issue.js` + `destroy.js`, against indexer HEAD `97e7ae1f` (the bridge landing)
+
+Baseline pin `62c8d7c7` for both. Range read:
+`git -C ../xchain-indexer diff 62c8d7c7..97e7ae1f -- src/actions/issue.js src/actions/destroy.js`,
+plus the three modules the diff adds (`token_bridge_activation.js`,
+`token_policy_activation.js`, `tick_namespace_activation.js`) and `reservedRoots.js`.
+(Since W4 of the activation registry, `tick_namespace_activation.js` is the registry row
+`tick_namespace_activation.TICK_NAMESPACE_ACTIVATION` in `src/protocol_changes/gates_3.js`.)
+This is the base bridge spec and the token bridge spec landing on the indexer side.
+Both handlers owe client changes, and one constant does too: `XBRIDGE` joins
+`FEE_CHARGING_ACTIONS`, because `xbridge.js` charges through `createFeesObject` on
+the lock and burn legs a client composes (the settle legs are system-injected and
+never reach pre-flight); the fee seam reported it missing, exactly the BET shape.
+
+**Three activation tables, and which side of each the client stands on.**
+`TOKEN_BRIDGE_ACTIVATION` (ISSUE format 7, XBRIDGE v3/v4) and
+`TICK_NAMESPACE_ACTIVATION` (the four-character floor and the reserved roots) both
+hold mainnet and testnet at the house sentinel (9999999999) with regtest at 0;
+`TOKEN_POLICY_INHERITANCE_ACTIVATION` the same. So the rule every entry below turns
+on is the one this map has applied since the leg-amount review: a rule that binds
+on one plane and not another is a warning or a declaration, never an error, unless
+its verdict is the same on EVERY plane at EVERY height. Several of this landing's
+rules are exactly that, and those are mirrored as findings.
+
+**`issue.js` - REAL changes, four client checks moved.**
+
+1. *Reserved names, case-folded (unconditional).* `RESERVED_TICKS` (the coin roots
+   plus the gas tick) was matched by exact-case `indexOf`; it is now matched against
+   the UPPER-CASED tick, so `ISSUE btc` is refused where it was accepted. The regtest
+   exemption narrows from the whole check to the gas tick alone, and `IS_GENESIS` is
+   exempt (a system-injected path no broadcast carries). **Direction: WIDENS
+   rejection**, on every plane and at every height (measured zero rows for every
+   case variant, so no replayed verdict moves). `checks/issue.js` had no reserved
+   check at all ("reserved-TICK tables are internal"). It gains one: a `TICK_FORMAT`
+   warning (the code is not error-certified) for a reserved name, with the gas tick's
+   exemption decided from the explorer's chain code (regtest) and the vendored GAS
+   address (the source), and declared as `ISSUE_GAS_TICK` when no chain code is
+   configured. A coin root needs no plane to be refused.
+
+2. *The gas tick off BTC (unconditional).* `invalid: TICK (BTC-only)` was keyed on
+   `NETWORK != regtest`; it is now refused off BTC from every source on every network,
+   because off BTC the gas tick's supply is the shadow of an escrow only the bridge's
+   settle leg may create. **Direction: WIDENS rejection** (regtest only; no off-BTC
+   broadcast history exists elsewhere). Mirrored as a `TICK_FORMAT` warning keyed on
+   the chain code, after the reserved check in the handler's order, so the warning
+   names the verdict the chain gives first.
+
+3. *Tick namespace (activation-keyed, creation-only).* At/above the flag-day a NEW
+   top-level name shorter than four characters is `invalid: TICK (length)` and a name
+   on `RESERVED_FUTURE_ROOTS` is `invalid: TICK (reserved)`, reserved winning when a
+   name is both; an existing row is untouched (the handler probes for one first), a
+   `^id` reference is never short, and a dotted child is measured on its own full
+   length. **Direction: WIDENS rejection**, but only where armed, which is regtest.
+   Mirrored the way the dispenser GIVE_AMOUNT rule is: a `TICK_FORMAT` warning that
+   names the condition and the unarmed planes, raised only for a fresh create (the
+   row lookup says so), declared as `ISSUE_TICK_NAMESPACE` when the lookup is down
+   and the name is short or listed. The floor (`MIN_NEW_TOP_LEVEL_TICK_LENGTH`) and
+   the 53 roots are vendored into `constants.js`. The floor lives in `issue.js` and
+   so is under this row's hash; the roots live in `src/consensus/reservedRoots.js`, which NO
+   mapped hash covers, so a change there moves the vendored list by hand until the
+   drift gate grows a by-value seam for it (owed, noted in the constant's comment).
+
+4. *ISSUE format 7, the bridge opt-in.* New format `VERSION|TICK|BRIDGE_CHAINS|
+   MIN_DEPTH|LOCK_BRIDGE|MEMO`, admitted only at/above `TOKEN_BRIDGE_ACTIVATION` and
+   otherwise `invalid: VERSION (unknown)`. Above it: an unknown tick is `TICK
+   (unknown)` (format 7 edits, never creates); the RESOLVED name may not be dotted
+   (`subassets are not bridgeable yet`, judged on the row's tick so `^id` cannot
+   slip a subasset in); every `BRIDGE_CHAINS` entry, upper-cased and NOT trimmed,
+   must be a chain coin other than this one, with `-` the sentinel for none and
+   empty meaning unchanged; `MIN_DEPTH` is digits only; `LOCK_BRIDGE` joins the LOCK
+   field list (0/1, cannot-unset). Every one of those refusals holds on every plane:
+   below the activation the whole format is refused, above it each rule refuses on
+   its own, so they are FINDINGS. The unknown tick is a `TOKEN_NOT_FOUND` error
+   (network, overridable; universal skips ISSUE because format 0 creates, and this is
+   the one format that cannot). `BRIDGE_CHAINS`, `MIN_DEPTH` and `LOCK_BRIDGE` are
+   `VALIDATOR_SEMANTICS` errors (local), the class the static validator's own field
+   rules land in; they run before the row lookup gate so a down explorer does not
+   hide them. The subasset refusal is a `TICK_FORMAT` warning. The activation itself
+   is declared as `ISSUE_BRIDGE_ACTIVATION`, since a client cannot read the height.
+
+   Not mirrored, and declared as `ISSUE_BRIDGE_POLICY_EXCLUSION`: the `(locked)`
+   refusals of a later `BRIDGE_CHAINS` / `MIN_DEPTH` edit under `LOCK_BRIDGE=1`, the
+   opt-in refused on a token with a controller binding or an allow/block list
+   (`policy-bound tokens are not bridgeable yet`, the list half lifting at policy
+   inheritance behind an `XPOLICY_MAX_MEMBERS` ceiling), and the mirror rule that a
+   bridgeable or bridged token cannot take a list or a binding on formats 0/5/6
+   (`bridged tokens cannot be policy-bound yet`). All of them read row state
+   (bindings, list membership, the lock, the `bridged` bit) the explorer's token
+   document does not serve.
+
+   Not client-visible: `IS_GENESIS` exemptions on every rule above (no broadcast
+   carries the flag), and the fee-side comment edits. The owner gate is unchanged and
+   already covers format 7.
+
+**`destroy.js` - REAL change, one client check moved.** Two unconditional refusals
+after the tick-exists check, on every leg: the gas tick off BTC is `invalid: TICK
+(use XBRIDGE v1)` and a bridged copy `<ORIGIN>.<NAME>` (exactly two parts, a
+non-empty name, a prefix that is a chain coin other than this one, per
+`utility.parseBridgedTick`) is `invalid: TICK (use XBRIDGE v4)`. A burn here would
+strand the escrow the supply shadows on the origin chain. **Direction: WIDENS
+rejection**, on every plane and at every height (no such row can exist before the
+bridge creates one, so no replayed verdict moves). `checks/send.js` (DESTROY) gains
+both as `TICK_FORMAT` warnings keyed on the explorer's chain code, judged per leg,
+and declared as `DESTROY_BRIDGE_SUPPLY` when no chain code is configured. SEND is
+untouched on both sides.
+
+**What the static validator does not yet do, for the record.** `src/config.js`
+`LOCK_FIELDS` does not list `LOCK_BRIDGE` and `src/protocol/validator.js` has no format-7
+field rules, so today the pre-flight checks above are the only client-side judge of
+those fields. That is a validator change, not a map change; when it lands the
+`VALIDATOR_SEMANTICS` findings here and there will agree by construction (both call
+`isValidLockValue`).
+
+Anchor moves to `97e7ae1f`. Tests: `test/unit/preflight/bridge_tick_rules.test.js`.
 
 ### 2026-09-11 (second pass) - `dispenser.js`, against indexer HEAD `62c8d7c7`
 
@@ -245,7 +1013,7 @@ only regtest runs the rule from genesis. So on every plane a client broadcasts
 to, the chain still accepts the whole non-numeral family, and a client that
 rejected it would block a broadcast consensus would have taken. That is the
 SDK-stricter-than-consensus false block this map's contract forbids, and
-`src/validator.js` records this SDK shipping exactly that regression once
+`src/protocol/validator.js` records this SDK shipping exactly that regression once
 already. It is also the road the two entries below took for
 `LEG_AMOUNT_CONSOLIDATION` and `GATED_HANDOFF_REF`, for the same reason: a
 pre-flight cannot read the activation state of a block that does not exist yet.
@@ -261,7 +1029,7 @@ decimals-aware amount-format check, so none of them ever returned the verdict
 this rule changes, and `checks/send.js` already declares the neighbouring
 leg-amount rule. `checks/batch.js` has no amount-format logic at all.
 
-`src/preflight/numeric.js` and `src/utility.js` keep the LEGACY two-argument
+`src/preflight/numeric.js` and `src/utils/utility.js` keep the LEGACY two-argument
 rule verbatim and now say so in place, with the condition for changing that:
 mirror the rule as a real rejection only once mainnet is armed, and only
 alongside an activation source this SDK can actually read. Until then the
@@ -313,7 +1081,10 @@ The other four handlers that moved in the same range (`attest.js`,
 
 Read `18954ab3..0d7074ad` over both handlers plus the two activation modules the
 diff adds, `gated_handoff_ref_activation.js` and
-`dispense_payment_tally_scale_activation.js`. Both are flag-day gated with
+`dispense_payment_tally_scale_activation.js` (since W4 of the activation registry:
+the registry row `gated_handoff_ref_activation.GATED_HANDOFF_REF_ACTIVATION` in
+`src/protocol_changes/gates_2.js`, and `src/actions/dispense/dispense_payment_tally_scale_gate.js`).
+Both are flag-day gated with
 mainnet on the unarmed house sentinel (9999999999) and testnet/regtest from
 genesis, so both reviews turn on the same question the leg-amount entry below
 turns on: what a client may assert when the rule binds on one plane and not on
@@ -383,7 +1154,9 @@ Anchor moves to `0d7074ad`.
 byte-identical to the `334d8117` pin.
 
 `send.js` and `destroy.js` both gain the leg-amount consolidation rule behind
-`consolidation_leg_amount_activation.js`. Above its flag-day a leg whose RAW
+`consolidation_leg_amount_activation.js` (since W4 of the activation registry, the
+registry row `consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION` in
+`src/protocol_changes/gates_1.js`). Above its flag-day a leg whose RAW
 amount fails `isValidAmountFormat` for its tick is held out of the merge on its
 own key, so it reaches the handler's existing per-leg check instead of being
 summed into a total that passes. Two 0.5 legs of a 0-decimals token merged to
@@ -603,10 +1376,10 @@ is 4 (the chunk carrier, which runs no constructor); anything unparseable
 falls through to the full VM weight of 30. `commandWeights` and
 `weightBudget` are untouched, so the tables stay byte-equal.
 
-Client side, mirrored in the same change set: `src/batchLimits.js`
+Client side, mirrored in the same change set: `src/protocol/batch_limits.js`
 `subCommandWeight` carries the identical discount through a faithful
 `formatVersion` mirror of the arbiter's derivation, and
-`test/unit/batchLimitsConformance.test.js` now drives weight vectors
+`test/unit/batch_limits_conformance.test.js` now drives weight vectors
 (defaults, VM 30, fan-out 25, the format-4 discount, and the budget
 boundary) through BOTH this mirror and the sibling handler's own
 `subCommandWeight`/`batchWeight`/`parse()`. The compose-side
@@ -630,7 +1403,7 @@ answer, and it is recorded here rather than edited out of that entry so the
 reversal is visible where the reasoning lives.
 
 That entry answered the posture question with "WARNING, not refusal" for BOTH
-compose-side sites. **For `batchBuilder.js` that answer is now overturned: the
+compose-side sites. **For `batch_builder.js` that answer is now overturned: the
 builder REFUSES an over-budget batch**, in the arbiter's own position (after
 the count pre-filter, before the per-ACTION cap loop), with the arbiter's own
 arithmetic. The reason the earlier answer gave is real but it does not decide
@@ -649,9 +1422,9 @@ this site:
 `validator.js` is UNCHANGED and still carries no weight rule at all: it
 validates a finished BATCH command string, which is the decode side of the
 split above. The weight arithmetic itself lives once, in
-`batchLimits.js` (`actionWeight`, which `subCommandWeight` now calls), so the
+`batch_limits.js` (`actionWeight`, which `subCommandWeight` now calls), so the
 compose and decode sites cannot come to weigh an action two ways. Pinned by
-`test/unit/batchBuilderCostWeight.test.js`, whose arbiter half drives the same
+`test/unit/batch_builder_cost_weight.test.js`, whose arbiter half drives the same
 vectors through the real `xchain-indexer` Batch handler.
 
 ### 2026-08-15 - nine handlers, `9d15127..58ab8e9`
@@ -693,7 +1466,7 @@ Separately, `LIST` gained a `MEMO` field in place on formats v0/v1 in
 this table - LIST is a `checks/misc.js` unverified-only action ("per-item
 validity is recorded per-item on-chain, never a reject"), which the MEMO
 addition does not change. Its client-side safety is the default-deny
-`_checkDelimiters` guard, which already covers every field and is now
+`checkDelimiters` guard, which already covers every field and is now
 pinned for MEMO specifically by `test/unit/validator.test.js`.
 
 ### 2026-08-15 (sixth pass) - `dispense.js`, against indexer HEAD `07aaf8e`
@@ -741,7 +1514,7 @@ DEPLOY's weight and the ratified EXECUTE/XEXEC weight still unwired in the
 arbiter. Both landed (DEPLOY, EXECUTE and XEXEC at 30, budget 250), so the
 condition is met and the mirror follows where that entry said it would:
 
-- `batchLimits.js` gains `BATCH_WEIGHT_BUDGET`, `BATCH_COMMAND_WEIGHTS`,
+- `batch_limits.js` gains `BATCH_WEIGHT_BUDGET`, `BATCH_COMMAND_WEIGHTS`,
   `subCommandWeight` and `batchWeight` as the single source, byte-equal to the
   arbiter's `weightBudget` and `commandWeights`.
 - `decoder/parse.js` and `preflight/checks/batch.js` weigh a batch that already
@@ -752,7 +1525,7 @@ condition is met and the mirror follows where that entry said it would:
   rejecting the whole batch before any per-action count is taken.
 
 **The posture question that entry raised is answered: WARNING, not refusal.**
-`batchBuilder.js` and `validator.js` are deliberately NOT given a weight
+`batch_builder.js` and `validator.js` are deliberately NOT given a weight
 refusal. `BATCH_COST_WEIGHTING` is live on testnet and regtest from genesis and
 UNARMED on mainnet, and a client has no chain height to tell them apart, so a
 refusal would false-block legal mainnet work - the direction this module's
@@ -830,9 +1603,9 @@ rather than left to be inferred from a refreshed hash.
   a batch the chain rejects, never the reverse.
 
 - **What must happen before the mirror is built.** The remaining weight classes
-  land in the arbiter, THEN `batchLimits.js` gains the budget and the weight table
+  land in the arbiter, THEN `batch_limits.js` gains the budget and the weight table
   as its single source, and the four other `BATCH_COMMAND_LIMIT` sites follow it
-  (`batchBuilder.js`, `validator.js`, `decoder/parse.js`,
+  (`batch_builder.js`, `validator.js`, `decoder/parse.js`,
   `preflight/checks/batch.js`). Note the posture question that work has to answer
   and this entry does not: `batchBuilder` and `validator` REFUSE on the command
   cap, and a refusal on a weight that is unarmed on mainnet would false-block
@@ -880,7 +1653,7 @@ no reading for.
   field would have shown a network approval for a batch that does nothing, and
   would additionally have demoted every Tier-2 finding on it to info. That is
   what `TIER1_SUBCOMMAND_PREFLIGHT` and the per-sub-command precedence rule in
-  `preflight/index.js` exist for; see `test/unit/preflight/batchTier1.test.js`.
+  `preflight/index.js` exist for; see `test/unit/preflight/batch_tier1.test.js`.
 
 - **`dispenser.js` - no client change, and the declared gap is unchanged.** The
   diff adds one probe-only block: when a Mode B DISPENSER's oracle fee is owed
@@ -941,12 +1714,15 @@ did carry real change, and they are separated out below.
   `invalid: TICK (caret dot)`: the handler's own caret guard is `isNumeric`,
   which is parseFloat-based, so `^12.5` read as a number and landed a valid ISSUE
   with a NULL ticker id. Client-visible, and no mirror is owed because
-  `validator._validateTickName` refuses EVERY `^`-led ISSUE TICK, which is
+  `validator.validateTickName` refuses EVERY `^`-led ISSUE TICK, which is
   strictly stronger than the caret-dot subset. That argument is the load-bearing
   one on this row and it was previously only prose, so it is now PINNED by
   `test/unit/validator.test.js` ("rejects a caret ISSUE TICK whose tail contains
   a dot"): if the SDK ever narrows to match the chain's rule literally, the claim
-  fails loudly instead of silently. (2) `gatedGetTokenInfo` suppresses interning
+  fails loudly instead of silently. **[SUPERSEDED 2026-09-12, second entry above:
+  the SDK did narrow, because the blanket refusal was stricter than consensus. The
+  caret-dot rule is now mirrored DIRECTLY on every format and the pinning test
+  still holds it; only the "strictly stronger" justification is retired.]** (2) `gatedGetTokenInfo` suppresses interning
   an unseen tick into `index_tickers` once `error` is already set. The value
   handed back is unchanged by construction (a not-yet-interned tick reads back as
   unknown either way), so it is a database side effect with no wire-visible
@@ -995,11 +1771,11 @@ did carry real change, and they are separated out below.
   precedence among per-action caps: the error names the action whose first
   sub-command appears earliest in the command LIST, taken from the list rather
   than from a tally's key enumeration. All three are already mirrored in
-  `src/batchLimits.js` (`BATCH_GATED_ACTION_LIMITS`, `maxMintsPerDistinctTick`,
+  `src/protocol/batch_limits.js` (`BATCH_GATED_ACTION_LIMITS`, `maxMintsPerDistinctTick`,
   `limitKeysInListOrder`) by the paired client-parity work, including the two
   divergences a string-keyed client cannot close (the caret alias, reported as
   approximate; unresolvable ticks, declared). Not taken on trust:
-  `test/unit/batchLimitsConformance.test.js` drives the REAL arbiter out of the
+  `test/unit/batch_limits_conformance.test.js` drives the REAL arbiter out of the
   sibling checkout over one shared vector set and compares classification, count,
   precedence and whole-batch verdict against the mirror, and it is green at this
   HEAD.
@@ -1026,13 +1802,13 @@ a row nobody read is the failure this log exists to prevent.
 
 Read: `src/actions/batch.js` at `105dfbf` (the BATCH_ISSUANCE_LIMITS work,
 `74c6780` + `d71c851` + `105dfbf`). Four client-visible rules, all now mirrored
-through one shared client copy of the scan, `src/batchLimits.js`:
+through one shared client copy of the scan, `src/protocol/batch_limits.js`:
 
 - **Dotted-TICK exemption.** At most one TOP-LEVEL (undotted) ISSUE per BATCH,
   plus any number of children. A caret TICK is never exempt even when it
   contains a dot. Classification reads params[1] of the NORMALIZED sub-command,
   so a legacy no-VERSION command classifies off the same TICK the executor sees.
-  Mirrored in `batchBuilder.js`, `validator.js` and `decoder/parse.js`.
+  Mirrored in `batch_builder.js`, `validator.js` and `decoder/parse.js`.
 - **250-command cap, checked FIRST.** The count is the raw `';'`-split list with
   empty elements included, and its precedence is pinned: a batch breaking the cap
   AND the ISSUE limit reports the cap. Mirrored at all four sites. Pre-flight
@@ -1055,11 +1831,15 @@ through one shared client copy of the scan, `src/batchLimits.js`:
 Also read but NOT re-pinned: `src/actions/issue.js`, which gained the caret-dot
 TICK rejection and the intern gating in the same train. No client change is owed
 and none was made: the SDK validator already refuses ANY `^`-led TICK on ISSUE
-(`_validateTickName`), which is strictly stronger than the caret-dot rule, and
+(`validateTickName`), which is strictly stronger than the caret-dot rule, and
 the intern gating is a database side effect with no wire-visible verdict. Its row
 keeps its stale hash rather than gaining a refresh this review did not earn.
+**[SUPERSEDED 2026-09-12, second entry above. "Strictly stronger" was also
+strictly stricter than consensus: the handler resolves a caret TICK on every
+ISSUE format, so the blanket refusal was blocking edits the chain accepts. The
+caret-dot rule is mirrored directly now; the intern-gating verdict stands.]**
 
-Conformance for all of the above is `test/unit/batchLimitsConformance.test.js`,
+Conformance for all of the above is `test/unit/batch_limits_conformance.test.js`,
 which drives the REAL arbiter from the sibling checkout over a shared vector set
 and compares classification, count and whole-batch verdict.
 
@@ -1074,7 +1854,8 @@ COMMITTED state on both sides before anything was refreshed.
 Nine handlers, one dominant rule. **Caret-ref strict activation** turns
 an unresolvable wire `^<id>` address reference into a hard
 `invalid: <FIELD> (unresolvable ^id)` at/after each chain's flag-day
-(`caret_ref_strict_activation.js`; regtest armed from genesis, mainnet on a
+(`caret_ref_strict_activation.js`, since W4 of the activation registry
+`src/db/database/caret_ref_strict_gate.js`; regtest armed from genesis, mainnet on a
 later flag-day train). It lands on `mint.js` DESTINATION, `issue.js` TRANSFER and
 TRANSFER_SUPPLY, `order.js` and `swap.js` GET_ADDRESS, and `dispenser.js`
 GET_ADDRESS and ORACLE_ADDRESS. Client-visible, and partly client-decidable,
@@ -1299,7 +2080,7 @@ thing it stands in for cannot be read from outside that repo.
   row here. A term added to one and not the others would have quoted a client a
   native output the handler then refuses. Fixed where the arithmetic lives rather
   than here: the four sites now call one pure `util.vmGasCost(schedule, family,
-  bytes)`, and `xchain-indexer/test/unit/vmGasParity.test.js` drives the static quote
+  bytes)`, and `xchain-indexer/test/unit/vm_gas_parity.test.js` drives the static quote
   and the handler-side call from identical DEPLOY v0/v1, v2/v3, v4 and EXECUTE
   fixtures, then scans all four sources so no site can re-inline a `VM_` gas key.
   Deliberately NOT a gate leg: nothing this gate reads from the outside proves two

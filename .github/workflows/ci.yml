@@ -44,7 +44,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: XChain-Platform/xchain-hub
-          ref: ${{ github.ref == 'refs/heads/master' && 'master' || 'develop' }}
+          # Release-aware like the shared-workflow call above: on a release PR each
+          # canonical sibling is read at the sibling release branch, because develop
+          # keeps moving under the frozen train (the indexer handler map this gate
+          # grades is re-pinned at every indexer develop landing).
+          ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || (github.ref == 'refs/heads/master' && 'master' || 'develop') }}
           ssh-key: ${{ secrets.XCHAIN_HUB_DEPLOY_KEY }}
           path: xchain-hub
 
@@ -75,7 +79,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: XChain-Platform/xchain-explorer
-          ref: ${{ github.ref == 'refs/heads/master' && 'master' || 'develop' }}
+          # Release-aware like the shared-workflow call above: on a release PR each
+          # canonical sibling is read at the sibling release branch, because develop
+          # keeps moving under the frozen train (the indexer handler map this gate
+          # grades is re-pinned at every indexer develop landing).
+          ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || (github.ref == 'refs/heads/master' && 'master' || 'develop') }}
           ssh-key: ${{ secrets.XCHAIN_EXPLORER_DEPLOY_KEY }}
           path: xchain-explorer
 
@@ -92,7 +100,7 @@ jobs:
         working-directory: xchain-sdk
         env:
           XCHAIN_REQUIRE_SIBLINGS: "1"
-        run: npx mocha test/unit/explorer-route-contract.test.js
+        run: npx mocha test/unit/clients/explorer_route_contract.test.js
 
       # Pre-flight drift gate (confirm/decode/pre-flight spec §8.5). The Tier-2
       # checks in src/preflight/checks/ mirror validity logic that is
@@ -105,13 +113,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: XChain-Platform/xchain-indexer
-          ref: ${{ github.ref == 'refs/heads/master' && 'master' || 'develop' }}
+          # Release-aware like the shared-workflow call above: on a release PR each
+          # canonical sibling is read at the sibling release branch, because develop
+          # keeps moving under the frozen train (the indexer handler map this gate
+          # grades is re-pinned at every indexer develop landing).
+          ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || (github.ref == 'refs/heads/master' && 'master' || 'develop') }}
           ssh-key: ${{ secrets.XCHAIN_INDEXER_DEPLOY_KEY }}
           path: xchain-indexer
 
+      # REQUIRE_SIBLINGS because the step above checks the sibling out: if that
+      # checkout is ever dropped or renamed, the gate must fail rather than skip
+      # its way to a green job having compared no handler at all.
       - name: Pre-flight <-> handler drift gate
         env:
           XCHAIN_INDEXER_PATH: ${{ github.workspace }}/xchain-indexer
+          XCHAIN_REQUIRE_SIBLINGS: "1"
         run: node xchain-sdk/bin/check-preflight-drift.js
 
   # Coverage ratchet: re-run the unit suite under c8 and fail if line or

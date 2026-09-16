@@ -21,30 +21,30 @@
  ********************************************************************/
 
 const XChainSDK        = require('./src/XChainSDK.js');
-const BatchBuilder     = require('./src/batchBuilder.js');
-const ContractClient   = require('./src/contractClient.js');
-const ContractUtils    = require('./src/contracts.js');
-const WalletUtils      = require('./src/wallet.js');
-const WalletSession    = require('./src/walletSession.js');
-const AgentSession     = require('./src/agentSession.js');
-const MuSig2AgentSession = require('./src/cosigner/musig2AgentSession.js');
+const BatchBuilder     = require('./src/carrier/batch_builder.js');
+const ContractClient   = require('./src/contract/client.js');
+const ContractUtils    = require('./src/contract/utils.js');
+const WalletUtils      = require('./src/utils/wallet.js');
+const WalletSession    = require('./src/utils/wallet_session.js');
+const AgentSession     = require('./src/cosigner/agent_session.js');
+const MuSig2AgentSession = require('./src/cosigner/musig2_agent_session.js');
 const coSigner = require('./src/cosigner/index.js');
 const decoder  = require('./src/decoder/index.js');
-const { X402Gateway, X402Client, parseActionString: x402ParseActionString } = require('./src/x402.js');
-const AuthUtils        = require('./src/auth.js');
-const CrossChainHelper   = require('./src/crossChain.js');
-const AttestationHelpers = require('./src/attestation.js');
-const NftHelpers         = require('./src/nft.js');
-const ProjectHelpers     = require('./src/project.js');
-const ControllerHelpers  = require('./src/controller.js');
-const VoteHelpers        = require('./src/vote.js');
-const UTXOCache        = require('./src/utxoCache.js');
-const MuSig2           = require('./src/musig2.js');
-const chunkHelper      = require('./src/chunkHelper.js');
+const { X402Gateway, X402Client, parseActionString: x402ParseActionString } = require('./src/utils/x402.js');
+const AuthUtils        = require('./src/utils/auth.js');
+const CrossChainHelper   = require('./src/actions/cross_chain.js');
+const AttestationHelpers = require('./src/actions/attestation.js');
+const NftHelpers         = require('./src/actions/nft.js');
+const ProjectHelpers     = require('./src/actions/project.js');
+const ControllerHelpers  = require('./src/actions/controller.js');
+const VoteHelpers        = require('./src/actions/vote.js');
+const UTXOCache        = require('./src/carrier/utxo_cache.js');
+const MuSig2           = require('./src/cosigner/musig2.js');
+const chunkHelper      = require('./src/contract/chunk_helper.js');
 const CheckpointVerifier = require('./src/checkpoint.js');
-const LightClient        = require('./src/light.js');
-const PinnedCheckpoints  = require('./src/pinnedCheckpoints.js');
-const { startREPL }   = require('./src/repl.js');
+const LightClient        = require('./src/protocol/light_client.js');
+const PinnedCheckpoints  = require('./src/protocol/pinned_checkpoints.js');
+const { startREPL }   = require('./src/cli/repl.js');
 const {
     SDKError,
     SDKValidationError,
@@ -63,7 +63,7 @@ const {
     SDKX402Error,
     SDKPreflightError,
     SDKRateLimitedError
-} = require('./src/errors.js');
+} = require('./src/utils/errors.js');
 
 module.exports = {
     XChainSDK,

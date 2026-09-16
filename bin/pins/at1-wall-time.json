@@ -1,0 +1,34 @@
+{
+  "comment": "What the unit tier costs, measured rather than assumed, so a restructure can be judged against a number that existed before it started.",
+  "repo": "xchain-sdk",
+  "rev": "957d9490eb59f7a40ce13c66a9356733b5217100",
+  "script": "test",
+  "command": "mocha --timeout 5000 --recursive 'test/unit/**/*.test.js'",
+  "files": 145,
+  "titles": 4644,
+
+  "measured": {
+    "wallSeconds": 37.8,
+    "passing": 4638,
+    "pending": 5,
+    "failing": 1,
+    "measuredWith": "--exit appended; see theScriptDoesNotExit below",
+    "note": "Taken on a host running eight other repo suites at once, load average about 22, so this is an upper bound rather than a quiet-machine figure."
+  },
+
+  "theScriptDoesNotExit": {
+    "what": "`npm test` as written never terminates. The mocha run itself finishes in well under a minute and then the process sits at 0% CPU indefinitely, holding the terminal.",
+    "why": "The `test` script carries no --exit, and the co-signer suites leave a listening sidecar and its lock-fence timers on the event loop. The `ci` script does pass --exit over the identical glob, which is why CI has never shown this.",
+    "measuredCost": "38m40s of wall clock before the run was stopped by hand, against 37.8s of actual work.",
+    "consequence": "Anything timing or gating on this script must append --exit, and a run that reports `npm test` green without it has reported a hang. Adding --exit to the script itself is a behaviour change to a published package's test entry point, so it is reported rather than ridden along with this restructure."
+  },
+
+  "preExistingFailure": {
+    "file": "test/unit/ActionManifestConformance.test.js",
+    "line": 164,
+    "title": "audit against the indexer handlers > every userEncodableVersions entry is a FORMAT the indexer parses",
+    "message": "no indexer handler file for: [\"DEPLOY\",\"EXECUTE\",\"PRICE\",\"XBRIDGE\"]",
+    "cause": "The suite resolves the indexer's per-action handler files by path in the sibling checkout. The indexer's own structure pass moved them, so the lookup finds nothing. Nothing in this repo is wrong and nothing in this pass caused it.",
+    "verdict": "PRE-EXISTING at this revision, recorded and not repaired here: the fix is a repoint in the sibling's own change set."
+  }
+}
