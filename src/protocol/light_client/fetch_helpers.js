@@ -39,7 +39,7 @@
 const M      = require('../../merkle.js');
 const pinned = require('../pinned_checkpoints.js');
 
-function _fetch(impl){
+function resolveFetch(impl){
     let f = impl || (typeof fetch === 'function' ? fetch : null);
     if (!f) throw new Error('LightClient: no fetch implementation available');
     return f;
@@ -107,4 +107,4 @@ function _no(reason){ return { verified: false, amount: null, reason: reason }; 
 
 function scaled(a){ const [i, f] = M.canonicalAmount(String(a)).split('.'); return BigInt(i) * 1000000000000000000n + BigInt(f); }
 
-module.exports = { _fetch, pinnedEntry, baseUrl, _json, _hx, expectedMismatch, _no, scaled };
+module.exports = { resolveFetch, pinnedEntry, baseUrl, _json, _hx, expectedMismatch, _no, scaled };

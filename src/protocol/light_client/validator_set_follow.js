@@ -40,13 +40,13 @@ const M          = require('../../merkle.js');
 const checkpoint = require('../../checkpoint.js');
 const swq        = require('../../stake_weighted_quorum.js');
 const srb        = require('../../snapshot_reorg_buffer.js');
-const { _fetch, baseUrl, _json, scaled, _hx } = require('./fetch_helpers.js');
+const { resolveFetch, baseUrl, _json, scaled, _hx } = require('./fetch_helpers.js');
 const { verifyValidatorSetProof } = require('./proof_checks.js');
 
 // Network: fetch + verify the validator-set proof at BTC snapshot height S.
 async function verifyValidatorSet(opts){
     opts = opts || {};
-    const f = _fetch(opts.fetchImpl);
+    const f = resolveFetch(opts.fetchImpl);
     const url = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.btcCoin || 'BTC')) +
                 '/api/proof/validator-set?height=' + encodeURIComponent(String(opts.snapshotBlock));
     const body = await _json(f, url);
@@ -117,7 +117,7 @@ function verifyCheckpointWithProvenSet(cp, provenOraclePublish){
 // trust root + the chain of adopted checkpoints. Stops at the first step that fails to verify.
 async function followForward(opts){
     opts = opts || {};
-    const f = _fetch(opts.fetchImpl);
+    const f = resolveFetch(opts.fetchImpl);
     const btcCoin = opts.btcCoin || 'BTC';
     let trusted = opts.trustedCheckpoint;
     if (!trusted || trusted.state_root == null) throw new Error('LightClient: followForward needs a trusted BTC checkpoint with a committed state_root');

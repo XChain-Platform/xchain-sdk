@@ -42,7 +42,7 @@ const M = require('../../merkle.js');
 // adjacent indices above 2^53 onto one value, so the binding guards below would
 // match the neighbouring action or height they exist to reject.
 const { sameWireIndex } = require('../../utils/wire_index.js');
-const { _fetch, baseUrl, _json, _hx } = require('./fetch_helpers.js');
+const { resolveFetch, baseUrl, _json, _hx } = require('./fetch_helpers.js');
 const { verifyBalanceProof, verifyLockedBalanceProof, verifyActionProof } = require('./proof_checks.js');
 const { resolveQuorum } = require('./quorum_resolution.js');
 
@@ -59,7 +59,7 @@ const { resolveQuorum } = require('./quorum_resolution.js');
 // only on transport/shape errors; a failed verification returns verified:false.
 async function verifyBalance(opts){
     opts = opts || {};
-    const f = _fetch(opts.fetchImpl);
+    const f = resolveFetch(opts.fetchImpl);
     const hq = (opts.atHeight != null && opts.atHeight !== '') ? ('?height=' + encodeURIComponent(String(opts.atHeight))) : '';
     const url = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.coin)) +
                 '/api/proof/balance/' + encodeURIComponent(String(opts.address)) +
@@ -145,7 +145,7 @@ async function resolveBalanceCheckpoint(f, opts, body, proof){
 // instead of throwing the way an absent proof does on the spendable path.
 async function verifyLockedBalance(opts){
     opts = opts || {};
-    const f = _fetch(opts.fetchImpl);
+    const f = resolveFetch(opts.fetchImpl);
     const hq = (opts.atHeight != null && opts.atHeight !== '') ? ('?height=' + encodeURIComponent(String(opts.atHeight))) : '';
     const url = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.coin)) +
                 '/api/proof/locked-balance/' + encodeURIComponent(String(opts.address)) +
@@ -198,7 +198,7 @@ async function verifyLockedBalance(opts){
 //  -> { verified, height, action, action_index, tx_index, reason, checkpoint, quorum, weighted }
 async function verifyAction(opts){
     opts = opts || {};
-    const f = _fetch(opts.fetchImpl);
+    const f = resolveFetch(opts.fetchImpl);
     const url = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.coin)) +
                 '/api/proof/action/' + encodeURIComponent(String(opts.actionIndex));
     const body = await _json(f, url);
