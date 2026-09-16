@@ -40,7 +40,7 @@ function validateBatchEnvelope(validator, commands, errors) {
     // the caller a full per-command parse of a batch the chain never reads.
     // Empty elements count, exactly as they do on-chain.
     if (commands.length > BATCH_COMMAND_LIMIT) {
-        errors.push(validator._error('BATCH_CONSTRAINT',
+        errors.push(validator.buildError('BATCH_CONSTRAINT',
             'BATCH can contain at most ' + BATCH_COMMAND_LIMIT + ' commands',
             { count: commands.length, limit: BATCH_COMMAND_LIMIT }));
         return false;
@@ -56,7 +56,7 @@ function validateBatchEnvelope(validator, commands, errors) {
     // findings here would describe rules the chain never reads.
     let weight = batchWeight(commands);
     if (weight > BATCH_WEIGHT_BUDGET) {
-        errors.push(validator._error('BATCH_CONSTRAINT',
+        errors.push(validator.buildError('BATCH_CONSTRAINT',
             'BATCH commands weigh ' + weight + ' (VM and fan-out actions cost more than 1 each); '
             + 'the chain rejects the whole batch above a total weight of ' + BATCH_WEIGHT_BUDGET,
             { count: commands.length, weight, limit: BATCH_WEIGHT_BUDGET }));
@@ -87,7 +87,7 @@ function scanBatchCommands(validator, commands, errors) {
         // below because this is also where descent stops: handing a child
         // BATCH to validateBatchCommand would re-enter this method.
         if (key === 'BATCH') {
-            errors.push(validator._error('BATCH_CONSTRAINT', 'BATCH cannot contain nested BATCH actions'));
+            errors.push(validator.buildError('BATCH_CONSTRAINT', 'BATCH cannot contain nested BATCH actions'));
             continue;                         // never descend into a forbidden child
         }
         errors.push(...validator.validateBatchCommand(cmd, i));
@@ -111,7 +111,7 @@ function appendBatchLimits(validator, commands, state, mint, errors) {
         if (limit === undefined || key === 'BATCH') continue;
         let observed = key === 'MINT' ? mint.max : state.counts[key];
         if (observed > limit)
-            errors.push(validator._error('BATCH_CONSTRAINT',
+            errors.push(validator.buildError('BATCH_CONSTRAINT',
                 BATCH_LIMIT_MESSAGES[key] || ('BATCH can contain at most ' + limit + ' ' + key + ' action(s)'),
                 { count: observed, limit }));
     }
@@ -128,7 +128,7 @@ function appendMintAliasFinding(validator, mint, mintTicks, errors) {
     // An all-caret set is distinct by construction and is accepted because
     // the builder normally compacts resolved MINT tickers to caret ids.
     if (mint.approximate)
-        errors.push(validator._error('BATCH_CONSTRAINT',
+        errors.push(validator.buildError('BATCH_CONSTRAINT',
             'BATCH mixes a `^<id>` MINT TICK with another MINT: a caret alias and a name can be the ' +
             'SAME token, which this SDK cannot resolve. Spell every MINT TICK by name.',
             { ticks: mintTicks.slice() }));
@@ -153,7 +153,7 @@ function validateBatch(validator, fields) {
     appendBatchLimits(validator, commands, state, mint, errors);
     appendMintAliasFinding(validator, mint, state.mintTicks, errors);
     if (state.fileCount > 1)
-        errors.push(validator._error('BATCH_CONSTRAINT', 'BATCH can contain at most 1 FILE action (one rawData per transaction)', { count: state.fileCount }));
+        errors.push(validator.buildError('BATCH_CONSTRAINT', 'BATCH can contain at most 1 FILE action (one rawData per transaction)', { count: state.fileCount }));
     return errors;
 }
 

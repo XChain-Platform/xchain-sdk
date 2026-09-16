@@ -33,15 +33,15 @@ module.exports = {
         let errors = [];
         // GAS_LIMIT is required for an actual deploy (inline v0/v1 + chunked-assemble v2/v3).
         if (this.isEmpty(fields.GAS_LIMIT))
-            errors.push(this._error('MISSING_REQUIRED_FIELD', 'DEPLOY requires GAS_LIMIT', { field: 'GAS_LIMIT' }));
+            errors.push(this.buildError('MISSING_REQUIRED_FIELD', 'DEPLOY requires GAS_LIMIT', { field: 'GAS_LIMIT' }));
         // Inline (v0/v1) carries CODE_ENCODING; chunked-assemble (v2/v3) carries CODE_HASH and
         // assembles the code from prior v4 carriers. Exactly one must be present.
         let hasInline = !this.isEmpty(fields.CODE_ENCODING);
         let hasHash   = !this.isEmpty(fields.CODE_HASH);
         if (!hasInline && !hasHash)
-            errors.push(this._error('MISSING_REQUIRED_FIELD', 'DEPLOY requires CODE_ENCODING (inline) or CODE_HASH (chunked)', { action: 'DEPLOY' }));
+            errors.push(this.buildError('MISSING_REQUIRED_FIELD', 'DEPLOY requires CODE_ENCODING (inline) or CODE_HASH (chunked)', { action: 'DEPLOY' }));
         else if (hasInline && hasHash)
-            errors.push(this._error('DEPLOY_CONSTRAINT', 'DEPLOY cannot carry both CODE_ENCODING and CODE_HASH', { action: 'DEPLOY' }));
+            errors.push(this.buildError('DEPLOY_CONSTRAINT', 'DEPLOY cannot carry both CODE_ENCODING and CODE_HASH', { action: 'DEPLOY' }));
         // v1 stakeable-contract config: SLASH_DESTINATION without COOLDOWN_BLOCKS is meaningless.
         // (The indexer applies the same rule and additionally defaults SLASH_DESTINATION->BURN
         // when COOLDOWN_BLOCKS is set without a destination, so we don't enforce SLASH_DESTINATION
@@ -49,7 +49,7 @@ module.exports = {
         let hasCooldown = !this.isEmpty(fields.COOLDOWN_BLOCKS);
         let hasDest     = !this.isEmpty(fields.SLASH_DESTINATION);
         if (hasDest && !hasCooldown)
-            errors.push(this._error('DEPLOY_CONSTRAINT', 'SLASH_DESTINATION requires COOLDOWN_BLOCKS', { cooldown: fields.COOLDOWN_BLOCKS, destination: fields.SLASH_DESTINATION }));
+            errors.push(this.buildError('DEPLOY_CONSTRAINT', 'SLASH_DESTINATION requires COOLDOWN_BLOCKS', { cooldown: fields.COOLDOWN_BLOCKS, destination: fields.SLASH_DESTINATION }));
         return errors;
     },
 
@@ -60,13 +60,13 @@ module.exports = {
         let errors = [];
         for (let f of ['CODE_HASH', 'CHUNK_INDEX', 'TOTAL_CHUNKS', 'CODE_PART'])
             if (this.isEmpty(fields[f]))
-                errors.push(this._error('MISSING_REQUIRED_FIELD', 'DEPLOY v4 (chunk carrier) requires ' + f, { field: f }));
+                errors.push(this.buildError('MISSING_REQUIRED_FIELD', 'DEPLOY v4 (chunk carrier) requires ' + f, { field: f }));
         let total = Number(fields.TOTAL_CHUNKS);
         let idx   = Number(fields.CHUNK_INDEX);
         if (!this.isEmpty(fields.TOTAL_CHUNKS) && (total < 1 || total > MAX_DEPLOY_CHUNKS))
-            errors.push(this._error('DEPLOY_CHUNK_CONSTRAINT', 'TOTAL_CHUNKS must be in [1, ' + MAX_DEPLOY_CHUNKS + ']', { total }));
+            errors.push(this.buildError('DEPLOY_CHUNK_CONSTRAINT', 'TOTAL_CHUNKS must be in [1, ' + MAX_DEPLOY_CHUNKS + ']', { total }));
         if (!this.isEmpty(fields.CHUNK_INDEX) && !this.isEmpty(fields.TOTAL_CHUNKS) && idx >= total)
-            errors.push(this._error('DEPLOY_CHUNK_CONSTRAINT', 'CHUNK_INDEX must be < TOTAL_CHUNKS', { index: idx, total }));
+            errors.push(this.buildError('DEPLOY_CHUNK_CONSTRAINT', 'CHUNK_INDEX must be < TOTAL_CHUNKS', { index: idx, total }));
         return errors;
     },
 
@@ -84,16 +84,16 @@ module.exports = {
             if (!isOwnershipGive) required.push('GIVE_AMOUNT');
             for (let field of required) {
                 if (this.isEmpty(fields[field]))
-                    errors.push(this._error('MISSING_REQUIRED_FIELD', 'DISPENSER create requires field: ' + field, { field }));
+                    errors.push(this.buildError('MISSING_REQUIRED_FIELD', 'DISPENSER create requires field: ' + field, { field }));
             }
             if (isOwnershipGive) {
                 if (!this.isEmpty(fields.GIVE_AMOUNT))
-                    errors.push(this._error('INVALID_FIELD_VALUE', 'GIVE_AMOUNT must be empty when GIVE_OWNERSHIP=1', { field: 'GIVE_AMOUNT' }));
+                    errors.push(this.buildError('INVALID_FIELD_VALUE', 'GIVE_AMOUNT must be empty when GIVE_OWNERSHIP=1', { field: 'GIVE_AMOUNT' }));
                 if (!this.isEmpty(fields.GIVE_ESCROW))
-                    errors.push(this._error('INVALID_FIELD_VALUE', 'GIVE_ESCROW must be empty when GIVE_OWNERSHIP=1', { field: 'GIVE_ESCROW' }));
+                    errors.push(this.buildError('INVALID_FIELD_VALUE', 'GIVE_ESCROW must be empty when GIVE_OWNERSHIP=1', { field: 'GIVE_ESCROW' }));
             }
             if (this.isEmpty(fields.GET_TICK) && this.isEmpty(fields.GET_COIN))
-                errors.push(this._error('MISSING_REQUIRED_FIELD',
+                errors.push(this.buildError('MISSING_REQUIRED_FIELD',
                     'DISPENSER create requires GET_TICK (token-paid) or GET_COIN (coin-paid)',
                     { field: 'GET_COIN' }));
         }
@@ -105,22 +105,22 @@ module.exports = {
         if (this.isEmpty(fields.ORDER_ACTION_INDEX)) {
             // At least one side must have a TICK (can't trade coin for coin)
             if (this.isEmpty(fields.GIVE_TICK) && this.isEmpty(fields.GET_TICK))
-                errors.push(this._error('MISSING_REQUIRED_FIELD', 'ORDER create requires at least one of GIVE_TICK or GET_TICK'));
+                errors.push(this.buildError('MISSING_REQUIRED_FIELD', 'ORDER create requires at least one of GIVE_TICK or GET_TICK'));
             // Amounts required unless the corresponding side is an ownership offer/bid
             let isOwnershipGive = (Number(fields.GIVE_OWNERSHIP || 0) === 1);
             let isOwnershipGet  = (Number(fields.GET_OWNERSHIP  || 0) === 1);
             if (!isOwnershipGive && this.isEmpty(fields.GIVE_AMOUNT))
-                errors.push(this._error('MISSING_REQUIRED_FIELD', 'ORDER create requires field: GIVE_AMOUNT', { field: 'GIVE_AMOUNT' }));
+                errors.push(this.buildError('MISSING_REQUIRED_FIELD', 'ORDER create requires field: GIVE_AMOUNT', { field: 'GIVE_AMOUNT' }));
             if (!isOwnershipGet  && this.isEmpty(fields.GET_AMOUNT))
-                errors.push(this._error('MISSING_REQUIRED_FIELD', 'ORDER create requires field: GET_AMOUNT', { field: 'GET_AMOUNT' }));
+                errors.push(this.buildError('MISSING_REQUIRED_FIELD', 'ORDER create requires field: GET_AMOUNT', { field: 'GET_AMOUNT' }));
             if (isOwnershipGive && !this.isEmpty(fields.GIVE_AMOUNT))
-                errors.push(this._error('INVALID_FIELD_VALUE', 'GIVE_AMOUNT must be empty when GIVE_OWNERSHIP=1', { field: 'GIVE_AMOUNT' }));
+                errors.push(this.buildError('INVALID_FIELD_VALUE', 'GIVE_AMOUNT must be empty when GIVE_OWNERSHIP=1', { field: 'GIVE_AMOUNT' }));
             if (isOwnershipGet  && !this.isEmpty(fields.GET_AMOUNT))
-                errors.push(this._error('INVALID_FIELD_VALUE', 'GET_AMOUNT must be empty when GET_OWNERSHIP=1', { field: 'GET_AMOUNT' }));
+                errors.push(this.buildError('INVALID_FIELD_VALUE', 'GET_AMOUNT must be empty when GET_OWNERSHIP=1', { field: 'GET_AMOUNT' }));
             if (isOwnershipGive && this.isEmpty(fields.GIVE_TICK))
-                errors.push(this._error('MISSING_REQUIRED_FIELD', 'ORDER with GIVE_OWNERSHIP=1 requires GIVE_TICK', { field: 'GIVE_TICK' }));
+                errors.push(this.buildError('MISSING_REQUIRED_FIELD', 'ORDER with GIVE_OWNERSHIP=1 requires GIVE_TICK', { field: 'GIVE_TICK' }));
             if (isOwnershipGet  && this.isEmpty(fields.GET_TICK))
-                errors.push(this._error('MISSING_REQUIRED_FIELD', 'ORDER with GET_OWNERSHIP=1 requires GET_TICK', { field: 'GET_TICK' }));
+                errors.push(this.buildError('MISSING_REQUIRED_FIELD', 'ORDER with GET_OWNERSHIP=1 requires GET_TICK', { field: 'GET_TICK' }));
         }
         return errors;
     },
@@ -135,12 +135,12 @@ module.exports = {
             if (!isOwnershipGet)  required.push('GET_AMOUNT');
             for (let field of required) {
                 if (this.isEmpty(fields[field]))
-                    errors.push(this._error('MISSING_REQUIRED_FIELD', 'SWAP create requires field: ' + field, { field }));
+                    errors.push(this.buildError('MISSING_REQUIRED_FIELD', 'SWAP create requires field: ' + field, { field }));
             }
             if (isOwnershipGive && !this.isEmpty(fields.GIVE_AMOUNT))
-                errors.push(this._error('INVALID_FIELD_VALUE', 'GIVE_AMOUNT must be empty when GIVE_OWNERSHIP=1', { field: 'GIVE_AMOUNT' }));
+                errors.push(this.buildError('INVALID_FIELD_VALUE', 'GIVE_AMOUNT must be empty when GIVE_OWNERSHIP=1', { field: 'GIVE_AMOUNT' }));
             if (isOwnershipGet  && !this.isEmpty(fields.GET_AMOUNT))
-                errors.push(this._error('INVALID_FIELD_VALUE', 'GET_AMOUNT must be empty when GET_OWNERSHIP=1', { field: 'GET_AMOUNT' }));
+                errors.push(this.buildError('INVALID_FIELD_VALUE', 'GET_AMOUNT must be empty when GET_OWNERSHIP=1', { field: 'GET_AMOUNT' }));
         }
         return errors;
     },
@@ -152,7 +152,7 @@ module.exports = {
         if (!isEdit) {
             // Create mode: TYPE is required
             if (this.isEmpty(fields.TYPE))
-                errors.push(this._error('MISSING_REQUIRED_FIELD', 'LIST create requires field: TYPE', { field: 'TYPE' }));
+                errors.push(this.buildError('MISSING_REQUIRED_FIELD', 'LIST create requires field: TYPE', { field: 'TYPE' }));
         }
 
         // TYPE 2 (ADDRESS list) item validation (xchain-bridge.md row 13,
@@ -189,11 +189,11 @@ module.exports = {
             if (String(item).charAt(0) === '^') {
                 let id = String(item).substring(1);
                 if (!this.util.isNumeric(id))
-                    errors.push(this._error('INVALID_ADDRESS_ID', 'LIST ITEM ID reference must be numeric: ' + item, { field: 'ITEM', value: item }));
+                    errors.push(this.buildError('INVALID_ADDRESS_ID', 'LIST ITEM ID reference must be numeric: ' + item, { field: 'ITEM', value: item }));
                 continue;
             }
             if (!this.isValidListAddress(item))
-                errors.push(this._error('INVALID_FIELD_VALUE',
+                errors.push(this.buildError('INVALID_FIELD_VALUE',
                     'LIST ITEM must be a valid address' + (this.network ? ' on ' + this.network : '') +
                     ' for a supported coin (' + VALID_COINS.join(', ') + ')',
                     { field: 'ITEM', value: item }));
@@ -253,7 +253,7 @@ module.exports = {
         let needs = (list, label) => {
             for (let field of list)
                 if (this.isEmpty(fields[field]))
-                    errors.push(this._error('MISSING_REQUIRED_FIELD',
+                    errors.push(this.buildError('MISSING_REQUIRED_FIELD',
                         label + ' requires field: ' + field, { action: 'VOTE', field }));
         };
 
@@ -286,7 +286,7 @@ module.exports = {
                 // Finalize is system-synthesized: the indexer rejects any user-broadcast
                 // VOTE v2, and formats.js omits it, so fail here with the actionable reason
                 // rather than at serialization with a bare unknown-version error.
-                errors.push(this._error('VOTE_CONSTRAINT',
+                errors.push(this.buildError('VOTE_CONSTRAINT',
                     'VOTE v2 (finalize) is system-synthesized and cannot be authored; the indexer rejects a user-broadcast VOTE v2',
                     { action: 'VOTE', version: 2 }));
                 break;
@@ -312,7 +312,7 @@ module.exports = {
         let needs = (list, label) => {
             for (let field of list)
                 if (this.isEmpty(fields[field]))
-                    errors.push(this._error('MISSING_REQUIRED_FIELD',
+                    errors.push(this.buildError('MISSING_REQUIRED_FIELD',
                         label + ' requires field: ' + field, { action: 'DELEGATE', field }));
         };
 

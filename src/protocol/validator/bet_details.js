@@ -21,20 +21,20 @@
 // Parses strict DETAILS input and returns null after any terminal format error.
 function parseBetDetails(validator, details, limits, errors) {
     if (!/^[A-Za-z0-9+/]*={0,2}$/.test(details) || details.length % 4 !== 0) {
-        errors.push(validator._error('INVALID_FIELD_VALUE',
+        errors.push(validator.buildError('INVALID_FIELD_VALUE',
             'DETAILS must be strict base64 (A-Za-z0-9+/ with = padding, length a multiple of 4)',
             { field: 'DETAILS' }));
         return null;
     }
     const buf = Buffer.from(details, 'base64');
     if (buf.toString('base64') !== details) {
-        errors.push(validator._error('INVALID_FIELD_VALUE',
+        errors.push(validator.buildError('INVALID_FIELD_VALUE',
             'DETAILS is not canonical base64: it does not re-encode to itself',
             { field: 'DETAILS' }));
         return null;
     }
     if (buf.length > limits.MAX_BET_DETAILS_LENGTH) {
-        errors.push(validator._error('INVALID_FIELD_VALUE',
+        errors.push(validator.buildError('INVALID_FIELD_VALUE',
             'DETAILS decodes to ' + buf.length + ' bytes, max ' + limits.MAX_BET_DETAILS_LENGTH,
             { field: 'DETAILS', value: buf.length, constraint: { max: limits.MAX_BET_DETAILS_LENGTH } }));
         return null;
@@ -44,11 +44,11 @@ function parseBetDetails(validator, details, limits, errors) {
     try {
         parsed = JSON.parse(buf.toString('utf8'));
     } catch (e) {
-        errors.push(validator._error('INVALID_FIELD_VALUE', 'DETAILS must decode to parseable JSON', { field: 'DETAILS' }));
+        errors.push(validator.buildError('INVALID_FIELD_VALUE', 'DETAILS must decode to parseable JSON', { field: 'DETAILS' }));
         return null;
     }
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        errors.push(validator._error('INVALID_FIELD_VALUE',
+        errors.push(validator.buildError('INVALID_FIELD_VALUE',
             'DETAILS must decode to a JSON object, not an array or a bare value',
             { field: 'DETAILS' }));
         return null;
@@ -71,12 +71,12 @@ function validateDetailsOutcomes(validator, parsed, outcomes, errors) {
     if (parsed.outcomes !== undefined && !validator.isEmpty(outcomes)) {
         const canonical = String(outcomes).split(',').map(o => o.trim());
         if (!Array.isArray(parsed.outcomes)) {
-            errors.push(validator._error('INVALID_FIELD_VALUE',
+            errors.push(validator.buildError('INVALID_FIELD_VALUE',
                 'DETAILS.outcomes must be an array when present', { field: 'DETAILS' }));
         } else {
             const given = parsed.outcomes.map(o => String(o == null ? '' : o).trim());
             if (given.length !== canonical.length || given.some((o, i) => o !== canonical[i]))
-                errors.push(validator._error('INVALID_FIELD_VALUE',
+                errors.push(validator.buildError('INVALID_FIELD_VALUE',
                     'DETAILS.outcomes must match the OUTCOMES field exactly (same order, same count)',
                     { field: 'DETAILS', outcomes: canonical, details: given }));
         }
@@ -91,7 +91,7 @@ function validateBetDetails(validator, details, outcomes, limits) {
 
     const depth = detailsDepth(parsed, 1);
     if (depth > limits.MAX_BET_DETAILS_DEPTH)
-        errors.push(validator._error('INVALID_FIELD_VALUE',
+        errors.push(validator.buildError('INVALID_FIELD_VALUE',
             'DETAILS nests ' + depth + ' levels deep, max ' + limits.MAX_BET_DETAILS_DEPTH,
             { field: 'DETAILS', value: depth, constraint: { max: limits.MAX_BET_DETAILS_DEPTH } }));
     validateDetailsOutcomes(validator, parsed, outcomes, errors);

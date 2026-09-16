@@ -47,13 +47,13 @@ function validateRequiredFields(validator, action, fields, legs) {
                     .map((leg, i) => (validator.isEmpty(leg[field]) && validator.isEmpty(fields[field])) ? i : -1)
                     .filter(i => i !== -1);
                 if (missingIn.length > 0)
-                    errors.push(validator._error('MISSING_REQUIRED_FIELD',
+                    errors.push(validator.buildError('MISSING_REQUIRED_FIELD',
                         action + ' requires field: ' + field + ' (missing on leg ' + missingIn.join(', ') + ')',
                         { action, field, legs: missingIn }));
                 continue;
             }
             if (validator.isEmpty(fields[field])) {
-                errors.push(validator._error('MISSING_REQUIRED_FIELD',
+                errors.push(validator.buildError('MISSING_REQUIRED_FIELD',
                     action + ' requires field: ' + field,
                     { action, field }));
             }
@@ -125,7 +125,7 @@ class Validator {
         // then threw "required is not iterable" on the ACTION_REQUIRED_FIELDS
         // lookup below (prototype-pollution-shaped crash in the validation path).
         if (!Object.prototype.hasOwnProperty.call(formats, action)) {
-            errors.push(this._error('UNKNOWN_ACTION', 'Unknown ACTION type: ' + action, { action }));
+            errors.push(this.buildError('UNKNOWN_ACTION', 'Unknown ACTION type: ' + action, { action }));
             return errors;
         }
 

@@ -53,22 +53,22 @@ module.exports = {
         if (legs === null || legs === undefined) return errors;
 
         if (!Array.isArray(legs)) {
-            errors.push(this._error('INVALID_LEGS', LEGS_FIELD + ' must be an array of per-leg objects', { action, field: LEGS_FIELD }));
+            errors.push(this.buildError('INVALID_LEGS', LEGS_FIELD + ' must be an array of per-leg objects', { action, field: LEGS_FIELD }));
             return errors;
         }
         if (legs.length === 0) {
-            errors.push(this._error('INVALID_LEGS', LEGS_FIELD + ' must contain at least one leg', { action, field: LEGS_FIELD }));
+            errors.push(this.buildError('INVALID_LEGS', LEGS_FIELD + ' must contain at least one leg', { action, field: LEGS_FIELD }));
             return errors;
         }
         for (let i = 0; i < legs.length; i++) {
             let leg = legs[i];
             if (!leg || typeof leg !== 'object' || Array.isArray(leg)) {
-                errors.push(this._error('INVALID_LEGS', LEGS_FIELD + '[' + i + '] must be an object of field values', { action, field: LEGS_FIELD, leg: i }));
+                errors.push(this.buildError('INVALID_LEGS', LEGS_FIELD + '[' + i + '] must be an object of field values', { action, field: LEGS_FIELD, leg: i }));
                 continue;
             }
             for (let key in leg) {
                 if (Array.isArray(leg[key]) || (leg[key] !== null && typeof leg[key] === 'object'))
-                    errors.push(this._error('INVALID_LEGS', LEGS_FIELD + '[' + i + '].' + key + ' must be a single scalar value', { action, field: key, leg: i }));
+                    errors.push(this.buildError('INVALID_LEGS', LEGS_FIELD + '[' + i + '].' + key + ' must be a single scalar value', { action, field: key, leg: i }));
             }
         }
 
@@ -78,7 +78,7 @@ module.exports = {
             let repeatable = Object.keys(formats[action] || {})
                 .some(v => FormatSelector.isRepeatedFormat(action, parseInt(v)));
             if (!repeatable)
-                errors.push(this._error('INVALID_LEGS',
+                errors.push(this.buildError('INVALID_LEGS',
                     action + ' has no multi-leg format version; ' + LEGS_FIELD + ' must contain exactly one leg',
                     { action, field: LEGS_FIELD, legCount: legs.length }));
         }
@@ -149,9 +149,9 @@ module.exports = {
             return errors;
         let isUnbind = Number(fields['UNBIND']) === 1;
         if (!hasClass)
-            errors.push(this._error('MISSING_REQUIRED_FIELD', 'ACTION_CLASS is required for a controller bind/unbind', { field: 'ACTION_CLASS' }));
+            errors.push(this.buildError('MISSING_REQUIRED_FIELD', 'ACTION_CLASS is required for a controller bind/unbind', { field: 'ACTION_CLASS' }));
         if (!isUnbind && !hasController)
-            errors.push(this._error('MISSING_REQUIRED_FIELD', 'CONTROLLER is required to bind a controller', { field: 'CONTROLLER' }));
+            errors.push(this.buildError('MISSING_REQUIRED_FIELD', 'CONTROLLER is required to bind a controller', { field: 'CONTROLLER' }));
         return errors;
     },
 
@@ -186,7 +186,7 @@ module.exports = {
         }
         let tick = this.isEmpty(fields['TICK']) ? '' : String(fields['TICK']);
         if (tick.charAt(0) !== '^' && tick.includes('.'))
-            errors.push(this._error('ISSUE_CONSTRAINT',
+            errors.push(this.buildError('ISSUE_CONSTRAINT',
                 'subassets are not bridgeable yet, so the indexer refuses the ISSUE v7 bridge opt-in for ' + tick,
                 { action: 'ISSUE', version: 7, field: 'TICK', value: tick }));
         return errors;
@@ -196,7 +196,7 @@ module.exports = {
         let errors = [];
         // Must have either MESSAGE or BROADCAST_ACTION_INDEX
         if (this.isEmpty(fields.MESSAGE) && this.isEmpty(fields.BROADCAST_ACTION_INDEX))
-            errors.push(this._error('MISSING_REQUIRED_FIELD', 'BROADCAST requires MESSAGE or BROADCAST_ACTION_INDEX'));
+            errors.push(this.buildError('MISSING_REQUIRED_FIELD', 'BROADCAST requires MESSAGE or BROADCAST_ACTION_INDEX'));
         return errors;
     }
 };

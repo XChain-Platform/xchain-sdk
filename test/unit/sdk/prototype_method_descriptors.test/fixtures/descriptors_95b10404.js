@@ -46,7 +46,7 @@ module.exports = {
     ],
     Validator: [
         ['checkDelimiters', false, true, true, 'function', 2],
-        ['_error', false, true, true, 'function', 2],
+        ['buildError', false, true, true, 'function', 2],
         ['isEmpty', false, true, true, 'function', 1],
         ['isValidListAddress', false, true, true, 'function', 1],
         ['issueFormat', false, true, true, 'function', 1],

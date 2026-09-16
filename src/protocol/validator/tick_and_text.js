@@ -34,23 +34,23 @@ module.exports = {
             return this.validateIssueTickRef(name, fields || {});
 
         if (name.length === 0 || name.length > MAX_TICK_LENGTH)
-            errors.push(this._error('INVALID_TICK_NAME', 'TICK name must be 1-' + MAX_TICK_LENGTH + ' characters', { value, length: name.length }));
+            errors.push(this.buildError('INVALID_TICK_NAME', 'TICK name must be 1-' + MAX_TICK_LENGTH + ' characters', { value, length: name.length }));
 
         if (!TICK_REGEX.test(name))
-            errors.push(this._error('INVALID_TICK_NAME', 'TICK name contains invalid characters', { value, allowed: 'a-zA-Z0-9~!@#$%^&*()_+-={}[]:<>.?' }));
+            errors.push(this.buildError('INVALID_TICK_NAME', 'TICK name contains invalid characters', { value, allowed: 'a-zA-Z0-9~!@#$%^&*()_+-={}[]:<>.?' }));
 
         for (let ch of FORBIDDEN_TEXT_CHARS) {
             if (name.includes(ch))
-                errors.push(this._error('INVALID_TICK_NAME', 'TICK name cannot contain ' + (ch === '|' ? 'pipe (|)' : 'semicolon (;)'), { value }));
+                errors.push(this.buildError('INVALID_TICK_NAME', 'TICK name cannot contain ' + (ch === '|' ? 'pipe (|)' : 'semicolon (;)'), { value }));
         }
 
         // Dot is the parent/child separator for sub-tokens (e.g. PARENT.CHILD), which the
         // indexer fully supports; use it as a separator but reject empty segments
         // (no leading, trailing, or consecutive dots). Slash is still forbidden.
         if (name.includes('.') && name.split('.').some(seg => seg.length === 0))
-            errors.push(this._error('INVALID_TICK_NAME', 'TICK name has an empty parent/child segment (no leading, trailing, or consecutive dots)', { value }));
+            errors.push(this.buildError('INVALID_TICK_NAME', 'TICK name has an empty parent/child segment (no leading, trailing, or consecutive dots)', { value }));
         if (name.includes('/'))
-            errors.push(this._error('INVALID_TICK_NAME', 'TICK name cannot contain slash (/)', { value }));
+            errors.push(this.buildError('INVALID_TICK_NAME', 'TICK name cannot contain slash (/)', { value }));
 
         return errors;
     },
@@ -94,7 +94,7 @@ module.exports = {
 
         // The handler measures the WHOLE wire tick, caret included (issue.js:365).
         if (ref.length > MAX_TICK_LENGTH)
-            errors.push(this._error('INVALID_TICK_NAME', 'TICK must be 1-' + MAX_TICK_LENGTH + ' characters', { value: ref, length: ref.length }));
+            errors.push(this.buildError('INVALID_TICK_NAME', 'TICK must be 1-' + MAX_TICK_LENGTH + ' characters', { value: ref, length: ref.length }));
 
         // TICK opts out of the blanket delimiter guard in favour of this validation,
         // so the scan runs from inside it (the id rules below would catch '|' and ';'
@@ -102,16 +102,16 @@ module.exports = {
         errors.push(...this.scanDelimiters('TICK', ref));
 
         if (!this.util.isNumeric(id)) {
-            errors.push(this._error('INVALID_TICK_ID',
+            errors.push(this.buildError('INVALID_TICK_ID',
                 'TICK ID reference must be numeric: ' + ref, { field: 'TICK', value: ref }));
         } else if (id.includes('.')) {
-            errors.push(this._error('INVALID_TICK_ID',
+            errors.push(this.buildError('INVALID_TICK_ID',
                 'TICK ID reference cannot contain a dot: ' + ref + ' reads as a number but names no ticker id',
                 { field: 'TICK', value: ref }));
         } else {
             let format = this.issueFormat(fields);
             if ((format === 6 || format === 7) && !CANONICAL_CARET_ID.test(id))
-                errors.push(this._error('INVALID_TICK_ID',
+                errors.push(this.buildError('INVALID_TICK_ID',
                     'TICK ID reference ' + ref + ' is not a canonical ^<id> (no leading zero, id >= 1), so it '
                     + 'resolves on no node; ISSUE format ' + format + ' edits an existing token and the indexer '
                     + 'refuses it as an unknown TICK.',
@@ -166,7 +166,7 @@ module.exports = {
             let text = String(item);
             for (let ch of FORBIDDEN_TEXT_CHARS) {
                 if (text.includes(ch))
-                    errors.push(this._error('FORBIDDEN_CHARACTER',
+                    errors.push(this.buildError('FORBIDDEN_CHARACTER',
                         field + ' cannot contain ' + (ch === '|' ? 'pipe (|)' : 'semicolon (;)'),
                         { field, value: item }));
             }
@@ -178,7 +178,7 @@ module.exports = {
         return value === null || value === undefined || value === '';
     },
 
-    _error(code, message, details = {}) {
+    buildError(code, message, details = {}) {
         return { code, message, details };
     }
 };

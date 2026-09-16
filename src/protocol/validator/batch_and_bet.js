@@ -45,19 +45,19 @@ module.exports = {
         try {
             res = parse(cmd, { validate: true });
         } catch (e) {
-            return [this._error('BATCH_COMMAND_INVALID',
+            return [this.buildError('BATCH_COMMAND_INVALID',
                 'BATCH command ' + index + ' could not be parsed: ' + e.message,
                 { index, command: cmd })];
         }
         if (!res || res.ok === false)
-            return [this._error('BATCH_COMMAND_INVALID',
+            return [this.buildError('BATCH_COMMAND_INVALID',
                 'BATCH command ' + index + ' is not a valid action: ' +
                     ((res && res.code) || 'PARSE_FAILED') + ((res && res.detail) ? ' (' + res.detail + ')' : ''),
                 { index, command: cmd, code: (res && res.code) || 'PARSE_FAILED' })];
         // Carry the child's own findings up, tagged with its position so the
         // caller can point at the offending command rather than the whole batch.
         const findings = (res.validation && res.validation.findings) || [];
-        return findings.map(f => this._error(f.code,
+        return findings.map(f => this.buildError(f.code,
             'BATCH command ' + index + ' (' + res.action + '): ' + f.message,
             Object.assign({ index, command: cmd }, f.details || {})));
     },

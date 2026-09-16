@@ -42,7 +42,7 @@ function validateBridgeChains(validator, action, field, value, allFields, errors
     if (field === 'BRIDGE_CHAINS' && String(value) !== '-') {
         for (let chain of String(value).split(',')) {
             if (!VALID_COINS.includes(chain.toUpperCase())) {
-                errors.push(validator._error('INVALID_FIELD_VALUE',
+                errors.push(validator.buildError('INVALID_FIELD_VALUE',
                     'BRIDGE_CHAINS must be "-" or a comma list of chain coins ('
                     + VALID_COINS.join(', ') + '), excluding this chain; "' + chain + '" is not one',
                     { field, value: chain, constraint: { valid: VALID_COINS } }));
@@ -60,7 +60,7 @@ function validateMinimumDepth(validator, action, field, value, allFields, errors
     // xchain-indexer/src/actions/issue.js:873 ('invalid: MIN_DEPTH (format)').
     if (field === 'MIN_DEPTH') {
         if (!/^[0-9]+$/.test(String(value)))
-            errors.push(validator._error('INVALID_FIELD_VALUE',
+            errors.push(validator.buildError('INVALID_FIELD_VALUE',
                 'MIN_DEPTH must be a whole number of confirmations (digits only)',
                 { field, value }));
     }
@@ -70,7 +70,7 @@ function validateMinimumDepth(validator, action, field, value, allFields, errors
 function validateNumericValue(validator, action, field, value, allFields, errors) {
     if (field === 'VALUE') {
         if (!validator.util.isNumeric(value))
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'VALUE must be numeric', { field, value }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'VALUE must be numeric', { field, value }));
     }
 }
 
@@ -83,7 +83,7 @@ function validatePriceValue(validator, action, field, value, allFields, errors) 
     // unpublishable, so both are worth catching before the fee is spent.
     if (field === 'VALUE' && action === 'PRICE') {
         if (!/^[0-9]+(\.[0-9]{1,8})?$/.test(String(value)) || Number(value) <= 0)
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'VALUE must be a positive price with at most 8 decimal places', { field, value }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'VALUE must be a positive price with at most 8 decimal places', { field, value }));
     }
 }
 

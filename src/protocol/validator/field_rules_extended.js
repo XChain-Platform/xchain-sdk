@@ -35,7 +35,7 @@ function validateFileKeyHash(validator, action, field, value, allFields, errors)
     // asserting a rule this check does not enforce.
     if (action === 'FILE' && field === 'KEY_HASH') {
         if (value !== '' && !/^[0-9a-f]{64}$/i.test(String(value)))
-            errors.push(validator._error('INVALID_FIELD_VALUE',
+            errors.push(validator.buildError('INVALID_FIELD_VALUE',
                 'KEY_HASH must be 64 hex characters, sha256(K); emit it lowercase, ' +
                 'the chain accepts either case and records the lowercase form',
                 { field, value }));
@@ -47,7 +47,7 @@ function validateFileGateTicker(validator, action, field, value, allFields, erro
     if (action === 'FILE' && field === 'GATE_TICKER') {
         // Empty is allowed (= public file); when set, basic TICK constraints apply.
         if (value !== '' && /[|;./]/.test(String(value)))
-            errors.push(validator._error('INVALID_FIELD_VALUE',
+            errors.push(validator.buildError('INVALID_FIELD_VALUE',
                 'GATE_TICKER cannot contain |, ;, ., or /',
                 { field, value }));
     }
@@ -79,7 +79,7 @@ function validateFileGateMinAmount(validator, action, field, value, allFields, e
     if (action === 'FILE' && field === 'GATE_MIN_AMOUNT') {
         const raw = String(value);
         if (raw !== '') {
-            const bad = (msg, extra) => errors.push(validator._error('INVALID_FIELD_VALUE',
+            const bad = (msg, extra) => errors.push(validator.buildError('INVALID_FIELD_VALUE',
                 'GATE_MIN_AMOUNT ' + msg, Object.assign({ field, value }, extra || {})));
             if (raw.length > MAX_GATE_MIN_AMOUNT_LENGTH) {
                 bad('must be at most ' + MAX_GATE_MIN_AMOUNT_LENGTH + ' characters',
@@ -107,7 +107,7 @@ function validateMessageFields(validator, action, field, value, allFields, error
     // MESSAGE content length validation (delimiter safety via checkDelimiters)
     if (field === 'PLAINTEXT_MESSAGE' || field === 'ENCRYPTED_MESSAGE' || field === 'ENCRYPTION_KEY') {
         if (String(value).length > MAX_MESSAGE_LENGTH)
-            errors.push(validator._error('INVALID_FIELD_VALUE', field + ' must be ' + MAX_MESSAGE_LENGTH + ' characters or less', { field, value: String(value).length, constraint: { max: MAX_MESSAGE_LENGTH } }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must be ' + MAX_MESSAGE_LENGTH + ' characters or less', { field, value: String(value).length, constraint: { max: MAX_MESSAGE_LENGTH } }));
     }
 }
 
@@ -116,7 +116,7 @@ function validateFeePreference(validator, action, field, value, allFields, error
     // FEE_PREFERENCE validation (ADDRESS action)
     if (field === 'FEE_PREFERENCE') {
         if (!validator.util.isValidValue(value, [1, 2, 3]))
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'FEE_PREFERENCE must be 1 (destroy), 2 (protocol), or 3 (community)', { field, value, constraint: { valid: [1, 2, 3] } }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'FEE_PREFERENCE must be 1 (destroy), 2 (protocol), or 3 (community)', { field, value, constraint: { valid: [1, 2, 3] } }));
     }
 }
 
@@ -125,7 +125,7 @@ function validateDispenserPreference(validator, action, field, value, allFields,
     // DISPENSER_PREFERENCE validation (ADDRESS action): who may open dispensers on this address
     if (field === 'DISPENSER_PREFERENCE') {
         if (!validator.util.isValidValue(value, [1, 2]))
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'DISPENSER_PREFERENCE must be 1 (owner only) or 2 (anyone)', { field, value, constraint: { valid: [1, 2] } }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'DISPENSER_PREFERENCE must be 1 (owner only) or 2 (anyone)', { field, value, constraint: { valid: [1, 2] } }));
     }
 }
 
@@ -133,7 +133,7 @@ function validateDispenserPreference(validator, action, field, value, allFields,
 function validateListType(validator, action, field, value, allFields, errors) {
     if (field === 'TYPE' && action === 'LIST') {
         if (!validator.util.isValidValue(value, [1, 2]))
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'LIST TYPE must be 1 (TICK list) or 2 (ADDRESS list)', { field, value, constraint: { valid: [1, 2] } }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'LIST TYPE must be 1 (TICK list) or 2 (ADDRESS list)', { field, value, constraint: { valid: [1, 2] } }));
     }
 }
 
@@ -145,7 +145,7 @@ function validateListEdit(validator, action, field, value, allFields, errors) {
 
     if (field === 'EDIT') {
         if (!validator.util.isValidValue(value, [1, 2]))
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'EDIT must be 1 (ADD) or 2 (REMOVE)', { field, value, constraint: { valid: [1, 2] } }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'EDIT must be 1 (ADD) or 2 (REMOVE)', { field, value, constraint: { valid: [1, 2] } }));
     }
 }
 
@@ -158,7 +158,7 @@ function validateBinaryFlags(validator, action, field, value, allFields, errors)
         field === 'ORDERS'   || field === 'SWAPS'      || field === 'DISPENSERS' ||
         field === 'GIVE_OWNERSHIP' || field === 'GET_OWNERSHIP') {
         if (!validator.util.isValidLockValue(value))
-            errors.push(validator._error('INVALID_FIELD_VALUE', field + ' must be 0 or 1', { field, value, constraint: { valid: [0, 1] } }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must be 0 or 1', { field, value, constraint: { valid: [0, 1] } }));
     }
 }
 
@@ -169,7 +169,7 @@ function validateNumericAmounts(validator, action, field, value, allFields, erro
         field === 'GIVE_ESCROW' || field === 'CALLBACK_AMOUNT' ||
         field === 'MINT_SUPPLY' || field === 'MAX_MINT' || field === 'MINT_ADDRESS_MAX') {
         if (!validator.util.isNumeric(value))
-            errors.push(validator._error('INVALID_FIELD_VALUE', field + ' must be numeric', { field, value }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must be numeric', { field, value }));
     }
 }
 
@@ -203,7 +203,7 @@ function validatePositiveAmounts(validator, action, field, value, allFields, err
     if (field === 'AMOUNT' || field === 'GIVE_AMOUNT' || field === 'GET_AMOUNT' ||
         field === 'GIVE_ESCROW' || field === 'CALLBACK_AMOUNT') {
         if (!fiatPricedDispenser && validator.util.isNumeric(value) && Number(value) <= 0)
-            errors.push(validator._error('INVALID_FIELD_VALUE', field + ' must be a positive number', { field, value }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must be a positive number', { field, value }));
     }
 }
 
@@ -212,7 +212,7 @@ function validateBroadcastFee(validator, action, field, value, allFields, errors
     // FEE validation (BROADCAST, percentage format)
     if (field === 'FEE' && action === 'BROADCAST') {
         if (!validator.util.isNumeric(value))
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'FEE must be numeric (percentage)', { field, value }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'FEE must be numeric (percentage)', { field, value }));
     }
 }
 
@@ -232,7 +232,7 @@ function validatePriceFee(validator, action, field, value, allFields, errors) {
     // lower bound needs no mirror here.
     if (field === 'FEE' && action === 'PRICE' && String(value).length > 0) {
         if (!/^[0-9]+(\.[0-9]{1,18})?$/.test(String(value)) || validator.util.bcnum(String(value)).gt('1'))
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'FEE must be a fraction between 0 and 1 with at most 18 decimals', { field, value, constraint: { min: 0, max: 1 } }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'FEE must be a fraction between 0 and 1 with at most 18 decimals', { field, value, constraint: { min: 0, max: 1 } }));
     }
 }
 

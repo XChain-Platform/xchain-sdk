@@ -42,7 +42,7 @@ function validateTickFields(validator, action, field, value, allFields, errors) 
             // remainder, so '^1|memo' fails as a non-numeric id.
             let id = String(value).substring(1);
             if (!validator.util.isNumeric(id))
-                errors.push(validator._error('INVALID_TICK_ID', field + ' ID reference must be numeric: ' + value, { field, value }));
+                errors.push(validator.buildError('INVALID_TICK_ID', field + ' ID reference must be numeric: ' + value, { field, value }));
         } else {
             // An ordinary ticker name on a non-ISSUE action: the branch that had
             // nothing. These five fields are on DELIMITER_EXEMPT_FIELDS on the
@@ -70,7 +70,7 @@ function validateDescriptionField(validator, action, field, value, allFields, er
     // DESCRIPTION validation (delimiter safety via checkDelimiters)
     if (field === 'DESCRIPTION') {
         if (String(value).length > MAX_DESC_LENGTH)
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'DESCRIPTION must be ' + MAX_DESC_LENGTH + ' characters or less', { field, value: String(value).length, constraint: { max: MAX_DESC_LENGTH } }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'DESCRIPTION must be ' + MAX_DESC_LENGTH + ' characters or less', { field, value: String(value).length, constraint: { max: MAX_DESC_LENGTH } }));
     }
 }
 
@@ -78,7 +78,7 @@ function validateDescriptionField(validator, action, field, value, allFields, er
 function validateDecimalsField(validator, action, field, value, allFields, errors) {
     if (field === 'DECIMALS') {
         if (!Number.isInteger(Number(value)) || Number(value) < 0 || Number(value) > MAX_DECIMALS)
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'DECIMALS must be an integer between 0 and ' + MAX_DECIMALS, { field, value, constraint: { min: 0, max: MAX_DECIMALS, type: 'integer' } }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'DECIMALS must be an integer between 0 and ' + MAX_DECIMALS, { field, value, constraint: { min: 0, max: MAX_DECIMALS, type: 'integer' } }));
     }
 }
 
@@ -96,9 +96,9 @@ function validateMaxSupplyField(validator, action, field, value, allFields, erro
             let raw    = String(value).trim();
             let bigVal = BigInt(raw.split('.')[0]);
             if (raw.startsWith('-') || bigVal < 0n || bigVal > BigInt('1000000000000000000000'))
-                errors.push(validator._error('INVALID_FIELD_VALUE', 'MAX_SUPPLY must be between 0 and ' + MAX_SUPPLY_CEILING, { field, value, constraint: { min: 0, max: MAX_SUPPLY_CEILING } }));
+                errors.push(validator.buildError('INVALID_FIELD_VALUE', 'MAX_SUPPLY must be between 0 and ' + MAX_SUPPLY_CEILING, { field, value, constraint: { min: 0, max: MAX_SUPPLY_CEILING } }));
         } catch (e) {
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'MAX_SUPPLY must be numeric', { field, value }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'MAX_SUPPLY must be numeric', { field, value }));
         }
         // Fractional precision, which the ceiling check above structurally cannot see: it
         // range-checks split('.')[0] and throws the fraction away, so MAX_SUPPLY=1.5 with
@@ -123,7 +123,7 @@ function validateMaxSupplyField(validator, action, field, value, allFields, erro
         let declaredDecimals = allFields ? allFields['DECIMALS'] : undefined;
         let fraction = String(value).split('.')[1];
         if (!validator.isEmpty(declaredDecimals) && fraction && fraction.length > MAX_DECIMALS)
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'MAX_SUPPLY cannot carry more than ' + MAX_DECIMALS + ' fractional digits', { field, value, constraint: { maxFractionalDigits: MAX_DECIMALS } }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'MAX_SUPPLY cannot carry more than ' + MAX_DECIMALS + ' fractional digits', { field, value, constraint: { maxFractionalDigits: MAX_DECIMALS } }));
     }
 }
 
@@ -131,7 +131,7 @@ function validateMaxSupplyField(validator, action, field, value, allFields, erro
 function validateLockFields(validator, action, field, value, allFields, errors) {
     if (validator.config['LOCK_FIELDS'].includes(field)) {
         if (!validator.util.isValidLockValue(value))
-            errors.push(validator._error('INVALID_FIELD_VALUE', field + ' must be 0 or 1', { field, value, constraint: { valid: [0, 1] } }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must be 0 or 1', { field, value, constraint: { valid: [0, 1] } }));
     }
 }
 
@@ -142,7 +142,7 @@ function validateFiatCodeField(validator, action, field, value, allFields, error
 
     if (field === 'FIAT_CODE') {
         if (!VALID_FIAT_CODES.includes(String(value).toUpperCase()))
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'FIAT_CODE must be one of: ' + VALID_FIAT_CODES.join(', '), { field, value, constraint: { valid: VALID_FIAT_CODES } }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'FIAT_CODE must be one of: ' + VALID_FIAT_CODES.join(', '), { field, value, constraint: { valid: VALID_FIAT_CODES } }));
     }
 }
 
@@ -154,7 +154,7 @@ function validatePriceFiatField(validator, action, field, value, allFields, erro
     // saves a miner fee on a doomed publish.
     if (field === 'FIAT' && action === 'PRICE') {
         if (!VALID_FIAT_CODES.includes(String(value).toUpperCase()))
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'FIAT must be one of: ' + VALID_FIAT_CODES.join(', '), { field, value, constraint: { valid: VALID_FIAT_CODES } }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'FIAT must be one of: ' + VALID_FIAT_CODES.join(', '), { field, value, constraint: { valid: VALID_FIAT_CODES } }));
     }
 }
 
@@ -170,7 +170,7 @@ function validateFiatAmountField(validator, action, field, value, allFields, err
     // priced dispensers could not be created at whole/half price points.
     if (field === 'FIAT_AMOUNT') {
         if (!validator.util.isNumeric(value) || String(value).startsWith('-') || !validator.util.isValidFiatFormat(2, value))
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'FIAT_AMOUNT must be a non-negative amount with at most 2 decimal places', { field, value }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'FIAT_AMOUNT must be a non-negative amount with at most 2 decimal places', { field, value }));
     }
 }
 
@@ -178,7 +178,7 @@ function validateFiatAmountField(validator, action, field, value, allFields, err
 function validateCoinFields(validator, action, field, value, allFields, errors) {
     if (field === 'COIN' || field === 'GIVE_COIN' || field === 'GET_COIN' || field === 'COIN1' || field === 'COIN2') {
         if (!VALID_COINS.includes(String(value).toUpperCase()))
-            errors.push(validator._error('INVALID_FIELD_VALUE', field + ' must be one of: ' + VALID_COINS.join(', '), { field, value, constraint: { valid: VALID_COINS } }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must be one of: ' + VALID_COINS.join(', '), { field, value, constraint: { valid: VALID_COINS } }));
     }
 }
 
@@ -190,7 +190,7 @@ function validateAddressReferenceFields(validator, action, field, value, allFiel
     if (ADDRESS_REF_FIELD_SET.has(field) && String(value).charAt(0) === '^') {
         let id = String(value).substring(1);
         if (!validator.util.isNumeric(id))
-            errors.push(validator._error('INVALID_ADDRESS_ID', field + ' ID reference must be numeric: ' + value, { field, value }));
+            errors.push(validator.buildError('INVALID_ADDRESS_ID', field + ' ID reference must be numeric: ' + value, { field, value }));
     }
 }
 
@@ -210,7 +210,7 @@ function validateAddressFields(validator, action, field, value, allFields, error
     if (field === 'DESTINATION' || field === 'GET_ADDRESS' || field === 'TRANSFER' ||
         field === 'TRANSFER_SUPPLY') {
         if (String(value).charAt(0) !== '^' && !validator.util.isCryptoAddress(value))
-            errors.push(validator._error('INVALID_FIELD_VALUE', field + ' must be a valid crypto address', { field, value }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must be a valid crypto address', { field, value }));
     }
 }
 
@@ -222,11 +222,11 @@ function validateEncryptionMethodField(validator, action, field, value, allField
     if (field === 'ENCRYPTION_METHOD') {
         if (action === 'FILE') {
             if (!validator.util.isValidValue(value, [1]))
-                errors.push(validator._error('INVALID_FIELD_VALUE',
+                errors.push(validator.buildError('INVALID_FIELD_VALUE',
                     'FILE ENCRYPTION_METHOD must be 1 (AES-256-GCM)',
                     { field, value, constraint: { valid: [1] } }));
         } else if (!validator.util.isValidValue(value, [1, 2, 3])) {
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'ENCRYPTION_METHOD must be 1 (ECIES), 2 (ECDH), or 3 (AES)', { field, value, constraint: { valid: [1, 2, 3] } }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'ENCRYPTION_METHOD must be 1 (ECIES), 2 (ECDH), or 3 (AES)', { field, value, constraint: { valid: [1, 2, 3] } }));
         }
     }
 }

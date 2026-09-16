@@ -29,7 +29,7 @@ function validateBlockFields(validator, action, field, value, allFields, errors)
     if (field === 'RESUME_BLOCK' || field === 'CALLBACK_BLOCK' ||
         field === 'MINT_START_BLOCK' || field === 'MINT_STOP_BLOCK') {
         if (!validator.util.isNumeric(value))
-            errors.push(validator._error('INVALID_FIELD_VALUE', field + ' must be numeric', { field, value }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must be numeric', { field, value }));
     }
 }
 
@@ -41,7 +41,7 @@ function validateActionIndexFields(validator, action, field, value, allFields, e
         field === 'LIST_ACTION_INDEX' || field === 'COIN1_ACTION_INDEX' ||
         field === 'COIN2_ACTION_INDEX' || field === 'CONTRACT_ACTION_INDEX') {
         if (!validator.util.isNumeric(value))
-            errors.push(validator._error('INVALID_FIELD_VALUE', field + ' must be numeric', { field, value }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must be numeric', { field, value }));
     }
 }
 
@@ -50,7 +50,7 @@ function validateGasLimit(validator, action, field, value, allFields, errors) {
     // GAS_LIMIT validation (must be positive integer)
     if (field === 'GAS_LIMIT') {
         if (!validator.util.isNumeric(value) || Number(value) <= 0 || !Number.isInteger(Number(value)))
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'GAS_LIMIT must be a positive integer', { field, value }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'GAS_LIMIT must be a positive integer', { field, value }));
     }
 }
 
@@ -59,7 +59,7 @@ function validateQuantity(validator, action, field, value, allFields, errors) {
     // QUANTITY validation (must be numeric and positive)
     if (field === 'QUANTITY') {
         if (!validator.util.isNumeric(value) || Number(value) <= 0)
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'QUANTITY must be a positive number', { field, value }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'QUANTITY must be a positive number', { field, value }));
     }
 }
 
@@ -72,7 +72,7 @@ function validateVoteAmounts(validator, action, field, value, allFields, errors)
     // broadcast instead of producing an on-chain invalid action.
     if (field === 'DEPOSIT' || field === 'GAS_ESCROW') {
         if (!validator.util.isNumeric(value) || Number(value) < 0)
-            errors.push(validator._error('INVALID_FIELD_VALUE', field + ' must be a non-negative number', { field, value, constraint: { min: 0 } }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must be a non-negative number', { field, value, constraint: { min: 0 } }));
     }
 }
 
@@ -80,7 +80,7 @@ function validateVoteAmounts(validator, action, field, value, allFields, errors)
 function validateCallbackContract(validator, action, field, value, allFields, errors) {
     if (field === 'CALLBACK_CONTRACT') {
         if (!/^[0-9]+$/.test(String(value)))
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'CALLBACK_CONTRACT must be a non-negative integer (a contract ACTION_INDEX)', { field, value }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'CALLBACK_CONTRACT must be a non-negative integer (a contract ACTION_INDEX)', { field, value }));
     }
 }
 
@@ -88,7 +88,7 @@ function validateCallbackContract(validator, action, field, value, allFields, er
 function validateCallbackDelay(validator, action, field, value, allFields, errors) {
     if (field === 'CALLBACK_DELAY_BLOCKS') {
         if (!/^[0-9]+$/.test(String(value)))
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'CALLBACK_DELAY_BLOCKS must be a non-negative integer (blocks between finalize and the callback firing)', { field, value }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'CALLBACK_DELAY_BLOCKS must be a non-negative integer (blocks between finalize and the callback firing)', { field, value }));
     }
 }
 
@@ -97,7 +97,7 @@ function validateMethod(validator, action, field, value, allFields, errors) {
     // METHOD validation (non-empty; delimiter safety via checkDelimiters)
     if (field === 'METHOD') {
         if (typeof value !== 'string' || value.length === 0)
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'METHOD must be a non-empty string', { field, value }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'METHOD must be a non-empty string', { field, value }));
     }
 }
 
@@ -107,11 +107,11 @@ function validateCodeEncoding(validator, action, field, value, allFields, errors
     if (field === 'CODE_ENCODING') {
         let b64 = String(value);
         if (!/^[A-Za-z0-9+/]*={0,2}$/.test(b64)) {
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'CODE_ENCODING must be a valid base64 string', { field }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'CODE_ENCODING must be a valid base64 string', { field }));
         } else {
             let bytes = Buffer.from(b64, 'base64').length; // decoded source size
             if (bytes > MAX_CODE_SIZE)
-                errors.push(validator._error('CODE_TOO_LARGE', 'Contract code exceeds ' + MAX_CODE_SIZE + ' byte limit (' + bytes + ' bytes)', { field, bytes, limit: MAX_CODE_SIZE }));
+                errors.push(validator.buildError('CODE_TOO_LARGE', 'Contract code exceeds ' + MAX_CODE_SIZE + ' byte limit (' + bytes + ' bytes)', { field, bytes, limit: MAX_CODE_SIZE }));
         }
     }
 }
@@ -121,7 +121,7 @@ function validateCodeHash(validator, action, field, value, allFields, errors) {
     // CODE_HASH validation: DEPLOY v2/v3 assemble + v4 carrier group key (sha256 hex)
     if (field === 'CODE_HASH') {
         if (!/^[0-9a-f]{64}$/.test(String(value)))
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'CODE_HASH must be a 64-char lowercase sha256 hex string', { field }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'CODE_HASH must be a 64-char lowercase sha256 hex string', { field }));
     }
 }
 
@@ -131,9 +131,9 @@ function validateCodePart(validator, action, field, value, allFields, errors) {
     if (field === 'CODE_PART') {
         let part = String(value);
         if (!/^[A-Za-z0-9+/]*={0,2}$/.test(part))
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'CODE_PART must be a valid base64 string', { field }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'CODE_PART must be a valid base64 string', { field }));
         else if (Buffer.byteLength(part, 'utf8') > MAX_DEPLOYCHUNK_PART_BYTES)
-            errors.push(validator._error('CODE_PART_TOO_LARGE', 'CODE_PART exceeds ' + MAX_DEPLOYCHUNK_PART_BYTES + ' byte limit', { field, limit: MAX_DEPLOYCHUNK_PART_BYTES }));
+            errors.push(validator.buildError('CODE_PART_TOO_LARGE', 'CODE_PART exceeds ' + MAX_DEPLOYCHUNK_PART_BYTES + ' byte limit', { field, limit: MAX_DEPLOYCHUNK_PART_BYTES }));
     }
 }
 
@@ -142,7 +142,7 @@ function validateChunkIndexes(validator, action, field, value, allFields, errors
     // CHUNK_INDEX / TOTAL_CHUNKS validation (non-negative integers; bounds checked cross-field)
     if (field === 'CHUNK_INDEX' || field === 'TOTAL_CHUNKS') {
         if (!validator.util.isNumeric(value) || !Number.isInteger(Number(value)) || Number(value) < 0)
-            errors.push(validator._error('INVALID_FIELD_VALUE', field + ' must be a non-negative integer', { field, value }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must be a non-negative integer', { field, value }));
     }
 }
 
@@ -155,7 +155,7 @@ function validateParams(validator, action, field, value, allFields, errors) {
                 let param = String(value[i]);
                 for (let ch of FORBIDDEN_TEXT_CHARS) {
                     if (param.includes(ch))
-                        errors.push(validator._error('INVALID_PARAM_VALUE', field + '[' + i + '] cannot contain ' + (ch === '|' ? 'pipe (|)' : 'semicolon (;)'), { field, index: i, value: param }));
+                        errors.push(validator.buildError('INVALID_PARAM_VALUE', field + '[' + i + '] cannot contain ' + (ch === '|' ? 'pipe (|)' : 'semicolon (;)'), { field, index: i, value: param }));
                 }
             }
         }
@@ -167,7 +167,7 @@ function validateSigningKeys(validator, action, field, value, allFields, errors)
     // SIGNING_PUBKEY / NEW_SIGNING_PUBKEY validation (64 hex chars, Ed25519)
     if (field === 'SIGNING_PUBKEY' || field === 'NEW_SIGNING_PUBKEY') {
         if (typeof value !== 'string' || !/^[0-9a-fA-F]{64}$/.test(value))
-            errors.push(validator._error('INVALID_FIELD_VALUE', field + ' must be a 64-character hex string (Ed25519 public key)', { field, value }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must be a 64-character hex string (Ed25519 public key)', { field, value }));
     }
 }
 
@@ -176,7 +176,7 @@ function validateTargetContractIndex(validator, action, field, value, allFields,
     // TARGET_CONTRACT_INDEX validation (STAKE v3 / UNSTAKE v1 / DELEGATE v1): must be a positive integer
     if (field === 'TARGET_CONTRACT_INDEX') {
         if (!/^[0-9]+$/.test(String(value)) || Number(value) <= 0)
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'TARGET_CONTRACT_INDEX must be a positive integer', { field, value }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'TARGET_CONTRACT_INDEX must be a positive integer', { field, value }));
     }
 }
 
@@ -186,7 +186,7 @@ function validateController(validator, action, field, value, allFields, errors) 
     // ACTION_INDEX of a deployed guard contract, so a non-negative integer.
     if (field === 'CONTROLLER') {
         if (!/^[0-9]+$/.test(String(value)))
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'CONTROLLER must be a non-negative integer (a contract ACTION_INDEX)', { field, value }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'CONTROLLER must be a non-negative integer (a contract ACTION_INDEX)', { field, value }));
     }
 }
 
@@ -199,7 +199,7 @@ function validateActionClass(validator, action, field, value, allFields, errors)
     if (field === 'ACTION_CLASS') {
         let classes = validator.config['ACTION_CLASSES'] || [];
         if (classes.indexOf(String(value).toLowerCase()) === -1)
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'ACTION_CLASS must be one of: ' + classes.join(', '), { field, value, constraint: { valid: classes } }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'ACTION_CLASS must be one of: ' + classes.join(', '), { field, value, constraint: { valid: classes } }));
     }
 }
 
@@ -208,7 +208,7 @@ function validateUnbind(validator, action, field, value, allFields, errors) {
     // UNBIND validation (ISSUE v6 / ADDRESS v1): 0 = bind / 1 = unbind.
     if (field === 'UNBIND') {
         if (!validator.util.isValidLockValue(value))
-            errors.push(validator._error('INVALID_FIELD_VALUE', 'UNBIND must be 0 (bind) or 1 (unbind)', { field, value, constraint: { valid: [0, 1] } }));
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'UNBIND must be 0 (bind) or 1 (unbind)', { field, value, constraint: { valid: [0, 1] } }));
     }
 }
 
@@ -223,13 +223,13 @@ function validateCooldownBlocks(validator, action, field, value, allFields, erro
         if (value !== '' && value !== null && value !== undefined) {
             if (action === 'ISSUE' || action === 'ADDRESS') {
                 if (!/^[0-9]+$/.test(String(value)))
-                    errors.push(validator._error('INVALID_FIELD_VALUE', 'COOLDOWN_BLOCKS must be a non-negative integer', { field, value, constraint: { min: 0 } }));
+                    errors.push(validator.buildError('INVALID_FIELD_VALUE', 'COOLDOWN_BLOCKS must be a non-negative integer', { field, value, constraint: { min: 0 } }));
             } else if (!validator.util.isNumeric(value)) {
-                errors.push(validator._error('INVALID_FIELD_VALUE', 'COOLDOWN_BLOCKS must be numeric', { field, value }));
+                errors.push(validator.buildError('INVALID_FIELD_VALUE', 'COOLDOWN_BLOCKS must be numeric', { field, value }));
             } else {
                 let cb = Number(value);
                 if (cb < 1 || cb > 100000)
-                    errors.push(validator._error('INVALID_FIELD_VALUE', 'COOLDOWN_BLOCKS must be in [1, 100000]', { field, value, constraint: { min: 1, max: 100000 } }));
+                    errors.push(validator.buildError('INVALID_FIELD_VALUE', 'COOLDOWN_BLOCKS must be in [1, 100000]', { field, value, constraint: { min: 1, max: 100000 } }));
             }
         }
     }
