@@ -104,7 +104,7 @@ module.exports = {
      */
     sessionDecrypt(ciphertext, sharedSecret) {
         let key = this.toBuffer(sharedSecret, 'sharedSecret');
-        return this._aesDecrypt(ciphertext, key);
+        return this.aesDecryptWithKey(ciphertext, key);
     },
 
     /**
@@ -160,7 +160,7 @@ module.exports = {
      */
     aesDecrypt(ciphertext, sharedKey) {
         let key = this.normalizeKey(sharedKey);
-        return this._aesDecrypt(ciphertext, key);
+        return this.aesDecryptWithKey(ciphertext, key);
     },
 
     /**

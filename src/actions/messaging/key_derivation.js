@@ -131,12 +131,12 @@ module.exports = {
         return { ciphertext: ciphertext.toString('hex') };
     },
 
-    _aesDecrypt(ciphertext, key) {
+    aesDecryptWithKey(ciphertext, key) {
         let { plaintext } = this._aesDecryptBytes(ciphertext, key);
         return { plaintext: plaintext.toString('utf8') };
     },
 
-    // Binary counterpart to _aesDecrypt: returns the raw plaintext Buffer.
+    // Binary counterpart to aesDecryptWithKey: returns the raw plaintext Buffer.
     _aesDecryptBytes(ciphertext, key) {
         if (!ciphertext)
             throw new SDKMessagingError('INVALID_CIPHERTEXT', 'Ciphertext is required.');
