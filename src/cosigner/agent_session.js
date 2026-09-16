@@ -211,7 +211,7 @@ class AgentSession extends WalletSession {
     evaluate(actionData) {
         // Pass the live window snapshot to the pure evaluator (it does no I/O).
         // Only read the window when the policy actually has a window rule.
-        const windowUsage = this.policy.maxPerWindow ? this._windowUsage() : undefined;
+        const windowUsage = this.policy.maxPerWindow ? this.computeWindowUsage() : undefined;
         const verdict = evaluatePolicy(this.policy, actionData, windowUsage);
         if (!verdict.ok)
             this.deny(verdict.violation.code, verdict.violation.message, verdict.violation.details);
@@ -245,7 +245,7 @@ class AgentSession extends WalletSession {
     // submit_action that advertises at-most-once without qualification. A keyed row
     // therefore outlives its window, COMPACTED to { t, key, txid }: action, tick and
     // amount are dropped so an aged-out row can never be summed into a spend cap
-    // even if some future caller sums the raw list. _windowUsage() filters by the
+    // even if some future caller sums the raw list. computeWindowUsage() filters by the
     // window cutoff regardless, which is the belt to this brace.
     pruned() {
         const usage = this.loadUsage();
@@ -286,7 +286,7 @@ class AgentSession extends WalletSession {
     // rows would let a spent-and-expired submission keep consuming maxActions and
     // perTick budget forever, which is the one way this retention could deny a
     // legitimate payment.
-    _windowUsage() {
+    computeWindowUsage() {
         const usage = this.pruned();
         const win = this.policy.maxPerWindow;
         const cutoff = win ? Date.now() - win.hours * 3600 * 1000 : -Infinity;
@@ -365,7 +365,7 @@ class AgentSession extends WalletSession {
             const ok = await this.policy.confirmAbove.handler({
                 action: evaluation.action, tick: evaluation.tick, amount: evaluation.amount,
                 destinations: evaluation.destinations, address: this.address,
-                windowUsage: this._windowUsage(),
+                windowUsage: this.computeWindowUsage(),
             });
             if (!ok)
                 this.deny('POLICY_CONFIRMATION_DENIED',
@@ -391,7 +391,7 @@ class AgentSession extends WalletSession {
         result.policy = {
             action: evaluation.action, tick: evaluation.tick, amount: evaluation.amount,
             confirmed: evaluation.needsConfirmation || undefined,
-            windowUsage: this._windowUsage(),
+            windowUsage: this.computeWindowUsage(),
         };
         return result;
     }

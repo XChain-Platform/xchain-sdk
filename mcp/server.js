@@ -318,7 +318,7 @@ function buildServer(options = {}) {
                 return {
                     address: s.address,
                     balances: await s.getBalances(),
-                    window_usage: s._windowUsage(),
+                    window_usage: s.computeWindowUsage(),
                 };
             });
 

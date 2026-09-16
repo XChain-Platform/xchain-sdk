@@ -85,7 +85,7 @@ function writableStub(network) {
         return {
             address: 'agentaddr', pubkey: 'agentpub',
             getBalances: async () => [{ tick: 'TOK', amount: '1' }],
-            _windowUsage: () => ({ count: 0, perTick: {}, hours: 24 }),
+            computeWindowUsage: () => ({ count: 0, perTick: {}, hours: 24 }),
             // Mirrors AgentSession.submit(actionData, encoderOpts, submitOpts),
             // INCLUDING its idempotency-key requirement: a stub that ignores the
             // trailing arguments greens a submit_action the real default policy
