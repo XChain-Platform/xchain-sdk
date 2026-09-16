@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-09-16
+
+### Added
+- XBRIDGE encoding and a bridge builder method.
+- The ISSUE format 7 bridge field rules and the reserved-roots list are mirrored by value.
+- XBRIDGE is priced and the bridge-era ISSUE and DESTROY pre-flight rules are predicted.
+- Plain-English descriptions for every XBRIDGE version, bounded by the cosigner value policy.
+- A caret ticker reference is compacted on the ISSUE edit formats only, never on a create.
+
+### Changed
+- Audited transitive packages move to their patched releases (lockfile only).
+- Restructured under the platform code-structure standard (feature directories, snake_case files, split test suites, restored comments); consensus identity byte-identical and pinned.
+
+### Fixed
+- Address-list items validate against the configured network's coins instead of length alone.
+- A caret ticker reference is accepted on every ISSUE format the way consensus resolves it.
+
 ## [0.18.0] - 2026-09-11
 
 ### Added
