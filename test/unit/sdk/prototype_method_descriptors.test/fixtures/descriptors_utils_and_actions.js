@@ -179,7 +179,7 @@ module.exports = {
         ['aesDecryptWithKey', false, true, true, 'function', 2],
         ['_aesDecryptBytes', false, true, true, 'function', 2],
         ['aesEncryptWithKey', false, true, true, 'function', 2],
-        ['_aesEncryptBytes', false, true, true, 'function', 2],
+        ['aesEncryptBytesWithKey', false, true, true, 'function', 2],
         ['deriveECDHSecretLegacy', false, true, true, 'function', 2],
         ['deriveEcdhSessionKey', false, true, true, 'function', 2],
         ['deriveEciesKey', false, true, true, 'function', 2],

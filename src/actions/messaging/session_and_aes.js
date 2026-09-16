@@ -120,7 +120,7 @@ module.exports = {
             throw new SDKMessagingError('INVALID_MESSAGE', 'Plaintext Buffer is required.');
 
         let key = this.toBuffer(sharedSecret, 'sharedSecret');
-        return this._aesEncryptBytes(plaintext, key);
+        return this.aesEncryptBytesWithKey(plaintext, key);
     },
 
     /**
@@ -176,7 +176,7 @@ module.exports = {
             throw new SDKMessagingError('INVALID_MESSAGE', 'Plaintext Buffer is required.');
 
         let key = this.normalizeKey(sharedKey);
-        return this._aesEncryptBytes(plaintext, key);
+        return this.aesEncryptBytesWithKey(plaintext, key);
     },
 
     /**

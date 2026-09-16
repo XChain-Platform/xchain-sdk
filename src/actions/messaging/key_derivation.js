@@ -120,7 +120,7 @@ module.exports = {
     },
 
     // Binary counterpart to aesEncryptWithKey: same envelope, no utf8 conversion.
-    _aesEncryptBytes(plaintext, key) {
+    aesEncryptBytesWithKey(plaintext, key) {
         let iv = crypto.randomBytes(IV_LEN);
         let cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
         let encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
