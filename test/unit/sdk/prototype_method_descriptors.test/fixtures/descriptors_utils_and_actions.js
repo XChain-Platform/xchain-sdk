@@ -177,7 +177,7 @@ module.exports = {
     // 66ac95fbaf, the parent of split 23f9d9edf1.
     MessagingUtils: [
         ['aesDecryptWithKey', false, true, true, 'function', 2],
-        ['_aesDecryptBytes', false, true, true, 'function', 2],
+        ['aesDecryptBytesWithKey', false, true, true, 'function', 2],
         ['aesEncryptWithKey', false, true, true, 'function', 2],
         ['aesEncryptBytesWithKey', false, true, true, 'function', 2],
         ['deriveECDHSecretLegacy', false, true, true, 'function', 2],
