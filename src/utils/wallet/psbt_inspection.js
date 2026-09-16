@@ -95,6 +95,153 @@ function classifyScript(scriptBuf, redeemScriptBuf) {
     return 'unknown';
 }
 
+// Parse through the shared error wrapper so callers receive the existing SDK error shape.
+function parsePsbt(psbtHex, net) {
+    try {
+        return bitcoin.Psbt.fromHex(psbtHex, { network: net });
+    } catch (err) {
+        throw new SDKWalletError('INVALID_PSBT', `Failed to parse PSBT: ${err.message}`);
+    }
+}
+
+// Read the preferred UTXO field while keeping exact satoshi values and parse failures intact.
+function readPrimaryUtxo(psbtInput, txInput, i) {
+    let value = null;
+    let scriptPubKeyBuf = null;
+    let nonWitnessUtxoHex = null;
+    let witnessUtxoScriptHex = null;
+    let prevTxInfo = null;
+
+    if (psbtInput.witnessUtxo) {
+        // Widen ONLY above 2^53, matching applyBufferutilsPatch's own contract:
+        // a Number stays a Number, a BigInt becomes an exact decimal string
+        // rather than a rounded double.
+        value = typeof psbtInput.witnessUtxo.value === 'bigint'
+            ? String(psbtInput.witnessUtxo.value) : psbtInput.witnessUtxo.value;
+        scriptPubKeyBuf = psbtInput.witnessUtxo.script;
+        witnessUtxoScriptHex = scriptPubKeyBuf.toString('hex');
+    } else if (psbtInput.nonWitnessUtxo) {
+        nonWitnessUtxoHex = psbtInput.nonWitnessUtxo.toString('hex');
+        try {
+            const prevTx = bitcoin.Transaction.fromBuffer(psbtInput.nonWitnessUtxo);
+            const out = prevTx.outs[txInput.index];
+            if (out) {
+                value = typeof out.value === 'bigint' ? String(out.value) : out.value;
+                scriptPubKeyBuf = out.script;
+            }
+            prevTxInfo = serializePrevTx(prevTx);
+        } catch (err) {
+            throw new SDKWalletError('INVALID_PSBT',
+                `Input ${i}: failed to parse nonWitnessUtxo: ${err.message}`);
+        }
+    } else {
+        throw new SDKWalletError('INVALID_PSBT',
+            `Input ${i}: PSBT missing both witnessUtxo and nonWitnessUtxo.`);
+    }
+
+    return { value, scriptPubKeyBuf, nonWitnessUtxoHex, witnessUtxoScriptHex, prevTxInfo };
+}
+
+// Preserve a supplemental previous transaction when a witness input carries both UTXO fields.
+function readSupplementalPrevTx(psbtInput, utxo) {
+    // Report the full previous transaction whenever the PSBT carries one,
+    // even alongside a witnessUtxo. Keeping this independent from the
+    // witness branch prevents a PSBT carrying BOTH from losing its prev tx,
+    // a hardware signer cannot sign without it, because Ledger derives
+    // the outpoint it signs from those bytes rather than from the
+    // PSBT's own txid. Value and script still come from the witnessUtxo
+    // when present, so nothing that already worked changes; this only
+    // stops information the PSBT contains from being dropped.
+    if (utxo.nonWitnessUtxoHex === null && psbtInput.nonWitnessUtxo) {
+        utxo.nonWitnessUtxoHex = psbtInput.nonWitnessUtxo.toString('hex');
+        try {
+            utxo.prevTxInfo = serializePrevTx(bitcoin.Transaction.fromBuffer(psbtInput.nonWitnessUtxo));
+        } catch { /* the witnessUtxo already gave us value + script */ }
+    }
+}
+
+// Convert a script to its network address while retaining null for unsupported scripts.
+function addressFromScript(scriptBuf, net) {
+    if (!scriptBuf) return null;
+    try {
+        return bitcoin.address.fromOutputScript(scriptBuf, net);
+    } catch {
+        return null;
+    }
+}
+
+// Shape one PSBT input so the public method stays focused on orchestration.
+function decomposeInput(psbtInput, txInput, i, net) {
+    // txInput.hash is little-endian; reverse to get display-order txid hex.
+    const prevTxHash = Buffer.from(txInput.hash).reverse().toString('hex');
+    const utxo = readPrimaryUtxo(psbtInput, txInput, i);
+    readSupplementalPrevTx(psbtInput, utxo);
+
+    const scriptPubKeyHex = utxo.scriptPubKeyBuf
+        ? utxo.scriptPubKeyBuf.toString('hex')
+        : '';
+    const redeemScriptHex = psbtInput.redeemScript
+        ? psbtInput.redeemScript.toString('hex')
+        : null;
+    const witnessScriptHex = psbtInput.witnessScript
+        ? psbtInput.witnessScript.toString('hex')
+        : null;
+
+    const scriptType = classifyScript(utxo.scriptPubKeyBuf, psbtInput.redeemScript);
+    const address = addressFromScript(utxo.scriptPubKeyBuf, net);
+
+    return {
+        prevTxHash,
+        prevTxIndex: txInput.index,
+        sequence: txInput.sequence >>> 0,
+        value: utxo.value,
+        scriptPubKeyHex,
+        scriptType,
+        sighashType: typeof psbtInput.sighashType === 'number'
+            ? psbtInput.sighashType
+            : null,
+        nonWitnessUtxoHex: utxo.nonWitnessUtxoHex,
+        witnessUtxoScriptHex: utxo.witnessUtxoScriptHex,
+        redeemScriptHex,
+        witnessScriptHex,
+        address,
+        prevTxInfo: utxo.prevTxInfo,
+    };
+}
+
+// Decompose inputs in source order because output consumers pair paths by index.
+function decomposeInputs(psbt, net) {
+    const inputs = [];
+    for (let i = 0; i < psbt.data.inputs.length; i += 1) {
+        inputs.push(decomposeInput(psbt.data.inputs[i], psbt.txInputs[i], i, net));
+    }
+    return inputs;
+}
+
+// Shape one transaction output with the same value widening and address fallback.
+function decomposeOutput(txOut, net) {
+    const scriptBuf = txOut.script;
+    const scriptPubKeyHex = scriptBuf.toString('hex');
+    const scriptType = classifyScript(scriptBuf, null);
+    const address = addressFromScript(scriptBuf, net);
+
+    return {
+        address,
+        scriptPubKeyHex,
+        scriptType,
+        value: typeof txOut.value === 'bigint' ? String(txOut.value) : txOut.value,
+    };
+}
+
+// Decompose outputs in transaction order so indices remain stable for callers.
+function decomposeOutputs(psbt, net) {
+    const outputs = [];
+    for (let i = 0; i < psbt.txOutputs.length; i += 1) {
+        outputs.push(decomposeOutput(psbt.txOutputs[i], net));
+    }
+    return outputs;
+}
+
 module.exports = {
     /**
      * Decompose an unsigned PSBT into a vendor-agnostic shape suitable
@@ -145,131 +292,9 @@ module.exports = {
         }
 
         const net = this._resolveNet();
-
-        let psbt;
-        try {
-            psbt = bitcoin.Psbt.fromHex(psbtHex, { network: net });
-        } catch (err) {
-            throw new SDKWalletError('INVALID_PSBT', `Failed to parse PSBT: ${err.message}`);
-        }
-
-        const inputs = [];
-        for (let i = 0; i < psbt.data.inputs.length; i += 1) {
-            const psbtInput = psbt.data.inputs[i];
-            const txInput = psbt.txInputs[i];
-
-            // txInput.hash is little-endian; reverse to get display-order txid hex.
-            const prevTxHash = Buffer.from(txInput.hash).reverse().toString('hex');
-
-            let value = null;
-            let scriptPubKeyBuf = null;
-            let nonWitnessUtxoHex = null;
-            let witnessUtxoScriptHex = null;
-            let prevTxInfo = null;
-
-            if (psbtInput.witnessUtxo) {
-                // Widen ONLY above 2^53, matching applyBufferutilsPatch's own contract:
-                // a Number stays a Number, a BigInt becomes an exact decimal string
-                // rather than a rounded double.
-                value = typeof psbtInput.witnessUtxo.value === 'bigint'
-                    ? String(psbtInput.witnessUtxo.value) : psbtInput.witnessUtxo.value;
-                scriptPubKeyBuf = psbtInput.witnessUtxo.script;
-                witnessUtxoScriptHex = scriptPubKeyBuf.toString('hex');
-            } else if (psbtInput.nonWitnessUtxo) {
-                nonWitnessUtxoHex = psbtInput.nonWitnessUtxo.toString('hex');
-                try {
-                    const prevTx = bitcoin.Transaction.fromBuffer(psbtInput.nonWitnessUtxo);
-                    const out = prevTx.outs[txInput.index];
-                    if (out) {
-                        value = typeof out.value === 'bigint' ? String(out.value) : out.value;
-                        scriptPubKeyBuf = out.script;
-                    }
-                    prevTxInfo = serializePrevTx(prevTx);
-                } catch (err) {
-                    throw new SDKWalletError('INVALID_PSBT',
-                        `Input ${i}: failed to parse nonWitnessUtxo: ${err.message}`);
-                }
-            } else {
-                throw new SDKWalletError('INVALID_PSBT',
-                    `Input ${i}: PSBT missing both witnessUtxo and nonWitnessUtxo.`);
-            }
-
-            // Report the full previous transaction whenever the PSBT carries one,
-            // even alongside a witnessUtxo. Keeping this independent from the
-            // witness branch prevents a PSBT carrying BOTH from losing its prev tx,
-            // a hardware signer cannot sign without it, because Ledger derives
-            // the outpoint it signs from those bytes rather than from the
-            // PSBT's own txid. Value and script still come from the witnessUtxo
-            // when present, so nothing that already worked changes; this only
-            // stops information the PSBT contains from being dropped.
-            if (nonWitnessUtxoHex === null && psbtInput.nonWitnessUtxo) {
-                nonWitnessUtxoHex = psbtInput.nonWitnessUtxo.toString('hex');
-                try {
-                    prevTxInfo = serializePrevTx(bitcoin.Transaction.fromBuffer(psbtInput.nonWitnessUtxo));
-                } catch { /* the witnessUtxo already gave us value + script */ }
-            }
-
-            const scriptPubKeyHex = scriptPubKeyBuf
-                ? scriptPubKeyBuf.toString('hex')
-                : '';
-            const redeemScriptHex = psbtInput.redeemScript
-                ? psbtInput.redeemScript.toString('hex')
-                : null;
-            const witnessScriptHex = psbtInput.witnessScript
-                ? psbtInput.witnessScript.toString('hex')
-                : null;
-
-            const scriptType = classifyScript(scriptPubKeyBuf, psbtInput.redeemScript);
-
-            let address = null;
-            if (scriptPubKeyBuf) {
-                try {
-                    address = bitcoin.address.fromOutputScript(scriptPubKeyBuf, net);
-                } catch {
-                    address = null;
-                }
-            }
-
-            inputs.push({
-                prevTxHash,
-                prevTxIndex: txInput.index,
-                sequence: txInput.sequence >>> 0,
-                value,
-                scriptPubKeyHex,
-                scriptType,
-                sighashType: typeof psbtInput.sighashType === 'number'
-                    ? psbtInput.sighashType
-                    : null,
-                nonWitnessUtxoHex,
-                witnessUtxoScriptHex,
-                redeemScriptHex,
-                witnessScriptHex,
-                address,
-                prevTxInfo,
-            });
-        }
-
-        const outputs = [];
-        for (let i = 0; i < psbt.txOutputs.length; i += 1) {
-            const txOut = psbt.txOutputs[i];
-            const scriptBuf = txOut.script;
-            const scriptPubKeyHex = scriptBuf.toString('hex');
-            const scriptType = classifyScript(scriptBuf, null);
-
-            let address = null;
-            try {
-                address = bitcoin.address.fromOutputScript(scriptBuf, net);
-            } catch {
-                address = null;
-            }
-
-            outputs.push({
-                address,
-                scriptPubKeyHex,
-                scriptType,
-                value: typeof txOut.value === 'bigint' ? String(txOut.value) : txOut.value,
-            });
-        }
+        const psbt = parsePsbt(psbtHex, net);
+        const inputs = decomposeInputs(psbt, net);
+        const outputs = decomposeOutputs(psbt, net);
 
         return {
             txVersion: psbt.version,
