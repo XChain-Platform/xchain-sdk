@@ -11,8 +11,7 @@ const { mockSdk, notFound } = require('../helpers/mock.js');
 const A1 = 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh';
 const A2 = '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2';
 
-describe('pre-flight engine', function () {
-
+function registerAuthoritativeDryRunCases() {
     describe('tier precedence (§4.2)', function () {
         it('Tier-1 valid downgrades a contradicting Tier-2 client error to info', async function () {
             // Token missing (client would error TOKEN_NOT_FOUND) but the
@@ -43,7 +42,9 @@ describe('pre-flight engine', function () {
             expect(r.verdict).to.equal('fail');
         });
     });
+}
 
+function registerBalancePrecedenceCases() {
     describe('tier precedence (§4.2)', function () {
         // §4.7. A dry-run says valid because the CONFIRMED balance
         // covers the send; only the wallet knows another window already
@@ -95,7 +96,9 @@ describe('pre-flight engine', function () {
             expect(r.findings.some(f => f.code === 'DRYRUN_UNAVAILABLE')).to.equal(true);
         });
     });
+}
 
+function registerUnansweredDryRunCase() {
     describe('tier precedence (§4.2)', function () {
         // The case above has a dry-run that FAILS FAST; the one that
         // bites in production is a dry-run that never answers at all (a cold
@@ -124,7 +127,9 @@ describe('pre-flight engine', function () {
             expect(unavailable.message).to.match(/timeout/i);
         });
     });
+}
 
+function registerDeclinedDryRunCase() {
     describe('tier precedence (§4.2)', function () {
         // A second case of an undeclared dry-run, for a controller-bound token
         // sent from a browser: the network is reached, answers promptly, and
@@ -174,7 +179,9 @@ describe('pre-flight engine', function () {
             expect(declined.message).to.match(/guardInert/i);
         });
     });
+}
 
+function registerGuardInertDryRunCase() {
     describe('tier precedence (§4.2)', function () {
         // A guard-inert reply on the /preflight shape, which carries the
         // boolean instead of the string sentinel. Two endpoints, one
@@ -193,4 +200,12 @@ describe('pre-flight engine', function () {
             expect(declined.message).to.match(/declined/i);
         });
     });
+}
+
+describe('pre-flight engine', function () {
+    registerAuthoritativeDryRunCases();
+    registerBalancePrecedenceCases();
+    registerUnansweredDryRunCase();
+    registerDeclinedDryRunCase();
+    registerGuardInertDryRunCase();
 });
