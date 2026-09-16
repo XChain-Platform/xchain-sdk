@@ -32,7 +32,7 @@ module.exports = {
     // and the VM would revert on a balance that is not there yet. Both waits
     // are bounded and fail CLOSED - a gate that never sees the state throws
     // rather than letting the caller proceed on an assumption.
-    async _awaitContract(result, actionData, opts, progress, finalTxid) {
+    async waitForContract(result, actionData, opts, progress, finalTxid) {
         let gate  = opts.awaitContract;
         let index = (gate.contractActionIndex !== undefined && gate.contractActionIndex !== null)
             ? gate.contractActionIndex

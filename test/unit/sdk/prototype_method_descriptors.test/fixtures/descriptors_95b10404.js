@@ -37,7 +37,7 @@ module.exports = {
         ['validateAddress', false, true, true, 'function', 2],
     ],
     LifecycleManager: [
-        ['_awaitContract', false, true, true, 'function', 5],
+        ['waitForContract', false, true, true, 'function', 5],
         ['extractChangeOutputs', false, true, true, 'function', 2],
         ['extractSpentInputs', false, true, true, 'function', 1],
         ['reconcileNetwork', false, true, true, 'function', 0],

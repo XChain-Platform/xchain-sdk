@@ -134,7 +134,7 @@ class LifecycleManager {
             result.indexed = indexed;
             progress('confirmed', { txid: finalTxid, action: indexed });
         }
-        if (opts.awaitContract) await this._awaitContract(result, actionData, opts, progress, finalTxid);
+        if (opts.awaitContract) await this.waitForContract(result, actionData, opts, progress, finalTxid);
         return result;
     }
 
