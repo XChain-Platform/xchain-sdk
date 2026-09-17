@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `README.md` documents the `src/api` submodule's `createApp`/`startApi` exports for a consumer that wants to mount the JSON-RPC server itself, and `index.d.ts` types both.
 
+### Changed
+- The vendored gate registry arms the token bridge and policy inheritance on testnet per chain at BTC 153160, LTC 4888478 and DOGE 67906525.
+
 ## [0.19.0] - 2026-09-16
 
 ### Added
