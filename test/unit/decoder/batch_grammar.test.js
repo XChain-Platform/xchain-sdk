@@ -9,6 +9,7 @@
 // findings.
 
 const { expect } = require('chai');
+const { resolveIndexerAction } = require('../../helpers/indexer_action_handler.js');
 const {
     parse,
     BATCH_ACTION_LIMITS,
@@ -155,14 +156,11 @@ describe('decoder.parse - BATCH sub-grammar', function () {
 
     describe('sibling conformance vs xchain-indexer batch.js', function () {
         const fs = require('fs');
-        const path = require('path');
-        const INDEXER = process.env.XCHAIN_INDEXER_PATH ||
-            path.join(__dirname, '..', '..', '..', '..', 'xchain-indexer');
-        const BATCH_SRC = path.join(INDEXER, 'src', 'actions', 'batch.js');
-        before(function () { if (!fs.existsSync(BATCH_SRC)) this.skip(); });
+        const batchHandler = resolveIndexerAction('batch');
+        before(function () { if (!batchHandler) this.skip(); });
 
         it('actionLimits values are byte-equal to the indexer source', function () {
-            const src = fs.readFileSync(BATCH_SRC, 'utf8');
+            const src = batchHandler.sources.map((file) => fs.readFileSync(file, 'utf8')).join('\n');
             for (const [action, limit] of Object.entries(BATCH_ACTION_LIMITS)) {
                 // A gated cap lives in `gatedActionLimits` on purpose: writing it
                 // into `actionLimits` would have applied it retroactively, so
@@ -182,7 +180,7 @@ describe('decoder.parse - BATCH sub-grammar', function () {
             // what makes the merge in batch_limits.js a mirror rather than a
             // guess. `gatedActionLimits` capitalizes its A, so the pattern reads
             // only the ungated table by construction.
-            const src = fs.readFileSync(BATCH_SRC, 'utf8');
+            const src = batchHandler.sources.map((file) => fs.readFileSync(file, 'utf8')).join('\n');
             expect(/actionLimits\['DEPLOY'\]/.test(src)).to.equal(false);
         });
     });

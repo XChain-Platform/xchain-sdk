@@ -38,8 +38,8 @@
  ********************************************************************/
 
 const { expect } = require('chai');
-const fs = require('fs');
 const path = require('path');
+const { loadIndexerAction } = require('../../helpers/indexer_action_handler.js');
 
 const XChainSDK = require('../../../src/XChainSDK.js');
 const {
@@ -96,16 +96,14 @@ const VECTORS = [
 ];
 
 function loadBatchHandler() {
-    const roots = [process.env.XCHAIN_INDEXER_PATH,
-        path.join(__dirname, '../..', '..', '..', 'xchain-indexer')].filter(Boolean);
-    const root = roots.find((r) => fs.existsSync(path.join(r, 'src', 'actions', 'batch.js')));
-    if (!root) return null;
+    const resolved = loadIndexerAction('batch');
+    if (!resolved) return null;
+    const { root, Handler: Batch } = resolved;
 
     process.env.INDEXER_COIN = process.env.INDEXER_COIN || 'BTC';
     process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
-    let Batch, IdxUtility, IdxConfig, ProtocolChanges;
+    let IdxUtility, IdxConfig, ProtocolChanges;
     try {
-        Batch = require(path.join(root, 'src', 'actions', 'batch.js'));
         IdxUtility = require(path.join(root, 'src', 'utility.js'));
         IdxConfig = require(path.join(root, 'src', 'config.js'));
         ProtocolChanges = require(path.join(root, 'src', 'protocol_changes.js'));
