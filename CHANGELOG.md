@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-09-17
+
+### Added
+- `README.md` documents the `src/api` submodule's `createApp` and `startApi` exports, and `index.d.ts` types both.
+
+### Changed
+- The vendored registry includes mirror-admission and anchor-attestation barrier rows.
+- Activation modules and preflight pins follow the consolidated consensus layout.
+
 ## [0.19.0] - 2026-09-16
 
 ### Added

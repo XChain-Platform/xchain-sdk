@@ -313,6 +313,10 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
         assert.strictEqual(r2.reason, 'CHECKPOINT_QUORUM_FAILED');
     });
 
+    // The flag-day boundary case (mainnet snapshot one below / at the armed height)
+    // moved to 09_spv_phase_4_doge_anchor_cold_start_trust.test.js: this describe was
+    // 71 lines with it inline, over the function-line limit.
+
     it('verifyAnchoredCheckpoint REJECTS a root that is not a 32-byte hex value', function () {
         const { cp, validators } = makeSignedSection();
         cp.state_root = 'not-a-root';

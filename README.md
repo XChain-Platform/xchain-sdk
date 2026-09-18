@@ -220,6 +220,26 @@ await sdk.findToken('MYTOKEN');     // the unwrapped info record, or null
 | `npm run build` | Production browser bundle -> `dist/xchain_sdk.min.js` |
 | `npm run build:dev` | Development browser bundle -> `dist/xchain_sdk.js` |
 
+### API server module
+
+`npm run api` (`node ./src/api/index.js`) runs the JSON-RPC server as a standalone process, opening a listener on `SDK_API_PORT` at load. A consumer that wants to own the server instead, mounting it under an existing express app, choosing its own listen path, or starting and stopping it from a test, requires the module directly rather than shelling out to the script:
+
+```js
+const { createApp, startApi } = require('@dankest-llc/xchain-sdk/src/api');
+
+// createApp(sdk) is synchronous and listener-free: it wires the same guard
+// stack (rate limit, auth gate, batch cap, /openrpc.json, JSON-RPC router)
+// as the CLI entry and returns the express app to mount yourself.
+const app = createApp(sdk);
+
+// startApi({ port }) builds the SDK from the environment, runs hub discovery,
+// and resolves to the listening http.Server (port 0 for an ephemeral port).
+const server = await startApi({ port: 0 });
+await new Promise((resolve) => server.close(resolve));
+```
+
+Requiring `src/api` never opens a socket; only the CLI entry (`npm run api` / `node ./src/api/index.js`) starts listening automatically.
+
 ## Test Suite
 
 | Type | Tests |

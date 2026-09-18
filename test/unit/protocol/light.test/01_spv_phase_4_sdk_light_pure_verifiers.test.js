@@ -148,7 +148,7 @@ function buildActionProof(height) {
 // whether the domain is committed at the proof's height, whatever the
 // server said, because no proof can tell (an armed-but-idle domain and an
 // inert one commit byte-identical roots).
-const SUBACT = require('../../../../src/state_subtree_activation.js');
+const SUBACT = require('../../../../src/consensus/gates/state_subtree_gate.js');
 const ESC_KEY = CHAIN + ':' + NET;
 // BTC:regtest carries a REAL armed height, so "disarm" must not DELETE the key:
 // that silently wipes the fleet-armed set for every later test in the process, and

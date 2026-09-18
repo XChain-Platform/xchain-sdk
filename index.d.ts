@@ -2978,6 +2978,36 @@ export function startREPL(options?: SDKOptions): Promise<any>;
 
 
 /*
+ *  API server (src/api)
+ *
+ *  Not part of this package's default export: a consumer requires the
+ *  submodule path directly, e.g. `require('@dankest-llc/xchain-sdk/src/api')`.
+ *  Requiring it opens no listener; only the CLI entry (`npm run api`,
+ *  `node ./src/api/index.js`) starts one automatically.
+ */
+
+export interface StartApiOptions {
+    /** Port to listen on (default: SDK_API_PORT, itself defaulting to 3005) */
+    port?: number;
+}
+
+/**
+ * Builds the express app wired with the same guard stack as the CLI entry
+ * (rate limit, auth gate, batch cap, /openrpc.json, the JSON-RPC router).
+ * Synchronous and listener-free, so a consumer can mount the result under
+ * its own server.
+ */
+export function createApp(sdk: XChainSDK): any;
+
+/**
+ * Builds an XChainSDK from the environment, runs hub discovery, wires
+ * createApp(), and starts listening. Resolves to the http.Server once
+ * listen() is issued, so the caller can await 'listening' and close() it.
+ */
+export function startApi(options?: StartApiOptions): Promise<any>;
+
+
+/*
  *  Module exports (CommonJS interop)
  */
 

@@ -70,7 +70,20 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `c5f9ba85`
+**Pins taken at indexer commit:** `4fd091c7`
+
+(Re-anchored 2026-09-16, eighth pass, by the activation-registry (W5) landing review below.
+`4fd091c7` is the indexer tip that carries the W5 consolidation: the last thirteen predicate-only
+activation modules retired and the fourteen logic-bearing gate modules moved under
+`src/consensus/gates/`. One mapped directory drifted on a real byte change to a pre-existing
+handler file: `issue/wire.js` swaps its two require lines (`token_bridge_activation.js`,
+`token_policy_activation.js`) for two literal registry keys and calls
+`gateRegistry.activeAt(<key>, network, null, blockIndex, null)` where it called the retired
+modules' own `is<Name>Active(...)`. The registry rows carry the same per-network activation
+values the retired modules declared (the W5 commit is reviewed as part of the Activation
+Registry build; no activation window moves), so no client-visible validity logic moved and no
+`checks/` module needs an update - only the `issue/` hash below. The other ten rows are
+byte-identical at `c5f9ba85` and at `4fd091c7`. `c5f9ba85` stays reachable.)
 
 (Re-anchored 2026-09-15, seventh pass, by the activation-registry (W4) landing review below.
 `c5f9ba85` is the indexer tip that carries the W4 migration retiring five per-flag activation
@@ -295,7 +308,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff c5f9ba85..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 4fd091c7..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -376,7 +389,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (SEND) | `src/actions/send/` | `fb94d4c1808146cb427a0a02f8e277620f2f02a6fadb1b42d5b7f57c1812dfe4` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `6f15d0f22e60fe328ff12188f519281b88aa61114ef1163b07df3bbba63d2d8f` |
 | `checks/mint.js` | `src/actions/mint/` | `7c8992a06f9143b876c5eb7bc554dbbe5b2ca61507c44e822b5491b8571d1c06` |
-| `checks/issue.js` | `src/actions/issue/` | `848d23ebb5702f9b22d31a6be795d8b6177f565adf7fb1a26d525dcb331bf0ed` |
+| `checks/issue.js` | `src/actions/issue/` | `9ff550c0f8105c557064f4168931d5d9e4761bab3527fa91b658054ed36ad78d` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `7f65cdaa58d433d3415f43f7b5997ae028baa00b6ba47fe38b11af392fcc04b9` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `66b5a180f0829cbfc25a1c1e7b8b698a376c89c0ced5e5237e4cbb5059243311` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `644dfe6951e78b653e185bb78201bfaeadc7b04eaab5cb7c1f4ffb2682b6cc79` |

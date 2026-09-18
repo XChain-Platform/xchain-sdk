@@ -14,25 +14,26 @@
 
 'use strict';
 
-// Arms the byte-equality claim checkpoint_commitment_activation.js makes in its own
-// header ("kept byte-equal by the cross-service regression suite") but that no suite
-// enforced. The module gates the SIGNED checkpoint preimage on the BTC-anchored
-// snapshot_block and is vendored into xchain-{hub,indexer,explorer,sdk,sync}; a
-// one-sided edit to any copy's flag-day forks federation quorum verification at the
-// boundary with no CI failure. This guard asserts:
-//   1. VALUE   - every copy's map equals the canonical map in xchain-documentation.
-//   2. IDENTITY- every copy is byte-identical to the sdk copy apart from the single
-//                self-referential header line that names the OTHER copies.
-// Mirrors xchain-indexer/test/unit/anchor_reward_activation_parity.test.js. Skips green
-// when the siblings are absent (standalone deploy), unless XCHAIN_REQUIRE_SIBLINGS=1.
+// Arms the value claim the CHECKPOINT_COMMITMENT flag day makes across the fleet.
+// Since W5 the map is one registry row, checkpoint_commitment_activation
+// .CHECKPOINT_COMMITMENT_ACTIVATION, carried by the byte-twin registry parts under
+// src/consensus/gate_registry/ in xchain-{hub,indexer,explorer,sdk,sync} and read by
+// every consumer through activeAt over the checkpoint's BTC-anchored snapshot_block;
+// there is no predicate-only shim carrying it; a one-sided edit to any
+// copy's row forks federation quorum verification at the boundary with no CI
+// failure, so this guard asserts:
+//   1. VALUE     - the sdk row equals the canonical map in xchain-documentation.
+//   2. PARITY    - every sibling's registry row equals the sdk row, and its activeAt
+//                  agrees with the sdk's at the boundary heights.
+// Skips green when the siblings are absent (standalone deploy), unless
+// XCHAIN_REQUIRE_SIBLINGS=1.
 
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const MODULE_FILE = 'checkpoint_commitment_activation.js';
-const LOCAL_PATH  = path.join(__dirname, '../..', '..', 'src', MODULE_FILE);
-const local       = require('../../../src/' + MODULE_FILE);
+const KEY   = 'checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION';
+const local = require('../../../src/consensus/gate_registry');
 
 // GitHub CI checks siblings out beside the repo; fall back to the dev sibling layout.
 const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(__dirname, '../..', '..', '..');
@@ -40,17 +41,13 @@ const DOCS_DIR     = process.env.XCHAIN_DOCS_DIR || path.join(SIBLING_ROOT, 'xch
 const CONSTANTS    = path.join(DOCS_DIR, 'protocol', 'constants.js');
 
 const TWINS = ['xchain-hub', 'xchain-indexer', 'xchain-explorer', 'xchain-sync'];
+// The registry entry every repo carries at the same tail; the indexer's is the
+// consumer-shaped entry over its own protocol_changes parts.
+const REGISTRY_ENTRY = path.join('src', 'consensus', 'gate_registry.js');
 
-// The one line each copy carries naming the OTHER copies. It is intentionally
-// different per copy and is the only permitted divergence.
-const TWIN_REF = /live in xchain-\{[^}]*\}/;
-
-function normalized(file){
-    return fs.readFileSync(file, 'utf8')
-        .split(/\r?\n/)
-        .map(l => TWIN_REF.test(l) ? '<TWIN-REF>' : l)
-        .join('\n');
-}
+// The boundary heights the old predicate was pinned at: one below and at the
+// mainnet and testnet flag days, regtest genesis, and an unknown network.
+const BOUNDARIES = [[960999,'mainnet'],[961000,'mainnet'],[145999,'testnet'],[146000,'testnet'],[0,'regtest'],[5,'bogusnet']];
 
 function missingSibling(what){
     if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
@@ -61,9 +58,10 @@ function missingSibling(what){
 describe('checkpoint_commitment_activation twin parity @regression', function () {
 
     it('sdk copy pins the armed flag-days', function () {
-        assert.strictEqual(local.CHECKPOINT_COMMITMENT_ACTIVATION.mainnet, 961000);
-        assert.strictEqual(local.CHECKPOINT_COMMITMENT_ACTIVATION.testnet, 146000);
-        assert.strictEqual(local.CHECKPOINT_COMMITMENT_ACTIVATION.regtest, 0);
+        const row = local.copy(KEY);
+        assert.strictEqual(row.mainnet, 961000);
+        assert.strictEqual(row.testnet, 146000);
+        assert.strictEqual(row.regtest, 0);
     });
 
     it('sdk map is value-identical to the canonical xchain-documentation map', function () {
@@ -74,26 +72,24 @@ describe('checkpoint_commitment_activation twin parity @regression', function ()
         const canon = require(CONSTANTS);
         assert.ok(canon.CHECKPOINT_COMMITMENT_ACTIVATION,
             'constants.js must export CHECKPOINT_COMMITMENT_ACTIVATION (the canonical authority)');
-        assert.deepStrictEqual(local.CHECKPOINT_COMMITMENT_ACTIVATION, canon.CHECKPOINT_COMMITMENT_ACTIVATION,
-            'sdk copy has drifted from the canonical flag-day map; a one-sided edit forks the signed checkpoint.');
+        assert.deepStrictEqual(local.copy(KEY), canon.CHECKPOINT_COMMITMENT_ACTIVATION,
+            'sdk row has drifted from the canonical flag-day map; a one-sided edit forks the signed checkpoint.');
     });
 
     TWINS.forEach(function (repo) {
         it(repo + ' copy matches the sdk copy in value and in bytes', function () {
-            const twinPath = path.join(SIBLING_ROOT, repo, 'src', MODULE_FILE);
+            const twinPath = path.join(SIBLING_ROOT, repo, REGISTRY_ENTRY);
             if(!fs.existsSync(twinPath)){
-                missingSibling(repo + ' sibling copy at ' + twinPath);
+                missingSibling(repo + ' sibling registry at ' + twinPath);
                 return this.skip();
             }
             const twin = require(twinPath);
-            assert.deepStrictEqual(twin.CHECKPOINT_COMMITMENT_ACTIVATION, local.CHECKPOINT_COMMITMENT_ACTIVATION,
-                repo + ' activation map diverged from the sdk copy');
-            for(const [sb, net] of [[960999,'mainnet'],[961000,'mainnet'],[145999,'testnet'],[146000,'testnet'],[0,'regtest'],[5,'bogusnet']]){
-                assert.strictEqual(twin.isCheckpointCommitmentActive(sb, net), local.isCheckpointCommitmentActive(sb, net),
+            assert.deepStrictEqual(twin.copy(KEY), local.copy(KEY),
+                repo + ' activation row diverged from the sdk row');
+            for(const [sb, net] of BOUNDARIES){
+                assert.strictEqual(twin.activeAt(KEY, net, null, sb, null), local.activeAt(KEY, net, null, sb, null),
                     'predicate parity @ ' + net + ':' + sb);
             }
-            assert.strictEqual(normalized(twinPath), normalized(LOCAL_PATH),
-                MODULE_FILE + ' drifted between xchain-sdk and ' + repo + ' (only the "live in xchain-{...}" line may differ)');
         });
     });
 });
