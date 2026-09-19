@@ -1,0 +1,57 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22.22.3"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - name: Install an OIDC-capable npm CLI
+        run: npm install --global "npm@^11.5.1"
+
+      - name: Verify release versions
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node <<'NODE'
+          const packages = [
+            require('./package.json'),
+            require('./mcp/package.json'),
+          ];
+          const expectedVersion = process.env.RELEASE_TAG.replace(/^v/, '');
+
+          for (const pkg of packages) {
+            if (pkg.version !== expectedVersion) {
+              throw new Error(`${pkg.name} is ${pkg.version}, expected ${expectedVersion}`);
+            }
+          }
+          NODE
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Publish SDK
+        run: npm publish --access public
+
+      - name: Publish MCP server
+        working-directory: mcp
+        run: npm publish --access public
