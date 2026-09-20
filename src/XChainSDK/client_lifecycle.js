@@ -137,7 +137,7 @@ module.exports = {
     discover() {
         if (this._discovering) return this._discovering;
         this._discovering = (async () => {
-            await this.hub.getAllConfig();
+            await this.hub.getDiscoveryConfig();
             this.applyEndpoints();
             this.startPollingOnce();
         })();
