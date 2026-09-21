@@ -47,7 +47,9 @@ let warnedUnknownStatus = false;
 
 class ActionWaiter {
 
-    // Keep encoding on the shared SDK while waiting on an optional target explorer.
+    // Keep encoding on the shared SDK while an optional target explorer watches
+    // the venue that actually indexes the transaction. A discovered shared
+    // explorer may describe another stack and can never confirm this venue's tx.
     constructor(sdk, opts = {}) {
         this.sdk = sdk;
         this.explorer = buildExplorer(sdk, opts);

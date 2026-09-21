@@ -37,8 +37,9 @@ const ecc     = require('@bitcoinerlab/secp256k1');
 const { secp256k1 } = require('@noble/curves/secp256k1');
 const MuSig2  = require('./musig2.js');
 const { exactU64 } = require('./co_signer.js');
-// Teach bitcoinjs to serialize a satoshi value above 2^53. Idempotent via
-// the module cache; without it a BigInt output value throws at write time.
+// Teach bitcoinjs to serialize satoshi values above 2^53 without narrowing
+// them through Number. The module cache makes the patch idempotent; without
+// it, an exact BigInt output value throws when the transaction is written.
 require('../utils/apply_bufferutils_patch');
 
 bitcoin.initEccLib(ecc);

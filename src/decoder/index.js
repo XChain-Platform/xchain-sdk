@@ -14,8 +14,8 @@
  *
  * XChain Platform SDK - decoder (public barrel)
  *
- * First-class decode library (spec §3). Two pure layers plus the PSBT
- * primitive:
+ * The public decode library keeps parsing separate from human-readable
+ * description, then exposes the same parser through the PSBT primitive:
  *
  *   parse(input, opts)        action string -> ParsedAction
  *   describe(parsed, ctx)     ParsedAction -> {summary, details, warnings}

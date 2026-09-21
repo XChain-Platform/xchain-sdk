@@ -43,8 +43,8 @@ const NUMBER_FIELDS = [
     'COOLDOWN_BLOCKS',
     'DECIMALS',
     // DEPOSIT / GAS_ESCROW are the VOTE v0 poll-creator XCHAIN escrow
-    // amounts; without canonicalization String(0.00000001) puts "1e-8"
-    // on the wire.
+    // amounts. Canonicalization keeps String(0.00000001) from putting "1e-8"
+    // on the wire, where a numerically equal value has a different spelling.
     'DEPOSIT',
     'DISPENSER_ACTION_INDEX',
     'EDIT',
