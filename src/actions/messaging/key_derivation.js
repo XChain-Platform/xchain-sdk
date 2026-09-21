@@ -46,8 +46,9 @@ module.exports = {
 
     // v1 KDF: HKDF-SHA256 over the raw ECDH product with a fixed protocol salt
     // and a per-method `info` label. The differing `info` per method is what
-    // guarantees cross-method domain separation: a key that leaks from one
-    // method cannot be replayed to read messages protected by the other.
+    // guarantees cross-method domain separation. The same ECDH product yields
+    // different method keys, so leaking one cannot expose messages protected
+    // by the other.
     hkdfFromEcdh(privateKey, publicKey, info) {
         let raw = this.ecdhProduct(privateKey, publicKey);
         return hkdfSha256(raw, HKDF_SALT, info, HKDF_KEY_LEN);

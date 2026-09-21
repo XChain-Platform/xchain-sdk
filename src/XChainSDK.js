@@ -86,9 +86,9 @@ function initializeNetworkUtilities(sdk, network) {
     sdk.auth       = new AuthUtils(network);
     sdk.messaging  = new MessagingUtils(network);
     sdk.gatedFile  = new GatedFileUtils();
-    // FILE payload compression. Stateless, no network:
-    // deflate-raw compress/inflate with the fail-closed, ratio-bounded
-    // read path every serve layer shares.
+    // FILE payload compression is stateless and needs no network. Every serve
+    // layer shares its fail-closed, ratio-bounded deflate-raw read path so a
+    // compressed payload cannot bypass the same expansion limit elsewhere.
     sdk.compression = new CompressionUtils();
 }
 

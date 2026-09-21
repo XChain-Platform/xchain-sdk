@@ -17,9 +17,9 @@
 // cannot: its payload lives in redeem scripts that exist only inside the
 // encoder, and the commit outputs are just hashes of them. So the one
 // encoding that carries the LARGEST payloads was also the one the wallet
-// had to take on trust: a compromised encoder could have swapped the payload
-// and nothing on the signing side would have noticed. That gap is what this
-// file closes.
+// had to take on trust: a compromised encoder could swap the payload while
+// leaving the signer to approve only its opaque hash. Checking both the script
+// commitment and its content closes that gap on the signing side.
 //
 // The encoder now returns those scripts (`carrierScripts`). Verification is
 // therefore a check, not a re-derivation - deliberately, because a second
