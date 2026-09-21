@@ -40,6 +40,9 @@ module.exports = {
         ['constructor', false, true, true, 'function', 0],
         ['extractServiceEndpoints', false, true, true, 'function', 1],
         ['getAllConfig', false, true, true, 'function', 0],
+        // Added by 43c77f6 (fix(hub): use public registry for keyless discovery),
+        // after this split: the keyless/public discovery entry point.
+        ['getDiscoveryConfig', false, true, true, 'function', 0],
         ['getCapabilityThresholds', false, true, true, 'function', 0],
         ['ping', false, true, true, 'function', 0],
         ['startPolling', false, true, true, 'function', 1],

@@ -101,7 +101,10 @@ describe('XChainSDK', function () {
                 network: 'bitcoin-regtest',
                 hubUrl: 'http://localhost:8001'
             });
-            sdk.hub.getAllConfig = sinon.stub().resolves({});
+            // ensureReady() drives discover(), which calls hub.getDiscoveryConfig()
+            // (the keyless/public path), not getAllConfig(); stub the method that
+            // is actually on the call path.
+            sdk.hub.getDiscoveryConfig = sinon.stub().resolves({});
             sdk.hub.extractServiceEndpoints = sinon.stub().returns({
                 encoderUrl: 'http://encoder.test',
                 encoderPort: 3000
@@ -157,7 +160,9 @@ describe('XChainSDK', function () {
 
         it('logs warn only once per service even if called multiple times', async function () {
             const sdk = new XChainSDK({ network: 'bitcoin-mainnet' });
-            sdk.hub.getAllConfig = sinon.stub().resolves({});
+            // Stub the method ensureReady()'s discover() actually calls, so this
+            // stays hermetic instead of quietly racing a real network fetch.
+            sdk.hub.getDiscoveryConfig = sinon.stub().resolves({});
             sdk.hub.extractServiceEndpoints = sinon.stub().returns({
                 explorerUrl: 'http://insecure.internal',
                 explorerPort: 18080

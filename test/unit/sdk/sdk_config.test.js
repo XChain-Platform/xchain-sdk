@@ -98,9 +98,12 @@ describe('XChainSDK config resolution', function () {
 
     describe('lazy hub overlay (ensureReady)', function () {
         // Build an SDK whose hub returns the given endpoints, with polling stubbed.
-        function withHub(endpoints, getAllConfig) {
+        // discover() reaches the hub through getDiscoveryConfig() (the keyless/
+        // public path added by 43c77f6), not getAllConfig(), so that is the
+        // method to stub here; otherwise these calls quietly race the real network.
+        function withHub(endpoints, getDiscoveryConfig) {
             const sdk = new XChainSDK({ network: 'bitcoin-mainnet' });
-            sdk.hub.getAllConfig = getAllConfig || (async () => ({}));
+            sdk.hub.getDiscoveryConfig = getDiscoveryConfig || (async () => ({}));
             sdk.hub.extractServiceEndpoints = () => endpoints;
             sdk.hub.startPolling = () => {};
             return sdk;
@@ -151,7 +154,7 @@ describe('XChainSDK config resolution', function () {
     describe('downgrade guard', function () {
         function applyHub(opts, endpoints) {
             const sdk = new XChainSDK(Object.assign({ network: 'bitcoin-mainnet' }, opts));
-            sdk.hub.getAllConfig = async () => ({});
+            sdk.hub.getDiscoveryConfig = async () => ({});
             sdk.hub.extractServiceEndpoints = () => endpoints;
             sdk.hub.startPolling = () => {};
             return sdk.ensureReady().then(() => sdk);
