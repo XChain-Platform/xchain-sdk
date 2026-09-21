@@ -17,6 +17,7 @@ const XChainSDK = require('../../../../src/XChainSDK.js');
 
 const HUB_BASE = 'http://localhost:10000';
 const REGISTRY_PATH = '/api/v1/chain-registry';
+let savedHubApiKey;
 
 function descriptor(overrides = {}) {
     return Object.assign({
@@ -28,20 +29,21 @@ function descriptor(overrides = {}) {
     }, overrides);
 }
 
-describe('public hub discovery', function () {
-    let savedHubApiKey;
-
-    beforeEach(function () {
+function isolateHubApiKey() {
+    beforeEach(function saveHubApiKey() {
         savedHubApiKey = process.env.HUB_API_KEY;
         delete process.env.HUB_API_KEY;
     });
 
-    afterEach(function () {
+    afterEach(function restoreHubApiKey() {
         nock.cleanAll();
         if (savedHubApiKey === undefined) delete process.env.HUB_API_KEY;
         else process.env.HUB_API_KEY = savedHubApiKey;
     });
+}
 
+function publicSdkDiscoveryTests() {
+    isolateHubApiKey();
     it('uses public GET discovery, updates clients and getHubConfig(), then polls the same public route', async function () {
         let gets = 0;
         let sawPoll;
@@ -91,7 +93,10 @@ describe('public hub discovery', function () {
             sdk.stop();
         }
     });
+}
 
+function publicHubFailoverTests() {
+    isolateHubApiKey();
     it('fails over between hub origins and reports HUB_UNAVAILABLE when all public origins fail', async function () {
         nock(HUB_BASE).get(REGISTRY_PATH).replyWithError('first hub unavailable');
         nock('http://hub2.test:8001').get(REGISTRY_PATH)
@@ -114,7 +119,10 @@ describe('public hub discovery', function () {
             err => err.name === 'SDKHubError' && err.code === 'HUB_UNAVAILABLE' && /2 endpoint/.test(err.message)
         );
     });
+}
 
+function keyedHubDiscoveryTests() {
+    isolateHubApiKey();
     it('retains keyed getallconfigs JSON-RPC discovery', async function () {
         let publicGet = nock(HUB_BASE).get(REGISTRY_PATH)
             .reply(500, { error: 'keyed clients should retain JSON-RPC' });
@@ -132,4 +140,8 @@ describe('public hub discovery', function () {
         assert.strictEqual(rpc.isDone(), true);
         assert.strictEqual(publicGet.isDone(), false);
     });
-});
+}
+
+describe('public hub discovery', publicSdkDiscoveryTests);
+describe('public hub discovery', publicHubFailoverTests);
+describe('public hub discovery', keyedHubDiscoveryTests);
