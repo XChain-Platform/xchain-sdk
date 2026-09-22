@@ -89,15 +89,64 @@ function lowerHex(x){ return String(x == null ? '' : x).toLowerCase(); }
 // the next major version, so new callers should always pass it. Only the fields
 // present are compared, each as a string, so a numeric contract_index and its
 // decimal spelling agree.
+//
+// undefined and null are NOT equivalent. undefined means the caller left the
+// field out of `expected` (nothing to bind), so it is skipped exactly like a
+// field that was never a key of the object. An explicit null on an identity
+// field is never a legitimate "don't care": a caller only produces one via a
+// bug (an unresolved lookup, a bad default), and a `continue` past it
+// would bind nothing, i.e. verify a proof for a different identity than the
+// caller thought it asked for. So it throws instead of skipping; every caller
+// of expectedMismatch (proof_checks.js) runs inside a try/catch that turns a
+// thrown error into an unverified/refused result, so this fails closed rather
+// than passing with the field unchecked.
 function expectedMismatch(expected, actual){
     if (!expected) return null;
     for (const field of Object.keys(expected)){
         const want = expected[field];
-        if (want === undefined || want === null) continue;
+        if (want === undefined) continue;
+        if (want === null) throw new TypeError('expectedMismatch: expected.' + field + ' is null, refusing to bind an unchecked identity field');
         if (String(want) !== String(actual[field])) return field;
     }
     return null;
 }
+
+// Runnable unit case for the null-refusal fix above:
+//   node src/protocol/light_client/fetch_helpers.js
+// Exits 0 and prints "ok" lines on success, exits 1 on any failure. Kept in
+// this file because it is the only writable surface for this row.
+if (require.main === module){
+    let failures = 0;
+    function check(name, fn){
+        try { fn(); console.log('ok - ' + name); }
+        catch (e){ failures++; console.error('not ok - ' + name + ': ' + (e && e.message)); }
+    }
+    check('a null expected field throws instead of being skipped (was: continue, bound nothing)', () => {
+        let threw = null;
+        try { expectedMismatch({ address: null }, { address: 'bc1qsomeoneelse' }); }
+        catch (e){ threw = e; }
+        if (!threw) throw new Error('expectedMismatch did not throw for a null expected.address');
+        if (!(threw instanceof TypeError)) throw new Error('expected a TypeError, got ' + threw);
+    });
+    check('an undefined expected field is still skipped (back-compat, unchanged)', () => {
+        const result = expectedMismatch({ address: undefined, tick: 'DOGE' }, { address: 'bc1qanything', tick: 'DOGE' });
+        if (result !== null) throw new Error('expected no mismatch for an undefined field, got ' + result);
+    });
+    check('a genuine mismatch on a present field is still reported', () => {
+        const result = expectedMismatch({ tick: 'DOGE' }, { tick: 'BTC' });
+        if (result !== 'tick') throw new Error('expected mismatched field "tick", got ' + result);
+    });
+    check('a fully matching expected object still verifies clean', () => {
+        const result = expectedMismatch({ tick: 'DOGE', address: 'bc1qsame' }, { tick: 'DOGE', address: 'bc1qsame' });
+        if (result !== null) throw new Error('expected no mismatch, got ' + result);
+    });
+    if (failures > 0){
+        console.error(failures + ' of 4 unit case(s) failed');
+        process.exit(1);
+    }
+    console.log('all 4 fetch_helpers.js unit cases passed');
+}
+
 function unverified(reason){ return { verified: false, amount: null, reason: reason }; }
 // ── Validator-set proof + forward-following (spec §7, Phase 5) ────────────────
 // The keystone of a self-verifying client: instead of trusting an explorer for the
