@@ -240,9 +240,21 @@ describe('SPV Phase 4: sdk.light pure verifiers', function () {
 
     it('the identity binding is OPT-IN and ignores absent fields, so existing callers are unaffected', function () {
         const { proof, stateRoot } = buildBalanceProof(ADDR_A, TICK, '5');
-        for (const expected of [undefined, null, {}, { address: undefined }, { tick: null }]) {
+        for (const expected of [undefined, null, {}, { address: undefined }]) {
             assert.strictEqual(light.verifyBalanceProof(proof, stateRoot, CHAIN, NET, expected).verified, true,
                 'expected=' + JSON.stringify(expected) + ' must not change the verdict');
+        }
+    });
+
+    // A null identity FIELD is not an absent field: only a caller bug produces
+    // one, and skipping it would verify a proof for an identity the caller never
+    // named. It fails closed rather than binding nothing.
+    it('a null identity field is refused, never skipped', function () {
+        const { proof, stateRoot } = buildBalanceProof(ADDR_A, TICK, '5');
+        for (const expected of [{ tick: null }, { address: null, tick: TICK }]) {
+            const r = light.verifyBalanceProof(proof, stateRoot, CHAIN, NET, expected);
+            assert.strictEqual(r.verified, false, 'expected=' + JSON.stringify(expected) + ' must not verify');
+            assert.ok(/^VERIFY_ERROR:/.test(r.reason) && /null/.test(r.reason), 'reason names the null field: ' + r.reason);
         }
     });
 });
