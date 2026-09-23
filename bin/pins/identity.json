@@ -13,7 +13,7 @@
       "src/checkpoint.js": "0b0e80f1372ef59fb6c8e7ec00a1f66d5e88ddca0a12584cadd087c1db595117",
       "src/contract/abi-core.js": "8222b193b5e65da7130af0bb589ff38d069f3a088f0d9f901826ffb18a3e9294",
       "test/fixtures/roundtrip-conformance.json": "d9963ac7c35bdcfab99595fec040d7791d73119cb62fef20db136f8ea56236ed",
-      "test/fixtures/action-manifest.json": "93ac85b4d76f078951a2e95eb3ca303f39fb9f18d0fb91b1ae16693716bef72f",
+      "test/fixtures/action-manifest.json": "05813d667976ec49bdeb001fc7f5aea41fce4f343a37576a2716d176b334a823",
       "test/unit/xcall-constants-cross-repo.test.js": "baa3bd32e8626a6b177c92f001455bf6922e4ec85ddad46456f5e8a6a903df96",
       "test/fixtures/gate-min-amount-vectors.json": "414a68df798c8eb24532abc4e0275326cc138019541a7cd4fb3b0221eef2b3c2"
     },
