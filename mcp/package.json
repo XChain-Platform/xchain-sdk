@@ -33,7 +33,11 @@
     "zod": "^4.4.3"
   },
   "scripts": {
-    "start": "node cli.js"
+    "start": "node cli.js",
+    "test": "node --test test/x402_fail_closed.test.js",
+    "comment:ci:pack": "Publish-shape check: packs both packages and requires the MCP server via its published load path. Needs registry access to resolve the SDK's own dependency tree into a clean install root, so it is not part of `test`.",
+    "ci:pack": "node --test test/packed_install.test.js",
+    "ci": "npm test && npm run ci:pack"
   },
   "engines": {
     "node": ">=22.0.0"
