@@ -16,7 +16,7 @@
  *
  * Non-fungible tokens on XChain are a composition of existing
  * primitives, not a special token type (see
- * xchain-documentation/protocol/NFT_Standard.md). There is no NFT
+ * xchain-documentation/protocol/nft-standard.md). There is no NFT
  * action, flag, or wire format. An "NFT" is an ISSUE with DECIMALS=0
  * and LOCK_MAX_SUPPLY=1. These helpers are the guided builders that
  * encode that rule in one place so every client mints NFTs correctly,
@@ -116,7 +116,7 @@ class NftHelpers {
     }
 
     // Build a minimal TIS v1.1.1 document for an NFT-pattern token
-    // (Token_Information_Standard.md). Intended for the fully on-chain
+    // (token-information-standard.md). Intended for the fully on-chain
     // authoring path: upload the returned JSON as a FILE action
     // (TYPE application/json) and set the token's DESCRIPTION to
     // "action:<index>" of that upload (the On-Chain Format).
@@ -185,7 +185,7 @@ class NftHelpers {
         return 'standard';
     }
 
-    // Canonical NFT classification (NFT_Standard.md): a token follows the NFT
+    // Canonical NFT classification (nft-standard.md): a token follows the NFT
     // pattern when it is indivisible (DECIMALS=0) and permanently supply-capped
     // (LOCK_MAX_SUPPLY=1). Accepts a token-info object using either UPPER_SNAKE
     // (explorer/indexer shape) or camelCase keys.

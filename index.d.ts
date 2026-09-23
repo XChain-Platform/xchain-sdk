@@ -954,7 +954,7 @@ export declare class ContractUtils {
 
 /*
  *  NFT helpers: pure builders for the NFT pattern (ISSUE with DECIMALS=0 +
- *  LOCK_MAX_SUPPLY=1). No network. Spec: protocol/NFT_Standard.md
+ *  LOCK_MAX_SUPPLY=1). No network. Spec: protocol/nft-standard.md
  */
 
 export interface NftUniqueParams { tick: string; description?: string; transfer?: string; memo?: string; }
@@ -2110,7 +2110,7 @@ export declare class XChainSDK {
     /** Distribute a dividend to all holders of a token */
     distributeDividend(wif: string, dividendParams: DividendParams | ActionParams, opts?: Partial<SubmitActionOpts>): Promise<SubmitActionResult>;
 
-    /** Pure NFT param builders + classifier (no network). Spec: protocol/NFT_Standard.md */
+    /** Pure NFT param builders + classifier (no network). Spec: protocol/nft-standard.md */
     readonly nft: NftHelpers;
 
     /** Issue a unique 1-of-1 NFT, fully minted to the issuer */

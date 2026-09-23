@@ -72,7 +72,8 @@ commit, not a re-pin back.
 
 **Pins taken at indexer commit:** `4fd091c7`
 
-(Re-anchored 2026-09-16, eighth pass, by the activation-registry (W5) landing review below.
+(Re-anchored 2026-09-16, eighth pass, for the activation-registry (W5) landing; the read is
+logged in the 2026-09-22 seventh- and eighth-pass entry of the review log below.
 `4fd091c7` is the indexer tip that carries the W5 consolidation: the last thirteen predicate-only
 activation modules retired and the fourteen logic-bearing gate modules moved under
 `src/consensus/gates/`. One mapped directory drifted on a real byte change to a pre-existing
@@ -85,8 +86,9 @@ Registry build; no activation window moves), so no client-visible validity logic
 `checks/` module needs an update - only the `issue/` hash below. The other ten rows are
 byte-identical at `c5f9ba85` and at `4fd091c7`. `c5f9ba85` stays reachable.)
 
-(Re-anchored 2026-09-15, seventh pass, by the activation-registry (W4) landing review below.
-`c5f9ba85` is the indexer tip that carries the W4 migration retiring five per-flag activation
+(Re-anchored 2026-09-15, seventh pass, for the activation-registry (W4) landing; the read is
+logged in the 2026-09-22 seventh- and eighth-pass entry of the review log below.
+`c5f9ba85` is the indexer tip that carries the W4 migration retiring ten per-flag activation
 modules in favor of the shared registry aliased at `src/consensus/gate_registry.js` (itself
 `require('../protocol_changes')`): `consolidation_leg_amount_activation.js`,
 `gated_handoff_ref_activation.js`, `tick_namespace_activation.js`, `dispenser_freshness_activation.js`,
@@ -405,6 +407,46 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-22 (seventh and eighth passes, logged) - the activation-registry W4 and W5 re-anchors, read after the fact
+
+The two re-anchors of 2026-09-15 (seventh pass, `4d5e2d0a` to `c5f9ba85`) and 2026-09-16
+(eighth pass, `c5f9ba85` to `4fd091c7`) were written up only in their anchor notes above,
+which pointed at a log entry that did not exist. This entry is that read, done on 2026-09-22
+against the committed trees, not a copy of the notes.
+
+Pins, each hashed from `git archive <commit> src/actions` by
+`node bin/preflight_handler_dirs.js <tree> src/actions/<name>/` (never by hand), for all eleven
+rows at all three commits. At `c5f9ba85` five rows moved: `send` `caf45dac` to `fb94d4c1`,
+`destroy` `4fcdfcde` to `6f15d0f2`, `issue` `e75a3af1` to `848d23eb`, `dispenser` `fa6a3c6a`
+to `7f65cdaa`, `dispense` `7a31e158` to `66b5a180`. At `4fd091c7` only `issue` moved, `848d23eb`
+to `9ff550c0`. The other six rows are byte-identical across all three commits. Range read:
+`git -C ../xchain-indexer log --name-status 4d5e2d0a..4fd091c7 -- src/actions/`, which reaches
+the mapped directories through exactly two commits, `a55d59f4` (W4) and `5b84ef90` (W5), and the
+full diffs `4d5e2d0a..c5f9ba85` and `c5f9ba85..4fd091c7` over those directories.
+
+**What moved: how each gate is reached, not what it decides.** Every non-comment change in the
+ten W4 handler files and in `issue/wire.js` under W5 replaces a require of a per-flag
+`src/<name>_activation.js` module and its own `is<Name>Active(...)` call with
+`gateRegistry.activeAt('<name>_activation.<CONSTANT>', network, coin, blockIndex, blockTime)`,
+passing the height or the time in the slot the retired predicate read it from and keeping the
+coin for the two DISPENSER freshness gates. The only other non-comment change is `dispense/`
+gaining `dispense_payment_tally_scale_gate.js`, the old shared
+`src/dispense_payment_tally_scale_activation.js` moved into the directory, with its two
+requirers (`dispense/context.js`, `dispense/pricing.js`) repointed at it. The W4 anchor note above says the migration retired five modules and
+then names ten; ten is the count.
+
+Machine-verified. With both trees loaded against the indexer's own dependencies, each of the
+eleven retired predicates (the nine W4 flags the mapped handlers read, and W5's
+`isTokenBridgeActive` and `isTokenPolicyInheritanceActive`) was compared with its registry row
+at every network (mainnet, testnet, regtest and an unknown name), every coin the freshness
+gates key on, and at 0, 1, one below, at and one above each declared threshold: 820 points,
+no disagreement. The same grid with the registry read one unit later disagrees at the
+thresholds, so the comparison can fail. The moved tally-scale gate exports the same names and
+constants, and its two functions agree with the retired copy at 784 points.
+
+**Direction: NEITHER, no admission boundary moves.** No threshold, fee, field, format version,
+error string or activation window changed. NO CLIENT CHECK MOVES.
 
 ### 2026-09-22 - two comment citations in `issue/` name the controller-bound-tokens spec by its current path
 

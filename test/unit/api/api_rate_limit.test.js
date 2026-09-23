@@ -21,7 +21,7 @@
  * These tests mount the SHIPPED limiter from src/utils/api_guards.js (the same
  * function src/api/index.js mounts) rather than a copy of it, so the limiter is
  * driven alone, without the SDK or the other guards in front of it, and a
- * source check pins that api.js still mounts it ahead of the auth gate and the
+ * built-app check pins that api.js mounts it ahead of the auth gate and the
  * router. (src/api/index.js used to start a live server at require time; it now
  * exports createApp and startApi and listens only as the CLI entry.)
  *
@@ -41,6 +41,7 @@ const {
     resolveRateWindowMs
 } = require('../../../src/utils/api_guards.js');
 const { waitFor } = require('../../helpers/wait.js');
+const { mountIndexes, DISPATCH_NAME } = require('./helpers/mount_order.js');
 
 // Tests that exercise per-credential bucketing pass the credentials the app
 // would accept (src/api/index.js passes a safeTokenEqual-against-SDK_API_KEY
@@ -232,18 +233,10 @@ describe('API request-rate limit', function () {
     this.timeout(10000);
 
     it('src/api.js mounts the limiter BEFORE the auth gate and the jsonRouter mount', () => {
-        const src = fs.readFileSync(path.join(__dirname, '../../../src/api/index.js'), 'utf8');
-        const rateIdx   = src.indexOf('app.use(rateLimitMiddleware(');
-        // Anchored on the MOUNT, not on a compare inside the gate body: the gate
-        // now lives in src/utils/api_guards.js, and an anchor that can go missing makes
-        // every ordering assertion below it argue from -1.
-        const authIdx   = src.indexOf('app.use(authGateMiddleware(');
-        const routerIdx = src.indexOf('jsonRouter(');
-        assert.notStrictEqual(rateIdx, -1, 'rate limiter not mounted in src/api.js');
-        assert.notStrictEqual(authIdx, -1, 'auth gate not mounted in src/api.js');
-        assert.notStrictEqual(routerIdx, -1, 'jsonRouter mount missing from src/api.js');
-        assert.ok(rateIdx < authIdx, 'the limiter must run before the auth gate so anonymous floods are bounded');
-        assert.ok(rateIdx < routerIdx, 'the limiter must run before the router');
+        // Read from the BUILT app, so a mount moved into a helper is placed by its call site.
+        const at = mountIndexes(assert, ['rateLimit', 'authGate', DISPATCH_NAME]);
+        assert.ok(at.rateLimit < at.authGate, 'the limiter must run before the auth gate so anonymous floods are bounded');
+        assert.ok(at.rateLimit < at[DISPATCH_NAME], 'the limiter must run before the router');
     });
 
     it('keeps ONE implementation of the limiter: api.js holds no inline copy', () => {

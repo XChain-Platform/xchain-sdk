@@ -31,7 +31,8 @@ const { parseCorsOrigin } = require('../utils/cors_origin.js');
 const Config = require('../config.js');
 // Request guards live in their own module so the shipped middleware has exactly
 // one implementation: the guard tests mount src/utils/api_guards.js directly and
-// pin, by reading this file, that createApp wires the same functions in order.
+// pin, from the router stack of the app createApp builds, that it wires the same
+// functions in order.
 const {
     parseWholeNumber,
     resolveMaxBatch,

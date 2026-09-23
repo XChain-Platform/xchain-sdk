@@ -206,3 +206,42 @@ describe(COINPAY_OUTPUT_PLAN_TITLE, function(){
     });
 
 });
+
+describe(COINPAY_OUTPUT_PLAN_TITLE, function(){
+
+    describe('checkCoinpayOutputPlan exact comparison', function(){
+
+        it('FAILS an output one satoshi short of a large total, inside the mathjs tolerance band', function(){
+            const result = checkCoinpayOutputPlan(
+                [{ payee: 'sellerA', amount: '100000.00000000' }],
+                [{ address: 'sellerA', amount: '99999.99999999' }]
+            );
+            expect(result.ok).to.equal(false);
+            expect(result.violations).to.deep.equal([{
+                payee: 'sellerA',
+                owed: '100000',
+                available: '99999.99999999',
+                reason: 'INSUFFICIENT',
+            }]);
+        });
+
+        it('FAILS an output one satoshi short of a small total', function(){
+            const result = checkCoinpayOutputPlan(
+                [{ payee: 'sellerA', amount: '1.00000000' }],
+                [{ address: 'sellerA', amount: '0.99999999' }]
+            );
+            expect(result.ok).to.equal(false);
+            expect(result.violations[0].reason).to.equal('INSUFFICIENT');
+        });
+
+        it('PASSES an output exactly equal to a large total', function(){
+            const result = checkCoinpayOutputPlan(
+                [{ payee: 'sellerA', amount: '100000.00000000' }],
+                [{ address: 'sellerA', amount: '100000' }]
+            );
+            expect(result.ok).to.equal(true);
+        });
+
+    });
+
+});

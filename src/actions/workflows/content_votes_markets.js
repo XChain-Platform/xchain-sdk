@@ -77,7 +77,7 @@ module.exports = {
     //   file: { name, type, title?, memo?, rawData },  // FILE upload
     //   memo?,                      // LINK memo
     //   tis?: {                     // OPTIONAL: also author the on-chain TIS
-    //     tick, name,               //   document (Token_Information_Standard.md
+    //     tick, name,               //   document (token-information-standard.md
     //     description?,             //   On-Chain Format) and point the token's
     //     imageRole?                //   DESCRIPTION at it via ISSUE v1; imageRole
     //   }                           //   is the TIS display role (default standard)

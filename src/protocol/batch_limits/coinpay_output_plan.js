@@ -138,7 +138,9 @@ function checkCoinpayOutputPlan(obligations, outputs) {
         }
         const rawAvailable = (output.amount === undefined || output.amount === null) ? '0' : output.amount;
         const available = mathjs.bignumber(String(rawAvailable));
-        if (mathjs.smaller(available, total)) {
+        // Compare with decimal.js's exact .lt, NOT mathjs.smaller: its relTol band
+        // would read a one-satoshi shortfall on a large total as fully paid.
+        if (available.lt(total)) {
             violations.push({
                 payee,
                 owed: mathjs.format(total, { notation: 'fixed' }),

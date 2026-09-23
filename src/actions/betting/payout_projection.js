@@ -152,8 +152,11 @@ module.exports = {
                 `${ctx}: the market's life must be a positive number of seconds (got ${secs})`,
                 { field: 'durationSeconds', value: secs });
 
-        // Half-up, matching bcdiv(seconds, 86400, 0) on-chain.
-        const days     = mathjs.floor(mathjs.add(mathjs.divide(bn(secs), bn(86400)), bn(0.5)));
+        // Half-up twice, as the chain does: bcsub(until, blockTime, 0) rounds the
+        // seconds, then bcdiv(seconds, 86400, 0) rounds the days. Native .floor(),
+        // never mathjs.floor (its relTol rounds a near-integer quotient up).
+        const whole    = bn(secs).plus(0.5).floor();
+        const days     = whole.div(86400).plus(0.5).floor();
         const freeBn   = bn(Number(freeDays));
         const billable = days.gt(freeBn) ? mathjs.subtract(days, freeBn) : bn(0);
         const fee      = mathjs.multiply(mathjs.multiply(billable, bn(Number(perDay))), bn(String(gasPrice)));

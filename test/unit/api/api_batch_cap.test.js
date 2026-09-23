@@ -22,7 +22,7 @@
  * These tests mount the SHIPPED middleware from src/utils/api_guards.js (the
  * same function src/api/index.js mounts) rather than a copy of it, so the cap
  * is driven alone, without the SDK or the other guards in front of it, and a
- * source check pins that api.js still mounts it ahead of the auth gate and the
+ * built-app check pins that api.js mounts it ahead of the auth gate and the
  * router. (src/api/index.js used to start a live server at require time; it now
  * exports createApp and startApi and listens only as the CLI entry.)
  *
@@ -37,6 +37,7 @@ const http   = require('http');
 const express = require('express');
 const bodyParser = require('body-parser');
 const { batchCapMiddleware, resolveMaxBatch } = require('../../../src/utils/api_guards.js');
+const { mountIndexes, DISPATCH_NAME } = require('./helpers/mount_order.js');
 
 function buildApp(maxBatch) {
     const app = express();
@@ -119,18 +120,11 @@ describe('API JSON-RPC batch fan-out cap', function () {
     });
 
     it('src/api.js mounts the batch cap BEFORE the auth gate and the jsonRouter mount', () => {
-        const src = fs.readFileSync(path.join(__dirname, '../../../src/api/index.js'), 'utf8');
-        const capIdx    = src.indexOf('app.use(batchCapMiddleware(');
-        // Anchored on the MOUNT, not on a compare inside the gate body: the gate
-        // now lives in src/utils/api_guards.js, and an anchor that can go missing makes
-        // every ordering assertion below it argue from -1.
-        const authIdx   = src.indexOf('app.use(authGateMiddleware(');
-        const routerIdx = src.indexOf('jsonRouter(');
-        assert.notStrictEqual(capIdx, -1, 'batch cap not mounted in src/api.js');
-        assert.notStrictEqual(authIdx, -1, 'auth gate missing from src/api.js');
-        assert.notStrictEqual(routerIdx, -1, 'jsonRouter mount missing from src/api.js');
-        assert.ok(capIdx < authIdx, 'the cap must run before the auth gate');
-        assert.ok(capIdx < routerIdx, 'the cap must run before the router dispatches');
+        // Read from the BUILT app: the cap mounts inside configureBaseMiddleware, so
+        // its runtime position is set by that helper's call site, not by its text.
+        const at = mountIndexes(assert, ['batchCap', 'authGate', DISPATCH_NAME]);
+        assert.ok(at.batchCap < at.authGate, 'the cap must run before the auth gate');
+        assert.ok(at.batchCap < at[DISPATCH_NAME], 'the cap must run before the router dispatches');
     });
 
     it('keeps ONE implementation of the cap: api.js holds no inline copy', () => {

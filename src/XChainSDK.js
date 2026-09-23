@@ -98,7 +98,7 @@ function initializeActionHelpers(sdk) {
     // LOCK_MAX_SUPPLY=1), collection child params, content-attach (LINK) params,
     // and the canonical isNft() classifier. No network. Submit-flow recipes that
     // compose these into live actions live on sdk.workflows (issueNft, etc.).
-    // Spec: protocol/NFT_Standard.md.
+    // Spec: protocol/nft-standard.md.
     sdk.nft        = new NftHelpers();
     // Project registry helpers: pure builders for owner-attested official-token
     // rosters (TICK-type LIST + LINK to the project's ISSUE). No network.
