@@ -25,13 +25,15 @@ const { SDKExplorerError } = require('../../utils/errors.js');
 // under an edge limiter, before spending a rate-limit token).
 const BATCH_ADDRESS_LIMIT = 20;
 
+const { seg } = require('./path_segment.js');
+
 module.exports = {
     /*
      *  Balance & Address Methods
      */
 
     async getBalances(address, opts = {}) {
-        return this.get('/balances/' + address, opts);
+        return this.get('/balances/' + seg(address), opts);
     },
 
     // Shared by both batch reads. A caller's own malformed list is refused here
@@ -78,27 +80,27 @@ module.exports = {
     },
 
     async getAddress(address, opts = {}) {
-        return this.get('/address/' + address, opts);
+        return this.get('/address/' + seg(address), opts);
     },
 
     async getPublicKey(address) {
-        return this.get('/pubkey/' + address);
+        return this.get('/pubkey/' + seg(address));
     },
 
     async getHolders(tick, opts = {}) {
-        return this.get('/holders/' + tick, opts);
+        return this.get('/holders/' + seg(tick), opts);
     },
 
     async getCredits(query, type, opts = {}) {
-        return this.get('/credits/' + query + '/' + type, opts);
+        return this.get('/credits/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getDebits(query, type, opts = {}) {
-        return this.get('/debits/' + query + '/' + type, opts);
+        return this.get('/debits/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getEscrows(query, type, opts = {}) {
-        return this.get('/escrows/' + query + '/' + type, opts);
+        return this.get('/escrows/' + seg(query) + '/' + seg(type), opts);
     },
 
 
@@ -112,7 +114,7 @@ module.exports = {
     // SDKExplorerError with code EXPLORER_HTTP_404. Use findToken/tokenExists
     // for an existence check; see those for why the obvious ones are wrong.
     async getToken(tick, opts = {}) {
-        return this.get('/token/' + tick, opts);
+        return this.get('/token/' + seg(tick), opts);
     },
 
     // The token's info record, or null when the tick does not exist.
@@ -148,15 +150,15 @@ module.exports = {
     // Current official-token roster of a project tick (protocol/Project_Registry.md).
     // The explorer 400s when the tick has no owner-attested roster.
     async getProject(tick) {
-        return this.get('/project/' + tick);
+        return this.get('/project/' + seg(tick));
     },
 
     async getTokens(query, type, opts = {}) {
-        return this.get('/tokens/' + query + '/' + type, opts);
+        return this.get('/tokens/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getIssues(query, type, opts = {}) {
-        return this.get('/issues/' + query + '/' + type, opts);
+        return this.get('/issues/' + seg(query) + '/' + seg(type), opts);
     },
 
 
@@ -165,11 +167,11 @@ module.exports = {
      */
 
     async getTransaction(query, type) {
-        return this.get('/transaction/' + query + '/' + type);
+        return this.get('/transaction/' + seg(query) + '/' + seg(type));
     },
 
     async getAction(actionIndex) {
-        return this.get('/action/' + actionIndex);
+        return this.get('/action/' + seg(actionIndex));
     },
 
     async getActions(params = {}) {
@@ -177,11 +179,11 @@ module.exports = {
     },
 
     async getBlock(blockIndex) {
-        return this.get('/block/' + blockIndex);
+        return this.get('/block/' + seg(blockIndex));
     },
 
     async getHistory(query, type, opts = {}) {
-        return this.get('/history/' + query + '/' + type, opts);
+        return this.get('/history/' + seg(query) + '/' + seg(type), opts);
     },
 
 
@@ -190,23 +192,23 @@ module.exports = {
      */
 
     async getAddresses(query, type, opts = {}) {
-        return this.get('/addresses/' + query + '/' + type, opts);
+        return this.get('/addresses/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getAirdrops(query, type, opts = {}) {
-        return this.get('/airdrops/' + query + '/' + type, opts);
+        return this.get('/airdrops/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getBatches(query, type, opts = {}) {
-        return this.get('/batches/' + query + '/' + type, opts);
+        return this.get('/batches/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getBroadcasts(query, type, opts = {}) {
-        return this.get('/broadcasts/' + query + '/' + type, opts);
+        return this.get('/broadcasts/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getCallbacks(query, type, opts = {}) {
-        return this.get('/callbacks/' + query + '/' + type, opts);
+        return this.get('/callbacks/' + seg(query) + '/' + seg(type), opts);
     },
 
     // Betting markets. type is one of block | address | source | token
@@ -222,14 +224,14 @@ module.exports = {
     // as getPrices/getVotes.
     async getBetFeeds(query, type, opts = {}) {
         if (query)
-            return this.get('/bet_feeds/' + query + '/' + type, opts);
+            return this.get('/bet_feeds/' + seg(query) + '/' + seg(type), opts);
         return this.get('/bet_feeds', opts);
     },
 
     // One market by its FEED_ACTION_INDEX: the feed row, per-outcome pool totals,
     // bet counts, and the status timeline.
     async getBetFeed(index, opts = {}) {
-        return this.get('/bet_feed/' + index, opts);
+        return this.get('/bet_feed/' + seg(index), opts);
     },
 
     // Bets, type is one of block | address | feed | token | status.
@@ -239,7 +241,7 @@ module.exports = {
     // caller has hit it yet.
     async getBets(query, type, opts = {}) {
         if (query)
-            return this.get('/bets/' + query + '/' + type, opts);
+            return this.get('/bets/' + seg(query) + '/' + seg(type), opts);
         return this.get('/bets', opts);
     },
 
@@ -248,23 +250,23 @@ module.exports = {
     // it is per-ADDRESS: an oracle can start fresh from a new address at any
     // time, so an empty record means unknown, never safe (BET.md trust model).
     async getOracleStats(address, opts = {}) {
-        return this.get('/oracle/' + address, opts);
+        return this.get('/oracle/' + seg(address), opts);
     },
 
     async getDestroys(query, type, opts = {}) {
-        return this.get('/destroys/' + query + '/' + type, opts);
+        return this.get('/destroys/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getCoinpays(query, type, opts = {}) {
-        return this.get('/coinpays/' + query + '/' + type, opts);
+        return this.get('/coinpays/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getCoinpayExpires(query, type, opts = {}) {
-        return this.get('/coinpay_expires/' + query + '/' + type, opts);
+        return this.get('/coinpay_expires/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getCoinpayObligations(query, type, opts = {}) {
-        return this.get('/coinpay_obligations/' + query + '/' + type, opts);
+        return this.get('/coinpay_obligations/' + seg(query) + '/' + seg(type), opts);
     },
 
     // The address-typed obligations read for up to 20 addresses in one request,
@@ -277,36 +279,36 @@ module.exports = {
     },
 
     async getDispensers(query, type, opts = {}) {
-        return this.get('/dispensers/' + query + '/' + type, opts);
+        return this.get('/dispensers/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getDispenses(query, type, opts = {}) {
-        return this.get('/dispenses/' + query + '/' + type, opts);
+        return this.get('/dispenses/' + seg(query) + '/' + seg(type), opts);
     },
 
     // Dispenser lifecycle events, type ∈ {block, address}.
     async getDispenserCancels(query, type, opts = {}) {
-        return this.get('/dispenser_cancels/' + query + '/' + type, opts);
+        return this.get('/dispenser_cancels/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getDispenserCloses(query, type, opts = {}) {
-        return this.get('/dispenser_closes/' + query + '/' + type, opts);
+        return this.get('/dispenser_closes/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getDispenserExpires(query, type, opts = {}) {
-        return this.get('/dispenser_expires/' + query + '/' + type, opts);
+        return this.get('/dispenser_expires/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getDispenserEdits(query, type, opts = {}) {
-        return this.get('/dispenser_edits/' + query + '/' + type, opts);
+        return this.get('/dispenser_edits/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getDividends(query, type, opts = {}) {
-        return this.get('/dividends/' + query + '/' + type, opts);
+        return this.get('/dividends/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getFees(query, type, opts = {}) {
-        return this.get('/fees/' + query + '/' + type, opts);
+        return this.get('/fees/' + seg(query) + '/' + seg(type), opts);
     },
 
     // Native-coin fee pre-flight for one action. Proxies to the indexer's read-only `feequote`.

@@ -20,9 +20,11 @@
 
 const ContractClient = require('../../contract/client.js');
 
+const { seg } = require('./path_segment.js');
+
 module.exports = {
     async getFiles(query, type, opts = {}) {
-        return this.get('/files/' + query + '/' + type, opts);
+        return this.get('/files/' + seg(query) + '/' + seg(type), opts);
     },
 
     // Coin-prefix for a sibling chain at THIS client's network tier:
@@ -69,81 +71,81 @@ module.exports = {
     },
 
     async getLinks(query, type, opts = {}) {
-        return this.get('/links/' + query + '/' + type, opts);
+        return this.get('/links/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getLists(query, type, opts = {}) {
-        return this.get('/lists/' + query + '/' + type, opts);
+        return this.get('/lists/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getMessages(query, type, opts = {}) {
-        return this.get('/messages/' + query + '/' + type, opts);
+        return this.get('/messages/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getMints(query, type, opts = {}) {
-        return this.get('/mints/' + query + '/' + type, opts);
+        return this.get('/mints/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getOrders(query, type, opts = {}) {
-        return this.get('/orders/' + query + '/' + type, opts);
+        return this.get('/orders/' + seg(query) + '/' + seg(type), opts);
     },
 
     // Order lifecycle events, type ∈ {block, address}.
     async getOrderCancels(query, type, opts = {}) {
-        return this.get('/order_cancels/' + query + '/' + type, opts);
+        return this.get('/order_cancels/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getOrderEdits(query, type, opts = {}) {
-        return this.get('/order_edits/' + query + '/' + type, opts);
+        return this.get('/order_edits/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getOrderExpires(query, type, opts = {}) {
-        return this.get('/order_expires/' + query + '/' + type, opts);
+        return this.get('/order_expires/' + seg(query) + '/' + seg(type), opts);
     },
 
     // Completed order matches (auto-matched counter-orders). The explorer
     // route keys matches by block, so type is 'block'.
     async getOrderMatches(query, type = 'block', opts = {}) {
         if (query)
-            return this.get('/order_matches/' + query + '/' + type, opts);
+            return this.get('/order_matches/' + seg(query) + '/' + seg(type), opts);
         return this.get('/order_matches', opts);
     },
 
     async getSends(query, type, opts = {}) {
-        return this.get('/sends/' + query + '/' + type, opts);
+        return this.get('/sends/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getSleeps(query, type, opts = {}) {
-        return this.get('/sleeps/' + query + '/' + type, opts);
+        return this.get('/sleeps/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getSwaps(query, type, opts = {}) {
-        return this.get('/swaps/' + query + '/' + type, opts);
+        return this.get('/swaps/' + seg(query) + '/' + seg(type), opts);
     },
 
     // Swap lifecycle events, type ∈ {block, address}.
     async getSwapCancels(query, type, opts = {}) {
-        return this.get('/swap_cancels/' + query + '/' + type, opts);
+        return this.get('/swap_cancels/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getSwapEdits(query, type, opts = {}) {
-        return this.get('/swap_edits/' + query + '/' + type, opts);
+        return this.get('/swap_edits/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getSwapExpires(query, type, opts = {}) {
-        return this.get('/swap_expires/' + query + '/' + type, opts);
+        return this.get('/swap_expires/' + seg(query) + '/' + seg(type), opts);
     },
 
     // Completed swap matches (two auto-matched counter-swaps). The explorer
     // route keys matches by block, so type is 'block'.
     async getSwapMatches(query, type = 'block', opts = {}) {
         if (query)
-            return this.get('/swap_matches/' + query + '/' + type, opts);
+            return this.get('/swap_matches/' + seg(query) + '/' + seg(type), opts);
         return this.get('/swap_matches', opts);
     },
 
     async getSweeps(query, type, opts = {}) {
-        return this.get('/sweeps/' + query + '/' + type, opts);
+        return this.get('/sweeps/' + seg(query) + '/' + seg(type), opts);
     },
 
 
@@ -155,14 +157,14 @@ module.exports = {
     // type ∈ {block, address, source, token}.
     async getPrices(query, type, opts = {}) {
         if (query)
-            return this.get('/prices/' + query + '/' + type, opts);
+            return this.get('/prices/' + seg(query) + '/' + seg(type), opts);
         return this.get('/prices', opts);
     },
 
     // Oracle price-snapshot rounds, type ∈ {pair, round, status}.
     async getPriceSnapshots(query, type, opts = {}) {
         if (query)
-            return this.get('/price_snapshots/' + query + '/' + type, opts);
+            return this.get('/price_snapshots/' + seg(query) + '/' + seg(type), opts);
         return this.get('/price_snapshots', opts);
     },
 
@@ -172,7 +174,7 @@ module.exports = {
      */
 
     async getContract(contractActionIndex) {
-        return this.get('/contract/' + contractActionIndex);
+        return this.get('/contract/' + seg(contractActionIndex));
     },
 
     // Read a contract's declared permissions manifest (programmable policy layer),
@@ -189,24 +191,24 @@ module.exports = {
 
     async getContracts(query, type, opts = {}) {
         if (query)
-            return this.get('/contracts/' + query + '/' + type, opts);
+            return this.get('/contracts/' + seg(query) + '/' + seg(type), opts);
         return this.get('/contracts', opts);
     },
 
     async getContractState(contractActionIndex, key) {
         if (key)
-            return this.get('/contract/' + contractActionIndex + '/state/' + key);
-        return this.get('/contract/' + contractActionIndex + '/state');
+            return this.get('/contract/' + seg(contractActionIndex) + '/state/' + seg(key));
+        return this.get('/contract/' + seg(contractActionIndex) + '/state');
     },
 
     async getContractBalance(contractActionIndex, tick) {
         if (tick)
-            return this.get('/contract/' + contractActionIndex + '/balance/' + tick);
-        return this.get('/contract/' + contractActionIndex + '/balance');
+            return this.get('/contract/' + seg(contractActionIndex) + '/balance/' + seg(tick));
+        return this.get('/contract/' + seg(contractActionIndex) + '/balance');
     },
 
     async getExecution(executionActionIndex) {
-        return this.get('/execution/' + executionActionIndex);
+        return this.get('/execution/' + seg(executionActionIndex));
     },
 
     // The explorer's filtered executions route is /executions/{QUERY}/{TYPE}
@@ -216,15 +218,15 @@ module.exports = {
     // executions by its action index).
     async getExecutions(query, type = 'contract', opts = {}) {
         if (query)
-            return this.get('/executions/' + query + '/' + type, opts);
+            return this.get('/executions/' + seg(query) + '/' + seg(type), opts);
         return this.get('/executions', opts);
     },
 
     async getDeposits(query, type, opts = {}) {
-        return this.get('/deposits/' + query + '/' + type, opts);
+        return this.get('/deposits/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getWithdrawals(query, type, opts = {}) {
-        return this.get('/withdrawals/' + query + '/' + type, opts);
+        return this.get('/withdrawals/' + seg(query) + '/' + seg(type), opts);
     },
 };
