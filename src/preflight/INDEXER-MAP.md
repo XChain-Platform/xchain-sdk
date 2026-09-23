@@ -389,7 +389,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (SEND) | `src/actions/send/` | `fb94d4c1808146cb427a0a02f8e277620f2f02a6fadb1b42d5b7f57c1812dfe4` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `6f15d0f22e60fe328ff12188f519281b88aa61114ef1163b07df3bbba63d2d8f` |
 | `checks/mint.js` | `src/actions/mint/` | `7c8992a06f9143b876c5eb7bc554dbbe5b2ca61507c44e822b5491b8571d1c06` |
-| `checks/issue.js` | `src/actions/issue/` | `9ff550c0f8105c557064f4168931d5d9e4761bab3527fa91b658054ed36ad78d` |
+| `checks/issue.js` | `src/actions/issue/` | `b76a638d9c1906d95989052f07d3459902014db1bad5858fed398936b2827e6a` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `7f65cdaa58d433d3415f43f7b5997ae028baa00b6ba47fe38b11af392fcc04b9` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `66b5a180f0829cbfc25a1c1e7b8b698a376c89c0ced5e5237e4cbb5059243311` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `644dfe6951e78b653e185bb78201bfaeadc7b04eaab5cb7c1f4ffb2682b6cc79` |
@@ -405,6 +405,15 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-22 - two comment citations in `issue/` name the controller-bound-tokens spec by its current path
+
+The `issue` pin moves from `9ff550c0` to `b76a638d`, hashed from the committed indexer tree at
+`f0c21e31`. The whole diff of `src/actions/issue/` since the `4fd091c7` anchor is two comment
+lines, in `controller_binding.js` and `index.js`, that replace the retired
+`Controller_Bound_Tokens.md` filename with `xchain-documentation/protocol/controller-bound-tokens.md`.
+
+**Direction: NEITHER, no admission boundary moves.** No code line changed. NO CLIENT CHECK MOVES.
 
 ### 2026-09-15 (sixth pass) - `reservedRoots.js` becomes `reserved_roots.js`, one require line in `issue/` follows it
 
