@@ -36,8 +36,8 @@ const REPO_ROOT    = path.join(__dirname, '../..', '..');
 const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(REPO_ROOT, '..');
 const STRICT       = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 
-// Each entry names a sibling checkout, the env overrides the existing suites
-// already read for it (first one set wins, so this resolves exactly as they do),
+// Each entry names a sibling checkout, the env overrides its guards read for it
+// (first one set wins; every name must have a process.env reader, asserted below),
 // a path that must exist inside it to count as a real checkout rather than an
 // empty directory, and the guard family that goes quiet when it is missing.
 const SIBLINGS = [
@@ -54,7 +54,8 @@ const SIBLINGS = [
       guards: 'abi-core drift and the typed explorer-route contract' },
     { repo: 'xchain-documentation', envs: ['XCHAIN_DOCS_DIR', 'XCHAIN_DOCUMENTATION_DIR'],
       marker: 'protocol',
-      guards: 'consensus reference-impl parity (quorum, equivocation, reorg buffer) and the canonical action map' },
+      guards: 'consensus reference-impl parity (quorum, equivocation, reorg buffer, gate_registry parts) '
+              + 'and the canonical action map' },
     { repo: 'xchain-encoder',       envs: ['XCHAIN_ENCODER_DIR'],
       marker: 'src',
       guards: 'the vendored roundtrip-conformance fixture' },
@@ -84,6 +85,35 @@ function resolve(entry) {
         if (process.env[key]) return { dir: process.env[key], via: key };
     }
     return { dir: path.join(SIBLING_ROOT, entry.repo), via: 'sibling root' };
+}
+
+// Walk the guard sources for a process.env reader of every roster override; what
+// stays in `pending` has no reader outside this file.
+function scanForEnvReaders() {
+    const pending = new Map();
+    for (const entry of SIBLINGS) for (const key of entry.envs) pending.set('process.env.' + key, `${key} (${entry.repo})`);
+    let scanned = 0;
+    const UNIT = path.join(REPO_ROOT, 'test', 'unit');
+    function walk(dir) {
+        if (!pending.size || !fs.existsSync(dir)) return;
+        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+            if (!pending.size) return;
+            const p = path.join(dir, e.name);
+            if (e.isDirectory()) {
+                if (!['node_modules', 'fixtures', 'pins'].includes(e.name) && p !== UNIT) walk(p);
+                continue;
+            }
+            if (!/\.(js|sh)$/.test(e.name) || p === __filename) continue;
+            const text = fs.readFileSync(p, 'utf8');
+            scanned++;
+            for (const needle of [...pending.keys()]) if (text.includes(needle)) pending.delete(needle);
+        }
+    }
+    // Guards live mostly under test/unit, so read it first and stop once every name is found.
+    walk(UNIT);
+    walk(path.join(REPO_ROOT, 'test'));
+    walk(path.join(REPO_ROOT, 'bin'));
+    return { scanned, pending };
 }
 
 // Present means "a real checkout", not merely "a directory exists": an empty
@@ -118,6 +148,16 @@ describe('cross-repo sibling coverage (what this run could NOT verify)', functio
             expect(r.dir, `${r.repo} resolved to nothing`).to.be.a('string').and.not.equal('');
             expect(r.present, `${r.repo} presence must be a decided boolean`).to.be.a('boolean');
         }
+    });
+
+    it('advertises only env overrides that some guard actually reads', function () {
+        // An override no guard reads makes this roster report a sibling resolvable
+        // while the guard it names resolves elsewhere and skips.
+        this.timeout(60000); // a full tree read on a loaded venue outruns the 5s default
+        const { scanned, pending } = scanForEnvReaders();
+        expect(scanned, 'no guard sources found to scan').to.be.greaterThan(0);
+        expect([...pending.values()], 'roster env overrides with no process.env reader outside this file')
+            .to.deep.equal([]);
     });
 
     it('resolves every sibling checkout the cross-repo guards depend on', function () {

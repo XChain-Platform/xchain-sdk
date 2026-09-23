@@ -38,9 +38,10 @@ const REGISTERED = [...ALLOWED_COINS].sort();
 
 // coin family -> wallet descriptor file whose p2pkh path (m/44'/N') carries the
 // authoritative coin type on the other side of the contract.
+const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(__dirname, '../..', '..', '..');
 const WALLET_DESCRIPTORS_DIR = path.join(
-    __dirname, '../..', '..', '..',
-    'xchain-wallet', 'packages', 'core', 'src', 'registry', 'descriptors'
+    process.env.XCHAIN_WALLET_DIR || path.join(SIBLING_ROOT, 'xchain-wallet'),
+    'packages', 'core', 'src', 'registry', 'descriptors'
 );
 const DESCRIPTOR_FILE = { BTC: 'bitcoin.js', LTC: 'litecoin.js', DOGE: 'dogecoin.js' };
 

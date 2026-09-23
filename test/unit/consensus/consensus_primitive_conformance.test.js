@@ -120,4 +120,19 @@ describe('consensus-primitive conformance: byte-identity to canonical source @re
                 'edit xchain-documentation/protocol/reference-impl/consensus/' + f + ' and re-vendor all five copies.');
         });
     });
+
+    // The activation-registry parts are byte twins of the canonical gate_registry/
+    // copies; the per-repo entry gate_registry.js is not a twin and stays out.
+    ['core.js', 'shared_rows.js', 'regtest_env.js', 'shared_rows_1.js', 'shared_rows_2.js',
+        'shared_rows_3.js', 'shared_rows_4.js', 'shared_rows_5.js'].forEach(function(f){
+        it('gate_registry/' + f + ' is byte-identical to xchain-documentation/protocol/reference-impl', function(){
+            const rel   = path.join('consensus', 'gate_registry', f);
+            const local = fs.readFileSync(path.join(LOCAL_DIR, rel), 'utf8');
+            const canon = fs.readFileSync(path.join(CANON_DIR, rel), 'utf8');
+            assert.strictEqual(local, canon,
+                'this repo\'s consensus/gate_registry/' + f + ' has drifted from the canonical source; ' +
+                'edit xchain-documentation/protocol/reference-impl/consensus/gate_registry/' + f +
+                ' and re-vendor every consumer copy, never the vendored copy alone.');
+        });
+    });
 });

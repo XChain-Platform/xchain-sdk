@@ -85,6 +85,9 @@ describe('Workflows', function () {
             //...whose images[] data_ref points at the artwork upload (action 101)
             assert.strictEqual(doc.images[0].data_ref, 'action:101');
             assert.strictEqual(doc.tick, 'ART1');
+            //...carrying the schema-required name and a display role, never the FILE's MIME type
+            assert.strictEqual(doc.name, 'Art One');
+            assert.strictEqual(doc.images[0].type, 'standard');
             //...and ISSUE v1 points the token's DESCRIPTION at the doc (action 102)
             assert.strictEqual(calls.issues.length, 1);
             assert.deepStrictEqual(calls.issues[0], {
@@ -92,6 +95,18 @@ describe('Workflows', function () {
             });
             assert.strictEqual(out.tisFile.txid, 'file_tx2');
             assert.strictEqual(out.describe.txid, 'describe_tx');
+        });
+        it('with tis but no name: refuses before any leg broadcasts', async function () {
+            const calls = { files: [], links: [], issues: [] };
+            const wf = new Workflows(makeAttachSdk(calls));
+            await assert.rejects(wf.attachContent(FAKE_WIF, {
+                coin: 'BTC', issueActionIndex: 7,
+                file: { name: 'a.png', type: 'image/png', rawData: 'x' },
+                tis: { tick: 'art1' },
+            }), /name is required/);
+            assert.strictEqual(calls.files.length, 0);
+            assert.strictEqual(calls.links.length, 0);
+            assert.strictEqual(calls.issues.length, 0);
         });
     });
 });

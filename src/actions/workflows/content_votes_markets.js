@@ -77,15 +77,23 @@ module.exports = {
     //   file: { name, type, title?, memo?, rawData },  // FILE upload
     //   memo?,                      // LINK memo
     //   tis?: {                     // OPTIONAL: also author the on-chain TIS
-    //     tick,                     //   document (Token_Information_Standard.md
-    //     name?, description?       //   On-Chain Format) and point the token's
-    //   }                           //   DESCRIPTION at it via ISSUE v1
+    //     tick, name,               //   document (Token_Information_Standard.md
+    //     description?,             //   On-Chain Format) and point the token's
+    //     imageRole?                //   DESCRIPTION at it via ISSUE v1; imageRole
+    //   }                           //   is the TIS display role (default standard)
     // }
     // Requires indexer confirmation (waitForIndexer) so each leg's ACTION_INDEX
     // is resolvable for the next.
     //
     // Returns: { file, link, tisFile?, describe? } (each a <submitResult>)
     async attachContent(wif, params, opts = {}) {
+        // Validate the TIS request before any leg broadcasts, so a refusal strands nothing on-chain.
+        if (params.tis) this.sdk.nft.tisDocument({
+            tick:        params.tis.tick,
+            name:        params.tis.name,
+            description: params.tis.description,
+            imageRole:   params.tis.imageRole
+        });
         let session = this.sdk.session(wif, opts);
         return this.withPartial({ file: null, link: null }, async (p) => {
             p.file = await session.file({
@@ -115,7 +123,7 @@ module.exports = {
                 name:             params.tis.name,
                 description:      params.tis.description,
                 imageActionIndex: fileActionIndex,
-                imageType:        params.file.type,
+                imageRole:        params.tis.imageRole,
                 imageName:        params.file.name
             });
             p.tisFile = await session.file({
