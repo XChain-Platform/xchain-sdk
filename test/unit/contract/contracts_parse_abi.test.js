@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-// ContractUtils.parseAbi (spec: xchain-documentation/protocol/Contract_ABI.md).
+// ContractUtils.parseAbi (spec: xchain-documentation/protocol/contract-abi.md).
 // The fixture strings are duplicated verbatim from the explorer suite
 // (xchain-explorer/test/unit/contract_introspect.test.js) so the two
 // hand-synced parser copies are tested against identical inputs.
