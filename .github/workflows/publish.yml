@@ -15,6 +15,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Check out declared sibling repositories
+        uses: XChain-Platform/.github/actions/checkout-siblings@master
+        with:
+          ref: master
+
       - name: Use Node.js 22
         uses: actions/setup-node@v6
         with:
@@ -46,8 +51,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Test
-        run: npm test
+      - name: Test SDK
+        env:
+          XCHAIN_REQUIRE_SIBLINGS: "1"
+        run: npm run ci
+
+      - name: Test MCP package
+        run: npm --prefix mcp run ci
 
       - name: Publish SDK
         run: npm publish --access public
