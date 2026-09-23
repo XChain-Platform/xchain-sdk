@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-09-23
+
+### Fixed
+- Re-slid BTC and DOGE testnet activations with LTC inert, added exact BET and Coinpay arithmetic, and emitted TIS v1.1.1 NFT documents.
+
+
 ## [0.20.0] - 2026-09-17
 
 ### Added
