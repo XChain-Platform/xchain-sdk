@@ -10,11 +10,21 @@ const message = 'challenge';
 const wif = 'private-key';
 const network = { name: 'testnet' };
 
-function testIsPosNum() {
-    assert.strictEqual(isPosNum('5.5'), true);
-    assert.strictEqual(isPosNum('-5'), false);
-    assert.strictEqual(isPosNum('0'), false);
-    assert.strictEqual(isPosNum('1e10'), false);
+function testInitialModeMatch() {
+    const calls = [];
+    const auth = {
+        signMessage: (actualMessage, actualWif, options) => {
+            calls.push({ actualMessage, actualWif, options });
+            return { address: 'A2', signature: 'sig1' };
+        },
+    };
+
+    assert.strictEqual(signForAddress(auth, message, wif, 'A2', network), 'sig1');
+    assert.deepStrictEqual(calls, [{
+        actualMessage: message,
+        actualWif: wif,
+        options: { network },
+    }]);
 }
 
 function testSegwitNativeMatch() {
@@ -73,14 +83,42 @@ function testPlainFallback() {
     });
 }
 
-describe('x402 amount utilities', function () {
-    describe('isPosNum', function () {
-        it('accepts positive decimal strings and rejects non-positive or exponential values', testIsPosNum);
+describe('isPosNum with a positive decimal string', function () {
+    it('returns true', function () {
+        assert.strictEqual(isPosNum('5.5'), true);
     });
+});
 
-    describe('signForAddress', function () {
-        it('returns the signature from the segwitNative mode when its address matches', testSegwitNativeMatch);
-        it('continues after errors and returns the segwitRedeemScript signature', testErrorsThenSegwitRedeemScriptMatch);
-        it('uses the fourth call as the plain fallback when no mode address matches', testPlainFallback);
+describe('isPosNum with a negative string', function () {
+    it('returns false', function () {
+        assert.strictEqual(isPosNum('-5'), false);
     });
+});
+
+describe('isPosNum with zero', function () {
+    it('returns false', function () {
+        assert.strictEqual(isPosNum('0'), false);
+    });
+});
+
+describe('isPosNum with exponential notation', function () {
+    it('returns false', function () {
+        assert.strictEqual(isPosNum('1e10'), false);
+    });
+});
+
+describe('signForAddress with an initial mode match', function () {
+    it('returns the matching signature from the first call', testInitialModeMatch);
+});
+
+describe('signForAddress with a segwitNative match', function () {
+    it('returns the signature from the segwitNative mode', testSegwitNativeMatch);
+});
+
+describe('signForAddress with signing errors before a match', function () {
+    it('returns the segwitRedeemScript signature from the third call', testErrorsThenSegwitRedeemScriptMatch);
+});
+
+describe('signForAddress without a matching mode address', function () {
+    it('returns the signature from the fourth plain call', testPlainFallback);
 });
