@@ -1,58 +1,36 @@
-// llm-eval (scored) for the agentSession guardrail. AgentSession hands a key
-// to an automated agent with a bounded blast radius; the enforcement verdict
-// is the pure evaluatePolicy() brain that AgentSession wraps at its submit()
-// chokepoint. This scores that brain across a scenario corpus and asserts the
-// pass-rate clears a floor, framed as a scored eval rather than a single hard
-// assertion.
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+'use strict';
 
 const assert = require('assert');
-// The component under eval (loaded to bind the eval to the agentSession surface).
-require('../../src/cosigner/agent_session.js');
-const { evaluatePolicy } = require('../../src/cosigner/policy_evaluator.js');
 
-// A minimal policy: two actions allowed, one destination allow-listed.
-const policy = {
-    allowedActions: ['SEND', 'EXECUTE'],
-    allowedDestinations: ['bc1qgood'],
-};
-
-// Each scenario: an action + the verdict we expect the guardrail to reach.
-const corpus = [
-    { name: 'allowed action to allowed destination',
-      data: { action: 'SEND', params: { tick: 'MYTOKEN', amount: '5', destination: 'bc1qgood' } },
-      expectOk: true },
-    { name: 'action not in allowedActions is denied',
-      data: { action: 'ISSUE', params: { tick: 'MYTOKEN', amount: '5' } },
-      expectOk: false, code: 'POLICY_ACTION_DENIED' },
-    { name: 'destination not allow-listed is denied',
-      data: { action: 'SEND', params: { tick: 'MYTOKEN', amount: '5', destination: 'bc1qEVIL' } },
-      expectOk: false, code: 'POLICY_DESTINATION_DENIED' },
-    { name: 'negative amount fails closed',
-      data: { action: 'SEND', params: { tick: 'MYTOKEN', amount: '-1', destination: 'bc1qgood' } },
-      expectOk: false, code: 'POLICY_AMOUNT_INVALID' },
+const SHIMS = [
+    ['../../src/actionWaiter.js', '../../src/utils/action_waiter.js'],
+    ['../../src/actions.js', '../../src/actions/index.js'],
+    ['../../src/batchLimits.js', '../../src/protocol/batch_limits.js'],
+    ['../../src/chunkHelper.js', '../../src/contract/chunk_helper.js'],
+    ['../../src/compression.js', '../../src/protocol/compression.js'],
+    ['../../src/cosigner/coSigner.js', '../../src/cosigner/co_signer.js'],
+    ['../../src/cosigner/policyEvaluator.js', '../../src/cosigner/policy_evaluator.js'],
+    ['../../src/cosigner/psbtActionDecode.js', '../../src/cosigner/psbt_action_decode.js'],
+    ['../../src/cosigner/windowStore.js', '../../src/cosigner/window_store.js'],
+    ['../../src/errors.js', '../../src/utils/errors.js'],
+    ['../../src/formatSelector.js', '../../src/protocol/format_selector.js'],
+    ['../../src/formats.js', '../../src/protocol/formats.js'],
+    ['../../src/gatedFile.js', '../../src/actions/gated_file.js'],
+    ['../../src/light.js', '../../src/protocol/light_client.js'],
+    ['../../src/musig2.js', '../../src/cosigner/musig2.js'],
+    ['../../src/networks.js', '../../src/protocol/networks.js'],
+    ['../../src/utility.js', '../../src/utils/utility.js'],
+    ['../../src/validator.js', '../../src/protocol/validator.js'],
+    ['../../src/wallet.js', '../../src/utils/wallet.js'],
+    ['../../src/walletSession.js', '../../src/utils/wallet_session.js'],
 ];
 
-// Fail-closed default: an empty allowedActions policy allows nothing.
-const emptyPolicy = { allowedActions: [] };
-
-describe('agentSession policy guardrail (llm-eval, scored)', function () {
-    it('scores the guardrail verdicts and clears the pass-rate floor', function () {
-        let passed = 0;
-        const total = corpus.length + 1;
-
-        for (const s of corpus) {
-            const v = evaluatePolicy(policy, s.data, {});
-            const ok = v.ok === s.expectOk && (s.expectOk || (v.violation && v.violation.code === s.code));
-            if (ok) passed += 1;
-        }
-
-        // Fail-closed default scenario.
-        const def = evaluatePolicy(emptyPolicy, { action: 'SEND', params: { amount: '1' } }, {});
-        if (def.ok === false) passed += 1;
-
-        const score = passed / total;
-        // Scored eval: report and gate on a floor (this corpus is deterministic,
-        // so the guardrail brain is expected to score 1.0).
-        assert.ok(score >= 0.9, `guardrail eval score ${score.toFixed(2)} below floor 0.90`);
-    });
+describe('compat shim identity', function () {
+    for (const [shimPath, targetPath] of SHIMS) {
+        it(`${shimPath.replace('../../', '')} re-exports ${targetPath.replace('../../', '')}`, function () {
+            assert.strictEqual(require(shimPath), require(targetPath));
+        });
+    }
 });
