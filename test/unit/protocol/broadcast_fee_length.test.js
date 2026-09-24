@@ -27,6 +27,6 @@ describe('Validator: BROADCAST FEE length', function () {
         const errs = lengthErrors('0.1234567890');
         expect(errs).to.have.length(1);
         expect(errs[0].code).to.equal('INVALID_FIELD_VALUE');
-        expect(errs[0].data.constraint).to.deep.equal({ max: 11 });
+        expect(errs[0].details.constraint).to.deep.equal({ max: 11 });
     });
 });
