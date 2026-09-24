@@ -163,20 +163,22 @@ describe('XChainSDK', function () {
 
         it('calls discover when hub is configured', async function () {
             const sdk = makeSDK();
-            // Create a fake hub
+            // Create a fake hub. discover() reaches the hub through
+            // getDiscoveryConfig() (the keyless/public entry point added by
+            // 43c77f6), not getAllConfig(), so the fake must expose that.
             sdk.hub = {
-                getAllConfig: sinon.stub().resolves({}),
+                getDiscoveryConfig: sinon.stub().resolves({}),
                 extractServiceEndpoints: sinon.stub().returns({}),
                 startPolling: sinon.stub()
             };
             await sdk.init();
-            expect(sdk.hub.getAllConfig.called).to.be.true;
+            expect(sdk.hub.getDiscoveryConfig.called).to.be.true;
         });
 
         it('warns but does not throw when hub fails and clients exist', async function () {
             const sdk = makeSDK();
             sdk.hub = {
-                getAllConfig: sinon.stub().rejects(new Error('hub down')),
+                getDiscoveryConfig: sinon.stub().rejects(new Error('hub down')),
                 extractServiceEndpoints: sinon.stub().returns({}),
                 startPolling: sinon.stub()
             };
@@ -190,7 +192,7 @@ describe('XChainSDK', function () {
                 network: 'bitcoin-mainnet',
                 hubUrl:  'http://localhost:8001'
             });
-            sdk.hub.getAllConfig = sinon.stub().rejects(new Error('hub down'));
+            sdk.hub.getDiscoveryConfig = sinon.stub().rejects(new Error('hub down'));
             sdk.hub.extractServiceEndpoints = sinon.stub().returns({});
             sdk.hub.startPolling = sinon.stub();
             sdk.explorer = null;

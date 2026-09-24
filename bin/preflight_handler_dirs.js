@@ -19,7 +19,9 @@
  *
  *   - a map row may name a DIRECTORY (`src/actions/<name>/`, trailing slash), hashed over
  *     every file in it, recursively, so editing, adding or removing any part moves the pin;
- *   - the fee walk reads every source file of a directory handler, not only index.js;
+ *   - a FILE row also includes a same-named companion directory, since another valid split
+ *     leaves `<name>.js` as the entry and moves its imported logic into `<name>/`;
+ *   - the fee walk reads every source file owned by either split shape, not only its entry;
  *   - a fee-quote literal is found exactly once across the indexer's src/, so moving it
  *     out of the loader into a part neither loses it nor lets a second copy go unseen.
  *
@@ -111,14 +113,44 @@ function hashDirectory(dirAbs) {
     return { digest: sha256(manifest), parts };
 }
 
+// A flat entry may keep its original path while its implementation moves into a directory
+// beside it. In that shape the row still names the entry, but its pin must commit to both
+// the entry and every companion part. Names are relative to src/actions/ so the manifest
+// distinguishes the entry from its tree and detects part renames as well as byte changes.
+function hashFileWithCompanionParts(fileAbs) {
+    const partsDir = fileAbs.replace(/\.js$/, '');
+    let partsStat;
+    try {
+        partsStat = fs.lstatSync(partsDir);
+    } catch (e) {
+        if (e && e.code === 'ENOENT') return { digest: sha256(fs.readFileSync(fileAbs)) };
+        throw e;
+    }
+    if (partsStat.isSymbolicLink()) {
+        throw new Error(`drift-gate: companion ${partsDir} is a symbolic link; handler parts must be in a plain directory.`);
+    }
+    if (!partsStat.isDirectory()) return { digest: sha256(fs.readFileSync(fileAbs)) };
+
+    const entryName = path.basename(fileAbs);
+    const partsName = path.basename(partsDir);
+    const parts = [{ name: entryName, sha256: sha256(fs.readFileSync(fileAbs)) }];
+    for (const name of listParts(partsDir)) {
+        parts.push({ name: `${partsName}/${name}`, sha256: sha256(fs.readFileSync(path.join(partsDir, name))) });
+    }
+    parts.sort((a, b) => Buffer.compare(Buffer.from(a.name, 'utf8'), Buffer.from(b.name, 'utf8')));
+    const manifest = parts.map((p) => `${p.sha256}  ${p.name}\n`).join('');
+    return { digest: sha256(manifest), parts };
+}
+
 function isDirectory(abs) {
     try { return fs.lstatSync(abs).isDirectory(); } catch (e) { return false; }
 }
 
 // Hash one mapped row against the checkout. Returns { actual, parts? } or { problem }.
 
-// A flat row is hashed as the file's bytes, which is what every pin in the table already
-// records, so directory support leaves the shipped map valid with no re-pin.
+// A flat row with no companion directory is hashed as the file's bytes, preserving legacy
+// pins. When a companion directory exists, the entry and its parts form one manifest and
+// the row needs the deliberate re-pin that closes the old blind spot.
 
 // The problems a directory split introduces are named one by one below rather than folded
 // into a hash mismatch, because each has its own fix.
@@ -129,7 +161,14 @@ function hashMappedRow(indexerRoot, row) {
         return { problem: `${row.handler}: not a mappable handler path; a row names src/actions/<name>.js or the directory src/actions/<name>/` };
     }
     if (row.kind === 'file') {
-        if (fs.existsSync(abs)) return { actual: sha256(fs.readFileSync(abs)) };
+        if (fs.existsSync(abs)) {
+            try {
+                const { digest, parts } = hashFileWithCompanionParts(abs);
+                return { actual: digest, parts };
+            } catch (e) {
+                return { problem: `${row.handler}: ${e && e.message ? e.message : String(e)}` };
+            }
+        }
         // A flat row whose handler became a directory: the fix is a re-pin as a directory row.
         const dir = abs.replace(/\.js$/, '');
         if (isDirectory(dir)) {
@@ -144,7 +183,7 @@ function hashMappedRow(indexerRoot, row) {
     // require('./<name>') resolves a flat <name>.js ahead of <name>/index.js, so with both
     // present the directory this would hash is not the code that runs.
     if (fs.existsSync(flat)) {
-        return { problem: `${row.handler}: a flat ${row.handler.replace(/\/$/, '.js')} beside it is what require() resolves first, so the directory is not the code that runs` };
+        return { problem: `${row.handler}: a flat ${row.handler.replace(/\/$/, '.js')} beside it is what require() resolves first; map that entry file so its pin includes this companion parts directory` };
     }
     try {
         const { digest, parts } = hashDirectory(abs);
@@ -181,8 +220,8 @@ function stripCommentsAndStrings(src) {
 }
 
 // The handlers the fee walk reads, each with every source file that belongs to it. A
-// handler is either src/actions/<name>.js or, since the M3 feature-directory pass,
-// src/actions/<name>/index.js.
+// handler is src/actions/<name>.js, optionally with parts in src/actions/<name>/, or a
+// directory handler whose entry is src/actions/<name>/index.js.
 
 // A flat readdir of *.js alone silently drops every directory handler, and a dropped
 // handler reads as "charges no fee" rather than as a broken walk, so both shapes are
@@ -196,11 +235,18 @@ function stripCommentsAndStrings(src) {
 // as a flat readdir drops a directory.
 function feeWalkHandlers(actionsDir, entries) {
     const handlers = [];
+    const flatNames = new Set(entries
+        .filter((e) => e.isFile() && e.name.endsWith('.js') && e.name !== 'index.js')
+        .map((e) => path.basename(e.name, '.js')));
     for (const e of entries) {
         if (e.isDirectory()) {
             const dirAbs = path.join(actionsDir, e.name);
             const files = listParts(dirAbs, { allowEmpty: true }).filter((n) => JS_SOURCE.test(n)).map((n) => path.join(dirAbs, n));
-            if (fs.existsSync(path.join(dirAbs, 'index.js'))) {
+            // A same-named flat entry owns this parts tree. It is added with the entry in
+            // the file branch below, including any index.js the tree happens to contain.
+            if (flatNames.has(e.name)) {
+                continue;
+            } else if (fs.existsSync(path.join(dirAbs, 'index.js'))) {
                 handlers.push({ action: e.name, files });
             // A directory with no index.js is not a handler, but if one of its files charges
             // a fee the walk cannot say for which action, so that fails CLOSED here rather
@@ -210,7 +256,23 @@ function feeWalkHandlers(actionsDir, entries) {
                     + 'calls createFeesObject. The fee walk cannot name the action that charges; fix the layout or the walk.');
             }
         } else if (e.isFile() && e.name.endsWith('.js') && e.name !== 'index.js') {
-            handlers.push({ action: path.basename(e.name, '.js'), files: [path.join(actionsDir, e.name)] });
+            const action = path.basename(e.name, '.js');
+            const entry = path.join(actionsDir, e.name);
+            const partsDir = path.join(actionsDir, action);
+            const files = [entry];
+            let partsStat;
+            try { partsStat = fs.lstatSync(partsDir); } catch (err) {
+                if (!err || err.code !== 'ENOENT') throw err;
+            }
+            if (partsStat && partsStat.isSymbolicLink()) {
+                throw new Error(`drift-gate: companion src/actions/${action}/ is a symbolic link; handler parts must be in a plain directory.`);
+            }
+            if (partsStat && partsStat.isDirectory()) {
+                files.push(...listParts(partsDir, { allowEmpty: true })
+                    .filter((n) => JS_SOURCE.test(n))
+                    .map((n) => path.join(partsDir, n)));
+            }
+            handlers.push({ action, files });
         }
     }
     return handlers;
@@ -290,6 +352,6 @@ function main(argv) {
 
 if (require.main === module) process.exit(main(process.argv.slice(2)));
 module.exports = {
-    parseMapRows, listParts, hashDirectory, hashMappedRow, compareRows, formatDrift,
+    parseMapRows, listParts, hashDirectory, hashFileWithCompanionParts, hashMappedRow, compareRows, formatDrift,
     stripCommentsAndStrings, feeWalkHandlers, declarationPattern, indexerLiteralReader, main,
 };

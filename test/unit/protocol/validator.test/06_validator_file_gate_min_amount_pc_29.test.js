@@ -71,14 +71,16 @@ describe('Validator: FILE GATE_MIN_AMOUNT (PC-29)', function () {
         // Cross-repo byte identity. Skips (rather than fails) when a sibling checkout
         // is absent, matching the repo's other sibling-conformance tests; CI sets
         // XCHAIN_REQUIRE_SIBLINGS=1 so a missing sibling hard-fails there.
+        const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(__dirname, '../../../../..');
         const SIBLINGS = [
-            ['xchain-indexer', 'test/fixtures/gate-min-amount-vectors.json'],
-            ['xchain-wallet',  'test/fixtures/gate-min-amount-vectors.json']
+            ['xchain-indexer', process.env.XCHAIN_INDEXER_PATH || process.env.XCHAIN_INDEXER_DIR,
+                'test/fixtures/gate-min-amount-vectors.json'],
+            ['xchain-wallet',  process.env.XCHAIN_WALLET_DIR, 'test/fixtures/gate-min-amount-vectors.json']
         ];
         const canonical = fs.readFileSync(FIXTURE);
-        SIBLINGS.forEach(([repo, rel]) => {
+        SIBLINGS.forEach(([repo, root, rel]) => {
             it(`the ${repo} copy is byte-identical`, function () {
-                const p = path.join(__dirname, '../../../../..', repo, rel);
+                const p = path.join(root || path.join(SIBLING_ROOT, repo), rel);
                 if (!fs.existsSync(p)) {
                     if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
                         throw new Error('sibling ' + repo + ' fixture missing: ' + p);

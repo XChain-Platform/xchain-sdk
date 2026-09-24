@@ -171,13 +171,13 @@ class ContractUtils {
     }
 
     // Extract the optional self-declared `abi` metadata block from contract
-    // source (spec: xchain-documentation/protocol/Contract_ABI.md). Fail-closed:
+    // source (spec: xchain-documentation/protocol/contract-abi.md). Fail-closed:
     // a dynamic or structurally wrong abi/version/methods returns null, while a
     // malformed SINGLE method entry drops only that method. The abi is display
     // metadata only, never validated against the code and never consensus.
     //
-    // Delegates to the vendored ./contract/abi-core.js (canonical copy:
-    // xchain-explorer/src/abi-core.js; byte-identity enforced by the
+    // Delegates to the vendored ./abi-core.js (canonical copy:
+    // xchain-explorer/src/contract/abi_core.js; byte-identity enforced by the
     // abi-core-drift unit test and the root bin/ci-all.sh guard).
     // Returns { version, methods } | null. Never throws.
     parseAbi(sourceCode) {

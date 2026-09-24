@@ -71,7 +71,8 @@ const { indexerRootCandidates, describeIndexerCandidates, resolveIndexerRoot } =
 
 /* The table rows, each tagged 'file', 'directory' or 'malformed' by the shape of the
  * handler path it names. A directory row carries a trailing slash and is hashed over every
- * file in the directory, so a handler split into parts cannot leave them unhashed. */
+ * file in the directory. A file row also covers a same-named directory beside its entry,
+ * so either supported handler split shape includes every part in its pin. */
 function parseMap(mapPath) {
     return handlerDirs.parseMapRows(fs.readFileSync(mapPath, 'utf8'));
 }

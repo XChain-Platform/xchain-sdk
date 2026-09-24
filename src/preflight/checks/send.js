@@ -51,17 +51,19 @@
  * into a total that passes: two 0.5 legs of a 0-decimals token used to
  * merge to '1' and settle.
  *
- * It is declared, not mirrored, and the distinction is load-bearing.
- * Predicting it needs the tick's DECIMALS *and* the activation state at
- * the block that will carry this action, which pre-flight cannot read.
- * The 2026-09-09 ruling armed it at genesis on EVERY network - the
- * authority map reads `mainnet: 0` alongside testnet and regtest
- * (registry row `consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION`
- * in xchain-indexer/src/protocol_changes/gates_1.js) - so the
- * old reason for declaring it, that an unconditional error would reject
- * on mainnet what mainnet still accepts, no longer holds. Promoting it
- * to a mirrored error is a client-behaviour change with its own blast
- * radius and is not made here; until then it stays declared.
+ * It is now MIRRORED, not merely declared. Predicting it needs the
+ * tick's DECIMALS and the activation state at the block that will carry
+ * this action; pre-flight can read the former (the token row) and, for
+ * this one gate, does not need the latter at all. The 2026-09-09 ruling
+ * armed consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION
+ * (xchain-indexer/src/protocol_changes/gates_1.js) at genesis - height 0 -
+ * on EVERY network, mainnet included, so any including block, whose
+ * height is never negative, always satisfies it. The old reason this
+ * stayed declared, that an unconditional error would reject on mainnet
+ * what mainnet still accepts, no longer holds, so checkLegAmountFormat
+ * below raises AMOUNT_FORMAT_INVALID per leg once the tick's decimals
+ * are known, and the declaration that follows narrows to the residual
+ * case: a leg whose tick lookup fails.
  *
  * DESTROY has two BRIDGE supply-path refusals (the base bridge spec),
  * both UNCONDITIONAL on every plane and every height: the gas tick
@@ -81,6 +83,7 @@ const numeric = require('../numeric.js');
 const { ALLOWED_COINS } = require('../../coins/index.js');
 const { GAS_TICK } = require('../../protocol/constants.js');
 const { planeFromCoin } = require('./issue.js');
+const { tokenField } = require('./mint.js');
 
 // Net multi-leg TICK/AMOUNT pairs into per-tick totals. SEND v1
 // repeats AMOUNT under one TICK; v2/v3 repeat TICK too.
@@ -132,18 +135,54 @@ async function checkBalanceCovers(ctx, verb) {
     }
 }
 
-// Name the leg-amount consolidation rule as unverified. Deciding it needs the
-// tick's DECIMALS and the activation state at the including block, so it is
-// declared here rather than predicted (see the header on the false-block risk).
+// LEG_AMOUNT_CONSOLIDATION mirror (see the header): consolidation_leg_amount_activation
+// .CONSOLIDATION_LEG_AMOUNT_ACTIVATION is armed at genesis on every network, so a leg
+// whose RAW amount does not fit its tick's DECIMALS is judged here per LEG, not on the
+// perTickTotals() merge above, which is exactly the grouping the flag-day takes out of
+// play for a badly-formatted leg. AMOUNT_FORMAT_INVALID is 'local' in TIER2_ERROR_CAPABLE
+// (mint.js and issue.js already certify the same vendored rule the same way), so a
+// resolvable decimals mismatch is a non-overridable error, never a warning.
+async function checkLegAmountFormat(ctx, verb) {
+    const ticks = [].concat(ctx.params.TICK || []);
+    const amounts = [].concat(ctx.params.AMOUNT || []);
+    const n = Math.max(ticks.length, amounts.length);
+    ctx.markRun(FINDING_CODES.AMOUNT_FORMAT_INVALID);
+    for (let i = 0; i < n; i++) {
+        const tick = String(ticks[Math.min(i, ticks.length - 1)] || '');
+        const amount = amounts[i] !== undefined ? String(amounts[i]) : '';
+        if (!tick || amount === '') continue;
+        const token = await ctx.token(tick);
+        if (token === undefined) {
+            ctx.addUnverified(FINDING_CODES.AMOUNT_FORMAT_INVALID, `token lookup unavailable for ${tick}`);
+            continue;
+        }
+        if (token === null) continue; // nonexistent tick: TOKEN_NOT_FOUND owns this leg
+        const decimals = tokenField(token, ['supply.decimals', 'info.decimals', 'decimals', 'DECIMALS']);
+        if (decimals === null || decimals === undefined || decimals === '') continue;
+        if (!numeric.isValidAmountFormat(decimals, amount)) {
+            ctx.addFinding(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'error',
+                `${verb} leg amount ${amount} for ${tick} is not a valid amount at ${decimals} decimals; `
+                + 'above the leg-amount-consolidation activation (armed on every network since genesis) '
+                + 'the indexer holds this leg out of the merge and rejects it on its own.',
+                { tick, amount, decimals });
+        }
+    }
+}
+
+// The residual, still-declared half of the rule: whether a leg's amount fits its
+// tick's decimals when the tick's row cannot be read at all. checkLegAmountFormat
+// above decides every leg whose token lookup succeeds.
 function declareLegAmountRule(ctx, verb) {
     ctx.addUnverified('LEG_AMOUNT_CONSOLIDATION',
         `above its flag-day, a ${verb.toLowerCase()} leg whose amount does not fit its tick's decimals is `
         + 'rejected on its own instead of merging into a sibling leg; the rule is armed on every network, '
-        + 'mainnet included, and the activation state of the including block is server-side only');
+        + 'mainnet included, so this SDK raises AMOUNT_FORMAT_INVALID for it directly once the tick\'s '
+        + 'decimals are known, and can only decide this when a tick\'s row is unreadable');
 }
 
 async function checkSend(ctx) {
     await checkBalanceCovers(ctx, 'Send');
+    await checkLegAmountFormat(ctx, 'Send');
     declareLegAmountRule(ctx, 'Send');
     ctx.addUnverified('SEND_RESTRICTIONS',
         'sleep state, allow/block lists, controller-guard outcome, and the conditional gated-key handoff '
@@ -204,6 +243,7 @@ function checkBridgeSupplyPath(ctx) {
 
 async function checkDestroy(ctx) {
     await checkBalanceCovers(ctx, 'Destroy');
+    await checkLegAmountFormat(ctx, 'Destroy');
     declareLegAmountRule(ctx, 'Destroy');
     checkBridgeSupplyPath(ctx);
     ctx.addUnverified('DESTROY_RESTRICTIONS',

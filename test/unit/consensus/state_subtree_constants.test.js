@@ -54,10 +54,12 @@ const M   = require('../../../src/merkle.js');
 // pair below is a raw byte compare.
 const GATE_FILE = 'src/consensus/gates/state_subtree_gate.js';
 const SELF = path.resolve(__dirname, '../../..', GATE_FILE);
+const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.resolve(__dirname, '../../../..');
 const SIBLINGS = {
-    'xchain-indexer':  path.resolve(__dirname, '../../../..', 'xchain-indexer', GATE_FILE),
-    'xchain-sync':     path.resolve(__dirname, '../../../..', 'xchain-sync', GATE_FILE),
-    'xchain-explorer': path.resolve(__dirname, '../../../..', 'xchain-explorer', GATE_FILE)
+    'xchain-indexer':  path.resolve(process.env.XCHAIN_INDEXER_PATH || process.env.XCHAIN_INDEXER_DIR
+                           || path.join(SIBLING_ROOT, 'xchain-indexer'), GATE_FILE),
+    'xchain-sync':     path.resolve(process.env.XCHAIN_SYNC_DIR || path.join(SIBLING_ROOT, 'xchain-sync'), GATE_FILE),
+    'xchain-explorer': path.resolve(process.env.XCHAIN_EXPLORER_DIR || path.join(SIBLING_ROOT, 'xchain-explorer'), GATE_FILE)
 };
 const SIBLING_REQUIRED = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 

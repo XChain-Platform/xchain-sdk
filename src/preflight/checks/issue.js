@@ -215,7 +215,8 @@ function checkBridgeOptIn(ctx, tick, token) {
     }
 }
 
-// MAX_SUPPLY fractional precision, measured at the decimals CONSENSUS uses.
+// Measure MAX_SUPPLY fractional precision with the decimals consensus uses,
+// so pre-flight cannot approve a spelling the chain will reject after fees.
 //
 // The static validator range-checks `split('.')[0]` and throws the fraction away, so
 // MAX_SUPPLY=1.5 with DECIMALS=0 cleared the SDK and was then refused on-chain as

@@ -76,9 +76,10 @@ const DEFAULT_ANCHOR_MIN_DEPTH = 60;
 //   passed to parseAnchorV0 or accepted by the fetchAnchoredCheckpoint filter.
 //
 //   ACTIVATION: an ANCHOR of any version mined below ANCHOR_ACTIVATION[network]
-//   (protocol/constants.js; { mainnet: 0, testnet: 67858600, regtest: 0 }) is
-//   invalid on the wire and never reaches this parser; at/above it only 0/1/2
-//   exist. The SDK trusts the indexer/explorer to have already applied that gate.
+//   (protocol/constants.js, which carries the per-network heights and why the
+//   mainnet one sits above the chain tip) is invalid on the wire and never
+//   reaches this parser; at/above it only 0/1/2 exist. The SDK trusts the
+//   indexer/explorer to have already applied that gate.
 //
 // Sections are variable-width (their signature lists differ), so the bundle is
 // walked with a cursor rather than read at the fixed offsets the retired v3/v5

@@ -65,7 +65,10 @@ function stubWorkflows(network){
         options: { network: network },
         util:    new Utility(),
         session: () => ({
-            submit: async (actionData) => { calls.push(actionData); return { submitted: true }; }
+            submit: async (actionData, encoderOpts, submitOpts) => {
+                calls.push({ actionData, encoderOpts, submitOpts });
+                return { submitted: true };
+            }
         })
     };
     return { flows: new Workflows(sdk), calls: calls };
@@ -231,9 +234,9 @@ describe('bridge: workflow recipes', () => {
         let { flows, calls } = stubWorkflows('regtest');
         await flows.bridgeLock('wif', { destCoin: 'BTC', destAddress: ADDR.BTC_REG_P2PKH, amount: '5', memo: 'go' });
         assert.strictEqual(calls.length, 1);
-        assert.strictEqual(calls[0].action, 'XBRIDGE');
-        assert.strictEqual(calls[0].params.VERSION, '0');
-        assert.strictEqual(calls[0].params.DEST_ADDRESS, ADDR.BTC_REG_P2PKH);
+        assert.strictEqual(calls[0].actionData.action, 'XBRIDGE');
+        assert.strictEqual(calls[0].actionData.params.VERSION, '0');
+        assert.strictEqual(calls[0].actionData.params.DEST_ADDRESS, ADDR.BTC_REG_P2PKH);
     });
 
     it('bridgeLock refuses a destination that is not valid on the destination chain', async () => {
@@ -247,7 +250,7 @@ describe('bridge: workflow recipes', () => {
     it('bridgeBurn validates against BTC whatever chain it is broadcast on, and pins v1', async () => {
         let { flows, calls } = stubWorkflows('regtest');
         await flows.bridgeBurn('wif', { btcAddress: ADDR.BTC_REG_P2PKH, amount: '2' });
-        assert.strictEqual(calls[0].params.VERSION, '1');
+        assert.strictEqual(calls[0].actionData.params.VERSION, '1');
         await assert.rejects(
             () => flows.bridgeBurn('wif', { btcAddress: ADDR.DOGE_MAIN_P2PKH, amount: '2' }),
             /BTC_ADDRESS .* not a valid BTC regtest address/);
@@ -256,7 +259,7 @@ describe('bridge: workflow recipes', () => {
     it('bridgeTokenLock pins v3 and refuses a dotted or missing tick', async () => {
         let { flows, calls } = stubWorkflows('regtest');
         await flows.bridgeTokenLock('wif', { tick: 'FUFU', destCoin: 'BTC', destAddress: ADDR.BTC_REG_P2PKH, amount: '5' });
-        assert.strictEqual(calls[0].params.VERSION, '3');
+        assert.strictEqual(calls[0].actionData.params.VERSION, '3');
         await assert.rejects(() => flows.bridgeTokenLock('wif', { tick: 'BTC.FUFU', destCoin: 'BTC', destAddress: ADDR.BTC_REG_P2PKH, amount: '5' }), /dotted tick/);
         await assert.rejects(() => flows.bridgeTokenLock('wif', { destCoin: 'BTC', destAddress: ADDR.BTC_REG_P2PKH, amount: '5' }), /requires a TICK/);
     });
@@ -264,7 +267,7 @@ describe('bridge: workflow recipes', () => {
     it('bridgeTokenBurn reads the origin chain out of the tick', async () => {
         let { flows, calls } = stubWorkflows('regtest');
         await flows.bridgeTokenBurn('wif', { tick: 'BTC.FUFU', originAddress: ADDR.BTC_REG_P2PKH, amount: '2' });
-        assert.strictEqual(calls[0].params.VERSION, '4');
+        assert.strictEqual(calls[0].actionData.params.VERSION, '4');
         // A BTC-shaped address is right for BTC.FUFU and wrong for DOGE.WOW: the
         // chain the address is checked against comes from the tick, not the caller.
         await assert.rejects(
@@ -277,14 +280,65 @@ describe('bridge: workflow recipes', () => {
 
 });
 
+describe('bridge: workflow encoder options', () => {
+
+    // A recipe that swallowed opts.encoder produced a transaction at the default
+    // fee rate no matter what the caller asked for, which is why the credited-lock
+    // recipe could not be driven at a chosen feePerKb.
+    it('forwards encoder and submission controls to their intended layers for every recipe', async () => {
+        let cases = [
+            ['bridgeLock', { destCoin: 'BTC', destAddress: ADDR.BTC_REG_P2PKH, amount: '5' }],
+            ['bridgeBurn', { btcAddress: ADDR.BTC_REG_P2PKH, amount: '2' }],
+            ['bridgeTokenLock', { tick: 'FUFU', destCoin: 'BTC', destAddress: ADDR.BTC_REG_P2PKH, amount: '5' }],
+            ['bridgeTokenBurn', { tick: 'BTC.FUFU', originAddress: ADDR.BTC_REG_P2PKH, amount: '2' }],
+            ['setTokenBridgeability', { tick: 'FUFU', bridgeChains: 'DOGE' }]
+        ];
+
+        for (let [method, params] of cases) {
+            let { flows, calls } = stubWorkflows('regtest');
+            await flows[method]('wif', params, {
+                network: 'regtest',
+                encoder: { feePerKb: 2000, unconfirmed: false },
+                waitForIndexer: false,
+                maxFeeSats: 12000
+            });
+
+            assert.strictEqual(calls.length, 1, method + ' must submit exactly once');
+            assert.deepStrictEqual(calls[0].encoderOpts,
+                { feePerKb: 2000, unconfirmed: false }, method + ' encoder options');
+            assert.deepStrictEqual(calls[0].submitOpts, {
+                network: 'regtest',
+                waitForIndexer: false,
+                maxFeeSats: 12000
+            }, method + ' submission options');
+        }
+    });
+
+    // The backward-compatibility case: an opts with no `encoder` key must reach
+    // the encoder as the same empty object every recipe passed before, and the
+    // encoder-shaped keys a caller misplaced at the top level stay where they are
+    // rather than being promoted into encoder input behind their back.
+    it('does not treat an encoder control placed only in submission options as encoder input', async () => {
+        let { flows, calls } = stubWorkflows('regtest');
+        await flows.bridgeLock('wif',
+            { destCoin: 'BTC', destAddress: ADDR.BTC_REG_P2PKH, amount: '5' },
+            { feePerKb: 9000, unconfirmed: true, maxFeeSats: 12000 });
+
+        assert.deepStrictEqual(calls[0].encoderOpts, {});
+        assert.deepStrictEqual(calls[0].submitOpts,
+            { feePerKb: 9000, unconfirmed: true, maxFeeSats: 12000 });
+    });
+
+});
+
 describe('bridge: workflow recipes', () => {
 
     it('setTokenBridgeability pins ISSUE v7, upper-cases the chain list and refuses an unknown coin', async () => {
         let { flows, calls } = stubWorkflows('regtest');
         await flows.setTokenBridgeability('wif', { tick: 'FUFU', bridgeChains: 'doge, ltc', minDepth: '3' });
-        assert.strictEqual(calls[0].action, 'ISSUE');
-        assert.strictEqual(calls[0].params.VERSION, '7');
-        assert.strictEqual(calls[0].params.BRIDGE_CHAINS, 'DOGE,LTC');
+        assert.strictEqual(calls[0].actionData.action, 'ISSUE');
+        assert.strictEqual(calls[0].actionData.params.VERSION, '7');
+        assert.strictEqual(calls[0].actionData.params.BRIDGE_CHAINS, 'DOGE,LTC');
         await assert.rejects(() => flows.setTokenBridgeability('wif', { tick: 'FUFU', bridgeChains: 'XMR' }), /unsupported coin/);
         // '' means UNCHANGED on chain, so it can never be the way to clear a list.
         await assert.rejects(() => flows.setTokenBridgeability('wif', { tick: 'FUFU', bridgeChains: '' }), /comma list of coins or the "-" sentinel/);
@@ -293,7 +347,7 @@ describe('bridge: workflow recipes', () => {
     it('setTokenBridgeability passes the "-" sentinel through untouched', async () => {
         let { flows, calls } = stubWorkflows('regtest');
         await flows.setTokenBridgeability('wif', { tick: 'FUFU', bridgeChains: '-' });
-        assert.strictEqual(calls[0].params.BRIDGE_CHAINS, '-');
+        assert.strictEqual(calls[0].actionData.params.BRIDGE_CHAINS, '-');
     });
 
     it('refuses a caller-supplied VERSION that disagrees with the recipe', async () => {

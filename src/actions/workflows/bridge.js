@@ -24,6 +24,23 @@ const Utility = require('../../utils/utility.js');
 const coins = require('../../coins');
 const Config = require('../../config.js');
 
+// Submit a bridge recipe, routing each half of the caller's opts to the layer
+// that reads it. WalletSession.submit takes encoder options and submission
+// options as SEPARATE arguments, so a recipe that hands its whole opts object
+// to the third slot silently drops a feePerKb or an unconfirmed-input request:
+// the encoder never sees them and the fee is whatever the default says. The
+// `encoder` sub-object is lifted out and passed as the encoder argument; a
+// caller who supplies no `encoder` key gets `{}` there, which is exactly the
+// literal every recipe passed before, so nothing existing changes behaviour.
+function submitBridge(workflows, wif, actionData, opts) {
+    let submitOpts = { ...opts };
+    let encoderOpts = submitOpts.encoder || {};
+    delete submitOpts.encoder;
+
+    let session = workflows.sdk.session(wif, submitOpts);
+    return session.submit(actionData, encoderOpts, submitOpts);
+}
+
 module.exports = {
     // Open a market and immediately place the oracle's own opening context in a
     // single recipe is deliberately NOT offered: the oracle may not bet on its
@@ -80,29 +97,32 @@ module.exports = {
     //
     // wif    - WIF private key of the holder
     // params - { destCoin, destAddress, amount, memo }
-    // opts   - submit options (network, waitForIndexer, timeout, ...)
+    // opts   - submit options (network, waitForIndexer, timeout, maxFeeSats, ...)
+    //          plus encoder: { feePerKb, unconfirmed, ... }
     //
     // Returns: <submitResult>
     async bridgeLock(wif, params, opts = {}) {
         let fields = this.bridgeParams(params);
         this.assertBridgeAddress('DEST_ADDRESS', fields.DEST_ADDRESS, fields.DEST_COIN, this.bridgeNetwork(opts));
-        let session = this.sdk.session(wif, opts);
-        return session.submit({ action: 'XBRIDGE', params: Utility.withForcedVersion('0', fields) }, {}, opts);
+        return submitBridge(this, wif,
+            { action: 'XBRIDGE', params: Utility.withForcedVersion('0', fields) }, opts);
     },
 
     // Burn bridged XCHAIN off BTC to release the BTC escrow (XBRIDGE v1, never on BTC).
     //
     // params - { btcAddress, amount, memo }
+    // opts   - as bridgeLock, including encoder: { feePerKb, unconfirmed, ... }
     async bridgeBurn(wif, params, opts = {}) {
         let fields = this.bridgeParams(params);
         this.assertBridgeAddress('BTC_ADDRESS', fields.BTC_ADDRESS, 'BTC', this.bridgeNetwork(opts));
-        let session = this.sdk.session(wif, opts);
-        return session.submit({ action: 'XBRIDGE', params: Utility.withForcedVersion('1', fields) }, {}, opts);
+        return submitBridge(this, wif,
+            { action: 'XBRIDGE', params: Utility.withForcedVersion('1', fields) }, opts);
     },
 
     // Lock a general token on its origin chain (XBRIDGE v3).
     //
     // params - { tick, destCoin, destAddress, amount, memo }
+    // opts   - as bridgeLock, including encoder: { feePerKb, unconfirmed, ... }
     //
     // TICK is the NATIVE name on this chain. A rooted name (BTC.FUFU) is the
     // bridged copy and is refused here rather than on chain, because v3 of a
@@ -117,13 +137,14 @@ module.exports = {
         if (tick.indexOf('.') !== -1)
             throw new Error('XBRIDGE v3 cannot bridge "' + tick + '": a dotted tick is a subasset or a bridged copy, and neither is bridgeable in this milestone');
         this.assertBridgeAddress('DEST_ADDRESS', fields.DEST_ADDRESS, fields.DEST_COIN, this.bridgeNetwork(opts));
-        let session = this.sdk.session(wif, opts);
-        return session.submit({ action: 'XBRIDGE', params: Utility.withForcedVersion('3', fields) }, {}, opts);
+        return submitBridge(this, wif,
+            { action: 'XBRIDGE', params: Utility.withForcedVersion('3', fields) }, opts);
     },
 
     // Burn a bridged token row back to its origin chain (XBRIDGE v4).
     //
     // params - { tick, originAddress, amount, memo }
+    // opts   - as bridgeLock, including encoder: { feePerKb, unconfirmed, ... }
     //
     // The origin chain is the tick's own root (BTC.FUFU burns back to BTC), so
     // ORIGIN_ADDRESS is validated against THAT chain and never against the chain
@@ -135,13 +156,14 @@ module.exports = {
         if (!parsed)
             throw new Error('XBRIDGE v4 needs a bridged tick of the form <ORIGIN>.<NAME>; got "' + String(fields.TICK) + '"');
         this.assertBridgeAddress('ORIGIN_ADDRESS', fields.ORIGIN_ADDRESS, parsed.origin, this.bridgeNetwork(opts));
-        let session = this.sdk.session(wif, opts);
-        return session.submit({ action: 'XBRIDGE', params: Utility.withForcedVersion('4', fields) }, {}, opts);
+        return submitBridge(this, wif,
+            { action: 'XBRIDGE', params: Utility.withForcedVersion('4', fields) }, opts);
     },
 
     // Set a token's bridgeability (ISSUE format 7). Owner only, no issuance fee.
     //
     // params - { tick, bridgeChains, minDepth, lockBridge, memo }
+    // opts   - as bridgeLock, including encoder: { feePerKb, unconfirmed, ... }
     //
     // bridgeChains is a comma list of destination coins, or the '-' sentinel for
     // none. An EMPTY field means UNCHANGED on chain, so an empty string is refused
@@ -159,8 +181,8 @@ module.exports = {
                     throw new Error('ISSUE v7 BRIDGE_CHAINS names an unsupported coin: ' + chain);
             fields.BRIDGE_CHAINS = chains.map(c => c.toUpperCase()).join(',');
         }
-        let session = this.sdk.session(wif, opts);
-        return session.submit({ action: 'ISSUE', params: Utility.withForcedVersion('7', fields) }, {}, opts);
+        return submitBridge(this, wif,
+            { action: 'ISSUE', params: Utility.withForcedVersion('7', fields) }, opts);
     },
 
     // Throw unless the chunked deploy's Phase-2 assembler fits the compiled-action

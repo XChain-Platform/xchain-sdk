@@ -29,7 +29,8 @@
  * a Number whenever the value is exactly representable and a BigInt only
  * above 2^53-1, so existing Number-based callers see identical behavior for
  * every value they could already handle. The READ-SIDE copies
- * (xchain-decoder and xchain-utxo-tracker, src/apply_bufferutils_patch.js)
+ * (xchain-decoder/src/chain/apply_bufferutils_patch.js and
+ * xchain-utxo-tracker/src/chain/apply_bufferutils_patch.js)
  * lift the same 2^53 wall for block decode but deliberately implement a
  * DIFFERENT contract: BufferReader.readUInt64 always returns a BigInt and
  * the module-level readUInt64LE/writeUInt64LE helpers keep the stock 2^53-1
@@ -37,8 +38,9 @@
  *
  * Re-sync seam (uuid:311476c7). Everything below this banner is pinned
  * byte-identical to the encoder copy's body by
- * xchain-encoder/test/unit/apply_bufferutils_patch.test.js. Only the two headers
- * differ, because each names the other and its own read-side relationship.
+ * xchain-encoder/test/unit/build/apply_bufferutils_patch.test.js. Only the two
+ * headers differ, because each names the other and its own read-side
+ * relationship.
  * Convergence runs SDK-ward: change this copy first, then copy its body to the
  * encoder, or the twin guard goes red.
  *

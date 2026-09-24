@@ -26,7 +26,7 @@ module.exports = {
     },
 
     // Coin-prefix for a sibling chain at THIS client's network tier:
-    // RBTC client + 'DOGE' → 'RDOGE' (Token_Information_Standard.md:
+    // RBTC client + 'DOGE' → 'RDOGE' (token-information-standard.md:
     // cross-chain action refs carry the base ticker; the tier is implied).
     siblingCoin(baseCoin) {
         if (!baseCoin) return this.coin;

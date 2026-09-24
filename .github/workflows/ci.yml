@@ -20,7 +20,7 @@ jobs:
     uses: XChain-Platform/.github/.github/workflows/ci-reusable.yml@6f4d39ae85787fc31e90a31588d87610a2c33103 # pin: XChain-Platform/.github @ master 2026-08-14; bump deliberately
     with:
       # A hotfix or release PR compares against siblings at the same branch, not develop.
-      siblings-ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || '' }}
+      siblings-ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || github.base_ref || '' }}
       # Opt into the perf gate: the SDK's perf suite (Validator throughput) needs
       # no infra, so it runs cleanly as a post-gate step. First adopter of run-perf.
       run-perf: true
@@ -48,7 +48,7 @@ jobs:
           # canonical sibling is read at the sibling release branch, because develop
           # keeps moving under the frozen train (the indexer handler map this gate
           # grades is re-pinned at every indexer develop landing).
-          ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || (github.ref == 'refs/heads/master' && 'master' || 'develop') }}
+          ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || github.base_ref || (github.ref == 'refs/heads/master' && 'master' || 'develop') }}
           ssh-key: ${{ secrets.XCHAIN_HUB_DEPLOY_KEY }}
           path: xchain-hub
 
@@ -83,7 +83,7 @@ jobs:
           # canonical sibling is read at the sibling release branch, because develop
           # keeps moving under the frozen train (the indexer handler map this gate
           # grades is re-pinned at every indexer develop landing).
-          ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || (github.ref == 'refs/heads/master' && 'master' || 'develop') }}
+          ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || github.base_ref || (github.ref == 'refs/heads/master' && 'master' || 'develop') }}
           ssh-key: ${{ secrets.XCHAIN_EXPLORER_DEPLOY_KEY }}
           path: xchain-explorer
 
@@ -117,7 +117,7 @@ jobs:
           # canonical sibling is read at the sibling release branch, because develop
           # keeps moving under the frozen train (the indexer handler map this gate
           # grades is re-pinned at every indexer develop landing).
-          ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || (github.ref == 'refs/heads/master' && 'master' || 'develop') }}
+          ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || github.base_ref || (github.ref == 'refs/heads/master' && 'master' || 'develop') }}
           ssh-key: ${{ secrets.XCHAIN_INDEXER_DEPLOY_KEY }}
           path: xchain-indexer
 
@@ -150,7 +150,7 @@ jobs:
       - name: Check out declared sibling repositories
         uses: XChain-Platform/.github/actions/checkout-siblings@master # one definition for every call site; see the action for why this tracks master
         with:
-          ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || '' }}
+          ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || github.base_ref || '' }}
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4

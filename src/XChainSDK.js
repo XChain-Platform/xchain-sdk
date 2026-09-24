@@ -86,9 +86,9 @@ function initializeNetworkUtilities(sdk, network) {
     sdk.auth       = new AuthUtils(network);
     sdk.messaging  = new MessagingUtils(network);
     sdk.gatedFile  = new GatedFileUtils();
-    // FILE payload compression. Stateless, no network:
-    // deflate-raw compress/inflate with the fail-closed, ratio-bounded
-    // read path every serve layer shares.
+    // FILE payload compression is stateless and needs no network. Every serve
+    // layer shares its fail-closed, ratio-bounded deflate-raw read path so a
+    // compressed payload cannot bypass the same expansion limit elsewhere.
     sdk.compression = new CompressionUtils();
 }
 
@@ -98,7 +98,7 @@ function initializeActionHelpers(sdk) {
     // LOCK_MAX_SUPPLY=1), collection child params, content-attach (LINK) params,
     // and the canonical isNft() classifier. No network. Submit-flow recipes that
     // compose these into live actions live on sdk.workflows (issueNft, etc.).
-    // Spec: protocol/NFT_Standard.md.
+    // Spec: protocol/nft-standard.md.
     sdk.nft        = new NftHelpers();
     // Project registry helpers: pure builders for owner-attested official-token
     // rosters (TICK-type LIST + LINK to the project's ISSUE). No network.

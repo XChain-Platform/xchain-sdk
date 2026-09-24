@@ -38,8 +38,8 @@
  ********************************************************************/
 
 const { expect } = require('chai');
-const fs = require('fs');
 const path = require('path');
+const { loadIndexerAction } = require('../../../helpers/indexer_action_handler.js');
 
 const {
     BATCH_COMMAND_WEIGHTS,
@@ -54,16 +54,15 @@ const {
 } = require('./fixtures/weight_vectors.js');
 
 function loadIndexer(context) {
-    const roots = [process.env.XCHAIN_INDEXER_PATH,
-        path.join(__dirname, '../..', '..', '..', '..', 'xchain-indexer')].filter(Boolean);
-    const root = roots.find((r) => fs.existsSync(path.join(r, 'src', 'actions', 'batch.js')));
-    if (!root) return context.skip();
+    const resolved = loadIndexerAction('batch');
+    if (!resolved) return context.skip();
+    const { root, Handler: Batch } = resolved;
 
     process.env.INDEXER_COIN = process.env.INDEXER_COIN || 'BTC';
     process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
     try {
         return {
-            Batch: require(path.join(root, 'src', 'actions', 'batch.js')),
+            Batch,
             IdxUtility: require(path.join(root, 'src', 'utility.js')),
             IdxConfig: require(path.join(root, 'src', 'config.js')),
             ProtocolChanges: require(path.join(root, 'src', 'protocol_changes.js')),

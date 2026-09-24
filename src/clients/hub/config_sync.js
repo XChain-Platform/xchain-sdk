@@ -31,6 +31,41 @@ const {
 const { getLogger } = require('../../observability/logger.js');
 const log = getLogger('xchain-sdk:hub');
 
+const CHAIN_REGISTRY_PATH = '/api/v1/chain-registry';
+
+function normalizeServiceDefaults(descriptor, service) {
+    let defaults = descriptor[service];
+    if (!defaults || typeof defaults !== 'object' ||
+        typeof defaults.defaultUrl !== 'string' || !defaults.defaultUrl)
+        throw new Error('chain registry descriptor ' + descriptor.id + ' has no ' + service + ' default URL');
+
+    let normalized = { host: defaults.defaultUrl };
+    if (defaults.defaultPort !== undefined && defaults.defaultPort !== null)
+        normalized.port = defaults.defaultPort;
+    return normalized;
+}
+
+function normalizeDiscoveryDescriptors(descriptors) {
+    if (!Array.isArray(descriptors)) throw new Error('chain registry response has no descriptors array');
+
+    let configs = {};
+    for (const descriptor of descriptors) {
+        if (!descriptor || typeof descriptor !== 'object' ||
+            typeof descriptor.coin !== 'string' || !descriptor.coin ||
+            typeof descriptor.networkKind !== 'string' || !descriptor.networkKind)
+            throw new Error('chain registry contains an invalid descriptor');
+
+        let coin = descriptor.coin;
+        let network = descriptor.networkKind;
+        if (!configs[coin]) configs[coin] = {};
+        configs[coin][network] = {
+            'xchain-explorer': normalizeServiceDefaults(descriptor, 'explorer'),
+            'xchain-encoder':  normalizeServiceDefaults(descriptor, 'encoder')
+        };
+    }
+    return configs;
+}
+
 async function fetchConfigResult(connector, url, cursorValid, sinceCursor, headers) {
     let result = await connector.postGetAllConfigs(url, sinceCursor, headers);
     if (result === undefined) return undefined;
@@ -71,6 +106,44 @@ async function fetchConfigResult(connector, url, cursorValid, sinceCursor, heade
 }
 
 module.exports = {
+    // Public SDKs do not have the key required by getallconfigs. Discover from
+    // the public chain registry in that case, while keyed mesh clients retain
+    // the full JSON-RPC config path and its incremental polling behavior.
+    async getDiscoveryConfig() {
+        if (this.apiKey) return this.getAllConfig();
+
+        let lastError = null;
+        for (let i = 0; i < this.urls.length; i++) {
+            let idx = (this._lastGoodIdx + i) % this.urls.length;
+            let url = this.urls[idx];
+            try {
+                // Hub URLs can carry a coin routing path such as /TBTC. The
+                // registry is mounted once at the origin, outside that route.
+                let registryUrl = new URL(CHAIN_REGISTRY_PATH, url).toString();
+                let response = await axios.get(registryUrl, {
+                    timeout: this.timeout,
+                    ...agentOptsFor(registryUrl, this._pool)
+                });
+                let configs = normalizeDiscoveryDescriptors(response.data && response.data.descriptors);
+                this._lastGoodIdx = idx;
+                this.configs = configs;
+                this.lastSeq = 0;
+                this.lastWatermark = 0;
+                this._watermarkEndpointIdx = null;
+                this.lastFetch = Date.now();
+                return this.configs;
+            } catch (err) {
+                lastError = err;
+            }
+        }
+
+        throw new SDKHubError(
+            'HUB_UNAVAILABLE',
+            'Failed to fetch discovery config from hub (tried ' + this.urls.length + ' endpoint(s)): ' + (lastError ? lastError.message : 'no result'),
+            { urls: this.urls, error: lastError ? lastError.message : 'no result' }
+        );
+    },
+
     // Fetch all configs from the hub via JSON-RPC (tries each endpoint in order)
     async getAllConfig() {
         let lastError = null;

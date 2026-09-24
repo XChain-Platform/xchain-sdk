@@ -31,6 +31,7 @@ const path = require('path');
 const VENDORED = path.join(__dirname, '../..', 'fixtures', 'action-manifest.json');
 const MANIFEST = JSON.parse(fs.readFileSync(VENDORED, 'utf8'));
 const Formats  = require('../../../src/protocol/formats.js');
+const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 const EDIT_HINT = 'Edit xchain-documentation/protocol/action-manifest.json, re-vendor with ' +
                   'bin/sync-action-manifest.sh, or change src/protocol/formats.js.';
@@ -109,7 +110,8 @@ describe('ACTION manifest conformance: sdk userEncodable set @regression', funct
     describe('byte-identity to canonical manifest', function () {
         const DOCS = process.env.XCHAIN_DOCS_DIR || path.join(__dirname, '../..', '..', '..', 'xchain-documentation');
         const CANON = path.join(DOCS, 'protocol', 'action-manifest.json');
-        before(function () { if (!fs.existsSync(CANON)) { if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1') throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but canonical action-manifest.json not found at ' + CANON); this.skip(); } });
+        // Refuses an absent docs checkout and a lane symlink into a live main checkout alike.
+        before(function () { const docs = siblingCheckout(__dirname, CANON); if (!docs.usable) skipOrFail(this, docs, 'the canonical action-manifest.json byte-identity guard'); });
         it('vendored test/fixtures/action-manifest.json is byte-identical to canonical', function () {
             assert.strictEqual(fs.readFileSync(VENDORED, 'utf8'), fs.readFileSync(CANON, 'utf8'),
                 'vendored action-manifest.json drifted from canonical; edit ' +
@@ -161,12 +163,10 @@ function registerIndexerHandlerAuditTests() {
         const INDEXER = process.env.XCHAIN_INDEXER_DIR ||
                         path.join(__dirname, '../..', '..', '..', 'xchain-indexer');
         const ACTIONS_DIR = path.join(INDEXER, 'src', 'actions');
+        // Refuses an absent indexer checkout and a lane symlink into a live main checkout alike.
         before(function () {
-            if (!fs.existsSync(ACTIONS_DIR)) {
-                if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                    throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but indexer handlers not found at ' + ACTIONS_DIR);
-                this.skip();
-            }
+            const indexer = siblingCheckout(__dirname, ACTIONS_DIR);
+            if (!indexer.usable) skipOrFail(this, indexer, 'the indexer-handler audit');
         });
 
         // The indexer loader accepts flat handler modules and feature directories

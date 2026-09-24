@@ -192,7 +192,7 @@ class HubConnector {
         if (this._pollTimer) return;
         this._pollTimer = setInterval(async () => {
             try {
-                await this.getAllConfig();
+                await this.getDiscoveryConfig();
                 if (callback) callback(this.configs);
             } catch (err) {
                 // Silently continue: hub unavailability during polling is non-fatal

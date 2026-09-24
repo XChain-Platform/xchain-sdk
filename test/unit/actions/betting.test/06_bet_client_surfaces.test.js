@@ -146,6 +146,22 @@ describe('BET client surfaces', function () {
 
 });
 
+describe('projectFeedCreateFee fractional seconds', function () {
+
+    it('rounds the seconds first, as the chain does, then the days', function () {
+        const b = new BettingHelpers();
+        // 7819200s is exactly 90.5 days. The chain rounds seconds to an integer
+        // (bcsub at 0 dp) before counting days, so anything that rounds to it is
+        // charged; anything that rounds below it is free.
+        const edge = 7819200;
+        expect(b.projectFeedCreateFee({ durationSeconds: edge - 0.4 }).days, 'rounds up to the edge').to.equal(91);
+        expect(b.projectFeedCreateFee({ durationSeconds: edge - 1e-8 }).days, 'inside relTol of the edge').to.equal(91);
+        expect(b.projectFeedCreateFee({ durationSeconds: edge - 0.6 }).days, 'rounds down off the edge').to.equal(90);
+        expect(b.projectFeedCreateFee({ durationSeconds: edge - 0.6 }).free).to.equal(true);
+    });
+
+});
+
 describe('BET client surfaces', function () {
 
     describe('projectFeedCreateFee (decision F duration pricing)', function () {

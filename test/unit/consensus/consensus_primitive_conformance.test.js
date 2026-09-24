@@ -18,11 +18,13 @@
 // predicate and the equivocation-header builder are CONSENSUS-CRITICAL and
 // vendored byte-identically into five services (xchain-hub, xchain-indexer,
 // xchain-explorer, xchain-sdk, xchain-sync); a divergence in their logic forks
-// the chain. The canonical source of record lives in xchain-documentation
-// (protocol/reference-impl + protocol/test-vectors). This guard runs in every
+// the chain. Their canonical source of record is xchain-indexer/src/consensus,
+// which reconcile-twins.sh vendors into every other copy, including
+// xchain-documentation/protocol/reference-impl/consensus; the canonical vectors
+// live in xchain-documentation/protocol/test-vectors. This guard runs in every
 // repo and asserts BOTH:
 //   1. BEHAVIOR  - the local copy matches the canonical vectors.
-//   2. IDENTITY  - the local copy is byte-identical to the canonical source.
+//   2. IDENTITY  - the local copy is byte-identical to the xchain-documentation copy.
 // (1) catches a logic change that happens to pass the local unit suite; (2)
 // catches ANY edit to one copy that was not propagated to the others. When the
 // sibling xchain-documentation repo is not checked out (standalone deploy), skip
@@ -117,7 +119,22 @@ describe('consensus-primitive conformance: byte-identity to canonical source @re
             const canon = fs.readFileSync(path.join(CANON_DIR, 'consensus', f), 'utf8');
             assert.strictEqual(local, canon,
                 'this repo\'s consensus/' + f + ' has drifted from the canonical source; ' +
-                'edit xchain-documentation/protocol/reference-impl/consensus/' + f + ' and re-vendor all five copies.');
+                'edit xchain-indexer/src/consensus/' + f + ' and re-run reconcile-twins.sh to re-vendor every copy.');
+        });
+    });
+
+    // The activation-registry parts are byte twins of the canonical gate_registry/
+    // copies; the per-repo entry gate_registry.js is not a twin and stays out.
+    ['core.js', 'shared_rows.js', 'regtest_env.js', 'shared_rows_1.js', 'shared_rows_2.js',
+        'shared_rows_3.js', 'shared_rows_4.js', 'shared_rows_5.js'].forEach(function(f){
+        it('gate_registry/' + f + ' is byte-identical to xchain-documentation/protocol/reference-impl', function(){
+            const rel   = path.join('consensus', 'gate_registry', f);
+            const local = fs.readFileSync(path.join(LOCAL_DIR, rel), 'utf8');
+            const canon = fs.readFileSync(path.join(CANON_DIR, rel), 'utf8');
+            assert.strictEqual(local, canon,
+                'this repo\'s consensus/gate_registry/' + f + ' has drifted from the canonical source; ' +
+                'edit xchain-documentation/protocol/reference-impl/consensus/gate_registry/' + f +
+                ' and re-vendor every consumer copy, never the vendored copy alone.');
         });
     });
 });

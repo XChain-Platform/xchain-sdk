@@ -16,7 +16,7 @@
  *
  * Non-fungible tokens on XChain are a composition of existing
  * primitives, not a special token type (see
- * xchain-documentation/protocol/NFT_Standard.md). There is no NFT
+ * xchain-documentation/protocol/nft-standard.md). There is no NFT
  * action, flag, or wire format. An "NFT" is an ISSUE with DECIMALS=0
  * and LOCK_MAX_SUPPLY=1. These helpers are the guided builders that
  * encode that rule in one place so every client mints NFTs correctly,
@@ -24,6 +24,12 @@
  * (LINK) param builder. All pure: no network, no consensus.
  *
  ********************************************************************/
+
+// Display roles an images[] entry may carry (TIS images.type enum).
+const TIS_IMAGE_ROLES = ['icon', 'standard', 'large', 'hires'];
+
+// Match a type/subtype MIME string, which TIS forbids in images[].type.
+const MIME_SHAPE = /^[\w.+-]+\/[\w.+-]+$/;
 
 class NftHelpers {
 
@@ -109,47 +115,77 @@ class NftHelpers {
         };
     }
 
-    // Build a minimal TIS v1.0.0 document for an NFT-pattern token
-    // (Token_Information_Standard.md). Intended for the fully on-chain
+    // Build a minimal TIS v1.1.1 document for an NFT-pattern token
+    // (token-information-standard.md). Intended for the fully on-chain
     // authoring path: upload the returned JSON as a FILE action
     // (TYPE application/json) and set the token's DESCRIPTION to
     // "action:<index>" of that upload (the On-Chain Format).
     //
     // tick             - the token's TICK (required)
-    // name             - display name (optional)
+    // name             - display name (required by the TIS schema)
     // description      - prose description (optional)
     // imageActionIndex - on-chain artwork FILE to reference via data_ref (optional)
     // imageCoin        - base coin ticker (BTC/LTC/DOGE) when the artwork FILE
     //                    lives on a SIBLING chain (optional; omitted = same
     //                    chain as the token; network tier is implied)
     // imageUrl         - off-chain artwork URL (optional; data_ref preferred when both)
-    // imageType        - artwork MIME type (optional)
+    // imageRole        - TIS display role for images[].type: icon, standard,
+    //                    large or hires (optional; default standard)
+    // imageType        - deprecated alias for imageRole; a MIME value is ignored,
+    //                    since the media type comes from the FILE action's TYPE
     // imageName        - artwork filename (optional)
     //
     // Returns { doc, json }: the document object and its serialized form.
-    tisDocument({ tick, name, description, imageActionIndex, imageCoin, imageUrl, imageType, imageName } = {}) {
+    tisDocument({ tick, name, description, imageActionIndex, imageCoin, imageUrl, imageRole, imageType, imageName } = {}) {
         if (!tick) throw new Error('nft.tisDocument: tick is required');
+        NftHelpers.assertTisName(name);
+        let role = NftHelpers.tisImageRole(imageRole, imageType);
         let doc = {
             tick: String(tick).toUpperCase(),
+            name: String(name),
             // Declare collectible intent so clients distinguish an NFT from a
             // currency that shares the same field values (TIS, NFT Usage).
             categories: [{ type: 'main', data: 'NFT' }]
         };
-        if (name)        doc.name        = String(name);
         if (description) doc.description = String(description);
         if (imageActionIndex !== undefined && imageActionIndex !== null || imageUrl) {
             let entry = {};
             if (imageActionIndex !== undefined && imageActionIndex !== null)
                 entry.data_ref = 'action:' + (imageCoin ? String(imageCoin).toUpperCase() + ':' : '') + String(imageActionIndex);
             if (imageUrl)  entry.data = String(imageUrl);
-            if (imageType) entry.type = String(imageType);
+            entry.type = role;
             if (imageName) entry.name = String(imageName);
             doc.images = [entry];
         }
         return { doc, json: JSON.stringify(doc) };
     }
 
-    // Canonical NFT classification (NFT_Standard.md): a token follows the NFT
+    // Refuse a TIS document without a display name (schema-required; never invented).
+    static assertTisName(name) {
+        if (name === undefined || name === null || !String(name).trim())
+            throw new Error('nft.tisDocument: name is required');
+    }
+
+    // Resolve the images[] display role (TIS v1.1.1 images.type enum).
+    static tisImageRole(imageRole, imageType) {
+        if (imageRole !== undefined && imageRole !== null && imageRole !== '') {
+            let role = String(imageRole);
+            if (!TIS_IMAGE_ROLES.includes(role))
+                throw new Error('nft.tisDocument: imageRole must be one of ' + TIS_IMAGE_ROLES.join(', ') +
+                    '; the media type comes from the referenced FILE action TYPE');
+            return role;
+        }
+        if (imageType !== undefined && imageType !== null && imageType !== '') {
+            let legacy = String(imageType);
+            if (TIS_IMAGE_ROLES.includes(legacy)) return legacy;
+            if (!MIME_SHAPE.test(legacy))
+                throw new Error('nft.tisDocument: imageType must be one of ' + TIS_IMAGE_ROLES.join(', ') +
+                    '; the media type comes from the referenced FILE action TYPE');
+        }
+        return 'standard';
+    }
+
+    // Canonical NFT classification (nft-standard.md): a token follows the NFT
     // pattern when it is indivisible (DECIMALS=0) and permanently supply-capped
     // (LOCK_MAX_SUPPLY=1). Accepts a token-info object using either UPPER_SNAKE
     // (explorer/indexer shape) or camelCase keys.

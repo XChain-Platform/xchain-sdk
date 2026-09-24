@@ -36,6 +36,7 @@ const http   = require('http');
 const express = require('express');
 const bodyParser = require('body-parser');
 const { authGateMiddleware } = require('../../../src/utils/api_guards.js');
+const { mountIndexes, DISPATCH_NAME } = require('./helpers/mount_order.js');
 const KEY = 'correct-horse-battery-staple';
 
 function buildApp(SDK_API_KEY) {
@@ -268,12 +269,9 @@ describe('API bearer-token auth gate', function () {
     });
 
     it('src/api.js mounts the shipped gate before the jsonRouter mount', () => {
-        const src = fs.readFileSync(path.join(__dirname, '../../../src/api/index.js'), 'utf8');
-        const gateIdx   = src.indexOf('app.use(authGateMiddleware(');
-        const routerIdx = src.indexOf('jsonRouter(');
-        assert.notStrictEqual(gateIdx, -1, 'auth gate not mounted in src/api.js');
-        assert.notStrictEqual(routerIdx, -1, 'jsonRouter mount missing from src/api.js');
-        assert.ok(gateIdx < routerIdx, 'auth gate must be registered before the jsonRouter mount');
+        // Read from the BUILT app, so a mount moved into a helper is placed by its call site.
+        const at = mountIndexes(assert, ['authGate', DISPATCH_NAME]);
+        assert.ok(at.authGate < at[DISPATCH_NAME], 'auth gate must be registered before the jsonRouter mount');
     });
 
     it('keeps the timing-safe compare, in the guard module the gate now lives in', () => {

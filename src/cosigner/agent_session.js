@@ -66,12 +66,11 @@ function validatePolicy(policy) {
     if (policy.idempotencyHours !== undefined
         && (!Number.isFinite(policy.idempotencyHours) || policy.idempotencyHours <= 0))
         throw new SDKPolicyError('POLICY_INVALID', 'idempotencyHours must be a positive number');
-    // Require at least one enforceable ceiling, BREAKING for a policy that ships
-    // an action allowlist with no monetary ceiling: such a policy bounds nothing,
-    // so an automated agent can execute an allowed value-moving action without
-    // limit. Running without a ceiling is an explicit, auditable opt-in rather
-    // than the state a caller reaches by omission. Same shape as the X402Client
-    // fail-closed default: the default is safe, unbounded is a word someone types.
+    // Require at least one enforceable ceiling. An action allowlist controls what
+    // an agent may do, not how much value it may move, so an allowlist without a
+    // monetary ceiling leaves every permitted action unbounded. Running that way
+    // is an explicit, auditable opt-in rather than a state reached by omission,
+    // matching the X402Client fail-closed default.
     //
     // The cap tables are tested for an ENFORCEABLE entry, not for truthiness:
     // `maxPerAction: {}`, `{ SEND: {} }` and `maxPerWindow.perTick: {}` are all

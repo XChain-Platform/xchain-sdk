@@ -33,8 +33,9 @@ const XChainSDK    = require('../../../src/XChainSDK.js');
 const ContractUtils = require('../../../src/contract/utils.js');
 
 const VENDORED_DIR = path.join(__dirname, '../..', '..', 'src', 'contract');
-const VM_SRC_DIR   = path.join(__dirname, '../..', '..', '..', 'xchain-vm', 'src');
-const CONTRACTS_DIR = path.join(__dirname, '../..', '..', '..', 'xchain-contracts');
+const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(__dirname, '../..', '..', '..');
+const VM_SRC_DIR   = path.join(process.env.XCHAIN_VM_DIR || path.join(SIBLING_ROOT, 'xchain-vm'), 'src');
+const CONTRACTS_DIR = process.env.XCHAIN_CONTRACTS_DIR || path.join(SIBLING_ROOT, 'xchain-contracts');
 // stripped_globals.js is in the vendor set because it is the ONE
 // definition of the sandbox's stripped-global names, required by lint_core.js
 // here and by sandbox.js / toolkit/authoring.js in xchain-vm. It is
@@ -182,7 +183,7 @@ describe('contract-lint parity + drift', function () {
 
         it('the four templates emit zero Move-2 findings (low false-positive)', function () {
             const fs = require('fs');
-            const dir = path.join(__dirname, '../..', '..', '..', 'xchain-contracts');
+            const dir = CONTRACTS_DIR;
             if (!requireSibling(this, dir)) return;
             for (const name of ['escrow', 'vesting', 'crowdsale', 'amm']) {
                 const f = path.join(dir, name, name + '.js');

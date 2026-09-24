@@ -115,25 +115,27 @@ describe('NftHelpers', function () {
             expect(() => nft.collectionItem({ parent: 'X' })).to.throw(/name is required/);
         });
     });
+});
 
+describe('NftHelpers', function () {
+    beforeEach(resetNftHelpers);
     describe('tisDocument()', function () {
         it('builds a minimal NFT-intent doc with an on-chain data_ref', function () {
             const { doc, json } = nft.tisDocument({
                 tick: 'art1', name: 'Art One', description: 'First print',
-                imageActionIndex: 1234, imageType: 'image/png', imageName: 'art.png',
+                imageActionIndex: 1234, imageRole: 'large', imageName: 'art.png',
             });
             expect(doc.tick).to.equal('ART1');
             expect(doc.name).to.equal('Art One');
             expect(doc.categories).to.deep.equal([{ type: 'main', data: 'NFT' }]);
             expect(doc.images).to.deep.equal([{
-                data_ref: 'action:1234', type: 'image/png', name: 'art.png',
+                data_ref: 'action:1234', type: 'large', name: 'art.png',
             }]);
             expect(JSON.parse(json)).to.deep.equal(doc);
         });
         it('supports an off-chain image URL and omits empty fields', function () {
-            const { doc } = nft.tisDocument({ tick: 'X', imageUrl: 'https://a/b.png' });
-            expect(doc.images).to.deep.equal([{ data: 'https://a/b.png' }]);
-            expect(doc).to.not.have.property('name');
+            const { doc } = nft.tisDocument({ tick: 'X', name: 'X', imageUrl: 'https://a/b.png' });
+            expect(doc.images).to.deep.equal([{ data: 'https://a/b.png', type: 'standard' }]);
             expect(doc).to.not.have.property('description');
         });
         it('omits images entirely when no artwork given', function () {
@@ -141,11 +143,31 @@ describe('NftHelpers', function () {
             expect(doc).to.not.have.property('images');
         });
         it('builds a cross-chain data_ref when imageCoin is given', function () {
-            const { doc } = nft.tisDocument({ tick: 'X', imageActionIndex: 55, imageCoin: 'doge' });
+            const { doc } = nft.tisDocument({ tick: 'X', name: 'X', imageActionIndex: 55, imageCoin: 'doge' });
             expect(doc.images[0].data_ref).to.equal('action:DOGE:55');
         });
         it('requires tick', function () {
             expect(() => nft.tisDocument({})).to.throw(/tick is required/);
+        });
+        it('requires a non-blank name rather than inventing one', function () {
+            expect(() => nft.tisDocument({ tick: 'X', imageUrl: 'https://a/b.png' })).to.throw(/name is required/);
+            expect(() => nft.tisDocument({ tick: 'X', name: '   ' })).to.throw(/name is required/);
+        });
+        it('defaults every image entry to the standard display role', function () {
+            const { doc } = nft.tisDocument({ tick: 'X', name: 'X', imageActionIndex: 7 });
+            expect(doc.images).to.deep.equal([{ data_ref: 'action:7', type: 'standard' }]);
+        });
+        it('never writes a MIME type into images[].type', function () {
+            const { doc } = nft.tisDocument({ tick: 'X', name: 'X', imageActionIndex: 7, imageType: 'image/png' });
+            expect(doc.images[0].type).to.equal('standard');
+            expect(nft.tisDocument({ tick: 'X', name: 'X', imageActionIndex: 7, imageType: 'hires' }).doc.images[0].type)
+                .to.equal('hires');
+        });
+        it('rejects a role outside icon, standard, large, hires', function () {
+            expect(() => nft.tisDocument({ tick: 'X', name: 'X', imageActionIndex: 7, imageRole: 'image/png' }))
+                .to.throw(/imageRole must be one of icon, standard, large, hires/);
+            expect(() => nft.tisDocument({ tick: 'X', name: 'X', imageActionIndex: 7, imageType: 'thumbnail' }))
+                .to.throw(/imageType must be one of/);
         });
     });
 });

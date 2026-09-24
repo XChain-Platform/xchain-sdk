@@ -206,6 +206,7 @@ class X402Gateway {
         return async (req, res, next) => {
             const paid = await this.guard(req, res);
             if (paid && next) next();
+            return paid;
         };
     }
 

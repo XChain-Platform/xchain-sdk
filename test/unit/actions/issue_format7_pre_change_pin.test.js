@@ -38,8 +38,8 @@
  ********************************************************************/
 
 const { expect } = require('chai');
-const fs         = require('fs');
 const path       = require('path');
+const { loadIndexerAction } = require('../../helpers/indexer_action_handler.js');
 
 const config  = require('../../../src/config.js');
 const Utility = require('../../../src/utils/utility.js');
@@ -112,19 +112,6 @@ function makeActions() {
 
 // Same sibling resolution the golden suite uses: the unit tier checks out only
 // this repo, so the parser half degrades to a skip rather than a false red.
-function resolveIndexerRoot() {
-    const candidates = [
-        process.env.XCHAIN_INDEXER_PATH,
-        path.join(__dirname, '../..', '..', '..', 'xchain-indexer'),
-    ].filter(Boolean);
-    for (const root of candidates) {
-        if (fs.existsSync(path.join(root, 'src', 'utility.js')) &&
-            fs.existsSync(path.join(root, 'src', 'actions', 'issue.js')))
-            return root;
-    }
-    return null;
-}
-
 describe('ISSUE format 7 is purely additive (pre-change pin)', function () {
 
     describe('the SDK ISSUE format table for versions 0 to 6 is byte-identical to its pre-format-7 text', function () {
@@ -158,18 +145,18 @@ describe('ISSUE format 7 is purely additive (pre-change pin)', function () {
 describe('ISSUE format 7 is purely additive (pre-change pin)', function () {
 
     describe('the sibling indexer parses an old-version ISSUE to the same values it always did', function () {
-        const indexerRoot = resolveIndexerRoot();
+        const indexerAction = loadIndexerAction('issue');
         let parse = null;
 
         before(function () {
             // Cross-repo require of the sibling handler and utility; synchronous,
             // so mocha's timer could only mis-attribute a slow load, never stop it.
             this.timeout(0);
-            if (!indexerRoot) { this.skip(); return; }
+            if (!indexerAction) { this.skip(); return; }
+            const { root: indexerRoot, Handler: Issue } = indexerAction;
             process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
             process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
             const IdxUtility = require(path.join(indexerRoot, 'src', 'utility.js'));
-            const Issue      = require(path.join(indexerRoot, 'src', 'actions', 'issue.js'));
             const formats    = new Issue({ config: {}, decoderDb: null, indexerDb: null, util: null, mapper: null }).formats;
             const util       = new IdxUtility();
             parse = function (wire) {
