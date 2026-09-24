@@ -51,6 +51,8 @@ const MAX_DECIMALS       = 18;
 const MAX_TICK_LENGTH    = 250;
 const MAX_DESC_LENGTH    = 250;
 const MAX_MESSAGE_LENGTH = 1048576; // 1MB
+// Matches the indexer's BROADCAST FEE limit and its 11-character column.
+const MAX_BROADCAST_FEE_LENGTH = 11;
 
 // PC-29: wire bound on FILE.GATE_MIN_AMOUNT. Matches the indexer's
 // gated_files.gate_min_amount VARCHAR(40) exactly, and the reason it is a WIRE
@@ -172,6 +174,7 @@ module.exports = {
     MAX_TICK_LENGTH,
     MAX_DESC_LENGTH,
     MAX_MESSAGE_LENGTH,
+    MAX_BROADCAST_FEE_LENGTH,
     MAX_GATE_MIN_AMOUNT_LENGTH,
     MAX_CODE_SIZE,
     TICK_REGEX,

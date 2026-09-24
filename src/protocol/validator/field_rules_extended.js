@@ -20,6 +20,7 @@
 
 const {
     MAX_MESSAGE_LENGTH,
+    MAX_BROADCAST_FEE_LENGTH,
     MAX_GATE_MIN_AMOUNT_LENGTH,
 } = require('./field_limits.js');
 
@@ -213,6 +214,9 @@ function validateBroadcastFee(validator, action, field, value, allFields, errors
     if (field === 'FEE' && action === 'BROADCAST') {
         if (!validator.util.isNumeric(value))
             errors.push(validator.buildError('INVALID_FIELD_VALUE', 'FEE must be numeric (percentage)', { field, value }));
+        if (String(value).length > MAX_BROADCAST_FEE_LENGTH)
+            errors.push(validator.buildError('INVALID_FIELD_VALUE',
+                'FEE must be ' + MAX_BROADCAST_FEE_LENGTH + ' characters or less', { field, value, constraint: { max: MAX_BROADCAST_FEE_LENGTH } }));
     }
 }
 
