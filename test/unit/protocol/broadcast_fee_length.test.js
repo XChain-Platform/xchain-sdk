@@ -19,13 +19,15 @@ describe('Validator: BROADCAST FEE length', function () {
     });
 
     it('accepts an 11-character FEE', function () {
-        expect('0.1234567890'.length).to.equal(12);
-        expect('0.123456789'.length).to.equal(11);
-        expect(validateFee('0.123456789')).to.deep.equal([]);
+        const fee = '0.123456789';
+        expect(fee).to.have.length(MAX_BROADCAST_FEE_LENGTH);
+        expect(validateFee(fee)).to.deep.equal([]);
     });
 
     it('refuses a 12-character FEE with the length message', function () {
-        const errs = lengthErrors('0.1234567890');
+        const fee = '0.1234567890';
+        expect(fee).to.have.length(MAX_BROADCAST_FEE_LENGTH + 1);
+        const errs = lengthErrors(fee);
         expect(errs).to.have.length(1);
         expect(errs[0].code).to.equal('INVALID_FIELD_VALUE');
         expect(errs[0].details.constraint).to.deep.equal({ max: 11 });
