@@ -23,6 +23,8 @@ const { SDKEncoderError, SDKRateLimitedError } = require('../utils/errors.js');
 const { withRetry, isRetryable, getRetryAfterSeconds } = require('../utils/retry.js');
 const Config = require('../config.js');
 const { installMethods } = require('../utils/install_methods.js');
+const encoderTransactionMethods = require('./encoder/transactions.js');
+const { getTxBlock, ...encoderPrototypeMethods } = encoderTransactionMethods;
 
 
 class EncoderClient {
@@ -58,6 +60,12 @@ class EncoderClient {
         this.retry = options.retry !== undefined ? options.retry : {};
         // Hooks
         this.hooks = options.hooks || {};
+
+        Object.defineProperty(this, 'getTxBlock', {
+            value: getTxBlock.bind(this),
+            writable: true,
+            configurable: true
+        });
     }
 
     // (Re)build the axios client + keep-alive agent for the current target.
@@ -213,7 +221,7 @@ class EncoderClient {
 
 }
 
-installMethods(EncoderClient.prototype, require('./encoder/transactions.js'));
+installMethods(EncoderClient.prototype, encoderPrototypeMethods);
 
 // The optional createTx fields, named ONCE. Both high-level entry points
 // (sdk.createAction and LifecycleManager.submitAction) used to re-enumerate this
