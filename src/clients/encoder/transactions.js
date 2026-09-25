@@ -248,6 +248,10 @@ module.exports = {
         return this.rpc('broadcast_tx', { tx_hex: txHex });
     },
 
+    async getTxBlock(txid) {
+        return this.rpc('get_tx_block', { txid: txid });
+    },
+
     // Estimate fee for a transaction without signing or broadcasting.
     // Calls create_tx and returns the PSBT along with fee information.
     //
