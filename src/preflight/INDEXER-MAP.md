@@ -70,9 +70,17 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `4fd091c7`
+**Pins taken at indexer commit:** `bafc027d`
 
-(Re-anchored 2026-09-16, eighth pass, for the activation-registry (W5) landing; the read is
+(Re-anchored 2026-09-26 for the gated list, dispenser, policy and payout validity
+batch reviewed below. `bafc027d` is the committed indexer tip carrying the five-commit
+batch from `5c581d27`; ten mapped directories move and `batch/` stays byte-identical.
+Every new admission boundary is behind a registry row that is unarmed on mainnet and
+testnet and active from genesis on regtest. The indexer lands before this map, so a
+checkout without `bafc027d` reports the ten rows as drifted and the answer is the
+missing indexer batch, never a re-pin back. `4fd091c7` stays reachable.)
+
+(Earlier note. Re-anchored 2026-09-16, eighth pass, for the activation-registry (W5) landing; the read is
 logged in the 2026-09-22 seventh- and eighth-pass entry of the review log below.
 `4fd091c7` is the indexer tip that carries the W5 consolidation: the last thirteen predicate-only
 activation modules retired and the fourteen logic-bearing gate modules moved under
@@ -310,7 +318,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 4fd091c7..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff bafc027d..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -388,16 +396,16 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `fb94d4c1808146cb427a0a02f8e277620f2f02a6fadb1b42d5b7f57c1812dfe4` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `6f15d0f22e60fe328ff12188f519281b88aa61114ef1163b07df3bbba63d2d8f` |
-| `checks/mint.js` | `src/actions/mint/` | `7c8992a06f9143b876c5eb7bc554dbbe5b2ca61507c44e822b5491b8571d1c06` |
-| `checks/issue.js` | `src/actions/issue/` | `b76a638d9c1906d95989052f07d3459902014db1bad5858fed398936b2827e6a` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `7f65cdaa58d433d3415f43f7b5997ae028baa00b6ba47fe38b11af392fcc04b9` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `66b5a180f0829cbfc25a1c1e7b8b698a376c89c0ced5e5237e4cbb5059243311` |
-| `checks/trading.js` (ORDER) | `src/actions/order/` | `644dfe6951e78b653e185bb78201bfaeadc7b04eaab5cb7c1f4ffb2682b6cc79` |
-| `checks/trading.js` (SWAP) | `src/actions/swap/` | `b8e6753cccc7a4b1c6586c66a39faea3cf86718fcc989351ca32449386390d4c` |
-| `checks/airdrop.js` | `src/actions/airdrop/` | `47d5d14dcc26ae3d181118b692b8d879b809e4754a4268ef68579f6896ffbd74` |
-| `checks/dividend.js` | `src/actions/dividend/` | `c227a04169123b47d373b00de220b3af89bded2c6d88a753436633530c17564d` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `61abbacd95c0f06951ac69929525e20338c906590ff6a5f682ed258e1fb326c2` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `1d5869c477a5670c76b5c64ca893044ce67910310e716f7156220f87819e8974` |
+| `checks/mint.js` | `src/actions/mint/` | `caf6f7e7bfc0ffac865ae76fbc5d36123be77db09df81f617c3a6fc9304554cd` |
+| `checks/issue.js` | `src/actions/issue/` | `bdabfb9fd0636099988112a430c53a19784c5d2bf42a876912a103e7f2e39061` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `c9155bf0c4dbb3287c88c9993ce1a772e35227d285f792fbac94b2818c61b04b` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `b134397e828779f479701655cfd106e972fcaf8f2cb99eb835a9635bbe7baf9b` |
+| `checks/trading.js` (ORDER) | `src/actions/order/` | `f1b75f4d843c2ca9fbb0bfe35716a0902600b0e3a8b37a7edadfadbf164b8818` |
+| `checks/trading.js` (SWAP) | `src/actions/swap/` | `e3be2be82c0f8f39c3ead46a5cf6006e2c1e5f4494ac9ee6b0f81611d31f8c49` |
+| `checks/airdrop.js` | `src/actions/airdrop/` | `a27b19a698d777c14085c6ada26582754b761785b7c75c458612ac946e66105a` |
+| `checks/dividend.js` | `src/actions/dividend/` | `431c27271448a92cd2cf1bc472d1fb0f0d1401f82cdd680a5cd141e2d12e611a` |
 | `checks/batch.js` | `src/actions/batch/` | `895eb6fda8380b3019ccdaa97f7b13d97ebae20008e4285a43f7b854b1884507` |
 
 Actions covered by `checks/misc.js` (unverified-only, no client validity
@@ -407,6 +415,52 @@ logic) are intentionally NOT mapped: there is nothing to drift from.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-26 - gated list, dispenser, policy and payout validity batch
+
+Baseline was the indexer develop tip `5c581d27`; the reviewed tip is the clean committed
+tree at `bafc027d`. The five-commit range was read over each of the ten drifted handler
+directories with `git -C ../xchain-indexer diff 5c581d27..bafc027d -- <handler>`. Pins were
+then derived with `node bin/preflight_handler_dirs.js <indexer> <handler>/`; `batch/` is the
+only mapped directory whose digest does not move.
+
+All admission changes are behind new registry rows with the same deployment table: mainnet
+and every testnet key are `UNARMED`, and regtest is active from height or time 0. The
+non-gated edits only pass the action block into the gated database reads or preserve the
+existing empty-value contract when a gated invalid LIST reference resolves to `null`.
+
+**SEND, DESTROY and MINT.** The three handlers pass `BLOCK_INDEX` into their source and
+destination policy lookups. At the token-policy and LIST-validity flag days this makes the
+lookup use token and LIST state at the action block and makes a stored invalid LIST behave
+as absent. `SEND_RESTRICTIONS`, `DESTROY_RESTRICTIONS` and `MINT_ADDRESS_HEADROOM` already
+declare allow/block-list decisions server-side, so no client check moves.
+
+**ISSUE.** Format 5 gains the gated `0` sentinel that detaches ALLOW_LIST or BLOCK_LIST, and
+list validation becomes block-scoped and validity-aware. This loosens the edit path where
+the detach gate is active. Tier 2 does not reject numeric list fields or attempt to resolve
+their state, and its bridge-policy exclusion is already declared server-side, so no client
+check moves.
+
+**DISPENSER and DISPENSE.** A gated fresh-address read counts only activity that proves use;
+format 2 gains the gated `0` list-removal sentinel; creates and positive refills gain a gated
+FIAT settlement-price precondition; and policy list reads treat a gated invalid reference as
+absent. Origin freshness, list state and settlement policy remain server-side. The client
+change is one `DISPENSER_SETTLEMENT_PRICE` unverified disclosure on FIAT opens and refills,
+so the new refusal cannot read as a complete Tier-2 pass. DISPENSE already declares its
+settlement match server-side and has no client list verdict, so no DISPENSE check moves.
+
+**ORDER and SWAP.** Create-time maker admission checks the local GET_ADDRESS policy; payout
+policy becomes per delivered token at its own flag day; edits gain the gated `0` list-removal
+sentinel; and policy reads become block-scoped and validity-aware. `ORDER_RESTRICTIONS` and
+`SWAP_RESTRICTIONS` already declare allow/block-list policy server-side, while Tier 2 does
+not reject the removal sentinel, so no client check moves.
+
+**AIRDROP and DIVIDEND.** AIRDROP now validates the referenced LIST and token policies at
+the action block, and both recipient walkers treat a gated invalid policy-list reference as
+absent instead of throwing. The AIRDROP action-detail lookup already receives the LIST row,
+so Tier 2 now rejects a non-valid LIST on regtest, where the gate is active from genesis,
+and declares the conditional rule elsewhere. Recipient-policy filtering and DIVIDEND debit
+remain in their existing server-side declarations, so no DIVIDEND check moves.
 
 ### 2026-09-22 (seventh and eighth passes, logged) - the activation-registry W4 and W5 re-anchors, read after the fact
 

@@ -11,7 +11,10 @@ const Actions = require('../../../../../src/actions/index.js');
 // Run a report against a set of endpoint stubs; Tier 1 is neutralized
 // (feeExempt => no verdict) so Tier-2 findings stand on their own.
 function reportFor(wire, explorerSpec, opts = {}) {
-    const sdk = mockSdk({ explorerSpec: { getFeeQuote: () => ({ feeExempt: true }), ...explorerSpec } });
+    const sdk = mockSdk({
+        explorerSpec: { getFeeQuote: () => ({ feeExempt: true }), ...explorerSpec },
+        network: opts.network,
+    });
     return sdk.preflight(wire, { source: opts.source || 'me', preflight: opts.mode || 'report', ...opts });
 }
 
