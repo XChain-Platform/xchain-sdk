@@ -27,6 +27,14 @@ module.exports = {
         return this.get('/files/' + seg(query) + '/' + seg(type), opts);
     },
 
+    /**
+     * Get every FILE gated on a token ticker using the standard paging options.
+     * Returns the explorer's `{ data, total, runtime }` envelope.
+     */
+    async getGatedFiles(tick, opts = {}) {
+        return this.get('/files/' + seg(tick) + '/gate', opts);
+    },
+
     // Coin-prefix for a sibling chain at THIS client's network tier:
     // RBTC client + 'DOGE' → 'RDOGE' (token-information-standard.md:
     // cross-chain action refs carry the base ticker; the tier is implied).

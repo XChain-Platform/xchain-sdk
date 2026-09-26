@@ -43,7 +43,7 @@ describe('ExplorerClient', function () {
             'getDestroys', 'getDispensers', 'getDispenses',
             'getDispenserCancels', 'getDispenserCloses', 'getDispenserExpires', 'getDispenserEdits',
             'getDividends', 'getFees',
-            'getFiles', 'getLinks', 'getLists', 'getMessages', 'getMints', 'getOrders',
+            'getFiles', 'getGatedFiles', 'getLinks', 'getLists', 'getMessages', 'getMints', 'getOrders',
             'getOrderCancels', 'getOrderEdits', 'getOrderExpires', 'getOrderMatches',
             'getSends', 'getSleeps', 'getSwaps',
             'getSwapCancels', 'getSwapEdits', 'getSwapExpires', 'getSweeps',
@@ -68,7 +68,7 @@ describe('ExplorerClient', function () {
             });
         }
 
-        it('has 133 public methods', function () {
+        it('has 134 public methods', function () {
             // 113 = 112 + getPreflight (validity-first pre-flight proxy).
             // 117 = 113 + the four BET reads: getBetFeeds, getBetFeed,
             // getBets, getOracleStats.
@@ -82,9 +82,10 @@ describe('ExplorerClient', function () {
             // underscore: buildClient, deriveCoinPrefix, buildParams, get, post,
             // recordFreshness, handleError, assertBatchAddresses, assertBatchBody,
             // siblingCoin.
+            // 134 = 133 + getGatedFiles.
             let publicMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(publicMethods).to.have.length(133);
+            expect(publicMethods).to.have.length(134);
         });
     });
 });

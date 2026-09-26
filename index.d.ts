@@ -1761,6 +1761,8 @@ export declare class XChainSDK {
     getDividends(query: string, type: string, opts?: QueryOptions): Promise<any>;
     getFees(query: string, type: string, opts?: QueryOptions): Promise<any>;
     getFiles(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    /** Get every FILE gated on a token ticker in the explorer's `{ data, total, runtime }` paging envelope. */
+    getGatedFiles(tick: string, opts?: QueryOptions): Promise<any>;
     getLinks(query: string, type: string, opts?: QueryOptions): Promise<any>;
     getLists(query: string, type: string, opts?: QueryOptions): Promise<any>;
     getMessages(query: string, type: string, opts?: QueryOptions): Promise<any>;
