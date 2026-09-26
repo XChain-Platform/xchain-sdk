@@ -45,6 +45,18 @@ function resolveFetch(impl){
     return f;
 }
 
+// Keep the historical mainnet default only when no contrary network context
+// exists. A caller that names testnet or regtest must also name that tier's coin.
+function networkContextCoin(opts, field, mainnetCoin, fallbackNetwork){
+    const coin = opts && opts[field];
+    if (coin) return coin;
+    const network = opts && opts.network != null ? opts.network : fallbackNetwork;
+    const tier = String(network || '').toLowerCase().split('-').pop();
+    if (tier === 'testnet' || tier === 'regtest')
+        throw new Error('LightClient: ' + field + ' is required for ' + tier + ' network context');
+    return mainnetCoin;
+}
+
 // Pinned trust root (spec D4): when a caller supplies neither `validators` nor
 // `trustedCheckpoint`, fall back to the out-of-band launch entry pinned for the
 // target coin instead of trusting the explorer's /verify set. Returns null when
@@ -156,4 +168,4 @@ function unverified(reason){ return { verified: false, amount: null, reason: rea
 
 function scaled(a){ const [i, f] = M.canonicalAmount(String(a)).split('.'); return BigInt(i) * 1000000000000000000n + BigInt(f); }
 
-module.exports = { resolveFetch, pinnedEntry, baseUrl, fetchJson, lowerHex, expectedMismatch, unverified, scaled };
+module.exports = { resolveFetch, networkContextCoin, pinnedEntry, baseUrl, fetchJson, lowerHex, expectedMismatch, unverified, scaled };

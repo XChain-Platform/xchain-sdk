@@ -42,7 +42,7 @@ const checkpoint = require('../../checkpoint.js');
 // same read checkpoint.js makes when it appends the roots to the signed canonical.
 const gateRegistry = require('../../consensus/gate_registry');
 const CHECKPOINT_COMMITMENT_KEY = 'checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION';
-const { lowerHex, resolveFetch, baseUrl, fetchJson } = require('./fetch_helpers.js');
+const { lowerHex, resolveFetch, networkContextCoin, baseUrl, fetchJson } = require('./fetch_helpers.js');
 const { resolveValidatorSet } = require('./quorum_resolution.js');
 
 // Default DOGE confirmation depth a cold-start anchor must be buried under before
@@ -259,8 +259,8 @@ function verifyAnchoredCheckpoint(opts){
 // CHECKPOINT_QUORUM_FAILED.
 async function fetchAnchoredCheckpoint(opts){
     opts = opts || {};
+    const dogeCoin = networkContextCoin(opts, 'dogeCoin', 'DOGE');
     const f = resolveFetch(opts.fetchImpl);
-    const dogeCoin = opts.dogeCoin || 'DOGE';
     const minDepth = (opts.minDepth != null) ? Number(opts.minDepth) : DEFAULT_ANCHOR_MIN_DEPTH;
     const url = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(dogeCoin)) +
                 '/api/anchors/' + encodeURIComponent(String(opts.targetChain)) + '/chain';
