@@ -88,6 +88,22 @@ const DEFAULT_ANCHOR_MIN_DEPTH = 60;
 // this family, D2) are refused by the version check below.
 const ANCHOR_BUNDLE_VERSION = 0;
 
+function sectionsChainOrderReason(sections){
+    for (let i = 1; i < sections.length; i++){
+        if (String(sections[i].chain) < String(sections[i - 1].chain))
+            return 'ANCHOR sections not CHAIN-ascending';
+    }
+    return null;
+}
+
+function sigsPubkeyOrderReason(sigs){
+    for (let i = 1; i < sigs.length; i++){
+        if (String(sigs[i].pubkey) < String(sigs[i - 1].pubkey))
+            return 'ANCHOR section signatures not PUBKEY-ascending';
+    }
+    return null;
+}
+
 // Parse an ANCHOR v0 bundle wire string (optional leading "ANCHOR|") into
 // { version, network, snapshot_block, section_count, sections, publisher,
 //   publisher_attestations }, where each section is the checkpoint shape
@@ -309,4 +325,4 @@ async function fetchAnchoredCheckpoint(opts){
     return Object.assign({}, res, { anchor: rec, dogeTxid: rec.tx_hash || null, depthSource });
 }
 
-module.exports = { DEFAULT_ANCHOR_MIN_DEPTH, ANCHOR_BUNDLE_VERSION, parseAnchorV0, anchorBundleSection, anchorToCheckpoint, ANCHOR_ROOT_RE, ANCHOR_VERSION_RE, verifyAnchoredCheckpoint, fetchAnchoredCheckpoint };
+module.exports = { DEFAULT_ANCHOR_MIN_DEPTH, ANCHOR_BUNDLE_VERSION, sectionsChainOrderReason, sigsPubkeyOrderReason, parseAnchorV0, anchorBundleSection, anchorToCheckpoint, ANCHOR_ROOT_RE, ANCHOR_VERSION_RE, verifyAnchoredCheckpoint, fetchAnchoredCheckpoint };
