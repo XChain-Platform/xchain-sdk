@@ -70,9 +70,14 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `bafc027d`
+**Pins taken at indexer commit:** `c9ba4f9c`
 
-(Re-anchored 2026-09-26 for the gated list, dispenser, policy and payout validity
+(Re-anchored 2026-09-27 for the DEPOSIT and WITHDRAW custody-controller review below.
+`c9ba4f9c` is the clean committed indexer tip carrying both guarded custody handlers.
+The two new rows are flat-file hashes from that tree; the eleven existing mapped
+directories are byte-identical at `bafc027d` and `c9ba4f9c`.)
+
+(Earlier note. Re-anchored 2026-09-26 for the gated list, dispenser, policy and payout validity
 batch reviewed below. `bafc027d` is the committed indexer tip carrying the five-commit
 batch from `5c581d27`; ten mapped directories move and `batch/` stays byte-identical.
 Every new admission boundary is behind a registry row that is unarmed on mainnet and
@@ -318,7 +323,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff bafc027d..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff c9ba4f9c..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -407,14 +412,36 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/airdrop.js` | `src/actions/airdrop/` | `a27b19a698d777c14085c6ada26582754b761785b7c75c458612ac946e66105a` |
 | `checks/dividend.js` | `src/actions/dividend/` | `431c27271448a92cd2cf1bc472d1fb0f0d1401f82cdd680a5cd141e2d12e611a` |
 | `checks/batch.js` | `src/actions/batch/` | `895eb6fda8380b3019ccdaa97f7b13d97ebae20008e4285a43f7b854b1884507` |
+| `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `cfd9837bc722773652e53b949ec938ba1757a295e470dba6c237a06ecf7667e3` |
+| `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `76fc627ad84da6a931e1d32b212b5764dd273cbf1a26a6ce746736ac29c5c669` |
 
-Actions covered by `checks/misc.js` (unverified-only, no client validity
-logic) are intentionally NOT mapped: there is nothing to drift from.
+The mapped custody disclosures are checks/misc.js (DEPOSIT) and
+checks/misc.js (WITHDRAW).
+
+Other actions covered by `checks/misc.js` (unverified-only, no client validity
+logic) remain intentionally unmapped: there is nothing to drift from.
 
 ## Review log
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-27 - DEPOSIT and WITHDRAW custody controller guards
+
+Baseline was the indexer develop tip `bafc027d`; the reviewed tip is the clean committed
+tree at `c9ba4f9c`. The full range was read for `src/actions/deposit.js` and
+`src/actions/withdraw.js`, and both pins were derived from those files at the reviewed tip.
+
+The custody gate runs after the existing action validations and before settlement. It runs
+the token's `transfer` or `all` controller and SOURCE's own address controller, rejects a
+denial, and burns the metered guard gas from SOURCE only on valid settlement. The range also
+adds the contract-meta owner-withdraw opt-in for newly deployed contracts. Controller
+bindings, contract state, activation at the landing block, guard execution and gas balances
+all resolve server-side. The two `checks/misc.js` notes disclose the custody guards and their
+gas without claiming a local decision, while the existing WITHDRAW state disclosure remains
+the server-side verdict for owner authority and contract state.
+
+**Direction: NEITHER, no admission boundary moves in the client. NO CLIENT VERDICT MOVES.**
 
 ### 2026-09-26 - gated list, dispenser, policy and payout validity batch
 
