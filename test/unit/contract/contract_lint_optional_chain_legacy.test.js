@@ -18,12 +18,7 @@
 'use strict';
 
 const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
-
-const kebabPath = path.join(__dirname, '../../../src/contract/lint-core.js');
-const legacyPath = path.join(__dirname, '../../../src/contract/lint_core.js');
-const { lintSource } = require(fs.existsSync(kebabPath) ? kebabPath : legacyPath);
+const { lintSource } = require('../../../src/contract/lint_core.js');
 
 const cases = [
     ['const p = globalThis?.Promise;', ['banned-async']],
