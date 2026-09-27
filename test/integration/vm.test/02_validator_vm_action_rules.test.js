@@ -138,9 +138,16 @@ describe('Validator – VM action rules', function () {
     let validator;
     beforeEach(function () { validator = new Validator(new Utility()); });
 
-    it('BATCH rejects DEPLOY', function () {
+    it('BATCH accepts exactly one DEPLOY', function () {
         let errors = validator.validate('BATCH', {
             COMMAND: 'DEPLOY|0|aabb|100000'
+        });
+        expect(errors.filter(e => e.code === 'BATCH_CONSTRAINT')).to.have.lengthOf(0);
+    });
+
+    it('BATCH rejects two DEPLOYs', function () {
+        let errors = validator.validate('BATCH', {
+            COMMAND: 'DEPLOY|0|aabb|100000;DEPLOY|0|ccdd|100000'
         });
         expect(errors.some(e => e.code === 'BATCH_CONSTRAINT' && e.message.includes('DEPLOY'))).to.be.true;
     });
