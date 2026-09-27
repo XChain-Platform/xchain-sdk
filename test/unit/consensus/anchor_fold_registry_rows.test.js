@@ -29,8 +29,6 @@ describe('anchor fold activation registry rows', function () {
     });
 
     it('pins both activation maps inert by default', function () {
-        // These cases wait for this repo's SHARED-block twin to carry the pair.
-        if (present.length !== 2) this.skip();
         withEnv(undefined, () => {
             for (const key of KEYS) {
                 assert.deepStrictEqual(gates.get(key), {
@@ -43,16 +41,12 @@ describe('anchor fold activation registry rows', function () {
     });
 
     it('arms both regtest entries from the shared variable', function () {
-        // These cases wait for this repo's SHARED-block twin to carry the pair.
-        if (present.length !== 2) this.skip();
         withEnv('armed', () => {
             for (const key of KEYS) assert.strictEqual(gates.get(key).regtest, 0);
         });
     });
 
     it('keeps both entries inactive below the sentinel', function () {
-        // These cases wait for this repo's SHARED-block twin to carry the pair.
-        if (present.length !== 2) this.skip();
         withEnv(undefined, () => {
             for (const key of KEYS) {
                 assert.strictEqual(gates.activeAt(key, 'mainnet', null, 99999999, null), false);
