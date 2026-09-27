@@ -42,6 +42,7 @@ const checkpoint = require('../../checkpoint.js');
 // same read checkpoint.js makes when it appends the roots to the signed canonical.
 const gateRegistry = require('../../consensus/gate_registry');
 const CHECKPOINT_COMMITMENT_KEY = 'checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION';
+const ANCHOR_BUNDLE_ORDER_KEY = 'anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION';
 const { lowerHex, resolveFetch, networkContextCoin, baseUrl, fetchJson } = require('./fetch_helpers.js');
 const { resolveValidatorSet } = require('./quorum_resolution.js');
 
@@ -79,7 +80,8 @@ const DEFAULT_ANCHOR_MIN_DEPTH = 60;
 //   (protocol/constants.js, which carries the per-network heights and why the
 //   mainnet one sits above the chain tip) is invalid on the wire and never
 //   reaches this parser; at/above it only 0/1/2 exist. The SDK trusts the
-//   indexer/explorer to have already applied that gate.
+//   indexer/explorer to have already applied that gate. ANCHOR_BUNDLE_ORDER_ACTIVATION
+//   gates v0 section and signature order at the caller-supplied DOGE height.
 //
 // Sections are variable-width (their signature lists differ), so the bundle is
 // walked with a cursor rather than read at the fixed offsets the retired v3/v5
@@ -104,17 +106,30 @@ function sigsPubkeyOrderReason(sigs){
     return null;
 }
 
+function enforceAnchorBundleOrder(network, blockIndex, sections){
+    if (!Number.isFinite(blockIndex)
+        || !gateRegistry.activeAt(ANCHOR_BUNDLE_ORDER_KEY, network, null, blockIndex, null)) return;
+    const sectionReason = sectionsChainOrderReason(sections);
+    if (sectionReason) throw new Error('LightClient: ' + sectionReason);
+    for (let s = 0; s < sections.length; s++){
+        const sigReason = sigsPubkeyOrderReason(sections[s].validator_signatures);
+        if (sigReason)
+            throw new Error('LightClient: ' + sigReason.replace('section ', 'section ' + s + ' '));
+    }
+}
+
 // Parse an ANCHOR v0 bundle wire string (optional leading "ANCHOR|") into
 // { version, network, snapshot_block, section_count, sections, publisher,
 //   publisher_attestations }, where each section is the checkpoint shape
 // sdk.checkpoint.verifyCheckpoint consumes. Pure; for callers who decode the raw
-// DOGE transaction themselves. Throws on a malformed / non-v0 string.
+// DOGE transaction themselves. The optional blockIndex is the bundle's DOGE
+// inclusion height. Throws on a malformed / non-v0 string.
 //
 // A section omits NETWORK on the wire, so every section takes the HEADER network:
 // that is the string the signed per-chain canonical (XCHECKPOINT|CHAIN|NETWORK|...)
 // was built with, and taking it from anywhere else would verify a different
 // canonical than the validators signed.
-function parseAnchorV0(wire){
+function parseAnchorV0(wire, { blockIndex } = {}){
     let p = String(wire || '').split('|');
     if (p.length && /^anchor$/i.test(p[0])) p = p.slice(1);
     const ver = String(p[0]);
@@ -149,6 +164,7 @@ function parseAnchorV0(wire){
         }
         sections.push(sec);
     }
+    enforceAnchorBundleOrder(network, blockIndex, sections);
     // Tail: one publisher attestation for the whole bundle. It is a reward
     // artifact, not part of SPV trust, and a degraded round legitimately lands
     // ATTEST_SIG_COUNT 0, so an absent or empty tail is not an error.

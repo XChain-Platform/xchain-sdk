@@ -57,6 +57,32 @@ describe('ANCHOR bundle ordering before enforcement', function () {
     });
 });
 
+describe('ANCHOR bundle ordering after enforcement', function () {
+    it('refuses sections that are not CHAIN-ascending', function () {
+        const wire = makeWire('regtest', [
+            makeSection('DOGE', ['aa', 'bb']),
+            makeSection('BTC', ['aa', 'bb'])
+        ]);
+        assert.doesNotThrow(() => parseAnchorV0(wire));
+        assert.throws(
+            () => parseAnchorV0(wire, { blockIndex: 70000000 }),
+            { message: 'LightClient: ANCHOR sections not CHAIN-ascending' }
+        );
+    });
+
+    it('refuses section signature pairs that are not PUBKEY-ascending', function () {
+        const wire = makeWire('regtest', [
+            makeSection('BTC', ['bb', 'aa']),
+            makeSection('DOGE', ['aa', 'bb'])
+        ]);
+        assert.doesNotThrow(() => parseAnchorV0(wire));
+        assert.throws(
+            () => parseAnchorV0(wire, { blockIndex: 70000000 }),
+            { message: 'LightClient: ANCHOR section 0 signatures not PUBKEY-ascending' }
+        );
+    });
+});
+
 describe('ANCHOR bundle canonical ordering', function () {
     function sortedWire(network) {
         return makeWire(network, [
@@ -65,13 +91,9 @@ describe('ANCHOR bundle canonical ordering', function () {
         ]);
     }
 
-    for (const network of ['mainnet', 'testnet']) {
+    for (const network of ['mainnet', 'testnet', 'regtest']) {
         it('accepts sorted ' + network + ' wires with and without a height', function () {
             assertParsesWithoutAndWithHeight(sortedWire(network));
         });
     }
-
-    it('accepts a sorted regtest wire without a height', function () {
-        assert.doesNotThrow(() => parseAnchorV0(sortedWire('regtest')));
-    });
 });
