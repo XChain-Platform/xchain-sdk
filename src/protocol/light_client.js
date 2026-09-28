@@ -41,7 +41,7 @@ const { verifyBalanceProof, verifyLockedBalanceProof, verifyContractStateProof,
     verifyActionProof, verifyValidatorSetProof } = require('./light_client/proof_checks.js');
 const { verifyBalance, verifyLockedBalance, verifyAction } = require('./light_client/online_verify.js');
 const { parseAnchorV0, anchorBundleSection: anchorBundleSectionV0, anchorToCheckpoint, verifyAnchoredCheckpoint,
-    fetchAnchoredCheckpoint } = require('./light_client/anchored_checkpoint.js');
+    fetchAnchoredCheckpoint, enforceAnchorBundleOrder } = require('./light_client/anchored_checkpoint.js');
 const { lowerHex } = require('./light_client/fetch_helpers.js');
 const { verifyValidatorSet, verifyCheckpointWithProvenSet,
     followForward } = require('./light_client/validator_set_follow.js');
@@ -98,7 +98,7 @@ function parseAnchorV3Tail(parts, start){
     return { publisher, publisherAttestations };
 }
 
-function parseAnchorV3(wire){
+function parseAnchorV3(wire, { blockIndex } = {}){
     let parts = String(wire || '').split('|');
     if (parts.length && /^anchor$/i.test(parts[0])) parts = parts.slice(1);
     if (String(parts[0]) !== String(ANCHOR_FOLD_VERSION))
@@ -115,6 +115,7 @@ function parseAnchorV3(wire){
         sections.push(parsed.section);
         next = parsed.next;
     }
+    enforceAnchorBundleOrder(network, blockIndex, sections);
     const archiveCountToken = parts[next++];
     if (!/^(0|1)$/.test(String(archiveCountToken == null ? '' : archiveCountToken)))
         throw new Error('LightClient: invalid: ARCHIVE_COUNT');

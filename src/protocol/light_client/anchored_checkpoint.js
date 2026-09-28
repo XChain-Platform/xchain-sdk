@@ -341,4 +341,4 @@ async function fetchAnchoredCheckpoint(opts){
     return Object.assign({}, res, { anchor: rec, dogeTxid: rec.tx_hash || null, depthSource });
 }
 
-module.exports = { DEFAULT_ANCHOR_MIN_DEPTH, ANCHOR_BUNDLE_VERSION, sectionsChainOrderReason, sigsPubkeyOrderReason, parseAnchorV0, anchorBundleSection, anchorToCheckpoint, ANCHOR_ROOT_RE, ANCHOR_VERSION_RE, verifyAnchoredCheckpoint, fetchAnchoredCheckpoint };
+module.exports = { DEFAULT_ANCHOR_MIN_DEPTH, ANCHOR_BUNDLE_VERSION, sectionsChainOrderReason, sigsPubkeyOrderReason, enforceAnchorBundleOrder, parseAnchorV0, anchorBundleSection, anchorToCheckpoint, ANCHOR_ROOT_RE, ANCHOR_VERSION_RE, verifyAnchoredCheckpoint, fetchAnchoredCheckpoint };
