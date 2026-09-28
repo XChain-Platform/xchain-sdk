@@ -233,7 +233,12 @@ module.exports = {
 
         const maxFeeRate = this.resolveMaxFeeRate(opts);
         if (maxFeeRate) psbt.setMaximumFeeRate(maxFeeRate);
-        const tx = psbt.extractTransaction();
+        let tx;
+        try {
+            tx = psbt.extractTransaction();
+        } catch (err) {
+            throw new SDKWalletError('FINALIZE_FAILED', `Envelope reveal finalization failed: ${err.message}`);
+        }
         return {
             txHex: tx.toHex(),
             txid: tx.getId(),
