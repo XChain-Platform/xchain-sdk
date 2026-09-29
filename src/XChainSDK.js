@@ -42,7 +42,7 @@ const MuSig2            = require('./cosigner/musig2.js');
 const Workflows         = require('./actions/workflows.js');
 const TickResolver      = require('./utils/tick_resolver.js');
 const AddressResolver   = require('./utils/address_resolver.js');
-const { publicDefaults } = require('./utils/endpoints.js');
+const { coinPrefix, publicDefaults } = require('./utils/endpoints.js');
 const { installMethods } = require('./utils/install_methods.js');
 const { ADDRESS_EVENT_TYPES, MEMPOOL_EVENT_TYPES } = require('./XChainSDK/event_frames.js');
 const clientLifecycleMethods = require('./XChainSDK/client_lifecycle.js');
@@ -129,7 +129,22 @@ function initializeActionHelpers(sdk) {
 }
 
 // Attach verification namespaces together so local trust checks initialize together.
-function initializeVerificationHelpers(sdk) {
+// Resolve cross-chain helpers to the same network tier as the configured chain.
+function networkScopedCoin(network, coin) {
+    if (!coinPrefix(network)) return null;
+    if (network.endsWith('-testnet')) return 'T' + coin;
+    if (network.endsWith('-regtest')) return 'R' + coin;
+    return coin;
+}
+
+function withNetworkCoin(opts, field, coin) {
+    const resolved = Object.assign({}, opts || {});
+    // Preserve an explicit caller choice; otherwise apply the instance context.
+    if (!resolved[field] && coin) resolved[field] = coin;
+    return resolved;
+}
+
+function initializeVerificationHelpers(sdk, network) {
     // Attestation request/payload builders (http_get URL validation, LLM
     // envelope, request options). Exposed on the instance for parity with
     // messaging/gatedFile so dapps can `sdk.attestation.httpGet(url)` before
@@ -144,7 +159,19 @@ function initializeVerificationHelpers(sdk) {
     // `sdk.light.verifyAction(...)` fetch a server proof and verify it LOCALLY
     // against a quorum-signed checkpoint's committed roots (merkle.js twin +
     // sdk.checkpoint). Nothing trusts the server's own verified/amount.
-    sdk.light = LightClient;
+    const dogeCoin = networkScopedCoin(network, 'DOGE');
+    const btcCoin = networkScopedCoin(network, 'BTC');
+    sdk.light = Object.assign({}, LightClient, {
+        fetchAnchoredCheckpoint: (opts) => LightClient.fetchAnchoredCheckpoint(
+            withNetworkCoin(opts, 'dogeCoin', dogeCoin)
+        ),
+        verifyValidatorSet: (opts) => LightClient.verifyValidatorSet(
+            withNetworkCoin(opts, 'btcCoin', btcCoin)
+        ),
+        followForward: (opts) => LightClient.followForward(
+            withNetworkCoin(opts, 'btcCoin', btcCoin)
+        )
+    });
     // First-class decode library (spec: confirm-decode-preflight §3):
     // `sdk.decoder.parse(actionString)` -> ParsedAction,
     // `sdk.decoder.describe(parsed, ctx)` -> plain-English intent,
@@ -168,7 +195,7 @@ class XChainSDK {
         let network = options.network || config.env.network() || null;
         initializeNetworkUtilities(this, network);
         initializeActionHelpers(this);
-        initializeVerificationHelpers(this);
+        initializeVerificationHelpers(this, network);
 
         // Pre-flight engine (spec: confirm-decode-preflight §4). Predicts
         // whether the indexer would reject an action BEFORE signing, via a

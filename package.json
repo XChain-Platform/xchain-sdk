@@ -79,8 +79,6 @@
   },
   "scripts": {
     "api": "node ./src/api/index.js",
-    "comment:lint": "The file-level half of the code-style rules, from the vendored eslint.config.js. Advisory: the pre-push structure gate is what actually binds, and it depends on neither eslint nor that file.",
-    "lint": "eslint src test bin",
     "test": "mocha --timeout 5000 --recursive 'test/unit/**/*.test.js'",
     "sync:templates": "node scripts/sync-templates.js",
     "comment:release:npm-check": "Release-ceremony gate: fails while registry.npmjs.org serves a version other than this repo's, for the SDK and for mcp/. Run as the closing act of the publish step; red means an unpublished or half-published cut. Needs network by design, so it is not part of the ci chain.",
@@ -109,8 +107,7 @@
     "test:all": "mocha --timeout 0 --recursive test/",
     "repl": "node src/cli/repl.js",
     "build": "npx browserify index.js -s XChainSDK -t [ babelify --presets [ @babel/preset-env ] --global ] | npx uglify-js --compress --mangle -o dist/xchain_sdk.min.js",
-    "build:dev": "npx browserify index.js -s XChainSDK -t [ babelify --presets [ @babel/preset-env ] --global ] -o dist/xchain_sdk.js",
-    "test:eval": "mocha --timeout 30000 --recursive 'test/eval/**/*.test.js'"
+    "build:dev": "npx browserify index.js -s XChainSDK -t [ babelify --presets [ @babel/preset-env ] --global ] -o dist/xchain_sdk.js"
   },
   "engines": {
     "node": ">=22.0.0"

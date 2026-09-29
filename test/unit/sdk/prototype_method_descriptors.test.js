@@ -53,6 +53,9 @@ const SPLIT_ADDED = {
         ['taprootKeyPathSighash', false, true, true, 'function', 3],
         ['toBytes', false, true, true, 'function', 2],
     ],
+    ExplorerClient: [
+        ['getGatedFiles', false, true, true, 'function', 1],
+    ],
 };
 
 function descriptorRows(proto) {

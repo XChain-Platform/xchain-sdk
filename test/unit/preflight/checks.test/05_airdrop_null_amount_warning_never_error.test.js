@@ -3,7 +3,7 @@
 // Copyright © 2025–2026 Dankest, LLC
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-const { expect, has, notFound, reportFor } = require('./helpers/setup.js');
+const { expect, has, notFound, reportFor, unverified } = require('./helpers/setup.js');
 
 describe('pre-flight Tier-2 per-action matrix', function () {
 
@@ -43,6 +43,23 @@ describe('pre-flight Tier-2 per-action matrix', function () {
                 getAction: () => ({ action: 'SEND', action_index: '55' }),
             });
             expect(has(r, 'LIST_NOT_FOUND', 'error')).to.equal(true);
+        });
+
+        it('an invalid LIST is an error where reference validity is active from genesis', async function () {
+            const r = await reportFor('AIRDROP|0|JDOG|1|55', {
+                getToken: () => ({ tick: 'JDOG' }),
+                getAction: () => ({ action: 'LIST', action_index: '55', status: 'invalid: TYPE' }),
+            });
+            expect(has(r, 'LIST_NOT_FOUND', 'error')).to.equal(true);
+        });
+
+        it('an invalid LIST remains conditional where reference validity is unarmed', async function () {
+            const r = await reportFor('AIRDROP|0|JDOG|1|55', {
+                getToken: () => ({ tick: 'JDOG' }),
+                getAction: () => ({ action: 'LIST', action_index: '55', status: 'invalid: TYPE' }),
+            }, { network: 'bitcoin-mainnet' });
+            expect(has(r, 'LIST_NOT_FOUND', 'error')).to.equal(false);
+            expect(unverified(r, 'LIST_REFERENCE_VALIDITY')).to.equal(true);
         });
     });
 });

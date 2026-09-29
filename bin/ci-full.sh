@@ -80,6 +80,11 @@ ci_tier_deferred() {
   return 1
 }
 # <<< ci-tier <<<
+fast_defer() {
+  DEFERRED="$DEFERRED [$1]"
+  echo; echo "ci:full ===== $1 DEFERRED (CI_TIER=fast, runs in the full sweep) ====="
+}
+
 # >>> ci-tier timer (generated block; re-run the tier wirer to update) >>>
 run_tier() {
   ci_tier_deferred "$1" && return 0  # ci-tier guard (generated)
@@ -120,8 +125,47 @@ need_sib xchain-indexer xchain-contracts xchain-decoder xchain-hub \
 # run-perf: true, perf-script: test:performance. Siblings checked out above;
 # XCHAIN_REQUIRE_SIBLINGS=1 mirrors the reusable workflow's test-gate step so
 # every cross-repo guard actually runs instead of skipping green.
-run_tier "ci (test gate, siblings required)" \
-  env XCHAIN_REQUIRE_SIBLINGS=1 npm run ci
+FAST_SELECTOR_CONSENSUS=""
+FAST_SELECTOR_REASON=""
+if [ "${CI_TIER:-full}" = "fast" ]; then
+  if [ ! -f bin/ci_fast_select.js ]; then
+    FAST_SELECTOR_REASON="helper missing"
+  elif FAST_SELECTOR_PLAN="$(node bin/ci_fast_select.js --plan 2>&1)"; then
+    printf '%s\n' "$FAST_SELECTOR_PLAN"
+    if printf '%s\n' "$FAST_SELECTOR_PLAN" | grep -q '^consensus 1$'; then
+      FAST_SELECTOR_CONSENSUS="1"
+    elif printf '%s\n' "$FAST_SELECTOR_PLAN" | grep -q '^consensus 0$'; then
+      FAST_SELECTOR_CONSENSUS="0"
+    else
+      FAST_SELECTOR_REASON="invalid plan output"
+    fi
+  else
+    FAST_SELECTOR_STATUS=$?
+    printf '%s\n' "$FAST_SELECTOR_PLAN"
+    FAST_SELECTOR_REASON="$(printf '%s\n' "$FAST_SELECTOR_PLAN" | tail -n 1)"
+    [ -n "$FAST_SELECTOR_REASON" ] || FAST_SELECTOR_REASON="exit $FAST_SELECTOR_STATUS"
+  fi
+  run_tier "fast-tier selector self-test" \
+    ./node_modules/.bin/mocha --no-config --timeout 20000 --exit bin/test/ci_fast_select.test.js
+fi
+
+if [ "${CI_TIER:-full}" != "fast" ]; then
+  run_tier "ci (test gate, siblings required)" \
+    env XCHAIN_REQUIRE_SIBLINGS=1 npm run ci
+elif [ -n "$FAST_SELECTOR_REASON" ]; then
+  echo "ci:full: fast selector unavailable ($FAST_SELECTOR_REASON); running the full unit tier"
+  run_tier "ci (test gate, siblings required)" \
+    env XCHAIN_REQUIRE_SIBLINGS=1 npm run ci
+elif [ "$FAST_SELECTOR_CONSENSUS" = "1" ]; then
+  run_tier "ci (test gate, siblings required)" \
+    env XCHAIN_REQUIRE_SIBLINGS=1 npm run ci
+else
+  run_tier "ci: pre-flight drift soft (ci:drift:soft)" npm run ci:drift:soft
+  run_tier "ci (changed tests, siblings required)" \
+    env XCHAIN_REQUIRE_SIBLINGS=1 node bin/ci_fast_select.js --run
+  run_tier "ci: pre-flight drift verdict (ci:drift:verdict)" npm run ci:drift:verdict
+  fast_defer "ci (test gate, siblings required)"
+fi
 run_tier "perf: hot-path throughput (test:performance)" npm run test:performance
 
 # --- job: drift-guards -------------------------------------------------

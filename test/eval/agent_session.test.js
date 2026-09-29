@@ -4,6 +4,16 @@
 
 const assert = require('assert');
 
+// Preserve the legacy top-level module paths as compatibility entry points for
+// callers that have not yet moved to the feature-oriented directory layout.
+// Removing one silently would turn an organizational refactor into a breaking release.
+
+// Bind each compatibility path to its canonical implementation rather than checking
+// exports member by member, because consumers may depend on constructors, singleton
+// state, or cached module objects retaining the exact same JavaScript identity.
+
+// Keep the complete path map in one table so each compatibility promise receives
+// the same assertion and newly retained entry points cannot bypass the shared rule.
 const SHIMS = [
     ['../../src/actionWaiter.js', '../../src/utils/action_waiter.js'],
     ['../../src/actions.js', '../../src/actions/index.js'],
@@ -27,6 +37,14 @@ const SHIMS = [
     ['../../src/walletSession.js', '../../src/utils/wallet_session.js'],
 ];
 
+// Exercise the real module loader for both sides of every pair, which catches missing
+// files, incorrect forwarding targets, and wrappers that manufacture replacement exports.
+
+// Generate a separate test case for each shim so a failure names the affected public
+// path directly instead of hiding one broken mapping behind a single aggregate result.
+
+// Compare with strict identity to prove the shim is transparent: merely equivalent
+// values would not protect instanceof checks or shared mutable state across import paths.
 describe('compat shim identity', function () {
     for (const [shimPath, targetPath] of SHIMS) {
         it(`${shimPath.replace('../../', '')} re-exports ${targetPath.replace('../../', '')}`, function () {

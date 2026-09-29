@@ -71,6 +71,17 @@ function noteOracleFee(ctx, oracleAddress) {
         'the oracle usage fee is an output-level rule; the wallet checks it at compose time');
 }
 
+// A FIAT open or refill must be priceable at the including block once the
+// settlement-price gate is active. Oracle history and the protocol-change state
+// are server-side inputs, so Tier 2 declares the rule instead of predicting it.
+function noteSettlementPrice(ctx, fiatCode) {
+    if (!fiatCode) return;
+    ctx.addUnverified('DISPENSER_SETTLEMENT_PRICE',
+        'at or above the settlement-price activation a FIAT open or refill needs an effective price at '
+        + 'the including block; oracle history and the activation state are server-side only, with mainnet '
+        + 'and testnet unarmed and regtest active from genesis');
+}
+
 // The EXPIRATION representability bound, mirrored from the create and edit paths
 // of xchain-indexer src/actions/dispenser.js: a value outside [0, EXPIRATION_MAX]
 // is `invalid: EXPIRATION (format)` rather than an expiration normalized to NULL,
@@ -163,6 +174,8 @@ function checkEditEscrow(ctx, idx, dispenser) {
 
     if (!topUp || !numeric.isPositive(topUp)) return;
 
+    noteSettlementPrice(ctx, String(dispenser?.fiat_code ?? dispenser?.FIAT_CODE ?? ''));
+
     // The refill's oracle address is the DISPENSER's, not the edit's: a
     // format-2 payload targets the dispenser by action index and never
     // restates the oracle.
@@ -198,6 +211,7 @@ async function checkDispenser(ctx) {
         declareAmountRepresentability(ctx);
         ctx.addUnverified('DISPENSER_ORIGIN_STANDING',
             'origin-standing / UTXO-freshness gate is server-side (and unreliable even on the quote path)');
+        noteSettlementPrice(ctx, ctx.field('FIAT_CODE'));
         noteOracleFee(ctx, ctx.field('ORACLE_ADDRESS'));
         return;
     }

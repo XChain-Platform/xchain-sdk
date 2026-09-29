@@ -40,14 +40,15 @@ const M          = require('../../merkle.js');
 const checkpoint = require('../../checkpoint.js');
 const swq        = require('../../consensus/stake_weighted_quorum.js');
 const srb        = require('../../consensus/snapshot_reorg_buffer.js');
-const { resolveFetch, baseUrl, fetchJson, scaled, lowerHex } = require('./fetch_helpers.js');
+const { resolveFetch, networkContextCoin, baseUrl, fetchJson, scaled, lowerHex } = require('./fetch_helpers.js');
 const { verifyValidatorSetProof } = require('./proof_checks.js');
 
 // Network: fetch + verify the validator-set proof at BTC snapshot height S.
 async function verifyValidatorSet(opts){
     opts = opts || {};
+    const btcCoin = networkContextCoin(opts, 'btcCoin', 'BTC');
     const f = resolveFetch(opts.fetchImpl);
-    const url = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.btcCoin || 'BTC')) +
+    const url = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(btcCoin)) +
                 '/api/proof/validator-set?height=' + encodeURIComponent(String(opts.snapshotBlock));
     const body = await fetchJson(f, url);
     if (!body || !body.proof) throw new Error('LightClient: no validator-set proof in response');
@@ -117,10 +118,10 @@ function verifyCheckpointWithProvenSet(cp, provenOraclePublish){
 // trust root + the chain of adopted checkpoints. Stops at the first step that fails to verify.
 async function followForward(opts){
     opts = opts || {};
-    const f = resolveFetch(opts.fetchImpl);
-    const btcCoin = opts.btcCoin || 'BTC';
     let trusted = opts.trustedCheckpoint;
     if (!trusted || trusted.state_root == null) throw new Error('LightClient: followForward needs a trusted BTC checkpoint with a committed state_root');
+    const btcCoin = networkContextCoin(opts, 'btcCoin', 'BTC', trusted.network);
+    const f = resolveFetch(opts.fetchImpl);
     const from = Number(trusted.block_index) + 1;
     const to   = Number(opts.toHeight != null ? opts.toHeight : trusted.block_index);
     const adopted = [];

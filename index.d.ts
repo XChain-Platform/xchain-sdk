@@ -250,6 +250,23 @@ export interface EncoderResult {
     encoding: EncodingType;
 }
 
+/** Confirmed block containing a transaction, as reported by the encoder's tracker. */
+export interface EncoderTxBlockResult {
+    block_hash: string;
+    block_height: number;
+    sync: {
+        committed_height: number;
+        committed_hash: string;
+    };
+}
+
+/** Low-level encoder service client exposed on `XChainSDK.encoder`. */
+export interface EncoderClient {
+    /** Locate the confirmed block containing a transaction, or return `null` when it is not indexed. */
+    getTxBlock(txid: string): Promise<EncoderTxBlockResult | null>;
+    [key: string]: any;
+}
+
 
 /*
  *  Validation
@@ -1475,6 +1492,8 @@ export declare class XChainSDK {
     readonly name: string | undefined;
     /** Raw options passed to the constructor */
     readonly options: SDKOptions;
+    /** Low-level encoder service client, when an encoder endpoint is configured. */
+    encoder: EncoderClient | null;
 
     constructor(options?: SDKOptions);
 
@@ -1742,6 +1761,8 @@ export declare class XChainSDK {
     getDividends(query: string, type: string, opts?: QueryOptions): Promise<any>;
     getFees(query: string, type: string, opts?: QueryOptions): Promise<any>;
     getFiles(query: string, type: string, opts?: QueryOptions): Promise<any>;
+    /** Get every FILE gated on a token ticker in the explorer's `{ data, total, runtime }` paging envelope. */
+    getGatedFiles(tick: string, opts?: QueryOptions): Promise<any>;
     getLinks(query: string, type: string, opts?: QueryOptions): Promise<any>;
     getLists(query: string, type: string, opts?: QueryOptions): Promise<any>;
     getMessages(query: string, type: string, opts?: QueryOptions): Promise<any>;
