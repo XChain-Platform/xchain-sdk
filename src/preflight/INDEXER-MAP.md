@@ -47,9 +47,17 @@ same day against the now-pushed `97e7ae1f`, which confirmed the pin and moved no
 hash but did move a client rule (the caret TICK, see the second 2026-09-12 entry in
 the review log). Hashes
 are of the indexer handler source files, resolved via
-`XCHAIN_INDEXER_PATH` or the sibling `../xchain-indexer` checkout. The
-gate SKIPS (does not fail) when no indexer checkout is present, so
-single-repo CI stays green; the sibling CI job enforces it.
+`XCHAIN_INDEXER_PATH` when it is set (authoritative: there is no fallback
+to the sibling) or else the sibling `../xchain-indexer` checkout. The
+gate FAILS (exit 1) when no indexer checkout resolves, naming every path
+it tried and why each was rejected, because a skip there would compare
+nothing and still read as a clean run. A clone with no indexer checkout
+on purpose declares it with `XCHAIN_ALLOW_NO_INDEXER=1`, which skips the
+handler comparison and exits 0 (the anchor-consistency check below still
+runs); `XCHAIN_REQUIRE_SIBLINGS=1` overrides that declaration. The CI
+drift job checks the indexer out beside the SDK and sets
+`XCHAIN_REQUIRE_SIBLINGS=1`. A standalone `npm run ci` with neither the
+sibling nor the declaration therefore ends red at `ci:drift:verdict`.
 
 Note when running this locally: the gate hashes the sibling WORKING TREE,
 so an uncommitted edit in `xchain-indexer` reports as drift. CI checks out
@@ -70,9 +78,18 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `c9ba4f9c`
+**Pins taken at indexer commit:** `0773b436`
 
-(Re-anchored 2026-09-27 for the DEPOSIT and WITHDRAW custody-controller review below.
+(Re-anchored 2026-09-29 for the review-round handler edits reviewed below. `0773b436` is
+the indexer develop tip the round's worktree sits on, and no mapped row moves between
+`c9ba4f9c` and it. The six re-pinned directories (send, issue, dispenser, dispense,
+airdrop, dividend) are hashed from that tip PLUS the round's uncommitted indexer edits,
+the paired-change exception described above: they match the indexer commit that lands
+with this round, and a tree without those edits reports these six rows as drift, whose
+answer is the missing indexer landing, not a re-pin back. The other seven rows are HEAD
+hashes at `0773b436`.)
+
+(Earlier note. Re-anchored 2026-09-27 for the DEPOSIT and WITHDRAW custody-controller review below.
 `c9ba4f9c` is the clean committed indexer tip carrying both guarded custody handlers.
 The two new rows are flat-file hashes from that tree; the eleven existing mapped
 directories are byte-identical at `bafc027d` and `c9ba4f9c`.)
@@ -323,7 +340,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff c9ba4f9c..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 0773b436..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -401,16 +418,16 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `61abbacd95c0f06951ac69929525e20338c906590ff6a5f682ed258e1fb326c2` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `68a094391bafac83610ef96d8baaad183a87d5fa037d0f655c55a4b5539cbce7` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `1d5869c477a5670c76b5c64ca893044ce67910310e716f7156220f87819e8974` |
 | `checks/mint.js` | `src/actions/mint/` | `caf6f7e7bfc0ffac865ae76fbc5d36123be77db09df81f617c3a6fc9304554cd` |
-| `checks/issue.js` | `src/actions/issue/` | `bdabfb9fd0636099988112a430c53a19784c5d2bf42a876912a103e7f2e39061` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `c9155bf0c4dbb3287c88c9993ce1a772e35227d285f792fbac94b2818c61b04b` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `b134397e828779f479701655cfd106e972fcaf8f2cb99eb835a9635bbe7baf9b` |
+| `checks/issue.js` | `src/actions/issue/` | `5a3e61d8b199060532e7ca5a4393615a0f232bdc6b4d5913791abea34210a080` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `fadc8c6c281d51854ff948c98abf1f354e9bca706e589920973a27c0180525f9` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `34cec38417f2fb43867dcc5810d980d3d15a1fabc513d47c6541bb81de8e5260` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `f1b75f4d843c2ca9fbb0bfe35716a0902600b0e3a8b37a7edadfadbf164b8818` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `e3be2be82c0f8f39c3ead46a5cf6006e2c1e5f4494ac9ee6b0f81611d31f8c49` |
-| `checks/airdrop.js` | `src/actions/airdrop/` | `a27b19a698d777c14085c6ada26582754b761785b7c75c458612ac946e66105a` |
-| `checks/dividend.js` | `src/actions/dividend/` | `431c27271448a92cd2cf1bc472d1fb0f0d1401f82cdd680a5cd141e2d12e611a` |
+| `checks/airdrop.js` | `src/actions/airdrop/` | `8b493af57a24dbba23ae3ca4346be6d42444f31bfd29be7a489d15d5cf70dd9f` |
+| `checks/dividend.js` | `src/actions/dividend/` | `498e038fd9118f0d37663a98a7d55db7d2cee93ae7a6f73cafc32f04d26a3103` |
 | `checks/batch.js` | `src/actions/batch/` | `895eb6fda8380b3019ccdaa97f7b13d97ebae20008e4285a43f7b854b1884507` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `cfd9837bc722773652e53b949ec938ba1757a295e470dba6c237a06ecf7667e3` |
 | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `76fc627ad84da6a931e1d32b212b5764dd273cbf1a26a6ce746736ac29c5c669` |
@@ -421,10 +438,51 @@ checks/misc.js (WITHDRAW).
 Other actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) remain intentionally unmapped: there is nothing to drift from.
 
+DEPLOY is the one exception. Its CONTRACT_META_REQUIRED pre-flight
+(`src/contract/utils/meta_literals.js`, which blocks a deploy by default)
+mirrors the indexer's `src/actions/deploy/contract_meta.js` and
+`contract_meta/meta_text.js`. That mirror is guarded by a behavioural parity
+test, `test/unit/contract/contract_meta_parity.test.js`, not by a hash row
+here: a row for the deploy directory would hash every deploy handler file to
+guard two, and a matching hash proves a file changed, never that the SDK still
+agrees with it.
+
 ## Review log
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-29 - review-round indexer edits over six handler directories
+
+Baseline was the prior anchor `c9ba4f9c`; the reviewed tree is indexer develop `0773b436`
+plus the review round's uncommitted edits (the paired-change exception, see the anchor
+note). `git -C ../xchain-indexer diff --stat c9ba4f9c 0773b436` over every mapped row is
+empty, so every change read here is the round's own. Each drifted directory was read with
+`git -C ../xchain-indexer diff c9ba4f9c -- <handler>` and `diff HEAD -- <handler>`, and each
+pin derived with `node bin/preflight_handler_dirs.js <indexer> <handler>/`.
+
+**SEND, DISPENSE, AIRDROP, DIVIDEND: comment-only.** Each `index.js` changes one comment line,
+the path of the sibling install pattern (`dispenser_close.js` to `dispenser_close/index.js`).
+No code moves.
+
+**ISSUE: behavioural in mechanism, inert on every current row.** `wire.js` now passes the
+chain's COIN, not null, to the four flag-day reads (TOKEN_BRIDGE, TOKEN_POLICY_INHERITANCE,
+ISSUE_POLICY_LIST_DETACH, TICK_NAMESPACE), so a per-chain `<COIN>:<network>` entry is
+honoured. In all four registry rows every coin-keyed entry equals its bare network entry
+(sentinel or UNARMED on mainnet and testnet, 0 on regtest), so no verdict changes on any
+network today. The client reads none of these activations: format 7, the tick-namespace
+floor and the bridge-policy exclusion are already declared as unverified or warning-only
+with "neither mainnet nor testnet is armed", which still holds.
+
+**DISPENSER: refactor plus a node-local fault change, no client-visible rule.** `index.js`
+moves the below-gate tracker freshness read into `readLegacyTrackerFreshness` byte for byte,
+and its catch now calls `rethrowIfInfraFault`, so a `UTXO_TRACKER_UNAVAILABLE` outage halts
+and retries the block instead of committing not-fresh; an RPC error answer or a shape
+violation still reads as not fresh. `controller_guard.js` is a comment rewrite (the guard's
+payoutLegs are still validated by `runControllerGuard`, already true). Freshness stays under
+the existing `DISPENSER_ORIGIN_STANDING` unverified declaration.
+
+**Direction: NEITHER, no admission boundary moves in the client. NO CLIENT VERDICT MOVES.**
 
 ### 2026-09-27 - DEPOSIT and WITHDRAW custody controller guards
 

@@ -23,6 +23,7 @@
 const { WebSocket, WS_CONNECTING, WS_OPEN, WS_SCHEMA_VERSION } = require('./websocket/socket_constants.js');
 const { SDKExplorerError } = require('../utils/errors.js');
 const { installMethods } = require('../utils/install_methods.js');
+const { dropCatchUp } = require('./websocket/catch_up.js');
 
 function websocketUrl(client) {
     // Tolerate baseUrl already being a full http(s) URL (e.g. derived from
@@ -68,6 +69,8 @@ function attachSocketListeners(client, url, resolve, reject) {
     client.ws.on('close', (code) => {
         client.connected = false;
         client.stopPing();
+        // An unfinished catch-up is abandoned, not applied, so the next one resumes before the gap.
+        dropCatchUp(client);
 
         if (client.hooks.onWsDisconnect) {
             try { client.hooks.onWsDisconnect({ code }); } catch (e) {}
@@ -135,6 +138,11 @@ class WebSocketClient {
         this.catchingUp         = false;
         this.nextId             = 1;
 
+        // The reconnect catch-up in progress, or null (websocket/catch_up.js), and how
+        // long one catch-up request may go unanswered before it is reported as a gap.
+        this._catchUp           = null;
+        this.catchUpTimeoutMs   = options.catchUpTimeout || 30000;
+
         // Tracked subscriptions for replay on reconnect
         this._subscriptions     = [];
 
@@ -172,6 +180,7 @@ class WebSocketClient {
     disconnect() {
         this.intentionalClose = true;
         this.stopPing();
+        dropCatchUp(this);
         this.rejectAllPending('Connection closed');
         if (this.ws) {
             this.ws.close();

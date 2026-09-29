@@ -22,6 +22,7 @@
 
 const { SDKExplorerError } = require('../../utils/errors.js');
 const { WS_OPEN, WS_SCHEMA_VERSION, COIN_PREFIX_MAP } = require('./socket_constants.js');
+const catchUp = require('./catch_up.js');
 
 // Envelope schema gate: the server stamps every frame with schema_version.
 // If it speaks a NEWER envelope schema than this SDK build understands,
@@ -49,13 +50,9 @@ module.exports = {
     onMessage(msg) {
         warnOnSchemaMismatch(this, msg);
 
-        // Track action indexes for catch-up. WELCOME's latest_action_index rides the
-        // same path, so a fresh client seeds from WELCOME here rather than in a second
-        // branch below that could drift from this one.
-        if (msg.data) {
-            this.advanceCursor(msg.data.action_index);
-            this.advanceCursor(msg.data.latest_action_index);
-        }
+        // Track action indexes for catch-up. WELCOME seeds only an unset cursor, and a
+        // reconnect replay holds it until every queued catch-up closes (catch_up.js).
+        catchUp.trackCursor(this, msg);
 
         // Handle system messages
         if (msg.type === 'WELCOME') {
@@ -67,6 +64,11 @@ module.exports = {
         }
         if (msg.catch_up && !this.catchingUp) {
             this.catchingUp = true;
+        }
+
+        // A COMPLETE or an error carrying the pending catch-up's id moves the reconnect on.
+        if (this._catchUp && (msg.type === 'CATCH_UP_COMPLETE' || msg.type === 'error')) {
+            catchUp.answerCatchUp(this, msg);
         }
 
         // Resolve pending request-response
@@ -170,17 +172,10 @@ module.exports = {
             this.lastActionIndex = val;
     },
 
+    // Replay every tracked subscription after a reconnect, sending the catch-ups one at a
+    // time because the server refuses an overlapping one (catch_up.js).
     resubscribe() {
-        for (const sub of this._subscriptions) {
-            const params = Object.assign({}, sub.params);
-            // Same gate as before the cursor became a string: a chain still at index 0
-            // gets no since_action_index, so an unseeded reconnect cannot ask the server
-            // to replay from the genesis of the feed.
-            if (this.lastActionIndex !== null && BigInt(this.lastActionIndex) > 0n) {
-                params.since_action_index = this.lastActionIndex;
-            }
-            this.send({ action: 'subscribe', channels: sub.channels, params });
-        }
+        catchUp.resubscribe(this);
     },
 
     startPing() {

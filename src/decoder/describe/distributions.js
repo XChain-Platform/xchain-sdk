@@ -41,6 +41,7 @@
 'use strict';
 
 const { str, toArray } = require('./value_format.js');
+const numberFormat = require('../../utils/utility/number_format.js');
 
 /*
  * LIST describer. Two format versions:
@@ -243,10 +244,24 @@ function dispenserCreateValues(p) {
             : values.getTick
                 ? `${values.getAmount || '?'} ${values.getTick}`
                 : `${values.getAmount || '?'} ${values.getCoin || '?'}`;
-    values.fillsEstimate = values.giveAmount && values.giveEscrow && Number(values.giveAmount) > 0
-        ? Math.floor(Number(values.giveEscrow) / Number(values.giveAmount))
-        : null;
+    values.fillsEstimate = exactFillsEstimate(values.giveEscrow, values.giveAmount);
     return values;
+}
+
+// Count whole fills the escrow covers exactly as the indexer does, floor(bcdiv(escrow, amount, 64)),
+// because a double quotient such as 0.3 / 0.1 = 2.9999999999999996 floors one fill short.
+function exactFillsEstimate(giveEscrow, giveAmount) {
+    if (!giveEscrow || !giveAmount || !numberFormat.isNumeric(giveEscrow) || !numberFormat.isNumeric(giveAmount))
+        return null;
+    try {
+        const amount = numberFormat.bcnum(giveAmount);
+        if (!amount.gt(0)) return null;
+        const quotient = numberFormat.bcdiv(numberFormat.bcnum(giveEscrow), amount, 64);
+        // Floor with decimal.js and keep a string: mathjs floor snaps near-integers up, and a Number loses counts above 2^53.
+        return numberFormat.bcnum(quotient).floor().toFixed(0);
+    } catch (e) {
+        return null;
+    }
 }
 
 // Assemble create details separately so the create branch remains readable without changing order.

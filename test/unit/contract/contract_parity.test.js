@@ -14,15 +14,18 @@
 // authors get false greens (lint passes, on-chain deploy rejects). Two guards:
 //
 //   1. DRIFT: the vendored src/contract/{lint_core,metering}.js must be
-//      byte-identical (sha256) to the xchain-vm canonicals. (Skipped when the
-//      sibling xchain-vm checkout is absent, e.g. SDK cloned standalone.)
+//      byte-identical (sha256) to the xchain-vm canonicals, AND the acorn,
+//      acorn-walk and astring the SDK declares and installs must equal the
+//      VM's consensus pin (AST_TOOLCHAIN_PINNED in consensus-runtime.js). (Skipped
+//      when the sibling xchain-vm checkout is absent, e.g. SDK cloned standalone.)
 //   2. VERDICT: a fixture corpus (good templates + one bad per rule) gets the
 //      expected verdict from sdk.validateContract / contracts.validate.
 //
 // The cross-ENGINE check (validateContract vs vm.validateSyntax incl. the V8
 // step) lives in xchain-vm's suite, where isolated-vm is available; because the
-// vendored files are proven byte-identical here, that check transitively covers
-// the SDK.
+// vendored files are proven byte-identical here AND run on the same pinned AST
+// toolchain, that check transitively covers the SDK. Identical bytes on a
+// different acorn/astring can still parse, walk or emit differently.
 
 const assert = require('assert');
 const crypto = require('crypto');
@@ -44,6 +47,26 @@ const VENDORED_FILES = ['lint_core.js', 'metering.js', 'stripped_globals.js'];
 
 function sha256(file) {
     return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
+
+// Map the VM pin's keys to the npm names the SDK declares and installs.
+const AST_TOOLCHAIN_PACKAGES = { acorn: 'acorn', acornWalk: 'acorn-walk', astring: 'astring' };
+const SDK_PACKAGE_JSON = path.join(__dirname, '../..', '..', 'package.json');
+
+// Read an installed package's version by walking up from its main entry
+// (astring's `exports` field blocks requiring astring/package.json directly).
+function installedVersion(name) {
+    let dir = path.dirname(require.resolve(name));
+    for (;;) {
+        const pj = path.join(dir, 'package.json');
+        if (fs.existsSync(pj)) {
+            const j = JSON.parse(fs.readFileSync(pj, 'utf8'));
+            if (j.name === name) return j.version;
+        }
+        const up = path.dirname(dir);
+        if (up === dir) return null;
+        dir = up;
+    }
 }
 
 // A parity guard must never silently pass by skipping. When the sibling is
@@ -100,6 +123,26 @@ describe('contract-lint parity + drift', function () {
                 );
             });
         }
+
+        // Gas placement is a function of the AST toolchain, so byte-identical copies need the same versions.
+        it('declared and installed acorn/acorn-walk/astring equal xchain-vm AST_TOOLCHAIN_PINNED', function () {
+            if (!requireSibling(this, VM_SRC_DIR)) return;
+            const runtime = path.join(VM_SRC_DIR, 'consensus-runtime.js');
+            assert.ok(fs.existsSync(runtime),
+                'NO CANONICAL: xchain-vm has no ' + runtime + '; the sibling checkout is stale, or the pin moved.');
+            const { AST_TOOLCHAIN_PINNED } = require(runtime);
+            assert.ok(AST_TOOLCHAIN_PINNED, 'xchain-vm consensus-runtime.js no longer exports AST_TOOLCHAIN_PINNED');
+            assert.deepStrictEqual(Object.keys(AST_TOOLCHAIN_PINNED).sort(), Object.keys(AST_TOOLCHAIN_PACKAGES).sort(),
+                'xchain-vm AST_TOOLCHAIN_PINNED names a different library set; update AST_TOOLCHAIN_PACKAGES to match');
+            const declared = JSON.parse(fs.readFileSync(SDK_PACKAGE_JSON, 'utf8')).dependencies;
+            for (const [key, pkg] of Object.entries(AST_TOOLCHAIN_PACKAGES)) {
+                const pin = AST_TOOLCHAIN_PINNED[key];
+                assert.strictEqual(declared[pkg], pin, 'AST TOOLCHAIN DRIFT: package.json declares ' + pkg + ' '
+                    + declared[pkg] + ' but the xchain-vm consensus pin is exactly ' + pin);
+                assert.strictEqual(installedVersion(pkg), pin, 'AST TOOLCHAIN DRIFT: installed ' + pkg + ' '
+                    + installedVersion(pkg) + ' != xchain-vm consensus pin ' + pin + '; bump both with a CONSENSUS_VERSION change');
+            }
+        });
     });
 
 });

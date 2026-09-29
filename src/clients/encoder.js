@@ -26,6 +26,19 @@ const { installMethods } = require('../utils/install_methods.js');
 const encoderTransactionMethods = require('./encoder/transactions.js');
 const { getTxBlock, ...encoderPrototypeMethods } = encoderTransactionMethods;
 
+// Return the JSON-RPC error object a non-2xx body carries, or null for any other
+// body (a proxy's HTML error page, an empty 500).
+function rpcErrorFromBody(data) {
+    let rpcError = data && typeof data === 'object' ? data.error : null;
+    if (!rpcError || typeof rpcError !== 'object' || typeof rpcError.message !== 'string') return null;
+    return rpcError;
+}
+
+// Format the encoder's reason and JSON-RPC code as a message suffix.
+function rpcErrorSuffix(rpcError) {
+    if (!rpcError) return '';
+    return ': ' + rpcError.message + (typeof rpcError.code === 'number' ? ' (code ' + rpcError.code + ')' : '');
+}
 
 class EncoderClient {
 
@@ -174,6 +187,10 @@ class EncoderClient {
 
     handleError(err, method) {
         if (err.response) {
+            // Keep the encoder's own JSON-RPC error off a non-2xx body (401 -32001,
+            // 429 -32029, 400 -32600) in the same details fields a 2xx error uses.
+            let rpcError = rpcErrorFromBody(err.response.data);
+            let rpcDetails = rpcError ? { rpcError, context: rpcError.data || null } : {};
             // A 429 reaching here already survived retry.js's honoured wait, so
             // it is the caller's to handle. The "Encoder returned HTTP 429 for
             // method <method>" prefix stays byte-exact for integrators matching
@@ -182,13 +199,15 @@ class EncoderClient {
                 let seconds = getRetryAfterSeconds(err);
                 throw new SDKRateLimitedError(
                     'Encoder returned HTTP 429 for method ' + method + (seconds === null ? '' : '; retry after ' + seconds + ' seconds'),
-                    { service: 'encoder', status: 429, retryAfterSeconds: seconds, method, data: err.response.data }
+                    Object.assign({ service: 'encoder', status: 429, retryAfterSeconds: seconds, method, data: err.response.data }, rpcDetails)
                 );
             }
+            // Keep the ENCODER_HTTP_<status> code and message prefix that callers
+            // classify on; the encoder's reason rides after them.
             throw new SDKEncoderError(
                 'ENCODER_HTTP_' + err.response.status,
-                'Encoder returned HTTP ' + err.response.status + ' for method ' + method,
-                { method, status: err.response.status, data: err.response.data }
+                'Encoder returned HTTP ' + err.response.status + ' for method ' + method + rpcErrorSuffix(rpcError),
+                Object.assign({ method, status: err.response.status, data: err.response.data }, rpcDetails)
             );
         }
         if (err.code === 'ECONNABORTED') {
