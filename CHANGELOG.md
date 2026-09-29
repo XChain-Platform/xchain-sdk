@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-09-29
+
+### Added
+- Added light-client parsing and canonical ordering for folded anchor bundles.
+- Exposed transaction block lookup through the encoder client.
+
+### Changed
+- Documented controller custody routing in SDK preflight checks.
+- Armed the testnet release train at BTC 155452.
+- Armed testnet mirror admission producers at BTC 155453, LTC 4907632 and DOGE 67968273.
+- Armed testnet mirror admission consumers at BTC 155499, LTC 4907862 and DOGE 67969217.
+- Armed the testnet anchor attestation barrier at BTC 155499.
+- Armed testnet token bridges at BTC 155453, LTC 4907632 and DOGE 67968273.
+- Armed testnet token policy inheritance at BTC 155453, LTC 4907632 and DOGE 67968273.
+
+### Fixed
+- Restored separate token activation sentinels for each testnet chain.
+
 ## [0.20.1] - 2026-09-23
 
 ### Fixed
