@@ -28,7 +28,10 @@ function coinQualifierRoot(text, coins = DEFAULT_COINS){
     const at = text.indexOf(LIST_TICK_COIN_SEPARATOR);
     if(at <= 0) return null;
     const root = text.slice(0, at).toUpperCase();
-    if(coins.some((c) => String(c).toUpperCase() === root)) return root;
+    const isCoin = Array.isArray(coins) && coins.some((coin) =>
+        typeof coin === 'string' && coin.toUpperCase() === root
+    );
+    if(isCoin) return root;
     return RESERVED_FUTURE_ROOTS.includes(root) ? root : null;
 }
 

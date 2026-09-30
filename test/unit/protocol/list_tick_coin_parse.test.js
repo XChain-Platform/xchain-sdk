@@ -7,6 +7,7 @@
 // General Public License v3.0 or later; see LICENSE.md. A commercial
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
+// GENERATED parity cases.
 
 const assert = require('assert');
 const {
@@ -41,6 +42,8 @@ describe('list_tick_coin parser', () => {
     it('honours a caller-supplied coin list', () => {
         assert.strictEqual(coinQualifierRoot('btc:X', ['BTC']), 'BTC');
         assert.strictEqual(coinQualifierRoot('DOGE:X', ['BTC']), null);
+        assert.strictEqual(coinQualifierRoot('DOGE:X', null), null);
+        assert.strictEqual(coinQualifierRoot('ETH:X', null), 'ETH');
     });
 
     it('accepts well-formed rests', () => {
