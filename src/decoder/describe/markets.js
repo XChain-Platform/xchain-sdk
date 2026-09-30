@@ -101,6 +101,8 @@ function decodeOrderCreate(p, noun, chainSuffix, memo, memoWarnings) {
     const getOwnership = str(p.GET_OWNERSHIP) === '1';
     const getAddress = str(p.GET_ADDRESS);
     const expiration = str(p.EXPIRATION);
+    const allowList = str(p.ALLOW_LIST);
+    const blockList = str(p.BLOCK_LIST);
     const giveLabel = giveOwnership
         ? `ownership of ${giveTick || '?'}`
         : `${giveAmount || '?'} ${giveTick || getCoinLabel(giveCoin) || '?'}`;
@@ -112,8 +114,10 @@ function decodeOrderCreate(p, noun, chainSuffix, memo, memoWarnings) {
         details: [
             { label: 'Give', value: giveLabel },
             { label: 'Get', value: getLabel },
-            ...(getAddress ? [{ label: 'Counterparty', value: getAddress }] : []),
+            ...(getAddress ? [{ label: 'Receive address', value: getAddress }] : []),
             ...(expiration ? [{ label: 'Expiration', value: expiration }] : []),
+            ...(allowList ? [{ label: 'Allow list', value: allowList }] : []),
+            ...(blockList ? [{ label: 'Block list', value: blockList }] : []),
             ...(memo ? [{ label: 'Memo', value: memo }] : []),
         ],
         warnings: [
