@@ -14,7 +14,7 @@ const {
     coinQualifierRoot,
     parseTickCoinItem,
     isTickCoinRestWellFormed,
-} = require('../../../src/protocol/list_tick_coin.js');
+} = require('../../../../src/protocol/list_tick_coin.js');
 
 describe('list_tick_coin parser', () => {
     it('exports the separator and the item length cap', () => {
