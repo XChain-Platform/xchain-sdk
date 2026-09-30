@@ -9,16 +9,27 @@ const { expect } = require('chai');
 const nock = require('nock');
 const EncoderClient = require('../../../src/clients/encoder.js');
 
+const BASE = 'http://encoder.test:3000';
+
+function createClient() {
+    return new EncoderClient({
+        encoderUrl: 'encoder.test',
+        encoderPort: 3000,
+        retry: false
+    });
+}
+
+function mockRpc(method, params, result) {
+    nock(BASE)
+        .post('/', { jsonrpc: '2.0', method, params, id: 1 })
+        .reply(200, { jsonrpc: '2.0', result, id: 1 });
+}
+
 describe('EncoderClient reservation release', function () {
-    const BASE = 'http://encoder.test:3000';
     let client;
 
     beforeEach(function () {
-        client = new EncoderClient({
-            encoderUrl: 'encoder.test',
-            encoderPort: 3000,
-            retry: false
-        });
+        client = createClient();
     });
 
     afterEach(function () {
@@ -32,14 +43,7 @@ describe('EncoderClient reservation release', function () {
             released: ['a'.repeat(64) + ':2']
         };
 
-        nock(BASE)
-            .post('/', {
-                jsonrpc: '2.0',
-                method: 'release_inputs',
-                params: { reservationId },
-                id: 1
-            })
-            .reply(200, { jsonrpc: '2.0', result: expected, id: 1 });
+        mockRpc('release_inputs', { reservationId }, expected);
 
         expect(await client.releaseInputs(reservationId)).to.deep.equal(expected);
     });
@@ -48,14 +52,7 @@ describe('EncoderClient reservation release', function () {
         const reservationId = '0'.repeat(32);
         const expected = { found: false, released: [] };
 
-        nock(BASE)
-            .post('/', {
-                jsonrpc: '2.0',
-                method: 'release_inputs',
-                params: { reservationId },
-                id: 1
-            })
-            .reply(200, { jsonrpc: '2.0', result: expected, id: 1 });
+        mockRpc('release_inputs', { reservationId }, expected);
 
         expect(await client.releaseInputs(reservationId)).to.deep.equal(expected);
     });
@@ -72,14 +69,7 @@ describe('EncoderClient reservation release', function () {
             }
         };
 
-        nock(BASE)
-            .post('/', {
-                jsonrpc: '2.0',
-                method: 'create_tx',
-                params: { pubkey: 'pubkey', data: 'TEST' },
-                id: 1
-            })
-            .reply(200, { jsonrpc: '2.0', result: expected, id: 1 });
+        mockRpc('create_tx', { pubkey: 'pubkey', data: 'TEST' }, expected);
 
         const result = await client.createTx({ data: 'TEST', pubkey: 'pubkey' });
 
