@@ -78,9 +78,15 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `0773b436`
+**Pins taken at indexer commit:** `500b5d4f`
 
-(Re-anchored 2026-09-29 for the review-round handler edits reviewed below. `0773b436` is
+(Re-anchored 2026-09-30 for the coin-keyed gate reads reviewed below. `500b5d4f` is the
+committed indexer develop tip; the commit that moves the three re-pinned directories
+(dispenser, order, swap) is `77e4f462`. It also closes the 2026-09-29 paired-change
+exception: the round's indexer edits those six pins were taken from are committed in the
+range `0773b436..500b5d4f`, and all thirteen rows are HEAD hashes at `500b5d4f`.)
+
+(Earlier note. Re-anchored 2026-09-29 for the review-round handler edits reviewed below. `0773b436` is
 the indexer develop tip the round's worktree sits on, and no mapped row moves between
 `c9ba4f9c` and it. The six re-pinned directories (send, issue, dispenser, dispense,
 airdrop, dividend) are hashed from that tip PLUS the round's uncommitted indexer edits,
@@ -340,7 +346,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 0773b436..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 500b5d4f..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -422,10 +428,10 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `1d5869c477a5670c76b5c64ca893044ce67910310e716f7156220f87819e8974` |
 | `checks/mint.js` | `src/actions/mint/` | `caf6f7e7bfc0ffac865ae76fbc5d36123be77db09df81f617c3a6fc9304554cd` |
 | `checks/issue.js` | `src/actions/issue/` | `5a3e61d8b199060532e7ca5a4393615a0f232bdc6b4d5913791abea34210a080` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `fadc8c6c281d51854ff948c98abf1f354e9bca706e589920973a27c0180525f9` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `fb0f32cd0721236f03d06adc22a2ba63fa2f9955bf686dab76acaec8ca9b8432` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `34cec38417f2fb43867dcc5810d980d3d15a1fabc513d47c6541bb81de8e5260` |
-| `checks/trading.js` (ORDER) | `src/actions/order/` | `f1b75f4d843c2ca9fbb0bfe35716a0902600b0e3a8b37a7edadfadbf164b8818` |
-| `checks/trading.js` (SWAP) | `src/actions/swap/` | `e3be2be82c0f8f39c3ead46a5cf6006e2c1e5f4494ac9ee6b0f81611d31f8c49` |
+| `checks/trading.js` (ORDER) | `src/actions/order/` | `7518413cb97ece320a481859d8227756c3627d1bb2891da63153b54ea2de71df` |
+| `checks/trading.js` (SWAP) | `src/actions/swap/` | `3572ba88cb701624a841a1e089d9c848d4cd37542fa7916f63ca41c7bd6d5e43` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `8b493af57a24dbba23ae3ca4346be6d42444f31bfd29be7a489d15d5cf70dd9f` |
 | `checks/dividend.js` | `src/actions/dividend/` | `498e038fd9118f0d37663a98a7d55db7d2cee93ae7a6f73cafc32f04d26a3103` |
 | `checks/batch.js` | `src/actions/batch/` | `895eb6fda8380b3019ccdaa97f7b13d97ebae20008e4285a43f7b854b1884507` |
@@ -451,6 +457,33 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-09-30 - DISPENSER, ORDER and SWAP pass the chain's COIN to three gate reads
+
+Baseline was the prior anchor `0773b436`; the reviewed tree is the committed indexer develop
+tip `500b5d4f`. Hashing `git archive 77e4f462^ src/actions` with
+`node bin/preflight_handler_dirs.js` reproduces all three prior pins, so the whole delta read
+here is `77e4f462`, read with `git -C ../xchain-indexer diff 0773b436..HEAD -- <handler>`.
+The new pins were derived with `node bin/preflight_handler_dirs.js <indexer> <handler>/`.
+
+**What moved: five gate reads now pass `this.config['COIN']` instead of `null`.** They are
+DISPENSER_FRESHNESS_PROVEN_USE (`dispenser/index.js`), DISPENSER_SETTLEMENT_PRICE
+(`dispenser/validate_format.js`) and LIST_EDIT_REMOVE (`dispenser/validate.js`,
+`order/validate.js`, `swap/validate.js`), so a `<COIN>:<network>` slot in those registry
+rows is now honoured before the bare network. Every coin-keyed slot equals its bare network
+slot today, so no indexer verdict changes on any network.
+
+**Client mirrors.** `activationThreshold` already resolves `<COIN>:<network>` first with the
+bare network as fallback, the same order as the indexer's `resolveThreshold`, and both
+tables it reads are now coin-keyed on the indexer side (LIST_REFERENCE_VALIDITY through
+`src/db/lists/index.js`). DISPENSER_SETTLEMENT_PRICE is never resolved by the client: it is
+an unverified disclosure whose text lists every pinned slot, now matching what the indexer
+reads. LIST_EDIT_REMOVE and DISPENSER_FRESHNESS_PROVEN_USE have no client mirror; the
+removal sentinel is not judged by Tier 2 and freshness stays under `DISPENSER_ORIGIN_STANDING`
+(2026-09-26 entry). The same round's LIST_CHANGE_REMATCH read in `list.js` and the
+VOTE callback-usability read in `vote/` sit outside every mapped row and have no mirror.
+
+**Direction: NEITHER, no admission boundary moves in the client. NO CLIENT VERDICT MOVES.**
 
 ### 2026-09-29 - review-round indexer edits over six handler directories
 
