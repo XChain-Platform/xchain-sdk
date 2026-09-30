@@ -174,6 +174,10 @@ module.exports = {
         return this.rpc('create_tx', rpcParams);
     },
 
+    async releaseInputs(reservationId) {
+        return this.rpc('release_inputs', { reservationId });
+    },
+
     // P2SH/P2WSH two-phase helper: spend an existing P2SH/P2WSH output
     // This is phase 2 of the two-transaction pattern used by P2SH/P2WSH encoding
     //
