@@ -49,7 +49,9 @@ describe('decoder.describe LIST union create', function () {
             'List has no items.',
         ]);
     });
+});
 
+describe('decoder.describe LIST backward compatibility', function () {
     it('leaves TYPE 2 create unchanged', function () {
         const decoded = describeAction(parse('LIST|0|2|trusted recipients|DOne|DTwo'));
 

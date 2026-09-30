@@ -43,13 +43,11 @@
 const { str, toArray } = require('./value_format.js');
 const numberFormat = require('../../utils/utility/number_format.js');
 
-/*
- * LIST describer. Two format versions:
- *   - v0 Create: VERSION|TYPE|MEMO|ITEM (ITEM repeats). TYPE 1 = TICK list,
- *     TYPE 2 = ADDRESS list, TYPE 3 = union of lists.
- *   - v1 Edit: VERSION|EDIT|LIST_ACTION_INDEX|MEMO|ITEM (ITEM repeats).
- *     Clones an existing list and adds (EDIT=1) or removes (EDIT=2).
- */
+// Describe v0 LIST creates as VERSION|TYPE|MEMO|ITEM, with ITEM repeating.
+// Recognize TYPE 1 as TICK, TYPE 2 as ADDRESS, and TYPE 3 as a union of lists.
+
+// Describe v1 LIST edits as VERSION|EDIT|LIST_ACTION_INDEX|MEMO|ITEM.
+// Clone the existing list, then add with EDIT 1 or remove with EDIT 2.
 function decodeList(p, chainSuffix) {
     const version = str(p.VERSION) || '0';
     const items = toArray(p.ITEM);
