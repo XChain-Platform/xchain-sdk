@@ -182,9 +182,14 @@ describe('Validator: LIST TYPE validation', function () {
         expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
     });
 
-    it('rejects LIST TYPE = 3', function () {
+    it('rejects LIST TYPE = 3 when ITEM is not an action index', function () {
         const errors = v.validate('LIST', { TYPE: 3, ITEM: 'MYTOKEN' });
         expect(hasErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
+    });
+
+    it('accepts LIST TYPE = 3 with action index items', function () {
+        const errors = v.validate('LIST', { TYPE: 3, ITEM: ['17', '42'] });
+        expect(hasNoErrorCode(errors, 'INVALID_FIELD_VALUE')).to.be.true;
     });
 });
 
