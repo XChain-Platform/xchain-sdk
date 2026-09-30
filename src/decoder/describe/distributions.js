@@ -46,7 +46,7 @@ const numberFormat = require('../../utils/utility/number_format.js');
 /*
  * LIST describer. Two format versions:
  *   - v0 Create: VERSION|TYPE|MEMO|ITEM (ITEM repeats). TYPE 1 = TICK list,
- *     TYPE 2 = ADDRESS list.
+ *     TYPE 2 = ADDRESS list, TYPE 3 = union of lists.
  *   - v1 Edit: VERSION|EDIT|LIST_ACTION_INDEX|MEMO|ITEM (ITEM repeats).
  *     Clones an existing list and adds (EDIT=1) or removes (EDIT=2).
  */
@@ -83,15 +83,18 @@ function decodeList(p, chainSuffix) {
 
     // Version 0: create.
     const type = str(p.TYPE);
+    const isUnion = type === '3';
     const kind = type === '1' ? 'token' : type === '2' ? 'address' : 'item';
-    const summary = `Create ${kind} list of ${count || '?'} item${count === 1 ? '' : 's'}${chainSuffix}`;
+    const summary = isUnion
+        ? `Create union list of ${count || '?'} member lists${chainSuffix}`
+        : `Create ${kind} list of ${count || '?'} item${count === 1 ? '' : 's'}${chainSuffix}`;
     return {
         summary,
         details: [
-            { label: 'Type', value: type === '1' ? 'Token' : type === '2' ? 'Address' : type },
+            { label: 'Type', value: type === '1' ? 'Token' : type === '2' ? 'Address' : isUnion ? 'Union' : type },
             { label: 'Items', value: String(count) },
             ...(count > 0 && count <= 5
-                ? [{ label: 'Sample', value: items.join(', ') }]
+                ? [{ label: isUnion ? 'Member list indexes' : 'Sample', value: items.join(', ') }]
                 : []),
             ...(memo ? [{ label: 'Memo', value: memo }] : []),
         ],
