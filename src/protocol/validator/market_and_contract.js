@@ -26,6 +26,38 @@ const { VALID_COINS, ACTION_REQUIRED_FIELDS } = require('./field_limits.js');
 // LIST_UNION_MAX_MEMBERS has its canonical home in xchain-documentation/protocol/constants.js.
 const LIST_UNION_MAX_MEMBERS = 16;
 
+function validateListUnionItems(validator, fields) {
+    const errors = [];
+    const raw = fields.ITEM;
+    const items = validator.isEmpty(raw) ? [] : (Array.isArray(raw) ? raw : [raw]);
+    if (items.length === 0) {
+        if (!validator.isEmpty(raw))
+            errors.push(validator.buildError('MISSING_REQUIRED_FIELD',
+                'LIST union create requires field: ITEM', { field: 'ITEM' }));
+        return errors;
+    }
+    if (items.length > LIST_UNION_MAX_MEMBERS)
+        errors.push(validator.buildError('INVALID_FIELD_VALUE',
+            'LIST union ITEM count must not exceed ' + LIST_UNION_MAX_MEMBERS,
+            { field: 'ITEM', value: items.length, constraint: { max: LIST_UNION_MAX_MEMBERS } }));
+
+    const seen = new Set();
+    for (const item of items) {
+        const value = String(item);
+        if (!/^[1-9][0-9]*$/.test(value))
+            errors.push(validator.buildError('INVALID_FIELD_VALUE',
+                'LIST union ITEM must be a positive action index: ' + value,
+                { field: 'ITEM', value: item }));
+        if (seen.has(value))
+            errors.push(validator.buildError('INVALID_FIELD_VALUE',
+                'LIST union ITEM must not contain duplicate action indexes: ' + value,
+                { field: 'ITEM', value: item }));
+        seen.add(value);
+    }
+    // Member-list types require chain state, so the indexer records mismatches invalid.
+    return errors;
+}
+
 module.exports = {
     // DEPLOY-specific validation (version-dependent)
     validateDeploy(fields) {
@@ -173,40 +205,8 @@ module.exports = {
         if (!isEdit && Number(fields.TYPE) === 2)
             errors.push(...this.validateListAddressItems(fields));
         if (!isEdit && Number(fields.TYPE) === 3)
-            errors.push(...this.validateListUnionItems(fields));
+            errors.push(...validateListUnionItems(this, fields));
 
-        return errors;
-    },
-
-    validateListUnionItems(fields) {
-        const errors = [];
-        const raw = fields.ITEM;
-        const items = this.isEmpty(raw) ? [] : (Array.isArray(raw) ? raw : [raw]);
-        if (items.length === 0) {
-            if (!this.isEmpty(raw))
-                errors.push(this.buildError('MISSING_REQUIRED_FIELD',
-                    'LIST union create requires field: ITEM', { field: 'ITEM' }));
-            return errors;
-        }
-        if (items.length > LIST_UNION_MAX_MEMBERS)
-            errors.push(this.buildError('INVALID_FIELD_VALUE',
-                'LIST union ITEM count must not exceed ' + LIST_UNION_MAX_MEMBERS,
-                { field: 'ITEM', value: items.length, constraint: { max: LIST_UNION_MAX_MEMBERS } }));
-
-        const seen = new Set();
-        for (const item of items) {
-            const value = String(item);
-            if (!/^[1-9][0-9]*$/.test(value))
-                errors.push(this.buildError('INVALID_FIELD_VALUE',
-                    'LIST union ITEM must be a positive action index: ' + value,
-                    { field: 'ITEM', value: item }));
-            if (seen.has(value))
-                errors.push(this.buildError('INVALID_FIELD_VALUE',
-                    'LIST union ITEM must not contain duplicate action indexes: ' + value,
-                    { field: 'ITEM', value: item }));
-            seen.add(value);
-        }
-        // Member-list types require chain state, so the indexer records mismatches invalid.
         return errors;
     },
 
