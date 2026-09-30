@@ -21,6 +21,8 @@
 const { SDKExplorerError } = require('../../utils/errors.js');
 const { withRetry, isRetryable } = require('../../utils/retry.js');
 
+const { seg } = require('./path_segment.js');
+
 module.exports = {
     /*
      *  Staking Methods
@@ -28,7 +30,7 @@ module.exports = {
 
     async getStakes(query, type, opts = {}) {
         if (query)
-            return this.get('/stakes/' + query + '/' + type, opts);
+            return this.get('/stakes/' + seg(query) + '/' + seg(type), opts);
         return this.get('/stakes', opts);
     },
 
@@ -36,14 +38,14 @@ module.exports = {
     // type ∈ {block, address, source}. Contract-targeted unstakes are getContractUnstakes.
     async getUnstakes(query, type, opts = {}) {
         if (query)
-            return this.get('/unstakes/' + query + '/' + type, opts);
+            return this.get('/unstakes/' + seg(query) + '/' + seg(type), opts);
         return this.get('/unstakes', opts);
     },
 
     // Signing-key revocations (DELEGATE v2/v3), type ∈ {block, address, source}.
     async getStakeKeyRevocations(query, type, opts = {}) {
         if (query)
-            return this.get('/delegation_revocations/' + query + '/' + type, opts);
+            return this.get('/delegation_revocations/' + seg(query) + '/' + seg(type), opts);
         return this.get('/delegation_revocations', opts);
     },
 
@@ -51,12 +53,12 @@ module.exports = {
     // The per-reward-type accrual ledger is getValidatorRewards; this is the claim event.
     async getCollects(query, type, opts = {}) {
         if (query)
-            return this.get('/collects/' + query + '/' + type, opts);
+            return this.get('/collects/' + seg(query) + '/' + seg(type), opts);
         return this.get('/collects', opts);
     },
 
     async getDelegations(query, type, opts = {}) {
-        return this.get('/delegations/' + query + '/' + type, opts);
+        return this.get('/delegations/' + seg(query) + '/' + seg(type), opts);
     },
 
     async getValidators(opts = {}) {
@@ -64,27 +66,27 @@ module.exports = {
     },
 
     async getValidatorRewards(query, type, opts = {}) {
-        return this.get('/rewards/' + query + '/' + type, opts);
+        return this.get('/rewards/' + seg(query) + '/' + seg(type), opts);
     },
 
     // Contract-targeted stakes (STAKE v3), type ∈ {address, block, contract}.
     async getContractStakes(query, type, opts = {}) {
         if (query)
-            return this.get('/contract_stakes/' + query + '/' + type, opts);
+            return this.get('/contract_stakes/' + seg(query) + '/' + seg(type), opts);
         return this.get('/contract_stakes', opts);
     },
 
     // Contract-targeted unstakes (UNSTAKE v1), type ∈ {address, block, contract}.
     async getContractUnstakes(query, type, opts = {}) {
         if (query)
-            return this.get('/contract_unstakes/' + query + '/' + type, opts);
+            return this.get('/contract_unstakes/' + seg(query) + '/' + seg(type), opts);
         return this.get('/contract_unstakes', opts);
     },
 
     // Contract-targeted delegations (DELEGATE v1), type ∈ {block, address, contract}.
     async getContractDelegations(query, type, opts = {}) {
         if (query)
-            return this.get('/contract_delegations/' + query + '/' + type, opts);
+            return this.get('/contract_delegations/' + seg(query) + '/' + seg(type), opts);
         return this.get('/contract_delegations', opts);
     },
 
@@ -92,7 +94,7 @@ module.exports = {
     // responses from the `attests` table), type ∈ {address, block, contract}.
     async getAttestations(query, type, opts = {}) {
         if (query)
-            return this.get('/attestations/' + query + '/' + type, opts);
+            return this.get('/attestations/' + seg(query) + '/' + seg(type), opts);
         return this.get('/attestations', opts);
     },
 
@@ -100,7 +102,7 @@ module.exports = {
     // type ∈ {address, block, contract}.
     async getSlashEvents(query, type, opts = {}) {
         if (query)
-            return this.get('/slash_events/' + query + '/' + type, opts);
+            return this.get('/slash_events/' + seg(query) + '/' + seg(type), opts);
         return this.get('/slash_events', opts);
     },
 
@@ -109,7 +111,7 @@ module.exports = {
     // lists contract-emitted slashes (xchain.contract.slash).
     async getCapabilitySlashEvents(query, type, opts = {}) {
         if (query)
-            return this.get('/capability_slash_events/' + query + '/' + type, opts);
+            return this.get('/capability_slash_events/' + seg(query) + '/' + seg(type), opts);
         return this.get('/capability_slash_events', opts);
     },
 
@@ -117,7 +119,7 @@ module.exports = {
     // List the source-chain request rows, type ∈ {block, contract, status}.
     async getXcalls(query, type, opts = {}) {
         if (query)
-            return this.get('/xcalls/' + query + '/' + type, opts);
+            return this.get('/xcalls/' + seg(query) + '/' + seg(type), opts);
         return this.get('/xcalls', opts);
     },
 
@@ -125,7 +127,7 @@ module.exports = {
     // target-chain execution outcome and the source-chain callback delivery (each null
     // until the call is relayed/executed/delivered).
     async getXcall(callId) {
-        return this.get('/xcall/' + callId);
+        return this.get('/xcall/' + seg(callId));
     },
 
     // Controller-bound token policy rows (programmable policy layer; read-only, no query).
@@ -141,28 +143,28 @@ module.exports = {
     // Full-node possession-proof verdicts (NODEPROOF v0), type ∈ {block, epoch, pubkey, address}.
     async getFullNodeVerifications(query, type, opts = {}) {
         if (query)
-            return this.get('/full_node_verifications/' + query + '/' + type, opts);
+            return this.get('/full_node_verifications/' + seg(query) + '/' + seg(type), opts);
         return this.get('/full_node_verifications', opts);
     },
 
     // Cross-chain settlement match rows (XCALL/DEX mirrors), type ∈ {match, block, status}.
     async getCrossChainMatches(query, type, opts = {}) {
         if (query)
-            return this.get('/cross_chain_matches/' + query + '/' + type, opts);
+            return this.get('/cross_chain_matches/' + seg(query) + '/' + seg(type), opts);
         return this.get('/cross_chain_matches', opts);
     },
 
     // Cross-chain settlement rows (the settle leg of a match), type ∈ {match, block}.
     async getCrossChainSettlements(query, type, opts = {}) {
         if (query)
-            return this.get('/cross_chain_settlements/' + query + '/' + type, opts);
+            return this.get('/cross_chain_settlements/' + seg(query) + '/' + seg(type), opts);
         return this.get('/cross_chain_settlements', opts);
     },
 
     // ANCHOR checkpoint-anchor rows, type ∈ {block, chain, network, status}.
     async getAnchors(query, type, opts = {}) {
         if (query)
-            return this.get('/anchors/' + query + '/' + type, opts);
+            return this.get('/anchors/' + seg(query) + '/' + seg(type), opts);
         return this.get('/anchors', opts);
     },
 
@@ -170,7 +172,7 @@ module.exports = {
     // type ∈ {token, address}. The validator COIN/FIAT snapshots are getPriceSnapshots.
     async getOraclePrices(query, type, opts = {}) {
         if (query)
-            return this.get('/oracle_prices/' + query + '/' + type, opts);
+            return this.get('/oracle_prices/' + seg(query) + '/' + seg(type), opts);
         return this.get('/oracle_prices', opts);
     },
 
@@ -178,7 +180,7 @@ module.exports = {
     // read from the explorer's co-located hub DB), type ∈ {capability, pubkey}.
     async getValidatorCapabilities(query, type, opts = {}) {
         if (query)
-            return this.get('/validator_capabilities/' + query + '/' + type, opts);
+            return this.get('/validator_capabilities/' + seg(query) + '/' + seg(type), opts);
         return this.get('/validator_capabilities', opts);
     },
 
@@ -186,14 +188,14 @@ module.exports = {
     // type ∈ {status, parameter, proposal}.
     async getGovernanceProposals(query, type, opts = {}) {
         if (query)
-            return this.get('/governance_proposals/' + query + '/' + type, opts);
+            return this.get('/governance_proposals/' + seg(query) + '/' + seg(type), opts);
         return this.get('/governance_proposals', opts);
     },
 
     // Per-validator governance votes (hub-owned governance_votes), type ∈ {proposal, voter}.
     async getGovernanceVotes(query, type, opts = {}) {
         if (query)
-            return this.get('/governance_votes/' + query + '/' + type, opts);
+            return this.get('/governance_votes/' + seg(query) + '/' + seg(type), opts);
         return this.get('/governance_votes', opts);
     },
 
@@ -203,27 +205,27 @@ module.exports = {
     // lifecycle (open/finalized/failed_quorum); source = the poll creator.
     async getPolls(query, type, opts = {}) {
         if (query)
-            return this.get('/polls/' + query + '/' + type, opts);
+            return this.get('/polls/' + seg(query) + '/' + seg(type), opts);
         return this.get('/polls', opts);
     },
 
     // A single VOTE poll by its id (the creating action_index). Returns the full poll
     // definition + finalization summary, with options/callback_params JSON-parsed.
     async getPoll(pollIndex, opts = {}) {
-        return this.get('/poll/' + pollIndex, opts);
+        return this.get('/poll/' + seg(pollIndex), opts);
     },
 
     // The frozen per-option tally for one poll (poll_results, written by VOTE v2 finalize).
     // Empty until the poll is finalized; ordered by option_index.
     async getPollResults(pollIndex, opts = {}) {
-        return this.get('/poll/' + pollIndex + '/results', opts);
+        return this.get('/poll/' + seg(pollIndex) + '/results', opts);
     },
 
     // VOTE ballots (v1; votes table), one row per (poll, voter, chosen option),
     // type ∈ {address, poll, block}. The voter is the ballot's source address.
     async getVotes(query, type, opts = {}) {
         if (query)
-            return this.get('/votes/' + query + '/' + type, opts);
+            return this.get('/votes/' + seg(query) + '/' + seg(type), opts);
         return this.get('/votes', opts);
     },
 
@@ -245,18 +247,18 @@ module.exports = {
 
     // Re-fetch the checkpoint at blockIndex with its validator set for LOCAL re-verification.
     async getCheckpointVerify(blockIndex) {
-        return this.get('/checkpoint/' + blockIndex + '/verify');
+        return this.get('/checkpoint/' + seg(blockIndex) + '/verify');
     },
 
     // Merkle inclusion proof for an address/tick balance against stakes/ledger root
     // (SPV §4.4). opts.height pins the checkpoint snapshot height.
     async getBalanceProof(address, tick, opts = {}) {
-        return this.get('/proof/balance/' + address + '/' + tick, opts);
+        return this.get('/proof/balance/' + seg(address) + '/' + seg(tick), opts);
     },
 
     // Merkle inclusion proof for an action by index (SPV §5).
     async getActionProof(actionIndex) {
-        return this.get('/proof/action/' + actionIndex);
+        return this.get('/proof/action/' + seg(actionIndex));
     },
 
     // Validator-set (stakes_root) proof (SPV §7.2; BTC-only). opts.height pins the snapshot.
@@ -266,7 +268,7 @@ module.exports = {
 
     // Contract-state inclusion proof for (contractIndex, key) (SPV §8.1).
     async getContractStateProof(contractIndex, key) {
-        return this.get('/proof/contract-state/' + contractIndex + '/' + key);
+        return this.get('/proof/contract-state/' + seg(contractIndex) + '/' + seg(key));
     },
 
 
@@ -276,28 +278,28 @@ module.exports = {
 
     async getMarkets(tick) {
         if (tick)
-            return this.get('/markets/' + tick);
+            return this.get('/markets/' + seg(tick));
         return this.get('/markets');
     },
 
     async getMarket(tick1, tick2) {
-        return this.get('/market/' + tick1 + '/' + tick2);
+        return this.get('/market/' + seg(tick1) + '/' + seg(tick2));
     },
 
     async getMarketHistory(tick1, tick2, address, opts = {}) {
         if (address)
-            return this.get('/market/' + tick1 + '/' + tick2 + '/history/' + address, opts);
-        return this.get('/market/' + tick1 + '/' + tick2 + '/history', opts);
+            return this.get('/market/' + seg(tick1) + '/' + seg(tick2) + '/history/' + seg(address), opts);
+        return this.get('/market/' + seg(tick1) + '/' + seg(tick2) + '/history', opts);
     },
 
     async getMarketOrders(tick1, tick2, address, opts = {}) {
         if (address)
-            return this.get('/market/' + tick1 + '/' + tick2 + '/orders/' + address, opts);
-        return this.get('/market/' + tick1 + '/' + tick2 + '/orders', opts);
+            return this.get('/market/' + seg(tick1) + '/' + seg(tick2) + '/orders/' + seg(address), opts);
+        return this.get('/market/' + seg(tick1) + '/' + seg(tick2) + '/orders', opts);
     },
 
     async getOrderbook(tick1, tick2) {
-        return this.get('/market/' + tick1 + '/' + tick2 + '/orderbook');
+        return this.get('/market/' + seg(tick1) + '/' + seg(tick2) + '/orderbook');
     },
 
 
@@ -322,7 +324,7 @@ module.exports = {
 
     // Unconfirmed mempool actions, type ∈ {address, token}.
     async getMempool(query, type, opts = {}) {
-        return this.get('/mempool/' + query + '/' + type, opts);
+        return this.get('/mempool/' + seg(query) + '/' + seg(type), opts);
     },
 
     // Network-wide summary (chain heights, indexer status, peer counts). Also

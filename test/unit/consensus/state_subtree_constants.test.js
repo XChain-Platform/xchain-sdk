@@ -324,7 +324,8 @@ function itGoldenCopyHasNotMovedOnItsOwn(){
         // Moved (W5 consolidation, row 21): the shim is src/consensus/gates/
         // state_subtree_gate.js in every repo; only its registry require line
         // changed with the move (../gate_registry), the values did not.
-        const GOLDEN = '9f07ece9abad3b9abb7770ecb1d06aeb0161fa08170bd24b8f74ed41f31662d8';
+        // Moved (header paths): header names the post-W5 carriers, guards and shared_rows_4.js height carriers; comment-only.
+        const GOLDEN = 'cb5b05479973080128636f18326c59391624a56342db86a07c639401adbb12e3';
         const actual = sha256File(SELF);
         if(actual !== GOLDEN)
             assert.fail(GATE_FILE + ' changed (sha256 ' + actual + ').\n' +

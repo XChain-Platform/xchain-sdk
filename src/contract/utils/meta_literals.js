@@ -65,6 +65,8 @@ function loadAcornWalk() {
  * byte-vendored consensus set) and never an import of the xchain-vm toolkit (which
  * is not an SDK dependency and pulls isolated-vm). The toolkit carries its own copy
  * of the same algorithm; the two are kept in step by the spec, not by a require.
+ * This copy's verdicts, caps and grammar are checked against the indexer's
+ * contract_meta.js by test/unit/contract/contract_meta_parity.test.js.
  *
  * The read is STATIC (acorn) while the chain EVALUATES `meta` in the isolate, so a
  * computed value is invisible here. That asymmetry decides what may refuse: only a

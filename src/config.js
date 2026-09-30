@@ -209,6 +209,7 @@ var Config = {
         rollcallRegtestActivation:        () => process.env.XC_ROLLCALL_REGTEST_ACTIVATION,
         rollcallGatesRegtestActivation:   () => process.env.XC_ROLLCALL_GATES_REGTEST_ACTIVATION,
         mirrorAdmissionRegtestActivation: () => process.env.XC_MIRROR_ADMISSION_ACTIVATION,
+        anchorFoldRegtestActivation:      () => process.env.XC_ANCHOR_FOLD_REGTEST_ACTIVATION,
     },
 
 }

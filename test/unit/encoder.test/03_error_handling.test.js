@@ -33,6 +33,8 @@ describe('EncoderClient', function () {
             } catch (e) {
                 expect(e.name).to.equal('SDKEncoderError');
                 expect(e.code).to.equal('ENCODER_HTTP_500');
+                expect(e.message).to.equal('Encoder returned HTTP 500 for method create_tx');
+                expect(e.details).to.not.have.property('rpcError');
             }
         });
 

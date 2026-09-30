@@ -83,6 +83,26 @@ describe('ExplorerClient', function () {
     });
 });
 
+describe('ExplorerClient, one segment per key', function () {
+    beforeEach(resetClient);
+    afterEach(cleanNock);
+
+    it('getToken percent-encodes a tick carrying URL characters as one segment', async function () {
+        // TDOGE issued "$$$$$$$$$$$78324%@##*(@#"; joined raw, the request
+        // was cut at the '#' and the rest failed URL parsing.
+        nock(BASE).get('/BTC/api/token/%24%24%24%24%24%24%24%24%24%24%2478324%25%40%23%23*(%40%23')
+            .reply(200, { info: { tick: '$$$$$$$$$$$78324%@##*(@#' } });
+        let result = await client.getToken('$$$$$$$$$$$78324%@##*(@#');
+        expect(result.info.tick).to.equal('$$$$$$$$$$$78324%@##*(@#');
+    });
+
+    it('getTokens encodes the query and type segments separately', async function () {
+        nock(BASE).get('/BTC/api/tokens/A%2FB/token').reply(200, { total: 0, data: [] });
+        let result = await client.getTokens('A/B', 'token');
+        expect(result.total).to.equal(0);
+    });
+});
+
 describe('ExplorerClient', function () {
     beforeEach(resetClient);
     afterEach(cleanNock);

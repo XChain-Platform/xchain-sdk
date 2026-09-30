@@ -71,10 +71,11 @@ The SDK runs a layered suite. Pick the tier that matches your change:
 | Unit | `npm test` | No |
 | Boundary | `npm run test:boundary` | No |
 | Security | `npm run test:security` | No |
-| CI (unit, fast gate) | `npm run ci` | No |
+| CI (unit, security, regression, drift gate) | `npm run ci` | No |
 | Integration | `npm run test:integration` | Running XChain stack |
 | Fuzz | `npm run test:fuzz` | No |
 | Chaos | `npm run test:chaos` | No |
+| Regression | `npm run test:regression` | No |
 
 Run the no-external-services tiers before every commit. New action-generation or encoding helpers should come with security and fuzz coverage, since a wrong action can cause fund loss in consumers. Changes to the MCP server (`mcp/cli.js`) should include smoke and security coverage for any new tool definitions.
 
@@ -141,7 +142,7 @@ boundary.
 ## Coding style
 
 - **Plain JavaScript**, no TypeScript (TypeScript definitions live in `index.d.ts` and are maintained alongside the source). Raw `mathjs` bignumber for all amount and fee calculations; no ORM.
-- **No linter is configured.** Match the style of the surrounding file: naming, structure, and comment density.
+- **No lint script is run or gated.** Match the style of the surrounding file: naming, structure, and comment density.
 - **Comments are rare on purpose.** Don't restate what well-named code already says. Do comment a *why* that isn't obvious: a hidden invariant, an encoding constraint, a workaround with a reference.
 - **Never use the em-dash character** in code, comments, or docs. Rewrite the sentence (a comma, colon, or parentheses) instead.
 - **Two trailing spaces** on consecutive bold-label markdown lines so CommonMark renders the line break instead of collapsing them.
@@ -162,7 +163,9 @@ Match the existing log style: a concise subject line, then a short body explaini
 
 ## Pull requests
 
-CI is the smoke + unit gate. Before opening a PR:
+CI runs the unit, security, regression and drift gates (`npm run ci`).
+
+Before opening a PR:
 
 1. Run the no-external-services tiers (`npm run ci`, `npm run test:security`) and confirm they pass.
 2. Update `CHANGELOG.md` with a terse entry for your change.

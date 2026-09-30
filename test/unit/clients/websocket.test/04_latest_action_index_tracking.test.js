@@ -208,7 +208,8 @@ describe('WebSocketClient', function () {
         it('includes since_action_index when lastActionIndex > 0', async function () {
             client = createClient(port);
             await client.connect();
-            await client.subscribe(['blocks']);
+            // An action-carrying channel: only those have anything for a catch-up to replay.
+            await client.subscribe(['actions']);
 
             // Set lastActionIndex (decimal string, the shape the wire hands us)
             client.lastActionIndex = '500';
@@ -237,7 +238,7 @@ describe('WebSocketClient', function () {
         it('replays an above-2^53 cursor byte-for-byte as since_action_index', async function () {
             client = createClient(port);
             await client.connect();
-            await client.subscribe(['blocks']);
+            await client.subscribe(['actions']);
 
             client.lastActionIndex = '9007199254740995';
 

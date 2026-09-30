@@ -162,8 +162,38 @@ function capFor(table, tick) {
     if (tick !== undefined) {
         const own = ownLookup(table, tick);
         if (own !== undefined) return own;
+        // Match the configured name in any case, since consensus treats TOK and tok as one token.
+        for (const key of tickKeysFor(table, tick)) {
+            const variant = ownLookup(table, key);
+            if (variant !== undefined) return variant;
+        }
     }
     return ownLookup(table, '*');
+}
+
+// Fold a tick to consensus identity: the indexer looks ticks up by LOWER(tick) over
+// an ASCII-only charset (TICK_CHARACTERS), so folding a-z alone reproduces its grouping.
+function foldTick(tick) {
+    return String(tick).replace(/[a-z]/g, (c) => c.toUpperCase());
+}
+
+// List a table's own named keys that consensus reads as the same token as `tick`.
+function tickKeysFor(table, tick) {
+    if (!table || typeof table !== 'object') return [];
+    if (typeof tick !== 'string' && typeof tick !== 'number') return [];
+    const folded = foldTick(tick);
+    return Object.keys(table).filter((key) => key !== '*' && foldTick(key) === folded);
+}
+
+// Sum a window snapshot's spend for `tick` across every case variant it was recorded under.
+function windowUsedFor(perTick, tick) {
+    let used = '0';
+    for (const key of tickKeysFor(perTick, tick)) {
+        if (key === UNRESOLVED_TICK_BUCKET) continue;
+        const amount = ownLookup(perTick, key);
+        if (amount !== undefined) used = addDecimal(used, amount);
+    }
+    return used;
 }
 
 // Decide whether a cap table can ever BIND. `{}`, `{ SEND: {} }` and
@@ -235,6 +265,9 @@ module.exports = {
     resolveValue,
     inCollection,
     capFor,
+    foldTick,
+    tickKeysFor,
+    windowUsedFor,
     hasEnforceableCap,
     resolveTickRef,
     hasNamedKey,

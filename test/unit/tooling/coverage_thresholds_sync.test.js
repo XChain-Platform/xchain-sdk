@@ -40,4 +40,24 @@ describe('coverage ratchet floors', () => {
   it('fails the job on a shortfall rather than only reporting it', () => {
     assert.match(pkg.scripts['coverage:check'], /--check-coverage/);
   });
+
+  it('measures every source file in both coverage venues', () => {
+    for (const name of ['coverage', 'coverage:check']) {
+      assert.match(
+        pkg.scripts[name],
+        /(?:^|\s)--all(?:\s|$)/,
+        `${name} must pass --all so unloaded source files count against coverage`,
+      );
+    }
+  });
+
+  it('keeps test-created home state inside the ignored coverage directory', () => {
+    for (const name of ['coverage', 'coverage:check']) {
+      assert.match(
+        pkg.scripts[name],
+        /(?:^|\s)HOME=["']?\$PWD\/coverage["']?(?:\s|$)/,
+        `${name} must isolate test-created home state from the runner account`,
+      );
+    }
+  });
 });

@@ -214,19 +214,7 @@ module.exports = {
         }
 
         const net = this.resolveNet();
-        let keyPair;
-        try {
-            keyPair = ECPair.fromWIF(wif, net);
-        } catch (err) {
-            throw new SDKWalletError('INVALID_WIF', `Failed to import WIF: ${err.message}`);
-        }
-
-        let psbt;
-        try {
-            psbt = bitcoin.Psbt.fromHex(psbtHex, { network: net });
-        } catch (err) {
-            throw new SDKWalletError('INVALID_PSBT', `Failed to parse PSBT: ${err.message}`);
-        }
+        const { keyPair, psbt } = createSigningContext(psbtHex, wif, net);
 
         try {
             psbt.signInput(0, {
@@ -238,14 +226,19 @@ module.exports = {
         }
 
         try {
-            psbt.finalizeAllInputs();
+            psbt.finalizeInput(0);
         } catch (err) {
             throw new SDKWalletError('FINALIZE_FAILED', `Envelope reveal finalization failed: ${err.message}`);
         }
 
         const maxFeeRate = this.resolveMaxFeeRate(opts);
         if (maxFeeRate) psbt.setMaximumFeeRate(maxFeeRate);
-        const tx = psbt.extractTransaction();
+        let tx;
+        try {
+            tx = psbt.extractTransaction();
+        } catch (err) {
+            throw new SDKWalletError('FINALIZE_FAILED', `Envelope reveal finalization failed: ${err.message}`);
+        }
         return {
             txHex: tx.toHex(),
             txid: tx.getId(),

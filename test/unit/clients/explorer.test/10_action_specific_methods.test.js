@@ -91,6 +91,19 @@ describe('ExplorerClient', function () {
 
     describe('action-specific methods', function () {
 
+        it('getGatedFiles requests the gate route with paging options', async function () {
+            const body = { data: [{ action_index: 42 }], total: 1, runtime: 3 };
+            nock(BASE).get('/BTC/api/files/ACCESS/gate')
+                .query({ page: '2', limit: '25', sortorder: 'desc' })
+                .reply(200, body);
+            const result = await client.getGatedFiles('ACCESS', {
+                page: 2,
+                limit: 25,
+                sortorder: 'desc'
+            });
+            expect(result).to.deep.equal(body);
+        });
+
         it('getOrderMatches without query returns result', async function () {
             nock(BASE).get('/BTC/api/order_matches').reply(200, { total: 0, data: [] });
             const r = await client.getOrderMatches(null);

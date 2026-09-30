@@ -37,8 +37,8 @@ const ASPECT_NOTES = {
     COLLECT:  'unclaimed reward balance and pool solvency resolve server-side',
     DEPLOY:   'chunk-set completeness, VM syntax, and constructor gas resolve server-side (Tier-1 denylisted)',
     EXECUTE:  'contract state and gas resolve server-side; a bad METHOD reverts at runtime WITH the fee charged',
-    DEPOSIT:  'contract active-state resolves server-side',
-    WITHDRAW: 'deployer-only gate and contract credit resolve server-side',
+    DEPOSIT:  'contract active-state resolves server-side; from the CONTROLLER_CUSTODY_GUARD flag day, the token\'s transfer or all controller and SOURCE\'s own address controller (the depositor) gate the move; both guards and their gas resolve server-side',
+    WITHDRAW: 'deployer-only gate and contract credit resolve server-side; from the CONTROLLER_CUSTODY_GUARD flag day, the token\'s transfer or all controller and SOURCE\'s own address controller (the withdrawer) gate the move; both guards and their gas resolve server-side',
     COINPAY:  'obligation existence/match/expiry resolve server-side; Tier 1 gives NO verdict (feeExempt)',
     // null: the action has no chain-state precondition at all, so there is
     // nothing the client failed to check and nothing belongs under the

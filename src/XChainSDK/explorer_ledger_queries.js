@@ -199,6 +199,11 @@ module.exports = {
         return this.requireExplorer().getFiles(query, type, opts);
     },
 
+    /** Get every FILE gated on a token ticker. */
+    async getGatedFiles(tick, opts) {
+        return this.requireExplorer().getGatedFiles(tick, opts);
+    },
+
     async getLinks(query, type, opts) {
         return this.requireExplorer().getLinks(query, type, opts);
     },

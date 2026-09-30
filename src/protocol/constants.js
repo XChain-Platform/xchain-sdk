@@ -305,6 +305,12 @@ const ANCHOR_ACTIVATION = {
     regtest: 0,
 };
 
+const ARCHIVE_MATCH_COUNT_ACTIVATION = {
+    mainnet: 9999999999,
+    testnet: 9999999999,
+    regtest: 0,
+};
+
 // ARCHIVE_REWARD_AMOUNT: the frozen archive-publish reward, signed into the archive XANCPUB
 // attestation by the hub and re-derived by the indexer (never from the wire). Kept equal to the
 // hub's historical default (ANCHOR_REWARD_PER_PUBLISH). Changing it is itself a flag-day.
@@ -443,6 +449,7 @@ module.exports = {
     ARCHIVE_REWARD_ACTIVATION,
     ARCHIVE_REWARD_AMOUNT,
     ANCHOR_ACTIVATION,
+    ARCHIVE_MATCH_COUNT_ACTIVATION,
     CROSS_CHAIN_ROYALTY_ACTIVATION,
     VALID_FIAT_CODES,
     GAS_TICK,

@@ -91,6 +91,7 @@ function registerEnvHooks() {
         { m: 'getDividends',          args: ['addr1', 'address', {}] },
         { m: 'getFees',               args: ['addr1', 'address', {}] },
         { m: 'getFiles',              args: ['addr1', 'address', {}] },
+        { m: 'getGatedFiles',         args: ['ACCESS', { page: 2 }] },
         { m: 'getLinks',              args: ['addr1', 'address', {}] },
         { m: 'getLists',              args: ['addr1', 'address', {}] },
         { m: 'getMessages',           args: ['addr1', 'address', {}] },

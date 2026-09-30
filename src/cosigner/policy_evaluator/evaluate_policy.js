@@ -21,7 +21,7 @@
 const { ownLookup } = require('../policy/param_charset.js');
 const valueDerivability = require('../policy/value_derivability.js');
 const {
-    pick, resolveValue, inCollection, capFor, resolveTickRef, hasNamedKey,
+    pick, resolveValue, inCollection, capFor, tickKeysFor, windowUsedFor, resolveTickRef, hasNamedKey,
     formatCarriesDestination, gtDecimal, isNonNegativeDecimal, addDecimal,
     DESTINATION_KEYS, UNBOUNDED_VALUE_ACTIONS, UNRESOLVED_TICK_BUCKET,
 } = require('./value_resolution.js');
@@ -72,6 +72,21 @@ function prepareEvaluation(policy, actionData) {
                     { action, tick },
                     { action, tick, amount, destinations, needsConfirmation: false }) };
         }
+    }
+    // Refuse a tick two policy keys both name in different case (TOK and tok are one
+    // token on chain), since either cap could be the one the operator meant.
+    for (const [table, where] of [
+        [ownLookup(policy.maxPerAction, action), 'maxPerAction.' + action],
+        [policy.maxPerWindow && policy.maxPerWindow.perTick, 'maxPerWindow.perTick'],
+        [policy.confirmAbove && policy.confirmAbove.perTick, 'confirmAbove.perTick'],
+    ]) {
+        const keys = tickKeysFor(table, tick);
+        if (keys.length > 1)
+            return { verdict: deny('POLICY_TICK_CASE_COLLISION',
+                `${where} names token ${tick} under several spellings (${keys.join(', ')}); ` +
+                `ticks are case-insensitive on chain, so keep exactly one`,
+                { action, tick, table: where, keys },
+                { action, tick, amount, destinations, needsConfirmation: false }) };
     }
     return { action, params, version, amount, tick, destinations,
         evaluation: { action, tick, amount, destinations, needsConfirmation: false } };
@@ -219,8 +234,10 @@ function checkWindow(policy, state, windowUsage) {
         if (win.perTick && amount !== undefined) {
             const cap = capFor(win.perTick, tick);
             if (cap !== undefined) {
-                const bucket = tick !== undefined ? tick : UNRESOLVED_TICK_BUCKET;
-                const used = ownLookup(usage.perTick, bucket) || '0';
+                // Total the token's spend across every case variant it was recorded under.
+                const used = tick !== undefined
+                    ? windowUsedFor(usage.perTick, tick)
+                    : ownLookup(usage.perTick, UNRESOLVED_TICK_BUCKET) || '0';
                 const projected = addDecimal(used, amount);
                 if (gtDecimal(projected, cap))
                     return deny('POLICY_WINDOW_AMOUNT_EXCEEDED',

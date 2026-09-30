@@ -66,6 +66,7 @@ require('./gate_registry/shared_rows_5.js');
 // every call (regtest_env.js), so this must stay a live view rather than a
 // snapshot object; each property is a getter over config.js's own reader.
 const registryEnv = {
+    get XC_ANCHOR_FOLD_REGTEST_ACTIVATION() { return sdkEnv.anchorFoldRegtestActivation(); },
     get XC_ROLLCALL_REGTEST_ACTIVATION() { return sdkEnv.rollcallRegtestActivation(); },
     get XC_ROLLCALL_GATES_REGTEST_ACTIVATION() { return sdkEnv.rollcallGatesRegtestActivation(); },
     get XC_MIRROR_ADMISSION_ACTIVATION() { return sdkEnv.mirrorAdmissionRegtestActivation(); },
