@@ -63,6 +63,7 @@ const {
 // manifest-conformance-guarded there.
 const { ACTION_ALIASES } = require('../decoder/aliases.js');
 const { parse: parseActionString } = require('../decoder/parse.js');
+const { parseVersion } = require('../decoder/parse/field_mapping.js');
 
 // Decoded params are attacker-controlled and several of them become lookup
 // keys in the policy tables and the window store, so they are charset-checked
@@ -168,8 +169,8 @@ function resolveActionFormat(segments) {
     // otherwise resolve to an inherited Object.prototype function and be carried
     // forward as the "action", exposing the same prototype-chain vulnerability.
     const action  = ownLookup(ACTION_ALIASES, rawAction) ?? rawAction;
-    const version = Number(segments[1]);
-    if (!Number.isInteger(version) || version < 0) return fail('BAD_VERSION');
+    const version = parseVersion(segments[1]);
+    if (version === null) return fail('BAD_VERSION');
 
     let fieldNames;
     try { fieldNames = FormatSelector.getFormatFields(action, version); }

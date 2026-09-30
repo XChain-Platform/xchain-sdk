@@ -197,6 +197,18 @@ describe('decoder.parse', function () {
         it('PRICE v0 (validator-only, not in formats) refuses', function () {
             expect(parse('PRICE|0|BTC|JDOG|USD|1').code).to.equal('UNKNOWN_VERSION');
         });
+        it('a token the indexer shifts or reads differently is UNKNOWN_VERSION', function () {
+            for (const s of ['SEND|000|A|1|x', 'SEND||A|1|x', 'SEND|0e0|A|1|x', 'ORDER|0o2|1|m', 'ORDER|1e1|1|m'])
+                expect(parse(s).code, s).to.equal('UNKNOWN_VERSION');
+            expect(parse('SEND|01|JDOG|1|a|b|c').version).to.equal(1);
+        });
+        it('every accepted VERSION token reads the same on the indexer', function () {
+            const { isLegacyActionFormat } = require('../../../src/protocol/batch_limits/limit_tables.js');
+            const { parseVersion } = require('../../../src/decoder/parse/field_mapping.js');
+            const tokens = Array.from({ length: 100 }, (_, i) => String(i)).concat(['00', '01', '000', '0x0', '0b1', '.0', '-0']);
+            for (const t of tokens.filter((t) => parseVersion(t) !== null))
+                expect([isLegacyActionFormat([t]), parseInt(t, 10)], t).to.deep.equal([false, parseVersion(t)]);
+        });
     });
 });
 

@@ -162,6 +162,15 @@ describe('psbtActionDecode.decodeActionFromPsbt', function () {
     });
 });
 
+describe('psbtActionDecode.decodeActionFromPsbt version token', function () {
+    it('fails closed on a VERSION token the indexer reads as a legacy TICK or another version', function () {
+        const sends = ['000', '001', '0e0', '0.0', '0x0', ' 0 ', '1e1', '.0', '-0', '']
+            .map((v) => `SEND|${v}|TOK|5|1destX`);
+        for (const s of sends.concat(['MINT|000|TOK|5', 'ISSUE|000|TOK', 'ORDER|0o2|1|m', 'DISPENSER|0b1|1']))
+            expect(decodeActionFromPsbt(buildPsbt(s)).reason, s).to.equal('BAD_VERSION');
+    });
+});
+
 describe('psbtActionDecode.decodeActionStringFromPsbt (self-sign byte-match)', function () {
     // The raw extractor is the correct primitive for the wallet's self-sign
     // tamper check (composeActionForConfirm -> confirmChecks.checkActionByteMatch):

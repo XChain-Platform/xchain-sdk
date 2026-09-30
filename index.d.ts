@@ -2522,12 +2522,20 @@ export interface EstimateFeeResult {
     psbt: string;
     /** Encoding type used */
     encoding: EncodingType;
-    /** Transaction fee in satoshis */
+    /** Transaction fee in satoshis; null when not exactly representable, unknown, or negative */
     fee: number | null;
-    /** Total input value in satoshis */
-    inputTotal?: number;
-    /** Total output value in satoshis */
-    outputTotal?: number;
+    /** Total input value in satoshis; null above 2^53-1 or when an input value is missing */
+    inputTotal?: number | null;
+    /** Total output value in satoshis; null above 2^53-1 */
+    outputTotal?: number | null;
+    /** Exact fee in satoshis as a decimal string, or null */
+    feeSats?: string | null;
+    /** Exact input total in satoshis as a decimal string, or null when an input value is missing */
+    inputTotalSats?: string | null;
+    /** Exact output total in satoshis as a decimal string */
+    outputTotalSats?: string | null;
+    /** Why no fee was computed (MISSING_INPUT_VALUE or NEGATIVE_FEE) */
+    feeError?: string;
     /** Serialized ACTION string */
     actionString: string;
     /** ACTION name */

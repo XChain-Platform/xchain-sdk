@@ -19,7 +19,36 @@
  ********************************************************************/
 
 const { SDKEncoderError } = require('../../utils/errors.js');
+require('../../utils/apply_bufferutils_patch');
 const bitcoin = require('bitcoinjs-lib');
+const { toU64, inputValue } = require('../../carrier/reconcile_encoded/script_matching.js');
+
+// Report a satoshi total as a Number only when it is exact, so no caller reads a rounded value.
+const safeNumber = (v) => (v !== null && v <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(v) : null);
+
+// Sum a PSBT's satoshis in BigInt; a missing input value or a negative fee yields no fee, with a reason.
+function exactFeeTotals(psbt) {
+    let inputTotal = 0n, missing = -1, outputTotal = 0n;
+    for (let i = 0; i < psbt.txInputs.length; i++) {
+        const value = inputValue(psbt, i);
+        if (value === null) { if (missing < 0) missing = i; } else inputTotal += value;
+    }
+    for (const out of psbt.txOutputs) {
+        const value = toU64(out.value);
+        if (value === null) throw new Error('an output value is not a non-negative integer');
+        outputTotal += value;
+    }
+    if (missing >= 0) inputTotal = null;
+    const fee = inputTotal !== null && inputTotal >= outputTotal ? inputTotal - outputTotal : null;
+    const totals = {
+        inputTotal: safeNumber(inputTotal), outputTotal: safeNumber(outputTotal), fee: safeNumber(fee),
+        inputTotalSats: inputTotal === null ? null : String(inputTotal),
+        outputTotalSats: String(outputTotal), feeSats: fee === null ? null : String(fee),
+    };
+    if (missing >= 0) totals.feeError = 'MISSING_INPUT_VALUE: input ' + missing + ' carries no readable witnessUtxo or nonWitnessUtxo value';
+    else if (fee === null) totals.feeError = 'NEGATIVE_FEE: outputs exceed inputs';
+    return totals;
+}
 
 function buildCreateTxParams(params) {
     // `data` is optional. A transaction with no ACTION is a plain
@@ -267,7 +296,8 @@ module.exports = {
     // Signing a raw estimateFee answer trusts the remote encoder.
     //
     // Required: same as createTx (data, pubkey)
-    // Returns: { psbt, encoding, revealPsbt?, carrierScripts?, fee, inputTotal, outputTotal }
+    // Returns: { psbt, encoding, revealPsbt?, carrierScripts?, fee, inputTotal, outputTotal,
+    //   feeSats, inputTotalSats, outputTotalSats, feeError? }; Number fields are null above 2^53-1.
     async estimateFee(params) {
         let result = await this.createTx(params);
 
@@ -286,29 +316,7 @@ module.exports = {
         // unable to run the check the submit path runs.
         if (result.carrierScripts) feeInfo.carrierScripts = result.carrierScripts;
         try {
-            let psbt = bitcoin.Psbt.fromHex(result.psbt);
-
-            let inputTotal = 0;
-            for (let i = 0; i < psbt.data.inputs.length; i++) {
-                let input = psbt.data.inputs[i];
-                if (input.witnessUtxo) {
-                    inputTotal += input.witnessUtxo.value;
-                } else if (input.nonWitnessUtxo) {
-                    let tx = bitcoin.Transaction.fromBuffer(input.nonWitnessUtxo);
-                    let prevIndex = psbt.txInputs[i].index;
-                    inputTotal += tx.outs[prevIndex].value;
-                }
-            }
-
-            let outputTotal = 0;
-            let txOutputs = psbt.txOutputs;
-            for (let out of txOutputs) {
-                outputTotal += out.value;
-            }
-
-            feeInfo.inputTotal  = inputTotal;
-            feeInfo.outputTotal = outputTotal;
-            feeInfo.fee         = inputTotal - outputTotal;
+            Object.assign(feeInfo, exactFeeTotals(bitcoin.Psbt.fromHex(result.psbt)));
         } catch (e) {
             // If PSBT parsing fails, still return the raw result
             feeInfo.fee = null;

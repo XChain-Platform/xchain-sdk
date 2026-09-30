@@ -26,7 +26,7 @@
 
 'use strict';
 
-const { FINDING_CODES, MAX_REFILLS, EXPIRATION_MAX } = require('../constants.js');
+const { FINDING_CODES, MAX_REFILLS, EXPIRATION_MAX, describeActivation } = require('../constants.js');
 const numeric = require('../numeric.js');
 const { resolveDispenserState, resolveGiveRemaining } = require('../resolvers.js');
 const { checkGiveAmount, checkSelfPrice, declareAmountRepresentability, checkDispensePrice }
@@ -78,8 +78,8 @@ function noteSettlementPrice(ctx, fiatCode) {
     if (!fiatCode) return;
     ctx.addUnverified('DISPENSER_SETTLEMENT_PRICE',
         'at or above the settlement-price activation a FIAT open or refill needs an effective price at '
-        + 'the including block; oracle history and the activation state are server-side only, with mainnet '
-        + 'and testnet unarmed and regtest active from genesis');
+        + 'the including block; oracle history is server-side only, and the pinned activation is '
+        + describeActivation('DISPENSER_SETTLEMENT_PRICE'));
 }
 
 // The EXPIRATION representability bound, mirrored from the create and edit paths

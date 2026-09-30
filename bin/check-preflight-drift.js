@@ -490,6 +490,64 @@ function checkListMirrors(indexerRoot) {
     return failed;
 }
 
+// Compare each ACTIVATION_MIRRORS table with its indexer addGate row by value, since no mapped hash
+// covers it; fail closed unless the key appears once and every value is UNARMED or an integer.
+function parseAddGateTable(body, key, where) {
+    const table = {};
+    const text = body.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    for (const part of text.split(',').map((s) => s.trim()).filter(Boolean)) {
+        const m = /^(?:'([^']+)'|"([^"]+)"|([A-Za-z_$][\w$]*))\s*:\s*(UNARMED|\d+)$/.exec(part);
+        if (!m) throw new Error(`drift-gate: cannot read the ${key} entry "${part}" in ${where}; `
+            + 'only UNARMED or an integer literal is understood, so a new arming style must be taught here first.');
+        table[m[1] || m[2] || m[3]] = m[4] === 'UNARMED' ? 'UNARMED' : Number(m[4]);
+    }
+    if (!Object.keys(table).length) throw new Error(`drift-gate: ${key} in ${where} read as an EMPTY table.`);
+    return table;
+}
+
+function findAddGate(dir, key) {
+    const hits = [];
+    const esc = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.js')).sort()) {
+        const text = fs.readFileSync(path.join(dir, file), 'utf8');
+        const calls = text.match(new RegExp(`addGate\\(\\s*['"]${esc}['"]`, 'g')) || [];
+        const re = new RegExp(`addGate\\(\\s*['"]${esc}['"]\\s*,\\s*['"](\\w+)['"]\\s*,\\s*\\{([^}]*)\\}`, 'g');
+        const parsed = [...text.matchAll(re)];
+        if (parsed.length !== calls.length)
+            throw new Error(`drift-gate: addGate('${key}') in ${file} is not in the (key, 'unit', { ... }) shape this gate reads.`);
+        for (const m of parsed) hits.push({ file, unit: m[1], body: m[2] });
+    }
+    if (hits.length !== 1)
+        throw new Error(`drift-gate: expected exactly one addGate('${key}') under src/protocol_changes/, found ${hits.length}.`);
+    return hits[0];
+}
+
+function checkActivationMirrors(indexerRoot) {
+    const { ACTIVATION_MIRRORS } = require('../src/preflight/constants.js');
+    const dir = path.join(indexerRoot, 'src', 'protocol_changes');
+    if (!fs.existsSync(dir)) {
+        warn('drift-gate: xchain-indexer/src/protocol_changes not found; it declares the activation rows this gate pins.');
+        return 1;
+    }
+    let failed = 0;
+    for (const name of Object.keys(ACTIVATION_MIRRORS)) {
+        const { key, unit, table } = ACTIVATION_MIRRORS[name];
+        const hit = findAddGate(dir, key);
+        const indexerTable = parseAddGateTable(hit.body, key, `xchain-indexer/src/protocol_changes/${hit.file}`);
+        const keys = [...new Set(Object.keys(indexerTable).concat(Object.keys(table)))].sort();
+        const differ = keys.filter((k) => indexerTable[k] !== table[k]);
+        if (hit.unit !== unit || differ.length) {
+            warn(`drift-gate: activation ${key} differs between xchain-indexer (${hit.file}) and ACTIVATION_MIRRORS.${name}:`);
+            if (hit.unit !== unit) warn(`  unit: indexer ${hit.unit}, sdk ${unit}`);
+            for (const k of differ) warn(`  ${k}: indexer ${indexerTable[k]}, sdk ${table[k]}`);
+            warn('  pre-flight decides error vs unverified from this table, so the SDK would misjudge the armed network.');
+            failed = 1;
+        }
+    }
+    if (!failed) say(`drift-gate: activation row(s) in sync (${Object.keys(ACTIVATION_MIRRORS).join(', ')}).`);
+    return failed;
+}
+
 /* GAS_SCHEDULE parity across the three coins.
  *
  * The SDK carries its OWN copy of each coin definition, and the gas schedule is what
@@ -663,6 +721,12 @@ function evaluate() {
         failed = 1;
     }
     try {
+        if (checkActivationMirrors(root)) failed = 1;
+    } catch (e) {
+        warn(e && e.message ? e.message : String(e));
+        failed = 1;
+    }
+    try {
         if (checkGasSchedules(root)) failed = 1;
     } catch (e) {
         warn(e && e.message ? e.message : String(e));
@@ -734,4 +798,5 @@ module.exports = {
     resolveIndexerRoot, indexerRootCandidates, parseMap, parseAnchor, parseStringSet, parseStringList, parseRegexLiteral,
     deriveFeeChargingActions, checkAnchorConsistency, checkFeeQuoteSeam,
     checkConfigConstants, checkRegexMirrors, checkListMirrors, checkGasSchedules, evaluate, main,
+    checkActivationMirrors, parseAddGateTable,
 };

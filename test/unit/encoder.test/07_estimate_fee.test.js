@@ -91,6 +91,47 @@ describe('EncoderClient', function () {
     });
 });
 
+describe('EncoderClient exact fee totals', function () {
+    const BASE = 'http://encoder.test:3000';
+    require('../../../src/utils/apply_bufferutils_patch.js');
+    const bitcoin = require('bitcoinjs-lib');
+    const script = bitcoin.payments.p2wpkh({ hash: Buffer.alloc(20, 7) }).output;
+    const client = new EncoderClient({ encoderUrl: 'encoder.test', encoderPort: 3000 });
+    afterEach(() => nock.cleanAll());
+
+    // Quote a PSBT whose inputs carry these witness values (null: no UTXO data at all).
+    async function feeFor(inValues, outValues) {
+        const psbt = new bitcoin.Psbt();
+        inValues.forEach((value, i) => psbt.addInput(Object.assign({ hash: Buffer.alloc(32, i + 1), index: 0 },
+            value === null ? {} : { witnessUtxo: { script, value } })));
+        outValues.forEach((value) => psbt.addOutput({ script, value }));
+        nock(BASE).post('/').reply(200, { jsonrpc: '2.0', result: { psbt: psbt.toHex(), encoding: 'OP_RETURN' }, id: 1 });
+        return client.estimateFee({ data: 'TEST', pubkey: 'pub' });
+    }
+
+    it('sums past 2^53 exactly and leaves no rounded Number behind', async function () {
+        const r = await feeFor([4503599627370497, 4503599627370496], [9007199254730993]);
+        expect([r.fee, r.feeSats, r.inputTotal, r.inputTotalSats]).to.deep.equal([10000, '10000', null, '9007199254740993']);
+    });
+
+    it('prices a BigInt input value instead of dropping the estimate', async function () {
+        const r = await feeFor([9007199254740993n], [9007199254730993]);
+        expect([r.fee, r.feeSats, r.parseError]).to.deep.equal([10000, '10000', undefined]);
+    });
+
+    it('refuses a fee when an input carries no value, naming the input', async function () {
+        const r = await feeFor([100000, null], [90000]);
+        expect([r.fee, r.feeSats, r.inputTotal]).to.deep.equal([null, null, null]);
+        expect(r.feeError).to.match(/MISSING_INPUT_VALUE.*input 1/);
+    });
+
+    it('refuses a negative fee', async function () {
+        const r = await feeFor([1000], [2000]);
+        expect([r.fee, r.outputTotalSats]).to.deep.equal([null, '2000']);
+        expect(r.feeError).to.match(/NEGATIVE_FEE/);
+    });
+});
+
 describe('EncoderClient', function () {
     let client;
 
