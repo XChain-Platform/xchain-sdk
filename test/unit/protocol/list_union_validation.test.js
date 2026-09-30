@@ -1,4 +1,4 @@
-/*********************************************************************
+/***** GENERATED ******************************************************
  *
  * Copyright © 2025-2026 Dankest, LLC
  * Based on XChain Platform by Dankest, LLC - https://dankest.llc
@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * XChain Platform SDK - LIST TYPE=3 union item validation
+ * XChain Platform SDK - LIST TYPE=3 union item validation matrix
  *
  ********************************************************************/
 
