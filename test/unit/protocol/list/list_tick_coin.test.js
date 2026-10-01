@@ -72,7 +72,9 @@ describe('coin-qualified LIST ticker items', function(){
             );
         }
     });
+});
 
+describe('coin-qualified LIST ticker integration', function(){
     it('matches the sibling indexer parser over a fixed item set', function(){
         const siblingPath = path.resolve(__dirname, INDEXER_LIST_TICK_COIN);
         if(!fs.existsSync(siblingPath)){
