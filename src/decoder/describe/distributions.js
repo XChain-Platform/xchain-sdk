@@ -1,53 +1,11 @@
-/*********************************************************************
- *
- * Copyright © 2025–2026 Dankest, LLC
- * Based on XChain Platform by Dankest, LLC – https://dankest.llc
- *
- * SPDX-License-Identifier: AGPL-3.0-or-later
- *
- * This file is part of XChain Platform. Licensed under the GNU Affero
- * General Public License v3.0 or later; see LICENSE.md. A commercial
- * license (without AGPL source-disclosure terms) is available -
- * contact legal@dankest.llc.
- *
- **********************************************************************
- *
- * XChain Platform SDK - decoder.describe
- *
- * Plain-English action describer, promoted from the wallet
- * (packages/core/src/decoder/actionDecoder.js). Pure
- * function (no vault, no network); both wallet shells and any SDK
- * consumer render the same {summary, details, warnings} contract.
- *
- * Dedicated describers: ADDRESS, SEND, SWEEP, ISSUE (v0-v7), MINT,
- * DESTROY, BATCH, BROADCAST, DISPENSER, DIVIDEND, LIST, AIRDROP, ORDER,
- * SWAP, STAKE, UNSTAKE, DELEGATE, VOTE, DEPLOY, EXECUTE, DEPOSIT,
- * WITHDRAW, COINPAY, COLLECT, MESSAGE, FILE, LINK, SLEEP, CALLBACK,
- * PRICE, BET, XBRIDGE - i.e. every ACTION in formats.js, which
- * `test/unit/decoder/describe.test.js` enumerates rather than trusting
- * this list: the confirm screen is where a user verifies intent
- * before signing, so a missing case there is a coverage hole on the
- * security surface, not a cosmetic gap.
- *
- * A future action added to formats.js with no case here gets the generic
- * fallback (which still names the action and lists every parameter) and
- * fails that enumeration test. Untrusted-input hardening (bidi/zero-width
- * neutralization, canonical amount flags, own-address/contact
- * marking) is applied centrally to the finished output - see
- * hardening.js and harden() below.
- *
- ********************************************************************/
+// Copyright © 2025–2026 Dankest, LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 'use strict';
 
 const { str, toArray } = require('./value_format.js');
 const numberFormat = require('../../utils/utility/number_format.js');
 
-// Describe v0 LIST creates as VERSION|TYPE|MEMO|ITEM, with ITEM repeating.
-// Recognize TYPE 1 as TICK, TYPE 2 as ADDRESS, and TYPE 3 as a union of lists.
-
-// Describe v1 LIST edits as VERSION|EDIT|LIST_ACTION_INDEX|MEMO|ITEM.
-// Clone the existing list, then add with EDIT 1 or remove with EDIT 2.
 function decodeUnionListCreate(items, memo, chainSuffix) {
     const count = items.length;
     return {
@@ -64,11 +22,57 @@ function decodeUnionListCreate(items, memo, chainSuffix) {
     };
 }
 
+function decodeListShare(p) {
+    const listIndex = str(p.LIST_ACTION_INDEX);
+    const memo = str(p.MEMO);
+    return {
+        summary: `Share list #${listIndex || '?'} on every chain`,
+        details: [
+            { label: 'List action index', value: listIndex },
+            ...(memo ? [{ label: 'Memo', value: memo }] : []),
+        ],
+        warnings: [
+            'Sharing is permanent. There is no unshare.',
+            'Sharing charges the LIST_SHARE fee.',
+            ...(!listIndex ? ['List action index is empty.'] : []),
+        ],
+    };
+}
+
+function listTransferDestination(destination) {
+    const addressId = /^\^(\d+)$/.exec(destination);
+    return addressId ? `address id ${addressId[1]}` : destination;
+}
+
+function decodeListTransfer(p) {
+    const listIndex = str(p.LIST_ACTION_INDEX);
+    const destination = str(p.DESTINATION);
+    const displayDestination = listTransferDestination(destination);
+    const memo = str(p.MEMO);
+    return {
+        summary: `Transfer list #${listIndex || '?'} to ${displayDestination || '?'}`,
+        details: [
+            { label: 'List action index', value: listIndex },
+            { label: 'Destination', value: displayDestination },
+            ...(memo ? [{ label: 'Memo', value: memo }] : []),
+        ],
+        warnings: [
+            'This transfer cannot be undone.',
+            'The new owner alone can edit, share or transfer the list.',
+            ...(!listIndex ? ['List action index is empty.'] : []),
+            ...(!destination ? ['Destination is empty.'] : []),
+        ],
+    };
+}
+
 function decodeList(p, chainSuffix) {
     const version = str(p.VERSION) || '0';
     const items = toArray(p.ITEM);
     const count = items.length;
     const memo = str(p.MEMO);
+
+    if (version === '2') return decodeListShare(p);
+    if (version === '3') return decodeListTransfer(p);
 
     if (version === '1') {
         const edit = str(p.EDIT);
@@ -142,13 +146,6 @@ function buildAirdropDrops(p, version, memoArr) {
     return drops;
 }
 
-/*
- * AIRDROP describer. Four format versions: v0 single; v1 multi-token
- * single-list; v2 multi-token multi-list; v3 = v2 + per-tuple MEMO.
- * The describer cannot know whether the referenced LIST is a TICK
- * list or an ADDRESS list without a DB lookup, so summaries stay
- * neutral.
- */
 function decodeAirdrop(p, chainSuffix) {
     const version = str(p.VERSION) || '0';
     const memo = Array.isArray(p.MEMO) ? '' : str(p.MEMO);
