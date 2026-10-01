@@ -17,7 +17,14 @@ const { expect } = require('chai');
 const ADDR = 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh';
 
 const { XChainSDK } = require('../../../../index.js');
-const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
+const sdk = new XChainSDK({ network: 'bitcoin-regtest', timeout: 25 });
+let statusReads = 0;
+sdk.explorer.getToken = async () => null;
+sdk.explorer.getAddress = async () => null;
+sdk.explorer.getStatus = () => {
+    statusReads += 1;
+    return new Promise(() => {});
+};
 
 // Helper: assert result has correct action name and a non-empty actionString
 function assertAction(result, expectedAction) {
@@ -107,6 +114,7 @@ describe('Convenience action methods', () => {
     it('list() returns action LIST with valid actionString', async () => {
         const result = await sdk.list({ type: 1, item: 'T1' });
         assertAction(result, 'LIST');
+        expect(statusReads).to.equal(1);
     });
 
     it('link() returns action LINK with valid actionString', async () => {
