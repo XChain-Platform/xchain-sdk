@@ -50,6 +50,16 @@ const numberFormat = require('../../utils/utility/number_format.js');
 // Describe v1 LIST edits as VERSION|EDIT|LIST_ACTION_INDEX|MEMO|ITEM.
 // Clone the existing list, then add with EDIT 1 or remove with EDIT 2.
 
+// An item-less edit with a memo is valid on chain (same members, new memo);
+// it read as "Add ? items" with a "no items" warning.
+function decodeListMemoEdit(parent, memo, chainSuffix) {
+    return {
+        summary: `Update the memo on list #${parent}${chainSuffix}`,
+        details: [{ label: 'Edit', value: 'Memo only (members unchanged)' }, { label: 'Memo', value: memo }],
+        warnings: [],
+    };
+}
+
 function decodeList(p, chainSuffix) {
     const version = str(p.VERSION) || '0';
     const items = toArray(p.ITEM);
@@ -64,21 +74,7 @@ function decodeList(p, chainSuffix) {
         const parent = str(p.LIST_ACTION_INDEX);
         const verb = edit === '1' ? 'Add' : edit === '2' ? 'Remove' : 'Edit';
         const prep = edit === '2' ? 'from' : 'to';
-        // An edit that adds and removes nothing but carries a memo is valid
-        // on chain (a new version of the list with the same members). It read
-        // as "Add ? items" with a "no items" warning, which describes the
-        // opposite of what it does.
-        if (count === 0 && memo && parent) {
-            return {
-                summary: `Update the memo on list #${parent}${chainSuffix}`,
-                details: [
-                    { label: 'Edit', value: 'Memo only (members unchanged)' },
-                    { label: 'Parent list action index', value: parent },
-                    { label: 'Memo', value: memo },
-                ],
-                warnings: [],
-            };
-        }
+        if (count === 0 && memo && parent) return decodeListMemoEdit(parent, memo, chainSuffix);
         const summary = `${verb} ${count || '?'} item${count === 1 ? '' : 's'} ${prep} list${parent ? ` #${parent}` : ''}${chainSuffix}`;
         return {
             summary,
