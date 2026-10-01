@@ -48,6 +48,22 @@ const numberFormat = require('../../utils/utility/number_format.js');
 
 // Describe v1 LIST edits as VERSION|EDIT|LIST_ACTION_INDEX|MEMO|ITEM.
 // Clone the existing list, then add with EDIT 1 or remove with EDIT 2.
+function decodeUnionListCreate(items, memo, chainSuffix) {
+    const count = items.length;
+    return {
+        summary: `Create union list of ${count || '?'} member lists${chainSuffix}`,
+        details: [
+            { label: 'Type', value: 'Union' },
+            { label: 'Items', value: String(count) },
+            ...(count > 0 && count <= 5
+                ? [{ label: 'Member list indexes', value: items.join(', ') }]
+                : []),
+            ...(memo ? [{ label: 'Memo', value: memo }] : []),
+        ],
+        warnings: count === 0 ? ['List has no items.'] : [],
+    };
+}
+
 function decodeList(p, chainSuffix) {
     const version = str(p.VERSION) || '0';
     const items = toArray(p.ITEM);
@@ -81,18 +97,17 @@ function decodeList(p, chainSuffix) {
 
     // Version 0: create.
     const type = str(p.TYPE);
-    const isUnion = type === '3';
+    if (type === '3') return decodeUnionListCreate(items, memo, chainSuffix);
+
     const kind = type === '1' ? 'token' : type === '2' ? 'address' : 'item';
-    const summary = isUnion
-        ? `Create union list of ${count || '?'} member lists${chainSuffix}`
-        : `Create ${kind} list of ${count || '?'} item${count === 1 ? '' : 's'}${chainSuffix}`;
+    const summary = `Create ${kind} list of ${count || '?'} item${count === 1 ? '' : 's'}${chainSuffix}`;
     return {
         summary,
         details: [
-            { label: 'Type', value: type === '1' ? 'Token' : type === '2' ? 'Address' : isUnion ? 'Union' : type },
+            { label: 'Type', value: type === '1' ? 'Token' : type === '2' ? 'Address' : type },
             { label: 'Items', value: String(count) },
             ...(count > 0 && count <= 5
-                ? [{ label: isUnion ? 'Member list indexes' : 'Sample', value: items.join(', ') }]
+                ? [{ label: 'Sample', value: items.join(', ') }]
                 : []),
             ...(memo ? [{ label: 'Memo', value: memo }] : []),
         ],
