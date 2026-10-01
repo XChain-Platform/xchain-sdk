@@ -9,12 +9,16 @@ const { mockSdk, notFound } = require('../helpers/mock.js');
 const VERDICT = 'invalid: TICK (reserved)';
 
 function reportFor(tick, { network = 'bitcoin-regtest', coin = 'RBTC', existing = false,
-    lookupError = false } = {}) {
+    lookupError = false, statusPending = false, statusError = false } = {}) {
     const sdk = mockSdk({
         network,
         explorerSpec: {
             getFeeQuote: () => ({ feeExempt: true }),
-            getStatus: () => ({ last_block: { [coin]: 10 } }),
+            getStatus: () => {
+                if (statusPending) return new Promise(() => {});
+                if (statusError) throw new Error('status unavailable');
+                return { last_block: { [coin]: 10 } };
+            },
             getToken: () => {
                 if (lookupError) throw new Error('lookup unavailable');
                 if (existing) return { tick, owner: 'me' };
@@ -28,6 +32,9 @@ function reportFor(tick, { network = 'bitcoin-regtest', coin = 'RBTC', existing 
 
 const reservedFinding = (report) => report.findings.find(
     (finding) => finding.data && finding.data.verdict === VERDICT);
+const expectUnverified = (report, reason) => expect(report.unverified).to.deep.include({
+    check: 'ISSUE_TICK_COIN_PREFIX', reason,
+});
 
 describe('ISSUE coin-qualified tick prefix pre-flight', function () {
     it('blocks fresh coin and future-root prefixes on regtest', async function () {
@@ -64,9 +71,20 @@ describe('ISSUE coin-qualified tick prefix pre-flight', function () {
     it('declares an unavailable token lookup instead of guessing', async function () {
         const report = await reportFor('BTC:FOO', { lookupError: true });
         expect(reservedFinding(report)).to.equal(undefined);
-        expect(report.unverified).to.deep.include({
-            check: 'ISSUE_TICK_COIN_PREFIX',
-            reason: 'token lookup unavailable',
-        });
+        expectUnverified(report, 'token lookup unavailable');
+    });
+
+    it('bounds an unavailable activation lookup instead of hanging', async function () {
+        const started = Date.now();
+        const report = await reportFor('BTC:FOO', { statusPending: true });
+        expect(Date.now() - started).to.be.lessThan(3000);
+        expect(reservedFinding(report)).to.equal(undefined);
+        expectUnverified(report, 'activation lookup unavailable');
+    });
+
+    it('declares a failed activation lookup instead of treating the gate as unarmed', async function () {
+        const report = await reportFor('BTC:FOO', { statusError: true });
+        expect(reservedFinding(report)).to.equal(undefined);
+        expectUnverified(report, 'activation lookup unavailable');
     });
 });
