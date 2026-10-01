@@ -10,6 +10,7 @@
 
 const { FULL_NAME_TO_TICK } = require('../coins/index.js');
 const { RESERVED_FUTURE_ROOTS } = require('../preflight/constants.js');
+const { activationThreshold } = require('../preflight/activation.js');
 const { TICK_REGEX, MAX_TICK_LENGTH } = require('../cosigner/policy/param_charset.js');
 
 const LIST_TICK_COIN_SEPARATOR = ':';
@@ -44,10 +45,31 @@ function isTickCoinRestWellFormed(rest, canonical){
     return rest.length >= 1 && rest.length <= MAX_TICK_LENGTH && TICK_REGEX.test(rest);
 }
 
+async function isListTickCoinActive(sdk){
+    let threshold;
+    try {
+        threshold = activationThreshold('LIST_TICK_COIN', sdk);
+    } catch (e) {
+        return false;
+    }
+    if(!Number.isFinite(threshold)) return false;
+
+    const explorer = sdk && sdk.explorer;
+    if(!explorer || typeof explorer.getStatus !== 'function') return false;
+    try {
+        const status = await explorer.getStatus();
+        const tip = status && status.last_block && status.last_block[explorer.coin];
+        return Number.isFinite(tip) && tip + 1 >= threshold;
+    } catch (e) {
+        return false;
+    }
+}
+
 module.exports = {
     LIST_TICK_COIN_SEPARATOR,
     LIST_TICK_COIN_MAX_ITEM_LENGTH,
     coinQualifierRoot,
     parseTickCoinItem,
     isTickCoinRestWellFormed,
+    isListTickCoinActive,
 };

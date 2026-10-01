@@ -30,6 +30,12 @@ const ACTIVATION_MIRRORS = Object.freeze({
         table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 'UNARMED', 'LTC:testnet': 'UNARMED',
             'DOGE:testnet': 'UNARMED', testnet: 'UNARMED', regtest: 0 }),
     }),
+    LIST_TICK_COIN: Object.freeze({
+        key: 'list_tick_coin_activation.LIST_TICK_COIN_ACTIVATION',
+        unit: 'height',
+        table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 'UNARMED', 'LTC:testnet': 'UNARMED',
+            'DOGE:testnet': 'UNARMED', testnet: 'UNARMED', regtest: 0 }),
+    }),
     LIST_REFERENCE_VALIDITY: Object.freeze({
         key: 'list_reference_validity_activation.LIST_REFERENCE_REQUIRES_VALID_LIST',
         unit: 'height',
