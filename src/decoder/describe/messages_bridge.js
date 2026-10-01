@@ -173,6 +173,23 @@ function decodeMessage(p, chainSuffix) {
     };
 }
 
+/*
+ * The bytes of every FILE are public forever; what differs is whether a
+ * reader can make sense of them. Only params are visible here, so a file
+ * the caller encrypted itself lands in the plain branch, which is why that
+ * branch says "unless encrypted" rather than "anyone can read it".
+ */
+function fileVisibilityWarning(gate, minAmount, encryptionMethod) {
+    if (gate) {
+        const holders = minAmount ? `at least ${minAmount} ${gate}` : gate;
+        return `File is stored on the blockchain permanently. Its contents are encrypted; only holders of ${holders} can read them.`;
+    }
+    if (encryptionMethod) {
+        return 'File is stored on the blockchain permanently. Its contents are encrypted.';
+    }
+    return 'File contents are permanent and public on the blockchain. Anyone can read them unless they were encrypted before publishing.';
+}
+
 /* FILE describer: publish a (possibly gated) file record. */
 function decodeFile(p, chainSuffix) {
     const name = str(p.NAME);
@@ -199,7 +216,7 @@ function decodeFile(p, chainSuffix) {
         ],
         warnings: [
             ...(!name ? ['File name is empty.'] : []),
-            'File contents are permanent and public on the blockchain (encrypted if gated).',
+            fileVisibilityWarning(gate, minAmount, str(p.ENCRYPTION_METHOD)),
         ],
     };
 }
