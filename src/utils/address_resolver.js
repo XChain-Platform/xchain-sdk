@@ -43,6 +43,7 @@ const { SDK_COMPACTABLE_BY_ACTION } = require('../addressRefFields.js');
 const { activationThreshold } = require('../preflight/activation.js');
 const { listAddressRefActive, shouldCompactListItems } = require('./list/address_ref_gate.js');
 const { mapWithLimit } = require('./list/map_limit.js');
+const { readParentListType } = require('./list/parent_list_type.js');
 
 // Per-ACTION sets of fields whose value references an EXISTING address and can
 // therefore be compacted to the `^<id>` wire form. Derived from the shared
@@ -57,13 +58,6 @@ const COMPACTABLE_BY_ACTION = SDK_COMPACTABLE_BY_ACTION;
 // but never responds, where it bounds the fall-back-to-address latency.
 const LOOKUP_CAP_MS = 2500;
 const LIST_ITEM_LOOKUP_LIMIT = 8;
-
-function actionRecord(raw) {
-    if (!raw) return null;
-    let record = raw.data !== undefined ? raw.data : raw;
-    if (Array.isArray(record)) record = record[0] || null;
-    return record && typeof record === 'object' ? record : null;
-}
 
 class AddressResolver {
 
@@ -154,21 +148,12 @@ class AddressResolver {
         let lastBlock = status && status.last_block && status.last_block[explorer.coin];
         if (!listAddressRefActive(threshold, lastBlock)) return;
 
-        if (listType === null && fields.LIST_ACTION_INDEX !== undefined
-            && out[fields.LIST_ACTION_INDEX] !== undefined
-            && out[fields.LIST_ACTION_INDEX] !== null
-            && typeof explorer.getAction === 'function') {
-            try {
-                let parent = await this.withCap(
-                    Promise.resolve().then(() => explorer.getAction(out[fields.LIST_ACTION_INDEX])),
-                    LOOKUP_CAP_MS
-                );
-                let record = actionRecord(parent);
-                listType = record && (record.type ?? record.TYPE);
-            } catch (e) {
-                return;
-            }
-        }
+        if (listType === null && fields.LIST_ACTION_INDEX !== undefined)
+            listType = await readParentListType(
+                explorer,
+                out[fields.LIST_ACTION_INDEX],
+                (promise) => this.withCap(promise, LOOKUP_CAP_MS)
+            );
         if (!shouldCompactListItems({ listType, threshold, lastBlock })) return;
 
         let input = Array.isArray(out[itemKey]) ? out[itemKey] : [out[itemKey]];
