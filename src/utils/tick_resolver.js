@@ -41,6 +41,7 @@
 // FILE.GATE_TICKER is held out of this set permanently: the indexer joins
 // gated_files.gate_ticker by literal string, so a `^<id>` un-gates the file.
 const { TICK_REF_FIELDS } = require('../protocol/tick_ref_fields.js');
+const { compactListTickItems } = require('./list_tick_compaction.js');
 
 // ISSUE formats that reject an unknown TICK outright (xchain-indexer
 // src/actions/issue.js: format 6 requires an existing tokenInfo at
@@ -66,6 +67,7 @@ class TickResolver {
 
     constructor(sdk) {
         this.sdk = sdk;
+        this.lookupCapMs = LOOKUP_CAP_MS;
         // Permanent name -> numeric-id cache. A ticker id (index_tickers.id) is
         // immutable once assigned, so entries never need invalidation. Keyed by
         // lowercase name; an SDK instance is bound to a single network/coin, so
@@ -136,6 +138,7 @@ class TickResolver {
         if (!this.enabled() || params === undefined || params === null) return params;
         let name = String(action || '').toUpperCase();
         let out  = Object.assign({}, params);
+        if (name === 'LIST') out = await compactListTickItems(this, out);
         // ISSUE's own TICK needs the wire format before it can be judged (see
         // ISSUE_TICK_COMPACT_FORMATS above); read it once, tolerant of either
         // casing, the same way the loop below maps every other key.

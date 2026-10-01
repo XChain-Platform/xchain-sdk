@@ -22,6 +22,7 @@ const ExplorerClient = require('../clients/explorer.js');
 const config = require('../config.js');
 const { SDKConfigError } = require('../utils/errors.js');
 const { buildCoinExplorers } = require('../utils/list/coin_explorers.js');
+const { isListTickCoinActive } = require('../protocol/list_tick_coin.js');
 
 // Keep wallet and messaging delegates together so account-facing operations stay grouped.
 module.exports = {
@@ -60,6 +61,7 @@ module.exports = {
     async sendMessage(params) { return this.messaging.send(params, this); },
     async getPublicKey(address) { return this.messaging.getPublicKey(address, this.requireExplorer()); },
     async getMessagesForAddress(address, opts) { return this.messaging.getMessages(address, opts, this.requireExplorer()); },
+    async isListTickCoinActive() { return isListTickCoinActive(this); },
 
     /*
      *  Token-gated content (FILE with GATE_TICKER set).

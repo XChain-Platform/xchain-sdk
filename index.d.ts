@@ -1568,6 +1568,8 @@ export declare class XChainSDK {
     airdrop(params: AirdropParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     message(params: MessageParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     list(params: ListParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
+    /** Whether coin-qualified ticker LIST items are active at the next block. */
+    isListTickCoinActive(): Promise<boolean>;
     link(params: LinkParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     file(params: FileParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     address(params: AddressParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
