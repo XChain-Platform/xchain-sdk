@@ -23,14 +23,18 @@ describe('list_tick_coin parser', () => {
     });
 
     it('qualifies coin and future-root items', () => {
-        assert.deepStrictEqual(parseTickCoinItem('DOGE:PEPE'), { coin: 'DOGE', rest: 'PEPE', canonical: 'DOGE:PEPE' });
-        assert.deepStrictEqual(parseTickCoinItem('doge:^12'), { coin: 'DOGE', rest: '^12', canonical: 'DOGE:^12' });
-        assert.strictEqual(parseTickCoinItem('ETH:FOO').coin, 'ETH');
+        for(const [item, root] of [['DOGE:PEPE', 'DOGE'], ['doge:^12', 'DOGE'], ['ETH:FOO', 'ETH']]){
+            assert.strictEqual(coinQualifierRoot(item), root, item);
+            assert.strictEqual(parseTickCoinItem(item).coin, root, item);
+        }
+        assert.strictEqual(parseTickCoinItem('doge:^12').canonical, 'DOGE:^12');
     });
 
     it('leaves every other item bare', () => {
-        for(const item of [':PEPE', 'FOO:BAR', 'PEPE', '^12', 'XCHAIN:FOO'])
+        for(const item of [':PEPE', 'FOO:BAR', 'PEPE', '^12', 'XCHAIN:FOO']){
+            assert.strictEqual(coinQualifierRoot(item), null, item);
             assert.strictEqual(parseTickCoinItem(item), null, item);
+        }
     });
 
     it('splits at the first colon', () => {
