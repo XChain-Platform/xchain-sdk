@@ -44,7 +44,7 @@ function hasField(errors, field) {
     return errors.some(error => error.details.field === field);
 }
 
-describe('LIST share, transfer, and union validation through createAction', function () {
+describe('LIST share validation through createAction', function () {
     it('accepts VERSION 2 with a positive LIST_ACTION_INDEX', function () {
         const action = create({ version: 2, listActionIndex: 17, memo: 'shared' });
         expect(action.version).to.equal(2);
@@ -67,7 +67,9 @@ describe('LIST share, transfer, and union validation through createAction', func
             expect(hasField(refused(params), field)).to.equal(true);
         });
     }
+});
 
+describe('LIST transfer validation through createAction', function () {
     it('accepts VERSION 3 with a full address or numeric address reference', function () {
         expect(create({ version: 3, listActionIndex: 29, destination: ADDRESS }).actionString)
             .to.equal('LIST|3|29|' + ADDRESS);
@@ -93,7 +95,9 @@ describe('LIST share, transfer, and union validation through createAction', func
         const errors = refused({ type: 1, item: 'TOKEN', destination: ADDRESS });
         expect(errors.some(error => error.message === 'LIST TRANSFER must be requested with VERSION 3')).to.equal(true);
     });
+});
 
+describe('LIST union and legacy validation through createAction', function () {
     it('accepts TYPE 3 creates with one through sixteen unique positive indexes', function () {
         expect(create({ type: 3, item: '1' }).actionString).to.equal('LIST|0|3||1');
         const item = Array.from({ length: 16 }, (_, index) => String(index + 1));
