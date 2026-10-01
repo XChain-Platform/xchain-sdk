@@ -246,6 +246,18 @@ describe('decoder.describe', function () {
 });
 
 describe('decoder.describe', function () {
+    describe('LIST memo-only edit', function () {
+        it('reads as a memo update with members unchanged, not "Add ? items"', function () {
+            const d = describeAction(parse('LIST|1|1|2700|season two'));
+            expect(d.summary).to.equal('Update the memo on list #2700');
+            expect(d.warnings).to.deep.equal([]);
+        });
+        it('still warns about an edit with no items and no memo', function () {
+            const d = describeAction(parse('LIST|1|1|2700|'));
+            expect(d.warnings).to.include('List has no items.');
+        });
+    });
+
     describe('EXECUTE deposit warning', function () {
         const NO_DEPOSIT = /sends no tokens to the contract/;
         it('warns that a bare call sends no tokens', function () {
