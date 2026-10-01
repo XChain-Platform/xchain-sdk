@@ -182,13 +182,16 @@ class AddressResolver {
         out[itemKey] = Array.isArray(out[itemKey]) ? compacted : compacted[0];
     }
 
-    // Compact every eligible address field of an action's params to its `^<id>`
-    // wire form. Returns a SHALLOW COPY with each original key's casing preserved
-    // (only the address field VALUES are rewritten); the caller's object is never
-    // mutated. General multi-value and type-gated fields remain absent from
-    // SDK_COMPACTABLE. LIST.ITEM is compacted only by the address-list path below,
-    // after its activation gate and list type are known. When compaction is disabled
-    // the params pass straight through.
+    // Compact every eligible address field to its `^<id>` wire form.
+    // Return a shallow copy with each original key's casing preserved.
+    // Preserve the caller's object by rewriting only values in the copy.
+
+    // Keep general multi-value and type-gated fields out of SDK_COMPACTABLE.
+    // Route LIST.ITEM only through the address-list path below.
+    // Require its activation gate and address-list type to be known first.
+
+    // Pass params through unchanged when compaction is disabled.
+    // Leave arrays untouched outside the gated LIST item handling.
     async resolveActionParams(action, params) {
         if (!this.enabled() || params === undefined || params === null) return params;
         // Gate on THIS action's compactable fields, so a field held back for one
