@@ -35,6 +35,8 @@
 
 const { evaluatePolicy } = require('./policy_evaluator/evaluate_policy.js');
 const valueDerivability = require('./policy/value_derivability.js');
+// allowedDestinations currently binds 8 of 70 decoder-reachable formats;
+// LIST v3 joins the destination-carrying set while LIST v2 does not.
 const {
     pick,
     resolveValue,
