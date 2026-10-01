@@ -458,6 +458,24 @@ agrees with it.
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
 
+### 2026-09-30 - LIST sharing, transfer, union and shared-edit refusals
+
+The LIST range after the `500b5d4f` anchor was read through indexer develop tip
+`d3b305f1`, together with the separate fee change at `95f0176a`. None of the thirteen
+mapped handlers changed bytes, including `src/actions/issue/`; the LIST handler remains
+intentionally unmapped because `checks/misc.js` makes no client-side LIST verdict.
+
+LIST formats 2 and 3 add SHARE and TRANSFER. Both refuse a non-owner source for the whole
+action. SHARE also refuses a union, an already-shared list, or membership over 10,000, and
+an edit that would take a shared list over 10,000 is likewise refused whole. Item validity
+for create and edit stays per-item. The separate fee change charges LIST_SHARE and
+shared-edit base and per-item fees through `createFeesObject`; `FEE_CHARGING_ACTIONS` now
+includes LIST so a native payment carries the existing NATIVE_FEE_FORFEIT disclosure.
+
+**Direction: NEITHER for client verdicts.** The client adds disclosures for server-side
+state and fee-forfeiture risk, but does not accept or reject a LIST locally. NO CLIENT
+VERDICT MOVES.
+
 ### 2026-09-30 - DISPENSER, ORDER and SWAP pass the chain's COIN to three gate reads
 
 Baseline was the prior anchor `0773b436`; the reviewed tree is the committed indexer develop
