@@ -36,11 +36,6 @@ function harness(options = {}) {
     let statusCalls = 0;
     const explorer = Object.assign(tokenClient(options.btcTokens || {}, btcCalls), {
         coin,
-        baseUrl: 'http://explorer.test',
-        port: 8080,
-        timeout: 100,
-        retry: false,
-        hooks: {},
         async getStatus() {
             statusCalls += 1;
             return { last_block: { [coin]: 0 } };
@@ -145,7 +140,7 @@ describe('LIST ticker item compaction', function () {
         assert.deepStrictEqual(h.dogeCalls, []);
     });
 
-    it('exposes the LS-90 gate reader on the SDK instance', async function () {
+    it('exposes the ticker-list gate reader on the SDK instance', async function () {
         const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
         sdk.config.network = 'bitcoin-regtest';
         sdk.explorer = {
