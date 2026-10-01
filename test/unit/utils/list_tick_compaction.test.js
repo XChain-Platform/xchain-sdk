@@ -108,7 +108,9 @@ describe('LIST ticker item compaction', function () {
         assert.deepStrictEqual(out.ITEM, ['DOGE:FAIL', 'LTC:SLOW']);
         assert.deepStrictEqual(hangingCalls, [{ rest: 'SLOW', options: { noRetry: true } }]);
     });
+});
 
+describe('LIST ticker item compaction guards', function () {
     it('leaves bare, id-form and future-root items untouched', async function () {
         const h = harness({ dogeTokens: { PEPE: 12 } });
         const items = ['PEPE', 'DOGE:^12', 'ETH:FOO'];
