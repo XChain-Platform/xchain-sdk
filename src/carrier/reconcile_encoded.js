@@ -44,6 +44,7 @@ const {
     inputScript,
     inputValue,
     inputPresigned,
+    singleKeyInput,
     isOpReturn,
     matchesPhaseShape,
     psbtPrevouts,
@@ -64,36 +65,29 @@ function createDeny(psbtHex, label) {
 
 // Read signer-owned funding state once so output authorization uses proven scripts.
 function readInputs(psbt, deny) {
-    // Funding scripts: change returning to an UNSIGNED script we are already spending
-    // FROM stays under the signer's control, whichever address scheme the encoder chose.
-    // Reading them out of the PSBT is what makes this rule false-positive-free -
-    // the SDK cannot predict the change script otherwise, since `pubkey` may be a
-    // raw key and the encoder picks the scheme. The unsigned qualifier is load-bearing;
-    // see the per-input note below.
+    // Funding scripts authorize change only when unsigned AND single-key: the WIF must
+    // finalize every input, so it alone controls them; a shared-key script (1-of-2) never qualifies.
     const fundingScripts = [];
+    let unsignedInputs = 0;
     const spent = [];
     let totalIn = 0n;
     let feeComputable = true;
     for (let i = 0; i < psbt.txInputs.length; i++) {
         const script = inputScript(psbt, i);
         if (!script) return deny('UNRECONCILABLE_PSBT', 'input ' + i + ' carries no witnessUtxo or nonWitnessUtxo, so its funding script cannot be established');
-        // Rule (b) below reads "spending FROM it" as proof the destination stays under
-        // the signer's control, and that only holds for inputs the WIF owns. A hostile
-        // encoder can attach its OWN pre-signed input and point the wallet-funded
-        // remainder at that input's script, which rule (b) would then wave through as
-        // change while signAllInputs/finalizeAllInputs completes the drain. A pre-signed
-        // input is provably not ours here, so it funds and it is spent, but it never
-        // authorizes a change destination.
-        if (!inputPresigned(psbt, i)) fundingScripts.push(script);
+        if (!inputPresigned(psbt, i)) {
+            unsignedInputs++;
+            if (singleKeyInput(psbt, i, script)) fundingScripts.push(script);
+        }
         const value = inputValue(psbt, i);
         if (value === null) feeComputable = false; else totalIn += value;
         spent.push({ script, value });
     }
-    // Counted on the PSBT, not on fundingScripts: an all-pre-signed transaction has
+    // Counted on the PSBT, not on unsignedInputs: an all-pre-signed transaction has
     // inputs but no signer-owned one, and it is denied below with its own reason
     // rather than mislabelled as input-less.
     if (!psbt.txInputs.length) return deny('UNRECONCILABLE_PSBT', 'the encoder returned a transaction with no inputs');
-    if (!fundingScripts.length) return deny('NO_SIGNER_OWNED_INPUT',
+    if (!unsignedInputs) return deny('NO_SIGNER_OWNED_INPUT',
         'every input in the encoder response already carries a signature, so none of them is the local signer\'s');
 
     return { fundingScripts, spent, totalIn, feeComputable };
@@ -159,13 +153,8 @@ function reconcileOutput(out, i, inputs, outputs, deny) {
         if (value > 0n) return deny('OP_RETURN_CARRIES_VALUE', { index: i, value: String(value) });
         return;
     }
-    // (b) Change back to an UNSIGNED script we are spending from (see the input
-    //     loop: a pre-signed input is foreign and never reaches fundingScripts),
-    //     or to the change address the caller submitted. Both stay under the
-    //     caller's control, and the
-    //     second has to be checked BEFORE the shape rule: a submitted P2SH change
-    //     address decompiles identically to a chunk funding leg, so classifying it
-    //     as one would demand the next phase spend it back.
+    // (b) Change to a single-key unsigned funding script, a submitted change address or a caller-identity
+    //     script, checked BEFORE the shape rule since a submitted P2SH change address matches a chunk leg shape.
     if (inputs.fundingScripts.some((s) => out.script.equals(s))) return;
     if (inputs.changeScripts.some((s) => out.script.equals(s))) return;
     // (c) An output the caller itself asked for, capped at what it asked for.
@@ -278,10 +267,10 @@ function reconcileFee(intent, inputs, outputs, deny) {
  *   network        {object}   bitcoinjs network, for parsing submitted addresses
  *   customOutputs  {Array}    [{ address, value }] exactly as submitted, or null
  *   changeAddresses {Array}   change destinations the caller itself submitted. Same
- *                             standing as change back to an input script, and it has
- *                             to be stated: a submitted P2SH change address is
- *                             shape-identical to a chunk leg, so without this it
- *                             would be mistaken for one
+ *                             standing as change back to a single-key input script,
+ *                             and it has to be stated: a submitted P2SH change
+ *                             address is shape-identical to a chunk leg, so without
+ *                             this it would be mistaken for one
  *   callerIdentities {Array}  the caller's own `pubkey` identity (address or raw
  *                             pubkey hex), whose default-type scripts a reveal with
  *                             no wallet input of its own returns change to

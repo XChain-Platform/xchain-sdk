@@ -22,6 +22,42 @@ const config = require('../../config.js');
 const FormatSelector = require('../format_selector.js');
 const { MAX_DEPLOY_CHUNKS } = require('../../contract/chunk_helper.js');
 const { VALID_COINS, ACTION_REQUIRED_FIELDS } = require('./field_limits.js');
+const { validateListVersionFields } = require('./field_rules_extended.js');
+
+// LIST_UNION_MAX_MEMBERS has its canonical home in xchain-documentation/protocol/constants.js.
+const LIST_UNION_MAX_MEMBERS = 16;
+ACTION_REQUIRED_FIELDS.LIST = [];
+
+function validateListUnionItems(validator, fields) {
+    const errors = [];
+    const raw = fields.ITEM;
+    const items = validator.isEmpty(raw) ? [] : (Array.isArray(raw) ? raw : [raw]);
+    if (items.length === 0) {
+        errors.push(validator.buildError('MISSING_REQUIRED_FIELD',
+            'LIST union create requires field: ITEM', { field: 'ITEM' }));
+        return errors;
+    }
+    if (items.length > LIST_UNION_MAX_MEMBERS)
+        errors.push(validator.buildError('INVALID_FIELD_VALUE',
+            'LIST union ITEM count must not exceed ' + LIST_UNION_MAX_MEMBERS,
+            { field: 'ITEM', value: items.length, constraint: { max: LIST_UNION_MAX_MEMBERS } }));
+
+    const seen = new Set();
+    for (const item of items) {
+        const value = String(item);
+        if (!/^[1-9][0-9]*$/.test(value))
+            errors.push(validator.buildError('INVALID_FIELD_VALUE',
+                'LIST union ITEM must be a positive action index: ' + value,
+                { field: 'ITEM', value: item }));
+        if (seen.has(value))
+            errors.push(validator.buildError('INVALID_FIELD_VALUE',
+                'LIST union ITEM must not contain duplicate action indexes: ' + value,
+                { field: 'ITEM', value: item }));
+        seen.add(value);
+    }
+    // Member-list types require chain state, so the indexer records mismatches invalid.
+    return errors;
+}
 
 module.exports = {
     // DEPLOY-specific validation (version-dependent)
@@ -146,11 +182,15 @@ module.exports = {
     },
 
     validateList(fields) {
-        let errors = [];
+        let versionValidation = validateListVersionFields(this, fields);
+        if (versionValidation.handled) return versionValidation.errors;
+        let errors = versionValidation.errors;
+
         let isEdit = !this.isEmpty(fields.LIST_ACTION_INDEX) || !this.isEmpty(fields.EDIT);
-        // LIST v0 (create) requires TYPE; LIST v1 (edit) requires EDIT + LIST_ACTION_INDEX
+        if (this.isEmpty(fields.ITEM) && Number(fields.TYPE) !== 3)
+            errors.push(this.buildError('MISSING_REQUIRED_FIELD',
+                'LIST requires field: ITEM', { action: 'LIST', field: 'ITEM' }));
         if (!isEdit) {
-            // Create mode: TYPE is required
             if (this.isEmpty(fields.TYPE))
                 errors.push(this.buildError('MISSING_REQUIRED_FIELD', 'LIST create requires field: TYPE', { field: 'TYPE' }));
         }
@@ -169,6 +209,8 @@ module.exports = {
         // the indexer, which does hold that state, is the arbiter for edits.
         if (!isEdit && Number(fields.TYPE) === 2)
             errors.push(...this.validateListAddressItems(fields));
+        if (!isEdit && Number(fields.TYPE) === 3)
+            errors.push(...validateListUnionItems(this, fields));
 
         return errors;
     },

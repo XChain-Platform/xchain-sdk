@@ -78,9 +78,21 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `0773b436`
+**Pins taken at indexer commit:** `93de40d1`
 
-(Re-anchored 2026-09-29 for the review-round handler edits reviewed below. `0773b436` is
+(Re-anchored 2026-10-01 for the coin-qualified LIST item consumers reviewed below.
+`93de40d1` is the clean, passed LS-85 lane tip used for this paired landing. The ISSUE
+and AIRDROP directory pins move; the LIST handler changes were also re-read but remain
+intentionally unmapped because Tier 2 makes no LIST validity verdict. The other eleven
+mapped handlers are byte-identical at `500b5d4f` and `93de40d1`.)
+
+(Earlier note. Re-anchored 2026-09-30 for the coin-keyed gate reads reviewed below. `500b5d4f` is the
+committed indexer develop tip; the commit that moves the three re-pinned directories
+(dispenser, order, swap) is `77e4f462`. It also closes the 2026-09-29 paired-change
+exception: the round's indexer edits those six pins were taken from are committed in the
+range `0773b436..500b5d4f`, and all thirteen rows are HEAD hashes at `500b5d4f`.)
+
+(Earlier note. Re-anchored 2026-09-29 for the review-round handler edits reviewed below. `0773b436` is
 the indexer develop tip the round's worktree sits on, and no mapped row moves between
 `c9ba4f9c` and it. The six re-pinned directories (send, issue, dispenser, dispense,
 airdrop, dividend) are hashed from that tip PLUS the round's uncommitted indexer edits,
@@ -340,7 +352,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 0773b436..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 93de40d1..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -421,12 +433,12 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (SEND) | `src/actions/send/` | `68a094391bafac83610ef96d8baaad183a87d5fa037d0f655c55a4b5539cbce7` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `1d5869c477a5670c76b5c64ca893044ce67910310e716f7156220f87819e8974` |
 | `checks/mint.js` | `src/actions/mint/` | `caf6f7e7bfc0ffac865ae76fbc5d36123be77db09df81f617c3a6fc9304554cd` |
-| `checks/issue.js` | `src/actions/issue/` | `5a3e61d8b199060532e7ca5a4393615a0f232bdc6b4d5913791abea34210a080` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `fadc8c6c281d51854ff948c98abf1f354e9bca706e589920973a27c0180525f9` |
+| `checks/issue.js` | `src/actions/issue/` | `02db2deb36967b65d673f5010806ca703b231c1fb22b9c0196b53a6e91d28500` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `fb0f32cd0721236f03d06adc22a2ba63fa2f9955bf686dab76acaec8ca9b8432` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `34cec38417f2fb43867dcc5810d980d3d15a1fabc513d47c6541bb81de8e5260` |
-| `checks/trading.js` (ORDER) | `src/actions/order/` | `f1b75f4d843c2ca9fbb0bfe35716a0902600b0e3a8b37a7edadfadbf164b8818` |
-| `checks/trading.js` (SWAP) | `src/actions/swap/` | `e3be2be82c0f8f39c3ead46a5cf6006e2c1e5f4494ac9ee6b0f81611d31f8c49` |
-| `checks/airdrop.js` | `src/actions/airdrop/` | `8b493af57a24dbba23ae3ca4346be6d42444f31bfd29be7a489d15d5cf70dd9f` |
+| `checks/trading.js` (ORDER) | `src/actions/order/` | `7518413cb97ece320a481859d8227756c3627d1bb2891da63153b54ea2de71df` |
+| `checks/trading.js` (SWAP) | `src/actions/swap/` | `3572ba88cb701624a841a1e089d9c848d4cd37542fa7916f63ca41c7bd6d5e43` |
+| `checks/airdrop.js` | `src/actions/airdrop/` | `fb9d19928390aae6963796923724072f77dd8a934d53679638b2cc11eaa5ed33` |
 | `checks/dividend.js` | `src/actions/dividend/` | `498e038fd9118f0d37663a98a7d55db7d2cee93ae7a6f73cafc32f04d26a3103` |
 | `checks/batch.js` | `src/actions/batch/` | `895eb6fda8380b3019ccdaa97f7b13d97ebae20008e4285a43f7b854b1884507` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `cfd9837bc722773652e53b949ec938ba1757a295e470dba6c237a06ecf7667e3` |
@@ -451,6 +463,77 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-01 - coin-qualified LIST items and their ISSUE and AIRDROP consumers
+
+Baseline was the prior anchor `500b5d4f`; the reviewed tree is the clean LS-85 lane tip
+`93de40d1`. The full diffs under `src/actions/issue/`, `src/actions/airdrop/` and the
+unmapped `src/actions/list.js` plus `src/actions/list/` were re-read, and the two mapped
+directory pins were derived with `bin/preflight_handler_dirs.js` against that tree.
+
+**ISSUE widens rejection and the client check changes.** At or above
+`LIST_TICK_COIN_ACTIVATION`, a fresh, top-level ticker whose case-folded prefix before
+the first colon is a configured coin or a reserved future root is refused as
+`invalid: TICK (reserved)`. Existing rows, dotted children and caret references keep
+their prior treatment. `checks/issue.js` now reads the shared activation helper and
+token lookup, raises a blocking `VALIDATOR_SEMANTICS` finding carrying that exact
+verdict for a proven fresh create, and declares `ISSUE_TICK_COIN_PREFIX` unverified
+when the lookup is unavailable. Mainnet and testnet remain unarmed.
+
+**AIRDROP changes recipient resolution but no client verdict.** Above the same gate,
+type-1 LIST entries are filtered to the action chain, coin-qualified ticker ids are
+resolved there, foreign-coin entries are ignored, and bare entries retain their
+own-chain meaning. This moves the effective recipient set and debit total, both of
+which remain server-side and are already declared by `AIRDROP_TOTAL_VS_BALANCE`; no
+client finding changes. The LIST handler adds the corresponding item admission and
+storage paths, plus the previously reviewed share, transfer, union, address-reference
+and fee paths. LIST is still intentionally unmapped because `checks/misc.js` makes no
+LIST verdict.
+
+### 2026-09-30 - LIST sharing, transfer, union and shared-edit refusals
+
+The LIST range after the `500b5d4f` anchor was read through indexer develop tip
+`d3b305f1`, together with the separate fee change at `95f0176a`. None of the thirteen
+mapped handlers changed bytes, including `src/actions/issue/`; the LIST handler remains
+intentionally unmapped because `checks/misc.js` makes no client-side LIST verdict.
+
+LIST formats 2 and 3 add SHARE and TRANSFER. Both refuse a non-owner source for the whole
+action. SHARE also refuses a union, an already-shared list, or membership over 10,000, and
+an edit that would take a shared list over 10,000 is likewise refused whole. Item validity
+for create and edit stays per-item. The separate fee change charges LIST_SHARE and
+shared-edit base and per-item fees through `createFeesObject`; `FEE_CHARGING_ACTIONS` now
+includes LIST so a native payment carries the existing NATIVE_FEE_FORFEIT disclosure.
+
+**Direction: NEITHER for client verdicts.** The client adds disclosures for server-side
+state and fee-forfeiture risk, but does not accept or reject a LIST locally. NO CLIENT
+VERDICT MOVES.
+
+### 2026-09-30 - DISPENSER, ORDER and SWAP pass the chain's COIN to three gate reads
+
+Baseline was the prior anchor `0773b436`; the reviewed tree is the committed indexer develop
+tip `500b5d4f`. Hashing `git archive 77e4f462^ src/actions` with
+`node bin/preflight_handler_dirs.js` reproduces all three prior pins, so the whole delta read
+here is `77e4f462`, read with `git -C ../xchain-indexer diff 0773b436..HEAD -- <handler>`.
+The new pins were derived with `node bin/preflight_handler_dirs.js <indexer> <handler>/`.
+
+**What moved: five gate reads now pass `this.config['COIN']` instead of `null`.** They are
+DISPENSER_FRESHNESS_PROVEN_USE (`dispenser/index.js`), DISPENSER_SETTLEMENT_PRICE
+(`dispenser/validate_format.js`) and LIST_EDIT_REMOVE (`dispenser/validate.js`,
+`order/validate.js`, `swap/validate.js`), so a `<COIN>:<network>` slot in those registry
+rows is now honoured before the bare network. Every coin-keyed slot equals its bare network
+slot today, so no indexer verdict changes on any network.
+
+**Client mirrors.** `activationThreshold` already resolves `<COIN>:<network>` first with the
+bare network as fallback, the same order as the indexer's `resolveThreshold`, and both
+tables it reads are now coin-keyed on the indexer side (LIST_REFERENCE_VALIDITY through
+`src/db/lists/index.js`). DISPENSER_SETTLEMENT_PRICE is never resolved by the client: it is
+an unverified disclosure whose text lists every pinned slot, now matching what the indexer
+reads. LIST_EDIT_REMOVE and DISPENSER_FRESHNESS_PROVEN_USE have no client mirror; the
+removal sentinel is not judged by Tier 2 and freshness stays under `DISPENSER_ORIGIN_STANDING`
+(2026-09-26 entry). The same round's LIST_CHANGE_REMATCH read in `list.js` and the
+VOTE callback-usability read in `vote/` sit outside every mapped row and have no mirror.
+
+**Direction: NEITHER, no admission boundary moves in the client. NO CLIENT VERDICT MOVES.**
 
 ### 2026-09-29 - review-round indexer edits over six handler directories
 

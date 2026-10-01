@@ -41,19 +41,23 @@
 'use strict';
 
 const { str, toArray } = require('./value_format.js');
+const { decodeUnionListCreate, decodeListShare, decodeListTransfer } = require('./list_share.js');
 const numberFormat = require('../../utils/utility/number_format.js');
 
-/*
- * LIST describer. Two format versions:
- *   - v0 Create: VERSION|TYPE|ITEM (ITEM repeats). TYPE 1 = TICK list,
- *     TYPE 2 = ADDRESS list.
- *   - v1 Edit: VERSION|EDIT|LIST_ACTION_INDEX|ITEM (ITEM repeats).
- *     Clones an existing list and adds (EDIT=1) or removes (EDIT=2).
- */
+// Describe v0 LIST creates as VERSION|TYPE|MEMO|ITEM, with ITEM repeating.
+// Recognize TYPE 1 as TICK, TYPE 2 as ADDRESS, and TYPE 3 as a union of lists.
+
+// Describe v1 LIST edits as VERSION|EDIT|LIST_ACTION_INDEX|MEMO|ITEM.
+// Clone the existing list, then add with EDIT 1 or remove with EDIT 2.
+
 function decodeList(p, chainSuffix) {
     const version = str(p.VERSION) || '0';
     const items = toArray(p.ITEM);
     const count = items.length;
+    const memo = str(p.MEMO);
+
+    if (version === '2') return decodeListShare(p);
+    if (version === '3') return decodeListTransfer(p);
 
     if (version === '1') {
         const edit = str(p.EDIT);
@@ -70,6 +74,7 @@ function decodeList(p, chainSuffix) {
                 ...(count > 0 && count <= 5
                     ? [{ label: 'Sample', value: items.join(', ') }]
                     : []),
+                ...(memo ? [{ label: 'Memo', value: memo }] : []),
             ],
             warnings: [
                 ...(!edit ? ['Edit direction is empty. Specify whether to add or remove items.'] : []),
@@ -81,6 +86,8 @@ function decodeList(p, chainSuffix) {
 
     // Version 0: create.
     const type = str(p.TYPE);
+    if (type === '3') return decodeUnionListCreate(items, memo, chainSuffix);
+
     const kind = type === '1' ? 'token' : type === '2' ? 'address' : 'item';
     const summary = `Create ${kind} list of ${count || '?'} item${count === 1 ? '' : 's'}${chainSuffix}`;
     return {
@@ -91,6 +98,7 @@ function decodeList(p, chainSuffix) {
             ...(count > 0 && count <= 5
                 ? [{ label: 'Sample', value: items.join(', ') }]
                 : []),
+            ...(memo ? [{ label: 'Memo', value: memo }] : []),
         ],
         warnings: [
             ...(!type ? ['List type is empty. Specify a token list or an address list.'] : []),

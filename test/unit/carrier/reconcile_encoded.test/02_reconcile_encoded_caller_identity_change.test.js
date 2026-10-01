@@ -14,6 +14,8 @@ const bitcoin = require('bitcoinjs-lib');
 const ecc     = require('@bitcoinerlab/secp256k1');
 const { secp256k1 } = require('@noble/curves/secp256k1');
 const { reconcileEncoded } = require('../../../../src/carrier/reconcile_encoded.js');
+const { callerScripts } = require('../../../../src/carrier/reconcile_encoded/script_matching.js');
+const { getNetwork } = require('../../../../src/protocol/networks.js');
 require('../../../../src/utils/apply_bufferutils_patch.js');
 
 bitcoin.initEccLib(ecc);
@@ -42,5 +44,30 @@ describe('reconcileEncoded caller-identity change', function () {
         // an identity that is neither an address nor a pubkey authorizes nothing
         assert.throws(() => reconcileEncoded(hex, { network: NET, callerIdentities: '03abc' }),
                       (e) => e.code === 'UNRECONCILED_OUTPUT');
+    });
+
+    function dogeReveal(pubkeyHex, pay) {
+        const doge = getNetwork('dogecoin-regtest');
+        const leg = bitcoin.payments.p2sh({ hash: crypto.randomBytes(20), network: doge }).output;
+        const psbt = new bitcoin.Psbt({ network: doge });
+        psbt.addInput({ hash: 'ee'.repeat(32), index: 0, witnessUtxo: { script: leg, value: 5000 } });
+        psbt.addOutput({ script: pay({ pubkey: Buffer.from(pubkeyHex, 'hex'), network: doge }).output, value: 4500 });
+        return { hex: psbt.toHex(), doge };
+    }
+
+    it('rejects P2WPKH caller change on a non-segwit network and keeps P2PKH', function () {
+        const pubkeyHex = Buffer.from(secp256k1.getPublicKey(crypto.randomBytes(32), true)).toString('hex');
+        const bad = dogeReveal(pubkeyHex, bitcoin.payments.p2wpkh);
+        assert.throws(() => reconcileEncoded(bad.hex, { network: bad.doge, callerIdentities: pubkeyHex }),
+                      (e) => e.code === 'UNRECONCILED_OUTPUT');
+        const good = dogeReveal(pubkeyHex, bitcoin.payments.p2pkh);
+        assert.strictEqual(reconcileEncoded(good.hex, { network: good.doge, callerIdentities: pubkeyHex }).fee, 500n);
+    });
+
+    it('still derives both caller scripts on segwit networks', function () {
+        const pubkeyHex = Buffer.from(secp256k1.getPublicKey(crypto.randomBytes(32), true)).toString('hex');
+        assert.strictEqual(callerScripts(pubkeyHex, getNetwork('dogecoin-regtest')).length, 1);
+        assert.strictEqual(callerScripts(pubkeyHex, getNetwork('bitcoin-regtest')).length, 2);
+        assert.strictEqual(callerScripts(pubkeyHex, NET).length, 2);
     });
 });

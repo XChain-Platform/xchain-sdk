@@ -54,13 +54,11 @@ function toText(input) {
     return { error: failure('EMPTY', 'input must be a string or Buffer') };
 }
 
-// VERSION segment must be a non-negative integer token, matching the
-// on-chain decoder's Number()+isInteger gate (psbtActionDecode BAD_VERSION).
+// Accept only 1-2 plain digits, the tokens the indexer reads as this same VERSION
+// (its parseInt) and never as a legacy TICK (its length>2 rule shifts ISSUE/MINT/SEND).
 function parseVersion(segment) {
-    if (segment === undefined || segment === '') return null;
-    const v = Number(segment);
-    if (!Number.isInteger(v) || v < 0) return null;
-    return v;
+    if (typeof segment !== 'string' || !/^\d{1,2}$/.test(segment)) return null;
+    return Number(segment);
 }
 
 /*

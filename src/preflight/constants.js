@@ -314,7 +314,7 @@ const TIER1_SUBCOMMAND_PREFLIGHT = Object.freeze(['BATCH']);
 // system-injected and never reaches pre-flight.
 const FEE_CHARGING_ACTIONS = Object.freeze([
     'ISSUE', 'SWEEP', 'DISPENSER', 'DIVIDEND', 'AIRDROP', 'CALLBACK',
-    'ORDER', 'SWAP', 'DEPLOY', 'EXECUTE', 'BET', 'XBRIDGE',
+    'ORDER', 'SWAP', 'DEPLOY', 'EXECUTE', 'BET', 'XBRIDGE', 'LIST',
 ]);
 
 // Tick-namespace rules an ISSUE create is judged by at/above the indexer's
@@ -334,7 +334,12 @@ const RESERVED_FUTURE_ROOTS = Object.freeze([
     'BASE', 'DASH', 'HBAR', 'HOOD', 'HYPE', 'NEAR',
 ]);
 
+const { ACTIVATION_MIRRORS, activationThreshold, describeActivation } = require('./activation.js');
+
 module.exports = {
+    ACTIVATION_MIRRORS,
+    activationThreshold,
+    describeActivation,
     REPORT_SCHEMA_VERSION,
     DEFAULT_TIMEOUT_MS,
     RECHECK_TIMEOUT_MS,

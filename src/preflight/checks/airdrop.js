@@ -24,17 +24,23 @@
 
 'use strict';
 
-const { FINDING_CODES } = require('../constants.js');
+const { FINDING_CODES, activationThreshold, describeActivation } = require('../constants.js');
 const numeric = require('../numeric.js');
 const { actionRecord } = require('../resolvers.js');
 
-// The LIST reference-validity gate is live at height 0 on regtest and unarmed on
-// mainnet and testnet. The configured SDK network is enough to decide that split,
-// and the action-detail record supplies the referenced LIST verdict.
-function listReferenceValidityActive(ctx) {
-    const network = String(ctx.sdk?.config?.network || '').toLowerCase();
-    const coin = String(ctx.sdk?.explorer?.coin || '').toUpperCase();
-    return network === 'regtest' || network.endsWith('-regtest') || /^R(?:BTC|LTC|DOGE)$/.test(coin);
+// Judge an invalid LIST reference from the pinned activation table: an error only where it is active from genesis.
+function noteInvalidListReference(ctx, idx, status) {
+    const at = activationThreshold('LIST_REFERENCE_VALIDITY', ctx.sdk);
+    if (at === 0) {
+        ctx.addFinding(FINDING_CODES.LIST_NOT_FOUND, 'error',
+            `List #${idx} exists but is not valid, so it cannot be referenced on this network.`,
+            { listActionIndex: String(idx), status });
+        return;
+    }
+    const here = typeof at === 'number' ? `this network arms the validity gate at height ${at}` : 'the gate is unarmed on this network';
+    ctx.addUnverified('LIST_REFERENCE_VALIDITY',
+        `list #${idx} is not valid; invalid LIST references are rejected where the validity gate is active (`
+        + describeActivation('LIST_REFERENCE_VALIDITY') + '), and ' + here);
 }
 
 async function checkAirdrop(ctx) {
@@ -67,17 +73,7 @@ async function checkAirdrop(ctx) {
             continue;
         }
         const status = String(record.status ?? record.STATUS ?? '').toLowerCase();
-        if (status && status !== 'valid') {
-            if (listReferenceValidityActive(ctx)) {
-                ctx.addFinding(FINDING_CODES.LIST_NOT_FOUND, 'error',
-                    `List #${idx} exists but is not valid, so it cannot be referenced on regtest.`,
-                    { listActionIndex: String(idx), status });
-            } else {
-                ctx.addUnverified('LIST_REFERENCE_VALIDITY',
-                    `list #${idx} is not valid; invalid LIST references are rejected where the validity gate is active, `
-                    + 'which is regtest from genesis while mainnet and testnet remain unarmed');
-            }
-        }
+        if (status && status !== 'valid') noteInvalidListReference(ctx, idx, status);
     }
 
     ctx.addUnverified('AIRDROP_TOTAL_VS_BALANCE',

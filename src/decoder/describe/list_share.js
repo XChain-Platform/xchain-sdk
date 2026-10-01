@@ -1,0 +1,58 @@
+'use strict';
+
+// Copyright © 2025–2026 Dankest, LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+const { str } = require('./value_format.js');
+
+function decodeUnionListCreate(items, memo, chainSuffix) {
+    const count = items.length;
+    return {
+        summary: `Create union list of ${count || '?'} member lists${chainSuffix}`,
+        details: [
+            { label: 'Type', value: 'Union' },
+            { label: 'Items', value: String(count) },
+            ...(count > 0 && count <= 5
+                ? [{ label: 'Member list indexes', value: items.join(', ') }]
+                : []),
+            ...(memo ? [{ label: 'Memo', value: memo }] : []),
+        ],
+        warnings: count === 0 ? ['List has no items.'] : [],
+    };
+}
+
+function decodeListShare(p) {
+    const idx = str(p.LIST_ACTION_INDEX);
+    const memo = str(p.MEMO);
+    return {
+        summary: `Share list #${idx || '?'} on every chain`,
+        details: [{ label: 'List action index', value: idx }, ...(memo ? [{ label: 'Memo', value: memo }] : [])],
+        warnings: [
+            'Sharing is permanent. There is no unshare.',
+            'Sharing charges the LIST_SHARE fee.',
+            ...(!idx ? ['List action index is empty.'] : []),
+        ],
+    };
+}
+
+function decodeListTransfer(p) {
+    const idx = str(p.LIST_ACTION_INDEX);
+    const dest = str(p.DESTINATION).replace(/^\^(\d+)$/, 'address id $1');
+    const memo = str(p.MEMO);
+    return {
+        summary: `Transfer list #${idx || '?'} to ${dest || '?'}`,
+        details: [
+            { label: 'List action index', value: idx },
+            { label: 'Destination', value: dest },
+            ...(memo ? [{ label: 'Memo', value: memo }] : []),
+        ],
+        warnings: [
+            'This transfer cannot be undone.',
+            'The new owner alone can edit, share or transfer the list.',
+            ...(!idx ? ['List action index is empty.'] : []),
+            ...(!dest ? ['Destination is empty.'] : []),
+        ],
+    };
+}
+
+module.exports = { decodeUnionListCreate, decodeListShare, decodeListTransfer };

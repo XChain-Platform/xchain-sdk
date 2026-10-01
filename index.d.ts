@@ -571,8 +571,12 @@ export interface MessageParams extends ActionParams {
 }
 
 export interface ListParams extends ActionParams {
-    /** Newline- or comma-separated list of addresses */
+    /** Newline- or comma-separated values. TYPE 3 values are LIST action indexes forming a union of lists. */
     values: string;
+    /** Existing LIST action index for an edit, share, or transfer */
+    listActionIndex?: number | string;
+    /** New owner address or numeric address reference for a VERSION 3 transfer */
+    destination?: string;
 }
 
 export interface LinkParams extends ActionParams {
@@ -1564,6 +1568,8 @@ export declare class XChainSDK {
     airdrop(params: AirdropParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     message(params: MessageParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     list(params: ListParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
+    /** Whether coin-qualified ticker LIST items are active at the next block. */
+    isListTickCoinActive(): Promise<boolean>;
     link(params: LinkParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     file(params: FileParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
     address(params: AddressParams | ActionParams, encoder?: EncoderOptions): Promise<ActionResult>;
@@ -2522,12 +2528,20 @@ export interface EstimateFeeResult {
     psbt: string;
     /** Encoding type used */
     encoding: EncodingType;
-    /** Transaction fee in satoshis */
+    /** Transaction fee in satoshis; null when not exactly representable, unknown, or negative */
     fee: number | null;
-    /** Total input value in satoshis */
-    inputTotal?: number;
-    /** Total output value in satoshis */
-    outputTotal?: number;
+    /** Total input value in satoshis; null above 2^53-1 or when an input value is missing */
+    inputTotal?: number | null;
+    /** Total output value in satoshis; null above 2^53-1 */
+    outputTotal?: number | null;
+    /** Exact fee in satoshis as a decimal string, or null */
+    feeSats?: string | null;
+    /** Exact input total in satoshis as a decimal string, or null when an input value is missing */
+    inputTotalSats?: string | null;
+    /** Exact output total in satoshis as a decimal string */
+    outputTotalSats?: string | null;
+    /** Why no fee was computed (MISSING_INPUT_VALUE or NEGATIVE_FEE) */
+    feeError?: string;
     /** Serialized ACTION string */
     actionString: string;
     /** ACTION name */

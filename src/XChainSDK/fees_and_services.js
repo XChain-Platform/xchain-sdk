@@ -112,7 +112,8 @@ function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs
 module.exports = {
 
     // Estimate fees for an action without signing or broadcasting.
-    // Returns { fee, inputTotal, outputTotal, encoding, psbt, actionString }
+    // Returns { fee, inputTotal, outputTotal, feeSats, inputTotalSats, outputTotalSats, feeError?,
+    //   encoding, psbt, actionString }
     // The ONE PSBT this returns can be signed directly to skip a second encode call: it
     // has already cleared the same fail-closed reconcileEncoded intent gate submitAction
     // applies before IT signs, so the encoder cannot swap outputs or drop change on this

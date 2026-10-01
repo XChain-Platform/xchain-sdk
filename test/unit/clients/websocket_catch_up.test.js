@@ -74,9 +74,6 @@ function createClient(port) {
     });
 }
 
-// Let in-flight frames land, so a frame the client should NOT have sent would show.
-const quiet = () => new Promise(r => setTimeout(r, 60));
-
 let ctx, client;
 
 async function reconnectWithTwoActionSubscriptions() {
@@ -95,7 +92,6 @@ describe('WebSocketClient reconnect catch-up: sequencing', function () {
 
     it('replays two action subscriptions one at a time from the pre-disconnect cursor, with none refused', async function () {
         await reconnectWithTwoActionSubscriptions();
-        await quiet();
         expect(ctx.srv.catchUps).to.have.lengthOf(1);
         expect(ctx.srv.catchUps[0]).to.include({ since: '500' });
         expect(ctx.srv.catchUps[0].channels).to.deep.equal(['actions']);
@@ -120,7 +116,8 @@ describe('WebSocketClient reconnect catch-up: sequencing', function () {
         const frames = [];
         ctx.srv.sock.on('message', (raw) => frames.push(JSON.parse(raw.toString())));
         client.resubscribe();
-        await quiet();
+        await waitFor(() => ctx.srv.catchUps.length === 1 && frames.some(f => f.channels && f.channels[0] === 'blocks'),
+            { message: 'resubscribe did not send both the blocks subscribe and the actions catch-up' });
         const blocks = frames.find(f => f.channels && f.channels[0] === 'blocks');
         expect(blocks.params).to.not.have.property('since_action_index');
         expect(ctx.srv.catchUps).to.have.lengthOf(1);

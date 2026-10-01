@@ -67,9 +67,59 @@ const numeric = require('../numeric.js');
 const { tokenField } = require('./mint.js');
 const { ALLOWED_COINS, getCoinConfig } = require('../../coins/index.js');
 const { GAS_TICK } = require('../../protocol/constants.js');
+const listTickCoin = require('../../protocol/list_tick_coin.js');
 const Utility = require('../../utils/utility.js');
+const { tickCoinPrefixVerdict } = require('./issue/tick_coin_prefix.js');
 
 const util = new Utility();
+const LIST_TICK_COIN_ACTIVATION_TIMEOUT_MS = 2000;
+const readListTickCoinActive = listTickCoin.isListTickCoinActive;
+
+function activationSdk(sdk, failed) {
+    const explorer = sdk && sdk.explorer;
+    if (!explorer || typeof explorer.getStatus !== 'function') return sdk;
+    const sdkView = Object.create(sdk);
+    const explorerView = Object.create(explorer);
+    explorerView.getStatus = async (...args) => {
+        try {
+            return await explorer.getStatus(...args);
+        } catch (e) {
+            failed.value = true;
+            throw e;
+        }
+    };
+    sdkView.explorer = explorerView;
+    return sdkView;
+}
+
+function withActivationTimeout(promise) {
+    promise.catch(() => {});
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(
+            () => reject(new Error('LIST_TICK_COIN activation lookup timed out')),
+            LIST_TICK_COIN_ACTIVATION_TIMEOUT_MS
+        );
+        if (timer && typeof timer.unref === 'function') timer.unref();
+        promise.then(
+            (value) => { clearTimeout(timer); resolve(value); },
+            (error) => { clearTimeout(timer); reject(error); }
+        );
+    });
+}
+
+async function listTickCoinActivation(sdk) {
+    const failed = { value: false };
+    try {
+        const active = await withActivationTimeout(Promise.resolve().then(
+            () => readListTickCoinActive(activationSdk(sdk, failed))
+        ));
+        return { active, unavailable: failed.value };
+    } catch (e) {
+        return { active: false, unavailable: true };
+    }
+}
+
+listTickCoin.isListTickCoinActive = async (sdk) => (await listTickCoinActivation(sdk)).active;
 
 // The indexer's RESERVED_TICKS: the coin roots plus the gas tick, matched against
 // the upper-cased wire tick (config.js in xchain-indexer builds the same list).
@@ -142,6 +192,27 @@ function checkTickRules(ctx, tick, token) {
         + 'at or above the tick-namespace activation the indexer refuses a new top-level name like this, '
         + 'and neither mainnet nor testnet is armed for it.',
         { tick, rule: isFuture ? 'reserved-root' : 'length' });
+}
+
+async function checkTickCoinPrefix(ctx, tick, token) {
+    let activation = { active: false, unavailable: false };
+    if (String(ctx.parsed.version) === '0') activation = await listTickCoinActivation(ctx.sdk);
+    if (activation.unavailable) {
+        ctx.addUnverified('ISSUE_TICK_COIN_PREFIX', 'activation lookup unavailable');
+        return;
+    }
+    const result = tickCoinPrefixVerdict({
+        tick,
+        active: String(ctx.parsed.version) === '0' && activation.active,
+        token,
+    });
+    if (result && result.unverified) {
+        ctx.addUnverified('ISSUE_TICK_COIN_PREFIX', result.unverified);
+    } else if (result && result.refuse) {
+        ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'error', result.refuse, {
+            field: 'TICK', tick, root: result.root, verdict: result.refuse,
+        });
+    }
 }
 
 function checkBridgeChains(ctx, plane) {
@@ -284,6 +355,7 @@ async function checkIssue(ctx) {
     // name.
     const token = await ctx.token(tick);
     checkTickRules(ctx, tick, token);
+    await checkTickCoinPrefix(ctx, tick, token);
     // The format-7 field rules need no row, so they run before the lookup gate below.
     checkBridgeOptIn(ctx, tick, token);
     ctx.markRun(FINDING_CODES.NOT_OWNER);

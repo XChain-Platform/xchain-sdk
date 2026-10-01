@@ -56,6 +56,9 @@ const SPLIT_ADDED = {
     ExplorerClient: [
         ['getGatedFiles', false, true, true, 'function', 1],
     ],
+    EncoderClient: [
+        ['releaseInputs', false, true, true, 'function', 1],
+    ],
 };
 
 function descriptorRows(proto) {

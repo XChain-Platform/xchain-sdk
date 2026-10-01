@@ -50,7 +50,7 @@ const ASPECT_NOTES = {
     MESSAGE:   null,
     FILE:     'gated-transfer ownership/escrow state resolves server-side',
     LINK:     'target-action ownership resolves server-side',
-    LIST:     'per-item validity is recorded per-item on-chain, never a reject',
+    LIST:     'per-item validity is recorded per-item on-chain; server-side refuses a whole SHARE or TRANSFER from anyone but the list\'s current owner, a SHARE of a union or already-shared list, a SHARE of a list over 10,000 members, and a shared-list edit past 10,000 members',
     ADDRESS:  'contract bindability and live-bind state resolve server-side',
     PRICE:    'oracle authority (capability stake) resolves server-side',
     SLEEP:    'ownership, lock, and escrow state resolve server-side',

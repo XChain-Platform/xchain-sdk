@@ -76,12 +76,8 @@ function inputValue(psbt, i) {
     return null;
 }
 
-// Does this input already carry a signature? The encoder's answer is UNSIGNED (see
-// the psbtHex param below), so a signature on an input at gate time was contributed
-// by somebody other than the local WIF, which makes that input's script foreign
-// rather than signer-owned. It has to be pre-signed to be there at all: the default
-// lifecycle path signs and finalizes every input, so an input the WIF cannot sign
-// would fail finalization instead of broadcasting.
+// Report whether another party already signed this input; the encoder's answer is unsigned.
+// Unsigned does not prove ownership: a shared-key script the WIF can finalize may be foreign.
 function inputPresigned(psbt, i) {
     const data = psbt.data.inputs[i];
     if (!data) return false;
@@ -89,6 +85,18 @@ function inputPresigned(psbt, i) {
         || (Array.isArray(data.partialSig) && data.partialSig.length)
         || (Array.isArray(data.tapScriptSig) && data.tapScriptSig.length)
         || data.tapKeySig);
+}
+
+// Accept only p2pkh, p2wpkh or a p2sh whose supplied redeemScript is a p2wpkh hashing to it,
+// the templates one key alone controls; p2wsh, multisig and p2tr can hide a second spender.
+function singleKeyInput(psbt, i, script) {
+    const redeem = psbt.data.inputs[i] && psbt.data.inputs[i].redeemScript;
+    const templates = [
+        () => bitcoin.payments.p2pkh({ output: script }),
+        () => bitcoin.payments.p2wpkh({ output: script }),
+        () => bitcoin.payments.p2sh({ output: script, redeem: bitcoin.payments.p2wpkh({ output: redeem }) }),
+    ];
+    return templates.some((build) => { try { build(); return true; } catch (e) { return false; } });
 }
 
 function isOpReturn(script) {
@@ -172,6 +180,7 @@ function scriptForAddress(address, network) {
 // admitted because a bare pubkey is address-type-ambiguous and both are the caller's
 // own money either way; anything that is neither an address nor a pubkey yields
 // nothing, so the output falls through to UNRECONCILED_OUTPUT.
+// Admit only P2PKH on a supportsSegwit:false network, where a witness program is anyone-can-spend.
 function callerScripts(identity, network) {
     if (typeof identity !== 'string' || !identity.length) return [];
     const direct = scriptForAddress(identity, network);
@@ -179,7 +188,9 @@ function callerScripts(identity, network) {
     if (!/^(0[23][0-9a-fA-F]{64}|04[0-9a-fA-F]{128})$/.test(identity)) return [];
     const pubkey = Buffer.from(identity, 'hex');
     const out = [];
-    for (const build of [bitcoin.payments.p2wpkh, bitcoin.payments.p2pkh]) {
+    const builds = (network && network.supportsSegwit === false)
+        ? [bitcoin.payments.p2pkh] : [bitcoin.payments.p2wpkh, bitcoin.payments.p2pkh];
+    for (const build of builds) {
         try { out.push(build({ pubkey, network: network || undefined }).output); } catch (e) { /* not derivable here */ }
     }
     return out;
@@ -191,6 +202,7 @@ module.exports = {
     inputScript,
     inputValue,
     inputPresigned,
+    singleKeyInput,
     isOpReturn,
     PHASE_SHAPES,
     matchesPhaseShape,

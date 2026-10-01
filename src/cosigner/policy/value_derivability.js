@@ -196,6 +196,10 @@ const TABLE = {
     LINK: {
         0: { class: NONE },
     },
+    LIST: {
+        2: { class: NONE },                                   // shares access to the referenced list
+        3: { class: NONE },                                   // transfers ownership of the referenced list
+    },
     MESSAGE: {
         0: { class: NONE },
         1: { class: NONE },
