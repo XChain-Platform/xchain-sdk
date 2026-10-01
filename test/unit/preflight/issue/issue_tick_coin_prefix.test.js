@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 const { expect } = require('chai');
-const { mockSdk, notFound } = require('./helpers/mock.js');
+const { mockSdk, notFound } = require('../helpers/mock.js');
 
 const VERDICT = 'invalid: TICK (reserved)';
 
