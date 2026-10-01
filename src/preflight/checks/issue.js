@@ -67,7 +67,9 @@ const numeric = require('../numeric.js');
 const { tokenField } = require('./mint.js');
 const { ALLOWED_COINS, getCoinConfig } = require('../../coins/index.js');
 const { GAS_TICK } = require('../../protocol/constants.js');
+const { isListTickCoinActive } = require('../../protocol/list_tick_coin.js');
 const Utility = require('../../utils/utility.js');
+const { tickCoinPrefixVerdict } = require('./issue/tick_coin_prefix.js');
 
 const util = new Utility();
 
@@ -142,6 +144,21 @@ function checkTickRules(ctx, tick, token) {
         + 'at or above the tick-namespace activation the indexer refuses a new top-level name like this, '
         + 'and neither mainnet nor testnet is armed for it.',
         { tick, rule: isFuture ? 'reserved-root' : 'length' });
+}
+
+async function checkTickCoinPrefix(ctx, tick, token) {
+    const result = tickCoinPrefixVerdict({
+        tick,
+        active: String(ctx.parsed.version) === '0' && await isListTickCoinActive(ctx.sdk),
+        token,
+    });
+    if (result && result.unverified) {
+        ctx.addUnverified('ISSUE_TICK_COIN_PREFIX', result.unverified);
+    } else if (result && result.refuse) {
+        ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'error', result.refuse, {
+            field: 'TICK', tick, root: result.root, verdict: result.refuse,
+        });
+    }
 }
 
 function checkBridgeChains(ctx, plane) {
@@ -284,6 +301,7 @@ async function checkIssue(ctx) {
     // name.
     const token = await ctx.token(tick);
     checkTickRules(ctx, tick, token);
+    await checkTickCoinPrefix(ctx, tick, token);
     // The format-7 field rules need no row, so they run before the lookup gate below.
     checkBridgeOptIn(ctx, tick, token);
     ctx.markRun(FINDING_CODES.NOT_OWNER);
