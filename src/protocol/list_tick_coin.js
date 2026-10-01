@@ -15,6 +15,7 @@ const { TICK_REGEX, MAX_TICK_LENGTH } = require('../cosigner/policy/param_charse
 
 const LIST_TICK_COIN_SEPARATOR = ':';
 const LIST_TICK_COIN_MAX_ITEM_LENGTH = 200;
+const LIST_TICK_COIN_READ_CAP_MS = 2000;
 
 const CANONICAL_CARET_REST = /^\^[1-9][0-9]*$/;
 const DEFAULT_COINS = Object.values(FULL_NAME_TO_TICK);
@@ -45,6 +46,29 @@ function isTickCoinRestWellFormed(rest, canonical){
     return rest.length >= 1 && rest.length <= MAX_TICK_LENGTH && TICK_REGEX.test(rest);
 }
 
+function requestTimeout(sdk, explorer){
+    const sdkTimeout = sdk && sdk.options && Number(sdk.options.timeout);
+    const explorerTimeout = explorer && Number(explorer.timeout);
+    const configured = Number.isFinite(sdkTimeout) && sdkTimeout > 0
+        ? sdkTimeout
+        : explorerTimeout;
+    return Number.isFinite(configured) && configured > 0
+        ? Math.min(configured, LIST_TICK_COIN_READ_CAP_MS)
+        : LIST_TICK_COIN_READ_CAP_MS;
+}
+
+function getStatusWithTimeout(sdk, explorer){
+    const read = Promise.resolve().then(() => explorer.getStatus());
+    const timeout = requestTimeout(sdk, explorer);
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('LIST ticker activation read timed out')), timeout);
+        read.then(
+            (status) => { clearTimeout(timer); resolve(status); },
+            (error) => { clearTimeout(timer); reject(error); }
+        );
+    });
+}
+
 async function isListTickCoinActive(sdk){
     let threshold;
     try {
@@ -57,7 +81,7 @@ async function isListTickCoinActive(sdk){
     const explorer = sdk && sdk.explorer;
     if(!explorer || typeof explorer.getStatus !== 'function') return false;
     try {
-        const status = await explorer.getStatus();
+        const status = await getStatusWithTimeout(sdk, explorer);
         const tip = status && status.last_block && status.last_block[explorer.coin];
         return Number.isFinite(tip) && tip + 1 >= threshold;
     } catch (e) {
