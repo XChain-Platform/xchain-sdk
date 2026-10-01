@@ -164,7 +164,12 @@ var Formats = {
         // is indistinguishable from one more item. So a memo-less LIST still spends
         // an empty segment on it (the `||` above).
         0: 'VERSION|TYPE|MEMO|...ITEM',
-        1: 'VERSION|EDIT|LIST_ACTION_INDEX|MEMO|...ITEM'
+        1: 'VERSION|EDIT|LIST_ACTION_INDEX|MEMO|...ITEM',
+        // v2 SHARE and v3 TRANSFER are owner-only. The SDK builds them on every
+        // network; the indexer gates them on LIST_SHARE_ACTIVATION and
+        // LIST_TRANSFER_ACTIVATION respectively.
+        2: 'VERSION|LIST_ACTION_INDEX|MEMO',
+        3: 'VERSION|LIST_ACTION_INDEX|DESTINATION|MEMO'
     },
 
     MESSAGE: {
