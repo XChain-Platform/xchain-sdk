@@ -36,7 +36,9 @@ describe('decoder.describe LIST share and transfer', function () {
         expect(decoded.summary).to.equal('Share list #? on every chain');
         expect(decoded.warnings).to.include('List action index is empty.');
     });
+});
 
+describe('decoder.describe LIST transfer', function () {
     it('describes a transfer to a full address and its consequences', function () {
         const decoded = describeList('LIST|3|41|DNewOwner|handoff');
 
@@ -68,7 +70,9 @@ describe('decoder.describe LIST share and transfer', function () {
             'Destination is empty.',
         ]);
     });
+});
 
+describe('decoder.describe LIST create and edit compatibility', function () {
     it('describes a type 3 create as a union of member lists', function () {
         const decoded = describeList('LIST|0|3|combined|11|22|33');
 
