@@ -13,7 +13,7 @@
 const assert = require('assert');
 const { createCoinTickLookup } = require('../../../../src/utils/list/coin_tick_lookup.js');
 
-describe('coin tick lookup', function () {
+function registerSuccessfulLookupTests() {
     it('reads a decimal ticker id with no retry and caches normalized keys', async function () {
         const calls = [];
         const client = {
@@ -55,7 +55,9 @@ describe('coin tick lookup', function () {
         assert.strictEqual(await lookup('BTC', 'PEPE'), null);
         assert.strictEqual(calls, 0);
     });
+}
 
+function registerFailedLookupTests() {
     it('does not cache a throwing read', async function () {
         let calls = 0;
         const client = {
@@ -111,9 +113,17 @@ describe('coin tick lookup', function () {
         assert.strictEqual(await lookup('DOGE', 'NONE'), null);
         assert.strictEqual(calls, 4);
     });
+}
 
+function registerValidationTests() {
     it('requires an explorer map and cap function', function () {
         assert.throws(() => createCoinTickLookup({ explorers: null, cap: () => {} }), TypeError);
         assert.throws(() => createCoinTickLookup({ explorers: {}, cap: null }), TypeError);
     });
+}
+
+describe('coin tick lookup', function () {
+    registerSuccessfulLookupTests();
+    registerFailedLookupTests();
+    registerValidationTests();
 });
