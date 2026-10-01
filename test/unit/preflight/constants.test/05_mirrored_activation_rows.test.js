@@ -14,6 +14,7 @@ const { checkActivationMirrors } = require('../../../../bin/check-preflight-drif
 
 const {
     LIST_ADDRESS_REF: LIST_ADDR,
+    LIST_TICK_COIN,
     LIST_REFERENCE_VALIDITY: LIST,
     DISPENSER_SETTLEMENT_PRICE: DISP
 } = constants.ACTIVATION_MIRRORS;
@@ -34,7 +35,7 @@ function indexerRoot(files) {
 }
 
 const allRows = (listOver, unit) => ({
-    'gates_4.js': row(LIST, listOver, unit) + row(DISP) + row(LIST_ADDR)
+    'gates_4.js': row(LIST, listOver, unit) + row(DISP) + row(LIST_ADDR) + row(LIST_TICK_COIN)
 });
 
 describe('pre-flight drift gate: mirrored activation rows', function () {
@@ -45,7 +46,7 @@ describe('pre-flight drift gate: mirrored activation rows', function () {
     it('passes when a row moves to a differently named part file', function () {
         expect(checkActivationMirrors(indexerRoot({
             'gates_9.js': row(LIST) + row(LIST_ADDR),
-            'shared_rows_7.js': row(DISP)
+            'shared_rows_7.js': row(DISP) + row(LIST_TICK_COIN)
         }))).to.equal(0);
     });
 
@@ -93,5 +94,7 @@ describe('pre-flight activation lookup', function () {
         expect(constants.activationThreshold('LIST_REFERENCE_VALIDITY', sdk('nonsense'))).to.equal(undefined);
         expect(constants.activationThreshold('LIST_ADDRESS_REF', sdk('bitcoin-regtest'))).to.equal(0);
         expect(constants.activationThreshold('LIST_ADDRESS_REF', sdk('bitcoin-mainnet'))).to.equal('UNARMED');
+        expect(constants.activationThreshold('LIST_TICK_COIN', sdk('bitcoin-regtest'))).to.equal(0);
+        expect(constants.activationThreshold('LIST_TICK_COIN', sdk('bitcoin-mainnet'))).to.equal('UNARMED');
     });
 });
