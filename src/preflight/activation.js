@@ -24,6 +24,12 @@ const { FULL_NAME_TO_TICK } = require('../coins/index.js');
 // Pin the indexer addGate tables pre-flight decides from; the drift gate compares each by value.
 // 'UNARMED' stands for the indexer's UNARMED sentinel, any number is the activation threshold.
 const ACTIVATION_MIRRORS = Object.freeze({
+    LIST_ADDRESS_REF: Object.freeze({
+        key: 'list_address_ref_activation.LIST_ADDRESS_REF_ACTIVATION',
+        unit: 'height',
+        table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 'UNARMED', 'LTC:testnet': 'UNARMED',
+            'DOGE:testnet': 'UNARMED', testnet: 'UNARMED', regtest: 0 }),
+    }),
     LIST_REFERENCE_VALIDITY: Object.freeze({
         key: 'list_reference_validity_activation.LIST_REFERENCE_REQUIRES_VALID_LIST',
         unit: 'height',

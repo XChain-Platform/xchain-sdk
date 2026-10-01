@@ -40,6 +40,9 @@
  ********************************************************************/
 
 const { SDK_COMPACTABLE_BY_ACTION } = require('../addressRefFields.js');
+const { activationThreshold } = require('../preflight/activation.js');
+const { listAddressRefActive, shouldCompactListItems } = require('./list/address_ref_gate.js');
+const { mapWithLimit } = require('./list/map_limit.js');
 
 // Per-ACTION sets of fields whose value references an EXISTING address and can
 // therefore be compacted to the `^<id>` wire form. Derived from the shared
@@ -53,6 +56,14 @@ const COMPACTABLE_BY_ACTION = SDK_COMPACTABLE_BY_ACTION;
 // in well under this; the cap only matters for a host that accepts a connection
 // but never responds, where it bounds the fall-back-to-address latency.
 const LOOKUP_CAP_MS = 2500;
+const LIST_ITEM_LOOKUP_LIMIT = 8;
+
+function actionRecord(raw) {
+    if (!raw) return null;
+    let record = raw.data !== undefined ? raw.data : raw;
+    if (Array.isArray(record)) record = record[0] || null;
+    return record && typeof record === 'object' ? record : null;
+}
 
 class AddressResolver {
 
@@ -121,14 +132,63 @@ class AddressResolver {
         return '^' + id;
     }
 
+    async compactListItems(out) {
+        let fields = {};
+        for (let key of Object.keys(out))
+            fields[this.sdk.util.camelToUpperSnake(key)] = key;
+
+        let itemKey = fields.ITEM;
+        if (itemKey === undefined) return;
+        let listType = fields.TYPE === undefined ? null : out[fields.TYPE];
+        if (listType !== null && String(listType) !== '2') return;
+        let explorer = this.sdk.explorer;
+        if (!explorer || typeof explorer.getStatus !== 'function') return;
+
+        let threshold = activationThreshold('LIST_ADDRESS_REF', this.sdk);
+        let status;
+        try {
+            status = await this.withCap(Promise.resolve().then(() => explorer.getStatus()), LOOKUP_CAP_MS);
+        } catch (e) {
+            return;
+        }
+        let lastBlock = status && status.last_block && status.last_block[explorer.coin];
+        if (!listAddressRefActive(threshold, lastBlock)) return;
+
+        if (listType === null && fields.LIST_ACTION_INDEX !== undefined
+            && out[fields.LIST_ACTION_INDEX] !== undefined
+            && out[fields.LIST_ACTION_INDEX] !== null
+            && typeof explorer.getAction === 'function') {
+            try {
+                let parent = await this.withCap(
+                    Promise.resolve().then(() => explorer.getAction(out[fields.LIST_ACTION_INDEX])),
+                    LOOKUP_CAP_MS
+                );
+                let record = actionRecord(parent);
+                listType = record && (record.type ?? record.TYPE);
+            } catch (e) {
+                return;
+            }
+        }
+        if (!shouldCompactListItems({ listType, threshold, lastBlock })) return;
+
+        let input = Array.isArray(out[itemKey]) ? out[itemKey] : [out[itemKey]];
+        let compacted = await mapWithLimit(input, LIST_ITEM_LOOKUP_LIMIT, async (item) => {
+            try {
+                return await this.resolve(item);
+            } catch (e) {
+                return item;
+            }
+        });
+        out[itemKey] = Array.isArray(out[itemKey]) ? compacted : compacted[0];
+    }
+
     // Compact every eligible address field of an action's params to its `^<id>`
     // wire form. Returns a SHALLOW COPY with each original key's casing preserved
     // (only the address field VALUES are rewritten); the caller's object is never
-    // mutated. Multi-value fields (arrays, e.g. multi-recipient SEND destinations)
-    // and type-gated fields (LIST.ITEM) are deliberately skipped: they are absent
-    // from SDK_COMPACTABLE, so the indexer assigns their ids in handler order and
-    // the SDK never emits a `^<id>` the indexer would not recognise. When
-    // compaction is disabled the params pass straight through.
+    // mutated. General multi-value and type-gated fields remain absent from
+    // SDK_COMPACTABLE. LIST.ITEM is compacted only by the address-list path below,
+    // after its activation gate and list type are known. When compaction is disabled
+    // the params pass straight through.
     async resolveActionParams(action, params) {
         if (!this.enabled() || params === undefined || params === null) return params;
         // Gate on THIS action's compactable fields, so a field held back for one
@@ -137,6 +197,7 @@ class AddressResolver {
         let name = String(action || '').toUpperCase();
         let compactable = COMPACTABLE_BY_ACTION[name] || [];
         let out = Object.assign({}, params);
+        if (name === 'LIST') await this.compactListItems(out);
         for (let key of Object.keys(out)) {
             // Map the (possibly camelCase) key to its canonical UPPER_SNAKE name
             // to test whether it is an address-reference field.
