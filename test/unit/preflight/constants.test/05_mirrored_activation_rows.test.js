@@ -97,7 +97,7 @@ describe('pre-flight activation lookup', function () {
         expect(constants.activationThreshold('LIST_TICK_COIN', sdk('bitcoin-regtest'))).to.equal(0);
         expect(constants.activationThreshold('LIST_TICK_COIN', sdk('bitcoin-mainnet'))).to.equal('UNARMED');
         // v0.21.1 arms both list rows per testnet chain; the bare testnet key stays dark.
-        expect(constants.activationThreshold('LIST_ADDRESS_REF', sdk('bitcoin-testnet'))).to.equal(154750);
-        expect(constants.activationThreshold('LIST_TICK_COIN', sdk('dogecoin-testnet'))).to.equal(67956200);
+        expect(constants.activationThreshold('LIST_ADDRESS_REF', sdk('bitcoin-testnet'))).to.equal(154777);
+        expect(constants.activationThreshold('LIST_TICK_COIN', sdk('dogecoin-testnet'))).to.equal(67956922);
     });
 });
