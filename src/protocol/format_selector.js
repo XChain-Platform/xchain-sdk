@@ -21,7 +21,7 @@
 
 const formats = require('./formats.js');
 const { SDKFormatError } = require('../utils/errors.js');
-const { AUTO_FIELDS, LEGS_FIELD } = require('./format_selector/field_names.js');
+const { AUTO_FIELDS, PIN_ONLY_VERSIONS, LEGS_FIELD } = require('./format_selector/field_names.js');
 const repeatedLegs = require('./format_selector/repeated_legs.js');
 const selection = require('./format_selector/selection.js');
 
@@ -62,7 +62,7 @@ class FormatSelector {
         let candidates = [];
 
         for (let version in actionFormats) {
-            let candidate = versionCandidate(this, action, parseInt(version), fields, populatedFields, legs);
+            let candidate = versionCandidate(this, action, version, fields, populatedFields, legs);
             if (candidate) candidates.push(candidate);
         }
 
@@ -131,6 +131,9 @@ function selectPinned(selector, action, fields, explicitVersion) {
 // One auto-selection candidate { version, formatFields, estimatedLength } when this
 // version can carry every populated field and leg without data loss, otherwise null
 function versionCandidate(selector, action, version, fields, populatedFields, legs) {
+    version = parseInt(version);
+    if ((PIN_ONLY_VERSIONS[action] || []).includes(version)) return null;
+
     let formatFields = selector.getFormatFields(action, version);
     let group = selector.getRepeatedGroup(action, version);
 

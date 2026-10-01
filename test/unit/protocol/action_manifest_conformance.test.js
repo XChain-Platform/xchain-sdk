@@ -26,6 +26,7 @@
 
 const assert = require('assert');
 const fs   = require('fs');
+const os   = require('os');
 const path = require('path');
 
 const VENDORED = path.join(__dirname, '../..', 'fixtures', 'action-manifest.json');
@@ -158,7 +159,61 @@ function registerUserEncodableVersionsShapeTests() {
 // indexer cannot parse at all. The other half (a version the indexer parses
 // but only accepts when it synthesized it, e.g. VOTE v2) stays a documented
 // hand audit, recorded in the manifest notes.
+// The indexer loader accepts flat handler modules and feature directories
+// whose entry is index.js. Resolving both forms keeps the audit aligned
+// with the loader and prevents false unsupported-action reports.
+function handlerFile(actionsDir, action) {
+    const base = path.join(actionsDir, action.toLowerCase());
+    for (const candidate of [base + '.js', path.join(base, 'index.js')])
+        if (fs.existsSync(candidate)) return candidate;
+    return null;
+}
+
+// A handler may keep every format in one file or split them across a
+// same-named companion directory (list.js beside list/); the companion is
+// optional. Formats are declared either as this.formats[N] literals or as
+// { format: N, fields: ... } specs.
+function declaredFormats(actionsDir, action) {
+    const file = handlerFile(actionsDir, action);
+    if (!file) return null;
+    const files = new Set([file]);
+    const companion = path.join(actionsDir, action.toLowerCase());
+    if (fs.existsSync(companion) && fs.statSync(companion).isDirectory()) {
+        for (const name of fs.readdirSync(companion).sort())
+            if (name.endsWith('.js')) files.add(path.join(companion, name));
+    }
+    const declared = new Set();
+    for (const f of files) {
+        const src = fs.readFileSync(f, 'utf8');
+        for (const m of src.matchAll(/this\.formats\[(\d+)\]/g)) declared.add(Number(m[1]));
+        for (const m of src.matchAll(/\bformat:\s*(\d+),\s*fields:/g)) declared.add(Number(m[1]));
+    }
+    return declared;
+}
+
 function registerIndexerHandlerAuditTests() {
+    describe('declaredFormats scan', function () {
+        it('reads the handler file and its companion directory, and tolerates an absent one', function () {
+            const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'declared-formats-'));
+            try {
+                fs.writeFileSync(path.join(dir, 'list.js'),
+                    'this.formats[0] = a;\nthis.formats[1] = b;\n');
+                assert.deepStrictEqual([...declaredFormats(dir, 'LIST')].sort(), [0, 1]);
+
+                fs.mkdirSync(path.join(dir, 'list'));
+                fs.writeFileSync(path.join(dir, 'list', 'share.js'),
+                    'module.exports = () => ({ format: 2, fields: SHARE_FIELDS, gate });\n');
+                assert.deepStrictEqual([...declaredFormats(dir, 'LIST')].sort(), [0, 1, 2]);
+
+                fs.rmSync(path.join(dir, 'list', 'share.js'));
+                assert.deepStrictEqual([...declaredFormats(dir, 'LIST')].sort(), [0, 1]);
+                assert.strictEqual(declaredFormats(dir, 'MISSING'), null);
+            } finally {
+                fs.rmSync(dir, { recursive: true, force: true });
+            }
+        });
+    });
+
     describe('audit against the indexer handlers', function () {
         const INDEXER = process.env.XCHAIN_INDEXER_DIR ||
                         path.join(__dirname, '../..', '..', '..', 'xchain-indexer');
@@ -169,24 +224,12 @@ function registerIndexerHandlerAuditTests() {
             if (!indexer.usable) skipOrFail(this, indexer, 'the indexer-handler audit');
         });
 
-        // The indexer loader accepts flat handler modules and feature directories
-        // whose entry is index.js. Resolving both forms keeps the audit aligned
-        // with the loader and prevents false unsupported-action reports.
-        function handlerFile(action) {
-            const base = path.join(ACTIONS_DIR, action.toLowerCase());
-            for (const candidate of [base + '.js', path.join(base, 'index.js')])
-                if (fs.existsSync(candidate)) return candidate;
-            return null;
-        }
-
         it('every userEncodableVersions entry is a FORMAT the indexer parses', function () {
             const unparsable = {};
             const unmapped   = [];
             for (const action of manifestSlice('userEncodable')) {
-                const file = handlerFile(action);
-                if (!file) { unmapped.push(action); continue; }
-                const src = fs.readFileSync(file, 'utf8');
-                const declared = new Set([...src.matchAll(/this\.formats\[(\d+)\]/g)].map(m => Number(m[1])));
+                const declared = declaredFormats(ACTIONS_DIR, action);
+                if (!declared) { unmapped.push(action); continue; }
                 const gap = manifestVersions(action).filter(v => !declared.has(v));
                 if (gap.length) unparsable[action] = gap;
             }
