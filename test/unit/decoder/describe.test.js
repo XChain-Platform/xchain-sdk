@@ -246,6 +246,22 @@ describe('decoder.describe', function () {
 });
 
 describe('decoder.describe', function () {
+    describe('EXECUTE deposit warning', function () {
+        const NO_DEPOSIT = /sends no tokens to the contract/;
+        it('warns that a bare call sends no tokens', function () {
+            const d = describeAction(parse('EXECUTE|0|3919|fundLoan'));
+            expect(d.warnings.some(w => NO_DEPOSIT.test(w))).to.equal(true);
+        });
+        it('drops the warning when the batch deposits into the same contract', function () {
+            const d = describeAction(parse('BATCH|0|DEPOSIT|0|3919|XCHAIN|1000;EXECUTE|0|3919|fundLoan'));
+            expect(d.warnings.some(w => NO_DEPOSIT.test(w))).to.equal(false);
+        });
+        it('keeps the warning when the batch deposits into a different contract', function () {
+            const d = describeAction(parse('BATCH|0|DEPOSIT|0|12|XCHAIN|1000;EXECUTE|0|3919|fundLoan'));
+            expect(d.warnings.some(w => NO_DEPOSIT.test(w))).to.equal(true);
+        });
+    });
+
     describe('BATCH', function () {
         it('renders each parsed command and the non-atomicity warning', function () {
             const d = describeAction(parse('BATCH|0|MINT|0|JDOG|5;SEND|0|JDOG|5|addr'));

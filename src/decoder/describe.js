@@ -46,7 +46,7 @@ const { decodeAddress, decodeSend, decodeSweep } = require('./describe/transfers
 const { decodeMint, decodeDestroy, decodeIssue } = require('./describe/token_supply.js');
 const { decodeList, decodeAirdrop, decodeDividend, decodeDispenser } = require('./describe/distributions.js');
 const { decodeOrderSwap, decodeCoinpay, decodePrice, decodeBet } = require('./describe/markets.js');
-const { decodeStake, decodeUnstake, decodeDelegate, decodeVote, decodeDeploy, decodeExecute, decodeContractFunds, decodeCollect } = require('./describe/staking_contracts.js');
+const { decodeStake, decodeUnstake, decodeDelegate, decodeVote, decodeDeploy, decodeExecute, decodeContractFunds, decodeCollect, EXECUTE_NO_DEPOSIT_WARNING } = require('./describe/staking_contracts.js');
 const { decodeBroadcast, decodeMessage, decodeFile, decodeLink, decodeSleep, decodeCallback, decodeXbridge } = require('./describe/messages_bridge.js');
 
 /*
@@ -171,6 +171,24 @@ function harden(decoded, p, ctx) {
  * sub-parse renders as an explicit per-command line ("Command 3: ...")
  * without hiding the rest.
  */
+/**
+ * Drop the EXECUTE no-deposit line from a child whose contract the same
+ * batch deposits into: there the call is funded, and the line would say
+ * the opposite of what the batch does.
+ */
+function withoutFundedExecuteWarnings(commands, children) {
+    const paramsOf = (cmd) => (cmd && typeof cmd === 'object' && (cmd.params || cmd.fields)) || {};
+    const funded = new Set(commands
+        .filter((cmd) => cmd && cmd.action === 'DEPOSIT')
+        .map((cmd) => String(paramsOf(cmd).CONTRACT_ACTION_INDEX ?? '')));
+    return children.map((child, i) => {
+        const cmd = commands[i];
+        if (!cmd || cmd.action !== 'EXECUTE') return child;
+        if (!funded.has(String(paramsOf(cmd).CONTRACT_ACTION_INDEX ?? ''))) return child;
+        return { ...child, warnings: child.warnings.filter((w) => w !== EXECUTE_NO_DEPOSIT_WARNING) };
+    });
+}
+
 function decodeBatch(parsed, p, ctx, chainSuffix) {
     let children = null;
 
@@ -197,6 +215,11 @@ function decodeBatch(parsed, p, ctx, chainSuffix) {
             }
             return describe({ action: cmd.action, params: cmd.params }, ctx);
         });
+    }
+
+    if (children) {
+        const commands = parsed && Array.isArray(parsed.commands) && parsed.commands.length > 0 ? parsed.commands : p.COMMANDS;
+        children = withoutFundedExecuteWarnings(commands, children);
     }
 
     if (!children || children.length === 0) {

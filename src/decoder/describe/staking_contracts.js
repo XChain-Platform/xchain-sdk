@@ -220,6 +220,16 @@ function decodeDeploy(p, chainSuffix) {
     };
 }
 
+/*
+ * EXECUTE carries no amount, so a method that expects payment (a loan's
+ * fundLoan) sees nothing unless a DEPOSIT precedes it in the same batch.
+ * A tester called such a method bare from a wallet holding the token only
+ * on another chain and could not tell what the call would send. The batch
+ * describer drops this line when the batch deposits into the same contract.
+ */
+const EXECUTE_NO_DEPOSIT_WARNING =
+    'This call sends no tokens to the contract. If the method needs a deposit, batch a DEPOSIT on this chain before it.';
+
 /* EXECUTE describer: call a deployed contract method (gas is the fee). */
 function decodeExecute(p, chainSuffix) {
     const idx = str(p.CONTRACT_ACTION_INDEX);
@@ -236,6 +246,7 @@ function decodeExecute(p, chainSuffix) {
             ...(!idx ? ['Contract action index is empty.'] : []),
             ...(!method ? ['Method name is empty.'] : []),
             'Gas is charged even if the contract call fails at runtime.',
+            EXECUTE_NO_DEPOSIT_WARNING,
         ],
     };
 }
@@ -271,4 +282,4 @@ function decodeCollect(p, chainSuffix) {
     };
 }
 
-module.exports = { decodeStake, decodeUnstake, decodeDelegate, decodeVote, decodeDeploy, decodeExecute, decodeContractFunds, decodeCollect };
+module.exports = { decodeStake, decodeUnstake, decodeDelegate, decodeVote, decodeDeploy, decodeExecute, decodeContractFunds, decodeCollect, EXECUTE_NO_DEPOSIT_WARNING };
