@@ -133,8 +133,8 @@ function validateDispenserPreference(validator, action, field, value, allFields,
 // Applies one contiguous field-rule group while preserving finding order.
 function validateListType(validator, action, field, value, allFields, errors) {
     if (field === 'TYPE' && action === 'LIST') {
-        if (!validator.util.isValidValue(value, [1, 2]))
-            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'LIST TYPE must be 1 (TICK list) or 2 (ADDRESS list)', { field, value, constraint: { valid: [1, 2] } }));
+        if (!validator.util.isValidValue(value, [1, 2, 3]))
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'LIST TYPE must be 1 (TICK list), 2 (ADDRESS list) or 3 (union of lists)', { field, value, constraint: { valid: [1, 2, 3] } }));
     }
 }
 
