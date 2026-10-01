@@ -89,7 +89,9 @@ describe('AddressResolver LIST items', function () {
         expect(out.ITEM).to.deep.equal([ADDR1]);
         expect(calls.address).to.deep.equal([]);
     });
+});
 
+describe('AddressResolver LIST item types', function () {
     it('never compacts TYPE 1 or TYPE 3 create items', async function () {
         for (const type of [1, 3]) {
             const { resolver, calls } = setup();
@@ -124,7 +126,9 @@ describe('AddressResolver LIST items', function () {
             expect(calls.address).to.deep.equal([]);
         }
     });
+});
 
+describe('AddressResolver LIST item safeguards', function () {
     it('fails closed when the activation plane, explorer, or indexed tip is missing', async function () {
         const cases = [
             setup({ network: 'nonsense', coin: 'UNKNOWN' }),
