@@ -21,6 +21,7 @@
 const ExplorerClient = require('../clients/explorer.js');
 const config = require('../config.js');
 const { SDKConfigError } = require('../utils/errors.js');
+const { buildCoinExplorers } = require('../utils/list/coin_explorers.js');
 
 // Keep wallet and messaging delegates together so account-facing operations stay grouped.
 module.exports = {
@@ -84,23 +85,7 @@ module.exports = {
         if (!network) throw new SDKConfigError('NETWORK_NOT_CONFIGURED', 'Network is required for cross-chain message queries.');
 
         let tier = network.split('-')[1]; // 'mainnet', 'testnet', or 'regtest'
-        let chains = [
-            { network: 'bitcoin-' + tier,  chain: 'BTC' },
-            { network: 'litecoin-' + tier,  chain: 'LTC' },
-            { network: 'dogecoin-' + tier,  chain: 'DOGE' }
-        ];
-
-        let explorers = chains.map(({ network: net, chain }) => {
-            let client = new ExplorerClient({
-                network:      net,
-                explorerUrl:  explorer.baseUrl,
-                explorerPort: explorer.port,
-                timeout:      explorer.timeout,
-                retry:        explorer.retry,
-                hooks:        explorer.hooks
-            });
-            return { explorer: client, chain };
-        });
+        let explorers = buildCoinExplorers(explorer, tier, ExplorerClient);
 
         return this.messaging.getAllMessages(address, opts, explorers);
     },
