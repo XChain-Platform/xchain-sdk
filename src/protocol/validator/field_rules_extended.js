@@ -150,6 +150,60 @@ function validateListEdit(validator, action, field, value, allFields, errors) {
     }
 }
 
+function rejectListFields(validator, fields, version, names) {
+    const errors = [];
+    for (const field of names) {
+        if (!validator.isEmpty(fields[field]))
+            errors.push(validator.buildError('INVALID_FIELD_VALUE',
+                'LIST v' + version + ' does not accept field: ' + field,
+                { field, version }));
+    }
+    return errors;
+}
+
+function validateListVersionFields(validator, fields) {
+    const version = validator.isEmpty(fields.VERSION) ? null : Number(fields.VERSION);
+    const errors = [];
+    if (!validator.isEmpty(fields.DESTINATION) && version !== 3)
+        errors.push(validator.buildError('INVALID_FIELD_VALUE',
+            'LIST TRANSFER must be requested with VERSION 3',
+            { field: 'DESTINATION', version }));
+    if (version === 2) {
+        if (validator.isEmpty(fields.LIST_ACTION_INDEX))
+            errors.push(validator.buildError('MISSING_REQUIRED_FIELD',
+                'LIST v2 (SHARE) requires field: LIST_ACTION_INDEX',
+                { field: 'LIST_ACTION_INDEX', version }));
+        else if (!/^[1-9][0-9]*$/.test(String(fields.LIST_ACTION_INDEX)))
+            errors.push(validator.buildError('INVALID_FIELD_VALUE',
+                'LIST v2 (SHARE) LIST_ACTION_INDEX must be a positive integer',
+                { field: 'LIST_ACTION_INDEX', value: fields.LIST_ACTION_INDEX, version }));
+        errors.push(...rejectListFields(validator, fields, version, ['EDIT', 'TYPE', 'ITEM']));
+        return { handled: true, errors };
+    }
+    if (version !== 3) return { handled: false, errors };
+    if (validator.isEmpty(fields.LIST_ACTION_INDEX))
+        errors.push(validator.buildError('MISSING_REQUIRED_FIELD',
+            'LIST v3 (TRANSFER) requires field: LIST_ACTION_INDEX',
+            { field: 'LIST_ACTION_INDEX', version }));
+    if (validator.isEmpty(fields.DESTINATION)) {
+        errors.push(validator.buildError('MISSING_REQUIRED_FIELD',
+            'LIST v3 (TRANSFER) requires field: DESTINATION',
+            { field: 'DESTINATION', version }));
+    } else if (String(fields.DESTINATION).charAt(0) === '^') {
+        const id = String(fields.DESTINATION).substring(1);
+        if (!validator.util.isNumeric(id))
+            errors.push(validator.buildError('INVALID_ADDRESS_ID',
+                'LIST TRANSFER DESTINATION ID reference must be numeric: ' + fields.DESTINATION,
+                { field: 'DESTINATION', value: fields.DESTINATION, version }));
+    } else if (!validator.isValidListAddress(fields.DESTINATION)) {
+        errors.push(validator.buildError('INVALID_FIELD_VALUE',
+            'LIST TRANSFER DESTINATION must be a valid address',
+            { field: 'DESTINATION', value: fields.DESTINATION, version }));
+    }
+    errors.push(...rejectListFields(validator, fields, version, ['ITEM']));
+    return { handled: true, errors };
+}
+
 // Applies one contiguous field-rule group while preserving finding order.
 function validateBinaryFlags(validator, action, field, value, allFields, errors) {
     // Binary 0/1 flag fields
@@ -240,4 +294,7 @@ function validatePriceFee(validator, action, field, value, allFields, errors) {
     }
 }
 
-module.exports = { FIELD_VALIDATORS: [validateFileKeyHash, validateFileGateTicker, validateFileGateMinAmount, validateMessageFields, validateFeePreference, validateDispenserPreference, validateListType, validateListEdit, validateBinaryFlags, validateNumericAmounts, validatePositiveAmounts, validateBroadcastFee, validatePriceFee] };
+module.exports = {
+    FIELD_VALIDATORS: [validateFileKeyHash, validateFileGateTicker, validateFileGateMinAmount, validateMessageFields, validateFeePreference, validateDispenserPreference, validateListType, validateListEdit, validateBinaryFlags, validateNumericAmounts, validatePositiveAmounts, validateBroadcastFee, validatePriceFee],
+    validateListVersionFields,
+};

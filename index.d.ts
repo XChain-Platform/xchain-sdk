@@ -571,8 +571,12 @@ export interface MessageParams extends ActionParams {
 }
 
 export interface ListParams extends ActionParams {
-    /** Newline- or comma-separated list of addresses */
+    /** Newline- or comma-separated values. TYPE 3 values are LIST action indexes forming a union of lists. */
     values: string;
+    /** Existing LIST action index for an edit, share, or transfer */
+    listActionIndex?: number | string;
+    /** New owner address or numeric address reference for a VERSION 3 transfer */
+    destination?: string;
 }
 
 export interface LinkParams extends ActionParams {
