@@ -4,13 +4,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 const { expect } = require('chai');
-const { parse } = require('../../../src/decoder/parse.js');
 const { describe: describeAction } = require('../../../src/decoder/describe.js');
 
-function parseAndDescribe(wire, ctx) {
-    const parsed = parse(wire);
-    expect(parsed, wire).to.include({ ok: true, action: 'LIST' });
-    return describeAction(parsed, ctx);
+function describeList(version, params, ctx) {
+    return describeAction({ action: 'LIST', version, params }, ctx);
 }
 
 function detailMap(decoded) {
@@ -18,12 +15,15 @@ function detailMap(decoded) {
 }
 
 describe('decoder.describe LIST format 4', function () {
-    it('describes a named token list through the public parser and describer', function () {
+    it('describes a named token list through the public describer', function () {
         const chainRegistry = { get: () => ({ displayName: 'Dogecoin' }) };
-        const decoded = parseAndDescribe(
-            'LIST|4|1|Official tokens|Tokens issued by our team|initial list|JDOG|BRRR',
-            { chainId: 'dogecoin-mainnet', chainRegistry }
-        );
+        const decoded = describeList(4, {
+            TYPE: '1',
+            NAME: 'Official tokens',
+            DESCRIPTION: 'Tokens issued by our team',
+            MEMO: 'initial list',
+            ITEM: ['JDOG', 'BRRR'],
+        }, { chainId: 'dogecoin-mainnet', chainRegistry });
 
         expect(decoded.summary).to.equal('Create token list "Official tokens" of 2 items on Dogecoin');
         expect(detailMap(decoded)).to.deep.equal({
@@ -38,7 +38,13 @@ describe('decoder.describe LIST format 4', function () {
     });
 
     it('renders optional metadata without changing the unnamed create wording', function () {
-        const descriptionOnly = parseAndDescribe('LIST|4|2||Treasury recipients||DOne|DTwo');
+        const descriptionOnly = describeList(4, {
+            TYPE: '2',
+            NAME: '',
+            DESCRIPTION: 'Treasury recipients',
+            MEMO: '',
+            ITEM: ['DOne', 'DTwo'],
+        });
 
         expect(descriptionOnly.summary).to.equal('Create address list of 2 items');
         expect(detailMap(descriptionOnly)).to.deep.equal({
@@ -52,9 +58,12 @@ describe('decoder.describe LIST format 4', function () {
 
 describe('decoder.describe LIST format 5', function () {
     it('describes setting each metadata field', function () {
-        const decoded = parseAndDescribe(
-            'LIST|5|41|Team wallets|Current treasury signers|Quarterly update'
-        );
+        const decoded = describeList(5, {
+            LIST_ACTION_INDEX: '41',
+            NAME: 'Team wallets',
+            DESCRIPTION: 'Current treasury signers',
+            MEMO: 'Quarterly update',
+        });
 
         expect(decoded.summary).to.equal('Update metadata on list #41');
         expect(detailMap(decoded)).to.deep.equal({
@@ -69,13 +78,21 @@ describe('decoder.describe LIST format 5', function () {
     });
 
     it('distinguishes unchanged and cleared values per field', function () {
-        const clearDescription = parseAndDescribe('LIST|5|41||-');
+        const clearDescription = describeList(5, {
+            LIST_ACTION_INDEX: '41',
+            NAME: '',
+            DESCRIPTION: '-',
+        });
         expect(detailMap(clearDescription)).to.include({
             Name: 'Unchanged',
             Description: 'Cleared',
         });
 
-        const clearName = parseAndDescribe('LIST|5|41|-|');
+        const clearName = describeList(5, {
+            LIST_ACTION_INDEX: '41',
+            NAME: '-',
+            DESCRIPTION: '',
+        });
         expect(detailMap(clearName)).to.include({
             Name: 'Cleared',
             Description: 'Unchanged',
@@ -83,7 +100,11 @@ describe('decoder.describe LIST format 5', function () {
     });
 
     it('warns when both fields are unchanged', function () {
-        const decoded = parseAndDescribe('LIST|5|41');
+        const decoded = describeList(5, {
+            LIST_ACTION_INDEX: '41',
+            NAME: '',
+            DESCRIPTION: '',
+        });
 
         expect(detailMap(decoded)).to.include({
             Name: 'Unchanged',
@@ -97,9 +118,13 @@ describe('decoder.describe LIST format 5', function () {
 
 describe('decoder.describe LIST metadata hardening', function () {
     it('neutralizes hidden text in format 4 summaries and details', function () {
-        const decoded = parseAndDescribe(
-            'LIST|4|1|Official\u202Etokens|Treasury\u200B recipients||JDOG'
-        );
+        const decoded = describeList(4, {
+            TYPE: '1',
+            NAME: 'Official\u202Etokens',
+            DESCRIPTION: 'Treasury\u200B recipients',
+            MEMO: '',
+            ITEM: ['JDOG'],
+        });
 
         expect(decoded.summary).to.include('Official␦tokens');
         expect(decoded.summary).to.not.include('\u202E');
@@ -116,7 +141,11 @@ describe('decoder.describe LIST metadata hardening', function () {
     });
 
     it('neutralizes hidden text in format 5 set values', function () {
-        const decoded = parseAndDescribe('LIST|5|41|Team\u200B wallets|Current\u202Esigners');
+        const decoded = describeList(5, {
+            LIST_ACTION_INDEX: '41',
+            NAME: 'Team\u200B wallets',
+            DESCRIPTION: 'Current\u202Esigners',
+        });
 
         expect(detailMap(decoded)).to.include({
             Name: 'Set to: Team wallets',
