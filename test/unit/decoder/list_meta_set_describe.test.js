@@ -10,7 +10,7 @@ function detailMap(decoded) {
     return Object.fromEntries(decoded.details.map(({ label, value }) => [label, value]));
 }
 
-describe('decoder.describe LIST set metadata', function () {
+describe('decoder.describe LIST set metadata field values', function () {
     it('describes setting the name and description', function () {
         const decoded = decodeListSetMeta({
             LIST_ACTION_INDEX: '41',
@@ -57,7 +57,9 @@ describe('decoder.describe LIST set metadata', function () {
             Description: 'Unchanged',
         });
     });
+});
 
+describe('decoder.describe LIST set metadata warnings', function () {
     it('warns when both metadata fields are unchanged', function () {
         const decoded = decodeListSetMeta({
             LIST_ACTION_INDEX: '41',
