@@ -58,7 +58,13 @@ const FormatSelector = require('../../protocol/format_selector.js');
 const { ownLookup }  = require('./param_charset.js');
 // The decoder's bounded rest-field allowlist, so decodableFormats() measures the
 // SAME surface the daemon actually reaches.
-const { BOUNDED_REST_FORMATS } = require('../psbt_action_decode.js');
+const { BOUNDED_REST_FORMATS, MAX_REST_PARAMS } = require('../psbt_action_decode.js');
+
+// LIST v4 ITEMs carry neither amount nor destination and remain arity-bounded.
+BOUNDED_REST_FORMATS.set('LIST 4', Object.freeze({
+    restField: '...ITEM',
+    maxParams: MAX_REST_PARAMS,
+}));
 
 // The signing account can give up no token/native amount that the action
 // string does not already state. Covers pure config/authority/data actions and

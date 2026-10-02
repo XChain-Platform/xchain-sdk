@@ -11,6 +11,7 @@
 const {
     expect,
     CoSigner,
+    decodeActionFromPsbt,
     evaluatePolicy,
     valueDerivability,
     makeAccount,
@@ -163,11 +164,26 @@ describe('G2: value-derivability allowlist', function () {
             expect(classification.byRef, `LIST v${version}`).to.equal(false);
         }
     });
+
+    it('decodes bounded LIST v4 metadata creates for policy evaluation', function () {
+        const decoded = decodeActionFromPsbt(buildSignablePsbt(makeAccount(),
+            'LIST|4|1|Tokens|Official||JDOG'));
+        expect(decoded.ok).to.equal(true);
+        expect(decoded.action).to.equal('LIST');
+        expect(decoded.version).to.equal(4);
+        expect(decoded.params.ITEM).to.deep.equal(['JDOG']);
+
+        const tooMany = new Array(33).fill('JDOG').join('|');
+        const refused = decodeActionFromPsbt(buildSignablePsbt(makeAccount(),
+            'LIST|4|1|Tokens|Official||' + tooMany));
+        expect(refused.ok).to.equal(false);
+        expect(refused.reason).to.equal('REST_FIELD_TOO_LONG');
+    });
 });
 
 describe('G2: value-derivability allowlist', function () {
 
-    it('conformance: pins the sole classification beyond decoder reach', function () {
+    it('conformance: no format is classified that the decoder cannot reach', function () {
         // The other direction: a stale entry for a format the decoder refuses is
         // dead weight that misleads the next reader about the enforced surface.
         const reachable = new Set(valueDerivability.decodableFormats().map((f) => `${f.action} v${f.version}`));
@@ -175,7 +191,7 @@ describe('G2: value-derivability allowlist', function () {
         for (const action of Object.keys(valueDerivability.TABLE))
             for (const version of Object.keys(valueDerivability.TABLE[action]))
                 if (!reachable.has(`${action} v${version}`)) stale.push(`${action} v${version}`);
-        expect(stale).to.deep.equal(['LIST v4']);
+        expect(stale).to.deep.equal([]);
     });
 });
 

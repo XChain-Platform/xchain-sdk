@@ -22,10 +22,7 @@ const {
     MAX_MESSAGE_LENGTH,
     MAX_BROADCAST_FEE_LENGTH,
     MAX_GATE_MIN_AMOUNT_LENGTH,
-    LIST_META_NAME_MAX_BYTES,
-    LIST_META_DESCRIPTION_MAX_BYTES,
 } = require('./field_limits.js');
-const { listMetaFieldError } = require('./list_meta_rules.js');
 
 // Applies one contiguous field-rule group while preserving finding order.
 function validateFileKeyHash(validator, action, field, value, allFields, errors) {
@@ -151,24 +148,6 @@ function validateListEdit(validator, action, field, value, allFields, errors) {
         if (!validator.util.isValidValue(value, [1, 2]))
             errors.push(validator.buildError('INVALID_FIELD_VALUE', 'EDIT must be 1 (ADD) or 2 (REMOVE)', { field, value, constraint: { valid: [1, 2] } }));
     }
-}
-
-// Applies the indexer's LIST metadata verdicts before the action is signed.
-function validateListMeta(validator, action, field, value, allFields, errors) {
-    if (action !== 'LIST' || (field !== 'NAME' && field !== 'DESCRIPTION')) return;
-
-    let version = validator.isEmpty(allFields.VERSION) ? null : Number(allFields.VERSION);
-    if (version === null)
-        version = validator.isEmpty(allFields.LIST_ACTION_INDEX) ? 4 : 5;
-    if (version !== 4 && version !== 5) return;
-
-    const maxBytes = field === 'NAME'
-        ? LIST_META_NAME_MAX_BYTES
-        : LIST_META_DESCRIPTION_MAX_BYTES;
-    const verdict = listMetaFieldError(field, String(value), maxBytes, version === 4);
-    if (verdict)
-        errors.push(validator.buildError('INVALID_FIELD_VALUE', verdict,
-            { field, value, verdict, constraint: { maxBytes } }));
 }
 
 function rejectListFields(validator, fields, version, names) {
@@ -346,6 +325,6 @@ function validatePriceFee(validator, action, field, value, allFields, errors) {
 }
 
 module.exports = {
-    FIELD_VALIDATORS: [validateFileKeyHash, validateFileGateTicker, validateFileGateMinAmount, validateMessageFields, validateFeePreference, validateDispenserPreference, validateListType, validateListEdit, validateListMeta, validateBinaryFlags, validateNumericAmounts, validatePositiveAmounts, validateBroadcastFee, validatePriceFee],
+    FIELD_VALIDATORS: [validateFileKeyHash, validateFileGateTicker, validateFileGateMinAmount, validateMessageFields, validateFeePreference, validateDispenserPreference, validateListType, validateListEdit, validateBinaryFlags, validateNumericAmounts, validatePositiveAmounts, validateBroadcastFee, validatePriceFee],
     validateListVersionFields,
 };
