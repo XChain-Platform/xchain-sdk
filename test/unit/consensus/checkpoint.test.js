@@ -304,6 +304,31 @@ describe('CheckpointVerifier - stake-weighted quorum (SDK)', function () {
         }
     });
 
+    // An empty-string root is absent, as the hub's isRootless rules, even when a quorum
+    // signs the canonical that carries it; version 0 stays a present version.
+    it('post-activation, an empty-string root fails closed while version 0 still verifies', function () {
+        let A = makeKeypair(), B = makeKeypair(), C = makeKeypair();
+        let validators = vset([
+            { source: 'srcA', weight: 10, keys: [A] },
+            { source: 'srcB', weight: 10, keys: [B] },
+            { source: 'srcC', weight: 10, keys: [C] }
+        ]);
+        let signed = (overrides) => {
+            let cp = Object.assign(makeCheckpoint({ network: 'regtest' }), overrides);
+            cp.validator_signatures = signAll([A, B, C], Checkpoint.canonicalCheckpoint(cp));
+            return cp;
+        };
+        for (let field of ['state_root', 'block_merkle_root']) {
+            let cp = signed({ [field]: '' });
+            assert.strictEqual(Checkpoint.commitmentMissing(cp), true, 'empty ' + field + ' is missing');
+            assert.strictEqual(Checkpoint.verifyCheckpoint(cp, validators).valid, false, 'empty ' + field + ' must not verify');
+        }
+        let zero = signed({ state_root_version: 0, block_merkle_version: 0 });
+        assert.strictEqual(Checkpoint.commitmentMissing(zero), false, 'version 0 is present');
+        assert.strictEqual(Checkpoint.verifyCheckpoint(zero, validators).valid, true, 'version 0 must verify');
+        assert.strictEqual(Checkpoint.commitmentMissing(makeCheckpoint({ state_root: '' })), false, 'inactive below the flag-day');
+    });
+
     it('below the flag-day (mainnet) the count path is unchanged: weighted=false', function () {
         let keys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
         let cp = makeCheckpoint();                                                      // mainnet, inactive

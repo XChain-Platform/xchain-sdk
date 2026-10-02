@@ -32,8 +32,10 @@
 
 const bitcoin = require('bitcoinjs-lib');
 
-// SIGHASH_DEFAULT (BIP341 0x00) is the only finalizable type here. `undefined`
-// means "unspecified", which the derivations resolve to SIGHASH_DEFAULT.
+// SIGHASH_DEFAULT (BIP341 0x00) is the only finalizable type here. SIGHASH_ALL also
+// commits to every output, but musig2_signer.js writes a bare 64-byte tapKeySig with no
+// sighash-flag byte, which BIP341 permits only for SIGHASH_DEFAULT, so an ALL signature
+// could not be finalized. `undefined` means "unspecified", resolved to SIGHASH_DEFAULT.
 const ALLOWED_SIGHASH = new Set([bitcoin.Transaction.SIGHASH_DEFAULT]);
 
 function sighashAllowed(hashType) {
