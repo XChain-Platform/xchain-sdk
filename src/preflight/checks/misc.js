@@ -56,12 +56,17 @@ const ASPECT_NOTES = {
     SLEEP:    'ownership, lock, and escrow state resolve server-side',
 };
 
+const LIST_SET_META_NOTE = 'A LIST SET META (format 5) on a shared list is charged the shared-list edit fee (LIST_SHARED_EDIT_BASE); whether the list is shared resolves server-side.';
+
 async function checkMisc(ctx) {
     const action = ctx.parsed.action;
     if (Object.prototype.hasOwnProperty.call(ASPECT_NOTES, action) && ASPECT_NOTES[action] === null) return;
     const note = ASPECT_NOTES[action];
     if (note) ctx.addUnverified(action + '_STATE', note);
     else ctx.addUnverified(action + '_STATE', 'no client-side state checks are certified for this action');
+    if (action === 'LIST' && String(ctx.parsed.version) === '5') {
+        ctx.addUnverified('LIST_SET_META_FEE', LIST_SET_META_NOTE);
+    }
 }
 
-module.exports = { checkMisc, ASPECT_NOTES };
+module.exports = { checkMisc, ASPECT_NOTES, LIST_SET_META_NOTE };
