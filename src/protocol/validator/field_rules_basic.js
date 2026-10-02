@@ -23,21 +23,24 @@ const {
     MAX_SUPPLY_CEILING,
     MAX_DECIMALS,
     MAX_DESC_LENGTH,
+    LIST_META_NAME_MAX_BYTES,
+    LIST_META_DESCRIPTION_MAX_BYTES,
     VALID_FIAT_CODES,
     VALID_COINS,
 } = require('./field_limits.js');
 const { listMetaFieldError } = require('./list_meta_rules.js');
 
-// Byte ceilings mirror documentation's LIST_META_NAME_MAX_BYTES and
-// LIST_META_DESCRIPTION_MAX_BYTES, which the sdk does not vendor.
-const LIST_META_MAX_BYTES = { NAME: 64, DESCRIPTION: 512 };
+const LIST_META_MAX_BYTES = {
+    NAME: LIST_META_NAME_MAX_BYTES,
+    DESCRIPTION: LIST_META_DESCRIPTION_MAX_BYTES,
+};
 
-// checkDelimiters already refuses a pipe or semicolon, so those verdicts are
-// dropped here rather than reported twice.
 function validateListMetaField(validator, field, value, allFields, errors) {
     const isCreate = validator.isEmpty(allFields ? allFields['LIST_ACTION_INDEX'] : undefined);
     const verdict  = listMetaFieldError(field, String(value), LIST_META_MAX_BYTES[field], isCreate);
-    if (verdict && !verdict.endsWith('(pipe)') && !verdict.endsWith('(semicolon)'))
+    const delimiterVerdict = verdict && (verdict.endsWith('(pipe)') || verdict.endsWith('(semicolon)'));
+    const fullFieldMap = allFields && Object.prototype.hasOwnProperty.call(allFields, field);
+    if (verdict && (!delimiterVerdict || fullFieldMap))
         errors.push(validator.buildError('INVALID_FIELD_VALUE', verdict, { field, value, constraint: { maxBytes: LIST_META_MAX_BYTES[field] } }));
 }
 
@@ -85,7 +88,15 @@ function validateTickFields(validator, action, field, value, allFields, errors) 
 
 // Applies one contiguous field-rule group while preserving finding order.
 function validateDescriptionField(validator, action, field, value, allFields, errors) {
-    // MEMO delimiter safety is handled by the default-deny checkDelimiters guard.
+    // FILE NAME and ISSUE DESCRIPTION opt out of the blanket delimiter guard
+    // so LIST can report its consensus verdict strings without duplicates.
+    if (action === 'FILE' && field === 'NAME')
+        errors.push(...validator.scanDelimiters(field, value));
+
+    // LIST metadata uses UTF-8 byte limits and its own grammar, so the general
+    // character cap must never be applied to a LIST.
+    if (action === 'ISSUE' && field === 'DESCRIPTION')
+        errors.push(...validator.scanDelimiters(field, value));
 
     // DESCRIPTION validation (delimiter safety via checkDelimiters)
     if (field === 'DESCRIPTION' && action !== 'LIST') {

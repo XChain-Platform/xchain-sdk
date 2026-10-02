@@ -169,7 +169,14 @@ var Formats = {
         // network; the indexer gates them on LIST_SHARE_ACTIVATION and
         // LIST_TRANSFER_ACTIVATION respectively.
         2: 'VERSION|LIST_ACTION_INDEX|MEMO',
-        3: 'VERSION|LIST_ACTION_INDEX|DESTINATION|MEMO'
+        3: 'VERSION|LIST_ACTION_INDEX|DESTINATION|MEMO',
+        // v4 creates a list with optional metadata: empty NAME or DESCRIPTION
+        // means absent, while '-' is not a clear sentinel during creation.
+        // v5 sets metadata: empty means unchanged and '-' clears that field.
+        // A v5 edit of a shared list pays LIST_SHARED_EDIT_BASE; preflight gets
+        // the authoritative shared/local verdict from the server dry-run.
+        4: 'VERSION|TYPE|NAME|DESCRIPTION|MEMO|...ITEM',
+        5: 'VERSION|LIST_ACTION_INDEX|NAME|DESCRIPTION|MEMO'
     },
 
     MESSAGE: {

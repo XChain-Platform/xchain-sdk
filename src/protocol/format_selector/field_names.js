@@ -33,8 +33,7 @@ const LEGS_FIELD = 'LEGS';
 // fee-charging, so it is built only for a caller who names its VERSION. A
 // { listActionIndex, memo } caller would otherwise fit format 5 with empty NAME
 // and DESCRIPTION (`NAME (no change)`), while a { type, items } caller must keep
-// format 0. versionCandidate only sees versions carried by formats.js, which has
-// no LIST 4 or 5 yet, so current selections remain unchanged.
+// format 0. Metadata edits likewise require explicit intent.
 const PIN_ONLY_VERSIONS = Object.freeze({ LIST: Object.freeze([2, 3, 4, 5]) });
 
 module.exports = { AUTO_FIELDS, PIN_ONLY_VERSIONS, REST_PREFIX, LEGS_FIELD };

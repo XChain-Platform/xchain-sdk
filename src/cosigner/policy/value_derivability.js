@@ -199,6 +199,8 @@ const TABLE = {
     LIST: {
         2: { class: NONE },                                   // shares access to the referenced list
         3: { class: NONE },                                   // transfers ownership of the referenced list
+        4: { class: NONE },                                   // creates a list with metadata
+        5: { class: NONE },                                   // edits metadata on the referenced list
     },
     MESSAGE: {
         0: { class: NONE },
