@@ -50,7 +50,9 @@ describe('decoder.describe LIST create with metadata', function () {
         });
         expect(decoded.warnings).to.deep.equal([]);
     });
+});
 
+describe('decoder.describe LIST metadata create kinds', function () {
     it('describes a union list and samples member list indexes', function () {
         const decoded = decodeListCreateMeta({
             TYPE: '3',
@@ -90,7 +92,9 @@ describe('decoder.describe LIST create with metadata', function () {
             warnings: [],
         });
     });
+});
 
+describe('decoder.describe LIST metadata create warnings', function () {
     it('warns when the list has no items', function () {
         const decoded = decodeListCreateMeta({
             TYPE: '2',
