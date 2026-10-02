@@ -102,7 +102,7 @@ const ANCHOR_FOLD_VERSION = 3;
 function isCheckpointSectionRow(r, dogeHeight){
     const v = Number(r.version);
     return v === ANCHOR_BUNDLE_VERSION || (v === ANCHOR_FOLD_VERSION
-        && gateRegistry.activeAt(ANCHOR_FOLD_KEY, String(r.network), null, Number(dogeHeight), null));
+        && gateRegistry.activeAt(ANCHOR_FOLD_KEY, String(r.network), 'DOGE', Number(dogeHeight), null));
 }
 
 function sectionsChainOrderReason(sections){
@@ -123,7 +123,7 @@ function sigsPubkeyOrderReason(sigs){
 
 function enforceAnchorBundleOrder(network, blockIndex, sections){
     if (!Number.isFinite(blockIndex)
-        || !gateRegistry.activeAt(ANCHOR_BUNDLE_ORDER_KEY, network, null, blockIndex, null)) return;
+        || !gateRegistry.activeAt(ANCHOR_BUNDLE_ORDER_KEY, network, 'DOGE', blockIndex, null)) return;
     const sectionReason = sectionsChainOrderReason(sections);
     if (sectionReason) throw new Error('LightClient: ' + sectionReason);
     for (let s = 0; s < sections.length; s++){
