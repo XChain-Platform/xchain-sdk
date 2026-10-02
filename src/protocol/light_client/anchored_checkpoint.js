@@ -43,6 +43,7 @@ const checkpoint = require('../../checkpoint.js');
 const gateRegistry = require('../../consensus/gate_registry');
 const CHECKPOINT_COMMITMENT_KEY = 'checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION';
 const ANCHOR_BUNDLE_ORDER_KEY = 'anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION';
+const ANCHOR_FOLD_KEY = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
 const { lowerHex, resolveFetch, networkContextCoin, baseUrl, fetchJson } = require('./fetch_helpers.js');
 const { resolveValidatorSet } = require('./quorum_resolution.js');
 
@@ -74,12 +75,17 @@ const DEFAULT_ANCHOR_MIN_DEPTH = 60;
 //   v1 is the archive head plus its publisher tail (ATTEST_SIG_COUNT MAY be 0 on
 //   a degraded round); v2 is an archive continuation chunk. Neither carries an SPV
 //   checkpoint, so the light client SKIPS both: only v0 bundle rows are ever
-//   passed to parseAnchorV0 or accepted by the fetchAnchoredCheckpoint filter.
+//   passed to parseAnchorV0.
+//
+//   v3 is the fold bundle the hub emits at/above ANCHOR_FOLD_ACTIVATION: the v0
+//   sections plus an optional folded archive (parseAnchorV3 in light_client.js).
+//   The fetchAnchoredCheckpoint filter admits a v0 section row, and a v3 section row
+//   only where ANCHOR_FOLD is active at that anchor's DOGE height, the indexer's rule.
 //
 //   ACTIVATION: an ANCHOR of any version mined below ANCHOR_ACTIVATION[network]
 //   (protocol/constants.js, which carries the per-network heights and why the
 //   mainnet one sits above the chain tip) is invalid on the wire and never
-//   reaches this parser; at/above it only 0/1/2 exist. The SDK trusts the
+//   reaches this parser; at/above it 0/1/2 exist, and 3 at/above ANCHOR_FOLD. The SDK trusts the
 //   indexer/explorer to have already applied that gate. ANCHOR_BUNDLE_ORDER_ACTIVATION
 //   gates v0 section and signature order at the caller-supplied DOGE height.
 //
@@ -87,8 +93,17 @@ const DEFAULT_ANCHOR_MIN_DEPTH = 60;
 // walked with a cursor rather than read at the fixed offsets the retired v3/v5
 // single-chain wires allowed. Versions 1/2 are skipped as above; the pre-launch
 // v0/v3/v4/v5 per-chain wires (a disjoint, now-retired numbering that predates
-// this family, D2) are refused by the version check below.
+// this family, D2) are refused by the version check below, and a v3 row below
+// ANCHOR_FOLD is refused by the fetch filter, since only that gate tells the two v3s apart.
 const ANCHOR_BUNDLE_VERSION = 0;
+const ANCHOR_FOLD_VERSION = 3;
+
+// Admit a checkpoint section row at a DOGE height: v0 always, v3 only where ANCHOR_FOLD is active.
+function isCheckpointSectionRow(r, dogeHeight){
+    const v = Number(r.version);
+    return v === ANCHOR_BUNDLE_VERSION || (v === ANCHOR_FOLD_VERSION
+        && gateRegistry.activeAt(ANCHOR_FOLD_KEY, String(r.network), null, Number(dogeHeight), null));
+}
 
 function sectionsChainOrderReason(sections){
     for (let i = 1; i < sections.length; i++){
@@ -298,12 +313,12 @@ async function fetchAnchoredCheckpoint(opts){
                 '/api/anchors/' + encodeURIComponent(String(opts.targetChain)) + '/chain';
     const body = await fetchJson(f, url);
     let rows = Array.isArray(body) ? body : ((body && (body.data || body.results || body.rows)) || []);
-    // v0 section rows only (the checkpoint bundle, spec anchor-v0-single-wire §2.1);
-    // v1 (archive head) and v2 (chunk) carry no SPV checkpoint and are skipped here,
-    // as is any pre-launch retired per-chain shape, rather than filtered by root
+    // Checkpoint section rows only: v0, and fold v3 at/above ANCHOR_FOLD at the row's DOGE
+    // height. v1 (archive head) and v2 (chunk) carry no SPV checkpoint and are skipped,
+    // as is any pre-launch retired per-chain shape, by version rather than by root
     // presence, so a replayed pre-launch anchor cannot serve as a trust root; the
     // state_root check still guards a malformed section.
-    rows = rows.filter(r => r && Number(r.version) === ANCHOR_BUNDLE_VERSION && r.state_root &&
+    rows = rows.filter(r => r && isCheckpointSectionRow(r, r.block_index_doge) && r.state_root &&
                             String(r.chain).toUpperCase() === String(opts.targetChain).toUpperCase());
     rows.sort((a, b) => Number(b.checkpoint_seq) - Number(a.checkpoint_seq));   // newest checkpoint first
     if (!rows.length)
@@ -316,8 +331,12 @@ async function fetchAnchoredCheckpoint(opts){
     if (txHeight == null && typeof opts.getDogeTxHeight === 'function')
         txHeight = await opts.getDogeTxHeight(rec.tx_hash || null);
     const depthSource  = (txHeight != null) ? 'caller' : 'explorer';
-    if (opts.requireTrustedDepth && depthSource !== 'caller')
-        return { verified: false, reason: 'UNTRUSTED_DOGE_DEPTH', checkpoint: anchorToCheckpoint(rec),
+    // A caller's own DOGE height re-judges the fold gate, so an explorer cannot pass off a
+    // retired v3 row by claiming a post-fold height for it.
+    const refusal = (opts.requireTrustedDepth && depthSource !== 'caller') ? 'UNTRUSTED_DOGE_DEPTH'
+        : (depthSource === 'caller' && !isCheckpointSectionRow(rec, txHeight)) ? 'ANCHOR_FOLD_NOT_ACTIVE' : null;
+    if (refusal)
+        return { verified: false, reason: refusal, checkpoint: anchorToCheckpoint(rec),
                  anchor: rec, dogeTxid: rec.tx_hash || null, confirmations: 0, minDepth,
                  quorum: null, weighted: null, depthSource };
     const anchorHeight = (txHeight != null) ? txHeight : rec.block_index_doge;
@@ -341,4 +360,4 @@ async function fetchAnchoredCheckpoint(opts){
     return Object.assign({}, res, { anchor: rec, dogeTxid: rec.tx_hash || null, depthSource });
 }
 
-module.exports = { DEFAULT_ANCHOR_MIN_DEPTH, ANCHOR_BUNDLE_VERSION, sectionsChainOrderReason, sigsPubkeyOrderReason, enforceAnchorBundleOrder, parseAnchorV0, anchorBundleSection, anchorToCheckpoint, ANCHOR_ROOT_RE, ANCHOR_VERSION_RE, verifyAnchoredCheckpoint, fetchAnchoredCheckpoint };
+module.exports = { DEFAULT_ANCHOR_MIN_DEPTH, ANCHOR_BUNDLE_VERSION, ANCHOR_FOLD_VERSION, sectionsChainOrderReason, sigsPubkeyOrderReason, enforceAnchorBundleOrder, parseAnchorV0, anchorBundleSection, anchorToCheckpoint, ANCHOR_ROOT_RE, ANCHOR_VERSION_RE, verifyAnchoredCheckpoint, fetchAnchoredCheckpoint };

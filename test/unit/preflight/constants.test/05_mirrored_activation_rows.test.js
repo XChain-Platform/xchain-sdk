@@ -16,7 +16,9 @@ const {
     LIST_ADDRESS_REF: LIST_ADDR,
     LIST_TICK_COIN,
     LIST_REFERENCE_VALIDITY: LIST,
-    DISPENSER_SETTLEMENT_PRICE: DISP
+    DISPENSER_SETTLEMENT_PRICE: DISP,
+    TICK_NAMESPACE: TICK_NS,
+    TOKEN_BRIDGE: BRIDGE
 } = constants.ACTIVATION_MIRRORS;
 
 function row(mirror, over = {}, unit = mirror.unit) {
@@ -34,8 +36,13 @@ function indexerRoot(files) {
     return root;
 }
 
-const allRows = (listOver, unit) => ({
-    'gates_4.js': row(LIST, listOver, unit) + row(DISP) + row(LIST_ADDR) + row(LIST_TICK_COIN)
+// The indexer spells these two rows' unarmed planes as the literal 9999999999, not UNARMED.
+const literal = (mirror, over = {}) => row(mirror, Object.assign({ mainnet: 9999999999, testnet: 9999999999 }, over));
+
+const allRows = (listOver, unit, nsOver = {}, bridgeOver = {}) => ({
+    'gates_4.js': row(LIST, listOver, unit) + row(DISP) + row(LIST_ADDR) + row(LIST_TICK_COIN),
+    'gates_3.js': literal(TICK_NS, nsOver),
+    'shared_rows_4.js': literal(BRIDGE, bridgeOver)
 });
 
 describe('pre-flight drift gate: mirrored activation rows', function () {
@@ -46,7 +53,7 @@ describe('pre-flight drift gate: mirrored activation rows', function () {
     it('passes when a row moves to a differently named part file', function () {
         expect(checkActivationMirrors(indexerRoot({
             'gates_9.js': row(LIST) + row(LIST_ADDR),
-            'shared_rows_7.js': row(DISP) + row(LIST_TICK_COIN)
+            'shared_rows_7.js': row(DISP) + row(LIST_TICK_COIN) + literal(TICK_NS) + literal(BRIDGE)
         }))).to.equal(0);
     });
 
@@ -84,6 +91,22 @@ describe('pre-flight drift gate: mirrored activation rows', function () {
     });
 });
 
+describe('pre-flight drift gate: tick-namespace and token-bridge rows', function () {
+    it('passes when the indexer writes 9999999999 where the SDK pins UNARMED', function () {
+        expect(checkActivationMirrors(indexerRoot(allRows()))).to.equal(0);
+    });
+
+    it('fails when a TICK_NAMESPACE or TOKEN_BRIDGE testnet height moves', function () {
+        expect(checkActivationMirrors(indexerRoot(allRows({}, undefined, { 'BTC:testnet': 154568 })))).to.equal(1);
+        expect(checkActivationMirrors(indexerRoot(allRows({}, undefined, {}, { 'DOGE:testnet': 67951141 })))).to.equal(1);
+    });
+
+    it('fails when the indexer arms mainnet for either row', function () {
+        expect(checkActivationMirrors(indexerRoot(allRows({}, undefined, { mainnet: 900000 })))).to.equal(1);
+        expect(checkActivationMirrors(indexerRoot(allRows({}, undefined, {}, { mainnet: 900000 })))).to.equal(1);
+    });
+});
+
 describe('pre-flight activation lookup', function () {
     const sdk = (network, coin) => ({ config: { network }, explorer: { coin } });
 
@@ -99,5 +122,14 @@ describe('pre-flight activation lookup', function () {
         // v0.21.1 arms both list rows per testnet chain; the bare testnet key stays dark.
         expect(constants.activationThreshold('LIST_ADDRESS_REF', sdk('bitcoin-testnet'))).to.equal(154777);
         expect(constants.activationThreshold('LIST_TICK_COIN', sdk('dogecoin-testnet'))).to.equal(67956922);
+    });
+
+    it('resolves the tick-namespace and token-bridge rows per testnet chain', function () {
+        expect(constants.activationThreshold('TICK_NAMESPACE', sdk('bitcoin-testnet'))).to.equal(154567);
+        expect(constants.activationThreshold('TOKEN_BRIDGE', sdk('dogecoin-testnet'))).to.equal(67951140);
+        expect(constants.activationThreshold('TICK_NAMESPACE', sdk('bitcoin-mainnet'))).to.equal('UNARMED');
+        expect(constants.activationThreshold('TOKEN_BRIDGE', sdk('bitcoin-mainnet'))).to.equal('UNARMED');
+        expect(constants.activationThreshold('TICK_NAMESPACE', sdk('bitcoin-regtest'))).to.equal(0);
+        expect(constants.activationThreshold('TOKEN_BRIDGE', sdk('bitcoin-regtest'))).to.equal(0);
     });
 });

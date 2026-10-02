@@ -334,12 +334,13 @@ const RESERVED_FUTURE_ROOTS = Object.freeze([
     'BASE', 'DASH', 'HBAR', 'HOOD', 'HYPE', 'NEAR',
 ]);
 
-const { ACTIVATION_MIRRORS, activationThreshold, describeActivation } = require('./activation.js');
+const { ACTIVATION_MIRRORS, activationThreshold, describeActivation, describeActivationHere } = require('./activation.js');
 
 module.exports = {
     ACTIVATION_MIRRORS,
     activationThreshold,
     describeActivation,
+    describeActivationHere,
     REPORT_SCHEMA_VERSION,
     DEFAULT_TIMEOUT_MS,
     RECHECK_TIMEOUT_MS,

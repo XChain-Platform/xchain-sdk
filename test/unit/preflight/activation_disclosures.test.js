@@ -14,7 +14,7 @@
 // no disclosure may still tell a caller mainnet is unarmed for them.
 
 const { expect } = require('chai');
-const { mockSdk } = require('./helpers/mock.js');
+const { mockSdk, notFound } = require('./helpers/mock.js');
 
 const OTHER = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4';
 
@@ -51,5 +51,41 @@ describe('pre-flight activation disclosures track the authority maps', function 
         expect(text, 'the disclosure is actually emitted').to.not.equal('');
         expect(text).to.not.match(/not armed|unarmed/i);
         expect(text).to.contain('armed on every network');
+    });
+});
+
+// The tick-namespace and token-bridge rows are armed per testnet chain and dark on mainnet.
+function issueReport(wire, getToken, coin) {
+    const network = { TBTC: 'bitcoin-testnet', BTC: 'bitcoin-mainnet' }[coin];
+    const sdk = mockSdk({ explorerSpec: { getFeeQuote: () => ({ feeExempt: true }), getToken }, network });
+    sdk.explorer.coin = coin;
+    return sdk.preflight(wire, { source: 'me', preflight: 'report' });
+}
+
+const tickWarning = (r, rule) => (r.findings.find(f => f.code === 'TICK_FORMAT' && f.data && f.data.rule === rule) || {}).message || '';
+
+describe('pre-flight ISSUE disclosures read the tick-namespace and token-bridge mirrors', function () {
+    const fresh = () => notFound();
+    const mine = () => ({ tick: 'JDOG', owner: 'me' });
+
+    it('a short or reserved-root create on BTC testnet names the armed height', async function () {
+        for (const [tick, rule] of [['ABC', 'length'], ['ETH', 'reserved-root']]) {
+            const text = tickWarning(await issueReport(`ISSUE|0|${tick}|1000`, fresh, 'TBTC'), rule);
+            expect(text, tick).to.contain('armed at height 154567 on this chain');
+            expect(text, tick).to.not.match(/neither mainnet nor testnet is armed/);
+        }
+    });
+
+    it('the same create on mainnet says this chain is not armed', async function () {
+        const text = tickWarning(await issueReport('ISSUE|0|ABC|1000', fresh, 'BTC'), 'length');
+        expect(text).to.contain('this chain is not armed for it');
+        expect(text).to.contain('armed at height 67951140 on DOGE:testnet');
+    });
+
+    it('the format-7 activation note carries the pinned per-chain heights', async function () {
+        const text = textFor(await issueReport('ISSUE|7|JDOG|DOGE,LTC|6|0', mine, 'TBTC'), 'ISSUE_BRIDGE_ACTIVATION');
+        expect(text, 'the disclosure is actually emitted').to.not.equal('');
+        expect(text).to.contain('armed at height 154567 on BTC:testnet');
+        expect(text).to.not.match(/neither mainnet nor testnet is armed/);
     });
 });

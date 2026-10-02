@@ -20,16 +20,8 @@
 
 const bitcoin = require('bitcoinjs-lib');
 
-// SIGHASH_DEFAULT (0x00) is the only type honored past this gate. SIGHASH_ALL
-// (0x01) also commits to ALL outputs and would be equally safe from the output-
-// gate's point of view, but the witness-assembly side (musig2_signer.js) writes
-// a bare 64-byte tapKeySig with no trailing sighash-flag byte, which BIP341
-// only permits for SIGHASH_DEFAULT; a non-default type here would sign
-// something the rest of the pipeline cannot correctly finalize. NONE/SINGLE
-// and ANYONECANPAY additionally let a caller obtain a partial signature over a
-// message that does not bind the outputs the co-signer just gated, then
-// reassemble a drain transaction that still verifies on-chain. `undefined`
-// defaults to SIGHASH_DEFAULT and is allowed.
+// Gate outputs only; which sighash types may be signed lives in ../policy/sighash_policy.js.
+
 // Parse an operator-supplied satoshi bound to an EXACT u64, or null if it cannot be
 // represented exactly. Accepts bigint, an integer Number, and a digit string, because
 // a config value above 2^53 can only reach us intact as one of the latter two.
