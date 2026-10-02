@@ -183,6 +183,19 @@ describe('G2: value-derivability allowlist', function () {
 
 describe('G2: value-derivability allowlist', function () {
 
+    it('admits LIST v4 in the decoder itself, not only once the policy module loads', function () {
+        // A fresh process loads only the decoder, so an entry added to its
+        // allowlist from any other module would not be seen here.
+        const decoder = require.resolve('../../../../src/cosigner/psbt_action_decode.js');
+        const out = require('child_process').execFileSync(process.execPath, ['-e',
+            'process.stdout.write(String(require(' + JSON.stringify(decoder) +
+            ').BOUNDED_REST_FORMATS.has("LIST 4")))']).toString();
+        expect(out).to.equal('true');
+    });
+});
+
+describe('G2: value-derivability allowlist', function () {
+
     it('conformance: no format is classified that the decoder cannot reach', function () {
         // The other direction: a stale entry for a format the decoder refuses is
         // dead weight that misleads the next reader about the enforced surface.
