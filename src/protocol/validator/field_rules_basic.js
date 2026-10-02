@@ -26,6 +26,26 @@ const {
     VALID_FIAT_CODES,
     VALID_COINS,
 } = require('./field_limits.js');
+const { listMetaFieldError } = require('./list_meta_rules.js');
+
+// Byte ceilings mirror documentation's LIST_META_NAME_MAX_BYTES and
+// LIST_META_DESCRIPTION_MAX_BYTES, which the sdk does not vendor.
+const LIST_META_MAX_BYTES = { NAME: 64, DESCRIPTION: 512 };
+
+// checkDelimiters already refuses a pipe or semicolon, so those verdicts are
+// dropped here rather than reported twice.
+function validateListMetaField(validator, field, value, allFields, errors) {
+    const isCreate = validator.isEmpty(allFields ? allFields['LIST_ACTION_INDEX'] : undefined);
+    const verdict  = listMetaFieldError(field, String(value), LIST_META_MAX_BYTES[field], isCreate);
+    if (verdict && !verdict.endsWith('(pipe)') && !verdict.endsWith('(semicolon)'))
+        errors.push(validator.buildError('INVALID_FIELD_VALUE', verdict, { field, value, constraint: { maxBytes: LIST_META_MAX_BYTES[field] } }));
+}
+
+// Applies one contiguous field-rule group while preserving finding order.
+function validateListMetaFields(validator, action, field, value, allFields, errors) {
+    if (action === 'LIST' && (field === 'NAME' || field === 'DESCRIPTION'))
+        validateListMetaField(validator, field, value, allFields, errors);
+}
 
 // Applies one contiguous field-rule group while preserving finding order.
 function validateTickFields(validator, action, field, value, allFields, errors) {
@@ -70,11 +90,13 @@ function validateDescriptionField(validator, action, field, value, allFields, er
     if (action === 'FILE' && field === 'NAME')
         errors.push(...validator.scanDelimiters(field, value));
 
-    // ISSUE DESCRIPTION validation.
-    // LIST metadata uses UTF-8 byte limits and its own grammar in the extended
-    // rules, so the ISSUE character cap must never be applied to a LIST.
-    if (action === 'ISSUE' && field === 'DESCRIPTION') {
+    // LIST metadata uses UTF-8 byte limits and its own grammar, so the general
+    // character cap must never be applied to a LIST.
+    if (action === 'ISSUE' && field === 'DESCRIPTION')
         errors.push(...validator.scanDelimiters(field, value));
+
+    // DESCRIPTION validation (delimiter safety via checkDelimiters)
+    if (field === 'DESCRIPTION' && action !== 'LIST') {
         if (String(value).length > MAX_DESC_LENGTH)
             errors.push(validator.buildError('INVALID_FIELD_VALUE', 'DESCRIPTION must be ' + MAX_DESC_LENGTH + ' characters or less', { field, value: String(value).length, constraint: { max: MAX_DESC_LENGTH } }));
     }
@@ -238,4 +260,4 @@ function validateEncryptionMethodField(validator, action, field, value, allField
     }
 }
 
-module.exports = { FIELD_VALIDATORS: [validateTickFields, validateDescriptionField, validateDecimalsField, validateMaxSupplyField, validateLockFields, validateFiatCodeField, validatePriceFiatField, validateFiatAmountField, validateCoinFields, validateAddressReferenceFields, validateAddressFields, validateEncryptionMethodField] };
+module.exports = { FIELD_VALIDATORS: [validateTickFields, validateListMetaFields, validateDescriptionField, validateDecimalsField, validateMaxSupplyField, validateLockFields, validateFiatCodeField, validatePriceFiatField, validateFiatAmountField, validateCoinFields, validateAddressReferenceFields, validateAddressFields, validateEncryptionMethodField] };
