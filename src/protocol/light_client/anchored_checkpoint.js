@@ -221,7 +221,7 @@ function anchorToCheckpoint(a){
     let sigs = a.validator_signatures;
     if (typeof sigs === 'string'){ try { sigs = JSON.parse(sigs); } catch (e){ sigs = []; } }
     if (!Array.isArray(sigs)) sigs = [];
-    return {
+    const cp = {
         chain: a.chain, network: a.network, block_index: Number(a.block_index),
         block_hash: a.block_hash, ledger_hash: a.ledger_hash, actions_hash: a.actions_hash, contract_hash: a.contract_hash,
         checkpoint_seq: Number(a.checkpoint_seq), snapshot_block: Number(a.snapshot_block),
@@ -229,6 +229,13 @@ function anchorToCheckpoint(a){
         block_merkle_root: a.block_merkle_root, block_merkle_version: a.block_merkle_version,
         validator_signatures: sigs
     };
+    const foldFields = ['match_batch_seq', 'match_count', 'batch_crc32', 'total_chunks'];
+    if (Number(a.version) === ANCHOR_FOLD_VERSION && foldFields.every((field) => a[field] != null))
+        cp.fold_archive = {
+            match_batch_seq: a.match_batch_seq, match_count: a.match_count,
+            batch_crc32: lowerHex(a.batch_crc32), total_chunks: a.total_chunks
+        };
+    return cp;
 }
 
 // Shapes the checkpoint canonical assumes for the committed SPV roots: a 32-byte

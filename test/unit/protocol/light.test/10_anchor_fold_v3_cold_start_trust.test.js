@@ -66,6 +66,14 @@ function row(version, dogeBlock, seq = 7, chain = 'BTC') {
         block_index_doge: dogeBlock, tx_hash: 'dd'.repeat(32) });
 }
 
+function foldRow(dogeBlock) {
+    const cp = Object.assign(baseCp('BTC', 7), { fold_archive: ARCHIVE });
+    const sigs = [{ pubkey: signer.pubkeyHex, sig: sign(checkpoint.canonicalCheckpoint(cp)) }];
+    return Object.assign({}, cp, ARCHIVE, { version: 3, fold_archive: undefined,
+        validator_signatures: JSON.stringify(sigs), block_index_doge: dogeBlock,
+        tx_hash: 'dd'.repeat(32) });
+}
+
 function fetchRows(...rows) {
     const fetchImpl = async (url) => url.includes('/api/anchors/')
         ? { ok: true, status: 200, json: async () => ({ data: rows }) }
@@ -82,6 +90,16 @@ describe('ANCHOR v3 fold: fetchAnchoredCheckpoint admits fold sections only past
             const ok = await fetchRows(row(3, 2000))();
             assert.strictEqual(ok.verified, true, ok.reason);
             assert.strictEqual((await fetchRows(row(3, 1000))()).reason, 'NO_ROOT_ANCHOR');
+        });
+    });
+
+    it('verifies an explorer wrapper row signed over its folded archive fields', async function () {
+        await withFold('1500', async () => {
+            const result = await fetchRows(foldRow(2000))();
+            assert.strictEqual(result.verified, true, result.reason);
+            assert.deepStrictEqual(result.checkpoint.fold_archive, {
+                match_batch_seq: 42, match_count: 17, batch_crc32: '9c4e1b22', total_chunks: 1
+            });
         });
     });
 
