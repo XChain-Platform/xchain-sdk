@@ -25,8 +25,8 @@ function decodeListCreateMeta(p, chainSuffix = '') {
             ...(name ? [{ label: 'Name', value: name }] : []),
             ...(description ? [{ label: 'Description', value: description }] : []),
             { label: 'Items', value: String(count) },
-            ...(count > 0 && count <= 5
-                ? [{ label: union ? 'Member list indexes' : 'Sample', value: items.join(', ') }]
+            ...(count > 0
+                ? [{ label: union ? 'Member list indexes' : 'Sample', value: items.slice(0, 5).join(', ') }]
                 : []),
             ...(memo ? [{ label: 'Memo', value: memo }] : []),
         ],

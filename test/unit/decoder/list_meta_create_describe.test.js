@@ -50,6 +50,25 @@ describe('decoder.describe LIST create with metadata', function () {
         });
         expect(decoded.warnings).to.deep.equal([]);
     });
+
+    it('samples only the first five items from a longer list', function () {
+        const decoded = decodeListCreateMeta({
+            TYPE: '1',
+            NAME: 'Long list',
+            DESCRIPTION: '',
+            MEMO: '',
+            ITEM: ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'],
+        });
+
+        expect(decoded.summary).to.equal('Create token list "Long list" of 6 items');
+        expect(detailMap(decoded)).to.deep.equal({
+            Type: 'Token',
+            Name: 'Long list',
+            Items: '6',
+            Sample: 'ONE, TWO, THREE, FOUR, FIVE',
+        });
+        expect(decoded.warnings).to.deep.equal([]);
+    });
 });
 
 describe('decoder.describe LIST metadata create kinds', function () {
