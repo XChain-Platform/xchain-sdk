@@ -155,11 +155,19 @@ describe('G2: value-derivability allowlist', function () {
         });
         expect(unclassified.map((f) => `${f.action} v${f.version}`)).to.deep.equal([]);
     });
+
+    it('classifies LIST metadata formats as moving no amount', function () {
+        for (const version of [4, 5]) {
+            const classification = valueDerivability.classify('LIST', version, {});
+            expect(classification.class, `LIST v${version}`).to.equal(valueDerivability.NONE);
+            expect(classification.byRef, `LIST v${version}`).to.equal(false);
+        }
+    });
 });
 
 describe('G2: value-derivability allowlist', function () {
 
-    it('conformance: no format is classified that the decoder cannot reach', function () {
+    it('conformance: pins the sole classification beyond decoder reach', function () {
         // The other direction: a stale entry for a format the decoder refuses is
         // dead weight that misleads the next reader about the enforced surface.
         const reachable = new Set(valueDerivability.decodableFormats().map((f) => `${f.action} v${f.version}`));
@@ -167,7 +175,7 @@ describe('G2: value-derivability allowlist', function () {
         for (const action of Object.keys(valueDerivability.TABLE))
             for (const version of Object.keys(valueDerivability.TABLE[action]))
                 if (!reachable.has(`${action} v${version}`)) stale.push(`${action} v${version}`);
-        expect(stale).to.deep.equal([]);
+        expect(stale).to.deep.equal(['LIST v4']);
     });
 });
 

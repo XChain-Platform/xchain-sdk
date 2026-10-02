@@ -23,6 +23,7 @@ const Actions = require('../../../../src/actions/index.js');
 const Utility = require('../../../../src/utils/utility.js');
 const Validator = require('../../../../src/protocol/validator.js');
 const formats = require('../../../../src/protocol/formats.js');
+const FormatSelector = require('../../../../src/protocol/format_selector.js');
 const {
     LIST_META_NAME_MAX_BYTES,
     LIST_META_DESCRIPTION_MAX_BYTES,
@@ -87,10 +88,19 @@ describe('LIST metadata formats and validation', function () {
     });
 
     it('serializes format 4 and format 5 without dropping metadata', function () {
-        expect(create({ type: 1, name: 'Tokens', description: 'Official', item: 'JDOG' }).actionString)
+        expect(create({ version: 4, type: 1, name: 'Tokens', description: 'Official', item: 'JDOG' }).actionString)
             .to.equal('LIST|4|1|Tokens|Official||JDOG');
-        expect(create({ listActionIndex: 17, name: 'Renamed', description: '-', memo: 'meta' }).actionString)
+        expect(create({ version: 5, listActionIndex: 17, name: 'Renamed', description: '-', memo: 'meta' }).actionString)
             .to.equal('LIST|5|17|Renamed|-|meta');
+    });
+
+    it('requires metadata formats to be pinned', function () {
+        expect(() => create({ type: 1, name: 'Tokens', item: 'JDOG' }))
+            .to.throw(/No format version for LIST/);
+        expect(FormatSelector.select('LIST', { TYPE: 1, ITEM: 'JDOG' }).version).to.equal(0);
+        expect(() => create({ listActionIndex: 17, name: 'Renamed' }))
+            .to.throw(/No format version for LIST/);
+        expect(FormatSelector.select('LIST', { LIST_ACTION_INDEX: 17, MEMO: 'meta' }).version).to.equal(1);
     });
 
     it('accepts empty metadata on create and refuses an empty set as no change', function () {

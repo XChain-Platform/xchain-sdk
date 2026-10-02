@@ -29,8 +29,8 @@ const REST_PREFIX = '...';
 // expands positionally into the format's repeated group.
 const LEGS_FIELD = 'LEGS';
 
-// Versions auto-selection never builds. A SHARE or TRANSFER is permanent and
-// fee-charging, so it is built only for a caller who names its VERSION.
-const PIN_ONLY_VERSIONS = Object.freeze({ LIST: Object.freeze([2, 3]) });
+// Versions auto-selection never builds. SHARE, TRANSFER, and metadata edits
+// require explicit intent; format 4 must not steal format 0 create callers.
+const PIN_ONLY_VERSIONS = Object.freeze({ LIST: Object.freeze([2, 3, 4, 5]) });
 
 module.exports = { AUTO_FIELDS, PIN_ONLY_VERSIONS, REST_PREFIX, LEGS_FIELD };
