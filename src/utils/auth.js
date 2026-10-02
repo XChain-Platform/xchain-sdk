@@ -31,6 +31,14 @@ const { SDKAuthError } = require('./errors.js');
 
 const ECPair = ECPairFactory(ecc);
 
+// Refuse segwit signing modes where a witness program is anyone-can-spend, as key_derivation.js does
+function refuseSegwitWithoutSupport(net, opts, networkName) {
+    if ((opts.segwitNative || opts.segwitRedeemScript) && net.supportsSegwit === false) {
+        throw new SDKAuthError('SEGWIT_NOT_SUPPORTED',
+            `SegWit message signing is not supported on ${networkName}.`);
+    }
+}
+
 
 class AuthUtils {
 
@@ -98,6 +106,7 @@ class AuthUtils {
      * @param {boolean} [opts.segwitNative=false] - For P2WPKH (bech32) addresses
      * @param {string} [opts.network] - Override instance network
      * @returns {{ signature: string, address: string }}
+     * @throws {SDKAuthError} SEGWIT_NOT_SUPPORTED when a segwit option is set on a non-segwit network (dogecoin-*)
      */
     signMessage(message, wif, opts = {}) {
         if (!message || typeof message !== 'string') {
@@ -108,6 +117,7 @@ class AuthUtils {
         }
 
         const net = this.resolveNet(opts.network);
+        refuseSegwitWithoutSupport(net, opts, opts.network || this.network);
         let keyPair;
 
         try {

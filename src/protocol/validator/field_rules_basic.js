@@ -92,16 +92,17 @@ function validateMaxSupplyField(validator, action, field, value, allFields, erro
             // BigInt('-0') is 0n, so a negative supply cleared `bigVal < 0n` and was
             // serialized into an ISSUE the indexer then refuses (its amount-format
             // validator rejects any amount starting with '-') after the fee is spent.
-            // Positive-fraction handling is deliberately untouched.
+            // The ceiling compares the FULL decimal with bcnum, the indexer's own exact
+            // bcgt, so 1e21 plus any fraction is refused here rather than on-chain.
             let raw    = String(value).trim();
             let bigVal = BigInt(raw.split('.')[0]);
-            if (raw.startsWith('-') || bigVal < 0n || bigVal > BigInt('1000000000000000000000'))
+            if (raw.startsWith('-') || bigVal < 0n || validator.util.bcnum(raw).gt(MAX_SUPPLY_CEILING))
                 errors.push(validator.buildError('INVALID_FIELD_VALUE', 'MAX_SUPPLY must be between 0 and ' + MAX_SUPPLY_CEILING, { field, value, constraint: { min: 0, max: MAX_SUPPLY_CEILING } }));
         } catch (e) {
             errors.push(validator.buildError('INVALID_FIELD_VALUE', 'MAX_SUPPLY must be numeric', { field, value }));
         }
-        // Fractional precision, which the ceiling check above structurally cannot see: it
-        // range-checks split('.')[0] and throws the fraction away, so MAX_SUPPLY=1.5 with
+        // Fractional precision, which the range check above does not decide: it bounds
+        // the value, never its digit count, so MAX_SUPPLY=1.5 with
         // DECIMALS=0 cleared the SDK while the indexer refuses it as
         // 'invalid: MAX_SUPPLY (format)' (issue.js fieldList['AMOUNT'] -> isValidAmountFormat)
         // after the miner fee is already spent.

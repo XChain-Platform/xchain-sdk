@@ -46,7 +46,7 @@ const ADDRESS_REF_FIELD_SET = (() => {
     return s;
 })();
 
-const MAX_SUPPLY_CEILING = 1000000000000000000000; // 1 sextillion
+const MAX_SUPPLY_CEILING = '1000000000000000000000'; // 1 sextillion, the indexer's MAX_TOKEN_SUPPLY string
 const MAX_DECIMALS       = 18;
 const MAX_TICK_LENGTH    = 250;
 const MAX_DESC_LENGTH    = 250;
