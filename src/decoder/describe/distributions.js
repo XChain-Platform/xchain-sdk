@@ -41,7 +41,7 @@
 'use strict';
 
 const { str, toArray } = require('./value_format.js');
-const { decodeUnionListCreate, decodeListShare, decodeListTransfer } = require('./list_share.js');
+const { decodeUnionListCreate, decodeListShare, decodeListTransfer, decodeListSetMeta } = require('./list_share.js');
 const numberFormat = require('../../utils/utility/number_format.js');
 
 // Describe v0 LIST creates as VERSION|TYPE|MEMO|ITEM, with ITEM repeating.
@@ -68,6 +68,8 @@ function decodeList(p, chainSuffix) {
 
     if (version === '2') return decodeListShare(p);
     if (version === '3') return decodeListTransfer(p);
+    if (version === '4') return require('./list_meta_create.js').decodeListCreateMeta(p, chainSuffix);
+    if (version === '5') return decodeListSetMeta(p);
 
     if (version === '1') {
         const edit = str(p.EDIT);
