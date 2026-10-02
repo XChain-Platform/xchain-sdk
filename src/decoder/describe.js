@@ -44,7 +44,8 @@ const { sanitizeText, formatAmount } = require('./hardening.js');
 const { genericFallback } = require('./describe/value_format.js');
 const { decodeAddress, decodeSend, decodeSweep } = require('./describe/transfers.js');
 const { decodeMint, decodeDestroy, decodeIssue } = require('./describe/token_supply.js');
-const { decodeList, decodeAirdrop, decodeDividend, decodeDispenser } = require('./describe/distributions.js');
+const { decodeList: decodeDistributionList, decodeAirdrop, decodeDividend, decodeDispenser } = require('./describe/distributions.js');
+const { decodeListMetadata } = require('./describe/list_share.js');
 const { decodeOrderSwap, decodeCoinpay, decodePrice, decodeBet } = require('./describe/markets.js');
 const { decodeStake, decodeUnstake, decodeDelegate, decodeVote, decodeDeploy, decodeExecute, decodeContractFunds, decodeCollect, EXECUTE_NO_DEPOSIT_WARNING } = require('./describe/staking_contracts.js');
 const { decodeBroadcast, decodeMessage, decodeFile, decodeLink, decodeSleep, decodeCallback, decodeXbridge } = require('./describe/messages_bridge.js');
@@ -113,6 +114,11 @@ function describe(parsed, ctx = {}) {
     else decoded = genericFallback(action, p, chainSuffix);
 
     return harden(decoded, p, ctx);
+}
+
+function decodeList(p, chainSuffix) {
+    const metadata = decodeListMetadata(p, chainSuffix);
+    return metadata || decodeDistributionList(p, chainSuffix);
 }
 
 /*

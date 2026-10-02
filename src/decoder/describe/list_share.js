@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 const { str } = require('./value_format.js');
+const { decodeListCreateMeta } = require('./list_meta_create.js');
 
 function decodeUnionListCreate(items, memo, chainSuffix) {
     const count = items.length;
@@ -84,4 +85,11 @@ function decodeListSetMeta(p) {
     };
 }
 
-module.exports = { decodeUnionListCreate, decodeListShare, decodeListTransfer, decodeListSetMeta };
+function decodeListMetadata(p, chainSuffix) {
+    const version = str(p.VERSION);
+    if (version === '4') return decodeListCreateMeta(p, chainSuffix);
+    if (version === '5') return decodeListSetMeta(p);
+    return null;
+}
+
+module.exports = { decodeUnionListCreate, decodeListShare, decodeListTransfer, decodeListSetMeta, decodeListMetadata };
