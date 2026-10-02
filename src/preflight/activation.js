@@ -48,6 +48,18 @@ const ACTIVATION_MIRRORS = Object.freeze({
         table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 'UNARMED', 'LTC:testnet': 'UNARMED',
             'DOGE:testnet': 'UNARMED', testnet: 'UNARMED', regtest: 0 }),
     }),
+    TICK_NAMESPACE: Object.freeze({
+        key: 'tick_namespace_activation.TICK_NAMESPACE_ACTIVATION',
+        unit: 'height',
+        table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 154567, 'LTC:testnet': 4903068,
+            'DOGE:testnet': 67951140, testnet: 'UNARMED', regtest: 0 }),
+    }),
+    TOKEN_BRIDGE: Object.freeze({
+        key: 'token_bridge_activation.TOKEN_BRIDGE_ACTIVATION',
+        unit: 'height',
+        table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 154567, 'LTC:testnet': 4903068,
+            'DOGE:testnet': 67951140, testnet: 'UNARMED', regtest: 0 }),
+    }),
 });
 
 // Resolve the SDK's network to the registry's (network, coin) pair from config or explorer prefix.
@@ -82,4 +94,13 @@ function describeActivation(name) {
     return Object.keys(groups).map((state) => state + ' on ' + groups[state].join(', ')).join('; ');
 }
 
-module.exports = { ACTIVATION_MIRRORS, activationThreshold, describeActivation };
+// Lead a disclosure with the SDK's own plane, then every plane, so it says where this chain stands.
+function describeActivationHere(name, sdk) {
+    const at = activationThreshold(name, sdk);
+    const here = at === undefined ? '' : at === 'UNARMED' ? 'this chain is not armed for it; '
+        : at === 0 ? 'it is active from genesis on this chain; '
+            : 'it is armed at ' + ACTIVATION_MIRRORS[name].unit + ' ' + at + ' on this chain; ';
+    return here + 'the activation is ' + describeActivation(name);
+}
+
+module.exports = { ACTIVATION_MIRRORS, activationThreshold, describeActivation, describeActivationHere };

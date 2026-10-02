@@ -98,6 +98,7 @@ function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs
         actionString:   result.actionString,
         encoding:       feeResult.encoding,
         carrierScripts: feeResult.carrierScripts,
+        rawData:        null,   // buildFeeEstimateRequest sends the encoder no rawData
         network:        reconcileNetwork,
         label:          'fee estimate',
     });

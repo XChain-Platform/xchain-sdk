@@ -70,8 +70,8 @@ function redeemFor(chunk) {
         bitcoin.opcodes.OP_HASH160, H160, bitcoin.opcodes.OP_EQUALVERIFY, bitcoin.opcodes.OP_CHECKSIG]);
 }
 
-function chunkLane(actionString, encoding) {
-    const data = bitcoin.script.compile([Buffer.from(actionString, 'utf8')]);
+function chunkLane(actionString, encoding, rawBuf) {
+    const data = bitcoin.script.compile([Buffer.from(actionString, 'utf8')].concat(rawBuf ? [rawBuf] : []));
     const redeems = [];
     for (let i = 0; i < data.length; i += 40) redeems.push(redeemFor(data.subarray(i, i + 40)));
     const psbt = new bitcoin.Psbt({ network: NET });
@@ -290,10 +290,41 @@ function describeChunkPolicies(encoding) {
     });
 }
 
+// The rawData push binds to the bytes the caller sent, verbatim or under COMPRESSION.
+function describeChunkRawData(encoding) {
+    describe(chunkDescription(encoding) + ': the rawData push', function () {
+        const zlib = require('zlib');
+        const raw = 'FILE|0|report.bin|application/octet-stream';
+        const compressed = 'FILE|0|report.bin|application/octet-stream|||||||1';
+        const BYTES = Buffer.from('report row,'.repeat(40), 'utf8');
+
+        it('passes the rawData the caller sent and refuses a substituted one', function () {
+            const ok = chunkLane(raw, encoding, BYTES);
+            expect(bind(Object.assign({ actionString: raw, encoding, rawData: BYTES.toString('binary') }, ok))).to.not.throw();
+            const swapped = Buffer.from(BYTES); swapped[3] ^= 0x20;
+            expect(bind(Object.assign({ actionString: raw, encoding, rawData: BYTES }, chunkLane(raw, encoding, swapped))))
+                .to.throw(/does not carry the action/);
+        });
+
+        it('passes a compressed FILE whose push inflates to the rawData and refuses one that does not', function () {
+            const ok = chunkLane(compressed, encoding, zlib.deflateRawSync(BYTES));
+            expect(bind(Object.assign({ actionString: raw, encoding, rawData: BYTES }, ok))).to.not.throw();
+            const other = chunkLane(compressed, encoding, zlib.deflateRawSync(Buffer.from('x'.repeat(BYTES.length))));
+            expect(bind(Object.assign({ actionString: raw, encoding, rawData: BYTES }, other))).to.throw(/does not carry the action/);
+        });
+
+        it('refuses a rawData push the caller never sent', function () {
+            const lane = chunkLane(raw, encoding, BYTES);
+            expect(bind(Object.assign({ actionString: raw, encoding, rawData: null }, lane))).to.throw(/does not carry the action/);
+        });
+    });
+}
+
 describe('carrier binding: the transaction must carry the action that was submitted', function () {
     for (const encoding of ['P2SH', 'P2WSH']) {
         describeChunkChecks(encoding);
         describeChunkPolicies(encoding);
+        describeChunkRawData(encoding);
     }
 });
 

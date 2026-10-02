@@ -126,6 +126,7 @@ function reconcileTransaction(manager, encoded, createResult, encoderOpts, opts)
         actionString:   createResult.actionString,
         encoding:       encoded.encoding,
         carrierScripts: encoded.carrierScripts,
+        rawData:        encoderOpts.rawData == null ? null : encoderOpts.rawData,
         network:        manager.reconcileNetwork(),
         label:          'transaction',
     });

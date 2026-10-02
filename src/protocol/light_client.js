@@ -41,13 +41,11 @@ const { verifyBalanceProof, verifyLockedBalanceProof, verifyContractStateProof,
     verifyActionProof, verifyValidatorSetProof } = require('./light_client/proof_checks.js');
 const { verifyBalance, verifyLockedBalance, verifyAction } = require('./light_client/online_verify.js');
 const { parseAnchorV0, anchorBundleSection: anchorBundleSectionV0, anchorToCheckpoint, verifyAnchoredCheckpoint,
-    fetchAnchoredCheckpoint, enforceAnchorBundleOrder } = require('./light_client/anchored_checkpoint.js');
+    fetchAnchoredCheckpoint, enforceAnchorBundleOrder, ANCHOR_FOLD_VERSION } = require('./light_client/anchored_checkpoint.js');
 const { lowerHex } = require('./light_client/fetch_helpers.js');
 const { verifyValidatorSet, verifyCheckpointWithProvenSet,
     followForward } = require('./light_client/validator_set_follow.js');
 const { clearValidatorSetCache } = require('./light_client/quorum_resolution.js');
-
-const ANCHOR_FOLD_VERSION = 3;
 
 function parseAnchorV3Section(parts, start, network, sectionIndex){
     if (start + 12 >= parts.length)
@@ -136,6 +134,9 @@ function parseAnchorV3(wire, { blockIndex } = {}){
             archive_b64: String(parts[next + 4] || '')
         };
         next += 5;
+        // Only the wrapper section is signed over the archive; canonicalCheckpoint appends it.
+        sections[wrapperSectionIndex].fold_archive = { match_batch_seq: archive.match_batch_seq,
+            match_count: archive.match_count, batch_crc32: archive.batch_crc32, total_chunks: archive.total_chunks };
     }
     const tail = parseAnchorV3Tail(parts, next);
     return {

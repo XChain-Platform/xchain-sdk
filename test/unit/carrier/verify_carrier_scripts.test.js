@@ -195,3 +195,62 @@ describe('carrier-script verification (§5.3.2)', function () {
     });
 
 });
+
+// The rawData push: the encoder chunks `script.compile([action, rawData])`, so a FILE,
+// artwork, label or gated ciphertext rides push[1] of the same reassembly.
+function buildPair(action, rawBuf, encoding = 'P2WSH', chunkSize = 64) {
+    const data = bitcoin.script.compile([Buffer.from(action, 'utf8'), rawBuf]);
+    const chunks = [];
+    for (let i = 0; i < data.length; i += chunkSize) chunks.push(data.subarray(i, i + chunkSize));
+    const redeems = chunks.map(redeemFor);
+    return { carrierScripts: redeems.map(r => r.toString('hex')), psbt: psbtWith(redeems.map(r => committed(encoding, r))) };
+}
+
+describe('carrier-script verification: the rawData push', function () {
+    const zlib = require('zlib');
+    const FILE = 'FILE|0|art.json|application/json|';
+    const RAW = Buffer.from(JSON.stringify({ art: 'x'.repeat(300), n: 1 }), 'utf8');
+    const check = (fixture, rawData, rawDataCompressed, action = FILE) =>
+        verifyCarrierScripts(Object.assign({}, fixture, { encoding: 'P2WSH', actionString: action, rawData, rawDataCompressed }));
+
+    it('passes when push[1] is the caller rawData, given as a latin-1 string or a Buffer', function () {
+        expect(check(buildPair(FILE, RAW), RAW.toString('binary')).ok).to.equal(true);
+        expect(check(buildPair(FILE, RAW), RAW).ok).to.equal(true);
+    });
+
+    it('refuses a same-length or shorter substituted payload', function () {
+        const swapped = Buffer.from(RAW); swapped[10] ^= 0x01;
+        expect(check(buildPair(FILE, swapped), RAW).reason).to.equal(REASONS.PAYLOAD_MISMATCH);
+        expect(check(buildPair(FILE, RAW.subarray(0, 100)), RAW).reason).to.equal(REASONS.PAYLOAD_MISMATCH);
+    });
+
+    it('refuses a missing push[1] when rawData was sent, and an extra one when none was', function () {
+        expect(check(build(FILE, 'P2WSH', 64), RAW).reason).to.equal(REASONS.PAYLOAD_MISMATCH);
+        expect(check(buildPair(FILE, RAW), null).reason).to.equal(REASONS.PAYLOAD_MISMATCH);
+        expect(check(build(FILE, 'P2WSH', 64), null).ok).to.equal(true);
+    });
+
+    it('leaves push[1] unchecked for a caller that passes no rawData argument', function () {
+        expect(check(buildPair(FILE, Buffer.from('anything')), undefined).ok).to.equal(true);
+    });
+
+    it('binds an empty rawData, which the compiler minimizes to OP_0', function () {
+        expect(check(buildPair(FILE, Buffer.alloc(0)), '').ok).to.equal(true);
+        expect(check(buildPair(FILE, Buffer.from('zz')), '').reason).to.equal(REASONS.PAYLOAD_MISMATCH);
+    });
+
+    it('passes a deflate-raw push that inflates to the caller rawData, and refuses one that does not', function () {
+        const COMPRESSED = FILE.replace('json|', 'json|deflate-raw');
+        expect(check(buildPair(COMPRESSED, zlib.deflateRawSync(RAW)), RAW, true, COMPRESSED).ok).to.equal(true);
+        const other = zlib.deflateRawSync(Buffer.concat([RAW.subarray(0, RAW.length - 1), Buffer.from('!')]));
+        expect(check(buildPair(COMPRESSED, other), RAW, true, COMPRESSED).reason).to.equal(REASONS.PAYLOAD_MISMATCH);
+        expect(check(buildPair(COMPRESSED, zlib.deflateRawSync(RAW)), RAW, false, COMPRESSED).ok).to.equal(false);
+    });
+
+    it('refuses a compressed push that inflates past the rawData length, without throwing', function () {
+        const COMPRESSED = FILE.replace('json|', 'json|deflate-raw');
+        const bomb = zlib.deflateRawSync(Buffer.alloc(RAW.length * 50, 0x41));
+        expect(bomb.length).to.be.below(RAW.length);
+        expect(check(buildPair(COMPRESSED, bomb), RAW, true, COMPRESSED).reason).to.equal(REASONS.PAYLOAD_MISMATCH);
+    });
+});

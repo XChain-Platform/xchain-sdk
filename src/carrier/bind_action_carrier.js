@@ -174,11 +174,12 @@ function assertInlineCarrier({ psbt, actionString, encoding, network, label }) {
  * @param {string}   args.actionString    the action the caller submitted
  * @param {string}   [args.encoding]      the encoder-reported encoding (used only to tighten)
  * @param {string[]} [args.carrierScripts] chunk redeem scripts, as create_tx returned them
+ * @param {string|Buffer|null} [args.rawData] the rawData sent to the encoder (null: none sent)
  * @param {object}   [args.network]       bitcoinjs network
  * @param {string}   [args.label]         which transaction this is, for the error
  * @throws {SDKActionError} CARRIER_ACTION_MISMATCH / CARRIER_UNREADABLE
  */
-function assertCarrierBinding({ psbt, actionString, encoding, carrierScripts, network, label = 'transaction' }) {
+function assertCarrierBinding({ psbt, actionString, encoding, carrierScripts, rawData, network, label = 'transaction' }) {
     if (typeof actionString !== 'string' || actionString.length === 0)
         throw new SDKActionError('CARRIER_BIND_MISSING_ACTION',
             `${label}: cannot bind a carrier without the caller's action string`);
@@ -199,12 +200,14 @@ function assertCarrierBinding({ psbt, actionString, encoding, carrierScripts, ne
     // where a legitimate compressed FILE lands. Offer the same single locally
     // recomputed rewrite here rather than the encoder's reported string: a
     // substituted SEND still has nowhere to hide, and a real compressed FILE
-    // stops being refused by its own gate.
-    let verified = verifyCarrierScripts({ psbt, carrierScripts, encoding: enc, actionString, network });
+    // stops being refused by its own gate. The rawData push binds to the caller's
+    // own bytes on both attempts: verbatim, or inflating to them under COMPRESSION.
+    let verified = verifyCarrierScripts({ psbt, carrierScripts, encoding: enc, actionString, rawData, network });
     if (verified && verified.ok === true) return;
     const compressedForm = toleratedCompressedForm(actionString);
     if (compressedForm) {
-        const retried = verifyCarrierScripts({ psbt, carrierScripts, encoding: enc, actionString: compressedForm, network });
+        const retried = verifyCarrierScripts({ psbt, carrierScripts, encoding: enc, actionString: compressedForm,
+            rawData, rawDataCompressed: true, network });
         if (retried && retried.ok === true) return;
         // Report the compressed attempt's reason: on a FILE lane it is the one
         // that describes what the transaction actually carries.

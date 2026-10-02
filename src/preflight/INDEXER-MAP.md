@@ -464,6 +464,20 @@ agrees with it.
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
 
+### 2026-10-01 - tick-namespace and token-bridge arming now pinned by value
+
+No handler diff; this entry reads two registry rows. The v0.21.0 freeze height plan
+arms `TICK_NAMESPACE_ACTIVATION` (`gates_3.js`) and `TOKEN_BRIDGE_ACTIVATION`
+(`shared_rows_4.js`) at `BTC:testnet` 154567, `LTC:testnet` 4903068 and `DOGE:testnet`
+67951140, with mainnet and the bare testnet key at the sentinel and regtest at 0. That
+supersedes the "neither mainnet nor testnet is armed" readings in the 2026-09-29 and
+2026-09-12 entries for these two rows. Both tables are now pinned in
+`ACTIVATION_MIRRORS` and bound by value by the drift gate, whose parser reads the
+literal 9999999999 as `UNARMED`. `checks/issue.js` builds the TICK_FORMAT namespace
+warning and the `ISSUE_BRIDGE_ACTIVATION` note from those tables, so the text moves
+with the pinned heights. Severity is unchanged: pre-flight still cannot read the
+including block's height.
+
 ### 2026-10-01 - coin-qualified LIST items and their ISSUE and AIRDROP consumers
 
 Baseline was the prior anchor `500b5d4f`; the reviewed tree is the clean LS-85 lane tip
