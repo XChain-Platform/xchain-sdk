@@ -46,6 +46,40 @@ function create(params) {
         .createAction({ action: 'LIST', params });
 }
 
+function registerMetadataFieldTests({ field, key, maxBytes }) {
+    describe(field, function () {
+        const fields = (value, version = 4) => version === 4
+            ? { VERSION: 4, TYPE: 1, ITEM: 'JDOG', [field]: value }
+            : { VERSION: 5, LIST_ACTION_INDEX: 17, [field]: value };
+
+        it('reports pipe, semicolon, length, and grammar verdicts in indexer order', function () {
+            expect(validate(fields('|;' + 'a'.repeat(maxBytes)))[0].message).to.equal('invalid: ' + field + ' (pipe)');
+            expect(validate(fields(';' + 'a'.repeat(maxBytes)))[0].message).to.equal('invalid: ' + field + ' (semicolon)');
+            expect(validate(fields('a'.repeat(maxBytes + 1)))[0].message).to.equal('invalid: ' + field + ' (length)');
+            expect(validate(fields('\u202E'))[0].message).to.equal('invalid: ' + field + ' (format)');
+        });
+
+        it('measures the cap in UTF-8 bytes', function () {
+            const atCap = 'a'.repeat(maxBytes - 4) + '\u{1F600}';
+            const overCap = 'a'.repeat(maxBytes - 3) + '\u{1F600}';
+            expect(Buffer.byteLength(atCap, 'utf8')).to.equal(maxBytes);
+            expect(verdicts(fields(atCap))).to.deep.equal([]);
+            expect(verdicts(fields(overCap))).to.include('invalid: ' + field + ' (length)');
+        });
+
+        it('refuses untrimmed, bidi, line-feed, and lone-surrogate text', function () {
+            for (const value of ['\u00A0leading', 'trailing ', 'text\u202Etext', 'line\nfeed', '\uD800'])
+                expect(verdicts(fields(value)), JSON.stringify(value)).to.include('invalid: ' + field + ' (format)');
+        });
+
+        it('refuses the clear sentinel on create and accepts it on set', function () {
+            expect(verdicts(fields('-', 4))).to.include('invalid: ' + field + ' (format)');
+            expect(verdicts(fields('-', 5))).to.deep.equal([]);
+            expect(create({ version: 5, listActionIndex: 17, [key]: '-' }).version).to.equal(5);
+        });
+    });
+}
+
 describe('LIST metadata formats and validation', function () {
     it('publishes the create-with-meta and set-meta wire formats', function () {
         expect(formats.LIST[4]).to.equal('VERSION|TYPE|NAME|DESCRIPTION|MEMO|...ITEM');
@@ -75,39 +109,7 @@ describe('LIST metadata formats and validation', function () {
         }
     });
 
-    for (const { field, key, maxBytes } of META_FIELDS) {
-        describe(field, function () {
-            const fields = (value, version = 4) => version === 4
-                ? { VERSION: 4, TYPE: 1, ITEM: 'JDOG', [field]: value }
-                : { VERSION: 5, LIST_ACTION_INDEX: 17, [field]: value };
-
-            it('reports pipe, semicolon, length, and grammar verdicts in indexer order', function () {
-                expect(validate(fields('|;' + 'a'.repeat(maxBytes)))[0].message).to.equal('invalid: ' + field + ' (pipe)');
-                expect(validate(fields(';' + 'a'.repeat(maxBytes)))[0].message).to.equal('invalid: ' + field + ' (semicolon)');
-                expect(validate(fields('a'.repeat(maxBytes + 1)))[0].message).to.equal('invalid: ' + field + ' (length)');
-                expect(validate(fields('\u202E'))[0].message).to.equal('invalid: ' + field + ' (format)');
-            });
-
-            it('measures the cap in UTF-8 bytes', function () {
-                const atCap = 'a'.repeat(maxBytes - 4) + '\u{1F600}';
-                const overCap = 'a'.repeat(maxBytes - 3) + '\u{1F600}';
-                expect(Buffer.byteLength(atCap, 'utf8')).to.equal(maxBytes);
-                expect(verdicts(fields(atCap))).to.deep.equal([]);
-                expect(verdicts(fields(overCap))).to.include('invalid: ' + field + ' (length)');
-            });
-
-            it('refuses untrimmed, bidi, line-feed, and lone-surrogate text', function () {
-                for (const value of ['\u00A0leading', 'trailing ', 'text\u202Etext', 'line\nfeed', '\uD800'])
-                    expect(verdicts(fields(value)), JSON.stringify(value)).to.include('invalid: ' + field + ' (format)');
-            });
-
-            it('refuses the clear sentinel on create and accepts it on set', function () {
-                expect(verdicts(fields('-', 4))).to.include('invalid: ' + field + ' (format)');
-                expect(verdicts(fields('-', 5))).to.deep.equal([]);
-                expect(create({ version: 5, listActionIndex: 17, [key]: '-' }).version).to.equal(5);
-            });
-        });
-    }
+    for (const field of META_FIELDS) registerMetadataFieldTests(field);
 
     it('does not apply the ISSUE 250-character DESCRIPTION cap to LIST', function () {
         const description = 'd'.repeat(251);
