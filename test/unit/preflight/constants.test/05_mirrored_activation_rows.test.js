@@ -15,6 +15,7 @@ const { checkActivationMirrors } = require('../../../../bin/check-preflight-drif
 const {
     LIST_ADDRESS_REF: LIST_ADDR,
     LIST_TICK_COIN,
+    LIST_META,
     LIST_REFERENCE_VALIDITY: LIST,
     DISPENSER_SETTLEMENT_PRICE: DISP
 } = constants.ACTIVATION_MIRRORS;
@@ -35,7 +36,7 @@ function indexerRoot(files) {
 }
 
 const allRows = (listOver, unit) => ({
-    'gates_4.js': row(LIST, listOver, unit) + row(DISP) + row(LIST_ADDR) + row(LIST_TICK_COIN)
+    'gates_4.js': row(LIST, listOver, unit) + row(DISP) + row(LIST_ADDR) + row(LIST_TICK_COIN) + row(LIST_META)
 });
 
 describe('pre-flight drift gate: mirrored activation rows', function () {
@@ -46,7 +47,7 @@ describe('pre-flight drift gate: mirrored activation rows', function () {
     it('passes when a row moves to a differently named part file', function () {
         expect(checkActivationMirrors(indexerRoot({
             'gates_9.js': row(LIST) + row(LIST_ADDR),
-            'shared_rows_7.js': row(DISP) + row(LIST_TICK_COIN)
+            'shared_rows_7.js': row(DISP) + row(LIST_TICK_COIN) + row(LIST_META)
         }))).to.equal(0);
     });
 
