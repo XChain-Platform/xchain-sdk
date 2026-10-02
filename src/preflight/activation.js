@@ -42,6 +42,12 @@ const ACTIVATION_MIRRORS = Object.freeze({
         table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 'UNARMED', 'LTC:testnet': 'UNARMED',
             'DOGE:testnet': 'UNARMED', testnet: 'UNARMED', regtest: 0 }),
     }),
+    LIST_META: Object.freeze({
+        key: 'list_meta_activation.LIST_META_ACTIVATION',
+        unit: 'height',
+        table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 'UNARMED', 'LTC:testnet': 'UNARMED',
+            'DOGE:testnet': 'UNARMED', testnet: 'UNARMED', regtest: 0 }),
+    }),
     DISPENSER_SETTLEMENT_PRICE: Object.freeze({
         key: 'dispenser_settlement_price_activation.DISPENSER_SETTLEMENT_PRICE_ACTIVATION',
         unit: 'time',
