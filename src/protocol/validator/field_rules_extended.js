@@ -22,7 +22,10 @@ const {
     MAX_MESSAGE_LENGTH,
     MAX_BROADCAST_FEE_LENGTH,
     MAX_GATE_MIN_AMOUNT_LENGTH,
+    LIST_META_NAME_MAX_BYTES,
+    LIST_META_DESCRIPTION_MAX_BYTES,
 } = require('./field_limits.js');
+const { listMetaFieldError } = require('./list_meta_rules.js');
 
 // Applies one contiguous field-rule group while preserving finding order.
 function validateFileKeyHash(validator, action, field, value, allFields, errors) {
@@ -150,6 +153,24 @@ function validateListEdit(validator, action, field, value, allFields, errors) {
     }
 }
 
+// Applies the indexer's LIST metadata verdicts before the action is signed.
+function validateListMeta(validator, action, field, value, allFields, errors) {
+    if (action !== 'LIST' || (field !== 'NAME' && field !== 'DESCRIPTION')) return;
+
+    let version = validator.isEmpty(allFields.VERSION) ? null : Number(allFields.VERSION);
+    if (version === null)
+        version = validator.isEmpty(allFields.LIST_ACTION_INDEX) ? 4 : 5;
+    if (version !== 4 && version !== 5) return;
+
+    const maxBytes = field === 'NAME'
+        ? LIST_META_NAME_MAX_BYTES
+        : LIST_META_DESCRIPTION_MAX_BYTES;
+    const verdict = listMetaFieldError(field, String(value), maxBytes, version === 4);
+    if (verdict)
+        errors.push(validator.buildError('INVALID_FIELD_VALUE', verdict,
+            { field, value, verdict, constraint: { maxBytes } }));
+}
+
 function rejectListFields(validator, fields, version, names) {
     const errors = [];
     for (const field of names) {
@@ -161,8 +182,29 @@ function rejectListFields(validator, fields, version, names) {
     return errors;
 }
 
+function validateListSetMetaFields(validator, fields, version) {
+    const errors = [];
+    if (validator.isEmpty(fields.LIST_ACTION_INDEX))
+        errors.push(validator.buildError('MISSING_REQUIRED_FIELD',
+            'LIST v5 (SET META) requires field: LIST_ACTION_INDEX',
+            { field: 'LIST_ACTION_INDEX', version }));
+    else if (!/^[1-9][0-9]*$/.test(String(fields.LIST_ACTION_INDEX)))
+        errors.push(validator.buildError('INVALID_FIELD_VALUE',
+            'LIST v5 (SET META) LIST_ACTION_INDEX must be a positive integer',
+            { field: 'LIST_ACTION_INDEX', value: fields.LIST_ACTION_INDEX, version }));
+    errors.push(...rejectListFields(validator, fields, version,
+        ['EDIT', 'TYPE', 'DESTINATION', 'ITEM']));
+    if (validator.isEmpty(fields.NAME) && validator.isEmpty(fields.DESCRIPTION))
+        errors.push(validator.buildError('INVALID_FIELD_VALUE',
+            'invalid: NAME (no change)',
+            { field: 'NAME', verdict: 'invalid: NAME (no change)', version }));
+    return errors;
+}
+
 function validateListVersionFields(validator, fields) {
-    const version = validator.isEmpty(fields.VERSION) ? null : Number(fields.VERSION);
+    let version = validator.isEmpty(fields.VERSION) ? null : Number(fields.VERSION);
+    if (version === null && (!validator.isEmpty(fields.NAME) || !validator.isEmpty(fields.DESCRIPTION)))
+        version = validator.isEmpty(fields.LIST_ACTION_INDEX) ? 4 : 5;
     const errors = [];
     if (!validator.isEmpty(fields.DESTINATION) && version !== 3)
         errors.push(validator.buildError('INVALID_FIELD_VALUE',
@@ -178,6 +220,15 @@ function validateListVersionFields(validator, fields) {
                 'LIST v2 (SHARE) LIST_ACTION_INDEX must be a positive integer',
                 { field: 'LIST_ACTION_INDEX', value: fields.LIST_ACTION_INDEX, version }));
         errors.push(...rejectListFields(validator, fields, version, ['EDIT', 'TYPE', 'ITEM']));
+        return { handled: true, errors };
+    }
+    if (version === 4) {
+        errors.push(...rejectListFields(validator, fields, version,
+            ['EDIT', 'LIST_ACTION_INDEX', 'DESTINATION']));
+        return { handled: false, errors };
+    }
+    if (version === 5) {
+        errors.push(...validateListSetMetaFields(validator, fields, version));
         return { handled: true, errors };
     }
     if (version !== 3) return { handled: false, errors };
@@ -295,6 +346,6 @@ function validatePriceFee(validator, action, field, value, allFields, errors) {
 }
 
 module.exports = {
-    FIELD_VALIDATORS: [validateFileKeyHash, validateFileGateTicker, validateFileGateMinAmount, validateMessageFields, validateFeePreference, validateDispenserPreference, validateListType, validateListEdit, validateBinaryFlags, validateNumericAmounts, validatePositiveAmounts, validateBroadcastFee, validatePriceFee],
+    FIELD_VALIDATORS: [validateFileKeyHash, validateFileGateTicker, validateFileGateMinAmount, validateMessageFields, validateFeePreference, validateDispenserPreference, validateListType, validateListEdit, validateListMeta, validateBinaryFlags, validateNumericAmounts, validatePositiveAmounts, validateBroadcastFee, validatePriceFee],
     validateListVersionFields,
 };

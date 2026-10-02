@@ -50,6 +50,9 @@ const MAX_SUPPLY_CEILING = '1000000000000000000000'; // 1 sextillion, the indexe
 const MAX_DECIMALS       = 18;
 const MAX_TICK_LENGTH    = 250;
 const MAX_DESC_LENGTH    = 250;
+// LIST metadata matches contract metadata and is measured in UTF-8 bytes.
+const LIST_META_NAME_MAX_BYTES = 64;
+const LIST_META_DESCRIPTION_MAX_BYTES = 512;
 const MAX_MESSAGE_LENGTH = 1048576; // 1MB
 // Matches the indexer's BROADCAST FEE limit and its 11-character column.
 const MAX_BROADCAST_FEE_LENGTH = 11;
@@ -100,6 +103,7 @@ const DELIMITER_EXEMPT_FIELDS = new Set([
     'TICK', 'GIVE_TICK', 'GET_TICK', 'DIVIDEND_TICK', 'CALLBACK_TICK',  // own tick-name validation
     'GATE_TICKER',                                                      // own |;./ check
     'CONSTRUCTOR_PARAMS', 'PARAMS',                                     // own per-element check
+    'NAME', 'DESCRIPTION',                                              // own FILE/ISSUE/LIST text rules
 ]);
 
 // Valid FIAT currency codes. Must stay a byte-equal allow-list with the indexer's
@@ -173,6 +177,8 @@ module.exports = {
     MAX_DECIMALS,
     MAX_TICK_LENGTH,
     MAX_DESC_LENGTH,
+    LIST_META_NAME_MAX_BYTES,
+    LIST_META_DESCRIPTION_MAX_BYTES,
     MAX_MESSAGE_LENGTH,
     MAX_BROADCAST_FEE_LENGTH,
     MAX_GATE_MIN_AMOUNT_LENGTH,

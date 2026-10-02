@@ -65,10 +65,16 @@ function validateTickFields(validator, action, field, value, allFields, errors) 
 
 // Applies one contiguous field-rule group while preserving finding order.
 function validateDescriptionField(validator, action, field, value, allFields, errors) {
-    // MEMO delimiter safety is handled by the default-deny checkDelimiters guard.
+    // FILE NAME and ISSUE DESCRIPTION opt out of the blanket delimiter guard
+    // so LIST can report its consensus verdict strings without duplicates.
+    if (action === 'FILE' && field === 'NAME')
+        errors.push(...validator.scanDelimiters(field, value));
 
-    // DESCRIPTION validation (delimiter safety via checkDelimiters)
-    if (field === 'DESCRIPTION') {
+    // ISSUE DESCRIPTION validation.
+    // LIST metadata uses UTF-8 byte limits and its own grammar in the extended
+    // rules, so the ISSUE character cap must never be applied to a LIST.
+    if (action === 'ISSUE' && field === 'DESCRIPTION') {
+        errors.push(...validator.scanDelimiters(field, value));
         if (String(value).length > MAX_DESC_LENGTH)
             errors.push(validator.buildError('INVALID_FIELD_VALUE', 'DESCRIPTION must be ' + MAX_DESC_LENGTH + ' characters or less', { field, value: String(value).length, constraint: { max: MAX_DESC_LENGTH } }));
     }
