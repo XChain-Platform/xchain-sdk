@@ -55,4 +55,33 @@ function decodeListTransfer(p) {
     };
 }
 
-module.exports = { decodeUnionListCreate, decodeListShare, decodeListTransfer };
+function describeMetaField(value) {
+    if (!value) return 'Unchanged';
+    if (value === '-') return 'Cleared';
+    return `Set to: ${value}`;
+}
+
+function decodeListSetMeta(p) {
+    const idx = str(p.LIST_ACTION_INDEX);
+    const name = str(p.NAME);
+    const description = str(p.DESCRIPTION);
+    const memo = str(p.MEMO);
+    return {
+        summary: `Update metadata on list #${idx || '?'}`,
+        details: [
+            { label: 'List action index', value: idx },
+            { label: 'Name', value: describeMetaField(name) },
+            { label: 'Description', value: describeMetaField(description) },
+            ...(memo ? [{ label: 'Memo', value: memo }] : []),
+        ],
+        warnings: [
+            'Updating a shared list name or description charges the shared-list edit fee.',
+            ...(!name && !description
+                ? ['Name and description are both unchanged. The indexer will refuse this action as NAME (no change).']
+                : []),
+            ...(!idx ? ['List action index is empty.'] : []),
+        ],
+    };
+}
+
+module.exports = { decodeUnionListCreate, decodeListShare, decodeListTransfer, decodeListSetMeta };
