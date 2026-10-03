@@ -18,6 +18,9 @@
 
 const { expect } = require('chai');
 const crypto  = require('crypto');
+const fs      = require('fs');
+const os      = require('os');
+const path    = require('path');
 const bitcoin = require('bitcoinjs-lib');
 const { secp256k1, schnorr } = require('@noble/curves/secp256k1');
 
@@ -30,6 +33,22 @@ const MuSig2AgentSession = require('../../../src/cosigner/musig2_agent_session.j
 const { SDKPolicyError } = require('../../../src/utils/errors.js');
 
 const DEST = '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2';
+
+let tmpDir, stateFile, stateFileCounter = 0;
+
+before(function () {
+    this.timeout(30000);
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'musig2-agent-session-'));
+});
+
+beforeEach(function () {
+    stateFile = path.join(tmpDir, `usage-${stateFileCounter++}.json`);
+});
+
+after(function () {
+    this.timeout(30000);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+});
 
 // An unsigned PSBT spending `inputs` UTXOs of `output`, carrying `actionString`
 // in an obfuscated OP_RETURN built exactly like the encoder (AES-128-CTR keyed
@@ -111,7 +130,7 @@ function makeSession(s, sdk, localPolicy) {
         // tests keep exercising the MuSig2 path rather than the new key requirement,
         // which is covered in agent_session.test.js.
         Object.assign({ allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '100' } }, allowUnkeyedSubmits: true }, localPolicy),
-        { coSigner: { transport, publicKeys: s.keys } });
+        { stateFile, coSigner: { transport, publicKeys: s.keys } });
 }
 
 describe('MuSig2 signer adapter (buildMuSig2Signer)', function () {
@@ -363,7 +382,7 @@ describe('MuSig2AgentSession', function () {
         const captured = { broadcasts: [], encodeCalls: 0 };
         const session = new MuSig2AgentSession(makeSdk(s, captured), 'WIF',
             { allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '100' } }, allowUnkeyedSubmits: true },
-            { coSigner: { transport: inProcessTransport(co), publicKeys: [agentPk, daemonPk], recovery: recPk } });
+            { stateFile, coSigner: { transport: inProcessTransport(co), publicKeys: [agentPk, daemonPk], recovery: recPk } });
 
         expect(session.address).to.equal(a3.address);
         await session.send({ tick: 'TOK', amount: '5', destination: DEST },
