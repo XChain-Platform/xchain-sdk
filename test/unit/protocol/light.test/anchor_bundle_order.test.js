@@ -40,8 +40,9 @@ function assertParsesWithoutAndWithHeight(wire) {
 }
 
 describe('ANCHOR bundle ordering before enforcement', function () {
+    // mainnet stays unarmed; testnet arms bundle order at the v0.21.3 heights.
     it('accepts sections that are not CHAIN-ascending', function () {
-        const wire = makeWire('testnet', [
+        const wire = makeWire('mainnet', [
             makeSection('DOGE', ['aa', 'bb']),
             makeSection('BTC', ['aa', 'bb'])
         ]);
@@ -49,7 +50,7 @@ describe('ANCHOR bundle ordering before enforcement', function () {
     });
 
     it('accepts section signature pairs that are not PUBKEY-ascending', function () {
-        const wire = makeWire('testnet', [
+        const wire = makeWire('mainnet', [
             makeSection('BTC', ['bb', 'aa']),
             makeSection('DOGE', ['aa', 'bb'])
         ]);

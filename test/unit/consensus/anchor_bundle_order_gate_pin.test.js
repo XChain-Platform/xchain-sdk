@@ -13,6 +13,9 @@ describe('anchor bundle order activation registry pin', function () {
         assert.strictEqual(registry.unitOf(KEY), 'height');
         assert.deepStrictEqual(gates.get(KEY), {
             mainnet: 9999999999,
+            'BTC:testnet': 155001,
+            'LTC:testnet': 4906040,
+            'DOGE:testnet': 67962387,
             testnet: 9999999999,
             regtest: 0,
         });
@@ -20,6 +23,8 @@ describe('anchor bundle order activation registry pin', function () {
         assert.strictEqual(gates.activeAt(KEY, 'regtest', null, 0, null), true);
         assert.strictEqual(gates.activeAt(KEY, 'regtest', null, 70000000, null), true);
         assert.strictEqual(gates.activeAt(KEY, 'testnet', null, 70000000, null), false);
+        assert.strictEqual(gates.activeAt(KEY, 'testnet', 'DOGE', 67962386, null), false);
+        assert.strictEqual(gates.activeAt(KEY, 'testnet', 'DOGE', 67962387, null), true);
         assert.strictEqual(gates.activeAt(KEY, 'mainnet', null, 70000000, null), false);
     });
 });
