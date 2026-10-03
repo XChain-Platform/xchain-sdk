@@ -434,7 +434,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `1d5869c477a5670c76b5c64ca893044ce67910310e716f7156220f87819e8974` |
 | `checks/mint.js` | `src/actions/mint/` | `caf6f7e7bfc0ffac865ae76fbc5d36123be77db09df81f617c3a6fc9304554cd` |
 | `checks/issue.js` | `src/actions/issue/` | `02db2deb36967b65d673f5010806ca703b231c1fb22b9c0196b53a6e91d28500` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `fb0f32cd0721236f03d06adc22a2ba63fa2f9955bf686dab76acaec8ca9b8432` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `f92e12188b6b557cd151ef06941fab3d9357d5d9410844df5ba13282ddbc81af` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `34cec38417f2fb43867dcc5810d980d3d15a1fabc513d47c6541bb81de8e5260` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `7518413cb97ece320a481859d8227756c3627d1bb2891da63153b54ea2de71df` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `3572ba88cb701624a841a1e089d9c848d4cd37542fa7916f63ca41c7bd6d5e43` |
