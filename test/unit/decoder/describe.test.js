@@ -268,6 +268,10 @@ describe('decoder.describe', function () {
             const d = describeAction(parse('BATCH|0|DEPOSIT|0|3919|XCHAIN|1000;EXECUTE|0|3919|fundLoan'));
             expect(d.warnings.some(w => NO_DEPOSIT.test(w))).to.equal(false);
         });
+        it('keeps the warning when the same-contract deposit follows the call', function () {
+            const d = describeAction(parse('BATCH|0|EXECUTE|0|3919|fundLoan;DEPOSIT|0|3919|XCHAIN|1000'));
+            expect(d.warnings.some(w => NO_DEPOSIT.test(w))).to.equal(true);
+        });
         it('keeps the warning when the batch deposits into a different contract', function () {
             const d = describeAction(parse('BATCH|0|DEPOSIT|0|12|XCHAIN|1000;EXECUTE|0|3919|fundLoan'));
             expect(d.warnings.some(w => NO_DEPOSIT.test(w))).to.equal(true);

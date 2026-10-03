@@ -178,20 +178,21 @@ function harden(decoded, p, ctx) {
  * without hiding the rest.
  */
 /**
- * Drop the EXECUTE no-deposit line from a child whose contract the same
- * batch deposits into: there the call is funded, and the line would say
+ * Drop the EXECUTE no-deposit line from a child whose contract an earlier
+ * command deposits into: there the call is funded, and the line would say
  * the opposite of what the batch does.
  */
 function withoutFundedExecuteWarnings(commands, children) {
     const paramsOf = (cmd) => (cmd && typeof cmd === 'object' && (cmd.params || cmd.fields)) || {};
-    const funded = new Set(commands
-        .filter((cmd) => cmd && cmd.action === 'DEPOSIT')
-        .map((cmd) => String(paramsOf(cmd).CONTRACT_ACTION_INDEX ?? '')));
+    const funded = new Set();
     return children.map((child, i) => {
         const cmd = commands[i];
-        if (!cmd || cmd.action !== 'EXECUTE') return child;
-        if (!funded.has(String(paramsOf(cmd).CONTRACT_ACTION_INDEX ?? ''))) return child;
-        return { ...child, warnings: child.warnings.filter((w) => w !== EXECUTE_NO_DEPOSIT_WARNING) };
+        const contract = String(paramsOf(cmd).CONTRACT_ACTION_INDEX ?? '');
+        let described = child;
+        if (cmd && cmd.action === 'EXECUTE' && funded.has(contract))
+            described = { ...child, warnings: child.warnings.filter((w) => w !== EXECUTE_NO_DEPOSIT_WARNING) };
+        if (cmd && cmd.action === 'DEPOSIT') funded.add(contract);
+        return described;
     });
 }
 
