@@ -32,8 +32,10 @@
 //      in the PSBT. A script the encoder invented but did not commit to
 //      fails here.
 //   2. CONTENT - the leading data pushes, concatenated in order, are exactly
-//      the action bytes the caller intended. A script that IS committed but
-//      carries a different payload fails here.
+//      the action bytes the caller intended, and the rawData push (FILE,
+//      artwork or label bytes, or gated ciphertext) is the caller's rawData
+//      when the caller passes it. A script that IS committed but carries a
+//      different payload fails here.
 //
 // Check 1 alone would accept a faithful hash of the wrong payload; check 2
 // alone would accept the right payload in a script that is not the one being
@@ -41,6 +43,7 @@
 // this refuses rather than warns when it cannot run.
 
 const bitcoin = require('bitcoinjs-lib');
+const zlib = require('zlib');
 
 const CHUNK_ENCODINGS = ['P2SH', 'P2WSH'];
 
@@ -124,16 +127,40 @@ function verifiedChunks(carrierScripts, enc, net, present) {
     return chunks;
 }
 
+// A push the compiler minimized to an opcode carries bytes too; OP_0 is the empty payload.
+function pushBytes(el) {
+    if (Buffer.isBuffer(el)) return el;
+    return el === bitcoin.opcodes.OP_0 ? Buffer.alloc(0) : null;
+}
+
+// Match the rawData push to the caller's latin-1 bytes; a compressed push must be shorter and
+// inflate, capped at their length, to exactly them (the encoder compresses only to save bytes).
+function rawDataMatches(pushes, rawData, rawDataCompressed) {
+    if (rawData === undefined) return true;
+    if (rawData === null) return pushes.length === 1;
+    const carried = pushes.length === 2 ? pushBytes(pushes[1]) : null;
+    if (!carried) return false;
+    const expected = Buffer.isBuffer(rawData) ? rawData
+        : (rawData instanceof Uint8Array ? Buffer.from(rawData) : Buffer.from(String(rawData), 'binary'));
+    if (rawDataCompressed !== true) return carried.equals(expected);
+    if (!expected.length || carried.length >= expected.length) return false;
+    try { return zlib.inflateRawSync(carried, { maxOutputLength: expected.length }).equals(expected); }
+    catch (e) { return false; }
+}
+
 /**
  * @param {object}   args
  * @param {object}   args.psbt            a bitcoinjs Psbt (the one about to be signed)
  * @param {string[]} args.carrierScripts  hex redeem scripts, as create_tx returned them
  * @param {string}   args.encoding        the encoder-reported encoding
  * @param {string}   args.actionString    the action the caller intended to send
+ * @param {string|Buffer|null} [args.rawData] the rawData the caller gave the encoder; null
+ *                                        demands no rawData push, omitted leaves it unchecked
+ * @param {boolean}  [args.rawDataCompressed] the push is the deflate-raw form of rawData
  * @param {object}   [args.network]       bitcoinjs network (defaults to bitcoin)
  * @returns {{ok: boolean, reason: string|null, checked: number}}
  */
-function verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString, network } = {}) {
+function verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString, rawData, rawDataCompressed, network } = {}) {
     const enc = String(encoding || '').toUpperCase();
     // Not a chunk lane: nothing here to verify, and saying so is not a pass.
     // The caller keeps using decodeActionFromPsbt for inline OP_RETURN.
@@ -176,10 +203,10 @@ function verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString, ne
     // caught it - they compiled the chunks from the bare action bytes, a shape
     // the encoder never emits.
     const carried = Buffer.concat(chunks);
-    let payload;
+    let payload, pushes;
     try {
-        const decompiled = bitcoin.script.decompile(carried);
-        payload = Array.isArray(decompiled) && Buffer.isBuffer(decompiled[0]) ? decompiled[0] : null;
+        pushes = bitcoin.script.decompile(carried);
+        payload = Array.isArray(pushes) && Buffer.isBuffer(pushes[0]) ? pushes[0] : null;
     } catch (e) { payload = null; }
     // Not a decodable push: the chain would read no action out of these bytes
     // at all, so this is a mismatch rather than a pass.
@@ -187,7 +214,7 @@ function verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString, ne
         return { ok: false, reason: REASONS.PAYLOAD_MISMATCH, checked: chunks.length };
 
     const intended = Buffer.from(String(actionString == null ? '' : actionString), 'utf8');
-    if (!payload.equals(intended))
+    if (!payload.equals(intended) || !rawDataMatches(pushes, rawData, rawDataCompressed))
         return { ok: false, reason: REASONS.PAYLOAD_MISMATCH, checked: chunks.length };
 
     return { ok: true, reason: null, checked: chunks.length };

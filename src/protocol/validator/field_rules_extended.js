@@ -161,8 +161,29 @@ function rejectListFields(validator, fields, version, names) {
     return errors;
 }
 
+function validateListSetMetaFields(validator, fields, version) {
+    const errors = [];
+    if (validator.isEmpty(fields.LIST_ACTION_INDEX))
+        errors.push(validator.buildError('MISSING_REQUIRED_FIELD',
+            'LIST v5 (SET META) requires field: LIST_ACTION_INDEX',
+            { field: 'LIST_ACTION_INDEX', version }));
+    else if (!/^[1-9][0-9]*$/.test(String(fields.LIST_ACTION_INDEX)))
+        errors.push(validator.buildError('INVALID_FIELD_VALUE',
+            'LIST v5 (SET META) LIST_ACTION_INDEX must be a positive integer',
+            { field: 'LIST_ACTION_INDEX', value: fields.LIST_ACTION_INDEX, version }));
+    errors.push(...rejectListFields(validator, fields, version,
+        ['EDIT', 'TYPE', 'DESTINATION', 'ITEM']));
+    if (validator.isEmpty(fields.NAME) && validator.isEmpty(fields.DESCRIPTION))
+        errors.push(validator.buildError('INVALID_FIELD_VALUE',
+            'invalid: NAME (no change)',
+            { field: 'NAME', verdict: 'invalid: NAME (no change)', version }));
+    return errors;
+}
+
 function validateListVersionFields(validator, fields) {
-    const version = validator.isEmpty(fields.VERSION) ? null : Number(fields.VERSION);
+    let version = validator.isEmpty(fields.VERSION) ? null : Number(fields.VERSION);
+    if (version === null && (!validator.isEmpty(fields.NAME) || !validator.isEmpty(fields.DESCRIPTION)))
+        version = validator.isEmpty(fields.LIST_ACTION_INDEX) ? 4 : 5;
     const errors = [];
     if (!validator.isEmpty(fields.DESTINATION) && version !== 3)
         errors.push(validator.buildError('INVALID_FIELD_VALUE',
@@ -178,6 +199,15 @@ function validateListVersionFields(validator, fields) {
                 'LIST v2 (SHARE) LIST_ACTION_INDEX must be a positive integer',
                 { field: 'LIST_ACTION_INDEX', value: fields.LIST_ACTION_INDEX, version }));
         errors.push(...rejectListFields(validator, fields, version, ['EDIT', 'TYPE', 'ITEM']));
+        return { handled: true, errors };
+    }
+    if (version === 4) {
+        errors.push(...rejectListFields(validator, fields, version,
+            ['EDIT', 'LIST_ACTION_INDEX', 'DESTINATION']));
+        return { handled: false, errors };
+    }
+    if (version === 5) {
+        errors.push(...validateListSetMetaFields(validator, fields, version));
         return { handled: true, errors };
     }
     if (version !== 3) return { handled: false, errors };

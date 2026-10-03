@@ -15,7 +15,7 @@ function bundleOrderEnforced(network, blockIndex) {
     if (!Number.isFinite(blockIndex)) return false;
     return gateRegistry.activeAt(
         'anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION',
-        network, null, blockIndex, null
+        network, 'DOGE', blockIndex, null
     );
 }
 

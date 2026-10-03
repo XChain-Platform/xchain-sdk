@@ -23,8 +23,16 @@
 
 const { expect } = require('chai');
 const FormatSelector = require('../../../src/protocol/format_selector.js');
+const { PIN_ONLY_VERSIONS } = require('../../../src/protocol/format_selector/field_names.js');
 
 describe('FormatSelector pin-only versions', () => {
+    it('pins LIST versions without changing TYPE and ITEM selection', () => {
+        expect(PIN_ONLY_VERSIONS.LIST).to.deep.equal([2, 3, 4, 5]);
+        expect(Object.isFrozen(PIN_ONLY_VERSIONS.LIST)).to.equal(true);
+
+        expect(FormatSelector.select('LIST', { TYPE: '1', ITEM: ['A'] }).version).to.equal(0);
+    });
+
     it('never auto-selects a pin-only LIST version', () => {
         const fields = { LIST_ACTION_INDEX: '5', MEMO: 'x' };
         expect(FormatSelector.estimateLength('LIST', 2, fields))

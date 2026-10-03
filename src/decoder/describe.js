@@ -44,9 +44,10 @@ const { sanitizeText, formatAmount } = require('./hardening.js');
 const { genericFallback } = require('./describe/value_format.js');
 const { decodeAddress, decodeSend, decodeSweep } = require('./describe/transfers.js');
 const { decodeMint, decodeDestroy, decodeIssue } = require('./describe/token_supply.js');
-const { decodeList, decodeAirdrop, decodeDividend, decodeDispenser } = require('./describe/distributions.js');
+const { decodeList: decodeDistributionList, decodeAirdrop, decodeDividend, decodeDispenser } = require('./describe/distributions.js');
+const { decodeListMetadata } = require('./describe/list_share.js');
 const { decodeOrderSwap, decodeCoinpay, decodePrice, decodeBet } = require('./describe/markets.js');
-const { decodeStake, decodeUnstake, decodeDelegate, decodeVote, decodeDeploy, decodeExecute, decodeContractFunds, decodeCollect } = require('./describe/staking_contracts.js');
+const { decodeStake, decodeUnstake, decodeDelegate, decodeVote, decodeDeploy, decodeExecute, decodeContractFunds, decodeCollect, EXECUTE_NO_DEPOSIT_WARNING } = require('./describe/staking_contracts.js');
 const { decodeBroadcast, decodeMessage, decodeFile, decodeLink, decodeSleep, decodeCallback, decodeXbridge } = require('./describe/messages_bridge.js');
 
 /*
@@ -115,6 +116,11 @@ function describe(parsed, ctx = {}) {
     return harden(decoded, p, ctx);
 }
 
+function decodeList(p, chainSuffix) {
+    const metadata = decodeListMetadata(p, chainSuffix);
+    return metadata || decodeDistributionList(p, chainSuffix);
+}
+
 /*
  * Central display hardening: sanitize every rendered string, flag
  * suspicious amounts, and mark known destinations. Runs on the
@@ -171,6 +177,25 @@ function harden(decoded, p, ctx) {
  * sub-parse renders as an explicit per-command line ("Command 3: ...")
  * without hiding the rest.
  */
+/**
+ * Drop the EXECUTE no-deposit line from a child whose contract an earlier
+ * command deposits into: there the call is funded, and the line would say
+ * the opposite of what the batch does.
+ */
+function withoutFundedExecuteWarnings(commands, children) {
+    const paramsOf = (cmd) => (cmd && typeof cmd === 'object' && (cmd.params || cmd.fields)) || {};
+    const funded = new Set();
+    return children.map((child, i) => {
+        const cmd = commands[i];
+        const contract = String(paramsOf(cmd).CONTRACT_ACTION_INDEX ?? '');
+        let described = child;
+        if (cmd && cmd.action === 'EXECUTE' && funded.has(contract))
+            described = { ...child, warnings: child.warnings.filter((w) => w !== EXECUTE_NO_DEPOSIT_WARNING) };
+        if (cmd && cmd.action === 'DEPOSIT') funded.add(contract);
+        return described;
+    });
+}
+
 function decodeBatch(parsed, p, ctx, chainSuffix) {
     let children = null;
 
@@ -197,6 +222,11 @@ function decodeBatch(parsed, p, ctx, chainSuffix) {
             }
             return describe({ action: cmd.action, params: cmd.params }, ctx);
         });
+    }
+
+    if (children) {
+        const commands = parsed && Array.isArray(parsed.commands) && parsed.commands.length > 0 ? parsed.commands : p.COMMANDS;
+        children = withoutFundedExecuteWarnings(commands, children);
     }
 
     if (!children || children.length === 0) {

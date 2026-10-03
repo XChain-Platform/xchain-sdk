@@ -11,6 +11,7 @@
 const {
     expect,
     CoSigner,
+    decodeActionFromPsbt,
     evaluatePolicy,
     valueDerivability,
     makeAccount,
@@ -154,6 +155,42 @@ describe('G2: value-derivability allowlist', function () {
             return !byAction || byAction[String(version)] === undefined;
         });
         expect(unclassified.map((f) => `${f.action} v${f.version}`)).to.deep.equal([]);
+    });
+
+    it('classifies LIST metadata formats as moving no amount', function () {
+        for (const version of [4, 5]) {
+            const classification = valueDerivability.classify('LIST', version, {});
+            expect(classification.class, `LIST v${version}`).to.equal(valueDerivability.NONE);
+            expect(classification.byRef, `LIST v${version}`).to.equal(false);
+        }
+    });
+
+    it('decodes bounded LIST v4 metadata creates for policy evaluation', function () {
+        const decoded = decodeActionFromPsbt(buildSignablePsbt(makeAccount(),
+            'LIST|4|1|Tokens|Official||JDOG'));
+        expect(decoded.ok).to.equal(true);
+        expect(decoded.action).to.equal('LIST');
+        expect(decoded.version).to.equal(4);
+        expect(decoded.params.ITEM).to.deep.equal(['JDOG']);
+
+        const tooMany = new Array(33).fill('JDOG').join('|');
+        const refused = decodeActionFromPsbt(buildSignablePsbt(makeAccount(),
+            'LIST|4|1|Tokens|Official||' + tooMany));
+        expect(refused.ok).to.equal(false);
+        expect(refused.reason).to.equal('REST_FIELD_TOO_LONG');
+    });
+});
+
+describe('G2: value-derivability allowlist', function () {
+
+    it('admits LIST v4 in the decoder itself, not only once the policy module loads', function () {
+        // A fresh process loads only the decoder, so an entry added to its
+        // allowlist from any other module would not be seen here.
+        const decoder = require.resolve('../../../../src/cosigner/psbt_action_decode.js');
+        const out = require('child_process').execFileSync(process.execPath, ['-e',
+            'process.stdout.write(String(require(' + JSON.stringify(decoder) +
+            ').BOUNDED_REST_FORMATS.has("LIST 4")))']).toString();
+        expect(out).to.equal('true');
     });
 });
 

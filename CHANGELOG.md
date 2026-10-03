@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.3] - 2026-10-03
+
+### Added
+- Added light-client parsing and canonical ordering for folded anchor bundles.
+- Exposed transaction block lookup through the encoder client.
+- Added coin-qualified LIST tickers, ticker list compaction and bounded LIST activation reads.
+- Added LIST formats and validation for list names and descriptions.
+
+### Changed
+- Documented controller custody routing in SDK preflight checks.
+- Armed ANCHOR_BUNDLE_ORDER_ACTIVATION on BTC:testnet at 155001.
+- Armed ANCHOR_BUNDLE_ORDER_ACTIVATION on LTC:testnet at 4906040.
+- Armed ANCHOR_BUNDLE_ORDER_ACTIVATION on DOGE:testnet at 67962387.
+- Armed PRICE_V1_CANONICAL_ACTIVATION on BTC:testnet at 1791061097.
+- Armed PRICE_V1_CANONICAL_ACTIVATION on LTC:testnet at 1791061097.
+- Armed PRICE_V1_CANONICAL_ACTIVATION on DOGE:testnet at 1791061097.
+- Armed STAKE_WEIGHT_COLLATION_ACTIVATION on BTC:testnet at 155001.
+- Armed STAKE_WEIGHT_COLLATION_ACTIVATION on LTC:testnet at 4906040.
+- Armed STAKE_WEIGHT_COLLATION_ACTIVATION on DOGE:testnet at 67962387.
+- Armed ANCHOR_FOLD_ACTIVATION on BTC:testnet at 155001.
+- Armed ANCHOR_FOLD_ACTIVATION on LTC:testnet at 4906040.
+- Armed ANCHOR_FOLD_ACTIVATION on DOGE:testnet at 67962387.
+- Armed ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION on BTC:testnet at 155001.
+- Armed ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION on LTC:testnet at 4906040.
+- Armed ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION on DOGE:testnet at 67962387.
+- Armed LIST_META_ACTIVATION on BTC:testnet at 155001.
+- Armed LIST_META_ACTIVATION on LTC:testnet at 4906040.
+- Armed LIST_META_ACTIVATION on DOGE:testnet at 67962387.
+
+### Fixed
+- Restored separate token activation sentinels for each testnet chain.
+
 ## [0.21.1] - 2026-10-01
 
 ### Added

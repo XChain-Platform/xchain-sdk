@@ -131,6 +131,20 @@ describe('AuthUtils', function() {
 
 });
 
+// A witness program is anyone-can-spend on DOGE, so both segwit modes must refuse there
+describe('AuthUtils signMessage() segwit options on a non-segwit network', function() {
+    for (const opts of [{ segwitRedeemScript: true }, { segwitNative: true }]) {
+        it(`refuses ${Object.keys(opts)[0]} on dogecoin, instance and per-call network`, function() {
+            const dogeWif = new WalletUtils('dogecoin-regtest').generateKeyPair().wif;
+            const code = (fn) => { try { fn(); return 'NO THROW'; } catch (e) { return e.code; } };
+            expect(code(() => new AuthUtils('dogecoin-regtest').signMessage('m', dogeWif, opts)))
+                .to.equal('SEGWIT_NOT_SUPPORTED');
+            expect(code(() => new AuthUtils('bitcoin-regtest').signMessage('m', dogeWif,
+                Object.assign({ network: 'dogecoin-regtest' }, opts)))).to.equal('SEGWIT_NOT_SUPPORTED');
+        });
+    }
+});
+
 describe('AuthUtils', function() {
 
     describe('verifyOwnership() - failure cases', function() {

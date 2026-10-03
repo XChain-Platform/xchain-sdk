@@ -78,7 +78,7 @@ function one(acct, index = 0) {
 describe('G9: allowedDestinations enforceability', function () {
 
     it('denies an action whose format carries no DESTINATION field', function () {
-        // Only 8 of the 70 decodable formats carry DESTINATION. For every other one
+        // Only 8 of the 72 decodable formats carry DESTINATION. For every other one
         // the destination list was EMPTY and the membership loop was vacuously
         // satisfied, so every trade, dispenser, staking and escrow action sailed
         // through a setting the operator reads as "can only pay these addresses".
@@ -95,7 +95,7 @@ describe('G9: allowedDestinations enforceability', function () {
         expect(res.reason).to.equal('POLICY_DESTINATION_UNENFORCEABLE');
     });
 
-    it('pins the 8-of-70 figure the G9 rationale quotes, derived from the format table', function () {
+    it('pins the 8-of-72 figure the G9 rationale quotes, derived from the format table', function () {
         // The comment in policy_evaluator.js sizes how little of the policy
         // surface allowedDestinations binds, and a hand-counted figure drifts
         // the moment a format gains or loses a DESTINATION field. Derive both
@@ -108,9 +108,10 @@ describe('G9: allowedDestinations enforceability', function () {
             .filter((f) => formatCarriesDestination(f.action, f.version))
             .map((f) => `${f.action} v${f.version}`)
             .sort();
-        // LIST v2 and v3 move the denominator from 68 to 70. LIST v3 also moves
-        // the numerator because its ownership recipient is a DESTINATION field.
-        expect(decodable.length).to.equal(70);
+        // LIST v2-v5 move the decoder-reachable denominator from 68 to 72. LIST
+        // v3 also moves the numerator because its ownership recipient is a
+        // DESTINATION field; bounded-rest v4 and fixed-field v5 carry none.
+        expect(decodable.length).to.equal(72);
         expect(carriers).to.deep.equal([
             'LIST v3',
             'MESSAGE v0', 'MESSAGE v1', 'MESSAGE v2', 'MESSAGE v3',

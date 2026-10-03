@@ -41,10 +41,10 @@
  * an escrow the bridge alone may create. The third is ACTIVATION-KEYED
  * and creation-only: at/above the tick-namespace flag-day a NEW
  * top-level name shorter than four characters, or one held for a
- * chain the platform may integrate later, is refused. Mainnet and
- * testnet are not armed for it and pre-flight cannot read the
- * including block's height, so it is a warning that names the
- * condition, the same treatment as the dispenser GIVE_AMOUNT rule.
+ * chain the platform may integrate later, is refused. It is armed per
+ * testnet chain only (ACTIVATION_MIRRORS.TICK_NAMESPACE) and pre-flight
+ * cannot read the including block's height, so it is a warning naming
+ * the pinned heights, the same treatment as the dispenser GIVE_AMOUNT rule.
  *
  * ISSUE FORMAT 7 is the issuer's bridge opt-in (BRIDGE_CHAINS,
  * MIN_DEPTH, LOCK_BRIDGE). Below the token-bridge activation the
@@ -61,7 +61,7 @@
 'use strict';
 
 const {
-    FINDING_CODES, MIN_NEW_TOP_LEVEL_TICK_LENGTH, RESERVED_FUTURE_ROOTS,
+    FINDING_CODES, MIN_NEW_TOP_LEVEL_TICK_LENGTH, RESERVED_FUTURE_ROOTS, describeActivation, describeActivationHere,
 } = require('../constants.js');
 const numeric = require('../numeric.js');
 const { tokenField } = require('./mint.js');
@@ -189,8 +189,8 @@ function checkTickRules(ctx, tick, token) {
         (isFuture
             ? `${tick} is held for a chain the platform may integrate later; `
             : `${tick} is shorter than ${MIN_NEW_TOP_LEVEL_TICK_LENGTH} characters; `)
-        + 'at or above the tick-namespace activation the indexer refuses a new top-level name like this, '
-        + 'and neither mainnet nor testnet is armed for it.',
+        + 'at or above the tick-namespace activation the indexer refuses a new top-level name like this; '
+        + describeActivationHere('TICK_NAMESPACE', ctx.sdk) + '.',
         { tick, rule: isFuture ? 'reserved-root' : 'length' });
 }
 
@@ -244,8 +244,8 @@ function checkBridgeOptIn(ctx, tick, token) {
 
     ctx.addUnverified('ISSUE_BRIDGE_ACTIVATION',
         'ISSUE format 7 exists only at or above the token-bridge activation of the including block, and '
-        + 'below it the indexer answers VERSION (unknown); the activation state is server-side only, and '
-        + 'neither mainnet nor testnet is armed for it');
+        + 'below it the indexer answers VERSION (unknown); pre-flight cannot read the including block height, '
+        + 'and the activation is ' + describeActivation('TOKEN_BRIDGE'));
 
     // Format 7 edits an existing row and carries no creation fields, so an unknown
     // tick is a refusal, never a create. Universal skips the token-exists check for

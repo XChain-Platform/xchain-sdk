@@ -434,7 +434,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `1d5869c477a5670c76b5c64ca893044ce67910310e716f7156220f87819e8974` |
 | `checks/mint.js` | `src/actions/mint/` | `caf6f7e7bfc0ffac865ae76fbc5d36123be77db09df81f617c3a6fc9304554cd` |
 | `checks/issue.js` | `src/actions/issue/` | `02db2deb36967b65d673f5010806ca703b231c1fb22b9c0196b53a6e91d28500` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `fb0f32cd0721236f03d06adc22a2ba63fa2f9955bf686dab76acaec8ca9b8432` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `f92e12188b6b557cd151ef06941fab3d9357d5d9410844df5ba13282ddbc81af` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `34cec38417f2fb43867dcc5810d980d3d15a1fabc513d47c6541bb81de8e5260` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `7518413cb97ece320a481859d8227756c3627d1bb2891da63153b54ea2de71df` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `3572ba88cb701624a841a1e089d9c848d4cd37542fa7916f63ca41c7bd6d5e43` |
@@ -463,6 +463,20 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-01 - tick-namespace and token-bridge arming now pinned by value
+
+No handler diff; this entry reads two registry rows. The v0.21.0 freeze height plan
+arms `TICK_NAMESPACE_ACTIVATION` (`gates_3.js`) and `TOKEN_BRIDGE_ACTIVATION`
+(`shared_rows_4.js`) at `BTC:testnet` 154567, `LTC:testnet` 4903068 and `DOGE:testnet`
+67951140, with mainnet and the bare testnet key at the sentinel and regtest at 0. That
+supersedes the "neither mainnet nor testnet is armed" readings in the 2026-09-29 and
+2026-09-12 entries for these two rows. Both tables are now pinned in
+`ACTIVATION_MIRRORS` and bound by value by the drift gate, whose parser reads the
+literal 9999999999 as `UNARMED`. `checks/issue.js` builds the TICK_FORMAT namespace
+warning and the `ISSUE_BRIDGE_ACTIVATION` note from those tables, so the text moves
+with the pinned heights. Severity is unchanged: pre-flight still cannot read the
+including block's height.
 
 ### 2026-10-01 - coin-qualified LIST items and their ISSUE and AIRDROP consumers
 

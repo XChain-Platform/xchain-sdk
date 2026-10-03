@@ -41,7 +41,7 @@
 'use strict';
 
 const { str, toArray } = require('./value_format.js');
-const { decodeUnionListCreate, decodeListShare, decodeListTransfer } = require('./list_share.js');
+const { decodeUnionListCreate, decodeListShare, decodeListTransfer, decodeListSetMeta } = require('./list_share.js');
 const numberFormat = require('../../utils/utility/number_format.js');
 
 // Describe v0 LIST creates as VERSION|TYPE|MEMO|ITEM, with ITEM repeating.
@@ -49,6 +49,16 @@ const numberFormat = require('../../utils/utility/number_format.js');
 
 // Describe v1 LIST edits as VERSION|EDIT|LIST_ACTION_INDEX|MEMO|ITEM.
 // Clone the existing list, then add with EDIT 1 or remove with EDIT 2.
+
+// An item-less edit with a memo is valid on chain (same members, new memo);
+// it read as "Add ? items" with a "no items" warning.
+function decodeListMemoEdit(parent, memo, chainSuffix) {
+    return {
+        summary: `Update the memo on list #${parent}${chainSuffix}`,
+        details: [{ label: 'Edit', value: 'Memo only (members unchanged)' }, { label: 'Memo', value: memo }],
+        warnings: [],
+    };
+}
 
 function decodeList(p, chainSuffix) {
     const version = str(p.VERSION) || '0';
@@ -58,12 +68,15 @@ function decodeList(p, chainSuffix) {
 
     if (version === '2') return decodeListShare(p);
     if (version === '3') return decodeListTransfer(p);
+    if (version === '4') return require('./list_meta_create.js').decodeListCreateMeta(p, chainSuffix);
+    if (version === '5') return decodeListSetMeta(p);
 
     if (version === '1') {
         const edit = str(p.EDIT);
         const parent = str(p.LIST_ACTION_INDEX);
         const verb = edit === '1' ? 'Add' : edit === '2' ? 'Remove' : 'Edit';
         const prep = edit === '2' ? 'from' : 'to';
+        if (count === 0 && memo && parent) return decodeListMemoEdit(parent, memo, chainSuffix);
         const summary = `${verb} ${count || '?'} item${count === 1 ? '' : 's'} ${prep} list${parent ? ` #${parent}` : ''}${chainSuffix}`;
         return {
             summary,

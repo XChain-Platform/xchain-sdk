@@ -34,8 +34,8 @@ describe('ANCHOR bundle order enforcement helper', function () {
         assert.strictEqual(bundleOrderEnforced('regtest', 70000000), true);
     });
 
-    it('is inactive on unarmed networks', function () {
-        assert.strictEqual(bundleOrderEnforced('testnet', 70000000), false);
+    it('is inactive on unarmed networks and armed on testnet from the v0.21.3 DOGE height', function () {
+        assert.strictEqual(bundleOrderEnforced('testnet', 70000000), true);
         assert.strictEqual(bundleOrderEnforced('mainnet', 70000000), false);
     });
 

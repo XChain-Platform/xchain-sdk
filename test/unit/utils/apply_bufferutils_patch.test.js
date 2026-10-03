@@ -163,3 +163,38 @@ describe('applyBufferutilsPatch', function () {
         });
     });
 });
+
+// Fee-accounting wrapper, large all-Number totals: each value is a safe Number but the
+// inputs sum past 2^53-1, where stock Number '+' rounds without throwing.
+describe('applyBufferutilsPatch', function () {
+    const { Psbt } = require('bitcoinjs-lib');
+
+    function multiPsbt(inputValues, outputValues, finalize = true) {
+        const psbt = new Psbt();
+        inputValues.forEach((value, i) => psbt.addInput({
+            hash: Buffer.alloc(32, i + 1), index: 0,
+            witnessUtxo: { script: Buffer.from('0014' + '11'.repeat(20), 'hex'), value }
+        }));
+        outputValues.forEach(value => psbt.addOutput({ script: Buffer.from('0014' + '22'.repeat(20), 'hex'), value }));
+        if (finalize) inputValues.forEach((_, i) => psbt.updateInput(i, { finalScriptWitness: Buffer.from([0]) }));
+        return psbt;
+    }
+    const BIG_INS = [4503599627370497, 4503599627370498];   // 2^52+1, 2^52+2: total 2^53+3
+
+    it('computes an exact fee when all-Number totals pass 2^53-1', function () {
+        assert.strictEqual(multiPsbt(BIG_INS, [9007199254740000]).getFee(), 995);
+        assert.strictEqual(multiPsbt(BIG_INS, [4503599627370496, 4503599627370497]).getFee(), 2);
+        assert.ok(multiPsbt(BIG_INS, [9007199254740000]).extractTransaction());
+    });
+
+    it('refuses an all-Number PSBT whose exact outputs exceed its inputs past 2^53-1', function () {
+        const outs = [4503599627370498, 4503599627370498];   // true fee is -1, rounded fee is 0
+        assert.throws(() => multiPsbt(BIG_INS, outs).getFee(), /Outputs are spending more than Inputs/);
+        assert.throws(() => multiPsbt(BIG_INS, outs).extractTransaction(), /Outputs are spending more than Inputs/);
+    });
+
+    it('leaves an unfinalized large-total PSBT to stock\'s own error', function () {
+        assert.throws(() => multiPsbt(BIG_INS, [9007199254740000], false).getFee(),
+            /PSBT must be finalized to calculate fee/);
+    });
+});

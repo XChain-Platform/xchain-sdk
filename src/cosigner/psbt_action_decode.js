@@ -102,8 +102,13 @@ const VALUE_FIELDS = new Set(['TICK', 'AMOUNT', 'DESTINATION']);
  * into unbounded work (the same class of concern as G14).
  */
 const MAX_REST_PARAMS = 32;
+// LIST v4 (CREATE WITH META) is admitted because its ITEMs are list members
+// (tokens or addresses), never TICK, AMOUNT or DESTINATION, and LIST v4 is
+// classified NONE in value_derivability.js, so no amount cap ever reads them.
+// Its rest field is arity-bounded like EXECUTE's.
 const BOUNDED_REST_FORMATS = new Map([
     ['EXECUTE 0', { restField: '...PARAMS', maxParams: MAX_REST_PARAMS }],
+    ['LIST 4',    { restField: '...ITEM',   maxParams: MAX_REST_PARAMS }],
 ]);
 
 function boundedRestFormat(action, version) {

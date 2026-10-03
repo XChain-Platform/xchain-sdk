@@ -492,6 +492,7 @@ function checkListMirrors(indexerRoot) {
 
 // Compare each ACTIVATION_MIRRORS table with its indexer addGate row by value, since no mapped hash
 // covers it; fail closed unless the key appears once and every value is UNARMED or an integer.
+// The literal 9999999999 reads as UNARMED, since the indexer defines UNARMED as that height (core.js).
 function parseAddGateTable(body, key, where) {
     const table = {};
     const text = body.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
@@ -499,7 +500,7 @@ function parseAddGateTable(body, key, where) {
         const m = /^(?:'([^']+)'|"([^"]+)"|([A-Za-z_$][\w$]*))\s*:\s*(UNARMED|\d+)$/.exec(part);
         if (!m) throw new Error(`drift-gate: cannot read the ${key} entry "${part}" in ${where}; `
             + 'only UNARMED or an integer literal is understood, so a new arming style must be taught here first.');
-        table[m[1] || m[2] || m[3]] = m[4] === 'UNARMED' ? 'UNARMED' : Number(m[4]);
+        table[m[1] || m[2] || m[3]] = (m[4] === 'UNARMED' || m[4] === '9999999999') ? 'UNARMED' : Number(m[4]);
     }
     if (!Object.keys(table).length) throw new Error(`drift-gate: ${key} in ${where} read as an EMPTY table.`);
     return table;
