@@ -39,20 +39,20 @@ const ACTIVATION_MIRRORS = Object.freeze({
     LIST_REFERENCE_VALIDITY: Object.freeze({
         key: 'list_reference_validity_activation.LIST_REFERENCE_REQUIRES_VALID_LIST',
         unit: 'height',
-        table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 'UNARMED', 'LTC:testnet': 'UNARMED',
-            'DOGE:testnet': 'UNARMED', testnet: 'UNARMED', regtest: 0 }),
+        table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 154939, 'LTC:testnet': 4905307,
+            'DOGE:testnet': 67960786, testnet: 'UNARMED', regtest: 0 }),
     }),
     LIST_META: Object.freeze({
         key: 'list_meta_activation.LIST_META_ACTIVATION',
         unit: 'height',
-        table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 'UNARMED', 'LTC:testnet': 'UNARMED',
-            'DOGE:testnet': 'UNARMED', testnet: 'UNARMED', regtest: 0 }),
+        table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 154939, 'LTC:testnet': 4905307,
+            'DOGE:testnet': 67960786, testnet: 'UNARMED', regtest: 0 }),
     }),
     DISPENSER_SETTLEMENT_PRICE: Object.freeze({
         key: 'dispenser_settlement_price_activation.DISPENSER_SETTLEMENT_PRICE_ACTIVATION',
         unit: 'time',
-        table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 'UNARMED', 'LTC:testnet': 'UNARMED',
-            'DOGE:testnet': 'UNARMED', testnet: 'UNARMED', regtest: 0 }),
+        table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 1791019443, 'LTC:testnet': 1791019443,
+            'DOGE:testnet': 1791019443, testnet: 'UNARMED', regtest: 0 }),
     }),
     TICK_NAMESPACE: Object.freeze({
         key: 'tick_namespace_activation.TICK_NAMESPACE_ACTIVATION',

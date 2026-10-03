@@ -308,6 +308,9 @@ const ANCHOR_ACTIVATION = {
 
 const ARCHIVE_MATCH_COUNT_ACTIVATION = {
     mainnet: 9999999999,
+    'BTC:testnet': 154939,
+    'LTC:testnet': 4905307,
+    'DOGE:testnet': 67960786,
     testnet: 9999999999,
     regtest: 0,
 };
