@@ -27,7 +27,7 @@ function waiterOf(overrides) {
     return hooks;
 }
 
-describe('contract value helpers', function () {
+describe('contract value parsing', function () {
     it('rowsOf unwraps arrays and data envelopes', function () {
         const arr = [1];
         assert.strictEqual(rowsOf(arr), arr);
@@ -46,6 +46,9 @@ describe('contract value helpers', function () {
         assert.strictEqual(parseStateValue(obj), obj);
     });
 
+});
+
+describe('contract state normalization', function () {
     it('normalizeContractState reads rows by either key pair', function () {
         const state = normalizeContractState(mod, [
             { state_key: 'a', state_value: '1' },
@@ -72,6 +75,9 @@ describe('contract value helpers', function () {
         assert.strictEqual(Object.getPrototypeOf(state), null);
     });
 
+});
+
+describe('contract state reads', function () {
     it('readContractStateValue reads row values', function () {
         const rows = [{ state_key: 'a', state_value: '1' }];
         const waiter = waiterOf();
@@ -87,6 +93,9 @@ describe('contract value helpers', function () {
         assert.strictEqual(readContractStateValue(mod, null, 'k'), undefined);
     });
 
+});
+
+describe('contract quantity and amount helpers', function () {
     it('readContractQuantity matches rows by tick and stringifies', function () {
         const rows = [{ tick: 'AAA', quantity: 5 }, { TICK: 'BBB', amount: 1.5 }];
         assert.strictEqual(readContractQuantity(mod, rows, 'AAA'), '5');
@@ -102,6 +111,9 @@ describe('contract value helpers', function () {
         assert.strictEqual(compareAmount('x', '1'), -1);
     });
 
+});
+
+describe('contract value hooks', function () {
     it('routes through the hooks on the object passed as ActionWaiter', function () {
         const hooks = waiterOf({ rowsOf: () => [{ key: 'z', value: '9' }] });
         assert.strictEqual(readContractStateValue(hooks, 'ignored', 'z'), 9);
