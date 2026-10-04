@@ -8,7 +8,7 @@ const { dispenserAction, expect, has, reportFor } = require('./helpers/setup.js'
     // An ownership dispenser never holds balance escrow, on edit as on create.
     // The create-time half is authoring-only and already lives in validator.js;
     // an EDIT never restates GIVE_OWNERSHIP, so only a state lookup can see it
-    // (xchain-indexer src/actions/dispenser.js).
+    // (xchain-indexer src/actions/dispenser/).
 describe('pre-flight Tier-2 per-action matrix', function () {
 
     describe('DISPENSER ownership-escrow edit', function () {
