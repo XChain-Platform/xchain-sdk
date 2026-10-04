@@ -22,7 +22,9 @@ const {
     unknownStatusError,
     confirmationTimeoutError,
     actionRejectedError,
-    classifyTargetedEvent
+    targetedEventResult,
+    classifyTargetedEvent,
+    unknownStatusWarning
 } = require('../../../../src/utils/action_waiter/transaction_result.js');
 
 const sameWireIndex = (left, right) => left === right;
@@ -74,6 +76,22 @@ describe('transaction result classification', function () {
 });
 
 describe('targeted event classification', function () {
+    it('copies and annotates a targeted event result', function () {
+        const data = { action_index: 2, status: ' pending ', value: 10 };
+        const result = targetedEventResult(data, 'pending');
+
+        assert.notStrictEqual(result, data);
+        assert.deepStrictEqual(result, {
+            action_index: 2,
+            status: 'pending',
+            value: 10,
+            statusKnown: true,
+            statusSource: 'indexer',
+            statusUnknownActions: []
+        });
+        assert.strictEqual(data.status, ' pending ');
+    });
+
     it('ignores an event for another action index', function () {
         assert.deepStrictEqual(classifyTargetedEvent(
             { action_index: 1, status: 'valid' }, 2, true, 'txid', sameWireIndex
@@ -126,5 +144,14 @@ describe('transaction result errors', function () {
             'ACTION_REJECTED'
         ]);
         errors.forEach(error => assert.ok(error instanceof SDKActionError));
+    });
+});
+
+describe('transaction result warnings', function () {
+    it('builds the assumed-status warning', function () {
+        assert.strictEqual(unknownStatusWarning('txid', [3, 5]),
+            '[xchain-sdk] the indexer reported no status for action(s) [3,5] ' +
+            'of transaction txid; reporting status=valid is an ASSUMPTION ' +
+            '(result.statusKnown=false). Pass strictStatus:true to fail closed instead.');
     });
 });
