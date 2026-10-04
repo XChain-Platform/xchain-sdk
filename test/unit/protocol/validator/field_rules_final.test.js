@@ -50,6 +50,10 @@ describe('final field validators', function () {
         expect(validate(FIELD_VALIDATORS[0], { field: 'COIN', value: 'BTC,XXX' })).to.deep.equal([]);
     });
 
+});
+
+describe('final numeric field validators', function () {
+
     it('accepts a whole-number minimum depth', function () {
         expect(validate(FIELD_VALIDATORS[1], { field: 'MIN_DEPTH', value: '12' })).to.deep.equal([]);
     });
