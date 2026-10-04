@@ -107,7 +107,7 @@ const REPORT_SCHEMA_VERSION = 1;
 // be CHECKED client-side (no endpoint exposes per-edit give_escrow, see
 // checks/dispenser.js), so this exists only to name the number in the
 // unverified declaration. The authoritative value is config['MAX_REFILLS']
-// in xchain-indexer/src/config.js, which src/actions/dispenser.js only READS
+// in xchain-indexer/src/config.js, which src/actions/dispenser/ only READS
 // by symbol, so that handler's mapped hash never moves when the cap does;
 // checkConfigConstants in bin/check-preflight-drift.js is what catches a
 // change to it, by value.
@@ -165,7 +165,7 @@ const FINDING_CODES = Object.freeze({
     DRYRUN_SUBCOMMAND_INVALID:  'DRYRUN_SUBCOMMAND_INVALID',
     DRYRUN_SUBCOMMAND_UNJUDGED: 'DRYRUN_SUBCOMMAND_UNJUDGED',
     // Oracle usage fees the arbiter DISCLOSES rather than judges for a batch's
-    // Mode B DISPENSER sub-commands (indexer actions/dispenser.js): a probe carries
+    // Mode B DISPENSER sub-commands (indexer src/actions/dispenser/): a probe carries
     // no outputs, so it reports the total owed per oracle instead of a verdict.
     DRYRUN_ORACLE_FEES_OWED:    'DRYRUN_ORACLE_FEES_OWED',
     // Certified Tier-2 (error-capable; §4.4 error column verbatim)
