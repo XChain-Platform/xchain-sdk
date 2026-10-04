@@ -15,7 +15,7 @@
  * Pre-flight Tier-2 DISPENSER amount rules: the activation-gated GIVE_AMOUNT
  * and GET_AMOUNT checks on a create, the amount-representability declaration,
  * and the stored-price check on a DISPENSE. Required by checks/dispenser.js;
- * mirrors xchain-indexer src/actions/dispenser.js and src/actions/dispense.js.
+ * mirrors xchain-indexer src/actions/dispenser/ and src/actions/dispense.js.
  *
  ********************************************************************/
 
@@ -49,7 +49,7 @@ function isSelfPriced(fiatCode, oracleAddress) {
 }
 
 // A balance dispenser must hand out something. Mirrors the Format-0
-// create rule in xchain-indexer/src/actions/dispenser.js: an absent or
+// create rule in xchain-indexer/src/actions/dispenser/: an absent or
 // non-positive GIVE_AMOUNT with GIVE_OWNERSHIP=0 opens a dispenser that
 // settles buyer payments as VALID fills crediting nothing, because every
 // downstream guard reads a non-positive GIVE_AMOUNT as "ownership
@@ -76,7 +76,7 @@ function checkGiveAmount(ctx) {
 }
 
 // A dispenser that names its own price must name a positive, well-formed
-// one. Mirrors the two Format-0 rules xchain-indexer/src/actions/dispenser.js
+// one. Mirrors the two Format-0 rules xchain-indexer/src/actions/dispenser/
 // enforces behind the registry row dispenser_amount_positivity_activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION
 // (xchain-indexer src/protocol_changes/gates_1.js): a native-coin-priced
 // GET_AMOUNT (empty GET_TICK) is checked against COIN_DECIMALS, which the
