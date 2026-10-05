@@ -140,14 +140,14 @@ describe('bin/suite-title-map.js: structured renames', () => {
     };
 
     it('accepts a declared path and title rename', () => {
-        const pin = titleMap('old.js', 'old', ['old title']);
-        const fresh = titleMap('new.js', 'fresh', ['new title']);
+        const pin = titleMap('old.js', 'old', ['old title', 'stable title']);
+        const fresh = titleMap('new.js', 'fresh', ['new title', 'stable title']);
         assert.deepStrictEqual(compare(pin, fresh, renames), []);
     });
 
     it('reports an actual title that differs from the declared rename', () => {
-        const pin = titleMap('old.js', 'old', ['old title']);
-        const fresh = titleMap('new.js', 'fresh', ['unexpected title']);
+        const pin = titleMap('old.js', 'old', ['old title', 'stable title']);
+        const fresh = titleMap('new.js', 'fresh', ['unexpected title', 'stable title']);
         assert.deepStrictEqual(compare(pin, fresh, renames), [
             { script: 'test', kind: 'title_dropped', file: 'new.js', title: 'new title' },
             { script: 'test', kind: 'title_added', file: 'new.js', title: 'unexpected title' },
