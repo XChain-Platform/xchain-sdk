@@ -194,7 +194,7 @@ describe('drift map rows: a directory handler is hashed whole', function () {
         for (const part of dirs.listParts(dir)) {
             const abs = path.join(dir, part);
             const original = fs.readFileSync(abs);
-            fs.writeFileSync(abs, Buffer.concat([original, Buffer.from('// edited\n')]));
+            fs.writeFileSync(abs, Buffer.concat([original, Buffer.from('module.exports.edited = 1;\n')]));
             expect(pinOf(root, 'src/actions/batch/'), `editing ${part} must move the pin`).to.not.equal(pinned);
             fs.writeFileSync(abs, original);
             expect(pinOf(root, 'src/actions/batch/'), `restoring ${part} must restore the pin`).to.equal(pinned);
@@ -205,7 +205,7 @@ describe('drift map rows: a directory handler is hashed whole', function () {
         const root = tempRoot();
         const dir = splitHandler(root, 'batch');
         const pinned = row('src/actions/batch/', pinOf(root, 'src/actions/batch/'));
-        fs.appendFileSync(path.join(dir, 'fees.js'), '// a rule changed here\n');
+        fs.appendFileSync(path.join(dir, 'fees.js'), 'module.exports.edited = 1;\n');
         const { missing, drift } = dirs.compareRows(root, [pinned]);
         expect(missing).to.deep.equal([]);
         expect(drift).to.have.lengthOf(1);
