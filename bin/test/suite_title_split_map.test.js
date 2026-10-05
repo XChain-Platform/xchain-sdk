@@ -133,7 +133,7 @@ describe('bin/suite-title-map.js: flat path renames', () => {
     });
 });
 
-describe('bin/suite-title-map.js: structured renames', () => {
+describe('suite-title-map structured renames', () => {
     const renames = {
         paths: { 'old.js': 'new.js' },
         titles: { 'new.js': { 'old title': 'new title' } },
