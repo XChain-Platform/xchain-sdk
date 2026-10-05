@@ -14,6 +14,9 @@
     "url": "git+https://github.com/XChain-Platform/xchain-sdk.git",
     "directory": "mcp"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "comment:files": "Publish allowlist: the server is two files. README/LICENSE/package.json ship automatically.",
   "files": [
     "cli.js",
