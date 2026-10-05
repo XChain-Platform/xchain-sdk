@@ -60,16 +60,28 @@ describe('BatchBuilder – VM actions', function () {
         expect(result.actionString).to.include('WITHDRAW|0|42|TOKEN|250');
     });
 
-    it('rejects DEPLOY in BATCH', async function () {
+    // build() is async, so a synchronous expect(...).to.throw() never sees the
+    // BATCH_CONSTRAINT: it inspected a returned promise, found no throw, and
+    // failed while the rule was working perfectly. Await the rejection instead.
+    it('allows exactly one DEPLOY in BATCH', async function () {
+        let result = await sdk.batch()
+            .add('DEPLOY', { code: 'x', gasLimit: 100000 })
+            .build();
+        expect(result.action).to.equal('BATCH');
+        expect(result.actionString).to.include('DEPLOY|0|');
+    });
+
+    it('rejects two DEPLOYs in BATCH', async function () {
         let caught = null;
         try {
             await sdk.batch()
                 .add('DEPLOY', { code: 'x', gasLimit: 100000 })
+                .add('DEPLOY', { code: 'y', gasLimit: 100000 })
                 .build();
         } catch (err) {
             caught = err;
         }
-        expect(caught, 'DEPLOY in a BATCH must be refused').to.be.instanceOf(SDKValidationError);
+        expect(caught, 'a second DEPLOY in a BATCH must be refused').to.be.instanceOf(SDKValidationError);
         expect(caught.code).to.equal('BATCH_CONSTRAINT');
         expect(caught.message).to.match(/DEPLOY/);
     });

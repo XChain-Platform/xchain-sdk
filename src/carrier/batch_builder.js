@@ -30,14 +30,15 @@ const {
     paramsTick,
 } = require('../protocol/batch_limits.js');
 
+// Wording for the per-ACTION caps this builder enforces, keyed the same way
+// batchLimits keys them. The LIMITS live in the shared mirror so a future
+// change lands once; only the sentence a caller reads lives here.
 const LIMIT_MESSAGES = {
     BATCH:  'BATCH cannot contain nested BATCH actions',
-    DEPLOY: 'BATCH cannot contain DEPLOY actions',
+    DEPLOY: 'BATCH can contain at most 1 DEPLOY action',
     MINT:   'BATCH can contain at most 1 MINT action per distinct TICK',
     ISSUE:  'BATCH can contain at most 1 top-level ISSUE action (child TICKs like JDOG.1 are exempt)',
 };
-const BUILDER_ACTION_LIMITS = Object.freeze(
-    Object.assign({}, BATCH_ACTION_LIMITS_ACTIVE, { DEPLOY: 0 }));
 
 // BATCH_COST_WEIGHTING: the WEIGHTED budget, in the arbiter's own
 // position - immediately after the count and before every per-ACTION
@@ -111,9 +112,20 @@ function tallyActionKeys(actions) {
     return { counts, mintTicks, fileCount, keyOrder };
 }
 
+// The caps themselves come from the shared mirror, so a limit change (or
+// a new capped action) lands in batch_limits.js alone. Iterated over the
+// OBSERVED keys in FIRST-APPEARANCE order (spec R2b), the arbiter's own
+// rule, rather than a precedence this builder invents. Worth stating where a caller reads these throws:
+// BATCH_ISSUANCE_LIMITS is ARMED on every network (mainnet at
+// 2026-08-16T00:00:00Z, testnet and regtest at genesis), so the
+// LOOSENINGS this enforces (a parent plus children, MINTs of several
+// distinct tokens) are accepted on chain as well. Below the mainnet
+// instant they are rejected on chain; the DEPLOY cap is the one rule
+// both sides of the flag agree on, since the chain never caps DEPLOY
+// below it and at most 1 is accepted either way.
 function assertActionCaps(keyOrder, counts, mint) {
     for (let key of keyOrder) {
-        let limit = BUILDER_ACTION_LIMITS[key];
+        let limit = BATCH_ACTION_LIMITS_ACTIVE[key];
         if (limit === undefined) continue;
         let observed = key === 'MINT' ? mint.max : counts[key];
         if (observed > limit)
@@ -178,6 +190,12 @@ class BatchBuilder {
     link(params)      { return this.add('LINK', params); }
     address(params)   { return this.add('ADDRESS', params); }
 
+    // VM action convenience methods. DEPLOY is CAPPED AT 1 per BATCH, not
+    // forbidden: every DEPLOY runs a constructor in the VM, by far the most
+    // expensive per-command work in the system, and the 250-command cap was
+    // sized for cheap commands. The old outright ban here was never a protocol
+    // rule - it was a legacy-lane size fact (8192 bytes) that the Taproot
+    // envelope lane retired, and oversize is self-enforcing at the encoder.
     deploy(params)    { return this.add('DEPLOY', params); }
     execute(params)   { return this.add('EXECUTE', params); }
     deposit(params)   { return this.add('DEPOSIT', params); }
