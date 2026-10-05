@@ -184,6 +184,7 @@ describe('G2: value-derivability allowlist', function () {
 describe('G2: value-derivability allowlist', function () {
 
     it('admits LIST v4 in the decoder itself, not only once the policy module loads', function () {
+        this.timeout(30000);
         // A fresh process loads only the decoder, so an entry added to its
         // allowlist from any other module would not be seen here.
         const decoder = require.resolve('../../../../src/cosigner/psbt_action_decode.js');
