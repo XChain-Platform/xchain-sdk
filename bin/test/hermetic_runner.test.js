@@ -26,7 +26,8 @@ describe('hermetic test runner', function () {
             'test:boundary',
             'test:fuzz',
             'test:chaos',
-            'auxiliary mocha',
+            'bin/test',
+            'scripts',
         ]);
         assert.deepStrictEqual(calls.map((call) => call.args), FAMILIES.map((family) => family.args));
         assert(calls.every((call) => call.options.stdio === 'inherit'));
@@ -42,5 +43,14 @@ describe('hermetic test runner', function () {
         assert.strictEqual(call, FAMILIES.length);
         assert.strictEqual(lines[2], 'FAIL test:boundary');
         assert.strictEqual(lines.filter((line) => line.startsWith('FAIL ')).length, 1);
+    });
+
+    it('marks a family red when its process cannot start', function () {
+        const lines = [];
+        const spawn = () => ({ status: null, error: new Error('not found') });
+
+        assert.strictEqual(runHermeticTests({ spawn, write: (line) => lines.push(line) }), 1);
+        assert.strictEqual(lines.length, FAMILIES.length);
+        assert(lines.every((line) => line.startsWith('FAIL ')));
     });
 });

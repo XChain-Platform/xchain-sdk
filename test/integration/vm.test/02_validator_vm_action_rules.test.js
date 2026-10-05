@@ -25,8 +25,6 @@
 const { expect } = require('chai');
 const Utility   = require('../../../src/utils/utility.js');
 const Validator = require('../../../src/protocol/validator.js');
-const BatchBuilder = require('../../../src/carrier/batch_builder.js');
-const { SDKValidationError } = require('../../../src/utils/errors.js');
 
 // Validator – VM action rules
 
@@ -140,10 +138,12 @@ describe('Validator – VM action rules', function () {
     let validator;
     beforeEach(function () { validator = new Validator(new Utility()); });
 
-    it('BATCH rejects DEPLOY', function () {
-        let builder = new BatchBuilder(null).add('DEPLOY', { code: 'x', gasLimit: 100000 });
-        expect(() => builder.validate()).to.throw(SDKValidationError)
-            .with.property('code', 'BATCH_CONSTRAINT');
+    it('BATCH rejects more than one DEPLOY', function () {
+        let errors = validator.validate('BATCH', {
+            COMMAND: 'DEPLOY|0|aabb|100000;DEPLOY|0|ccdd|100000'
+        });
+        expect(errors.some(e => e.code === 'BATCH_CONSTRAINT'
+            && e.message.includes('at most 1 DEPLOY'))).to.be.true;
     });
 
     it('BATCH allows EXECUTE', function () {
