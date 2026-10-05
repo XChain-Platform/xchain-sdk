@@ -6,7 +6,10 @@ handler's validity logic changes, the corresponding client check can
 silently drift out of ground-truth, so the drift gate
 (`bin/check-preflight-drift.js`, run by `npm run ci` here and by the CI
 job on both repos) fails when any mapped indexer handler's SHA-256
-changes without a matching update here.
+of normalized source changes without a matching update here. JavaScript
+comments are removed and line-end whitespace is trimmed before hashing;
+empty source lines are ignored and multiline source keeps one terminal line
+ending, while quoted string and template contents remain byte-exact.
 
 To resolve a drift-gate failure: re-read the changed handler, update the
 client check (or confirm no client-visible logic changed), then refresh
@@ -78,7 +81,17 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `93de40d1`
+**Pins taken at indexer commit:** `02e25669`
+
+(Re-anchored 2026-10-04 against indexer develop `02e25669`. All thirteen
+rows were regenerated in one pass with the comment-insensitive digest. Comment
+text and line-end whitespace no longer move a pin, while code and quoted
+content still do.)
+
+(The range from the prior anchor has one mapped executable change:
+`dispenser/validate_format.js` passes the existing hub database handle, with
+the local database as fallback, to the same oracle price and fee methods. No
+predicate, field format or error path mirrored by the client checks changed.)
 
 (Re-anchored 2026-10-01 for the coin-qualified LIST item consumers reviewed below.
 `93de40d1` is the clean, passed LS-85 lane tip used for this paired landing. The ISSUE
@@ -352,7 +365,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 93de40d1..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 02e25669..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -397,24 +410,19 @@ marker.
 
     | `checks/batch.js` | `src/actions/batch/` | `<64-hex digest>` |
 
-The digest covers every file in the directory, recursively, so no part can be
-edited, added, removed or renamed without the row going red. It is the SHA-256
-of a manifest carrying one line per file, sorted by name in byte order:
+The digest covers every file in the directory, recursively, so code or quoted
+content in any part cannot be edited and no part can be added, removed or
+renamed without the row going red. It is the SHA-256 of a manifest carrying
+one line per file, sorted by name in byte order:
 
-    <sha256 of that file's bytes>  <path relative to the directory>
+    <sha256 of that file's normalized source>  <path relative to the directory>
 
-That is exactly what `shasum -a 256` (or `sha256sum`) prints, so the pin can be
-recomputed without this repo:
-
-    cd <indexer>/src/actions/batch && find . -type f | sed 's|^\./||' \
-      | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256
-
-or from here, which also prints every part it hashed:
+Use the canonical helper to recompute a pin and print every part it hashed:
 
     node bin/preflight_handler_dirs.js <indexer root> src/actions/batch/
 
-Flat rows are unchanged, and every hash in the table below is still the bytes of
-one file. Three shapes are refused rather than hashed, because each would leave
+Flat rows use the same normalized source digest for their one file. Three
+shapes are refused rather than hashed, because each would leave
 part of a handler unreviewed: a row naming a file INSIDE a handler directory (it
 pins `index.js` while the parts beside it escape), a directory row while a flat
 `<name>.js` still sits beside the directory (`require('./<name>')` resolves the
@@ -430,19 +438,19 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `68a094391bafac83610ef96d8baaad183a87d5fa037d0f655c55a4b5539cbce7` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `1d5869c477a5670c76b5c64ca893044ce67910310e716f7156220f87819e8974` |
-| `checks/mint.js` | `src/actions/mint/` | `caf6f7e7bfc0ffac865ae76fbc5d36123be77db09df81f617c3a6fc9304554cd` |
-| `checks/issue.js` | `src/actions/issue/` | `02db2deb36967b65d673f5010806ca703b231c1fb22b9c0196b53a6e91d28500` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `f92e12188b6b557cd151ef06941fab3d9357d5d9410844df5ba13282ddbc81af` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `34cec38417f2fb43867dcc5810d980d3d15a1fabc513d47c6541bb81de8e5260` |
-| `checks/trading.js` (ORDER) | `src/actions/order/` | `7518413cb97ece320a481859d8227756c3627d1bb2891da63153b54ea2de71df` |
-| `checks/trading.js` (SWAP) | `src/actions/swap/` | `3572ba88cb701624a841a1e089d9c848d4cd37542fa7916f63ca41c7bd6d5e43` |
-| `checks/airdrop.js` | `src/actions/airdrop/` | `fb9d19928390aae6963796923724072f77dd8a934d53679638b2cc11eaa5ed33` |
-| `checks/dividend.js` | `src/actions/dividend/` | `498e038fd9118f0d37663a98a7d55db7d2cee93ae7a6f73cafc32f04d26a3103` |
-| `checks/batch.js` | `src/actions/batch/` | `895eb6fda8380b3019ccdaa97f7b13d97ebae20008e4285a43f7b854b1884507` |
-| `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `cfd9837bc722773652e53b949ec938ba1757a295e470dba6c237a06ecf7667e3` |
-| `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `76fc627ad84da6a931e1d32b212b5764dd273cbf1a26a6ce746736ac29c5c669` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `a6ab5ff2ac70c4e6f7042b5cb76c78a9cb9d754dcab01d8f724088c8aa5fa4f6` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `3671cf3e2efefb069d30539814ecc2f1bd65087698f756711c8a1c7b75e9665f` |
+| `checks/mint.js` | `src/actions/mint/` | `0f2b6b0375df803321c1644e24f9fa2b6dcb73119a470832eeb93dfab8530595` |
+| `checks/issue.js` | `src/actions/issue/` | `bbd56bb132beb24842beeac0cf5333797b0d44b4321fd7f08fe5b6beac167620` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `abe6e7af6493d881b7ed12c08939999cee87141e45cbfe09a8ffaa882daf43f6` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `40bacc5f8b14d5c8d96b38ff912e8de964054dc65f287ca8f0590e4528919c6c` |
+| `checks/trading.js` (ORDER) | `src/actions/order/` | `66728bf57468a88c88e154622ca2708a1089ac9f5f8aa115f296cdadcbd5b8e5` |
+| `checks/trading.js` (SWAP) | `src/actions/swap/` | `54ea109eda27f47b8954fc134c53672bf94e1706c2084693a45fd97bf15c96dd` |
+| `checks/airdrop.js` | `src/actions/airdrop/` | `0174875cd302106d68a816c7e72a64d53e3f51971881cd9efbea70a78786e7d9` |
+| `checks/dividend.js` | `src/actions/dividend/` | `d4f5c14da27903f71c58cb5f56310d2ff0520bb2f8d0646e7e798d1721c28014` |
+| `checks/batch.js` | `src/actions/batch/` | `e29048413eb43f385d090a41e31c2f6d29870b9a1c412bad87b2e3521f45caf5` |
+| `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `bbddd777d235e2da7b472d0e4ed993b598886202374f58ae2d46525079cb8f76` |
+| `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `b68c873821cbcbe2e72082817f13eecbe87c12c2a99591d5d4b9085358b7fa75` |
 
 The mapped custody disclosures are checks/misc.js (DEPOSIT) and
 checks/misc.js (WITHDRAW).

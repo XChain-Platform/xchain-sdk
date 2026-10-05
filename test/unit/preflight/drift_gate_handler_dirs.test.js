@@ -78,6 +78,63 @@ function splitHandler(root, name) {
     return path.join(root, 'src', 'actions', name);
 }
 
+describe('comment-insensitive digest', function () {
+    const source = [
+        "'use strict';",
+        "const message = 'invalid: // stays literal';",
+        'const template = `rule /* stays literal */`;',
+        'const total = 1/* inline fixture note */ + 2;',
+        '// Explain the fixture rule.',
+        'function validate(value) {',
+        '    /*',
+        '     * Require a positive value.',
+        '     */',
+        '    return value > 0;',
+        '}',
+        'module.exports = { message, template, validate };',
+        '',
+    ].join('\n');
+
+    function pinSource(root, fixtureSource) {
+        put(root, 'src/actions/fixture.js', fixtureSource);
+        return pinOf(root, 'src/actions/fixture.js');
+    }
+
+    afterEach(cleanRoots);
+
+    it('keeps the digest for comment-only and line-end whitespace edits', function () {
+        const root = tempRoot();
+        const original = pinSource(root, source);
+        const edited = source
+            .replace('/* inline fixture note */', '')
+            .replace('// Explain the fixture rule.\n', '')
+            .replace('    /*\n     * Require a positive value.\n     */\n', '')
+            .replace('return value > 0;', 'return value > 0; \t');
+        expect(pinSource(root, edited)).to.equal(original);
+    });
+
+    it('changes the digest when executable code changes', function () {
+        const root = tempRoot();
+        const original = pinSource(root, source);
+        expect(pinSource(root, source.replace('value > 0', 'value >= 0'))).to.not.equal(original);
+    });
+
+    it('changes the digest for edits inside string and template literals', function () {
+        const root = tempRoot();
+        const original = pinSource(root, source);
+        expect(pinSource(root, source.replace('// stays literal', '// changed literal'))).to.not.equal(original);
+        expect(pinSource(root, source.replace('/* stays literal */', '/* changed literal */'))).to.not.equal(original);
+    });
+
+    it('keeps an ASI-significant line ending from an inline block comment', function () {
+        const root = tempRoot();
+        const sameLine = 'function value() { return/* explanation */ {}; }\n';
+        const nextLine = 'function value() { return/* explanation\n */ {}; }\n';
+        expect(pinSource(root, nextLine)).to.not.equal(pinSource(root, sameLine));
+        expect(pinSource(root, sameLine.replace('explanation', 'explanation\u2028'))).to.not.equal(pinSource(root, sameLine));
+    });
+});
+
 describe('drift map rows: what a row may name (§8.5)', function () {
     afterEach(cleanRoots);
 
@@ -139,7 +196,7 @@ describe('drift map rows: a directory handler is hashed whole', function () {
         for (const part of dirs.listParts(dir)) {
             const abs = path.join(dir, part);
             const original = fs.readFileSync(abs);
-            fs.writeFileSync(abs, Buffer.concat([original, Buffer.from('// edited\n')]));
+            fs.writeFileSync(abs, Buffer.concat([original, Buffer.from('module.exports.edited = 1;\n')]));
             expect(pinOf(root, 'src/actions/batch/'), `editing ${part} must move the pin`).to.not.equal(pinned);
             fs.writeFileSync(abs, original);
             expect(pinOf(root, 'src/actions/batch/'), `restoring ${part} must restore the pin`).to.equal(pinned);
@@ -150,7 +207,7 @@ describe('drift map rows: a directory handler is hashed whole', function () {
         const root = tempRoot();
         const dir = splitHandler(root, 'batch');
         const pinned = row('src/actions/batch/', pinOf(root, 'src/actions/batch/'));
-        fs.appendFileSync(path.join(dir, 'fees.js'), '// a rule changed here\n');
+        fs.appendFileSync(path.join(dir, 'fees.js'), 'module.exports.edited = 1;\n');
         const { missing, drift } = dirs.compareRows(root, [pinned]);
         expect(missing).to.deep.equal([]);
         expect(drift).to.have.lengthOf(1);

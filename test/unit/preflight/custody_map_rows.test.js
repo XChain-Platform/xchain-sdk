@@ -8,15 +8,15 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { parseMapRows, compareRows } = require('../../../bin/preflight_handler_dirs.js');
+const { parseMapRows, compareRows, digestSource } = require('../../../bin/preflight_handler_dirs.js');
 
 const DEPOSIT_BYTES = "module.exports = 'deposit';\n";
 const WITHDRAW_BYTES = "module.exports = 'withdraw';\n";
-const DEPOSIT_HASH = 'a0b6e81071f6936b049954ef7ad90039a170570ee623fa3cb7981015aa373dd6';
-const WITHDRAW_HASH = '7d7f8b58b3ff47018d8ce91f3d31e92a20cba4776a7e7e65537387bba8c34eab';
+const DEPOSIT_HASH = digestSource(DEPOSIT_BYTES);
+const WITHDRAW_HASH = digestSource(WITHDRAW_BYTES);
 const MAP_FRAGMENT = [
-    '| `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `a0b6e81071f6936b049954ef7ad90039a170570ee623fa3cb7981015aa373dd6` |',
-    '| `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `7d7f8b58b3ff47018d8ce91f3d31e92a20cba4776a7e7e65537387bba8c34eab` |',
+    `| \`checks/misc.js\` (DEPOSIT) | \`src/actions/deposit.js\` | \`${DEPOSIT_HASH}\` |`,
+    `| \`checks/misc.js\` (WITHDRAW) | \`src/actions/withdraw.js\` | \`${WITHDRAW_HASH}\` |`,
 ].join('\n');
 
 function put(root, relativePath, bytes) {
