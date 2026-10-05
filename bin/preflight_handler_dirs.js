@@ -42,7 +42,6 @@ const acorn = require('acorn');
 // | ... | `src/actions/x.js` | `<hash>` |   and, for a directory handler,
 // | ... | `src/actions/x/`   | `<hash>` |
 const ROW_RE = /\|\s*`(src\/actions\/[^`]+)`\s*\|\s*`([0-9a-f]{64})`\s*\|/g;
-const ACTIVE_TABLE_HEADER = '| Client check module | Indexer handler | SHA-256 |';
 
 // A flat row names a file directly under src/actions/. A path deeper than that is refused
 // rather than hashed: pinning src/actions/<name>/index.js alone is exactly the row that
@@ -144,11 +143,9 @@ function hashSourceFile(fileAbs) {
 // parser skips silently is a handler nobody checks, while the table still reads complete.
 function parseMapRows(text) {
     const rows = [];
-    const tableStart = text.indexOf(ACTIVE_TABLE_HEADER);
-    const mapText = tableStart === -1 ? text : text.slice(tableStart);
     let m;
     ROW_RE.lastIndex = 0;
-    while ((m = ROW_RE.exec(mapText)) !== null) {
+    while ((m = ROW_RE.exec(text)) !== null) {
         const handler = m[1];
         const kind = FILE_ROW.test(handler) ? 'file' : DIRECTORY_ROW.test(handler) ? 'directory' : 'malformed';
         rows.push({ handler, hash: m[2], kind });

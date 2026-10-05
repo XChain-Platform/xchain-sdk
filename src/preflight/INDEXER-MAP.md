@@ -93,12 +93,6 @@ content still do.)
 the local database as fallback, to the same oracle price and fee methods. No
 predicate, field format or error path mirrored by the client checks changed.)
 
-The custody mapping was introduced with these raw-byte pins. They remain here
-as provenance, before the canonical table that the gate parses:
-
-    | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `cfd9837bc722773652e53b949ec938ba1757a295e470dba6c237a06ecf7667e3` |
-    | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `76fc627ad84da6a931e1d32b212b5764dd273cbf1a26a6ce746736ac29c5c669` |
-
 (Re-anchored 2026-10-01 for the coin-qualified LIST item consumers reviewed below.
 `93de40d1` is the clean, passed LS-85 lane tip used for this paired landing. The ISSUE
 and AIRDROP directory pins move; the LIST handler changes were also re-read but remain
