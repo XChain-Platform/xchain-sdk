@@ -68,7 +68,8 @@ function normalizedCommentSpan(source, block, start, end) {
     if (/^[^\S\r\n]*$/u.test(before) && /^[^\S\r\n]*$/u.test(after)) {
         return { start: lineStart, end: lineBreakEnd, text: '', protected: false };
     }
-    return { start, end, text: block ? ' ' : '', protected: false };
+    const lineEndings = block ? source.slice(start, end).match(/\r\n|[\r\n\u2028\u2029]/g) : null;
+    return { start, end, text: block ? ` ${lineEndings ? lineEndings.join('') : ''}` : '', protected: false };
 }
 
 function normalizeDigestPieces(pieces) {
@@ -81,7 +82,7 @@ function normalizeDigestPieces(pieces) {
     for (let i = 0; i < units.length; i += 1) {
         const ch = units[i].ch;
         const isProtected = units[i].protected;
-        if (ch === '\r' || ch === '\n') {
+        if (ch === '\r' || ch === '\n' || ch === '\u2028' || ch === '\u2029') {
             let ending = ch;
             if (ch === '\r' && units[i + 1] && units[i + 1].ch === '\n') ending += units[++i].ch;
             lastEnding = ending;
@@ -106,7 +107,7 @@ function normalizeDigestPieces(pieces) {
 
 // Remove comments before hashing while protecting quoted content from comment
 // recognition and line-end trimming. Whole comment-only lines disappear, while
-// inline block comments keep one token separator and empty source lines collapse.
+// inline block comments keep a token separator and any ASI-significant line ending.
 function normalizeDigestSource(bytes) {
     const source = Buffer.isBuffer(bytes) ? bytes.toString('utf8') : String(bytes);
     const spans = [];

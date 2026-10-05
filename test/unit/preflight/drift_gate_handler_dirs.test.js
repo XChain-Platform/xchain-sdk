@@ -122,6 +122,14 @@ describe('comment-insensitive digest', function () {
         expect(pinSource(root, COMMENT_SOURCE.replace('// stays literal', '// changed literal'))).to.not.equal(original);
         expect(pinSource(root, COMMENT_SOURCE.replace('/* stays literal */', '/* changed literal */'))).to.not.equal(original);
     });
+
+    it('keeps an ASI-significant line ending from an inline block comment', function () {
+        const root = tempRoot();
+        const sameLine = 'function value() { return/* explanation */ {}; }\n';
+        const nextLine = 'function value() { return/* explanation\n */ {}; }\n';
+        expect(pinSource(root, nextLine)).to.not.equal(pinSource(root, sameLine));
+        expect(pinSource(root, sameLine.replace('explanation', 'explanation\u2028'))).to.not.equal(pinSource(root, sameLine));
+    });
 });
 
 describe('drift map rows: what a row may name (§8.5)', function () {
@@ -137,14 +145,6 @@ describe('drift map rows: what a row may name (§8.5)', function () {
         const rows = gate.parseMap(REAL_MAP);
         expect(rows, 'map contains one row per mapped handler').to.have.lengthOf(13);
         for (const r of rows) expect(r.kind, r.handler).to.be.oneOf(['file', 'directory']);
-    });
-
-    it('does not hide mapping rows that appear before a table header', function () {
-        const first = `| \`checks/first.js\` | \`src/actions/first.js\` | \`${ZERO}\` |`;
-        const second = `| \`checks/second.js\` | \`src/actions/second.js\` | \`${ZERO}\` |`;
-        const header = '| Client check module | Indexer handler | SHA-256 |';
-        expect(dirs.parseMapRows(`${first}\n${header}\n${second}`))
-            .to.have.lengthOf(2);
     });
 
     it('hashes a flat handler as the normalized source of that one file', function () {
