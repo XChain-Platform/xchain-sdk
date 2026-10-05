@@ -147,7 +147,9 @@ describe('drift map rows: what a row may name (§8.5)', function () {
         for (const r of rows) expect(r.kind, r.handler).to.be.oneOf(['file', 'directory']);
     });
 
-    it('hashes a flat handler as the normalized source of that one file', function () {
+    it('still hashes a flat handler as the bytes of that one file', function () {
+        // The pin every existing row carries: unchanged by directory support, which is what
+        // lets the shipped map stay green with no re-pin.
         const root = tempRoot();
         put(root, 'src/actions/send.js', 'abc');
         expect(row('src/actions/send.js').kind).to.equal('file');
@@ -172,7 +174,7 @@ describe('drift map rows: what a row may name (§8.5)', function () {
 describe('drift map rows: a directory handler is hashed whole', function () {
     afterEach(cleanRoots);
 
-    it('pins the sorted (name, normalized source) manifest reproducibly', function () {
+    it('pins the sorted (name, bytes) manifest, reproducibly', function () {
         const root = tempRoot();
         put(root, 'src/actions/batch/index.js', 'abc');
         put(root, 'src/actions/batch/lib/x.js', '');
@@ -183,7 +185,7 @@ describe('drift map rows: a directory handler is hashed whole', function () {
         expect(pinOf(root, 'src/actions/batch/')).to.equal(DIGEST_ABC_EMPTY);
     });
 
-    it('covers EVERY part: changing code in any one moves the pin', function () {
+    it('covers EVERY part: editing any one of them moves the pin', function () {
         // The whole point of the row: no part may be editable without the pin noticing.
         const root = tempRoot();
         const dir = splitHandler(root, 'batch');
