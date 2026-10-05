@@ -20,6 +20,7 @@ describe('hermetic test runner', function () {
         };
 
         assert.strictEqual(runHermeticTests({ spawn, write: (line) => lines.push(line) }), 0);
+        assert.strictEqual(FAMILIES.length, 7);
         assert.deepStrictEqual(FAMILIES.map((family) => family.name), [
             'test:smoke',
             'test:integration',
