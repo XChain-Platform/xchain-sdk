@@ -37,7 +37,7 @@ const fs     = require('fs');
 const os     = require('os');
 const path   = require('path');
 
-const { compare } = require('../suite-title-map.js');
+const { compare, mochaArgsFor, splitCommand } = require('../suite-title-map.js');
 const splitMap    = require('../suite_title_map/split_map.js');
 
 const OLD = 'test/unit/db_queries.test.js';
@@ -89,6 +89,71 @@ function moveTitle(from, to, title) {
 }
 
 const kinds = (diffs) => diffs.map((d) => d.kind).sort();
+
+function titleMap(file, key, titles) {
+    return {
+        titleSets: { [key]: titles },
+        scripts: { test: { files: { [file]: key } } },
+    };
+}
+
+describe('bin/suite-title-map.js: pure command parsing', () => {
+    it('keeps quoted grep patterns and globs as single tokens', () => {
+        assert.deepStrictEqual(splitCommand('mocha --grep "@x.*(a|b)" \'test/**/*.js\''), [
+            { value: 'mocha', quoted: false },
+            { value: '--grep', quoted: false },
+            { value: '@x.*(a|b)', quoted: true },
+            { value: 'test/**/*.js', quoted: true },
+        ]);
+    });
+
+    it('separates leading environment assignments from mocha arguments', () => {
+        assert.deepStrictEqual(mochaArgsFor("FUZZ_RUNS=1000 mocha --timeout 0 'test/fuzz/**/*.js'"), {
+            args: ['--timeout', '0', 'test/fuzz/**/*.js'],
+            env: { FUZZ_RUNS: '1000' },
+        });
+    });
+
+    it('extracts npm scripts from a composite command', () => {
+        assert.deepStrictEqual(mochaArgsFor('npm run a && npm run b'), { composite: ['a', 'b'] });
+    });
+
+    it('identifies a non-mocha command in the skip reason', () => {
+        assert.deepStrictEqual(mochaArgsFor('node bin/something.js'), {
+            skip: 'not a mocha command (runs node)',
+        });
+    });
+});
+
+describe('bin/suite-title-map.js: flat path renames', () => {
+    it('accepts an identical title set moved through the rename map', () => {
+        const pin = titleMap('old.js', 'shared', ['suite title']);
+        const fresh = titleMap('new.js', 'shared', ['suite title']);
+        assert.deepStrictEqual(compare(pin, fresh, { 'old.js': 'new.js' }), []);
+    });
+});
+
+describe('suite-title-map structured renames', () => {
+    const renames = {
+        paths: { 'old.js': 'new.js' },
+        titles: { 'new.js': { 'old title': 'new title' } },
+    };
+
+    it('accepts a declared path and title rename', () => {
+        const pin = titleMap('old.js', 'old', ['old title', 'stable title']);
+        const fresh = titleMap('new.js', 'fresh', ['new title', 'stable title']);
+        assert.deepStrictEqual(compare(pin, fresh, renames), []);
+    });
+
+    it('reports an actual title that differs from the declared rename', () => {
+        const pin = titleMap('old.js', 'old', ['old title', 'stable title']);
+        const fresh = titleMap('new.js', 'fresh', ['unexpected title', 'stable title']);
+        assert.deepStrictEqual(compare(pin, fresh, renames), [
+            { script: 'test', kind: 'title_dropped', file: 'new.js', title: 'new title' },
+            { script: 'test', kind: 'title_added', file: 'new.js', title: 'unexpected title' },
+        ]);
+    });
+});
 
 describe('bin/suite_title_map/split_map.js: a declared split that is honest', () => {
     it('reports nothing when the parts carry exactly the old file titles', () => {
