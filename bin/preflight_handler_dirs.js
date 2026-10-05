@@ -42,6 +42,7 @@ const acorn = require('acorn');
 // | ... | `src/actions/x.js` | `<hash>` |   and, for a directory handler,
 // | ... | `src/actions/x/`   | `<hash>` |
 const ROW_RE = /\|\s*`(src\/actions\/[^`]+)`\s*\|\s*`([0-9a-f]{64})`\s*\|/g;
+const ACTIVE_TABLE_HEADER = '| Client check module | Indexer handler | SHA-256 |';
 
 // A flat row names a file directly under src/actions/. A path deeper than that is refused
 // rather than hashed: pinning src/actions/<name>/index.js alone is exactly the row that
@@ -77,12 +78,14 @@ function normalizeDigestPieces(pieces) {
     let line = '';
     let trailing = '';
     let lineProtected = false;
+    let lastEnding = '';
     for (let i = 0; i < units.length; i += 1) {
         const ch = units[i].ch;
         const isProtected = units[i].protected;
         if (ch === '\r' || ch === '\n') {
             let ending = ch;
             if (ch === '\r' && units[i + 1] && units[i + 1].ch === '\n') ending += units[++i].ch;
+            lastEnding = ending;
             if (isProtected) lineProtected = true;
             if (line || lineProtected) normalized += line + ending;
             line = '';
@@ -99,7 +102,7 @@ function normalizeDigestPieces(pieces) {
             trailing = '';
         }
     }
-    return (normalized + line).replace(/(?:\r\n|\r|\n)+$/u, '');
+    return normalized + line + (line && lastEnding ? lastEnding : '');
 }
 
 // Remove comments before hashing while protecting quoted content from comment
@@ -141,9 +144,11 @@ function hashSourceFile(fileAbs) {
 // parser skips silently is a handler nobody checks, while the table still reads complete.
 function parseMapRows(text) {
     const rows = [];
+    const tableStart = text.indexOf(ACTIVE_TABLE_HEADER);
+    const mapText = tableStart === -1 ? text : text.slice(tableStart);
     let m;
     ROW_RE.lastIndex = 0;
-    while ((m = ROW_RE.exec(text)) !== null) {
+    while ((m = ROW_RE.exec(mapText)) !== null) {
         const handler = m[1];
         const kind = FILE_ROW.test(handler) ? 'file' : DIRECTORY_ROW.test(handler) ? 'directory' : 'malformed';
         rows.push({ handler, hash: m[2], kind });

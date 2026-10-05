@@ -8,8 +8,8 @@ silently drift out of ground-truth, so the drift gate
 job on both repos) fails when any mapped indexer handler's SHA-256
 of normalized source changes without a matching update here. JavaScript
 comments are removed and line-end whitespace is trimmed before hashing;
-empty source lines are ignored, while quoted string and template contents
-remain byte-exact.
+empty source lines are ignored and multiline source keeps one terminal line
+ending, while quoted string and template contents remain byte-exact.
 
 To resolve a drift-gate failure: re-read the changed handler, update the
 client check (or confirm no client-visible logic changed), then refresh
@@ -92,6 +92,12 @@ content still do.)
 `dispenser/validate_format.js` passes the existing hub database handle, with
 the local database as fallback, to the same oracle price and fee methods. No
 predicate, field format or error path mirrored by the client checks changed.)
+
+The custody mapping was introduced with these raw-byte pins. They remain here
+as provenance, before the canonical table that the gate parses:
+
+    | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `cfd9837bc722773652e53b949ec938ba1757a295e470dba6c237a06ecf7667e3` |
+    | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `76fc627ad84da6a931e1d32b212b5764dd273cbf1a26a6ce746736ac29c5c669` |
 
 (Re-anchored 2026-10-01 for the coin-qualified LIST item consumers reviewed below.
 `93de40d1` is the clean, passed LS-85 lane tip used for this paired landing. The ISSUE
@@ -438,19 +444,19 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `ac6fe80391667d2bca544049a2d408a548c28110d3480c34da6f3ad95874c7d8` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `d306a0340725096795dcb7823ad0f268d7f6e3e93b0938fce91aa849d23ec5c1` |
-| `checks/mint.js` | `src/actions/mint/` | `dab78ce9e87cfc27c2437495de21ac78adf2f33cf163e753292998866eccb732` |
-| `checks/issue.js` | `src/actions/issue/` | `4399ff41a3bee0996c23de2ef7a50aa579ce44d62cebcaabf3891615328195cd` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `2fde97d2a50bafba2475317cd494f83f2f7b56159d09bb278eb695de9298200b` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `b254c2ef3a50e979bf111322f37df1c237c72501d8bd6ecbaccc48de34042c4a` |
-| `checks/trading.js` (ORDER) | `src/actions/order/` | `57be695f7866aa26c0a145911095c836d821bdc3421c543b0a5816bae6406fef` |
-| `checks/trading.js` (SWAP) | `src/actions/swap/` | `c1f8a5aaaf7853fbeb95b8791b75d409a675d36f1775e404cbee7f94436b183e` |
-| `checks/airdrop.js` | `src/actions/airdrop/` | `2908c8b11aae5c8c0035607286133bf8cd268ae804e6d690232691c5cfe660f2` |
-| `checks/dividend.js` | `src/actions/dividend/` | `f6db983500a245e236af88ea36151b25f1081fdcab4642fb22feec4377e0f755` |
-| `checks/batch.js` | `src/actions/batch/` | `f9b90475af3470c6e5c887f0ff0e1511440581b165326ef34b91f565c78bf6c3` |
-| `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `bd826a6b6586a00ecebb2f80ca9bc22e168b0d5e3e0b2cd8c5cd5762d37935e2` |
-| `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `fd343e59788f720d50f6c7ba43a4e623a101672d2411f800ea6523a9970eec22` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `a6ab5ff2ac70c4e6f7042b5cb76c78a9cb9d754dcab01d8f724088c8aa5fa4f6` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `3671cf3e2efefb069d30539814ecc2f1bd65087698f756711c8a1c7b75e9665f` |
+| `checks/mint.js` | `src/actions/mint/` | `0f2b6b0375df803321c1644e24f9fa2b6dcb73119a470832eeb93dfab8530595` |
+| `checks/issue.js` | `src/actions/issue/` | `bbd56bb132beb24842beeac0cf5333797b0d44b4321fd7f08fe5b6beac167620` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `abe6e7af6493d881b7ed12c08939999cee87141e45cbfe09a8ffaa882daf43f6` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `40bacc5f8b14d5c8d96b38ff912e8de964054dc65f287ca8f0590e4528919c6c` |
+| `checks/trading.js` (ORDER) | `src/actions/order/` | `66728bf57468a88c88e154622ca2708a1089ac9f5f8aa115f296cdadcbd5b8e5` |
+| `checks/trading.js` (SWAP) | `src/actions/swap/` | `54ea109eda27f47b8954fc134c53672bf94e1706c2084693a45fd97bf15c96dd` |
+| `checks/airdrop.js` | `src/actions/airdrop/` | `0174875cd302106d68a816c7e72a64d53e3f51971881cd9efbea70a78786e7d9` |
+| `checks/dividend.js` | `src/actions/dividend/` | `d4f5c14da27903f71c58cb5f56310d2ff0520bb2f8d0646e7e798d1721c28014` |
+| `checks/batch.js` | `src/actions/batch/` | `e29048413eb43f385d090a41e31c2f6d29870b9a1c412bad87b2e3521f45caf5` |
+| `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `bbddd777d235e2da7b472d0e4ed993b598886202374f58ae2d46525079cb8f76` |
+| `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `b68c873821cbcbe2e72082817f13eecbe87c12c2a99591d5d4b9085358b7fa75` |
 
 The mapped custody disclosures are checks/misc.js (DEPOSIT) and
 checks/misc.js (WITHDRAW).
