@@ -69,7 +69,7 @@ function normalizedCommentSpan(source, block, start, end) {
         return { start: lineStart, end: lineBreakEnd, text: '', protected: false };
     }
     const lineEndings = block ? source.slice(start, end).match(/\r\n|[\r\n\u2028\u2029]/g) : null;
-    return { start, end, text: block ? ` ${lineEndings ? lineEndings.join('') : ''}` : '', protected: false };
+    return { start, end, text: block && lineEndings ? lineEndings.join('') : '', protected: false };
 }
 
 function normalizeDigestPieces(pieces) {
@@ -107,7 +107,7 @@ function normalizeDigestPieces(pieces) {
 
 // Remove comments before hashing while protecting quoted content from comment
 // recognition and line-end trimming. Whole comment-only lines disappear, while
-// inline block comments keep a token separator and any ASI-significant line ending.
+// inline block comments keep any ASI-significant line ending.
 function normalizeDigestSource(bytes) {
     const source = Buffer.isBuffer(bytes) ? bytes.toString('utf8') : String(bytes);
     const spans = [];

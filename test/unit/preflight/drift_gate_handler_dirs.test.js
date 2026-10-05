@@ -83,6 +83,7 @@ describe('comment-insensitive digest', function () {
         "'use strict';",
         "const message = 'invalid: // stays literal';",
         'const template = `rule /* stays literal */`;',
+        'const total = 1/* inline fixture note */ + 2;',
         '// Explain the fixture rule.',
         'function validate(value) {',
         '    /*',
@@ -105,6 +106,7 @@ describe('comment-insensitive digest', function () {
         const root = tempRoot();
         const original = pinSource(root, source);
         const edited = source
+            .replace('/* inline fixture note */', '')
             .replace('// Explain the fixture rule.\n', '')
             .replace('    /*\n     * Require a positive value.\n     */\n', '')
             .replace('return value > 0;', 'return value > 0; \t');
