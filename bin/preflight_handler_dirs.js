@@ -18,7 +18,7 @@
  * the gate the directory shape as a whole:
  *
  *   - a map row may name a DIRECTORY (`src/actions/<name>/`, trailing slash), hashed over
- *     every file in it, recursively, so editing, adding or removing any part moves the pin;
+ *     every file recursively, so code edits and adding or removing parts move the pin;
  *   - a FILE row also includes a same-named companion directory, since another valid split
  *     leaves `<name>.js` as the entry and moves its imported logic into `<name>/`;
  *   - the fee walk reads every source file owned by either split shape, not only its entry;
@@ -37,6 +37,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const acorn = require('acorn');
 
 // | ... | `src/actions/x.js` | `<hash>` |   and, for a directory handler,
 // | ... | `src/actions/x/`   | `<hash>` |
@@ -56,6 +57,90 @@ function sha256(bytes) {
     return crypto.createHash('sha256').update(bytes).digest('hex');
 }
 
+function normalizedCommentSpan(source, block, start, end) {
+    const lineStart = source.lastIndexOf('\n', start - 1) + 1;
+    const nextNewline = source.indexOf('\n', end);
+    const lineBreakEnd = nextNewline === -1 ? source.length : nextNewline + 1;
+    let lineEnd = nextNewline === -1 ? source.length : nextNewline;
+    if (lineEnd > end && source[lineEnd - 1] === '\r') lineEnd -= 1;
+    const before = source.slice(lineStart, start);
+    const after = source.slice(end, lineEnd);
+    if (/^[^\S\r\n]*$/u.test(before) && /^[^\S\r\n]*$/u.test(after)) {
+        return { start: lineStart, end: lineBreakEnd, text: '', protected: false };
+    }
+    const lineEndings = block ? source.slice(start, end).match(/\r\n|[\r\n\u2028\u2029]/g) : null;
+    return { start, end, text: block && lineEndings ? lineEndings.join('') : '', protected: false };
+}
+
+function normalizeDigestPieces(pieces) {
+    const units = pieces.flatMap((piece) => Array.from(piece.text, (ch) => ({ ch, protected: piece.protected })));
+    let normalized = '';
+    let line = '';
+    let trailing = '';
+    let lineProtected = false;
+    let lastEnding = '';
+    for (let i = 0; i < units.length; i += 1) {
+        const ch = units[i].ch;
+        const isProtected = units[i].protected;
+        if (ch === '\r' || ch === '\n' || ch === '\u2028' || ch === '\u2029') {
+            let ending = ch;
+            if (ch === '\r' && units[i + 1] && units[i + 1].ch === '\n') ending += units[++i].ch;
+            lastEnding = ending;
+            if (isProtected) lineProtected = true;
+            if (line || lineProtected) normalized += line + ending;
+            line = '';
+            trailing = '';
+            lineProtected = false;
+        } else if (isProtected) {
+            line += trailing + ch;
+            trailing = '';
+            lineProtected = true;
+        } else if (/[^\S\r\n]/u.test(ch)) {
+            trailing += ch;
+        } else {
+            line += trailing + ch;
+            trailing = '';
+        }
+    }
+    return normalized + line + (line && lastEnding ? lastEnding : '');
+}
+
+// Remove comments before hashing while protecting quoted content from comment
+// recognition and line-end trimming. Whole comment-only lines disappear, while
+// inline block comments keep any ASI-significant line ending.
+function normalizeDigestSource(bytes) {
+    const source = Buffer.isBuffer(bytes) ? bytes.toString('utf8') : String(bytes);
+    const spans = [];
+    const tokenizer = acorn.tokenizer(source, {
+        ecmaVersion: 'latest', allowHashBang: true,
+        onComment: (block, text, start, end) => spans.push(normalizedCommentSpan(source, block, start, end)),
+    });
+    for (;;) {
+        const token = tokenizer.getToken();
+        if (token.type.label === 'string' || token.type.label === 'template') {
+            spans.push({ start: token.start, end: token.end, text: source.slice(token.start, token.end), protected: true });
+        }
+        if (token.type.label === 'eof') break;
+    }
+    spans.sort((a, b) => a.start - b.start);
+    const pieces = [];
+    let cursor = 0;
+    for (const span of spans) {
+        if (span.start > cursor) pieces.push({ text: source.slice(cursor, span.start), protected: false });
+        pieces.push({ text: span.text, protected: span.protected });
+        cursor = span.end;
+    }
+    if (cursor < source.length) pieces.push({ text: source.slice(cursor), protected: false });
+    return normalizeDigestPieces(pieces);
+}
+
+function digestSource(bytes) {
+    return sha256(normalizeDigestSource(bytes));
+}
+
+function hashSourceFile(fileAbs) {
+    return digestSource(fs.readFileSync(fileAbs));
+}
 // Parse the map's table rows, each tagged with the kind of handler it names: 'file',
 // 'directory' or 'malformed'.
 
@@ -73,9 +158,8 @@ function parseMapRows(text) {
     return rows;
 }
 
-// Every file under a directory, recursively, as sorted POSIX paths relative to it. Sorted
-// by UTF-8 bytes, the order `LC_ALL=C sort` gives, so a reviewer can recompute a pin with
-// coreutils (the map shows the one-liner).
+// List every file recursively as POSIX paths sorted by UTF-8 bytes, keeping directory
+// manifests stable across filesystems.
 
 // Fails CLOSED on anything that makes the listing ambiguous or partial: the three throws
 // below, and, unless the caller allows it, a directory with no files at all.
@@ -99,43 +183,41 @@ function listParts(dirAbs, { allowEmpty = false } = {}) {
     return names.sort((a, b) => Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8')));
 }
 
-// The pin of a directory handler: the SHA-256 of a manifest with one line per part, in
-// listParts order, `<sha256 of the part's bytes>  <relative name>\n`, which is byte-for-byte
-// what `shasum -a 256` (or `sha256sum`) prints.
+// Hash a directory manifest with one line per part in listParts order:
+// `<sha256 of normalized source>  <relative name>\n`.
 
-// It commits to the sorted list of (relative name, bytes): an edited part changes its line,
-// an added or removed part changes the line set, and a renamed part changes its name.
+// Commit to each name and its executable or quoted source. Adding, removing or renaming a
+// part changes the line set while comment text and line-end whitespace remain stable.
 
 // The per-part lines are returned too, so a drift report can show what the directory holds.
 function hashDirectory(dirAbs) {
-    const parts = listParts(dirAbs).map((name) => ({ name, sha256: sha256(fs.readFileSync(path.join(dirAbs, name))) }));
+    const parts = listParts(dirAbs).map((name) => ({ name, sha256: hashSourceFile(path.join(dirAbs, name)) }));
     const manifest = parts.map((p) => `${p.sha256}  ${p.name}\n`).join('');
     return { digest: sha256(manifest), parts };
 }
 
-// A flat entry may keep its original path while its implementation moves into a directory
-// beside it. In that shape the row still names the entry, but its pin must commit to both
-// the entry and every companion part. Names are relative to src/actions/ so the manifest
-// distinguishes the entry from its tree and detects part renames as well as byte changes.
+// Hash a flat entry and any same-named companion directory as one manifest.
+// Names are relative to src/actions/, so entry, parts, renames and normalized
+// source changes all affect the pin.
 function hashFileWithCompanionParts(fileAbs) {
     const partsDir = fileAbs.replace(/\.js$/, '');
     let partsStat;
     try {
         partsStat = fs.lstatSync(partsDir);
     } catch (e) {
-        if (e && e.code === 'ENOENT') return { digest: sha256(fs.readFileSync(fileAbs)) };
+        if (e && e.code === 'ENOENT') return { digest: hashSourceFile(fileAbs) };
         throw e;
     }
     if (partsStat.isSymbolicLink()) {
         throw new Error(`drift-gate: companion ${partsDir} is a symbolic link; handler parts must be in a plain directory.`);
     }
-    if (!partsStat.isDirectory()) return { digest: sha256(fs.readFileSync(fileAbs)) };
+    if (!partsStat.isDirectory()) return { digest: hashSourceFile(fileAbs) };
 
     const entryName = path.basename(fileAbs);
     const partsName = path.basename(partsDir);
-    const parts = [{ name: entryName, sha256: sha256(fs.readFileSync(fileAbs)) }];
+    const parts = [{ name: entryName, sha256: hashSourceFile(fileAbs) }];
     for (const name of listParts(partsDir)) {
-        parts.push({ name: `${partsName}/${name}`, sha256: sha256(fs.readFileSync(path.join(partsDir, name))) });
+        parts.push({ name: `${partsName}/${name}`, sha256: hashSourceFile(path.join(partsDir, name)) });
     }
     parts.sort((a, b) => Buffer.compare(Buffer.from(a.name, 'utf8'), Buffer.from(b.name, 'utf8')));
     const manifest = parts.map((p) => `${p.sha256}  ${p.name}\n`).join('');
@@ -148,8 +230,8 @@ function isDirectory(abs) {
 
 // Hash one mapped row against the checkout. Returns { actual, parts? } or { problem }.
 
-// A flat row with no companion directory is hashed as the file's bytes, preserving legacy
-// pins. When a companion directory exists, the entry and its parts form one manifest and
+// A flat row with no companion directory hashes its normalized source. When a companion
+// directory exists, the entry and its parts form one manifest and
 // the row needs the deliberate re-pin that closes the old blind spot.
 
 // The problems a directory split introduces are named one by one below rather than folded
@@ -353,5 +435,5 @@ function main(argv) {
 if (require.main === module) process.exit(main(process.argv.slice(2)));
 module.exports = {
     parseMapRows, listParts, hashDirectory, hashFileWithCompanionParts, hashMappedRow, compareRows, formatDrift,
-    stripCommentsAndStrings, feeWalkHandlers, declarationPattern, indexerLiteralReader, main,
+    normalizeDigestSource, digestSource, stripCommentsAndStrings, feeWalkHandlers, declarationPattern, indexerLiteralReader, main,
 };
