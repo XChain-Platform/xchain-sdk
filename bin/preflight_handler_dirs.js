@@ -57,14 +57,60 @@ function sha256(bytes) {
     return crypto.createHash('sha256').update(bytes).digest('hex');
 }
 
+function normalizedCommentSpan(source, block, start, end) {
+    const lineStart = source.lastIndexOf('\n', start - 1) + 1;
+    const nextNewline = source.indexOf('\n', end);
+    const lineBreakEnd = nextNewline === -1 ? source.length : nextNewline + 1;
+    let lineEnd = nextNewline === -1 ? source.length : nextNewline;
+    if (lineEnd > end && source[lineEnd - 1] === '\r') lineEnd -= 1;
+    const before = source.slice(lineStart, start);
+    const after = source.slice(end, lineEnd);
+    if (/^[^\S\r\n]*$/u.test(before) && /^[^\S\r\n]*$/u.test(after)) {
+        return { start: lineStart, end: lineBreakEnd, text: '', protected: false };
+    }
+    return { start, end, text: block ? ' ' : '', protected: false };
+}
+
+function normalizeDigestPieces(pieces) {
+    const units = pieces.flatMap((piece) => Array.from(piece.text, (ch) => ({ ch, protected: piece.protected })));
+    let normalized = '';
+    let line = '';
+    let trailing = '';
+    let lineProtected = false;
+    for (let i = 0; i < units.length; i += 1) {
+        const ch = units[i].ch;
+        const isProtected = units[i].protected;
+        if (ch === '\r' || ch === '\n') {
+            let ending = ch;
+            if (ch === '\r' && units[i + 1] && units[i + 1].ch === '\n') ending += units[++i].ch;
+            if (isProtected) lineProtected = true;
+            if (line || lineProtected) normalized += line + ending;
+            line = '';
+            trailing = '';
+            lineProtected = false;
+        } else if (isProtected) {
+            line += trailing + ch;
+            trailing = '';
+            lineProtected = true;
+        } else if (/[^\S\r\n]/u.test(ch)) {
+            trailing += ch;
+        } else {
+            line += trailing + ch;
+            trailing = '';
+        }
+    }
+    return (normalized + line).replace(/(?:\r\n|\r|\n)+$/u, '');
+}
+
 // Remove comments before hashing while protecting quoted content from comment
-// recognition and line-end trimming. Block comments keep one token separator.
+// recognition and line-end trimming. Whole comment-only lines disappear, while
+// inline block comments keep one token separator and empty source lines collapse.
 function normalizeDigestSource(bytes) {
     const source = Buffer.isBuffer(bytes) ? bytes.toString('utf8') : String(bytes);
     const spans = [];
     const tokenizer = acorn.tokenizer(source, {
         ecmaVersion: 'latest', allowHashBang: true,
-        onComment: (block, text, start, end) => spans.push({ start, end, text: block ? ' ' : '', protected: false }),
+        onComment: (block, text, start, end) => spans.push(normalizedCommentSpan(source, block, start, end)),
     });
     for (;;) {
         const token = tokenizer.getToken();
@@ -82,17 +128,7 @@ function normalizeDigestSource(bytes) {
         cursor = span.end;
     }
     if (cursor < source.length) pieces.push({ text: source.slice(cursor), protected: false });
-    let normalized = '';
-    let trailing = '';
-    for (const piece of pieces) {
-        for (const ch of piece.text) {
-            if (piece.protected) { normalized += trailing + ch; trailing = ''; }
-            else if (/[^\S\r\n]/u.test(ch)) trailing += ch;
-            else if (ch === '\r' || ch === '\n') { normalized += ch; trailing = ''; }
-            else { normalized += trailing + ch; trailing = ''; }
-        }
-    }
-    return normalized;
+    return normalizeDigestPieces(pieces);
 }
 
 function hashSourceFile(fileAbs) {
@@ -153,10 +189,9 @@ function hashDirectory(dirAbs) {
     return { digest: sha256(manifest), parts };
 }
 
-// A flat entry may keep its original path while its implementation moves into a directory
-// beside it. In that shape the row still names the entry, but its pin must commit to both
-// the entry and every companion part. Names are relative to src/actions/ so the manifest
-// distinguishes the entry from its tree and detects part renames and normalized changes.
+// Hash a flat entry and any same-named companion directory as one manifest.
+// Names are relative to src/actions/, so entry, parts, renames and normalized
+// source changes all affect the pin.
 function hashFileWithCompanionParts(fileAbs) {
     const partsDir = fileAbs.replace(/\.js$/, '');
     let partsStat;

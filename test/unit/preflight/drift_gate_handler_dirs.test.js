@@ -40,6 +40,20 @@ const SHA256_ABC = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f200
 // sha256 of the manifest of { index.js: 'abc', lib/x.js: '' }, taken from coreutils:
 //   find . -type f | sed 's|^\./||' | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256
 const DIGEST_ABC_EMPTY = '2f49d30a8e31cecab46ffda54c4a4df8fb79fad1eeb117577793188b337018ee';
+const COMMENT_SOURCE = [
+    "'use strict';",
+    "const message = 'invalid: // stays literal';",
+    'const template = `rule /* stays literal */`;',
+    '// Explain the fixture rule.',
+    'function validate(value) {',
+    '    /*',
+    '     * Require a positive value.',
+    '     */',
+    '    return value > 0;',
+    '}',
+    'module.exports = { message, template, validate };',
+    '',
+].join('\n');
 
 const ROOTS = [];
 
@@ -68,6 +82,11 @@ function pinOf(root, handler) {
     return dirs.hashMappedRow(root, row(handler)).actual;
 }
 
+function pinSource(root, source) {
+    put(root, 'src/actions/fixture.js', source);
+    return pinOf(root, 'src/actions/fixture.js');
+}
+
 /* A handler split the way the indexer's split convention splits one: the entry at
  * index.js, named parts beside it, and one part a directory deeper. */
 function splitHandler(root, name) {
@@ -77,6 +96,33 @@ function splitHandler(root, name) {
     put(root, `src/actions/${name}/limits/caps.js`, 'module.exports = { MAX_PARTS: 10 };\n');
     return path.join(root, 'src', 'actions', name);
 }
+
+describe('comment-insensitive digest', function () {
+    afterEach(cleanRoots);
+
+    it('keeps the digest for comment-only and line-end whitespace edits', function () {
+        const root = tempRoot();
+        const original = pinSource(root, COMMENT_SOURCE);
+        const edited = COMMENT_SOURCE
+            .replace('// Explain the fixture rule.\n', '')
+            .replace('    /*\n     * Require a positive value.\n     */\n', '')
+            .replace('return value > 0;', 'return value > 0; \t');
+        expect(pinSource(root, edited)).to.equal(original);
+    });
+
+    it('changes the digest when executable code changes', function () {
+        const root = tempRoot();
+        const original = pinSource(root, COMMENT_SOURCE);
+        expect(pinSource(root, COMMENT_SOURCE.replace('value > 0', 'value >= 0'))).to.not.equal(original);
+    });
+
+    it('changes the digest for edits inside string and template literals', function () {
+        const root = tempRoot();
+        const original = pinSource(root, COMMENT_SOURCE);
+        expect(pinSource(root, COMMENT_SOURCE.replace('// stays literal', '// changed literal'))).to.not.equal(original);
+        expect(pinSource(root, COMMENT_SOURCE.replace('/* stays literal */', '/* changed literal */'))).to.not.equal(original);
+    });
+});
 
 describe('drift map rows: what a row may name (§8.5)', function () {
     afterEach(cleanRoots);
@@ -93,9 +139,7 @@ describe('drift map rows: what a row may name (§8.5)', function () {
         for (const r of rows) expect(r.kind, r.handler).to.be.oneOf(['file', 'directory']);
     });
 
-    it('still hashes a flat handler as the bytes of that one file', function () {
-        // The pin every existing row carries: unchanged by directory support, which is what
-        // lets the shipped map stay green with no re-pin.
+    it('hashes a flat handler as the normalized source of that one file', function () {
         const root = tempRoot();
         put(root, 'src/actions/send.js', 'abc');
         expect(row('src/actions/send.js').kind).to.equal('file');
@@ -120,7 +164,7 @@ describe('drift map rows: what a row may name (§8.5)', function () {
 describe('drift map rows: a directory handler is hashed whole', function () {
     afterEach(cleanRoots);
 
-    it('pins the sorted (name, bytes) manifest, reproducibly', function () {
+    it('pins the sorted (name, normalized source) manifest reproducibly', function () {
         const root = tempRoot();
         put(root, 'src/actions/batch/index.js', 'abc');
         put(root, 'src/actions/batch/lib/x.js', '');
@@ -131,7 +175,7 @@ describe('drift map rows: a directory handler is hashed whole', function () {
         expect(pinOf(root, 'src/actions/batch/')).to.equal(DIGEST_ABC_EMPTY);
     });
 
-    it('covers EVERY part: editing any one of them moves the pin', function () {
+    it('covers EVERY part: changing code in any one moves the pin', function () {
         // The whole point of the row: no part may be editable without the pin noticing.
         const root = tempRoot();
         const dir = splitHandler(root, 'batch');
@@ -139,7 +183,7 @@ describe('drift map rows: a directory handler is hashed whole', function () {
         for (const part of dirs.listParts(dir)) {
             const abs = path.join(dir, part);
             const original = fs.readFileSync(abs);
-            fs.writeFileSync(abs, Buffer.concat([original, Buffer.from('// edited\n')]));
+            fs.writeFileSync(abs, Buffer.concat([original, Buffer.from('module.exports.__digestProbe = true;\n')]));
             expect(pinOf(root, 'src/actions/batch/'), `editing ${part} must move the pin`).to.not.equal(pinned);
             fs.writeFileSync(abs, original);
             expect(pinOf(root, 'src/actions/batch/'), `restoring ${part} must restore the pin`).to.equal(pinned);
@@ -150,7 +194,7 @@ describe('drift map rows: a directory handler is hashed whole', function () {
         const root = tempRoot();
         const dir = splitHandler(root, 'batch');
         const pinned = row('src/actions/batch/', pinOf(root, 'src/actions/batch/'));
-        fs.appendFileSync(path.join(dir, 'fees.js'), '// a rule changed here\n');
+        fs.appendFileSync(path.join(dir, 'fees.js'), 'module.exports.__digestProbe = true;\n');
         const { missing, drift } = dirs.compareRows(root, [pinned]);
         expect(missing).to.deep.equal([]);
         expect(drift).to.have.lengthOf(1);
