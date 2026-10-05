@@ -133,8 +133,12 @@ function normalizeDigestSource(bytes) {
     return normalizeDigestPieces(pieces);
 }
 
+function digestSource(bytes) {
+    return sha256(normalizeDigestSource(bytes));
+}
+
 function hashSourceFile(fileAbs) {
-    return sha256(normalizeDigestSource(fs.readFileSync(fileAbs)));
+    return digestSource(fs.readFileSync(fileAbs));
 }
 // Parse the map's table rows, each tagged with the kind of handler it names: 'file',
 // 'directory' or 'malformed'.
@@ -430,5 +434,5 @@ function main(argv) {
 if (require.main === module) process.exit(main(process.argv.slice(2)));
 module.exports = {
     parseMapRows, listParts, hashDirectory, hashFileWithCompanionParts, hashMappedRow, compareRows, formatDrift,
-    normalizeDigestSource, stripCommentsAndStrings, feeWalkHandlers, declarationPattern, indexerLiteralReader, main,
+    normalizeDigestSource, digestSource, stripCommentsAndStrings, feeWalkHandlers, declarationPattern, indexerLiteralReader, main,
 };
