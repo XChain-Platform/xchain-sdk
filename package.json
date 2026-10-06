@@ -61,6 +61,7 @@
     "mocha": "^11.7.5",
     "nock": "^14.0.0",
     "sinon": "^21.0.3",
+    "supertest": "^7.3.1",
     "uglify-js": "^3.19.3"
   },
   "overrides": {
