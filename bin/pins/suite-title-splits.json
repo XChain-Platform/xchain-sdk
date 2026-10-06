@@ -64,12 +64,12 @@
       "test/unit/actions/actions.test/10_partial_unstake_claim_optional_amount.test.js",
       "test/unit/actions/actions.test/11_top_level_version_reaches_version_dependent_validation.test.js"
     ],
-    "test/unit/protocol/batch_limits_conformance.test.js": [
-      "test/unit/protocol/batch_limits_conformance.test.js",
-      "test/unit/protocol/batch_limits_conformance.test/01_sdk_half.test.js",
-      "test/unit/protocol/batch_limits_conformance.test/02_arbiter_half_sibling_xchain_indexer_checkout.test.js",
-      "test/unit/protocol/batch_limits_conformance.test/03_weight_conformance_sdk_half.test.js",
-      "test/unit/protocol/batch_limits_conformance.test/04_weight_conformance_arbiter_half.test.js"
+    "test/unit/protocol/batch/batch_limits_conformance.test.js": [
+      "test/unit/protocol/batch/batch_limits_conformance.test.js",
+      "test/unit/protocol/batch/batch_limits_conformance.test/01_sdk_half.test.js",
+      "test/unit/protocol/batch/batch_limits_conformance.test/02_arbiter_half_sibling_xchain_indexer_checkout.test.js",
+      "test/unit/protocol/batch/batch_limits_conformance.test/03_weight_conformance_sdk_half.test.js",
+      "test/unit/protocol/batch/batch_limits_conformance.test/04_weight_conformance_arbiter_half.test.js"
     ],
     "test/unit/actions/betting.test.js": [
       "test/unit/actions/betting.test.js",
@@ -119,17 +119,17 @@
       "test/unit/decoder/describe.test/06_xbridge.test.js",
       "test/unit/decoder/describe.test/07_issue_v7_bridgeability_opt_in.test.js"
     ],
-    "test/unit/protocol/format_selector.test.js": [
-      "test/unit/protocol/format_selector.test.js",
-      "test/unit/protocol/format_selector.test/01_format_selector_serialize_trailing_empty_fields_are_trimmed.test.js",
-      "test/unit/protocol/format_selector.test/02_format_selector_serialize_version_is_auto_populated.test.js",
-      "test/unit/protocol/format_selector.test/03_format_selector_serialize_empty_missing_fields_become_empty_strings.test.js",
-      "test/unit/protocol/format_selector.test/04_format_selector_get_format_fields.test.js",
-      "test/unit/protocol/format_selector.test/05_format_selector_get_populated_fields.test.js",
-      "test/unit/protocol/format_selector.test/06_format_selector_estimate_length.test.js",
-      "test/unit/protocol/format_selector.test/07_format_selector_explicit_version_rest_fields.test.js",
-      "test/unit/protocol/format_selector.test/08_format_selector_select_pinned_version_never_silently_drops_field.test.js",
-      "test/unit/protocol/format_selector.test/09_format_selector_select_explicit_version_must_be_canonical_integer.test.js"
+    "test/unit/protocol/format_selector/format_selector.test.js": [
+      "test/unit/protocol/format_selector/format_selector.test.js",
+      "test/unit/protocol/format_selector/format_selector.test/01_format_selector_serialize_trailing_empty_fields_are_trimmed.test.js",
+      "test/unit/protocol/format_selector/format_selector.test/02_format_selector_serialize_version_is_auto_populated.test.js",
+      "test/unit/protocol/format_selector/format_selector.test/03_format_selector_serialize_empty_missing_fields_become_empty_strings.test.js",
+      "test/unit/protocol/format_selector/format_selector.test/04_format_selector_get_format_fields.test.js",
+      "test/unit/protocol/format_selector/format_selector.test/05_format_selector_get_populated_fields.test.js",
+      "test/unit/protocol/format_selector/format_selector.test/06_format_selector_estimate_length.test.js",
+      "test/unit/protocol/format_selector/format_selector.test/07_format_selector_explicit_version_rest_fields.test.js",
+      "test/unit/protocol/format_selector/format_selector.test/08_format_selector_select_pinned_version_never_silently_drops_field.test.js",
+      "test/unit/protocol/format_selector/format_selector.test/09_format_selector_select_explicit_version_must_be_canonical_integer.test.js"
     ],
     "test/unit/clients/hub.test.js": [
       "test/unit/clients/hub.test.js",
@@ -312,16 +312,16 @@
       "test/unit/carrier/lifecycle_manager.test/07_submit_action_indexing_wait_expires.test.js",
       "test/unit/carrier/lifecycle_manager.test/08_submit_action_contract_actions.test.js"
     ],
-    "test/unit/protocol/light.test.js": [
-      "test/unit/protocol/light.test.js",
-      "test/unit/protocol/light.test/01_spv_phase_4_sdk_light_pure_verifiers.test.js",
-      "test/unit/protocol/light.test/02_spv_phase_4_sdk_light_verify_balance_end_to_end_signed_checkpoint_mocked_fetch.test.js",
-      "test/unit/protocol/light.test/03_spv_phase_4_light_js_validator_set_cache_convenience_verify_tier.test.js",
-      "test/unit/protocol/light.test/04_spv_phase_4_doge_anchor_cold_start_trust.test.js",
-      "test/unit/protocol/light.test/05_spv_phase_4_doge_anchor_cold_start_trust.test.js",
-      "test/unit/protocol/light.test/06_spv_phase_5_validator_set_proof_trustless_quorum.test.js",
-      "test/unit/protocol/light.test/07_spv_d4_pinned_launch_trust_root.test.js",
-      "test/unit/protocol/light.test/08_spv_7_3_rotation_aware_pinned_path_follow_forward.test.js"
+    "test/unit/protocol/light/light.test.js": [
+      "test/unit/protocol/light/light.test.js",
+      "test/unit/protocol/light/light.test/01_spv_phase_4_sdk_light_pure_verifiers.test.js",
+      "test/unit/protocol/light/light.test/02_spv_phase_4_sdk_light_verify_balance_end_to_end_signed_checkpoint_mocked_fetch.test.js",
+      "test/unit/protocol/light/light.test/03_spv_phase_4_light_js_validator_set_cache_convenience_verify_tier.test.js",
+      "test/unit/protocol/light/light.test/04_spv_phase_4_doge_anchor_cold_start_trust.test.js",
+      "test/unit/protocol/light/light.test/05_spv_phase_4_doge_anchor_cold_start_trust.test.js",
+      "test/unit/protocol/light/light.test/06_spv_phase_5_validator_set_proof_trustless_quorum.test.js",
+      "test/unit/protocol/light/light.test/07_spv_d4_pinned_launch_trust_root.test.js",
+      "test/unit/protocol/light/light.test/08_spv_7_3_rotation_aware_pinned_path_follow_forward.test.js"
     ],
     "test/unit/sdk/mempool_surface.test.js": [
       "test/unit/sdk/mempool_surface.test.js",
@@ -346,14 +346,14 @@
       "test/unit/actions/messaging.test/12_get_messages_encrypted_without_wif.test.js",
       "test/unit/actions/messaging.test/13_send_validation_guards.test.js"
     ],
-    "test/unit/protocol/validator.test.js": [
-      "test/unit/protocol/validator.test.js",
-      "test/unit/protocol/validator.test/01_validator_max_supply_validation.test.js",
-      "test/unit/protocol/validator.test/02_validator_price_v1_oracle_publish.test.js",
-      "test/unit/protocol/validator.test/03_validator_vote_binding_poll_numeric_fields.test.js",
-      "test/unit/protocol/validator.test/04_validator_dispenser_create_required_fields.test.js",
-      "test/unit/protocol/validator.test/05_validator_unknown_action.test.js",
-      "test/unit/protocol/validator.test/06_validator_file_gate_min_amount_pc_29.test.js"
+    "test/unit/protocol/validator/validator.test.js": [
+      "test/unit/protocol/validator/validator.test.js",
+      "test/unit/protocol/validator/validator.test/01_validator_max_supply_validation.test.js",
+      "test/unit/protocol/validator/validator.test/02_validator_price_v1_oracle_publish.test.js",
+      "test/unit/protocol/validator/validator.test/03_validator_vote_binding_poll_numeric_fields.test.js",
+      "test/unit/protocol/validator/validator.test/04_validator_dispenser_create_required_fields.test.js",
+      "test/unit/protocol/validator/validator.test/05_validator_unknown_action.test.js",
+      "test/unit/protocol/validator/validator.test/06_validator_file_gate_min_amount_pc_29.test.js"
     ],
     "test/unit/wallet/wallet.test.js": [
       "test/unit/wallet/wallet.test.js",
