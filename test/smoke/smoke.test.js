@@ -21,6 +21,9 @@ process.env.SDK_API_RATE_LIMIT = '0';
 const XChainSDK = require('../../src/XChainSDK');
 const { createApp } = require('../../src/api/index.js');
 
+// Mount the production Express app on an in-process transport: supertest binds an
+// ephemeral port per request, so no fixed port can collide and no server is
+// hand-copied into the test.
 const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
 const app = createApp(sdk);
 
@@ -131,6 +134,9 @@ describe('Smoke: real API app registry introspection', function () {
     it('get_actions returns the full action registry', async function () {
         const response = await rpc('get_actions');
 
+        // The registry grows as the protocol gains actions, so a literal count goes
+        // stale. Comparing against the library's own list still catches a truncated
+        // or lossy response without needing an edit for every new action.
         expect(response.body.result).to.deep.equal(sdk.getActions());
         expect(response.body.result).to.include('SEND');
         expect(response.body.result).to.include('ISSUE');
@@ -163,7 +169,8 @@ describe('Smoke: real API app request handling', function () {
                 action: 'send',
                 params: {
                     tick: 'TOKEN' + index,
-                    // Send a positive amount per request; the validator rejects "0".
+                    // Amounts start at 100, not 0: the validator rejects a zero amount, and a
+                    // bad fixture would fail this test for a reason unrelated to concurrency.
                     amount: String((index + 1) * 100),
                     destination: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh'
                 }
