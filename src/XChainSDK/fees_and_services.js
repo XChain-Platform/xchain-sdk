@@ -109,8 +109,30 @@ function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs
     if (nativeFeeQuote) feeResult.nativeFeeQuote = nativeFeeQuote;
 }
 
+// LTC and DOGE have no XCHAIN fee lane, so their actions are only valid with a coin fee output.
+const NATIVE_FEE_COIN = /(LTC|DOGE)$/;
+
 // Keep fee and service reads together because they share remote-client validation.
 module.exports = {
+
+    // Whether an action submitted through this SDK must carry the native-coin fee output.
+    // An explicit opts.payFeeInNativeCoin wins either way; otherwise the connected chain decides.
+    nativeFeeRequired(opts = {}) {
+        if (typeof opts.payFeeInNativeCoin === 'boolean') return opts.payFeeInNativeCoin;
+        let coin = this.explorer && this.explorer.coin;
+        return typeof coin === 'string' && NATIVE_FEE_COIN.test(coin);
+    },
+
+    // Quote the native fee for an action and return the encoder customOutputs that pay it,
+    // or [] when this chain does not take the fee as a coin output. A refused quote throws
+    // before anything is composed, so no fee-forfeiting transaction is built.
+    async nativeFeeOutputs(actionData, opts = {}) {
+        if (!this.nativeFeeRequired(opts)) return [];
+        let quote = await this.quoteNativeFee(actionData, { source: opts.source });
+        let outputs = [];
+        appendNativeFeeOutput(quote, outputs);
+        return outputs;
+    },
 
     // Estimate fees for an action without signing or broadcasting.
     // Returns { fee, inputTotal, outputTotal, feeSats, inputTotalSats, outputTotalSats, feeError?,
