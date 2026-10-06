@@ -15,9 +15,9 @@
 const {
     expect, fs, CoSigner, WindowStore, evaluatePolicy,
     makeAccount, buildSignablePsbt, agentNonce, tmpStateFile,
-} = require('./cosigner_hardening.test/helpers/cosigner_hardening_helpers.js');
+} = require('../cosigner_hardening.test/helpers/cosigner_hardening_helpers.js');
 const { foldTick, UNRESOLVED_TICK_BUCKET } =
-    require('../../../src/cosigner/policy_evaluator/value_resolution.js');
+    require('../../../../src/cosigner/policy_evaluator/value_resolution.js');
 
 const send = (tick, amount) => ({ action: 'SEND', version: 0, params: { TICK: tick, AMOUNT: amount, DESTINATION: 'x' } });
 

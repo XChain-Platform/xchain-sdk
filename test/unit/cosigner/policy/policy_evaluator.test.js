@@ -9,7 +9,7 @@
 // contact legal@dankest.llc.
 
 const { expect } = require('chai');
-const { evaluatePolicy, GAS_TICK } = require('../../../src/cosigner/policy_evaluator.js');
+const { evaluatePolicy, GAS_TICK } = require('../../../../src/cosigner/policy_evaluator.js');
 
 const send = (params) => ({ action: 'SEND', params });
 
