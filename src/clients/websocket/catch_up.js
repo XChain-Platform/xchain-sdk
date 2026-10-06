@@ -60,13 +60,19 @@ function trackCursor(client, msg) {
         if (client.lastActionIndex === null) client.advanceCursor(msg.data.latest_action_index);
         return;
     }
+    // Only NEW_ACTION and CATCH_UP_COMPLETE report a delivered action row. Other frames
+    // reuse action_index for an entity id (a dispenser, a bet feed), and moving the
+    // cursor to one would make the next reconnect skip rows this client never received.
+    let raw;
+    if (msg.type === 'NEW_ACTION') raw = msg.data.action_index;
+    else if (msg.type === 'CATCH_UP_COMPLETE') raw = msg.data.latest_action_index;
+    else return;
     const state = client._catchUp;
     if (state) {
-        state.maxSeen = maxIndex(maxIndex(state.maxSeen, msg.data.action_index), msg.data.latest_action_index);
+        state.maxSeen = maxIndex(state.maxSeen, raw);
         return;
     }
-    client.advanceCursor(msg.data.action_index);
-    client.advanceCursor(msg.data.latest_action_index);
+    client.advanceCursor(raw);
 }
 
 // Cancel the pending request's backstop timer, if one is armed.

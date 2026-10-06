@@ -201,7 +201,7 @@ await sdk.findToken('MYTOKEN');     // the unwrapped info record, or null
 | `CORS_ORIGIN` | No | Disabled | CORS allowed origin for the helper API |
 | `SDK_API_MAX_BATCH` | No | `20` | Maximum JSON-RPC calls in one array (batch) body. A non-numeric or non-positive value falls back to `20`; no value disables the cap |
 | `SDK_API_RATE_LIMIT` | No | `300` | Requests per window per credential (per source address when unauthenticated). A non-numeric or negative value falls back to `300`; an explicit `0` disables the limiter and is the only way to turn it off |
-| `SDK_API_RATE_WINDOW_MS` | No | `60000` | Length of the fixed rate-limit window, in milliseconds. A non-numeric or non-positive value falls back to `60000` |
+| `SDK_API_RATE_WINDOW_MS` | No | `60000` | Length of the fixed rate-limit window, in milliseconds. Anything other than a positive whole number of milliseconds (`60s`, `1e5`, `1.5`, `0`) falls back to `60000` and logs a warning at startup |
 | `EXPLORER_URL` / `EXPLORER_PORT` | No | `127.0.0.1` / `8080` | xchain-explorer location |
 | `ENCODER_URL` / `ENCODER_PORT` | No | `127.0.0.1` / `3003` | xchain-encoder location |
 | `ENCODER_API_KEY` | No | (none) | API key sent as `x-api-key` to an xchain-encoder whose operator set `API_KEY`; also settable per instance as the `encoderApiKey` option. With no pinned `ENCODER_URL` it is also sent to whatever encoder host hub discovery names |

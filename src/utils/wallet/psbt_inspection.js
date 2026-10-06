@@ -21,6 +21,7 @@
 require('../apply_bufferutils_patch');
 const bitcoin = require('bitcoinjs-lib');
 const { SDKWalletError } = require('../errors.js');
+const { findInputPrevout } = require('./psbt_prevout.js');
 
 /**
  * Serialize a bitcoinjs-lib Transaction into a plain-JSON shape
@@ -174,6 +175,8 @@ function addressFromScript(scriptBuf, net) {
 function decomposeInput(psbtInput, txInput, i, net) {
     // txInput.hash is little-endian; reverse to get display-order txid hex.
     const prevTxHash = Buffer.from(txInput.hash).reverse().toString('hex');
+    // Refuse disagreeing UTXO fields, so the confirm view shows the prevout the signer will sign
+    findInputPrevout(psbtInput, txInput, i);
     const utxo = readPrimaryUtxo(psbtInput, txInput, i);
     readSupplementalPrevTx(psbtInput, utxo);
 

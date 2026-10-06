@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `CoSigner` now refuses an explicit `SIGHASH_ALL` and signs only `SIGHASH_DEFAULT`, because the bare 64-byte key-path signature cannot carry the sighash flag byte, superseding the 0.10.0 note that ALL is accepted.
+
 ## [0.22.4] - 2026-10-05
 
 ### Changed
