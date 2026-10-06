@@ -24,6 +24,7 @@ const psbtutils = require('bitcoinjs-lib/src/psbt/psbtutils');
 const ecc = require('@bitcoinerlab/secp256k1');
 const { SDKWalletError } = require('../errors.js');
 const { ECPair } = require('./key_derivation.js');
+const { assertConsistentPrevouts } = require('./psbt_prevout.js');
 
 bitcoin.initEccLib(ecc);
 
@@ -41,6 +42,8 @@ function createSigningContext(psbtHex, wif, net) {
     } catch (err) {
         throw new SDKWalletError('INVALID_PSBT', `Failed to parse PSBT: ${err.message}`);
     }
+    // Refuse disagreeing UTXO fields before signing, so the fee ceiling and any gate read the prevout the key signs
+    assertConsistentPrevouts(psbt);
 
     return { keyPair, psbt };
 }
@@ -278,6 +281,8 @@ module.exports = {
         } catch (err) {
             throw new SDKWalletError('INVALID_PSBT', `Failed to parse PSBT: ${err.message}`);
         }
+        // Refuse disagreeing UTXO fields before signing (see createSigningContext)
+        assertConsistentPrevouts(psbt);
 
         try {
             psbt.signAllInputs(keyPair);

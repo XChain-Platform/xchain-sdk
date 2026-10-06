@@ -61,3 +61,24 @@ describe('co-signer public exports', function () {
         expect(pkg.coSigner.createCoSignerApp).to.equal(undefined);
     });
 });
+
+describe('MuSig2 raw library instance stays module-private', function () {
+
+    // True when a value is the raw MuSig instance (it alone carries addExternalNonce).
+    const isRawMusig = (v) => !!v && typeof v === 'object' && typeof v.addExternalNonce === 'function';
+
+    it('the package MuSig2 export carries no raw library handle', function () {
+        expect(pkg.MuSig2).to.be.a('function');
+        expect(pkg.MuSig2).to.not.have.property('_internal');
+        for (const key of Object.keys(pkg.MuSig2)) {
+            expect(isRawMusig(pkg.MuSig2[key]), 'MuSig2.' + key).to.equal(false);
+        }
+    });
+
+    it('no module under src/cosigner/musig2 exports the raw library instance', function () {
+        const adapter = require('../../../src/cosigner/musig2/curve_adapter.js');
+        for (const key of Object.keys(adapter)) {
+            expect(isRawMusig(adapter[key]), 'curve_adapter.' + key).to.equal(false);
+        }
+    });
+});

@@ -68,7 +68,13 @@ if(Config.env.sdkApiRateLimit() !== undefined && parseWholeNumber(Config.env.sdk
     log.warn('WARNING: SDK_API_RATE_LIMIT is not a whole number; using the default of ' + SDK_API_RATE_LIMIT +
                  ' requests per window. Set it to exactly 0 to disable the limiter.');
 const SDK_API_RATE_WINDOW_MS = resolveRateWindowMs();
-const NETWORK      = Config.env.network();
+// Say so when the window setting was unusable too: a silent 60000 would leave the
+// operator believing a window they typed as '60s' or '1e5' was in force.
+const RAW_RATE_WINDOW_MS = Config.env.sdkApiRateWindowMs();
+if(RAW_RATE_WINDOW_MS !== undefined && !parseWholeNumber(RAW_RATE_WINDOW_MS))
+    log.warn('WARNING: SDK_API_RATE_WINDOW_MS is not a positive whole number of milliseconds; using the default of ' +
+                 SDK_API_RATE_WINDOW_MS + ' ms.');
+const NETWORK     = Config.env.network();
 const EXPLORER_URL = Config.env.explorerUrl();
 const EXPLORER_PORT = Config.env.explorerPort();
 const ENCODER_URL  = Config.env.encoderUrl();
