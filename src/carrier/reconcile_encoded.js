@@ -52,6 +52,7 @@ const {
     scriptForAddress,
     callerScripts,
 } = require('./reconcile_encoded/script_matching.js');
+const { findVerifiedPrevout } = require('../utils/wallet/psbt_prevout.js');
 
 // Bind refusal details once so every check throws the same SDK error shape.
 function createDeny(psbtHex, label) {
@@ -73,6 +74,9 @@ function readInputs(psbt, deny) {
     let totalIn = 0n;
     let feeComputable = true;
     for (let i = 0; i < psbt.txInputs.length; i++) {
+        // Refuse UTXO fields that disagree: the key signs the nonWitnessUtxo prevout, so judging a forged witnessUtxo approves a drain
+        try { findVerifiedPrevout(psbt, i); }
+        catch (e) { return deny('INCONSISTENT_PREVOUT', e.message); }
         const script = inputScript(psbt, i);
         if (!script) return deny('UNRECONCILABLE_PSBT', 'input ' + i + ' carries no witnessUtxo or nonWitnessUtxo, so its funding script cannot be established');
         if (!inputPresigned(psbt, i)) {

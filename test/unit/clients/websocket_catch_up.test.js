@@ -27,6 +27,8 @@ const { expect }      = require('chai');
 const WebSocket       = require('ws');
 const WebSocketClient = require('../../../src/clients/websocket.js');
 const { waitFor }     = require('../../helpers/wait.js');
+const { trackCursor } = require('../../../src/clients/websocket/catch_up.js');
+const pump            = require('../../../src/clients/websocket/message_pump.js');
 
 // A server holding the catch-up latch per connection, as the explorer does.
 function createCatchUpServer() {
@@ -160,5 +162,51 @@ describe('WebSocketClient reconnect catch-up: continuation and refusal', functio
         expect(events[0].code).to.equal('CATCH_UP_TIMEOUT');
         expect(events[0].since_action_index, 'the gap starts where the truncated replay stopped').to.equal('600');
         expect(events[0].channels).to.deep.equal(['actions']);
+    });
+});
+
+describe('WebSocketClient reconnect catch-up: which frames move the cursor', function () {
+
+    // Frames whose data.action_index names an entity (a dispenser, a bet feed, an
+    // xcall's origin) rather than an action row this client has received.
+    const ENTITY_FRAMES = [
+        { type: 'SUBSCRIBED',       data: { channel: 'dispenser', action_index: '900000' } },
+        { type: 'UNSUBSCRIBED',     data: { channel: 'bet_feed', action_index: '900000' } },
+        { type: 'SNAPSHOT',         data: { channel: 'dispenser', action_index: '900000' } },
+        { type: 'DISPENSER_UPDATE', data: { channel: 'dispenser', action_index: '900000' } },
+        { type: 'BET_CLOSED',       data: { action_index: '900000' } },
+        { type: 'XCALL_COMPLETED',  data: { action_index: '900000' } }
+    ];
+
+    // A client holding only the cursor state trackCursor reads, with the SDK's own advance rule.
+    function cursorClient(cursor, catchUp) {
+        const fake = { lastActionIndex: cursor, _catchUp: catchUp || null };
+        fake.advanceCursor = pump.advanceCursor.bind(fake);
+        return fake;
+    }
+
+    it('an idle client ignores entity ids and still advances on NEW_ACTION', function () {
+        const fake = cursorClient('500');
+        for (const frame of ENTITY_FRAMES) trackCursor(fake, frame);
+        expect(fake.lastActionIndex).to.equal('500');
+        trackCursor(fake, { type: 'NEW_ACTION', data: { action_index: '510' } });
+        expect(fake.lastActionIndex).to.equal('510');
+    });
+
+    it('a replay notes NEW_ACTION and CATCH_UP_COMPLETE but not entity ids', function () {
+        const replay = { maxSeen: null };
+        const fake = cursorClient('500', replay);
+        for (const frame of ENTITY_FRAMES) trackCursor(fake, frame);
+        expect(replay.maxSeen).to.equal(null);
+        trackCursor(fake, { type: 'NEW_ACTION', data: { action_index: '520' } });
+        trackCursor(fake, { type: 'CATCH_UP_COMPLETE', data: { latest_action_index: '600' } });
+        expect(replay.maxSeen).to.equal('600');
+        expect(fake.lastActionIndex).to.equal('500');
+    });
+
+    it('a CATCH_UP_COMPLETE outside a replay still advances the cursor', function () {
+        const fake = cursorClient('500');
+        trackCursor(fake, { type: 'CATCH_UP_COMPLETE', data: { latest_action_index: '640' } });
+        expect(fake.lastActionIndex).to.equal('640');
     });
 });
