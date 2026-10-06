@@ -48,6 +48,23 @@ const path = require('path');
 const { SDKX402Error } = require('../errors.js');
 const { bn, gte, isPosNum, parseActionString } = require('./amounts.js');
 
+const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
+const MAX_LOOKUP_PAGES   = 50;
+
+// Read every page of an explorer list read, stopping on a short page, on the reported
+// total, or at the page cap, so a holder past the first page is not missed.
+async function fetchAllRows(read, limit) {
+    const rows = [];
+    for (let page = 1; page <= MAX_LOOKUP_PAGES; page++) {
+        const res   = await read({ limit, page });
+        const batch = (res && Array.isArray(res.data)) ? res.data : [];
+        rows.push(...batch);
+        const total = res && Number(res.total);
+        if (batch.length < limit || (Number.isFinite(total) && rows.length >= total)) break;
+    }
+    return rows;
+}
+
 module.exports = {
     // Does this parsed-output / REST-row match the invoice? Exact rules:
     // destination verbatim, tick uppercased, amount >= as BigNumber,
@@ -61,10 +78,10 @@ module.exports = {
     outputMatches(invoice, out, ids) {
         const dest   = String(out.destination == null ? '' : out.destination);
         const destOk = dest === invoice.payTo
-            || (ids && ids.payToId && dest === '^' + ids.payToId);
+            || (ids && CANONICAL_CARET_ID.test(String(ids.payToId)) && dest === '^' + ids.payToId);
         const tick   = String(out.tick).toUpperCase();
         const tickOk = tick === invoice.tick
-            || (ids && ids.tickId && tick === '^' + ids.tickId);
+            || (ids && CANONICAL_CARET_ID.test(String(ids.tickId)) && tick === '^' + ids.tickId);
         return destOk && tickOk
             && isPosNum(out.amount) && gte(out.amount, invoice.amount)
             && String(out.memo == null ? '' : out.memo).trim() === invoice.nonce;
@@ -86,7 +103,7 @@ module.exports = {
             try {
                 const res  = await this.explorer.getAddress(invoice.payTo, { noRetry: true });
                 const info = res && (Array.isArray(res) ? (res[0] || {}).info : res.info);
-                if (info && info.address_id != null && /^[0-9]+$/.test(String(info.address_id))) {
+                if (info && info.address_id != null && CANONICAL_CARET_ID.test(String(info.address_id))) {
                     ids.payToId = String(info.address_id);
                     this._wireIdCache.addr.set(invoice.payTo, ids.payToId);
                 }
@@ -97,7 +114,7 @@ module.exports = {
             try {
                 const token = await this.explorer.getToken(invoice.tick, { noRetry: true });
                 const info  = token && (Array.isArray(token) ? (token[0] || {}).info : token.info);
-                if (info && info.tick_id != null && /^[0-9]+$/.test(String(info.tick_id))) {
+                if (info && info.tick_id != null && CANONICAL_CARET_ID.test(String(info.tick_id))) {
                     ids.tickId = String(info.tick_id);
                     this._wireIdCache.tick.set(invoice.tick, ids.tickId);
                 }
@@ -208,8 +225,7 @@ module.exports = {
             if (!consumed.ok) return { ok: false, code: consumed.code };
         }
 
-        const res = await this.explorer.getBalances(payer, { limit: 500 });
-        const rows = (res && res.data) || [];
+        const rows = await fetchAllRows((o) => this.explorer.getBalances(payer, o), 500);
         for (const row of rows) {
             if (String(row.tick).toUpperCase() === this.dispenser.holdTick
                 && isPosNum(row.amount) && gte(row.amount, this.dispenser.minBalance))
@@ -248,8 +264,7 @@ module.exports = {
 
         const tail = this._depositLocks.get(payer) || Promise.resolve();
         const run = tail.then(async () => {
-            const res = await this.explorer.getSends(this.deposit.depositAddress, 'destination', { limit: 100 });
-            const rows = (res && res.data) || [];
+            const rows = await fetchAllRows((o) => this.explorer.getSends(this.deposit.depositAddress, 'destination', o), 100);
             let deposited = bn(0);
             for (const row of rows)
                 if (row.source === payer

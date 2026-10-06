@@ -21,6 +21,7 @@
  ********************************************************************/
 
 const { SDKMessagingError } = require('../../utils/errors.js');
+const { reconcileEncoded } = require('../../carrier/reconcile_encoded.js');
 const { METHOD_ECIES, METHOD_ECDH, METHOD_AES, normalizeLookupBudget } = require('./kdf_constants.js');
 
 function validateSendParams(params, sdk) {
@@ -229,6 +230,18 @@ module.exports = {
             params: actionParams,
             encoder: params.encoder
         });
+
+        if (typeof sdk.wallet.getBitcoinNetwork === 'function') {
+            reconcileEncoded(actionResult.psbt, {
+                network:          sdk.wallet.getBitcoinNetwork(),
+                changeAddresses:  params.encoder.change,
+                callerIdentities: params.encoder.pubkey,
+                maxFeeSats:       params.encoder.maxFeeSats,
+                label:            'message',
+                phaseShapes:      [],
+                phaseSpends:      null
+            });
+        }
 
         let signed = sdk.wallet.signPsbt(actionResult.psbt, params.wif);
         let broadcast = await sdk.wallet.broadcastTx(signed.txHex, sdk.requireEncoder());
