@@ -30,6 +30,7 @@
 
 const { FINDING_CODES } = require('../constants.js');
 const numeric = require('../numeric.js');
+const { describeActivation } = require('../activation.js');
 const { GAS_TICK } = require('../../protocol/constants.js');
 const { BATCH_COMMAND_LIMIT, BATCH_WEIGHT_BUDGET, batchWeight }
     = require('../../protocol/batch_limits.js');
@@ -192,8 +193,8 @@ function checkCommandCap(ctx, commands) {
     }
     ctx.addFinding(FINDING_CODES.BATCH_LIMIT_EXCEEDED, 'warning',
         `This batch's ${count} commands weigh ${weight}; the chain rejects the whole batch above `
-        + `${BATCH_WEIGHT_BUDGET} (cost weighting is in force on every network: testnet and regtest `
-        + `from genesis, mainnet from 2026-08-16T00:00:00Z).`,
+        + `${BATCH_WEIGHT_BUDGET} (cost weighting is in force on every network: the weighted budget binds `
+        + `inside the issuance-limits gate, ${describeActivation('BATCH_ISSUANCE_LIMITS')}).`,
         { action: 'COMMAND', limit: BATCH_WEIGHT_BUDGET, count, weight });
 }
 

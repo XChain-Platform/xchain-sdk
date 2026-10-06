@@ -23,6 +23,7 @@
 
 const { FINDING_CODES } = require('../../constants.js');
 const numeric = require('../../numeric.js');
+const { describeActivation } = require('../../activation.js');
 const { getCoinConfig } = require('../../../coins/index.js');
 
 // Decimal places of the chain coin a GET_COIN names, read from the vendored coin
@@ -115,14 +116,13 @@ function checkSelfPrice(ctx) {
 // its flag-day the indexer also requires each of them to denote the number the
 // ledger credits, which pre-flight cannot decide: it needs the activation state
 // of the block that will carry the create. Declared rather than raised, because
-// neither mainnet nor testnet is armed and rejecting here would block a create
-// both planes accept.
+// pre-flight has no block time and rejecting here would block a create the chain accepts.
 function declareAmountRepresentability(ctx) {
     ctx.addUnverified('AMOUNT_REPRESENTABILITY',
         'above its flag-day every amount on this create must be a plain decimal numeral denoting the '
         + 'number the ledger credits, so exponent notation and an integer too wide for the ledger '
         + 'aggregation are rejected instead of crediting a different number; the activation state of '
-        + 'the including block is server-side only, and neither mainnet nor testnet is armed for it');
+        + 'the including block is server-side only; the activation is ' + describeActivation('AMOUNT_REPRESENTABILITY'));
 }
 
 // The settlement half of the dispenser_amount_positivity_activation row
