@@ -59,6 +59,12 @@ jobs:
         with:
           node-version: "22.22.3"
 
+      # preflight_handler_dirs.js requires acorn, declared in this repo package.json; the
+      # job checks the sdk out under xchain-sdk/ and nothing installed it.
+      - name: Install dependencies
+        working-directory: xchain-sdk
+        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
       - name: Coin-registry byte-identity vs canonical
         run: xchain-hub/bin/sync-coins.sh --check --only xchain-sdk
 
