@@ -10,6 +10,8 @@ const { expect } = require('chai');
 const fs = require('fs');
 const path = require('path');
 const { DISCLOSURE_MIRRORS, describeActivation } = require('../../../src/preflight/activation.js');
+const { checkCommandCap } = require('../../../src/preflight/checks/batch.js');
+const { FINDING_CODES } = require('../../../src/preflight/constants.js');
 const { declareAmountRepresentability } = require('../../../src/preflight/checks/dispenser/amount_rules.js');
 
 const INDEXER = path.join(__dirname, '..', '..', '..', '..', 'xchain-indexer', 'src', 'protocol_changes');
@@ -28,6 +30,22 @@ describe('pre-flight activation splits are mirrored, not hard-coded', function (
         expect(seen[0].check).to.equal('AMOUNT_REPRESENTABILITY');
         expect(seen[0].text).to.contain(describeActivation('AMOUNT_REPRESENTABILITY'));
         expect(seen[0].text).to.not.contain('neither mainnet nor testnet is armed');
+    });
+
+    it('the batch weight finding is worded from the pinned issuance-limits table', function () {
+        const findings = [];
+        const ctx = {
+            parsed: { params: { COMMAND: Array(11).fill('DROP|TICK|1').join(';') } },
+            findings,
+            markRun: () => {},
+            addFinding: (code, level, text, data) => findings.push({ code, level, text, data }),
+        };
+        checkCommandCap(ctx, []);
+        expect(findings).to.have.length(1);
+        expect(findings[0].code).to.equal(FINDING_CODES.BATCH_LIMIT_EXCEEDED);
+        expect(findings[0].data.weight).to.be.greaterThan(findings[0].data.limit);
+        expect(findings[0].text).to.contain(describeActivation('BATCH_ISSUANCE_LIMITS'));
+        expect(findings[0].text).to.not.contain('2026-08-16');
     });
 
     it('describes each pinned table by value', function () {

@@ -321,4 +321,4 @@ async function checkBatch(ctx) {
     await checkFeeBudget(ctx, fees, gas, allPriced);
 }
 
-module.exports = { checkBatch, projectDeltas };
+module.exports = { checkBatch, projectDeltas, checkCommandCap };
