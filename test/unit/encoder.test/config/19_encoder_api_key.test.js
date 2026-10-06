@@ -10,7 +10,7 @@
 
 const { expect } = require('chai');
 const nock = require('nock');
-const EncoderClient = require('../../../src/clients/encoder.js');
+const EncoderClient = require('../../../../src/clients/encoder.js');
 
 // An xchain-encoder whose operator set API_KEY 401s every method except
 // GET /openrpc.json; with no way to present x-api-key the SDK could not
@@ -126,7 +126,7 @@ describe('EncoderClient', function () {
     describe('encoder API key', function () {
         it('is threaded from the XChainSDK constructor, whose encoder options are cherry-picked', function () {
             this.timeout(10000);
-            const XChainSDK = require('../../../src/XChainSDK.js');
+            const XChainSDK = require('../../../../src/XChainSDK.js');
             let sdk = new XChainSDK({
                 network: 'bitcoin-regtest', noHub: true,
                 encoderUrl: 'encoder.test', encoderPort: 3000, encoderApiKey: 'fake-key'

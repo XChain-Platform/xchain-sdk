@@ -9,7 +9,7 @@
 // contact legal@dankest.llc.
 
 const { expect } = require('chai');
-const EncoderClient = require('../../../src/clients/encoder.js');
+const EncoderClient = require('../../../../src/clients/encoder.js');
 
 describe('EncoderClient', function () {
     let client;

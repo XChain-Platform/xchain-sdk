@@ -11,7 +11,7 @@
 const { expect } = require('chai');
 const nock = require('nock');
 const sinon = require('sinon');
-const EncoderClient = require('../../../src/clients/encoder.js');
+const EncoderClient = require('../../../../src/clients/encoder.js');
 
 describe('EncoderClient', function () {
     const BASE = 'http://encoder.test:3000';
