@@ -71,7 +71,7 @@ function pinOf(root, handler) {
 /* A handler split the way the indexer's split convention splits one: the entry at
  * index.js, named parts beside it, and one part a directory deeper. */
 function splitHandler(root, name) {
-    put(root, `src/actions/${name}/index.js`, "const validate = require('../validate.js');\nmodule.exports = { validate };\n");
+    put(root, `src/actions/${name}/index.js`, "const validate = require('./validate.js');\nmodule.exports = { validate };\n");
     put(root, `src/actions/${name}/validate.js`, 'module.exports = function validate(d) { return d.quantity > 0; };\n');
     put(root, `src/actions/${name}/fees.js`, 'module.exports = async function fees(u, d, p) { return u.createFeesObject(d, p); };\n');
     put(root, `src/actions/${name}/limits/caps.js`, 'module.exports = { MAX_PARTS: 10 };\n');
@@ -243,7 +243,7 @@ describe('drift map rows: split shapes that must fail closed', function () {
     });
 
     it('refuses a directory row while a flat handler beside it still wins require()', function () {
-        // Node resolves require('../batch') to batch.js before batch/index.js, so hashing
+        // Node resolves require('./batch') to batch.js before batch/index.js, so hashing
         // the directory here would pin code that does not run.
         const root = tempRoot();
         splitHandler(root, 'batch');
