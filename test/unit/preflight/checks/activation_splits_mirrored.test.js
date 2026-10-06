@@ -9,12 +9,12 @@
 const { expect } = require('chai');
 const fs = require('fs');
 const path = require('path');
-const { DISCLOSURE_MIRRORS, describeActivation } = require('../../../src/preflight/activation.js');
-const { checkCommandCap } = require('../../../src/preflight/checks/batch.js');
-const { FINDING_CODES } = require('../../../src/preflight/constants.js');
-const { declareAmountRepresentability } = require('../../../src/preflight/checks/dispenser/amount_rules.js');
+const { DISCLOSURE_MIRRORS, describeActivation } = require('../../../../src/preflight/activation.js');
+const { checkCommandCap } = require('../../../../src/preflight/checks/batch.js');
+const { FINDING_CODES } = require('../../../../src/preflight/constants.js');
+const { declareAmountRepresentability } = require('../../../../src/preflight/checks/dispenser/amount_rules.js');
 
-const INDEXER = path.join(__dirname, '..', '..', '..', '..', 'xchain-indexer', 'src', 'protocol_changes');
+const INDEXER = path.join(__dirname, '..', '..', '..', '..', '..', 'xchain-indexer', 'src', 'protocol_changes');
 const read = (f) => fs.readFileSync(path.join(INDEXER, f), 'utf8');
 
 describe('pre-flight activation splits are mirrored, not hard-coded', function () {

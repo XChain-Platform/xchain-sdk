@@ -111,12 +111,9 @@ function checkSelfPrice(ctx) {
     }
 }
 
-// GIVE_AMOUNT, GIVE_ESCROW, GET_AMOUNT and FIAT_AMOUNT are all judged above (or
-// by validator.js) against the LEGACY amount-format rule, see numeric.js. Above
-// its flag-day the indexer also requires each of them to denote the number the
-// ledger credits, which pre-flight cannot decide: it needs the activation state
-// of the block that will carry the create. Declared rather than raised, because
-// pre-flight has no block time and rejecting here would block a create the chain accepts.
+// Declare, never reject, the post-flag-day representability rule: it needs the
+// activation state of the including block, which pre-flight has no way to know.
+// Amounts are judged above against the legacy format rule (numeric.js).
 function declareAmountRepresentability(ctx) {
     ctx.addUnverified('AMOUNT_REPRESENTABILITY',
         'above its flag-day every amount on this create must be a plain decimal numeral denoting the '
