@@ -10,7 +10,7 @@
 
 const { expect } = require('chai');
 const nock = require('nock');
-const EncoderClient = require('../../../src/clients/encoder.js');
+const EncoderClient = require('../../../../src/clients/encoder.js');
 
 describe('EncoderClient', function () {
     const BASE = 'http://encoder.test:3000';
@@ -93,7 +93,7 @@ describe('EncoderClient', function () {
 
 describe('EncoderClient exact fee totals', function () {
     const BASE = 'http://encoder.test:3000';
-    require('../../../src/utils/apply_bufferutils_patch.js');
+    require('../../../../src/utils/apply_bufferutils_patch.js');
     const bitcoin = require('bitcoinjs-lib');
     const script = bitcoin.payments.p2wpkh({ hash: Buffer.alloc(20, 7) }).output;
     const client = new EncoderClient({ encoderUrl: 'encoder.test', encoderPort: 3000 });

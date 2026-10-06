@@ -10,7 +10,7 @@
 
 const { expect } = require('chai');
 const sinon = require('sinon');
-const EncoderClient = require('../../../src/clients/encoder.js');
+const EncoderClient = require('../../../../src/clients/encoder.js');
 
 describe('EncoderClient', function () {
     describe('timeout errors', function () {

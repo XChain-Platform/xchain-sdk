@@ -10,7 +10,8 @@
 
 const { expect } = require('chai');
 const nock = require('nock');
-const EncoderClient = require('../../../src/clients/encoder.js');
+const sinon = require('sinon');
+const EncoderClient = require('../../../../src/clients/encoder.js');
 
 describe('EncoderClient', function () {
     const BASE = 'http://encoder.test:3000';
@@ -19,26 +20,26 @@ describe('EncoderClient', function () {
         nock.cleanAll();
     });
 
-    describe('retry=false', function () {
-        it('does not retry when retry is false', async function () {
+    describe('readyHook', function () {
+        afterEach(function () {
+            sinon.restore();
+        });
+
+        it('awaits readyHook before each RPC call', async function () {
+            let hookCalled = false;
+            const readyHook = async () => { hookCalled = true; };
             const hooked = new EncoderClient({
                 encoderUrl: 'encoder.test',
                 encoderPort: 3000,
-                retry: false
+                retry: false,
+                readyHook
             });
-
-            // Only intercept one call; if retried, nock would throw unmatched request
             nock(BASE)
                 .post('/')
-                .reply(503, 'Service Unavailable');
+                .reply(200, { jsonrpc: '2.0', result: { status: 'ok' }, id: 1 });
 
-            try {
-                await hooked.ping();
-                expect.fail('should have thrown');
-            } catch (e) {
-                expect(e.name).to.equal('SDKEncoderError');
-                expect(e.code).to.equal('ENCODER_HTTP_503');
-            }
+            await hooked.ping();
+            expect(hookCalled).to.be.true;
         });
     });
 });
