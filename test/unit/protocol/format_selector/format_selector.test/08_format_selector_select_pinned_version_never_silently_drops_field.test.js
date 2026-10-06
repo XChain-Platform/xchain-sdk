@@ -21,8 +21,8 @@
 'use strict';
 
 const { expect } = require('chai');
-const FormatSelector = require('../../../../src/protocol/format_selector.js');
-const { SDKFormatError } = require('../../../../src/utils/errors.js');
+const FormatSelector = require('../../../../../src/protocol/format_selector.js');
+const { SDKFormatError } = require('../../../../../src/utils/errors.js');
 
 // #3918: a PINNED version obeys the same no-data-loss rule as auto-selection.
 // STAKE v3 alone carries TARGET_CONTRACT_INDEX|TICK; pinning v1 without this guard

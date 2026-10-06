@@ -23,8 +23,8 @@
 
 const assert = require('assert');
 const crypto = require('crypto');
-const light  = require('../../../../src/protocol/light_client.js');
-const checkpoint = require('../../../../src/checkpoint.js');
+const light  = require('../../../../../src/protocol/light_client.js');
+const checkpoint = require('../../../../../src/checkpoint.js');
 
 const ENV = 'XC_ANCHOR_FOLD_REGTEST_ACTIVATION';
 const NET = 'regtest';
@@ -282,7 +282,7 @@ describe('ANCHOR v3 fold: the wrapper fold is read from the action archive row t
 
 describe('ANCHOR v3 fold: attachFoldArchive matches exactly one archive row', function () {
     let attachFoldArchive;
-    before(function () { ({ attachFoldArchive } = require('../../../../src/protocol/light_client/fold_archive_attach.js')); });
+    before(function () { ({ attachFoldArchive } = require('../../../../../src/protocol/light_client/fold_archive_attach.js')); });
     const sigs = [{ pubkey: 'AA'.repeat(32), sig: 'BB'.repeat(64) }];
     const archive = (extra) => Object.assign({ chain: null, validator_signatures: sigs }, ARCHIVE, extra);
 

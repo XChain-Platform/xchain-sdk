@@ -15,7 +15,7 @@
 'use strict';
 
 const assert = require('assert');
-const { parseAnchorV0 } = require('../../../../src/protocol/light_client/anchored_checkpoint.js');
+const { parseAnchorV0 } = require('../../../../../src/protocol/light_client/anchored_checkpoint.js');
 
 function makeSection(chain, pubkeys) {
     const fields = [

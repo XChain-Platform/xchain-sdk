@@ -23,7 +23,7 @@
  ********************************************************************/
 
 const { expect } = require('chai');
-const { planCoinpayOutputs, checkCoinpayOutputPlan } = require('../../../src/protocol/batch_limits.js');
+const { planCoinpayOutputs, checkCoinpayOutputPlan } = require('../../../../src/protocol/batch_limits.js');
 
 const COINPAY_OUTPUT_PLAN_TITLE = 'batchLimits: COINPAY per-payee output planning (spec row 31)';
 

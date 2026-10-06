@@ -13,11 +13,11 @@ const assert = require('assert');
 const {
     sectionsChainOrderReason,
     sigsPubkeyOrderReason
-} = require('../../../../src/protocol/light_client/anchored_checkpoint.js');
+} = require('../../../../../src/protocol/light_client/anchored_checkpoint.js');
 const {
     bundleOrderEnforced,
     bundleOrderRefusal
-} = require('../../../../src/protocol/light_client/anchor_bundle_order.js');
+} = require('../../../../../src/protocol/light_client/anchor_bundle_order.js');
 
 const reasons = { sectionsChainOrderReason, sigsPubkeyOrderReason };
 

@@ -41,8 +41,8 @@ const {
     classifyCommand,
     commandTick,
     maxMintsPerDistinctTick,
-} = require('../../../../../src/protocol/batch_limits.js');
-const { parse } = require('../../../../../src/decoder/parse.js');
+} = require('../../../../../../src/protocol/batch_limits.js');
+const { parse } = require('../../../../../../src/decoder/parse.js');
 
 /*
  * THE SDK HALF IS THE SHIPPED DECODER, NOT A SECOND SCANNER.

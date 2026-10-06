@@ -30,8 +30,8 @@
 
 const assert = require('assert');
 const crypto = require('crypto');
-const light  = require('../../../../src/protocol/light_client.js');
-const checkpoint = require('../../../../src/checkpoint.js');
+const light  = require('../../../../../src/protocol/light_client.js');
+const checkpoint = require('../../../../../src/checkpoint.js');
 
 const CHAIN = 'BTC', NET = 'regtest';
 
@@ -76,7 +76,7 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
         // mainnet snapshot_block one below the armed height keeps the roots out of
         // the signed canonical, so a rooted row there carries roots nobody signed,
         // whatever its version fields say. The registry's own row is the oracle.
-        const registry = require('../../../../src/consensus/gate_registry');
+        const registry = require('../../../../../src/consensus/gate_registry');
         const armed = registry.get('checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION').mainnet;
         assert.ok(Number.isInteger(armed) && armed > 0, 'mainnet is armed to a concrete height');
         const { cp, validators } = makeSignedSection({ network: 'mainnet' });

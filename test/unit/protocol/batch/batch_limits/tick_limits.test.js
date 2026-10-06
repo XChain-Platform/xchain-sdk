@@ -5,7 +5,7 @@ const {
     commandTick,
     limitKeysInListOrder,
     paramsTick,
-} = require('../../../../src/protocol/batch_limits/tick_limits.js');
+} = require('../../../../../src/protocol/batch_limits/tick_limits.js');
 
 describe('batch limit tick helpers', function () {
     it('reads a SEND tick from the current wire format', function () {

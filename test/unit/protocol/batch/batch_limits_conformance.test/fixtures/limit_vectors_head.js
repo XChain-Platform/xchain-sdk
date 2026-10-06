@@ -37,7 +37,7 @@
  * cannot quietly split a vector's expectations to make a failure go away.
  ********************************************************************/
 
-const { CHILD_ISSUE_KEY } = require('../../../../../src/protocol/batch_limits.js');
+const { CHILD_ISSUE_KEY } = require('../../../../../../src/protocol/batch_limits.js');
 const { repeat } = require('../support/limit_helpers.js');
 
 /*

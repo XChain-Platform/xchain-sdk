@@ -21,8 +21,8 @@
 'use strict';
 
 const { expect } = require('chai');
-const FormatSelector = require('../../../../src/protocol/format_selector.js');
-const { SDKFormatError } = require('../../../../src/utils/errors.js');
+const FormatSelector = require('../../../../../src/protocol/format_selector.js');
+const { SDKFormatError } = require('../../../../../src/utils/errors.js');
 
 // Explicit version + rest-field handling
 describe('FormatSelector: explicit version + rest fields', function () {

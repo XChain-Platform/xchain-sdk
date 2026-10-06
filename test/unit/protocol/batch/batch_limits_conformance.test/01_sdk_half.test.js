@@ -41,8 +41,8 @@ const { expect } = require('chai');
 
 const {
     classifyCommand,
-} = require('../../../../src/protocol/batch_limits.js');
-const { parse } = require('../../../../src/decoder/parse.js');
+} = require('../../../../../src/protocol/batch_limits.js');
+const { parse } = require('../../../../../src/decoder/parse.js');
 const {
     mirrorMint,
     mirrorVerdict,

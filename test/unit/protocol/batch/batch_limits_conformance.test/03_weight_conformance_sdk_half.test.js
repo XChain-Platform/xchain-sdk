@@ -45,8 +45,8 @@ const {
     BATCH_WEIGHT_BUDGET,
     batchWeight,
     subCommandWeight,
-} = require('../../../../src/protocol/batch_limits.js');
-const { parse } = require('../../../../src/decoder/parse.js');
+} = require('../../../../../src/protocol/batch_limits.js');
+const { parse } = require('../../../../../src/decoder/parse.js');
 const { mirrorVerdict, repeat } = require('./support/limit_helpers.js');
 const {
     WEIGHT_BATCH_VECTORS,

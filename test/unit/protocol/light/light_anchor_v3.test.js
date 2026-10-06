@@ -10,7 +10,7 @@
 'use strict';
 
 const assert = require('assert');
-const light = require('../../../src/protocol/light_client.js');
+const light = require('../../../../src/protocol/light_client.js');
 
 const hash = (char) => char.repeat(64);
 const signature = (char) => char.repeat(128);

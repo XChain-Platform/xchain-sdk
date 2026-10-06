@@ -22,8 +22,8 @@
 'use strict';
 
 const { expect } = require('chai');
-const FormatSelector = require('../../../src/protocol/format_selector.js');
-const { PIN_ONLY_VERSIONS } = require('../../../src/protocol/format_selector/field_names.js');
+const FormatSelector = require('../../../../src/protocol/format_selector.js');
+const { PIN_ONLY_VERSIONS } = require('../../../../src/protocol/format_selector/field_names.js');
 
 describe('FormatSelector pin-only versions', () => {
     it('pins LIST versions without changing TYPE and ITEM selection', () => {

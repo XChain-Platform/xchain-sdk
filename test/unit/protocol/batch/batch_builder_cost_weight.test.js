@@ -39,15 +39,15 @@
 
 const { expect } = require('chai');
 const path = require('path');
-const { loadIndexerAction } = require('../../helpers/indexer_action_handler.js');
+const { loadIndexerAction } = require('../../../helpers/indexer_action_handler.js');
 
-const XChainSDK = require('../../../src/XChainSDK.js');
+const XChainSDK = require('../../../../src/XChainSDK.js');
 const {
     BATCH_COMMAND_LIMIT,
     BATCH_WEIGHT_BUDGET,
     BATCH_COMMAND_WEIGHTS,
     actionWeight,
-} = require('../../../src/protocol/batch_limits.js');
+} = require('../../../../src/protocol/batch_limits.js');
 
 // Queue `entries` ([action, params] pairs) on a fresh builder and return the
 // message of whatever validate() throws, or null when it accepts the batch.

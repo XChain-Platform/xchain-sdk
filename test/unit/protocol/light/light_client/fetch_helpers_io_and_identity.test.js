@@ -19,7 +19,7 @@ const {
     expectedMismatch,
     fetchJson,
     pinnedEntry
-} = require('../../../../src/protocol/light_client/fetch_helpers.js');
+} = require('../../../../../src/protocol/light_client/fetch_helpers.js');
 
 describe('pinnedEntry', function () {
     it('returns null when the caller supplies validators or a trusted checkpoint', function () {

@@ -23,9 +23,9 @@
  ********************************************************************/
 
 const { expect } = require('chai');
-const XChainSDK = require('../../../src/XChainSDK.js');
-const Validator = require('../../../src/protocol/validator.js');
-const Utility = require('../../../src/utils/utility.js');
+const XChainSDK = require('../../../../src/XChainSDK.js');
+const Validator = require('../../../../src/protocol/validator.js');
+const Utility = require('../../../../src/utils/utility.js');
 
 const validator = new Validator(new Utility());
 

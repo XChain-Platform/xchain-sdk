@@ -2,9 +2,9 @@
 
 const assert = require('assert');
 
-const GATE_PATH = require.resolve('../../../../src/consensus/gate_registry.js');
-const ANCHOR_PATH = require.resolve('../../../../src/protocol/light_client/anchored_checkpoint.js');
-const ORDER_PATH = require.resolve('../../../../src/protocol/light_client/anchor_bundle_order.js');
+const GATE_PATH = require.resolve('../../../../../src/consensus/gate_registry.js');
+const ANCHOR_PATH = require.resolve('../../../../../src/protocol/light_client/anchored_checkpoint.js');
+const ORDER_PATH = require.resolve('../../../../../src/protocol/light_client/anchor_bundle_order.js');
 const REAL_GATE = require(GATE_PATH);
 
 async function withChainQualifiedGates(run) {

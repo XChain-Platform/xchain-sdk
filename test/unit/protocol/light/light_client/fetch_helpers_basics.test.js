@@ -22,7 +22,7 @@
 'use strict';
 
 const { expect } = require('chai');
-const H = require('../../../../src/protocol/light_client/fetch_helpers.js');
+const H = require('../../../../../src/protocol/light_client/fetch_helpers.js');
 
 describe('light_client fetch_helpers basics', function () {
     describe('resolveFetch', function () {

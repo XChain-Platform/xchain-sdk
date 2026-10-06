@@ -35,10 +35,10 @@
 'use strict';
 
 const assert = require('assert');
-const M = require('../../../src/merkle.js');
-const light = require('../../../src/protocol/light_client.js');
-const ActionWaiter = require('../../../src/utils/action_waiter.js');
-const { sameWireIndex, toWireIndex } = require('../../../src/utils/wire_index.js');
+const M = require('../../../../src/merkle.js');
+const light = require('../../../../src/protocol/light_client.js');
+const ActionWaiter = require('../../../../src/utils/action_waiter.js');
+const { sameWireIndex, toWireIndex } = require('../../../../src/utils/wire_index.js');
 
 // Two adjacent indices that JavaScript's Number cannot tell apart, spelled the
 // way the wire spells them.

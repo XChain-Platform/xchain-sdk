@@ -27,16 +27,16 @@ const assert = require('assert');
 const crypto = require('crypto');
 const fs     = require('fs');
 const path   = require('path');
-const M      = require('../../../../src/merkle.js');
-const light  = require('../../../../src/protocol/light_client.js');
-const checkpoint = require('../../../../src/checkpoint.js');
+const M      = require('../../../../../src/merkle.js');
+const light  = require('../../../../../src/protocol/light_client.js');
+const checkpoint = require('../../../../../src/checkpoint.js');
 
 // The AUTHORITATIVE ANCHOR wire vector lives in the docs repo (hub and indexer
 // vendor byte-identical copies; the SDK reads the original rather than adding a
 // fourth copy to keep in sync). Resolved exactly as the other cross-repo guards
 // resolve their siblings, so a single-repo clone skips instead of failing, and
 // XCHAIN_REQUIRE_SIBLINGS=1 turns that silence into a failure.
-const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(__dirname, '../..', '..', '..', '..');
+const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(__dirname, '../../..', '..', '..', '..');
 const DOCS_DIR     = process.env.XCHAIN_DOCS_DIR || process.env.XCHAIN_DOCUMENTATION_DIR
                      || path.join(SIBLING_ROOT, 'xchain-documentation');
 const VECTOR_FILE  = path.join(DOCS_DIR, 'protocol', 'test-vectors', 'anchor_canonical.json');
@@ -142,7 +142,7 @@ function buildActionProof(height) {
 }
 
 
-const pinned = require('../../../../src/protocol/pinned_checkpoints.js');
+const pinned = require('../../../../../src/protocol/pinned_checkpoints.js');
 
 function makeSigner() {
     const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');

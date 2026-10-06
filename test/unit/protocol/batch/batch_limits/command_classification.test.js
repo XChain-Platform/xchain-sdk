@@ -19,8 +19,8 @@ const {
     classifyIssueTick,
     formatVersion,
     classifyCommand,
-} = require('../../../../src/protocol/batch_limits/command_classification.js');
-const { CHILD_ISSUE_KEY } = require('../../../../src/protocol/batch_limits/limit_tables.js');
+} = require('../../../../../src/protocol/batch_limits/command_classification.js');
+const { CHILD_ISSUE_KEY } = require('../../../../../src/protocol/batch_limits/limit_tables.js');
 
 describe('command classification', function () {
     it('classifies only non-caret dotted ticks as child issues', function () {

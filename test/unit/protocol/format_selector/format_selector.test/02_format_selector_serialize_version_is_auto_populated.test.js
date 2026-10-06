@@ -21,7 +21,7 @@
 'use strict';
 
 const { expect } = require('chai');
-const FormatSelector = require('../../../../src/protocol/format_selector.js');
+const FormatSelector = require('../../../../../src/protocol/format_selector.js');
 
 // serialize() - VERSION is auto-populated
 

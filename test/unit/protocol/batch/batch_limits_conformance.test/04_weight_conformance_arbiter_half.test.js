@@ -39,14 +39,14 @@
 
 const { expect } = require('chai');
 const path = require('path');
-const { loadIndexerAction } = require('../../../helpers/indexer_action_handler.js');
+const { loadIndexerAction } = require('../../../../helpers/indexer_action_handler.js');
 
 const {
     BATCH_COMMAND_WEIGHTS,
     BATCH_WEIGHT_BUDGET,
     formatVersion,
     subCommandWeight,
-} = require('../../../../src/protocol/batch_limits.js');
+} = require('../../../../../src/protocol/batch_limits.js');
 const {
     FORMAT_FIELD_VECTORS,
     WEIGHT_BATCH_VECTORS,

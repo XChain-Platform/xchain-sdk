@@ -18,9 +18,9 @@
 // >2^53 magnitudes where String()/parseFloat go scientific.
 
 const { expect } = require('chai');
-const config     = require('../../../src/config.js');
-const Utility    = require('../../../src/utils/utility.js');
-const { XChainSDK } = require('../../../index.js');
+const config     = require('../../../../src/config.js');
+const Utility    = require('../../../../src/utils/utility.js');
+const { XChainSDK } = require('../../../../index.js');
 
 const cfg  = config.getConfig();
 const util = new Utility(cfg);

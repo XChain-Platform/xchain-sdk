@@ -19,9 +19,9 @@
 'use strict';
 
 const { expect } = require('chai');
-const Utility    = require('../../../../src/utils/utility.js');
-const Validator  = require('../../../../src/protocol/validator.js');
-const { SDKValidationError } = require('../../../../src/utils/errors.js');
+const Utility    = require('../../../../../src/utils/utility.js');
+const Validator  = require('../../../../../src/protocol/validator.js');
+const { SDKValidationError } = require('../../../../../src/utils/errors.js');
 
 function createValidator() {
     return new Validator(new Utility());
@@ -48,7 +48,7 @@ describe('Validator: FILE GATE_MIN_AMOUNT (PC-29)', function () {
     describe('shared GATE_MIN_AMOUNT vectors', function () {
         const fs      = require('fs');
         const path    = require('path');
-        const FIXTURE = path.join(__dirname, '../../../fixtures/gate-min-amount-vectors.json');
+        const FIXTURE = path.join(__dirname, '../../../../fixtures/gate-min-amount-vectors.json');
         const vectors = JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
 
 
@@ -71,7 +71,7 @@ describe('Validator: FILE GATE_MIN_AMOUNT (PC-29)', function () {
         // Cross-repo byte identity. Skips (rather than fails) when a sibling checkout
         // is absent, matching the repo's other sibling-conformance tests; CI sets
         // XCHAIN_REQUIRE_SIBLINGS=1 so a missing sibling hard-fails there.
-        const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(__dirname, '../../../../..');
+        const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(__dirname, '../../../../../..');
         const SIBLINGS = [
             ['xchain-indexer', process.env.XCHAIN_INDEXER_PATH || process.env.XCHAIN_INDEXER_DIR,
                 'test/fixtures/gate-min-amount-vectors.json'],

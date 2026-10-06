@@ -39,7 +39,7 @@
 
 const { expect } = require('chai');
 const path = require('path');
-const { loadIndexerAction } = require('../../../helpers/indexer_action_handler.js');
+const { loadIndexerAction } = require('../../../../helpers/indexer_action_handler.js');
 
 const {
     BATCH_ACTION_LIMITS,
@@ -47,8 +47,8 @@ const {
     BATCH_COMMAND_LIMIT,
     BATCH_GATED_ACTION_LIMITS,
     CHILD_ISSUE_KEY,
-} = require('../../../../src/protocol/batch_limits.js');
-const { CANONICAL_CARET_ID } = require('../../../../src/preflight/constants.js');
+} = require('../../../../../src/protocol/batch_limits.js');
+const { CANONICAL_CARET_ID } = require('../../../../../src/preflight/constants.js');
 const { arbiterVerdictOf } = require('./support/limit_helpers.js');
 const { VECTORS } = require('./fixtures/limit_vectors.js');
 

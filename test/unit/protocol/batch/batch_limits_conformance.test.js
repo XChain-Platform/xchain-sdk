@@ -50,7 +50,7 @@ const {
     limitKeysInListOrder,
     maxMintsPerDistinctTick,
     mintTickKey,
-} = require('../../../src/protocol/batch_limits.js');
+} = require('../../../../src/protocol/batch_limits.js');
 const {
     CARET_ALIAS,
     DECLARED_DIVERGENCES,

@@ -10,7 +10,7 @@
 'use strict';
 
 const assert = require('assert');
-const { parseAnchorV3 } = require('../../../../src/protocol/light_client.js');
+const { parseAnchorV3 } = require('../../../../../src/protocol/light_client.js');
 
 function makeSection(chain, char) {
     const hash = char.repeat(64);
