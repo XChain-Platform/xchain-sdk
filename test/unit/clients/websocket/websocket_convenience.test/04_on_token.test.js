@@ -20,7 +20,7 @@
 
 const { expect } = require('chai');
 const sinon = require('sinon');
-const { waitForCalls } = require('../../../helpers/wait.js');
+const { waitForCalls } = require('../../../../helpers/wait.js');
 const { closeFixture, createFixture, passBarrier } = require('./support/setup.js');
 
 let server, sdk;
@@ -40,35 +40,32 @@ async function barrier() {
 
 describe('XChainSDK – WebSocket convenience methods', function () {
     registerHooks();
-    describe('onDispenser', function () {
-it('fires on DISPENSER_UPDATE and DISPENSE', async function () {
+    describe('onToken', function () {
+it('subscribes to token and fires on TOKEN_UPDATE', async function () {
             await sdk.connectWs();
             const spy = sinon.spy();
-            sdk.onDispenser(12345, spy);
+            sdk.onToken('PEPE', spy);
 
             server._lastClient.send(JSON.stringify({
-                type: 'DISPENSER_UPDATE', data: { action_index: 12345, give_remaining: '1000' }
-            }));
-            server._lastClient.send(JSON.stringify({
-                type: 'DISPENSE', data: { action_index: 501, dispenser_action_index: 12345 }
+                type: 'TOKEN_UPDATE', data: { tick: 'PEPE', supply: '100000' }
             }));
             await waitForCalls(spy);
 
-            expect(spy.callCount).to.equal(2);
+            expect(spy.calledOnce).to.be.true;
         });
     });
 });
 
 describe('XChainSDK – WebSocket convenience methods', function () {
     registerHooks();
-    describe('onDispenser', function () {
-it('fires on the SNAPSHOT frame for the subscribed dispenser', async function () {
+    describe('onToken', function () {
+it('fires on the SNAPSHOT frame for the subscribed tick', async function () {
             await sdk.connectWs();
             const spy = sinon.spy();
-            sdk.onDispenser(12345, spy);
+            sdk.onToken('PEPE', spy);
 
             server._lastClient.send(JSON.stringify({
-                type: 'SNAPSHOT', data: { channel: 'dispenser', action_index: 12345, give_remaining: '1000' }
+                type: 'SNAPSHOT', data: { channel: 'token', tick: 'PEPE', supply: '100000' }
             }));
             await waitForCalls(spy);
 
@@ -80,32 +77,14 @@ it('fires on the SNAPSHOT frame for the subscribed dispenser', async function ()
 
 describe('XChainSDK – WebSocket convenience methods', function () {
     registerHooks();
-    describe('onDispenser', function () {
-it('matches action_index across number/string wire representations', async function () {
+    describe('onToken', function () {
+it('does not fire on a SNAPSHOT for a different tick', async function () {
             await sdk.connectWs();
             const spy = sinon.spy();
-            sdk.onDispenser(12345, spy);
+            sdk.onToken('PEPE', spy);
 
             server._lastClient.send(JSON.stringify({
-                type: 'SNAPSHOT', data: { channel: 'dispenser', action_index: '12345', give_remaining: '1000' }
-            }));
-            await waitForCalls(spy);
-
-            expect(spy.calledOnce).to.be.true;
-        });
-    });
-});
-
-describe('XChainSDK – WebSocket convenience methods', function () {
-    registerHooks();
-    describe('onDispenser', function () {
-it('does not fire on a SNAPSHOT for a different dispenser', async function () {
-            await sdk.connectWs();
-            const spy = sinon.spy();
-            sdk.onDispenser(12345, spy);
-
-            server._lastClient.send(JSON.stringify({
-                type: 'SNAPSHOT', data: { channel: 'dispenser', action_index: 999, give_remaining: '1' }
+                type: 'SNAPSHOT', data: { channel: 'token', tick: 'DOGE', supply: '1' }
             }));
             await barrier();
 
@@ -116,15 +95,15 @@ it('does not fire on a SNAPSHOT for a different dispenser', async function () {
 
 describe('XChainSDK – WebSocket convenience methods', function () {
     registerHooks();
-    describe('onDispenser', function () {
+    describe('onToken', function () {
 it('removes the SNAPSHOT handler on unsubscribe', async function () {
             await sdk.connectWs();
             const spy = sinon.spy();
-            const unsub = sdk.onDispenser(12345, spy);
+            const unsub = sdk.onToken('PEPE', spy);
             unsub();
 
             server._lastClient.send(JSON.stringify({
-                type: 'SNAPSHOT', data: { channel: 'dispenser', action_index: 12345, give_remaining: '1000' }
+                type: 'SNAPSHOT', data: { channel: 'token', tick: 'PEPE', supply: '100000' }
             }));
             await barrier();
 

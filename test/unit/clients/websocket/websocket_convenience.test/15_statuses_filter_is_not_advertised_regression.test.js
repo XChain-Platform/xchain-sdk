@@ -20,8 +20,8 @@
 
 const { expect } = require('chai');
 const WebSocket = require('ws');
-const { XChainSDK } = require('../../../../index.js');
-const { waitFor } = require('../../../helpers/wait.js');
+const { XChainSDK } = require('../../../../../index.js');
+const { waitFor } = require('../../../../helpers/wait.js');
 const { closeFixture, createFixture } = require('./support/setup.js');
 
 let server, sdk;

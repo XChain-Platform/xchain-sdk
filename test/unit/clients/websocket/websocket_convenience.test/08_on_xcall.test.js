@@ -20,7 +20,7 @@
 
 const { expect } = require('chai');
 const sinon = require('sinon');
-const { waitForCalls } = require('../../../helpers/wait.js');
+const { waitForCalls } = require('../../../../helpers/wait.js');
 const { closeFixture, createFixture, passBarrier } = require('./support/setup.js');
 
 let server, sdk;
@@ -38,43 +38,42 @@ async function barrier() {
     await passBarrier(sdk, server);
 }
 
+const CALL_ID = 'a1b2c3d4'.repeat(8);
+
 describe('XChainSDK – WebSocket convenience methods', function () {
     registerHooks();
-    describe('onBetFeed', function () {
-it('fires on BET, BET_EXPIRED and BET_CLOSED for the subscribed feed', async function () {
+    describe('onXcall', function () {
+it('fires on both terminal phases for the subscribed call', async function () {
             await sdk.connectWs();
             const spy = sinon.spy();
-            sdk.onBetFeed(7, spy);
+            sdk.onXcall(CALL_ID, spy);
 
             server._lastClient.send(JSON.stringify({
-                type: 'BET', data: { action_index: 801, feed_action_index: 7, action_format: 2 }
+                type: 'XCALL_COMPLETED',
+                data: { call_id: CALL_ID, action_index: 901, request_status: 'completed', synthetic: true }
             }));
             server._lastClient.send(JSON.stringify({
-                type: 'BET_EXPIRED', data: { action_index: 802, feed_action_index: 7 }
+                type: 'XCALL_EXPIRED',
+                data: { call_id: CALL_ID, action_index: 902, request_status: 'expired', result_status: null }
             }));
-            server._lastClient.send(JSON.stringify({
-                type: 'BET_CLOSED', data: { action_index: 7, feed_action_index: 7, synthetic: true }
-            }));
-            await waitForCalls(spy, 3);
+            await waitForCalls(spy, 2);
 
             expect(spy.getCalls().map(c => c.args[0].type))
-                .to.deep.equal(['BET', 'BET_EXPIRED', 'BET_CLOSED']);
+                .to.deep.equal(['XCALL_COMPLETED', 'XCALL_EXPIRED']);
         });
     });
 });
 
 describe('XChainSDK – WebSocket convenience methods', function () {
     registerHooks();
-    describe('onBetFeed', function () {
-// The guard is on feed_action_index, not action_index: a BET frame's own
-        // action_index is the individual bet, and 801 is a different feed's bet.
-        it('does not fire on a bet placed on a different feed', async function () {
+    describe('onXcall', function () {
+it('does not fire on another call\'s terminal phase', async function () {
             await sdk.connectWs();
             const spy = sinon.spy();
-            sdk.onBetFeed(7, spy);
+            sdk.onXcall(CALL_ID, spy);
 
             server._lastClient.send(JSON.stringify({
-                type: 'BET', data: { action_index: 801, feed_action_index: 8, action_format: 2 }
+                type: 'XCALL_COMPLETED', data: { call_id: 'f'.repeat(64), action_index: 903 }
             }));
             await barrier();
 
@@ -85,57 +84,60 @@ describe('XChainSDK – WebSocket convenience methods', function () {
 
 describe('XChainSDK – WebSocket convenience methods', function () {
     registerHooks();
-    describe('onBetFeed', function () {
-it('fires on the bet_feed SNAPSHOT frame, matching number/string wire forms', async function () {
+    describe('onXcall', function () {
+// Only the Broadcaster's ROUTING key is lower-cased, so an id that comes
+        // back upper-cased inside `data` is the same call and must still deliver.
+        it('matches the frame call_id case-insensitively', async function () {
             await sdk.connectWs();
             const spy = sinon.spy();
-            sdk.onBetFeed(7, spy);
+            sdk.onXcall(CALL_ID, spy);
 
             server._lastClient.send(JSON.stringify({
-                type: 'SNAPSHOT', data: { channel: 'bet_feed', action_index: '7', feed_status: 'open' }
+                type: 'XCALL_COMPLETED', data: { call_id: CALL_ID.toUpperCase(), action_index: 904 }
             }));
             await waitForCalls(spy);
 
-            expect(spy.firstCall.args[0].type).to.equal('SNAPSHOT');
+            expect(spy.calledOnce).to.be.true;
         });
     });
 });
 
 describe('XChainSDK – WebSocket convenience methods', function () {
     registerHooks();
-    describe('onBetFeed', function () {
-it('does not fire on a SNAPSHOT for a different feed or another channel', async function () {
+    describe('onXcall', function () {
+it('fires on the xcall SNAPSHOT frame and not another channel\'s', async function () {
             await sdk.connectWs();
             const spy = sinon.spy();
-            sdk.onBetFeed(7, spy);
+            sdk.onXcall(CALL_ID, spy);
 
             server._lastClient.send(JSON.stringify({
-                type: 'SNAPSHOT', data: { channel: 'bet_feed', action_index: 8 }
+                type: 'SNAPSHOT', data: { channel: 'bet_feed', action_index: 7, call_id: CALL_ID }
             }));
             server._lastClient.send(JSON.stringify({
-                type: 'SNAPSHOT', data: { channel: 'dispenser', action_index: 7 }
+                type: 'SNAPSHOT', data: { channel: 'xcall', call_id: CALL_ID, request_status: 'pending' }
             }));
-            await barrier();
+            await waitForCalls(spy);
 
-            expect(spy.called).to.be.false;
+            expect(spy.calledOnce).to.be.true;
+            expect(spy.firstCall.args[0].data.channel).to.equal('xcall');
         });
     });
 });
 
 describe('XChainSDK – WebSocket convenience methods', function () {
     registerHooks();
-    describe('onBetFeed', function () {
+    describe('onXcall', function () {
 it('unsubscribe removes every handler it registered, SNAPSHOT included', async function () {
             await sdk.connectWs();
             const spy = sinon.spy();
-            const unsub = sdk.onBetFeed(7, spy);
+            const unsub = sdk.onXcall(CALL_ID, spy);
             unsub();
 
             server._lastClient.send(JSON.stringify({
-                type: 'BET', data: { action_index: 801, feed_action_index: 7 }
+                type: 'XCALL_EXPIRED', data: { call_id: CALL_ID, action_index: 905 }
             }));
             server._lastClient.send(JSON.stringify({
-                type: 'SNAPSHOT', data: { channel: 'bet_feed', action_index: 7 }
+                type: 'SNAPSHOT', data: { channel: 'xcall', call_id: CALL_ID }
             }));
             await barrier();
 
@@ -146,15 +148,14 @@ it('unsubscribe removes every handler it registered, SNAPSHOT included', async f
 
 describe('XChainSDK – WebSocket convenience methods', function () {
     registerHooks();
-    describe('onBetFeed', function () {
-// Matched on the message body, not the method name: a missing method
-        // throws "sdk.onBetFeed is not a function", which a /onBetFeed/ pattern
-        // would accept as a pass on a build that never implemented it.
-        it('rejects a non-canonical feed action index', async function () {
+    describe('onXcall', function () {
+// Matched on the message body, not the method name, for the same reason
+        // the onBetFeed case above is: a missing method throws too.
+        it('rejects a call_id that is not 64 hex', async function () {
             await sdk.connectWs();
-            expect(() => sdk.onBetFeed('abc', () => {})).to.throw(/must be a numeric ACTION_INDEX/);
-            expect(() => sdk.onBetFeed(null, () => {})).to.throw(/must be a numeric ACTION_INDEX/);
-            expect(() => sdk.onBetFeed('-1', () => {})).to.throw(/must be a numeric ACTION_INDEX/);
+            expect(() => sdk.onXcall('abc', () => {})).to.throw(/must be a 64-character hex string/);
+            expect(() => sdk.onXcall(null, () => {})).to.throw(/must be a 64-character hex string/);
+            expect(() => sdk.onXcall('g'.repeat(64), () => {})).to.throw(/must be a 64-character hex string/);
         });
     });
 });

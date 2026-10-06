@@ -25,10 +25,10 @@
 
 const { expect }      = require('chai');
 const WebSocket       = require('ws');
-const WebSocketClient = require('../../../src/clients/websocket.js');
-const { waitFor }     = require('../../helpers/wait.js');
-const { trackCursor } = require('../../../src/clients/websocket/catch_up.js');
-const pump            = require('../../../src/clients/websocket/message_pump.js');
+const WebSocketClient = require('../../../../src/clients/websocket.js');
+const { waitFor }     = require('../../../helpers/wait.js');
+const { trackCursor } = require('../../../../src/clients/websocket/catch_up.js');
+const pump            = require('../../../../src/clients/websocket/message_pump.js');
 
 // A server holding the catch-up latch per connection, as the explorer does.
 function createCatchUpServer() {

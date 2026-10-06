@@ -20,7 +20,7 @@
 
 const { expect } = require('chai');
 const sinon = require('sinon');
-const { waitForCalls } = require('../../../helpers/wait.js');
+const { waitForCalls } = require('../../../../helpers/wait.js');
 const { closeFixture, createFixture } = require('./support/setup.js');
 
 let server, sdk;
@@ -37,19 +37,20 @@ function registerHooks() {
 describe('XChainSDK – WebSocket convenience methods', function () {
     registerHooks();
 
-    describe('onOrderMatch', function () {
+    describe('onAction', function () {
 
-        it('fires on ORDER_MATCH', async function () {
+        it('subscribes to actions and fires callback', async function () {
             await sdk.connectWs();
             const spy = sinon.spy();
-            sdk.onOrderMatch('1abc', spy);
+            sdk.onAction(spy);
 
             server._lastClient.send(JSON.stringify({
-                type: 'ORDER_MATCH', data: { action_index: 501, settlement_type: 'coinpay' }
+                type: 'NEW_ACTION', data: { action_index: 501, action: 'SEND' }
             }));
             await waitForCalls(spy);
 
             expect(spy.calledOnce).to.be.true;
         });
     });
+
 });
