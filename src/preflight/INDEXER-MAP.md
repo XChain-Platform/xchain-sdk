@@ -1245,12 +1245,11 @@ both as `TICK_FORMAT` warnings keyed on the explorer's chain code, judged per le
 and declared as `DESTROY_BRIDGE_SUPPLY` when no chain code is configured. SEND is
 untouched on both sides.
 
-**What the static validator does not yet do, for the record.** `src/config.js`
-`LOCK_FIELDS` does not list `LOCK_BRIDGE` and `src/protocol/validator.js` has no format-7
-field rules, so today the pre-flight checks above are the only client-side judge of
-those fields. That is a validator change, not a map change; when it lands the
-`VALIDATOR_SEMANTICS` findings here and there will agree by construction (both call
-`isValidLockValue`).
+**What the static validator now covers.** `src/config.js` `LOCK_FIELDS` lists
+`LOCK_BRIDGE`, and `src/protocol/validator/field_rules_final.js` carries the format-7
+`BRIDGE_CHAINS` and `MIN_DEPTH` field rules, so the pre-flight checks above are no
+longer the only client-side judge of those fields. The `VALIDATOR_SEMANTICS` findings
+here and there agree by construction (both call `isValidLockValue`).
 
 Anchor moves to `97e7ae1f`. Tests: `test/unit/preflight/bridge_tick_rules.test.js`.
 
