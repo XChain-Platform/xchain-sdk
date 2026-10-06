@@ -43,10 +43,11 @@ function createCatchUpServer() {
         });
         srv.reply = (frame) => srv.sock.send(JSON.stringify(frame));
         // Close catch-up `n` the way the explorer does, releasing the latch.
-        srv.complete = (n, latest, truncated) => {
+        srv.complete = (n, latest, truncated, notReplayed) => {
             srv.latched = false;
-            srv.reply({ type: 'CATCH_UP_COMPLETE', id: srv.catchUps[n].id,
-                data: { events_replayed: 1, latest_action_index: latest, truncated: !!truncated } });
+            const data = { events_replayed: 1, latest_action_index: latest, truncated: !!truncated };
+            if (notReplayed) data.not_replayed = notReplayed;
+            srv.reply({ type: 'CATCH_UP_COMPLETE', id: srv.catchUps[n].id, data });
         };
         srv.refuse = (n, code) => {
             srv.latched = false;
@@ -148,6 +149,28 @@ describe('WebSocketClient reconnect catch-up: continuation and refusal', functio
         expect(events).to.have.lengthOf(1);
         expect(events[0]).to.include({ code: 'CATCH_UP_TOO_OLD', since_action_index: '500' });
         expect(events[0].channels).to.deep.equal(['actions']);
+    });
+
+    it('emits not_replayed with the lifecycle types a completed replay could not carry', async function () {
+        const events = [];
+        await reconnectWithTwoActionSubscriptions();
+        client.on('not_replayed', (m) => events.push(m.data));
+        ctx.srv.complete(0, '640', false, ['ACTION_REORGED', 'ACTION_DROPPED']);
+        await waitFor(() => events.length === 1, { message: 'no not_replayed event' });
+        expect(events[0].types).to.deep.equal(['ACTION_REORGED', 'ACTION_DROPPED']);
+        expect(events[0].channels).to.deep.equal(['actions']);
+        expect(events[0].since_action_index).to.equal('500');
+    });
+
+    it('emits no not_replayed event when the list is absent or empty', async function () {
+        const events = [];
+        await reconnectWithTwoActionSubscriptions();
+        client.on('not_replayed', (m) => events.push(m.data));
+        ctx.srv.complete(0, '640', false, []);
+        await waitFor(() => ctx.srv.catchUps.length === 2, { message: 'the second catch-up never went out' });
+        ctx.srv.complete(1, '650');
+        await waitFor(() => client._catchUp === null, { message: 'the catch-up never closed' });
+        expect(events).to.have.lengthOf(0);
     });
 
     it('reports an unanswered catch-up as a gap once its timeout passes', async function () {
