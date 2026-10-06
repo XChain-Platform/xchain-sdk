@@ -25,22 +25,22 @@ const FEE_DEST = 'Lfees7tszAx5Gqam2fuqf6biaX3LXafM4H';
 // native-fee chain went out without one and was ruled invalid.
 function makeSdk(coin, calls, quote) {
     const record = (kind) => async (params, enc) => {
-        calls.push({ kind, params, enc });
-        return { txid: kind + '_tx', indexed: { action_index: 3 } };
+    calls.push({ kind, params, enc });
+    return { txid: kind + '_tx', indexed: { action_index: 3 } };
     };
     const session = {
-        address: 'srcAddr',
-        deploy: record('deploy'),
-        deployChunk: record('chunk'),
-        deposit: record('deposit'),
+    address: 'srcAddr',
+    deploy: record('deploy'),
+    deployChunk: record('chunk'),
+    deposit: record('deposit'),
     };
     const sdk = {
-        actions: new Actions({ config: config.getConfig(), util: new Utility() }),
-        explorer: { coin },
-        session: () => session,
-        preflightContractLint: () => {},
-        getAction: async () => ({ deployed_contract_index: 3 }),
-        quoteNativeFee: sinon.spy(async () => quote),
+    actions: new Actions({ config: config.getConfig(), util: new Utility() }),
+    explorer: { coin },
+    session: () => session,
+    preflightContractLint: () => {},
+    getAction: async () => ({ deployed_contract_index: 3 }),
+    quoteNativeFee: sinon.spy(async () => quote),
     };
     session.sdk = sdk;
     sdk.nativeFeeRequired = feeMethods.nativeFeeRequired;
@@ -50,67 +50,70 @@ function makeSdk(coin, calls, quote) {
 
 const GOOD_QUOTE = { supported: true, valid: true, requiredFeeSats: 123456, feeDestination: FEE_DEST };
 
-describe('Workflows', function () {
+describe('Workflows deployContract() native fee output', function () {
 
     afterEach(() => sinon.restore());
 
-    describe('deployContract() native fee output', function () {
-        it('attaches the quoted fee output to the DEPLOY on LTC', async function () {
-            const calls = [];
-            const sdk = makeSdk('LTC', calls, GOOD_QUOTE);
-            await new Workflows(sdk).deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 });
-            assert.strictEqual(calls.length, 1);
-            assert.deepStrictEqual(calls[0].enc.customOutputs, [{ address: FEE_DEST, value: 123456 }]);
-            assert.strictEqual(sdk.quoteNativeFee.firstCall.args[0].action, 'DEPLOY');
-            assert.strictEqual(sdk.quoteNativeFee.firstCall.args[1].source, 'srcAddr');
-        });
+    it('attaches the quoted fee output to the DEPLOY on LTC', async function () {
+        const calls = [];
+        const sdk = makeSdk('LTC', calls, GOOD_QUOTE);
+        await new Workflows(sdk).deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 });
+        assert.strictEqual(calls.length, 1);
+        assert.deepStrictEqual(calls[0].enc.customOutputs, [{ address: FEE_DEST, value: 123456 }]);
+        assert.strictEqual(sdk.quoteNativeFee.firstCall.args[0].action, 'DEPLOY');
+        assert.strictEqual(sdk.quoteNativeFee.firstCall.args[1].source, 'srcAddr');
+    });
 
-        it('attaches it on DOGE regtest', async function () {
-            const calls = [];
-            await new Workflows(makeSdk('RDOGE', calls, GOOD_QUOTE)).deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 });
-            assert.strictEqual(calls[0].enc.customOutputs.length, 1);
-        });
+    it('attaches it on DOGE regtest', async function () {
+        const calls = [];
+        await new Workflows(makeSdk('RDOGE', calls, GOOD_QUOTE)).deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 });
+        assert.strictEqual(calls[0].enc.customOutputs.length, 1);
+    });
 
-        it('attaches nothing on BTC and never asks for a quote', async function () {
-            const calls = [];
-            const sdk = makeSdk('BTC', calls, GOOD_QUOTE);
-            await new Workflows(sdk).deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 });
-            assert.deepStrictEqual(calls[0].enc, {});
-            assert.strictEqual(sdk.quoteNativeFee.callCount, 0);
-        });
+    it('attaches nothing on BTC and never asks for a quote', async function () {
+        const calls = [];
+        const sdk = makeSdk('BTC', calls, GOOD_QUOTE);
+        await new Workflows(sdk).deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 });
+        assert.deepStrictEqual(calls[0].enc, {});
+        assert.strictEqual(sdk.quoteNativeFee.callCount, 0);
+    });
 
-        it('honours an explicit payFeeInNativeCoin on BTC', async function () {
-            const calls = [];
-            await new Workflows(makeSdk('BTC', calls, GOOD_QUOTE)).deployContract(FAKE_WIF,
-                { code: 'x', gasLimit: 1 }, undefined, { payFeeInNativeCoin: true });
-            assert.strictEqual(calls[0].enc.customOutputs.length, 1);
-        });
+    it('honours an explicit payFeeInNativeCoin on BTC', async function () {
+        const calls = [];
+        await new Workflows(makeSdk('BTC', calls, GOOD_QUOTE)).deployContract(FAKE_WIF,
+            { code: 'x', gasLimit: 1 }, undefined, { payFeeInNativeCoin: true });
+        assert.strictEqual(calls[0].enc.customOutputs.length, 1);
+    });
 
-        it('honours payFeeInNativeCoin:false on LTC', async function () {
-            const calls = [];
-            await new Workflows(makeSdk('LTC', calls, GOOD_QUOTE)).deployContract(FAKE_WIF,
-                { code: 'x', gasLimit: 1 }, undefined, { payFeeInNativeCoin: false });
-            assert.deepStrictEqual(calls[0].enc, {});
-        });
+    it('honours payFeeInNativeCoin:false on LTC', async function () {
+        const calls = [];
+        await new Workflows(makeSdk('LTC', calls, GOOD_QUOTE)).deployContract(FAKE_WIF,
+            { code: 'x', gasLimit: 1 }, undefined, { payFeeInNativeCoin: false });
+        assert.deepStrictEqual(calls[0].enc, {});
+    });
+});
 
-        it('refuses an unsupported quote before any DEPLOY is submitted', async function () {
-            const calls = [];
-            const wf = new Workflows(makeSdk('LTC', calls, { supported: false, error: 'no oracle' }));
-            await assert.rejects(() => wf.deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 }),
-                (e) => e.code === 'NATIVE_FEE_UNSUPPORTED');
-            assert.strictEqual(calls.length, 0);
-        });
+describe('Workflows deployContract() native fee refusal and chunks', function () {
 
-        it('pays the fee on every chunk carrier and the assembler', async function () {
-            const calls = [];
-            const code = 'a'.repeat(60000);
-            await new Workflows(makeSdk('LTC', calls, GOOD_QUOTE)).deployContract(FAKE_WIF,
-                { code, gasLimit: 1 });
-            const chunks = calls.filter(c => c.kind === 'chunk');
-            assert.ok(chunks.length > 1, 'source should chunk');
-            for (const c of calls)
-                assert.deepStrictEqual(c.enc.customOutputs, [{ address: FEE_DEST, value: 123456 }], c.kind);
-            assert.strictEqual(calls[calls.length - 1].kind, 'deploy');
-        });
+    afterEach(() => sinon.restore());
+
+    it('refuses an unsupported quote before any DEPLOY is submitted', async function () {
+        const calls = [];
+        const wf = new Workflows(makeSdk('LTC', calls, { supported: false, error: 'no oracle' }));
+        await assert.rejects(() => wf.deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 }),
+            (e) => e.code === 'NATIVE_FEE_UNSUPPORTED');
+        assert.strictEqual(calls.length, 0);
+    });
+
+    it('pays the fee on every chunk carrier and the assembler', async function () {
+        const calls = [];
+        const code = 'a'.repeat(60000);
+        await new Workflows(makeSdk('LTC', calls, GOOD_QUOTE)).deployContract(FAKE_WIF,
+            { code, gasLimit: 1 });
+        const chunks = calls.filter(c => c.kind === 'chunk');
+        assert.ok(chunks.length > 1, 'source should chunk');
+        for (const c of calls)
+            assert.deepStrictEqual(c.enc.customOutputs, [{ address: FEE_DEST, value: 123456 }], c.kind);
+        assert.strictEqual(calls[calls.length - 1].kind, 'deploy');
     });
 });
