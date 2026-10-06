@@ -20,7 +20,9 @@
  * waiting for its CATCH_UP_COMPLETE or refusal before sending the next. A
  * truncated replay is continued from where the server stopped; a refused or
  * unanswered one emits `resync_required` so the caller can backfill over
- * REST. Mirrors the explorer's bundled browser client
+ * REST. A completed one whose CATCH_UP_COMPLETE names `not_replayed` types (lifecycle
+ * events the replay cannot carry) emits `not_replayed` so the caller can backfill those
+ * over REST too. Mirrors the explorer's bundled browser client
  * (src/content/js/xchain_ws_catch_up.js).
  *
  * Plain functions over the client rather than prototype methods, so the
@@ -161,6 +163,13 @@ function answerCatchUp(client, msg) {
         return;
     }
     clearTimer(state);
+    if (Array.isArray(data.not_replayed) && data.not_replayed.length > 0) {
+        client.emit('not_replayed', {
+            types:              data.not_replayed.slice(),
+            channels:           state.current.sub.channels,
+            since_action_index: state.current.since
+        });
+    }
     nextCatchUp(client);
 }
 
