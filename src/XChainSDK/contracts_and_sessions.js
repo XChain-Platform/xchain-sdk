@@ -29,7 +29,7 @@ const MuSig2AgentSession = require('../cosigner/musig2_agent_session.js');
 const { getLogger } = require('../observability/logger.js');
 const log = getLogger('xchain-sdk');
 const { SDKContractError } = require('../utils/errors.js');
-const { lintSource } = require('../contract/lint_core.js');
+const { lintSource } = require('../contract/lint-core.js');
 const CONTRACT_SOURCES = require('../contract/templates.js');
 const chunkHelper = require('../contract/chunk_helper.js');
 

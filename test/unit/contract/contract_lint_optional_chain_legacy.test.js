@@ -18,7 +18,7 @@
 'use strict';
 
 const assert = require('assert');
-const { lintSource } = require('../../../src/contract/lint_core.js');
+const { lintSource } = require('../../../src/contract/lint-core.js');
 
 const cases = [
     ['const p = globalThis?.Promise;', ['banned-async']],

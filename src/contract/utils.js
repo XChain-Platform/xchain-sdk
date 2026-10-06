@@ -29,7 +29,7 @@
  ********************************************************************/
 
 const { SDKContractError } = require('../utils/errors.js');
-const { lintSource, findFloatWarnings } = require('./lint_core.js');
+const { lintSource, findFloatWarnings } = require('./lint-core.js');
 const abiCore = require('./abi-core.js');
 const {
     loadAcorn,
