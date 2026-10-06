@@ -11,7 +11,7 @@
 const { expect } = require('chai');
 const nock = require('nock');
 const sinon = require('sinon');
-const ExplorerClient = require('../../../../src/clients/explorer.js');
+const ExplorerClient = require('../../../../../src/clients/explorer.js');
 
 const BASE = 'http://explorer.test:8080';
 let client;
@@ -118,7 +118,7 @@ describe('ExplorerClient', function () {
             expect(executions).to.have.property('data').that.is.an('array');
             expect(Array.isArray(executions)).to.equal(false);
 
-            const dts = require('fs').readFileSync(require('path').join(__dirname, '../../../../index.d.ts'), 'utf8');
+            const dts = require('fs').readFileSync(require('path').join(__dirname, '../../../../../index.d.ts'), 'utf8');
             expect(dts, 'ListEnvelope must be declared').to.match(/export interface ListEnvelope<T> \{/);
             expect(dts).to.match(/getContracts\(query\?: string, type\?: string, opts\?: QueryOptions\): Promise<ListEnvelope<ContractInfo>>;/);
             // Three-arg, matching the implementation: a two-arg declaration here is
