@@ -37,8 +37,14 @@
  *
  ********************************************************************/
 
+const { MuSigFactory } = require('@brandonblack/musig');
 const { SDKMuSigError } = require('../utils/errors.js');
-const { ecc, _musig, requireBytes, normalizePubkeys, concat } = require('./musig2/curve_adapter.js');
+const { ecc, requireBytes, normalizePubkeys, concat } = require('./musig2/curve_adapter.js');
+
+// Single instance: required because the underlying library stashes
+// secret nonces in an internal Map keyed by publicNonce. See module
+// header. Module-private, so the reuse guard below is its only door.
+const musigLib = MuSigFactory(ecc);
 
 
 // SessionIds this process has already generated a nonce under, keyed publicKey|sessionId.
@@ -98,8 +104,8 @@ class MuSig2 {
         let ctx;
         try {
             ctx = tweaks && tweaks.length > 0
-                ? _musig.keyAgg(keys, ...tweaks)
-                : _musig.keyAgg(keys);
+                ? musigLib.keyAgg(keys, ...tweaks)
+                : musigLib.keyAgg(keys);
         } catch (e) {
             throw new SDKMuSigError('KEY_AGG_FAILED', e.message);
         }
@@ -115,7 +121,7 @@ class MuSig2 {
      * BIP327 key-sorting helper. Returns the pubkeys in canonical order.
      */
     sortKeys(publicKeys) {
-        return _musig.keySort(normalizePubkeys(publicKeys));
+        return musigLib.keySort(normalizePubkeys(publicKeys));
     }
 
     /*
@@ -141,7 +147,7 @@ class MuSig2 {
         if (params.msg !== undefined)            requireBytes(params.msg, 'msg', 32);
         guardSessionIdReuse(params);
         try {
-            return _musig.nonceGen(params);
+            return musigLib.nonceGen(params);
         } catch (e) {
             throw new SDKMuSigError('NONCE_GEN_FAILED', e.message);
         }
@@ -156,7 +162,7 @@ class MuSig2 {
                 'publicNonces must be an array of at least 2 nonces');
         publicNonces.forEach((n, i) => requireBytes(n, 'publicNonces[' + i + ']', 66));
         try {
-            return _musig.nonceAgg(publicNonces);
+            return musigLib.nonceAgg(publicNonces);
         } catch (e) {
             throw new SDKMuSigError('NONCE_AGG_FAILED', e.message);
         }
@@ -178,8 +184,8 @@ class MuSig2 {
         let keys = normalizePubkeys(publicKeys);
         try {
             return tweaks && tweaks.length > 0
-                ? _musig.startSigningSession(aggNonce, msg, keys, ...tweaks)
-                : _musig.startSigningSession(aggNonce, msg, keys);
+                ? musigLib.startSigningSession(aggNonce, msg, keys, ...tweaks)
+                : musigLib.startSigningSession(aggNonce, msg, keys);
         } catch (e) {
             throw new SDKMuSigError('SESSION_START_FAILED', e.message);
         }
@@ -203,7 +209,7 @@ class MuSig2 {
         if (!params.sessionKey)
             throw new SDKMuSigError('INVALID_INPUT', 'sessionKey required');
         try {
-            return _musig.partialSign({
+            return musigLib.partialSign({
                 secretKey:   params.secretKey,
                 publicNonce: params.publicNonce,
                 sessionKey:  params.sessionKey,
@@ -228,7 +234,7 @@ class MuSig2 {
         if (!params.sessionKey)
             throw new SDKMuSigError('INVALID_INPUT', 'sessionKey required');
         try {
-            return _musig.partialVerify({
+            return musigLib.partialVerify({
                 sig:         params.sig,
                 publicKey:   params.publicKey,
                 publicNonce: params.publicNonce,
@@ -251,7 +257,7 @@ class MuSig2 {
         if (!sessionKey)
             throw new SDKMuSigError('INVALID_INPUT', 'sessionKey required');
         try {
-            return _musig.signAgg(sigs, sessionKey);
+            return musigLib.signAgg(sigs, sessionKey);
         } catch (e) {
             throw new SDKMuSigError('SIG_AGG_FAILED', e.message);
         }
@@ -304,7 +310,7 @@ class MuSig2 {
             params.otherPublicNonces.forEach((n, i) =>
                 requireBytes(n, 'otherPublicNonces[' + i + ']', 66));
             try {
-                aggOtherNonce = _musig.nonceAgg(params.otherPublicNonces);
+                aggOtherNonce = musigLib.nonceAgg(params.otherPublicNonces);
             } catch (e) {
                 throw new SDKMuSigError('NONCE_AGG_FAILED', e.message);
             }
@@ -314,7 +320,7 @@ class MuSig2 {
         }
 
         try {
-            return _musig.deterministicSign({
+            return musigLib.deterministicSign({
                 secretKey:     params.secretKey,
                 aggOtherNonce: aggOtherNonce,
                 publicKeys:    keys,
@@ -331,8 +337,5 @@ class MuSig2 {
 }
 
 
-module.exports = Object.assign(MuSig2, {
-    MuSig2,
-    // Exposed for integration testing against the raw library surface.
-    _internal: { ecc, musig: _musig },
-});
+// Export the guarded wrapper only; the raw library instance would bypass the nonce reuse guard.
+module.exports = Object.assign(MuSig2, { MuSig2 });

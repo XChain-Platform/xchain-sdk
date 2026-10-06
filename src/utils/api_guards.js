@@ -77,14 +77,16 @@ function resolveRateLimit(env = { SDK_API_RATE_LIMIT: Config.env.sdkApiRateLimit
 }
 
 /*
- * Length of the fixed rate-limit window in milliseconds.
+ * Length of the fixed rate-limit window in milliseconds. Only a positive whole
+ * number is accepted; anything else ('60s', '1e5', '0') falls back to 60000,
+ * because a truncated window of a few ms opens a fresh bucket per request.
  *
  * @param {object} [env]
  * @returns {number}
  */
 function resolveRateWindowMs(env = { SDK_API_RATE_WINDOW_MS: Config.env.sdkApiRateWindowMs() }) {
-    const n = parseInt(env.SDK_API_RATE_WINDOW_MS, 10);
-    return (Number.isFinite(n) && n > 0) ? n : 60000;
+    const n = parseWholeNumber(env.SDK_API_RATE_WINDOW_MS);
+    return (n === null || n === 0) ? 60000 : n;
 }
 
 /*

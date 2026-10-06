@@ -46,6 +46,7 @@ const ANCHOR_BUNDLE_ORDER_KEY = 'anchor_bundle_order_activation.ANCHOR_BUNDLE_OR
 const ANCHOR_FOLD_KEY = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
 const { lowerHex, resolveFetch, networkContextCoin, baseUrl, fetchJson } = require('./fetch_helpers.js');
 const { resolveValidatorSet } = require('./quorum_resolution.js');
+const { attachFoldArchiveFromExplorer } = require('./fold_archive_attach.js');
 
 // Default DOGE confirmation depth a cold-start anchor must be buried under before
 // it is trusted. DOGE blocks ~1 min and ANCHORs land ~daily, so a recent valid
@@ -215,7 +216,8 @@ function anchorBundleSection(bundle, chain){
 // Normalize an explorer /api/anchors record (a full row) into the checkpoint shape.
 // Under v0 the explorer serves ONE row per section, each carrying its own chain,
 // the header network and its own roots and signatures, so this mapping is
-// unchanged from the one-anchor-per-chain era.
+// unchanged from the one-anchor-per-chain era. A v3 wrapper's fold is read here only off
+// a row that carries it; stored rows keep it apart, joined by fold_archive_attach.js.
 function anchorToCheckpoint(a){
     if (!a) throw new Error('LightClient: empty anchor record');
     let sigs = a.validator_signatures;
@@ -350,6 +352,9 @@ async function fetchAnchoredCheckpoint(opts){
     const confirmations = (tip != null && anchorHeight != null)
         ? (Number(tip) - Number(anchorHeight) + 1) : NaN;
     const cp = anchorToCheckpoint(rec);
+    // A v3 list row never carries its wrapper fold; it lives on the action's archive row.
+    if (Number(rec.version) === ANCHOR_FOLD_VERSION && !cp.fold_archive)
+        await attachFoldArchiveFromExplorer(f, opts, dogeCoin, rec, cp);
     // Resolve the signer set through the SAME ladder every other network entry
     // point uses. Handing verifyAnchoredCheckpoint `opts.validators` raw meant a
     // caller that supplied none was verified against an empty set, which reads as

@@ -65,4 +65,15 @@ describe('abi-core drift guard @regression', function () {
         };`;
         assert.deepStrictEqual(new ContractUtils().parseAbi(src), abiCore.parseAbi(src));
     });
+
+    it('parses the same ECMA dialect the VM validates deploys against', function () {
+        // metering.js is held byte-identical to xchain-vm by the contract_parity drift guard,
+        // so this ties the ABI parser to the VM; integer checks stop undefined === undefined.
+        const abiCore  = require('../../../src/contract/abi-core.js');
+        const metering = require('../../../src/contract/metering.js');
+        assert.ok(Number.isInteger(abiCore.CONTRACT_ECMA_VERSION), 'abi-core exports no CONTRACT_ECMA_VERSION');
+        assert.ok(Number.isInteger(metering.CONTRACT_ECMA_VERSION), 'metering exports no CONTRACT_ECMA_VERSION');
+        assert.strictEqual(abiCore.CONTRACT_ECMA_VERSION, metering.CONTRACT_ECMA_VERSION,
+            'abi-core parses a different ECMA version than the VM; change the explorer canonical and re-sync');
+    });
 });
