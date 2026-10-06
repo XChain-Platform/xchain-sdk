@@ -6,7 +6,7 @@
 // Pre-flight activation lookup precedence: '<COIN>:<network>' wins over the bare network row.
 
 const { expect } = require('chai');
-const { ACTIVATION_MIRRORS, activationThreshold } = require('../../../src/preflight/activation.js');
+const { ACTIVATION_MIRRORS, activationThreshold } = require('../../../../src/preflight/activation.js');
 
 const sdkFor = (network, coin) => ({ config: { network }, explorer: { coin } });
 
