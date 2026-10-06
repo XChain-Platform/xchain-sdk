@@ -10,7 +10,7 @@
 
 const { expect } = require('chai');
 const crypto = require('crypto');
-const MuSig2 = require('../../../src/cosigner/musig2.js');
+const MuSig2 = require('../../../../src/cosigner/musig2.js');
 const { secp256k1, schnorr } = require('@noble/curves/secp256k1');
 
 // Convert hex helper
@@ -89,10 +89,10 @@ describe('MuSig2', function () { beforeEach(resetMuSig2);
             // publicKey), so a repeat the guard does NOT see re-issues the same 66
             // bytes as a distinct object, i.e. a second live handle on one secret
             // nonce. A fresh module copy has an empty guard set and shows exactly it.
-            const musigPath = require.resolve('../../../src/cosigner/musig2.js');
+            const musigPath = require.resolve('../../../../src/cosigner/musig2.js');
             const cached = require.cache[musigPath];
             delete require.cache[musigPath];
-            const FreshMuSig2 = require('../../../src/cosigner/musig2.js');
+            const FreshMuSig2 = require('../../../../src/cosigner/musig2.js');
             delete require.cache[musigPath];
             require.cache[musigPath] = cached;
             const second = new FreshMuSig2().generateNonce({ publicKey: pk, secretKey: sk, sessionId });

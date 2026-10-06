@@ -21,12 +21,12 @@ const crypto  = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
 const { secp256k1, schnorr } = require('@noble/curves/secp256k1');
 
-const CoSigner = require('../../../src/cosigner/co_signer.js');
-const CoSignerClient = require('../../../src/cosigner/client.js');
+const CoSigner = require('../../../../src/cosigner/co_signer.js');
+const CoSignerClient = require('../../../../src/cosigner/client.js');
 const { inProcessTransport } = CoSignerClient;
-const { deriveMuSig2P2TR } = require('../../../src/cosigner/account.js');
-const { buildMuSig2Signer } = require('../../../src/cosigner/musig2_signer.js');
-const { SDKPolicyError } = require('../../../src/utils/errors.js');
+const { deriveMuSig2P2TR } = require('../../../../src/cosigner/account.js');
+const { buildMuSig2Signer } = require('../../../../src/cosigner/musig2_signer.js');
+const { SDKPolicyError } = require('../../../../src/utils/errors.js');
 
 const DEST = '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2';
 
