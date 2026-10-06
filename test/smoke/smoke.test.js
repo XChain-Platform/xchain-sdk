@@ -44,9 +44,8 @@ async function rpc(method, params = {}, authenticated = true) {
     return req;
 }
 
+// Basic connectivity and authentication: ping is open, everything else needs the key.
 describe('Smoke: real API app through the authenticated HTTP layer', function () {
-    // Basic connectivity
-
     it('serves ping without authentication', async function () {
         const response = await rpc('ping', {}, false);
 
