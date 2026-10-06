@@ -81,7 +81,11 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `02e25669`
+**Pins taken at indexer commit:** `6efa8403`
+
+(Re-anchored 2026-10-06 against indexer `6efa8403`. Only the `issue` directory pin moves,
+for the owner History mapping reviewed in the first entry of the review log below. The other
+twelve rows are byte-identical to the prior anchor `02e25669`.)
 
 (Re-anchored 2026-10-04 against indexer develop `02e25669`. All thirteen
 rows were regenerated in one pass with the comment-insensitive digest. Comment
@@ -365,7 +369,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 02e25669..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 6efa8403..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -441,7 +445,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (SEND) | `src/actions/send/` | `a6ab5ff2ac70c4e6f7042b5cb76c78a9cb9d754dcab01d8f724088c8aa5fa4f6` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `3671cf3e2efefb069d30539814ecc2f1bd65087698f756711c8a1c7b75e9665f` |
 | `checks/mint.js` | `src/actions/mint/` | `0f2b6b0375df803321c1644e24f9fa2b6dcb73119a470832eeb93dfab8530595` |
-| `checks/issue.js` | `src/actions/issue/` | `bbd56bb132beb24842beeac0cf5333797b0d44b4321fd7f08fe5b6beac167620` |
+| `checks/issue.js` | `src/actions/issue/` | `9936894a073dbdbc6f1e495d742e6f4035024efce3e0aa1fecea04a8a89471a6` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `abe6e7af6493d881b7ed12c08939999cee87141e45cbfe09a8ffaa882daf43f6` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `40bacc5f8b14d5c8d96b38ff912e8de964054dc65f287ca8f0590e4528919c6c` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `66728bf57468a88c88e154622ca2708a1089ac9f5f8aa115f296cdadcbd5b8e5` |
@@ -471,6 +475,19 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-06 - `issue/settle.js` lists a named owner in the ISSUE's History addresses
+
+The `issue` pin moves from `bbd56bb1` to `9936894a`, hashed from the committed indexer tree at
+`6efa8403` by `node bin/preflight_handler_dirs.js <indexer> src/actions/issue/`. The whole diff
+of `src/actions/issue/` since `02e25669` is one executable statement in `settle.js`, inside
+`settleValidIssue`: when the ISSUE names an owner other than its source, that owner is passed to
+`addAddressTicker` so the ISSUE appears in the owner's address History feed.
+
+**Direction: NEITHER, no admission boundary moves.** The statement runs only after validation
+has accepted the ISSUE and writes only the addresses-by-ticker list that History reads. No
+predicate, field format, fee or error path changed, so a transaction is accepted or rejected
+exactly as before. NO CLIENT CHECK MOVES.
 
 ### 2026-10-01 - tick-namespace and token-bridge arming now pinned by value
 
