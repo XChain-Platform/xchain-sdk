@@ -725,6 +725,26 @@
       "policyEvaluator tick case folding: windows, confirmations, collisions still resolves inherited names such as constructor to no cap",
       "policyEvaluator tick case folding: windows, confirmations, collisions totals window spend across every case spelling it was recorded under"
     ],
+    "17d4121b8213b71a": [
+      "ANCHOR v3 fold: attachFoldArchive matches exactly one archive row attaches from the one chain-less row whose signature list equals the section list",
+      "ANCHOR v3 fold: attachFoldArchive matches exactly one archive row leaves the checkpoint unchanged on no match or on two matches",
+      "ANCHOR v3 fold: fetchAnchoredCheckpoint admits fold sections only past the gate excludes a v3 row with no chain or no state root",
+      "ANCHOR v3 fold: fetchAnchoredCheckpoint admits fold sections only past the gate picks the newest checkpoint across the flag day whichever version carries it",
+      "ANCHOR v3 fold: fetchAnchoredCheckpoint admits fold sections only past the gate re-judges the gate at the caller DOGE height over the explorer claim",
+      "ANCHOR v3 fold: fetchAnchoredCheckpoint admits fold sections only past the gate refuses every v3 row while the fold gate is unarmed, and v5 even when armed",
+      "ANCHOR v3 fold: fetchAnchoredCheckpoint admits fold sections only past the gate verifies a v3 section at/above the fold height and refuses one below it",
+      "ANCHOR v3 fold: fetchAnchoredCheckpoint admits fold sections only past the gate verifies an explorer wrapper row signed over its folded archive fields",
+      "ANCHOR v3 fold: the wrapper fold is read from the action archive row the indexer stores fails closed on quorum, never throws, when the detail read is missing or broken",
+      "ANCHOR v3 fold: the wrapper fold is read from the action archive row the indexer stores fails closed when the archive row the explorer serves was tampered with",
+      "ANCHOR v3 fold: the wrapper fold is read from the action archive row the indexer stores leaves a non-wrapper section of the same action on the plain canonical",
+      "ANCHOR v3 fold: the wrapper fold is read from the action archive row the indexer stores never makes the detail read for a v0 section",
+      "ANCHOR v3 fold: the wrapper fold is read from the action archive row the indexer stores verifies the wrapper section by attaching the archive row that carries its signatures",
+      "ANCHOR v3 fold: the wrapper section verifies over the archive-extended canonical leaves an ARCHIVE_COUNT 0 bundle on the plain canonical",
+      "ANCHOR v3 fold: the wrapper section verifies over the archive-extended canonical matches the hub foldArchiveCanonical bytes, written out by hand",
+      "ANCHOR v3 fold: the wrapper section verifies over the archive-extended canonical refuses a wrapper signed over the plain canonical, with no fallback",
+      "ANCHOR v3 fold: the wrapper section verifies over the archive-extended canonical refuses a wrapper whose archive fields moved on the wire",
+      "ANCHOR v3 fold: the wrapper section verifies over the archive-extended canonical tags only the wrapper section and verifies both sections"
+    ],
     "1866e9c807f637eb": [
       "pre-flight LIST SET META fee note does not file the fee note for another action at version 5",
       "pre-flight LIST SET META fee note files only LIST state for version 0",
@@ -797,6 +817,12 @@
       "Convenience action methods swap() returns action SWAP with valid actionString",
       "Convenience action methods sweep() returns action SWEEP with valid actionString",
       "Convenience action methods transfer() is an alias for send and returns action SEND"
+    ],
+    "1a92adf0a8d572f0": [
+      "WalletUtils refuses disagreeing prevout fields signMultisigPsbt, finalizeMultisigPsbt and decomposePsbt refuse the same input",
+      "WalletUtils refuses disagreeing prevout fields signPsbt refuses a witnessUtxo naming a different script, and signs nothing",
+      "WalletUtils refuses disagreeing prevout fields signPsbt refuses a witnessUtxo understating the value",
+      "WalletUtils refuses disagreeing prevout fields still signs when the fields agree, or when only the full transaction is carried"
     ],
     "1c05d72307bf3d60": [
       "select() with legs an explicit version that cannot carry the legs fails loudly, never silently",
@@ -1595,6 +1621,12 @@
       "FormatSelector.serialize(): trailing empty fields are trimmed SEND v0 without MEMO has no trailing pipe",
       "FormatSelector.serialize(): trailing empty fields are trimmed SWEEP v0 with only DESTINATION trims trailing empty fields",
       "FormatSelector.serialize(): trailing empty fields are trimmed does not trim fields that are empty but not trailing"
+    ],
+    "3c7283206a5c8d7d": [
+      "reconcileEncoded prevout field conflicts REJECTS a drain whose forged witnessUtxo names the attacker script as the funding input",
+      "reconcileEncoded prevout field conflicts REJECTS a nonWitnessUtxo that is not the transaction the input spends",
+      "reconcileEncoded prevout field conflicts REJECTS an understated witnessUtxo value that would slip the fee cap",
+      "reconcileEncoded prevout field conflicts still reconciles change when both fields carry the same prevout, or only the full transaction"
     ],
     "3c78facf8764f1d4": [
       "batchLimits: COINPAY per-payee output planning (spec row 31) checkCoinpayOutputPlan FAILS a plan that splits one payee's combined amount across two outputs",
@@ -3301,6 +3333,12 @@
       "co-signer: Taproot envelope composition budget: one action, two transactions, one charge lets a commit that filled the window still reveal",
       "co-signer: Taproot envelope composition budget: one action, two transactions, one charge still denies a reveal when the window was filled by another action"
     ],
+    "72a6f2b05e8fb756": [
+      "pre-flight activation lookup is coin-first every mirrored table pins the bare testnet row to UNARMED beside armed coin rows",
+      "pre-flight activation lookup is coin-first falls back to the bare network row when no coin row exists",
+      "pre-flight activation lookup is coin-first resolves the coin from the explorer prefix when the config names only the plane",
+      "pre-flight activation lookup is coin-first resolves the coin row over the network row on testnet"
+    ],
     "730e3f72faae6120": [
       "contract meta grammar parity (SDK mirror vs xchain-indexer contract_meta.js) agrees at every byte-cap boundary and on non-string and ill-formed input",
       "contract meta grammar parity (SDK mirror vs xchain-indexer contract_meta.js) agrees on every code point in every placement",
@@ -4046,6 +4084,11 @@
       "Round-trip: serialize then parse back XBRIDGE v4 (burn a bridged token home) round-trips correctly",
       "Round-trip: serialize then parse back every action type has at least one round-trip test"
     ],
+    "8b4d2d1531598d1b": [
+      "abi-core drift guard @regression ContractUtils.parseAbi delegates to the vendored core (same object out)",
+      "abi-core drift guard @regression parses the same ECMA dialect the VM validates deploys against",
+      "abi-core drift guard @regression src/contract/abi-core.js matches the canonical xchain-explorer/src/contract/abi_core.js"
+    ],
     "8b9e1993d587f2e5": [
       "x402 balance lookups page past the first page deposit sums deposits across pages",
       "x402 balance lookups page past the first page dispenser finds a holding on page two",
@@ -4207,12 +4250,6 @@
       "wire collapse: a single request/response shape a single-input approval returns a one-element signatures array, not a bare sig",
       "wire collapse: a single request/response shape refuses the legacy single-input request shape"
     ],
-    "90b62f3c2bb5a7eb": [
-      "co-signer public exports does NOT pull the Node-only sidecar into the public barrel",
-      "co-signer public exports exposes the same toolkit on a constructed SDK instance (sdk.coSigner)",
-      "co-signer public exports exposes the toolkit as named package exports",
-      "co-signer public exports the public exports are actually wired (a derive round-trips)"
-    ],
     "90eae5e9ed3d466d": [
       "BATCH pre-flight (Tier 1 sub-command verdicts) oracle fees are disclosed, not judged a per-oracle total becomes an info finding naming the amount and address",
       "BATCH pre-flight (Tier 1 sub-command verdicts) oracle fees are disclosed, not judged no oracleFeesOwed means no finding",
@@ -4275,6 +4312,16 @@
       "fee-quote literals: found once, wherever the split left them keeps the whole fee-quote seam green with the literal in a part",
       "fee-quote literals: found once, wherever the split left them reads a literal that moved out of the loader into a handler part",
       "fee-quote literals: found once, wherever the split left them reports where a duplicate lives, so the stale copy can be found"
+    ],
+    "91a65b88981100b5": [
+      "WebSocketClient reconnect catch-up: continuation and refusal continues a truncated replay from where the server stopped",
+      "WebSocketClient reconnect catch-up: continuation and refusal emits resync_required for a refused catch-up and still replays the next subscription",
+      "WebSocketClient reconnect catch-up: continuation and refusal reports an unanswered catch-up as a gap once its timeout passes",
+      "WebSocketClient reconnect catch-up: sequencing replays two action subscriptions one at a time from the pre-disconnect cursor, with none refused",
+      "WebSocketClient reconnect catch-up: sequencing resubscribes a blocks subscription at once, without since_action_index",
+      "WebSocketClient reconnect catch-up: which frames move the cursor a CATCH_UP_COMPLETE outside a replay still advances the cursor",
+      "WebSocketClient reconnect catch-up: which frames move the cursor a replay notes NEW_ACTION and CATCH_UP_COMPLETE but not entity ids",
+      "WebSocketClient reconnect catch-up: which frames move the cursor an idle client ignores entity ids and still advances on NEW_ACTION"
     ],
     "9221e379c7cee9e2": [
       "STOP_CHECK_INTERVAL config empty yields 5000",
@@ -4979,13 +5026,6 @@
       "injected connection agents (pool.httpAgent / pool.httpsAgent) HubConnector chooses per endpoint when the hub list mixes schemes",
       "injected connection agents (pool.httpAgent / pool.httpsAgent) HubConnector still disables axios env-proxy handling when no agents are injected"
     ],
-    "aeba40192a356871": [
-      "WebSocketClient reconnect catch-up: continuation and refusal continues a truncated replay from where the server stopped",
-      "WebSocketClient reconnect catch-up: continuation and refusal emits resync_required for a refused catch-up and still replays the next subscription",
-      "WebSocketClient reconnect catch-up: continuation and refusal reports an unanswered catch-up as a gap once its timeout passes",
-      "WebSocketClient reconnect catch-up: sequencing replays two action subscriptions one at a time from the pre-disconnect cursor, with none refused",
-      "WebSocketClient reconnect catch-up: sequencing resubscribes a blocks subscription at once, without since_action_index"
-    ],
     "aebe256594756370": [
       "Module entry point default export equals XChainSDK",
       "Module entry point exports BatchBuilder",
@@ -5088,6 +5128,14 @@
       "ProjectHelpers sdk wiring sdk.project is a ProjectHelpers instance",
       "ProjectHelpers sdk wiring sdk.setRoster delegates to workflows.setRoster"
     ],
+    "b2eaa00a57cba2d3": [
+      "MuSig2 raw library instance stays module-private no module under src/cosigner/musig2 exports the raw library instance",
+      "MuSig2 raw library instance stays module-private the package MuSig2 export carries no raw library handle",
+      "co-signer public exports does NOT pull the Node-only sidecar into the public barrel",
+      "co-signer public exports exposes the same toolkit on a constructed SDK instance (sdk.coSigner)",
+      "co-signer public exports exposes the toolkit as named package exports",
+      "co-signer public exports the public exports are actually wired (a derive round-trips)"
+    ],
     "b3a0340d5a4e6c64": [
       "decoder.describe value_format helpers firstStr returns the first slot of a joined list",
       "decoder.describe value_format helpers genericFallback names an unknown action and humanizes the parameters",
@@ -5133,6 +5181,26 @@
     "b5467612a9f8e12c": [
       "MessagingUtils @crypto @regression deriveSharedSecret(): error paths accepts Buffer for theirPublicKey",
       "MessagingUtils @crypto @regression deriveSharedSecret(): error paths throws INVALID_WIF on bad WIF"
+    ],
+    "b598ef35f06841f5": [
+      "WalletUtils deriveMultisigAddress() on a network without segwit should refuse a dogecoin network override on a bitcoin instance",
+      "WalletUtils deriveMultisigAddress() on a network without segwit should refuse both witness schemes even when the network carries a bech32 prefix",
+      "WalletUtils deriveMultisigAddress() on a network without segwit should refuse p2wsh-multisig on dogecoin-regtest with SEGWIT_NOT_SUPPORTED",
+      "WalletUtils deriveMultisigAddress() on a network without segwit should refuse taproot-musig2 on dogecoin-regtest with SEGWIT_NOT_SUPPORTED",
+      "WalletUtils deriveMultisigAddress() on a network without segwit should still derive p2sh-multisig on dogecoin-regtest",
+      "WalletUtils deriveMultisigAddress() should derive p2sh-multisig address for 2-of-3",
+      "WalletUtils deriveMultisigAddress() should derive p2wsh-multisig address for 1-of-2",
+      "WalletUtils deriveMultisigAddress() should derive taproot-musig2 address",
+      "WalletUtils deriveMultisigAddress() should support network override via params.network",
+      "WalletUtils deriveMultisigAddress() should throw INVALID_SCRIPT_TEMPLATE for bad multi: format",
+      "WalletUtils deriveMultisigAddress() should throw INVALID_SCRIPT_TEMPLATE for bad musig2 template format",
+      "WalletUtils deriveMultisigAddress() should throw INVALID_SCRIPT_TEMPLATE for musig2 with wrong pubkey length",
+      "WalletUtils deriveMultisigAddress() should throw INVALID_SCRIPT_TEMPLATE for non-integer threshold",
+      "WalletUtils deriveMultisigAddress() should throw INVALID_SCRIPT_TEMPLATE for uncompressed pubkey in multisig template",
+      "WalletUtils deriveMultisigAddress() should throw INVALID_SCRIPT_TEMPLATE when threshold > cosigner count",
+      "WalletUtils deriveMultisigAddress() should throw for unknown scheme",
+      "WalletUtils deriveMultisigAddress() should throw with empty scriptTemplate",
+      "WalletUtils deriveMultisigAddress() should throw without params"
     ],
     "b6597e6fd59dcaba": [
       "VM Actions \u2013 DEPLOY creates DEPLOY with constructor params",
@@ -5866,6 +5934,26 @@
       "MessagingUtils @crypto @regression KDF v1 (HKDF-SHA256) versioning and domain separation round-trips a legacy v0 binary (bytes) ECIES blob",
       "MessagingUtils @crypto @regression KDF v1 (HKDF-SHA256) versioning and domain separation still decrypts a legacy (v0, no version byte, bare-SHA256) ECIES blob"
     ],
+    "d4d16ec81f93d6a2": [
+      "API request-rate limit a zero-prefixed junk value is junk, not the off switch",
+      "API request-rate limit adds no runtime dependency for the limiter",
+      "API request-rate limit allows requests up to the limit and rejects the next one with 429",
+      "API request-rate limit an explicit 0 disables the limiter and nothing else does",
+      "API request-rate limit an unvalidated token does not mint its own bucket: a rotating junk token is capped per source address",
+      "API request-rate limit bounds the unauthenticated path too (keyed on the source address)",
+      "API request-rate limit counts per credential, so one hot key cannot starve another",
+      "API request-rate limit falls back to safe defaults on a junk env value",
+      "API request-rate limit keeps ONE implementation of the limiter: api.js holds no inline copy",
+      "API request-rate limit never holds a raw credential as a map key",
+      "API request-rate limit prunes expired buckets so the map cannot grow without bound",
+      "API request-rate limit src/api.js mounts the limiter BEFORE the auth gate and the jsonRouter mount",
+      "API request-rate limit the shipped limiter still bites when the env value was junk",
+      "API request-rate limit the window rolls over and the caller is allowed again",
+      "API request-rate limit with no isCredential predicate every caller is bucketed by source address",
+      "API request-rate window a truncatable junk window falls back to the default instead of shrinking to milliseconds",
+      "API request-rate window the shipped limiter still bites when the window env value was junk",
+      "API request-rate window warns at load when the window setting was unusable, and stays quiet on a good one"
+    ],
     "d54576fa6708d56d": [
       "Actions \u2013 pre-flight encoding validation ENCODING_DATA_TOO_LARGE error includes suggestion in details",
       "Actions \u2013 pre-flight encoding validation MULTISIGN with compressedPubKey does NOT throw",
@@ -6063,23 +6151,6 @@
     ],
     "debb89d9d557f222": [
       "XChainSDK \u2013 WebSocket convenience methods onOrderMatch fires on ORDER_MATCH"
-    ],
-    "decf786888bd7bd6": [
-      "API request-rate limit a zero-prefixed junk value is junk, not the off switch",
-      "API request-rate limit adds no runtime dependency for the limiter",
-      "API request-rate limit allows requests up to the limit and rejects the next one with 429",
-      "API request-rate limit an explicit 0 disables the limiter and nothing else does",
-      "API request-rate limit an unvalidated token does not mint its own bucket: a rotating junk token is capped per source address",
-      "API request-rate limit bounds the unauthenticated path too (keyed on the source address)",
-      "API request-rate limit counts per credential, so one hot key cannot starve another",
-      "API request-rate limit falls back to safe defaults on a junk env value",
-      "API request-rate limit keeps ONE implementation of the limiter: api.js holds no inline copy",
-      "API request-rate limit never holds a raw credential as a map key",
-      "API request-rate limit prunes expired buckets so the map cannot grow without bound",
-      "API request-rate limit src/api.js mounts the limiter BEFORE the auth gate and the jsonRouter mount",
-      "API request-rate limit the shipped limiter still bites when the env value was junk",
-      "API request-rate limit the window rolls over and the caller is allowed again",
-      "API request-rate limit with no isCredential predicate every caller is bucketed by source address"
     ],
     "deec5a095c8b2024": [
       "XChainSDK \u2013 WebSocket convenience methods initialization creates ws client when explorerUrl is configured",
@@ -6472,19 +6543,6 @@
       "Utility.withForcedVersion (version-locked helpers) forces its version over a caller VERSION in either spelling",
       "Utility.withForcedVersion (version-locked helpers) throws rather than route a MISMATCHED caller version"
     ],
-    "e88d40e9dbb79d54": [
-      "ANCHOR v3 fold: fetchAnchoredCheckpoint admits fold sections only past the gate excludes a v3 row with no chain or no state root",
-      "ANCHOR v3 fold: fetchAnchoredCheckpoint admits fold sections only past the gate picks the newest checkpoint across the flag day whichever version carries it",
-      "ANCHOR v3 fold: fetchAnchoredCheckpoint admits fold sections only past the gate re-judges the gate at the caller DOGE height over the explorer claim",
-      "ANCHOR v3 fold: fetchAnchoredCheckpoint admits fold sections only past the gate refuses every v3 row while the fold gate is unarmed, and v5 even when armed",
-      "ANCHOR v3 fold: fetchAnchoredCheckpoint admits fold sections only past the gate verifies a v3 section at/above the fold height and refuses one below it",
-      "ANCHOR v3 fold: fetchAnchoredCheckpoint admits fold sections only past the gate verifies an explorer wrapper row signed over its folded archive fields",
-      "ANCHOR v3 fold: the wrapper section verifies over the archive-extended canonical leaves an ARCHIVE_COUNT 0 bundle on the plain canonical",
-      "ANCHOR v3 fold: the wrapper section verifies over the archive-extended canonical matches the hub foldArchiveCanonical bytes, written out by hand",
-      "ANCHOR v3 fold: the wrapper section verifies over the archive-extended canonical refuses a wrapper signed over the plain canonical, with no fallback",
-      "ANCHOR v3 fold: the wrapper section verifies over the archive-extended canonical refuses a wrapper whose archive fields moved on the wire",
-      "ANCHOR v3 fold: the wrapper section verifies over the archive-extended canonical tags only the wrapper section and verifies both sections"
-    ],
     "e891b4772f4628da": [
       "GatedFileUtils decryptFileBytes - negative paths throws on tampered authTag",
       "GatedFileUtils decryptFileBytes - negative paths throws on tampered ciphertext byte",
@@ -6565,21 +6623,6 @@
       "co-signer: Taproot envelope composition mixed carriers on an envelope role refuses a decoy OP_RETURN too, without decoding its payload",
       "co-signer: Taproot envelope composition mixed carriers on an envelope role still approves the ordinary inline carrier on a non-envelope spend",
       "co-signer: Taproot envelope composition mixed carriers on an envelope role still denies a non-envelope OP_RETURN that carries value"
-    ],
-    "ee3d6157e9b6e6f4": [
-      "WalletUtils deriveMultisigAddress() should derive p2sh-multisig address for 2-of-3",
-      "WalletUtils deriveMultisigAddress() should derive p2wsh-multisig address for 1-of-2",
-      "WalletUtils deriveMultisigAddress() should derive taproot-musig2 address",
-      "WalletUtils deriveMultisigAddress() should support network override via params.network",
-      "WalletUtils deriveMultisigAddress() should throw INVALID_SCRIPT_TEMPLATE for bad multi: format",
-      "WalletUtils deriveMultisigAddress() should throw INVALID_SCRIPT_TEMPLATE for bad musig2 template format",
-      "WalletUtils deriveMultisigAddress() should throw INVALID_SCRIPT_TEMPLATE for musig2 with wrong pubkey length",
-      "WalletUtils deriveMultisigAddress() should throw INVALID_SCRIPT_TEMPLATE for non-integer threshold",
-      "WalletUtils deriveMultisigAddress() should throw INVALID_SCRIPT_TEMPLATE for uncompressed pubkey in multisig template",
-      "WalletUtils deriveMultisigAddress() should throw INVALID_SCRIPT_TEMPLATE when threshold > cosigner count",
-      "WalletUtils deriveMultisigAddress() should throw for unknown scheme",
-      "WalletUtils deriveMultisigAddress() should throw with empty scriptTemplate",
-      "WalletUtils deriveMultisigAddress() should throw without params"
     ],
     "ee6c1e212efd2771": [
       "XChainSDK action shortcut methods passes the encoder option through to createAction",
@@ -6791,10 +6834,6 @@
       "explorer option construction returns an explicit explorer untouched",
       "explorer option construction returns null without explorer connection options"
     ],
-    "f6b3df37ce48194d": [
-      "abi-core drift guard @regression ContractUtils.parseAbi delegates to the vendored core (same object out)",
-      "abi-core drift guard @regression src/contract/abi-core.js matches the canonical xchain-explorer/src/contract/abi_core.js"
-    ],
     "f7e5931142d6202d": [
       "cosigner/recovery buildRecoverySpend a >2^53 output overspend is caught, not rounded into a zero fee",
       "cosigner/recovery buildRecoverySpend a fractional or negative satoshi value is refused outright",
@@ -6926,8 +6965,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 516,
-      "titleCount": 5483,
+      "fileCount": 519,
+      "titleCount": 5516,
       "files": {
         "test/unit/actions/action_roundtrip_golden.test.js": "0889dd14dd14af13",
         "test/unit/actions/actions.test.js": "e72dbd6bc6ac1b9a",
@@ -6989,7 +7028,7 @@
         "test/unit/api/api_auth_gate.test.js": "63619a72a6a85671",
         "test/unit/api/api_batch_cap.test.js": "09620624baddbde2",
         "test/unit/api/api_listener.test.js": "42d0222dd88f5616",
-        "test/unit/api/api_rate_limit.test.js": "decf786888bd7bd6",
+        "test/unit/api/api_rate_limit.test.js": "d4d16ec81f93d6a2",
         "test/unit/api/cors_origin.test.js": "47a8c7aec5cc3398",
         "test/unit/api/jsonrpc_body_guard.test.js": "58706b2a54fa0008",
         "test/unit/carrier/bind_action_carrier.test.js": "309253190446db60",
@@ -7009,6 +7048,7 @@
         "test/unit/carrier/reconcile_encoded.test/03_reconcile_encoded_foreign_input_change.test.js": "4234a6192854b61f",
         "test/unit/carrier/reconcile_encoded.test/04_reconcile_encoded_malformed_caps_fail_closed.test.js": "eea85d333892a161",
         "test/unit/carrier/reconcile_encoded.test/05_reconcile_encoded_shared_key_change.test.js": "2656481d9521bf4d",
+        "test/unit/carrier/reconcile_encoded.test/06_reconcile_encoded_prevout_field_conflict.test.js": "3c7283206a5c8d7d",
         "test/unit/carrier/utxo_cache.test.js": "d1e88cf731c181fe",
         "test/unit/carrier/verify_carrier_scripts.test.js": "85118e9491d67f0b",
         "test/unit/cli/repl.test.js": "45dba3fb0f557130",
@@ -7074,7 +7114,7 @@
         "test/unit/clients/websocket.test/03_emit_and_connection_lost.test.js": "c6c38104ad45ec9a",
         "test/unit/clients/websocket.test/04_latest_action_index_tracking.test.js": "a66187140aa93ab9",
         "test/unit/clients/websocket_bundler_interop.test.js": "34f473d0e384ae26",
-        "test/unit/clients/websocket_catch_up.test.js": "aeba40192a356871",
+        "test/unit/clients/websocket_catch_up.test.js": "91a65b88981100b5",
         "test/unit/clients/websocket_convenience.test.js": "deec5a095c8b2024",
         "test/unit/clients/websocket_convenience.test/01_on_block.test.js": "2daae22e85db73d7",
         "test/unit/clients/websocket_convenience.test/02_on_action.test.js": "1624ce0c406b2282",
@@ -7104,7 +7144,7 @@
         "test/unit/consensus/consensus_primitive_conformance.test.js": "53527e8cf6636821",
         "test/unit/consensus/regtest_env_twin.test.js": "cbad35bf1daff99f",
         "test/unit/consensus/state_subtree_constants.test.js": "e596539159de9a25",
-        "test/unit/contract/abi_core_drift.test.js": "f6b3df37ce48194d",
+        "test/unit/contract/abi_core_drift.test.js": "8b4d2d1531598d1b",
         "test/unit/contract/chunk_helper.test.js": "e22290dc42295659",
         "test/unit/contract/contract_client.test.js": "30dca91fc67eac4d",
         "test/unit/contract/contract_lint_global_alias.test.js": "121815bf45a0311e",
@@ -7146,7 +7186,7 @@
         "test/unit/cosigner/cosigner_envelope.test/11_the_2_of_2_account_is_untouched.test.js": "877773781a99ef1b",
         "test/unit/cosigner/cosigner_envelope.test/12_the_envelope_survives_the_wire.test.js": "3e53fdbb6260bdbe",
         "test/unit/cosigner/cosigner_envelope.test/13_sdk_create_tx_passthrough.test.js": "936e694dd2ad90a4",
-        "test/unit/cosigner/cosigner_exports.test.js": "90b62f3c2bb5a7eb",
+        "test/unit/cosigner/cosigner_exports.test.js": "b2eaa00a57cba2d3",
         "test/unit/cosigner/cosigner_hardening.test.js": "9838f9323113b187",
         "test/unit/cosigner/cosigner_hardening.test/01_g2_value_derivability_allowlist.test.js": "76a61f8dce9a8539",
         "test/unit/cosigner/cosigner_hardening.test/02_g3_tap_tree_provenance.test.js": "658646c635b28143",
@@ -7214,6 +7254,7 @@
         "test/unit/mcp/mcp.test.js": "a897a1e8fe5df99d",
         "test/unit/mcp/mcp.test/01_mcp_server_write_tools.test.js": "2ff922f4242ecbe8",
         "test/unit/observability/logger.test.js": "036b3389dcc3412c",
+        "test/unit/preflight/activation/activation_coin_first_precedence.test.js": "72a6f2b05e8fb756",
         "test/unit/preflight/activation_disclosures.test.js": "2cec8afa17027767",
         "test/unit/preflight/amount_representability.test.js": "27d1312efc3e8920",
         "test/unit/preflight/batch.test.js": "769a01a07529353f",
@@ -7320,7 +7361,7 @@
         "test/unit/protocol/light.test/07_spv_d4_pinned_launch_trust_root.test.js": "720592b683056f8f",
         "test/unit/protocol/light.test/08_spv_7_3_rotation_aware_pinned_path_follow_forward.test.js": "a642d1867223aa67",
         "test/unit/protocol/light.test/09_spv_phase_4_doge_anchor_cold_start_trust.test.js": "446a816c74c3e1c6",
-        "test/unit/protocol/light.test/10_anchor_fold_v3_cold_start_trust.test.js": "e88d40e9dbb79d54",
+        "test/unit/protocol/light.test/10_anchor_fold_v3_cold_start_trust.test.js": "17d4121b8213b71a",
         "test/unit/protocol/light.test/anchor_bundle_order.test.js": "e082fc71f6438b42",
         "test/unit/protocol/light.test/anchor_bundle_order_helpers.test.js": "480d3f9cba3f934c",
         "test/unit/protocol/light.test/anchor_v3_bundle_order.test.js": "567b49dd3d5eae61",
@@ -7425,7 +7466,7 @@
         "test/unit/wallet/wallet.test/06_get_utxos.test.js": "d08dcae82793ad93",
         "test/unit/wallet/wallet.test/07_broadcast_tx_success_and_error_paths.test.js": "0f0eba04cf20ed73",
         "test/unit/wallet/wallet.test/08_sign_ecdsa.test.js": "3b361ae93e0f0a6c",
-        "test/unit/wallet/wallet.test/09_derive_multisig_address.test.js": "ee3d6157e9b6e6f4",
+        "test/unit/wallet/wallet.test/09_derive_multisig_address.test.js": "b598ef35f06841f5",
         "test/unit/wallet/wallet.test/10_txid_of.test.js": "c116a25e39aef89d",
         "test/unit/wallet/wallet.test/11_sign_multisig_psbt_and_finalize_multisig_psbt.test.js": "e8e36352ffe160a6",
         "test/unit/wallet/wallet.test/12_validate_address_extended.test.js": "dbcb60fc4a4ada27",
@@ -7433,6 +7474,7 @@
         "test/unit/wallet/wallet.test/14_sign_reveal_psbt.test.js": "600686f89502ee9b",
         "test/unit/wallet/wallet.test/15_decompose_psbt_op_return_and_missing_utxo_paths.test.js": "c119124f1fb21d44",
         "test/unit/wallet/wallet.test/16_get_bitcoin_network.test.js": "6ae7cbf3179f9e84",
+        "test/unit/wallet/wallet.test/17_prevout_field_conflicts.test.js": "1a92adf0a8d572f0",
         "test/unit/wallet/wallet_session.test.js": "5fca7e9b97347f87",
         "test/unit/wallet/wallet_session.test/01_submit.test.js": "5bf8b9f66d323161",
         "test/unit/wallet/wallet_session.test/02_unconfirmed_policy_vs_the_injected_cache.test.js": "024ba0d10d62429a",
@@ -7448,8 +7490,8 @@
       }
     },
     "test:all": {
-      "fileCount": 556,
-      "titleCount": 5811,
+      "fileCount": 559,
+      "titleCount": 5844,
       "files": {
         "test/boundary/boundary.test.js": "51c5d77e922af958",
         "test/boundary/boundary.test/01_tick_name_length_boundary.test.js": "2291494717b9aaab",
@@ -7551,7 +7593,7 @@
         "test/unit/api/api_auth_gate.test.js": "63619a72a6a85671",
         "test/unit/api/api_batch_cap.test.js": "09620624baddbde2",
         "test/unit/api/api_listener.test.js": "42d0222dd88f5616",
-        "test/unit/api/api_rate_limit.test.js": "decf786888bd7bd6",
+        "test/unit/api/api_rate_limit.test.js": "d4d16ec81f93d6a2",
         "test/unit/api/cors_origin.test.js": "47a8c7aec5cc3398",
         "test/unit/api/jsonrpc_body_guard.test.js": "58706b2a54fa0008",
         "test/unit/carrier/bind_action_carrier.test.js": "309253190446db60",
@@ -7571,6 +7613,7 @@
         "test/unit/carrier/reconcile_encoded.test/03_reconcile_encoded_foreign_input_change.test.js": "4234a6192854b61f",
         "test/unit/carrier/reconcile_encoded.test/04_reconcile_encoded_malformed_caps_fail_closed.test.js": "eea85d333892a161",
         "test/unit/carrier/reconcile_encoded.test/05_reconcile_encoded_shared_key_change.test.js": "2656481d9521bf4d",
+        "test/unit/carrier/reconcile_encoded.test/06_reconcile_encoded_prevout_field_conflict.test.js": "3c7283206a5c8d7d",
         "test/unit/carrier/utxo_cache.test.js": "d1e88cf731c181fe",
         "test/unit/carrier/verify_carrier_scripts.test.js": "85118e9491d67f0b",
         "test/unit/cli/repl.test.js": "45dba3fb0f557130",
@@ -7636,7 +7679,7 @@
         "test/unit/clients/websocket.test/03_emit_and_connection_lost.test.js": "c6c38104ad45ec9a",
         "test/unit/clients/websocket.test/04_latest_action_index_tracking.test.js": "a66187140aa93ab9",
         "test/unit/clients/websocket_bundler_interop.test.js": "34f473d0e384ae26",
-        "test/unit/clients/websocket_catch_up.test.js": "aeba40192a356871",
+        "test/unit/clients/websocket_catch_up.test.js": "91a65b88981100b5",
         "test/unit/clients/websocket_convenience.test.js": "deec5a095c8b2024",
         "test/unit/clients/websocket_convenience.test/01_on_block.test.js": "2daae22e85db73d7",
         "test/unit/clients/websocket_convenience.test/02_on_action.test.js": "1624ce0c406b2282",
@@ -7666,7 +7709,7 @@
         "test/unit/consensus/consensus_primitive_conformance.test.js": "53527e8cf6636821",
         "test/unit/consensus/regtest_env_twin.test.js": "cbad35bf1daff99f",
         "test/unit/consensus/state_subtree_constants.test.js": "e596539159de9a25",
-        "test/unit/contract/abi_core_drift.test.js": "f6b3df37ce48194d",
+        "test/unit/contract/abi_core_drift.test.js": "8b4d2d1531598d1b",
         "test/unit/contract/chunk_helper.test.js": "e22290dc42295659",
         "test/unit/contract/contract_client.test.js": "30dca91fc67eac4d",
         "test/unit/contract/contract_lint_global_alias.test.js": "121815bf45a0311e",
@@ -7708,7 +7751,7 @@
         "test/unit/cosigner/cosigner_envelope.test/11_the_2_of_2_account_is_untouched.test.js": "877773781a99ef1b",
         "test/unit/cosigner/cosigner_envelope.test/12_the_envelope_survives_the_wire.test.js": "3e53fdbb6260bdbe",
         "test/unit/cosigner/cosigner_envelope.test/13_sdk_create_tx_passthrough.test.js": "936e694dd2ad90a4",
-        "test/unit/cosigner/cosigner_exports.test.js": "90b62f3c2bb5a7eb",
+        "test/unit/cosigner/cosigner_exports.test.js": "b2eaa00a57cba2d3",
         "test/unit/cosigner/cosigner_hardening.test.js": "9838f9323113b187",
         "test/unit/cosigner/cosigner_hardening.test/01_g2_value_derivability_allowlist.test.js": "76a61f8dce9a8539",
         "test/unit/cosigner/cosigner_hardening.test/02_g3_tap_tree_provenance.test.js": "658646c635b28143",
@@ -7776,6 +7819,7 @@
         "test/unit/mcp/mcp.test.js": "a897a1e8fe5df99d",
         "test/unit/mcp/mcp.test/01_mcp_server_write_tools.test.js": "2ff922f4242ecbe8",
         "test/unit/observability/logger.test.js": "036b3389dcc3412c",
+        "test/unit/preflight/activation/activation_coin_first_precedence.test.js": "72a6f2b05e8fb756",
         "test/unit/preflight/activation_disclosures.test.js": "2cec8afa17027767",
         "test/unit/preflight/amount_representability.test.js": "27d1312efc3e8920",
         "test/unit/preflight/batch.test.js": "769a01a07529353f",
@@ -7882,7 +7926,7 @@
         "test/unit/protocol/light.test/07_spv_d4_pinned_launch_trust_root.test.js": "720592b683056f8f",
         "test/unit/protocol/light.test/08_spv_7_3_rotation_aware_pinned_path_follow_forward.test.js": "a642d1867223aa67",
         "test/unit/protocol/light.test/09_spv_phase_4_doge_anchor_cold_start_trust.test.js": "446a816c74c3e1c6",
-        "test/unit/protocol/light.test/10_anchor_fold_v3_cold_start_trust.test.js": "e88d40e9dbb79d54",
+        "test/unit/protocol/light.test/10_anchor_fold_v3_cold_start_trust.test.js": "17d4121b8213b71a",
         "test/unit/protocol/light.test/anchor_bundle_order.test.js": "e082fc71f6438b42",
         "test/unit/protocol/light.test/anchor_bundle_order_helpers.test.js": "480d3f9cba3f934c",
         "test/unit/protocol/light.test/anchor_v3_bundle_order.test.js": "567b49dd3d5eae61",
@@ -7987,7 +8031,7 @@
         "test/unit/wallet/wallet.test/06_get_utxos.test.js": "d08dcae82793ad93",
         "test/unit/wallet/wallet.test/07_broadcast_tx_success_and_error_paths.test.js": "0f0eba04cf20ed73",
         "test/unit/wallet/wallet.test/08_sign_ecdsa.test.js": "3b361ae93e0f0a6c",
-        "test/unit/wallet/wallet.test/09_derive_multisig_address.test.js": "ee3d6157e9b6e6f4",
+        "test/unit/wallet/wallet.test/09_derive_multisig_address.test.js": "b598ef35f06841f5",
         "test/unit/wallet/wallet.test/10_txid_of.test.js": "c116a25e39aef89d",
         "test/unit/wallet/wallet.test/11_sign_multisig_psbt_and_finalize_multisig_psbt.test.js": "e8e36352ffe160a6",
         "test/unit/wallet/wallet.test/12_validate_address_extended.test.js": "dbcb60fc4a4ada27",
@@ -7995,6 +8039,7 @@
         "test/unit/wallet/wallet.test/14_sign_reveal_psbt.test.js": "600686f89502ee9b",
         "test/unit/wallet/wallet.test/15_decompose_psbt_op_return_and_missing_utxo_paths.test.js": "c119124f1fb21d44",
         "test/unit/wallet/wallet.test/16_get_bitcoin_network.test.js": "6ae7cbf3179f9e84",
+        "test/unit/wallet/wallet.test/17_prevout_field_conflicts.test.js": "1a92adf0a8d572f0",
         "test/unit/wallet/wallet_session.test.js": "5fca7e9b97347f87",
         "test/unit/wallet/wallet_session.test/01_submit.test.js": "5bf8b9f66d323161",
         "test/unit/wallet/wallet_session.test/02_unconfirmed_policy_vs_the_injected_cache.test.js": "024ba0d10d62429a",
