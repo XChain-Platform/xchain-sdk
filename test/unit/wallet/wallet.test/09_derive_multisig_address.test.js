@@ -10,6 +10,7 @@
 
 const { expect } = require('chai');
 const WalletUtils = require('../../../../src/utils/wallet.js');
+const { getNetwork } = require('../../../../src/protocol/networks.js');
 
 describe('WalletUtils', function() {
 
@@ -151,6 +152,74 @@ describe('WalletUtils', function() {
                 network: 'bitcoin-regtest'
             });
             expect(result.address).to.be.a('string');
+        });
+    });
+});
+
+// Capture the thrown error so a segwit-gate assertion reads its code, not its message.
+function codeOf(fn) {
+    try { fn(); } catch (e) { return e.code; }
+    return 'no-throw';
+}
+
+function multiTemplate(wallet) {
+    const kp1 = wallet.generateKeyPair();
+    const kp2 = wallet.generateKeyPair();
+    return `multi:1:${kp1.publicKeyHex}:${kp2.publicKeyHex}`;
+}
+
+function musigTemplate(wallet) {
+    return `musig2:${wallet.generateKeyPair().publicKey.slice(1).toString('hex')}`;
+}
+
+describe('WalletUtils', function() {
+
+    describe('deriveMultisigAddress() on a network without segwit', function() {
+        it('should refuse p2wsh-multisig on dogecoin-regtest with SEGWIT_NOT_SUPPORTED', function() {
+            const wallet = new WalletUtils('dogecoin-regtest');
+            expect(codeOf(() => wallet.deriveMultisigAddress({
+                scriptTemplate: multiTemplate(wallet), scheme: 'p2wsh-multisig',
+            }))).to.equal('SEGWIT_NOT_SUPPORTED');
+        });
+
+        it('should refuse taproot-musig2 on dogecoin-regtest with SEGWIT_NOT_SUPPORTED', function() {
+            const wallet = new WalletUtils('dogecoin-regtest');
+            expect(codeOf(() => wallet.deriveMultisigAddress({
+                scriptTemplate: musigTemplate(wallet), scheme: 'taproot-musig2',
+            }))).to.equal('SEGWIT_NOT_SUPPORTED');
+        });
+
+        it('should refuse a dogecoin network override on a bitcoin instance', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            expect(codeOf(() => wallet.deriveMultisigAddress({
+                scriptTemplate: multiTemplate(wallet), scheme: 'p2wsh-multisig', network: 'dogecoin-regtest',
+            }))).to.equal('SEGWIT_NOT_SUPPORTED');
+        });
+    });
+});
+
+describe('WalletUtils', function() {
+
+    describe('deriveMultisigAddress() on a network without segwit', function() {
+        it('should still derive p2sh-multisig on dogecoin-regtest', function() {
+            const wallet = new WalletUtils('dogecoin-regtest');
+            const result = wallet.deriveMultisigAddress({
+                scriptTemplate: multiTemplate(wallet), scheme: 'p2sh-multisig',
+            });
+            expect(result.address).to.be.a('string');
+            expect(result.scheme).to.equal('p2sh-multisig');
+        });
+
+        // A bech32 prefix on a non-segwit network must not turn the refusal into an address.
+        it('should refuse both witness schemes even when the network carries a bech32 prefix', function() {
+            const wallet = new WalletUtils('dogecoin-regtest');
+            wallet.resolveNet = () => Object.assign({}, getNetwork('dogecoin-regtest'), { bech32: 'dcrt' });
+            expect(codeOf(() => wallet.deriveMultisigAddress({
+                scriptTemplate: multiTemplate(wallet), scheme: 'p2wsh-multisig',
+            }))).to.equal('SEGWIT_NOT_SUPPORTED');
+            expect(codeOf(() => wallet.deriveMultisigAddress({
+                scriptTemplate: musigTemplate(wallet), scheme: 'taproot-musig2',
+            }))).to.equal('SEGWIT_NOT_SUPPORTED');
         });
     });
 });
