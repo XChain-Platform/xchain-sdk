@@ -13,7 +13,7 @@
  **********************************************************************
  *
  * Pre-flight Tier-2: AIRDROP (spec §4.4; mirrors xchain-indexer
- * src/actions/airdrop.js). LIST existence is checkable; a null AMOUNT
+ * src/actions/airdrop/index.js). LIST existence is checkable; a null AMOUNT
  * is a WARNING, never an error - airdrop.js:176 accepts it as a
  * zero airdrop with the fee still charged (false-block invariant).
  * The full total<=balance check needs the resolved recipient count,

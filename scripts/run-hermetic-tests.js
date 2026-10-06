@@ -18,10 +18,14 @@ const FAMILIES = Object.freeze([
     { name: 'test:fuzz', command: npm, args: ['run', 'test:fuzz'] },
     { name: 'test:chaos', command: npm, args: ['run', 'test:chaos'] },
     {
-        name: 'auxiliary mocha',
+        name: 'bin/test',
         command: process.execPath,
-        args: [mocha, '--no-config', '--timeout', '30000', '--exit',
-            'bin/test/*.test.js', 'scripts/*.test.js'],
+        args: [mocha, '--no-config', '--timeout', '30000', '--exit', 'bin/test/*.test.js'],
+    },
+    {
+        name: 'scripts',
+        command: process.execPath,
+        args: [mocha, '--no-config', '--timeout', '30000', '--exit', 'scripts/*.test.js'],
     },
 ]);
 

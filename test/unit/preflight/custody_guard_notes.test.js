@@ -29,8 +29,8 @@ describe('pre-flight custody guard notes', function () {
     }
 
     const mapCases = [
-        ['DEPOSIT', 'deposit', 'cfd9837bc722773652e53b949ec938ba1757a295e470dba6c237a06ecf7667e3'],
-        ['WITHDRAW', 'withdraw', '76fc627ad84da6a931e1d32b212b5764dd273cbf1a26a6ce746736ac29c5c669'],
+        ['DEPOSIT', 'deposit', 'bbddd777d235e2da7b472d0e4ed993b598886202374f58ae2d46525079cb8f76'],
+        ['WITHDRAW', 'withdraw', 'b68c873821cbcbe2e72082817f13eecbe87c12c2a99591d5d4b9085358b7fa75'],
     ];
 
     for (const [action, handler, hash] of mapCases) {
