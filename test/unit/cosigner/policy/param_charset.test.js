@@ -34,6 +34,10 @@ describe('co-signer parameter charset', function () {
         }
     });
 
+});
+
+describe('co-signer parameter validation', function () {
+
     it('accepts values that do not require tick validation', function () {
         const accepted = [
             null,
