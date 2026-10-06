@@ -33,6 +33,8 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 const http   = require('http');
+const os     = require('os');
+const { execFile } = require('child_process');
 const express = require('express');
 const bodyParser = require('body-parser');
 const {
@@ -250,5 +252,49 @@ describe('API request-rate limit', function () {
         const deps = Object.keys(pkg.dependencies || {});
         for (const forbidden of ['express-rate-limit', 'rate-limiter-flexible', 'express-slow-down'])
             assert.ok(!deps.includes(forbidden), forbidden + ' must not be a runtime dependency of a published SDK');
+    });
+});
+
+// Loads src/api/index.js in a fresh node with one window setting and returns its stderr,
+// where the module-load warnings land (the logger's default sink is console.warn).
+function loadApiStderr(windowMs) {
+    const env = { PATH: process.env.PATH, HOME: process.env.HOME, NETWORK: 'bitcoin-regtest',
+        SDK_API_KEY: 'window-test-key', SDK_API_RATE_WINDOW_MS: windowMs };
+    const script = 'require(' + JSON.stringify(path.join(__dirname, '../../../src/api/index.js')) + ');';
+    return new Promise((resolve, reject) => {
+        execFile(process.execPath, ['-e', script], { env, cwd: os.tmpdir(), timeout: 8000 },
+            (err, stdout, stderr) => err ? reject(new Error(err.message + '\n' + stderr)) : resolve(stderr));
+    });
+}
+
+describe('API request-rate window', function () {
+    this.timeout(15000);
+
+    it('a truncatable junk window falls back to the default instead of shrinking to milliseconds', () => {
+        // parseInt() read '1e5' as 1 and '60s' as 60, a window so short every request
+        // opened a fresh bucket, so the limiter in front of the auth gate never fired.
+        for (const junk of ['1e5', '1.5e5', '60s', '2m', '1000ms', '0.5', '-1000', '+1000', '0', '', '   '])
+            assert.strictEqual(resolveRateWindowMs({ SDK_API_RATE_WINDOW_MS: junk }), 60000,
+                'a malformed window must fall back to 60000: ' + JSON.stringify(junk));
+        // Whole numbers of milliseconds still parse, padding included.
+        assert.strictEqual(resolveRateWindowMs({ SDK_API_RATE_WINDOW_MS: ' 30000 ' }), 30000);
+        assert.strictEqual(resolveRateWindowMs({ SDK_API_RATE_WINDOW_MS: '1000' }), 1000);
+    });
+
+    it('the shipped limiter still bites when the window env value was junk', async () => {
+        const windowMs = resolveRateWindowMs({ SDK_API_RATE_WINDOW_MS: '1e5' });
+        assert.strictEqual(windowMs, 60000);
+        const app = buildApp(3, windowMs);
+        await withServer(app, async (send) => {
+            for (let i = 0; i < 3; i++)
+                assert.strictEqual((await send()).status, 200, 'request ' + i + ' must be allowed');
+            assert.strictEqual((await send()).status, 429, 'request 4 must be rejected inside the window');
+        });
+    });
+
+    it('warns at load when the window setting was unusable, and stays quiet on a good one', async () => {
+        assert.match(await loadApiStderr('60s'), /SDK_API_RATE_WINDOW_MS is not a positive whole number/);
+        assert.match(await loadApiStderr('0'), /SDK_API_RATE_WINDOW_MS is not a positive whole number/);
+        assert.doesNotMatch(await loadApiStderr('30000'), /SDK_API_RATE_WINDOW_MS/);
     });
 });
