@@ -39,7 +39,7 @@ const {
     findBannedWasm,
     findBannedMathCalls,
     CONSENSUS_RULES
-} = require('../../../src/contract/lint_core.js');
+} = require('../../../src/contract/lint-core.js');
 
 function firstConsensusError(code, opts) {
     const errs = lintSource(code, opts).errors.filter((e) => CONSENSUS_RULES.has(e.rule));

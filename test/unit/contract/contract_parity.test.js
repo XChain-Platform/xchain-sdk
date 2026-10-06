@@ -43,7 +43,7 @@ const CONTRACTS_DIR = process.env.XCHAIN_CONTRACTS_DIR || path.join(SIBLING_ROOT
 // definition of the sandbox's stripped-global names, required by lint_core.js
 // here and by sandbox.js / toolkit/authoring.js in xchain-vm. It is
 // dependency-free so the single require line resolves at both vendored depths.
-const VENDORED_FILES = ['lint_core.js', 'metering.js', 'stripped_globals.js'];
+const VENDORED_FILES = ['lint-core.js', 'metering.js', 'stripped-globals.js'];
 
 function sha256(file) {
     return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -188,7 +188,7 @@ describe('contract-lint parity + drift', function () {
 describe('contract-lint parity + drift', function () {
 
     describe('Move 2: logic-level rules (advisory, never deploy-blocking)', function () {
-        const { CONSENSUS_RULES } = require('../../../src/contract/lint_core.js');
+        const { CONSENSUS_RULES } = require('../../../src/contract/lint-core.js');
         let sdk;
         before(function () { sdk = new XChainSDK({ network: 'bitcoin-regtest', noHub: true }); });
 
