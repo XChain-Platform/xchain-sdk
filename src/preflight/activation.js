@@ -68,6 +68,31 @@ const ACTIVATION_MIRRORS = Object.freeze({
     }),
 });
 
+// Pin the activations pre-flight words into disclosures that no drift-gated row covers: the
+// representability gate is an addGate row, the two batch gates are time-table rows.
+const DISCLOSURE_MIRRORS = Object.freeze({
+    AMOUNT_REPRESENTABILITY: Object.freeze({
+        key: 'amount_representability_activation.AMOUNT_REPRESENTABILITY_ACTIVATION',
+        unit: 'time',
+        table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 1791061097, 'LTC:testnet': 1791061097,
+            'DOGE:testnet': 1791061097, testnet: 'UNARMED', regtest: 0 }),
+    }),
+    BATCH_ISSUANCE_LIMITS: Object.freeze({
+        key: 'BATCH_ISSUANCE_LIMITS',
+        unit: 'time',
+        table: Object.freeze({ mainnet: 1786838400, testnet: 0, regtest: 0 }),
+    }),
+    BATCH_COST_WEIGHTING: Object.freeze({
+        key: 'BATCH_COST_WEIGHTING',
+        unit: 'time',
+        table: Object.freeze({ mainnet: 0, testnet: 0, regtest: 0 }),
+    }),
+});
+
+function mirrorFor(name) {
+    return ACTIVATION_MIRRORS[name] || DISCLOSURE_MIRRORS[name];
+}
+
 // Resolve the SDK's network to the registry's (network, coin) pair from config or explorer prefix.
 function activationPlane(sdk) {
     const [fullName, plane] = String((sdk && sdk.config && sdk.config.network) || '').toLowerCase().split('-');
@@ -81,7 +106,7 @@ function activationPlane(sdk) {
 
 // Read a mirrored threshold with the registry's precedence: '<COIN>:<network>' first, then the network.
 function activationThreshold(name, sdk) {
-    const table = ACTIVATION_MIRRORS[name].table;
+    const table = mirrorFor(name).table;
     const at = activationPlane(sdk);
     if (!at) return undefined;
     const own = (k) => Object.prototype.hasOwnProperty.call(table, k);
@@ -91,7 +116,7 @@ function activationThreshold(name, sdk) {
 
 // Describe a mirrored table for disclosure text, so the wording moves with the pinned values.
 function describeActivation(name) {
-    const { table, unit } = ACTIVATION_MIRRORS[name];
+    const { table, unit } = mirrorFor(name);
     const groups = {};
     for (const k of Object.keys(table)) {
         const state = table[k] === 'UNARMED' ? 'unarmed' : table[k] === 0 ? 'active from genesis' : 'armed at ' + unit + ' ' + table[k];
@@ -105,8 +130,8 @@ function describeActivationHere(name, sdk) {
     const at = activationThreshold(name, sdk);
     const here = at === undefined ? '' : at === 'UNARMED' ? 'this chain is not armed for it; '
         : at === 0 ? 'it is active from genesis on this chain; '
-            : 'it is armed at ' + ACTIVATION_MIRRORS[name].unit + ' ' + at + ' on this chain; ';
+            : 'it is armed at ' + mirrorFor(name).unit + ' ' + at + ' on this chain; ';
     return here + 'the activation is ' + describeActivation(name);
 }
 
-module.exports = { ACTIVATION_MIRRORS, activationThreshold, describeActivation, describeActivationHere };
+module.exports = { ACTIVATION_MIRRORS, DISCLOSURE_MIRRORS, activationThreshold, describeActivation, describeActivationHere };
