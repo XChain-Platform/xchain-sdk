@@ -8,74 +8,55 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
+'use strict';
+
 const { expect } = require('chai');
-const axios = require('axios');
-const http = require('http');
+const request = require('supertest');
 
-let server;
-const PORT = 19876; // Unlikely to collide
+const API_KEY = 'smoke-test-key';
+process.env.NETWORK = 'bitcoin-regtest';
+process.env.SDK_API_KEY = API_KEY;
+process.env.SDK_API_RATE_LIMIT = '0';
 
-function startServer(done) {
-    // Boot the SDK API server programmatically
-    const express    = require('express');
-    const bodyParser = require('body-parser');
-    const helmet     = require('helmet');
-    const cors       = require('cors');
-    const jsonRouter = require('express-json-rpc-router');
-    const XChainSDK  = require('../../src/XChainSDK');
+const XChainSDK = require('../../src/XChainSDK');
+const { createApp } = require('../../src/api/index.js');
 
-    const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
+const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
+const app = createApp(sdk);
 
-    const app = express();
-    app.use(helmet());
-    app.use(bodyParser.json());
-    app.use(cors());
+async function rpc(method, params = {}, authenticated = true) {
+    const req = request(app)
+        .post('/')
+        .send({ jsonrpc: '2.0', method, params, id: 1 });
 
-    const controller = {
-        async ping() { return { status: 'success' }; },
-        async create_action(params) { return sdk.createAction(params); },
-        async validate_action(params) { return sdk.validateAction(params.action, params.params); },
-        async get_actions() { return sdk.getActions(); },
-        async get_action_formats(params) { return sdk.getActionFormats(params.action); },
-        async get_action_fields(params) { return sdk.getActionFields(params.action, params.version); }
-    };
+    if (authenticated)
+        req.set('Authorization', 'Bearer ' + API_KEY);
 
-    app.use(jsonRouter({ methods: controller }));
-
-    server = app.listen(PORT, done);
+    return req;
 }
 
-function stopServer(done) {
-    server.close(done);
-}
-
-async function rpc(method, params) {
-    let response = await axios.post('http://localhost:' + PORT, {
-        jsonrpc: '2.0',
-        method: method,
-        params: params || {},
-        id: 1
-    });
-    return response.data;
-}
-
-describe('Smoke: API server end-to-end', function () {
-
-    before(startServer);
-    after(stopServer);
-
+describe('Smoke: real API app through the authenticated HTTP layer', function () {
     // Basic connectivity
 
-    it('ping returns success', async function () {
-        let res = await rpc('ping');
-        expect(res.result).to.deep.equal({ status: 'success' });
-        expect(res.error).to.be.undefined;
+    it('serves ping without authentication', async function () {
+        const response = await rpc('ping', {}, false);
+
+        expect(response.status).to.equal(200);
+        expect(response.body.result).to.deep.equal({ status: 'success' });
+        expect(response.body.error).to.be.undefined;
+    });
+
+    it('enforces the API key for non-ping methods', async function () {
+        const response = await rpc('get_actions', {}, false);
+
+        expect(response.status).to.equal(401);
+        expect(response.body.error.code).to.equal(-32001);
     });
 
     // Action creation via RPC
 
     it('create_action produces valid SEND', async function () {
-        let res = await rpc('create_action', {
+        const response = await rpc('create_action', {
             action: 'send',
             params: {
                 tick: 'TOKEN',
@@ -84,41 +65,42 @@ describe('Smoke: API server end-to-end', function () {
                 memo: 'smoke test'
             }
         });
-        expect(res.error).to.be.undefined;
-        expect(res.result.action).to.equal('SEND');
-        expect(res.result.version).to.equal(0);
-        expect(res.result.actionString).to.include('SEND|0|TOKEN|100|');
-        expect(res.result.actionString).to.include('smoke test');
-        expect(res.result.psbt).to.be.null;
+        const result = response.body.result;
+
+        expect(response.body.error).to.be.undefined;
+        expect(result.action).to.equal('SEND');
+        expect(result.version).to.equal(0);
+        expect(result.actionString).to.include('SEND|0|TOKEN|100|');
+        expect(result.actionString).to.include('smoke test');
+        expect(result.psbt).to.be.null;
     });
 
     it('create_action with ISSUE picks correct version', async function () {
-        let res = await rpc('create_action', {
+        const response = await rpc('create_action', {
             action: 'issue',
             params: { tick: 'SMOKETOKEN', description: 'testing' }
         });
-        expect(res.result.version).to.equal(1);
-        expect(res.result.actionString).to.equal('ISSUE|1|SMOKETOKEN|testing');
+
+        expect(response.body.result.version).to.equal(1);
+        expect(response.body.result.actionString).to.equal('ISSUE|1|SMOKETOKEN|testing');
     });
 
     it('create_action returns error for invalid input', async function () {
-        let res = await rpc('create_action', {
+        const response = await rpc('create_action', {
             action: 'send',
             params: { amount: '100' } // missing tick and destination
         });
-        expect(res.error).to.exist;
+
+        expect(response.body.error).to.exist;
     });
+
 });
 
-describe('Smoke: API server end-to-end', function () {
-
-    before(startServer);
-    after(stopServer);
-
+describe('Smoke: real API app action validation', function () {
     // Validation via RPC
 
     it('validate_action returns valid for good input', async function () {
-        let res = await rpc('validate_action', {
+        const response = await rpc('validate_action', {
             action: 'send',
             params: {
                 tick: 'TOKEN',
@@ -126,91 +108,79 @@ describe('Smoke: API server end-to-end', function () {
                 destination: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh'
             }
         });
-        expect(res.result.valid).to.be.true;
-        expect(res.result.errors).to.be.an('array').with.length(0);
+
+        expect(response.body.result.valid).to.be.true;
+        expect(response.body.result.errors).to.be.an('array').with.length(0);
     });
 
     it('validate_action returns errors for bad input', async function () {
-        let res = await rpc('validate_action', {
+        const response = await rpc('validate_action', {
             action: 'issue',
             params: { tick: 'BAD|TOKEN' }
         });
-        expect(res.result.valid).to.be.false;
-        expect(res.result.errors.length).to.be.greaterThan(0);
+
+        expect(response.body.result.valid).to.be.false;
+        expect(response.body.result.errors.length).to.be.greaterThan(0);
     });
 
-    // Introspection via RPC
-
-    // The count here was a literal 28 and went stale the moment an action was
-    // added (BET and friends took it to 31). A smoke test over the RPC surface
-    // is checking that the whole registry survives the round trip, not what is
-    // in it, so compare against the library's own list: that still catches a
-    // truncated or lossy response, and it does not have to be edited every time
-    // the protocol gains an action.
-    it('get_actions returns the full action registry', async function () {
-        const XChainSDK = require('../../src/XChainSDK');
-        const expected = new XChainSDK({ network: 'bitcoin-regtest' }).getActions();
-
-        let res = await rpc('get_actions');
-        expect(res.result).to.be.an('array');
-        expect(res.result).to.deep.equal(expected);
-        expect(res.result).to.include('SEND');
-        expect(res.result).to.include('ISSUE');
-        expect(res.result).to.include('DEPLOY');
-        expect(res.result).to.include('EXECUTE');
-    });
 });
 
-describe('Smoke: API server end-to-end', function () {
+describe('Smoke: real API app registry introspection', function () {
+    // Introspection via RPC
 
-    before(startServer);
-    after(stopServer);
+    it('get_actions returns the full action registry', async function () {
+        const response = await rpc('get_actions');
+
+        expect(response.body.result).to.deep.equal(sdk.getActions());
+        expect(response.body.result).to.include('SEND');
+        expect(response.body.result).to.include('ISSUE');
+        expect(response.body.result).to.include('DEPLOY');
+        expect(response.body.result).to.include('EXECUTE');
+    });
 
     it('get_action_formats returns versions for ISSUE', async function () {
-        let res = await rpc('get_action_formats', { action: 'ISSUE' });
-        expect(res.result).to.have.property('0');
-        expect(res.result).to.have.property('5');
+        const response = await rpc('get_action_formats', { action: 'ISSUE' });
+
+        expect(response.body.result).to.have.property('0');
+        expect(response.body.result).to.have.property('5');
     });
 
     it('get_action_fields returns fields for SEND v0', async function () {
-        let res = await rpc('get_action_fields', { action: 'SEND', version: 0 });
-        expect(res.result).to.include('VERSION');
-        expect(res.result).to.include('TICK');
-        expect(res.result).to.include('AMOUNT');
-        expect(res.result).to.include('DESTINATION');
-        expect(res.result).to.include('MEMO');
-    });
+        const response = await rpc('get_action_fields', { action: 'SEND', version: 0 });
 
+        expect(response.body.result).to.include.members([
+            'VERSION', 'TICK', 'AMOUNT', 'DESTINATION', 'MEMO'
+        ]);
+    });
+});
+
+describe('Smoke: real API app request handling', function () {
     // Multiple rapid requests
 
     it('handles 10 concurrent requests without errors', async function () {
-        let promises = [];
-        for (let i = 0; i < 10; i++) {
-            promises.push(rpc('create_action', {
+        const responses = await Promise.all(Array.from({ length: 10 }, (_, index) =>
+            rpc('create_action', {
                 action: 'send',
                 params: {
-                    tick: 'TOKEN' + i,
-                    // (i + 1), not i: the first request used to send AMOUNT "0",
-                    // which the validator rejects as not a positive number. That
-                    // made this concurrency test fail on a bad fixture rather
-                    // than on anything about concurrency.
-                    amount: String((i + 1) * 100),
+                    tick: 'TOKEN' + index,
+                    // Send a positive amount per request; the validator rejects "0".
+                    amount: String((index + 1) * 100),
                     destination: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh'
                 }
-            }));
-        }
-        let results = await Promise.all(promises);
-        for (let res of results) {
-            expect(res.error).to.be.undefined;
-            expect(res.result.action).to.equal('SEND');
+            })
+        ));
+
+        for (const response of responses) {
+            expect(response.body.error).to.be.undefined;
+            expect(response.body.result.action).to.equal('SEND');
         }
     });
 
     // Unknown method
 
     it('returns JSON-RPC error for unknown method', async function () {
-        let res = await rpc('nonexistent_method');
-        expect(res.error).to.exist;
-    });
+        const response = await rpc('nonexistent_method');
 
+        expect(response.body.error).to.exist;
+    });
 });
