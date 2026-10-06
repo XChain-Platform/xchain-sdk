@@ -40,6 +40,20 @@ function rpcErrorSuffix(rpcError) {
     return ': ' + rpcError.message + (typeof rpcError.code === 'number' ? ' (code ' + rpcError.code + ')' : '');
 }
 
+// The encoder answers -32603 for a node or tracker fault it expects to clear, and
+// documents it as retry-with-backoff. It rides a 2xx body, so withRetry cannot see
+// it; this wrapper gives the retry loop an error it classifies as transient and
+// carries the typed error to surface once retries are spent.
+const RETRYABLE_RPC_CODE = -32603;
+
+class RetryableRpcFault extends Error {
+    constructor(sdkError) {
+        super(sdkError.message);
+        this.sdkError = sdkError;
+        this.response = { status: 503, headers: {}, data: null };
+    }
+}
+
 class EncoderClient {
 
     constructor(options = {}) {
@@ -158,10 +172,11 @@ class EncoderClient {
                         let err = new SDKEncoderError(
                             'ENCODER_RPC_ERROR',
                             'Encoder RPC error: ' + (body.error.message || JSON.stringify(body.error)),
-                            { method, rpcError: body.error, context: body.error.data || null }
+                            { method, rpcError: body.error, context: body.error.data || null, retryable: body.error.code === RETRYABLE_RPC_CODE }
                         );
                         if (self.hooks.onError)
                             self.hooks.onError({ service: 'encoder', method, error: err.message });
+                        if (err.details.retryable) throw new RetryableRpcFault(err);
                         throw err;
                     }
 
@@ -170,7 +185,7 @@ class EncoderClient {
 
                     return body ? body.result : undefined;
                 } catch (err) {
-                    if (err instanceof SDKEncoderError) throw err;
+                    if (err instanceof SDKEncoderError || err instanceof RetryableRpcFault) throw err;
                     if (self.hooks.onError)
                         self.hooks.onError({ service: 'encoder', method, error: err.message });
                     // Re-throw raw error so withRetry can inspect retryability; wrap only when not retryable
@@ -180,6 +195,7 @@ class EncoderClient {
             }, retryConfig, onRetry);
         } catch (err) {
             // After all retries, wrap any raw (non-SDK) error into a typed SDKEncoderError
+            if (err instanceof RetryableRpcFault) throw err.sdkError;
             if (err instanceof SDKEncoderError) throw err;
             self.handleError(err, method);
         }
