@@ -22,9 +22,9 @@
 const { expect }  = require('chai');
 const sinon       = require('sinon');
 const WebSocket   = require('ws');
-const WebSocketClient = require('../../../../src/clients/websocket.js');
-const { SDKExplorerError } = require('../../../../src/utils/errors.js');
-const { waitFor, waitForCalls } = require('../../../helpers/wait.js');
+const WebSocketClient = require('../../../../../src/clients/websocket.js');
+const { SDKExplorerError } = require('../../../../../src/utils/errors.js');
+const { waitFor, waitForCalls } = require('../../../../helpers/wait.js');
 
 // Mock WebSocket Server
 

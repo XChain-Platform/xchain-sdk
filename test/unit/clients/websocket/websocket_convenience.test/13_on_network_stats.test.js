@@ -20,7 +20,7 @@
 
 const { expect } = require('chai');
 const sinon = require('sinon');
-const { waitForCalls } = require('../../../helpers/wait.js');
+const { waitForCalls } = require('../../../../helpers/wait.js');
 const { closeFixture, createFixture } = require('./support/setup.js');
 
 let server, sdk;
@@ -37,25 +37,19 @@ function registerHooks() {
 describe('XChainSDK – WebSocket convenience methods', function () {
     registerHooks();
 
-    // Convenience methods
+    describe('onNetworkStats', function () {
 
-    describe('onBlock', function () {
-
-        it('subscribes to blocks and fires callback on NEW_BLOCK', async function () {
+        it('fires on NETWORK_STATS', async function () {
             await sdk.connectWs();
             const spy = sinon.spy();
-            const unsub = sdk.onBlock(spy);
+            sdk.onNetworkStats(spy);
 
             server._lastClient.send(JSON.stringify({
-                type: 'NEW_BLOCK', data: { block_index: 101 }
+                type: 'NETWORK_STATS', data: { block_height: 101 }
             }));
             await waitForCalls(spy);
 
             expect(spy.calledOnce).to.be.true;
-            expect(spy.firstCall.args[0].data.block_index).to.equal(101);
-
-            // Unsubscribe function works
-            expect(typeof unsub).to.equal('function');
         });
     });
 

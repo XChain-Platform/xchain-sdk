@@ -7,7 +7,7 @@
 
 const { expect } = require('chai');
 const nock = require('nock');
-const EncoderClient = require('../../../src/clients/encoder.js');
+const EncoderClient = require('../../../../src/clients/encoder.js');
 
 const BASE = 'http://encoder.test:3000';
 const FAST_RETRY = { maxRetries: 2, baseDelay: 1, maxDelay: 2 };

@@ -28,7 +28,7 @@
 'use strict';
 
 const { expect }  = require('chai');
-const XChainSDK   = require('../../../src/XChainSDK.js');
+const XChainSDK   = require('../../../../src/XChainSDK.js');
 
 // A ws double whose subscribe() never gets confirmed.
 function rejectingWs(err) {

@@ -77,14 +77,14 @@ function makeBundledWsModule() {
 // the suite keeps seeing the real `ws`.
 function loadClientWithWsModule(wsExports) {
     const wsPath  = require.resolve('ws');
-    const clientPath = require.resolve('../../../src/clients/websocket.js');
+    const clientPath = require.resolve('../../../../src/clients/websocket.js');
     const savedWs     = require.cache[wsPath];
     const savedClient = require.cache[clientPath];
 
     require.cache[wsPath] = { id: wsPath, filename: wsPath, loaded: true, exports: wsExports };
     delete require.cache[clientPath];
     try {
-        return require('../../../src/clients/websocket.js');
+        return require('../../../../src/clients/websocket.js');
     } finally {
         if (savedWs) require.cache[wsPath] = savedWs; else delete require.cache[wsPath];
         delete require.cache[clientPath];

@@ -22,9 +22,9 @@
 const { expect }  = require('chai');
 const sinon       = require('sinon');
 const WebSocket   = require('ws');
-const WebSocketClient = require('../../../src/clients/websocket.js');
-const { SDKExplorerError } = require('../../../src/utils/errors.js');
-const { waitFor, waitForCalls } = require('../../helpers/wait.js');
+const WebSocketClient = require('../../../../src/clients/websocket.js');
+const { SDKExplorerError } = require('../../../../src/utils/errors.js');
+const { waitFor, waitForCalls } = require('../../../helpers/wait.js');
 
 // Mock WebSocket Server
 
@@ -119,7 +119,7 @@ describe('WebSocketClient', function () {
     describe('WS_SCHEMA_VERSION', function () {
 
         it('is exposed as a static on the client class', function () {
-            const WebSocketClient = require('../../../src/clients/websocket.js');
+            const WebSocketClient = require('../../../../src/clients/websocket.js');
             expect(WebSocketClient.WS_SCHEMA_VERSION).to.be.a('number');
             expect(WebSocketClient.WS_SCHEMA_VERSION).to.equal(2);
         });
@@ -127,7 +127,7 @@ describe('WebSocketClient', function () {
         it('matches the explorer sibling schema version when checked out (cross-repo drift guard)', function () {
             const path = require('path');
             const fs = require('fs');
-            const explorerDir = path.join(__dirname, '../..', '..', '..', 'xchain-explorer');
+            const explorerDir = path.join(__dirname, '../..', '..', '..', '..', 'xchain-explorer');
             const explorerSchema = path.join(explorerDir, 'src', 'ws', 'schema_version.js');
             // Skip only for a standalone clone with no explorer beside it. With
             // the checkout present, a missing file means the constant moved and
@@ -135,7 +135,7 @@ describe('WebSocketClient', function () {
             if (!fs.existsSync(path.join(explorerDir, 'package.json'))) return this.skip();
             expect(fs.existsSync(explorerSchema),
                 path.relative(explorerDir, explorerSchema) + ' is gone from xchain-explorer; repoint this drift guard').to.be.true;
-            const WebSocketClient = require('../../../src/clients/websocket.js');
+            const WebSocketClient = require('../../../../src/clients/websocket.js');
             expect(require(explorerSchema).WS_SCHEMA_VERSION).to.equal(WebSocketClient.WS_SCHEMA_VERSION);
         });
     });
