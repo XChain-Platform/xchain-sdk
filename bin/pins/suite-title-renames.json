@@ -482,10 +482,6 @@
       "vendored lint-core: LINT_GLOBAL_ALIAS rules flags this-rooted globalThis chain by default (author-facing linter)": "vendored lint_core: LINT_GLOBAL_ALIAS rules flags this-rooted globalThis chain by default (author-facing linter)",
       "vendored lint-core: LINT_GLOBAL_ALIAS rules leaves the pre-epoch spellings blocking in both modes": "vendored lint_core: LINT_GLOBAL_ALIAS rules leaves the pre-epoch spellings blocking in both modes",
       "vendored lint-core: LINT_GLOBAL_ALIAS rules the detectors take the epoch flag directly": "vendored lint_core: LINT_GLOBAL_ALIAS rules the detectors take the epoch flag directly"
-    },
-    "test/unit/contract/contract_parity.test.js": {
-      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/lint-core.js matches xchain-vm/src/lint-core.js": "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/lint_core.js matches xchain-vm/src/lint_core.js",
-      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/stripped-globals.js matches xchain-vm/src/stripped-globals.js": "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/stripped_globals.js matches xchain-vm/src/stripped_globals.js"
     }
   }
 }
