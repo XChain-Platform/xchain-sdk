@@ -9,7 +9,7 @@
 // contact legal@dankest.llc.
 //
 // The MuSig2-backed agent submit path. Covers the signer adapter
-// (single-input key-path spend, multi-input fail-closed) and MuSig2AgentSession
+// (single- and multi-input key-path spends, every input signed in one round) and MuSig2AgentSession
 // wiring (aggregate spending account, local policy pre-flight, co-signer as the
 // authoritative gate). The encoder + broadcast are mocked; everything from the
 // PSBT through the co-signer round to the finalized witness is real.
