@@ -198,3 +198,105 @@ describe('ANCHOR v3 fold: the wrapper section verifies over the archive-extended
         assert.strictEqual(verify(wire, 'BTC').verified, true);
     });
 });
+
+// The rows the indexer really stores for a folded v3 action: one per chain section with the
+// four fold fields null, then a chain-less archive row carrying the wrapper's own signatures.
+function storedFoldAction({ archive = ARCHIVE } = {}) {
+    const btc = baseCp('BTC', 7), doge = baseCp('DOGE', 7);
+    const btcSigs = [{ pubkey: signer.pubkeyHex, sig: sign(checkpoint.canonicalCheckpoint(Object.assign({ fold_archive: ARCHIVE }, btc))) }];
+    const dogeSigs = [{ pubkey: signer.pubkeyHex, sig: sign(checkpoint.canonicalCheckpoint(doge)) }];
+    const nullFold = { match_batch_seq: null, match_count: null, batch_crc32: null, total_chunks: null };
+    const header = { action_index: 123, version: 3, block_index_doge: 2000, tx_hash: 'dd'.repeat(32) };
+    const section = (cp, sigs, index) => Object.assign({}, header, cp, nullFold, { section_index: index, validator_signatures: sigs });
+    const archiveRow = Object.assign({}, header, archive, { section_index: 2, chain: null, block_index: null,
+        checkpoint_seq: null, state_root: null, block_merkle_root: null, validator_signatures: btcSigs });
+    const asListRow = (s) => Object.assign({}, s, { validator_signatures: JSON.stringify(s.validator_signatures) });
+    const sections = [section(btc, btcSigs, 0), section(doge, dogeSigs, 1), archiveRow];
+    return { list: [asListRow(sections[0]), asListRow(sections[1])], detail: Object.assign({}, header, { sections }) };
+}
+
+// Serves the list route and the singular detail route apart, logging every URL asked for.
+function fetchStored(stored, { detail = 'ok' } = {}) {
+    const calls = [];
+    const fetchImpl = async (url) => {
+        calls.push(url);
+        if (url.includes('/api/anchors/')) return { ok: true, status: 200, json: async () => ({ data: stored.list }) };
+        if (url.includes('/api/anchor/') && detail === 'throw') throw new Error('network down');
+        if (url.includes('/api/anchor/') && detail === 'ok') return { ok: true, status: 200, json: async () => stored.detail };
+        return { ok: false, status: 404, json: async () => ({}) };
+    };
+    const run = (targetChain) => light.fetchAnchoredCheckpoint({ explorerUrl: 'https://x', dogeCoin: 'DOGE',
+        targetChain, validators: VALIDATORS, dogeTipHeight: 2500, minDepth: 60, fetchImpl });
+    return { run, calls };
+}
+
+describe('ANCHOR v3 fold: the wrapper fold is read from the action archive row the indexer stores', function () {
+    beforeEach(function () { light.clearValidatorSetCache(); });
+
+    it('verifies the wrapper section by attaching the archive row that carries its signatures', async function () {
+        await withFold('1500', async () => {
+            const { run, calls } = fetchStored(storedFoldAction());
+            const result = await run('BTC');
+            assert.strictEqual(result.verified, true, result.reason);
+            assert.deepStrictEqual(result.checkpoint.fold_archive,
+                { match_batch_seq: 42, match_count: 17, batch_crc32: '9c4e1b22', total_chunks: 1 });
+            assert.ok(calls.some((url) => url.endsWith('/DOGE/api/anchor/123')), calls.join(', '));
+        });
+    });
+
+    it('leaves a non-wrapper section of the same action on the plain canonical', async function () {
+        await withFold('1500', async () => {
+            const result = await fetchStored(storedFoldAction()).run('DOGE');
+            assert.strictEqual(result.verified, true, result.reason);
+            assert.strictEqual(result.checkpoint.fold_archive, undefined);
+        });
+    });
+
+    it('fails closed on quorum, never throws, when the detail read is missing or broken', async function () {
+        await withFold('1500', async () => {
+            for (const detail of ['missing', 'throw']) {
+                const result = await fetchStored(storedFoldAction(), { detail }).run('BTC');
+                assert.strictEqual(result.reason, 'CHECKPOINT_QUORUM_FAILED', detail);
+            }
+        });
+    });
+
+    it('fails closed when the archive row the explorer serves was tampered with', async function () {
+        await withFold('1500', async () => {
+            for (const moved of [{ batch_crc32: '9C4E1B23' }, { match_batch_seq: 43 }]) {
+                const stored = storedFoldAction({ archive: Object.assign({}, ARCHIVE, moved) });
+                assert.strictEqual((await fetchStored(stored).run('BTC')).reason, 'CHECKPOINT_QUORUM_FAILED');
+            }
+        });
+    });
+
+    it('never makes the detail read for a v0 section', async function () {
+        await withFold('1500', async () => {
+            const stored = { list: [row(0, 2000)], detail: {} };
+            const { run, calls } = fetchStored(stored);
+            assert.strictEqual((await run('BTC')).verified, true);
+            assert.deepStrictEqual(calls.filter((url) => url.includes('/api/anchor/')), []);
+        });
+    });
+});
+
+describe('ANCHOR v3 fold: attachFoldArchive matches exactly one archive row', function () {
+    let attachFoldArchive;
+    before(function () { ({ attachFoldArchive } = require('../../../../src/protocol/light_client/fold_archive_attach.js')); });
+    const sigs = [{ pubkey: 'AA'.repeat(32), sig: 'BB'.repeat(64) }];
+    const archive = (extra) => Object.assign({ chain: null, validator_signatures: sigs }, ARCHIVE, extra);
+
+    it('attaches from the one chain-less row whose signature list equals the section list', function () {
+        const cp = attachFoldArchive({ validator_signatures: sigs.map((s) => ({ pubkey: s.pubkey.toLowerCase(), sig: s.sig.toLowerCase() })) },
+            [{ chain: 'BTC', validator_signatures: sigs }, archive({ validator_signatures: JSON.stringify(sigs) })]);
+        assert.deepStrictEqual(cp.fold_archive, { match_batch_seq: 42, match_count: 17, batch_crc32: '9c4e1b22', total_chunks: 1 });
+    });
+
+    it('leaves the checkpoint unchanged on no match or on two matches', function () {
+        const other = [{ pubkey: 'cc'.repeat(32), sig: 'dd'.repeat(64) }];
+        assert.strictEqual(attachFoldArchive({ validator_signatures: sigs }, [archive({ validator_signatures: other })]).fold_archive, undefined);
+        assert.strictEqual(attachFoldArchive({ validator_signatures: sigs }, [archive(), archive({ match_count: 18 })]).fold_archive, undefined);
+        assert.strictEqual(attachFoldArchive({ validator_signatures: sigs }, [archive({ chain: 'BTC' })]).fold_archive, undefined);
+        assert.strictEqual(attachFoldArchive({ validator_signatures: [] }, [archive({ validator_signatures: [] })]).fold_archive, undefined);
+    });
+});

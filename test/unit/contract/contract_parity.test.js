@@ -230,7 +230,9 @@ describe('contract-lint parity + drift', function () {
             if (!requireSibling(this, dir)) return;
             for (const name of ['escrow', 'vesting', 'crowdsale', 'amm']) {
                 const f = path.join(dir, name, name + '.js');
-                if (!fs.existsSync(f)) continue;
+                // Fail closed on a missing template, the same way NO CANONICAL does above
+                assert.ok(fs.existsSync(f), 'NO TEMPLATE: ' + name + ' is listed here but xchain-contracts has no ' + f +
+                    '; the sibling checkout is stale, or the template was renamed/removed (update this list).');
                 const r = sdk.validateContract(fs.readFileSync(f, 'utf8'));
                 assert.strictEqual(r.errors.length, 0, name + ' errors: ' + JSON.stringify(r.errors));
                 assert.strictEqual(r.warnings.length, 0, name + ' warnings: ' + JSON.stringify(r.warnings.map(w => w.rule)));

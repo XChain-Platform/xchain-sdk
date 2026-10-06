@@ -31,11 +31,15 @@
  * src/addressRefFields.js (the indexer keeps the authoritative copy). Compaction
  * is gated per action by SDK_COMPACTABLE_BY_ACTION (single-value, non-type-gated,
  * non-`noCompact` fields); the indexer assigns ids for the FULL set, so the
- * SDK-emitted `^<id>` set is always a subset the indexer recognises. One field is
- * held back even though the indexer ids it: DISPENSER.GET_ADDRESS is emitted as a
- * full address (the decoder gates dispense detection on it and cannot resolve a
- * `^<id>` ref), while ORDER/SWAP.GET_ADDRESS stay compacted. SOURCE is never in
- * the map (it is the tx sender, not a wire payload field) and so is never compacted.
+ * SDK-emitted `^<id>` set is always a subset the indexer recognises. The fields
+ * marked `noCompact` in src/addressRefFields.js (the authoritative list and its
+ * rationale) are held back even though the indexer ids them, because the decoder
+ * keys work off them and cannot resolve a `^<id>` ref. Today that is two fields,
+ * both emitted as full addresses: DISPENSER.GET_ADDRESS (the decoder gates dispense
+ * detection on it) and DISPENSER.ORACLE_ADDRESS (the decoder captures the oracle-fee
+ * output from it, so a compacted ref fails validateOracleFee and the create is
+ * rejected). ORDER/SWAP.GET_ADDRESS stay compacted. SOURCE is never in the map (it
+ * is the tx sender, not a wire payload field) and so is never compacted.
  *
  ********************************************************************/
 
@@ -49,8 +53,8 @@ const { readParentListType } = require('./list/parent_list_type.js');
 // therefore be compacted to the `^<id>` wire form. Derived from the shared
 // consensus map so it can never drift from the indexer's accepted set. Keyed by
 // action so a field can be compactable for one action yet held back for another
-// (DISPENSER.GET_ADDRESS is emitted as a full address; ORDER/SWAP.GET_ADDRESS are
-// compacted); see the `noCompact` note in addressRefFields.js.
+// (DISPENSER.GET_ADDRESS and DISPENSER.ORACLE_ADDRESS are emitted as full addresses;
+// ORDER/SWAP.GET_ADDRESS are compacted); see the `noCompact` note in addressRefFields.js.
 const COMPACTABLE_BY_ACTION = SDK_COMPACTABLE_BY_ACTION;
 
 // Hard upper bound on a single compaction lookup. A reachable explorer answers

@@ -14,8 +14,9 @@
  *
  * XChain Platform SDK - MuSig2 Agent Session
  *
- * An AgentSession whose spending account is a 2-of-2 MuSig2 P2TR: the agent
- * holds one key, a policy co-signer holds the other. This is the HARD
+ * An AgentSession whose spending account is a MuSig2 P2TR (2-of-2, or a 2-of-3
+ * tap tree when a recovery key is named): the agent holds one key, a policy
+ * co-signer holds the other. This is the HARD
  * enforcement that AgentSession's HONESTY NOTE points to - the co-signer
  * withholds its partial on out-of-policy actions, so the WIF holder cannot
  * bypass policy with raw SDK calls (the agent's key alone can't move funds).
@@ -33,9 +34,10 @@
  * address and the co-signer is the authoritative, WIF-independent gate
  * (see musig2_signer.js + co_signer.js).
  *
- * SCOPE (P3 slice 2): key-path 2-of-2, single taproot input (see
- * musig2_signer.js). The 2-of-3 recovery tap-tree and multi-input spends are
- * later slices.
+ * SCOPE: agent+daemon key-path spends only, of the 2-of-2 account or of a 2-of-3
+ * recovery account's tweaked key path; every taproot input is signed in one
+ * co-signer round (see musig2_signer.js). Recovery script-path spends never
+ * reach this module.
  *
  ********************************************************************/
 
