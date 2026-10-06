@@ -13,6 +13,9 @@
 const { expect } = require('chai');
 const request = require('supertest');
 
+// The API module reads its network, key and rate limit from the environment when
+// it loads, so these are set before the require calls below. A rate limit of 0
+// disables throttling, which keeps the concurrent-request test from tripping it.
 const API_KEY = 'smoke-test-key';
 process.env.NETWORK = 'bitcoin-regtest';
 process.env.SDK_API_KEY = API_KEY;
@@ -27,6 +30,9 @@ const { createApp } = require('../../src/api/index.js');
 const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
 const app = createApp(sdk);
 
+// Sends one JSON-RPC 2.0 call through the real middleware stack (body parsing,
+// authentication, rate limiting, dispatch). Pass authenticated = false to omit
+// the bearer header and exercise the unauthenticated path.
 async function rpc(method, params = {}, authenticated = true) {
     const req = request(app)
         .post('/')
@@ -56,7 +62,8 @@ describe('Smoke: real API app through the authenticated HTTP layer', function ()
         expect(response.body.error.code).to.equal(-32001);
     });
 
-    // Action creation via RPC
+    // Action creation via RPC: the response carries the encoded action name and its
+    // fields, so each case checks the shape a real client would depend on.
 
     it('create_action produces valid SEND', async function () {
         const response = await rpc('create_action', {
@@ -100,7 +107,8 @@ describe('Smoke: real API app through the authenticated HTTP layer', function ()
 });
 
 describe('Smoke: real API app action validation', function () {
-    // Validation via RPC
+    // Validation via RPC: bad input must come back as a JSON-RPC error object, never
+    // as an HTTP failure or an unhandled exception that drops the connection.
 
     it('validate_action returns valid for good input', async function () {
         const response = await rpc('validate_action', {
@@ -183,7 +191,8 @@ describe('Smoke: real API app request handling', function () {
         }
     });
 
-    // Unknown method
+    // Unknown method: dispatch must answer with the standard method-not-found error
+    // rather than falling through to a 500.
 
     it('returns JSON-RPC error for unknown method', async function () {
         const response = await rpc('nonexistent_method');
