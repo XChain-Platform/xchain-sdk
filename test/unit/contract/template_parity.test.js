@@ -44,34 +44,68 @@ function sha256(buf) { return crypto.createHash('sha256').update(buf).digest('he
 function canonicalTemplatePath(name) { return path.join(CONTRACTS_DIR, name, name + '.js'); }
 function canonicalPatternPath(name)  { return path.join(CONTRACTS_DIR, 'patterns', name + '.js'); }
 
-let sdk;
+describe('scaffold sources: drift + verdict', function () {
 
-function setupSdk() {
-    sdk = new XChainSDK({ network: 'bitcoin-regtest', noHub: true });
-}
+    let sdk;
+    before(function () { sdk = new XChainSDK({ network: 'bitcoin-regtest', noHub: true }); });
 
-function defineDriftGuardTests() {
-    for (const name of Object.keys(EMBEDDED.templates)) {
-        it('template ' + name + ' matches xchain-contracts/' + name + '/' + name + '.js', function () {
-            if (!requireContracts(this)) return;
-            const embedded  = Buffer.from(EMBEDDED.templates[name], 'base64');
-            const canonical = fs.readFileSync(canonicalTemplatePath(name));
-            assert.strictEqual(sha256(embedded), sha256(canonical),
-                'TEMPLATE DRIFT: ' + name + '; re-run `npm run sync:templates`.');
+    describe('drift guard (embedded === canonical xchain-contracts)', function () {
+        for (const name of ['amm', 'crowdsale']) {
+            it('template ' + name + ' matches xchain-contracts/' + name + '/' + name + '.js', function () {
+                if (!requireContracts(this)) return;
+                const embedded  = Buffer.from(EMBEDDED.templates[name], 'base64');
+                const canonical = fs.readFileSync(canonicalTemplatePath(name));
+                assert.strictEqual(sha256(embedded), sha256(canonical),
+                    'TEMPLATE DRIFT: ' + name + '; re-run `npm run sync:templates`.');
+            });
+        }
+        for (const name of Object.keys(EMBEDDED.patterns)) {
+            it('pattern ' + name + ' matches xchain-contracts/patterns/' + name + '.js', function () {
+                if (!requireContracts(this)) return;
+                const embedded  = Buffer.from(EMBEDDED.patterns[name], 'base64');
+                const canonical = fs.readFileSync(canonicalPatternPath(name));
+                assert.strictEqual(sha256(embedded), sha256(canonical),
+                    'PATTERN DRIFT: ' + name + '; re-run `npm run sync:templates`.');
+            });
+        }
+    });
+
+    describe('sdk.scaffold() + listTemplates()', function () {
+        it('lists the four templates and the patterns', function () {
+            const l = sdk.listTemplates();
+            for (const t of ['escrow', 'vesting', 'crowdsale', 'amm'])
+                assert.ok(l.templates.includes(t), 'missing template ' + t);
+            assert.ok(l.patterns.length > 0, 'expected patterns');
         });
-    }
-    for (const name of Object.keys(EMBEDDED.patterns)) {
-        it('pattern ' + name + ' matches xchain-contracts/patterns/' + name + '.js', function () {
-            if (!requireContracts(this)) return;
-            const embedded  = Buffer.from(EMBEDDED.patterns[name], 'base64');
-            const canonical = fs.readFileSync(canonicalPatternPath(name));
-            assert.strictEqual(sha256(embedded), sha256(canonical),
-                'PATTERN DRIFT: ' + name + '; re-run `npm run sync:templates`.');
-        });
-    }
-}
 
-function defineMintSupplyLockTests() {
+        it('every scaffolded template is a non-empty string that passes validateContract', function () {
+            for (const name of sdk.listTemplates().templates) {
+                const src = sdk.scaffold(name);
+                assert.strictEqual(typeof src, 'string');
+                assert.ok(src.length > 0, name + ' is empty');
+                assert.strictEqual(sdk.validateContract(src).valid, true,
+                    name + ' failed validateContract: ' + JSON.stringify(sdk.validateContract(src).errors));
+            }
+        });
+
+        it('every scaffolded pattern lints with zero errors', function () {
+            for (const name of sdk.listTemplates().patterns) {
+                const src = sdk.scaffold(name);
+                const r = sdk.validateContract(src);
+                assert.strictEqual(r.errors.length, 0, name + ' errors: ' + JSON.stringify(r.errors.map(e => e.rule)));
+            }
+        });
+
+        it('an unknown name throws SDKContractError(TEMPLATE_NOT_FOUND)', function () {
+            assert.throws(() => sdk.scaffold('does-not-exist'), function (e) {
+                return e && e.code === 'TEMPLATE_NOT_FOUND';
+            });
+        });
+    });
+
+});
+
+describe('mint-supply lock guard', function () {
     for (const name of ['amm', 'crowdsale']) {
         it(name + ' locks the configured mint supply and exposes no public mint', function () {
             const source = Buffer.from(EMBEDDED.templates[name], 'base64').toString('utf8');
@@ -79,46 +113,18 @@ function defineMintSupplyLockTests() {
             assert.doesNotMatch(source, /emit[.]mint/);
         });
     }
-}
+});
 
-function defineScaffoldTests() {
-    it('lists the four templates and the patterns', function () {
-        const l = sdk.listTemplates();
-        for (const t of ['escrow', 'vesting', 'crowdsale', 'amm'])
-            assert.ok(l.templates.includes(t), 'missing template ' + t);
-        assert.ok(l.patterns.length > 0, 'expected patterns');
-    });
+describe('unrelated template guard', function () {
+    const expected = {
+        escrow: '6645899af2b969982a87b31bc9e8525067c20f534ec7c1717501f95534c7e79c',
+        vesting: 'bdeb9425e61ed0a12c52e5bef9ec88d4bc5c4948a541c2c0f47807ad2e7fe36b'
+    };
 
-    it('every scaffolded template is a non-empty string that passes validateContract', function () {
-        for (const name of sdk.listTemplates().templates) {
-            const src = sdk.scaffold(name);
-            assert.strictEqual(typeof src, 'string');
-            assert.ok(src.length > 0, name + ' is empty');
-            assert.strictEqual(sdk.validateContract(src).valid, true,
-                name + ' failed validateContract: ' + JSON.stringify(sdk.validateContract(src).errors));
-        }
-    });
-
-    it('every scaffolded pattern lints with zero errors', function () {
-        for (const name of sdk.listTemplates().patterns) {
-            const src = sdk.scaffold(name);
-            const r = sdk.validateContract(src);
-            assert.strictEqual(r.errors.length, 0, name + ' errors: ' + JSON.stringify(r.errors.map(e => e.rule)));
-        }
-    });
-
-    it('an unknown name throws SDKContractError(TEMPLATE_NOT_FOUND)', function () {
-        assert.throws(() => sdk.scaffold('does-not-exist'), function (e) {
-            return e && e.code === 'TEMPLATE_NOT_FOUND';
+    for (const name of Object.keys(expected)) {
+        it(name + ' remains unchanged', function () {
+            const source = Buffer.from(EMBEDDED.templates[name], 'base64');
+            assert.strictEqual(sha256(source), expected[name], 'UNRELATED TEMPLATE DRIFT: ' + name);
         });
-    });
-}
-
-function defineScaffoldSourceTests() {
-    before(setupSdk);
-    describe('drift guard (embedded === canonical xchain-contracts)', defineDriftGuardTests);
-    describe('mint-supply lock guard', defineMintSupplyLockTests);
-    describe('sdk.scaffold() + listTemplates()', defineScaffoldTests);
-}
-
-describe('scaffold sources: drift + verdict', defineScaffoldSourceTests);
+    }
+});
