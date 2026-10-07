@@ -71,11 +71,19 @@ describe('scaffold sources: drift + verdict', function () {
     });
 
     describe('sdk.scaffold() + listTemplates()', function () {
-        it('lists the four templates and the patterns', function () {
+        it('lists the five templates and the patterns', function () {
             const l = sdk.listTemplates();
-            for (const t of ['escrow', 'vesting', 'crowdsale', 'amm'])
+            for (const t of ['escrow', 'escrowDelivery', 'vesting', 'crowdsale', 'amm'])
                 assert.ok(l.templates.includes(t), 'missing template ' + t);
             assert.ok(l.patterns.length > 0, 'expected patterns');
+        });
+
+        it('ships the updated escrow variants', function () {
+            for (const name of ['escrow', 'escrowDelivery']) {
+                const src = sdk.scaffold(name);
+                assert.match(src, /function requirePlainDecimal/);
+                assert.match(src, /cancel:/);
+            }
         });
 
         it('every scaffolded template is a non-empty string that passes validateContract', function () {
