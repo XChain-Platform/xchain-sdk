@@ -81,7 +81,7 @@ describe('BET client surfaces', function () {
         const s = sdk();
         expect(s.betting).to.be.an('object');
         expect(s.getActions()).to.include('BET');
-        expect(s.getActionFormats('BET')).to.have.keys(['0', '1', '2', '3']);
+        expect(s.getActionFormats('BET')).to.have.keys(['0', '1', '2', '3', '4']);
         const result = await s.bet({ version: 1, feedActionIndex: 1234 });
         expect(result.actionString).to.equal('BET|1|1234');
     });

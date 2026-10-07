@@ -2483,3 +2483,18 @@ the hashes were updated" is exactly the non-review this file exists to prevent.
   approved set is unchanged, and the diff bears that out: same `recipients`
   iteration, same insertion order, an empty list stays truthy as a Set exactly as it
   was as an array. Performance only, no verdict moves, nothing to mirror.
+
+### 2026-10-07 - BET format 4 membership-list edits
+
+BET v4 adds one client-authorable state transition:
+`VERSION|FEED_ACTION_INDEX|ALLOW_LIST|BLOCK_LIST|MEMO`. The SDK can certify the
+wire format, the numeric feed reference, the three-way list-reference spelling
+(empty retains, zero detaches, positive replaces), the no-op rule, and the case
+where both supplied positive references are the same. Those checks now live in
+the BET composer and validator, and the signing description makes clear that an
+edit applies only to future bets.
+
+Activation height, market ownership, open status, referenced-list existence and
+type, and equality against a retained current reference all require indexed
+state. They remain indexer-owned and cannot become SDK errors without a server
+dry-run carrying that state.
