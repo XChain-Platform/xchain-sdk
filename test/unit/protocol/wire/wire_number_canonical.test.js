@@ -31,7 +31,7 @@ const SCI_CASES = [
     [0.00000001,  '0.00000001'],           // String() => "1e-8"
     [0.0000001,   '0.0000001'],            // String() => "1e-7"
     [2e-8,        '0.00000002'],
-    [1e21,        '1000000000000000000000'], // String() => "1e+21"
+    ['1e+21',     '1000000000000000000000'], // what String(1e21) prints; a Number this large is refused
     ['1e-8',      '0.00000001'],           // scientific already in a string
     ['2.5E-7',    '0.00000025'],           // uppercase exponent
 ];
@@ -72,14 +72,30 @@ describe('wire number canonicalization contract', function () {
     });
 
     it('leaves faithfully-carried magnitudes alone, above 2^53 included', function () {
-        // 1e21 needs one significant digit, so the double holds it exactly; the
-        // guard must not turn a working large-supply amount into an error.
-        expect(util.setNumberFormats({ MAX_SUPPLY: 1e21 }).MAX_SUPPLY)
+        // Above 2^53 only a decimal string carries the magnitude faithfully; small Numbers still pass.
+        expect(util.setNumberFormats({ MAX_SUPPLY: '1000000000000000000000' }).MAX_SUPPLY)
             .to.equal('1000000000000000000000');
+        expect(util.setNumberFormats({ AMOUNT: 900719925474099 }).AMOUNT)
+            .to.equal('900719925474099');
         expect(util.setNumberFormats({ AMOUNT: 0.00000001 }).AMOUNT).to.equal('0.00000001');
         expect(util.setNumberFormats({ AMOUNT: 123.456 }).AMOUNT).to.equal('123.456');
     });
 
+    it('refuses an unsafe-integer JS number even when its rounded form prints short', function () {
+        // Each of these is one double that also stands for its neighbours, so the caller's value is unknowable
+        const aliased = [1e17 + 1, 1e18 + 1, 1e19 + 7, 1e21, -1e17,
+            JSON.parse('{"A":100000000000000001}').A, JSON.parse('{"A":1000000000000000000001}').A];
+        for (const value of aliased)
+            expect(() => util.setNumberFormats({ AMOUNT: value }), String(value))
+                .to.throw(RangeError, /already rounded/);
+        expect(() => util.setNumberFormats({ MAX_SUPPLY: 1e21 })).to.throw(RangeError, /MAX_SUPPLY/);
+        // The decimal-string spellings stay exact.
+        expect(util.setNumberFormats({ AMOUNT: '100000000000000001' }).AMOUNT).to.equal('100000000000000001');
+        expect(util.setNumberFormats({ AMOUNT: '1000000000000000000001' }).AMOUNT).to.equal('1000000000000000000001');
+    });
+});
+
+describe('wire number canonicalization contract', function () {
     it('VOTE v0 poll-create wire string carries DEPOSIT/GAS_ESCROW as fixed decimals', async function () {
         // compactTickers:false so createAction never reaches the network.
         const sdk = new XChainSDK({ network: 'bitcoin-mainnet', compactTickers: false });

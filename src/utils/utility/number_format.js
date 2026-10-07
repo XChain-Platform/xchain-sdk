@@ -195,16 +195,21 @@ module.exports = {
                 // sent into an exact-looking wire amount with no error anywhere:
                 // JSON.parse('{"AMOUNT":9007199254740993}') is 9007199254740992 by
                 // the time this gate sees it, and bodyParser.json() puts every HTTP
-                // caller on that path. The double carries 15 decimal digits
-                // faithfully; a shortest form needing MORE than that is a value the
-                // Number could not have held as written, so refuse it and say what
-                // to send instead. Strings and BigInt are untouched, and a Number
-                // that IS exact at this width (1e21 prints as one significant digit)
-                // still canonicalizes exactly as before.
-                if(typeof value === 'number' && this.significantDigits(value) > 15)
+                // caller on that path. Refuse any integer above Number.MAX_SAFE_INTEGER:
+                // above 2^53 one double stands for many integers (1e17 is also what
+                // 1e17+1 parses to, and 1e21 is also 1e21+1), so its short printed
+                // form proves nothing about what the caller sent. Below 2^53 the
+                // double carries 15 decimal digits faithfully, so a shortest form
+                // needing MORE than that was rounded too. Strings and BigInt are
+                // untouched. A fraction rounded onto a short value (1.000000000000000001
+                // parses to 1) cannot be detected here; send such amounts as strings.
+                if(typeof value === 'number'
+                    && ((Number.isInteger(value) && !Number.isSafeInteger(value))
+                        || this.significantDigits(value) > 15))
                     throw new RangeError(
-                        name + ' was supplied as a JS number with more precision than a ' +
-                        'double carries, so its value was already rounded before the SDK ' +
+                        name + ' was supplied as a JS number beyond what a double holds ' +
+                        'exactly (above Number.MAX_SAFE_INTEGER or more than 15 significant ' +
+                        'digits), so its value may have been already rounded before the SDK ' +
                         'saw it; send an amount of this size as a decimal string');
                 data[name] = mathjs.format(mathjs.bignumber(String(value).trim()), { notation: 'fixed' });
             }
@@ -215,7 +220,7 @@ module.exports = {
     // Significant decimal digits in a finite Number's SHORTEST round-tripping form
     // (what String() prints), ignoring sign, exponent, and leading/trailing zeros:
     // 1e21 and 100 are 1, 9007199254740992 is 16, 0.1 is 1. Used by
-    // setNumberFormats to tell a faithfully-carried magnitude from a rounded one.
+    // setNumberFormats to catch a rounded value below 2^53 (larger integers are refused outright).
     significantDigits(value){
         if(typeof value !== 'number' || !Number.isFinite(value))
             return 0;

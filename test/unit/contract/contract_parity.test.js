@@ -13,8 +13,9 @@
 // The SDK's contract linter MUST match the indexer's deploy-time validator, or
 // authors get false greens (lint passes, on-chain deploy rejects). Two guards:
 //
-//   1. DRIFT: the vendored src/contract/{lint_core,metering}.js must be
-//      byte-identical (sha256) to the xchain-vm canonicals, AND the acorn,
+//   1. DRIFT: the vendored src/contract/{lint-core,metering,stripped-globals}.js
+//      AND every file under src/contract/{lint-core,metering}/ (same file set on
+//      both sides) must be byte-identical (sha256) to the xchain-vm canonicals, AND the acorn,
 //      acorn-walk and astring the SDK declares and installs must equal the
 //      VM's consensus pin (AST_TOOLCHAIN_PINNED in consensus-runtime.js). (Skipped
 //      when the sibling xchain-vm checkout is absent, e.g. SDK cloned standalone.)
@@ -23,7 +24,7 @@
 //
 // The cross-ENGINE check (validateContract vs vm.validateSyntax incl. the V8
 // step) lives in xchain-vm's suite, where isolated-vm is available; because the
-// vendored files are proven byte-identical here AND run on the same pinned AST
+// vendored files, rule modules included, are proven byte-identical here AND run on the same pinned AST
 // toolchain, that check transitively covers the SDK. Identical bytes on a
 // different acorn/astring can still parse, walk or emit differently.
 
@@ -44,9 +45,25 @@ const CONTRACTS_DIR = process.env.XCHAIN_CONTRACTS_DIR || path.join(SIBLING_ROOT
 // here and by sandbox.js / toolkit/authoring.js in xchain-vm. It is
 // dependency-free so the single require line resolves at both vendored depths.
 const VENDORED_FILES = ['lint-core.js', 'metering.js', 'stripped-globals.js'];
+// The two top-level entries are thin requires over these directories, which hold the actual rules and gas placement.
+const VENDORED_DIRS = ['lint-core', 'metering'];
 
 function sha256(file) {
     return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
+
+// List every regular file under base as sorted '/'-separated relative paths ([] when base is absent).
+function listFiles(base, rel = '') {
+    let entries;
+    try { entries = fs.readdirSync(path.join(base, rel), { withFileTypes: true }); }
+    catch (e) { if (e.code === 'ENOENT') return []; throw e; }
+    let out = [];
+    for (const entry of entries) {
+        const child = rel ? rel + '/' + entry.name : entry.name;
+        if (entry.isDirectory()) out = out.concat(listFiles(base, child));
+        else if (entry.isFile()) out.push(child);
+    }
+    return out.sort();
 }
 
 // Map the VM pin's keys to the npm names the SDK declares and installs.
@@ -98,6 +115,39 @@ const BAD_FIXTURES = [
 const FLOAT_FIXTURE = { code: 'var x = 3.14; function f(){ return x; }' };
 const GOOD_FIXTURE  = 'function init(){ return 1; } function add(a,b){ return a + b; }';
 
+// Register the drift checks for one vendored directory: non-empty, same file set, and each file byte-identical.
+function dirDriftCases(dir) {
+    const own = listFiles(path.join(VENDORED_DIR, dir));
+    // Fail closed on a vacuous pass: a renamed or emptied directory must go red, never generate zero checks
+    it('src/contract/' + dir + '/ is present and non-empty, so its drift checks cannot pass vacuously', function () {
+        assert.ok(own.length > 0, 'NO VENDORED FILES: src/contract/' + dir +
+            '/ is missing or empty, so the per-file drift guard below would check nothing.');
+    });
+    // Refuse a file added, removed or renamed on one side only, which a per-file hash of one side cannot see
+    it('src/contract/' + dir + '/ file set matches xchain-vm/src/' + dir + '/', function () {
+        if (!requireSibling(this, VM_SRC_DIR)) return;
+        const canonical = listFiles(path.join(VM_SRC_DIR, dir));
+        assert.ok(canonical.length > 0, 'NO CANONICAL: xchain-vm has no files under ' +
+            path.join(VM_SRC_DIR, dir) + '; the sibling checkout is stale, or the directory moved.');
+        const missingHere = canonical.filter((f) => !own.includes(f));
+        const onlyHere = own.filter((f) => !canonical.includes(f));
+        assert.ok(missingHere.length === 0 && onlyHere.length === 0,
+            'VENDOR DRIFT: ' + dir + '/ file sets differ. Missing from the SDK copy: [' + missingHere.join(', ') +
+            ']. Present only in the SDK copy: [' + onlyHere.join(', ') + '].');
+    });
+    for (const rel of own) {
+        const f = dir + '/' + rel;
+        it('src/contract/' + f + ' matches xchain-vm/src/' + f, function () {
+            if (!requireSibling(this, VM_SRC_DIR)) return;
+            const canonical = path.join(VM_SRC_DIR, f);
+            assert.ok(fs.existsSync(canonical), 'NO CANONICAL: ' + f + ' is vendored here but xchain-vm has no ' +
+                canonical + '; the sibling checkout is stale, or the file was renamed/removed upstream.');
+            assert.strictEqual(sha256(path.join(VENDORED_DIR, f)), sha256(canonical),
+                'VENDOR DRIFT: ' + f + ' differs from xchain-vm canonical; re-sync the copy.');
+        });
+    }
+}
+
 describe('contract-lint parity + drift', function () {
 
     describe('drift guard (vendored copies byte-identical to xchain-vm)', function () {
@@ -123,6 +173,8 @@ describe('contract-lint parity + drift', function () {
                 );
             });
         }
+
+        for (const dir of VENDORED_DIRS) dirDriftCases(dir);
 
         // Gas placement is a function of the AST toolchain, so byte-identical copies need the same versions.
         it('declared and installed acorn/acorn-walk/astring equal xchain-vm AST_TOOLCHAIN_PINNED', function () {

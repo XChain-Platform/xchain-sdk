@@ -287,3 +287,87 @@ describe('Native-coin fee quote (client)', function () {
         });
     });
 });
+
+const ISSUE = { action: 'ISSUE', params: { tick: 'NEWTICK', description: 'x' } };
+// The stub explorer carries the connected chain the way the real client sets explorer.coin
+function onChain(coin, quote) {
+    let sdk = makeSdk(quote);
+    sdk.explorer.coin = coin;
+    return sdk;
+}
+async function refusal(p) {
+    try { await p; } catch (e) { return e; }
+    return null;
+}
+
+describe('Native-coin fee quote (client) on a native-fee chain', function () {
+    afterEach(function () { nock.cleanAll(); });
+
+    it('estimateFees adds the fee output on DOGE when the caller passes no flag', async function () {
+        let sdk = onChain('RDOGE');
+        let r = await sdk.estimateFees(ISSUE, { pubkey: 'pk', change: 'src1' });
+        expect(sdk.explorer._seen, 'the quote must be requested').to.not.equal(null);
+        expect(sdk.encoder._seen.customOutputs).to.deep.equal([{ address: 'feeDest', value: 2000 }]);
+        expect(r.nativeFeeQuote).to.include({ requiredFeeSats: 2000 });
+    });
+
+    it('estimateFees adds the fee output on LTC when the caller passes no flag', async function () {
+        let sdk = onChain('LTC');
+        await sdk.estimateFees(ISSUE, { pubkey: 'pk', change: 'src1' });
+        expect(sdk.encoder._seen.customOutputs).to.deep.equal([{ address: 'feeDest', value: 2000 }]);
+    });
+
+    it('estimateFees honours an explicit payFeeInNativeCoin:false on DOGE', async function () {
+        let sdk = onChain('DOGE');
+        await sdk.estimateFees(ISSUE, { payFeeInNativeCoin: false, pubkey: 'pk', change: 'src1' });
+        expect(sdk.explorer._seen, 'no quote is requested on an explicit opt-out').to.equal(null);
+        expect(sdk.encoder._seen.customOutputs).to.deep.equal([]);
+    });
+
+    it('estimateFees adds nothing and asks for no quote on BTC with no flag', async function () {
+        let sdk = onChain('BTC');
+        await sdk.estimateFees(ISSUE, { pubkey: 'pk', change: 'src1' });
+        expect(sdk.explorer._seen).to.equal(null);
+        expect(sdk.encoder._seen.customOutputs).to.deep.equal([]);
+    });
+});
+
+describe('Native-coin fee quote (client) on a native-fee chain', function () {
+    afterEach(function () { nock.cleanAll(); });
+
+    it('estimateFees builds without an output on a DOGE node whose native fees are off', async function () {
+        for (const feeDestination of [null, 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX']) {
+            let sdk = onChain('RDOGE', { supported: false, valid: false, feeDestination,
+                error: 'native coin fee not enabled (no FEE_DESTINATION configured)' });
+            await sdk.estimateFees(ISSUE, { pubkey: 'pk', change: 'src1' });
+            expect(sdk.encoder._seen.customOutputs, String(feeDestination)).to.deep.equal([]);
+        }
+    });
+
+    it('estimateFees still refuses a denied action under the DOGE chain default, naming the opt-out', async function () {
+        let sdk = onChain('RDOGE', { supported: false, valid: false, denied: true, feeDestination: 'feeDest',
+            error: 'native fee pre-flight not supported for XEXEC' });
+        let err = await refusal(sdk.estimateFees(ISSUE, { pubkey: 'pk', change: 'src1' }));
+        expect(err, 'a denied quote must refuse').to.exist;
+        expect(err.code).to.equal('NATIVE_FEE_UNSUPPORTED');
+        expect(err.message).to.match(/payFeeInNativeCoin:false/);
+        expect(sdk.encoder._seen, 'nothing reaches the encoder').to.equal(null);
+    });
+
+    it('estimateFees with an explicit opt-in still refuses a node whose native fees are off', async function () {
+        let sdk = onChain('RDOGE', { supported: false, valid: false, feeDestination: null, error: 'not enabled' });
+        let err = await refusal(sdk.estimateFees(ISSUE, { payFeeInNativeCoin: true, pubkey: 'pk', change: 'src1' }));
+        expect(err).to.exist;
+        expect(err.code).to.equal('NATIVE_FEE_UNSUPPORTED');
+    });
+
+    it('estimateFees and nativeFeeOutputs agree on the outputs for the same chain and flag', async function () {
+        for (const [coin, opts] of [['RDOGE', {}], ['LTC', {}], ['BTC', {}], ['DOGE', { payFeeInNativeCoin: false }], ['BTC', { payFeeInNativeCoin: true }]]) {
+            let a = onChain(coin);
+            await a.estimateFees(ISSUE, Object.assign({ pubkey: 'pk', change: 'src1' }, opts));
+            let b = onChain(coin);
+            let outs = await b.nativeFeeOutputs(ISSUE, opts);
+            expect(a.encoder._seen.customOutputs, coin + ' ' + JSON.stringify(opts)).to.deep.equal(outs);
+        }
+    });
+});

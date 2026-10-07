@@ -224,10 +224,10 @@ module.exports = {
         for (let item of items) {
             if (this.isEmpty(item)) continue;
             // ^<id> reference to an already-indexed address. addressRefFields.js
-            // marks LIST.ITEM `listType:true`: the indexer still assigns it an
-            // address id like any other address-bearing field even though the SDK
-            // never COMPACTS an ITEM to this form, so a caller-supplied ^id is a
-            // legitimate item and is format-checked as a bare id, not as an address.
+            // marks LIST.ITEM `listType:true`: the indexer assigns it an address
+            // id like any other address-bearing field, and the SDK resolver may
+            // compact a TYPE 2 ITEM to this form once LIST_ADDRESS_REF is active,
+            // so a ^id is a legitimate item, format-checked as a bare id.
             if (String(item).charAt(0) === '^') {
                 let id = String(item).substring(1);
                 if (!this.util.isNumeric(id))

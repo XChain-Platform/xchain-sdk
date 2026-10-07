@@ -116,6 +116,15 @@ function batchCapMiddleware(maxBatch) {
     };
 }
 
+// Answer a rate-limit refusal: HTTP 429, a Retry-After header, and the -32005 JSON-RPC error.
+function refuseTooManyRequests(res, retryAfter, message) {
+    res.set('Retry-After', String(retryAfter));
+    return res.status(429).json({
+        jsonrpc: '2.0', id: null,
+        error: { code: -32005, message }
+    });
+}
+
 /*
  * Per-credential (falling back to per-IP) request-rate limit. Mount ahead of
  * the auth gate so an anonymous ping flood is bounded too. The API key stops
@@ -129,8 +138,12 @@ function batchCapMiddleware(maxBatch) {
  * dependency to a published SDK for ~20 lines is a poor trade, and a fixed
  * window is the right shape for "stop a runaway client", which is what this
  * surface needs. Keys are HASHED so a long-lived map never holds a raw
- * credential, and expired buckets are pruned so the map cannot grow without
- * bound under rotating keys.
+ * credential.
+ *
+ * Under a many-address flood the map stays bounded and cheap: insertion order
+ * is expiry order, so the prune stops at the first live bucket, and anonymous
+ * buckets are capped at maxAnonBuckets (a NEW address past the cap gets 429),
+ * while a credential bucket is never capped, so a flood cannot lock out the key holder.
  *
  * A bearer token only mints its own bucket when the caller's isCredential
  * predicate accepts it; any other token (junk, rotated per request, or no
@@ -143,42 +156,52 @@ function batchCapMiddleware(maxBatch) {
  * The returned middleware exposes its bucket Map as .buckets so a test can
  * assert the hashing and the pruning on the shipped structure itself.
  *
- * @param {{limit: number, windowMs: number, isCredential?: function(string): boolean}} options
+ * @param {{limit: number, windowMs: number, isCredential?: function(string): boolean, maxAnonBuckets?: number}} options
  * @returns {function} express middleware
  */
-function rateLimitMiddleware({ limit, windowMs, isCredential }) {
+function rateLimitMiddleware({ limit, windowMs, isCredential, maxAnonBuckets = 10000 }) {
     const buckets = new Map();
+    let anonCount = 0;
     const accepts = (typeof isCredential === 'function') ? isCredential : () => false;
+    const dropBucket = (k, b) => { buckets.delete(k); if (b.anon) anonCount -= 1; };
     const rateLimit = function rateLimit(req, res, next) {
         if (limit <= 0) return next();                    // 0 disables
         const header = req.headers['authorization'];
         const token  = (typeof header === 'string' && header.startsWith('Bearer ')) ? header.slice(7) : null;
-        const ident  = (token && accepts(token) === true)
-            ? ('k:' + token)
-            : ('a:' + (req.ip || (req.socket && req.socket.remoteAddress) || 'unknown'));
+        const anon   = !(token && accepts(token) === true);
+        const ident  = anon
+            ? ('a:' + (req.ip || (req.socket && req.socket.remoteAddress) || 'unknown'))
+            : ('k:' + token);
         const key    = crypto.createHash('sha256').update(ident).digest('hex');
 
+        // Prune expired buckets from the front only (insertion order is expiry order)
         const now = Date.now();
-        for (const [k, b] of buckets)
-            if (b.resetAt <= now) buckets.delete(k);
+        for (const [k, b] of buckets) {
+            if (b.resetAt > now) break;
+            dropBucket(k, b);
+        }
 
         let bucket = buckets.get(key);
         if (!bucket || bucket.resetAt <= now) {
-            bucket = { count: 0, resetAt: now + windowMs };
+            // Re-insert at the end so a backward clock step cannot strand an expired bucket mid-map
+            if (bucket) dropBucket(key, bucket);
+            // Refuse a NEW anonymous address at the cap; credential buckets are never capped
+            if (anon && anonCount >= maxAnonBuckets) {
+                const oldest = buckets.values().next().value;
+                const retryAfter = Math.max(1, Math.ceil(((oldest ? oldest.resetAt : now + windowMs) - now) / 1000));
+                return refuseTooManyRequests(res, retryAfter,
+                    'Too many requests: the rate limiter is at capacity for anonymous callers. Retry after ' + retryAfter + 's.');
+            }
+            bucket = { count: 0, resetAt: now + windowMs, anon };
             buckets.set(key, bucket);
+            if (anon) anonCount += 1;
         }
         bucket.count += 1;
         if (bucket.count > limit) {
             const retryAfter = Math.ceil((bucket.resetAt - now) / 1000);
-            res.set('Retry-After', String(retryAfter));
-            return res.status(429).json({
-                jsonrpc: '2.0', id: null,
-                error: {
-                    code: -32005,
-                    message: 'Too many requests: limit is ' + limit +
-                             ' per ' + windowMs + 'ms. Retry after ' + retryAfter + 's.'
-                }
-            });
+            return refuseTooManyRequests(res, retryAfter,
+                'Too many requests: limit is ' + limit +
+                ' per ' + windowMs + 'ms. Retry after ' + retryAfter + 's.');
         }
         next();
     };
