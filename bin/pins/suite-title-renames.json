@@ -459,6 +459,9 @@
     "test/unit/cosigner/musig2_agent_session.test/01_agent_session.test.js": "test/unit/cosigner/musig2/musig2_agent_session.test/01_agent_session.test.js"
   },
   "titles": {
+    "test/unit/wallet/wallet.test/11_sign_multisig_psbt_and_finalize_multisig_psbt.test.js": {
+      "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() sign + finalize completes a 1-of-1 p2wpkh PSBT": "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() sign + finalize completes a 1-of-1 p2wsh multisig PSBT"
+    },
     "test/unit/contract/abi_core_drift.test.js": {
       "abi-core drift guard @regression src/contract/abi-core.js matches the canonical xchain-explorer/src/abi-core.js": "abi-core drift guard @regression src/contract/abi-core.js matches the canonical xchain-explorer/src/contract/abi_core.js"
     },
