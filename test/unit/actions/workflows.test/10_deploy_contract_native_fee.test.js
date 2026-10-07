@@ -105,6 +105,14 @@ describe('Workflows deployContract() native fee refusal and chunks', function ()
         assert.strictEqual(calls.length, 0);
     });
 
+    it('deploys without a fee output on an LTC node whose native fees are off', async function () {
+        const calls = [];
+        const off = { supported: false, valid: false, feeDestination: null, error: 'native coin fee not enabled' };
+        await new Workflows(makeSdk('LTC', calls, off)).deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 });
+        assert.strictEqual(calls.length, 1);
+        assert.deepStrictEqual(calls[0].enc, {});
+    });
+
     it('pays the fee on every chunk carrier and the assembler', async function () {
         const calls = [];
         const code = 'a'.repeat(60000);

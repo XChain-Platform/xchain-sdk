@@ -1,9 +1,9 @@
 // Unit coverage for src/addressRefFields.js, the canonical map of which
 // ACTION params carry an ADDRESS value (a consensus surface: it decides which
-// values become ^id references). The SDK only compacts the unconditional
-// single-value fields (SDK_COMPACTABLE, a strict subset), and must never emit
-// a ^id the indexer would not assign. Pins that derivation and the exclusion
-// of multi-value / type-gated fields.
+// values become ^id references). The SDK's general path compacts only the
+// unconditional single-value fields (SDK_COMPACTABLE, a strict subset; LIST.ITEM
+// compacts only on the resolver's gated LIST path), and must never emit a ^id the
+// indexer would not assign. Pins that derivation and the flat-set exclusions.
 
 const assert = require('assert');
 const fs = require('fs');
@@ -48,7 +48,8 @@ describe('addressRefFields', function () {
     });
 
     it('excludes multi-value and type-gated (LIST.ITEM) fields from compaction', function () {
-        // LIST.ITEM is type-gated (listType) and must never be compacted.
+        // LIST.ITEM is type-gated (listType), so it stays out of the flat set and
+        // compacts only through the resolver's gated LIST path.
         assert.ok(!SDK_COMPACTABLE.includes('ITEM'), 'LIST.ITEM must not be compactable');
     });
 

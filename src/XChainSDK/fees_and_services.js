@@ -23,15 +23,37 @@ const { assertCarrierBinding } = require('../carrier/bind_action_carrier.js');
 const { SDKConfigError, SDKExplorerError } = require('../utils/errors.js');
 
 // Validate and append a quoted native fee so refused quotes cannot reach the encoder.
-function appendNativeFeeOutput(nativeFeeQuote, customOutputs) {
+function appendNativeFeeOutput(nativeFeeQuote, customOutputs, hint = '') {
     // Paying the fee in the native coin only works where the network offers it for this action.
     if (!nativeFeeQuote || nativeFeeQuote.supported === false)
-        throw new SDKConfigError('NATIVE_FEE_UNSUPPORTED', 'Native-coin fee not available for this action: ' + ((nativeFeeQuote && nativeFeeQuote.error) || 'unsupported'), { quote: nativeFeeQuote });
+        throw new SDKConfigError('NATIVE_FEE_UNSUPPORTED', 'Native-coin fee not available for this action: ' + ((nativeFeeQuote && nativeFeeQuote.error) || 'unsupported') + hint, { quote: nativeFeeQuote });
     // Offered is not enough: the quote also has to come back with a price we can actually pay.
     if (nativeFeeQuote.valid === false)
-        throw new SDKConfigError('NATIVE_FEE_INVALID', 'Native-coin fee cannot be priced: ' + (nativeFeeQuote.error || 'invalid'), { quote: nativeFeeQuote });
+        throw new SDKConfigError('NATIVE_FEE_INVALID', 'Native-coin fee cannot be priced: ' + (nativeFeeQuote.error || 'invalid') + hint, { quote: nativeFeeQuote });
     if (Number(nativeFeeQuote.requiredFeeSats) > 0)
         customOutputs.push({ address: nativeFeeQuote.feeDestination, value: Number(nativeFeeQuote.requiredFeeSats) });
+}
+
+// Detect a node with native fees switched off (no real FEE_DESTINATION), where the indexer takes the fee from the XCHAIN balance instead
+function nativeFeeDisabled(quote) {
+    if (!quote || quote.supported !== false || quote.denied === true) return false;
+    // Require the field itself: the indexer always sends it (null when unset), so a quote without it proves nothing
+    if (!Object.prototype.hasOwnProperty.call(quote, 'feeDestination')) return false;
+    const dest = quote.feeDestination;
+    return dest == null || dest === '' || /^X{34}$/.test(String(dest));
+}
+
+// Decide one action's native fee outputs for every signing path, so estimateFees and deployContract cannot drift apart again.
+// An explicit payFeeInNativeCoin is strict; the LTC/DOGE chain default also tolerates a node with native fees off.
+async function resolveNativeFeeOutputs(sdk, actionData, opts, source) {
+    if (!sdk.nativeFeeRequired(opts)) return { quote: null, outputs: [] };
+    const quote = await sdk.quoteNativeFee(actionData, { source });
+    const outputs = [];
+    const chainDefault = typeof opts.payFeeInNativeCoin !== 'boolean';
+    if (chainDefault && nativeFeeDisabled(quote)) return { quote, outputs };
+    appendNativeFeeOutput(quote, outputs,
+        chainDefault ? ' (this chain requires a native-coin fee output by default; pass payFeeInNativeCoin:false to build without one)' : '');
+    return { quote, outputs };
 }
 
 // Build the encoder request together so every supported option is forwarded as one shape.
@@ -127,11 +149,7 @@ module.exports = {
     // or [] when this chain does not take the fee as a coin output. A refused quote throws
     // before anything is composed, so no fee-forfeiting transaction is built.
     async nativeFeeOutputs(actionData, opts = {}) {
-        if (!this.nativeFeeRequired(opts)) return [];
-        let quote = await this.quoteNativeFee(actionData, { source: opts.source });
-        let outputs = [];
-        appendNativeFeeOutput(quote, outputs);
-        return outputs;
+        return (await resolveNativeFeeOutputs(this, actionData, opts, opts.source)).outputs;
     },
 
     // Estimate fees for an action without signing or broadcasting.
@@ -144,7 +162,8 @@ module.exports = {
     // account for. An envelope's reveal leg is deliberately NOT returned (see below);
     // signing one goes through submitAction, which reconciles both legs.
     //
-    // Native-coin protocol fee (opt-in via encoderOpts.payFeeInNativeCoin): pay the XCHAIN
+    // Native-coin protocol fee (added by default on LTC/DOGE, opt-in on BTC via
+    // encoderOpts.payFeeInNativeCoin, and payFeeInNativeCoin:false opts out): pay the XCHAIN
     // protocol fee in BTC/LTC/DOGE at the USD-equivalent by adding a FEE_DESTINATION output.
     // This runs the indexer pre-flight (quoteNativeFee) to size that output exactly and REFUSES
     // to build a doomed tx (unsupported action / stale-or-missing oracle price). A failed
@@ -155,11 +174,9 @@ module.exports = {
         let encoder = this.requireEncoder();
 
         let customOutputs  = Array.isArray(encoderOpts.customOutputs) ? encoderOpts.customOutputs.slice() : [];
-        let nativeFeeQuote = null;
-        if (encoderOpts.payFeeInNativeCoin) {
-            nativeFeeQuote = await this.quoteNativeFee(actionData, { source: encoderOpts.source || encoderOpts.change });
-            appendNativeFeeOutput(nativeFeeQuote, customOutputs);
-        }
+        let native = await resolveNativeFeeOutputs(this, actionData, encoderOpts, encoderOpts.source || encoderOpts.change);
+        let nativeFeeQuote = native.quote;
+        for (let out of native.outputs) customOutputs.push(out);
 
         let feeResult = await encoder.estimateFee(buildFeeEstimateRequest(result, encoderOpts, customOutputs));
         reconcileFeeEstimate(this, feeResult, result, encoderOpts, customOutputs, nativeFeeQuote);
