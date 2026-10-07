@@ -42,16 +42,35 @@ function rpcErrorSuffix(rpcError) {
 
 // The encoder answers -32603 for a node or tracker fault it expects to clear, and
 // documents it as retry-with-backoff. It rides a 2xx body, so withRetry cannot see
-// it; this wrapper gives the retry loop an error it classifies as transient and
-// carries the typed error to surface once retries are spent.
+// it; this wrapper marks it retryable explicitly, keeps the real HTTP response so
+// hooks never see a status the encoder did not send, and carries the typed error.
 const RETRYABLE_RPC_CODE = -32603;
 
 class RetryableRpcFault extends Error {
-    constructor(sdkError) {
+    constructor(sdkError, response) {
         super(sdkError.message);
         this.sdkError = sdkError;
-        this.response = { status: 503, headers: {}, data: null };
+        this.retryable = true;
+        this.rpcCode = sdkError.details.rpcError.code;
+        this.response = response || null;
     }
+}
+
+// Build the withRetry callback that reports one rpc call's retries, or null when
+// the client has no onRetry hook.
+function encoderRetryHook(client, method) {
+    if (!client.hooks.onRetry) return null;
+    return (attempt, delay, err) => {
+        // `status` lets a hook tell a rate limit from a 5xx without parsing
+        // the message; null for a transport error that never got a response.
+        // A JSON-RPC error retried from a 2xx body keeps its 2xx status and
+        // names its code in `rpcCode`; every other retry carries rpcCode null.
+        client.hooks.onRetry({
+            service: 'encoder', method, attempt, delay, error: err.message,
+            status: err.response ? err.response.status : null,
+            rpcCode: err instanceof RetryableRpcFault ? err.rpcCode : null
+        });
+    };
 }
 
 class EncoderClient {
@@ -145,12 +164,7 @@ class EncoderClient {
         if (this._readyHook) await this._readyHook();
         let self = this;
         let retryConfig = this.retry === false ? { maxRetries: 0 } : this.retry;
-
-        let onRetry = this.hooks.onRetry ? (attempt, delay, err) => {
-            // `status` lets a hook tell a rate limit from a 5xx without parsing
-            // the message; null for a transport error that never got a response.
-            this.hooks.onRetry({ service: 'encoder', method, attempt, delay, error: err.message, status: err.response ? err.response.status : null });
-        } : null;
+        let onRetry = encoderRetryHook(this, method);
 
         try {
             return await withRetry(async () => {
@@ -176,7 +190,7 @@ class EncoderClient {
                         );
                         if (self.hooks.onError)
                             self.hooks.onError({ service: 'encoder', method, error: err.message });
-                        if (err.details.retryable) throw new RetryableRpcFault(err);
+                        if (err.details.retryable) throw new RetryableRpcFault(err, response);
                         throw err;
                     }
 

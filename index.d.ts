@@ -78,6 +78,8 @@ export interface RetryInfo {
     error: string;
     /** HTTP status of the response being retried; null for a transport error */
     status?: number | null;
+    /** JSON-RPC error code that caused a retry from a 2xx body (encoder only); null otherwise */
+    rpcCode?: number | null;
 }
 
 
@@ -690,6 +692,117 @@ export interface ContractInfo {
     /** The whole evaluated `meta` object (parsed meta_json), including keys consensus ignores */
     meta?: Record<string, any> | null;
     [key: string]: any;
+}
+
+/**
+ * The freshness marker the explorer adds to a data response body ONLY while
+ * the coin's indexed tip is stale. A fresh response carries no `freshness`
+ * key at all; the XChain-Freshness headers are on every response.
+ */
+export interface ExplorerFreshnessMarker {
+    stale: true;
+    tip_block: number | null;
+    tip_age_seconds: number | null;
+    /** null means "could not be determined", never "not halted" */
+    replica_halted: boolean | null;
+}
+
+/** A coin or token identity with its quoted prices (decimal strings). */
+export interface NetworkAsset {
+    name: string;
+    symbol: string;
+    price: {
+        /** Price in BTC, 8dp decimal string */
+        btc: string;
+        /** Price in USD, decimal string ("0.00" when no market) */
+        usd: string;
+    };
+}
+
+/**
+ * What `getNetwork()` answers: network statistics for the SDK's ONE coin.
+ * There is no peer data, no other chain's height and no indexer-health verdict
+ * here; `getStatus()` carries the indexer and decoder positions.
+ */
+export interface NetworkSummary {
+    /** This coin's indexer tip and mempool depth */
+    network: {
+        /** Indexer tip height */
+        block: number;
+        /** Unix time of the tip block (0 when the chain is empty) */
+        time: number;
+        /** Unconfirmed XChain-carrying transactions (0 when the decoder is unreachable) */
+        unconfirmed: number;
+        /** The coin node's TOTAL mempool count, XChain or not; null when no decoder API resolves */
+        unconfirmed_node?: number | null;
+    };
+    /** Exact record count per action table, keyed by table name */
+    totals: { [table: string]: number };
+    /** Suggested fee tiers in sat/vByte from this coin's encoder ({1,2,3} when it is unreachable) */
+    fee: { low: number; medium: number; high: number };
+    coin: NetworkAsset;
+    xchain: NetworkAsset;
+    /** Recommended confirmation depth per chain: display guidance, never a gate */
+    finality: { [chain: string]: number };
+    /** Server-side render time */
+    runtime?: string;
+    freshness?: ExplorerFreshnessMarker;
+}
+
+/** Why the indexer trails the decoder for one coin (see ExplorerStatus.indexer_state). */
+export type ExplorerIndexerState = 'live' | 'future_block_wait' | 'behind';
+
+/**
+ * What `getStatus()` answers. Every map is keyed by coin ticker, and many list
+ * only the coins this instance measures, so an ABSENT key means "not measured",
+ * which is not the same as a null value. Every field is optional because an
+ * older explorer omits the newer maps.
+ */
+export interface ExplorerStatus {
+    /** Coins this instance knows about at all (ticker -> name) */
+    supported?: { [coin: string]: string };
+    /** Coins served as CURRENT data right now; a stale coin drops out of this map */
+    available?: { [coin: string]: string };
+    /** ISO-8601 time of the last successful hub-config fetch; null before the first */
+    hub_config_fetched_at?: string | null;
+    /** Seconds since the last successful hub-config fetch; null before the first */
+    hub_config_age_seconds?: number | null;
+    /** Highest block the indexer has processed; null when that coin's DB read failed */
+    last_block?: { [coin: string]: number | null };
+    /** block_time of that block; null when that coin's DB read failed */
+    last_block_time?: { [coin: string]: number | null };
+    /** The decoder's highest processed block (NOT the node's chain tip); null when unavailable */
+    decoder_tip?: { [coin: string]: number | null };
+    /** decoder_tip - last_block (>= 0): the indexer-to-decoder slice only; null when unavailable */
+    decoder_lag_blocks?: { [coin: string]: number | null };
+    /** Seconds since the newest indexed block_time, clamped at 0; null when unreadable */
+    tip_age_seconds?: { [coin: string]: number | null };
+    /** Seconds the newest indexed block is dated AHEAD of the host clock; null when unreadable */
+    tip_future_seconds?: { [coin: string]: number | null };
+    /** Why the indexer trails the decoder; null when it cannot be determined */
+    indexer_state?: { [coin: string]: ExplorerIndexerState | null };
+    /** block_time of the next block the indexer must commit; null when unknown */
+    next_block_time?: { [coin: string]: number | null };
+    /** Seconds that next block is dated ahead of the host clock: the real consensus-wait measure */
+    next_block_future_seconds?: { [coin: string]: number | null };
+    /** ISO-8601 instant the current indexer wait may first clear; null when unknown */
+    indexer_wait_clears_at?: { [coin: string]: string | null };
+    /** The tip-age verdict. Never null: a missing block_time reads true (fails closed) */
+    stale?: { [coin: string]: boolean };
+    /** Whether the replica stopped indexing. null means UNKNOWN and must never be read as false */
+    replica_halted?: { [coin: string]: boolean | null };
+    /** The coin node's chain tip as the decoder reports it; null when unavailable */
+    chain_tip?: { [coin: string]: number | null };
+    /** chain_tip - decoder tip: the chain-to-decoder slice; null when unavailable */
+    chain_lag_blocks?: { [coin: string]: number | null };
+    /**
+     * The decoder's own health verdict: 'healthy', 'unhealthy', 'node-stale', 'unconfigured' or
+     * 'unreachable'. Typed as string because the explorer passes the decoder's own word through
+     */
+    decoder_health?: { [coin: string]: string };
+    /** Server-side render time */
+    runtime?: string;
+    freshness?: ExplorerFreshnessMarker;
 }
 
 /** Normalized permissions manifest (programmable policy layer). See sdk.getContractManifest. */
@@ -1947,22 +2060,21 @@ export declare class XChainSDK {
      */
 
     /**
-     * Get explorer service status and indexer sync position.
+     * Get explorer service status and indexer sync position. The full field
+     * set, with each map's nullability, is `ExplorerStatus`.
      *
-     * Resolves to an object with `supported` and `available` coin maps plus
-     * `last_block` and `last_block_time`, per-coin maps (keyed by ticker) of
-     * the highest block index processed by the indexer and its block_time.
-     *
-     * Also includes `decoder_tip` and `decoder_lag_blocks` per-coin maps:
-     * `decoder_tip` is the decoder's highest *processed* block and
+     * `decoder_tip` and `decoder_lag_blocks` measure the indexer→decoder
+     * slice only: `decoder_tip` is the decoder's highest *processed* block and
      * `decoder_lag_blocks` is `decoder_tip - last_block` (>= 0), so a stalled
-     * indexer is detectable from this single call. These measure the
-     * indexer→decoder slice only, NOT the coin node's chain tip; the explorer
-     * never talks to a coin node, so the chain→decoder gap is exposed by the
-     * decoder's own `health()` RPC, not here. Both are `null` for a coin when the
-     * decoder tip is unavailable.
+     * indexer is detectable from this single call. The chain→decoder side is
+     * `chain_tip`, `chain_lag_blocks` and `decoder_health`, which the explorer
+     * relays from the decoder's own `health()` call.
+     *
+     * `stale`, `tip_age_seconds` and `replica_halted` are what `assertFresh()`
+     * reads. A null `replica_halted` entry means the halt state could not be
+     * determined; never read it as false.
      */
-    getStatus(): Promise<any>;
+    getStatus(): Promise<ExplorerStatus>;
 
     /** Get unconfirmed mempool actions filtered by query and type (address | token). */
     getMempool(query: string, type: string, opts?: QueryOptions): Promise<any>;
@@ -1999,8 +2111,12 @@ export declare class XChainSDK {
         destinations: string[];
     }>>;
 
-    /** Get a network-wide summary (chain heights, indexer status, peer counts). */
-    getNetwork(opts?: QueryOptions): Promise<any>;
+    /**
+     * Get network statistics for this SDK's coin: indexer tip and mempool depth,
+     * per-action-table record counts, fee tiers, coin and XCHAIN identity and
+     * prices, and recommended finality depths. There is no peer data here.
+     */
+    getNetwork(opts?: QueryOptions): Promise<NetworkSummary>;
 
     /** Search the explorer for a query string of a given type. */
     search(query: string, type: string): Promise<any>;

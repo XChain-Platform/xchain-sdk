@@ -241,11 +241,11 @@ module.exports = {
     // Indexer status: per-coin last_block / last_block_time (indexer position),
     // plus decoder_tip (the decoder's highest *processed* block) and
     // decoder_lag_blocks (decoder_tip - last_block, >= 0) so a stalled indexer is
-    // detectable from this single call. This covers the indexer->decoder slice only,
-    // NOT whole-pipeline lag: the coin node's chain tip is not exposed here (use the
-    // decoder's health() RPC for the chain->decoder gap). decoder_tip /
-    // decoder_lag_blocks are null for a coin when the decoder tip is unavailable. See
-    // ExplorerClient.getStatus for the full field list.
+    // detectable from this single call. Those two cover the indexer->decoder slice
+    // only; the chain->decoder side is chain_tip / chain_lag_blocks, which the
+    // explorer relays from the decoder's own health() call. decoder_tip /
+    // decoder_lag_blocks are null for a coin when the decoder tip is unavailable.
+    // ExplorerStatus in index.d.ts is the full field list.
     async getStatus() {
         return this.requireExplorer().getStatus();
     },
@@ -353,8 +353,8 @@ module.exports = {
         }));
     },
 
-    // Network-wide summary (chain heights, indexer status, peer counts,
-    // recommended finality confirmations). See ExplorerClient.getNetwork.
+    // Network statistics for this SDK's coin (tip, mempool, record counts, fees,
+    // prices, recommended finality confirmations; no peer data). See ExplorerClient.getNetwork.
     async getNetwork(opts) {
         return this.requireExplorer().getNetwork(opts);
     },
