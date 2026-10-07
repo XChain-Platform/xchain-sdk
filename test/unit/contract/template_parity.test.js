@@ -70,6 +70,16 @@ describe('scaffold sources: drift + verdict', function () {
         }
     });
 
+    describe('mint-supply lock guard', function () {
+        for (const name of ['amm', 'crowdsale']) {
+            it(name + ' locks the configured mint supply and exposes no public mint', function () {
+                const source = Buffer.from(EMBEDDED.templates[name], 'base64').toString('utf8');
+                assert.match(source, /lockMintSupply/);
+                assert.doesNotMatch(source, /emit[.]mint/);
+            });
+        }
+    });
+
     describe('sdk.scaffold() + listTemplates()', function () {
         it('lists the four templates and the patterns', function () {
             const l = sdk.listTemplates();
