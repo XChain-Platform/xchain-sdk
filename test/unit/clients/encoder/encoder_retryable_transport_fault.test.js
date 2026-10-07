@@ -20,10 +20,15 @@ function replyError(code, message) {
     return [200, { jsonrpc: '2.0', error: { code, message }, id: 1 }];
 }
 
-describe('EncoderClient retryable -32603 body error', function () {
+// Clear every nock interceptor after each test in the calling describe.
+function installNockCleanup() {
     afterEach(function () {
         nock.cleanAll();
     });
+}
+
+describe('EncoderClient retryable -32603 body error', function () {
+    installNockCleanup();
 
     it('retries a -32603 body error and returns the later result', async function () {
         nock(BASE).post('/').reply(...replyError(-32603, 'node unavailable'));
@@ -42,6 +47,32 @@ describe('EncoderClient retryable -32603 body error', function () {
         expect(seen).to.have.length(1);
         expect(seen[0].method).to.equal('ping');
     });
+
+    it('tells the onRetry hook the real 2xx status and the JSON-RPC code, never a synthetic 503', async function () {
+        const seen = [];
+        nock(BASE).post('/').reply(...replyError(-32603, 'node unavailable'));
+        nock(BASE).post('/').reply(200, { jsonrpc: '2.0', result: 'pong', id: 2 });
+
+        await createClient(FAST_RETRY, { onRetry: (info) => seen.push(info) }).ping();
+        expect(seen).to.have.length(1);
+        expect(seen[0].status).to.equal(200);
+        expect(seen[0].rpcCode).to.equal(-32603);
+    });
+
+    it('reports a real HTTP 503 retry with its status and a null rpcCode', async function () {
+        const seen = [];
+        nock(BASE).post('/').reply(503, 'busy');
+        nock(BASE).post('/').reply(200, { jsonrpc: '2.0', result: 'pong', id: 2 });
+
+        await createClient(FAST_RETRY, { onRetry: (info) => seen.push(info) }).ping();
+        expect(seen).to.have.length(1);
+        expect(seen[0].status).to.equal(503);
+        expect(seen[0].rpcCode).to.equal(null);
+    });
+});
+
+describe('EncoderClient retryable -32603 body error', function () {
+    installNockCleanup();
 
     it('surfaces ENCODER_RPC_ERROR marked retryable once retries are spent', async function () {
         nock(BASE).post('/').times(3).reply(...replyError(-32603, 'node unavailable'));
