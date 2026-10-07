@@ -38,8 +38,7 @@
  ********************************************************************/
 
 const { expect } = require('chai');
-const path = require('path');
-const { loadIndexerAction } = require('../../../../helpers/indexer_action_handler.js');
+const { loadBatchArbiter } = require('../../../../helpers/indexer_action_handler.js');
 
 const {
     BATCH_COMMAND_WEIGHTS,
@@ -52,25 +51,6 @@ const {
     WEIGHT_BATCH_VECTORS,
     WEIGHT_VECTORS,
 } = require('./fixtures/weight_vectors.js');
-
-function loadIndexer(context) {
-    const resolved = loadIndexerAction('batch');
-    if (!resolved) return context.skip();
-    const { root, Handler: Batch } = resolved;
-
-    process.env.INDEXER_COIN = process.env.INDEXER_COIN || 'BTC';
-    process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
-    try {
-        return {
-            Batch,
-            IdxUtility: require(path.join(root, 'src', 'utility.js')),
-            IdxConfig: require(path.join(root, 'src', 'config.js')),
-            ProtocolChanges: require(path.join(root, 'src', 'protocol_changes.js')),
-        };
-    } catch (e) {
-        return context.skip();
-    }
-}
 
 function createWeightHandler(dependencies) {
     const { Batch, IdxUtility, IdxConfig, ProtocolChanges, blockTime } = dependencies;
@@ -102,7 +82,7 @@ function createWeightHandler(dependencies) {
 }
 
 function setupWeightArbiter(context) {
-    const dependencies = loadIndexer(context);
+    const dependencies = loadBatchArbiter(context, 'the BATCH weight arbiter half');
     const idxUtil = new dependencies.IdxUtility();
     const blockTime = Math.floor(Date.now() / 1000);
     dependencies.blockTime = blockTime;

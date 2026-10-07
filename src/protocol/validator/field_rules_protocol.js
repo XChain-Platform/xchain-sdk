@@ -65,7 +65,7 @@ function validateQuantity(validator, action, field, value, allFields, errors) {
 
 // Applies one contiguous field-rule group while preserving finding order.
 function validateVoteAmounts(validator, action, field, value, allFields, errors) {
-    // VOTE v0 binding-poll numeric fields. Consensus (indexer actions/vote.js)
+    // VOTE v0 binding-poll numeric fields. Consensus (indexer actions/vote/)
     // requires DEPOSIT and GAS_ESCROW to be non-negative amounts and
     // CALLBACK_CONTRACT to be numeric (a contract ACTION_INDEX, resolved via
     // parseInt); check the same shape client-side so a bad value fails before
