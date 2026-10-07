@@ -318,6 +318,9 @@ module.exports = {
     //                            decoder_tip is null. Lets a caller detect a stalled
     //                            indexer (indexer->decoder slice) from this single
     //                            call rather than a separate tip query.
+    // plus the freshness maps assertFresh reads (stale, tip_age_seconds,
+    // replica_halted) and the chain->decoder maps; ExplorerStatus in index.d.ts
+    // is the full field set with each map's nullability.
     async getStatus() {
         return this.get('/status');
     },
@@ -327,8 +330,10 @@ module.exports = {
         return this.get('/mempool/' + seg(query) + '/' + seg(type), opts);
     },
 
-    // Network-wide summary (chain heights, indexer status, peer counts). Also
-    // includes a `finality` map ({ BTC, LTC, DOGE }): the recommended number of
+    // Network statistics for this client's coin: indexer tip and mempool depth,
+    // per-action-table record counts, fee tiers, coin/XCHAIN identity and prices,
+    // and no peer data (NetworkSummary in index.d.ts). Also includes a
+    // `finality` map ({ BTC, LTC, DOGE }): the recommended number of
     // confirmations to wait before treating a same-chain receipt as final
     // (display/UX guidance; the indexer itself processes actions at the tip).
     async getNetwork(opts = {}) {
