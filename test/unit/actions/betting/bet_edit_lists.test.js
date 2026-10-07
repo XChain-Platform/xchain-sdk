@@ -21,7 +21,7 @@ function sdk() {
     return new XChainSDK({ network: 'bitcoin-mainnet', compactTickers: false });
 }
 
-describe('BET v4 edit feed lists', function () {
+describe('BET v4 edit feed list composition', function () {
 
     it('registers the canonical wire field order and composes retain/detach exactly', async function () {
         expect(formats.BET[4]).to.equal('VERSION|FEED_ACTION_INDEX|ALLOW_LIST|BLOCK_LIST|MEMO');
@@ -57,6 +57,9 @@ describe('BET v4 edit feed lists', function () {
         expect((await sdk().bet({ feedActionIndex: 42, allowList: 101 })).actionString)
             .to.equal('BET|4|42|101');
     });
+});
+
+describe('BET v4 edit feed list safeguards', function () {
 
     it('rejects no-op edits, malformed references, and equal replacement lists', function () {
         const betting = new BettingHelpers();

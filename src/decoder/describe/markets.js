@@ -220,19 +220,8 @@ function decodePrice(p, chainSuffix) {
 }
 
 /*
- * BET describer (§11.3 signing, promoted from the wallet). One action
- * name over five formats, so the summary must name
- * WHICH one is being signed: approving a resolve is not remotely the
- * same act as approving a stake.
- *
- * Reads the wire spelling a ParsedAction carries, and tolerates the SDK
- * builder's camelCase output so a caller describing what it just built
- * (rather than what it parsed) still reads sensibly.
- *
- * The warnings are the irreversibilities, not lint. A bet cannot be
- * cancelled, a resolve is the payout decision itself, and a cancel
- * refunds and ends the market. Those are the facts a signer needs
- * before approving, and exactly what a raw-hex screen would hide.
+ * Name which of the five BET formats is being signed. Accept parsed wire
+ * fields and builder camelCase fields, and warn about irreversible effects.
  */
 function decodeBet(p, chainSuffix) {
     const pick = (camel, upper) => {
