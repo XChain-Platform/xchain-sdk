@@ -263,9 +263,9 @@ var Formats = {
 
     // Token-weighted governance polls. v0 = create poll, v1 = cast ballot,
     // v3 = set/clear standing vote delegation. The user-encodable versions must
-    // match xchain-indexer/src/actions/vote.js exactly.
+    // match xchain-indexer/src/actions/vote/index.js exactly.
     // v2 (finalize) is system-synthesized and is intentionally omitted, exactly as
-    // PRICE v0 is: the indexer rejects a user-broadcast VOTE v2 (vote.js
+    // PRICE v0 is: the indexer rejects a user-broadcast VOTE v2 (vote/index.js
     // `if(!data['IS_SYNTHETIC'])`), so listing it here only let sdk.vote({version:2})
     // build a command guaranteed to be rejected on arrival. Omitting it also drops
     // SDK DECODE of a VOTE|2 string (UNKNOWN_VERSION), the same accepted trade-off

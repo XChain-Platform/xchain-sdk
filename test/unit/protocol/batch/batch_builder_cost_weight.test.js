@@ -38,8 +38,7 @@
  ********************************************************************/
 
 const { expect } = require('chai');
-const path = require('path');
-const { loadIndexerAction } = require('../../../helpers/indexer_action_handler.js');
+const { loadBatchArbiter } = require('../../../helpers/indexer_action_handler.js');
 
 const XChainSDK = require('../../../../src/XChainSDK.js');
 const {
@@ -95,21 +94,10 @@ const VECTORS = [
       queue: repeat(11, 'DROP'),    weight: 275, over: true },
 ];
 
-function loadBatchHandler() {
-    const resolved = loadIndexerAction('batch');
-    if (!resolved) return null;
-    const { root, Handler: Batch } = resolved;
-
-    process.env.INDEXER_COIN = process.env.INDEXER_COIN || 'BTC';
-    process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
-    let IdxUtility, IdxConfig, ProtocolChanges;
-    try {
-        IdxUtility = require(path.join(root, 'src', 'utility.js'));
-        IdxConfig = require(path.join(root, 'src', 'config.js'));
-        ProtocolChanges = require(path.join(root, 'src', 'protocol_changes.js'));
-    } catch (e) {
-        return null;
-    }
+function loadBatchHandler(context) {
+    const loaded = loadBatchArbiter(context, 'the BATCH weighted-budget arbiter half');
+    if (!loaded) return null;
+    const { Batch, IdxUtility, IdxConfig, ProtocolChanges } = loaded;
 
     const blockTime = Math.floor(Date.now() / 1000);
     return function () {
@@ -229,8 +217,7 @@ describe('BATCH_COST_WEIGHTING: batchBuilder enforces the weighted budget', func
 
         before(function () {
             this.timeout(30000);
-            makeHandler = loadBatchHandler();
-            if (!makeHandler) return this.skip();
+            makeHandler = loadBatchHandler(this);
         });
 
         it('mirrors the arbiter budget and weight table byte-for-byte', function () {
@@ -262,8 +249,7 @@ describe('BATCH_COST_WEIGHTING: batchBuilder enforces the weighted budget', func
 
         before(function () {
             this.timeout(30000);
-            makeHandler = loadBatchHandler();
-            if (!makeHandler) return this.skip();
+            makeHandler = loadBatchHandler(this);
         });
 
         it('rejects the over-budget batch whole, with the string the SDK composes against', async function () {

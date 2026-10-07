@@ -38,8 +38,7 @@
  ********************************************************************/
 
 const { expect } = require('chai');
-const path = require('path');
-const { loadIndexerAction } = require('../../../../helpers/indexer_action_handler.js');
+const { loadBatchArbiter } = require('../../../../helpers/indexer_action_handler.js');
 
 const {
     BATCH_ACTION_LIMITS,
@@ -70,25 +69,6 @@ const TICKER_IDS = new Map([
     ['doge',  701],
 ]);
 const EXISTING_TICKER_IDS = new Set(TICKER_IDS.values());
-
-function loadIndexer(context) {
-    const resolved = loadIndexerAction('batch');
-    if (!resolved) return context.skip();
-    const { root, Handler: Batch } = resolved;
-
-    process.env.INDEXER_COIN = process.env.INDEXER_COIN || 'BTC';
-    process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
-    try {
-        return {
-            Batch,
-            IdxUtility: require(path.join(root, 'src', 'utility.js')),
-            IdxConfig: require(path.join(root, 'src', 'config.js')),
-            ProtocolChanges: require(path.join(root, 'src', 'protocol_changes.js')),
-        };
-    } catch (e) {
-        return context.skip();
-    }
-}
 
 // Mirror of xchain-indexer/src/db/index_tables.js getTickerId, over the fixed
 // token set above: a CANONICAL `^<id>` resolves straight to that id
@@ -143,7 +123,7 @@ function createLimitHandler(dependencies, off) {
 }
 
 function setupLimitArbiter(context) {
-    const dependencies = loadIndexer(context);
+    const dependencies = loadBatchArbiter(context, 'the BATCH limit-scan arbiter half');
     const blockTime = Math.floor(Date.now() / 1000);
     dependencies.blockTime = blockTime;
     return (off) => createLimitHandler(dependencies, off);

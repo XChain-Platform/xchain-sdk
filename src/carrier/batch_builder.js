@@ -97,10 +97,9 @@ function tallyActionKeys(actions) {
         // Only a TOP-LEVEL (undotted, non-caret) ISSUE consumes the single
         // top-level slot; child issuances (JDOG.1, JDOG.1.2) are uncapped, so
         // one BATCH registers a parent plus any number of its children. The
-        // TICK is read from the queued params here rather than the serialized
-        // string, which does not exist yet; tickResolver never compacts an
-        // ISSUE's defining TICK to `^<id>`, so the value classified here is
-        // the one that reaches the wire.
+        // TICK is read from the queued params, before any compaction; build()
+        // keeps a dotted child TICK by name (see restoreChildIssueTick), so
+        // the value classified here is the one that reaches the wire.
         let key = entry.action === 'ISSUE'
             ? classifyIssueTick(paramsTick(entry.params))
             : entry.action;
@@ -155,6 +154,19 @@ function assertMintTicksNamed(mint, mintTicks) {
             'BATCH mixes a `^<id>` MINT TICK with another MINT: a caret alias and a name can be the ' +
             'SAME token, which this SDK cannot resolve. Spell every MINT TICK by name.',
             { ticks: mintTicks.map(t => (t === undefined || t === null) ? '' : String(t)) });
+}
+
+// Put a dotted child ISSUE TICK back by name after tickResolver compacted it.
+// ISSUE formats 6 and 7 compact their TICK to `^<id>`, and the chain counts a
+// caret ISSUE as TOP-LEVEL, so a compacted child edit would take the single
+// top-level slot validate() left free; the handler accepts the name as well.
+function restoreChildIssueTick(action, rawParams, resolvedParams) {
+    if (action !== 'ISSUE' || !rawParams || !resolvedParams) return resolvedParams;
+    let key = Object.keys(rawParams).find((k) => k.replace(/_/g, '').toLowerCase() === 'tick');
+    if (key === undefined || classifyIssueTick(rawParams[key]) !== CHILD_ISSUE_KEY) return resolvedParams;
+    let resolved = resolvedParams[key];
+    if (resolved === undefined || resolved === null || String(resolved).charAt(0) !== '^') return resolvedParams;
+    return Object.assign({}, resolvedParams, { [key]: rawParams[key] });
 }
 
 
@@ -271,6 +283,7 @@ class BatchBuilder {
             }
             let resolvedParams = await this.sdk.tickResolver.resolveActionParams(entry.action, subParams);
             resolvedParams = await this.sdk.addressResolver.resolveActionParams(entry.action, resolvedParams);
+            resolvedParams = restoreChildIssueTick(entry.action, subParams, resolvedParams);
             let result = this.sdk.actions.createAction({
                 action: entry.action,
                 params: resolvedParams
