@@ -190,7 +190,12 @@ class ContractClient {
             version:     text(info.meta_version),
             meta
         };
-        if (permissionsError) manifest.permissionsError = true;
+        if (permissionsError) {
+            Object.defineProperty(manifest, 'permissionsError', {
+                value: true,
+                enumerable: false
+            });
+        }
         return manifest;
     }
 

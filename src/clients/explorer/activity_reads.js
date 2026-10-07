@@ -195,7 +195,10 @@ module.exports = {
     // reports permissions_error or the permissions value is unreadable.
     async getContractManifest(contractActionIndex) {
         let info = await this.getContract(contractActionIndex);
-        return ContractClient.parseManifest(info);
+        let manifest = ContractClient.parseManifest(info);
+        if (manifest.permissionsError)
+            return { ...manifest, permissionsError: true };
+        return manifest;
     },
 
     async getContracts(query, type, opts = {}) {
