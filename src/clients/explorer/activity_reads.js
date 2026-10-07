@@ -191,7 +191,8 @@ module.exports = {
     // (`permissions`: string[]|null, `max_take_bps`: number|null). Returns
     //   { permissions: string[]|null, maxTakeBps: number|null }
     // permissions=null → no declared allowlist (unrestricted); maxTakeBps=null →
-    // the global cap applies.
+    // the global cap applies. `permissionsError: true` is added when the explorer
+    // reports permissions_error or the permissions value is unreadable.
     async getContractManifest(contractActionIndex) {
         let info = await this.getContract(contractActionIndex);
         return ContractClient.parseManifest(info);
