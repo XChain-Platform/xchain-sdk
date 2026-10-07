@@ -22,7 +22,9 @@
 
 const { SDKMessagingError } = require('../../utils/errors.js');
 const { reconcileEncoded } = require('../../carrier/reconcile_encoded.js');
+const { assertCarrierBinding } = require('../../carrier/bind_action_carrier.js');
 const { METHOD_ECIES, METHOD_ECDH, METHOD_AES, normalizeLookupBudget } = require('./kdf_constants.js');
+const { messageQueryType, messagePaginationOpts, unwrapMessages, messageEntry } = require('./message_rows.js');
 
 function validateSendParams(params, sdk) {
     if (!params.wif || typeof params.wif !== 'string')
@@ -114,54 +116,6 @@ async function buildMessageActionParams(owner, params, sdk, messageIsBytes) {
     return actionParams;
 }
 
-function messageQueryType(type) {
-    if (type === 'sent') return 'source';
-    if (type === 'received') return 'destination';
-    return 'address';
-}
-
-function messagePaginationOpts(opts) {
-    const paginationOpts = {};
-    if (opts.limit !== undefined) paginationOpts.limit = opts.limit;
-    if (opts.page !== undefined) paginationOpts.page = opts.page;
-    if (opts.sortorder !== undefined) paginationOpts.sortorder = opts.sortorder;
-    return paginationOpts;
-}
-
-function unwrapMessages(rawMessages) {
-    // The explorer serves every list endpoint as `{ data: [...], total }`,
-    // and `get` hands that body back untouched. Requiring a bare array here
-    // meant a real explorer response always failed the check and the inbox
-    // returned EMPTY - so a MESSAGE that is on-chain, valid and addressed to
-    // you was invisible in the wallet, silently. Accept both shapes:
-    // a bare array is what the unit-test doubles return.
-    if (rawMessages && !Array.isArray(rawMessages) && Array.isArray(rawMessages.data))
-        return rawMessages.data;
-    return rawMessages;
-}
-
-function messageEntry(msg, opts) {
-    let method = msg.encryption_method ? Number(msg.encryption_method) : null;
-    if (method === null && msg.encrypted_message) method = METHOD_ECIES;
-    return {
-        from: msg.source || null, to: msg.destination || null,
-        coin: msg.coin || null, chain: opts._chain || null,
-        text: null, bytes: null, encrypted: false, method,
-        // The counterparty's published pubkey + the wire format, surfaced
-        // so handshake-aware callers can read format-0/1 key-exchange rows
-        // (encryption_key) that getMessages otherwise drops.
-        encryptionKey: msg.encryption_key || null,
-        format: (msg.action_format === undefined || msg.action_format === null)
-            ? null : Number(msg.action_format),
-        txid: msg.tx_hash || null,
-        block: msg.block_index || null,
-        // The explorer /messages contract projects the block time as
-        // `timestamp` (db.js: `b1.block_time as timestamp`); accept the
-        // raw column name too for any non-explorer row source.
-        timestamp: msg.timestamp || msg.block_time || null
-    };
-}
-
 async function decryptMessageEntry(owner, entry, msg, address, opts, explorer, pubkeyCache) {
     if (msg.plaintext_message) {
         entry.text = msg.plaintext_message;
@@ -204,6 +158,8 @@ module.exports = {
     /**
      * Send a message to a destination address.
      * Handles pubkey lookup, encryption, action creation, signing, and broadcasting.
+     * Fails closed before signing unless the encoder's outputs and fee reconcile and
+     * its data carrier holds exactly this MESSAGE.
      *
      * @param {Object} params
      * @param {string} params.wif - Sender's WIF private key
@@ -231,17 +187,28 @@ module.exports = {
             encoder: params.encoder
         });
 
-        if (typeof sdk.wallet.getBitcoinNetwork === 'function') {
-            reconcileEncoded(actionResult.psbt, {
-                network:          sdk.wallet.getBitcoinNetwork(),
-                changeAddresses:  params.encoder.change,
-                callerIdentities: params.encoder.pubkey,
-                maxFeeSats:       params.encoder.maxFeeSats,
-                label:            'message',
-                phaseShapes:      [],
-                phaseSpends:      null
-            });
-        }
+        // Reconcile the encoder's outputs and fee on every wallet; a missing network only means an address it cannot parse authorizes nothing
+        let network;
+        try { network = sdk.wallet.getBitcoinNetwork(); } catch (e) { network = undefined; }
+        reconcileEncoded(actionResult.psbt, {
+            network:          network,
+            changeAddresses:  params.encoder.change,
+            callerIdentities: params.encoder.pubkey,
+            maxFeeSats:       params.encoder.maxFeeSats,
+            label:            'message',
+            phaseShapes:      [],
+            phaseSpends:      null
+        });
+        // Refuse a PSBT whose data carrier holds any command other than this MESSAGE (the output gate never reads the carrier)
+        assertCarrierBinding({
+            psbt:           actionResult.psbt,
+            actionString:   actionResult.actionString,
+            encoding:       actionResult.encoding,
+            carrierScripts: actionResult.carrierScripts,
+            rawData:        null,
+            network:        network,
+            label:          'message'
+        });
 
         let signed = sdk.wallet.signPsbt(actionResult.psbt, params.wif);
         let broadcast = await sdk.wallet.broadcastTx(signed.txHex, sdk.requireEncoder());

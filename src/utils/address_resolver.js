@@ -30,9 +30,11 @@
  * The SET of compactable fields comes from the SHARED, byte-identical field map
  * src/addressRefFields.js (the indexer keeps the authoritative copy). Compaction
  * is gated per action by SDK_COMPACTABLE_BY_ACTION (single-value, non-type-gated,
- * non-`noCompact` fields); the indexer assigns ids for the FULL set, so the
- * SDK-emitted `^<id>` set is always a subset the indexer recognises. The fields
- * marked `noCompact` in src/addressRefFields.js (the authoritative list and its
+ * non-`noCompact` fields), plus LIST.ITEM on the separate compactListItems path
+ * (TYPE 2 lists, after LIST_ADDRESS_REF activates); the indexer assigns ids for
+ * the FULL set, so the SDK-emitted `^<id>` set is always a subset the indexer
+ * recognises. The fields marked `noCompact` in src/addressRefFields.js (the
+ * authoritative list and its
  * rationale) are held back even though the indexer ids them, because the decoder
  * keys work off them and cannot resolve a `^<id>` ref. Today that is two fields,
  * both emitted as full addresses: DISPENSER.GET_ADDRESS (the decoder gates dispense

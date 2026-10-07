@@ -298,3 +298,69 @@ describe('API request-rate window', function () {
         assert.doesNotMatch(await loadApiStderr('30000'), /SDK_API_RATE_WINDOW_MS/);
     });
 });
+
+// Drive the shipped middleware directly, since every HTTP test above arrives from 127.0.0.1
+function stubCall(mw, { ip, authorization } = {}) {
+    const res = { statusCode: 200, headers: {}, body: null };
+    res.status = (code) => { res.statusCode = code; return res; };
+    res.set = (k, v) => { res.headers[k] = v; return res; };
+    res.json = (body) => { res.body = body; return res; };
+    let passed = false;
+    const headers = authorization ? { authorization } : {};
+    mw({ headers, ip }, res, () => { passed = true; });
+    return { passed, res };
+}
+
+describe('API request-rate limit under a many-address flood', function () {
+    this.timeout(10000);
+
+    it('caps anonymous buckets and refuses a new address at the cap with 429', () => {
+        const mw = rateLimitMiddleware({ limit: 5, windowMs: 60000, isCredential: KNOWN_KEYS, maxAnonBuckets: 3 });
+        for (let i = 0; i < 3; i++)
+            assert.strictEqual(stubCall(mw, { ip: '10.0.0.' + i }).passed, true, 'address ' + i + ' must pass');
+        const refused = stubCall(mw, { ip: '10.0.0.99' });
+        assert.strictEqual(refused.passed, false, 'a new address past the cap must not reach next()');
+        assert.strictEqual(refused.res.statusCode, 429);
+        assert.strictEqual(refused.res.body.error.code, -32005);
+        assert.ok(Number(refused.res.headers['Retry-After']) >= 1, 'Retry-After must be a positive number of seconds');
+        assert.strictEqual(mw.buckets.size, 3, 'a refused address must not mint a bucket');
+    });
+
+    it('still serves an address that already holds a bucket when the cap is reached', () => {
+        const mw = rateLimitMiddleware({ limit: 5, windowMs: 60000, isCredential: KNOWN_KEYS, maxAnonBuckets: 2 });
+        stubCall(mw, { ip: '10.0.0.1' });
+        stubCall(mw, { ip: '10.0.0.2' });
+        assert.strictEqual(stubCall(mw, { ip: '10.0.0.1' }).passed, true);
+    });
+
+    it('never refuses a credential bucket because of the anonymous cap', () => {
+        const mw = rateLimitMiddleware({ limit: 5, windowMs: 60000, isCredential: KNOWN_KEYS, maxAnonBuckets: 2 });
+        stubCall(mw, { ip: '10.0.0.1' });
+        stubCall(mw, { ip: '10.0.0.2' });
+        assert.strictEqual(stubCall(mw, { ip: '10.0.0.3' }).passed, false, 'the cap must bite for a new anonymous address');
+        assert.strictEqual(stubCall(mw, { ip: '10.0.0.3', authorization: 'Bearer key-a' }).passed, true,
+            'the real key holder must pass while the anonymous cap is full');
+        assert.strictEqual(mw.buckets.size, 3);
+    });
+
+    it('gives cap slots back once anonymous buckets expire', async () => {
+        const mw = rateLimitMiddleware({ limit: 5, windowMs: 20, isCredential: KNOWN_KEYS, maxAnonBuckets: 2 });
+        stubCall(mw, { ip: '10.0.0.1' });
+        stubCall(mw, { ip: '10.0.0.2' });
+        assert.strictEqual(stubCall(mw, { ip: '10.0.0.3' }).passed, false);
+        await waitFor(() => stubCall(mw, { ip: '10.0.0.3' }).passed,
+            { message: 'a new address must be admitted once the earlier buckets expire' });
+        assert.strictEqual(mw.buckets.size, 1, 'the expired buckets must be pruned, leaving only the fresh one');
+    });
+
+    it('prunes from the front and stops at the first live bucket', async () => {
+        const mw = rateLimitMiddleware({ limit: 5, windowMs: 20, isCredential: KNOWN_KEYS });
+        for (let i = 0; i < 5; i++) stubCall(mw, { ip: '10.0.1.' + i });
+        const expiredAt = Math.max(...[...mw.buckets.values()].map((b) => b.resetAt));
+        await waitFor(() => Date.now() > expiredAt, { message: 'the first five buckets must expire' });
+        stubCall(mw, { ip: '10.0.2.1' });
+        assert.strictEqual(mw.buckets.size, 1, 'every expired bucket ahead of the fresh one must be gone');
+        const fresh = [...mw.buckets.values()][0];
+        assert.ok(fresh.resetAt > Date.now() - 1, 'the survivor must be the fresh bucket');
+    });
+});
