@@ -78,6 +78,8 @@ export interface RetryInfo {
     error: string;
     /** HTTP status of the response being retried; null for a transport error */
     status?: number | null;
+    /** JSON-RPC error code that caused a retry from a 2xx body (encoder only); null otherwise */
+    rpcCode?: number | null;
 }
 
 
