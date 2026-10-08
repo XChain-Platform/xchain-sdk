@@ -42,7 +42,7 @@ const LIMIT_MESSAGES = {
 
 // BATCH_COST_WEIGHTING: the WEIGHTED budget, in the arbiter's own
 // position - immediately after the count and before every per-ACTION
-// cap (xchain-indexer/src/actions/batch.js parse(): the count
+// cap (xchain-indexer/src/actions/batch/validate.js checkBatch(): the count
 // pre-filter, then the weighted sum, then the cap loop). Both bounds
 // are the same on-chain rejection, `invalid: COMMAND (limit)`; the
 // count stays first and is an EXACT pre-filter rather than a

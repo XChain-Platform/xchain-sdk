@@ -22,6 +22,7 @@ const axios = require('axios');
 const { SDKEncoderError, SDKRateLimitedError } = require('../utils/errors.js');
 const { withRetry, isRetryable, getRetryAfterSeconds } = require('../utils/retry.js');
 const Config = require('../config.js');
+const { hasHttpScheme, isHttpsUrl } = require('../utils/endpoints.js');
 const { installMethods } = require('../utils/install_methods.js');
 const encoderTransactionMethods = require('./encoder/transactions.js');
 const { getTxBlock, ...encoderPrototypeMethods } = encoderTransactionMethods;
@@ -101,8 +102,8 @@ class EncoderClient {
     // so connection pooling applies to public hosts too.
     buildClient() {
         let pool    = this._pool;
-        let baseURL = this.baseUrl.startsWith('http') ? this.baseUrl : 'http://' + this.baseUrl + ':' + this.port;
-        let isHttps = baseURL.startsWith('https');
+        let baseURL = hasHttpScheme(this.baseUrl) ? this.baseUrl : 'http://' + this.baseUrl + ':' + this.port;
+        let isHttps = isHttpsUrl(baseURL);
         // An injected agent wins. The desktop wallet routes its traffic
         // through a SOCKS5 proxy when the user turns on Tor routing, and
         // that is expressed as pre-built agents because a SOCKS tunnel is a
