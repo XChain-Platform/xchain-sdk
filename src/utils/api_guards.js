@@ -33,16 +33,17 @@ const { safeTokenEqual } = require('./safe_compare.js');
 
 /*
  * Maximum JSON-RPC calls in one array (batch) body. Env-tunable because a
- * legitimate integrator may batch more than the default; a non-numeric or
- * non-positive value falls back to the default rather than disabling the cap
+ * legitimate integrator may batch more than the default; anything but a positive
+ * whole number falls back to the default rather than disabling the cap
  * (a NaN cap used in a > comparison never fires, so the fallback IS the guard).
+ * Validates the WHOLE string, so '1e3' is junk rather than a cap of 1.
  *
  * @param {object} [env]
  * @returns {number}
  */
 function resolveMaxBatch(env = { SDK_API_MAX_BATCH: Config.env.sdkApiMaxBatch() }) {
-    const n = parseInt(env.SDK_API_MAX_BATCH, 10);
-    return (Number.isFinite(n) && n > 0) ? n : 20;
+    const n = parseWholeNumber(env.SDK_API_MAX_BATCH);
+    return (n !== null && n > 0) ? n : 20;
 }
 
 /*

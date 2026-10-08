@@ -20,6 +20,7 @@
 
 const axios = require('axios');
 const Config = require('../config.js');
+const { hasHttpScheme } = require('../utils/endpoints.js');
 const { agentOptsFor, NETWORK_MAP } = require('./hub/config_envelope.js');
 const { getLogger } = require('../observability/logger.js');
 const { installMethods } = require('../utils/install_methods.js');
@@ -50,11 +51,11 @@ class HubConnector {
 
         // Multi-endpoint support: hubValidators takes priority over hubUrl:hubPort
         if(options.hubValidators && Array.isArray(options.hubValidators) && options.hubValidators.length > 0){
-            this.urls = options.hubValidators.map(e => e.startsWith('http') ? e : 'http://' + e);
+            this.urls = options.hubValidators.map(e => hasHttpScheme(e) ? e : 'http://' + e);
         } else {
             let hubUrl  = options.hubUrl || 'localhost';
             let hubPort = options.hubPort || 10000;
-            this.urls = [hubUrl.startsWith('http') ? hubUrl : 'http://' + hubUrl + ':' + hubPort];
+            this.urls = [hasHttpScheme(hubUrl) ? hubUrl : 'http://' + hubUrl + ':' + hubPort];
         }
 
         // Backward compat: this.url points to the first endpoint
