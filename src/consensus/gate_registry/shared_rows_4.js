@@ -16,8 +16,8 @@
  *
  * One SHARED block part. The region between the two marker lines is
  * BYTE-TWINNED into the registry of xchain-sync, xchain-hub, xchain-explorer
- * and xchain-sdk: each consumer keeps the same bytes and replaces only the
- * require line below with its own queue module. What may live between the
+ * and xchain-sdk, and the file is a whole-file byte twin: every consumer keeps
+ * the same bytes, require line included. What may live between the
  * markers: `addGate(key, unit, table)` calls with LITERAL values (a table, a
  * number, a string or literals joined by +, a RegExp, an array), one call per
  * row, at column zero, and comments. No require, no computed value, nothing

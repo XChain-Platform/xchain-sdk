@@ -18,8 +18,8 @@
  * hold the SHARED block, the gate rows every consumer of this platform judges:
  * only the region between their `// SHARED-GATES BEGIN` and `// SHARED-GATES END`
  * markers is BYTE-TWINNED into xchain-sync, xchain-hub, xchain-explorer and
- * xchain-sdk. This wrapper is not twinned: each of those repos keeps its own
- * copy of this queue and replaces only the require line above the markers.
+ * xchain-sdk. This wrapper is a whole-file byte twin as well: each of those repos
+ * keeps the same bytes, with the queue require resolved by the same path.
  * gates_N.js hold the rows no other repo twins. Every part file calls
  * `addGate(key, unit, table)` at column zero, with literal values only, so the
  * calls are queued here as the parts load and replayed into the registry the
