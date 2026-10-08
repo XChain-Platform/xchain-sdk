@@ -112,3 +112,33 @@ describe('scaffold sources: drift + verdict', function () {
     });
 
 });
+
+describe('mint-supply lock guard', function () {
+    for (const name of ['amm', 'crowdsale']) {
+        it(name + ' locks the configured mint supply and exposes no public mint', function () {
+            const source = Buffer.from(EMBEDDED.templates[name], 'base64').toString('utf8');
+            assert.match(source, /lockMintSupply/);
+            assert.doesNotMatch(source, /emit[.]mint/);
+        });
+    }
+});
+
+describe('embedded template hash guard', function () {
+    const expected = {
+        escrow: '524662fb0b2f265b0062bd4d06167979c46eb19a9488edf8a5a51ebbed7fd51e',
+        vesting: 'bdeb9425e61ed0a12c52e5bef9ec88d4bc5c4948a541c2c0f47807ad2e7fe36b',
+        crowdsale: 'f16dfe18e916924032aa4de7a630a1e94aff683633df105894a6ff5601d83f3c',
+        amm: '7ce16e02127cd2f63879720b73394abf83333564f777eeab2d4d85b3aed073e7'
+    };
+
+    it('covers every embedded template', function () {
+        assert.deepStrictEqual(Object.keys(EMBEDDED.templates).sort(), Object.keys(expected).sort());
+    });
+
+    for (const name of Object.keys(expected)) {
+        it(name + ' matches its expected embed', function () {
+            const source = Buffer.from(EMBEDDED.templates[name], 'base64');
+            assert.strictEqual(sha256(source), expected[name], 'UNEXPECTED TEMPLATE DRIFT: ' + name);
+        });
+    }
+});

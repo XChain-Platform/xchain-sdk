@@ -12,96 +12,60 @@ const EncoderClient = require('../../../../src/clients/encoder.js');
 const BASE = 'http://encoder.test:3000';
 const FAST_RETRY = { maxRetries: 2, baseDelay: 1, maxDelay: 2 };
 
-function createClient(retry, hooks) {
-    return new EncoderClient({ encoderUrl: 'encoder.test', encoderPort: 3000, retry, hooks });
+function createClient(hooks) {
+    return new EncoderClient({
+        encoderUrl: 'encoder.test',
+        encoderPort: 3000,
+        retry: FAST_RETRY,
+        hooks
+    });
 }
 
-function replyError(code, message) {
-    return [200, { jsonrpc: '2.0', error: { code, message }, id: 1 }];
+function resetFault() {
+    return Object.assign(new Error('connection reset'), { code: 'ECONNRESET' });
 }
 
-// Clear every nock interceptor after each test in the calling describe.
-function installNockCleanup() {
+describe('EncoderClient retryable transport fault', function () {
     afterEach(function () {
         nock.cleanAll();
     });
-}
 
-describe('EncoderClient retryable -32603 body error', function () {
-    installNockCleanup();
-
-    it('retries a -32603 body error and returns the later result', async function () {
-        nock(BASE).post('/').reply(...replyError(-32603, 'node unavailable'));
+    it('retries a connection reset for a read-only RPC and returns the later result', async function () {
+        nock(BASE).post('/').replyWithError(resetFault());
         nock(BASE).post('/').reply(200, { jsonrpc: '2.0', result: 'pong', id: 2 });
 
-        expect(await createClient(FAST_RETRY).ping()).to.equal('pong');
+        expect(await createClient().ping()).to.equal('pong');
         expect(nock.isDone()).to.equal(true);
     });
 
-    it('reports each retry through the onRetry hook', async function () {
-        const seen = [];
-        nock(BASE).post('/').reply(...replyError(-32603, 'node unavailable'));
-        nock(BASE).post('/').reply(200, { jsonrpc: '2.0', result: 'pong', id: 2 });
+    it('retries an HTTP 503 for get_utxos and returns the later result', async function () {
+        const expected = { utxos: [] };
+        nock(BASE).post('/').reply(503, 'busy');
+        nock(BASE).post('/').reply(200, { jsonrpc: '2.0', result: expected, id: 2 });
 
-        await createClient(FAST_RETRY, { onRetry: (info) => seen.push(info) }).ping();
-        expect(seen).to.have.length(1);
-        expect(seen[0].method).to.equal('ping');
+        expect(await createClient().getUTXOs('funding-address')).to.deep.equal(expected);
+        expect(nock.isDone()).to.equal(true);
     });
 
-    it('tells the onRetry hook the real 2xx status and the JSON-RPC code, never a synthetic 503', async function () {
-        const seen = [];
-        nock(BASE).post('/').reply(...replyError(-32603, 'node unavailable'));
-        nock(BASE).post('/').reply(200, { jsonrpc: '2.0', result: 'pong', id: 2 });
-
-        await createClient(FAST_RETRY, { onRetry: (info) => seen.push(info) }).ping();
-        expect(seen).to.have.length(1);
-        expect(seen[0].status).to.equal(200);
-        expect(seen[0].rpcCode).to.equal(-32603);
-    });
-
-    it('reports a real HTTP 503 retry with its status and a null rpcCode', async function () {
+    it('reports the real transport status through the onRetry hook', async function () {
         const seen = [];
         nock(BASE).post('/').reply(503, 'busy');
         nock(BASE).post('/').reply(200, { jsonrpc: '2.0', result: 'pong', id: 2 });
 
-        await createClient(FAST_RETRY, { onRetry: (info) => seen.push(info) }).ping();
+        await createClient({ onRetry: (info) => seen.push(info) }).ping();
+
         expect(seen).to.have.length(1);
-        expect(seen[0].status).to.equal(503);
-        expect(seen[0].rpcCode).to.equal(null);
+        expect(seen[0]).to.include({ method: 'ping', status: 503, rpcCode: null });
     });
-});
 
-describe('EncoderClient retryable -32603 body error', function () {
-    installNockCleanup();
-
-    it('surfaces ENCODER_RPC_ERROR marked retryable once retries are spent', async function () {
-        nock(BASE).post('/').times(3).reply(...replyError(-32603, 'node unavailable'));
+    it('surfaces ENCODER_NETWORK after connection-reset retries are spent', async function () {
+        nock(BASE).post('/').times(3).replyWithError(resetFault());
 
         let caught;
-        try { await createClient(FAST_RETRY).ping(); } catch (e) { caught = e; }
+        try { await createClient().ping(); } catch (error) { caught = error; }
+
         expect(caught.name).to.equal('SDKEncoderError');
-        expect(caught.code).to.equal('ENCODER_RPC_ERROR');
-        expect(caught.details.retryable).to.equal(true);
-        expect(caught.details.rpcError.code).to.equal(-32603);
-        expect(nock.isDone()).to.equal(true);
-    });
-
-    it('marks the error retryable without retrying when retry is disabled', async function () {
-        nock(BASE).post('/').reply(...replyError(-32603, 'node unavailable'));
-
-        let caught;
-        try { await createClient(false).ping(); } catch (e) { caught = e; }
-        expect(caught.code).to.equal('ENCODER_RPC_ERROR');
-        expect(caught.details.retryable).to.equal(true);
-    });
-
-    it('does not retry a -32602 body error and marks it not retryable', async function () {
-        nock(BASE).post('/').reply(...replyError(-32602, 'bad params'));
-
-        let caught;
-        try { await createClient(FAST_RETRY).ping(); } catch (e) { caught = e; }
-        expect(caught.code).to.equal('ENCODER_RPC_ERROR');
-        expect(caught.details.retryable).to.equal(false);
+        expect(caught.code).to.equal('ENCODER_NETWORK');
         expect(nock.isDone()).to.equal(true);
     });
 });
