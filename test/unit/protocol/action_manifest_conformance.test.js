@@ -63,21 +63,7 @@ function diffVersions(expected, actual) {
 }
 
 describe('ACTION manifest conformance: sdk userEncodable set @regression', function () {
-    it('keeps settlement anchors explorer-only and outside SDK Formats', function () {
-        assert.strictEqual(typeof MANIFEST.categories['settlement-anchor'], 'string');
-        const members = Object.keys(MANIFEST.actions)
-            .filter(action => MANIFEST.actions[action].category === 'settlement-anchor')
-            .sort();
-        assert.deepStrictEqual(members, SETTLEMENT_ANCHORS);
-        for (const action of SETTLEMENT_ANCHORS) {
-            assert.deepStrictEqual(MANIFEST.actions[action], {
-                category: 'settlement-anchor',
-                explorerRender: true
-            });
-            assert.strictEqual(Formats[action], undefined,
-                action + ' is an indexer-minted settlement anchor, not an SDK-authored action');
-        }
-    });
+    registerSettlementAnchorTests();
 
     it('Formats keys exactly equal the manifest userEncodable slice', function () {
         const expected = manifestSlice('userEncodable');
@@ -125,6 +111,28 @@ describe('ACTION manifest conformance: sdk userEncodable set @regression', funct
 
     registerIndexerHandlerAuditTests();
 
+    registerCanonicalManifestIdentityTests();
+});
+
+function registerSettlementAnchorTests() {
+    it('keeps settlement anchors explorer-only and outside SDK Formats', function () {
+        assert.strictEqual(typeof MANIFEST.categories['settlement-anchor'], 'string');
+        const members = Object.keys(MANIFEST.actions)
+            .filter(action => MANIFEST.actions[action].category === 'settlement-anchor')
+            .sort();
+        assert.deepStrictEqual(members, SETTLEMENT_ANCHORS);
+        for (const action of SETTLEMENT_ANCHORS) {
+            assert.deepStrictEqual(MANIFEST.actions[action], {
+                category: 'settlement-anchor',
+                explorerRender: true
+            });
+            assert.strictEqual(Formats[action], undefined,
+                action + ' is an indexer-minted settlement anchor, not an SDK-authored action');
+        }
+    });
+}
+
+function registerCanonicalManifestIdentityTests() {
     describe('byte-identity to canonical manifest', function () {
         const DOCS = process.env.XCHAIN_DOCS_DIR || path.join(__dirname, '../..', '..', '..', 'xchain-documentation');
         const CANON = path.join(DOCS, 'protocol', 'action-manifest.json');
@@ -136,7 +144,7 @@ describe('ACTION manifest conformance: sdk userEncodable set @regression', funct
                 'xchain-documentation/protocol/action-manifest.json and re-vendor all copies.');
         });
     });
-});
+}
 
 // The version arrays are only load-bearing if they are present and shaped
 // right on exactly the authorable actions; a missing or malformed array
