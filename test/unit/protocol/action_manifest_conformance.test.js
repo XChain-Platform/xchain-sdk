@@ -43,11 +43,11 @@ function manifestSlice(flag) {
 function localSdkSet() {
     return Object.keys(Formats).filter(k => /^[A-Z_]+$/.test(k)).sort();
 }
-// Version keys are JS object keys (strings) on the SDK side and JSON numbers in
-// the manifest; both sides normalize to sorted numbers so the comparison is on
-// the versions themselves, not on their spelling.
+// Version keys are JS own property names (strings) on the SDK side and JSON
+// numbers in the manifest; both sides normalize to sorted numbers so the
+// comparison is on the versions themselves, not on their spelling.
 function sdkVersions(action) {
-    return Object.keys(Formats[action]).map(Number).sort((a, b) => a - b);
+    return Object.getOwnPropertyNames(Formats[action]).map(Number).sort((a, b) => a - b);
 }
 function manifestVersions(action) {
     return (MANIFEST.actions[action].userEncodableVersions || []).slice().sort((a, b) => a - b);

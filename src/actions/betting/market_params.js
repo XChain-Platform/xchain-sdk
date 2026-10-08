@@ -14,12 +14,12 @@
  *
  * XChain Platform SDK - BET (parimutuel betting) Helpers
  *
- * Pure builders for the five BET formats (see
+ * Pure builders for the four BET lifecycle formats (see
  * xchain-documentation/protocol/actions/BET.md): v0 create a market, v1 cancel,
- * v2 place a bet, v3 resolve, v4 edit membership lists. Every rule mirrored
- * here is a CONSENSUS rule the indexer enforces; duplicating them ensures a
- * malformed market fails in the caller's hands rather than after paying a fee
- * to be rejected on-chain. The SDK must never be stricter than consensus (that
+ * v2 place a bet, v3 resolve. Every rule mirrored here is a CONSENSUS rule the
+ * indexer enforces; duplicating them ensures a malformed market fails in the
+ * caller's hands rather than after paying a fee to be rejected on-chain. The
+ * SDK must never be stricter than consensus (that
  * refuses actions the protocol accepts) nor looser (that lets fees burn).
  *
  * The DETAILS schema lives here and is the single source of truth for it:
@@ -211,34 +211,6 @@ module.exports = {
             version:         3,
             feedActionIndex: this.actionIndex(feedActionIndex, 'FEED_ACTION_INDEX', ctx),
             outcome:         String(this.outcomeIndex(outcome, outcomes, ctx)),
-            memo:            isSet(memo) ? String(memo) : ''
-        };
-    },
-
-    // Build BET v4 params (edit a market's membership lists). Owner-only and
-    // open-market-only on-chain. Empty retains the current reference, zero
-    // detaches it, and a positive ACTION_INDEX replaces it.
-    editMarketListsParams({ feedActionIndex, allowList, blockList, memo } = {}) {
-        const ctx = 'betting.editMarketListsParams';
-        const allowOut = isSet(allowList) ? this.actionIndex(allowList, 'ALLOW_LIST', ctx) : '';
-        const blockOut = isSet(blockList) ? this.actionIndex(blockList, 'BLOCK_LIST', ctx) : '';
-
-        if (allowOut === '' && blockOut === '')
-            fail('MISSING_REQUIRED_FIELD',
-                `${ctx}: allowList or blockList is required. Empty fields retain the current references`,
-                { fields: ['ALLOW_LIST', 'BLOCK_LIST'] });
-        const allowKey = allowOut.replace(/^0+/, '');
-        const blockKey = blockOut.replace(/^0+/, '');
-        if (allowKey !== '' && blockKey !== '' && allowKey === blockKey)
-            fail('INVALID_FIELD_VALUE',
-                `${ctx}: allowList and blockList cannot be set to the same list (${allowOut})`,
-                { field: 'BLOCK_LIST', value: blockOut });
-
-        return {
-            version:         4,
-            feedActionIndex: this.actionIndex(feedActionIndex, 'FEED_ACTION_INDEX', ctx),
-            allowList:       allowOut,
-            blockList:       blockOut,
             memo:            isSet(memo) ? String(memo) : ''
         };
     },
