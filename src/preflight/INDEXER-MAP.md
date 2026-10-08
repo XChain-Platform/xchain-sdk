@@ -81,7 +81,12 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `31ee72dc`
+**Pins taken at indexer commit:** `1e1adf86`
+
+(Re-anchored 2026-10-08 against indexer `1e1adf86`. Only the `dispenser` and `dispense`
+directory pins move, for the delay-clock block index callers reviewed in the first entry
+of the review log below. The other eleven rows are byte-identical to the prior anchor
+`31ee72dc`.)
 
 (Re-anchored 2026-10-06 against indexer `31ee72dc`. Only the `send` and `dispenser` directory pins move,
 for the caret pack key lookup and the dispenser refill controller guard reviewed in the first entry of
@@ -373,7 +378,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 31ee72dc..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 1e1adf86..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -450,8 +455,8 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `3671cf3e2efefb069d30539814ecc2f1bd65087698f756711c8a1c7b75e9665f` |
 | `checks/mint.js` | `src/actions/mint/` | `0f2b6b0375df803321c1644e24f9fa2b6dcb73119a470832eeb93dfab8530595` |
 | `checks/issue.js` | `src/actions/issue/` | `9936894a073dbdbc6f1e495d742e6f4035024efce3e0aa1fecea04a8a89471a6` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `da2a7d7c2fd22489c65ffebc91804b02bb4694aec0ba86daa89aecd81d409b7c` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `40bacc5f8b14d5c8d96b38ff912e8de964054dc65f287ca8f0590e4528919c6c` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `4e6fabc35fb8ccd74818b89a4c468505c9341d4c2de59666e2b33a3a3df6d775` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `0ba2b8e2037de1c86163525776af2d788da7a9b3995999615f60c018280115fa` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `66728bf57468a88c88e154622ca2708a1089ac9f5f8aa115f296cdadcbd5b8e5` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `54ea109eda27f47b8954fc134c53672bf94e1706c2084693a45fd97bf15c96dd` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `0174875cd302106d68a816c7e72a64d53e3f51971881cd9efbea70a78786e7d9` |
@@ -479,6 +484,29 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-08 - dispenser delay clock callers
+
+The `dispenser` pin moves from `da2a7d7c` to `4e6fabc3` and the `dispense` pin from
+`40bacc5f` to `0ba2b8e2`, hashed from the committed indexer tree at `1e1adf86` by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/<name>/`. The full source
+diff from the branch merge base changes five callers.
+
+- **`dispenser/context.js` and `dispense/pricing.js`:** the format-1/2 dispenser lookup
+  and DISPENSE settlement lookup now pass the action's `BLOCK_INDEX` after `BLOCK_TIME`.
+  At this reviewed tree `getDispenserInfo` still accepts three arguments and calls
+  `getDispenserEdits` without a block index, so JavaScript ignores the new fourth
+  argument. These two mapped edits establish the caller contract but do not yet move
+  a predicate, field format, fee, state overlay or error path. **Direction: NEITHER.**
+- **`dispenser_close/index.js` and `dispenser_expire/index.js`:** the two internal
+  maintenance actions pass the same fourth argument. They are not mapped client-check
+  handlers, and at this tree the argument is ignored for the same reason.
+- **`utility/block_passes.js`:** cancellation scanning now passes `block_index` to
+  `findCancelledDispensers`, which already accepts it and selects the delay clock.
+  This changes when the indexer emits its internal close action, not any DISPENSER or
+  DISPENSE validity rule mirrored by `checks/dispenser.js`.
+
+NO CLIENT CHECK MOVES.
 
 ### 2026-10-06 - caret pack key for SEND and the DISPENSER_REFILL controller guard
 
