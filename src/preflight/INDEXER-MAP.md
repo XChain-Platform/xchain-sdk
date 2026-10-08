@@ -83,12 +83,12 @@ commit, not a re-pin back.
 
 **Pins taken at indexer commit:** `e545c8d5`
 
-(Re-anchored 2026-10-08 against committed indexer develop `e545c8d5`. Three directory pins move, each
-reviewed in the first two entries of the review log below: `send` from that tree plus the paired
-`dde40808` change adding the unwired gated-totals helper, and `dispenser` and `dispense` from the
-paired `1e1adf86` change passing the delay-clock block index to their callers. A comment-only edit
-in `send/gated_handoff.js` normalizes away, and the other ten rows are byte-identical to the prior
-anchor `31ee72dc`.)
+(Re-anchored 2026-10-08 against committed indexer develop `e545c8d5`. Four directory pins move, each
+reviewed in the first three entries of the review log below: `send` from that tree plus the paired
+`dde40808` change adding the unwired gated-totals helper, `dispenser` and `dispense` from the paired
+`1e1adf86` change passing the delay-clock block index to their callers, and `issue` from the paired
+`6f531460` change adding the lazy distribution probe. A comment-only edit in `send/gated_handoff.js`
+normalizes away, and the other nine rows are byte-identical to the prior anchor `31ee72dc`.)
 
 (Re-anchored 2026-10-06 against indexer `31ee72dc`. Only the `send` and `dispenser` directory pins move,
 for the caret pack key lookup and the dispenser refill controller guard reviewed in the first entry of
@@ -456,7 +456,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (SEND) | `src/actions/send/` | `dcf4e6d4f2d8b1267b7543dc0da61e87506298a5a16db554d4c5a16353e5dc7e` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `3671cf3e2efefb069d30539814ecc2f1bd65087698f756711c8a1c7b75e9665f` |
 | `checks/mint.js` | `src/actions/mint/` | `0f2b6b0375df803321c1644e24f9fa2b6dcb73119a470832eeb93dfab8530595` |
-| `checks/issue.js` | `src/actions/issue/` | `9936894a073dbdbc6f1e495d742e6f4035024efce3e0aa1fecea04a8a89471a6` |
+| `checks/issue.js` | `src/actions/issue/` | `95dff217aeae8428578cf583b74bdeedf97731fd2c9242be6e8baf6763c816e9` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `4e6fabc35fb8ccd74818b89a4c468505c9341d4c2de59666e2b33a3a3df6d775` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `0ba2b8e2037de1c86163525776af2d788da7a9b3995999615f60c018280115fa` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `66728bf57468a88c88e154622ca2708a1089ac9f5f8aa115f296cdadcbd5b8e5` |
@@ -523,6 +523,24 @@ diff from the branch merge base changes five callers.
   DISPENSE validity rule mirrored by `checks/dispenser.js`.
 
 NO CLIENT CHECK MOVES.
+
+### 2026-10-08 - issue lazy distribution probe
+
+The `issue` pin moves from `9936894a` to `95dff217`, hashed from the committed indexer tree at
+`6f531460` by `node bin/preflight_handler_dirs.js <indexer> src/actions/issue/`. The executable
+diff from its parent changes `token_state.js` and `edit_rules.js`; the new
+`distribution_probe.test.js` drives the same behavior and is also covered by the directory pin.
+
+The handler used to read token holders eagerly for every non-genesis ISSUE. It now creates a
+cached probe and awaits it only when CALLBACK_BLOCK, CALLBACK_TICK, or CALLBACK_AMOUNT differs
+from the stored token value. Each changed callback field still rejects when supply is distributed,
+with the same error text and after the same earlier validations. An unchanged callback field and a
+description-only edit now avoid the holder read. Genesis still produces `false` without a holder
+read, and the first probe result is reused if more than one callback field reaches it.
+
+**Direction: NEITHER, no admission boundary moves.** This is a deferred database read with the
+same verdict at every call site. No predicate, field format, fee, activation condition, or error
+path mirrored by `checks/issue.js` changed. NO CLIENT CHECK MOVES.
 
 ### 2026-10-06 - caret pack key for SEND and the DISPENSER_REFILL controller guard
 
