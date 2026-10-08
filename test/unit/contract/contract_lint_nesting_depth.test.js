@@ -19,70 +19,70 @@
 
 const assert = require('assert');
 const {
+    CONSENSUS_RULES,
     lintSource,
-    findNestingDepthViolation,
-    LINT_MAX_NESTING_DEPTH
+    findNestingDepth,
+    MAX_NESTING_DEPTH
 } = require('../../../src/contract/lint-core.js');
 
-const wrap = (expression) => 'module.exports = function () { return ' + expression + '; };';
-const nest = (count, open, close) => open.repeat(count) + '1' + close.repeat(count);
-const mixedNest = (count) => {
-    const pairs = [['(', ')'], ['[', ']'], ['{', '}']];
-    let open = '';
-    let close = '';
-    for (let i = 0; i < count; i += 1) {
-        const pair = pairs[i % pairs.length];
-        open += pair[0];
-        close = pair[1] + close;
-    }
-    return open + '1' + close;
-};
+function parenthesized(depth) {
+    return 'module.exports = ' + '('.repeat(depth) + '1' + ')'.repeat(depth) + ';';
+}
+
+function depthErrors(code, opts) {
+    return lintSource(code, opts).errors.filter((error) => error.rule === 'nesting-depth');
+}
 
 describe('vendored lint core: nesting-depth rule', function () {
-    it('exports the frozen limit', function () {
-        assert.strictEqual(LINT_MAX_NESTING_DEPTH, 64);
+    it('freezes the rule and limit as consensus parameters', function () {
+        assert.ok(CONSENSUS_RULES.has('nesting-depth'));
+        assert.strictEqual(MAX_NESTING_DEPTH, 64);
     });
 
-    it('accepts depth 64 and rejects depth 65', function () {
-        const accepted = wrap(nest(64, '(', ')'));
-        const rejected = wrap(nest(65, '(', ')'));
-        assert.deepStrictEqual(lintSource(accepted).errors, []);
-
-        const lint = lintSource(rejected);
-        assert.strictEqual(lint.errors[0].rule, 'nesting-depth');
-        assert.strictEqual(lint.errors[0].severity, 'error');
+    it('accepts the limit and rejects the first token beyond it', function () {
+        assert.deepStrictEqual(findNestingDepth(parenthesized(64)), []);
+        assert.deepStrictEqual(findNestingDepth(parenthesized(65)), [{ line: 1, depth: 65 }]);
     });
 
-    it('can be disabled on the public path', function () {
-        const code = wrap(nest(65, '(', ')'));
-        assert.strictEqual(lintSource(code, { enforceLintNestingDepth: false }).errors.length, 0);
+    it('reports the line of the first excessive opening token', function () {
+        const source = 'module.exports =\n' + '('.repeat(64) + '\n(1)' + ')'.repeat(64) + ';';
+        assert.deepStrictEqual(findNestingDepth(source), [{ line: 3, depth: 65 }]);
+        assert.strictEqual(depthErrors(source)[0].line, 3);
+    });
+
+    it('counts mixed delimiters and template substitutions', function () {
+        const openings = Array.from({ length: 17 }, () => '([{`x${').join('');
+        const closings = Array.from({ length: 17 }, () => '}' + '`' + '}])').join('');
+        const source = 'module.exports = ' + openings + '1' + closings + ';';
+        assert.deepStrictEqual(findNestingDepth(source), [{ line: 1, depth: 65 }]);
+    });
+
+    it('ignores delimiter text in lexical text', function () {
+        const source = [
+            'var a = "(((([[[{{{";',
+            'var b = /[(){}\\[\\]]+/;',
+            'var c = `((([[{{ plain text`;',
+            '// ((( [[[ {{{',
+            'module.exports = a + b.source + c;'
+        ].join('\n');
+        assert.deepStrictEqual(findNestingDepth(source), []);
+        assert.deepStrictEqual(depthErrors(source), []);
     });
 
     it('rejects extreme input before the AST parser', function () {
-        const code = wrap(nest(100000, '(', ')'));
-        assert.strictEqual(lintSource(code).errors[0].rule, 'nesting-depth');
+        const source = parenthesized(100000);
+        assert.doesNotThrow(() => lintSource(source));
+        assert.strictEqual(lintSource(source).errors[0].rule, 'nesting-depth');
     });
 
-    it('counts all delimiter families toward one overall depth', function () {
-        assert.strictEqual(findNestingDepthViolation(wrap(mixedNest(64))), null);
-        assert.strictEqual(findNestingDepthViolation(wrap(mixedNest(65))).rule, 'nesting-depth');
-        assert.strictEqual(findNestingDepthViolation(nest(65, '[', ']')), null);
-        assert.strictEqual(findNestingDepthViolation(nest(66, '[', ']')).rule, 'nesting-depth');
-        assert.strictEqual(findNestingDepthViolation(nest(65, '{', '}')), null);
-        assert.strictEqual(findNestingDepthViolation(nest(66, '{', '}')).rule, 'nesting-depth');
+    it('leaves lexical and parse failures to the existing syntax rules', function () {
+        assert.deepStrictEqual(findNestingDepth('function f( {'), []);
+        assert.strictEqual(lintSource('function f( {').errors[0].rule, 'unsupported-syntax');
     });
 
-    it('ignores delimiters in lexical text', function () {
-        const many = '('.repeat(200);
-        const sources = [
-            wrap(JSON.stringify(many) + '.length'),
-            wrap('`' + many + '`.length'),
-            wrap('/[(]+/.test("(")'),
-            '/* ' + many + ' */ module.exports = function () { return 1; };'
-        ];
-        for (const source of sources) {
-            assert.strictEqual(findNestingDepthViolation(source), null);
-            assert.ok(!lintSource(source).errors.some((error) => error.rule === 'nesting-depth'));
-        }
+    it('is enabled by default and can be disabled for replay', function () {
+        const source = parenthesized(65);
+        assert.strictEqual(depthErrors(source).length, 1);
+        assert.deepStrictEqual(depthErrors(source, { enforceLintNestingDepth: false }), []);
     });
 });

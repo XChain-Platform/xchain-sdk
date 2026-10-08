@@ -32,22 +32,25 @@
  ********************************************************************/
 // @ts-nocheck
 
+// @ts-nocheck
+
 const constants = require('./lint-core/constants.js');
 const { STRIPPED_GLOBAL_NAMES, ADVISORY_STRIPPED_GLOBAL_NAMES } = require('./stripped-globals.js');
 const { CONTRACT_ECMA_VERSION } = require('./metering.js');
 const banned_syntax = require('./lint-core/banned_syntax.js');
 const banned_globals = require('./lint-core/banned_globals.js');
+const banned_with = require('./lint-core/banned_with.js');
+const nesting_depth = require('./lint-core/nesting_depth.js');
 const { analyzeContract } = require('./lint-core/contract_analysis.js');
-const { lintSource: lintComposedSource } = require('./lint-core/result_composition.js');
-const { findNestingDepthViolation } = require('./lint-core/nesting_depth.js');
+const { lintSource: composeLintSource } = require('./lint-core/result_composition.js');
 
 function lintSource(code, opts) {
     const enforceLintNestingDepth = !opts || opts.enforceLintNestingDepth !== false;
     if (enforceLintNestingDepth) {
-        const violation = findNestingDepthViolation(code);
-        if (violation) return { errors: [violation], warnings: [] };
+        const finding = nesting_depth.nestingDepthFinding(code);
+        if (finding) return { errors: [finding], warnings: [] };
     }
-    return lintComposedSource(code, opts);
+    return composeLintSource(code, opts);
 }
 
 module.exports = {
@@ -58,6 +61,9 @@ module.exports = {
     findBannedAsync: banned_globals.findBannedAsync,
     findBannedGenerator: banned_globals.findBannedGenerator,
     findBannedWasm: banned_globals.findBannedWasm,
+    findBannedWith: banned_with.findBannedWith,
+    findNestingDepth: nesting_depth.findNestingDepth,
+    nestingDepthFinding: nesting_depth.nestingDepthFinding,
     findBannedRest: banned_syntax.findBannedRest,
     findBannedExponentiation: banned_syntax.findBannedExponentiation,
     findBannedProtoMethods: banned_syntax.findBannedProtoMethods,
@@ -65,8 +71,7 @@ module.exports = {
     findReservedControlBinding: banned_syntax.findReservedControlBinding,
     codeSizeBytes: banned_syntax.codeSizeBytes,
     MAX_CODE_SIZE: constants.MAX_CODE_SIZE,
-    LINT_MAX_NESTING_DEPTH: constants.LINT_MAX_NESTING_DEPTH,
-    findNestingDepthViolation,
+    MAX_NESTING_DEPTH: constants.MAX_NESTING_DEPTH,
     STRIPPED_PROTO_METHOD_NAMES: constants.STRIPPED_PROTO_METHOD_NAMES,
     STRIPPED_GLOBAL_NAMES,
     STRIPPED_GLOBAL_NAMES_MIRROR: STRIPPED_GLOBAL_NAMES,

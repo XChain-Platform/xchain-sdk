@@ -33,7 +33,7 @@ const RESERVED_CONTROL_BINDINGS = [
 // It MUST stay equal to src/protocol/constants.js MAX_CODE_SIZE (and therefore
 // to the indexer's deploy.js cap); a parity test asserts it.
 const MAX_CODE_SIZE = 65536;
-const LINT_MAX_NESTING_DEPTH = 64;
+const MAX_NESTING_DEPTH = 64;
 
 // The sandbox's hard-neutered prototype METHODS (sandbox.js
 // STRIPPED_PROTO_METHODS). Duplicated here for the dependency-light reason
@@ -81,14 +81,15 @@ const STRIPPED_GLOBAL_NAMES_MIRROR = STRIPPED_GLOBAL_NAMES;
 const ADVISORY_STRIPPED_GLOBALS = ADVISORY_STRIPPED_GLOBAL_NAMES;
 
 // Move 2: logic-level lint rules (advisory; NEVER deploy-blocking).
-// CONSENSUS_RULES are the AST findings the on-chain deploy validator
-// (validateSyntax -> xchain-indexer/deploy.js) acts on after its direct pre-parser
-// checks. Everything analyzeContract adds is author-facing signal for the SDK
-// linter and the CLI; it must not change what the chain accepts, or the Move-1
-// deploy-parity invariant breaks. Keep this set in lockstep with the error-severity
-// rules emitted above lintSource's Move-2 section.
+// CONSENSUS_RULES are the only findings the on-chain deploy validator
+// (validateSyntax -> xchain-indexer/deploy.js) acts on. Everything analyzeContract
+// adds is author-facing signal for the SDK linter and the CLI; it must not change
+// what the chain accepts, or the Move-1 deploy-parity invariant breaks. Keep this
+// set in lockstep with the error-severity rules emitted above lintSource's Move-2
+// section.
 const CONSENSUS_RULES = new Set([
     'invalid-type',
+    'nesting-depth',
     'unsupported-syntax',
     'reserved-identifier',
     'banned-math',
@@ -110,7 +111,11 @@ const CONSENSUS_RULES = new Set([
     // set. Its on-chain activation is threaded through validateSyntax as
     // enforceBannedRest, so below the flag-day a from-genesis replay reproduces the
     // historical accepted verdict.
-    'banned-rest'
+    'banned-rest',
+    // The `with` statement rebinds free identifiers at runtime, so every
+    // identifier-precise ban above could be sidestepped from inside a with block.
+    // Error-severity and AST-precise (a WithStatement node), hence deploy-blocking.
+    'banned-with'
 ]);
 
 const TYPED_ARRAY_CTORS = new Set([
@@ -124,7 +129,7 @@ module.exports = {
     SAFE_MATH_MEMBERS,
     RESERVED_CONTROL_BINDINGS,
     MAX_CODE_SIZE,
-    LINT_MAX_NESTING_DEPTH,
+    MAX_NESTING_DEPTH,
     STRIPPED_PROTO_METHOD_NAMES,
     REGEX_COERCING_METHODS,
     STRIPPED_GLOBAL_NAMES,
