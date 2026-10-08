@@ -21,6 +21,7 @@
 const ContractClient = require('../../contract/client.js');
 
 const { seg } = require('./path_segment.js');
+const { coinTier, hasHttpScheme } = require('../../utils/endpoints.js');
 
 module.exports = {
     async getFiles(query, type, opts = {}) {
@@ -40,8 +41,7 @@ module.exports = {
     // cross-chain action refs carry the base ticker; the tier is implied).
     siblingCoin(baseCoin) {
         if (!baseCoin) return this.coin;
-        let tier = (this.coin.match(/^([TR])(BTC|LTC|DOGE)$/) || [])[1] || '';
-        return tier + String(baseCoin).toUpperCase();
+        return coinTier(this.coin) + String(baseCoin).toUpperCase();
     },
 
     // Absolute URL of a FILE action's raw bytes on this explorer: the
@@ -50,7 +50,7 @@ module.exports = {
     // Pass `coin` (base ticker) for a sibling-chain reference. Pure string
     // builder, no request.
     fileRawUrl(actionIndex, coin = null) {
-        let base = this.baseUrl.startsWith('http')
+        let base = hasHttpScheme(this.baseUrl)
             ? this.baseUrl
             : 'http://' + this.baseUrl + ':' + this.port;
         return base.replace(/\/+$/, '') + '/' + this.siblingCoin(coin) + '/api/file/' + String(actionIndex) + '/raw';
