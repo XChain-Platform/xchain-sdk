@@ -230,6 +230,20 @@ describe('drift map rows: a directory handler is hashed whole', function () {
     });
 });
 
+describe('drift map rows: test modules are part of a directory handler', function () {
+    afterEach(cleanRoots);
+
+    it('covers a test module shipped inside the handler directory', function () {
+        const root = tempRoot();
+        const dir = splitHandler(root, 'issue');
+        put(root, 'src/actions/issue/distribution_probe.test.js', 'module.exports = { ownerOnly: false };\n');
+        const pinned = pinOf(root, 'src/actions/issue/');
+        expect(dirs.listParts(dir)).to.include('distribution_probe.test.js');
+        fs.appendFileSync(path.join(dir, 'distribution_probe.test.js'), 'module.exports.nonOwner = true;\n');
+        expect(pinOf(root, 'src/actions/issue/')).to.not.equal(pinned);
+    });
+});
+
 describe('drift map rows: split shapes that must fail closed', function () {
     afterEach(cleanRoots);
 
