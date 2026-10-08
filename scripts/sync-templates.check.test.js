@@ -39,7 +39,7 @@ function buildSandbox() {
     // code under test, pointed at fixture siblings instead of the real ones.
     fs.copyFileSync(SCRIPT_SRC, path.join(sdkScripts, 'sync-templates.js'));
 
-    for (const name of ['escrow', 'vesting', 'crowdsale', 'amm']) {
+    for (const name of ['escrow', 'escrowDelivery', 'vesting', 'crowdsale', 'amm']) {
         fs.mkdirSync(path.join(contracts, name), { recursive: true });
         fs.writeFileSync(path.join(contracts, name, name + '.js'),
             '// fixture ' + name + ' template v1\nmodule.exports = {};\n');
@@ -50,9 +50,9 @@ function buildSandbox() {
     return { root, sdkScripts, contracts };
 }
 
-function run(sdkScripts, args) {
+function run(sdkScripts, args, env = {}) {
     return spawnSync(process.execPath, [path.join(sdkScripts, 'sync-templates.js'), ...args],
-        { encoding: 'utf8' });
+        { encoding: 'utf8', env: { ...process.env, XCHAIN_CONTRACTS_DIR: '', ...env } });
 }
 
 describe('sync-templates.js --check', function () {
@@ -73,6 +73,21 @@ describe('sync-templates.js --check', function () {
         const res = run(sandbox.sdkScripts, ['--check']);
         assert.strictEqual(res.status, 1, res.stdout + res.stderr);
         assert.ok(/TEMPLATE DRIFT/.test(res.stderr), 'expected a drift error, got: ' + res.stderr);
+    });
+
+    it('honors XCHAIN_CONTRACTS_DIR for a pinned canonical checkout', function () {
+        const gen = run(sandbox.sdkScripts, []);
+        assert.strictEqual(gen.status, 0, gen.stdout + gen.stderr);
+
+        const pinned = path.join(sandbox.root, 'pinned-contracts');
+        fs.cpSync(sandbox.contracts, pinned, { recursive: true });
+        fs.appendFileSync(path.join(sandbox.contracts, 'escrow', 'escrow.js'), '// later edit\n');
+
+        const current = run(sandbox.sdkScripts, ['--check']);
+        assert.strictEqual(current.status, 1, current.stdout + current.stderr);
+
+        const pinnedResult = run(sandbox.sdkScripts, ['--check'], { XCHAIN_CONTRACTS_DIR: pinned });
+        assert.strictEqual(pinnedResult.status, 0, pinnedResult.stdout + pinnedResult.stderr);
     });
 
     it('exits 0 right after a real sync, and 1 once the canonical source drifts (falsified and restored)', function () {

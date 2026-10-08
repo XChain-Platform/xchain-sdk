@@ -20,6 +20,9 @@
 'use strict';
 
 const { FULL_NAME_TO_TICK } = require('../coins/index.js');
+const { REGTEST_ARMING } = require('../consensus/gate_registry/shared_rows.js');
+const { regtestHeight } = require('../consensus/gate_registry/regtest_env.js');
+const { armingEnv } = require('../consensus/gate_registry.js');
 
 // Pin the indexer addGate tables pre-flight decides from; the drift gate compares each by value.
 // 'UNARMED' stands for the indexer's UNARMED sentinel, any number is the activation threshold.
@@ -93,6 +96,19 @@ function mirrorFor(name) {
     return ACTIVATION_MIRRORS[name] || DISCLOSURE_MIRRORS[name];
 }
 
+// Arm a mirror's regtest entries from this process's env at read time, as the indexer's registry overlay does.
+// The pinned table stays the committed row the drift gate compares; only the read sees the venue's arming.
+function tableFor(name) {
+    const { key, table } = mirrorFor(name);
+    const rule = REGTEST_ARMING[key];
+    if (!rule) return table;
+    const height = regtestHeight(armingEnv[rule.env], rule.armedHeight, rule.label, rule.env);
+    if (height === null) return table;
+    const out = Object.assign({}, table);
+    for (const k of rule.keys) out[k] = height;
+    return Object.freeze(out);
+}
+
 // Resolve the SDK's network to the registry's (network, coin) pair from config or explorer prefix.
 function activationPlane(sdk) {
     const [fullName, plane] = String((sdk && sdk.config && sdk.config.network) || '').toLowerCase().split('-');
@@ -106,7 +122,7 @@ function activationPlane(sdk) {
 
 // Read a mirrored threshold with the registry's precedence: '<COIN>:<network>' first, then the network.
 function activationThreshold(name, sdk) {
-    const table = mirrorFor(name).table;
+    const table = tableFor(name);
     const at = activationPlane(sdk);
     if (!at) return undefined;
     const own = (k) => Object.prototype.hasOwnProperty.call(table, k);
@@ -116,7 +132,8 @@ function activationThreshold(name, sdk) {
 
 // Describe a mirrored table for disclosure text, so the wording moves with the pinned values.
 function describeActivation(name) {
-    const { table, unit } = mirrorFor(name);
+    const { unit } = mirrorFor(name);
+    const table = tableFor(name);
     const groups = {};
     for (const k of Object.keys(table)) {
         const state = table[k] === 'UNARMED' ? 'unarmed' : table[k] === 0 ? 'active from genesis' : 'armed at ' + unit + ' ' + table[k];

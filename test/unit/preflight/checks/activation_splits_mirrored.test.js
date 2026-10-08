@@ -11,11 +11,43 @@ const fs = require('fs');
 const path = require('path');
 const { DISCLOSURE_MIRRORS, describeActivation } = require('../../../../src/preflight/activation.js');
 const { checkCommandCap } = require('../../../../src/preflight/checks/batch.js');
+const { siblingCheckout, skipOrFail } = require('../../../helpers/sibling_checkout.js');
 const { FINDING_CODES } = require('../../../../src/preflight/constants.js');
 const { declareAmountRepresentability } = require('../../../../src/preflight/checks/dispenser/amount_rules.js');
 
 const INDEXER = path.join(__dirname, '..', '..', '..', '..', '..', 'xchain-indexer', 'src', 'protocol_changes');
-const read = (f) => fs.readFileSync(path.join(INDEXER, f), 'utf8');
+let indexerDir = null;
+const read = (f) => fs.readFileSync(path.join(indexerDir, f), 'utf8');
+
+// Fail under XCHAIN_REQUIRE_SIBLINGS=1 and refuse a symlink into a live main checkout, like every sibling guard.
+function indexerRowsSuite() {
+    before(function () {
+        const verdict = siblingCheckout(__dirname, INDEXER);
+        if (!skipOrFail(this, verdict, 'the disclosure-mirror value guard against xchain-indexer protocol_changes')) return;
+        indexerDir = verdict.path;
+    });
+
+    it('amount representability table matches the addGate row', function () {
+        const src = read('gates_1.js');
+        const marker = "AMOUNT_REPRESENTABILITY_ACTIVATION', 'time', {";
+        expect(src.split(marker), 'the addGate row appears exactly once in gates_1.js').to.have.length(2);
+        const body = src.split(marker)[1].split('});')[0];
+        const got = {};
+        for (const m of body.matchAll(/'?([A-Za-z:]+)'?:\s*(\d+|UNARMED)\b/g))
+            got[m[1]] = m[2] === 'UNARMED' || Number(m[2]) === 9999999999 ? 'UNARMED' : Number(m[2]);
+        expect(got).to.deep.equal(DISCLOSURE_MIRRORS.AMOUNT_REPRESENTABILITY.table);
+    });
+
+    it('batch mainnet constants match the flag-time file', function () {
+        const src = read('flag_times_batch_fees.js');
+        const issuance = /BATCH_ISSUANCE_LIMITS_MAINNET_TIME = (\d+);/.exec(src);
+        const weighting = /BATCH_COST_WEIGHTING_MAINNET_TIME = (\d+);/.exec(src);
+        expect(issuance, 'BATCH_ISSUANCE_LIMITS_MAINNET_TIME literal in flag_times_batch_fees.js').to.not.equal(null);
+        expect(weighting, 'BATCH_COST_WEIGHTING_MAINNET_TIME literal in flag_times_batch_fees.js').to.not.equal(null);
+        expect(Number(issuance[1])).to.equal(DISCLOSURE_MIRRORS.BATCH_ISSUANCE_LIMITS.table.mainnet);
+        expect(Number(weighting[1])).to.equal(DISCLOSURE_MIRRORS.BATCH_COST_WEIGHTING.table.mainnet);
+    });
+}
 
 describe('pre-flight activation splits are mirrored, not hard-coded', function () {
     it('pins the representability and batch gates', function () {
@@ -54,22 +86,5 @@ describe('pre-flight activation splits are mirrored, not hard-coded', function (
         expect(describeActivation('AMOUNT_REPRESENTABILITY')).to.contain('armed at time 1791061097 on BTC:testnet');
     });
 
-    const indexerPresent = fs.existsSync(INDEXER);
-    (indexerPresent ? describe : describe.skip)('against the indexer rows', function () {
-        it('amount representability table matches the addGate row', function () {
-            const src = read('gates_1.js');
-            const body = src.split("AMOUNT_REPRESENTABILITY_ACTIVATION', 'time', {")[1].split('});')[0];
-            const got = {};
-            for (const m of body.matchAll(/'?([A-Za-z:]+)'?:\s*(\d+)/g)) got[m[1]] = Number(m[2]) === 9999999999 ? 'UNARMED' : Number(m[2]);
-            expect(got).to.deep.equal(DISCLOSURE_MIRRORS.AMOUNT_REPRESENTABILITY.table);
-        });
-
-        it('batch mainnet constants match the flag-time file', function () {
-            const src = read('flag_times_batch_fees.js');
-            expect(Number(/BATCH_ISSUANCE_LIMITS_MAINNET_TIME = (\d+);/.exec(src)[1]))
-                .to.equal(DISCLOSURE_MIRRORS.BATCH_ISSUANCE_LIMITS.table.mainnet);
-            expect(Number(/BATCH_COST_WEIGHTING_MAINNET_TIME = (\d+);/.exec(src)[1]))
-                .to.equal(DISCLOSURE_MIRRORS.BATCH_COST_WEIGHTING.table.mainnet);
-        });
-    });
+    describe('against the indexer rows', indexerRowsSuite);
 });

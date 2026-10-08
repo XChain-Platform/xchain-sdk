@@ -21,7 +21,7 @@
  * `localhost` fallback (these helpers return nothing for regtest).
  *
  * The constants are FULL URLs (with scheme). The service clients build
- * their axios baseURL as `url.startsWith('http') ? url : 'http://'+url+':'+port`,
+ * their axios baseURL as `hasHttpScheme(url) ? url : 'http://'+url+':'+port`,
  * so a full `https://` URL is used verbatim (correct scheme, no stray
  * dev port appended (public infra serves https on 443).
  *
@@ -40,17 +40,45 @@ function isRegtest(network) {
     return typeof network === 'string' && network.endsWith('-regtest');
 }
 
-// Coin path prefix used by the platform to route a shared service host to the
-// right per-network backend: e.g. bitcoin-mainnet -> BTC, bitcoin-testnet ->
-// TBTC, dogecoin-regtest -> RDOGE. Matches explorer.js COIN_PREFIX_MAP and the
-// wallet chain descriptors. Returns null for an unknown network.
+// Network tier -> the letter a coin code carries for it (TBTC, RDOGE).
+const TIER_PREFIX = Object.freeze({ mainnet: '', testnet: 'T', regtest: 'R' });
+
+// True when `table` holds `key` itself (an inherited name like 'constructor' is not a key).
+function ownKey(table, key) {
+    return Object.prototype.hasOwnProperty.call(table, key);
+}
+
+// Coin path prefix the platform routes a shared service host by: bitcoin-mainnet
+// -> BTC, bitcoin-testnet -> TBTC, dogecoin-regtest -> RDOGE. The explorer and
+// WebSocket clients both resolve here; websocket/socket_constants.js COIN_PREFIX_MAP
+// and the wallet chain descriptors use the same convention. Null when unknown.
 function coinPrefix(network) {
-    let [chain, net] = String(network || '').split('-');
-    let coin = coins.FULL_NAME_TO_TICK[chain];
-    let pre  = { mainnet: '', testnet: 'T', regtest: 'R' }[net];
-    // Strict: reject unknown chain or network part (e.g. "bitcoin-foo").
-    if (!coin || pre === undefined) return null;
-    return pre + coin;
+    let parts = String(network || '').split('-');
+    // Strict: exactly "<chain>-<tier>", both registry keys of their own, so
+    // "bitcoin-foo", "bitcoin-mainnet-x" and "constructor-mainnet" all give null.
+    if (parts.length !== 2) return null;
+    if (!ownKey(coins.FULL_NAME_TO_TICK, parts[0]) || !ownKey(TIER_PREFIX, parts[1])) return null;
+    return TIER_PREFIX[parts[1]] + coins.FULL_NAME_TO_TICK[parts[0]];
+}
+
+// Network tier letter ('', 'T' or 'R') of a coin code such as TDOGE, read
+// from the coin registry so a newly added coin keeps its tier. '' when unknown.
+function coinTier(code) {
+    for (const tick of coins.ALLOWED_COINS)
+        for (const net of coins.NETWORKS)
+            if (TIER_PREFIX[net] + tick === code) return TIER_PREFIX[net];
+    return '';
+}
+
+// True when `url` already carries an http:// or https:// scheme. A bare host
+// that merely starts with "http" (httpgw.internal) is not a URL yet.
+function hasHttpScheme(url) {
+    return /^https?:\/\//.test(String(url || ''));
+}
+
+// True when `url` carries the https:// scheme (picks the https agent).
+function isHttpsUrl(url) {
+    return /^https:\/\//.test(String(url || ''));
 }
 
 // Network-derived public defaults. Returns {} for regtest (or a missing
@@ -79,5 +107,8 @@ module.exports = {
     PUBLIC_ENCODER,
     isRegtest,
     coinPrefix,
+    coinTier,
+    hasHttpScheme,
+    isHttpsUrl,
     publicDefaults
 };

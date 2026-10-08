@@ -54,7 +54,7 @@ const UNRESOLVED_TICK_KEY = Symbol('BATCH_UNRESOLVED_TICK');
 const CHILD_ISSUE_KEY = 'ISSUE.CHILD';
 
 // The three actions whose params take the implied legacy VERSION-0 injection
-// (indexer batch.js normalizeSubAction).
+// (indexer batch/sub_command.js normalizeSubAction).
 const LEGACY_FORMAT_ACTIONS = ['ISSUE', 'MINT', 'SEND'];
 
 // Mirror of xchain-indexer/src/utility.js isLegacyActionFormat: params[0] is
