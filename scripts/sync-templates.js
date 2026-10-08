@@ -28,10 +28,11 @@ const fs   = require('fs');
 const path = require('path');
 
 const SDK_ROOT       = path.join(__dirname, '..');
-const CONTRACTS_DIR  = path.join(SDK_ROOT, '..', 'xchain-contracts');
+const CONTRACTS_DIR  = process.env.XCHAIN_CONTRACTS_DIR ||
+    path.join(SDK_ROOT, '..', 'xchain-contracts');
 const OUT_FILE       = path.join(SDK_ROOT, 'src', 'contract', 'templates.js');
 
-const TEMPLATE_NAMES = ['escrow', 'vesting', 'crowdsale', 'amm'];
+const TEMPLATE_NAMES = ['escrow', 'escrowDelivery', 'vesting', 'crowdsale', 'amm'];
 
 function b64(file) {
     return Buffer.from(fs.readFileSync(file, 'utf8'), 'utf8').toString('base64');
