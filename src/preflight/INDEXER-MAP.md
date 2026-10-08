@@ -81,7 +81,12 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `31ee72dc`
+**Pins taken at indexer commit:** `e545c8d5`
+
+(Re-anchored 2026-10-08 against committed indexer develop `e545c8d5`. The `send` directory pin is
+from that tree plus the paired `dde40808` change adding the unwired gated-totals helper reviewed in
+the first entry of the review log below. A comment-only edit in `send/gated_handoff.js` normalizes
+away, and the other twelve rows are byte-identical to the prior anchor `31ee72dc`.)
 
 (Re-anchored 2026-10-06 against indexer `31ee72dc`. Only the `send` and `dispenser` directory pins move,
 for the caret pack key lookup and the dispenser refill controller guard reviewed in the first entry of
@@ -373,7 +378,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 31ee72dc..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff e545c8d5..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -446,7 +451,7 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `d82275d10ce07ce916e13a74ce5474957ff8d4f2a038175de53274821b0a9619` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `dcf4e6d4f2d8b1267b7543dc0da61e87506298a5a16db554d4c5a16353e5dc7e` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `3671cf3e2efefb069d30539814ecc2f1bd65087698f756711c8a1c7b75e9665f` |
 | `checks/mint.js` | `src/actions/mint/` | `0f2b6b0375df803321c1644e24f9fa2b6dcb73119a470832eeb93dfab8530595` |
 | `checks/issue.js` | `src/actions/issue/` | `9936894a073dbdbc6f1e495d742e6f4035024efce3e0aa1fecea04a8a89471a6` |
@@ -479,6 +484,20 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-08 - send gated totals by tick id
+
+The `send` pin moves from `d82275d1` to `dcf4e6d4`, hashed from committed indexer develop
+`e545c8d5` plus the paired `dde40808` change by
+`node bin/preflight_handler_dirs.js <composed-indexer-tree> src/actions/send/`. The full diff
+since the prior anchor has two parts: `gated_handoff.js` rewords a comment without moving its
+normalized digest, and `legs.js` adds `gatedTotalsByTickId(sends, ticks)`.
+
+The helper groups resolved tick amounts by recipient and tick id, but no indexer source calls it.
+The SEND parse path still consolidates legs, loads destination balances, and processes each leg
+without invoking this helper. **Direction: NEITHER.** An installed but uncalled method cannot move
+an admission predicate, field format, fee, settlement, or error path, so no validity rule mirrored
+by `checks/send.js` changed. NO CLIENT CHECK MOVES.
 
 ### 2026-10-06 - caret pack key for SEND and the DISPENSER_REFILL controller guard
 
