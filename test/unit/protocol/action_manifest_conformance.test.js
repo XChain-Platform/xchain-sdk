@@ -46,7 +46,8 @@ function localSdkSet() {
 }
 // Version keys are JS object keys (strings) on the SDK side and JSON numbers in
 // the manifest; both sides normalize to sorted numbers so the comparison is on
-// the versions themselves, not on their spelling.
+// the versions themselves, not on their spelling. Object.keys is intentional:
+// a user-encodable version must participate in normal SDK format discovery.
 function sdkVersions(action) {
     return Object.keys(Formats[action]).map(Number).sort((a, b) => a - b);
 }

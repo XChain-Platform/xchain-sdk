@@ -111,7 +111,8 @@ describe('G9: allowedDestinations enforceability', function () {
         // LIST v2-v5 move the decoder-reachable denominator from 68 to 72. LIST
         // v3 also moves the numerator because its ownership recipient is a
         // DESTINATION field; bounded-rest v4 and fixed-field v5 carry none.
-        expect(decodable.length).to.equal(72);
+        // BET v4 (feed list edits) moves it to 73 and carries no DESTINATION.
+        expect(decodable.length).to.equal(73);
         expect(carriers).to.deep.equal([
             'LIST v3',
             'MESSAGE v0', 'MESSAGE v1', 'MESSAGE v2', 'MESSAGE v3',
