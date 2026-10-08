@@ -70,18 +70,41 @@ function canonicalWorktree() {
 const VM_DIR = canonicalWorktree();
 if (VM_DIR !== DEFAULT_VM_DIR) process.env.XCHAIN_VM_DIR = VM_DIR;
 
-function requireSibling(ctx) {
-    if (fs.existsSync(VM_DIR)) {
-        try {
-            childProcess.execFileSync(
+function hasCanonicalCommit() {
+    return childProcess.spawnSync(
+        'git',
+        ['-C', VM_DIR, 'cat-file', '-e', VM_COMMIT + '^{commit}'],
+        { stdio: 'ignore' }
+    ).status === 0;
+}
+
+// CI clones each sibling with --depth 1, so the pinned commit is absent there
+// even when it is an ancestor of the sibling's tip. Fetch that one commit into
+// a shallow clone, once per run, rather than reading the ambient tip instead.
+let canonicalCommitReadable = null;
+function canonicalCommitAvailable() {
+    if (canonicalCommitReadable !== null) return canonicalCommitReadable;
+    canonicalCommitReadable = hasCanonicalCommit();
+    if (!canonicalCommitReadable) {
+        const shallow = childProcess.spawnSync(
+            'git',
+            ['-C', VM_DIR, 'rev-parse', '--is-shallow-repository'],
+            { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
+        );
+        if (shallow.status === 0 && shallow.stdout.trim() === 'true') {
+            childProcess.spawnSync(
                 'git',
-                ['-C', VM_DIR, 'cat-file', '-e', VM_COMMIT + '^{commit}'],
-                { stdio: 'ignore' }
+                ['-C', VM_DIR, 'fetch', '--quiet', '--no-tags', '--depth', '1', 'origin', VM_COMMIT],
+                { stdio: 'ignore', timeout: 60000 }
             );
-            return true;
-        } catch (_) {
+            canonicalCommitReadable = hasCanonicalCommit();
         }
     }
+    return canonicalCommitReadable;
+}
+
+function requireSibling(ctx) {
+    if (fs.existsSync(VM_DIR) && canonicalCommitAvailable()) return true;
     if (SIBLING_REQUIRED) {
         throw new Error('banned-with parity guard cannot read canonical commit from sibling at ' + VM_DIR);
     }
@@ -98,6 +121,11 @@ function readCanonical(relative) {
 }
 
 describe('vendored deploy-lint: banned-with byte parity', function () {
+    before(function () {
+        this.timeout(90000);
+        if (fs.existsSync(VM_DIR)) canonicalCommitAvailable();
+    });
+
     for (const relative of FILES) {
         it('src/contract/' + relative + ' matches xchain-vm/src/' + relative, function () {
             if (!requireSibling(this)) return;
