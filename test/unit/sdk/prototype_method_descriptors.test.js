@@ -59,6 +59,9 @@ const SPLIT_ADDED = {
     EncoderClient: [
         ['releaseInputs', false, true, true, 'function', 1],
     ],
+    BettingHelpers: [
+        ['editMarketListsParams', false, true, true, 'function', 0],
+    ],
 };
 
 function descriptorRows(proto) {
