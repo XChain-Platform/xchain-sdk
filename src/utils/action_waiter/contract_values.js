@@ -21,7 +21,8 @@
 
 const mathjs = require('mathjs');
 
-const ENVELOPE_FIELDS = new Set(['total', 'page', 'limit', 'offset', 'data', 'results']);
+// Name the list-envelope keys, so an empty page never reads as contract state.
+const ENVELOPE_FIELDS = new Set(['total', 'page', 'limit', 'offset', 'data', 'results', 'runtime', 'freshness']);
 
 // Unpack explorer result rows so callers can accept both response shapes.
 function rowsOf(raw) {
@@ -67,10 +68,10 @@ function readContractStateValue(ActionWaiter, raw, key) {
         let state = ActionWaiter.normalizeContractState(raw);
         return Object.prototype.hasOwnProperty.call(state, String(key)) ? state[String(key)] : undefined;
     }
-    if (raw && typeof raw === 'object') {
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
         if (raw.state_value !== undefined) return ActionWaiter.parseStateValue(raw.state_value);
         if (raw.value !== undefined)       return ActionWaiter.parseStateValue(raw.value);
-        if (Object.prototype.hasOwnProperty.call(raw, key))
+        if (!ENVELOPE_FIELDS.has(String(key)) && Object.prototype.hasOwnProperty.call(raw, key))
             return ActionWaiter.parseStateValue(raw[key]);
     }
     return undefined;

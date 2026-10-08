@@ -170,6 +170,7 @@ describe('CheckpointVerifier (SDK)', function () {
         assert.strictEqual(fetchedUrl, 'https://explorer.xchain.io/BTC/api/checkpoint/900123/verify');
         assert.strictEqual(result.valid, true);                                        // local crypto decides
         assert.strictEqual(result.snapshotAvailable, true);
+        assert.strictEqual(result.validatorSource, 'explorer');
     });
 });
 

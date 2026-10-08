@@ -57,14 +57,16 @@ const WS_OPEN       = 1;
 const WS_SCHEMA_VERSION = 2;
 
 // Network string -> explorer coin code, built from the coin registry with the
-// same convention as utils/endpoints.js coinPrefix (which resolves it): '' mainnet,
+// tier letters of utils/endpoints.js TIER_PREFIX (the one copy): '' mainnet,
 // 'T' testnet or 'R' regtest before the ticker (dogecoin-testnet -> TDOGE).
 const coins = require('../../coins');
-const NET_DISPLAY_PREFIX = { mainnet: '', testnet: 'T', regtest: 'R' };
+const { TIER_PREFIX } = require('../../utils/endpoints.js');
+// Keep the old export name as an alias of TIER_PREFIX for deep importers.
+const NET_DISPLAY_PREFIX = TIER_PREFIX;
 const COIN_PREFIX_MAP = {};
 for(const _tick of coins.ALLOWED_COINS)
     for(const _network of coins.NETWORKS)
-        COIN_PREFIX_MAP[coins.COIN_FULL_NAME[_tick] + '-' + _network] = NET_DISPLAY_PREFIX[_network] + _tick;
+        COIN_PREFIX_MAP[coins.COIN_FULL_NAME[_tick] + '-' + _network] = TIER_PREFIX[_network] + _tick;
 
 module.exports = {
     WebSocket,

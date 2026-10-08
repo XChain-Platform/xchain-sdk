@@ -45,6 +45,10 @@ const compressionUtils = new CompressionUtils();
 // Chunk lanes: the payload rides redeem scripts no PSBT-only check can see.
 const CHUNK_ENCODINGS = ['P2SH', 'P2WSH'];
 
+// Decode failures that mean the transaction holds no inline action carrier: no
+// OP_RETURN at all, an OP_RETURN that is not ours, or the chunk reveal's tag.
+const NO_INLINE_CARRIER_REASONS = new Set(['NO_OP_RETURN', 'NO_MAGIC_WORD', 'P2SH_P2WSH_UNSUPPORTED']);
+
 // The encoder answers in PSBT HEX, so every entry point here takes either form.
 // A string that will not parse yields null, and each caller decides what that
 // means rather than this helper guessing.
@@ -144,26 +148,14 @@ function assertInlineCarrier({ psbt, actionString, encoding, network, label }) {
                 { submitted: actionString, carried: decoded.actionString });
         return;
     }
-    // A SECOND well-formed carrier is the one unreadable shape that must still
-    // deny. Two carriers are two commands, only one of which was authorized, and
-    // which one the chain executes is not this SDK's call to make: the encoder
-    // never emits two (its own single-OP_RETURN policy throws first, and no
-    // shipped coin relays multi-OP_RETURN as standard), so refusing costs nothing
-    // real.
-    if (decoded.reason === 'MULTI_OP_RETURN')
-        throw mismatch('CARRIER_UNREADABLE', label,
-            { submitted: actionString, reason: decoded.reason, detail: decoded.detail });
-    // Every other decode failure means this transaction carries no readable inline
-    // action: the P2SH/P2WSH reveal's tag marker (a tag, no params), no OP_RETURN
-    // at all on the chunk funding transaction, MULTISIGN and the envelope commit,
-    // or bytes that do not deobfuscate to the magic word and will not decompile.
-    // This decoder mirrors the authoritative one (same obfuscation derivation,
-    // same magic word, same single-push count), so what it cannot read is what the
-    // chain reads no action out of - which is a transaction that publishes
-    // nothing, not a substituted command. Bounding the check to what the chain can
-    // actually execute is what keeps it a fund-safety gate rather than a second,
-    // stricter opinion about the encoder's framing.
-    return;
+    // Pass only the reasons that mean no inline action carrier is present.
+    if (NO_INLINE_CARRIER_REASONS.has(decoded.reason)) return;
+    // Deny every other failure, a second carrier included. Once the magic word
+    // matches, the decoder treats the output as a carrier, and it sizes only the
+    // leading push and decodes invalid UTF-8 leniently, so a body this SDK cannot
+    // read can still execute a command nobody authorized.
+    throw mismatch('CARRIER_UNREADABLE', label,
+        { submitted: actionString, reason: decoded.reason, detail: decoded.detail });
 }
 
 /*

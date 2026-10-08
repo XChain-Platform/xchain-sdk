@@ -53,33 +53,33 @@ describe('ExplorerClient', function () {
         });
 
         it('getContractState with key returns result', async function () {
-            nock(BASE).get('/BTC/api/contract/42/state/mykey').reply(200, { value: 'hello' });
+            nock(BASE).get('/BTC/api/contract/42/state/mykey').reply(200, { total: 1, data: [{ state_key: 'mykey', state_value: '"hello"' }] });
             const r = await client.getContractState(42, 'mykey');
-            expect(r.value).to.equal('hello');
+            expect(r.data[0].state_value).to.equal('"hello"');
         });
 
         it('getContractState without key returns result', async function () {
-            nock(BASE).get('/BTC/api/contract/42/state').reply(200, { state: {} });
+            nock(BASE).get('/BTC/api/contract/42/state').reply(200, { total: 0, data: [] });
             const r = await client.getContractState(42);
-            expect(r).to.have.property('state');
+            expect(r).to.have.property('data');
         });
 
         it('getContractBalance with tick returns result', async function () {
-            nock(BASE).get('/BTC/api/contract/42/balance/TOKEN').reply(200, { balance: '1000' });
+            nock(BASE).get('/BTC/api/contract/42/balance/TOKEN').reply(200, { total: 1, data: [{ tick: 'TOKEN', amount: '1000' }] });
             const r = await client.getContractBalance(42, 'TOKEN');
-            expect(r.balance).to.equal('1000');
+            expect(r.data[0].amount).to.equal('1000');
         });
 
         it('getContractBalance without tick returns result', async function () {
-            nock(BASE).get('/BTC/api/contract/42/balance').reply(200, { balances: [] });
+            nock(BASE).get('/BTC/api/contract/42/balance').reply(200, { total: 0, data: [] });
             const r = await client.getContractBalance(42);
-            expect(r).to.have.property('balances');
+            expect(r).to.have.property('data');
         });
 
         it('getExecution returns result', async function () {
-            nock(BASE).get('/BTC/api/execution/99').reply(200, { action_index: 99 });
+            nock(BASE).get('/BTC/api/execution/99').reply(200, { total: 1, data: [{ action_index: 99, method_name: 'run', status: 'valid' }] });
             const r = await client.getExecution(99);
-            expect(r.action_index).to.equal(99);
+            expect(r.data[0].action_index).to.equal(99);
         });
     });
 });
@@ -113,7 +113,7 @@ describe('ExplorerClient', function () {
             expect(contracts).to.have.property('total');
             expect(Array.isArray(contracts)).to.equal(false);
 
-            nock(BASE).get('/BTC/api/executions').reply(200, { total: 2, data: [{ method: 'run' }], runtime: '1ms' });
+            nock(BASE).get('/BTC/api/executions').reply(200, { total: 2, data: [{ method_name: 'run' }], runtime: '1ms' });
             const executions = await client.getExecutions(null);
             expect(executions).to.have.property('data').that.is.an('array');
             expect(Array.isArray(executions)).to.equal(false);

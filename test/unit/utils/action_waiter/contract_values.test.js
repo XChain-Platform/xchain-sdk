@@ -120,3 +120,31 @@ describe('contract value hooks', function () {
         assert.strictEqual(mod.rowsOf, rowsOf);
     });
 });
+
+describe('contract reads over the explorer list envelope', function () {
+    const EMPTY = { total: 0, data: [], runtime: '1ms', freshness: { stale: true } };
+
+    it('readContractStateValue never reads an envelope key as contract state', function () {
+        for (const key of ['total', 'data', 'runtime', 'freshness', 'page', 'limit', 'offset', 'results'])
+            assert.strictEqual(readContractStateValue(waiterOf(), EMPTY, key), undefined, key);
+        assert.strictEqual(readContractStateValue(waiterOf(), [], 'length'), undefined);
+    });
+
+    it('normalizeContractState leaves runtime and freshness out of an empty page', function () {
+        assert.deepStrictEqual(Object.keys(normalizeContractState(mod, EMPTY)), []);
+    });
+
+    it('a state gate on a key named like an envelope field stays unsatisfied on an empty page', function () {
+        const { classifyState } = require('../../../../src/utils/action_waiter/contract_wait.js');
+        const hooks = waiterOf();
+        hooks.readContractStateValue = (raw, key) => readContractStateValue(hooks, raw, key);
+        assert.strictEqual(classifyState(hooks, EMPTY, 'total', {}, 7, () => false).satisfied, false);
+    });
+
+    it('reads the state and amount columns the explorer serves', function () {
+        const state = { total: 1, data: [{ id: '3', contract_index: '7', state_key: 'k', state_value: '{"n":2}', block_index: '9' }] };
+        assert.deepStrictEqual(readContractStateValue(waiterOf(), state, 'k'), { n: 2 });
+        const balance = { total: 1, data: [{ tick: 'AAA', amount: '12.50000000' }] };
+        assert.strictEqual(readContractQuantity(mod, balance, 'AAA'), '12.50000000');
+    });
+});
