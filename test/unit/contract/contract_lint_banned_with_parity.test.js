@@ -33,8 +33,16 @@ const FILES = [
     'lint-core/result_composition.js'
 ];
 
+const VENDOR_PATHS = [
+    'src/lint-core.js',
+    'src/metering.js',
+    'src/stripped-globals.js',
+    'src/lint-core',
+    'src/metering'
+];
+
 function canonicalWorktree() {
-    if (process.env.XCHAIN_VM_DIR || !fs.existsSync(DEFAULT_VM_DIR)) return DEFAULT_VM_DIR;
+    if (!fs.existsSync(DEFAULT_VM_DIR)) return DEFAULT_VM_DIR;
     try {
         const records = childProcess.execFileSync(
             'git',
@@ -43,17 +51,16 @@ function canonicalWorktree() {
         ).trim().split(/\n\n+/);
         for (const record of records) {
             const lines = record.split('\n');
-            const head = lines.find((line) => line.startsWith('HEAD '));
-            if (!head) continue;
+            const worktree = lines.find((line) => line.startsWith('worktree '));
+            if (!worktree) continue;
+            const worktreeDir = worktree.slice('worktree '.length);
             const unchanged = childProcess.spawnSync(
                 'git',
-                ['-C', DEFAULT_VM_DIR, 'diff', '--quiet', VM_COMMIT, head.slice('HEAD '.length), '--']
-                    .concat(FILES.map((relative) => 'src/' + relative)),
+                ['-C', worktreeDir, 'diff', '--quiet', VM_COMMIT, '--'].concat(VENDOR_PATHS),
                 { stdio: 'ignore' }
             );
             if (unchanged.status !== 0) continue;
-            const worktree = lines.find((line) => line.startsWith('worktree '));
-            if (worktree) return worktree.slice('worktree '.length);
+            return worktreeDir;
         }
     } catch (_) {
     }
@@ -61,7 +68,7 @@ function canonicalWorktree() {
 }
 
 const VM_DIR = canonicalWorktree();
-if (!process.env.XCHAIN_VM_DIR && VM_DIR !== DEFAULT_VM_DIR) process.env.XCHAIN_VM_DIR = VM_DIR;
+if (VM_DIR !== DEFAULT_VM_DIR) process.env.XCHAIN_VM_DIR = VM_DIR;
 
 function requireSibling(ctx) {
     if (fs.existsSync(VM_DIR)) {
