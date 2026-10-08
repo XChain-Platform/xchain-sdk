@@ -16,12 +16,14 @@
 'use strict';
 
 const assert = require('assert');
+const childProcess = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
 const SDK_CONTRACT_DIR = path.join(__dirname, '..', '..', '..', 'src', 'contract');
 const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(SDK_CONTRACT_DIR, '..', '..', '..');
-const VM_SRC_DIR = path.join(process.env.XCHAIN_VM_DIR || path.join(SIBLING_ROOT, 'xchain-vm'), 'src');
+const VM_DIR = process.env.XCHAIN_VM_DIR || path.join(SIBLING_ROOT, 'xchain-vm');
+const VM_COMMIT = 'ea12b0b621d1269e2c8d56089a4b4697b22ae652';
 const SIBLING_REQUIRED = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 
 const FILES = [
@@ -32,12 +34,30 @@ const FILES = [
 ];
 
 function requireSibling(ctx) {
-    if (fs.existsSync(VM_SRC_DIR)) return true;
+    if (fs.existsSync(VM_DIR)) {
+        try {
+            childProcess.execFileSync(
+                'git',
+                ['-C', VM_DIR, 'cat-file', '-e', VM_COMMIT + '^{commit}'],
+                { stdio: 'ignore' }
+            );
+            return true;
+        } catch (_) {
+        }
+    }
     if (SIBLING_REQUIRED) {
-        throw new Error('banned-with parity guard cannot run: required sibling missing at ' + VM_SRC_DIR);
+        throw new Error('banned-with parity guard cannot read canonical commit from sibling at ' + VM_DIR);
     }
     ctx.skip();
     return false;
+}
+
+function readCanonical(relative) {
+    return childProcess.execFileSync(
+        'git',
+        ['-C', VM_DIR, 'show', VM_COMMIT + ':src/' + relative],
+        { encoding: null, stdio: ['ignore', 'pipe', 'pipe'] }
+    );
 }
 
 describe('vendored deploy-lint: banned-with byte parity', function () {
@@ -46,10 +66,8 @@ describe('vendored deploy-lint: banned-with byte parity', function () {
             if (!requireSibling(this)) return;
 
             const vendored = path.join(SDK_CONTRACT_DIR, relative);
-            const canonical = path.join(VM_SRC_DIR, relative);
-            assert.ok(fs.existsSync(canonical), 'missing canonical xchain-vm file: ' + canonical);
             assert.strictEqual(
-                Buffer.compare(fs.readFileSync(vendored), fs.readFileSync(canonical)),
+                Buffer.compare(fs.readFileSync(vendored), readCanonical(relative)),
                 0,
                 'vendored file differs byte for byte from xchain-vm: ' + relative
             );

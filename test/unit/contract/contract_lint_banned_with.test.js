@@ -18,6 +18,8 @@
 const assert = require('assert');
 const { lintSource, findBannedWith, CONSENSUS_RULES } = require('../../../src/contract/lint-core.js');
 
+require('./contract_lint_banned_with_parity.test.js');
+
 const withErrors = (code) => lintSource(code).errors.filter((e) => e.rule === 'banned-with');
 
 describe('vendored deploy-lint: banned-with', function () {
