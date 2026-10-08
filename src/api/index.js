@@ -60,6 +60,12 @@ if(!SDK_API_KEY)
 // back to a safe default on a junk value; see src/utils/api_guards.js). With no
 // argument, each resolver reads process.env through its own default parameter.
 const SDK_API_MAX_BATCH      = resolveMaxBatch();
+// Say so when the batch cap setting was unusable: '1e3' read silently as the
+// default would leave the operator believing a raised cap was in force.
+const RAW_MAX_BATCH = Config.env.sdkApiMaxBatch();
+if(RAW_MAX_BATCH !== undefined && !parseWholeNumber(RAW_MAX_BATCH))
+    log.warn('WARNING: SDK_API_MAX_BATCH is not a positive whole number; using the default of ' +
+                 SDK_API_MAX_BATCH + ' calls per batch.');
 const SDK_API_RATE_LIMIT     = resolveRateLimit();
 // Say so when the limiter setting was unusable. A silent substitution is what
 // made the truncation bug expensive: the operator believed the value they typed

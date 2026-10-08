@@ -158,11 +158,30 @@
     "03fb4e6c7762bc8d": [
       "Workflows distributeDividend() calls session.dividend and returns result"
     ],
+    "049843dad5d3e7f1": [
+      "XCALL/VM protocol constants agree across vm/indexer/sdk runs inside one of the three participating repos",
+      "XCALL/VM protocol constants agree across vm/indexer/sdk sibling xchain-indexer carries this guard, byte-identical",
+      "XCALL/VM protocol constants agree across vm/indexer/sdk sibling xchain-indexer declares the same six values",
+      "XCALL/VM protocol constants agree across vm/indexer/sdk sibling xchain-sdk carries this guard, byte-identical",
+      "XCALL/VM protocol constants agree across vm/indexer/sdk sibling xchain-sdk declares the same six values",
+      "XCALL/VM protocol constants agree across vm/indexer/sdk sibling xchain-vm carries this guard, byte-identical",
+      "XCALL/VM protocol constants agree across vm/indexer/sdk sibling xchain-vm declares the same six values",
+      "XCALL/VM protocol constants agree across vm/indexer/sdk the canonical xchain-documentation copy pins the same six values",
+      "XCALL/VM protocol constants agree across vm/indexer/sdk this repo pins the six constants at the frozen values"
+    ],
     "04a1cbc6763bf108": [
       "XChainSDK \u2013 WebSocket convenience methods onToken does not fire on a SNAPSHOT for a different tick",
       "XChainSDK \u2013 WebSocket convenience methods onToken fires on the SNAPSHOT frame for the subscribed tick",
       "XChainSDK \u2013 WebSocket convenience methods onToken removes the SNAPSHOT handler on unsubscribe",
       "XChainSDK \u2013 WebSocket convenience methods onToken subscribes to token and fires on TOKEN_UPDATE"
+    ],
+    "05472391a4b64276": [
+      "pre-flight activation splits are mirrored, not hard-coded against the indexer rows amount representability table matches the addGate row",
+      "pre-flight activation splits are mirrored, not hard-coded against the indexer rows batch mainnet constants match the flag-time file",
+      "pre-flight activation splits are mirrored, not hard-coded describes each pinned table by value",
+      "pre-flight activation splits are mirrored, not hard-coded pins the representability and batch gates",
+      "pre-flight activation splits are mirrored, not hard-coded the batch weight finding is worded from the pinned issuance-limits table",
+      "pre-flight activation splits are mirrored, not hard-coded the dispenser representability disclosure is built from the pinned table"
     ],
     "0703fff6ef6ff5b6": [
       "Actions \u2013 introspection getActionFields(\"ISSUE\") with no version returns a union of all fields across all versions",
@@ -276,16 +295,6 @@
       "Action round-trip golden \u2013 SDK encoder byte-layout contract full round-trip against a live indexer parser (when sibling present) the two vendored golden copies are byte-identical",
       "Action round-trip golden \u2013 SDK encoder byte-layout contract loads a representative set of golden vectors"
     ],
-    "09620624baddbde2": [
-      "API JSON-RPC batch fan-out cap enforces the default cap the shipped config resolver produces",
-      "API JSON-RPC batch fan-out cap falls back to the default cap on a junk or disabling env value",
-      "API JSON-RPC batch fan-out cap keeps ONE implementation of the cap: api.js holds no inline copy",
-      "API JSON-RPC batch fan-out cap never rejects a single (non-array) call body",
-      "API JSON-RPC batch fan-out cap passes a batch at exactly the cap",
-      "API JSON-RPC batch fan-out cap rejects an oversized batch before anything is dispatched",
-      "API JSON-RPC batch fan-out cap rejects the unauthenticated ping amplification path too (cap precedes auth)",
-      "API JSON-RPC batch fan-out cap src/api.js mounts the batch cap BEFORE the auth gate and the jsonRouter mount"
-    ],
     "0a77fd4345dc9beb": [
       "co-signer: Taproot envelope composition delta (b): the reveal signs the leaf is NOT a key-path signature (the two messages differ)",
       "co-signer: Taproot envelope composition delta (b): the reveal signs the leaf produces a signature that verifies under the leaf key over the BIP342 sighash",
@@ -312,13 +321,6 @@
     ],
     "0a90643634e1c034": [
       "EncoderClient HTTPS base URL builds client with https agent when url starts with https"
-    ],
-    "0aea8952240a8bf1": [
-      "wire number canonicalization contract NUMBER_FIELDS covers the VOTE escrow amounts DEPOSIT and GAS_ESCROW",
-      "wire number canonicalization contract VOTE v0 poll-create wire string carries DEPOSIT/GAS_ESCROW as fixed decimals",
-      "wire number canonicalization contract leaves faithfully-carried magnitudes alone, above 2^53 included",
-      "wire number canonicalization contract refuses a JS number whose value was already rounded by the parser",
-      "wire number canonicalization contract setNumberFormats never emits scientific notation for any NUMBER_FIELD"
     ],
     "0b7e25d1390e869c": [
       "XChainSDK \u2013 WebSocket convenience methods unsubscribe return value onBlock returns function that removes handler"
@@ -553,6 +555,16 @@
       "ExplorerClient batch reads the request that goes out records the freshness marker off a batch response",
       "ExplorerClient batch reads typings index.d.ts declares both batch methods on the facade"
     ],
+    "141df50b6dc0f1fc": [
+      "explorer response types in index.d.ts ExplorerStatus declares every field assertFresh() reads",
+      "explorer response types in index.d.ts ExplorerStatus declares exactly the pinned fields, each optional, with the pinned shape",
+      "explorer response types in index.d.ts ExplorerStatus getStatus() resolves to ExplorerStatus",
+      "explorer response types in index.d.ts ExplorerStatus keeps replica_halted nullable and stale non-nullable",
+      "explorer response types in index.d.ts ExplorerStatus matches the explorer OpenAPI ExplorerStatus schema",
+      "explorer response types in index.d.ts NetworkSummary declares exactly the pinned fields and no peer data",
+      "explorer response types in index.d.ts NetworkSummary getNetwork() resolves to NetworkSummary",
+      "explorer response types in index.d.ts NetworkSummary matches the explorer OpenAPI NetworkResponse schema"
+    ],
     "1469a7dc74069461": [
       "pre-flight Tier-2 per-action matrix DISPENSER settlement-price gate declares settlement-price availability unverified on a FIAT open",
       "pre-flight Tier-2 per-action matrix DISPENSER settlement-price gate declares settlement-price availability unverified on a FIAT refill",
@@ -744,6 +756,12 @@
       "ANCHOR v3 fold: the wrapper section verifies over the archive-extended canonical refuses a wrapper signed over the plain canonical, with no fallback",
       "ANCHOR v3 fold: the wrapper section verifies over the archive-extended canonical refuses a wrapper whose archive fields moved on the wire",
       "ANCHOR v3 fold: the wrapper section verifies over the archive-extended canonical tags only the wrapper section and verifies both sections"
+    ],
+    "18463a2ea4b1d31d": [
+      "BatchBuilder builds a parent ISSUE plus an ISSUE v6 child edit the resolver would compact",
+      "BatchBuilder builds two ISSUE v6 child edits with no parent, both kept by name",
+      "BatchBuilder leaves a standalone ISSUE v6 child edit compacted",
+      "BatchBuilder still compacts an undotted ISSUE v6 TICK, which stays top-level"
     ],
     "1866e9c807f637eb": [
       "pre-flight LIST SET META fee note does not file the fee note for another action at version 5",
@@ -1161,14 +1179,6 @@
       "signForAddress with signing errors before a match returns the segwitRedeemScript signature from the third call",
       "signForAddress without a matching mode address returns the signature from the fourth plain call"
     ],
-    "2b0e2e86365e0414": [
-      "message send reconciles the encoder PSBT refuses before signing when an output goes to a stranger",
-      "message send reconciles the encoder PSBT signs a PSBT whose outputs it can account for",
-      "scoped WIF signing on submitAction leaves a custom signer path untouched",
-      "scoped WIF signing on submitAction leaves the sdk unscoped when no utxos are supplied",
-      "scoped WIF signing on submitAction refuses an unsigned input the caller never named",
-      "scoped WIF signing on submitAction signs only the supplied utxos and finalizes"
-    ],
     "2ba6d5dbf15032c1": [
       "pre-flight Tier-2 per-action matrix AIRDROP (null AMOUNT is a warning, never an error) an action index that is not a LIST is an error",
       "pre-flight Tier-2 per-action matrix AIRDROP (null AMOUNT is a warning, never an error) an existing list is not reported missing",
@@ -1566,6 +1576,30 @@
       "anchor fold activation registry rows pins both activation maps inert by default",
       "anchor fold activation registry rows ships the shared row pair atomically"
     ],
+    "39aaee8721e33449": [
+      "embedded template hash guard amm matches its expected embed",
+      "embedded template hash guard covers every embedded template",
+      "embedded template hash guard crowdsale matches its expected embed",
+      "embedded template hash guard escrow matches its expected embed",
+      "embedded template hash guard escrowDelivery matches its expected embed",
+      "embedded template hash guard vesting matches its expected embed",
+      "mint-supply lock guard amm locks the configured mint supply and exposes no public mint",
+      "mint-supply lock guard crowdsale locks the configured mint supply and exposes no public mint",
+      "scaffold sources: drift + verdict drift guard (embedded === canonical xchain-contracts) pattern access-control matches xchain-contracts/patterns/access-control.js",
+      "scaffold sources: drift + verdict drift guard (embedded === canonical xchain-contracts) pattern pausable matches xchain-contracts/patterns/pausable.js",
+      "scaffold sources: drift + verdict drift guard (embedded === canonical xchain-contracts) pattern safe-transfer matches xchain-contracts/patterns/safe-transfer.js",
+      "scaffold sources: drift + verdict drift guard (embedded === canonical xchain-contracts) pattern state-machine matches xchain-contracts/patterns/state-machine.js",
+      "scaffold sources: drift + verdict drift guard (embedded === canonical xchain-contracts) pattern validation matches xchain-contracts/patterns/validation.js",
+      "scaffold sources: drift + verdict drift guard (embedded === canonical xchain-contracts) template amm matches xchain-contracts/amm/amm.js",
+      "scaffold sources: drift + verdict drift guard (embedded === canonical xchain-contracts) template crowdsale matches xchain-contracts/crowdsale/crowdsale.js",
+      "scaffold sources: drift + verdict drift guard (embedded === canonical xchain-contracts) template escrow matches xchain-contracts/escrow/escrow.js",
+      "scaffold sources: drift + verdict drift guard (embedded === canonical xchain-contracts) template escrowDelivery matches xchain-contracts/escrowDelivery/escrowDelivery.js",
+      "scaffold sources: drift + verdict drift guard (embedded === canonical xchain-contracts) template vesting matches xchain-contracts/vesting/vesting.js",
+      "scaffold sources: drift + verdict sdk.scaffold() + listTemplates() an unknown name throws SDKContractError(TEMPLATE_NOT_FOUND)",
+      "scaffold sources: drift + verdict sdk.scaffold() + listTemplates() every scaffolded pattern lints with zero errors",
+      "scaffold sources: drift + verdict sdk.scaffold() + listTemplates() every scaffolded template is a non-empty string that passes validateContract",
+      "scaffold sources: drift + verdict sdk.scaffold() + listTemplates() lists the five templates and the patterns"
+    ],
     "39fe2ed29221c6ad": [
       "BATCH pre-flight (Tier 1 sub-command verdicts) normalizing the arbiter sub-command list a non-string status is null (unjudged), never coerced to a verdict",
       "BATCH pre-flight (Tier 1 sub-command verdicts) normalizing the arbiter sub-command list an absent or empty list is null, not an empty verdict set",
@@ -1768,6 +1802,12 @@
       "LifecycleManager constructor stores the sdk reference",
       "LifecycleManager submitAction(): missing WIF throws MISSING_WIF when wif is null",
       "LifecycleManager submitAction(): missing WIF throws SDKConfigError MISSING_WIF when wif is absent"
+    ],
+    "42145816c16b7c8c": [
+      "SDK native-fee classification tracks the coin registry every registered coin declares a supported fee payment mode",
+      "SDK native-fee classification tracks the coin registry keeps explicit caller choice authoritative and unknown routes non-native",
+      "SDK native-fee classification tracks the coin registry reads the registry field instead of inferring the mode from the ticker",
+      "SDK native-fee classification tracks the coin registry uses FEE_PAYMENT_MODE for every explorer route coin"
     ],
     "4234a6192854b61f": [
       "reconcileEncoded foreign-input change REJECTS the drain: wallet value sent to a PRE-SIGNED foreign input's script",
@@ -2082,6 +2122,12 @@
       "pre-flight engine severity/trust model (\u00a74.2) local-provable errors are non-overridable",
       "pre-flight engine severity/trust model (\u00a74.2) network-sourced errors are overridable"
     ],
+    "4e4bc66101b257dd": [
+      "pre-flight activation mirrors follow regtest venue arming an invalid LIST is conditional, not an error, on a venue armed above genesis",
+      "pre-flight activation mirrors follow regtest venue arming an invalid LIST stays an error on a venue armed at genesis",
+      "pre-flight activation mirrors follow regtest venue arming leaves the pinned table and the non-regtest planes untouched when armed",
+      "pre-flight activation mirrors follow regtest venue arming reads the list reference validity height from the arming variable on regtest"
+    ],
     "4ecde2c635405bbd": [
       "request hooks - EncoderClient no hooks configured: no crash on successful request",
       "request hooks - EncoderClient onError fires on RPC error",
@@ -2328,6 +2374,19 @@
       "Validator: required field enforcement returns MISSING_REQUIRED_FIELD when MINT is missing TICK",
       "Validator: required field enforcement returns MISSING_REQUIRED_FIELD when SEND is missing DESTINATION",
       "Validator: required field enforcement returns MISSING_REQUIRED_FIELD when SEND is missing TICK"
+    ],
+    "556699475895f0d6": [
+      "vendored deploy-lint: banned-with banned-with is a consensus rule",
+      "vendored deploy-lint: banned-with byte parity src/contract/lint-core.js matches xchain-vm/src/lint-core.js",
+      "vendored deploy-lint: banned-with byte parity src/contract/lint-core/banned_with.js matches xchain-vm/src/lint-core/banned_with.js",
+      "vendored deploy-lint: banned-with byte parity src/contract/lint-core/constants.js matches xchain-vm/src/lint-core/constants.js",
+      "vendored deploy-lint: banned-with byte parity src/contract/lint-core/result_composition.js matches xchain-vm/src/lint-core/result_composition.js",
+      "vendored deploy-lint: banned-with clean code has no banned-with finding",
+      "vendored deploy-lint: banned-with does not flag the word with in identifiers, properties, strings or comments",
+      "vendored deploy-lint: banned-with flags a with statement with its line",
+      "vendored deploy-lint: banned-with flags every with statement, nested ones included",
+      "vendored deploy-lint: banned-with lintSource emits an error-severity finding carrying the line",
+      "vendored deploy-lint: banned-with yields no hits for unparseable source"
     ],
     "5576f4821dc4979e": [
       "Workflows deployContract() chunked funding leg carries the single-shot contract index on the result without an explorer read",
@@ -2627,21 +2686,6 @@
       "AgentSession (policy-bounded wallet) refuses construction with an allowlist but no spend ceiling",
       "AgentSession (policy-bounded wallet) refuses construction without allowedActions (fail-closed)",
       "AgentSession (policy-bounded wallet) validates window hours and confirm handler at construction"
-    ],
-    "5df782332dd01eb1": [
-      "scaffold sources: drift + verdict drift guard (embedded === canonical xchain-contracts) pattern access-control matches xchain-contracts/patterns/access-control.js",
-      "scaffold sources: drift + verdict drift guard (embedded === canonical xchain-contracts) pattern pausable matches xchain-contracts/patterns/pausable.js",
-      "scaffold sources: drift + verdict drift guard (embedded === canonical xchain-contracts) pattern safe-transfer matches xchain-contracts/patterns/safe-transfer.js",
-      "scaffold sources: drift + verdict drift guard (embedded === canonical xchain-contracts) pattern state-machine matches xchain-contracts/patterns/state-machine.js",
-      "scaffold sources: drift + verdict drift guard (embedded === canonical xchain-contracts) pattern validation matches xchain-contracts/patterns/validation.js",
-      "scaffold sources: drift + verdict drift guard (embedded === canonical xchain-contracts) template amm matches xchain-contracts/amm/amm.js",
-      "scaffold sources: drift + verdict drift guard (embedded === canonical xchain-contracts) template crowdsale matches xchain-contracts/crowdsale/crowdsale.js",
-      "scaffold sources: drift + verdict drift guard (embedded === canonical xchain-contracts) template escrow matches xchain-contracts/escrow/escrow.js",
-      "scaffold sources: drift + verdict drift guard (embedded === canonical xchain-contracts) template vesting matches xchain-contracts/vesting/vesting.js",
-      "scaffold sources: drift + verdict sdk.scaffold() + listTemplates() an unknown name throws SDKContractError(TEMPLATE_NOT_FOUND)",
-      "scaffold sources: drift + verdict sdk.scaffold() + listTemplates() every scaffolded pattern lints with zero errors",
-      "scaffold sources: drift + verdict sdk.scaffold() + listTemplates() every scaffolded template is a non-empty string that passes validateContract",
-      "scaffold sources: drift + verdict sdk.scaffold() + listTemplates() lists the four templates and the patterns"
     ],
     "5e5931771714f2f9": [
       "Actions \u2013 edge cases ADDRESS with feePreference and requireMemo serializes correctly",
@@ -2973,6 +3017,12 @@
       "decoder.describe.value_format scaled units scales plain decimals to exact BigInt units",
       "decoder.describe.value_format scaled units trims whitespace and reads a number through its string"
     ],
+    "66ca509a32c6955d": [
+      "vendored deploy-lint: banned-with byte parity src/contract/lint-core.js matches xchain-vm/src/lint-core.js",
+      "vendored deploy-lint: banned-with byte parity src/contract/lint-core/banned_with.js matches xchain-vm/src/lint-core/banned_with.js",
+      "vendored deploy-lint: banned-with byte parity src/contract/lint-core/constants.js matches xchain-vm/src/lint-core/constants.js",
+      "vendored deploy-lint: banned-with byte parity src/contract/lint-core/result_composition.js matches xchain-vm/src/lint-core/result_composition.js"
+    ],
     "670dfab925d19c7b": [
       "signEnvelopeRevealPsbt() signs a real commit/reveal pair and enforces the fee ceiling"
     ],
@@ -3058,6 +3108,18 @@
       "Performance: SDK hot-path throughput formats 10000 full-precision amounts well under the regression ceiling",
       "Performance: SDK hot-path throughput validate() throughput does not degrade with repeated reuse of one Validator",
       "Performance: SDK hot-path throughput validates 10000 ISSUE actions well under the regression ceiling"
+    ],
+    "6abb57b79a51e287": [
+      "API JSON-RPC batch cap setting validation a truncatable junk cap falls back to the default instead of a truncated prefix",
+      "API JSON-RPC batch cap setting validation warns at startup when the batch cap setting is unusable",
+      "API JSON-RPC batch fan-out cap enforces the default cap the shipped config resolver produces",
+      "API JSON-RPC batch fan-out cap falls back to the default cap on a junk or disabling env value",
+      "API JSON-RPC batch fan-out cap keeps ONE implementation of the cap: api.js holds no inline copy",
+      "API JSON-RPC batch fan-out cap never rejects a single (non-array) call body",
+      "API JSON-RPC batch fan-out cap passes a batch at exactly the cap",
+      "API JSON-RPC batch fan-out cap rejects an oversized batch before anything is dispatched",
+      "API JSON-RPC batch fan-out cap rejects the unauthenticated ping amplification path too (cap precedes auth)",
+      "API JSON-RPC batch fan-out cap src/api.js mounts the batch cap BEFORE the auth gate and the jsonRouter mount"
     ],
     "6ae7cbf3179f9e84": [
       "WalletUtils getBitcoinNetwork() resolves a different network by name without a second SDK",
@@ -3156,17 +3218,6 @@
       "Validator: field + cross-field constraints rejects an ownership DISPENSER carrying a GIVE_ESCROW",
       "Validator: unknown action returns UNKNOWN_ACTION error for an unrecognised action type"
     ],
-    "6f662e3ad4950cda": [
-      "XCALL/VM protocol constants agree across vm/indexer/sdk runs inside one of the three participating repos",
-      "XCALL/VM protocol constants agree across vm/indexer/sdk sibling xchain-indexer carries this guard, byte-identical",
-      "XCALL/VM protocol constants agree across vm/indexer/sdk sibling xchain-indexer declares the same four values",
-      "XCALL/VM protocol constants agree across vm/indexer/sdk sibling xchain-sdk carries this guard, byte-identical",
-      "XCALL/VM protocol constants agree across vm/indexer/sdk sibling xchain-sdk declares the same four values",
-      "XCALL/VM protocol constants agree across vm/indexer/sdk sibling xchain-vm carries this guard, byte-identical",
-      "XCALL/VM protocol constants agree across vm/indexer/sdk sibling xchain-vm declares the same four values",
-      "XCALL/VM protocol constants agree across vm/indexer/sdk the canonical xchain-documentation copy pins the same four values",
-      "XCALL/VM protocol constants agree across vm/indexer/sdk this repo pins the four constants at the frozen values"
-    ],
     "701b53e82a451bd5": [
       "retry: the 429 path DEFAULTS caps an honoured Retry-After at 60 s and retries a 429 once",
       "retry: the 429 path getDelay() on a 429 (a) honours Retry-After: 30 past a maxDelay of 2000",
@@ -3185,6 +3236,17 @@
       "SDK mempool surface @regression the shared, refcounted address subscription replays the channel ONCE on reconnect, not once per caller",
       "SDK mempool surface @regression the shared, refcounted address subscription resolves the second subscribe instead of waiting for a SUBSCRIBED that never comes",
       "SDK mempool surface @regression the shared, refcounted address subscription sends the server unsubscribe only on the LAST teardown"
+    ],
+    "70839f7ab6ba4d24": [
+      "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() finalizes a dogecoin multisig PSBT whose ordinary fee exceeds the bitcoinjs guard",
+      "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() honors an explicit opts.maximumFeeRate, so a caller can tighten the ceiling",
+      "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() leaves the bitcoin absurd-fee guard intact",
+      "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() should throw on bad WIF in signMultisigPsbt",
+      "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() should throw on invalid PSBT in finalizeMultisigPsbt",
+      "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() should throw on invalid PSBT in signMultisigPsbt",
+      "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() should throw on missing PSBT in finalizeMultisigPsbt",
+      "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() should throw on missing PSBT or WIF in signMultisigPsbt",
+      "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() sign + finalize completes a 1-of-1 p2wsh multisig PSBT"
     ],
     "708d08e96b3fa2c3": [
       "pre-flight Tier-2 per-action matrix ISSUE (existence != reject; ownership gate) a fractional MAX_SUPPLY on a CREATE with DECIMALS 0 is an error",
@@ -3298,6 +3360,12 @@
       "BATCH limit-scan conformance (SDK mirror vs arbiter) arbiter half (sibling xchain-indexer checkout) unknown FORMAT still classifies off params[1]",
       "BATCH limit-scan conformance (SDK mirror vs arbiter) arbiter half (sibling xchain-indexer checkout) unresolvable ticks: two unknown names are one bucket on chain and invisible to the mirror"
     ],
+    "74408e9ca166ae3b": [
+      "loadBatchArbiter: arbiter-half loader for the BATCH conformance suites fails a strict run when a support module throws at load, naming the error",
+      "loadBatchArbiter: arbiter-half loader for the BATCH conformance suites fails a strict run when no indexer checkout resolves, and skips a soft one",
+      "loadBatchArbiter: arbiter-half loader for the BATCH conformance suites returns the handler and the three support modules when everything loads",
+      "loadBatchArbiter: arbiter-half loader for the BATCH conformance suites skips a soft run when a support module throws at load"
+    ],
     "7443a223c63f048c": [
       "MuSig2 2-of-2 roundtrip aggregated signature verifies as BIP340 Schnorr",
       "MuSig2 3-of-3 roundtrip aggregated signature verifies",
@@ -3337,26 +3405,9 @@
       "WebSocketClient hooks fires onWsMessage hook for every message",
       "WebSocketClient readyHook in connect awaits readyHook before connecting"
     ],
-    "74deca601cfe38ed": [
-      "Native-coin fee quote (client) ExplorerClient getFeeQuote accepts a pre-joined pipe string + feeOutputSats",
-      "Native-coin fee quote (client) ExplorerClient getFeeQuote hits /{COIN}/api/feequote with encoded action/params/source",
-      "Native-coin fee quote (client) ExplorerClient getFeeSchedule hits /{COIN}/api/feeschedule",
-      "Native-coin fee quote (client) XChainSDK estimateFees merges the native output with caller-supplied customOutputs",
-      "Native-coin fee quote (client) XChainSDK estimateFees refuses (throws) when the oracle price is stale/invalid",
-      "Native-coin fee quote (client) XChainSDK estimateFees refuses (throws) when the quote is unsupported",
-      "Native-coin fee quote (client) XChainSDK estimateFees sizes the output from a verdict-free (valid:null) static quote",
-      "Native-coin fee quote (client) XChainSDK estimateFees without payFeeInNativeCoin adds no native output",
-      "Native-coin fee quote (client) XChainSDK estimateFees({ payFeeInNativeCoin }) adds a FEE_DESTINATION output sized to the quote",
-      "Native-coin fee quote (client) XChainSDK estimateFees({ payFeeInNativeCoin }) propagates the malformed-quote refusal",
-      "Native-coin fee quote (client) XChainSDK quoteNativeFee accepts an already-formatted action string",
-      "Native-coin fee quote (client) XChainSDK quoteNativeFee asks the same question either way (string or actionData)",
-      "Native-coin fee quote (client) XChainSDK quoteNativeFee does not retry a non-busy invalid quote",
-      "Native-coin fee quote (client) XChainSDK quoteNativeFee hard-fails on a non-JSON (HTML) explorer response",
-      "Native-coin fee quote (client) XChainSDK quoteNativeFee hard-fails on an error envelope without a supported flag",
-      "Native-coin fee quote (client) XChainSDK quoteNativeFee retries once on a busy/retryable quote and returns the retry result",
-      "Native-coin fee quote (client) XChainSDK quoteNativeFee retries only once: a still-busy retry is returned as-is",
-      "Native-coin fee quote (client) XChainSDK quoteNativeFee splits ACTION off the wire params",
-      "Native-coin fee quote (client) XChainSDK quoteNativeFee validates the retry response shape too"
+    "7504fc139500eef8": [
+      "config_envelope NETWORK_MAP registry derivation covers every registry coin and network, keyed like COIN_PREFIX_MAP",
+      "config_envelope NETWORK_MAP registry derivation gives a coin added to the registry hub config keys"
     ],
     "750e2595b38c6af9": [
       "EncoderClient encoder API key falls back to ENCODER_API_KEY in a Node environment",
@@ -3469,6 +3520,20 @@
       "EncoderClient non-2xx JSON-RPC errors keeps the encoder JSON-RPC error from a 400 batch refusal",
       "EncoderClient non-2xx JSON-RPC errors keeps the encoder JSON-RPC error from a 401 body",
       "EncoderClient non-2xx JSON-RPC errors leaves a non-JSON-RPC 502 body out of the message and details"
+    ],
+    "790cec7e080db380": [
+      "endpoints coin tier from the registry coinTier reads the tier letter of every registry coin code",
+      "endpoints coin tier from the registry siblingCoin keeps the tier for a coin added to the registry",
+      "endpoints http scheme detection a bare host starting with http gets a scheme and port on every client",
+      "endpoints http scheme detection agentOptsFor picks the http agent for a bare host named https-hub",
+      "endpoints http scheme detection full http and https URLs are still used verbatim",
+      "endpoints http scheme detection hasHttpScheme needs the scheme separator, not just an http prefix",
+      "endpoints strict network lookups coinPrefix returns null for extra segments",
+      "endpoints strict network lookups coinPrefix returns null for inherited prototype names",
+      "endpoints strict network lookups explorer client refuses inherited names and extra segments",
+      "endpoints strict network lookups publicDefaults returns {} for an inherited name or extra segment",
+      "endpoints strict network lookups websocket and explorer clients agree on every registry network",
+      "endpoints strict network lookups websocket client refuses inherited names and extra segments"
     ],
     "798ec006302761b9": [
       "contract identity (meta): static read + deploy pre-flight workflows deploy pre-flight deployAndFund honours preflight:'off'",
@@ -4109,6 +4174,14 @@
       "LIST TYPE=3 union item validation requires ITEM when none is supplied",
       "LIST TYPE=3 union item validation treats numeric and string forms of an index as duplicates"
     ],
+    "904629a771c783a8": [
+      "wire number canonicalization contract NUMBER_FIELDS covers the VOTE escrow amounts DEPOSIT and GAS_ESCROW",
+      "wire number canonicalization contract VOTE v0 poll-create wire string carries DEPOSIT/GAS_ESCROW as fixed decimals",
+      "wire number canonicalization contract leaves faithfully-carried magnitudes alone, above 2^53 included",
+      "wire number canonicalization contract refuses a JS number whose value was already rounded by the parser",
+      "wire number canonicalization contract refuses an unsafe-integer JS number even when its rounded form prints short",
+      "wire number canonicalization contract setNumberFormats never emits scientific notation for any NUMBER_FIELD"
+    ],
     "90531fa5a5588822": [
       "EncoderClient hooks fires onError hook on RPC error",
       "EncoderClient hooks fires onError hook on network error",
@@ -4161,14 +4234,6 @@
       "multi-leg round trip SEND v3 with 3 leg(s) round-trips with each leg exactly once",
       "multi-leg round trip SEND v3 with 4 leg(s) round-trips with each leg exactly once",
       "multi-leg round trip the pre-existing repeated-field param arrays still carry every slot"
-    ],
-    "9135504f8a96a493": [
-      "ExplorerClient getContractManifest() carries the contract identity the explorer reports",
-      "ExplorerClient getContractManifest() normalizes a snake_case manifest (permissions JSON string + max_take_bps)",
-      "ExplorerClient getContractManifest() passes through an already-parsed permissions array",
-      "ExplorerClient getContractManifest() returns nulls when the contract declares no manifest",
-      "ExplorerClient pagination omits undefined params",
-      "ExplorerClient pagination passes page, limit, sortorder as query params"
     ],
     "9171d42bcc06115e": [
       "comment-insensitive digest changes the digest for edits inside string and template literals",
@@ -4269,6 +4334,46 @@
       "LifecycleManager submitAction(): contract actions marks a gate timeout as broadcast so the caller does not rebuild and double-spend",
       "LifecycleManager submitAction(): contract actions reads the contract index off the upper-case wire form too",
       "LifecycleManager submitAction(): contract actions refuses a gate with no contract to read"
+    ],
+    "932b268be2669106": [
+      "contract-lint parity + drift Move 2: logic-level rules (advisory, never deploy-blocking) crossCallable array with an unknown method \u2192 warning, stays valid",
+      "contract-lint parity + drift Move 2: logic-level rules (advisory, never deploy-blocking) crossCallable non-array \u2192 error (rule crossCallable-not-array), but NOT a consensus rule",
+      "contract-lint parity + drift Move 2: logic-level rules (advisory, never deploy-blocking) large-allocation \u2192 warning only (valid stays true)",
+      "contract-lint parity + drift Move 2: logic-level rules (advisory, never deploy-blocking) missing-input-validation \u2192 warning only (valid stays true)",
+      "contract-lint parity + drift Move 2: logic-level rules (advisory, never deploy-blocking) the four templates emit zero Move-2 findings (low false-positive)",
+      "contract-lint parity + drift Move 2: logic-level rules (advisory, never deploy-blocking) unbounded-loop \u2192 warning only (valid stays true)",
+      "contract-lint parity + drift Move 2: logic-level rules (advisory, never deploy-blocking) unchecked-state-get \u2192 warning only (valid stays true)",
+      "contract-lint parity + drift back-compat: ContractUtils.validate() shape bad \u2192 { valid:false, error:<string> }",
+      "contract-lint parity + drift back-compat: ContractUtils.validate() shape good \u2192 { valid:true }",
+      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) declared and installed acorn/acorn-walk/astring equal xchain-vm AST_TOOLCHAIN_PINNED",
+      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/lint-core.js matches xchain-vm/src/lint-core.js",
+      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/lint-core/ file set matches xchain-vm/src/lint-core/",
+      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/lint-core/ is present and non-empty, so its drift checks cannot pass vacuously",
+      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/lint-core/banned_globals.js matches xchain-vm/src/lint-core/banned_globals.js",
+      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/lint-core/banned_syntax.js matches xchain-vm/src/lint-core/banned_syntax.js",
+      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/lint-core/banned_with.js matches xchain-vm/src/lint-core/banned_with.js",
+      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/lint-core/constants.js matches xchain-vm/src/lint-core/constants.js",
+      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/lint-core/contract_analysis.js matches xchain-vm/src/lint-core/contract_analysis.js",
+      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/lint-core/result_composition.js matches xchain-vm/src/lint-core/result_composition.js",
+      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/lint-core/scope_analysis.js matches xchain-vm/src/lint-core/scope_analysis.js",
+      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/metering.js matches xchain-vm/src/metering.js",
+      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/metering/ file set matches xchain-vm/src/metering/",
+      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/metering/ is present and non-empty, so its drift checks cannot pass vacuously",
+      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/metering/allocator_transform.js matches xchain-vm/src/metering/allocator_transform.js",
+      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/metering/ast_builders.js matches xchain-vm/src/metering/ast_builders.js",
+      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/metering/reserved_identifiers.js matches xchain-vm/src/metering/reserved_identifiers.js",
+      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/metering/visitor_instrumentation.js matches xchain-vm/src/metering/visitor_instrumentation.js",
+      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/stripped-globals.js matches xchain-vm/src/stripped-globals.js",
+      "contract-lint parity + drift the four shipped templates lint clean (acorn-coverable rules) xchain-contracts templates present",
+      "contract-lint parity + drift verdict corpus: sdk.validateContract bad fixture \"banned-literal-bigint\" \u2192 invalid with rule banned-literal",
+      "contract-lint parity + drift verdict corpus: sdk.validateContract bad fixture \"banned-literal-regex\" \u2192 invalid with rule banned-literal",
+      "contract-lint parity + drift verdict corpus: sdk.validateContract bad fixture \"banned-math\" \u2192 invalid with rule banned-math",
+      "contract-lint parity + drift verdict corpus: sdk.validateContract bad fixture \"reserved-alloc\" \u2192 invalid with rule reserved-identifier",
+      "contract-lint parity + drift verdict corpus: sdk.validateContract bad fixture \"reserved-gas\" \u2192 invalid with rule reserved-identifier",
+      "contract-lint parity + drift verdict corpus: sdk.validateContract bad fixture \"unsupported-syntax\" \u2192 invalid with rule unsupported-syntax",
+      "contract-lint parity + drift verdict corpus: sdk.validateContract float literal \u2192 valid with a float-literal warning",
+      "contract-lint parity + drift verdict corpus: sdk.validateContract good contract \u2192 valid, no errors, advisory (authoritative:false)",
+      "contract-lint parity + drift verdict corpus: sdk.validateContract never reports valid:true for an acorn-coverable bad fixture (no false greens)"
     ],
     "936e694dd2ad90a4": [
       "SDK create_tx passthrough forwards encoding AUTO, compress and the options bag",
@@ -4428,6 +4533,10 @@
       "G1: decoded params are untrusted input an unaccumulable legacy entry now fails the LOAD closed, not just quarantine",
       "G1: decoded params are untrusted input refuses a tick the protocol could never mint (DECODE_PARAM_INVALID)"
     ],
+    "98ee26a659d8646e": [
+      "escrow scaffold variants ships the updated escrow source",
+      "escrow scaffold variants ships the updated escrowDelivery source"
+    ],
     "99d3e354f4a12b66": [
       "reconcileEncoded funding-leg pins N identical legs need N distinct spends, not one spend reused",
       "reconcileEncoded funding-leg pins REJECTS an over-funded leg even when the reveal spends that script",
@@ -4451,6 +4560,12 @@
       "FormatSelector \u2013 rest-field support serializes EXECUTE with no params",
       "FormatSelector \u2013 rest-field support serializes EXECUTE with params array",
       "FormatSelector \u2013 rest-field support serializes WITHDRAW"
+    ],
+    "9ab821cd86b1dafb": [
+      "EncoderClient node rejection retry boundary does not report a JSON-RPC rejection through the retry hook",
+      "EncoderClient node rejection retry boundary does not retry a deterministic broadcast_tx node rejection",
+      "EncoderClient node rejection retry boundary does not retry a deterministic get_utxos tracker rejection",
+      "EncoderClient node rejection retry boundary does not retry an ambiguous broadcast_tx connection reset"
     ],
     "9b72f93e4302645d": [
       "LIST ticker item compaction does not compact on an unarmed mainnet",
@@ -4567,6 +4682,31 @@
     ],
     "9f8bf7a383946aa2": [
       "WalletUtils deriveAddress() - extended should throw INVALID_ADDRESS_TYPE for unknown type"
+    ],
+    "a119099cfeb183c6": [
+      "API request-rate limit a zero-prefixed junk value is junk, not the off switch",
+      "API request-rate limit adds no runtime dependency for the limiter",
+      "API request-rate limit allows requests up to the limit and rejects the next one with 429",
+      "API request-rate limit an explicit 0 disables the limiter and nothing else does",
+      "API request-rate limit an unvalidated token does not mint its own bucket: a rotating junk token is capped per source address",
+      "API request-rate limit bounds the unauthenticated path too (keyed on the source address)",
+      "API request-rate limit counts per credential, so one hot key cannot starve another",
+      "API request-rate limit falls back to safe defaults on a junk env value",
+      "API request-rate limit keeps ONE implementation of the limiter: api.js holds no inline copy",
+      "API request-rate limit never holds a raw credential as a map key",
+      "API request-rate limit prunes expired buckets so the map cannot grow without bound",
+      "API request-rate limit src/api.js mounts the limiter BEFORE the auth gate and the jsonRouter mount",
+      "API request-rate limit the shipped limiter still bites when the env value was junk",
+      "API request-rate limit the window rolls over and the caller is allowed again",
+      "API request-rate limit under a many-address flood caps anonymous buckets and refuses a new address at the cap with 429",
+      "API request-rate limit under a many-address flood gives cap slots back once anonymous buckets expire",
+      "API request-rate limit under a many-address flood never refuses a credential bucket because of the anonymous cap",
+      "API request-rate limit under a many-address flood prunes from the front and stops at the first live bucket",
+      "API request-rate limit under a many-address flood still serves an address that already holds a bucket when the cap is reached",
+      "API request-rate limit with no isCredential predicate every caller is bucketed by source address",
+      "API request-rate window a truncatable junk window falls back to the default instead of shrinking to milliseconds",
+      "API request-rate window the shipped limiter still bites when the window env value was junk",
+      "API request-rate window warns at load when the window setting was unusable, and stays quiet on a good one"
     ],
     "a13f37baf43851b0": [
       "CoSignerClient (agent side) msg-to-PSBT binding sign() throws COSIGNER_MSG_MISMATCH before signing when the returned msg is not the PSBT sighash",
@@ -4766,24 +4906,6 @@
       "drift gate sibling resolution (\u00a78.5) says a directory that is not an indexer checkout is a different fact from an absent one",
       "drift gate sibling resolution (\u00a78.5) skips only when the run DECLARES it has no indexer, and says nothing was compared",
       "drift gate sibling resolution (\u00a78.5) still resolves and COMPARES a checkout that carries the handler directory"
-    ],
-    "aaced4236fdca5e3": [
-      "retry utility getDelay() increases with attempt number (attempt 1 < attempt 3 on average)",
-      "retry utility getDelay() never exceeds maxDelay + 25% jitter",
-      "retry utility getDelay() returns a number > 0 for attempt 0",
-      "retry utility isRetryable() returns false for HTTP 400",
-      "retry utility isRetryable() returns false for HTTP 404",
-      "retry utility isRetryable() returns false for error with no response and no code",
-      "retry utility isRetryable() returns true for ECONNABORTED (timeout)",
-      "retry utility isRetryable() returns true for ECONNRESET",
-      "retry utility isRetryable() returns true for HTTP 429",
-      "retry utility isRetryable() returns true for HTTP 502",
-      "retry utility isRetryable() returns true for HTTP 503",
-      "retry utility isRetryable() returns true for HTTP 504",
-      "retry utility withRetry() exhausts all retries: throws last error",
-      "retry utility withRetry() fails once then succeeds: fn called exactly twice",
-      "retry utility withRetry() fails with non-retryable error: throws immediately, fn called once",
-      "retry utility withRetry() succeeds on first try: fn called exactly once"
     ],
     "ab04df4ecad84c1c": [
       "decoder.describe multi-destroy a non-positive leg amount is flagged",
@@ -5052,6 +5174,16 @@
       "ContractUtils.parseAbi() returns null when version is not a numeric literal",
       "ContractUtils.parseAbi() treats an abi-named FUNCTION as an ordinary method, not metadata"
     ],
+    "b54621b172a17eb2": [
+      "ExplorerClient getContractManifest() carries permissionsError when the explorer reports permissions_error",
+      "ExplorerClient getContractManifest() carries permissionsError when the permissions value is unreadable",
+      "ExplorerClient getContractManifest() carries the contract identity the explorer reports",
+      "ExplorerClient getContractManifest() normalizes a snake_case manifest (permissions JSON string + max_take_bps)",
+      "ExplorerClient getContractManifest() passes through an already-parsed permissions array",
+      "ExplorerClient getContractManifest() returns nulls when the contract declares no manifest",
+      "ExplorerClient pagination omits undefined params",
+      "ExplorerClient pagination passes page, limit, sortorder as query params"
+    ],
     "b5467612a9f8e12c": [
       "MessagingUtils @crypto @regression deriveSharedSecret(): error paths accepts Buffer for theirPublicKey",
       "MessagingUtils @crypto @regression deriveSharedSecret(): error paths throws INVALID_WIF on bad WIF"
@@ -5266,6 +5398,35 @@
       "CompressionUtils (Part B) action-string derivation (spec \u00a75.1) withCompressionField sets the field at index 10, padding intermediate optionals",
       "CompressionUtils (Part B) action-string derivation (spec \u00a75.1) withCompressionField setting it empty leaves the action BYTE-IDENTICAL to the pre-Part-B form"
     ],
+    "bd47cb862843d661": [
+      "Native-coin fee quote (client) ExplorerClient getFeeQuote accepts a pre-joined pipe string + feeOutputSats",
+      "Native-coin fee quote (client) ExplorerClient getFeeQuote hits /{COIN}/api/feequote with encoded action/params/source",
+      "Native-coin fee quote (client) ExplorerClient getFeeSchedule hits /{COIN}/api/feeschedule",
+      "Native-coin fee quote (client) XChainSDK estimateFees merges the native output with caller-supplied customOutputs",
+      "Native-coin fee quote (client) XChainSDK estimateFees refuses (throws) when the oracle price is stale/invalid",
+      "Native-coin fee quote (client) XChainSDK estimateFees refuses (throws) when the quote is unsupported",
+      "Native-coin fee quote (client) XChainSDK estimateFees sizes the output from a verdict-free (valid:null) static quote",
+      "Native-coin fee quote (client) XChainSDK estimateFees without payFeeInNativeCoin adds no native output",
+      "Native-coin fee quote (client) XChainSDK estimateFees({ payFeeInNativeCoin }) adds a FEE_DESTINATION output sized to the quote",
+      "Native-coin fee quote (client) XChainSDK estimateFees({ payFeeInNativeCoin }) propagates the malformed-quote refusal",
+      "Native-coin fee quote (client) XChainSDK quoteNativeFee accepts an already-formatted action string",
+      "Native-coin fee quote (client) XChainSDK quoteNativeFee asks the same question either way (string or actionData)",
+      "Native-coin fee quote (client) XChainSDK quoteNativeFee does not retry a non-busy invalid quote",
+      "Native-coin fee quote (client) XChainSDK quoteNativeFee hard-fails on a non-JSON (HTML) explorer response",
+      "Native-coin fee quote (client) XChainSDK quoteNativeFee hard-fails on an error envelope without a supported flag",
+      "Native-coin fee quote (client) XChainSDK quoteNativeFee retries once on a busy/retryable quote and returns the retry result",
+      "Native-coin fee quote (client) XChainSDK quoteNativeFee retries only once: a still-busy retry is returned as-is",
+      "Native-coin fee quote (client) XChainSDK quoteNativeFee splits ACTION off the wire params",
+      "Native-coin fee quote (client) XChainSDK quoteNativeFee validates the retry response shape too",
+      "Native-coin fee quote (client) on a native-fee chain estimateFees adds nothing and asks for no quote on BTC with no flag",
+      "Native-coin fee quote (client) on a native-fee chain estimateFees adds the fee output on DOGE when the caller passes no flag",
+      "Native-coin fee quote (client) on a native-fee chain estimateFees adds the fee output on LTC when the caller passes no flag",
+      "Native-coin fee quote (client) on a native-fee chain estimateFees and nativeFeeOutputs agree on the outputs for the same chain and flag",
+      "Native-coin fee quote (client) on a native-fee chain estimateFees builds without an output on a DOGE node whose native fees are off",
+      "Native-coin fee quote (client) on a native-fee chain estimateFees honours an explicit payFeeInNativeCoin:false on DOGE",
+      "Native-coin fee quote (client) on a native-fee chain estimateFees still refuses a denied action under the DOGE chain default, naming the opt-out",
+      "Native-coin fee quote (client) on a native-fee chain estimateFees with an explicit opt-in still refuses a node whose native fees are off"
+    ],
     "bd6577f1a00a81e2": [
       "ActionWaiter contract state gate state normalization accepts a bare row array",
       "ActionWaiter contract state gate state normalization carries a __proto__ state key as data instead of hitting the setter",
@@ -5472,6 +5633,10 @@
       "serialize() refuses a flat field map on a repeated format every repeated format refuses a flat map",
       "serialize() refuses a flat field map on a repeated format parallel arrays in flat fields are refused, not comma-joined into one slot"
     ],
+    "c1a216842cf0b824": [
+      "SDK/indexer fee payment mode parity covers the same registered coins",
+      "SDK/indexer fee payment mode parity requires native fees exactly where the indexer registry declares them"
+    ],
     "c1ddb86fcfe1fbe9": [
       "addressRefFields SDK_COMPACTABLE is a sorted, duplicate-free list",
       "addressRefFields SDK_COMPACTABLE is a subset of the fields declared in the map",
@@ -5496,6 +5661,14 @@
       "transaction result errors builds typed errors with their public codes",
       "transaction result warnings builds the assumed-status warning"
     ],
+    "c1ee63ad9ff82d1d": [
+      "cosigner witness-v1 derivation refuses a network without segwit a 2-of-2 CoSigner on DOGE refuses at construction instead of adopting an OP_1 account script",
+      "cosigner witness-v1 derivation refuses a network without segwit a 2-of-3 CoSigner on DOGE refuses with the code intact, not a rewrapped tap-tree error",
+      "cosigner witness-v1 derivation refuses a network without segwit deriveEnvelopeCommit refuses DOGE before reading its other arguments",
+      "cosigner witness-v1 derivation refuses a network without segwit deriveMuSig2P2TR refuses DOGE and still derives on BTC regtest and native bitcoinjs networks",
+      "cosigner witness-v1 derivation refuses a network without segwit deriveMuSig2P2TR2of3 refuses DOGE and still derives on BTC regtest",
+      "cosigner witness-v1 derivation refuses a network without segwit the SDK dogecoin network really is marked non-segwit with no bech32 prefix"
+    ],
     "c1f23d83c7fe1108": [
       "x402 exports are wired into the SDK entry point",
       "x402 parseActionString keeps multi-output tuples paired (v1: amounts belong to their own destination)",
@@ -5512,6 +5685,12 @@
     "c42415392f462bd0": [
       "EncoderClient getTxBlock returns null when the encoder reports no indexed block",
       "EncoderClient getTxBlock sends get_tx_block with the txid and returns the result"
+    ],
+    "c45e36f5184ff255": [
+      "EncoderClient retryable transport fault reports the real transport status through the onRetry hook",
+      "EncoderClient retryable transport fault retries a connection reset for a read-only RPC and returns the later result",
+      "EncoderClient retryable transport fault retries an HTTP 503 for get_utxos and returns the later result",
+      "EncoderClient retryable transport fault surfaces ENCODER_NETWORK after connection-reset retries are spent"
     ],
     "c519a27fcb01f81e": [
       "MessagingUtils @crypto @regression ECDH/AES (bytes) aesDecrypt (string mode) still decrypts aesEncryptBytes text payloads",
@@ -5631,31 +5810,6 @@
       "co-signer: Taproot envelope composition role derivation classifies commit, reveal and cancel from the PSBT alone",
       "co-signer: Taproot envelope composition role derivation classifies nothing for a transaction that neither funds nor spends the commit"
     ],
-    "c9cf3558f27fbddc": [
-      "contract-lint parity + drift Move 2: logic-level rules (advisory, never deploy-blocking) crossCallable array with an unknown method \u2192 warning, stays valid",
-      "contract-lint parity + drift Move 2: logic-level rules (advisory, never deploy-blocking) crossCallable non-array \u2192 error (rule crossCallable-not-array), but NOT a consensus rule",
-      "contract-lint parity + drift Move 2: logic-level rules (advisory, never deploy-blocking) large-allocation \u2192 warning only (valid stays true)",
-      "contract-lint parity + drift Move 2: logic-level rules (advisory, never deploy-blocking) missing-input-validation \u2192 warning only (valid stays true)",
-      "contract-lint parity + drift Move 2: logic-level rules (advisory, never deploy-blocking) the four templates emit zero Move-2 findings (low false-positive)",
-      "contract-lint parity + drift Move 2: logic-level rules (advisory, never deploy-blocking) unbounded-loop \u2192 warning only (valid stays true)",
-      "contract-lint parity + drift Move 2: logic-level rules (advisory, never deploy-blocking) unchecked-state-get \u2192 warning only (valid stays true)",
-      "contract-lint parity + drift back-compat: ContractUtils.validate() shape bad \u2192 { valid:false, error:<string> }",
-      "contract-lint parity + drift back-compat: ContractUtils.validate() shape good \u2192 { valid:true }",
-      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) declared and installed acorn/acorn-walk/astring equal xchain-vm AST_TOOLCHAIN_PINNED",
-      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/lint-core.js matches xchain-vm/src/lint-core.js",
-      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/metering.js matches xchain-vm/src/metering.js",
-      "contract-lint parity + drift drift guard (vendored copies byte-identical to xchain-vm) src/contract/stripped-globals.js matches xchain-vm/src/stripped-globals.js",
-      "contract-lint parity + drift the four shipped templates lint clean (acorn-coverable rules) xchain-contracts templates present",
-      "contract-lint parity + drift verdict corpus: sdk.validateContract bad fixture \"banned-literal-bigint\" \u2192 invalid with rule banned-literal",
-      "contract-lint parity + drift verdict corpus: sdk.validateContract bad fixture \"banned-literal-regex\" \u2192 invalid with rule banned-literal",
-      "contract-lint parity + drift verdict corpus: sdk.validateContract bad fixture \"banned-math\" \u2192 invalid with rule banned-math",
-      "contract-lint parity + drift verdict corpus: sdk.validateContract bad fixture \"reserved-alloc\" \u2192 invalid with rule reserved-identifier",
-      "contract-lint parity + drift verdict corpus: sdk.validateContract bad fixture \"reserved-gas\" \u2192 invalid with rule reserved-identifier",
-      "contract-lint parity + drift verdict corpus: sdk.validateContract bad fixture \"unsupported-syntax\" \u2192 invalid with rule unsupported-syntax",
-      "contract-lint parity + drift verdict corpus: sdk.validateContract float literal \u2192 valid with a float-literal warning",
-      "contract-lint parity + drift verdict corpus: sdk.validateContract good contract \u2192 valid, no errors, advisory (authoritative:false)",
-      "contract-lint parity + drift verdict corpus: sdk.validateContract never reports valid:true for an acorn-coverable bad fixture (no false greens)"
-    ],
     "c9dff162015ec6ae": [
       "networks getNetwork() should have bech32 prefix for bitcoin and litecoin",
       "networks getNetwork() should have correct WIF bytes",
@@ -5739,6 +5893,16 @@
       "MuSig2 signer adapter (buildMuSig2Signer) propagates a co-signer denial as SDKPolicyError (no tx produced)",
       "MuSig2 signer adapter (buildMuSig2Signer) rejects bad construction",
       "MuSig2 signer adapter (buildMuSig2Signer) signs every input of a multi-input aggregate spend in one round"
+    ],
+    "cfe8c949778344fe": [
+      "WalletUtils signMultisigPsbt input scope does not sign a multisig input whose script lacks this key",
+      "WalletUtils signMultisigPsbt input scope ignores a decoy multisig script attached to a single-key input",
+      "WalletUtils signMultisigPsbt input scope refuses a PSBT that holds no multisig input for this key",
+      "WalletUtils signMultisigPsbt input scope refuses an empty, out-of-range or non-integer inputIndices",
+      "WalletUtils signMultisigPsbt input scope refuses an inputIndices entry that names a single-key input",
+      "WalletUtils signMultisigPsbt input scope signs every classical multisig shape: P2WSH, P2SH-P2WSH and bare P2SH",
+      "WalletUtils signMultisigPsbt input scope signs only the listed inputs when opts.inputIndices is given",
+      "WalletUtils signMultisigPsbt input scope signs the multisig input and leaves single-key inputs to the same key unsigned"
     ],
     "d00071e8c66a024a": [
       "LifecycleManager submitAction(): the carrier must hold the action that was submitted refuses a substituted amount and destination BEFORE anything is signed",
@@ -5846,26 +6010,6 @@
       "MessagingUtils @crypto @regression KDF v1 (HKDF-SHA256) versioning and domain separation emits v1-framed ECIES ciphertext (leading 0x01 version byte) and round-trips",
       "MessagingUtils @crypto @regression KDF v1 (HKDF-SHA256) versioning and domain separation round-trips a legacy v0 binary (bytes) ECIES blob",
       "MessagingUtils @crypto @regression KDF v1 (HKDF-SHA256) versioning and domain separation still decrypts a legacy (v0, no version byte, bare-SHA256) ECIES blob"
-    ],
-    "d4d16ec81f93d6a2": [
-      "API request-rate limit a zero-prefixed junk value is junk, not the off switch",
-      "API request-rate limit adds no runtime dependency for the limiter",
-      "API request-rate limit allows requests up to the limit and rejects the next one with 429",
-      "API request-rate limit an explicit 0 disables the limiter and nothing else does",
-      "API request-rate limit an unvalidated token does not mint its own bucket: a rotating junk token is capped per source address",
-      "API request-rate limit bounds the unauthenticated path too (keyed on the source address)",
-      "API request-rate limit counts per credential, so one hot key cannot starve another",
-      "API request-rate limit falls back to safe defaults on a junk env value",
-      "API request-rate limit keeps ONE implementation of the limiter: api.js holds no inline copy",
-      "API request-rate limit never holds a raw credential as a map key",
-      "API request-rate limit prunes expired buckets so the map cannot grow without bound",
-      "API request-rate limit src/api.js mounts the limiter BEFORE the auth gate and the jsonRouter mount",
-      "API request-rate limit the shipped limiter still bites when the env value was junk",
-      "API request-rate limit the window rolls over and the caller is allowed again",
-      "API request-rate limit with no isCredential predicate every caller is bucketed by source address",
-      "API request-rate window a truncatable junk window falls back to the default instead of shrinking to milliseconds",
-      "API request-rate window the shipped limiter still bites when the window env value was junk",
-      "API request-rate window warns at load when the window setting was unusable, and stays quiet on a good one"
     ],
     "d54576fa6708d56d": [
       "Actions \u2013 pre-flight encoding validation ENCODING_DATA_TOO_LARGE error includes suggestion in details",
@@ -6077,11 +6221,37 @@
       "SDK mempool surface @regression getUnconfirmed returns [] on an empty mempool rather than null or a throw",
       "SDK mempool surface @regression getUnconfirmed returns the explorer field names verbatim, plus destinations"
     ],
+    "df3e1fe466fd7706": [
+      "retry utility getDelay() increases with attempt number (attempt 1 < attempt 3 on average)",
+      "retry utility getDelay() never exceeds maxDelay + 25% jitter",
+      "retry utility getDelay() returns a number > 0 for attempt 0",
+      "retry utility isRetryable() returns false for HTTP 400",
+      "retry utility isRetryable() returns false for HTTP 404",
+      "retry utility isRetryable() returns false for error with no response and no code",
+      "retry utility isRetryable() returns true for ECONNABORTED (timeout)",
+      "retry utility isRetryable() returns true for ECONNRESET",
+      "retry utility isRetryable() returns true for HTTP 429",
+      "retry utility isRetryable() returns true for HTTP 502",
+      "retry utility isRetryable() returns true for HTTP 503",
+      "retry utility isRetryable() returns true for HTTP 504",
+      "retry utility isRetryable() returns true for an explicitly retryable fault on a 2xx response",
+      "retry utility withRetry() exhausts all retries: throws last error",
+      "retry utility withRetry() fails once then succeeds: fn called exactly twice",
+      "retry utility withRetry() fails with non-retryable error: throws immediately, fn called once",
+      "retry utility withRetry() succeeds on first try: fn called exactly once"
+    ],
     "df97ec7283defdfb": [
       "pre-flight Tier-2 per-action matrix OP_RETURN carrier cap parity with the compose-time gate a 74-byte action string: pre-flight and compose agree (both accept)",
       "pre-flight Tier-2 per-action matrix OP_RETURN carrier cap parity with the compose-time gate a 75-byte action string: pre-flight and compose agree (both accept)",
       "pre-flight Tier-2 per-action matrix OP_RETURN carrier cap parity with the compose-time gate a 76-byte action string: pre-flight and compose agree (both reject)",
       "pre-flight Tier-2 per-action matrix OP_RETURN carrier cap parity with the compose-time gate a 77-byte action string: pre-flight and compose agree (both reject)"
+    ],
+    "e03046bb6ae8069c": [
+      "ContractClient.parseManifest permissionsError is absent for readable, null, empty and missing permissions",
+      "ContractClient.parseManifest permissionsError is true when permissions is a non-array, non-string value",
+      "ContractClient.parseManifest permissionsError is true when permissions is an unparseable string",
+      "ContractClient.parseManifest permissionsError is true when permissions parses to a non-array",
+      "ContractClient.parseManifest permissionsError is true when the explorer reports permissions_error"
     ],
     "e082fc71f6438b42": [
       "ANCHOR bundle canonical ordering accepts sorted mainnet wires with and without a height",
@@ -6247,6 +6417,16 @@
       "prototype method descriptors of split classes installMethods copies symbol keys and skips a source key that is not enumerable",
       "prototype method descriptors of split classes installMethods defines methods with the flags a class body gives them",
       "prototype method descriptors of split classes installMethods installs sources in order, a later source winning a shared key"
+    ],
+    "e37912476e93135e": [
+      "Workflows deployContract() native fee output attaches it on DOGE regtest",
+      "Workflows deployContract() native fee output attaches nothing on BTC and never asks for a quote",
+      "Workflows deployContract() native fee output attaches the quoted fee output to the DEPLOY on LTC",
+      "Workflows deployContract() native fee output honours an explicit payFeeInNativeCoin on BTC",
+      "Workflows deployContract() native fee output honours payFeeInNativeCoin:false on LTC",
+      "Workflows deployContract() native fee refusal and chunks deploys without a fee output on an LTC node whose native fees are off",
+      "Workflows deployContract() native fee refusal and chunks pays the fee on every chunk carrier and the assembler",
+      "Workflows deployContract() native fee refusal and chunks refuses an unsupported quote before any DEPLOY is submitted"
     ],
     "e393e309eb532d75": [
       "retry helpers (pure) getDelay caps exponential backoff at maxDelay (jitter is applied after the cap)",
@@ -6490,17 +6670,6 @@
       "GatedFileUtils verifyKey returns false for wrong key",
       "GatedFileUtils verifyKey returns true for matching key + hash"
     ],
-    "e8e36352ffe160a6": [
-      "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() finalizes a dogecoin multisig PSBT whose ordinary fee exceeds the bitcoinjs guard",
-      "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() honors an explicit opts.maximumFeeRate, so a caller can tighten the ceiling",
-      "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() leaves the bitcoin absurd-fee guard intact",
-      "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() should throw on bad WIF in signMultisigPsbt",
-      "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() should throw on invalid PSBT in finalizeMultisigPsbt",
-      "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() should throw on invalid PSBT in signMultisigPsbt",
-      "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() should throw on missing PSBT in finalizeMultisigPsbt",
-      "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() should throw on missing PSBT or WIF in signMultisigPsbt",
-      "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() sign + finalize completes a 1-of-1 p2wpkh PSBT"
-    ],
     "e8ec9e9a4fce2709": [
       "pre-flight LIST share disclosures names the owner-only whole-action SHARE and TRANSFER refusals",
       "pre-flight LIST share disclosures treats LIST as fee-charging"
@@ -6641,20 +6810,16 @@
       "ExplorerClient action-specific methods getSwaps returns result",
       "ExplorerClient action-specific methods getSweeps returns result"
     ],
-    "ef50f2ccde8e13c5": [
-      "consensus-primitive conformance: activation predicate vectors @regression every group this repo runs is a non-empty list",
-      "consensus-primitive conformance: byte-identity to canonical source @regression equivocation_header.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/core.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/regtest_env.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_1.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_2.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_3.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_4.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_5.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression snapshot_reorg_buffer.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression stake_weighted_quorum.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: canonical vectors @regression equivocation_header builder ENGINE_TAGS matches the canonical map"
+    "eff111b0ada2a9ed": [
+      "message send reconciles the encoder PSBT enforces the encoder maxFeeSats ceiling before signing",
+      "message send reconciles the encoder PSBT refuses before signing when an output goes to a stranger",
+      "message send reconciles the encoder PSBT refuses before signing when the carrier holds a different command than the MESSAGE",
+      "message send reconciles the encoder PSBT signs a PSBT whose outputs it can account for",
+      "message send reconciles the encoder PSBT still reconciles outputs when the wallet exposes no network",
+      "scoped WIF signing on submitAction leaves a custom signer path untouched",
+      "scoped WIF signing on submitAction leaves the sdk unscoped when no utxos are supplied",
+      "scoped WIF signing on submitAction refuses an unsigned input the caller never named",
+      "scoped WIF signing on submitAction signs only the supplied utxos and finalizes"
     ],
     "f03ae31623c0d806": [
       "reconcileEncoded (encoder-authored PSBT vs submitted intent) REJECTS a value-negative transaction",
@@ -6735,6 +6900,29 @@
       "FormatSelector.estimateLength() returns a positive integer",
       "FormatSelector.estimateLength() returns a smaller estimate for a shorter format version"
     ],
+    "f43abb21b1821af1": [
+      "consensus-primitive conformance: activation predicate vectors @regression every group this repo runs is a non-empty list",
+      "consensus-primitive conformance: byte-identity to canonical source @regression equivocation_header.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/ file set equals xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/ holds the vendored parts",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/core.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/regtest_env.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_1.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_2.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_3.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_4.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_5.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression snapshot_reorg_buffer.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression stake_weighted_quorum.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: canonical vectors @regression equivocation_header builder ENGINE_TAGS matches the canonical map",
+      "gate_registry entry loads every local shared-rows part @regression finds numbered shared-rows parts to check",
+      "gate_registry entry loads every local shared-rows part @regression the entry requires gate_registry/shared_rows_1.js",
+      "gate_registry entry loads every local shared-rows part @regression the entry requires gate_registry/shared_rows_2.js",
+      "gate_registry entry loads every local shared-rows part @regression the entry requires gate_registry/shared_rows_3.js",
+      "gate_registry entry loads every local shared-rows part @regression the entry requires gate_registry/shared_rows_4.js",
+      "gate_registry entry loads every local shared-rows part @regression the entry requires gate_registry/shared_rows_5.js"
+    ],
     "f4432ea3f895cbc6": [
       "G6: window-store durability a refused start releases its lock, so the operator can retry after restoring",
       "G6: window-store durability an init on an existing window does not wipe it",
@@ -6749,28 +6937,20 @@
       "pre-flight Tier-2 per-action matrix DISPENSER refill (refill cap + oracle fee) says nothing about an oracle fee on a Mode A dispenser",
       "pre-flight Tier-2 per-action matrix DISPENSER refill (refill cap + oracle fee) says nothing about an oracle fee when refilling a Mode A dispenser"
     ],
-    "f4637c49de2d92d5": [
-      "EncoderClient retryable -32603 body error does not retry a -32602 body error and marks it not retryable",
-      "EncoderClient retryable -32603 body error marks the error retryable without retrying when retry is disabled",
-      "EncoderClient retryable -32603 body error reports each retry through the onRetry hook",
-      "EncoderClient retryable -32603 body error retries a -32603 body error and returns the later result",
-      "EncoderClient retryable -32603 body error surfaces ENCODER_RPC_ERROR marked retryable once retries are spent"
+    "f48a98be337a65d6": [
+      "vendored deploy-lint: banned-with banned-with is a consensus rule",
+      "vendored deploy-lint: banned-with clean code has no banned-with finding",
+      "vendored deploy-lint: banned-with does not flag the word with in identifiers, properties, strings or comments",
+      "vendored deploy-lint: banned-with flags a with statement with its line",
+      "vendored deploy-lint: banned-with flags every with statement, nested ones included",
+      "vendored deploy-lint: banned-with lintSource emits an error-severity finding carrying the line",
+      "vendored deploy-lint: banned-with yields no hits for unparseable source"
     ],
     "f58955d9b96a2218": [
       "explorer option construction accepts a null SDK when a URL is supplied",
       "explorer option construction builds an explorer client with SDK network options",
       "explorer option construction returns an explicit explorer untouched",
       "explorer option construction returns null without explorer connection options"
-    ],
-    "f6d3218eec8c7e04": [
-      "pre-flight activation splits are mirrored, not hard-coded against the indexer rows amount representability table matches the addGate row",
-      "pre-flight activation splits are mirrored, not hard-coded against the indexer rows amount representability table matches the addGate row",
-      "pre-flight activation splits are mirrored, not hard-coded against the indexer rows batch mainnet constants match the flag-time file",
-      "pre-flight activation splits are mirrored, not hard-coded against the indexer rows batch mainnet constants match the flag-time file",
-      "pre-flight activation splits are mirrored, not hard-coded describes each pinned table by value",
-      "pre-flight activation splits are mirrored, not hard-coded pins the representability and batch gates",
-      "pre-flight activation splits are mirrored, not hard-coded the batch weight finding is worded from the pinned issuance-limits table",
-      "pre-flight activation splits are mirrored, not hard-coded the dispenser representability disclosure is built from the pinned table"
     ],
     "f7e5931142d6202d": [
       "cosigner/recovery buildRecoverySpend a >2^53 output overspend is caught, not rounded into a zero fee",
@@ -6863,6 +7043,20 @@
       "WalletSession estimateFees() calls sdk.estimateFees with merged pubkey/change",
       "WalletSession estimateFees() merges caller-provided encoderOpts"
     ],
+    "fcffc50ce343b45a": [
+      "gate registry env view covers the regtest arming grammar arms anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION from XC_ANCHOR_STAKE_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms anchor_fold_activation.ANCHOR_FOLD_ACTIVATION from XC_ANCHOR_FOLD_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms anchor_reward_activation.ANCHOR_ATTEST_BARRIER_ACTIVATION from XC_MIRROR_ADMISSION_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION from XC_ANCHOR_FOLD_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms mirror_admission_activation.MIRROR_ADMISSION_ACTIVATION from XC_MIRROR_ADMISSION_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION from XC_MIRROR_ADMISSION_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms rollcall_activation.ROLLCALL_ACTIVATION from XC_ROLLCALL_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms rollcall_gates_activation.ROLLCALL_GATES_ACTIVATION from XC_ROLLCALL_GATES_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms stake_weight_collation_activation.STAKE_WEIGHT_COLLATION_ACTIVATION from XC_ANCHOR_STAKE_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar enforces bundle order from the venue height on an armed regtest venue",
+      "gate registry env view covers the regtest arming grammar holds at least one armable row, so the sweep below checks something",
+      "gate registry env view covers the regtest arming grammar names a getter for every variable the arming grammar reads"
+    ],
     "fd6b274868280874": [
       "contract identity (meta): static read + deploy pre-flight getExportedMeta() is ABSENT for an identifier export with no <id>.meta assignment",
       "contract identity (meta): static read + deploy pre-flight getExportedMeta() is ABSENT for an object export with no meta key",
@@ -6903,8 +7097,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 520,
-      "titleCount": 5451,
+      "fileCount": 537,
+      "titleCount": 5598,
       "files": {
         "test/unit/actions/action_roundtrip_golden.test.js": "0889dd14dd14af13",
         "test/unit/actions/actions.test.js": "e72dbd6bc6ac1b9a",
@@ -6963,10 +7157,11 @@
         "test/unit/actions/workflows.test/07_resolve_deployed_contract.test.js": "2bed02ef6c6d9ad1",
         "test/unit/actions/workflows.test/08_deploy_contract_chunked_funding_leg.test.js": "5576f4821dc4979e",
         "test/unit/actions/workflows.test/09_action_index_of.test.js": "c814f78b9c8185a2",
+        "test/unit/actions/workflows.test/10_deploy_contract_native_fee.test.js": "e37912476e93135e",
         "test/unit/api/api_auth_gate.test.js": "63619a72a6a85671",
-        "test/unit/api/api_batch_cap.test.js": "09620624baddbde2",
+        "test/unit/api/api_batch_cap.test.js": "6abb57b79a51e287",
         "test/unit/api/api_listener.test.js": "42d0222dd88f5616",
-        "test/unit/api/api_rate_limit.test.js": "d4d16ec81f93d6a2",
+        "test/unit/api/api_rate_limit.test.js": "a119099cfeb183c6",
         "test/unit/api/cors_origin.test.js": "47a8c7aec5cc3398",
         "test/unit/api/jsonrpc_body_guard.test.js": "58706b2a54fa0008",
         "test/unit/carrier/bind_action_carrier.test.js": "309253190446db60",
@@ -6992,12 +7187,14 @@
         "test/unit/cli/repl.test.js": "45dba3fb0f557130",
         "test/unit/clients/action_waiter_explorer_target.test.js": "365d57d172c132e7",
         "test/unit/clients/encoder/encoder_get_tx_block.test.js": "c42415392f462bd0",
+        "test/unit/clients/encoder/encoder_node_rejected_no_retry.test.js": "9ab821cd86b1dafb",
         "test/unit/clients/encoder/encoder_release_inputs.test.js": "2de904e5b5676f23",
-        "test/unit/clients/encoder/encoder_retryable_transport_fault.test.js": "f4637c49de2d92d5",
+        "test/unit/clients/encoder/encoder_retryable_transport_fault.test.js": "c45e36f5184ff255",
         "test/unit/clients/endpoints.test.js": "47c27eed341d75e1",
+        "test/unit/clients/endpoints_strict_lookups.test.js": "790cec7e080db380",
         "test/unit/clients/explorer.test.js": "0336f2cb730df061",
         "test/unit/clients/explorer.test/01_url_construction.test.js": "4efe102e88b75e1c",
-        "test/unit/clients/explorer.test/02_get_contract_manifest.test.js": "9135504f8a96a493",
+        "test/unit/clients/explorer.test/02_get_contract_manifest.test.js": "b54621b172a17eb2",
         "test/unit/clients/explorer.test/04_set_base.test.js": "fb810bfabfb449aa",
         "test/unit/clients/explorer.test/05_ready_hook.test.js": "86e209190552c399",
         "test/unit/clients/explorer.test/06_hooks.test.js": "65652b14b5833264",
@@ -7019,8 +7216,9 @@
         "test/unit/clients/explorer/path_segment.test.js": "44458ab76d5cef25",
         "test/unit/clients/explorer_batch.test.js": "1403e3f96513eee2",
         "test/unit/clients/explorer_freshness.test.js": "fd84c4df57085bae",
+        "test/unit/clients/explorer_response_types.test.js": "141df50b6dc0f1fc",
         "test/unit/clients/explorer_route_contract.test.js": "af88a5dab4d4b43f",
-        "test/unit/clients/fee_quote.test.js": "74deca601cfe38ed",
+        "test/unit/clients/fee_quote.test.js": "bd47cb862843d661",
         "test/unit/clients/hub.test.js": "c81a4d1b1b19ae73",
         "test/unit/clients/hub.test/01_get_all_config.test.js": "637e95e9ee69cb49",
         "test/unit/clients/hub.test/02_ping.test.js": "a96f406deb9783aa",
@@ -7030,9 +7228,10 @@
         "test/unit/clients/hub.test/06_public_discovery.test.js": "d5fddf5159e6752e",
         "test/unit/clients/hub/config_envelope_agents_and_networks.test.js": "674211cb382ea5b7",
         "test/unit/clients/hub/config_envelope_merge_and_marks.test.js": "4831d727e3585b94",
+        "test/unit/clients/hub/config_envelope_network_map_registry.test.js": "7504fc139500eef8",
         "test/unit/clients/hub_consensus_hash.test.js": "f83040e84c44e94a",
         "test/unit/clients/pool_agent_injection.test.js": "aeb8aa70b3937527",
-        "test/unit/clients/retry.test.js": "aaced4236fdca5e3",
+        "test/unit/clients/retry.test.js": "df3e1fe466fd7706",
         "test/unit/clients/retry.test/01_explorer_client_retry_integration.test.js": "6dd9801f97a34733",
         "test/unit/clients/retry.test/02_encoder_client_retry_integration.test.js": "7a474a717a5c8b64",
         "test/unit/clients/retry.test/03_request_hooks_explorer_client.test.js": "3d17bd00e1516657",
@@ -7074,17 +7273,22 @@
         "test/unit/coins/coins_conformance.test.js": "2442df610ebb6911",
         "test/unit/coins/coins_no_filesystem.test.js": "606950257bf479c5",
         "test/unit/coins/derivation.test.js": "0a8729cb47efaa64",
+        "test/unit/coins/fee_payment_mode_parity.test.js": "c1a216842cf0b824",
+        "test/unit/coins/fee_payment_mode_registry.test.js": "42145816c16b7c8c",
         "test/unit/consensus/anchor_bundle_order_gate_pin.test.js": "4d1ead3895106afb",
         "test/unit/consensus/anchor_fold_registry_rows.test.js": "39858f72b81694ad",
         "test/unit/consensus/archive_match_count_mirror.test.js": "966436d371b81563",
         "test/unit/consensus/checkpoint.test.js": "f9fd3e0e8a60cde7",
         "test/unit/consensus/checkpoint_commitment_twin_parity.test.js": "21a1db9c64f4b487",
-        "test/unit/consensus/consensus_primitive_conformance.test.js": "ef50f2ccde8e13c5",
+        "test/unit/consensus/consensus_primitive_conformance.test.js": "f43abb21b1821af1",
+        "test/unit/consensus/gate_registry_env_coverage.test.js": "fcffc50ce343b45a",
         "test/unit/consensus/regtest_env_twin.test.js": "cbad35bf1daff99f",
         "test/unit/consensus/state_subtree_constants.test.js": "e596539159de9a25",
         "test/unit/contract/abi_core_drift.test.js": "8b4d2d1531598d1b",
         "test/unit/contract/chunk_helper.test.js": "e22290dc42295659",
         "test/unit/contract/contract_client.test.js": "30dca91fc67eac4d",
+        "test/unit/contract/contract_lint_banned_with.test.js": "f48a98be337a65d6",
+        "test/unit/contract/contract_lint_banned_with_parity.test.js": "66ca509a32c6955d",
         "test/unit/contract/contract_lint_global_alias.test.js": "121815bf45a0311e",
         "test/unit/contract/contract_lint_optional_chain.test.js": "ddd6f2464ac1217e",
         "test/unit/contract/contract_lint_optional_chain_legacy.test.js": "3cabb5b2bb2287cb",
@@ -7094,12 +7298,14 @@
         "test/unit/contract/contract_meta_preflight.test/02_sdk_deploy_pre_flight.test.js": "3ff1902d967bf391",
         "test/unit/contract/contract_meta_preflight.test/03_wallet_session_deploy_pre_flight.test.js": "c0577e3b0291d7e6",
         "test/unit/contract/contract_meta_preflight.test/04_workflows_deploy_pre_flight.test.js": "798ec006302761b9",
-        "test/unit/contract/contract_parity.test.js": "c9cf3558f27fbddc",
+        "test/unit/contract/contract_parity.test.js": "932b268be2669106",
         "test/unit/contract/contract_state_wait.test.js": "bd6577f1a00a81e2",
         "test/unit/contract/contracts.test.js": "831f56d7b10985fe",
         "test/unit/contract/contracts_parse_abi.test.js": "b536490bbf987431",
+        "test/unit/contract/escrow_variants_scaffold.test.js": "98ee26a659d8646e",
+        "test/unit/contract/manifest_permissions_error.test.js": "e03046bb6ae8069c",
         "test/unit/contract/protocol_size_caps.test.js": "26dbe28a48e2c854",
-        "test/unit/contract/template_parity.test.js": "5df782332dd01eb1",
+        "test/unit/contract/template_parity.test.js": "39aaee8721e33449",
         "test/unit/cosigner/agent_session.test.js": "5c3bc0f4da7d2c0c",
         "test/unit/cosigner/agent_session.test/01_windows_and_persistence.test.js": "dd04654f615c981c",
         "test/unit/cosigner/co_signer.test.js": "ab319758adc74b35",
@@ -7136,6 +7342,7 @@
         "test/unit/cosigner/cosigner_hosted.test.js": "bd791496d54da50b",
         "test/unit/cosigner/cosigner_recovery.test.js": "f7e5931142d6202d",
         "test/unit/cosigner/cosigner_roundtrip_conformance.test.js": "bca2b61511d7a812",
+        "test/unit/cosigner/cosigner_segwit_guard.test.js": "c1ee63ad9ff82d1d",
         "test/unit/cosigner/hardening/cosigner_hardening3.test.js": "389fc2df7041b8bc",
         "test/unit/cosigner/musig2/musig2.test.js": "7443a223c63f048c",
         "test/unit/cosigner/musig2/musig2_agent_session.test.js": "cf6ccf1a585b2e77",
@@ -7194,6 +7401,7 @@
         "test/unit/observability/logger.test.js": "036b3389dcc3412c",
         "test/unit/preflight/activation/activation_coin_first_precedence.test.js": "72a6f2b05e8fb756",
         "test/unit/preflight/activation/activation_disclosures.test.js": "2cec8afa17027767",
+        "test/unit/preflight/activation/activation_regtest_arming.test.js": "4e4bc66101b257dd",
         "test/unit/preflight/batch/batch.test.js": "769a01a07529353f",
         "test/unit/preflight/batch/batch.test/01_pre_flight_batch_issuance_fee_budget.test.js": "709fe028967162a5",
         "test/unit/preflight/batch/batch.test/02_pre_flight_batch_command_cap.test.js": "fbd37573a89de44c",
@@ -7201,7 +7409,7 @@
         "test/unit/preflight/batch/batch.test/04_pre_flight_batch_cost_weight_budget.test.js": "30fb7c34e6e36aa9",
         "test/unit/preflight/bridge_tick_rules.test.js": "1cd7fdb28fdab0e1",
         "test/unit/preflight/caret_refs.test.js": "e6c849b6eaaa439a",
-        "test/unit/preflight/checks/activation_splits_mirrored.test.js": "f6d3218eec8c7e04",
+        "test/unit/preflight/checks/activation_splits_mirrored.test.js": "05472391a4b64276",
         "test/unit/preflight/checks/checks.test.js": "10a6d1416312f006",
         "test/unit/preflight/checks/checks.test/01_issue_existence_reject_ownership_gate.test.js": "708d08e96b3fa2c3",
         "test/unit/preflight/checks/checks.test/02_mint_two_caps_no_fee.test.js": "632c2919a161558e",
@@ -7338,11 +7546,12 @@
         "test/unit/protocol/wire/issue_tick_ref.test.js": "97719469e6fa9e29",
         "test/unit/protocol/wire/tick_ref_fields.test.js": "89913b10df49648b",
         "test/unit/protocol/wire/wire_index_above2p53.test.js": "959efa5d5b10ce6b",
-        "test/unit/protocol/wire/wire_number_canonical.test.js": "0aea8952240a8bf1",
+        "test/unit/protocol/wire/wire_number_canonical.test.js": "904629a771c783a8",
         "test/unit/sdk/address_event_coverage.test.js": "c6da426d34dbb8e1",
         "test/unit/sdk/convenience.test.js": "aebe256594756370",
         "test/unit/sdk/convenience.test/01_convenience_action_methods.test.js": "19d80e5cb57f6539",
         "test/unit/sdk/convenience.test/02_batch_builder.test.js": "56598ba9c441ec7d",
+        "test/unit/sdk/convenience.test/03_batch_builder_child_issue_compaction.test.js": "18463a2ea4b1d31d",
         "test/unit/sdk/mempool_surface.test.js": "492e2266f6f99e96",
         "test/unit/sdk/mempool_surface.test/01_the_per_address_guard.test.js": "87dca2ea46c2a540",
         "test/unit/sdk/mempool_surface.test/02_the_shared_refcounted_address_subscription.test.js": "701da992f7a606c3",
@@ -7351,7 +7560,7 @@
         "test/unit/sdk/prototype_method_descriptors.test.js": "e32eaab615340a25",
         "test/unit/sdk/sdk_config.test.js": "88f4aee64e305261",
         "test/unit/sdk/sdk_light_network.test.js": "68f43b26aea2a3db",
-        "test/unit/sdk/signing_scoped_wif_and_message_psbt.test.js": "2b0e2e86365e0414",
+        "test/unit/sdk/signing_scoped_wif_and_message_psbt.test.js": "eff111b0ada2a9ed",
         "test/unit/sdk/stop_check_interval.test.js": "9221e379c7cee9e2",
         "test/unit/sdk/ticker_id_equivalence.test.js": "44925ccbe8429e1a",
         "test/unit/sdk/xbridge_sdk_builder.test.js": "e1343dadb690c22c",
@@ -7366,6 +7575,7 @@
         "test/unit/sdk/xchain_sdk.test/08_apply_endpoints.test.js": "e24aa9972c20c1c5",
         "test/unit/sdk/xchain_sdk.test/09_action_shortcut_methods.test.js": "ee6c1e212efd2771",
         "test/unit/security/configuration/dependency_advisories.test.js": "0f2abe37f99c5a17",
+        "test/unit/tooling/batch_arbiter_loader.test.js": "74408e9ca166ae3b",
         "test/unit/tooling/coverage_thresholds_sync.test.js": "25619da680526453",
         "test/unit/tooling/docs_openrpc.test.js": "332d728d3fb99ca4",
         "test/unit/tooling/openrpc_coverage.test.js": "1d41e3f226896333",
@@ -7407,13 +7617,14 @@
         "test/unit/wallet/wallet.test/08_sign_ecdsa.test.js": "3b361ae93e0f0a6c",
         "test/unit/wallet/wallet.test/09_derive_multisig_address.test.js": "b598ef35f06841f5",
         "test/unit/wallet/wallet.test/10_txid_of.test.js": "c116a25e39aef89d",
-        "test/unit/wallet/wallet.test/11_sign_multisig_psbt_and_finalize_multisig_psbt.test.js": "e8e36352ffe160a6",
+        "test/unit/wallet/wallet.test/11_sign_multisig_psbt_and_finalize_multisig_psbt.test.js": "70839f7ab6ba4d24",
         "test/unit/wallet/wallet.test/12_validate_address_extended.test.js": "dbcb60fc4a4ada27",
         "test/unit/wallet/wallet.test/13_derive_address_extended.test.js": "9f8bf7a383946aa2",
         "test/unit/wallet/wallet.test/14_sign_reveal_psbt.test.js": "600686f89502ee9b",
         "test/unit/wallet/wallet.test/15_decompose_psbt_op_return_and_missing_utxo_paths.test.js": "c119124f1fb21d44",
         "test/unit/wallet/wallet.test/16_get_bitcoin_network.test.js": "6ae7cbf3179f9e84",
         "test/unit/wallet/wallet.test/17_prevout_field_conflicts.test.js": "1a92adf0a8d572f0",
+        "test/unit/wallet/wallet.test/18_sign_multisig_psbt_input_scope.test.js": "cfe8c949778344fe",
         "test/unit/wallet/wallet_session.test.js": "5fca7e9b97347f87",
         "test/unit/wallet/wallet_session.test/01_submit.test.js": "5bf8b9f66d323161",
         "test/unit/wallet/wallet_session.test/02_unconfirmed_policy_vs_the_injected_cache.test.js": "024ba0d10d62429a",
@@ -7425,12 +7636,12 @@
         "test/unit/wallet/x402.test/01_x402_gateway.test.js": "a390a388a8cd0d37",
         "test/unit/wallet/x402.test/02_x402_gateway_payer_signature_binding.test.js": "f3d9fadc8597c800",
         "test/unit/wallet/x402.test/03_x402_client.test.js": "0f442213605187b8",
-        "test/unit/xcall-constants-cross-repo.test.js": "6f662e3ad4950cda"
+        "test/unit/xcall-constants-cross-repo.test.js": "049843dad5d3e7f1"
       }
     },
     "test:all": {
-      "fileCount": 560,
-      "titleCount": 5780,
+      "fileCount": 576,
+      "titleCount": 5927,
       "files": {
         "test/boundary/boundary.test.js": "51c5d77e922af958",
         "test/boundary/boundary.test/01_tick_name_length_boundary.test.js": "2291494717b9aaab",
@@ -7529,10 +7740,11 @@
         "test/unit/actions/workflows.test/07_resolve_deployed_contract.test.js": "2bed02ef6c6d9ad1",
         "test/unit/actions/workflows.test/08_deploy_contract_chunked_funding_leg.test.js": "5576f4821dc4979e",
         "test/unit/actions/workflows.test/09_action_index_of.test.js": "c814f78b9c8185a2",
+        "test/unit/actions/workflows.test/10_deploy_contract_native_fee.test.js": "e37912476e93135e",
         "test/unit/api/api_auth_gate.test.js": "63619a72a6a85671",
-        "test/unit/api/api_batch_cap.test.js": "09620624baddbde2",
+        "test/unit/api/api_batch_cap.test.js": "6abb57b79a51e287",
         "test/unit/api/api_listener.test.js": "42d0222dd88f5616",
-        "test/unit/api/api_rate_limit.test.js": "d4d16ec81f93d6a2",
+        "test/unit/api/api_rate_limit.test.js": "a119099cfeb183c6",
         "test/unit/api/cors_origin.test.js": "47a8c7aec5cc3398",
         "test/unit/api/jsonrpc_body_guard.test.js": "58706b2a54fa0008",
         "test/unit/carrier/bind_action_carrier.test.js": "309253190446db60",
@@ -7558,12 +7770,14 @@
         "test/unit/cli/repl.test.js": "45dba3fb0f557130",
         "test/unit/clients/action_waiter_explorer_target.test.js": "365d57d172c132e7",
         "test/unit/clients/encoder/encoder_get_tx_block.test.js": "c42415392f462bd0",
+        "test/unit/clients/encoder/encoder_node_rejected_no_retry.test.js": "9ab821cd86b1dafb",
         "test/unit/clients/encoder/encoder_release_inputs.test.js": "2de904e5b5676f23",
-        "test/unit/clients/encoder/encoder_retryable_transport_fault.test.js": "f4637c49de2d92d5",
+        "test/unit/clients/encoder/encoder_retryable_transport_fault.test.js": "c45e36f5184ff255",
         "test/unit/clients/endpoints.test.js": "47c27eed341d75e1",
+        "test/unit/clients/endpoints_strict_lookups.test.js": "790cec7e080db380",
         "test/unit/clients/explorer.test.js": "0336f2cb730df061",
         "test/unit/clients/explorer.test/01_url_construction.test.js": "4efe102e88b75e1c",
-        "test/unit/clients/explorer.test/02_get_contract_manifest.test.js": "9135504f8a96a493",
+        "test/unit/clients/explorer.test/02_get_contract_manifest.test.js": "b54621b172a17eb2",
         "test/unit/clients/explorer.test/04_set_base.test.js": "fb810bfabfb449aa",
         "test/unit/clients/explorer.test/05_ready_hook.test.js": "86e209190552c399",
         "test/unit/clients/explorer.test/06_hooks.test.js": "65652b14b5833264",
@@ -7585,8 +7799,9 @@
         "test/unit/clients/explorer/path_segment.test.js": "44458ab76d5cef25",
         "test/unit/clients/explorer_batch.test.js": "1403e3f96513eee2",
         "test/unit/clients/explorer_freshness.test.js": "fd84c4df57085bae",
+        "test/unit/clients/explorer_response_types.test.js": "141df50b6dc0f1fc",
         "test/unit/clients/explorer_route_contract.test.js": "af88a5dab4d4b43f",
-        "test/unit/clients/fee_quote.test.js": "74deca601cfe38ed",
+        "test/unit/clients/fee_quote.test.js": "bd47cb862843d661",
         "test/unit/clients/hub.test.js": "c81a4d1b1b19ae73",
         "test/unit/clients/hub.test/01_get_all_config.test.js": "637e95e9ee69cb49",
         "test/unit/clients/hub.test/02_ping.test.js": "a96f406deb9783aa",
@@ -7596,9 +7811,10 @@
         "test/unit/clients/hub.test/06_public_discovery.test.js": "d5fddf5159e6752e",
         "test/unit/clients/hub/config_envelope_agents_and_networks.test.js": "674211cb382ea5b7",
         "test/unit/clients/hub/config_envelope_merge_and_marks.test.js": "4831d727e3585b94",
+        "test/unit/clients/hub/config_envelope_network_map_registry.test.js": "7504fc139500eef8",
         "test/unit/clients/hub_consensus_hash.test.js": "f83040e84c44e94a",
         "test/unit/clients/pool_agent_injection.test.js": "aeb8aa70b3937527",
-        "test/unit/clients/retry.test.js": "aaced4236fdca5e3",
+        "test/unit/clients/retry.test.js": "df3e1fe466fd7706",
         "test/unit/clients/retry.test/01_explorer_client_retry_integration.test.js": "6dd9801f97a34733",
         "test/unit/clients/retry.test/02_encoder_client_retry_integration.test.js": "7a474a717a5c8b64",
         "test/unit/clients/retry.test/03_request_hooks_explorer_client.test.js": "3d17bd00e1516657",
@@ -7640,17 +7856,21 @@
         "test/unit/coins/coins_conformance.test.js": "2442df610ebb6911",
         "test/unit/coins/coins_no_filesystem.test.js": "606950257bf479c5",
         "test/unit/coins/derivation.test.js": "0a8729cb47efaa64",
+        "test/unit/coins/fee_payment_mode_parity.test.js": "c1a216842cf0b824",
+        "test/unit/coins/fee_payment_mode_registry.test.js": "42145816c16b7c8c",
         "test/unit/consensus/anchor_bundle_order_gate_pin.test.js": "4d1ead3895106afb",
         "test/unit/consensus/anchor_fold_registry_rows.test.js": "39858f72b81694ad",
         "test/unit/consensus/archive_match_count_mirror.test.js": "966436d371b81563",
         "test/unit/consensus/checkpoint.test.js": "f9fd3e0e8a60cde7",
         "test/unit/consensus/checkpoint_commitment_twin_parity.test.js": "21a1db9c64f4b487",
-        "test/unit/consensus/consensus_primitive_conformance.test.js": "ef50f2ccde8e13c5",
+        "test/unit/consensus/consensus_primitive_conformance.test.js": "f43abb21b1821af1",
+        "test/unit/consensus/gate_registry_env_coverage.test.js": "fcffc50ce343b45a",
         "test/unit/consensus/regtest_env_twin.test.js": "cbad35bf1daff99f",
         "test/unit/consensus/state_subtree_constants.test.js": "e596539159de9a25",
         "test/unit/contract/abi_core_drift.test.js": "8b4d2d1531598d1b",
         "test/unit/contract/chunk_helper.test.js": "e22290dc42295659",
         "test/unit/contract/contract_client.test.js": "30dca91fc67eac4d",
+        "test/unit/contract/contract_lint_banned_with.test.js": "556699475895f0d6",
         "test/unit/contract/contract_lint_global_alias.test.js": "121815bf45a0311e",
         "test/unit/contract/contract_lint_optional_chain.test.js": "ddd6f2464ac1217e",
         "test/unit/contract/contract_lint_optional_chain_legacy.test.js": "3cabb5b2bb2287cb",
@@ -7660,12 +7880,14 @@
         "test/unit/contract/contract_meta_preflight.test/02_sdk_deploy_pre_flight.test.js": "3ff1902d967bf391",
         "test/unit/contract/contract_meta_preflight.test/03_wallet_session_deploy_pre_flight.test.js": "c0577e3b0291d7e6",
         "test/unit/contract/contract_meta_preflight.test/04_workflows_deploy_pre_flight.test.js": "798ec006302761b9",
-        "test/unit/contract/contract_parity.test.js": "c9cf3558f27fbddc",
+        "test/unit/contract/contract_parity.test.js": "932b268be2669106",
         "test/unit/contract/contract_state_wait.test.js": "bd6577f1a00a81e2",
         "test/unit/contract/contracts.test.js": "831f56d7b10985fe",
         "test/unit/contract/contracts_parse_abi.test.js": "b536490bbf987431",
+        "test/unit/contract/escrow_variants_scaffold.test.js": "98ee26a659d8646e",
+        "test/unit/contract/manifest_permissions_error.test.js": "e03046bb6ae8069c",
         "test/unit/contract/protocol_size_caps.test.js": "26dbe28a48e2c854",
-        "test/unit/contract/template_parity.test.js": "5df782332dd01eb1",
+        "test/unit/contract/template_parity.test.js": "39aaee8721e33449",
         "test/unit/cosigner/agent_session.test.js": "5c3bc0f4da7d2c0c",
         "test/unit/cosigner/agent_session.test/01_windows_and_persistence.test.js": "dd04654f615c981c",
         "test/unit/cosigner/co_signer.test.js": "ab319758adc74b35",
@@ -7702,6 +7924,7 @@
         "test/unit/cosigner/cosigner_hosted.test.js": "bd791496d54da50b",
         "test/unit/cosigner/cosigner_recovery.test.js": "f7e5931142d6202d",
         "test/unit/cosigner/cosigner_roundtrip_conformance.test.js": "bca2b61511d7a812",
+        "test/unit/cosigner/cosigner_segwit_guard.test.js": "c1ee63ad9ff82d1d",
         "test/unit/cosigner/hardening/cosigner_hardening3.test.js": "389fc2df7041b8bc",
         "test/unit/cosigner/musig2/musig2.test.js": "7443a223c63f048c",
         "test/unit/cosigner/musig2/musig2_agent_session.test.js": "cf6ccf1a585b2e77",
@@ -7760,6 +7983,7 @@
         "test/unit/observability/logger.test.js": "036b3389dcc3412c",
         "test/unit/preflight/activation/activation_coin_first_precedence.test.js": "72a6f2b05e8fb756",
         "test/unit/preflight/activation/activation_disclosures.test.js": "2cec8afa17027767",
+        "test/unit/preflight/activation/activation_regtest_arming.test.js": "4e4bc66101b257dd",
         "test/unit/preflight/batch/batch.test.js": "769a01a07529353f",
         "test/unit/preflight/batch/batch.test/01_pre_flight_batch_issuance_fee_budget.test.js": "709fe028967162a5",
         "test/unit/preflight/batch/batch.test/02_pre_flight_batch_command_cap.test.js": "fbd37573a89de44c",
@@ -7767,7 +7991,7 @@
         "test/unit/preflight/batch/batch.test/04_pre_flight_batch_cost_weight_budget.test.js": "30fb7c34e6e36aa9",
         "test/unit/preflight/bridge_tick_rules.test.js": "1cd7fdb28fdab0e1",
         "test/unit/preflight/caret_refs.test.js": "e6c849b6eaaa439a",
-        "test/unit/preflight/checks/activation_splits_mirrored.test.js": "f6d3218eec8c7e04",
+        "test/unit/preflight/checks/activation_splits_mirrored.test.js": "05472391a4b64276",
         "test/unit/preflight/checks/checks.test.js": "10a6d1416312f006",
         "test/unit/preflight/checks/checks.test/01_issue_existence_reject_ownership_gate.test.js": "708d08e96b3fa2c3",
         "test/unit/preflight/checks/checks.test/02_mint_two_caps_no_fee.test.js": "632c2919a161558e",
@@ -7904,11 +8128,12 @@
         "test/unit/protocol/wire/issue_tick_ref.test.js": "97719469e6fa9e29",
         "test/unit/protocol/wire/tick_ref_fields.test.js": "89913b10df49648b",
         "test/unit/protocol/wire/wire_index_above2p53.test.js": "959efa5d5b10ce6b",
-        "test/unit/protocol/wire/wire_number_canonical.test.js": "0aea8952240a8bf1",
+        "test/unit/protocol/wire/wire_number_canonical.test.js": "904629a771c783a8",
         "test/unit/sdk/address_event_coverage.test.js": "c6da426d34dbb8e1",
         "test/unit/sdk/convenience.test.js": "aebe256594756370",
         "test/unit/sdk/convenience.test/01_convenience_action_methods.test.js": "19d80e5cb57f6539",
         "test/unit/sdk/convenience.test/02_batch_builder.test.js": "56598ba9c441ec7d",
+        "test/unit/sdk/convenience.test/03_batch_builder_child_issue_compaction.test.js": "18463a2ea4b1d31d",
         "test/unit/sdk/mempool_surface.test.js": "492e2266f6f99e96",
         "test/unit/sdk/mempool_surface.test/01_the_per_address_guard.test.js": "87dca2ea46c2a540",
         "test/unit/sdk/mempool_surface.test/02_the_shared_refcounted_address_subscription.test.js": "701da992f7a606c3",
@@ -7917,7 +8142,7 @@
         "test/unit/sdk/prototype_method_descriptors.test.js": "e32eaab615340a25",
         "test/unit/sdk/sdk_config.test.js": "88f4aee64e305261",
         "test/unit/sdk/sdk_light_network.test.js": "68f43b26aea2a3db",
-        "test/unit/sdk/signing_scoped_wif_and_message_psbt.test.js": "2b0e2e86365e0414",
+        "test/unit/sdk/signing_scoped_wif_and_message_psbt.test.js": "eff111b0ada2a9ed",
         "test/unit/sdk/stop_check_interval.test.js": "9221e379c7cee9e2",
         "test/unit/sdk/ticker_id_equivalence.test.js": "44925ccbe8429e1a",
         "test/unit/sdk/xbridge_sdk_builder.test.js": "e1343dadb690c22c",
@@ -7932,6 +8157,7 @@
         "test/unit/sdk/xchain_sdk.test/08_apply_endpoints.test.js": "e24aa9972c20c1c5",
         "test/unit/sdk/xchain_sdk.test/09_action_shortcut_methods.test.js": "ee6c1e212efd2771",
         "test/unit/security/configuration/dependency_advisories.test.js": "0f2abe37f99c5a17",
+        "test/unit/tooling/batch_arbiter_loader.test.js": "74408e9ca166ae3b",
         "test/unit/tooling/coverage_thresholds_sync.test.js": "25619da680526453",
         "test/unit/tooling/docs_openrpc.test.js": "332d728d3fb99ca4",
         "test/unit/tooling/openrpc_coverage.test.js": "1d41e3f226896333",
@@ -7973,13 +8199,14 @@
         "test/unit/wallet/wallet.test/08_sign_ecdsa.test.js": "3b361ae93e0f0a6c",
         "test/unit/wallet/wallet.test/09_derive_multisig_address.test.js": "b598ef35f06841f5",
         "test/unit/wallet/wallet.test/10_txid_of.test.js": "c116a25e39aef89d",
-        "test/unit/wallet/wallet.test/11_sign_multisig_psbt_and_finalize_multisig_psbt.test.js": "e8e36352ffe160a6",
+        "test/unit/wallet/wallet.test/11_sign_multisig_psbt_and_finalize_multisig_psbt.test.js": "70839f7ab6ba4d24",
         "test/unit/wallet/wallet.test/12_validate_address_extended.test.js": "dbcb60fc4a4ada27",
         "test/unit/wallet/wallet.test/13_derive_address_extended.test.js": "9f8bf7a383946aa2",
         "test/unit/wallet/wallet.test/14_sign_reveal_psbt.test.js": "600686f89502ee9b",
         "test/unit/wallet/wallet.test/15_decompose_psbt_op_return_and_missing_utxo_paths.test.js": "c119124f1fb21d44",
         "test/unit/wallet/wallet.test/16_get_bitcoin_network.test.js": "6ae7cbf3179f9e84",
         "test/unit/wallet/wallet.test/17_prevout_field_conflicts.test.js": "1a92adf0a8d572f0",
+        "test/unit/wallet/wallet.test/18_sign_multisig_psbt_input_scope.test.js": "cfe8c949778344fe",
         "test/unit/wallet/wallet_session.test.js": "5fca7e9b97347f87",
         "test/unit/wallet/wallet_session.test/01_submit.test.js": "5bf8b9f66d323161",
         "test/unit/wallet/wallet_session.test/02_unconfirmed_policy_vs_the_injected_cache.test.js": "024ba0d10d62429a",
@@ -7991,7 +8218,7 @@
         "test/unit/wallet/x402.test/01_x402_gateway.test.js": "a390a388a8cd0d37",
         "test/unit/wallet/x402.test/02_x402_gateway_payer_signature_binding.test.js": "f3d9fadc8597c800",
         "test/unit/wallet/x402.test/03_x402_client.test.js": "0f442213605187b8",
-        "test/unit/xcall-constants-cross-repo.test.js": "6f662e3ad4950cda"
+        "test/unit/xcall-constants-cross-repo.test.js": "049843dad5d3e7f1"
       }
     },
     "test:boundary": {

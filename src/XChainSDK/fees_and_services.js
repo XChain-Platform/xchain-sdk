@@ -21,6 +21,7 @@
 const { reconcileEncoded, psbtPrevouts } = require('../carrier/reconcile_encoded.js');
 const { assertCarrierBinding } = require('../carrier/bind_action_carrier.js');
 const { SDKConfigError, SDKExplorerError } = require('../utils/errors.js');
+const coins = require('../coins');
 
 // Validate and append a quoted native fee so refused quotes cannot reach the encoder.
 function appendNativeFeeOutput(nativeFeeQuote, customOutputs, hint = '') {
@@ -44,7 +45,7 @@ function nativeFeeDisabled(quote) {
 }
 
 // Decide one action's native fee outputs for every signing path, so estimateFees and deployContract cannot drift apart again.
-// An explicit payFeeInNativeCoin is strict; the LTC/DOGE chain default also tolerates a node with native fees off.
+// An explicit payFeeInNativeCoin is strict; a registry-native chain default also tolerates a node with native fees off.
 async function resolveNativeFeeOutputs(sdk, actionData, opts, source) {
     if (!sdk.nativeFeeRequired(opts)) return { quote: null, outputs: [] };
     const quote = await sdk.quoteNativeFee(actionData, { source });
@@ -131,8 +132,17 @@ function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs
     if (nativeFeeQuote) feeResult.nativeFeeQuote = nativeFeeQuote;
 }
 
-// LTC and DOGE have no XCHAIN fee lane, so their actions are only valid with a coin fee output.
-const NATIVE_FEE_COIN = /(LTC|DOGE)$/;
+// Resolve the explorer route coin (BTC/TBTC/RBTC, and their registry peers) without
+// maintaining a second coin list beside the canonical registry.
+function feePaymentConfig(routeCoin) {
+    if (typeof routeCoin !== 'string') return null;
+    for (const tick of coins.ALLOWED_COINS) {
+        if (routeCoin === tick) return coins.getCoinConfig(tick, 'mainnet');
+        if (routeCoin === 'T' + tick) return coins.getCoinConfig(tick, 'testnet');
+        if (routeCoin === 'R' + tick) return coins.getCoinConfig(tick, 'regtest');
+    }
+    return null;
+}
 
 // Keep fee and service reads together because they share remote-client validation.
 module.exports = {
@@ -141,8 +151,8 @@ module.exports = {
     // An explicit opts.payFeeInNativeCoin wins either way; otherwise the connected chain decides.
     nativeFeeRequired(opts = {}) {
         if (typeof opts.payFeeInNativeCoin === 'boolean') return opts.payFeeInNativeCoin;
-        let coin = this.explorer && this.explorer.coin;
-        return typeof coin === 'string' && NATIVE_FEE_COIN.test(coin);
+        const config = feePaymentConfig(this.explorer && this.explorer.coin);
+        return !!config && config.FEE_PAYMENT_MODE === 'native';
     },
 
     // Quote the native fee for an action and return the encoder customOutputs that pay it,
@@ -162,7 +172,7 @@ module.exports = {
     // account for. An envelope's reveal leg is deliberately NOT returned (see below);
     // signing one goes through submitAction, which reconciles both legs.
     //
-    // Native-coin protocol fee (added by default on LTC/DOGE, opt-in on BTC via
+    // Native-coin protocol fee (added by default on registry-native chains, opt-in on others via
     // encoderOpts.payFeeInNativeCoin, and payFeeInNativeCoin:false opts out): pay the XCHAIN
     // protocol fee in BTC/LTC/DOGE at the USD-equivalent by adding a FEE_DESTINATION output.
     // This runs the indexer pre-flight (quoteNativeFee) to size that output exactly and REFUSES
@@ -193,7 +203,7 @@ module.exports = {
     // priced from the indexer's gas schedule without a dry-run (`staticQuote:true`,
     // `validated:false`), so the fee is authoritative but on-chain validity was never judged.
     // Size the output and broadcast, but surface that the action itself is unverified: those two
-    // are otherwise unpayable on LTC/DOGE, which have no XCHAIN fee lane to fall back to.
+    // are otherwise unpayable on native-only chains, which have no XCHAIN fee lane to fall back to.
     // A `busy:true, retryable:true` quote (indexer
     // admission cap) is retried once after a short delay (opts.busyRetryDelayMs, default 1s)
     // before being returned. See xchain-documentation/concepts/GAS.md.

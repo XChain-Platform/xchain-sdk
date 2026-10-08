@@ -42,7 +42,7 @@ const MuSig2            = require('./cosigner/musig2.js');
 const Workflows         = require('./actions/workflows.js');
 const TickResolver      = require('./utils/tick_resolver.js');
 const AddressResolver   = require('./utils/address_resolver.js');
-const { coinPrefix, publicDefaults } = require('./utils/endpoints.js');
+const { TIER_PREFIX, coinPrefix, publicDefaults } = require('./utils/endpoints.js');
 const { installMethods } = require('./utils/install_methods.js');
 const { ADDRESS_EVENT_TYPES, MEMPOOL_EVENT_TYPES } = require('./XChainSDK/event_frames.js');
 const clientLifecycleMethods = require('./XChainSDK/client_lifecycle.js');
@@ -132,9 +132,8 @@ function initializeActionHelpers(sdk) {
 // Resolve cross-chain helpers to the same network tier as the configured chain.
 function networkScopedCoin(network, coin) {
     if (!coinPrefix(network)) return null;
-    if (network.endsWith('-testnet')) return 'T' + coin;
-    if (network.endsWith('-regtest')) return 'R' + coin;
-    return coin;
+    // coinPrefix accepted exactly "<chain>-<tier>", so the tier is the second part.
+    return TIER_PREFIX[network.split('-')[1]] + coin;
 }
 
 function withNetworkCoin(opts, field, coin) {
@@ -151,9 +150,10 @@ function initializeVerificationHelpers(sdk, network) {
     // passing a URL into an EXECUTE that emits xchain.attestation.request().
     sdk.attestation = AttestationHelpers;
     // State checkpoint verification (local Ed25519 over the XCHECKPOINT
-    // canonical): `sdk.checkpoint.fetchAndVerifyCheckpoint(...)` lets a
-    // client verify explorer state against the validator quorum without
-    // trusting the server. Spec: protocol/actions/ANCHOR.md.
+    // canonical): `sdk.checkpoint.fetchAndVerifyCheckpoint(...)` checks the
+    // signatures locally against the explorer's validator set unless the caller
+    // supplies one (opts.validators); for trust-minimized checks use `sdk.light`.
+    // Spec: protocol/actions/ANCHOR.md.
     sdk.checkpoint = CheckpointVerifier;
     // SPV light client (spec §8): `sdk.light.verifyBalance(...)` /
     // `sdk.light.verifyAction(...)` fetch a server proof and verify it LOCALLY

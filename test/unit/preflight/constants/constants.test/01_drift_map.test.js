@@ -99,10 +99,22 @@ function registerMapCoverageTest() {
     });
 }
 
+function registerIssueLazyProbeReviewTest() {
+    it('pins and records the issue lazy distribution probe review', function () {
+        const text = fs.readFileSync(REAL_MAP, 'utf8');
+        const issue = parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/issue/');
+        expect(issue, 'issue directory row').to.exist;
+        expect(issue.hash).to.equal('95dff217aeae8428578cf583b74bdeedf97731fd2c9242be6e8baf6763c816e9');
+        expect(text).to.include('### 2026-10-08 - issue lazy distribution probe');
+        expect(text).to.include('**Direction: NEITHER, no admission boundary moves.**');
+    });
+}
+
 describe('pre-flight constants + registry', function () {
     describe('drift map (§8.5)', function () {
         registerMapParsingTest();
         registerAnchorConsistencyTests();
         registerMapCoverageTest();
+        registerIssueLazyProbeReviewTest();
     });
 });

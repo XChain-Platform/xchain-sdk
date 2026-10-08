@@ -190,14 +190,15 @@ module.exports = {
 
     // Fetch the checkpoint at blockIndex through the pooled, retry-aware
     // ExplorerClient (vs sdk.checkpoint.fetchAndVerifyCheckpoint's bare fetch),
-    // then re-verify it LOCALLY with Ed25519. The server's `verified` flag is
-    // ignored; only local crypto decides.
-    async verifyCheckpoint(blockIndex) {
+    // then re-verify its signatures LOCALLY with Ed25519; the server's `verified`
+    // flag is ignored. Without opts.validators the set is the explorer's own, so
+    // validatorSource says whether the verdict trusts the explorer for the set.
+    async verifyCheckpoint(blockIndex, opts) {
+        let supplied = CheckpointVerifier.suppliedValidators(opts);
         let body = await this.requireExplorer().getCheckpointVerify(blockIndex);
         // Nothing to verify if the explorer sent no checkpoint back; fail loudly rather than report success.
         if (!body || !body.checkpoint) throw new Error('verifyCheckpoint: no checkpoint in response');
-        let result = CheckpointVerifier.verifyCheckpoint(body.checkpoint, body.validators || []);
-        return Object.assign({ checkpoint: body.checkpoint, snapshotAvailable: !!body.snapshot_available }, result);
+        return CheckpointVerifier.verifyServedCheckpoint(body, supplied);
     },
 
 

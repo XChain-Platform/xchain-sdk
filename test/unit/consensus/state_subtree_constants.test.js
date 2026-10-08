@@ -49,6 +49,7 @@ const path   = require('path');
 
 const SUB = require('../../../src/consensus/gates/state_subtree_gate.js');
 const M   = require('../../../src/merkle.js');
+const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 // The gate sits at the same tail in every repo that carries it since W5, so every
 // pair below is a raw byte compare.
@@ -61,7 +62,6 @@ const SIBLINGS = {
     'xchain-sync':     path.resolve(process.env.XCHAIN_SYNC_DIR || path.join(SIBLING_ROOT, 'xchain-sync'), GATE_FILE),
     'xchain-explorer': path.resolve(process.env.XCHAIN_EXPLORER_DIR || path.join(SIBLING_ROOT, 'xchain-explorer'), GATE_FILE)
 };
-const SIBLING_REQUIRED = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 
 function sha256File(p){ return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex'); }
 
@@ -344,11 +344,8 @@ describe('SPV sub-tree activation constants: client export @regression', functio
 
     Object.keys(SIBLINGS).forEach(function(repo){
         it('is byte-identical to ' + repo + '\'s copy (cross-repo consensus constant)', function(){
-            if(!fs.existsSync(SIBLINGS[repo])){
-                if(SIBLING_REQUIRED)
-                    throw new Error('drift guard cannot run: sibling missing at ' + SIBLINGS[repo]);
-                return this.skip();
-            }
+            // Refuse an absent sibling and a lane symlink into a live main checkout alike.
+            if(!skipOrFail(this, siblingCheckout(__dirname, SIBLINGS[repo]), 'the ' + repo + ' gate-file drift guard')) return;
             assert.strictEqual(fs.readFileSync(SELF, 'utf8'), fs.readFileSync(SIBLINGS[repo], 'utf8'),
                 'state_subtree_gate.js drifted between xchain-sdk and ' + repo + '. The heights a ' +
                 'client reads MUST equal the heights the fleet commits: a lagging SDK copy reports a live ' +

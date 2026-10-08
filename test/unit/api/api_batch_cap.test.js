@@ -34,6 +34,8 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 const http   = require('http');
+const os     = require('os');
+const { execFile } = require('child_process');
 const express = require('express');
 const bodyParser = require('body-parser');
 const { batchCapMiddleware, resolveMaxBatch } = require('../../../src/utils/api_guards.js');
@@ -133,5 +135,34 @@ describe('API JSON-RPC batch fan-out cap', function () {
         // the shipped path, so the tests refuse to let one come back.
         assert.ok(!/req\.body\.length\s*>/.test(src),
             'src/api.js re-implements the batch cap inline; it must mount batchCapMiddleware instead');
+    });
+});
+
+// Loads src/api/index.js in a child process and resolves its stderr (startup warnings)
+function loadApiStderr(maxBatch) {
+    const env = { PATH: process.env.PATH, HOME: process.env.HOME, NETWORK: 'bitcoin-regtest',
+        SDK_API_KEY: 'batch-test-key', SDK_API_MAX_BATCH: maxBatch };
+    const script = 'require(' + JSON.stringify(path.join(__dirname, '../../../src/api/index.js')) + ');';
+    return new Promise((resolve, reject) => {
+        execFile(process.execPath, ['-e', script], { env, cwd: os.tmpdir(), timeout: 8000 },
+            (err, stdout, stderr) => err ? reject(new Error(err.message + '\n' + stderr)) : resolve(stderr));
+    });
+}
+
+describe('API JSON-RPC batch cap setting validation', function () {
+    this.timeout(15000);
+
+    it('a truncatable junk cap falls back to the default instead of a truncated prefix', () => {
+        // parseInt() read '1e3' as a cap of 1 and '50abc' as 50, with nothing logged.
+        for (const junk of ['1e3', '50abc', '2.5', '+50', '0x10', '   '])
+            assert.strictEqual(resolveMaxBatch({ SDK_API_MAX_BATCH: junk }), 20,
+                'a malformed cap must fall back to 20: ' + JSON.stringify(junk));
+        assert.strictEqual(resolveMaxBatch({ SDK_API_MAX_BATCH: ' 50 ' }), 50);
+    });
+
+    it('warns at startup when the batch cap setting is unusable', async () => {
+        assert.match(await loadApiStderr('1e3'), /SDK_API_MAX_BATCH is not a positive whole number/);
+        assert.match(await loadApiStderr('0'), /SDK_API_MAX_BATCH is not a positive whole number/);
+        assert.doesNotMatch(await loadApiStderr('50'), /SDK_API_MAX_BATCH/);
     });
 });

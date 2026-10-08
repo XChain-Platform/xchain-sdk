@@ -35,6 +35,7 @@ const path   = require('path');
 
 const XChainSDK    = require('../../../src/XChainSDK.js');
 const ContractUtils = require('../../../src/contract/utils.js');
+const { siblingCheckout, skipOrFail, siblingsRequired } = require('../../helpers/sibling_checkout.js');
 
 const VENDORED_DIR = path.join(__dirname, '../..', '..', 'src', 'contract');
 const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(__dirname, '../..', '..', '..');
@@ -86,21 +87,14 @@ function installedVersion(name) {
     }
 }
 
-// A parity guard must never silently pass by skipping. When the sibling is
-// present we run; when it is absent we HARD-FAIL only where the sibling is
-// REQUIRED, i.e. the job that checks it out and sets XCHAIN_REQUIRE_SIBLINGS=1,
-// so the guard can never green-by-skip there (mirrors xchain-sync's
-// rollback-coverage requireSibling). We do NOT key on the generic CI flag:
-// the shared unit job sets CI=true without checking out siblings. Returns
-// false (caller should `return`) when it skipped; throws when required-but-missing.
-const SIBLING_REQUIRED = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
+// A parity guard must never silently pass by skipping, nor pass against a
+// sibling no commit pins. The shared helper refuses an absent sibling and a
+// lane-worktree symlink into a live main checkout; a refusal fails when
+// XCHAIN_REQUIRE_SIBLINGS=1 and skips otherwise. Returns false (caller should
+// `return`) when it skipped; throws when the sibling was declared supplied.
+const SIBLING_REQUIRED = siblingsRequired();
 function requireSibling(ctx, absPath) {
-    if (fs.existsSync(absPath)) return true;
-    if (SIBLING_REQUIRED)
-        throw new Error('parity guard cannot run: required sibling missing at ' + absPath +
-            ' (the job setting XCHAIN_REQUIRE_SIBLINGS=1 must check out the sibling repo)');
-    ctx.skip();
-    return false;
+    return skipOrFail(ctx, siblingCheckout(__dirname, absPath), 'the contract-lint parity guard against ' + absPath);
 }
 
 // One bad fixture per acorn-coverable rule + a float-warning fixture.
@@ -314,7 +308,8 @@ describe('contract-lint parity + drift', function () {
 describe('contract-lint parity + drift', function () {
 
     describe('the four shipped templates lint clean (acorn-coverable rules)', function () {
-        const haveTemplates = fs.existsSync(CONTRACTS_DIR);
+        const templatesCheckout = siblingCheckout(__dirname, CONTRACTS_DIR);
+        const haveTemplates = templatesCheckout.usable;
         let sdk;
         before(function () { sdk = new XChainSDK({ network: 'bitcoin-regtest', noHub: true }); });
 
@@ -328,6 +323,7 @@ describe('contract-lint parity + drift', function () {
             it('xchain-contracts templates present', function () {
                 // Green-by-skip is only acceptable in a per-repo unit run; the
                 // job that checks out siblings must hard-fail on absence.
+                if (!haveTemplates && !skipOrFail(this, templatesCheckout, 'the template-parity guard')) return;
                 if (SIBLING_REQUIRED)
                     throw new Error('template-parity guard cannot run: xchain-contracts templates missing at ' +
                         CONTRACTS_DIR + ' with XCHAIN_REQUIRE_SIBLINGS=1');

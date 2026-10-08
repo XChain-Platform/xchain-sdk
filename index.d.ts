@@ -670,15 +670,48 @@ export interface TokenRecord {
     [key: string]: any;
 }
 
+/**
+ * One contract as the explorer serves it: snake_case on the wire, passed through
+ * unchanged. A `getContracts()` row carries the unmarked fields; `getContract()`
+ * adds the ones marked detail-only. BIGINT columns arrive as exact decimal strings.
+ * Closed on purpose, so a misspelled field is a compile error, not `undefined`.
+ */
 export interface ContractInfo {
-    actionIndex: number;
-    address: string;
-    owner: string;
-    codeHash?: string;
-    status?: string;
-    deployBlock?: number;
-    gasLimit?: number;
-    /** Declared emission allowlist (programmable policy layer); null/absent = unrestricted */
+    action: string | null;
+    /** The DEPLOY's ACTION_INDEX, which is the contract's id */
+    action_index: number | string | null;
+    action_format: number | null;
+    /** The deployer's address */
+    source: string | null;
+    code_hash: string;
+    api_version: number;
+    cooldown_blocks: number | null;
+    slash_destination: string | null;
+    block_index: number | string;
+    /** DEPLOY block time, unix seconds */
+    timestamp: number | string;
+    tx_hash: string | null;
+    tx_index: number | string;
+    status: string | null;
+    /** Owner withdraw: true enabled, false disabled, null unknown */
+    owner_withdraw: boolean | null;
+    /** Detail-only: the deployed source */
+    code?: string;
+    /** Detail-only: whether `code` still hashes to `code_hash` */
+    code_hash_ok?: boolean;
+    /** Detail-only: callable method names, or null when the shape is unrecognized */
+    methods?: string[] | null;
+    /** Detail-only: the self-declared abi metadata, or null */
+    abi?: Record<string, any> | null;
+    /** Detail-only: the constructor's raw input params, or null */
+    constructor_params?: string | null;
+    /** Detail-only: whether this explorer serves read-only contract calls */
+    vm_query_enabled?: boolean;
+    /** Detail-only: the wallet a write call hands off to */
+    wallet_url?: string;
+    /** Detail-only: true when the stored permissions manifest is unreadable */
+    permissions_error?: boolean;
+    /** Detail-only. Declared emission allowlist (programmable policy layer); null = unrestricted */
     permissions?: string[] | null;
     /** Declared royalty cap in basis points (snake_case on the wire); null/absent = global cap */
     max_take_bps?: number | null;
@@ -691,7 +724,8 @@ export interface ContractInfo {
     meta_version?: string | null;
     /** The whole evaluated `meta` object (parsed meta_json), including keys consensus ignores */
     meta?: Record<string, any> | null;
-    [key: string]: any;
+    /** Detail-only, and only while the coin's indexed tip is stale */
+    freshness?: ExplorerFreshnessMarker;
 }
 
 /**
@@ -821,25 +855,49 @@ export interface ContractManifest {
     meta?: Record<string, any> | null;
 }
 
+/** One row of a contract's current state, as the explorer's state route serves it. */
 export interface ContractStateEntry {
-    key: string;
-    value: any;
+    id: number | string;
+    contract_index: number | string;
+    state_key: string;
+    /** The stored JSON text, not the parsed value; JSON.parse it to read the value */
+    state_value: string | null;
+    block_index: number | string;
 }
 
+/** One token held in a contract's custody, as the explorer's balance route serves it. */
 export interface ContractBalanceEntry {
-    tick: string;
-    balance: string;
+    tick: string | null;
+    /** Exact decimal string */
+    amount: string | null;
 }
 
+/**
+ * One contract execution as the explorer serves it, snake_case on the wire.
+ * `getExecutions()` rows carry the unmarked fields; `getExecution()` adds the
+ * detail-only ones. `status` 'valid' is a successful run, any other value a failed
+ * one. The explorer stores no return value.
+ */
 export interface ExecutionInfo {
-    actionIndex: number;
-    contractActionIndex: number;
-    method: string;
-    params?: string[];
-    success: boolean;
-    gasUsed: number;
-    returnValue?: string;
-    [key: string]: any;
+    action: string | null;
+    action_index: number | string;
+    action_format: number | null;
+    contract_index: number | string | null;
+    caller: string | null;
+    method_name: string | null;
+    gas_used: number | string;
+    gas_limit: number | string;
+    emitted_count: number;
+    block_index: number | string;
+    /** Block time, unix seconds */
+    timestamp: number | string;
+    tx_hash: string | null;
+    tx_index: number | string;
+    status: string | null;
+    /** Detail-only: the raw method params */
+    input_params?: string | null;
+    /** Detail-only: why the run failed, or null */
+    error_message?: string | null;
 }
 
 export interface CodeSizeResult {
@@ -1578,11 +1636,11 @@ export declare class ContractClient {
     /** Get contract metadata from explorer */
     getInfo(): Promise<ContractInfo>;
     /** Get contract state (all keys or a specific key) */
-    getState(key?: string): Promise<ContractStateEntry | ContractStateEntry[]>;
+    getState(key?: string): Promise<ListEnvelope<ContractStateEntry>>;
     /** Get contract execution history */
     getExecutions(opts?: QueryOptions): Promise<ListEnvelope<ExecutionInfo>>;
     /** Get contract token balances */
-    getBalance(tick?: string): Promise<ContractBalanceEntry | ContractBalanceEntry[]>;
+    getBalance(tick?: string): Promise<ListEnvelope<ContractBalanceEntry>>;
     /** Get the contract's declared permissions manifest (programmable policy layer) */
     getManifest(): Promise<ContractManifest>;
 
@@ -1914,13 +1972,13 @@ export declare class XChainSDK {
     getContracts(query?: string, type?: string, opts?: QueryOptions): Promise<ListEnvelope<ContractInfo>>;
 
     /** Get contract state entries (all keys or a specific key) */
-    getContractState(contractActionIndex: number | string, key?: string): Promise<ContractStateEntry | ContractStateEntry[]>;
+    getContractState(contractActionIndex: number | string, key?: string): Promise<ListEnvelope<ContractStateEntry>>;
 
     /** Get contract token balances */
-    getContractBalance(contractActionIndex: number | string, tick?: string): Promise<ContractBalanceEntry | ContractBalanceEntry[]>;
+    getContractBalance(contractActionIndex: number | string, tick?: string): Promise<ListEnvelope<ContractBalanceEntry>>;
 
-    /** Get a single execution result by its ACTION_INDEX */
-    getExecution(executionActionIndex: number | string): Promise<ExecutionInfo>;
+    /** Get one execution by its ACTION_INDEX, inside the list envelope: read `data[0]` */
+    getExecution(executionActionIndex: number | string): Promise<ListEnvelope<ExecutionInfo>>;
 
     /** Get execution history, filtered by `type` (block | address | contract; defaults to contract) */
     getExecutions(query?: number | string, type?: string, opts?: QueryOptions): Promise<ListEnvelope<ExecutionInfo>>;
@@ -2020,8 +2078,12 @@ export declare class XChainSDK {
     getValidatorSetProof(opts?: QueryOptions): Promise<any>;
     /** Contract-state inclusion proof for (contractIndex, key). */
     getContractStateProof(contractIndex: number | string, key: string): Promise<any>;
-    /** Fetch a checkpoint via the pooled client and re-verify it locally (Ed25519). */
-    verifyCheckpoint(blockIndex: number | string): Promise<any>;
+    /**
+     * Fetch a checkpoint via the pooled client and re-verify its signatures locally (Ed25519).
+     * Without opts.validators the set is the explorer's own (validatorSource 'explorer'); pass an
+     * out-of-band set to judge against it instead (validatorSource 'supplied').
+     */
+    verifyCheckpoint(blockIndex: number | string, opts?: { validators?: Array<string | { pubkey: string; weight?: string; source?: string }> }): Promise<any>;
 
 
     /*
