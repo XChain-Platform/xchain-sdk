@@ -1,23 +1,28 @@
 'use strict';
 
 const assert = require('assert');
-const crypto = require('crypto');
 const fs     = require('fs');
 const path   = require('path');
 
 const gates = require('../../../src/consensus/gate_registry');
 const { REGTEST_ARMING } = require('../../../src/consensus/gate_registry/shared_rows.js');
+const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 const ENTRY = path.join(__dirname, '..', '..', '..', 'src', 'consensus', 'gate_registry.js');
 const SHARED_ROWS_DIR = path.join(__dirname, '..', '..', '..', 'src', 'consensus', 'gate_registry');
-const SHARED_ROW_HASHES = {
-    'shared_rows.js':   '1db6bd06818eca6fc27a57858ac820592e6dc9e366e87e75be28ea099f8780dc',
-    'shared_rows_1.js': '6769da650408acc79b5db6fa0d93f835b077a37d8f7885e8aa81d61bcd8618de',
-    'shared_rows_2.js': '8c9ddc10be60387322faa3facbda25b7f17ac1c5ecefaf6340e78bb96dd7e496',
-    'shared_rows_3.js': '89127614a54b9a4007b8e63f18c4f8abb0873d8f8cb0d3f31a1115d67485c2b4',
-    'shared_rows_4.js': 'dec84cd5f6e10b5bc631eb3a68ddcdfa5e37c5fb10cdf01ddd43cbb35980dc9b',
-    'shared_rows_5.js': 'c6749ca7043a9a0c3057ed3a7b4dfd92362dee351a9a3d7611efff69bfd1b7ae',
-};
+const SHARED_ROW_FILES = [
+    'shared_rows.js',
+    'shared_rows_1.js',
+    'shared_rows_2.js',
+    'shared_rows_3.js',
+    'shared_rows_4.js',
+    'shared_rows_5.js',
+];
+const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT
+    || path.join(__dirname, '..', '..', '..', '..');
+const INDEXER_ROOT = process.env.XCHAIN_INDEXER_PATH || process.env.XCHAIN_INDEXER_DIR
+    || path.join(SIBLING_ROOT, 'xchain-indexer');
+const INDEXER_SHARED_ROWS_DIR = path.join(INDEXER_ROOT, 'src', 'protocol_changes');
 const BUNDLE_ORDER = 'anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION';
 const STAKE_ENV = 'XC_ANCHOR_STAKE_REGTEST_ACTIVATION';
 
@@ -38,10 +43,12 @@ const registered = Object.entries(REGTEST_ARMING).filter(([key]) => gates.has(ke
 
 describe('gate registry env view covers the regtest arming grammar', function () {
     it('keeps the canonical shared row files byte-identical', function () {
-        for (const [file, expected] of Object.entries(SHARED_ROW_HASHES)) {
-            const bytes = fs.readFileSync(path.join(SHARED_ROWS_DIR, file));
-            const actual = crypto.createHash('sha256').update(bytes).digest('hex');
-            assert.strictEqual(actual, expected, file + ' differs from the canonical whole-file twin');
+        const verdict = siblingCheckout(__dirname, INDEXER_SHARED_ROWS_DIR);
+        if (!skipOrFail(this, verdict, 'the canonical indexer shared-row byte-identity guard')) return;
+        for (const file of SHARED_ROW_FILES) {
+            const local = fs.readFileSync(path.join(SHARED_ROWS_DIR, file));
+            const canonical = fs.readFileSync(path.join(verdict.path, file));
+            assert.ok(local.equals(canonical), file + ' differs from the indexer canonical whole-file twin');
         }
     });
 
