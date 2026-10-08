@@ -20,7 +20,7 @@
 
 const bitcoin = require('bitcoinjs-lib');
 const ecc = require('@bitcoinerlab/secp256k1');
-const { deriveMuSig2P2TR2of3 } = require('../account.js');
+const { deriveMuSig2P2TR2of3, assertSegwitNetwork } = require('../account.js');
 const { isCapInert } = require('../policy/value_derivability.js');
 const { exactU64 } = require('./output_policy.js');
 const { toBytes } = require('./sign_request.js');
@@ -56,6 +56,8 @@ function setIdentity(self, config) {
         throw new Error('policy.maxPerWindow requires a windowStore (server-side budget)');
     self.windowStore = config.windowStore || null;
     self.network = config.network || null;
+    // Refuse here, ahead of setTapTree's rewrapping catch, so the error keeps its code.
+    assertSegwitNetwork(self.network, 'CoSigner');
 }
 
 // G2: an amount cap keyed on an action whose every decodable format

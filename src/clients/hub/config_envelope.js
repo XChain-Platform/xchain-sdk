@@ -19,6 +19,7 @@
  ********************************************************************/
 
 const coins = require('../../coins');
+const { isHttpsUrl } = require('../../utils/endpoints.js');
 
 // Local { coin -> consensusHash } per network, computed on first use. The bundled
 // coin registry cannot change under a running process, so re-hashing it on every
@@ -78,24 +79,26 @@ function hubEnvelopeMarks(result){
 // URL rather than once per client.
 function agentOptsFor(url, pool){
     if(!pool) return { proxy: false };
-    let isHttps = String(url).startsWith('https');
+    let isHttps = isHttpsUrl(url);
     let agent = isHttps ? pool.httpsAgent : pool.httpAgent;
     if(!agent) return { proxy: false };
     return isHttps ? { proxy: false, httpsAgent: agent } : { proxy: false, httpAgent: agent };
 }
 
-// Network string → hub config keys mapping
-const NETWORK_MAP = {
-    'bitcoin-mainnet':   { coin: 'bitcoin',  network: 'mainnet' },
-    'bitcoin-testnet':   { coin: 'bitcoin',  network: 'testnet' },
-    'bitcoin-regtest':   { coin: 'bitcoin',  network: 'regtest' },
-    'litecoin-mainnet':  { coin: 'litecoin', network: 'mainnet' },
-    'litecoin-testnet':  { coin: 'litecoin', network: 'testnet' },
-    'litecoin-regtest':  { coin: 'litecoin', network: 'regtest' },
-    'dogecoin-mainnet':  { coin: 'dogecoin', network: 'mainnet' },
-    'dogecoin-testnet':  { coin: 'dogecoin', network: 'testnet' },
-    'dogecoin-regtest':  { coin: 'dogecoin', network: 'regtest' }
-};
+// Build the network string → hub config keys mapping (bitcoin-testnet →
+// { coin: 'bitcoin', network: 'testnet' }) from the coin registry, so a coin
+// added to the registry gets hub endpoint discovery with no edit here.
+function buildNetworkMap(registry){
+    const map = {};
+    for(const tick of registry.ALLOWED_COINS){
+        const full = registry.COIN_FULL_NAME[tick];
+        for(const network of registry.NETWORKS)
+            map[full + '-' + network] = { coin: full, network };
+    }
+    return map;
+}
+
+const NETWORK_MAP = buildNetworkMap(coins);
 
 module.exports = {
     LOCAL_CONSENSUS_HASHES,
@@ -104,5 +107,6 @@ module.exports = {
     isHubErrorEnvelope,
     hubEnvelopeMarks,
     agentOptsFor,
+    buildNetworkMap,
     NETWORK_MAP
 };

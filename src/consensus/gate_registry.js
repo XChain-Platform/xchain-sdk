@@ -29,13 +29,14 @@
  * here, and no key, spelling or order in the block changes inside a window.
  *
  * REGTEST ARMING is applied WHEN A ROW IS READ (shared_rows.js registerRows
- * installs it as the core's read overlay): the block writes the five
- * venue-armed regtest entries UNPINNED, the registry stores that committed
+ * installs it as the core's read overlay): each block row REGTEST_ARMING
+ * lists commits a bare regtest entry, the registry stores that committed
  * table, and every get(), copy(), rows() and activeAt() arms the entry from
  * this process's environment as it stands at that moment. The overlay reads
  * through config.js's env getters, never process.env directly, per
  * CODE-STYLE.md's module-shape rule; registryEnv below is a live read-through
- * (getter-backed) view over the three variables the arming grammar names.
+ * (getter-backed) view with one getter per variable the arming grammar reads
+ * (ENV_READERS in shared_rows.js), which gate_registry_env_coverage.test.js pins.
  *
  * Readers get(), copy(), has(), keys(), rows() and activeAt(). A miss THROWS a
  * RegistryMissError naming the key: a row a build lacks is a build defect and
@@ -70,6 +71,13 @@ const registryEnv = {
     get XC_ROLLCALL_REGTEST_ACTIVATION() { return sdkEnv.rollcallRegtestActivation(); },
     get XC_ROLLCALL_GATES_REGTEST_ACTIVATION() { return sdkEnv.rollcallGatesRegtestActivation(); },
     get XC_MIRROR_ADMISSION_ACTIVATION() { return sdkEnv.mirrorAdmissionRegtestActivation(); },
+    get XC_ANCHOR_STAKE_REGTEST_ACTIVATION() { return sdkEnv.anchorStakeRegtestActivation(); },
+    get XC_ANCHOR_SLASH_REGTEST_ACTIVATION() { return sdkEnv.anchorSlashRegtestActivation(); },
+    get XC_AMOUNTS_PRICE_REGTEST_ACTIVATION() { return sdkEnv.amountsPriceRegtestActivation(); },
+    get XC_AMOUNTS_PRICE_REGTEST_TIME() { return sdkEnv.amountsPriceRegtestTime(); },
+    get XC_CONTRACTS_REGTEST_ACTIVATION() { return sdkEnv.contractsRegtestActivation(); },
+    get XC_LISTS_MARKET_REGTEST_ACTIVATION() { return sdkEnv.listsMarketRegtestActivation(); },
+    get XC_LISTS_MARKET_REGTEST_TIME() { return sdkEnv.listsMarketRegtestTime(); },
 };
 
 const { registry } = core;
@@ -85,4 +93,6 @@ module.exports = {
     UNARMED: core.UNARMED,
     UNPINNED: core.UNPINNED,
     RegistryMissError: core.RegistryMissError,
+    // Expose the live arming view so pre-flight mirrors arm from the same readers.
+    armingEnv: registryEnv,
 };

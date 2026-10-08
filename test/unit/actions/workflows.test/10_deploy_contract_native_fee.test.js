@@ -21,8 +21,8 @@ const feeMethods = require('../../../../src/XChainSDK/fees_and_services.js');
 const FAKE_WIF = 'L1rkA9mYRjVPVdvMuVbHRMX6SPHM7fNwCEfT3AV2qCGAmJ8wNfp';
 const FEE_DEST = 'Lfees7tszAx5Gqam2fuqf6biaX3LXafM4H';
 
-// deployContract() never passed a fee output to the session, so a DEPLOY on a
-// native-fee chain went out without one and was ruled invalid.
+// deployContract() must follow the registry-backed SDK fee decision or a DEPLOY on a
+// native-fee chain goes out without its required output and is ruled invalid.
 function makeSdk(coin, calls, quote) {
     const record = (kind) => async (params, enc) => {
     calls.push({ kind, params, enc });
