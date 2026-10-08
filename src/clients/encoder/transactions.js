@@ -278,7 +278,7 @@ module.exports = {
         if (!txHex)
             throw new SDKEncoderError('MISSING_TX_HEX', 'broadcastTx requires txHex (signed transaction hex)');
 
-        return this.rpc('broadcast_tx', { tx_hex: txHex });
+        return this.rpc('broadcast_tx', { tx_hex: txHex }, { retry: false });
     },
 
     async getTxBlock(txid) {
