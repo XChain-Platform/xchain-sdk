@@ -220,19 +220,8 @@ function decodePrice(p, chainSuffix) {
 }
 
 /*
- * BET describer (§11.3 signing, promoted from the wallet). One action
- * name over four formats, so the summary must name
- * WHICH one is being signed: approving a resolve is not remotely the
- * same act as approving a stake.
- *
- * Reads the wire spelling a ParsedAction carries, and tolerates the SDK
- * builder's camelCase output so a caller describing what it just built
- * (rather than what it parsed) still reads sensibly.
- *
- * The warnings are the irreversibilities, not lint. A bet cannot be
- * cancelled, a resolve is the payout decision itself, and a cancel
- * refunds and ends the market. Those are the facts a signer needs
- * before approving, and exactly what a raw-hex screen would hide.
+ * Name which of the five BET formats is being signed. Accept parsed wire
+ * fields and builder camelCase fields, and warn about irreversible effects.
  */
 function decodeBet(p, chainSuffix) {
     const pick = (camel, upper) => {
@@ -253,7 +242,28 @@ function decodeBet(p, chainSuffix) {
     if (version === '2') return decodeBetPlacement(chainSuffix, pick, feedRef, outcome, memo, memoWarn);
     if (version === '3') return decodeBetResolution(chainSuffix, feedRef, outcome, memo, memoWarn);
     if (version === '1') return decodeBetCancellation(chainSuffix, feedRef, memo, memoWarn);
+    if (version === '4') return decodeBetListEdit(chainSuffix, pick, feedRef, memo, memoWarn);
     return decodeBetMarket(chainSuffix, pick, memo, memoWarn);
+}
+
+function decodeBetListEdit(chainSuffix, pick, feedRef, memo, memoWarn) {
+    const describeList = value => value === '' ? 'Retain current' : value === '0' ? 'Detach' : value;
+    const allowList = pick('allowList', 'ALLOW_LIST');
+    const blockList = pick('blockList', 'BLOCK_LIST');
+    return {
+        summary: `Edit membership lists for market ${feedRef || '?'}${chainSuffix}`,
+        details: [
+            { label: 'Market', value: feedRef },
+            { label: 'Allow list', value: describeList(allowList) },
+            { label: 'Block list', value: describeList(blockList) },
+            ...(memo ? [{ label: 'Memo', value: memo }] : []),
+        ],
+        warnings: [
+            'Only the market creator can make this edit, and only while the market is open.',
+            'The new membership lists affect future bets only. Existing bets are unchanged.',
+            ...memoWarn,
+        ],
+    };
 }
 
 function decodeBetPlacement(chainSuffix, pick, feedRef, outcome, memo, memoWarn) {
@@ -339,7 +349,7 @@ function decodeBetMarket(chainSuffix, pick, memo, memoWarn) {
             ...(memo ? [{ label: 'Memo', value: memo }] : []),
         ],
         warnings: [
-            'Markets cannot be edited after this. To change any term you must cancel and create a new one.',
+            'Market terms cannot be edited after this. Only allow and block list references can change while the market is open.',
             'You are the oracle: if you never resolve it, bettors are refunded after the refund window, and your address carries that record publicly.',
             ...(outcomeList.length < 2 ? ['A market needs at least two outcomes.'] : []),
             ...memoWarn,
