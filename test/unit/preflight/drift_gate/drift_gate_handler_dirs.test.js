@@ -203,16 +203,6 @@ describe('drift map rows: a directory handler is hashed whole', function () {
         }
     });
 
-    it('covers a test module shipped inside the handler directory', function () {
-        const root = tempRoot();
-        const dir = splitHandler(root, 'issue');
-        put(root, 'src/actions/issue/distribution_probe.test.js', 'module.exports = { ownerOnly: false };\n');
-        const pinned = pinOf(root, 'src/actions/issue/');
-        expect(dirs.listParts(dir)).to.include('distribution_probe.test.js');
-        fs.appendFileSync(path.join(dir, 'distribution_probe.test.js'), 'module.exports.nonOwner = true;\n');
-        expect(pinOf(root, 'src/actions/issue/')).to.not.equal(pinned);
-    });
-
     it('reports drift when one part is edited, and names what the directory holds now', function () {
         const root = tempRoot();
         const dir = splitHandler(root, 'batch');
@@ -237,6 +227,20 @@ describe('drift map rows: a directory handler is hashed whole', function () {
         expect(dirs.compareRows(root, [pinned]).drift, 'a removed part').to.have.lengthOf(1);
         put(root, 'src/actions/batch/limits/caps_renamed.js', 'module.exports = { MAX_PARTS: 10 };\n');
         expect(dirs.compareRows(root, [pinned]).drift, 'a renamed part, same bytes').to.have.lengthOf(1);
+    });
+});
+
+describe('drift map rows: test modules are part of a directory handler', function () {
+    afterEach(cleanRoots);
+
+    it('covers a test module shipped inside the handler directory', function () {
+        const root = tempRoot();
+        const dir = splitHandler(root, 'issue');
+        put(root, 'src/actions/issue/distribution_probe.test.js', 'module.exports = { ownerOnly: false };\n');
+        const pinned = pinOf(root, 'src/actions/issue/');
+        expect(dirs.listParts(dir)).to.include('distribution_probe.test.js');
+        fs.appendFileSync(path.join(dir, 'distribution_probe.test.js'), 'module.exports.nonOwner = true;\n');
+        expect(pinOf(root, 'src/actions/issue/')).to.not.equal(pinned);
     });
 });
 
