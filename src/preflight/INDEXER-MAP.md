@@ -81,7 +81,11 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `31ee72dc`
+**Pins taken at indexer commit:** `6f531460`
+
+(Re-anchored 2026-10-08 against indexer `6f531460`. Only the `issue` directory pin moves,
+for the lazy distribution probe reviewed in the first entry of the review log below. The
+other twelve rows are byte-identical to the prior anchor `31ee72dc`.)
 
 (Re-anchored 2026-10-06 against indexer `31ee72dc`. Only the `send` and `dispenser` directory pins move,
 for the caret pack key lookup and the dispenser refill controller guard reviewed in the first entry of
@@ -373,7 +377,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 31ee72dc..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 6f531460..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -449,7 +453,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (SEND) | `src/actions/send/` | `d82275d10ce07ce916e13a74ce5474957ff8d4f2a038175de53274821b0a9619` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `3671cf3e2efefb069d30539814ecc2f1bd65087698f756711c8a1c7b75e9665f` |
 | `checks/mint.js` | `src/actions/mint/` | `0f2b6b0375df803321c1644e24f9fa2b6dcb73119a470832eeb93dfab8530595` |
-| `checks/issue.js` | `src/actions/issue/` | `9936894a073dbdbc6f1e495d742e6f4035024efce3e0aa1fecea04a8a89471a6` |
+| `checks/issue.js` | `src/actions/issue/` | `95dff217aeae8428578cf583b74bdeedf97731fd2c9242be6e8baf6763c816e9` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `da2a7d7c2fd22489c65ffebc91804b02bb4694aec0ba86daa89aecd81d409b7c` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `40bacc5f8b14d5c8d96b38ff912e8de964054dc65f287ca8f0590e4528919c6c` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `66728bf57468a88c88e154622ca2708a1089ac9f5f8aa115f296cdadcbd5b8e5` |
@@ -479,6 +483,24 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-08 - issue lazy distribution probe
+
+The `issue` pin moves from `9936894a` to `95dff217`, hashed from the committed indexer tree at
+`6f531460` by `node bin/preflight_handler_dirs.js <indexer> src/actions/issue/`. The executable
+diff from its parent changes `token_state.js` and `edit_rules.js`; the new
+`distribution_probe.test.js` drives the same behavior and is also covered by the directory pin.
+
+The handler used to read token holders eagerly for every non-genesis ISSUE. It now creates a
+cached probe and awaits it only when CALLBACK_BLOCK, CALLBACK_TICK, or CALLBACK_AMOUNT differs
+from the stored token value. Each changed callback field still rejects when supply is distributed,
+with the same error text and after the same earlier validations. An unchanged callback field and a
+description-only edit now avoid the holder read. Genesis still produces `false` without a holder
+read, and the first probe result is reused if more than one callback field reaches it.
+
+**Direction: NEITHER, no admission boundary moves.** This is a deferred database read with the
+same verdict at every call site. No predicate, field format, fee, activation condition, or error
+path mirrored by `checks/issue.js` changed. NO CLIENT CHECK MOVES.
 
 ### 2026-10-06 - caret pack key for SEND and the DISPENSER_REFILL controller guard
 
