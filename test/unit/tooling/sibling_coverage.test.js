@@ -46,7 +46,7 @@ const SIBLINGS = [
       guards: 'vendored coins registry byte-identity (BTC/LTC/DOGE/index/consensus_pin)' },
     { repo: 'xchain-indexer',       envs: ['XCHAIN_INDEXER_PATH', 'XCHAIN_INDEXER_DIR'],
       marker: 'src/actions',
-      guards: 'the §8.5 pre-flight drift gate over the mapped handlers and its by-value seams '
+      guards: 'native fee-mode registry parity, the §8.5 pre-flight drift gate over the mapped handlers and its by-value seams '
               + '(fee-quote lists, config caps, mirrored regex rules, gas schedules), plus the '
               + 'addressRefFields consensus-twin byte-identity guard' },
     { repo: 'xchain-explorer',      envs: ['XCHAIN_EXPLORER_DIR'],

@@ -33,7 +33,7 @@
  * rather than silently opening the service to everyone.
  *
  * Identical by intent to xchain-encoder/src/server/cors_origin.js, xchain-hub's
- * src/lib/corsOrigin.js, xchain-indexer/src/api/corsOrigin.js,
+ * src/api/cors_origin.js, xchain-indexer/src/api/cors_origin.js,
  * xchain-utxo-tracker/src/server/cors_origin.js and xchain-sync/src/http/cors_origin.js; keep
  * the six in step.
  *

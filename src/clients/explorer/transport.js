@@ -21,7 +21,7 @@
 const axios = require('axios');
 const { SDKExplorerError, SDKRateLimitedError } = require('../../utils/errors.js');
 const { withRetry, isRetryable, getRetryAfterSeconds } = require('../../utils/retry.js');
-const { coinPrefix } = require('../../utils/endpoints.js');
+const { coinPrefix, hasHttpScheme, isHttpsUrl } = require('../../utils/endpoints.js');
 const { getSupportedNetworks } = require('../../protocol/networks.js');
 
 // (Coin prefix mapping lives in endpoints.coinPrefix, single source of truth,
@@ -33,8 +33,8 @@ module.exports = {
     // so connection pooling applies to public hosts too.
     buildClient() {
         let pool   = this._pool;
-        let baseURL = this.baseUrl.startsWith('http') ? this.baseUrl : 'http://' + this.baseUrl + ':' + this.port;
-        let isHttps = baseURL.startsWith('https');
+        let baseURL = hasHttpScheme(this.baseUrl) ? this.baseUrl : 'http://' + this.baseUrl + ':' + this.port;
+        let isHttps = isHttpsUrl(baseURL);
         // An injected agent wins. The desktop wallet routes its traffic
         // through a SOCKS5 proxy when the user turns on Tor routing, and
         // that is expressed as pre-built agents because a SOCKS tunnel is a

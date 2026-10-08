@@ -50,6 +50,15 @@ const VEC_DIR   = path.join(DOCS_DIR, 'protocol', 'test-vectors');
 const VEC_CHECKOUT   = siblingCheckout(__dirname, VEC_DIR);
 const CANON_CHECKOUT = siblingCheckout(__dirname, CANON_DIR);
 
+// List the regular .js files of one side's consensus/gate_registry/, sorted; empty when absent.
+function registryParts(root){
+    const dir = path.join(root, 'consensus', 'gate_registry');
+    if(!fs.existsSync(dir)) return [];
+    return fs.readdirSync(dir, { withFileTypes: true })
+        .filter((d) => d.isFile() && d.name.endsWith('.js')).map((d) => d.name).sort();
+}
+const LOCAL_PARTS = registryParts(LOCAL_DIR);
+
 let quorumVec = null, equivVec = null, activationVec = null;
 if(VEC_CHECKOUT.usable) try {
     quorumVec     = require(path.join(VEC_DIR, 'stake_weighted_quorum.json'));
@@ -180,9 +189,25 @@ describe('consensus-primitive conformance: byte-identity to canonical source @re
     });
 
     // The activation-registry parts are byte twins of the canonical gate_registry/
-    // copies; the per-repo entry gate_registry.js is not a twin and stays out.
-    ['core.js', 'shared_rows.js', 'regtest_env.js', 'shared_rows_1.js', 'shared_rows_2.js',
-        'shared_rows_3.js', 'shared_rows_4.js', 'shared_rows_5.js'].forEach(function(f){
+    // copies; the per-repo entry gate_registry.js is not a twin and stays out. The part
+    // list is the local directory listing, held equal to the canonical listing below.
+    it('gate_registry/ holds the vendored parts', function(){
+        assert.ok(LOCAL_PARTS.length > 0,
+            'src/consensus/gate_registry/ is missing or empty, so the per-file byte guard would check nothing');
+    });
+
+    it('gate_registry/ file set equals xchain-documentation/protocol/reference-impl', function(){
+        const canon = registryParts(CANON_DIR);
+        assert.ok(canon.length > 0, 'the canonical gate_registry/ under ' + CANON_DIR + ' is missing or empty');
+        const missing = canon.filter((f) => !LOCAL_PARTS.includes(f));
+        const extra   = LOCAL_PARTS.filter((f) => !canon.includes(f));
+        assert.deepStrictEqual({ missing, extra }, { missing: [], extra: [] },
+            'gate_registry/ file sets differ. Missing from the SDK copy: [' + missing.join(', ') +
+            ']. Present only in the SDK copy: [' + extra.join(', ') +
+            ']. Vendor the canonical part(s) and wire them into src/consensus/gate_registry.js.');
+    });
+
+    LOCAL_PARTS.forEach(function(f){
         it('gate_registry/' + f + ' is byte-identical to xchain-documentation/protocol/reference-impl', function(){
             const rel   = path.join('consensus', 'gate_registry', f);
             const local = fs.readFileSync(path.join(LOCAL_DIR, rel), 'utf8');
@@ -191,6 +216,25 @@ describe('consensus-primitive conformance: byte-identity to canonical source @re
                 'this repo\'s consensus/gate_registry/' + f + ' has drifted from the canonical source; ' +
                 'edit xchain-documentation/protocol/reference-impl/consensus/gate_registry/' + f +
                 ' and re-vendor every consumer copy, never the vendored copy alone.');
+        });
+    });
+});
+
+// Read the entry as text, not require.cache: other files load the parts directly and would mask a missing require.
+describe('gate_registry entry loads every local shared-rows part @regression', function(){
+    const entry = fs.readFileSync(path.join(LOCAL_DIR, 'consensus', 'gate_registry.js'), 'utf8');
+    const parts = LOCAL_PARTS.filter((f) => /^shared_rows_\d+\.js$/.test(f));
+
+    it('finds numbered shared-rows parts to check', function(){
+        assert.ok(parts.length > 0, 'no shared_rows_<n>.js part under src/consensus/gate_registry/');
+    });
+
+    parts.forEach(function(f){
+        it('the entry requires gate_registry/' + f, function(){
+            const stem = f.replace(/\.js$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const wired = new RegExp('require\\(\\s*[\'"]\\./gate_registry/' + stem + '(\\.js)?[\'"]\\s*\\)');
+            assert.ok(wired.test(entry), 'src/consensus/gate_registry.js never requires gate_registry/' + f +
+                ', so its rows are missing from the registry; add the require beside the other parts.');
         });
     });
 });

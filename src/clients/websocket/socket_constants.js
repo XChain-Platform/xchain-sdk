@@ -56,9 +56,9 @@ const WS_OPEN       = 1;
 // reshaped payload; keep this in sync with the explorer's WS_SCHEMA_VERSION.
 const WS_SCHEMA_VERSION = 2;
 
-// Network string -> explorer coin code, generated from the canonical coin
-// registry (same convention as explorer.js): a display prefix ('' mainnet,
-// 'T' testnet, 'R' regtest) prepended to the ticker (e.g. dogecoin-testnet -> TDOGE).
+// Network string -> explorer coin code, built from the coin registry with the
+// same convention as utils/endpoints.js coinPrefix (which resolves it): '' mainnet,
+// 'T' testnet or 'R' regtest before the ticker (dogecoin-testnet -> TDOGE).
 const coins = require('../../coins');
 const NET_DISPLAY_PREFIX = { mainnet: '', testnet: 'T', regtest: 'R' };
 const COIN_PREFIX_MAP = {};
