@@ -44,7 +44,8 @@ var Formats = {
         0: 'VERSION|LABEL|OUTCOMES|TICK|FEE|DEADLINE|REFUND_WINDOW|MIN_AMOUNT|ALLOW_LIST|BLOCK_LIST|DETAILS|MEMO',
         1: 'VERSION|FEED_ACTION_INDEX|MEMO',
         2: 'VERSION|FEED_ACTION_INDEX|OUTCOME|AMOUNT|MEMO',
-        3: 'VERSION|FEED_ACTION_INDEX|OUTCOME|MEMO'
+        3: 'VERSION|FEED_ACTION_INDEX|OUTCOME|MEMO',
+        4: 'VERSION|FEED_ACTION_INDEX|ALLOW_LIST|BLOCK_LIST|MEMO'
     },
 
     BROADCAST: {
@@ -271,12 +272,5 @@ var Formats = {
     }
 
 }
-
-Object.defineProperty(Formats.BET, 4, {
-    value: 'VERSION|FEED_ACTION_INDEX|ALLOW_LIST|BLOCK_LIST|MEMO',
-    enumerable: false,
-    writable: false,
-    configurable: false
-});
 
 module.exports = Formats;
