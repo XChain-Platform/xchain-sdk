@@ -43,7 +43,7 @@ function stateEnvelope(pairs) {
 }
 
 function balanceEnvelope(rows) {
-    return { total: rows.length, data: rows.map(([tick, quantity]) => ({ tick, quantity })) };
+    return { total: rows.length, data: rows.map(([tick, amount]) => ({ tick, amount })) };
 }
 
 // A waiter over a scripted explorer: each call to getContractState /
@@ -317,10 +317,9 @@ describe('ActionWaiter contract state gate', function () {
             assert.strictEqual(({}).polluted, undefined);
         });
 
-        it('drops envelope fields when the response is already a key map', function () {
+        it('ignores a plain key map outside the explorer list shape', function () {
             const state = ActionWaiter.normalizeContractState({ total: 2, status: '"FUNDED"' });
-            assert.strictEqual(state.status, 'FUNDED');
-            assert.ok(!('total' in state));
+            assert.deepStrictEqual(Object.keys(state), []);
         });
 
         it('reports a key that is not there as undefined, distinct from a null value', function () {

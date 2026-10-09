@@ -21,9 +21,6 @@
 
 const mathjs = require('mathjs');
 
-// Name the list-envelope keys, so an empty page never reads as contract state.
-const ENVELOPE_FIELDS = new Set(['total', 'page', 'limit', 'offset', 'data', 'results', 'runtime', 'freshness']);
-
 // Unpack explorer result rows so callers can accept both response shapes.
 function rowsOf(raw) {
     if (Array.isArray(raw)) return raw;
@@ -42,55 +39,27 @@ function parseStateValue(value) {
 function normalizeContractState(ActionWaiter, raw) {
     let state = Object.create(null);
     let rows  = ActionWaiter.rowsOf(raw);
-    if (rows.length) {
-        for (let row of rows) {
-            if (!row || typeof row !== 'object') continue;
-            let key = (row.state_key !== undefined) ? row.state_key : row.key;
-            if (key === undefined || key === null) continue;
-            let value = (row.state_value !== undefined) ? row.state_value : row.value;
-            state[String(key)] = ActionWaiter.parseStateValue(value);
-        }
-        return state;
-    }
-    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-        for (let key of Object.keys(raw)) {
-            if (ENVELOPE_FIELDS.has(key)) continue;
-            state[key] = ActionWaiter.parseStateValue(raw[key]);
-        }
+    for (let row of rows) {
+        if (!row || typeof row !== 'object') continue;
+        let key = row.state_key;
+        if (key === undefined || key === null) continue;
+        state[String(key)] = ActionWaiter.parseStateValue(row.state_value);
     }
     return state;
 }
 
 // Read one state key through the class hooks so static overrides keep working.
 function readContractStateValue(ActionWaiter, raw, key) {
-    let rows = ActionWaiter.rowsOf(raw);
-    if (rows.length) {
-        let state = ActionWaiter.normalizeContractState(raw);
-        return Object.prototype.hasOwnProperty.call(state, String(key)) ? state[String(key)] : undefined;
-    }
-    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-        if (raw.state_value !== undefined) return ActionWaiter.parseStateValue(raw.state_value);
-        if (raw.value !== undefined)       return ActionWaiter.parseStateValue(raw.value);
-        if (!ENVELOPE_FIELDS.has(String(key)) && Object.prototype.hasOwnProperty.call(raw, key))
-            return ActionWaiter.parseStateValue(raw[key]);
-    }
-    return undefined;
+    let state = ActionWaiter.normalizeContractState(raw);
+    return Object.prototype.hasOwnProperty.call(state, String(key)) ? state[String(key)] : undefined;
 }
 
 // Read an exact decimal balance string without lossy number conversion.
 function readContractQuantity(ActionWaiter, raw, tick) {
     let rows = ActionWaiter.rowsOf(raw);
-    if (rows.length) {
-        let row = rows.find(r => r && (r.tick === tick || r.TICK === tick));
-        if (!row) return null;
-        let quantity = (row.quantity !== undefined) ? row.quantity : row.amount;
-        return (quantity === undefined || quantity === null) ? null : String(quantity);
-    }
-    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-        let quantity = (raw.quantity !== undefined) ? raw.quantity : raw.amount;
-        if (quantity !== undefined && quantity !== null) return String(quantity);
-    }
-    return null;
+    let balance = rows.find(candidate => candidate && candidate.tick === tick);
+    if (!balance || balance.amount === undefined || balance.amount === null) return null;
+    return String(balance.amount);
 }
 
 // Compare exact decimal quantities so large adjacent values remain distinct.

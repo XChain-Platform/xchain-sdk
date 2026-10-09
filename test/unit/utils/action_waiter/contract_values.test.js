@@ -49,23 +49,21 @@ describe('contract value parsing', function () {
 });
 
 describe('contract state normalization', function () {
-    it('normalizeContractState reads rows by either key pair', function () {
+    it('normalizeContractState reads the explorer state columns only', function () {
         const state = normalizeContractState(mod, [
             { state_key: 'a', state_value: '1' },
             { key: 'b', value: '"x"' },
             null, 'junk', { value: '2' }, { key: null, value: '3' }
         ]);
-        assert.deepStrictEqual(Object.keys(state).sort(), ['a', 'b']);
+        assert.deepStrictEqual(Object.keys(state), ['a']);
         assert.strictEqual(state.a, 1);
-        assert.strictEqual(state.b, 'x');
         assert.strictEqual(Object.getPrototypeOf(state), null);
     });
 
-    it('normalizeContractState reads plain objects and skips envelope keys', function () {
+    it('normalizeContractState ignores objects outside the explorer list shape', function () {
         const raw = { total: 1, page: 1, limit: 1, offset: 0, data: [], results: [], k: '{"n":2}', j: 'z' };
         const state = normalizeContractState(mod, raw);
-        assert.deepStrictEqual(Object.keys(state).sort(), ['j', 'k']);
-        assert.deepStrictEqual(state.k, { n: 2 });
+        assert.deepStrictEqual(Object.keys(state), []);
         assert.strictEqual(Object.getPrototypeOf(state), null);
     });
 
@@ -85,23 +83,28 @@ describe('contract state reads', function () {
         assert.strictEqual(readContractStateValue(waiter, rows, 'missing'), undefined);
     });
 
-    it('readContractStateValue reads a single object', function () {
-        assert.strictEqual(readContractStateValue(mod, { state_value: '4' }, 'k'), 4);
-        assert.strictEqual(readContractStateValue(mod, { value: '"v"' }, 'k'), 'v');
-        assert.strictEqual(readContractStateValue(mod, { k: '{"q":1}' }, 'k').q, 1);
-        assert.strictEqual(readContractStateValue(mod, { other: 1 }, 'k'), undefined);
-        assert.strictEqual(readContractStateValue(mod, null, 'k'), undefined);
+    it('readContractStateValue ignores non-explorer objects', function () {
+        const waiter = waiterOf();
+        assert.strictEqual(readContractStateValue(waiter, { state_value: '4' }, 'k'), undefined);
+        assert.strictEqual(readContractStateValue(waiter, { value: '"v"' }, 'k'), undefined);
+        assert.strictEqual(readContractStateValue(waiter, { k: '{"q":1}' }, 'k'), undefined);
+        assert.strictEqual(readContractStateValue(waiter, null, 'k'), undefined);
     });
 
 });
 
 describe('contract quantity and amount helpers', function () {
-    it('readContractQuantity matches rows by tick and stringifies', function () {
-        const rows = [{ tick: 'AAA', quantity: 5 }, { TICK: 'BBB', amount: 1.5 }];
+    it('readContractQuantity reads the explorer balance columns only', function () {
+        const rows = [
+            { tick: 'AAA', amount: 5 },
+            { tick: 'BBB', quantity: 1.5 },
+            { TICK: 'CCC', amount: 2 }
+        ];
         assert.strictEqual(readContractQuantity(mod, rows, 'AAA'), '5');
-        assert.strictEqual(readContractQuantity(mod, rows, 'BBB'), '1.5');
+        assert.strictEqual(readContractQuantity(mod, rows, 'BBB'), null);
         assert.strictEqual(readContractQuantity(mod, rows, 'CCC'), null);
         assert.strictEqual(readContractQuantity(mod, null, 'AAA'), null);
+        assert.strictEqual(readContractQuantity(mod, { tick: 'AAA', amount: '5' }, 'AAA'), null);
     });
 
     it('compareAmount compares exact decimals', function () {
@@ -115,7 +118,7 @@ describe('contract quantity and amount helpers', function () {
 
 describe('contract value hooks', function () {
     it('routes through the hooks on the object passed as ActionWaiter', function () {
-        const hooks = waiterOf({ rowsOf: () => [{ key: 'z', value: '9' }] });
+        const hooks = waiterOf({ rowsOf: () => [{ state_key: 'z', state_value: '9' }] });
         assert.strictEqual(readContractStateValue(hooks, 'ignored', 'z'), 9);
         assert.strictEqual(mod.rowsOf, rowsOf);
     });
