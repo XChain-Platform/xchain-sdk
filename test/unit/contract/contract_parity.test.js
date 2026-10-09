@@ -8,26 +8,6 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// Contract-lint PARITY + DRIFT guard.
-//
-// The SDK's contract linter MUST match the indexer's deploy-time validator, or
-// authors get false greens (lint passes, on-chain deploy rejects). Two guards:
-//
-//   1. DRIFT: the vendored src/contract/{lint-core,metering,stripped-globals}.js
-//      AND every file under src/contract/{lint-core,metering}/ (same file set on
-//      both sides) must be byte-identical (sha256) to the xchain-vm canonicals, AND the acorn,
-//      acorn-walk and astring the SDK declares and installs must equal the
-//      VM's consensus pin (AST_TOOLCHAIN_PINNED in consensus-runtime.js). (Skipped
-//      when the sibling xchain-vm checkout is absent, e.g. SDK cloned standalone.)
-//   2. VERDICT: a fixture corpus (good templates + one bad per rule) gets the
-//      expected verdict from sdk.validateContract / contracts.validate.
-//
-// The cross-ENGINE check (validateContract vs vm.validateSyntax incl. the V8
-// step) lives in xchain-vm's suite, where isolated-vm is available; because the
-// vendored files, rule modules included, are proven byte-identical here AND run on the same pinned AST
-// toolchain, that check transitively covers the SDK. Identical bytes on a
-// different acorn/astring can still parse, walk or emit differently.
-
 const assert = require('assert');
 const crypto = require('crypto');
 const fs     = require('fs');
@@ -35,6 +15,7 @@ const path   = require('path');
 
 const XChainSDK    = require('../../../src/XChainSDK.js');
 const ContractUtils = require('../../../src/contract/utils.js');
+const EMBEDDED = require('../../../src/contract/templates.js');
 const { siblingCheckout, skipOrFail, siblingsRequired } = require('../../helpers/sibling_checkout.js');
 
 const VENDORED_DIR = path.join(__dirname, '../..', '..', 'src', 'contract');
@@ -51,6 +32,10 @@ const VENDORED_DIRS = ['lint-core', 'metering'];
 
 function sha256(file) {
     return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
+
+function sha256Buffer(data) {
+    return crypto.createHash('sha256').update(data).digest('hex');
 }
 
 // List every regular file under base as sorted '/'-separated relative paths ([] when base is absent).
@@ -191,6 +176,76 @@ describe('contract-lint parity + drift', function () {
         });
     });
 
+});
+
+describe('scaffold sources: drift + verdict', function () {
+    let sdk;
+    before(function () { sdk = new XChainSDK({ network: 'bitcoin-regtest', noHub: true }); });
+    for (const name of Object.keys(EMBEDDED.templates)) {
+        it('template ' + name + ' matches xchain-contracts/' + name + '/' + name + '.js', function () {
+            if (!requireSibling(this, CONTRACTS_DIR)) return;
+            const embedded = Buffer.from(EMBEDDED.templates[name], 'base64');
+            const canonical = fs.readFileSync(path.join(CONTRACTS_DIR, name, name + '.js'));
+            assert.strictEqual(sha256Buffer(embedded), sha256Buffer(canonical),
+                'TEMPLATE DRIFT: ' + name + '; re-run `npm run sync:templates`.');
+        });
+    }
+    for (const name of Object.keys(EMBEDDED.patterns)) {
+        it('pattern ' + name + ' matches xchain-contracts/patterns/' + name + '.js', function () {
+            if (!requireSibling(this, CONTRACTS_DIR)) return;
+            const embedded = Buffer.from(EMBEDDED.patterns[name], 'base64');
+            const canonical = fs.readFileSync(path.join(CONTRACTS_DIR, 'patterns', name + '.js'));
+            assert.strictEqual(sha256Buffer(embedded), sha256Buffer(canonical),
+                'PATTERN DRIFT: ' + name + '; re-run `npm run sync:templates`.');
+        });
+    }
+    it('lists the five templates and the patterns', function () {
+        const list = sdk.listTemplates();
+        for (const name of ['escrow', 'escrowDelivery', 'vesting', 'crowdsale', 'amm'])
+            assert.ok(list.templates.includes(name), 'missing template ' + name);
+        assert.ok(list.patterns.length > 0, 'expected patterns');
+    });
+    it('every scaffolded template passes validateContract', function () {
+        for (const name of sdk.listTemplates().templates) {
+            const source = sdk.scaffold(name);
+            assert.strictEqual(typeof source, 'string');
+            assert.ok(source.length > 0, name + ' is empty');
+            assert.strictEqual(sdk.validateContract(source).valid, true, name + ' failed validateContract');
+        }
+    });
+    it('every scaffolded pattern lints with zero errors', function () {
+        for (const name of sdk.listTemplates().patterns)
+            assert.strictEqual(sdk.validateContract(sdk.scaffold(name)).errors.length, 0, name + ' has lint errors');
+    });
+
+    it('an unknown name throws SDKContractError(TEMPLATE_NOT_FOUND)', function () {
+        assert.throws(() => sdk.scaffold('does-not-exist'), (e) => e && e.code === 'TEMPLATE_NOT_FOUND');
+    });
+});
+
+describe('embedded template guards', function () {
+    const expected = {
+        escrow: '524662fb0b2f265b0062bd4d06167979c46eb19a9488edf8a5a51ebbed7fd51e',
+        escrowDelivery: '3706465c241cf62cd2dba5d873f822ac8e0de278434a4984fadcbe81d10bb66e',
+        vesting: 'bdeb9425e61ed0a12c52e5bef9ec88d4bc5c4948a541c2c0f47807ad2e7fe36b',
+        crowdsale: '5aa270edbc5917e6c566e3f8d29dfd9a6a87f129ee995e9877eeb29b071c8f5a',
+        amm: '7ce16e02127cd2f63879720b73394abf83333564f777eeab2d4d85b3aed073e7'
+    };
+
+    it('covers every embedded template', function () {
+        assert.deepStrictEqual(Object.keys(EMBEDDED.templates).sort(), Object.keys(expected).sort());
+    });
+
+    for (const name of Object.keys(expected)) {
+        it(name + ' matches its expected embed and locks the configured mint supply where required', function () {
+            const source = Buffer.from(EMBEDDED.templates[name], 'base64');
+            assert.strictEqual(sha256Buffer(source), expected[name], 'UNEXPECTED TEMPLATE DRIFT: ' + name);
+            if (name === 'amm' || name === 'crowdsale') {
+                assert.match(source.toString('utf8'), /lockMintSupply/);
+                assert.doesNotMatch(source.toString('utf8'), /emit[.]mint/);
+            }
+        });
+    }
 });
 
 describe('contract-lint parity + drift', function () {
