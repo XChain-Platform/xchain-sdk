@@ -23,14 +23,18 @@ const path = require('path');
 const SDK_CONTRACT_DIR = path.join(__dirname, '..', '..', '..', 'src', 'contract');
 const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(SDK_CONTRACT_DIR, '..', '..', '..');
 const DEFAULT_VM_DIR = process.env.XCHAIN_VM_DIR || path.join(SIBLING_ROOT, 'xchain-vm');
-const VM_COMMIT = 'f845c2e83bf5c1c18b82298de887a935ddee9054';
+const VM_COMMIT = '53453374eeae647aca3684e45e75be0ce10c9470';
 const SIBLING_REQUIRED = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 
 const FILES = [
     'lint-core.js',
+    'lint-core/banned_globals.js',
+    'lint-core/banned_syntax.js',
     'lint-core/banned_with.js',
     'lint-core/constants.js',
-    'lint-core/result_composition.js'
+    'lint-core/contract_analysis.js',
+    'lint-core/result_composition.js',
+    'lint-core/scope_analysis.js'
 ];
 
 const VENDOR_PATHS = [
@@ -120,7 +124,7 @@ function readCanonical(relative) {
     );
 }
 
-describe('vendored deploy-lint: banned-with byte parity', function () {
+describe('vendored deploy-lint: pinned lint-core byte parity', function () {
     before(function () {
         this.timeout(90000);
         if (fs.existsSync(VM_DIR)) canonicalCommitAvailable();
