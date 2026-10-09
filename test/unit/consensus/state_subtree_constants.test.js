@@ -268,63 +268,57 @@ describe('SPV sub-tree activation constants: client export @regression', functio
     });
 });
 
-// Named step for the GOLDEN pin below: pulled out of the describe callback (which
-// was 62 lines with the it() inline, over the function-line limit) into its own
-// named function. Comments stay exactly where they explain the pin, just under a
-// named function header instead of an anonymous describe callback; two adjacent
-// pairs of them are joined onto one line each (same history, fewer lines) so the
-// function itself also clears the limit once the describe wrapper is gone.
+// 2026-07-28 (B2): the explorer became the fourth carrier (its
+// locked-balance proof endpoint refuses below the escrow leaf's armed
+// height, and only this map can tell it where that is) and the
+// ESCROW_LOCKED_LEAF comment block was refreshed to the built design.
+// 2026-07-28 (B3): ESCROW_LOCKED_LEAF_SHADOW + its armed-wins predicate landed for the §7 shadow window.
+// 2026-07-28 (arming): contract_state_root ARMED on BTC:regtest at
+// 10000, the first height ever set in this file. Regtest only; mainnet and
+// testnet remain unarmed for every slot.
+// 2026-07-30 (testnet arming): contract_state_root ARMED on
+// BTC:testnet at 146500, above its 146000 collation height. BTC only of the
+// three testnet chains (LTC:testnet is below its own collation height,
+// DOGE:testnet has no follower). MAINNET still unarmed for every slot.
+// 2026-08-11 (Stage B shadow): ESCROW_LOCKED_LEAF_SHADOW
+// opened on BTC:testnet at 148000. A SHADOW, not an arming: nothing is
+// committed, balances_root stays byte-identical to v1, and every
+// locked-balance proof stays refused because ESCROW_LOCKED_LEAF_ACTIVATION
+// is what both gates read and it did not move.
+// 2026-08-12: this pin was the ONLY thing that caught the line
+// above, and it caught it one commit late, so it landed red at HEAD. The
+// shadow maps had no assertion of their own in this file, which is why the
+// exact-set tripwire stayed green through a real map change; that hole is
+// closed in the first test above, and this pin is now the SECOND line of
+// defence it was always meant to be rather than the only one.
+// Re-pinned 2026-08-12 onto the shadow-map change described just above,
+// which is the change this pin caught a commit late. All four carriers
+// were verified byte-identical and unmodified at HEAD before repinning,
+// so the invariant the pin guards holds; only the pin was stale.
+// Moved 2026-08-18: ESCROW_LOCKED_LEAF_ACTIVATION armed at genesis on BTC/LTC/DOGE
+// testnet for the pre-launch "every feature live on testnet" ruling. All four copies
+// (indexer, sync, sdk, explorer) were updated in the same change, which is exactly
+// what this pin exists to force.
+// Moved 2026-08-20 (Stage A genesis): STATE_SUBTREE_ACTIVATION.contract_state_root
+// armed at genesis on all three testnet chains, replacing BTC:testnet's 146500 (left
+// inert by the 2026-08-10 re-genesis) and adding LTC and DOGE. Legal at 0 because all
+// three are genesis-active in the state_key_collation_activation row, so no slot
+// arms below its own collation height. ESCROW_LOCKED_LEAF_SHADOW was emptied too: its
+// BTC:testnet 148000 entry could never open once the leaf armed at genesis there, so
+// it was unreachable code that read as an open window.
+// Moved (registry conversion): the literal STATE_SUBTREE_ACTIVATION,
+// ESCROW_LOCKED_LEAF_ACTIVATION and shadow maps were replaced by
+// registry reads (copy('state_subtree_activation.<EXPORT>')); the values
+// are unchanged, only the source of the constants moved. All four copies (indexer, sync, sdk, explorer) carry the same shim bytes.
+// Moved (W5 consolidation, row 21): the shim is src/consensus/gates/
+// state_subtree_gate.js in every repo; only its registry require line
+// changed with the move (../gate_registry), the values did not.
+// Moved (header paths): header names the post-W5 carriers, guards and shared_rows_4.js height carriers; comment-only.
 function itGoldenCopyHasNotMovedOnItsOwn(){
     it('GOLDEN: this repo\'s copy has not moved on its own', function(){
         // Layer 1. A bump anywhere must be a coordinated four-repo change; this
         // pin makes a one-sided edit HERE fail even with no siblings on disk.
         // Updating it is the deliberate step that says "yes, all four moved".
-        // 2026-07-28 (B2): the explorer became the fourth carrier (its
-        // locked-balance proof endpoint refuses below the escrow leaf's armed
-        // height, and only this map can tell it where that is) and the
-        // ESCROW_LOCKED_LEAF comment block was refreshed to the built design.
-        // 2026-07-28 (B3): ESCROW_LOCKED_LEAF_SHADOW + its armed-wins predicate landed for the §7 shadow window.
-        // 2026-07-28 (arming): contract_state_root ARMED on BTC:regtest at
-        // 10000, the first height ever set in this file. Regtest only; mainnet and
-        // testnet remain unarmed for every slot.
-        // 2026-07-30 (testnet arming): contract_state_root ARMED on
-        // BTC:testnet at 146500, above its 146000 collation height. BTC only of the
-        // three testnet chains (LTC:testnet is below its own collation height,
-        // DOGE:testnet has no follower). MAINNET still unarmed for every slot.
-        // 2026-08-11 (Stage B shadow): ESCROW_LOCKED_LEAF_SHADOW
-        // opened on BTC:testnet at 148000. A SHADOW, not an arming: nothing is
-        // committed, balances_root stays byte-identical to v1, and every
-        // locked-balance proof stays refused because ESCROW_LOCKED_LEAF_ACTIVATION
-        // is what both gates read and it did not move.
-        // 2026-08-12: this pin was the ONLY thing that caught the line
-        // above, and it caught it one commit late, so it landed red at HEAD. The
-        // shadow maps had no assertion of their own in this file, which is why the
-        // exact-set tripwire stayed green through a real map change; that hole is
-        // closed in the first test above, and this pin is now the SECOND line of
-        // defence it was always meant to be rather than the only one.
-        // Re-pinned 2026-08-12 onto the shadow-map change described just above,
-        // which is the change this pin caught a commit late. All four carriers
-        // were verified byte-identical and unmodified at HEAD before repinning,
-        // so the invariant the pin guards holds; only the pin was stale.
-        // Moved 2026-08-18: ESCROW_LOCKED_LEAF_ACTIVATION armed at genesis on BTC/LTC/DOGE
-        // testnet for the pre-launch "every feature live on testnet" ruling. All four copies
-        // (indexer, sync, sdk, explorer) were updated in the same change, which is exactly
-        // what this pin exists to force.
-        // Moved 2026-08-20 (Stage A genesis): STATE_SUBTREE_ACTIVATION.contract_state_root
-        // armed at genesis on all three testnet chains, replacing BTC:testnet's 146500 (left
-        // inert by the 2026-08-10 re-genesis) and adding LTC and DOGE. Legal at 0 because all
-        // three are genesis-active in state_key_collation_activation.js, so no slot arms below
-        // its own collation height. ESCROW_LOCKED_LEAF_SHADOW emptied in the same change: its
-        // BTC:testnet 148000 entry could never open once the leaf armed at genesis there, so
-        // it was unreachable code that read as an open window.
-        // Moved (registry conversion): the literal STATE_SUBTREE_ACTIVATION,
-        // ESCROW_LOCKED_LEAF_ACTIVATION and shadow maps were replaced by
-        // registry reads (copy('state_subtree_activation.<EXPORT>')); the values
-        // are unchanged, only the source of the constants moved. All four copies (indexer, sync, sdk, explorer) carry the same shim bytes.
-        // Moved (W5 consolidation, row 21): the shim is src/consensus/gates/
-        // state_subtree_gate.js in every repo; only its registry require line
-        // changed with the move (../gate_registry), the values did not.
-        // Moved (header paths): header names the post-W5 carriers, guards and shared_rows_4.js height carriers; comment-only.
         const GOLDEN = 'cb5b05479973080128636f18326c59391624a56342db86a07c639401adbb12e3';
         const actual = sha256File(SELF);
         if(actual !== GOLDEN)
