@@ -128,6 +128,21 @@ function registerOrderSwapRemoteTokenReviewTest() {
     });
 }
 
+function registerSendGatedTotalReviewTest() {
+    it('pins and records the SEND gated handoff totals by resolved tick id review', function () {
+        const text = fs.readFileSync(REAL_MAP, 'utf8');
+        const send = parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/send/');
+        expect(send, 'send directory row').to.exist;
+        expect(send.hash).to.equal('bf2126e339d34154a15fc294a0d07341a01798718ba3a5ea8afdff4d07ea3ab7');
+        const heading = '### 2026-10-09 - send gated handoff totals by resolved tick id';
+        expect(text).to.include(heading);
+        const start = text.indexOf(heading);
+        const entry = text.slice(start, text.indexOf('\n### ', start + heading.length));
+        expect(entry).to.include('**Direction: WIDENS rejection behind an activation row.**');
+        expect(entry).to.include('NO CLIENT CHECK MOVES');
+    });
+}
+
 describe('pre-flight constants + registry', function () {
     describe('drift map (§8.5)', function () {
         registerMapParsingTest();
@@ -135,5 +150,6 @@ describe('pre-flight constants + registry', function () {
         registerMapCoverageTest();
         registerIssueLazyProbeReviewTest();
         registerOrderSwapRemoteTokenReviewTest();
+        registerSendGatedTotalReviewTest();
     });
 });

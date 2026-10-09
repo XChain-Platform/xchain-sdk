@@ -81,12 +81,17 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `e545c8d5`
+**Pins taken at indexer commit:** `6f22f0bc`
 
-(Paired 2026-10-09 update: the `order` and `swap` directory pins move to the
-committed indexer lane tree at `ba82c424` for the remote-token accept check reviewed
-below. That commit is based on this anchor but has not landed on indexer develop, so
-the map stays anchored at `e545c8d5`; the other eleven rows are unchanged.)
+(Re-anchored 2026-10-09 against committed indexer develop `6f22f0bc`. Only the `send` directory
+pin moves, for the gated handoff totals by resolved tick id reviewed in the first entry of the
+review log below. The remote-token accept check paired with the prior `order` and `swap` pins
+has landed on develop as `a9870b8d`, so those two rows now match committed develop unchanged,
+and so do the other ten rows, including the paired `issue`, `dispenser` and `dispense` pins.)
+
+(Paired 2026-10-09 update, superseded by the re-anchor above: the `order` and `swap` directory
+pins moved to the committed indexer lane tree at `ba82c424` for the remote-token accept check
+reviewed below, while the map stayed anchored at `e545c8d5` until that change landed.)
 
 (Re-anchored 2026-10-08 against committed indexer develop `e545c8d5`. Four directory pins move, each
 reviewed in the first three entries of the review log below: `send` from that tree plus the paired
@@ -385,7 +390,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff e545c8d5..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 6f22f0bc..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -458,7 +463,7 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `dcf4e6d4f2d8b1267b7543dc0da61e87506298a5a16db554d4c5a16353e5dc7e` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `bf2126e339d34154a15fc294a0d07341a01798718ba3a5ea8afdff4d07ea3ab7` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `3671cf3e2efefb069d30539814ecc2f1bd65087698f756711c8a1c7b75e9665f` |
 | `checks/mint.js` | `src/actions/mint/` | `0f2b6b0375df803321c1644e24f9fa2b6dcb73119a470832eeb93dfab8530595` |
 | `checks/issue.js` | `src/actions/issue/` | `95dff217aeae8428578cf583b74bdeedf97731fd2c9242be6e8baf6763c816e9` |
@@ -491,6 +496,31 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-09 - send gated handoff totals by resolved tick id
+
+The `send` pin moves from `dcf4e6d4` to `bf2126e3`, hashed from committed indexer develop
+`6f22f0bc` by `node bin/preflight_handler_dirs.js <indexer> src/actions/send/`. The mapped
+diff from the `e545c8d5` anchor wires the `gatedTotalsByTickId` helper that the 2026-10-08
+entry recorded as installed but uncalled. `consolidateSendLegs` in `legs.js` now captures
+per-recipient totals keyed by resolved `TICK_ID` before literal TICK spellings are
+consolidated, and only while `SEND_GATED_TOTAL_TICK_ID_ACTIVATION` is active; below it the
+totals stay null and the new arithmetic never runs. The helper skips a leg whose tick does not
+resolve or whose amount fails its tick's format, so placeholder records of an invalid action
+never reach decimal arithmetic. `checkGatedHandoff` in `gated_handoff.js` then hands
+`gatedHandoffRequired` the action total for that (DESTINATION, resolved TICK_ID) in place of
+the literal consolidated leg amount, and the post-send balance compared against each pack
+threshold is built from that total. Settlement legs, balances and every other error path are
+unchanged.
+
+**Direction: WIDENS rejection behind an activation row.** The resolved total is at least the
+amount of any one spelling, so a recipient reaches a pack threshold at least as often and the
+key handoff MESSAGE is required at least as often; alternate spellings of one token can no
+longer split a transfer under the threshold. Whether the handoff is required at all depends on
+the destination's pre-send balance at (BLOCK_INDEX, ACTION_INDEX), the tick's pack thresholds
+and the including block's activation state, none of which Tier 2 can read, so it stays the
+declared server-side aspect it already is in `checks/send.js` (`SEND_RESTRICTIONS` and
+`GATED_HANDOFF_REF`). NO CLIENT CHECK MOVES.
 
 ### 2026-10-09 - ORDER and SWAP remote token accept check
 
