@@ -23,7 +23,7 @@ const path = require('path');
 const SDK_CONTRACT_DIR = path.join(__dirname, '..', '..', '..', 'src', 'contract');
 const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(SDK_CONTRACT_DIR, '..', '..', '..');
 const DEFAULT_VM_DIR = process.env.XCHAIN_VM_DIR || path.join(SIBLING_ROOT, 'xchain-vm');
-const VM_COMMIT = '53453374eeae647aca3684e45e75be0ce10c9470';
+const VM_COMMIT = 'b9768df225b789ae8389afc22347660d6461753b';
 const SIBLING_REQUIRED = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 
 const FILES = [
@@ -33,6 +33,7 @@ const FILES = [
     'lint-core/banned_with.js',
     'lint-core/constants.js',
     'lint-core/contract_analysis.js',
+    'lint-core/nesting_depth.js',
     'lint-core/result_composition.js',
     'lint-core/scope_analysis.js'
 ];
