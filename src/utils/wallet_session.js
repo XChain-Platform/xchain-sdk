@@ -116,7 +116,8 @@ async function submitAndTrack(session, actionData, mergedEncoder, submitOpts) {
     let mergedOpts = {
         ...session._defaultOpts,
         ...submitOpts,
-        wif: session.wif
+        wif: session.wif,
+        skipAddressCompaction: !!(submitOpts && submitOpts.skipAddressCompaction)
     };
 
     let mgr = new LifecycleManager(session.sdk);
