@@ -56,6 +56,31 @@ describe('gate registry env view covers the regtest arming grammar', function ()
         assert.ok(registered.length > 0, 'no REGTEST_ARMING row is registered in the SDK copy');
     });
 
+    it('preserves the mirror admission margin gates', function () {
+        assert.deepStrictEqual(
+            gates.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS'),
+            {
+                DOGE: {
+                    bridge_transfers:    14,
+                    cross_chain_calls:   14,
+                    cross_chain_matches: 14,
+                    list_snapshots:      14,
+                    policy_snapshots:    14,
+                    price_snapshots:     16,
+                },
+            }
+        );
+        assert.deepStrictEqual(
+            gates.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION'),
+            {
+                mainnet:        null,
+                'DOGE:mainnet': null,
+                'DOGE:testnet': 9999999999,
+                regtest:        0,
+            }
+        );
+    });
+
     registered.forEach(([key, rule]) => {
         it('arms ' + key + ' from ' + rule.env, function () {
             withEnv(rule.env, '702', () => {
