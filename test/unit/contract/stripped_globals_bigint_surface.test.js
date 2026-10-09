@@ -25,7 +25,6 @@ const SDK_COPY = path.join(SDK_ROOT, 'src', 'contract', 'stripped-globals.js');
 const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(SDK_ROOT, '..');
 const VM_DIR = path.resolve(process.env.XCHAIN_VM_DIR || path.join(SIBLING_ROOT, 'xchain-vm'));
 const VM_SOURCE = path.join(VM_DIR, 'src', 'stripped-globals.js');
-const VM_SANDBOX = path.join(VM_DIR, 'src', 'sandbox.js');
 const VM_DIGEST_TEST = path.join(
     VM_DIR,
     'test',
@@ -73,7 +72,7 @@ describe('stripped-globals BigInt surface parity', function () {
     it('pins the VM BigInt typed-array globals beside the split consensus digest guard', function () {
         if (!requireVmSibling(this)) return;
         const names = frozenStringArray(
-            fs.readFileSync(VM_SANDBOX, 'utf8'),
+            fs.readFileSync(VM_SOURCE, 'utf8'),
             'BIGINT_SURFACE_STRIPPED_GLOBAL_NAMES'
         );
         assert.deepStrictEqual(names, ['BigInt64Array', 'BigUint64Array']);
