@@ -5,7 +5,10 @@ const acorn = require('acorn');
 const walk  = require('acorn-walk');
 const { CONTRACT_ECMA_VERSION } = require('../metering.js');
 const { ADVISORY_STRIPPED_GLOBALS } = require('./constants.js');
-const { isGlobalObjectRef, staticMemberKey, scopeDeclares } = require('./scope_analysis.js');
+const {
+    isGlobalObjectRef, isGlobalObjectPathRef, staticMemberKey,
+    objectPatternEntries, scopeDeclares
+} = require('./scope_analysis.js');
 
 /**
  * Scan contract code for the async surface (async functions, await expressions,
@@ -43,12 +46,14 @@ const { isGlobalObjectRef, staticMemberKey, scopeDeclares } = require('./scope_a
  * @param {boolean} [hardened=true] - VM_LINT_HARDENING consensus flag
  * @param {boolean} [aliased=true] - LINT_GLOBAL_ALIAS consensus flag
  * @param {boolean} [optionalChain=true] - LINT_OPTIONAL_CHAIN consensus flag
+ * @param {boolean} [destructure=true] - LINT_DESTRUCTURE consensus flag
  * @returns {Array<{kind: string, line: (number|string)}>}
  */
-function findBannedAsync(code, hardened, aliased, optionalChain) {
+function findBannedAsync(code, hardened, aliased, optionalChain, destructure) {
     if (hardened === undefined) hardened = true;
     if (aliased === undefined) aliased = true;
     if (optionalChain === undefined) optionalChain = true;
+    if (destructure === undefined) destructure = true;
     const hits = [];
     let ast;
     try {
@@ -59,7 +64,18 @@ function findBannedAsync(code, hardened, aliased, optionalChain) {
     const markAsync = (node) => {
         if (node.async) hits.push({ kind: 'async', line: node.loc ? node.loc.start.line : '?' });
     };
+    const markDestructuredPromise = (node) => {
+        if (!destructure) return;
+        for (const entry of objectPatternEntries(node)) {
+            const path = entry.path;
+            if (path[path.length - 1] !== 'Promise') continue;
+            if (!isGlobalObjectPathRef(entry.source, path.slice(0, -1), aliased, optionalChain)) continue;
+            hits.push({ kind: 'promise', line: entry.property.loc ? entry.property.loc.start.line : '?' });
+        }
+    };
     walk.ancestor(ast, {
+        VariableDeclarator: markDestructuredPromise,
+        AssignmentExpression: markDestructuredPromise,
         FunctionDeclaration: markAsync,
         FunctionExpression: markAsync,
         ArrowFunctionExpression: markAsync,
@@ -174,11 +190,13 @@ function findBannedGenerator(code) {
  * @param {string} code - Contract source code
  * @param {boolean} [aliased=true] - LINT_GLOBAL_ALIAS consensus flag
  * @param {boolean} [optionalChain=true] - LINT_OPTIONAL_CHAIN consensus flag
+ * @param {boolean} [destructure=true] - LINT_DESTRUCTURE consensus flag
  * @returns {Array<{line: (number|string)}>}
  */
-function findBannedWasm(code, aliased, optionalChain) {
+function findBannedWasm(code, aliased, optionalChain, destructure) {
     if (aliased === undefined) aliased = true;
     if (optionalChain === undefined) optionalChain = true;
+    if (destructure === undefined) destructure = true;
     const hits = [];
     let ast;
     try {
@@ -186,7 +204,18 @@ function findBannedWasm(code, aliased, optionalChain) {
     } catch (e) {
         return hits;
     }
+    const markDestructuredWasm = (node) => {
+        if (!destructure) return;
+        for (const entry of objectPatternEntries(node)) {
+            const path = entry.path;
+            if (path[path.length - 1] !== 'WebAssembly') continue;
+            if (!isGlobalObjectPathRef(entry.source, path.slice(0, -1), aliased, optionalChain)) continue;
+            hits.push({ line: entry.property.loc ? entry.property.loc.start.line : '?' });
+        }
+    };
     walk.ancestor(ast, {
+        VariableDeclarator: markDestructuredWasm,
+        AssignmentExpression: markDestructuredWasm,
         Identifier(node, state, ancestors) {
             if (node.name !== 'WebAssembly') return;
             // Skip the property position of a member access (obj.WebAssembly) and a
