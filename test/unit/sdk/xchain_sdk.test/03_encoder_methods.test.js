@@ -129,6 +129,8 @@ describe('XChainSDK', function () {
             );
             expect(sdk.encoder.estimateFee.calledOnce).to.be.true;
             expect(result.actionString).to.be.a('string');
+            expect(result.signable, 'a single-transaction estimate stays signable').to.equal(true);
+            expect(result.psbt).to.be.a('string');
         });
     });
 });
@@ -203,13 +205,20 @@ describe('XChainSDK', function () {
             reveal.addOutput({ script: script(), value: 49000 });
 
             const sdk = makeSDK();
-            mockEncoder(sdk, { psbt: commit.toHex(), encoding: 'TAPROOT', revealPsbt: reveal.toHex(), fee: 1000 });
+            mockEncoder(sdk, { psbt: commit.toHex(), encoding: 'TAPROOT', revealPsbt: reveal.toHex(),
+                envelope: { tapleafHash: 'cd'.repeat(32) }, fee: 1000 });
             const result = await sdk.estimateFees(
                 { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
                 { pubkey: 'mypub' }
             );
-            expect(result.psbt, 'the gated commit is still returned').to.equal(commit.toHex());
+            // The commit is checked but withheld: signed without its reveal and its
+            // recovery record, neither of which comes back here, it strands its funds.
+            expect(result.psbt, 'an envelope commit must not come back signable').to.equal(null);
+            expect(result.signable).to.equal(false);
+            expect(result.unsignableReason).to.equal('ENVELOPE_PAIR_SIGN_VIA_SUBMIT_ACTION');
+            expect(result.fee, 'the pair is still priced').to.equal(1000);
             expect(result.revealPsbt, 'an ungated reveal must never reach the caller').to.equal(undefined);
+            expect(result.envelope).to.equal(undefined);
         });
     });
 });

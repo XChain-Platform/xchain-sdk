@@ -1608,7 +1608,8 @@ export declare const chunkHelper: {
     splitCode(code: string): string[];
     /**
      * Plan a deploy: single-shot or chunked.
-     * @throws Error if the code needs more than MAX_DEPLOY_CHUNKS (16) slices.
+     * @throws Error if the UTF-8 source exceeds MAX_CODE_SIZE (65536 bytes), or if
+     * it needs more than MAX_DEPLOY_CHUNKS (16) slices.
      */
     planDeploy(code: string, opts?: DeployPlanOpts): DeployPlan;
     /** Maximum total action-data length (8192 bytes) */
@@ -2706,8 +2707,12 @@ export interface WaitForActionOpts {
 }
 
 export interface EstimateFeeResult {
-    /** Unsigned PSBT hex (can be signed directly to skip re-encoding) */
-    psbt: string;
+    /** Unsigned PSBT hex (can be signed directly to skip re-encoding when `signable`); null for a TAPROOT envelope pair */
+    psbt: string | null;
+    /** False when the PSBT is withheld: an envelope pair is signed through submitAction */
+    signable: boolean;
+    /** Why `psbt` was withheld, when `signable` is false */
+    unsignableReason?: 'ENVELOPE_PAIR_SIGN_VIA_SUBMIT_ACTION';
     /** Encoding type used */
     encoding: EncodingType;
     /** Transaction fee in satoshis; null when not exactly representable, unknown, or negative */

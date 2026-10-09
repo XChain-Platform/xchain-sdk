@@ -346,3 +346,34 @@ describe('policyEvaluator.evaluatePolicy', function () {
         });
     });
 });
+
+describe('policyEvaluator.evaluatePolicy', function () {
+    // The SDK compacts an indexed MINT/MESSAGE/SWEEP destination to ^<id> by default,
+    // and the daemon judges the decoded wire form. A reference the list cannot match
+    // is refused with a code that names the cause, never an allow.
+    describe('^id wire-form destination references', function () {
+        const mint = (destination) => ({ action: 'MINT', version: 0, params: { tick: 'TOK', amount: '1', destination } });
+        const policy = (extra) => Object.assign({ allowedActions: new Set(['MINT']), allowedDestinations: ['bc1qallowed'] }, extra);
+
+        it('refuses an unlisted ^id destination with a code naming the compaction remedy', function () {
+            const v = evaluatePolicy(policy(), mint('^57'));
+            expect(v.ok).to.equal(false);
+            expect(v.violation.code).to.equal('POLICY_UNRESOLVED_DESTINATION');
+            expect(v.violation.message).to.match(/compactAddresses/);
+            expect(v.violation.details).to.deep.equal({ action: 'MINT', destination: '^57' });
+        });
+
+        it('still matches a ^id the operator listed literally', function () {
+            expect(evaluatePolicy(policy({ allowedDestinations: ['^57'] }), mint('^57')).ok).to.equal(true);
+        });
+
+        it('keeps the plain denial for an unlisted literal address', function () {
+            expect(evaluatePolicy(policy(), mint('bc1qother')).violation.code).to.equal('POLICY_DESTINATION_DENIED');
+            expect(evaluatePolicy(policy(), mint('bc1qallowed')).ok).to.equal(true);
+        });
+
+        it('leaves a policy with no destination list alone', function () {
+            expect(evaluatePolicy({ allowedActions: new Set(['MINT']) }, mint('^57')).ok).to.equal(true);
+        });
+    });
+});

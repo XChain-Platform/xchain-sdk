@@ -70,6 +70,16 @@ function coinTier(code) {
     return '';
 }
 
+// Coin and network of a coin code, any case (TLTC -> { coin: 'LTC', network: 'testnet' }),
+// read from the coin registry and TIER_PREFIX so a newly added coin decodes. Null when unknown.
+function parseCoinCode(code) {
+    const upper = String(code || '').toUpperCase();
+    for (const tick of coins.ALLOWED_COINS)
+        for (const net of coins.NETWORKS)
+            if (TIER_PREFIX[net] + tick === upper) return { coin: tick, network: net };
+    return null;
+}
+
 // True when `url` already carries an http:// or https:// scheme. A bare host
 // that merely starts with "http" (httpgw.internal) is not a URL yet.
 function hasHttpScheme(url) {
@@ -109,6 +119,7 @@ module.exports = {
     TIER_PREFIX,
     coinPrefix,
     coinTier,
+    parseCoinCode,
     hasHttpScheme,
     isHttpsUrl,
     publicDefaults

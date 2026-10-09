@@ -291,13 +291,14 @@ module.exports = {
     // BOTH PSBTs returned HERE are ungated: this client is a thin RPC layer with no
     // submitted intent to reconcile against, so they are the encoder's unchecked answer.
     // Sign only via XChainSDK.estimateFees, which runs the commit through
-    // reconcileEncoded and drops the reveal rather than hand back a leg it did not
-    // gate, or via LifecycleManager.submitAction, which gates both.
+    // reconcileEncoded and withholds an envelope commit rather than hand back a leg
+    // whose reveal it drops, or via LifecycleManager.submitAction, which gates both.
     // Signing a raw estimateFee answer trusts the remote encoder.
     //
     // Required: same as createTx (data, pubkey)
-    // Returns: { psbt, encoding, revealPsbt?, carrierScripts?, fee, inputTotal, outputTotal,
-    //   feeSats, inputTotalSats, outputTotalSats, feeError? }; Number fields are null above 2^53-1.
+    // Returns: { psbt, encoding, revealPsbt?, carrierScripts?, envelope?, fee, inputTotal,
+    //   outputTotal, feeSats, inputTotalSats, outputTotalSats, feeError? }; Number fields are
+    //   null above 2^53-1.
     async estimateFee(params) {
         let result = await this.createTx(params);
 
@@ -315,6 +316,9 @@ module.exports = {
         // substituted one. Dropping the field here left the estimate path structurally
         // unable to run the check the submit path runs.
         if (result.carrierScripts) feeInfo.carrierScripts = result.carrierScripts;
+        // The envelope recovery record the encoder says must be persisted before a
+        // commit is broadcast; a thin client must not drop it on the floor.
+        if (result.envelope) feeInfo.envelope = result.envelope;
         try {
             Object.assign(feeInfo, exactFeeTotals(bitcoin.Psbt.fromHex(result.psbt)));
         } catch (e) {

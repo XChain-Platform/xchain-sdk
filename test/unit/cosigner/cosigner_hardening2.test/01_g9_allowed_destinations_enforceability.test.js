@@ -78,7 +78,8 @@ function one(acct, index = 0) {
 describe('G9: allowedDestinations enforceability', function () {
 
     it('denies an action whose format carries no DESTINATION field', function () {
-        // Only 8 of the 72 decodable formats carry DESTINATION. For every other one
+        // Only a handful of decodable formats carry DESTINATION; the next case pins
+        // the exact set. For every other one
         // the destination list was EMPTY and the membership loop was vacuously
         // satisfied, so every trade, dispenser, staking and escrow action sailed
         // through a setting the operator reads as "can only pay these addresses".
@@ -96,8 +97,8 @@ describe('G9: allowedDestinations enforceability', function () {
     });
 
     it('pins the 8-of-72 figure the G9 rationale quotes, derived from the format table', function () {
-        // The comment in policy_evaluator.js sizes how little of the policy
-        // surface allowedDestinations binds, and a hand-counted figure drifts
+        // The G9 notes in the evaluator point here instead of quoting a count,
+        // because a hand-counted figure drifts
         // the moment a format gains or loses a DESTINATION field. Derive both
         // halves from the shipped tables instead: decodableFormats() is the
         // daemon's own denominator (it already drops the multi-leg SEND v1-v3,
@@ -150,6 +151,20 @@ describe('G9: allowedDestinations enforceability', function () {
             psbt: buildSignablePsbt(acct, 'DESTROY|0|TOK|5|m').toHex(),
             inputs: one(acct),
         }).approved).to.equal(true);
+    });
+
+    it('names the compaction cause when a decoded destination arrives as an index reference', function () {
+        const acct = makeAccount();
+        const co = new CoSigner({
+            secretKey: acct.coSk, publicKeys: acct.keys,
+            policy: { allowedActions: new Set(['MINT']), allowedDestinations: ['1allowedAddr'] },
+        });
+        const denied = co.process({
+            psbt: buildSignablePsbt(acct, 'MINT|0|TOK|5|^57|m').toHex(),
+            inputs: one(acct),
+        });
+        expect(denied.approved).to.equal(false);
+        expect(denied.reason).to.equal('POLICY_UNRESOLVED_DESTINATION');
     });
 
 });

@@ -112,14 +112,14 @@ function checkBasics(policy, state) {
 
     if (policy.allowedDestinations) {
         // G9: allowedDestinations binds only the action-string DESTINATION field,
-        // and only 7 of the 68 decodable formats carry one (SEND v0, MINT v0,
-        // MESSAGE v0-v3, SWEEP v0). The denominator is 68 with the bridge formats
-        // (ISSUE v7, XBRIDGE v0/v1/v3/v4), while the numerator remains 7: an XBRIDGE
-        // names its counterparty in DEST_ADDRESS / BTC_ADDRESS / ORIGIN_ADDRESS, none
-        // of which is the DESTINATION field this list reads. Both halves are derived
-        // from the shipped tables by the G9 conformance case in
-        // test/unit/cosigner_hardening2.test.js, so this figure never needs hand-counting.
-        // For every other format the destination list is
+        // and only a small minority of the decodable formats carry one. The exact
+        // set and its denominator are derived from the shipped tables and pinned by
+        // test/unit/cosigner/cosigner_hardening2.test/01_g9_allowed_destinations_enforceability.test.js,
+        // so no figure is hand-counted here. The bridge formats (ISSUE v7, XBRIDGE)
+        // are not carriers: they name a counterparty in DEST_ADDRESS / BTC_ADDRESS /
+        // ORIGIN_ADDRESS, none of which this list reads. Multi-leg SEND v1-v3 carry
+        // DESTINATION in the table but the decoder refuses them, so they never reach
+        // this gate. For every other format the destination list is
         // EMPTY and the membership loop below is vacuously satisfied - so every
         // trade, dispenser, contract-escrow, staking and native-pay action sailed
         // straight through a setting the operator reads as "this agent can only
@@ -136,10 +136,19 @@ function checkBasics(policy, state) {
                 `constrain where it moves value; it cannot be signed while allowedDestinations is set ` +
                 `(remove the destination list, or disallow ${action})`,
                 { action, version }, evaluation);
-        for (const d of destinations)
-            if (!inCollection(policy.allowedDestinations, d))
-                return deny('POLICY_DESTINATION_DENIED',
-                    `destination ${d} is not in allowedDestinations`, { action, destination: d }, evaluation);
+        for (const d of destinations) {
+            if (inCollection(policy.allowedDestinations, d)) continue;
+            // A ^<id> reference is the SDK's default compaction of an indexed address,
+            // applied after the client check. It is refused, never resolved: an id map
+            // here would make operator config the only proof of where funds go.
+            if (String(d).charAt(0) === '^')
+                return deny('POLICY_UNRESOLVED_DESTINATION',
+                    `${action} destination ${d} is an address index reference that allowedDestinations ` +
+                    `cannot match; list the destination by address and submit with compactAddresses disabled`,
+                    { action, destination: d }, evaluation);
+            return deny('POLICY_DESTINATION_DENIED',
+                `destination ${d} is not in allowedDestinations`, { action, destination: d }, evaluation);
+        }
     }
     return null;
 }

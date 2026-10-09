@@ -84,8 +84,8 @@ const DEFAULT_ANCHOR_MIN_DEPTH = 60;
 //   only where ANCHOR_FOLD is active at that anchor's DOGE height, the indexer's rule.
 //
 //   ACTIVATION: an ANCHOR of any version mined below ANCHOR_ACTIVATION[network]
-//   (protocol/constants.js, which carries the per-network heights and why the
-//   mainnet one sits above the chain tip) is invalid on the wire and never
+//   (protocol/constants.js, which carries the per-network heights and the
+//   rulings behind them; both are already past) is invalid on the wire and never
 //   reaches this parser; at/above it 0/1/2 exist, and 3 at/above ANCHOR_FOLD. The SDK trusts the
 //   indexer/explorer to have already applied that gate. ANCHOR_BUNDLE_ORDER_ACTIVATION
 //   gates v0 section and signature order at the caller-supplied DOGE height.

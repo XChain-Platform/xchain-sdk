@@ -41,8 +41,8 @@ const VENDORED_DIR = path.join(__dirname, '../..', '..', 'src', 'contract');
 const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(__dirname, '../..', '..', '..');
 const VM_SRC_DIR   = path.join(process.env.XCHAIN_VM_DIR || path.join(SIBLING_ROOT, 'xchain-vm'), 'src');
 const CONTRACTS_DIR = process.env.XCHAIN_CONTRACTS_DIR || path.join(SIBLING_ROOT, 'xchain-contracts');
-// stripped_globals.js is in the vendor set because it is the ONE
-// definition of the sandbox's stripped-global names, required by lint_core.js
+// stripped-globals.js is in the vendor set because it is the ONE
+// definition of the sandbox's stripped-global names, required by lint-core.js
 // here and by sandbox.js / toolkit/authoring.js in xchain-vm. It is
 // dependency-free so the single require line resolves at both vendored depths.
 const VENDORED_FILES = ['lint-core.js', 'metering.js', 'stripped-globals.js'];

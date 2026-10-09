@@ -20,8 +20,10 @@
 
 const { reconcileEncoded, psbtPrevouts } = require('../carrier/reconcile_encoded.js');
 const { assertCarrierBinding } = require('../carrier/bind_action_carrier.js');
+const EncoderClient = require('../clients/encoder.js');
 const { SDKConfigError, SDKExplorerError } = require('../utils/errors.js');
 const coins = require('../coins');
+const { parseCoinCode } = require('../utils/endpoints.js');
 
 // Validate and append a quoted native fee so refused quotes cannot reach the encoder.
 function appendNativeFeeOutput(nativeFeeQuote, customOutputs, hint = '') {
@@ -57,22 +59,19 @@ async function resolveNativeFeeOutputs(sdk, actionData, opts, source) {
     return { quote, outputs };
 }
 
-// Build the encoder request together so every supported option is forwarded as one shape.
+// Build the encoder request from the shared createTx option list, so the PSBT this
+// returns describes the transaction submitAction would build for the same options.
 function buildFeeEstimateRequest(result, encoderOpts, customOutputs) {
-    return {
-        data:             result.actionString,
-        pubkey:           encoderOpts.pubkey,
-        change:           encoderOpts.change,
-        utxos:            encoderOpts.utxos,
-        encoding:         encoderOpts.encoding,
-        fee:              encoderOpts.fee,
-        feePerKb:         encoderOpts.feePerKb,
-        rbf:              encoderOpts.rbf,
-        dust:             encoderOpts.dust,
-        unconfirmed:      encoderOpts.unconfirmed,
-        compressedPubKey: encoderOpts.compressedPubKey,
-        customOutputs:    customOutputs
-    };
+    const req = EncoderClient.pickCreateTxOptions(encoderOpts, {});
+    // Excluded on purpose: the AUTO capability hint lets the encoder answer with an
+    // envelope pair, which this method can price but never return signable.
+    delete req.options;
+    // Set after the pick, which would otherwise overwrite the merged list with the
+    // caller's own and drop the native-fee output.
+    req.data          = result.actionString;
+    req.pubkey        = encoderOpts.pubkey;
+    req.customOutputs = customOutputs;
+    return req;
 }
 
 // Reconcile and annotate the fee result synchronously before it becomes signable.
@@ -121,7 +120,7 @@ function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs
         actionString:   result.actionString,
         encoding:       feeResult.encoding,
         carrierScripts: feeResult.carrierScripts,
-        rawData:        null,   // buildFeeEstimateRequest sends the encoder no rawData
+        rawData:        encoderOpts.rawData == null ? null : encoderOpts.rawData,
         network:        reconcileNetwork,
         label:          'fee estimate',
     });
@@ -130,18 +129,28 @@ function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs
     feeResult.action       = result.action;
     feeResult.version      = result.version;
     if (nativeFeeQuote) feeResult.nativeFeeQuote = nativeFeeQuote;
+    markSignable(feeResult, revealPsbt);
+}
+
+// Withhold an envelope commit once its numbers are checked: signed without the
+// reveal and the recovery record (neither returned here) it strands its funds.
+function markSignable(feeResult, revealPsbt) {
+    if (!revealPsbt) {
+        feeResult.signable = true;
+        return;
+    }
+    feeResult.psbt = null;
+    feeResult.signable = false;
+    feeResult.unsignableReason = 'ENVELOPE_PAIR_SIGN_VIA_SUBMIT_ACTION';
+    delete feeResult.envelope;
 }
 
 // Resolve the explorer route coin (BTC/TBTC/RBTC, and their registry peers) without
-// maintaining a second coin list beside the canonical registry.
+// maintaining a second coin list or tier letters beside the registry. Exact case only.
 function feePaymentConfig(routeCoin) {
-    if (typeof routeCoin !== 'string') return null;
-    for (const tick of coins.ALLOWED_COINS) {
-        if (routeCoin === tick) return coins.getCoinConfig(tick, 'mainnet');
-        if (routeCoin === 'T' + tick) return coins.getCoinConfig(tick, 'testnet');
-        if (routeCoin === 'R' + tick) return coins.getCoinConfig(tick, 'regtest');
-    }
-    return null;
+    if (typeof routeCoin !== 'string' || routeCoin !== routeCoin.toUpperCase()) return null;
+    const plane = parseCoinCode(routeCoin);
+    return plane ? coins.getCoinConfig(plane.coin, plane.network) : null;
 }
 
 // Keep fee and service reads together because they share remote-client validation.
@@ -164,13 +173,14 @@ module.exports = {
 
     // Estimate fees for an action without signing or broadcasting.
     // Returns { fee, inputTotal, outputTotal, feeSats, inputTotalSats, outputTotalSats, feeError?,
-    //   encoding, psbt, actionString }
-    // The ONE PSBT this returns can be signed directly to skip a second encode call: it
-    // has already cleared the same fail-closed reconcileEncoded intent gate submitAction
-    // applies before IT signs, so the encoder cannot swap outputs or drop change on this
-    // path. Throws SDKActionError rather than returning a PSBT it cannot
-    // account for. An envelope's reveal leg is deliberately NOT returned (see below);
-    // signing one goes through submitAction, which reconciles both legs.
+    //   encoding, psbt, signable, unsignableReason?, actionString }
+    // When `signable` is true, the ONE PSBT this returns can be signed directly to skip a
+    // second encode call: it has already cleared the same fail-closed reconcileEncoded
+    // intent gate submitAction applies before IT signs, so the encoder cannot swap outputs
+    // or drop change on this path. Throws SDKActionError rather than returning a PSBT it
+    // cannot account for. A TAPROOT envelope answer comes back priced but with `psbt: null`
+    // and `signable: false`: its commit is only safe to sign together with the reveal and
+    // the recovery record, so envelope actions are signed through submitAction.
     //
     // Native-coin protocol fee (added by default on registry-native chains, opt-in on others via
     // encoderOpts.payFeeInNativeCoin, and payFeeInNativeCoin:false opts out): pay the XCHAIN

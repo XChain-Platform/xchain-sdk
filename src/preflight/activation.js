@@ -20,6 +20,7 @@
 'use strict';
 
 const { FULL_NAME_TO_TICK } = require('../coins/index.js');
+const { parseCoinCode } = require('../utils/endpoints.js');
 const { REGTEST_ARMING } = require('../consensus/gate_registry/shared_rows.js');
 const { regtestHeight } = require('../consensus/gate_registry/regtest_env.js');
 const { armingEnv } = require('../consensus/gate_registry.js');
@@ -112,8 +113,7 @@ function tableFor(name) {
 // Resolve the SDK's network to the registry's (network, coin) pair from config or explorer prefix.
 function activationPlane(sdk) {
     const [fullName, plane] = String((sdk && sdk.config && sdk.config.network) || '').toLowerCase().split('-');
-    const m = /^([TR]?)(BTC|LTC|DOGE)$/.exec(String((sdk && sdk.explorer && sdk.explorer.coin) || '').toUpperCase());
-    const fromCoin = m ? { coin: m[2], network: m[1] === 'T' ? 'testnet' : m[1] === 'R' ? 'regtest' : 'mainnet' } : null;
+    const fromCoin = parseCoinCode(sdk && sdk.explorer && sdk.explorer.coin);
     if (plane && FULL_NAME_TO_TICK[fullName]) return { coin: FULL_NAME_TO_TICK[fullName], network: plane };
     if (['mainnet', 'testnet', 'regtest'].includes(fullName) && !plane)
         return { coin: fromCoin ? fromCoin.coin : null, network: fullName };

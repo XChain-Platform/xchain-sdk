@@ -130,6 +130,18 @@ describe('EncoderClient exact fee totals', function () {
         expect([r.fee, r.outputTotalSats]).to.deep.equal([null, '2000']);
         expect(r.feeError).to.match(/NEGATIVE_FEE/);
     });
+
+    it('passes the envelope recovery record through with the pair', async function () {
+        const psbt = new bitcoin.Psbt();
+        psbt.addInput({ hash: Buffer.alloc(32, 1), index: 0, witnessUtxo: { script, value: 100000 } });
+        psbt.addOutput({ script, value: 90000 });
+        const envelope = { tapleafHash: 'ab'.repeat(32), internalKeyPath: "m/86'/1'/0'/0/0" };
+        nock(BASE).post('/').reply(200, { jsonrpc: '2.0', id: 1,
+            result: { psbt: psbt.toHex(), encoding: 'TAPROOT', revealPsbt: psbt.toHex(), envelope } });
+        const r = await client.estimateFee({ data: 'TEST', pubkey: 'pub' });
+        expect(r.envelope, 'a record the wallet must persist is never dropped').to.deep.equal(envelope);
+        expect(r.revealPsbt).to.equal(psbt.toHex());
+    });
 });
 
 describe('EncoderClient', function () {

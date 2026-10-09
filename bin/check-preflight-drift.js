@@ -604,10 +604,12 @@ function checkGasSchedules(indexerRoot) {
  *
  * Kept exit-free so the same evaluation can back three callers: the strict CLI run, the
  * fail-soft run at the head of `npm run ci`, and the muted --verdict run that closes it.
- * The gate used to be the process itself, which is why a drift killed `npm run ci` before
- * mocha loaded and the pre-push gate reported NEVER RAN instead of a named failure.
+ * An exiting gate would kill `npm run ci` before mocha loads, so the pre-push gate would
+ * report NEVER RAN, not a named failure.
  *
- * Returns 0 for in-sync (or skipped, when there is no sibling checkout), 1 for a finding.
+ * Returns 0 for in-sync, or for a declared XCHAIN_ALLOW_NO_INDEXER=1 standalone run whose
+ * INDEXER-MAP.md anchor check passed. Returns 1 for a finding, and an unresolved indexer
+ * checkout is a finding: a missing sibling is never a silent skip.
  */
 function evaluate() {
     const mapPath = path.join(__dirname, '..', 'src', 'preflight', 'INDEXER-MAP.md');

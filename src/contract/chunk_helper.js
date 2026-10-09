@@ -134,8 +134,12 @@ function splitCode(code) {
 
 // Plan a deploy: { codeHash, single, parts, totalChunks }. `single` true => deploy
 // inline (DEPLOY v0/v1); false => submit `parts` as DEPLOY v4 carriers then assemble via
-// DEPLOY v2/v3. Throws if the code needs more than MAX_DEPLOY_CHUNKS slices.
+// DEPLOY v2/v3. Throws past MAX_CODE_SIZE UTF-8 bytes or MAX_DEPLOY_CHUNKS slices.
 function planDeploy(code, opts = {}) {
+    // Refuse before any plan exists: the indexer checks the size only after every carrier is paid.
+    let codeBytes = Buffer.byteLength(String(code), 'utf8');
+    if (codeBytes > PROTO.MAX_CODE_SIZE)
+        throw new Error('Contract code exceeds ' + PROTO.MAX_CODE_SIZE + ' byte limit (' + codeBytes + ' bytes)');
     let codeHash = codeHashOf(code);
     if (fitsSingleDeploy(code, opts))
         return { codeHash, single: true, parts: null, totalChunks: 0 };

@@ -91,6 +91,31 @@ function verifySignature(payload, sigHex, pubkeyHex){
     }
 }
 
+// Is the commitment active for this checkpoint while a required field is absent?
+// True means the row cannot be verified at all: the canonical it would be checked
+// against is the legacy rootless one, which is not what a post-flag-day producer signs.
+function commitmentMissing(cp){
+    if(!cp || !isCheckpointCommitmentActive(cp.snapshot_block, cp.network)) return false;
+    // Treat an empty root as absent, as the hub's isRootless does; a version is absent
+    // only when null or undefined, because 0 is a valid version.
+    return !cp.state_root || !cp.block_merkle_root
+        || cp.state_root_version === null || cp.state_root_version === undefined
+        || cp.block_merkle_version === null || cp.block_merkle_version === undefined;
+}
+
+// Does one validator entry carry the stake fields the weighted regime requires?
+// Blank source and a missing, blank or nonnumeric weight are all disqualifying.
+// meetsStakeThreshold also fails closed on each of these (its decimal check is the
+// stricter of the two), so this gate is defence in depth: keep both layers. A
+// negative weight is rejected there and again here.
+function isWeightedEntry(v){
+    if(!v || typeof v !== 'object') return false;
+    if(v.source === null || v.source === undefined || String(v.source).trim() === '') return false;
+    if(v.weight === null || v.weight === undefined || String(v.weight).trim() === '') return false;
+    let w = Number(v.weight);
+    return Number.isFinite(w) && w >= 0;
+}
+
 // Verify a checkpoint against a qualifying validator set.
 //   checkpoint: { chain, network, block_index, block_hash, ledger_hash,
 //                 actions_hash, contract_hash, checkpoint_seq, snapshot_block,
@@ -107,32 +132,6 @@ function verifySignature(payload, sigHex, pubkeyHex){
 // from the checkpoint's snapshot_block + network (the SDK trusts neither the
 // server's `verified` flag nor any server-supplied `is_weighted`); only the stake
 // WEIGHTS themselves come from the supplied set, exactly as the pubkeys always have.
-
-// Does one validator entry carry the stake fields the weighted regime requires?
-// Blank source and missing weight are BOTH disqualifying: meetsStakeThreshold
-// fails closed on the former but silently reads the latter as '0', so the
-// weight check has to live here. A negative weight is rejected
-// there and again here, since a caller reaching this gate should never see one.
-// Is the commitment active for this checkpoint while a required field is absent?
-// True means the row cannot be verified at all: the canonical it would be checked
-// against is the legacy rootless one, which is not what a post-flag-day producer signs.
-function commitmentMissing(cp){
-    if(!cp || !isCheckpointCommitmentActive(cp.snapshot_block, cp.network)) return false;
-    // Treat an empty root as absent, as the hub's isRootless does; a version is absent
-    // only when null or undefined, because 0 is a valid version.
-    return !cp.state_root || !cp.block_merkle_root
-        || cp.state_root_version === null || cp.state_root_version === undefined
-        || cp.block_merkle_version === null || cp.block_merkle_version === undefined;
-}
-
-function isWeightedEntry(v){
-    if(!v || typeof v !== 'object') return false;
-    if(v.source === null || v.source === undefined || String(v.source).trim() === '') return false;
-    if(v.weight === null || v.weight === undefined || String(v.weight).trim() === '') return false;
-    let w = Number(v.weight);
-    return Number.isFinite(w) && w >= 0;
-}
-
 function verifyCheckpoint(checkpoint, validators){
     let canonical = canonicalCheckpoint(checkpoint);
     let vset      = validators || [];
@@ -182,11 +181,10 @@ function verifyCheckpoint(checkpoint, validators){
         // that hasn't been upgraded), we cannot confirm stake quorum; fail closed
         // (false-reject leaning, the fail-safe direction for a light client).
         //
-        // EVERY entry, not some: `.some` let a set mix one weighted entry with
-        // unweighted ones and still pass, and meetsStakeThreshold reads a missing
-        // weight as '0', so the omitted stake left the denominator while the
-        // weighted signer kept the numerator. One 100-weight signature then
-        // cleared 3*100 > 2*100 against a set whose true stake was unknown.
+        // EVERY entry, not some: `.some` once let a set mix one weighted entry with
+        // unweighted ones, back when meetsStakeThreshold read a missing weight as '0',
+        // and one 100-weight signature cleared 3*100 > 2*100. meetsStakeThreshold now
+        // fails closed on a missing weight too; this gate stays as defence in depth.
         // Empty sets fail here too (`.every` is vacuously true on []).
         let hasWeights = vset.length > 0 && vset.every(v => isWeightedEntry(v));
         valid = hasWeights && swq.meetsStakeThreshold(vset, validSigners);
@@ -250,8 +248,9 @@ async function fetchAndVerifyCheckpoint(explorerUrl, coin, blockIndex, fetchImpl
 module.exports = {
     canonicalCheckpoint,
     verifySignature,
-    // Exported so light.js#verifyCheckpointWithProvenSet enforces THIS predicate
-    // rather than a second copy that can drift from it.
+    // Exported so verifyCheckpointWithProvenSet (protocol/light_client/validator_set_follow.js,
+    // re-exported through protocol/light_client.js and the src/light.js shim) enforces
+    // THIS predicate rather than a second copy that can drift from it.
     commitmentMissing,
     verifyCheckpoint,
     suppliedValidators,

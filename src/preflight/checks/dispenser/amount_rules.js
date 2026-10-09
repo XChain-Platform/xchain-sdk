@@ -25,14 +25,15 @@ const { FINDING_CODES } = require('../../constants.js');
 const numeric = require('../../numeric.js');
 const { describeActivation } = require('../../activation.js');
 const { getCoinConfig } = require('../../../coins/index.js');
+const { parseCoinCode } = require('../../../utils/endpoints.js');
 
 // Decimal places of the chain coin a GET_COIN names, read from the vendored coin
 // registry so the precision rule below cannot drift from the indexer's
 // COIN_DECIMALS. Null for anything that is not a native coin code.
 function nativeCoinDecimals(coin) {
-    const m = /^[TR]?(BTC|LTC|DOGE)$/.exec(String(coin || '').toUpperCase());
-    if (!m) return null;
-    try { return getCoinConfig(m[1], 'mainnet').decimals; } catch (e) { return null; }
+    const plane = parseCoinCode(coin);
+    if (!plane) return null;
+    try { return getCoinConfig(plane.coin, 'mainnet').decimals; } catch (e) { return null; }
 }
 
 // Strictly-positive test that answers false, never throws, on a value the

@@ -24,6 +24,8 @@ const coins = require('../../coins');
 const {
     localConsensusHashes,
     mergeConfigDelta,
+    isUnsafeConfigKey,
+    ownConfigBranch,
     isHubErrorEnvelope,
     hubEnvelopeMarks,
     agentOptsFor
@@ -52,13 +54,13 @@ function normalizeDiscoveryDescriptors(descriptors) {
     for (const descriptor of descriptors) {
         if (!descriptor || typeof descriptor !== 'object' ||
             typeof descriptor.coin !== 'string' || !descriptor.coin ||
-            typeof descriptor.networkKind !== 'string' || !descriptor.networkKind)
+            typeof descriptor.networkKind !== 'string' || !descriptor.networkKind ||
+            isUnsafeConfigKey(descriptor.coin) || isUnsafeConfigKey(descriptor.networkKind))
             throw new Error('chain registry contains an invalid descriptor');
 
         let coin = descriptor.coin;
         let network = descriptor.networkKind;
-        if (!configs[coin]) configs[coin] = {};
-        configs[coin][network] = {
+        ownConfigBranch(configs, coin)[network] = {
             'xchain-explorer': normalizeServiceDefaults(descriptor, 'explorer'),
             'xchain-encoder':  normalizeServiceDefaults(descriptor, 'encoder')
         };

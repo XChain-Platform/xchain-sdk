@@ -246,10 +246,8 @@ describe('CheckpointVerifier - stake-weighted quorum (SDK)', function () {
         assert.strictEqual(result.valid, false);
     });
 
-    // The gate used to use `.some`, so ONE weighted entry admitted a set
-    // whose other entries carried no weight. meetsStakeThreshold reads a missing
-    // weight as '0', so the unknown stake left the denominator while the weighted
-    // signer kept the numerator, and a lone signature cleared 3*100 > 2*100.
+    // Pin that the outer gate needs a weight on EVERY entry: with `.some`, one weighted
+    // entry would admit a set whose other entries carry no weight (both layers fail closed).
     it('weighted regime fails closed when only SOME of the set carries a weight', function () {
         let A = makeKeypair(), B = makeKeypair();
         let cp = makeCheckpoint({ network: 'regtest' });

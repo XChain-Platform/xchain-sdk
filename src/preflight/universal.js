@@ -28,6 +28,7 @@ const { FINDING_CODES, ENCODING_LIMITS, FEE_CHARGING_ACTIONS, CANONICAL_CARET_ID
 const { ADDRESS_REF_FIELDS } = require('../addressRefFields.js');
 const { TICK_EXISTENCE_FIELDS } = require('../protocol/tick_ref_fields.js');
 const numeric = require('./numeric.js');
+const { parseCoinCode } = require('../utils/endpoints.js');
 
 // Wire fields that reference a TICK whose existence is checkable.
 // ISSUE is excluded at the loop below (existence is legal there: format 0
@@ -162,8 +163,8 @@ function checkAddressRefs(ctx) {
 // strip it to recover the bare ticker a native reference uses. Returns null for
 // non-native coin codes so nothing is skipped by accident.
 function nativeTickerFromCoin(coin) {
-    const m = /^[TR]?(BTC|LTC|DOGE)$/.exec(String(coin || '').toUpperCase());
-    return m ? m[1] : null;
+    const plane = parseCoinCode(coin);
+    return plane ? plane.coin : null;
 }
 
 /*
