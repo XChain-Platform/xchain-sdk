@@ -288,10 +288,10 @@ const ARCHIVE_REWARD_ACTIVATION = {
 // archive fold) parses only once ANCHOR_FOLD_ACTIVATION is also active, and every other version
 // byte is 'invalid: VERSION (unknown)'. Keyed on the action's OWN DOGE block_index
 // (data['BLOCK_INDEX'] at parse time, anchor_actions.block_index_doge), never on SNAPSHOT_BLOCK or
-// the checkpointed height: the row being judged is the anchor itself. Mainnet 6360000 sits ABOVE
-// the chain tip on purpose: the restarted wire set has NOT activated on mainnet yet, and the height
-// is a flag day the operator arms deliberately rather than one that silently already passed.
-// Testnet 67858600 is 24 blocks above its last pre-restart anchor (67858576) and is already past.
+// the checkpointed height: the row being judged is the anchor itself. Mainnet 6360000 is a flag day
+// the operator arms deliberately: anchors below it stay on the retired wire set and anchors at or
+// above it use the restarted one, so the height is chosen, not derived from the chain tip.
+// Testnet 67858600 is 24 blocks above its last pre-restart anchor (67858576).
 // Neither is 0, because both carry pre-restart history (mainnet 56 rows, testnet 11, measured
 // 2026-08-30): at 0 the gate can never fire, so the retired wires fall through to the restarted
 // version table and are read as shapes they are not. The old per-chain version 0 would report as a
