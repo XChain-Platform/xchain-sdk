@@ -459,6 +459,15 @@
     "test/unit/cosigner/musig2_agent_session.test/01_agent_session.test.js": "test/unit/cosigner/musig2/musig2_agent_session.test/01_agent_session.test.js"
   },
   "titles": {
+    "test/unit/contract/contract_state_wait.test.js": {
+      "ActionWaiter contract state gate state normalization drops envelope fields when the response is already a key map": "ActionWaiter contract state gate state normalization ignores a plain key map outside the explorer list shape"
+    },
+    "test/unit/utils/action_waiter/contract_values.test.js": {
+      "contract quantity and amount helpers readContractQuantity matches rows by tick and stringifies": "contract quantity and amount helpers readContractQuantity reads the explorer balance columns only",
+      "contract state normalization normalizeContractState reads plain objects and skips envelope keys": "contract state normalization normalizeContractState ignores objects outside the explorer list shape",
+      "contract state normalization normalizeContractState reads rows by either key pair": "contract state normalization normalizeContractState reads the explorer state columns only",
+      "contract state reads readContractStateValue reads a single object": "contract state reads readContractStateValue ignores non-explorer objects"
+    },
     "test/unit/wallet/wallet.test/11_sign_multisig_psbt_and_finalize_multisig_psbt.test.js": {
       "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() sign + finalize completes a 1-of-1 p2wpkh PSBT": "WalletUtils signMultisigPsbt() and finalizeMultisigPsbt() sign + finalize completes a 1-of-1 p2wsh multisig PSBT"
     },
