@@ -485,6 +485,10 @@
       "vendored lint-core: LINT_GLOBAL_ALIAS rules flags this-rooted globalThis chain by default (author-facing linter)": "vendored lint_core: LINT_GLOBAL_ALIAS rules flags this-rooted globalThis chain by default (author-facing linter)",
       "vendored lint-core: LINT_GLOBAL_ALIAS rules leaves the pre-epoch spellings blocking in both modes": "vendored lint_core: LINT_GLOBAL_ALIAS rules leaves the pre-epoch spellings blocking in both modes",
       "vendored lint-core: LINT_GLOBAL_ALIAS rules the detectors take the epoch flag directly": "vendored lint_core: LINT_GLOBAL_ALIAS rules the detectors take the epoch flag directly"
+    },
+    "test/unit/actions/betting.test.js": {
+      "BET formats has no edit format: markets are immutable from creation": "BET formats exposes the list edit format through normal format discovery",
+      "BET formats registers all four formats with the field order BET.md declares": "BET formats registers all five formats with the field order BET.md declares"
     }
   }
 }

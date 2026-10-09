@@ -6,8 +6,23 @@ const path   = require('path');
 
 const gates = require('../../../src/consensus/gate_registry');
 const { REGTEST_ARMING } = require('../../../src/consensus/gate_registry/shared_rows.js');
+const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 const ENTRY = path.join(__dirname, '..', '..', '..', 'src', 'consensus', 'gate_registry.js');
+const SHARED_ROWS_DIR = path.join(__dirname, '..', '..', '..', 'src', 'consensus', 'gate_registry');
+const SHARED_ROW_FILES = [
+    'shared_rows.js',
+    'shared_rows_1.js',
+    'shared_rows_2.js',
+    'shared_rows_3.js',
+    'shared_rows_4.js',
+    'shared_rows_5.js',
+];
+const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT
+    || path.join(__dirname, '..', '..', '..', '..');
+const INDEXER_ROOT = process.env.XCHAIN_INDEXER_PATH || process.env.XCHAIN_INDEXER_DIR
+    || path.join(SIBLING_ROOT, 'xchain-indexer');
+const INDEXER_SHARED_ROWS_DIR = path.join(INDEXER_ROOT, 'src', 'protocol_changes');
 const BUNDLE_ORDER = 'anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION';
 const STAKE_ENV = 'XC_ANCHOR_STAKE_REGTEST_ACTIVATION';
 
@@ -27,6 +42,16 @@ function withEnv(name, value, fn) {
 const registered = Object.entries(REGTEST_ARMING).filter(([key]) => gates.has(key));
 
 describe('gate registry env view covers the regtest arming grammar', function () {
+    it('keeps the canonical shared row files byte-identical', function () {
+        const verdict = siblingCheckout(__dirname, INDEXER_SHARED_ROWS_DIR);
+        if (!skipOrFail(this, verdict, 'the canonical indexer shared-row byte-identity guard')) return;
+        for (const file of SHARED_ROW_FILES) {
+            const local = fs.readFileSync(path.join(SHARED_ROWS_DIR, file));
+            const canonical = fs.readFileSync(path.join(verdict.path, file));
+            assert.ok(local.equals(canonical), file + ' differs from the indexer canonical whole-file twin');
+        }
+    });
+
     it('holds at least one armable row, so the sweep below checks something', function () {
         assert.ok(registered.length > 0, 'no REGTEST_ARMING row is registered in the SDK copy');
     });

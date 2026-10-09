@@ -106,6 +106,7 @@ module.exports = {
     PUBLIC_EXPLORER,
     PUBLIC_ENCODER,
     isRegtest,
+    TIER_PREFIX,
     coinPrefix,
     coinTier,
     hasHttpScheme,
