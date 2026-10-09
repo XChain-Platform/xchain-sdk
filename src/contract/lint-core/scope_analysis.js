@@ -59,7 +59,7 @@ function staticPatternKey(property) {
     return null;
 }
 
-// Collect statically named leaf reads made by a variable-declaration or assignment
+// Collect statically named reads made by a variable-declaration or assignment
 // ObjectPattern. Each entry retains the source expression and the property path read
 // from it, so the global-object and Math scanners can share one shape analysis.
 function objectPatternEntries(node) {
@@ -83,6 +83,7 @@ function objectPatternEntries(node) {
             const key = staticPatternKey(property);
             if (key === null) continue;
             const nextPath = path.concat(key);
+            entries.push({ source, path: nextPath, property });
             const value = property.value;
             const nested = value && value.type === 'ObjectPattern'
                 ? value
@@ -91,7 +92,6 @@ function objectPatternEntries(node) {
                     ? value.left
                     : null;
             if (nested) collect(nested, nextPath);
-            else entries.push({ source, path: nextPath, property });
         }
     };
     collect(pattern, []);
