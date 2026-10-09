@@ -375,10 +375,8 @@ class AgentSession extends WalletSession {
         const entry = authorizeSubmission(this, evaluation, submitOpts);
         let result;
         try {
-            const policySubmitOpts = this.policy.allowedDestinations
-                ? Object.assign({}, submitOpts, { skipAddressCompaction: true })
-                : submitOpts;
-            result = await super.submitInner(actionData, encoderOpts, policySubmitOpts);
+            result = await super.submitInner(actionData, encoderOpts, this.policy.allowedDestinations
+                ? Object.assign({}, submitOpts, { skipAddressCompaction: true }) : submitOpts);
         } catch (err) {
             // A throw AFTER broadcast carries the txid (e.g. CONFIRMATION_TIMEOUT).
             // Patch it onto the provisional entry so the audit record is not left
