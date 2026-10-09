@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `CoSigner` now refuses an explicit `SIGHASH_ALL` and signs only `SIGHASH_DEFAULT`, because the bare 64-byte key-path signature cannot carry the sighash flag byte, superseding the 0.10.0 note that ALL is accepted.
 
+### Fixed
+- Fee estimates now expose exact decimal-string satoshi totals and a `feeError` when missing input values or outputs above inputs make the fee indeterminate, instead of returning a misleading numeric fee.
+- `estimateFees` now runs `reconcileEncoded` before returning its directly signable PSBT and withholds an envelope reveal leg that it cannot independently reconcile.
+- `submitAction` default-path signing now signs only caller-supplied UTXOs and refuses encoder-added unsigned inputs.
+
 ## [0.22.4] - 2026-10-05
 
 ### Changed
