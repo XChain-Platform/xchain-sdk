@@ -83,6 +83,11 @@ commit, not a re-pin back.
 
 **Pins taken at indexer commit:** `e545c8d5`
 
+(Paired 2026-10-09 update: the `order` and `swap` directory pins move to the
+committed indexer lane tree at `ba82c424` for the remote-token accept check reviewed
+below. That commit is based on this anchor but has not landed on indexer develop, so
+the map stays anchored at `e545c8d5`; the other eleven rows are unchanged.)
+
 (Re-anchored 2026-10-08 against committed indexer develop `e545c8d5`. Four directory pins move, each
 reviewed in the first three entries of the review log below: `send` from that tree plus the paired
 `dde40808` change adding the unwired gated-totals helper, `dispenser` and `dispense` from the paired
@@ -459,8 +464,8 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/issue.js` | `src/actions/issue/` | `95dff217aeae8428578cf583b74bdeedf97731fd2c9242be6e8baf6763c816e9` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `4e6fabc35fb8ccd74818b89a4c468505c9341d4c2de59666e2b33a3a3df6d775` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `0ba2b8e2037de1c86163525776af2d788da7a9b3995999615f60c018280115fa` |
-| `checks/trading.js` (ORDER) | `src/actions/order/` | `66728bf57468a88c88e154622ca2708a1089ac9f5f8aa115f296cdadcbd5b8e5` |
-| `checks/trading.js` (SWAP) | `src/actions/swap/` | `54ea109eda27f47b8954fc134c53672bf94e1706c2084693a45fd97bf15c96dd` |
+| `checks/trading.js` (ORDER) | `src/actions/order/` | `150f49fc260ca52f15b9744bb217aa8eb06837bbbaf740f3cb99fcb54940b78c` |
+| `checks/trading.js` (SWAP) | `src/actions/swap/` | `f04acff4651e7529a57e5acb527d0cf8fcad73273babaf584fc8e945c94b8503` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `0174875cd302106d68a816c7e72a64d53e3f51971881cd9efbea70a78786e7d9` |
 | `checks/dividend.js` | `src/actions/dividend/` | `d4f5c14da27903f71c58cb5f56310d2ff0520bb2f8d0646e7e798d1721c28014` |
 | `checks/batch.js` | `src/actions/batch/` | `e29048413eb43f385d090a41e31c2f6d29870b9a1c412bad87b2e3521f45caf5` |
@@ -486,6 +491,27 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-09 - ORDER and SWAP remote token accept check
+
+The `order` pin moves from `66728bf5` to `150f49fc` and the `swap` pin from
+`54ea109e` to `f04acff4`, hashed from the committed paired indexer tree at
+`ba82c424` by `node bin/preflight_handler_dirs.js <indexer> src/actions/<name>/`.
+The mapped diff from the `e545c8d5` anchor imports the shared
+`cross_chain_remote_token.js` helper in both handlers and calls it from
+`validateGeneral` after reference checks and before expiration.
+
+The helper applies only to format-0 cross-chain creates with a nonempty GET token.
+Before its registry row exists or while the row is inactive, the prior behavior is
+preserved. Once active, it asks the hub mirror for the finalized remote token row
+identified by network, GET_COIN and GET_TICK; a missing row, reader or mirror rejects
+the action as `invalid: GET_TICK (no pinned remote token)`.
+
+**Direction: WIDENS rejection behind an activation row.** The decision depends on
+authoritative finalized hub-mirror state that Tier 2 cannot read. Treating a local
+or cached token lookup as equivalent would make the pre-flight claim a verdict it
+cannot prove, so the server-only restriction remains unverified in `checks/trading.js`.
+NO CLIENT CHECK MOVES.
 
 ### 2026-10-08 - send gated totals by tick id
 

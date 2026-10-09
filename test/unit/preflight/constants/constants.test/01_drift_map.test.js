@@ -110,11 +110,30 @@ function registerIssueLazyProbeReviewTest() {
     });
 }
 
+function registerOrderSwapRemoteTokenReviewTest() {
+    it('pins and records the ORDER and SWAP remote token accept review', function () {
+        const text = fs.readFileSync(REAL_MAP, 'utf8');
+        const rows = parseMap(REAL_MAP);
+        const order = rows.find((r) => r.handler === 'src/actions/order/');
+        const swap = rows.find((r) => r.handler === 'src/actions/swap/');
+        expect(order, 'order directory row').to.exist;
+        expect(swap, 'swap directory row').to.exist;
+        expect(order.hash).to.equal('150f49fc260ca52f15b9744bb217aa8eb06837bbbaf740f3cb99fcb54940b78c');
+        expect(swap.hash).to.equal('f04acff4651e7529a57e5acb527d0cf8fcad73273babaf584fc8e945c94b8503');
+        const heading = '### 2026-10-09 - ORDER and SWAP remote token accept check';
+        expect(text).to.include(heading);
+        const start = text.indexOf(heading);
+        const entry = text.slice(start, text.indexOf('\n### ', start + heading.length));
+        expect(entry).to.include('NO CLIENT CHECK MOVES');
+    });
+}
+
 describe('pre-flight constants + registry', function () {
     describe('drift map (§8.5)', function () {
         registerMapParsingTest();
         registerAnchorConsistencyTests();
         registerMapCoverageTest();
         registerIssueLazyProbeReviewTest();
+        registerOrderSwapRemoteTokenReviewTest();
     });
 });
