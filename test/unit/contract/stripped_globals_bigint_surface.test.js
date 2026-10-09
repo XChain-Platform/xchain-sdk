@@ -51,6 +51,16 @@ function frozenStringArray(source, name) {
 }
 
 describe('stripped-globals BigInt surface parity', function () {
+    it('exports the frozen BigInt typed-array strip surface', function () {
+        delete require.cache[require.resolve(SDK_COPY)];
+        const sdkGlobals = require(SDK_COPY);
+        assert.ok(Object.isFrozen(sdkGlobals.BIGINT_SURFACE_STRIPPED_GLOBAL_NAMES));
+        assert.deepStrictEqual(
+            sdkGlobals.BIGINT_SURFACE_STRIPPED_GLOBAL_NAMES,
+            ['BigInt64Array', 'BigUint64Array']
+        );
+    });
+
     it('keeps the SDK stripped-globals vendor byte-identical to xchain-vm', function () {
         if (!requireVmSibling(this)) return;
         assert.strictEqual(
