@@ -313,9 +313,8 @@ function itGoldenCopyHasNotMovedOnItsOwn(){
         // Moved 2026-08-20 (Stage A genesis): STATE_SUBTREE_ACTIVATION.contract_state_root
         // armed at genesis on all three testnet chains, replacing BTC:testnet's 146500 (left
         // inert by the 2026-08-10 re-genesis) and adding LTC and DOGE. Legal at 0 because all
-        // three are genesis-active in the state_key_collation_activation registry row, so no
-        // slot arms below its own collation height. ESCROW_LOCKED_LEAF_SHADOW emptied in the
-        // same change: its
+        // three are genesis-active in the state_key_collation_activation row, so no slot
+        // arms below its own collation height. ESCROW_LOCKED_LEAF_SHADOW was emptied too: its
         // BTC:testnet 148000 entry could never open once the leaf armed at genesis there, so
         // it was unreachable code that read as an open window.
         // Moved (registry conversion): the literal STATE_SUBTREE_ACTIVATION,
