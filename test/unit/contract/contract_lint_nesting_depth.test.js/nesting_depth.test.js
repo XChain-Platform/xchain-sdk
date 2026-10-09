@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * test/unit/contract/contract_lint_nesting_depth.test.js
+ * test/unit/contract/contract_lint_nesting_depth.test.js/nesting_depth.test.js
  *
  * Nesting-depth verdicts from the SDK's vendored lint core.
  ********************************************************************/
@@ -23,7 +23,7 @@ const {
     lintSource,
     findNestingDepth,
     MAX_NESTING_DEPTH
-} = require('../../../src/contract/lint-core.js');
+} = require('../../../../src/contract/lint-core.js');
 
 function parenthesized(depth) {
     return 'module.exports = ' + '('.repeat(depth) + '1' + ')'.repeat(depth) + ';';
