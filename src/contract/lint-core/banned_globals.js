@@ -10,6 +10,26 @@ const {
     objectPatternEntries, scopeDeclares
 } = require('./scope_analysis.js');
 
+function parseSource(code) {
+    try {
+        return acorn.parse(code, {
+            ecmaVersion: CONTRACT_ECMA_VERSION,
+            sourceType: 'script',
+            locations: true
+        });
+    } catch (e) {
+        return null;
+    }
+}
+
+function destructuredGlobalEntries(node, name, aliased, optionalChain) {
+    return objectPatternEntries(node).filter((entry) => {
+        const path = entry.path;
+        return path[path.length - 1] === name &&
+            isGlobalObjectPathRef(entry.source, path.slice(0, -1), aliased, optionalChain);
+    });
+}
+
 /**
  * Scan contract code for the async surface (async functions, await expressions,
  * and Promise references). The CONTRACT_WRAPPER invokes exports SYNCHRONOUSLY:
@@ -55,23 +75,15 @@ function findBannedAsync(code, hardened, aliased, optionalChain, destructure) {
     if (optionalChain === undefined) optionalChain = true;
     if (destructure === undefined) destructure = true;
     const hits = [];
-    let ast;
-    try {
-        ast = acorn.parse(code, { ecmaVersion: CONTRACT_ECMA_VERSION, sourceType: 'script', locations: true });
-    } catch (e) {
-        return hits;
-    }
+    const ast = parseSource(code);
+    if (!ast) return hits;
     const markAsync = (node) => {
         if (node.async) hits.push({ kind: 'async', line: node.loc ? node.loc.start.line : '?' });
     };
     const markDestructuredPromise = (node) => {
         if (!destructure) return;
-        for (const entry of objectPatternEntries(node)) {
-            const path = entry.path;
-            if (path[path.length - 1] !== 'Promise') continue;
-            if (!isGlobalObjectPathRef(entry.source, path.slice(0, -1), aliased, optionalChain)) continue;
+        for (const entry of destructuredGlobalEntries(node, 'Promise', aliased, optionalChain))
             hits.push({ kind: 'promise', line: entry.property.loc ? entry.property.loc.start.line : '?' });
-        }
     };
     walk.ancestor(ast, {
         VariableDeclarator: markDestructuredPromise,
@@ -84,13 +96,8 @@ function findBannedAsync(code, hardened, aliased, optionalChain, destructure) {
         },
         Identifier(node, state, ancestors) {
             if (node.name !== 'Promise') return;
-            // Only the GLOBAL Promise is banned. Skip the property position of a
-            // member access (obj.Promise) and a non-computed object-literal key
-            // ({ Promise: ... }): those never resolve to the global binding.
-            // Note: the shorthand `{ Promise }` DOES read the global binding and
-            // is caught here in both modes: acorn materializes distinct key and
-            // value nodes for a shorthand property, so the key-skip below never
-            // suppresses the value read (efc8c624, locked in by unit tests).
+            // Property names do not read the global. Shorthand `{ Promise }` does:
+            // acorn gives its value a distinct node, so the key check does not skip it.
             const parent = ancestors.length >= 2 ? ancestors[ancestors.length - 2] : null;
             if (parent) {
                 if (parent.type === 'MemberExpression' && parent.property === node && !parent.computed) return;
@@ -198,20 +205,12 @@ function findBannedWasm(code, aliased, optionalChain, destructure) {
     if (optionalChain === undefined) optionalChain = true;
     if (destructure === undefined) destructure = true;
     const hits = [];
-    let ast;
-    try {
-        ast = acorn.parse(code, { ecmaVersion: CONTRACT_ECMA_VERSION, sourceType: 'script', locations: true });
-    } catch (e) {
-        return hits;
-    }
+    const ast = parseSource(code);
+    if (!ast) return hits;
     const markDestructuredWasm = (node) => {
         if (!destructure) return;
-        for (const entry of objectPatternEntries(node)) {
-            const path = entry.path;
-            if (path[path.length - 1] !== 'WebAssembly') continue;
-            if (!isGlobalObjectPathRef(entry.source, path.slice(0, -1), aliased, optionalChain)) continue;
+        for (const entry of destructuredGlobalEntries(node, 'WebAssembly', aliased, optionalChain))
             hits.push({ line: entry.property.loc ? entry.property.loc.start.line : '?' });
-        }
     };
     walk.ancestor(ast, {
         VariableDeclarator: markDestructuredWasm,
