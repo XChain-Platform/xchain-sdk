@@ -37,6 +37,8 @@ const STATUS_FIELDS = {
     available:                 { map: true,  nullable: false },
     hub_config_fetched_at:     { map: false, nullable: true  },
     hub_config_age_seconds:    { map: false, nullable: true  },
+    hub_consensus_hash_mismatch:         { map: false, nullable: true  },
+    hub_consensus_hash_mismatch_details: { map: false, nullable: false },
     last_block:                { map: true,  nullable: true  },
     last_block_time:           { map: true,  nullable: true  },
     decoder_tip:               { map: true,  nullable: true  },
