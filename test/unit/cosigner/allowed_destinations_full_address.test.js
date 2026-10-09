@@ -19,6 +19,7 @@ const AgentSession = require('../../../src/cosigner/agent_session.js');
 const WalletSession = require('../../../src/utils/wallet_session.js');
 
 const FULL_ADDRESS = 'bc1qallowedfulladdress';
+let tmpDir;
 
 function makeSdk(captured, stop) {
     return {
@@ -61,73 +62,83 @@ async function expectStopped(promise, stop) {
     throw new Error('expected action creation to stop the submission');
 }
 
-describe('allowedDestinations full-address encoding', function () {
-    let tmpDir;
+function createTmpDir() {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'allowed-destinations-'));
+}
 
-    beforeEach(function () {
-        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'allowed-destinations-'));
-    });
+function removeTmpDir() {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+}
 
-    afterEach(function () {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-    });
-
-    for (const action of ['MINT', 'MESSAGE', 'SWEEP']) {
-        it(`keeps an allowed ${action} destination as a full address`, async function () {
-            const captured = { addressResolverCalls: 0, created: [] };
-            const stop = new Error('stop after action creation');
-            const session = new AgentSession(makeSdk(captured, stop), 'WIF', {
-                allowedActions: [action],
-                allowedDestinations: [FULL_ADDRESS],
-                allowUnbounded: true,
-                allowUnkeyedSubmits: true,
-                stateFile: path.join(tmpDir, `${action}.json`),
-            });
-
-            await expectStopped(session.submit({
-                action,
-                params: { tick: 'TOK', amount: '1', destination: FULL_ADDRESS },
-            }), stop);
-
-            expect(captured.addressResolverCalls).to.equal(0);
-            expect(captured.created).to.have.length(1);
-            expect(captured.created[0].params.destination).to.equal(FULL_ADDRESS);
-        });
-    }
-
-    it('keeps address resolution enabled for other allowed actions', async function () {
+function testAllowedDestination(action) {
+    return async function () {
         const captured = { addressResolverCalls: 0, created: [] };
         const stop = new Error('stop after action creation');
         const session = new AgentSession(makeSdk(captured, stop), 'WIF', {
-            allowedActions: ['SEND'],
+            allowedActions: [action],
             allowedDestinations: [FULL_ADDRESS],
             allowUnbounded: true,
             allowUnkeyedSubmits: true,
-            stateFile: path.join(tmpDir, 'SEND.json'),
+            stateFile: path.join(tmpDir, `${action}.json`),
         });
 
         await expectStopped(session.submit({
-            action: 'SEND',
+            action,
             params: { tick: 'TOK', amount: '1', destination: FULL_ADDRESS },
         }), stop);
 
-        expect(captured.addressResolverCalls).to.equal(1);
+        expect(captured.addressResolverCalls).to.equal(0);
         expect(captured.created).to.have.length(1);
-        expect(captured.created[0].params.destination).to.equal('^57');
+        expect(captured.created[0].params.destination).to.equal(FULL_ADDRESS);
+    };
+}
+
+async function testOtherAllowedAction() {
+    const captured = { addressResolverCalls: 0, created: [] };
+    const stop = new Error('stop after action creation');
+    const session = new AgentSession(makeSdk(captured, stop), 'WIF', {
+        allowedActions: ['SEND'],
+        allowedDestinations: [FULL_ADDRESS],
+        allowUnbounded: true,
+        allowUnkeyedSubmits: true,
+        stateFile: path.join(tmpDir, 'SEND.json'),
     });
 
-    it('keeps default address compaction for an ordinary wallet session', async function () {
-        const captured = { addressResolverCalls: 0, created: [] };
-        const stop = new Error('stop after action creation');
-        const session = new WalletSession(makeSdk(captured, stop), 'WIF');
+    await expectStopped(session.submit({
+        action: 'SEND',
+        params: { tick: 'TOK', amount: '1', destination: FULL_ADDRESS },
+    }), stop);
 
-        await expectStopped(session.submit({
-            action: 'MINT',
-            params: { tick: 'TOK', amount: '1', destination: FULL_ADDRESS },
-        }), stop);
+    expect(captured.addressResolverCalls).to.equal(1);
+    expect(captured.created).to.have.length(1);
+    expect(captured.created[0].params.destination).to.equal('^57');
+}
 
-        expect(captured.addressResolverCalls).to.equal(1);
-        expect(captured.created).to.have.length(1);
-        expect(captured.created[0].params.destination).to.equal('^57');
-    });
+async function testOrdinaryWalletSession() {
+    const captured = { addressResolverCalls: 0, created: [] };
+    const stop = new Error('stop after action creation');
+    const session = new WalletSession(makeSdk(captured, stop), 'WIF');
+
+    await expectStopped(session.submit({
+        action: 'MINT',
+        params: { tick: 'TOK', amount: '1', destination: FULL_ADDRESS },
+    }), stop);
+
+    expect(captured.addressResolverCalls).to.equal(1);
+    expect(captured.created).to.have.length(1);
+    expect(captured.created[0].params.destination).to.equal('^57');
+}
+
+describe('allowedDestinations full-address encoding', function () {
+    beforeEach(createTmpDir);
+    afterEach(removeTmpDir);
+
+    for (const action of ['MINT', 'MESSAGE', 'SWEEP']) {
+        it(`keeps an allowed ${action} destination as a full address`,
+            testAllowedDestination(action));
+    }
+
+    it('keeps address resolution enabled for other allowed actions', testOtherAllowedAction);
+    it('keeps default address compaction for an ordinary wallet session',
+        testOrdinaryWalletSession);
 });
