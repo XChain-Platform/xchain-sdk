@@ -801,6 +801,10 @@ export interface ExplorerStatus {
     hub_config_fetched_at?: string | null;
     /** Seconds since the last successful hub-config fetch; null before the first */
     hub_config_age_seconds?: number | null;
+    /** Whether the hub's coin-registry consensus hashes disagree; null when the hub advertises none */
+    hub_consensus_hash_mismatch?: boolean | null;
+    /** One diagnostic string per hub consensus-hash mismatch */
+    hub_consensus_hash_mismatch_details?: string[];
     /** Highest block the indexer has processed; null when that coin's DB read failed */
     last_block?: { [coin: string]: number | null };
     /** block_time of that block; null when that coin's DB read failed */
