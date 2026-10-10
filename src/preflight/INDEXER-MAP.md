@@ -467,10 +467,10 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `3671cf3e2efefb069d30539814ecc2f1bd65087698f756711c8a1c7b75e9665f` |
 | `checks/mint.js` | `src/actions/mint/` | `0f2b6b0375df803321c1644e24f9fa2b6dcb73119a470832eeb93dfab8530595` |
 | `checks/issue.js` | `src/actions/issue/` | `95dff217aeae8428578cf583b74bdeedf97731fd2c9242be6e8baf6763c816e9` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `4e6fabc35fb8ccd74818b89a4c468505c9341d4c2de59666e2b33a3a3df6d775` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `e4d3f5f8b8affe3aedf3c382870b49c820ee1b7136dde874101d235d4a108f89` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `0ba2b8e2037de1c86163525776af2d788da7a9b3995999615f60c018280115fa` |
-| `checks/trading.js` (ORDER) | `src/actions/order/` | `150f49fc260ca52f15b9744bb217aa8eb06837bbbaf740f3cb99fcb54940b78c` |
-| `checks/trading.js` (SWAP) | `src/actions/swap/` | `f04acff4651e7529a57e5acb527d0cf8fcad73273babaf584fc8e945c94b8503` |
+| `checks/trading.js` (ORDER) | `src/actions/order/` | `79fdae31db05edea980aca9b52b70fd8a2c65bb53e9e785534229bdca0ffd8ec` |
+| `checks/trading.js` (SWAP) | `src/actions/swap/` | `9bb114863e30d2501bb36f6f2d5a541bbaf99320b860466708253555aded19cc` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `0174875cd302106d68a816c7e72a64d53e3f51971881cd9efbea70a78786e7d9` |
 | `checks/dividend.js` | `src/actions/dividend/` | `d4f5c14da27903f71c58cb5f56310d2ff0520bb2f8d0646e7e798d1721c28014` |
 | `checks/batch.js` | `src/actions/batch/` | `e29048413eb43f385d090a41e31c2f6d29870b9a1c412bad87b2e3521f45caf5` |
@@ -2616,3 +2616,15 @@ Activation height, market ownership, open status, referenced-list existence and
 type, and equality against a retained current reference all require indexed
 state. They remain indexer-owned and cannot become SDK errors without a server
 dry-run carrying that state.
+
+### 2026-10-10 - exact integer wire fields (dispenser, order, swap)
+
+Indexer `be3a5277b` adds one gated rule to `src/actions/dispenser/validate_format.js`,
+`src/actions/order/validate.js` and `src/actions/swap/validate.js`: once
+`EXACT_INTEGER_WIRE_FIELDS` is active, `EXPIRATION`, `ALLOW_LIST`, `BLOCK_LIST` and the
+action-index field must be exact integers when present, else `invalid: <FIELD> (format)`.
+The gate ships unarmed on every network, so no verdict moves today and nothing is
+mirrored yet. When the gate is armed, the matching `checks/` modules should reject the
+same non-integer values; that is a client change to make with the arming, not before.
+All three hashes re-pinned at indexer `090a25136`; the trunk before `be3a5277b` was
+clean against the previous pins.
