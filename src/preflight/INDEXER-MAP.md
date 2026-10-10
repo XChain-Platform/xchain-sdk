@@ -81,7 +81,13 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `6f22f0bc`
+**Pins taken at indexer commit:** `6b0a43ea`
+
+(Re-anchored 2026-10-10 against committed indexer develop `6b0a43ea`. Only the `batch` directory
+pin moves, for the gated sub-command admission by dispatch coverage reviewed in the first entry of
+the review log below. The other twelve rows are unchanged and match that tree, including the
+`dispenser`, `order` and `swap` pins the exact integer wire review took from `090a25136`
+while the anchor line still read `6f22f0bc`; `090a25136` is an ancestor of this anchor.)
 
 (Re-anchored 2026-10-09 against committed indexer develop `6f22f0bc`. Only the `send` directory
 pin moves, for the gated handoff totals by resolved tick id reviewed in the first entry of the
@@ -390,7 +396,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 6f22f0bc..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 6b0a43ea..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -473,7 +479,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `9bb114863e30d2501bb36f6f2d5a541bbaf99320b860466708253555aded19cc` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `0174875cd302106d68a816c7e72a64d53e3f51971881cd9efbea70a78786e7d9` |
 | `checks/dividend.js` | `src/actions/dividend/` | `d4f5c14da27903f71c58cb5f56310d2ff0520bb2f8d0646e7e798d1721c28014` |
-| `checks/batch.js` | `src/actions/batch/` | `e29048413eb43f385d090a41e31c2f6d29870b9a1c412bad87b2e3521f45caf5` |
+| `checks/batch.js` | `src/actions/batch/` | `7e138a16dc5eff43ac60c4cca83c2b35ccd865eb98df3ce57c8cbc8aebca85a6` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `bbddd777d235e2da7b472d0e4ed993b598886202374f58ae2d46525079cb8f76` |
 | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `b68c873821cbcbe2e72082817f13eecbe87c12c2a99591d5d4b9085358b7fa75` |
 
@@ -496,6 +502,35 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-10 - BATCH sub-command admission by dispatch coverage
+
+The `batch` pin moves from `e2904841` to `7e138a16`, hashed from committed indexer develop
+`6b0a43ea` by `node bin/preflight_handler_dirs.js <indexer> src/actions/batch/`. The mapped
+diff from the `6f22f0bc` anchor touches two files. `limits.js` repoints one comment citation
+and normalizes away. `validate.js` carries the whole move: `resolveGates` reads one more
+verdict per BATCH, `gateRegistry.activeAt('action_admission_dispatched_only.ACTION_ADMISSION_DISPATCHED_ONLY',
+NETWORK, COIN, BLOCK_INDEX, null)`, and while it is active the activation scan refuses the
+whole batch with `invalid: ACTION (unknown)` when a sub-command's ACTION (alias-rewritten
+where sub-action normalization is active) is a non-empty name outside `DISPATCHED_ACTIONS` (the set of names
+`actions_class/dispatch.js` has a handler line for). An empty ACTION skips the new branch and
+keeps the enabled-at-this-block test it already had, and so does every name inside the set.
+The registry row is `mainnet: UNARMED, testnet: UNARMED, regtest: 0`, so the rule runs on
+regtest only today. The top-level reader of the same key in `actions_class/transaction.js`
+is outside every mapped directory.
+
+**Direction: WIDENS rejection behind an activation row.** The gate only adds refusals, and
+each one is a batch the client already refuses. The decoder fails a sub-command whose ACTION
+is not a key of `src/protocol/formats.js` (after `ACTION_ALIASES`) with `UNKNOWN_ACTION`,
+and `checkBatch` in `checks/batch.js` raises an error-severity `PARSE_INVALID` for every
+sub-command that does not parse, on every network and at every height. Machine-verified
+against the `6b0a43ea` tree: all 32 format keys and all five alias targets are members of
+`DISPATCHED_ACTIONS`, so no sub-command the client composes or passes is refused by the new
+branch, and every name the new branch refuses is outside the format table. The client stays
+the stricter side where it already was (an empty element, and dispatched names with no client
+wire format such as `XEXEC`), and none of that moves. No `ACTIVATION_MIRRORS` row is added
+because no client predicate reads this gate; a format key added for a name the dispatcher does
+not handle would be the first case that needs one. NO CLIENT CHECK MOVES.
 
 ### 2026-10-09 - send gated handoff totals by resolved tick id
 
