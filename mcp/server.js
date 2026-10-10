@@ -208,7 +208,7 @@ function buildServer(options = {}) {
         { coin: coinParam, query: z.string(), type: z.enum(['address', 'token', 'block', 'source', 'destination']), ...pageOpts },
         ({ coin, query, type, page, limit }) => sdkFor(coin).getDispensers(query, type, { page, limit }));
 
-    tool('get_markets', 'Trading pairs on the DEX (optionally for one tick).',
+    tool('get_markets', 'Trading pairs on the DEX. When tick is supplied, every returned pair puts the searched tick in tick2 and its values in tick2_* fields; the counter tick is in tick1. Read the searched tick\'s price from tick2_price.',
         { coin: coinParam, tick: z.string().optional() },
         ({ coin, tick }) => sdkFor(coin).getMarkets(tick));
 

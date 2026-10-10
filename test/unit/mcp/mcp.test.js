@@ -91,6 +91,15 @@ describe('MCP server (read-only)', () => {
         }
     });
 
+    it('documents the get_markets filtered tick orientation', async () => {
+        const { client } = await connectedPair();
+        const { tools } = await client.listTools();
+        const markets = tools.find((tool) => tool.name === 'get_markets');
+        expect(markets.description).to.equal(
+            'Trading pairs on the DEX. When tick is supplied, every returned pair puts the searched tick in tick2 and its values in tick2_* fields; the counter tick is in tick1. Read the searched tick\'s price from tick2_price.'
+        );
+    });
+
     it('creates SDK instances lazily, one per coin, with the right network', async () => {
         const { client, created } = await connectedPair();
         expect(created).to.have.lengthOf(0);                       // listing tools opens nothing
