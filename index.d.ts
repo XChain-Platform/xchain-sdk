@@ -2095,7 +2095,11 @@ export declare class XChainSDK {
      *  Explorer: Market methods
      */
 
-    /** Get all markets, or markets for a specific token ticker. */
+    /**
+     * Get all markets, or markets for a specific token ticker.
+     * When tick is supplied, every returned pair puts the searched tick in tick2 and its values in
+     * tick2_* fields; the counter tick is in tick1. Read the searched tick's price from tick2_price.
+     */
     getMarkets(tick?: string): Promise<any>;
 
     /** Get the market between two token tickers. */
