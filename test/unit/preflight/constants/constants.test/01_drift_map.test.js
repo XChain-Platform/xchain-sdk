@@ -111,6 +111,8 @@ function registerIssueLazyProbeReviewTest() {
 }
 
 function registerOrderSwapRemoteTokenReviewTest() {
+    // The hashes move with every later reviewed change to these handlers; the 2026-10-09
+    // entry below stays the record of the remote token accept review.
     it('pins and records the ORDER and SWAP remote token accept review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const rows = parseMap(REAL_MAP);
@@ -118,8 +120,8 @@ function registerOrderSwapRemoteTokenReviewTest() {
         const swap = rows.find((r) => r.handler === 'src/actions/swap/');
         expect(order, 'order directory row').to.exist;
         expect(swap, 'swap directory row').to.exist;
-        expect(order.hash).to.equal('150f49fc260ca52f15b9744bb217aa8eb06837bbbaf740f3cb99fcb54940b78c');
-        expect(swap.hash).to.equal('f04acff4651e7529a57e5acb527d0cf8fcad73273babaf584fc8e945c94b8503');
+        expect(order.hash).to.equal('79fdae31db05edea980aca9b52b70fd8a2c65bb53e9e785534229bdca0ffd8ec');
+        expect(swap.hash).to.equal('9bb114863e30d2501bb36f6f2d5a541bbaf99320b860466708253555aded19cc');
         const heading = '### 2026-10-09 - ORDER and SWAP remote token accept check';
         expect(text).to.include(heading);
         const start = text.indexOf(heading);
