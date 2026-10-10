@@ -306,12 +306,14 @@ const ANCHOR_ACTIVATION = {
     regtest: 0,
 };
 
+const UNARMED = 9999999999;
+
 const ARCHIVE_MATCH_COUNT_ACTIVATION = {
-    mainnet: 9999999999,
+    mainnet: UNARMED,
     'BTC:testnet': 155001,
     'LTC:testnet': 4906040,
     'DOGE:testnet': 67962387,
-    testnet: 9999999999,
+    testnet: UNARMED,
     regtest: 0,
 };
 
