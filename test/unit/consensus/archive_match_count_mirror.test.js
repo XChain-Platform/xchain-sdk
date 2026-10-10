@@ -10,6 +10,7 @@ const sdkConstants = require('../../../src/protocol/constants.js');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 const { ARCHIVE_MATCH_COUNT_ACTIVATION } = sdkConstants;
+const sdkConstantsSource = fs.readFileSync(require.resolve('../../../src/protocol/constants.js'), 'utf8');
 
 // Name the flag-day maps the SDK exports today, so discovery can never pass on an empty list.
 const KNOWN_ACTIVATION_MAPS = [
@@ -63,6 +64,12 @@ describe('archive MATCH_COUNT activation mirror', function () {
             testnet: 9999999999,
             regtest: 0,
         });
+
+        const mapSource = sdkConstantsSource.match(
+            /const ARCHIVE_MATCH_COUNT_ACTIVATION = \{[\s\S]*?\n\};/
+        )[0];
+        assert.doesNotMatch(mapSource, /9999999999/);
+        assert.strictEqual((mapSource.match(/\bUNARMED\b/g) || []).length, 2);
     });
 
     it('matches the documentation canon', function () {
