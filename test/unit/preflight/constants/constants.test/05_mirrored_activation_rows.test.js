@@ -37,13 +37,12 @@ function indexerRoot(files) {
     return root;
 }
 
-// The indexer spells these two rows' unarmed planes as the literal 9999999999, not UNARMED.
-const literal = (mirror, over = {}) => row(mirror, Object.assign({ mainnet: 9999999999, testnet: 9999999999 }, over));
+const unarmed = (mirror, over = {}) => row(mirror, Object.assign({ mainnet: 'UNARMED', testnet: 'UNARMED' }, over));
 
 const allRows = (listOver, unit, nsOver = {}, bridgeOver = {}) => ({
     'gates_4.js': row(LIST, listOver, unit) + row(DISP) + row(LIST_ADDR) + row(LIST_TICK_COIN) + row(LIST_META),
-    'gates_3.js': literal(TICK_NS, nsOver),
-    'shared_rows_4.js': literal(BRIDGE, bridgeOver)
+    'gates_3.js': unarmed(TICK_NS, nsOver),
+    'shared_rows_4.js': unarmed(BRIDGE, bridgeOver)
 });
 
 describe('pre-flight drift gate: mirrored activation rows', function () {
@@ -54,7 +53,7 @@ describe('pre-flight drift gate: mirrored activation rows', function () {
     it('passes when a row moves to a differently named part file', function () {
         expect(checkActivationMirrors(indexerRoot({
             'gates_9.js': row(LIST) + row(LIST_ADDR),
-            'shared_rows_7.js': row(DISP) + row(LIST_TICK_COIN) + row(LIST_META) + literal(TICK_NS) + literal(BRIDGE)
+            'shared_rows_7.js': row(DISP) + row(LIST_TICK_COIN) + row(LIST_META) + unarmed(TICK_NS) + unarmed(BRIDGE)
         }))).to.equal(0);
     });
 
@@ -93,8 +92,14 @@ describe('pre-flight drift gate: mirrored activation rows', function () {
 });
 
 describe('pre-flight drift gate: tick-namespace and token-bridge rows', function () {
-    it('passes when the indexer writes 9999999999 where the SDK pins UNARMED', function () {
+    it('passes when the indexer writes UNARMED where the SDK pins UNARMED', function () {
         expect(checkActivationMirrors(indexerRoot(allRows()))).to.equal(0);
+    });
+
+    it('still recognizes the legacy numeric UNARMED spelling', function () {
+        expect(checkActivationMirrors(indexerRoot(allRows({}, undefined,
+            { mainnet: 9999999999, testnet: 9999999999 },
+            { mainnet: 9999999999, testnet: 9999999999 })))).to.equal(0);
     });
 
     it('fails when a TICK_NAMESPACE or TOKEN_BRIDGE testnet height moves', function () {
