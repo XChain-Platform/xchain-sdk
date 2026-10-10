@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fee estimates now expose exact decimal-string satoshi totals and a `feeError` when missing input values or outputs above inputs make the fee indeterminate, instead of returning a misleading numeric fee.
 - `estimateFees` now runs `reconcileEncoded` before returning its directly signable PSBT and withholds an envelope reveal leg that it cannot independently reconcile.
 - `submitAction` default-path signing now signs only caller-supplied UTXOs and refuses encoder-added unsigned inputs.
+- Agent sessions with `allowedDestinations` now keep MINT, MESSAGE and SWEEP destinations as full addresses so co-signer policy can match them.
 
 ## [0.22.4] - 2026-10-05
 
