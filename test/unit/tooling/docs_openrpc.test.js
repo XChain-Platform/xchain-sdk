@@ -23,4 +23,13 @@ describe('docs/openrpc.json', function () {
         const names = doc.methods.map((m) => m.name);
         assert.strictEqual(new Set(names).size, names.length, 'method names must be unique');
     });
+
+    it('documents the filtered get_markets tick orientation', function () {
+        const method = doc.methods.find((candidate) => candidate.name === 'get_markets');
+        assert.ok(method, 'get_markets must be documented');
+        assert.strictEqual(
+            method.description,
+            'When params.tick is supplied, every returned pair puts the searched tick in tick2 and its values in tick2_* fields; the counter tick is in tick1. Read the searched tick\'s price from tick2_price.'
+        );
+    });
 });
