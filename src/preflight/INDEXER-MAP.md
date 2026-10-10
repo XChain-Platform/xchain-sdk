@@ -81,7 +81,17 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `6b0a43ea`
+**Pins taken at indexer commit:** `a406de91`
+
+(Re-anchored 2026-10-10 against the committed indexer lane tree `a406de91`, the head of the
+refill token-policy change, which had not landed on develop when this was written. Only the
+`dispenser` directory pin moves, for the gated refill token policy reviewed in the first entry of
+the review log below. The other twelve rows are unchanged and match that tree. `6b0a43ea` is not
+an ancestor of this anchor: the two share the base `26bdfcf22`, and `src/actions/dispenser/` is
+the only mapped directory that differs between them, so the batch review taken at `6b0a43ea`
+stands as read. This anchor joins develop when the lane lands as a merge commit, as the two
+commits beneath it did; a squashed or rebased landing would orphan it, and the section on an
+unreachable anchor below is then the way back.)
 
 (Re-anchored 2026-10-10 against committed indexer develop `6b0a43ea`. Only the `batch` directory
 pin moves, for the gated sub-command admission by dispatch coverage reviewed in the first entry of
@@ -396,7 +406,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 6b0a43ea..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff a406de91..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -473,7 +483,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `3671cf3e2efefb069d30539814ecc2f1bd65087698f756711c8a1c7b75e9665f` |
 | `checks/mint.js` | `src/actions/mint/` | `0f2b6b0375df803321c1644e24f9fa2b6dcb73119a470832eeb93dfab8530595` |
 | `checks/issue.js` | `src/actions/issue/` | `95dff217aeae8428578cf583b74bdeedf97731fd2c9242be6e8baf6763c816e9` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `e4d3f5f8b8affe3aedf3c382870b49c820ee1b7136dde874101d235d4a108f89` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `6369bdf9bd39490c407c7f447be77bbaf275c081e67abf9d29f075e5d5a3e546` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `0ba2b8e2037de1c86163525776af2d788da7a9b3995999615f60c018280115fa` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `79fdae31db05edea980aca9b52b70fd8a2c65bb53e9e785534229bdca0ffd8ec` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `9bb114863e30d2501bb36f6f2d5a541bbaf99320b860466708253555aded19cc` |
@@ -502,6 +512,40 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-10 - DISPENSER refill token policy
+
+The `dispenser` pin moves from `e4d3f5f8` to `6369bdf9`, hashed from the committed indexer lane
+tree `a406de91` by `node bin/preflight_handler_dirs.js <indexer> src/actions/dispenser/`. The
+mapped diff from the `26bdfcf22` base touches one file, `validate.js`, whose content at that
+base is the content at the `6b0a43ea` anchor. `validateDispenserEditRules` gains one branch
+between the ownership-escrow rule and the `MAX_REFILLS` cap. It runs on a format-2 edit whose
+`GIVE_ESCROW` is supplied and greater than zero, while
+`gateRegistry.activeAt('dispenser_refill_policy_activation.DISPENSER_REFILL_POLICY_ACTIVATION',
+NETWORK, COIN, BLOCK_INDEX, null)` is active, and it takes the tick from the dispenser row
+because an edit carries no `GIVE_TICK`. `isActionAllowed(null, tick, BLOCK_INDEX)` false
+refuses the edit with `invalid: TICK (sleeping)`, and otherwise
+`isActionAllowed(SOURCE, tick, BLOCK_INDEX)` false refuses it with
+`invalid: SOURCE (not authorized)`. These are the token sleep rule and the SOURCE allow and
+block list rule `validateGeneralRules` already applies to a format-0 create. An edit that adds
+no escrow is not judged. The registry row is `mainnet: UNARMED, testnet: UNARMED, regtest: 0`
+with every coin testnet UNARMED, so the rule runs on regtest only today.
+
+**Direction: WIDENS rejection behind an activation row.** The gate only adds refusals, and
+both read chain state at the including block: the token's sleep window and the token's allow
+and block lists as they stand for the refilling SOURCE. Pre-flight is handed an action string
+before any block exists, and `checks/send.js` already declares the same two inputs server-side
+only for SEND and DESTROY. `checkDispenser` in `checks/dispenser.js` mirrors neither rule on
+the create path, where the indexer has applied both all along, so the refill path gains
+nothing to mirror: `checkEditEscrow` keeps its ownership-escrow warning, its settlement-price
+and oracle-fee notes and its `MAX_REFILLS` declaration unchanged. A hard client block would
+also be wrong on its own terms, because the row is unarmed on every public network and
+pre-flight has no chain height, the reasoning the ownership-escrow rule already records.
+Where the row is active the refusal is a server-side verdict, the standing every sleep and
+list refusal on a create already has. No `ACTIVATION_MIRRORS` row is added because no client
+predicate reads this gate. One gap is older than this change and stays outside this re-pin: the dispenser create
+and refill paths carry no unverified declaration for sleep and list state, where SEND
+carries one. NO CLIENT CHECK MOVES.
 
 ### 2026-10-10 - BATCH sub-command admission by dispatch coverage
 
