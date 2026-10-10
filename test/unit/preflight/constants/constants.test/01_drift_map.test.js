@@ -160,6 +160,21 @@ function registerBatchDispatchAdmissionReviewTest() {
     });
 }
 
+function registerDispenserRefillPolicyReviewTest() {
+    it('pins and records the DISPENSER refill token policy review', function () {
+        const text = fs.readFileSync(REAL_MAP, 'utf8');
+        const dispenser = parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/dispenser/');
+        expect(dispenser, 'dispenser directory row').to.exist;
+        expect(dispenser.hash).to.equal('6369bdf9bd39490c407c7f447be77bbaf275c081e67abf9d29f075e5d5a3e546');
+        const heading = '### 2026-10-10 - DISPENSER refill token policy';
+        expect(text).to.include(heading);
+        const start = text.indexOf(heading);
+        const entry = text.slice(start, text.indexOf('\n### ', start + heading.length));
+        expect(entry).to.include('**Direction: WIDENS rejection behind an activation row.**');
+        expect(entry).to.include('NO CLIENT CHECK MOVES');
+    });
+}
+
 describe('pre-flight constants + registry', function () {
     describe('drift map (§8.5)', function () {
         registerMapParsingTest();
@@ -169,5 +184,6 @@ describe('pre-flight constants + registry', function () {
         registerOrderSwapRemoteTokenReviewTest();
         registerSendGatedTotalReviewTest();
         registerBatchDispatchAdmissionReviewTest();
+        registerDispenserRefillPolicyReviewTest();
     });
 });
