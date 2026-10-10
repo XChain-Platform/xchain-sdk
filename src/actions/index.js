@@ -23,6 +23,7 @@ const Validator         = require('../protocol/validator.js');
 const { getNetwork }    = require('../protocol/networks.js');
 const { SDKValidationError, SDKContractError } = require('../utils/errors.js');
 const Config            = require('../config.js');
+const { fillMarketCoinFields } = require('./market_coin_fields.js');
 
 // Encoding byte limits for pre-flight validation. Only P2SH is read from this
 // table today (the oversize suggestion below); the OP_RETURN gate is
@@ -215,6 +216,7 @@ class Actions {
         const { actionName, params } = resolveActionInput(this, data);
         let fields = normalizeActionFields(this, actionName, params);
         fields = applyActionVersion(this, data, fields);
+        fields = fillMarketCoinFields(fields, actionName, this.network);
         return serializeAction(this, actionName, fields, validate);
     }
 
@@ -291,6 +293,7 @@ class Actions {
         let fields     = this.util.normalizeFields(params || {});
         fields         = this.normalizeLegs(fields);
         fields         = this.util.setNumberFormats(fields);
+        fields         = fillMarketCoinFields(fields, actionName, this.network);
         let errors     = this.validator.validate(actionName, fields);
         if (errors.length === 0)
             return { valid: true, errors: [] };

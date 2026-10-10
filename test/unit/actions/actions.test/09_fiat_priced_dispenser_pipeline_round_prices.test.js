@@ -43,7 +43,7 @@ describe('Actions – fiat-priced DISPENSER pipeline (round prices)', function (
             action: 'DISPENSER',
             params: {
                 giveTick: 'TOKEN', giveAmount: '10',
-                getTick: 'BTC', getAmount: '0.001',
+                giveCoin: 'BTC', getCoin: 'BTC', getAmount: '0.001',
                 fiatCode: 'USD', fiatAmount: fiatAmount
             }
         });

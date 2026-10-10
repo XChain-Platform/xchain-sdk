@@ -23,6 +23,7 @@ const FormatSelector = require('../format_selector.js');
 const { MAX_DEPLOY_CHUNKS } = require('../../contract/chunk_helper.js');
 const { VALID_COINS, ACTION_REQUIRED_FIELDS } = require('./field_limits.js');
 const { validateListVersionFields } = require('./field_rules_extended.js');
+const { marketCoinErrors } = require('./market_coin_rules.js');
 
 // LIST_UNION_MAX_MEMBERS has its canonical home in xchain-documentation/protocol/constants.js.
 const LIST_UNION_MAX_MEMBERS = 16;
@@ -115,6 +116,7 @@ module.exports = {
         // Ownership dispensers (GIVE_OWNERSHIP=1) are single-shot: GIVE_AMOUNT
         // and GIVE_ESCROW must be EMPTY in that mode, and GET_AMOUNT is the price.
         if (this.isEmpty(fields.DISPENSER_ACTION_INDEX)) {
+            errors.push(...marketCoinErrors(this, 'DISPENSER', fields));
             let isOwnershipGive = (Number(fields.GIVE_OWNERSHIP || 0) === 1);
             let required = ['GIVE_TICK', 'GET_AMOUNT'];
             if (!isOwnershipGive) required.push('GIVE_AMOUNT');
@@ -139,6 +141,7 @@ module.exports = {
     validateOrder(fields) {
         let errors = [];
         if (this.isEmpty(fields.ORDER_ACTION_INDEX)) {
+            errors.push(...marketCoinErrors(this, 'ORDER', fields));
             // At least one side must have a TICK (can't trade coin for coin)
             if (this.isEmpty(fields.GIVE_TICK) && this.isEmpty(fields.GET_TICK))
                 errors.push(this.buildError('MISSING_REQUIRED_FIELD', 'ORDER create requires at least one of GIVE_TICK or GET_TICK'));
@@ -164,6 +167,7 @@ module.exports = {
     validateSwap(fields) {
         let errors = [];
         if (this.isEmpty(fields.SWAP_ACTION_INDEX)) {
+            errors.push(...marketCoinErrors(this, 'SWAP', fields));
             let isOwnershipGive = (Number(fields.GIVE_OWNERSHIP || 0) === 1);
             let isOwnershipGet  = (Number(fields.GET_OWNERSHIP  || 0) === 1);
             let required = ['GIVE_TICK', 'GET_TICK'];

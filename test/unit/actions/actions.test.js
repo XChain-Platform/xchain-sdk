@@ -147,7 +147,7 @@ describe('Actions – all 19 ACTION types', function () {
         let result = actions.createAction({
             action: 'DISPENSER',
             params: {
-                giveTick: 'A', giveAmount: '100', giveEscrow: '100',
+                giveCoin: 'BTC', getCoin: 'BTC', giveTick: 'A', giveAmount: '100', giveEscrow: '100',
                 getTick: 'B', getAmount: '50'
             }
         });
@@ -256,7 +256,7 @@ describe('Actions – all 19 ACTION types', function () {
     it('ORDER produces correct actionString', function () {
         let result = actions.createAction({
             action: 'ORDER',
-            params: { giveTick: 'A', giveAmount: '100', getTick: 'B', getAmount: '200' }
+            params: { giveCoin: 'BTC', getCoin: 'BTC', giveTick: 'A', giveAmount: '100', getTick: 'B', getAmount: '200' }
         });
         expect(result.actionString).to.match(/^ORDER\|/);
         expect(result.actionString).to.include('A');
@@ -297,7 +297,7 @@ describe('Actions – all 19 ACTION types', function () {
     it('SWAP produces correct actionString', function () {
         let result = actions.createAction({
             action: 'SWAP',
-            params: { giveTick: 'A', giveAmount: '100', getTick: 'B', getAmount: '200' }
+            params: { giveCoin: 'BTC', getCoin: 'BTC', giveTick: 'A', giveAmount: '100', getTick: 'B', getAmount: '200' }
         });
         expect(result.actionString).to.match(/^SWAP\|/);
         expect(result.actionString).to.include('A');

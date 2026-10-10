@@ -64,8 +64,10 @@ describe('Validator: DISPENSER create required fields', function () {
         expect(hasNoErrorCode(errors, 'MISSING_REQUIRED_FIELD')).to.be.true;
     });
 
-    it('accepts a token-paid dispenser (GET_TICK set, GET_COIN empty)', function () {
+    it('accepts a token-paid dispenser (GET_TICK set, GET_COIN names the chain)', function () {
         const errors = v.validate('DISPENSER', {
+            GIVE_COIN:   'BTC',
+            GET_COIN:    'BTC',
             GIVE_TICK:   'JDOG',
             GIVE_AMOUNT: '1',
             GIVE_ESCROW: '10',
