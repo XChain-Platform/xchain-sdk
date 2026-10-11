@@ -174,6 +174,9 @@ var Config = {
         // Service endpoints, used only when the caller passed no url or port.
         hubApiHost:     () => process.env.HUB_API_HOST,
         hubPort:        () => process.env.HUB_PORT,
+        // The developer REPL's hub endpoint (src/cli/repl.js), kept raw like
+        // the rest: the REPL passes it through as its hubUrl option.
+        hubUrl:         () => process.env.HUB_URL,
         explorerUrl:    () => process.env.EXPLORER_URL,
         explorerPort:   () => process.env.EXPLORER_PORT,
         encoderUrl:     () => process.env.ENCODER_URL,
