@@ -26,6 +26,7 @@
 const repl = require('repl');
 const XChainSDK = require('../XChainSDK.js');
 const CrossChainHelper = require('../actions/cross_chain.js');
+const Config = require('../config.js');
 
 
 async function startREPL(options = {}) {
@@ -46,12 +47,12 @@ async function startREPL(options = {}) {
 function buildSDKOptions(options) {
     // Build options from env vars and explicit options
     return {
-        network:     options.network     || process.env.NETWORK     || 'bitcoin-regtest',
-        explorerUrl: options.explorerUrl || process.env.EXPLORER_URL,
-        explorerPort: options.explorerPort || process.env.EXPLORER_PORT,
-        encoderUrl:  options.encoderUrl  || process.env.ENCODER_URL,
-        encoderPort: options.encoderPort || process.env.ENCODER_PORT,
-        hubUrl:      options.hubUrl      || process.env.HUB_URL,
+        network:     options.network     || Config.env.network()     || 'bitcoin-regtest',
+        explorerUrl: options.explorerUrl || Config.env.explorerUrl(),
+        explorerPort: options.explorerPort || Config.env.explorerPort(),
+        encoderUrl:  options.encoderUrl  || Config.env.encoderUrl(),
+        encoderPort: options.encoderPort || Config.env.encoderPort(),
+        hubUrl:      options.hubUrl      || Config.env.hubUrl(),
         ...options
     };
 }
