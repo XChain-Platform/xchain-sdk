@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Re-embedded the vesting template and safe-transfer pattern with exact positive-payout guards.
 - Re-embedded the crowdsale 1.4.0 template with `burnUnsold` support for finalized inventory.
 - `estimateFees withholds an envelope commit`, returning `psbt: null` and `signable: false` with the reason `ENVELOPE_PAIR_SIGN_VIA_SUBMIT_ACTION`, because the commit is safe to sign only together with its reveal through `submitAction`.
 - The raw encoder client `estimateFee` passes the envelope answer through unchecked.
