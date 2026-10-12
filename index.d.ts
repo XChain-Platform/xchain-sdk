@@ -361,7 +361,7 @@ export interface PreflightReport {
     checksRun: string[];
     findings: PreflightFinding[];
     unverified: PreflightUnverified[];
-    /** Tier-1 fee quote when one was obtained, else null. Untyped for the same reason `getFeeQuote` is. */
+    /** Tier-1 answer when one was obtained, else null. Untyped because it is a preflight verdict or a fee quote, whichever the explorer served. */
     quote: unknown;
     /** Block height the network answered at, or null when Tier-1 gave no verdict. */
     stateHeight: number | null;
@@ -834,8 +834,8 @@ export interface ExplorerStatus {
     /** chain_tip - decoder tip: the chain-to-decoder slice; null when unavailable */
     chain_lag_blocks?: { [coin: string]: number | null };
     /**
-     * The decoder's own health verdict: 'healthy', 'unhealthy', 'node-stale', 'unconfigured' or
-     * 'unreachable'. Typed as string because the explorer passes the decoder's own word through
+     * The decoder's own health verdict: 'healthy', 'unhealthy', 'reorg-halt-parked', 'reorg-halted',
+     * 'node-stale', 'unconfigured' or 'unreachable'. Typed as string because the explorer passes the decoder's own word through
      */
     decoder_health?: { [coin: string]: string };
     /** Server-side render time */
@@ -1357,6 +1357,33 @@ export interface EncryptPackResult {
  */
 
 // Internal: reached only via `sdk.ws`; not re-exported from index.js, so declared (not exported) here.
+/**
+ * The envelope every explorer WebSocket frame arrives in. `stale: true` is
+ * present only while the coin's indexed tip is behind (never `false`); WELCOME
+ * also repeats it as `data.stale`.
+ */
+export interface WsFrameEnvelope {
+    type: string;
+    data: any;
+    chain?: string;
+    network?: string;
+    timestamp?: number;
+    schema_version?: number;
+    id?: string;
+    catch_up?: true;
+    stale?: true;
+}
+
+/** The `data` of the events the WebSocket client emits after a reconnect catch-up. */
+export interface WsCatchUpEvents {
+    /** The replay was refused or went unanswered: backfill these channels over REST. */
+    resync_required: { code: string | null; message: string | null; channels: string[]; since_action_index: string };
+    /** Lifecycle types no replay carries: backfill them over REST. */
+    not_replayed: { types: string[]; channels: string[]; since_action_index: string };
+    /** The replay came from a replica whose tip is behind; it ends at latest_action_index. */
+    stale_replay: { channels: string[]; since_action_index: string; latest_action_index: string | null };
+}
+
 declare class WebSocketClient {
     constructor(options?: {
         /** Explorer/websocket hostname; falls back to explorerUrl, then 'localhost' */
@@ -1418,7 +1445,11 @@ declare class WebSocketClient {
     /** Resolves with the server's SUBSCRIPTION_LIST response */
     listSubscriptions(): Promise<any>;
 
-    /** Register a handler for a WS message type (or '*' for all) */
+    /**
+     * Register a handler for a WS message type (or '*' for all). Besides the
+     * server's frame types, the client emits `resync_required`, `not_replayed`
+     * and `stale_replay` after a reconnect catch-up (WsCatchUpEvents).
+     */
     on(eventType: string, callback: (msg: any) => void): void;
 
     /** Remove a previously registered handler */
@@ -1814,6 +1845,13 @@ export declare class XChainSDK {
     /** Estimate fees for an action without signing or broadcasting */
     estimateFees(actionData: { action: string; params: ActionParams }, encoderOpts?: Partial<EncoderOptions>): Promise<EstimateFeeResult>;
 
+    /**
+     * Native-coin fee pre-flight for an action or an already-formatted action string.
+     * Size the fee output to `requiredFeeSats`; refuse to broadcast on `supported: false`
+     * or `valid: false`. A busy answer is retried once after `busyRetryDelayMs` (default 1000).
+     */
+    quoteNativeFee(actionData: { action: string; params: ActionParams } | string, opts?: { source?: string; feeOutputSats?: number; busyRetryDelayMs?: number }): Promise<NativeFeeQuote>;
+
     /** Ping the encoder service. Returns the RPC result. */
     pingEncoder(): Promise<any>;
 
@@ -1844,6 +1882,9 @@ export declare class XChainSDK {
      * hub has not been contacted yet or is not configured.
      */
     getHubConfig(): object | null;
+
+    /** Per-capability MIN_STAKE thresholds read live from the hub, or null when no hub is configured or none answered. */
+    getCapabilityThresholds(): Promise<CapabilityThreshold[] | null>;
 
 
     /*
@@ -2049,8 +2090,8 @@ export declare class XChainSDK {
     getCoinpayObligations(query: string, type: string, opts?: QueryOptions): Promise<any>;
     /** One request for up to 20 addresses; answered keyed by address, each entry carrying the same body as the address-typed obligations read. */
     getCoinpayObligationsBatch(addresses: string[], opts?: QueryOptions): Promise<Record<string, any>>;
-    /** Native-coin fee pre-flight for one action (proxies the indexer feequote). */
-    getFeeQuote(opts: { action: string; params?: ActionParams; source?: string; feeOutputSats?: number }): Promise<any>;
+    /** Native-coin fee pre-flight for one action (proxies the indexer feequote); throws EXPLORER_BAD_FEEQUOTE on an answer that is not a quote. */
+    getFeeQuote(opts: { action: string; params?: ActionParams; source?: string; feeOutputSats?: number }): Promise<FeeQuote>;
     /** Native-coin fee schedule plus current oracle prices. */
     getFeeSchedule(): Promise<any>;
 
@@ -2221,7 +2262,9 @@ export declare class XChainSDK {
      *  Each on*() registers a handler and subscribes the relevant explorer
      *  channel, returning an unsubscribe function. The callback receives the
      *  raw WS message envelope `{ type, data, chain, network, timestamp,
-     *  catch_up? }`. Requires the WS client to be configured (network +
+     *  catch_up?, stale? }`; `stale: true` marks a frame served while the
+     *  coin's indexed tip is behind (see WsFrameEnvelope). Requires the WS
+     *  client to be configured (network +
      *  websocketUrl/explorerUrl, or hub discovery) and connected.
      */
 
@@ -2741,6 +2784,50 @@ export interface EstimateFeeResult {
     version: number;
 }
 
+/**
+ * The indexer's `feequote` answer as the SDK returns it. Only the fields the SDK
+ * reads are declared; the indexer adds others per branch (oracle prices, tolerance band).
+ */
+export interface FeeQuote {
+    /** Whether the network offers a native-coin fee for this action; an answer without it is refused. */
+    supported: boolean;
+    /** true payable, false refused, null priced from the gas schedule with validity not judged. */
+    valid?: boolean | null;
+    /** Why the quote refused or could not price. */
+    error?: string | null;
+    /** The fee output to add, in satoshis. */
+    requiredFeeSats?: number;
+    /** The same fee in the native coin, as an 8-decimal string. */
+    requiredFeeNative?: string;
+    /** The address the fee output pays; null when native fees are off. */
+    feeDestination?: string | null;
+    /** Set on the indexer's admission-cap answer, together with `retryable`. */
+    busy?: boolean;
+    /** Whether asking again shortly can succeed. */
+    retryable?: boolean;
+    /** Set when the fee was priced from the gas schedule without a dry-run. */
+    staticQuote?: boolean;
+    /** False when the action's on-chain validity was not judged. */
+    validated?: boolean;
+    [key: string]: any;
+}
+
+/** A `quoteNativeFee` answer: the fee quote plus the action string it priced. */
+export interface NativeFeeQuote extends FeeQuote {
+    /** The exact action string the quote priced. */
+    actionString: string;
+}
+
+/** One capability's staking threshold, as the hub's `getcapabilitythresholds` serves it. */
+export interface CapabilityThreshold {
+    /** The capability name. */
+    capability: string;
+    /** The latest configured MIN_STAKE as a decimal string, or null when the hub configures none. */
+    min_stake: string | null;
+    /** True when the hub operator has opted out of serving this capability. */
+    disabled: boolean;
+}
+
 
 /*
  *  WalletSession class
@@ -3049,13 +3136,14 @@ export interface X402ClientOptions {
     /** Fetch implementation (default: global fetch) */
     fetch?: typeof fetch;
     /**
-     * Maximum token amount the client will auto-pay without throwing (decimal string).
-     * Omitting it applies a conservative fail-closed default ceiling (base token units);
-     * an over-ceiling offer throws X402_PRICE_TOO_HIGH before any payment. Pass
-     * 'unbounded' or Infinity (or allowUnbounded: true) to disable the ceiling.
+     * Per-payment spend ceiling. Prefer a per-tick map ({ TICK: '5' }): an offer naming a
+     * tick with no entry throws X402_TICK_NOT_ALLOWED, and one above its tick's ceiling throws
+     * X402_PRICE_TOO_HIGH, both before any payment. Omitting it refuses every offer. A plain
+     * decimal applies one ceiling to whatever tick the server names. Pass 'unbounded' or
+     * Infinity (or allowUnbounded: true) to disable the ceiling.
      */
-    maxAmount?: string | number | null;
-    /** Explicit opt-in to unbounded per-payment spending (disables the default ceiling). */
+    maxAmount?: Record<string, string | number> | string | number | null;
+    /** Explicit opt-in to unbounded per-payment spending (disables the ceiling). */
     allowUnbounded?: boolean;
     /** Delay between retry attempts in ms (default: 1500) */
     retryDelayMs?: number;

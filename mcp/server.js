@@ -282,8 +282,9 @@ function buildServer(options = {}) {
     // Copying the evaluator's third clause here to "fix the divergence" would let a
     // confirmAbove-only policy satisfy the hard-cap requirement and reopen exactly the
     // unbounded-spend hole the confirmAbove rejection was traded away to close. The
-    // divergence is the point; test/unit/mcp.test.js pins it. maxPerWindow.maxActions is
-    // likewise a COUNT cap, not an amount ceiling, and does not satisfy this.
+    // divergence is the point; 'keeps confirmAbove out of the ceiling predicate' in
+    // test/unit/mcp/mcp.test/01_mcp_server_write_tools.test.js pins it. maxPerWindow.maxActions
+    // is likewise a COUNT cap, not an amount ceiling, and does not satisfy this.
     if (wallet) {
         const pol = wallet.policy;
         // Enforceability, not truthiness: `maxPerAction: {}`, `{ SEND: {} }` and

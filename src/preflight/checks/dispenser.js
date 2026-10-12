@@ -192,9 +192,25 @@ function checkEditEscrow(ctx, idx, dispenser) {
         `the ${MAX_REFILLS}-refill cap is not derivable client-side: /dispenser_edits/ exposes no give_escrow`);
 }
 
+// Declare the sleep and allow/block-list refusals of xchain-indexer src/actions/dispenser/ (chain
+// state at the including block, so declared like SEND and ORDER, never predicted).
+function declareRestrictions(ctx, version) {
+    const topUp = ctx.field('GIVE_ESCROW');
+    let reason = 'SOURCE sleep state is server-side only';
+    if (version === '0') {
+        reason = 'sleep state of SOURCE and GIVE_TICK, and the GIVE_TICK allow/block lists for SOURCE and '
+            + 'GET_ADDRESS, are server-side only';
+    } else if (version === '2' && topUp && numeric.isPositive(topUp)) {
+        reason += '; at or above the refill-policy activation, so are the dispenser give token\'s sleep state '
+            + 'and its allow/block lists for SOURCE';
+    }
+    ctx.addUnverified('DISPENSER_RESTRICTIONS', reason);
+}
+
 async function checkDispenser(ctx) {
     checkExpirationRange(ctx);
     const version = String(ctx.parsed.version);
+    declareRestrictions(ctx, version);
     if (version === '0') {
         // Open: flat hasBalance(GIVE_ESCROW), skipped when
         // GIVE_OWNERSHIP=1 (dispenser.js). EXPIRATION is block TIME,

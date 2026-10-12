@@ -167,6 +167,8 @@ class EncoderClient {
                     let response = await self.client.post('/', payload);
                     let body = response.data;
 
+                    // Treat every body error as final, -32603 included: it mixes node outages with
+                    // deterministic rejections the SDK cannot tell apart, so callers own any retry.
                     if (body && body.error) {
                         let err = new SDKEncoderError(
                             'ENCODER_RPC_ERROR',

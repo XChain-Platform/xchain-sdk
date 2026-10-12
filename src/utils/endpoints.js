@@ -23,7 +23,10 @@
  * The constants are FULL URLs (with scheme). The service clients build
  * their axios baseURL as `hasHttpScheme(url) ? url : 'http://'+url+':'+port`,
  * so a full `https://` URL is used verbatim (correct scheme, no stray
- * dev port appended (public infra serves https on 443).
+ * dev port appended (public infra serves https on 443). The WebSocket
+ * client follows the same rule: a full ws:// or wss:// base is used as
+ * given, an http(s):// base only swaps to ws(s)://, and only a bare host
+ * gets a protocol and port.
  *
  ********************************************************************/
 
@@ -91,6 +94,17 @@ function isHttpsUrl(url) {
     return /^https:\/\//.test(String(url || ''));
 }
 
+// True when `url` already carries a ws:// or wss:// scheme. A bare host that
+// merely starts with "ws" (wss-gw.internal) is not a URL yet.
+function hasWsScheme(url) {
+    return /^wss?:\/\//.test(String(url || ''));
+}
+
+// True when `url` carries a TLS scheme, https:// or wss://.
+function isSecureUrl(url) {
+    return /^(https|wss):\/\//.test(String(url || ''));
+}
+
 // Network-derived public defaults. Returns {} for regtest (or a missing
 // network), so the caller's `options || env || publicDefaults().X` chain
 // resolves to undefined there and each client keeps its localhost fallback.
@@ -122,5 +136,7 @@ module.exports = {
     parseCoinCode,
     hasHttpScheme,
     isHttpsUrl,
+    hasWsScheme,
+    isSecureUrl,
     publicDefaults
 };

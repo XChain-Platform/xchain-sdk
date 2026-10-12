@@ -131,6 +131,10 @@ async function followForward(opts){
         const rangeBody = await fetchJson(f, rangeUrl);
         const steps = (rangeBody && rangeBody.checkpoints) || [];
         for (const next of steps){
+            // Below the commitment flag day a step's roots are unsigned, and adopting one would
+            // let the explorer choose the root the NEXT step's signer set is proven against.
+            if (!checkpoint.commitmentActive(next))
+                return { trusted, adopted, reason: 'ROOTS_NOT_SIGNED@' + next.block_index, stoppedAt: next.block_index };
             // Prove the signer set at next.snapshot_block against the current trusted state_root.
             //
             // The checkpoint DECLARES the raw height the signing hub was handed, but
