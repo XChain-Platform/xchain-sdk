@@ -18,6 +18,8 @@
 // instead under XCHAIN_REQUIRE_SIBLINGS=1.
 
 const assert = require('assert');
+const acorn  = require('acorn');
+const walk   = require('acorn-walk');
 const crypto = require('crypto');
 const fs     = require('fs');
 const path   = require('path');
@@ -43,6 +45,31 @@ function requireContracts(ctx) {
 function sha256(buf) { return crypto.createHash('sha256').update(buf).digest('hex'); }
 function canonicalTemplatePath(name) { return path.join(CONTRACTS_DIR, name, name + '.js'); }
 function canonicalPatternPath(name)  { return path.join(CONTRACTS_DIR, 'patterns', name + '.js'); }
+
+function burnUnsoldDestroysInventory(source) {
+    const ast = acorn.parse(source, { ecmaVersion: 2022 });
+    let method;
+    walk.simple(ast, {
+        Property(node) {
+            const name = node.key.type === 'Identifier' ? node.key.name : node.key.value;
+            if (name === 'burnUnsold' && node.value.type === 'FunctionExpression') method = node.value;
+        }
+    });
+    if (!method) return false;
+
+    let destroys = false;
+    walk.simple(method.body, {
+        CallExpression(node) {
+            const callee = node.callee;
+            if (callee.type !== 'MemberExpression' || callee.computed || callee.property.name !== 'destroy') return;
+            const emitter = callee.object;
+            if (emitter.type === 'MemberExpression' && !emitter.computed &&
+                emitter.object.type === 'Identifier' && emitter.object.name === 'xchain' &&
+                emitter.property.name === 'emit') destroys = true;
+        }
+    });
+    return destroys;
+}
 
 let sdk;
 
@@ -119,8 +146,12 @@ describe('mint-supply lock guard', function () {
 describe('crowdsale unsold inventory guard', function () {
     it('exposes burnUnsold and destroys finalized inventory', function () {
         const source = Buffer.from(EMBEDDED.templates.crowdsale, 'base64').toString('utf8');
-        assert.match(source, /burnUnsold:\s*function\s*\(xchain\)/);
-        assert.match(source, /xchain[.]emit[.]destroy/);
+        assert.strictEqual(burnUnsoldDestroysInventory(source), true);
+
+        const misplacedDestroy = source.replace('xchain.emit.destroy', 'xchain.emit.send') +
+            '\nfunction unrelated(xchain) { xchain.emit.destroy({}); }\n';
+        assert.strictEqual(burnUnsoldDestroysInventory(misplacedDestroy), false,
+            'a destroy call outside burnUnsold must not satisfy the guard');
     });
 });
 
