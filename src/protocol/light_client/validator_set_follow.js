@@ -144,8 +144,8 @@ async function followForward(opts){
             // one that signed whenever a validator's stake activated or deactivated inside
             // (snapshot_block - 6, snapshot_block], and a light client on that boundary either
             // rejects a valid checkpoint or counts a signer the hub never had. Bury by the same
-            // shared constant. Flag-day gated (INERT on mainnet/testnet), so below the gate the
-            // declared height is used verbatim and already-anchored checkpoints read as before.
+            // shared constant. Flag-day gated and armed from genesis on mainnet, testnet, and
+            // regtest; below any future nonzero gate, the declared height remains verbatim.
             const setBlock = srb.buriedSnapshotBlock(next.snapshot_block, next.network);
             const vs = await verifyValidatorSet({ explorerUrl: opts.explorerUrl, btcCoin,
                 snapshotBlock: setBlock, trustedStateRoot: lowerHex(trusted.state_root), fetchImpl: f });
