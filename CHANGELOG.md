@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `estimateFees withholds an envelope commit`, returning `psbt: null` and `signable: false` with the reason `ENVELOPE_PAIR_SIGN_VIA_SUBMIT_ACTION`, because the commit is safe to sign only together with its reveal through `submitAction`.
+- The raw encoder client `estimateFee` passes the envelope answer through unchecked.
+
 ## [0.23.0] - 2026-10-11
 
 ### Added
