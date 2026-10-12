@@ -20,6 +20,56 @@
 
 const EncoderClient = require('../clients/encoder.js');
 const LifecycleManager = require('../carrier/lifecycle_manager.js');
+const bitcoin = require('bitcoinjs-lib');
+const { SDKActionError } = require('../utils/errors.js');
+
+function outpointKey(txid, vout) {
+    return String(txid).toLowerCase() + ':' + Number(vout);
+}
+
+function inputIsPresigned(input) {
+    return !!(input.partialSig || input.finalScriptSig || input.finalScriptWitness
+        || input.tapKeySig || input.tapScriptSig);
+}
+
+// Indices of the unsigned inputs that spend the caller-approved outpoints.
+// Throws when the encoder added an unsigned input the caller never named, since
+// the key would otherwise sign it along with the approved set.
+function approvedInputIndices(psbtHex, approved, net) {
+    const psbt = bitcoin.Psbt.fromHex(psbtHex, { network: net });
+    const indices = [];
+    psbt.txInputs.forEach((txIn, i) => {
+        if (inputIsPresigned(psbt.data.inputs[i])) return;
+        const key = outpointKey(Buffer.from(txIn.hash).reverse().toString('hex'), txIn.index);
+        if (!approved.has(key))
+            throw new SDKActionError('UNAPPROVED_INPUT',
+                `the encoder response spends ${key}, which is not among the supplied utxos; refusing to sign`);
+        indices.push(i);
+    });
+    if (!indices.length)
+        throw new SDKActionError('UNAPPROVED_INPUT',
+            'none of the supplied utxos is spent by the encoder response; refusing to sign');
+    return indices;
+}
+
+// A view of the SDK whose commit signing is limited to the caller's utxos.
+function scopeSigningToUtxos(sdk, utxos) {
+    const approved = new Set(utxos.map(u => outpointKey(u.txid, u.vout)));
+    const wallet = Object.create(sdk.wallet);
+    Object.defineProperty(wallet, 'signPsbt', {
+        value(psbtHex, wif, signOpts) {
+            const inputIndices = approvedInputIndices(psbtHex, approved, sdk.wallet.resolveNet());
+            const signed = sdk.wallet.signPsbt(psbtHex, wif, Object.assign({}, signOpts, { inputIndices }));
+            if (!signed.txHex)
+                throw new SDKActionError('SIGN_SCOPE_INCOMPLETE',
+                    'signing only the supplied utxos left the transaction unfinalized; refusing to broadcast');
+            return signed;
+        }
+    });
+    const scoped = Object.create(sdk);
+    Object.defineProperty(scoped, 'wallet', { value: wallet });
+    return scoped;
+}
 
 // Keep action delegates together so the public action surface stays easy to audit.
 module.exports = {
@@ -69,7 +119,9 @@ module.exports = {
     // result's `indexed.statusKnown` says whether the status was read or assumed
     // (strictStatus:true rejects rather than assume - see actionWaiter).
     async submitAction(actionData, encoderOpts, opts) {
-        let mgr = new LifecycleManager(this);
+        let utxos = encoderOpts && encoderOpts.utxos;
+        let scoped = Array.isArray(utxos) && utxos.length > 0 && !(opts && typeof opts.signer === 'function');
+        let mgr = new LifecycleManager(scoped ? scopeSigningToUtxos(this, utxos) : this);
         return mgr.submitAction(actionData, encoderOpts, opts);
     },
 

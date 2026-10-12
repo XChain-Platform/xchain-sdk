@@ -54,6 +54,17 @@ describe('ExplorerClient', function () {
             let m = await client.getContractManifest(9);
             expect(m).to.deep.equal({ permissions: null, maxTakeBps: null, ...NO_META });
         });
+        it('carries permissionsError when the explorer reports permissions_error', async function () {
+            nock(BASE).get('/BTC/api/contract/12').reply(200, { action_index: 12, permissions: null, permissions_error: true });
+            let m = await client.getContractManifest(12);
+            expect(m).to.deep.equal({ permissions: null, maxTakeBps: null, permissionsError: true, ...NO_META });
+        });
+        it('carries permissionsError when the permissions value is unreadable', async function () {
+            nock(BASE).get('/BTC/api/contract/13').reply(200, { action_index: 13, permissions: 'not-json' });
+            let m = await client.getContractManifest(13);
+            expect(m.permissions).to.equal(null);
+            expect(m.permissionsError).to.equal(true);
+        });
         it('carries the contract identity the explorer reports', async function () {
             nock(BASE).get('/BTC/api/contract/11').reply(200, {
                 action_index: 11, permissions: null, max_take_bps: null,

@@ -13,8 +13,9 @@
 // The SDK's contract linter MUST match the indexer's deploy-time validator, or
 // authors get false greens (lint passes, on-chain deploy rejects). Two guards:
 //
-//   1. DRIFT: the vendored src/contract/{lint_core,metering}.js must be
-//      byte-identical (sha256) to the xchain-vm canonicals, AND the acorn,
+//   1. DRIFT: the vendored src/contract/{lint-core,metering,stripped-globals}.js
+//      AND every file under src/contract/{lint-core,metering}/ (same file set on
+//      both sides) must be byte-identical (sha256) to the xchain-vm canonicals, AND the acorn,
 //      acorn-walk and astring the SDK declares and installs must equal the
 //      VM's consensus pin (AST_TOOLCHAIN_PINNED in consensus-runtime.js). (Skipped
 //      when the sibling xchain-vm checkout is absent, e.g. SDK cloned standalone.)
@@ -23,7 +24,7 @@
 //
 // The cross-ENGINE check (validateContract vs vm.validateSyntax incl. the V8
 // step) lives in xchain-vm's suite, where isolated-vm is available; because the
-// vendored files are proven byte-identical here AND run on the same pinned AST
+// vendored files, rule modules included, are proven byte-identical here AND run on the same pinned AST
 // toolchain, that check transitively covers the SDK. Identical bytes on a
 // different acorn/astring can still parse, walk or emit differently.
 
@@ -34,19 +35,36 @@ const path   = require('path');
 
 const XChainSDK    = require('../../../src/XChainSDK.js');
 const ContractUtils = require('../../../src/contract/utils.js');
+const { siblingCheckout, skipOrFail, siblingsRequired } = require('../../helpers/sibling_checkout.js');
 
 const VENDORED_DIR = path.join(__dirname, '../..', '..', 'src', 'contract');
 const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(__dirname, '../..', '..', '..');
 const VM_SRC_DIR   = path.join(process.env.XCHAIN_VM_DIR || path.join(SIBLING_ROOT, 'xchain-vm'), 'src');
 const CONTRACTS_DIR = process.env.XCHAIN_CONTRACTS_DIR || path.join(SIBLING_ROOT, 'xchain-contracts');
-// stripped_globals.js is in the vendor set because it is the ONE
-// definition of the sandbox's stripped-global names, required by lint_core.js
+// stripped-globals.js is in the vendor set because it is the ONE
+// definition of the sandbox's stripped-global names, required by lint-core.js
 // here and by sandbox.js / toolkit/authoring.js in xchain-vm. It is
 // dependency-free so the single require line resolves at both vendored depths.
-const VENDORED_FILES = ['lint_core.js', 'metering.js', 'stripped_globals.js'];
+const VENDORED_FILES = ['lint-core.js', 'metering.js', 'stripped-globals.js'];
+// The two top-level entries are thin requires over these directories, which hold the actual rules and gas placement.
+const VENDORED_DIRS = ['lint-core', 'metering'];
 
 function sha256(file) {
     return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
+
+// List every regular file under base as sorted '/'-separated relative paths ([] when base is absent).
+function listFiles(base, rel = '') {
+    let entries;
+    try { entries = fs.readdirSync(path.join(base, rel), { withFileTypes: true }); }
+    catch (e) { if (e.code === 'ENOENT') return []; throw e; }
+    let out = [];
+    for (const entry of entries) {
+        const child = rel ? rel + '/' + entry.name : entry.name;
+        if (entry.isDirectory()) out = out.concat(listFiles(base, child));
+        else if (entry.isFile()) out.push(child);
+    }
+    return out.sort();
 }
 
 // Map the VM pin's keys to the npm names the SDK declares and installs.
@@ -69,21 +87,14 @@ function installedVersion(name) {
     }
 }
 
-// A parity guard must never silently pass by skipping. When the sibling is
-// present we run; when it is absent we HARD-FAIL only where the sibling is
-// REQUIRED, i.e. the job that checks it out and sets XCHAIN_REQUIRE_SIBLINGS=1,
-// so the guard can never green-by-skip there (mirrors xchain-sync's
-// rollback-coverage requireSibling). We do NOT key on the generic CI flag:
-// the shared unit job sets CI=true without checking out siblings. Returns
-// false (caller should `return`) when it skipped; throws when required-but-missing.
-const SIBLING_REQUIRED = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
+// A parity guard must never silently pass by skipping, nor pass against a
+// sibling no commit pins. The shared helper refuses an absent sibling and a
+// lane-worktree symlink into a live main checkout; a refusal fails when
+// XCHAIN_REQUIRE_SIBLINGS=1 and skips otherwise. Returns false (caller should
+// `return`) when it skipped; throws when the sibling was declared supplied.
+const SIBLING_REQUIRED = siblingsRequired();
 function requireSibling(ctx, absPath) {
-    if (fs.existsSync(absPath)) return true;
-    if (SIBLING_REQUIRED)
-        throw new Error('parity guard cannot run: required sibling missing at ' + absPath +
-            ' (the job setting XCHAIN_REQUIRE_SIBLINGS=1 must check out the sibling repo)');
-    ctx.skip();
-    return false;
+    return skipOrFail(ctx, siblingCheckout(__dirname, absPath), 'the contract-lint parity guard against ' + absPath);
 }
 
 // One bad fixture per acorn-coverable rule + a float-warning fixture.
@@ -97,6 +108,39 @@ const BAD_FIXTURES = [
 ];
 const FLOAT_FIXTURE = { code: 'var x = 3.14; function f(){ return x; }' };
 const GOOD_FIXTURE  = 'function init(){ return 1; } function add(a,b){ return a + b; }';
+
+// Register the drift checks for one vendored directory: non-empty, same file set, and each file byte-identical.
+function dirDriftCases(dir) {
+    const own = listFiles(path.join(VENDORED_DIR, dir));
+    // Fail closed on a vacuous pass: a renamed or emptied directory must go red, never generate zero checks
+    it('src/contract/' + dir + '/ is present and non-empty, so its drift checks cannot pass vacuously', function () {
+        assert.ok(own.length > 0, 'NO VENDORED FILES: src/contract/' + dir +
+            '/ is missing or empty, so the per-file drift guard below would check nothing.');
+    });
+    // Refuse a file added, removed or renamed on one side only, which a per-file hash of one side cannot see
+    it('src/contract/' + dir + '/ file set matches xchain-vm/src/' + dir + '/', function () {
+        if (!requireSibling(this, VM_SRC_DIR)) return;
+        const canonical = listFiles(path.join(VM_SRC_DIR, dir));
+        assert.ok(canonical.length > 0, 'NO CANONICAL: xchain-vm has no files under ' +
+            path.join(VM_SRC_DIR, dir) + '; the sibling checkout is stale, or the directory moved.');
+        const missingHere = canonical.filter((f) => !own.includes(f));
+        const onlyHere = own.filter((f) => !canonical.includes(f));
+        assert.ok(missingHere.length === 0 && onlyHere.length === 0,
+            'VENDOR DRIFT: ' + dir + '/ file sets differ. Missing from the SDK copy: [' + missingHere.join(', ') +
+            ']. Present only in the SDK copy: [' + onlyHere.join(', ') + '].');
+    });
+    for (const rel of own) {
+        const f = dir + '/' + rel;
+        it('src/contract/' + f + ' matches xchain-vm/src/' + f, function () {
+            if (!requireSibling(this, VM_SRC_DIR)) return;
+            const canonical = path.join(VM_SRC_DIR, f);
+            assert.ok(fs.existsSync(canonical), 'NO CANONICAL: ' + f + ' is vendored here but xchain-vm has no ' +
+                canonical + '; the sibling checkout is stale, or the file was renamed/removed upstream.');
+            assert.strictEqual(sha256(path.join(VENDORED_DIR, f)), sha256(canonical),
+                'VENDOR DRIFT: ' + f + ' differs from xchain-vm canonical; re-sync the copy.');
+        });
+    }
+}
 
 describe('contract-lint parity + drift', function () {
 
@@ -123,6 +167,8 @@ describe('contract-lint parity + drift', function () {
                 );
             });
         }
+
+        for (const dir of VENDORED_DIRS) dirDriftCases(dir);
 
         // Gas placement is a function of the AST toolchain, so byte-identical copies need the same versions.
         it('declared and installed acorn/acorn-walk/astring equal xchain-vm AST_TOOLCHAIN_PINNED', function () {
@@ -188,7 +234,7 @@ describe('contract-lint parity + drift', function () {
 describe('contract-lint parity + drift', function () {
 
     describe('Move 2: logic-level rules (advisory, never deploy-blocking)', function () {
-        const { CONSENSUS_RULES } = require('../../../src/contract/lint_core.js');
+        const { CONSENSUS_RULES } = require('../../../src/contract/lint-core.js');
         let sdk;
         before(function () { sdk = new XChainSDK({ network: 'bitcoin-regtest', noHub: true }); });
 
@@ -230,7 +276,9 @@ describe('contract-lint parity + drift', function () {
             if (!requireSibling(this, dir)) return;
             for (const name of ['escrow', 'vesting', 'crowdsale', 'amm']) {
                 const f = path.join(dir, name, name + '.js');
-                if (!fs.existsSync(f)) continue;
+                // Fail closed on a missing template, the same way NO CANONICAL does above
+                assert.ok(fs.existsSync(f), 'NO TEMPLATE: ' + name + ' is listed here but xchain-contracts has no ' + f +
+                    '; the sibling checkout is stale, or the template was renamed/removed (update this list).');
                 const r = sdk.validateContract(fs.readFileSync(f, 'utf8'));
                 assert.strictEqual(r.errors.length, 0, name + ' errors: ' + JSON.stringify(r.errors));
                 assert.strictEqual(r.warnings.length, 0, name + ' warnings: ' + JSON.stringify(r.warnings.map(w => w.rule)));
@@ -260,7 +308,8 @@ describe('contract-lint parity + drift', function () {
 describe('contract-lint parity + drift', function () {
 
     describe('the four shipped templates lint clean (acorn-coverable rules)', function () {
-        const haveTemplates = fs.existsSync(CONTRACTS_DIR);
+        const templatesCheckout = siblingCheckout(__dirname, CONTRACTS_DIR);
+        const haveTemplates = templatesCheckout.usable;
         let sdk;
         before(function () { sdk = new XChainSDK({ network: 'bitcoin-regtest', noHub: true }); });
 
@@ -274,6 +323,7 @@ describe('contract-lint parity + drift', function () {
             it('xchain-contracts templates present', function () {
                 // Green-by-skip is only acceptable in a per-repo unit run; the
                 // job that checks out siblings must hard-fail on absence.
+                if (!haveTemplates && !skipOrFail(this, templatesCheckout, 'the template-parity guard')) return;
                 if (SIBLING_REQUIRED)
                     throw new Error('template-parity guard cannot run: xchain-contracts templates missing at ' +
                         CONTRACTS_DIR + ' with XCHAIN_REQUIRE_SIBLINGS=1');

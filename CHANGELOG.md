@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-10-11
+
+### Added
+- Added BET feed list edit support and exposed it through format discovery.
+- Added mirror admission margin gate rows and read the native fee mode from the coin registry.
+- Emitted a not_replayed event when a catch-up completes with lifecycle types it could not replay.
+
+### Changed
+- Retried encoder -32603 body errors only when safe and respected RPC safety in encoder retries.
+- Scoped submitAction commit signing to the supplied utxos.
+- Armed ANCHOR_EMPTY_FOLD_REJECT_ACTIVATION on BTC:testnet at 156230.
+- Armed ANCHOR_EMPTY_FOLD_REJECT_ACTIVATION on LTC:testnet at 4912984.
+- Armed ANCHOR_EMPTY_FOLD_REJECT_ACTIVATION on DOGE:testnet at 67989993.
+- Armed COOLDOWN_MATURITY_ESCROW_REVERSAL_ACTIVATION on BTC:testnet at 156230.
+- Armed COOLDOWN_MATURITY_ESCROW_REVERSAL_ACTIVATION on LTC:testnet at 4912984.
+- Armed COOLDOWN_MATURITY_ESCROW_REVERSAL_ACTIVATION on DOGE:testnet at 67989993.
+- Armed DISPENSER_REFILL_POLICY_ACTIVATION on BTC:testnet at 156230.
+- Armed DISPENSER_REFILL_POLICY_ACTIVATION on LTC:testnet at 4912984.
+- Armed DISPENSER_REFILL_POLICY_ACTIVATION on DOGE:testnet at 67989993.
+- Armed ATTEST_RELAY_RESPONSE_DEADLINE_ACTIVATION on BTC:testnet at 1791804379.
+- Armed ATTEST_RELAY_RESPONSE_DEADLINE_ACTIVATION on LTC:testnet at 1791804379.
+- Armed ATTEST_RELAY_RESPONSE_DEADLINE_ACTIVATION on DOGE:testnet at 1791804379.
+- Armed BRIDGE_ROW_FIELDS_TERMINAL_ACTIVATION on BTC:testnet at 156230.
+- Armed BRIDGE_ROW_FIELDS_TERMINAL_ACTIVATION on LTC:testnet at 4912984.
+- Armed BRIDGE_ROW_FIELDS_TERMINAL_ACTIVATION on DOGE:testnet at 67989993.
+- Armed ADMIT_CHAIN_MARGIN_ACTIVATION on DOGE:testnet at 67989993.
+- Armed ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION on BTC:testnet at 156230.
+- Armed ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION on LTC:testnet at 4912984.
+- Armed ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION on DOGE:testnet at 67989993.
+
+### Fixed
+- Bound contract waiters to explorer rows and attached the native fee output to every deployContract on LTC and DOGE.
+- Refused segwit and taproot multisig derivation on networks without segwit.
+- Advanced the websocket catch-up cursor only on NEW_ACTION and CATCH_UP_COMPLETE.
+
+### Changed
+- `CoSigner` now refuses an explicit `SIGHASH_ALL` and signs only `SIGHASH_DEFAULT`, because the bare 64-byte key-path signature cannot carry the sighash flag byte, superseding the 0.10.0 note that ALL is accepted.
+
+### Fixed
+- Fee estimates now expose exact decimal-string satoshi totals and a `feeError` when missing input values or outputs above inputs make the fee indeterminate, instead of returning a misleading numeric fee.
+- `estimateFees` now runs `reconcileEncoded` before returning its directly signable PSBT and withholds an envelope reveal leg that it cannot independently reconcile.
+- `submitAction` default-path signing now signs only caller-supplied UTXOs and refuses encoder-added unsigned inputs.
+- Agent sessions with `allowedDestinations` now keep MINT, MESSAGE and SWEEP destinations as full addresses so co-signer policy can match them.
+
 ## [0.22.4] - 2026-10-05
 
 ### Changed

@@ -986,6 +986,7 @@
     {
       "name": "get_markets",
       "summary": "All trading pairs.",
+      "description": "When params.tick is supplied, every returned pair puts the searched tick in tick2 and its values in tick2_* fields; the counter tick is in tick1. Read the searched tick's price from tick2_price.",
       "paramStructure": "by-name",
       "params": [
         {

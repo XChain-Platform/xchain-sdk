@@ -97,7 +97,7 @@ function xchainFeeDebit(ctx, gas) {
 /*
  * Price ONE ISSUE sub-command's protocol fee, in the gas token.
  *
- * Mirrors what the arbiter can price (indexer batch.js nominalIssueFee /
+ * Mirrors what the arbiter can price (indexer batch/fees.js nominalIssueFee /
  * isGasProvablyUnaffordable): a NEW non-caret, non-gas TICK costs the schedule
  * price, top-level or child by the dot; a tick that already carries a valid
  * issuance is a free re-issue.
@@ -210,7 +210,7 @@ async function projectExecuteFee(ctx, gas) {
  * loop). Two verdicts, and the split is the whole point, because the chain
  * has two behaviours and only one of them is a rejection of the batch:
  *
- * ERROR - the arbiter's own whole-batch collapse (indexer batch.js
+ * ERROR - the arbiter's own whole-batch collapse (indexer batch/fees.js
  *   isGasProvablyUnaffordable, `invalid: GAS (insufficient)`), which fires on
  *   the MINIMUM, never the sum: every sub-command must carry a positively
  *   priced LOWER-BOUND quote (`bound`, folded into `allPriced` by the loop)

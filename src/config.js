@@ -174,6 +174,9 @@ var Config = {
         // Service endpoints, used only when the caller passed no url or port.
         hubApiHost:     () => process.env.HUB_API_HOST,
         hubPort:        () => process.env.HUB_PORT,
+        // The developer REPL's hub endpoint (src/cli/repl.js), kept raw like
+        // the rest: the REPL passes it through as its hubUrl option.
+        hubUrl:         () => process.env.HUB_URL,
         explorerUrl:    () => process.env.EXPLORER_URL,
         explorerPort:   () => process.env.EXPLORER_PORT,
         encoderUrl:     () => process.env.ENCODER_URL,
@@ -210,6 +213,13 @@ var Config = {
         rollcallGatesRegtestActivation:   () => process.env.XC_ROLLCALL_GATES_REGTEST_ACTIVATION,
         mirrorAdmissionRegtestActivation: () => process.env.XC_MIRROR_ADMISSION_ACTIVATION,
         anchorFoldRegtestActivation:      () => process.env.XC_ANCHOR_FOLD_REGTEST_ACTIVATION,
+        anchorStakeRegtestActivation:     () => process.env.XC_ANCHOR_STAKE_REGTEST_ACTIVATION,
+        anchorSlashRegtestActivation:     () => process.env.XC_ANCHOR_SLASH_REGTEST_ACTIVATION,
+        amountsPriceRegtestActivation:    () => process.env.XC_AMOUNTS_PRICE_REGTEST_ACTIVATION,
+        amountsPriceRegtestTime:          () => process.env.XC_AMOUNTS_PRICE_REGTEST_TIME,
+        contractsRegtestActivation:       () => process.env.XC_CONTRACTS_REGTEST_ACTIVATION,
+        listsMarketRegtestActivation:     () => process.env.XC_LISTS_MARKET_REGTEST_ACTIVATION,
+        listsMarketRegtestTime:           () => process.env.XC_LISTS_MARKET_REGTEST_TIME,
     },
 
 }

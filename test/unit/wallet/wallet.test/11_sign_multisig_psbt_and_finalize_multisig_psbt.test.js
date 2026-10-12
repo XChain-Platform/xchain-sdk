@@ -16,23 +16,25 @@ const { getNetwork } = require('../../../../src/protocol/networks.js');
 // The coordinator flow's extraction step is the one place a fully
 // threshold-signed transaction can still be unspendable: bitcoinjs's
 // 5000 sat/vB "absurd fee" guard is calibrated for BTC's unit value and
-// an ordinary DOGE fee clears it. DOGE has no segwit, so this is p2pkh
-// with a nonWitnessUtxo, not the p2wpkh shape the test above uses.
+// an ordinary DOGE fee clears it. DOGE has no segwit, so this is a bare
+// P2SH 1-of-1 multisig with a nonWitnessUtxo, not the P2WSH shape the test
+// above uses.
 function absurdFeePsbt(netName) {
     const wallet = new WalletUtils(netName);
     const net = getNetwork(netName);
     const kp = wallet.generateKeyPair();
-    const p2pkh = bitcoin.payments.p2pkh({ pubkey: kp.publicKey, network: net });
+    const redeem = bitcoin.payments.p2ms({ m: 1, pubkeys: [Buffer.from(kp.publicKey)], network: net });
+    const p2sh = bitcoin.payments.p2sh({ redeem, network: net });
     const prevTx = new bitcoin.Transaction();
     prevTx.version = 1;
     prevTx.addInput(Buffer.alloc(32), 0xffffffff, 0xffffffff, Buffer.from([0x51]));
-    prevTx.addOutput(p2pkh.output, 1_000_000);
+    prevTx.addOutput(p2sh.output, 2_000_000);
     const psbt = new bitcoin.Psbt({ network: net });
-    psbt.addInput({ hash: prevTx.getId(), index: 0, sequence: 0xfffffffd, nonWitnessUtxo: prevTx.toBuffer() });
-    // ~999,000 sat of fee over a ~191-byte tx is ~5230 sat/vB, just past
-    // the default guard. The control assertion below fails loudly if that
+    psbt.addInput({ hash: prevTx.getId(), index: 0, sequence: 0xfffffffd, nonWitnessUtxo: prevTx.toBuffer(), redeemScript: redeem.output });
+    // ~1,999,000 sat of fee over a ~200-byte tx is ~10,000 sat/vB, past the
+    // default 5000 guard. The control assertion below fails loudly if that
     // margin ever stops biting, so this can never pass vacuously.
-    psbt.addOutput({ script: p2pkh.output, value: 1_000 });
+    psbt.addOutput({ script: p2sh.output, value: 1_000 });
     return { wallet, kp, net, psbtHex: psbt.toHex() };
 }
 
@@ -81,17 +83,18 @@ describe('WalletUtils', function() {
 describe('WalletUtils', function() {
 
     describe('signMultisigPsbt() and finalizeMultisigPsbt()', function() {
-        it('sign + finalize completes a 1-of-1 p2wpkh PSBT', function() {
-            // Build a single-key P2WPKH PSBT, sign with signPsbt; exercise finalize path
+        it('sign + finalize completes a 1-of-1 p2wsh multisig PSBT', function() {
+            // Build a P2WSH 1-of-1 multisig PSBT; one cosigner meets threshold, so finalize completes
             const wallet = new WalletUtils('bitcoin-regtest');
             const net = getNetwork('bitcoin-regtest');
             const kp = wallet.generateKeyPair();
-            const inputScript = bitcoin.payments.p2wpkh({ pubkey: kp.publicKey, network: net }).output;
+            const redeem = bitcoin.payments.p2ms({ m: 1, pubkeys: [Buffer.from(kp.publicKey)], network: net });
+            const inputScript = bitcoin.payments.p2wsh({ redeem, network: net }).output;
             const psbt = new bitcoin.Psbt({ network: net });
             const prevTx = new bitcoin.Transaction();
             prevTx.addInput(Buffer.alloc(32), 0xffffffff, 0xffffffff, Buffer.from([0x51]));
             prevTx.addOutput(inputScript, 50_000);
-            psbt.addInput({ hash: prevTx.getId(), index: 0, sequence: 0xfffffffd, witnessUtxo: { script: inputScript, value: 50_000 } });
+            psbt.addInput({ hash: prevTx.getId(), index: 0, sequence: 0xfffffffd, witnessUtxo: { script: inputScript, value: 50_000 }, witnessScript: redeem.output });
             psbt.addOutput({ script: inputScript, value: 49_000 });
             const psbtHex = psbt.toHex();
             // signMultisigPsbt adds partial sig but doesn't finalize

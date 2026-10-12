@@ -69,6 +69,7 @@ const { ALLOWED_COINS, getCoinConfig } = require('../../coins/index.js');
 const { GAS_TICK } = require('../../protocol/constants.js');
 const listTickCoin = require('../../protocol/list_tick_coin.js');
 const Utility = require('../../utils/utility.js');
+const { parseCoinCode } = require('../../utils/endpoints.js');
 const { tickCoinPrefixVerdict } = require('./issue/tick_coin_prefix.js');
 
 const util = new Utility();
@@ -128,13 +129,10 @@ const RESERVED_TICKS = Object.freeze(ALLOWED_COINS.concat(GAS_TICK));
 // The plane this SDK is pointed at, read off the explorer's coin code: the native
 // ticker with a network prefix (T=testnet, R=regtest, none=mainnet). Null when no
 // explorer is configured or the code is not a chain coin, so a caller can tell
-// "cannot decide" from "decided". (Same shape as nativeTickerFromCoin in
-// universal.js; kept local to avoid a cross-module import cycle.)
+// "cannot decide" from "decided". Decoded through the coin registry, so a newly
+// added coin needs no edit here.
 function planeFromCoin(coin) {
-    const m = /^([TR]?)(BTC|LTC|DOGE)$/.exec(String(coin || '').toUpperCase());
-    if (!m) return null;
-    const network = m[1] === 'T' ? 'testnet' : m[1] === 'R' ? 'regtest' : 'mainnet';
-    return { coin: m[2], network };
+    return parseCoinCode(coin);
 }
 
 // Mirror the handler's tick refusals in the handler's order, so the warning names

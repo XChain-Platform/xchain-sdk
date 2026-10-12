@@ -58,6 +58,12 @@ function registerIsRetryableTests() {
         it('returns false for error with no response and no code', () => {
             expect(isRetryable({})).to.equal(false);
         });
+
+        it('returns true for an explicitly retryable fault on a 2xx response', () => {
+            expect(isRetryable({ retryable: true, response: { status: 200 } })).to.equal(true);
+            expect(isRetryable({ response: { status: 200 } })).to.equal(false);
+            expect(isRetryable({ retryable: 'yes', response: { status: 200 } })).to.equal(false);
+        });
     });
 }
 

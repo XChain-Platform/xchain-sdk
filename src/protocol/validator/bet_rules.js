@@ -115,10 +115,7 @@ function validateBetPolicy(validator, fields, limits, errors) {
 // Validates lifecycle fields separately because they select cancel, resolve, or place.
 function validateBetLifecycle(validator, fields, errors) {
     // Lifecycle formats. FEED_ACTION_INDEX is the market reference.
-    if (!/^\d+$/.test(String(fields.FEED_ACTION_INDEX).trim()))
-        errors.push(validator.buildError('INVALID_FIELD_VALUE',
-            'FEED_ACTION_INDEX must be a numeric ACTION_INDEX',
-            { field: 'FEED_ACTION_INDEX', value: fields.FEED_ACTION_INDEX }));
+    validateBetFeedReference(validator, fields, errors);
 
     // OUTCOME is a zero-based index. Its upper bound depends on the
     // market's outcome count, which is on-chain state, so only the
@@ -146,12 +143,55 @@ function validateBetLifecycle(validator, fields, errors) {
             { field: 'OUTCOME' }));
 }
 
+function validateBetListEdit(validator, fields, errors) {
+    validateBetFeedReference(validator, fields, errors);
+
+    const allow = validator.isEmpty(fields.ALLOW_LIST) ? '' : String(fields.ALLOW_LIST).trim();
+    const block = validator.isEmpty(fields.BLOCK_LIST) ? '' : String(fields.BLOCK_LIST).trim();
+    if (allow === '' && block === '')
+        errors.push(validator.buildError('MISSING_REQUIRED_FIELD',
+            'BET v4 requires ALLOW_LIST or BLOCK_LIST; an empty field retains its current reference',
+            { fields: ['ALLOW_LIST', 'BLOCK_LIST'], version: 4 }));
+
+    for (const [field, value] of [['ALLOW_LIST', allow], ['BLOCK_LIST', block]]) {
+        if (value !== '' && !/^\d+$/.test(value))
+            errors.push(validator.buildError('INVALID_FIELD_VALUE',
+                field + ' must be empty (retain), 0 (detach), or a positive numeric ACTION_INDEX',
+                { field, value, version: 4 }));
+    }
+
+    const allowKey = allow.replace(/^0+/, '');
+    const blockKey = block.replace(/^0+/, '');
+    if (allowKey !== '' && blockKey !== '' && /^\d+$/.test(allow) &&
+        /^\d+$/.test(block) && allowKey === blockKey)
+        errors.push(validator.buildError('INVALID_FIELD_VALUE',
+            'BLOCK_LIST must differ from ALLOW_LIST when both are replaced',
+            { field: 'BLOCK_LIST', value: block, version: 4 }));
+}
+
+function validateBetFeedReference(validator, fields, errors) {
+    if (!/^\d+$/.test(String(fields.FEED_ACTION_INDEX).trim()))
+        errors.push(validator.buildError('INVALID_FIELD_VALUE',
+            'FEED_ACTION_INDEX must be a numeric ACTION_INDEX',
+            { field: 'FEED_ACTION_INDEX', value: fields.FEED_ACTION_INDEX }));
+}
+
 // Coordinates synchronous BET branches while retaining their result order.
 function validateBet(validator, fields) {
     let errors = [];
     const limits = BET_LIMITS;
     const isCreate = validator.isEmpty(fields.FEED_ACTION_INDEX);
-    if (isCreate) {
+    const version = validator.isEmpty(fields.VERSION) ? null : Number(fields.VERSION);
+    const carriesListEdit = !isCreate &&
+        (!validator.isEmpty(fields.ALLOW_LIST) || !validator.isEmpty(fields.BLOCK_LIST));
+    if (version !== null && version !== 4 && carriesListEdit)
+        errors.push(validator.buildError('INVALID_FIELD_VALUE',
+            'BET membership-list fields require VERSION 4',
+            { field: 'VERSION', value: fields.VERSION }));
+
+    if (version === 4 || (version === null && carriesListEdit)) {
+        validateBetListEdit(validator, fields, errors);
+    } else if (isCreate) {
         validateBetLabels(validator, fields, limits, errors);
         validateBetTerms(validator, fields, limits, errors);
         validateBetPolicy(validator, fields, limits, errors);

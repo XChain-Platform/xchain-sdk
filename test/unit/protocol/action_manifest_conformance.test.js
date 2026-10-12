@@ -33,6 +33,7 @@ const VENDORED = path.join(__dirname, '../..', 'fixtures', 'action-manifest.json
 const MANIFEST = JSON.parse(fs.readFileSync(VENDORED, 'utf8'));
 const Formats  = require('../../../src/protocol/formats.js');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
+const SETTLEMENT_ANCHORS = ['LIST_SHARE', 'XPOLICY'];
 
 const EDIT_HINT = 'Edit xchain-documentation/protocol/action-manifest.json, re-vendor with ' +
                   'bin/sync-action-manifest.sh, or change src/protocol/formats.js.';
@@ -45,7 +46,8 @@ function localSdkSet() {
 }
 // Version keys are JS object keys (strings) on the SDK side and JSON numbers in
 // the manifest; both sides normalize to sorted numbers so the comparison is on
-// the versions themselves, not on their spelling.
+// the versions themselves, not on their spelling. Object.keys is intentional:
+// a user-encodable version must participate in normal SDK format discovery.
 function sdkVersions(action) {
     return Object.keys(Formats[action]).map(Number).sort((a, b) => a - b);
 }
@@ -62,6 +64,8 @@ function diffVersions(expected, actual) {
 }
 
 describe('ACTION manifest conformance: sdk userEncodable set @regression', function () {
+    registerSettlementAnchorTests();
+
     it('Formats keys exactly equal the manifest userEncodable slice', function () {
         const expected = manifestSlice('userEncodable');
         const actual   = localSdkSet();
@@ -108,6 +112,28 @@ describe('ACTION manifest conformance: sdk userEncodable set @regression', funct
 
     registerIndexerHandlerAuditTests();
 
+    registerCanonicalManifestIdentityTests();
+});
+
+function registerSettlementAnchorTests() {
+    it('keeps settlement anchors explorer-only and outside SDK Formats', function () {
+        assert.strictEqual(typeof MANIFEST.categories['settlement-anchor'], 'string');
+        const members = Object.keys(MANIFEST.actions)
+            .filter(action => MANIFEST.actions[action].category === 'settlement-anchor')
+            .sort();
+        assert.deepStrictEqual(members, SETTLEMENT_ANCHORS);
+        for (const action of SETTLEMENT_ANCHORS) {
+            assert.deepStrictEqual(MANIFEST.actions[action], {
+                category: 'settlement-anchor',
+                explorerRender: true
+            });
+            assert.strictEqual(Formats[action], undefined,
+                action + ' is an indexer-minted settlement anchor, not an SDK-authored action');
+        }
+    });
+}
+
+function registerCanonicalManifestIdentityTests() {
     describe('byte-identity to canonical manifest', function () {
         const DOCS = process.env.XCHAIN_DOCS_DIR || path.join(__dirname, '../..', '..', '..', 'xchain-documentation');
         const CANON = path.join(DOCS, 'protocol', 'action-manifest.json');
@@ -119,7 +145,7 @@ describe('ACTION manifest conformance: sdk userEncodable set @regression', funct
                 'xchain-documentation/protocol/action-manifest.json and re-vendor all copies.');
         });
     });
-});
+}
 
 // The version arrays are only load-bearing if they are present and shaped
 // right on exactly the authorable actions; a missing or malformed array

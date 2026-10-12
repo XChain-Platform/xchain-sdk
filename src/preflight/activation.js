@@ -20,6 +20,10 @@
 'use strict';
 
 const { FULL_NAME_TO_TICK } = require('../coins/index.js');
+const { parseCoinCode } = require('../utils/endpoints.js');
+const { REGTEST_ARMING } = require('../consensus/gate_registry/shared_rows.js');
+const { regtestHeight } = require('../consensus/gate_registry/regtest_env.js');
+const { armingEnv } = require('../consensus/gate_registry.js');
 
 // Pin the indexer addGate tables pre-flight decides from; the drift gate compares each by value.
 // 'UNARMED' stands for the indexer's UNARMED sentinel, any number is the activation threshold.
@@ -68,11 +72,48 @@ const ACTIVATION_MIRRORS = Object.freeze({
     }),
 });
 
+// Pin the activations pre-flight words into disclosures that no drift-gated row covers: the
+// representability gate is an addGate row, the two batch gates are time-table rows.
+const DISCLOSURE_MIRRORS = Object.freeze({
+    AMOUNT_REPRESENTABILITY: Object.freeze({
+        key: 'amount_representability_activation.AMOUNT_REPRESENTABILITY_ACTIVATION',
+        unit: 'time',
+        table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 1791061097, 'LTC:testnet': 1791061097,
+            'DOGE:testnet': 1791061097, testnet: 'UNARMED', regtest: 0 }),
+    }),
+    BATCH_ISSUANCE_LIMITS: Object.freeze({
+        key: 'BATCH_ISSUANCE_LIMITS',
+        unit: 'time',
+        table: Object.freeze({ mainnet: 1786838400, testnet: 0, regtest: 0 }),
+    }),
+    BATCH_COST_WEIGHTING: Object.freeze({
+        key: 'BATCH_COST_WEIGHTING',
+        unit: 'time',
+        table: Object.freeze({ mainnet: 0, testnet: 0, regtest: 0 }),
+    }),
+});
+
+function mirrorFor(name) {
+    return ACTIVATION_MIRRORS[name] || DISCLOSURE_MIRRORS[name];
+}
+
+// Arm a mirror's regtest entries from this process's env at read time, as the indexer's registry overlay does.
+// The pinned table stays the committed row the drift gate compares; only the read sees the venue's arming.
+function tableFor(name) {
+    const { key, table } = mirrorFor(name);
+    const rule = REGTEST_ARMING[key];
+    if (!rule) return table;
+    const height = regtestHeight(armingEnv[rule.env], rule.armedHeight, rule.label, rule.env);
+    if (height === null) return table;
+    const out = Object.assign({}, table);
+    for (const k of rule.keys) out[k] = height;
+    return Object.freeze(out);
+}
+
 // Resolve the SDK's network to the registry's (network, coin) pair from config or explorer prefix.
 function activationPlane(sdk) {
     const [fullName, plane] = String((sdk && sdk.config && sdk.config.network) || '').toLowerCase().split('-');
-    const m = /^([TR]?)(BTC|LTC|DOGE)$/.exec(String((sdk && sdk.explorer && sdk.explorer.coin) || '').toUpperCase());
-    const fromCoin = m ? { coin: m[2], network: m[1] === 'T' ? 'testnet' : m[1] === 'R' ? 'regtest' : 'mainnet' } : null;
+    const fromCoin = parseCoinCode(sdk && sdk.explorer && sdk.explorer.coin);
     if (plane && FULL_NAME_TO_TICK[fullName]) return { coin: FULL_NAME_TO_TICK[fullName], network: plane };
     if (['mainnet', 'testnet', 'regtest'].includes(fullName) && !plane)
         return { coin: fromCoin ? fromCoin.coin : null, network: fullName };
@@ -81,7 +122,7 @@ function activationPlane(sdk) {
 
 // Read a mirrored threshold with the registry's precedence: '<COIN>:<network>' first, then the network.
 function activationThreshold(name, sdk) {
-    const table = ACTIVATION_MIRRORS[name].table;
+    const table = tableFor(name);
     const at = activationPlane(sdk);
     if (!at) return undefined;
     const own = (k) => Object.prototype.hasOwnProperty.call(table, k);
@@ -91,7 +132,8 @@ function activationThreshold(name, sdk) {
 
 // Describe a mirrored table for disclosure text, so the wording moves with the pinned values.
 function describeActivation(name) {
-    const { table, unit } = ACTIVATION_MIRRORS[name];
+    const { unit } = mirrorFor(name);
+    const table = tableFor(name);
     const groups = {};
     for (const k of Object.keys(table)) {
         const state = table[k] === 'UNARMED' ? 'unarmed' : table[k] === 0 ? 'active from genesis' : 'armed at ' + unit + ' ' + table[k];
@@ -105,8 +147,8 @@ function describeActivationHere(name, sdk) {
     const at = activationThreshold(name, sdk);
     const here = at === undefined ? '' : at === 'UNARMED' ? 'this chain is not armed for it; '
         : at === 0 ? 'it is active from genesis on this chain; '
-            : 'it is armed at ' + ACTIVATION_MIRRORS[name].unit + ' ' + at + ' on this chain; ';
+            : 'it is armed at ' + mirrorFor(name).unit + ' ' + at + ' on this chain; ';
     return here + 'the activation is ' + describeActivation(name);
 }
 
-module.exports = { ACTIVATION_MIRRORS, activationThreshold, describeActivation, describeActivationHere };
+module.exports = { ACTIVATION_MIRRORS, DISCLOSURE_MIRRORS, activationThreshold, describeActivation, describeActivationHere };

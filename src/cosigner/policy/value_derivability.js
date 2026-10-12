@@ -122,6 +122,7 @@ const TABLE = {
         1: { class: UNBOUNDED, byRef: true },                 // cancel the referenced market
         2: { class: UNBOUNDED, byRef: true },                 // place a bet: AMOUNT is present but its TICK is the MARKET's, not the string's
         3: { class: UNBOUNDED, byRef: true },                 // resolve the referenced market
+        4: { class: NONE },                                   // edits the referenced market's allow and block lists; moves nothing
     },
     BROADCAST: {
         0: { class: NONE },                                   // VALUE is a feed datum, not an amount

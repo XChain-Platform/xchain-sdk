@@ -20,7 +20,9 @@
  * waiting for its CATCH_UP_COMPLETE or refusal before sending the next. A
  * truncated replay is continued from where the server stopped; a refused or
  * unanswered one emits `resync_required` so the caller can backfill over
- * REST. Mirrors the explorer's bundled browser client
+ * REST. A completed one whose CATCH_UP_COMPLETE names `not_replayed` types (lifecycle
+ * events the replay cannot carry) emits `not_replayed` so the caller can backfill those
+ * over REST too. Mirrors the explorer's bundled browser client
  * (src/content/js/xchain_ws_catch_up.js).
  *
  * Plain functions over the client rather than prototype methods, so the
@@ -58,13 +60,19 @@ function trackCursor(client, msg) {
         if (client.lastActionIndex === null) client.advanceCursor(msg.data.latest_action_index);
         return;
     }
+    // Only NEW_ACTION and CATCH_UP_COMPLETE report a delivered action row. Other frames
+    // reuse action_index for an entity id (a dispenser, a bet feed), and moving the
+    // cursor to one would make the next reconnect skip rows this client never received.
+    let raw;
+    if (msg.type === 'NEW_ACTION') raw = msg.data.action_index;
+    else if (msg.type === 'CATCH_UP_COMPLETE') raw = msg.data.latest_action_index;
+    else return;
     const state = client._catchUp;
     if (state) {
-        state.maxSeen = maxIndex(maxIndex(state.maxSeen, msg.data.action_index), msg.data.latest_action_index);
+        state.maxSeen = maxIndex(state.maxSeen, raw);
         return;
     }
-    client.advanceCursor(msg.data.action_index);
-    client.advanceCursor(msg.data.latest_action_index);
+    client.advanceCursor(raw);
 }
 
 // Cancel the pending request's backstop timer, if one is armed.
@@ -161,6 +169,13 @@ function answerCatchUp(client, msg) {
         return;
     }
     clearTimer(state);
+    if (Array.isArray(data.not_replayed) && data.not_replayed.length > 0) {
+        client.emit('not_replayed', {
+            types:              data.not_replayed.slice(),
+            channels:           state.current.sub.channels,
+            since_action_index: state.current.since
+        });
+    }
     nextCatchUp(client);
 }
 

@@ -15,7 +15,7 @@
  * Pre-flight Tier-2 DISPENSER amount rules: the activation-gated GIVE_AMOUNT
  * and GET_AMOUNT checks on a create, the amount-representability declaration,
  * and the stored-price check on a DISPENSE. Required by checks/dispenser.js;
- * mirrors xchain-indexer src/actions/dispenser.js and src/actions/dispense.js.
+ * mirrors xchain-indexer src/actions/dispenser/ and src/actions/dispense.js.
  *
  ********************************************************************/
 
@@ -23,15 +23,17 @@
 
 const { FINDING_CODES } = require('../../constants.js');
 const numeric = require('../../numeric.js');
+const { describeActivation } = require('../../activation.js');
 const { getCoinConfig } = require('../../../coins/index.js');
+const { parseCoinCode } = require('../../../utils/endpoints.js');
 
 // Decimal places of the chain coin a GET_COIN names, read from the vendored coin
 // registry so the precision rule below cannot drift from the indexer's
 // COIN_DECIMALS. Null for anything that is not a native coin code.
 function nativeCoinDecimals(coin) {
-    const m = /^[TR]?(BTC|LTC|DOGE)$/.exec(String(coin || '').toUpperCase());
-    if (!m) return null;
-    try { return getCoinConfig(m[1], 'mainnet').decimals; } catch (e) { return null; }
+    const plane = parseCoinCode(coin);
+    if (!plane) return null;
+    try { return getCoinConfig(plane.coin, 'mainnet').decimals; } catch (e) { return null; }
 }
 
 // Strictly-positive test that answers false, never throws, on a value the
@@ -49,7 +51,7 @@ function isSelfPriced(fiatCode, oracleAddress) {
 }
 
 // A balance dispenser must hand out something. Mirrors the Format-0
-// create rule in xchain-indexer/src/actions/dispenser.js: an absent or
+// create rule in xchain-indexer/src/actions/dispenser/: an absent or
 // non-positive GIVE_AMOUNT with GIVE_OWNERSHIP=0 opens a dispenser that
 // settles buyer payments as VALID fills crediting nothing, because every
 // downstream guard reads a non-positive GIVE_AMOUNT as "ownership
@@ -76,7 +78,7 @@ function checkGiveAmount(ctx) {
 }
 
 // A dispenser that names its own price must name a positive, well-formed
-// one. Mirrors the two Format-0 rules xchain-indexer/src/actions/dispenser.js
+// one. Mirrors the two Format-0 rules xchain-indexer/src/actions/dispenser/
 // enforces behind the registry row dispenser_amount_positivity_activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION
 // (xchain-indexer src/protocol_changes/gates_1.js): a native-coin-priced
 // GET_AMOUNT (empty GET_TICK) is checked against COIN_DECIMALS, which the
@@ -110,19 +112,15 @@ function checkSelfPrice(ctx) {
     }
 }
 
-// GIVE_AMOUNT, GIVE_ESCROW, GET_AMOUNT and FIAT_AMOUNT are all judged above (or
-// by validator.js) against the LEGACY amount-format rule, see numeric.js. Above
-// its flag-day the indexer also requires each of them to denote the number the
-// ledger credits, which pre-flight cannot decide: it needs the activation state
-// of the block that will carry the create. Declared rather than raised, because
-// neither mainnet nor testnet is armed and rejecting here would block a create
-// both planes accept.
+// Declare, never reject, the post-flag-day representability rule: it needs the
+// activation state of the including block, which pre-flight has no way to know.
+// Amounts are judged above against the legacy format rule (numeric.js).
 function declareAmountRepresentability(ctx) {
     ctx.addUnverified('AMOUNT_REPRESENTABILITY',
         'above its flag-day every amount on this create must be a plain decimal numeral denoting the '
         + 'number the ledger credits, so exponent notation and an integer too wide for the ledger '
         + 'aggregation are rejected instead of crediting a different number; the activation state of '
-        + 'the including block is server-side only, and neither mainnet nor testnet is armed for it');
+        + 'the including block is server-side only; the activation is ' + describeActivation('AMOUNT_REPRESENTABILITY'));
 }
 
 // The settlement half of the dispenser_amount_positivity_activation row

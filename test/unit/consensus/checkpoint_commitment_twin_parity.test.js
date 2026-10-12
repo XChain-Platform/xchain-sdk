@@ -78,8 +78,8 @@ describe('checkpoint_commitment_activation twin parity @regression', function ()
 
     TWINS.forEach(function (repo) {
         it(repo + ' copy matches the sdk copy in value and in bytes', function () {
-            // Explorer eagerly loads its config and mathjs graph; leave headroom for CPU-contended CI.
-            if(repo === 'xchain-explorer') this.timeout(15000);
+            // Each twin eagerly loads its config and dependency graph; leave headroom for CPU-contended CI.
+            this.timeout(15000);
             const twinPath = path.join(SIBLING_ROOT, repo, REGISTRY_ENTRY);
             if(!fs.existsSync(twinPath)){
                 missingSibling(repo + ' sibling registry at ' + twinPath);

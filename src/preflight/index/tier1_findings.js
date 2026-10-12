@@ -148,7 +148,7 @@ function applyTier1(findings, tier1) {
 // the Tier-2 client errors it outranks.
 function applyValidVerdict(findings, tier1) {
     // A batch answers at two levels and the outer one is not a verdict on the
-    // inner ones (indexer actions/batch.js restores the BATCH's own status
+    // inner ones (indexer actions/batch/index.js restores the BATCH's own status
     // after the dispatch loop). Report both, and say which is which.
     const cls = tier1.subCommands ? pushSubCommandFindings(findings, tier1.subCommands) : null;
     findings.push({ code: FINDING_CODES.DRYRUN_VALID, severity: 'info', source: 'dryrun',

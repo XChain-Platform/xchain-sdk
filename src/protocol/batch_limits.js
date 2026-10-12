@@ -15,7 +15,8 @@
  * XChain Platform SDK - BATCH limit scan (client mirror)
  *
  * ONE copy of the consensus arbiter's per-BATCH limit rules
- * (xchain-indexer/src/actions/batch.js, BATCH_ISSUANCE_LIMITS), shared by
+ * (xchain-indexer/src/actions/batch/limits.js tables, checked in
+ * batch/validate.js, BATCH_ISSUANCE_LIMITS), shared by
  * every client site that used to carry its own: the compose-time builder,
  * the static validator, the decoder mirror and pre-flight. Four copies of
  * a counting rule is how the decoder mirror came to count only the
@@ -130,11 +131,11 @@ const { classifyIssueTick, formatVersion, classifyCommand } = require('./batch_l
 const { commandTick, limitKeysInListOrder, paramsTick } = require('./batch_limits/tick_limits.js');
 const { planCoinpayOutputs, checkCoinpayOutputPlan } = require('./batch_limits/coinpay_output_plan.js');
 
-// Global per-BATCH command cap (indexer batch.js `commandLimit`).
+// Global per-BATCH command cap (indexer batch/limits.js `commandLimit`).
 const BATCH_COMMAND_LIMIT = 250;
 
 // Budget the weighted sum is compared against at/after BATCH_COST_WEIGHTING
-// (indexer batch.js `weightBudget`). Equal to the command cap on purpose: with
+// (indexer batch/limits.js `weightBudget`). Equal to the command cap on purpose: with
 // a default weight of 1 an ordinary batch is decided arithmetically identically
 // to the count rule, including the error string, which stays
 // `invalid: COMMAND (limit)` for a weight overflow too.

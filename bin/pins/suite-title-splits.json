@@ -64,12 +64,12 @@
       "test/unit/actions/actions.test/10_partial_unstake_claim_optional_amount.test.js",
       "test/unit/actions/actions.test/11_top_level_version_reaches_version_dependent_validation.test.js"
     ],
-    "test/unit/protocol/batch_limits_conformance.test.js": [
-      "test/unit/protocol/batch_limits_conformance.test.js",
-      "test/unit/protocol/batch_limits_conformance.test/01_sdk_half.test.js",
-      "test/unit/protocol/batch_limits_conformance.test/02_arbiter_half_sibling_xchain_indexer_checkout.test.js",
-      "test/unit/protocol/batch_limits_conformance.test/03_weight_conformance_sdk_half.test.js",
-      "test/unit/protocol/batch_limits_conformance.test/04_weight_conformance_arbiter_half.test.js"
+    "test/unit/protocol/batch/batch_limits_conformance.test.js": [
+      "test/unit/protocol/batch/batch_limits_conformance.test.js",
+      "test/unit/protocol/batch/batch_limits_conformance.test/01_sdk_half.test.js",
+      "test/unit/protocol/batch/batch_limits_conformance.test/02_arbiter_half_sibling_xchain_indexer_checkout.test.js",
+      "test/unit/protocol/batch/batch_limits_conformance.test/03_weight_conformance_sdk_half.test.js",
+      "test/unit/protocol/batch/batch_limits_conformance.test/04_weight_conformance_arbiter_half.test.js"
     ],
     "test/unit/actions/betting.test.js": [
       "test/unit/actions/betting.test.js",
@@ -119,17 +119,17 @@
       "test/unit/decoder/describe.test/06_xbridge.test.js",
       "test/unit/decoder/describe.test/07_issue_v7_bridgeability_opt_in.test.js"
     ],
-    "test/unit/protocol/format_selector.test.js": [
-      "test/unit/protocol/format_selector.test.js",
-      "test/unit/protocol/format_selector.test/01_format_selector_serialize_trailing_empty_fields_are_trimmed.test.js",
-      "test/unit/protocol/format_selector.test/02_format_selector_serialize_version_is_auto_populated.test.js",
-      "test/unit/protocol/format_selector.test/03_format_selector_serialize_empty_missing_fields_become_empty_strings.test.js",
-      "test/unit/protocol/format_selector.test/04_format_selector_get_format_fields.test.js",
-      "test/unit/protocol/format_selector.test/05_format_selector_get_populated_fields.test.js",
-      "test/unit/protocol/format_selector.test/06_format_selector_estimate_length.test.js",
-      "test/unit/protocol/format_selector.test/07_format_selector_explicit_version_rest_fields.test.js",
-      "test/unit/protocol/format_selector.test/08_format_selector_select_pinned_version_never_silently_drops_field.test.js",
-      "test/unit/protocol/format_selector.test/09_format_selector_select_explicit_version_must_be_canonical_integer.test.js"
+    "test/unit/protocol/format_selector/format_selector.test.js": [
+      "test/unit/protocol/format_selector/format_selector.test.js",
+      "test/unit/protocol/format_selector/format_selector.test/01_format_selector_serialize_trailing_empty_fields_are_trimmed.test.js",
+      "test/unit/protocol/format_selector/format_selector.test/02_format_selector_serialize_version_is_auto_populated.test.js",
+      "test/unit/protocol/format_selector/format_selector.test/03_format_selector_serialize_empty_missing_fields_become_empty_strings.test.js",
+      "test/unit/protocol/format_selector/format_selector.test/04_format_selector_get_format_fields.test.js",
+      "test/unit/protocol/format_selector/format_selector.test/05_format_selector_get_populated_fields.test.js",
+      "test/unit/protocol/format_selector/format_selector.test/06_format_selector_estimate_length.test.js",
+      "test/unit/protocol/format_selector/format_selector.test/07_format_selector_explicit_version_rest_fields.test.js",
+      "test/unit/protocol/format_selector/format_selector.test/08_format_selector_select_pinned_version_never_silently_drops_field.test.js",
+      "test/unit/protocol/format_selector/format_selector.test/09_format_selector_select_explicit_version_must_be_canonical_integer.test.js"
     ],
     "test/unit/clients/hub.test.js": [
       "test/unit/clients/hub.test.js",
@@ -152,41 +152,41 @@
       "test/unit/protocol/multi_leg_formats.test/05_multi_leg_round_trip.test.js",
       "test/unit/protocol/multi_leg_formats.test/06_indexer_leg_extraction_conformance.test.js"
     ],
-    "test/unit/preflight/batch_tier1.test.js": [
-      "test/unit/preflight/batch_tier1.test.js",
-      "test/unit/preflight/batch_tier1.test/01_a_refused_sub_action_is_a_clear_answer.test.js",
-      "test/unit/preflight/batch_tier1.test/02_normalizing_the_arbiter_sub_command_list.test.js",
-      "test/unit/preflight/batch_tier1.test/03_a_valid_batch_does_not_mean_its_commands_succeed.test.js",
-      "test/unit/preflight/batch_tier1.test/04_an_unjudged_sub_command_is_neither_a_pass_nor_a_failure.test.js",
-      "test/unit/preflight/batch_tier1.test/05_per_command_precedence.test.js",
-      "test/unit/preflight/batch_tier1.test/06_oracle_fees_are_disclosed_not_judged.test.js",
-      "test/unit/preflight/batch_tier1.test/07_end_to_end_through_sdk_preflight.test.js",
-      "test/unit/preflight/batch_tier1.test/08_an_invalid_batch_header.test.js"
+    "test/unit/preflight/tier1/batch_tier1.test.js": [
+      "test/unit/preflight/tier1/batch_tier1.test.js",
+      "test/unit/preflight/tier1/batch_tier1.test/01_a_refused_sub_action_is_a_clear_answer.test.js",
+      "test/unit/preflight/tier1/batch_tier1.test/02_normalizing_the_arbiter_sub_command_list.test.js",
+      "test/unit/preflight/tier1/batch_tier1.test/03_a_valid_batch_does_not_mean_its_commands_succeed.test.js",
+      "test/unit/preflight/tier1/batch_tier1.test/04_an_unjudged_sub_command_is_neither_a_pass_nor_a_failure.test.js",
+      "test/unit/preflight/tier1/batch_tier1.test/05_per_command_precedence.test.js",
+      "test/unit/preflight/tier1/batch_tier1.test/06_oracle_fees_are_disclosed_not_judged.test.js",
+      "test/unit/preflight/tier1/batch_tier1.test/07_end_to_end_through_sdk_preflight.test.js",
+      "test/unit/preflight/tier1/batch_tier1.test/08_an_invalid_batch_header.test.js"
     ],
-    "test/unit/preflight/batch.test.js": [
-      "test/unit/preflight/batch.test.js",
-      "test/unit/preflight/batch.test/01_pre_flight_batch_issuance_fee_budget.test.js",
-      "test/unit/preflight/batch.test/02_pre_flight_batch_command_cap.test.js",
-      "test/unit/preflight/batch.test/03_pre_flight_batch_fee_budget_priced_classes_beyond_issue.test.js",
-      "test/unit/preflight/batch.test/04_pre_flight_batch_cost_weight_budget.test.js"
+    "test/unit/preflight/batch/batch.test.js": [
+      "test/unit/preflight/batch/batch.test.js",
+      "test/unit/preflight/batch/batch.test/01_pre_flight_batch_issuance_fee_budget.test.js",
+      "test/unit/preflight/batch/batch.test/02_pre_flight_batch_command_cap.test.js",
+      "test/unit/preflight/batch/batch.test/03_pre_flight_batch_fee_budget_priced_classes_beyond_issue.test.js",
+      "test/unit/preflight/batch/batch.test/04_pre_flight_batch_cost_weight_budget.test.js"
     ],
-    "test/unit/preflight/checks.test.js": [
-      "test/unit/preflight/checks.test.js",
-      "test/unit/preflight/checks.test/01_issue_existence_reject_ownership_gate.test.js",
-      "test/unit/preflight/checks.test/02_mint_two_caps_no_fee.test.js",
-      "test/unit/preflight/checks.test/03_mint_issue_against_real_nested_token_document.test.js",
-      "test/unit/preflight/checks.test/04_sweep_empty_valid_no_op.test.js",
-      "test/unit/preflight/checks.test/05_airdrop_null_amount_warning_never_error.test.js",
-      "test/unit/preflight/checks.test/06_dispense_tier_1_cannot_validate_moves_native_coin.test.js",
-      "test/unit/preflight/checks.test/07_dispenser_create_pricing_amount_positivity_mirror.test.js",
-      "test/unit/preflight/checks.test/08_dispenser_refill_refill_cap_oracle_fee.test.js",
-      "test/unit/preflight/checks.test/09_dispenser_ownership_escrow_edit.test.js",
-      "test/unit/preflight/checks.test/10_vote_re_vote_legal_state_unverified.test.js",
-      "test/unit/preflight/checks.test/11_execute_no_method_existence_check_in_handler.test.js",
-      "test/unit/preflight/checks.test/12_broadcast_message_no_chain_state_preconditions.test.js",
-      "test/unit/preflight/checks.test/13_coinpay_fee_exempt_tier_1_gives_no_verdict.test.js",
-      "test/unit/preflight/checks.test/14_native_fee_forfeiture_disclosure.test.js",
-      "test/unit/preflight/checks.test/15_op_return_carrier_cap_parity_with_compose_time_gate.test.js"
+    "test/unit/preflight/checks/checks.test.js": [
+      "test/unit/preflight/checks/checks.test.js",
+      "test/unit/preflight/checks/checks.test/01_issue_existence_reject_ownership_gate.test.js",
+      "test/unit/preflight/checks/checks.test/02_mint_two_caps_no_fee.test.js",
+      "test/unit/preflight/checks/checks.test/03_mint_issue_against_real_nested_token_document.test.js",
+      "test/unit/preflight/checks/checks.test/04_sweep_empty_valid_no_op.test.js",
+      "test/unit/preflight/checks/checks.test/05_airdrop_null_amount_warning_never_error.test.js",
+      "test/unit/preflight/checks/checks.test/06_dispense_tier_1_cannot_validate_moves_native_coin.test.js",
+      "test/unit/preflight/checks/checks.test/07_dispenser_create_pricing_amount_positivity_mirror.test.js",
+      "test/unit/preflight/checks/checks.test/08_dispenser_refill_refill_cap_oracle_fee.test.js",
+      "test/unit/preflight/checks/checks.test/09_dispenser_ownership_escrow_edit.test.js",
+      "test/unit/preflight/checks/checks.test/10_vote_re_vote_legal_state_unverified.test.js",
+      "test/unit/preflight/checks/checks.test/11_execute_no_method_existence_check_in_handler.test.js",
+      "test/unit/preflight/checks/checks.test/12_broadcast_message_no_chain_state_preconditions.test.js",
+      "test/unit/preflight/checks/checks.test/13_coinpay_fee_exempt_tier_1_gives_no_verdict.test.js",
+      "test/unit/preflight/checks/checks.test/14_native_fee_forfeiture_disclosure.test.js",
+      "test/unit/preflight/checks/checks.test/15_op_return_carrier_cap_parity_with_compose_time_gate.test.js"
     ],
     "test/unit/carrier/reconcile_encoded.test.js": [
       "test/unit/carrier/reconcile_encoded.test.js",
@@ -258,46 +258,47 @@
     ],
     "test/unit/encoder.test.js": [
       "test/unit/encoder.test.js",
-      "test/unit/encoder.test/01_spend_p2sh.test.js",
+      "test/unit/encoder.test/spend/01_spend_p2sh.test.js",
       "test/unit/encoder.test/02_ping.test.js",
-      "test/unit/encoder.test/03_error_handling.test.js",
+      "test/unit/encoder.test/errors/03_error_handling.test.js",
       "test/unit/encoder.test/04_rpc_id.test.js",
       "test/unit/encoder.test/05_broadcast_tx.test.js",
       "test/unit/encoder.test/06_get_utxos.test.js",
-      "test/unit/encoder.test/07_estimate_fee.test.js",
-      "test/unit/encoder.test/08_spend_p2sh_optional_params.test.js",
-      "test/unit/encoder.test/09_set_base.test.js",
-      "test/unit/encoder.test/10_hooks.test.js",
-      "test/unit/encoder.test/11_ready_hook.test.js",
-      "test/unit/encoder.test/12_retry_false.test.js",
-      "test/unit/encoder.test/13_timeout_errors.test.js",
-      "test/unit/encoder.test/14_estimate_fee_non_witness_utxo.test.js",
-      "test/unit/encoder.test/15_https_base_url.test.js",
+      "test/unit/encoder.test/fees/07_estimate_fee.test.js",
+      "test/unit/encoder.test/spend/08_spend_p2sh_optional_params.test.js",
+      "test/unit/encoder.test/config/09_set_base.test.js",
+      "test/unit/encoder.test/config/10_hooks.test.js",
+      "test/unit/encoder.test/config/11_ready_hook.test.js",
+      "test/unit/encoder.test/errors/12_retry_false.test.js",
+      "test/unit/encoder.test/errors/13_timeout_errors.test.js",
+      "test/unit/encoder.test/fees/14_estimate_fee_non_witness_utxo.test.js",
+      "test/unit/encoder.test/config/15_https_base_url.test.js",
       "test/unit/encoder.test/16_public_methods.test.js",
       "test/unit/encoder.test/17_health.test.js",
-      "test/unit/encoder.test/18_get_fee_tiers.test.js",
-      "test/unit/encoder.test/19_encoder_api_key.test.js"
+      "test/unit/encoder.test/fees/18_get_fee_tiers.test.js",
+      "test/unit/encoder.test/config/19_encoder_api_key.test.js",
+      "test/unit/encoder.test/errors/20_non_2xx_rpc_error.test.js"
     ],
     "test/unit/clients/explorer.test.js": [
       "test/unit/clients/explorer.test.js",
       "test/unit/clients/explorer.test/01_url_construction.test.js",
       "test/unit/clients/explorer.test/02_get_contract_manifest.test.js",
-      "test/unit/clients/explorer.test/03_error_handling.test.js",
+      "test/unit/clients/explorer.test/errors/03_error_handling.test.js",
       "test/unit/clients/explorer.test/04_set_base.test.js",
       "test/unit/clients/explorer.test/05_ready_hook.test.js",
       "test/unit/clients/explorer.test/06_hooks.test.js",
-      "test/unit/clients/explorer.test/07_timeout_errors.test.js",
-      "test/unit/clients/explorer.test/08_balance_address_methods.test.js",
-      "test/unit/clients/explorer.test/09_transaction_history_methods.test.js",
-      "test/unit/clients/explorer.test/10_action_specific_methods.test.js",
-      "test/unit/clients/explorer.test/11_fee_methods.test.js",
-      "test/unit/clients/explorer.test/12_contract_vm_methods.test.js",
-      "test/unit/clients/explorer.test/13_attestation_methods.test.js",
-      "test/unit/clients/explorer.test/14_betting_reads.test.js",
-      "test/unit/clients/explorer.test/15_market_methods.test.js",
+      "test/unit/clients/explorer.test/errors/07_timeout_errors.test.js",
+      "test/unit/clients/explorer.test/methods/08_balance_address_methods.test.js",
+      "test/unit/clients/explorer.test/methods/09_transaction_history_methods.test.js",
+      "test/unit/clients/explorer.test/methods/10_action_specific_methods.test.js",
+      "test/unit/clients/explorer.test/methods/11_fee_methods.test.js",
+      "test/unit/clients/explorer.test/methods/12_contract_vm_methods.test.js",
+      "test/unit/clients/explorer.test/methods/13_attestation_methods.test.js",
+      "test/unit/clients/explorer.test/methods/14_betting_reads.test.js",
+      "test/unit/clients/explorer.test/methods/15_market_methods.test.js",
       "test/unit/clients/explorer.test/16_utility_methods.test.js",
       "test/unit/clients/explorer.test/17_get_gated_file_raw.test.js",
-      "test/unit/clients/explorer.test/18_search_error_handling.test.js",
+      "test/unit/clients/explorer.test/errors/18_search_error_handling.test.js",
       "test/unit/clients/explorer.test/19_build_params_additional_params.test.js",
       "test/unit/clients/explorer.test/20_public_methods.test.js"
     ],
@@ -312,16 +313,16 @@
       "test/unit/carrier/lifecycle_manager.test/07_submit_action_indexing_wait_expires.test.js",
       "test/unit/carrier/lifecycle_manager.test/08_submit_action_contract_actions.test.js"
     ],
-    "test/unit/protocol/light.test.js": [
-      "test/unit/protocol/light.test.js",
-      "test/unit/protocol/light.test/01_spv_phase_4_sdk_light_pure_verifiers.test.js",
-      "test/unit/protocol/light.test/02_spv_phase_4_sdk_light_verify_balance_end_to_end_signed_checkpoint_mocked_fetch.test.js",
-      "test/unit/protocol/light.test/03_spv_phase_4_light_js_validator_set_cache_convenience_verify_tier.test.js",
-      "test/unit/protocol/light.test/04_spv_phase_4_doge_anchor_cold_start_trust.test.js",
-      "test/unit/protocol/light.test/05_spv_phase_4_doge_anchor_cold_start_trust.test.js",
-      "test/unit/protocol/light.test/06_spv_phase_5_validator_set_proof_trustless_quorum.test.js",
-      "test/unit/protocol/light.test/07_spv_d4_pinned_launch_trust_root.test.js",
-      "test/unit/protocol/light.test/08_spv_7_3_rotation_aware_pinned_path_follow_forward.test.js"
+    "test/unit/protocol/light/light.test.js": [
+      "test/unit/protocol/light/light.test.js",
+      "test/unit/protocol/light/light.test/01_spv_phase_4_sdk_light_pure_verifiers.test.js",
+      "test/unit/protocol/light/light.test/02_spv_phase_4_sdk_light_verify_balance_end_to_end_signed_checkpoint_mocked_fetch.test.js",
+      "test/unit/protocol/light/light.test/03_spv_phase_4_light_js_validator_set_cache_convenience_verify_tier.test.js",
+      "test/unit/protocol/light/light.test/04_spv_phase_4_doge_anchor_cold_start_trust.test.js",
+      "test/unit/protocol/light/light.test/05_spv_phase_4_doge_anchor_cold_start_trust.test.js",
+      "test/unit/protocol/light/light.test/06_spv_phase_5_validator_set_proof_trustless_quorum.test.js",
+      "test/unit/protocol/light/light.test/07_spv_d4_pinned_launch_trust_root.test.js",
+      "test/unit/protocol/light/light.test/08_spv_7_3_rotation_aware_pinned_path_follow_forward.test.js"
     ],
     "test/unit/sdk/mempool_surface.test.js": [
       "test/unit/sdk/mempool_surface.test.js",
@@ -346,14 +347,14 @@
       "test/unit/actions/messaging.test/12_get_messages_encrypted_without_wif.test.js",
       "test/unit/actions/messaging.test/13_send_validation_guards.test.js"
     ],
-    "test/unit/protocol/validator.test.js": [
-      "test/unit/protocol/validator.test.js",
-      "test/unit/protocol/validator.test/01_validator_max_supply_validation.test.js",
-      "test/unit/protocol/validator.test/02_validator_price_v1_oracle_publish.test.js",
-      "test/unit/protocol/validator.test/03_validator_vote_binding_poll_numeric_fields.test.js",
-      "test/unit/protocol/validator.test/04_validator_dispenser_create_required_fields.test.js",
-      "test/unit/protocol/validator.test/05_validator_unknown_action.test.js",
-      "test/unit/protocol/validator.test/06_validator_file_gate_min_amount_pc_29.test.js"
+    "test/unit/protocol/validator/validator.test.js": [
+      "test/unit/protocol/validator/validator.test.js",
+      "test/unit/protocol/validator/validator.test/01_validator_max_supply_validation.test.js",
+      "test/unit/protocol/validator/validator.test/02_validator_price_v1_oracle_publish.test.js",
+      "test/unit/protocol/validator/validator.test/03_validator_vote_binding_poll_numeric_fields.test.js",
+      "test/unit/protocol/validator/validator.test/04_validator_dispenser_create_required_fields.test.js",
+      "test/unit/protocol/validator/validator.test/05_validator_unknown_action.test.js",
+      "test/unit/protocol/validator/validator.test/06_validator_file_gate_min_amount_pc_29.test.js"
     ],
     "test/unit/wallet/wallet.test.js": [
       "test/unit/wallet/wallet.test.js",
@@ -429,12 +430,12 @@
       "test/unit/sdk/xchain_sdk.test/08_apply_endpoints.test.js",
       "test/unit/sdk/xchain_sdk.test/09_action_shortcut_methods.test.js"
     ],
-    "test/unit/preflight/engine.test.js": [
-      "test/unit/preflight/engine.test.js",
-      "test/unit/preflight/engine.test/01_input_normalization.test.js",
-      "test/unit/preflight/engine.test/02_report_shape_4_2.test.js",
-      "test/unit/preflight/engine.test/03_tier_precedence_4_2.test.js",
-      "test/unit/preflight/engine.test/04_severity_trust_model_4_2.test.js"
+    "test/unit/preflight/engine/engine.test.js": [
+      "test/unit/preflight/engine/engine.test.js",
+      "test/unit/preflight/engine/engine.test/01_input_normalization.test.js",
+      "test/unit/preflight/engine/engine.test/02_report_shape_4_2.test.js",
+      "test/unit/preflight/engine/engine.test/03_tier_precedence_4_2.test.js",
+      "test/unit/preflight/engine/engine.test/04_severity_trust_model_4_2.test.js"
     ]
   }
 }

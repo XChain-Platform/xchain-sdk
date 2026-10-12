@@ -110,7 +110,7 @@ describe('LifecycleManager', function () {
             const explorer = {
                 getContractBalance: async () => (++reads < 2)
                     ? { total: 0, data: [] }
-                    : { total: 1, data: [{ tick: 'PAY514', quantity: '1000' }] },
+                    : { total: 1, data: [{ tick: 'PAY514', amount: '1000' }] },
             };
             const lm = new LifecycleManager(contractSdk('DEPOSIT', explorer));
             const result = await lm.submitAction(
@@ -200,7 +200,7 @@ describe('LifecycleManager', function () {
                 getContractBalance: async () => {
                     order.push('balance-read');
                     return credited
-                        ? { total: 1, data: [{ tick: 'PAY514', quantity: '1000' }] }
+                        ? { total: 1, data: [{ tick: 'PAY514', amount: '1000' }] }
                         : { total: 0, data: [] };
                 },
             };

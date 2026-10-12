@@ -42,6 +42,7 @@ const { decodeActionFromPsbt, decodeActionStringFromPsbt } = require('../cosigne
 // §5.3.2 companion to decodeActionFromPsbt: that one cross-checks an INLINE
 // OP_RETURN action, this one covers the chunk lanes it fails closed on.
 const { verifyCarrierScripts, REASONS: CARRIER_REASONS } = require('../carrier/verify_carrier_scripts.js');
+const { assertEnvelopeCarrierBinding } = require('../carrier/bind_action_carrier.js');
 
 module.exports = {
     parse,
@@ -49,6 +50,7 @@ module.exports = {
     decodeActionFromPsbt,
     decodeActionStringFromPsbt,
     verifyCarrierScripts,
+    assertEnvelopeCarrierBinding,
     CARRIER_REASONS,
     actionDisplayLabel,
     ACTION_ALIASES,

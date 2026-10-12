@@ -21,6 +21,7 @@
  ********************************************************************/
 
 const { SDKExplorerError } = require('../../utils/errors.js');
+const { coinPrefix } = require('../../utils/endpoints.js');
 const { WS_OPEN, WS_SCHEMA_VERSION, COIN_PREFIX_MAP } = require('./socket_constants.js');
 const catchUp = require('./catch_up.js');
 
@@ -203,7 +204,9 @@ module.exports = {
 
     deriveCoinPrefix(network) {
         if (!network) return 'BTC';
-        let prefix = COIN_PREFIX_MAP[network];
+        // Resolve through the same strict lookup the explorer client uses, so
+        // both clients accept and refuse exactly the same network strings.
+        let prefix = coinPrefix(network);
         if (!prefix)
             throw new SDKExplorerError('INVALID_NETWORK', 'Unknown network: ' + network + '. Valid: ' + Object.keys(COIN_PREFIX_MAP).join(', '), { network });
         return prefix;

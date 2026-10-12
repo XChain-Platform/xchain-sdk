@@ -142,6 +142,9 @@ class ContractClient {
 
     // Normalize the manifest off a raw explorer contract object. `permissions` may arrive
     // as a JSON string ('["SEND"]') or an already-parsed array; anything else → null.
+    // `permissionsError: true` is added when the explorer flags `permissions_error` or the
+    // value is present but unreadable, so a broken manifest is not read as unrestricted;
+    // the key is absent otherwise.
     //
     // Contract identity (spec 2.5/2.6) rides the same object: `meta_name`,
     // `meta_description`, `meta_version` are flat columns and `meta` is the parsed
@@ -153,10 +156,16 @@ class ContractClient {
             return { permissions: null, maxTakeBps: null, name: null, description: null, version: null, meta: null };
         let permissions = null;
         let raw = info.permissions;
+        let permissionsError = [true, 1, '1', 'true'].includes(info.permissions_error);
         if (Array.isArray(raw)) {
             permissions = raw;
         } else if (typeof raw === 'string' && raw.length) {
-            try { let p = JSON.parse(raw); if (Array.isArray(p)) permissions = p; } catch (e) { permissions = null; }
+            try {
+                let p = JSON.parse(raw);
+                if (Array.isArray(p)) permissions = p; else permissionsError = true;
+            } catch (e) { permissionsError = true; }
+        } else if (raw !== null && raw !== undefined && raw !== '') {
+            permissionsError = true;
         }
         let mtb = info.max_take_bps;
         let maxTakeBps = (mtb === null || mtb === undefined || mtb === '') ? null : Number(mtb);
@@ -173,7 +182,7 @@ class ContractClient {
             } catch (e) { meta = null; }
         }
 
-        return {
+        let manifest = {
             permissions,
             maxTakeBps,
             name:        text(info.meta_name),
@@ -181,6 +190,13 @@ class ContractClient {
             version:     text(info.meta_version),
             meta
         };
+        if (permissionsError) {
+            Object.defineProperty(manifest, 'permissionsError', {
+                value: true,
+                enumerable: false
+            });
+        }
+        return manifest;
     }
 
 }

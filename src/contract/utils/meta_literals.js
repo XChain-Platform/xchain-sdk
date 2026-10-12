@@ -19,11 +19,15 @@
  *
  * These are pure functions with no dependency on isolated-vm.
  *
- * validate() / checkFloatUsage() delegate to ./contract/lint_core.js, a
- * BYTE-IDENTICAL vendored copy of xchain-vm/src/lint_core.js, so the SDK's
+ * validate() / checkFloatUsage() delegate to src/contract/lint-core.js, a
+ * BYTE-IDENTICAL vendored copy of xchain-vm/src/lint-core.js, so the SDK's
  * pre-flight verdict matches the indexer's deploy-time validation exactly
- * (no false greens). A CI parity guard (sha256) fails the build on drift.
- * lint_core pulls acorn/acorn-walk/astring (pure JS, browser-safe hard deps),
+ * (no false greens). lint-core.js is one file of a larger vendored set; the
+ * authoritative list is VENDORED_FILES / VENDORED_DIRS in
+ * test/unit/contract/contract_parity.test.js, whose sha256 guard fails the
+ * build on drift. Re-sync by copying from xchain-vm/src/, never by editing
+ * the vendored copies here.
+ * lint-core pulls acorn/acorn-walk/astring (pure JS, browser-safe hard deps),
  * never isolated-vm.
  *
  ********************************************************************/

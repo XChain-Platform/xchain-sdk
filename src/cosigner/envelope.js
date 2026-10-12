@@ -86,6 +86,7 @@ const ecc     = require('@bitcoinerlab/secp256k1');
 // Shared with co_signer.js's key-path derivation: one definition of which
 // sighash types this signer will produce a message for.
 const { sighashAllowed, disallowedSighashError } = require('./policy/sighash_policy.js');
+const { assertSegwitNetwork } = require('./account.js');
 
 bitcoin.initEccLib(ecc);
 
@@ -208,6 +209,7 @@ function normalizeRecoveryLeaves(recovery) {
  */
 function deriveEnvelopeCommit(args = {}) {
     const { internalXOnly, envelopeScript, network } = args;
+    assertSegwitNetwork(network, 'deriveEnvelopeCommit');
     if (!Buffer.isBuffer(internalXOnly) || internalXOnly.length !== 32)
         throw new Error('deriveEnvelopeCommit requires a 32-byte x-only internal key');
     const parsed = parseEnvelopeScript(envelopeScript);

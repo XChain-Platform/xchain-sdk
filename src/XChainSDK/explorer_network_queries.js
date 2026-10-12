@@ -190,14 +190,15 @@ module.exports = {
 
     // Fetch the checkpoint at blockIndex through the pooled, retry-aware
     // ExplorerClient (vs sdk.checkpoint.fetchAndVerifyCheckpoint's bare fetch),
-    // then re-verify it LOCALLY with Ed25519. The server's `verified` flag is
-    // ignored; only local crypto decides.
-    async verifyCheckpoint(blockIndex) {
+    // then re-verify its signatures LOCALLY with Ed25519; the server's `verified`
+    // flag is ignored. Without opts.validators the set is the explorer's own, so
+    // validatorSource says whether the verdict trusts the explorer for the set.
+    async verifyCheckpoint(blockIndex, opts) {
+        let supplied = CheckpointVerifier.suppliedValidators(opts);
         let body = await this.requireExplorer().getCheckpointVerify(blockIndex);
         // Nothing to verify if the explorer sent no checkpoint back; fail loudly rather than report success.
         if (!body || !body.checkpoint) throw new Error('verifyCheckpoint: no checkpoint in response');
-        let result = CheckpointVerifier.verifyCheckpoint(body.checkpoint, body.validators || []);
-        return Object.assign({ checkpoint: body.checkpoint, snapshotAvailable: !!body.snapshot_available }, result);
+        return CheckpointVerifier.verifyServedCheckpoint(body, supplied);
     },
 
 
@@ -241,11 +242,11 @@ module.exports = {
     // Indexer status: per-coin last_block / last_block_time (indexer position),
     // plus decoder_tip (the decoder's highest *processed* block) and
     // decoder_lag_blocks (decoder_tip - last_block, >= 0) so a stalled indexer is
-    // detectable from this single call. This covers the indexer->decoder slice only,
-    // NOT whole-pipeline lag: the coin node's chain tip is not exposed here (use the
-    // decoder's health() RPC for the chain->decoder gap). decoder_tip /
-    // decoder_lag_blocks are null for a coin when the decoder tip is unavailable. See
-    // ExplorerClient.getStatus for the full field list.
+    // detectable from this single call. Those two cover the indexer->decoder slice
+    // only; the chain->decoder side is chain_tip / chain_lag_blocks, which the
+    // explorer relays from the decoder's own health() call. decoder_tip /
+    // decoder_lag_blocks are null for a coin when the decoder tip is unavailable.
+    // ExplorerStatus in index.d.ts is the full field list.
     async getStatus() {
         return this.requireExplorer().getStatus();
     },
@@ -353,8 +354,8 @@ module.exports = {
         }));
     },
 
-    // Network-wide summary (chain heights, indexer status, peer counts,
-    // recommended finality confirmations). See ExplorerClient.getNetwork.
+    // Network statistics for this SDK's coin (tip, mempool, record counts, fees,
+    // prices, recommended finality confirmations; no peer data). See ExplorerClient.getNetwork.
     async getNetwork(opts) {
         return this.requireExplorer().getNetwork(opts);
     },

@@ -21,6 +21,7 @@
 const ContractClient = require('../../contract/client.js');
 
 const { seg } = require('./path_segment.js');
+const { coinTier, hasHttpScheme } = require('../../utils/endpoints.js');
 
 module.exports = {
     async getFiles(query, type, opts = {}) {
@@ -40,8 +41,7 @@ module.exports = {
     // cross-chain action refs carry the base ticker; the tier is implied).
     siblingCoin(baseCoin) {
         if (!baseCoin) return this.coin;
-        let tier = (this.coin.match(/^([TR])(BTC|LTC|DOGE)$/) || [])[1] || '';
-        return tier + String(baseCoin).toUpperCase();
+        return coinTier(this.coin) + String(baseCoin).toUpperCase();
     },
 
     // Absolute URL of a FILE action's raw bytes on this explorer: the
@@ -50,7 +50,7 @@ module.exports = {
     // Pass `coin` (base ticker) for a sibling-chain reference. Pure string
     // builder, no request.
     fileRawUrl(actionIndex, coin = null) {
-        let base = this.baseUrl.startsWith('http')
+        let base = hasHttpScheme(this.baseUrl)
             ? this.baseUrl
             : 'http://' + this.baseUrl + ':' + this.port;
         return base.replace(/\/+$/, '') + '/' + this.siblingCoin(coin) + '/api/file/' + String(actionIndex) + '/raw';
@@ -191,10 +191,14 @@ module.exports = {
     // (`permissions`: string[]|null, `max_take_bps`: number|null). Returns
     //   { permissions: string[]|null, maxTakeBps: number|null }
     // permissions=null → no declared allowlist (unrestricted); maxTakeBps=null →
-    // the global cap applies.
+    // the global cap applies. `permissionsError: true` is added when the explorer
+    // reports permissions_error or the permissions value is unreadable.
     async getContractManifest(contractActionIndex) {
         let info = await this.getContract(contractActionIndex);
-        return ContractClient.parseManifest(info);
+        let manifest = ContractClient.parseManifest(info);
+        if (manifest.permissionsError)
+            return { ...manifest, permissionsError: true };
+        return manifest;
     },
 
     async getContracts(query, type, opts = {}) {

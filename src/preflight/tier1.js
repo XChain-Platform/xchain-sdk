@@ -197,7 +197,7 @@ function classifyQuote(quote) {
  * `position` falls back to the array index rather than being dropped: it is what
  * ties a network verdict to a Tier-2 finding's `commandIndex`, and the whole
  * per-command precedence rule in applyTier1 is keyed on it. The arbiter emits it
- * as its own 0-based batch position (indexer actions/batch.js `batchPosition`),
+ * as its own 0-based batch position (indexer actions/batch/index.js `batchPosition`),
  * which is the same counter, so the fallback only ever covers a malformed row.
  */
 function normalizeSubCommands(raw) {

@@ -16,7 +16,6 @@
  *
  ********************************************************************/
 
-const { MuSigFactory } = require('@brandonblack/musig');
 const baseCrypto       = require('@brandonblack/musig/base_crypto');
 const { secp256k1, schnorr } = require('@noble/curves/secp256k1');
 const { sha256 }       = require('@noble/hashes/sha2');
@@ -154,12 +153,6 @@ const ecc = {
 };
 
 
-// Single instance: required because the underlying library stashes
-// secret nonces in an internal Map keyed by publicNonce. See module
-// header.
-const _musig = MuSigFactory(ecc);
-
-
 /*
  * Validate a byte-sized input. Throws SDKMuSigError on failure.
  */
@@ -202,4 +195,4 @@ function normalizePubkeys(pubkeys) {
 }
 
 
-module.exports = { concat, Point, schnorrUtl, ecc, _musig, requireBytes, normalizePubkeys };
+module.exports = { concat, Point, schnorrUtl, ecc, requireBytes, normalizePubkeys };

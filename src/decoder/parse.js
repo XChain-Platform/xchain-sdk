@@ -43,7 +43,7 @@ const {
 } = require('./parse/field_mapping.js');
 
 // BATCH limit scan, vendored from the consensus arbiter
-// (xchain-indexer/src/actions/batch.js) through the one shared client copy in
+// (xchain-indexer/src/actions/batch/) through the one shared client copy in
 // src/protocol/batch_limits.js; the conformance unit test guards drift by CLASSIFICATION
 // and COUNT, not just by the table's values. BATCH:0 = nested BATCH
 // categorically forbidden (a parse failure, not a limit finding).
@@ -235,7 +235,7 @@ function decodeBatchEntries(entries, doValidate, commands, counts, mintTicks) {
         // `commands[i] = {ok:false, code}` so describe() can render "command 3:
         // unsupported action" without hiding the commands around it. The arbiter
         // does reject the whole transaction on the first unregistered ACTION
-        // (batch.js activation scan; nothing dispatches), but that verdict is
+        // (batch/validate.js activation scan; nothing dispatches), but that verdict is
         // acceptance, which is preflight's job: checks/batch.js raises an
         // error-severity PARSE_INVALID per bad sub-command and computeVerdict
         // fails the whole report on it. Decode reports SHAPE; preflight reports

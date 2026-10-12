@@ -138,13 +138,21 @@ describe('XChainSDK', function () {
             const fs = require('fs');
             const path = require('path');
             const EncoderClient = require('../../../../src/clients/encoder.js');
-            const src = fs.readFileSync(path.join(__dirname, '../../../../src/clients/encoder.js'), 'utf8');
-            const start = src.indexOf('async createTx(params)');
-            // Stop at the next method, or spendP2sh's own params leak into the scan.
-            const end = src.indexOf('\n    async ', start + 1);
-            const body = src.slice(start, end);
+            const src = fs.readFileSync(path.join(__dirname, '../../../../src/clients/encoder/transactions.js'), 'utf8');
+            // createTx reads its options in two places: the wire mapper, and createTx
+            // itself for the SDK-side fields. Each marker must be found, or the scan
+            // reads nothing and passes whatever the list holds.
+            const bodies = [['function buildCreateTxParams(params)', '\n}\n'], ['async createTx(params)', '\n    async ']]
+                .map(([marker, stop]) => {
+                    const start = src.indexOf(marker);
+                    expect(start, 'marker not found: ' + marker).to.not.equal(-1);
+                    // Stop at the next function, or spendP2sh's own params leak into the scan.
+                    return src.slice(start, src.indexOf(stop, start + 1));
+                });
             const read = new Set();
-            for (const m of body.matchAll(/params\.([A-Za-z_$][\w$]*)/g)) read.add(m[1]);
+            for (const body of bodies)
+                for (const m of body.matchAll(/params\.([A-Za-z_$][\w$]*)/g)) read.add(m[1]);
+            expect(read.size, 'the scan found no option reads at all').to.be.above(10);
             read.delete('data'); read.delete('pubkey');   // required, set explicitly by each caller
             const listed = new Set(EncoderClient.CREATE_TX_OPTION_FIELDS);
             const missing = [...read].filter(k => !listed.has(k));

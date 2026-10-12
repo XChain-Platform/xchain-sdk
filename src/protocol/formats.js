@@ -37,20 +37,15 @@ var Formats = {
         0: 'VERSION|COMMAND'
     },
 
-    // Parimutuel betting markets. One self-contained action covers the
-    // whole lifecycle; BROADCAST plays no part in betting. There is deliberately
-    // no edit format: markets are immutable from creation, and the pre-bet fix
-    // path is cancel + recreate. Auto-selection distinguishes the three
-    // FEED_ACTION_INDEX formats by the fields present (cancel has neither
-    // OUTCOME nor AMOUNT, resolve has OUTCOME, place has both), but the compose
-    // helpers in betting.js pin the version explicitly rather than relying on it,
-    // because a resolve and a place-bet differing only by a missing AMOUNT is too
-    // sharp an edge to leave to inference.
+    // Market terms are immutable, while v4 can update membership-list references.
+    // Compose helpers pin the version because the four FEED_ACTION_INDEX formats
+    // otherwise differ only by OUTCOME, AMOUNT, and membership-list fields.
     BET: {
         0: 'VERSION|LABEL|OUTCOMES|TICK|FEE|DEADLINE|REFUND_WINDOW|MIN_AMOUNT|ALLOW_LIST|BLOCK_LIST|DETAILS|MEMO',
         1: 'VERSION|FEED_ACTION_INDEX|MEMO',
         2: 'VERSION|FEED_ACTION_INDEX|OUTCOME|AMOUNT|MEMO',
-        3: 'VERSION|FEED_ACTION_INDEX|OUTCOME|MEMO'
+        3: 'VERSION|FEED_ACTION_INDEX|OUTCOME|MEMO',
+        4: 'VERSION|FEED_ACTION_INDEX|ALLOW_LIST|BLOCK_LIST|MEMO'
     },
 
     BROADCAST: {
@@ -263,9 +258,9 @@ var Formats = {
 
     // Token-weighted governance polls. v0 = create poll, v1 = cast ballot,
     // v3 = set/clear standing vote delegation. The user-encodable versions must
-    // match xchain-indexer/src/actions/vote.js exactly.
+    // match xchain-indexer/src/actions/vote/index.js exactly.
     // v2 (finalize) is system-synthesized and is intentionally omitted, exactly as
-    // PRICE v0 is: the indexer rejects a user-broadcast VOTE v2 (vote.js
+    // PRICE v0 is: the indexer rejects a user-broadcast VOTE v2 (vote/index.js
     // `if(!data['IS_SYNTHETIC'])`), so listing it here only let sdk.vote({version:2})
     // build a command guaranteed to be rejected on arrival. Omitting it also drops
     // SDK DECODE of a VOTE|2 string (UNKNOWN_VERSION), the same accepted trade-off

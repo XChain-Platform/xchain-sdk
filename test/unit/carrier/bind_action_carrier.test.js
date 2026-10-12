@@ -160,11 +160,9 @@ describe('carrier binding: the transaction must carry the action that was submit
                 .to.throw(/does not carry the action/);
         });
 
-        // The bound is what the CHAIN can execute. This decoder mirrors the
-        // authoritative one, so an OP_RETURN it cannot read is one no action comes
-        // out of: the transaction publishes nothing, which is a wasted fee and not a
-        // substituted command. Widening the gate to those would make it a second
-        // opinion about the encoder's framing rather than a fund-safety check.
+        // An OP_RETURN that is not ours, or no OP_RETURN at all, carries no inline
+        // action for anyone to substitute. An XCHN carrier this SDK cannot read is
+        // a different case and is refused (see the suite at the end of this file).
         it('lets an unreadable OP_RETURN through, because the chain reads no action from it either', function () {
             expect(bind({ psbt: inlinePsbt(null, { decoy: true }), actionString: SEND_A, encoding: 'OP_RETURN' }))
                 .to.not.throw();

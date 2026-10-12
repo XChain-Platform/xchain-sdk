@@ -13,7 +13,7 @@
  **********************************************************************
  *
  * Pre-flight Tier-2: DISPENSER (open/edit/close) + DISPENSE (buy).
- * Spec §4.4 rows; mirrors xchain-indexer src/actions/dispenser.js.
+ * Spec §4.4 rows; mirrors xchain-indexer src/actions/dispenser/.
  *
  * DISPENSE is the row Tier 1 CANNOT validate (feeExempt: the handler
  * never runs on the quote path, and the synthetic tx cannot carry the
@@ -57,7 +57,7 @@ const { checkGiveAmount, checkSelfPrice, declareAmountRepresentability, checkDis
  * A batch narrows the gap without closing it, and the difference matters. When
  * Mode B DISPENSERs ride inside a BATCH, /preflight now returns `oracleFeesOwed`:
  * the TOTAL owed per oracle address, summed across the batch's sub-commands
- * (indexer actions/dispenser.js). Tier 1 surfaces it as DRYRUN_ORACLE_FEES_OWED
+ * (indexer src/actions/dispenser/). Tier 1 surfaces it as DRYRUN_ORACLE_FEES_OWED
  * info. That is a DISCLOSURE, deliberately not a verdict and deliberately not an
  * error - it is the number a composer needs to SIZE the outputs, computed by the
  * arbiter, and it says nothing about whether any output exists. Nothing about
@@ -83,7 +83,7 @@ function noteSettlementPrice(ctx, fiatCode) {
 }
 
 // The EXPIRATION representability bound, mirrored from the create and edit paths
-// of xchain-indexer src/actions/dispenser.js: a value outside [0, EXPIRATION_MAX]
+// of xchain-indexer src/actions/dispenser/: a value outside [0, EXPIRATION_MAX]
 // is `invalid: EXPIRATION (format)` rather than an expiration normalized to NULL,
 // which would be a dispenser that never closes. Same rule, same error severity
 // and the same reasoning as the ORDER/SWAP copy in checks/trading.js, including
@@ -153,7 +153,7 @@ function checkEditEscrow(ctx, idx, dispenser) {
     // the wire there); an EDIT targets the dispenser by action index and never
     // restates the flag, so only this state lookup can see it. Without the rule
     // the edit debited GIVE_ESCROW while both terminal paths credit nothing back,
-    // stranding the balance (xchain-indexer src/actions/dispenser.js).
+    // stranding the balance (xchain-indexer src/actions/dispenser/).
     //
     // Ahead of the refill early-return below on purpose: the handler guards with
     // isNull, not isPositive, so a supplied GIVE_ESCROW of 0 is still supplied and

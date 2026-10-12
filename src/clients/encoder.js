@@ -22,6 +22,7 @@ const axios = require('axios');
 const { SDKEncoderError, SDKRateLimitedError } = require('../utils/errors.js');
 const { withRetry, isRetryable, getRetryAfterSeconds } = require('../utils/retry.js');
 const Config = require('../config.js');
+const { hasHttpScheme, isHttpsUrl } = require('../utils/endpoints.js');
 const { installMethods } = require('../utils/install_methods.js');
 const encoderTransactionMethods = require('./encoder/transactions.js');
 const { getTxBlock, ...encoderPrototypeMethods } = encoderTransactionMethods;
@@ -38,6 +39,21 @@ function rpcErrorFromBody(data) {
 function rpcErrorSuffix(rpcError) {
     if (!rpcError) return '';
     return ': ' + rpcError.message + (typeof rpcError.code === 'number' ? ' (code ' + rpcError.code + ')' : '');
+}
+
+// Build the withRetry callback that reports one rpc call's retries, or null when
+// the client has no onRetry hook.
+function encoderRetryHook(client, method) {
+    if (!client.hooks.onRetry) return null;
+    return (attempt, delay, err) => {
+        // `status` lets a hook tell a rate limit from a 5xx without parsing
+        // the message; null for a transport error that never got a response.
+        client.hooks.onRetry({
+            service: 'encoder', method, attempt, delay, error: err.message,
+            status: err.response ? err.response.status : null,
+            rpcCode: null
+        });
+    };
 }
 
 class EncoderClient {
@@ -86,8 +102,8 @@ class EncoderClient {
     // so connection pooling applies to public hosts too.
     buildClient() {
         let pool    = this._pool;
-        let baseURL = this.baseUrl.startsWith('http') ? this.baseUrl : 'http://' + this.baseUrl + ':' + this.port;
-        let isHttps = baseURL.startsWith('https');
+        let baseURL = hasHttpScheme(this.baseUrl) ? this.baseUrl : 'http://' + this.baseUrl + ':' + this.port;
+        let isHttps = isHttpsUrl(baseURL);
         // An injected agent wins. The desktop wallet routes its traffic
         // through a SOCKS5 proxy when the user turns on Tor routing, and
         // that is expressed as pre-built agents because a SOCKS tunnel is a
@@ -127,16 +143,13 @@ class EncoderClient {
         this.buildClient();
     }
 
-    async rpc(method, params = {}) {
+    async rpc(method, params = {}, options = {}) {
         if (this._readyHook) await this._readyHook();
         let self = this;
-        let retryConfig = this.retry === false ? { maxRetries: 0 } : this.retry;
-
-        let onRetry = this.hooks.onRetry ? (attempt, delay, err) => {
-            // `status` lets a hook tell a rate limit from a 5xx without parsing
-            // the message; null for a transport error that never got a response.
-            this.hooks.onRetry({ service: 'encoder', method, attempt, delay, error: err.message, status: err.response ? err.response.status : null });
-        } : null;
+        let retryConfig = this.retry === false || options.retry === false
+            ? { maxRetries: 0 }
+            : this.retry;
+        let onRetry = encoderRetryHook(this, method);
 
         try {
             return await withRetry(async () => {
@@ -158,7 +171,7 @@ class EncoderClient {
                         let err = new SDKEncoderError(
                             'ENCODER_RPC_ERROR',
                             'Encoder RPC error: ' + (body.error.message || JSON.stringify(body.error)),
-                            { method, rpcError: body.error, context: body.error.data || null }
+                            { method, rpcError: body.error, context: body.error.data || null, retryable: false }
                         );
                         if (self.hooks.onError)
                             self.hooks.onError({ service: 'encoder', method, error: err.message });

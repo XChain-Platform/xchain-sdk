@@ -11,7 +11,7 @@
 // BET (parimutuel betting) SDK surface.
 //
 // Two things are under test and they fail differently. The COMPOSE half must put
-// exactly the right bytes in exactly the right slots: BET has three formats that
+// exactly the right bytes in exactly the right slots: BET has four formats that
 // all lead with FEED_ACTION_INDEX and differ only by which trailing fields are
 // present, so a resolve with a stray AMOUNT silently becomes a place-bet, and a
 // place-bet with no OUTCOME silently becomes a cancel. The VALIDATE half must
@@ -24,19 +24,17 @@ const formats = require('../../../src/protocol/formats.js');
 
 describe('BET formats', function () {
 
-    it('registers all four formats with the field order BET.md declares', function () {
+    it('registers all five formats with the field order BET.md declares', function () {
         expect(formats.BET[0]).to.equal(
             'VERSION|LABEL|OUTCOMES|TICK|FEE|DEADLINE|REFUND_WINDOW|MIN_AMOUNT|ALLOW_LIST|BLOCK_LIST|DETAILS|MEMO');
         expect(formats.BET[1]).to.equal('VERSION|FEED_ACTION_INDEX|MEMO');
         expect(formats.BET[2]).to.equal('VERSION|FEED_ACTION_INDEX|OUTCOME|AMOUNT|MEMO');
         expect(formats.BET[3]).to.equal('VERSION|FEED_ACTION_INDEX|OUTCOME|MEMO');
+        expect(formats.BET[4]).to.equal('VERSION|FEED_ACTION_INDEX|ALLOW_LIST|BLOCK_LIST|MEMO');
     });
 
-    it('has no edit format: markets are immutable from creation', function () {
-        // Reinstating one would reopen the first-bettor edit race, which is why
-        // the whole FEED_HASH apparatus was cut. If a v4 appears, that decision
-        // is being reversed and the spec needs revisiting first.
-        expect(Object.keys(formats.BET)).to.deep.equal(['0', '1', '2', '3']);
+    it('exposes the list edit format through normal format discovery', function () {
+        expect(Object.keys(formats.BET)).to.deep.equal(['0', '1', '2', '3', '4']);
     });
 
 });

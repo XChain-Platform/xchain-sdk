@@ -29,7 +29,7 @@ const MuSig2AgentSession = require('../cosigner/musig2_agent_session.js');
 const { getLogger } = require('../observability/logger.js');
 const log = getLogger('xchain-sdk');
 const { SDKContractError } = require('../utils/errors.js');
-const { lintSource } = require('../contract/lint_core.js');
+const { lintSource } = require('../contract/lint-core.js');
 const CONTRACT_SOURCES = require('../contract/templates.js');
 const chunkHelper = require('../contract/chunk_helper.js');
 
@@ -86,7 +86,7 @@ module.exports = {
     // MAX_DEPLOY_CHUNKS and the base64 + push-prefix overhead) to build the
     // carrier + assembling actions on their own signing path; re-deriving it
     // caller-side would drift from consensus at the cap. Throws when the source
-    // needs more than MAX_DEPLOY_CHUNKS slices.
+    // exceeds MAX_CODE_SIZE bytes or needs more than MAX_DEPLOY_CHUNKS slices.
     //
     // opts: { gasLimit, constructorParams, cooldownBlocks, slashDestination }. A
     // stakeable deploy MUST pass its staking fields: they select DEPLOY v1, whose

@@ -85,7 +85,8 @@ class LifecycleManager {
         if (opts.strictFreshness) await this.sdk.assertFresh();
         progress('creating', { action: actionData.action });
         let resolvedParams = await this.sdk.tickResolver.resolveActionParams(actionData.action, actionData.params);
-        resolvedParams = await this.sdk.addressResolver.resolveActionParams(actionData.action, resolvedParams);
+        if (!opts.skipAddressCompaction)
+            resolvedParams = await this.sdk.addressResolver.resolveActionParams(actionData.action, resolvedParams);
         const transaction = buildTransactionRequest(this, actionData, encoderOpts, resolvedParams, progress);
         const { createResult, txParams } = transaction;
         const encoded = await encoder.createTx(txParams);

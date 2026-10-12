@@ -18,6 +18,21 @@ const WalletUtils = require('../../../../src/utils/wallet.js');
 const NETWORK = 'bitcoin-regtest';
 function keypair() { return new WalletUtils(NETWORK).generateKeyPair(); }
 
+// Build an encoder answer whose OP_RETURN carrier really holds actionString, since send() binds the carrier before signing
+const bitcoin = require('bitcoinjs-lib');
+function carrierPsbtHex(actionString) {
+    const script = bitcoin.payments.p2wpkh({ pubkey: keypair().publicKey, network: bitcoin.networks.regtest }).output;
+    const prevTxid = crypto.randomBytes(32).toString('hex');
+    const tagged = Buffer.concat([Buffer.from('XCHN'), bitcoin.script.compile([Buffer.from(actionString, 'utf8')])]);
+    const cipher = crypto.createCipheriv('aes-128-ctr', prevTxid.substr(0, 16), prevTxid.substr(16, 16));
+    const data = Buffer.concat([cipher.update(tagged), cipher.final()]);
+    const psbt = new bitcoin.Psbt({ network: bitcoin.networks.regtest });
+    psbt.addInput({ hash: prevTxid, index: 0, witnessUtxo: { script, value: 100000 } });
+    psbt.addOutput({ script: bitcoin.payments.embed({ data: [data] }).output, value: 0 });
+    psbt.addOutput({ script, value: 90000 });
+    return psbt.toHex();
+}
+
 // Assert a thrown SDKMessagingError carries the expected `.code`.
 function expectCode(fn, code) {
     expect(fn).to.throw().with.property('code', code);
@@ -97,7 +112,7 @@ describe('MessagingUtils @crypto @regression', function () {
             const payload = crypto.randomBytes(33);
             let sentParams = null;
             const fakeSdk = {
-                createAction: async (data) => { sentParams = data.params; return { psbt: 'p', actionString: 'XC|MSG' }; },
+                createAction: async (data) => { sentParams = data.params; return { psbt: carrierPsbtHex('XC|MSG'), actionString: 'XC|MSG' }; },
                 wallet: {
                     signPsbt:    () => ({ txHex: 'txhex', txid: 'txecdhbin' }),
                     broadcastTx: async () => ({})
@@ -119,7 +134,7 @@ describe('MessagingUtils @crypto @regression', function () {
             const payload = Buffer.concat([Buffer.from([0x01, 0x00, 0xff]), crypto.randomBytes(30)]);
             let sentParams = null;
             const fakeSdk = {
-                createAction: async (data) => { sentParams = data.params; return { psbt: 'p', actionString: 'XC|MSG' }; },
+                createAction: async (data) => { sentParams = data.params; return { psbt: carrierPsbtHex('XC|MSG'), actionString: 'XC|MSG' }; },
                 wallet: {
                     signPsbt:    () => ({ txHex: 'txhex', txid: 'txaesbin' }),
                     broadcastTx: async () => ({})
@@ -166,7 +181,7 @@ describe('MessagingUtils @crypto @regression', function () {
         // encoding and signing (stub createAction + wallet.signPsbt + broadcastTx).
         it('returns txid and actionString on a successful plaintext send', async function () {
             const fakeSdk = {
-                createAction: async () => ({ psbt: 'psbtHex', actionString: 'XC|MSG' }),
+                createAction: async () => ({ psbt: carrierPsbtHex('XC|MSG'), actionString: 'XC|MSG' }),
                 wallet: {
                     signPsbt:    () => ({ txHex: 'txhex', txid: 'txabc' }),
                     broadcastTx: async () => ({})
@@ -195,7 +210,7 @@ describe('MessagingUtils @crypto @regression', function () {
             const crypto = require('crypto');
             const secret = crypto.randomBytes(32).toString('hex');
             const fakeSdk = {
-                createAction: async () => ({ psbt: 'psbtHex', actionString: 'XC|MSG' }),
+                createAction: async () => ({ psbt: carrierPsbtHex('XC|MSG'), actionString: 'XC|MSG' }),
                 wallet: {
                     signPsbt:    () => ({ txHex: 'txhex', txid: 'txecdh' }),
                     broadcastTx: async () => ({})
@@ -214,7 +229,7 @@ describe('MessagingUtils @crypto @regression', function () {
             const crypto = require('crypto');
             const key = crypto.randomBytes(32).toString('hex');
             const fakeSdk = {
-                createAction: async () => ({ psbt: 'psbtHex', actionString: 'XC|MSG' }),
+                createAction: async () => ({ psbt: carrierPsbtHex('XC|MSG'), actionString: 'XC|MSG' }),
                 wallet: {
                     signPsbt:    () => ({ txHex: 'txhex', txid: 'txaes' }),
                     broadcastTx: async () => ({})
@@ -254,7 +269,7 @@ describe('MessagingUtils @crypto @regression', function () {
                 createAction:     async (data) => {
                     const res = realActions.createAction(data);
                     encodedActionString = res.actionString;
-                    return res;
+                    return Object.assign({}, res, { psbt: carrierPsbtHex(res.actionString) });
                 },
                 wallet: {
                     signPsbt:    () => ({ txHex: 'txhex', txid: 'txecies' }),
@@ -289,7 +304,7 @@ describe('MessagingUtils @crypto @regression', function () {
             const bob = keypair();
             const fakeSdk = {
                 requireExplorer: () => ({ getPublicKey: async () => ({ pubkey: bob.publicKeyHex }) }),
-                createAction:     async () => ({ psbt: 'psbtHex', actionString: 'XC|MSG' }),
+                createAction:     async () => ({ psbt: carrierPsbtHex('XC|MSG'), actionString: 'XC|MSG' }),
                 wallet: {
                     signPsbt:    () => ({ txHex: 'txhex', txid: 'txbinary' }),
                     broadcastTx: async () => ({})

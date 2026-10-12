@@ -6,7 +6,10 @@ handler's validity logic changes, the corresponding client check can
 silently drift out of ground-truth, so the drift gate
 (`bin/check-preflight-drift.js`, run by `npm run ci` here and by the CI
 job on both repos) fails when any mapped indexer handler's SHA-256
-changes without a matching update here.
+of normalized source changes without a matching update here. JavaScript
+comments are removed and line-end whitespace is trimmed before hashing;
+empty source lines are ignored and multiline source keeps one terminal line
+ending, while quoted string and template contents remain byte-exact.
 
 To resolve a drift-gate failure: re-read the changed handler, update the
 client check (or confirm no client-visible logic changed), then refresh
@@ -78,7 +81,58 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `93de40d1`
+**Pins taken at indexer commit:** `a406de91`
+
+(Re-anchored 2026-10-10 against the committed indexer lane tree `a406de91`, the head of the
+refill token-policy change, which had not landed on develop when this was written. Only the
+`dispenser` directory pin moves, for the gated refill token policy reviewed in the first entry of
+the review log below. The other twelve rows are unchanged and match that tree. `6b0a43ea` is not
+an ancestor of this anchor: the two share the base `26bdfcf22`, and `src/actions/dispenser/` is
+the only mapped directory that differs between them, so the batch review taken at `6b0a43ea`
+stands as read. This anchor joins develop when the lane lands as a merge commit, as the two
+commits beneath it did; a squashed or rebased landing would orphan it, and the section on an
+unreachable anchor below is then the way back.)
+
+(Re-anchored 2026-10-10 against committed indexer develop `6b0a43ea`. Only the `batch` directory
+pin moves, for the gated sub-command admission by dispatch coverage reviewed in the first entry of
+the review log below. The other twelve rows are unchanged and match that tree, including the
+`dispenser`, `order` and `swap` pins the exact integer wire review took from `090a25136`
+while the anchor line still read `6f22f0bc`; `090a25136` is an ancestor of this anchor.)
+
+(Re-anchored 2026-10-09 against committed indexer develop `6f22f0bc`. Only the `send` directory
+pin moves, for the gated handoff totals by resolved tick id reviewed in the first entry of the
+review log below. The remote-token accept check paired with the prior `order` and `swap` pins
+has landed on develop as `a9870b8d`, so those two rows now match committed develop unchanged,
+and so do the other ten rows, including the paired `issue`, `dispenser` and `dispense` pins.)
+
+(Paired 2026-10-09 update, superseded by the re-anchor above: the `order` and `swap` directory
+pins moved to the committed indexer lane tree at `ba82c424` for the remote-token accept check
+reviewed below, while the map stayed anchored at `e545c8d5` until that change landed.)
+
+(Re-anchored 2026-10-08 against committed indexer develop `e545c8d5`. Four directory pins move, each
+reviewed in the first three entries of the review log below: `send` from that tree plus the paired
+`dde40808` change adding the unwired gated-totals helper, `dispenser` and `dispense` from the paired
+`1e1adf86` change passing the delay-clock block index to their callers, and `issue` from the paired
+`6f531460` change adding the lazy distribution probe. A comment-only edit in `send/gated_handoff.js`
+normalizes away, and the other nine rows are byte-identical to the prior anchor `31ee72dc`.)
+
+(Re-anchored 2026-10-06 against indexer `31ee72dc`. Only the `send` and `dispenser` directory pins move,
+for the caret pack key lookup and the dispenser refill controller guard reviewed in the first entry of
+the review log below. The other eleven rows are byte-identical to the prior anchor `6efa8403`.)
+
+(Re-anchored 2026-10-06 against indexer `6efa8403`. Only the `issue` directory pin moves,
+for the owner History mapping reviewed in the first entry of the review log below. The other
+twelve rows are byte-identical to the prior anchor `02e25669`.)
+
+(Re-anchored 2026-10-04 against indexer develop `02e25669`. All thirteen
+rows were regenerated in one pass with the comment-insensitive digest. Comment
+text and line-end whitespace no longer move a pin, while code and quoted
+content still do.)
+
+(The range from the prior anchor has one mapped executable change:
+`dispenser/validate_format.js` passes the existing hub database handle, with
+the local database as fallback, to the same oracle price and fee methods. No
+predicate, field format or error path mirrored by the client checks changed.)
 
 (Re-anchored 2026-10-01 for the coin-qualified LIST item consumers reviewed below.
 `93de40d1` is the clean, passed LS-85 lane tip used for this paired landing. The ISSUE
@@ -352,7 +406,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 93de40d1..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff a406de91..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -397,24 +451,19 @@ marker.
 
     | `checks/batch.js` | `src/actions/batch/` | `<64-hex digest>` |
 
-The digest covers every file in the directory, recursively, so no part can be
-edited, added, removed or renamed without the row going red. It is the SHA-256
-of a manifest carrying one line per file, sorted by name in byte order:
+The digest covers every file in the directory, recursively, so code or quoted
+content in any part cannot be edited and no part can be added, removed or
+renamed without the row going red. It is the SHA-256 of a manifest carrying
+one line per file, sorted by name in byte order:
 
-    <sha256 of that file's bytes>  <path relative to the directory>
+    <sha256 of that file's normalized source>  <path relative to the directory>
 
-That is exactly what `shasum -a 256` (or `sha256sum`) prints, so the pin can be
-recomputed without this repo:
-
-    cd <indexer>/src/actions/batch && find . -type f | sed 's|^\./||' \
-      | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256
-
-or from here, which also prints every part it hashed:
+Use the canonical helper to recompute a pin and print every part it hashed:
 
     node bin/preflight_handler_dirs.js <indexer root> src/actions/batch/
 
-Flat rows are unchanged, and every hash in the table below is still the bytes of
-one file. Three shapes are refused rather than hashed, because each would leave
+Flat rows use the same normalized source digest for their one file. Three
+shapes are refused rather than hashed, because each would leave
 part of a handler unreviewed: a row naming a file INSIDE a handler directory (it
 pins `index.js` while the parts beside it escape), a directory row while a flat
 `<name>.js` still sits beside the directory (`require('./<name>')` resolves the
@@ -430,19 +479,19 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `68a094391bafac83610ef96d8baaad183a87d5fa037d0f655c55a4b5539cbce7` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `1d5869c477a5670c76b5c64ca893044ce67910310e716f7156220f87819e8974` |
-| `checks/mint.js` | `src/actions/mint/` | `caf6f7e7bfc0ffac865ae76fbc5d36123be77db09df81f617c3a6fc9304554cd` |
-| `checks/issue.js` | `src/actions/issue/` | `02db2deb36967b65d673f5010806ca703b231c1fb22b9c0196b53a6e91d28500` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `f92e12188b6b557cd151ef06941fab3d9357d5d9410844df5ba13282ddbc81af` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `34cec38417f2fb43867dcc5810d980d3d15a1fabc513d47c6541bb81de8e5260` |
-| `checks/trading.js` (ORDER) | `src/actions/order/` | `7518413cb97ece320a481859d8227756c3627d1bb2891da63153b54ea2de71df` |
-| `checks/trading.js` (SWAP) | `src/actions/swap/` | `3572ba88cb701624a841a1e089d9c848d4cd37542fa7916f63ca41c7bd6d5e43` |
-| `checks/airdrop.js` | `src/actions/airdrop/` | `fb9d19928390aae6963796923724072f77dd8a934d53679638b2cc11eaa5ed33` |
-| `checks/dividend.js` | `src/actions/dividend/` | `498e038fd9118f0d37663a98a7d55db7d2cee93ae7a6f73cafc32f04d26a3103` |
-| `checks/batch.js` | `src/actions/batch/` | `895eb6fda8380b3019ccdaa97f7b13d97ebae20008e4285a43f7b854b1884507` |
-| `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `cfd9837bc722773652e53b949ec938ba1757a295e470dba6c237a06ecf7667e3` |
-| `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `76fc627ad84da6a931e1d32b212b5764dd273cbf1a26a6ce746736ac29c5c669` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `bf2126e339d34154a15fc294a0d07341a01798718ba3a5ea8afdff4d07ea3ab7` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `3671cf3e2efefb069d30539814ecc2f1bd65087698f756711c8a1c7b75e9665f` |
+| `checks/mint.js` | `src/actions/mint/` | `0f2b6b0375df803321c1644e24f9fa2b6dcb73119a470832eeb93dfab8530595` |
+| `checks/issue.js` | `src/actions/issue/` | `95dff217aeae8428578cf583b74bdeedf97731fd2c9242be6e8baf6763c816e9` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `6369bdf9bd39490c407c7f447be77bbaf275c081e67abf9d29f075e5d5a3e546` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `0ba2b8e2037de1c86163525776af2d788da7a9b3995999615f60c018280115fa` |
+| `checks/trading.js` (ORDER) | `src/actions/order/` | `79fdae31db05edea980aca9b52b70fd8a2c65bb53e9e785534229bdca0ffd8ec` |
+| `checks/trading.js` (SWAP) | `src/actions/swap/` | `9bb114863e30d2501bb36f6f2d5a541bbaf99320b860466708253555aded19cc` |
+| `checks/airdrop.js` | `src/actions/airdrop/` | `0174875cd302106d68a816c7e72a64d53e3f51971881cd9efbea70a78786e7d9` |
+| `checks/dividend.js` | `src/actions/dividend/` | `d4f5c14da27903f71c58cb5f56310d2ff0520bb2f8d0646e7e798d1721c28014` |
+| `checks/batch.js` | `src/actions/batch/` | `7e138a16dc5eff43ac60c4cca83c2b35ccd865eb98df3ce57c8cbc8aebca85a6` |
+| `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `bbddd777d235e2da7b472d0e4ed993b598886202374f58ae2d46525079cb8f76` |
+| `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `b68c873821cbcbe2e72082817f13eecbe87c12c2a99591d5d4b9085358b7fa75` |
 
 The mapped custody disclosures are checks/misc.js (DEPOSIT) and
 checks/misc.js (WITHDRAW).
@@ -463,6 +512,204 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-10 - DISPENSER refill token policy
+
+The `dispenser` pin moves from `e4d3f5f8` to `6369bdf9`, hashed from the committed indexer lane
+tree `a406de91` by `node bin/preflight_handler_dirs.js <indexer> src/actions/dispenser/`. The
+mapped diff from the `26bdfcf22` base touches one file, `validate.js`, whose content at that
+base is the content at the `6b0a43ea` anchor. `validateDispenserEditRules` gains one branch
+between the ownership-escrow rule and the `MAX_REFILLS` cap. It runs on a format-2 edit whose
+`GIVE_ESCROW` is supplied and greater than zero, while
+`gateRegistry.activeAt('dispenser_refill_policy_activation.DISPENSER_REFILL_POLICY_ACTIVATION',
+NETWORK, COIN, BLOCK_INDEX, null)` is active, and it takes the tick from the dispenser row
+because an edit carries no `GIVE_TICK`. `isActionAllowed(null, tick, BLOCK_INDEX)` false
+refuses the edit with `invalid: TICK (sleeping)`, and otherwise
+`isActionAllowed(SOURCE, tick, BLOCK_INDEX)` false refuses it with
+`invalid: SOURCE (not authorized)`. These are the token sleep rule and the SOURCE allow and
+block list rule `validateGeneralRules` already applies to a format-0 create. An edit that adds
+no escrow is not judged. The registry row is `mainnet: UNARMED, testnet: UNARMED, regtest: 0`
+with every coin testnet UNARMED, so the rule runs on regtest only today.
+
+**Direction: WIDENS rejection behind an activation row.** The gate only adds refusals, and
+both read chain state at the including block: the token's sleep window and the token's allow
+and block lists as they stand for the refilling SOURCE. Pre-flight is handed an action string
+before any block exists, and `checks/send.js` already declares the same two inputs server-side
+only for SEND and DESTROY. `checkDispenser` in `checks/dispenser.js` mirrors neither rule on
+the create path, where the indexer has applied both all along, so the refill path gains
+nothing to mirror: `checkEditEscrow` keeps its ownership-escrow warning, its settlement-price
+and oracle-fee notes and its `MAX_REFILLS` declaration unchanged. A hard client block would
+also be wrong on its own terms, because the row is unarmed on every public network and
+pre-flight has no chain height, the reasoning the ownership-escrow rule already records.
+Where the row is active the refusal is a server-side verdict, the standing every sleep and
+list refusal on a create already has. No `ACTIVATION_MIRRORS` row is added because no client
+predicate reads this gate. One gap is older than this change and stays outside this re-pin: the dispenser create
+and refill paths carry no unverified declaration for sleep and list state, where SEND
+carries one. NO CLIENT CHECK MOVES.
+
+### 2026-10-10 - BATCH sub-command admission by dispatch coverage
+
+The `batch` pin moves from `e2904841` to `7e138a16`, hashed from committed indexer develop
+`6b0a43ea` by `node bin/preflight_handler_dirs.js <indexer> src/actions/batch/`. The mapped
+diff from the `6f22f0bc` anchor touches two files. `limits.js` repoints one comment citation
+and normalizes away. `validate.js` carries the whole move: `resolveGates` reads one more
+verdict per BATCH, `gateRegistry.activeAt('action_admission_dispatched_only.ACTION_ADMISSION_DISPATCHED_ONLY',
+NETWORK, COIN, BLOCK_INDEX, null)`, and while it is active the activation scan refuses the
+whole batch with `invalid: ACTION (unknown)` when a sub-command's ACTION (alias-rewritten
+where sub-action normalization is active) is a non-empty name outside `DISPATCHED_ACTIONS` (the set of names
+`actions_class/dispatch.js` has a handler line for). An empty ACTION skips the new branch and
+keeps the enabled-at-this-block test it already had, and so does every name inside the set.
+The registry row is `mainnet: UNARMED, testnet: UNARMED, regtest: 0`, so the rule runs on
+regtest only today. The top-level reader of the same key in `actions_class/transaction.js`
+is outside every mapped directory.
+
+**Direction: WIDENS rejection behind an activation row.** The gate only adds refusals, and
+each one is a batch the client already refuses. The decoder fails a sub-command whose ACTION
+is not a key of `src/protocol/formats.js` (after `ACTION_ALIASES`) with `UNKNOWN_ACTION`,
+and `checkBatch` in `checks/batch.js` raises an error-severity `PARSE_INVALID` for every
+sub-command that does not parse, on every network and at every height. Machine-verified
+against the `6b0a43ea` tree: all 32 format keys and all five alias targets are members of
+`DISPATCHED_ACTIONS`, so no sub-command the client composes or passes is refused by the new
+branch, and every name the new branch refuses is outside the format table. The client stays
+the stricter side where it already was (an empty element, and dispatched names with no client
+wire format such as `XEXEC`), and none of that moves. No `ACTIVATION_MIRRORS` row is added
+because no client predicate reads this gate; a format key added for a name the dispatcher does
+not handle would be the first case that needs one. NO CLIENT CHECK MOVES.
+
+### 2026-10-09 - send gated handoff totals by resolved tick id
+
+The `send` pin moves from `dcf4e6d4` to `bf2126e3`, hashed from committed indexer develop
+`6f22f0bc` by `node bin/preflight_handler_dirs.js <indexer> src/actions/send/`. The mapped
+diff from the `e545c8d5` anchor wires the `gatedTotalsByTickId` helper that the 2026-10-08
+entry recorded as installed but uncalled. `consolidateSendLegs` in `legs.js` now captures
+per-recipient totals keyed by resolved `TICK_ID` before literal TICK spellings are
+consolidated, and only while `SEND_GATED_TOTAL_TICK_ID_ACTIVATION` is active; below it the
+totals stay null and the new arithmetic never runs. The helper skips a leg whose tick does not
+resolve or whose amount fails its tick's format, so placeholder records of an invalid action
+never reach decimal arithmetic. `checkGatedHandoff` in `gated_handoff.js` then hands
+`gatedHandoffRequired` the action total for that (DESTINATION, resolved TICK_ID) in place of
+the literal consolidated leg amount, and the post-send balance compared against each pack
+threshold is built from that total. Settlement legs, balances and every other error path are
+unchanged.
+
+**Direction: WIDENS rejection behind an activation row.** The resolved total is at least the
+amount of any one spelling, so a recipient reaches a pack threshold at least as often and the
+key handoff MESSAGE is required at least as often; alternate spellings of one token can no
+longer split a transfer under the threshold. Whether the handoff is required at all depends on
+the destination's pre-send balance at (BLOCK_INDEX, ACTION_INDEX), the tick's pack thresholds
+and the including block's activation state, none of which Tier 2 can read, so it stays the
+declared server-side aspect it already is in `checks/send.js` (`SEND_RESTRICTIONS` and
+`GATED_HANDOFF_REF`). NO CLIENT CHECK MOVES.
+
+### 2026-10-09 - ORDER and SWAP remote token accept check
+
+The `order` pin moves from `66728bf5` to `150f49fc` and the `swap` pin from
+`54ea109e` to `f04acff4`, hashed from the committed paired indexer tree at
+`ba82c424` by `node bin/preflight_handler_dirs.js <indexer> src/actions/<name>/`.
+The mapped diff from the `e545c8d5` anchor imports the shared
+`cross_chain_remote_token.js` helper in both handlers and calls it from
+`validateGeneral` after reference checks and before expiration.
+
+The helper applies only to format-0 cross-chain creates with a nonempty GET token.
+Before its registry row exists or while the row is inactive, the prior behavior is
+preserved. Once active, it asks the hub mirror for the finalized remote token row
+identified by network, GET_COIN and GET_TICK; a missing row, reader or mirror rejects
+the action as `invalid: GET_TICK (no pinned remote token)`.
+
+**Direction: WIDENS rejection behind an activation row.** The decision depends on
+authoritative finalized hub-mirror state that Tier 2 cannot read. Treating a local
+or cached token lookup as equivalent would make the pre-flight claim a verdict it
+cannot prove, so the server-only restriction remains unverified in `checks/trading.js`.
+NO CLIENT CHECK MOVES.
+
+### 2026-10-08 - send gated totals by tick id
+
+The `send` pin moves from `d82275d1` to `dcf4e6d4`, hashed from committed indexer develop
+`e545c8d5` plus the paired `dde40808` change by
+`node bin/preflight_handler_dirs.js <composed-indexer-tree> src/actions/send/`. The full diff
+since the prior anchor has two parts: `gated_handoff.js` rewords a comment without moving its
+normalized digest, and `legs.js` adds `gatedTotalsByTickId(sends, ticks)`.
+
+The helper groups resolved tick amounts by recipient and tick id, but no indexer source calls it.
+The SEND parse path still consolidates legs, loads destination balances, and processes each leg
+without invoking this helper. **Direction: NEITHER.** An installed but uncalled method cannot move
+an admission predicate, field format, fee, settlement, or error path, so no validity rule mirrored
+by `checks/send.js` changed. NO CLIENT CHECK MOVES.
+
+### 2026-10-08 - dispenser delay clock callers
+
+The `dispenser` pin moves from `da2a7d7c` to `4e6fabc3` and the `dispense` pin from
+`40bacc5f` to `0ba2b8e2`, hashed from the committed indexer tree at `1e1adf86` by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/<name>/`. The full source
+diff from the branch merge base changes five callers.
+
+- **`dispenser/context.js` and `dispense/pricing.js`:** the format-1/2 dispenser lookup
+  and DISPENSE settlement lookup now pass the action's `BLOCK_INDEX` after `BLOCK_TIME`.
+  At this reviewed tree `getDispenserInfo` still accepts three arguments and calls
+  `getDispenserEdits` without a block index, so JavaScript ignores the new fourth
+  argument. These two mapped edits establish the caller contract but do not yet move
+  a predicate, field format, fee, state overlay or error path. **Direction: NEITHER.**
+- **`dispenser_close/index.js` and `dispenser_expire/index.js`:** the two internal
+  maintenance actions pass the same fourth argument. They are not mapped client-check
+  handlers, and at this tree the argument is ignored for the same reason.
+- **`utility/block_passes.js`:** cancellation scanning now passes `block_index` to
+  `findCancelledDispensers`, which already accepts it and selects the delay clock.
+  This changes when the indexer emits its internal close action, not any DISPENSER or
+  DISPENSE validity rule mirrored by `checks/dispenser.js`.
+
+NO CLIENT CHECK MOVES.
+
+### 2026-10-08 - issue lazy distribution probe
+
+The `issue` pin moves from `9936894a` to `95dff217`, hashed from the committed indexer tree at
+`6f531460` by `node bin/preflight_handler_dirs.js <indexer> src/actions/issue/`. The executable
+diff from its parent changes `token_state.js` and `edit_rules.js`; the new
+`distribution_probe.test.js` drives the same behavior and is also covered by the directory pin.
+
+The handler used to read token holders eagerly for every non-genesis ISSUE. It now creates a
+cached probe and awaits it only when CALLBACK_BLOCK, CALLBACK_TICK, or CALLBACK_AMOUNT differs
+from the stored token value. Each changed callback field still rejects when supply is distributed,
+with the same error text and after the same earlier validations. An unchanged callback field and a
+description-only edit now avoid the holder read. Genesis still produces `false` without a holder
+read, and the first probe result is reused if more than one callback field reaches it.
+
+**Direction: NEITHER, no admission boundary moves.** This is a deferred database read with the
+same verdict at every call site. No predicate, field format, fee, activation condition, or error
+path mirrored by `checks/issue.js` changed. NO CLIENT CHECK MOVES.
+
+### 2026-10-06 - caret pack key for SEND and the DISPENSER_REFILL controller guard
+
+The `send` pin moves from `a6ab5ff2` to `d82275d1` and the `dispenser` pin from `abe6e7af` to
+`da2a7d7c`, hashed from the committed indexer tree at `31ee72dc` by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/<name>/`. Two executable changes were read.
+
+- **`send/prefetch.js`:** once the caret pack-key row is active, the gated-pack lookup is keyed by the
+  tick name a caret id resolves to, so a caret-id SEND of a gated token now meets the key-handoff rule it
+  used to skip. **Direction: WIDENS rejection, behind a row unarmed on mainnet.** The handoff is already a
+  declared-unverified aspect (`SEND_RESTRICTIONS` and `GATED_HANDOFF_REF` in `checks/send.js`), because
+  it needs the recipient's post-send balance and the pack thresholds, which pre-flight cannot read.
+  Mirroring it would be a new error needing state the client lacks, so nothing is added.
+- **`dispenser/controller_guard.js` and `utility/controller_guard.js`:** from the DISPENSER_REFILL row,
+  a format-2 edit that tops up GIVE_ESCROW consults the token's `trade` controller, and a denial rejects
+  the edit. **Direction: WIDENS rejection, behind a row unarmed on mainnet and testnet.** The outcome is
+  the result of executing the bound contract's guard, which the Tier-2 checks never model for the create
+  either; the network's Tier-1 answer carries it (`index/tier1_findings.js`). No predicate, field format
+  or fee mirrored by `checks/dispenser.js` changed.
+
+NO CLIENT CHECK MOVES.
+
+### 2026-10-06 - `issue/settle.js` lists a named owner in the ISSUE's History addresses
+
+The `issue` pin moves from `bbd56bb1` to `9936894a`, hashed from the committed indexer tree at
+`6efa8403` by `node bin/preflight_handler_dirs.js <indexer> src/actions/issue/`. The whole diff
+of `src/actions/issue/` since `02e25669` is one executable statement in `settle.js`, inside
+`settleValidIssue`: when the ISSUE names an owner other than its source, that owner is passed to
+`addAddressTicker` so the ISSUE appears in the owner's address History feed.
+
+**Direction: NEITHER, no admission boundary moves.** The statement runs only after validation
+has accepted the ISSUE and writes only the addresses-by-ticker list that History reads. No
+predicate, field format, fee or error path changed, so a transaction is accepted or rejected
+exactly as before. NO CLIENT CHECK MOVES.
 
 ### 2026-10-01 - tick-namespace and token-bridge arming now pinned by value
 
@@ -1237,12 +1484,11 @@ both as `TICK_FORMAT` warnings keyed on the explorer's chain code, judged per le
 and declared as `DESTROY_BRIDGE_SUPPLY` when no chain code is configured. SEND is
 untouched on both sides.
 
-**What the static validator does not yet do, for the record.** `src/config.js`
-`LOCK_FIELDS` does not list `LOCK_BRIDGE` and `src/protocol/validator.js` has no format-7
-field rules, so today the pre-flight checks above are the only client-side judge of
-those fields. That is a validator change, not a map change; when it lands the
-`VALIDATOR_SEMANTICS` findings here and there will agree by construction (both call
-`isValidLockValue`).
+**What the static validator now covers.** `src/config.js` `LOCK_FIELDS` lists
+`LOCK_BRIDGE`, and `src/protocol/validator/field_rules_final.js` carries the format-7
+`BRIDGE_CHAINS` and `MIN_DEPTH` field rules, so the pre-flight checks above are no
+longer the only client-side judge of those fields. The `VALIDATOR_SEMANTICS` findings
+here and there agree by construction (both call `isValidLockValue`).
 
 Anchor moves to `97e7ae1f`. Tests: `test/unit/preflight/bridge_tick_rules.test.js`.
 
@@ -2434,3 +2680,30 @@ the hashes were updated" is exactly the non-review this file exists to prevent.
   approved set is unchanged, and the diff bears that out: same `recipients`
   iteration, same insertion order, an empty list stays truthy as a Set exactly as it
   was as an array. Performance only, no verdict moves, nothing to mirror.
+
+### 2026-10-07 - BET format 4 membership-list edits
+
+BET v4 adds one client-authorable state transition:
+`VERSION|FEED_ACTION_INDEX|ALLOW_LIST|BLOCK_LIST|MEMO`. The SDK can certify the
+wire format, the numeric feed reference, the three-way list-reference spelling
+(empty retains, zero detaches, positive replaces), the no-op rule, and the case
+where both supplied positive references are the same. Those checks now live in
+the BET composer and validator, and the signing description makes clear that an
+edit applies only to future bets.
+
+Activation height, market ownership, open status, referenced-list existence and
+type, and equality against a retained current reference all require indexed
+state. They remain indexer-owned and cannot become SDK errors without a server
+dry-run carrying that state.
+
+### 2026-10-10 - exact integer wire fields (dispenser, order, swap)
+
+Indexer `be3a5277b` adds one gated rule to `src/actions/dispenser/validate_format.js`,
+`src/actions/order/validate.js` and `src/actions/swap/validate.js`: once
+`EXACT_INTEGER_WIRE_FIELDS` is active, `EXPIRATION`, `ALLOW_LIST`, `BLOCK_LIST` and the
+action-index field must be exact integers when present, else `invalid: <FIELD> (format)`.
+The gate ships unarmed on every network, so no verdict moves today and nothing is
+mirrored yet. When the gate is armed, the matching `checks/` modules should reject the
+same non-integer values; that is a client change to make with the arming, not before.
+All three hashes re-pinned at indexer `090a25136`; the trunk before `be3a5277b` was
+clean against the previous pins.

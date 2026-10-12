@@ -208,7 +208,7 @@ function buildServer(options = {}) {
         { coin: coinParam, query: z.string(), type: z.enum(['address', 'token', 'block', 'source', 'destination']), ...pageOpts },
         ({ coin, query, type, page, limit }) => sdkFor(coin).getDispensers(query, type, { page, limit }));
 
-    tool('get_markets', 'Trading pairs on the DEX (optionally for one tick).',
+    tool('get_markets', 'Trading pairs on the DEX. When tick is supplied, every returned pair puts the searched tick in tick2 and its values in tick2_* fields; the counter tick is in tick1. Read the searched tick\'s price from tick2_price.',
         { coin: coinParam, tick: z.string().optional() },
         ({ coin, tick }) => sdkFor(coin).getMarkets(tick));
 
@@ -256,7 +256,7 @@ function buildServer(options = {}) {
         { coin: coinParam },
         ({ coin }) => sdkFor(coin).getValidators());
 
-    tool('verify_checkpoint', 'Fetch a quorum-signed state checkpoint and verify its Ed25519 signatures CLIENT-SIDE (does not trust the explorer\'s verified flag).',
+    tool('verify_checkpoint', 'Fetch a quorum-signed state checkpoint and verify its Ed25519 signatures CLIENT-SIDE against the validator set the explorer serves in the same response (ignores the explorer\'s verified flag, but does not independently establish who the validators are).',
         { coin: coinParam, block_index: z.number().int().min(0) },
         ({ coin, block_index }) => {
             const sdk = sdkFor(coin);

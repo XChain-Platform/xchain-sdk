@@ -46,8 +46,24 @@
 const bitcoin = require('bitcoinjs-lib');
 const ecc     = require('@bitcoinerlab/secp256k1');
 const MuSig2  = require('./musig2.js');
+const { SDKPolicyError } = require('../utils/errors.js');
 
 bitcoin.initEccLib(ecc);
+
+/*
+ * Refuse a witness-v1 output on a network without segwit (dogecoin-*): it is anyone-can-spend there.
+ * `=== false`, since native bitcoinjs networks carry no supportsSegwit field; a supplied
+ * network with no bech32 prefix is refused too, since no P2TR address exists there.
+ *
+ * @param {object} [network]  bitcoinjs network; absent means the mainnet default
+ * @param {string} where      the derivation site, named in the error
+ */
+function assertSegwitNetwork(network, where) {
+    if (!network) return;
+    if (network.supportsSegwit === false || !network.bech32)
+        throw new SDKPolicyError('SEGWIT_NOT_SUPPORTED', where + ' builds a witness-v1 (P2TR) output, '
+            + 'which is anyone-can-spend on a network without segwit; refusing this network.');
+}
 
 /*
  * @param {(Uint8Array|string)[]} publicKeys  the full signer set, in the agreed
@@ -60,6 +76,7 @@ bitcoin.initEccLib(ecc);
  *   tweaks         {Array}   always [] for this key-path scheme - sign with no tweak
  */
 function deriveMuSig2P2TR(publicKeys, network) {
+    assertSegwitNetwork(network, 'deriveMuSig2P2TR');
     const agg = new MuSig2().aggregateKeys(publicKeys);   // throws on < 2 keys / bad pubkey
     const aggregateXOnly = Buffer.from(agg.xOnlyPubkey);
     const p2tr = bitcoin.payments.p2tr({ pubkey: aggregateXOnly, network: network || undefined });
@@ -98,6 +115,7 @@ function deriveMuSig2P2TR2of3(parties, network) {
     const { agent, daemon, recovery } = parties || {};
     if (!agent || !daemon || !recovery)
         throw new Error('deriveMuSig2P2TR2of3 requires { agent, daemon, recovery } public keys');
+    assertSegwitNetwork(network, 'deriveMuSig2P2TR2of3');
 
     const m = new MuSig2();
     const internal = Buffer.from(m.aggregateKeys([agent, daemon]).xOnlyPubkey);
@@ -142,4 +160,4 @@ function deriveMuSig2P2TR2of3(parties, network) {
     };
 }
 
-module.exports = { deriveMuSig2P2TR, deriveMuSig2P2TR2of3 };
+module.exports = { deriveMuSig2P2TR, deriveMuSig2P2TR2of3, assertSegwitNetwork };

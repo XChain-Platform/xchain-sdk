@@ -339,6 +339,7 @@ describe('ExplorerClient batch reads', function () {
         });
 
         it('sdk.getCoinpayObligationsBatch reaches the batch route and forwards opts', async function () {
+            this.timeout(30000);
             const scope = nock(BASE).post('/BTC/api/coinpay_obligations', { addresses: ['a1'] })
                 .query({ limit: '5' })
                 .reply(200, { a1: { coinpay_obligations: { total: 0, data: [] }, error: null } });

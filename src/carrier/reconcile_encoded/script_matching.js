@@ -15,6 +15,7 @@
 'use strict';
 
 const bitcoin = require('bitcoinjs-lib');
+const { findVerifiedPrevout } = require('../../utils/wallet/psbt_prevout.js');
 
 // Satoshi values arrive as Number OR BigInt: applyBufferutilsPatch teaches
 // bip174/bitcoinjs to carry values above 2^53-1 (large DOGE UTXOs) as BigInt.
@@ -43,37 +44,23 @@ function exactU64(v) {
     return null;
 }
 
-// The output script an input spends, from whichever UTXO form the PSBT carries.
-// bitcoinjs needs one of the two to sign at all, so an input with neither cannot
-// be signed and the fail-closed path below is not a false positive.
-function inputScript(psbt, i) {
-    const data = psbt.data.inputs[i];
-    if (!data) return null;
-    if (data.witnessUtxo && data.witnessUtxo.script) return data.witnessUtxo.script;
-    if (data.nonWitnessUtxo) {
-        try {
-            const prev = bitcoin.Transaction.fromBuffer(data.nonWitnessUtxo);
-            const vout = psbt.txInputs[i].index;
-            const out = prev.outs[vout];
-            return out ? out.script : null;
-        } catch (e) { return null; }
-    }
-    return null;
+// Read the verified prevout, folding an untrustworthy one into null so every caller fails closed.
+function verifiedPrevoutOrNull(psbt, i) {
+    try { return findVerifiedPrevout(psbt, i); } catch (e) { return null; }
 }
 
-// The value an input brings in, same two forms.
+// The output script an input spends, resolved the way bitcoinjs signs it (hash-checked
+// nonWitnessUtxo first, never a disagreeing witnessUtxo). An input with no usable UTXO
+// form cannot be signed, so the fail-closed path below is not a false positive.
+function inputScript(psbt, i) {
+    const prevout = verifiedPrevoutOrNull(psbt, i);
+    return prevout ? prevout.script : null;
+}
+
+// The value an input brings in, from the same verified prevout.
 function inputValue(psbt, i) {
-    const data = psbt.data.inputs[i];
-    if (!data) return null;
-    if (data.witnessUtxo) return toU64(data.witnessUtxo.value);
-    if (data.nonWitnessUtxo) {
-        try {
-            const prev = bitcoin.Transaction.fromBuffer(data.nonWitnessUtxo);
-            const out = prev.outs[psbt.txInputs[i].index];
-            return out ? toU64(out.value) : null;
-        } catch (e) { return null; }
-    }
-    return null;
+    const prevout = verifiedPrevoutOrNull(psbt, i);
+    return prevout ? toU64(prevout.value) : null;
 }
 
 // Report whether another party already signed this input; the encoder's answer is unsigned.

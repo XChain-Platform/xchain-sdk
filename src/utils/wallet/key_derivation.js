@@ -219,6 +219,9 @@ module.exports = {
      * once at MultisigConfig creation time (via sdk.musig2.aggregateKeys
      * for taproot-musig2) and persists it; this function only renders.
      *
+     * p2wsh-multisig and taproot-musig2 throw SEGWIT_NOT_SUPPORTED on a
+     * network without segwit (dogecoin-*); p2sh-multisig works on every network.
+     *
      * @param {object} params
      * @param {string} params.scriptTemplate
      * @param {'p2sh-multisig' | 'p2wsh-multisig' | 'taproot-musig2'} params.scheme
@@ -233,6 +236,13 @@ module.exports = {
 
         const net = this.resolveNet(params.network);
         const scheme = params.scheme;
+
+        // Refuse witness-program multisig on a network without segwit (dogecoin-*): such an
+        // output is anyone-can-spend there, so the refusal must not depend on a missing bech32 prefix.
+        if ((scheme === 'p2wsh-multisig' || scheme === 'taproot-musig2') && !net.supportsSegwit) {
+            throw new SDKWalletError('SEGWIT_NOT_SUPPORTED',
+                `SegWit addresses are not supported on ${params.network || this.network}.`);
+        }
 
         if (scheme === 'taproot-musig2') {
             const m = /^musig2:([0-9a-fA-F]+)$/.exec(params.scriptTemplate);

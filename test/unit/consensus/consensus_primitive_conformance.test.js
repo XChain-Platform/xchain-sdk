@@ -36,6 +36,7 @@ const path   = require('path');
 
 const swq   = require('../../../src/consensus/stake_weighted_quorum.js');
 const equiv = require('../../../src/consensus/equivocation_header.js');
+const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 const LOCAL_DIR = path.join(__dirname, '../..', '..', 'src');
 // Resolve the canonical xchain-documentation repo. Prefer an explicit path: GitHub CI
@@ -46,15 +47,24 @@ const LOCAL_DIR = path.join(__dirname, '../..', '..', 'src');
 const DOCS_DIR  = process.env.XCHAIN_DOCS_DIR || path.join(__dirname, '../..', '..', '..', 'xchain-documentation');
 const CANON_DIR = path.join(DOCS_DIR, 'protocol', 'reference-impl');
 const VEC_DIR   = path.join(DOCS_DIR, 'protocol', 'test-vectors');
+const VEC_CHECKOUT   = siblingCheckout(__dirname, VEC_DIR);
+const CANON_CHECKOUT = siblingCheckout(__dirname, CANON_DIR);
+
+// List the regular .js files of one side's consensus/gate_registry/, sorted; empty when absent.
+function registryParts(root){
+    const dir = path.join(root, 'consensus', 'gate_registry');
+    if(!fs.existsSync(dir)) return [];
+    return fs.readdirSync(dir, { withFileTypes: true })
+        .filter((d) => d.isFile() && d.name.endsWith('.js')).map((d) => d.name).sort();
+}
+const LOCAL_PARTS = registryParts(LOCAL_DIR);
 
 let quorumVec = null, equivVec = null, activationVec = null;
-try {
+if(VEC_CHECKOUT.usable) try {
     quorumVec     = require(path.join(VEC_DIR, 'stake_weighted_quorum.json'));
     equivVec      = require(path.join(VEC_DIR, 'equivocation_header.json'));
     activationVec = require(path.join(VEC_DIR, 'activation_predicates.json'));
 } catch(e){ /* sibling xchain-documentation absent */ }
-
-const CANON_PRESENT = fs.existsSync(CANON_DIR);
 
 // Every copy now shares ONE signature: meetsStakeThreshold(validators, signers),
 // and every copy exports totalStake(). No per-repo adapter remains.
@@ -69,7 +79,14 @@ function vecValidators(c){
 function meets(c){ return swq.meetsStakeThreshold(vecValidators(c), c.signers); }
 
 describe('consensus-primitive conformance: canonical vectors @regression', function(){
-    before(function(){ if(!quorumVec || !equivVec){ if(process.env.XCHAIN_REQUIRE_SIBLINGS==='1') throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but consensus test-vectors not found (sibling xchain-documentation missing)'); this.skip(); } });
+    before(function(){
+        if(!skipOrFail(this, VEC_CHECKOUT, 'the consensus test-vector guard')) return;
+        if(!quorumVec || !equivVec){
+            if(process.env.XCHAIN_REQUIRE_SIBLINGS==='1')
+                throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but consensus test-vectors could not be loaded from ' + VEC_DIR);
+            this.skip();
+        }
+    });
 
     describe('stake_weighted_quorum.meetsStakeThreshold', function(){
         (quorumVec ? quorumVec.meetsStakeThreshold : []).forEach(function(c){
@@ -120,7 +137,14 @@ function decodeSnapshotBlock(v){
 // and so through its own gate registry, which byte identity alone never reaches.
 describe('consensus-primitive conformance: activation predicate vectors @regression', function(){
     const srb = require('../../../src/consensus/snapshot_reorg_buffer.js');
-    before(function(){ if(!activationVec){ if(process.env.XCHAIN_REQUIRE_SIBLINGS==='1') throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but activation_predicates.json not found (sibling xchain-documentation missing)'); this.skip(); } });
+    before(function(){
+        if(!skipOrFail(this, VEC_CHECKOUT, 'the activation-predicate test-vector guard')) return;
+        if(!activationVec){
+            if(process.env.XCHAIN_REQUIRE_SIBLINGS==='1')
+                throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but activation_predicates.json could not be loaded from ' + VEC_DIR);
+            this.skip();
+        }
+    });
     const groups = activationVec || {};
 
     it('every group this repo runs is a non-empty list', function(){
@@ -147,7 +171,9 @@ describe('consensus-primitive conformance: activation predicate vectors @regress
 });
 
 describe('consensus-primitive conformance: byte-identity to canonical source @regression', function(){
-    before(function(){ if(!CANON_PRESENT){ if(process.env.XCHAIN_REQUIRE_SIBLINGS==='1') throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but canonical reference-impl dir not found at ' + CANON_DIR); this.skip(); } });
+    before(function(){
+        if(!skipOrFail(this, CANON_CHECKOUT, 'the consensus-primitive byte-identity guard')) return;
+    });
 
     // The three carriers sit under consensus/ on both sides since W5 (the same tail in
     // every repo), so the compare is a raw byte compare of src/consensus/<f> against
@@ -163,9 +189,25 @@ describe('consensus-primitive conformance: byte-identity to canonical source @re
     });
 
     // The activation-registry parts are byte twins of the canonical gate_registry/
-    // copies; the per-repo entry gate_registry.js is not a twin and stays out.
-    ['core.js', 'shared_rows.js', 'regtest_env.js', 'shared_rows_1.js', 'shared_rows_2.js',
-        'shared_rows_3.js', 'shared_rows_4.js', 'shared_rows_5.js'].forEach(function(f){
+    // copies; the per-repo entry gate_registry.js is not a twin and stays out. The part
+    // list is the local directory listing, held equal to the canonical listing below.
+    it('gate_registry/ holds the vendored parts', function(){
+        assert.ok(LOCAL_PARTS.length > 0,
+            'src/consensus/gate_registry/ is missing or empty, so the per-file byte guard would check nothing');
+    });
+
+    it('gate_registry/ file set equals xchain-documentation/protocol/reference-impl', function(){
+        const canon = registryParts(CANON_DIR);
+        assert.ok(canon.length > 0, 'the canonical gate_registry/ under ' + CANON_DIR + ' is missing or empty');
+        const missing = canon.filter((f) => !LOCAL_PARTS.includes(f));
+        const extra   = LOCAL_PARTS.filter((f) => !canon.includes(f));
+        assert.deepStrictEqual({ missing, extra }, { missing: [], extra: [] },
+            'gate_registry/ file sets differ. Missing from the SDK copy: [' + missing.join(', ') +
+            ']. Present only in the SDK copy: [' + extra.join(', ') +
+            ']. Vendor the canonical part(s) and wire them into src/consensus/gate_registry.js.');
+    });
+
+    LOCAL_PARTS.forEach(function(f){
         it('gate_registry/' + f + ' is byte-identical to xchain-documentation/protocol/reference-impl', function(){
             const rel   = path.join('consensus', 'gate_registry', f);
             const local = fs.readFileSync(path.join(LOCAL_DIR, rel), 'utf8');
@@ -174,6 +216,25 @@ describe('consensus-primitive conformance: byte-identity to canonical source @re
                 'this repo\'s consensus/gate_registry/' + f + ' has drifted from the canonical source; ' +
                 'edit xchain-documentation/protocol/reference-impl/consensus/gate_registry/' + f +
                 ' and re-vendor every consumer copy, never the vendored copy alone.');
+        });
+    });
+});
+
+// Read the entry as text, not require.cache: other files load the parts directly and would mask a missing require.
+describe('gate_registry entry loads every local shared-rows part @regression', function(){
+    const entry = fs.readFileSync(path.join(LOCAL_DIR, 'consensus', 'gate_registry.js'), 'utf8');
+    const parts = LOCAL_PARTS.filter((f) => /^shared_rows_\d+\.js$/.test(f));
+
+    it('finds numbered shared-rows parts to check', function(){
+        assert.ok(parts.length > 0, 'no shared_rows_<n>.js part under src/consensus/gate_registry/');
+    });
+
+    parts.forEach(function(f){
+        it('the entry requires gate_registry/' + f, function(){
+            const stem = f.replace(/\.js$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const wired = new RegExp('require\\(\\s*[\'"]\\./gate_registry/' + stem + '(\\.js)?[\'"]\\s*\\)');
+            assert.ok(wired.test(entry), 'src/consensus/gate_registry.js never requires gate_registry/' + f +
+                ', so its rows are missing from the registry; add the require beside the other parts.');
         });
     });
 });

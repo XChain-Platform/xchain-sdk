@@ -371,11 +371,12 @@ class AgentSession extends WalletSession {
                     `${evaluation.action} of ${evaluation.amount} ${evaluation.tick || ''} was not confirmed`,
                     { action: evaluation.action, tick: evaluation.tick, amount: evaluation.amount });
         }
-
         const entry = authorizeSubmission(this, evaluation, submitOpts);
         let result;
         try {
-            result = await super.submitInner(actionData, encoderOpts, submitOpts);
+            result = await super.submitInner(actionData, encoderOpts, this.policy.allowedDestinations
+                && ['MINT', 'MESSAGE', 'SWEEP'].includes(evaluation.action)
+                ? Object.assign({}, submitOpts, { skipAddressCompaction: true }) : submitOpts);
         } catch (err) {
             // A throw AFTER broadcast carries the txid (e.g. CONFIRMATION_TIMEOUT).
             // Patch it onto the provisional entry so the audit record is not left

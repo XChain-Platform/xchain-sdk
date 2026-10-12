@@ -83,7 +83,7 @@ const testCases = [
     {
         name: 'DISPENSER v0',
         action: 'dispenser',
-        params: { giveTick: 'A', giveAmount: '100', giveEscrow: '100', getTick: 'B', getAmount: '50', memo: 'vend' },
+        params: { giveCoin: 'BTC', getCoin: 'BTC', giveTick: 'A', giveAmount: '100', giveEscrow: '100', getTick: 'B', getAmount: '50', memo: 'vend' },
         expectedVersion: 0,
         check: { GIVE_TICK: 'A', GIVE_AMOUNT: '100', GIVE_ESCROW: '100', GET_TICK: 'B', GET_AMOUNT: '50', MEMO: 'vend' }
     },
@@ -185,7 +185,7 @@ const testCases = [
     {
         name: 'ORDER v0 (full create)',
         action: 'order',
-        params: { giveTick: 'A', giveAmount: '100', getTick: 'B', getAmount: '200', memo: 'trade' },
+        params: { giveCoin: 'BTC', getCoin: 'BTC', giveTick: 'A', giveAmount: '100', getTick: 'B', getAmount: '200', memo: 'trade' },
         expectedVersion: 0,
         check: { GIVE_TICK: 'A', GIVE_AMOUNT: '100', GET_TICK: 'B', GET_AMOUNT: '200', MEMO: 'trade' }
     },
@@ -234,7 +234,7 @@ const testCases = [
     {
         name: 'SWAP v0 (full create)',
         action: 'swap',
-        params: { giveTick: 'X', giveAmount: '50', getTick: 'Y', getAmount: '75' },
+        params: { giveCoin: 'BTC', getCoin: 'BTC', giveTick: 'X', giveAmount: '50', getTick: 'Y', getAmount: '75' },
         expectedVersion: 0,
         check: { GIVE_TICK: 'X', GIVE_AMOUNT: '50', GET_TICK: 'Y', GET_AMOUNT: '75' }
     },

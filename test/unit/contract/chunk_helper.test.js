@@ -292,7 +292,9 @@ describe('chunkHelper @regression', function () {
         });
 
         it('throws when the source needs more than MAX_DEPLOY_CHUNKS slices', function () {
-            expect(() => planDeploy(HUGE, { gasLimit: 100000 })).to.throw(/MAX_DEPLOY_CHUNKS/);
+            // Past 16 slices a source is already past MAX_CODE_SIZE, which is checked first.
+            expect(splitCode(HUGE).length).to.be.greaterThan(MAX_DEPLOY_CHUNKS);
+            expect(() => planDeploy(HUGE, { gasLimit: 100000 })).to.throw(/exceeds 65536 byte limit/);
         });
 
         // The headline: the plan's slices pass the indexer's exact integrity gate.

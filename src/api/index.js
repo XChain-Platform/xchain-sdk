@@ -60,6 +60,12 @@ if(!SDK_API_KEY)
 // back to a safe default on a junk value; see src/utils/api_guards.js). With no
 // argument, each resolver reads process.env through its own default parameter.
 const SDK_API_MAX_BATCH      = resolveMaxBatch();
+// Say so when the batch cap setting was unusable: '1e3' read silently as the
+// default would leave the operator believing a raised cap was in force.
+const RAW_MAX_BATCH = Config.env.sdkApiMaxBatch();
+if(RAW_MAX_BATCH !== undefined && !parseWholeNumber(RAW_MAX_BATCH))
+    log.warn('WARNING: SDK_API_MAX_BATCH is not a positive whole number; using the default of ' +
+                 SDK_API_MAX_BATCH + ' calls per batch.');
 const SDK_API_RATE_LIMIT     = resolveRateLimit();
 // Say so when the limiter setting was unusable. A silent substitution is what
 // made the truncation bug expensive: the operator believed the value they typed
@@ -68,7 +74,13 @@ if(Config.env.sdkApiRateLimit() !== undefined && parseWholeNumber(Config.env.sdk
     log.warn('WARNING: SDK_API_RATE_LIMIT is not a whole number; using the default of ' + SDK_API_RATE_LIMIT +
                  ' requests per window. Set it to exactly 0 to disable the limiter.');
 const SDK_API_RATE_WINDOW_MS = resolveRateWindowMs();
-const NETWORK      = Config.env.network();
+// Say so when the window setting was unusable too: a silent 60000 would leave the
+// operator believing a window they typed as '60s' or '1e5' was in force.
+const RAW_RATE_WINDOW_MS = Config.env.sdkApiRateWindowMs();
+if(RAW_RATE_WINDOW_MS !== undefined && !parseWholeNumber(RAW_RATE_WINDOW_MS))
+    log.warn('WARNING: SDK_API_RATE_WINDOW_MS is not a positive whole number of milliseconds; using the default of ' +
+                 SDK_API_RATE_WINDOW_MS + ' ms.');
+const NETWORK     = Config.env.network();
 const EXPLORER_URL = Config.env.explorerUrl();
 const EXPLORER_PORT = Config.env.explorerPort();
 const ENCODER_URL  = Config.env.encoderUrl();

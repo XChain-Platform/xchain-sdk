@@ -45,6 +45,108 @@ const log = getLogger('xchain-sdk:action-waiter');
 // per-wait warning would drown the useful one.
 let warnedUnknownStatus = false;
 
+function settleTxidWait(wait, err, result) {
+    if (wait.settled) return;
+    wait.settled = true;
+    if (wait.timer) clearTimeout(wait.timer);
+    if (wait.pollId) clearInterval(wait.pollId);
+    if (wait.unsub) { try { wait.unsub(); } catch (e) {} }
+    if (err) wait.reject(err);
+    else wait.resolve(result);
+}
+
+function startTxidTimeout(wait) {
+    wait.timer = setTimeout(() => {
+        if (wait.strictStatus && wait.requireValid && wait.unknownResult) {
+            settleTxidWait(wait, unknownStatusError(wait.txid, wait.unknownResult));
+            return;
+        }
+        settleTxidWait(wait, confirmationTimeoutError(wait.txid, wait.timeout));
+    }, wait.timeout);
+}
+
+function resolvePolledTransaction(wait, result) {
+    let classification = classifyTransactionResult(result,
+        { actionIndex: wait.opts.actionIndex, sameWireIndex });
+    if (classification.empty) return;
+
+    if (wait.requireValid && classification.invalid) {
+        let reason = readStatus(classification.invalid);
+        settleTxidWait(wait, actionRejectedError(wait.txid, result, reason));
+        return;
+    }
+    if (!result.statusKnown) {
+        wait.unknownResult = result;
+        if (wait.requireValid && wait.strictStatus) return;
+        if (!warnedUnknownStatus) {
+            warnedUnknownStatus = true;
+            log.warn(unknownStatusWarning(wait.txid, classification.unknown));
+        }
+    }
+    settleTxidWait(wait, null, result);
+}
+
+async function pollForTxid(wait) {
+    if (wait.settled) return;
+    try {
+        let result = await wait.explorerTarget.getTransaction(wait.txid, 'tx_hash');
+        if (result && result.tx_hash) resolvePolledTransaction(wait, result);
+    } catch (e) {
+        // A missing transaction or network error leaves polling active.
+    }
+}
+
+function handleTxidEvent(wait, msg) {
+    if (!(msg && msg.data && msg.data.tx_hash === wait.txid)) return;
+
+    if (wait.opts.actionIndex !== undefined) {
+        let event = classifyTargetedEvent(msg.data, wait.opts.actionIndex,
+            wait.requireValid, wait.txid, sameWireIndex);
+        if (event.ignored) return;
+        if (event.poll) { pollForTxid(wait); return; }
+        if (event.error) settleTxidWait(wait, event.error);
+        else settleTxidWait(wait, null, event.result);
+        return;
+    }
+    pollForTxid(wait);
+}
+
+function subscribeToTxidEvents(wait) {
+    if (!wait.useWebSocket || !wait.waiter.sdk.ws ||
+        !wait.waiter.sdk.ws.isConnected()) return;
+
+    let handler = (msg) => handleTxidEvent(wait, msg);
+    wait.waiter.sdk.ws.on('NEW_ACTION', handler);
+    wait.unsub = () => wait.waiter.sdk.ws.off('NEW_ACTION', handler);
+}
+
+function startTxidPolling(wait) {
+    setTimeout(() => {
+        if (wait.settled) return;
+        pollForTxid(wait);
+        wait.pollId = setInterval(() => pollForTxid(wait), wait.pollInterval);
+    }, 500);
+}
+
+function beginTxidWait(waiter, txid, opts, settings, resolve, reject) {
+    let wait = {
+        waiter,
+        txid,
+        opts,
+        resolve,
+        reject,
+        ...settings,
+        settled: false,
+        timer: null,
+        pollId: null,
+        unsub: null,
+        unknownResult: null
+    };
+    startTxidTimeout(wait);
+    subscribeToTxidEvents(wait);
+    startTxidPolling(wait);
+}
+
 class ActionWaiter {
 
     // Keep encoding on the shared SDK while an optional target explorer watches
@@ -90,126 +192,17 @@ class ActionWaiter {
         let pollInterval = opts.pollInterval || 2000;
         let requireValid = opts.requireValid !== false;
         let strictStatus = opts.strictStatus === true;
-        // Resolve ONCE, outside the poll loop: a per-call explorerUrl would
-        // otherwise build a fresh client (and a fresh keep-alive agent) on
-        // every poll tick.
         let explorerTarget = this.resolveExplorer(opts);
         let useWebSocket   = !this.explorerOverridden(opts);
 
-        return new Promise((resolve, reject) => {
-            let settled  = false;
-            let timer    = null;
-            let pollId   = null;
-            let unsub    = null;
-            // Tracks the last unreadable result so the timeout error explains
-            // which action remained silent in a strictStatus wait.
-            let unknownResult = null;
-
-            let settle = (err, result) => {
-                if (settled) return;
-                settled = true;
-                if (timer) clearTimeout(timer);
-                if (pollId) clearInterval(pollId);
-                if (unsub) { try { unsub(); } catch (e) {} }
-                if (err) reject(err);
-                else resolve(result);
-            };
-
-            // Timeout. A strictStatus wait that DID see the transaction but never
-            // read a status reports that specifically: the transaction is indexed,
-            // so "timed out waiting to be indexed" would send the caller hunting
-            // the wrong problem.
-            timer = setTimeout(() => {
-                if (strictStatus && requireValid && unknownResult) {
-                    settle(unknownStatusError(txid, unknownResult));
-                    return;
-                }
-                // Not indexed inside the window. Say what that does and does NOT
-                // mean: the transaction may be sitting in the mempool waiting for a
-                // block, which on a chain with long or irregular block times is the
-                // ordinary case rather than a fault. Callers that broadcast it
-                // themselves mark `broadcast` on this error (see lifecycleManager).
-                settle(confirmationTimeoutError(txid, timeout));
-            }, timeout);
-
-            // Polling fallback (runs simultaneously with WebSocket). Defined before
-            // the WS handler because the untargeted (whole-tx) WS path delegates to
-            // it: see the handler comment below.
-            let poll = async () => {
-                if (settled) return;
-                try {
-                    let explorer = explorerTarget;
-                    // The explorer transaction endpoint keys on type 'tx_hash' (not 'hash')
-                    // and returns { tx_hash, block_index, actions: [{ action, status, ... }], ... }.
-                    // Per-action status is prefixed, e.g. "valid" / "invalid: insufficient funds (FEE)".
-                    let result = await explorer.getTransaction(txid, 'tx_hash');
-                    if (result && result.tx_hash) {
-                        let classification = classifyTransactionResult(result,
-                            { actionIndex: opts.actionIndex, sameWireIndex });
-                        if (classification.empty) return;
-
-                        if (requireValid && classification.invalid) {
-                            let reason = readStatus(classification.invalid);
-                            settle(actionRejectedError(txid, result, reason));
-                            return;
-                        }
-                        if (!result.statusKnown) {
-                            unknownResult = result;
-                            // A fail-closed caller waits out the window: the status may still
-                            // be written (indexer enrichment lags the transaction row), and
-                            // only the timeout can prove it never was.
-                            if (requireValid && strictStatus) return;
-                            if (!warnedUnknownStatus) {
-                                warnedUnknownStatus = true;
-                                log.warn(unknownStatusWarning(txid, classification.unknown));
-                            }
-                        }
-                        settle(null, result);
-                    }
-                } catch (e) {
-                    // 404 or network error; keep polling
-                }
-            };
-
-            // Try WebSocket fast path (if connected). A live WS emits one NEW_ACTION
-            // per action in the tx.
-            if (useWebSocket && this.sdk.ws && this.sdk.ws.isConnected()) {
-                let handler = (msg) => {
-                    if (!(msg && msg.data && msg.data.tx_hash === txid)) return;
-
-                    if (opts.actionIndex !== undefined) {
-                        let event = classifyTargetedEvent(msg.data, opts.actionIndex,
-                            requireValid, txid, sameWireIndex);
-                        if (event.ignored) return;
-                        if (event.poll) { poll(); return; }
-                        if (event.error) settle(event.error);
-                        else settle(null, event.result);
-                        return;
-                    }
-
-                    // Untargeted (whole-tx) wait: a single NEW_ACTION event cannot
-                    // prove the WHOLE tx succeeded, because a multi-action tx (BATCH,
-                    // or any tx the lifecycle manager submits and waits on without an
-                    // actionIndex) emits one event per action and a sibling action may
-                    // be invalid. Settling success from one valid event here would
-                    // mask a sibling's rejection - the poll path, which evaluates the
-                    // FULL action set, would have rejected. So use the event only as a
-                    // signal that the tx is indexed and trigger an immediate
-                    // authoritative poll; poll() is idempotent (guards on `settled`),
-                    // so firing it once per sub-action event is safe.
-                    poll();
-                };
-                this.sdk.ws.on('NEW_ACTION', handler);
-                unsub = () => this.sdk.ws.off('NEW_ACTION', handler);
-            }
-
-            // Start polling after a short initial delay (give WebSocket a chance first)
-            setTimeout(() => {
-                if (settled) return;
-                poll(); // immediate first poll
-                pollId = setInterval(poll, pollInterval);
-            }, 500);
-        });
+        return new Promise((resolve, reject) => beginTxidWait(this, txid, opts, {
+            timeout,
+            pollInterval,
+            requireValid,
+            strictStatus,
+            explorerTarget,
+            useWebSocket
+        }, resolve, reject));
     }
 
     // Wait for a specific action_index to appear in the explorer.

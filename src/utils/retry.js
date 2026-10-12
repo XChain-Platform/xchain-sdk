@@ -39,6 +39,8 @@ const DEFAULTS = {
 
 // Determine if an axios error is retryable
 function isRetryable(err) {
+    // Honour an explicit flag for a transient fault that arrived in a 2xx body
+    if (err && err.retryable === true) return true;
     // Network errors (ECONNRESET, ECONNREFUSED, timeout)
     if (!err.response) {
         if (err.code === 'ECONNABORTED') return true;

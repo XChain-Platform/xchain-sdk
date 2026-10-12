@@ -78,6 +78,8 @@ export interface RetryInfo {
     error: string;
     /** HTTP status of the response being retried; null for a transport error */
     status?: number | null;
+    /** JSON-RPC error code that caused a retry from a 2xx body (encoder only); null otherwise */
+    rpcCode?: number | null;
 }
 
 
@@ -668,15 +670,48 @@ export interface TokenRecord {
     [key: string]: any;
 }
 
+/**
+ * One contract as the explorer serves it: snake_case on the wire, passed through
+ * unchanged. A `getContracts()` row carries the unmarked fields; `getContract()`
+ * adds the ones marked detail-only. BIGINT columns arrive as exact decimal strings.
+ * Closed on purpose, so a misspelled field is a compile error, not `undefined`.
+ */
 export interface ContractInfo {
-    actionIndex: number;
-    address: string;
-    owner: string;
-    codeHash?: string;
-    status?: string;
-    deployBlock?: number;
-    gasLimit?: number;
-    /** Declared emission allowlist (programmable policy layer); null/absent = unrestricted */
+    action: string | null;
+    /** The DEPLOY's ACTION_INDEX, which is the contract's id */
+    action_index: number | string | null;
+    action_format: number | null;
+    /** The deployer's address */
+    source: string | null;
+    code_hash: string;
+    api_version: number;
+    cooldown_blocks: number | null;
+    slash_destination: string | null;
+    block_index: number | string;
+    /** DEPLOY block time, unix seconds */
+    timestamp: number | string;
+    tx_hash: string | null;
+    tx_index: number | string;
+    status: string | null;
+    /** Owner withdraw: true enabled, false disabled, null unknown */
+    owner_withdraw: boolean | null;
+    /** Detail-only: the deployed source */
+    code?: string;
+    /** Detail-only: whether `code` still hashes to `code_hash` */
+    code_hash_ok?: boolean;
+    /** Detail-only: callable method names, or null when the shape is unrecognized */
+    methods?: string[] | null;
+    /** Detail-only: the self-declared abi metadata, or null */
+    abi?: Record<string, any> | null;
+    /** Detail-only: the constructor's raw input params, or null */
+    constructor_params?: string | null;
+    /** Detail-only: whether this explorer serves read-only contract calls */
+    vm_query_enabled?: boolean;
+    /** Detail-only: the wallet a write call hands off to */
+    wallet_url?: string;
+    /** Detail-only: true when the stored permissions manifest is unreadable */
+    permissions_error?: boolean;
+    /** Detail-only. Declared emission allowlist (programmable policy layer); null = unrestricted */
     permissions?: string[] | null;
     /** Declared royalty cap in basis points (snake_case on the wire); null/absent = global cap */
     max_take_bps?: number | null;
@@ -689,7 +724,123 @@ export interface ContractInfo {
     meta_version?: string | null;
     /** The whole evaluated `meta` object (parsed meta_json), including keys consensus ignores */
     meta?: Record<string, any> | null;
-    [key: string]: any;
+    /** Detail-only, and only while the coin's indexed tip is stale */
+    freshness?: ExplorerFreshnessMarker;
+}
+
+/**
+ * The freshness marker the explorer adds to a data response body ONLY while
+ * the coin's indexed tip is stale. A fresh response carries no `freshness`
+ * key at all; the XChain-Freshness headers are on every response.
+ */
+export interface ExplorerFreshnessMarker {
+    stale: true;
+    tip_block: number | null;
+    tip_age_seconds: number | null;
+    /** null means "could not be determined", never "not halted" */
+    replica_halted: boolean | null;
+}
+
+/** A coin or token identity with its quoted prices (decimal strings). */
+export interface NetworkAsset {
+    name: string;
+    symbol: string;
+    price: {
+        /** Price in BTC, 8dp decimal string */
+        btc: string;
+        /** Price in USD, decimal string ("0.00" when no market) */
+        usd: string;
+    };
+}
+
+/**
+ * What `getNetwork()` answers: network statistics for the SDK's ONE coin.
+ * There is no peer data, no other chain's height and no indexer-health verdict
+ * here; `getStatus()` carries the indexer and decoder positions.
+ */
+export interface NetworkSummary {
+    /** This coin's indexer tip and mempool depth */
+    network: {
+        /** Indexer tip height */
+        block: number;
+        /** Unix time of the tip block (0 when the chain is empty) */
+        time: number;
+        /** Unconfirmed XChain-carrying transactions (0 when the decoder is unreachable) */
+        unconfirmed: number;
+        /** The coin node's TOTAL mempool count, XChain or not; null when no decoder API resolves */
+        unconfirmed_node?: number | null;
+    };
+    /** Exact record count per action table, keyed by table name */
+    totals: { [table: string]: number };
+    /** Suggested fee tiers in sat/vByte from this coin's encoder ({1,2,3} when it is unreachable) */
+    fee: { low: number; medium: number; high: number };
+    coin: NetworkAsset;
+    xchain: NetworkAsset;
+    /** Recommended confirmation depth per chain: display guidance, never a gate */
+    finality: { [chain: string]: number };
+    /** Server-side render time */
+    runtime?: string;
+    freshness?: ExplorerFreshnessMarker;
+}
+
+/** Why the indexer trails the decoder for one coin (see ExplorerStatus.indexer_state). */
+export type ExplorerIndexerState = 'live' | 'future_block_wait' | 'behind';
+
+/**
+ * What `getStatus()` answers. Every map is keyed by coin ticker, and many list
+ * only the coins this instance measures, so an ABSENT key means "not measured",
+ * which is not the same as a null value. Every field is optional because an
+ * older explorer omits the newer maps.
+ */
+export interface ExplorerStatus {
+    /** Coins this instance knows about at all (ticker -> name) */
+    supported?: { [coin: string]: string };
+    /** Coins served as CURRENT data right now; a stale coin drops out of this map */
+    available?: { [coin: string]: string };
+    /** ISO-8601 time of the last successful hub-config fetch; null before the first */
+    hub_config_fetched_at?: string | null;
+    /** Seconds since the last successful hub-config fetch; null before the first */
+    hub_config_age_seconds?: number | null;
+    /** Whether the hub's coin-registry consensus hashes disagree; null when the hub advertises none */
+    hub_consensus_hash_mismatch?: boolean | null;
+    /** One diagnostic string per hub consensus-hash mismatch */
+    hub_consensus_hash_mismatch_details?: string[];
+    /** Highest block the indexer has processed; null when that coin's DB read failed */
+    last_block?: { [coin: string]: number | null };
+    /** block_time of that block; null when that coin's DB read failed */
+    last_block_time?: { [coin: string]: number | null };
+    /** The decoder's highest processed block (NOT the node's chain tip); null when unavailable */
+    decoder_tip?: { [coin: string]: number | null };
+    /** decoder_tip - last_block (>= 0): the indexer-to-decoder slice only; null when unavailable */
+    decoder_lag_blocks?: { [coin: string]: number | null };
+    /** Seconds since the newest indexed block_time, clamped at 0; null when unreadable */
+    tip_age_seconds?: { [coin: string]: number | null };
+    /** Seconds the newest indexed block is dated AHEAD of the host clock; null when unreadable */
+    tip_future_seconds?: { [coin: string]: number | null };
+    /** Why the indexer trails the decoder; null when it cannot be determined */
+    indexer_state?: { [coin: string]: ExplorerIndexerState | null };
+    /** block_time of the next block the indexer must commit; null when unknown */
+    next_block_time?: { [coin: string]: number | null };
+    /** Seconds that next block is dated ahead of the host clock: the real consensus-wait measure */
+    next_block_future_seconds?: { [coin: string]: number | null };
+    /** ISO-8601 instant the current indexer wait may first clear; null when unknown */
+    indexer_wait_clears_at?: { [coin: string]: string | null };
+    /** The tip-age verdict. Never null: a missing block_time reads true (fails closed) */
+    stale?: { [coin: string]: boolean };
+    /** Whether the replica stopped indexing. null means UNKNOWN and must never be read as false */
+    replica_halted?: { [coin: string]: boolean | null };
+    /** The coin node's chain tip as the decoder reports it; null when unavailable */
+    chain_tip?: { [coin: string]: number | null };
+    /** chain_tip - decoder tip: the chain-to-decoder slice; null when unavailable */
+    chain_lag_blocks?: { [coin: string]: number | null };
+    /**
+     * The decoder's own health verdict: 'healthy', 'unhealthy', 'node-stale', 'unconfigured' or
+     * 'unreachable'. Typed as string because the explorer passes the decoder's own word through
+     */
+    decoder_health?: { [coin: string]: string };
+    /** Server-side render time */
+    runtime?: string;
+    freshness?: ExplorerFreshnessMarker;
 }
 
 /** Normalized permissions manifest (programmable policy layer). See sdk.getContractManifest. */
@@ -708,25 +859,49 @@ export interface ContractManifest {
     meta?: Record<string, any> | null;
 }
 
+/** One row of a contract's current state, as the explorer's state route serves it. */
 export interface ContractStateEntry {
-    key: string;
-    value: any;
+    id: number | string;
+    contract_index: number | string;
+    state_key: string;
+    /** The stored JSON text, not the parsed value; JSON.parse it to read the value */
+    state_value: string | null;
+    block_index: number | string;
 }
 
+/** One token held in a contract's custody, as the explorer's balance route serves it. */
 export interface ContractBalanceEntry {
-    tick: string;
-    balance: string;
+    tick: string | null;
+    /** Exact decimal string */
+    amount: string | null;
 }
 
+/**
+ * One contract execution as the explorer serves it, snake_case on the wire.
+ * `getExecutions()` rows carry the unmarked fields; `getExecution()` adds the
+ * detail-only ones. `status` 'valid' is a successful run, any other value a failed
+ * one. The explorer stores no return value.
+ */
 export interface ExecutionInfo {
-    actionIndex: number;
-    contractActionIndex: number;
-    method: string;
-    params?: string[];
-    success: boolean;
-    gasUsed: number;
-    returnValue?: string;
-    [key: string]: any;
+    action: string | null;
+    action_index: number | string;
+    action_format: number | null;
+    contract_index: number | string | null;
+    caller: string | null;
+    method_name: string | null;
+    gas_used: number | string;
+    gas_limit: number | string;
+    emitted_count: number;
+    block_index: number | string;
+    /** Block time, unix seconds */
+    timestamp: number | string;
+    tx_hash: string | null;
+    tx_index: number | string;
+    status: string | null;
+    /** Detail-only: the raw method params */
+    input_params?: string | null;
+    /** Detail-only: why the run failed, or null */
+    error_message?: string | null;
 }
 
 export interface CodeSizeResult {
@@ -1433,7 +1608,8 @@ export declare const chunkHelper: {
     splitCode(code: string): string[];
     /**
      * Plan a deploy: single-shot or chunked.
-     * @throws Error if the code needs more than MAX_DEPLOY_CHUNKS (16) slices.
+     * @throws Error if the UTF-8 source exceeds MAX_CODE_SIZE (65536 bytes), or if
+     * it needs more than MAX_DEPLOY_CHUNKS (16) slices.
      */
     planDeploy(code: string, opts?: DeployPlanOpts): DeployPlan;
     /** Maximum total action-data length (8192 bytes) */
@@ -1465,11 +1641,11 @@ export declare class ContractClient {
     /** Get contract metadata from explorer */
     getInfo(): Promise<ContractInfo>;
     /** Get contract state (all keys or a specific key) */
-    getState(key?: string): Promise<ContractStateEntry | ContractStateEntry[]>;
+    getState(key?: string): Promise<ListEnvelope<ContractStateEntry>>;
     /** Get contract execution history */
     getExecutions(opts?: QueryOptions): Promise<ListEnvelope<ExecutionInfo>>;
     /** Get contract token balances */
-    getBalance(tick?: string): Promise<ContractBalanceEntry | ContractBalanceEntry[]>;
+    getBalance(tick?: string): Promise<ListEnvelope<ContractBalanceEntry>>;
     /** Get the contract's declared permissions manifest (programmable policy layer) */
     getManifest(): Promise<ContractManifest>;
 
@@ -1801,13 +1977,13 @@ export declare class XChainSDK {
     getContracts(query?: string, type?: string, opts?: QueryOptions): Promise<ListEnvelope<ContractInfo>>;
 
     /** Get contract state entries (all keys or a specific key) */
-    getContractState(contractActionIndex: number | string, key?: string): Promise<ContractStateEntry | ContractStateEntry[]>;
+    getContractState(contractActionIndex: number | string, key?: string): Promise<ListEnvelope<ContractStateEntry>>;
 
     /** Get contract token balances */
-    getContractBalance(contractActionIndex: number | string, tick?: string): Promise<ContractBalanceEntry | ContractBalanceEntry[]>;
+    getContractBalance(contractActionIndex: number | string, tick?: string): Promise<ListEnvelope<ContractBalanceEntry>>;
 
-    /** Get a single execution result by its ACTION_INDEX */
-    getExecution(executionActionIndex: number | string): Promise<ExecutionInfo>;
+    /** Get one execution by its ACTION_INDEX, inside the list envelope: read `data[0]` */
+    getExecution(executionActionIndex: number | string): Promise<ListEnvelope<ExecutionInfo>>;
 
     /** Get execution history, filtered by `type` (block | address | contract; defaults to contract) */
     getExecutions(query?: number | string, type?: string, opts?: QueryOptions): Promise<ListEnvelope<ExecutionInfo>>;
@@ -1907,15 +2083,23 @@ export declare class XChainSDK {
     getValidatorSetProof(opts?: QueryOptions): Promise<any>;
     /** Contract-state inclusion proof for (contractIndex, key). */
     getContractStateProof(contractIndex: number | string, key: string): Promise<any>;
-    /** Fetch a checkpoint via the pooled client and re-verify it locally (Ed25519). */
-    verifyCheckpoint(blockIndex: number | string): Promise<any>;
+    /**
+     * Fetch a checkpoint via the pooled client and re-verify its signatures locally (Ed25519).
+     * Without opts.validators the set is the explorer's own (validatorSource 'explorer'); pass an
+     * out-of-band set to judge against it instead (validatorSource 'supplied').
+     */
+    verifyCheckpoint(blockIndex: number | string, opts?: { validators?: Array<string | { pubkey: string; weight?: string; source?: string }> }): Promise<any>;
 
 
     /*
      *  Explorer: Market methods
      */
 
-    /** Get all markets, or markets for a specific token ticker. */
+    /**
+     * Get all markets, or markets for a specific token ticker.
+     * When tick is supplied, every returned pair puts the searched tick in tick2 and its values in
+     * tick2_* fields; the counter tick is in tick1. Read the searched tick's price from tick2_price.
+     */
     getMarkets(tick?: string): Promise<any>;
 
     /** Get the market between two token tickers. */
@@ -1947,22 +2131,21 @@ export declare class XChainSDK {
      */
 
     /**
-     * Get explorer service status and indexer sync position.
+     * Get explorer service status and indexer sync position. The full field
+     * set, with each map's nullability, is `ExplorerStatus`.
      *
-     * Resolves to an object with `supported` and `available` coin maps plus
-     * `last_block` and `last_block_time`, per-coin maps (keyed by ticker) of
-     * the highest block index processed by the indexer and its block_time.
-     *
-     * Also includes `decoder_tip` and `decoder_lag_blocks` per-coin maps:
-     * `decoder_tip` is the decoder's highest *processed* block and
+     * `decoder_tip` and `decoder_lag_blocks` measure the indexer→decoder
+     * slice only: `decoder_tip` is the decoder's highest *processed* block and
      * `decoder_lag_blocks` is `decoder_tip - last_block` (>= 0), so a stalled
-     * indexer is detectable from this single call. These measure the
-     * indexer→decoder slice only, NOT the coin node's chain tip; the explorer
-     * never talks to a coin node, so the chain→decoder gap is exposed by the
-     * decoder's own `health()` RPC, not here. Both are `null` for a coin when the
-     * decoder tip is unavailable.
+     * indexer is detectable from this single call. The chain→decoder side is
+     * `chain_tip`, `chain_lag_blocks` and `decoder_health`, which the explorer
+     * relays from the decoder's own `health()` call.
+     *
+     * `stale`, `tip_age_seconds` and `replica_halted` are what `assertFresh()`
+     * reads. A null `replica_halted` entry means the halt state could not be
+     * determined; never read it as false.
      */
-    getStatus(): Promise<any>;
+    getStatus(): Promise<ExplorerStatus>;
 
     /** Get unconfirmed mempool actions filtered by query and type (address | token). */
     getMempool(query: string, type: string, opts?: QueryOptions): Promise<any>;
@@ -1999,8 +2182,12 @@ export declare class XChainSDK {
         destinations: string[];
     }>>;
 
-    /** Get a network-wide summary (chain heights, indexer status, peer counts). */
-    getNetwork(opts?: QueryOptions): Promise<any>;
+    /**
+     * Get network statistics for this SDK's coin: indexer tip and mempool depth,
+     * per-action-table record counts, fee tiers, coin and XCHAIN identity and
+     * prices, and recommended finality depths. There is no peer data here.
+     */
+    getNetwork(opts?: QueryOptions): Promise<NetworkSummary>;
 
     /** Search the explorer for a query string of a given type. */
     search(query: string, type: string): Promise<any>;
@@ -2524,8 +2711,12 @@ export interface WaitForActionOpts {
 }
 
 export interface EstimateFeeResult {
-    /** Unsigned PSBT hex (can be signed directly to skip re-encoding) */
-    psbt: string;
+    /** Unsigned PSBT hex (can be signed directly to skip re-encoding when `signable`); null for a TAPROOT envelope pair */
+    psbt: string | null;
+    /** False when the PSBT is withheld: an envelope pair is signed through submitAction */
+    signable: boolean;
+    /** Why `psbt` was withheld, when `signable` is false */
+    unsignableReason?: 'ENVELOPE_PAIR_SIGN_VIA_SUBMIT_ACTION';
     /** Encoding type used */
     encoding: EncodingType;
     /** Transaction fee in satoshis; null when not exactly representable, unknown, or negative */

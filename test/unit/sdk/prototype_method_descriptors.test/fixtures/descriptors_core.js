@@ -31,7 +31,7 @@ module.exports = {
         ['importWIF', false, true, true, 'function', 1],
         ['signEcdsa', false, true, true, 'function', 2],
         ['signEnvelopeRevealPsbt', false, true, true, 'function', 3],
-        ['signMultisigPsbt', false, true, true, 'function', 2],
+        ['signMultisigPsbt', false, true, true, 'function', 3],
         ['signPsbt', false, true, true, 'function', 3],
         ['signRevealPsbt', false, true, true, 'function', 3],
         ['txidOf', false, true, true, 'function', 1],
