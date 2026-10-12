@@ -18,11 +18,10 @@
 // instead under XCHAIN_REQUIRE_SIBLINGS=1.
 
 const assert = require('assert');
-const acorn  = require('acorn');
-const walk   = require('acorn-walk');
 const crypto = require('crypto');
 const fs     = require('fs');
 const path   = require('path');
+const vm     = require('vm');
 
 const XChainSDK = require('../../../src/XChainSDK.js');
 const EMBEDDED  = require('../../../src/contract/templates.js');
@@ -46,29 +45,66 @@ function sha256(buf) { return crypto.createHash('sha256').update(buf).digest('he
 function canonicalTemplatePath(name) { return path.join(CONTRACTS_DIR, name, name + '.js'); }
 function canonicalPatternPath(name)  { return path.join(CONTRACTS_DIR, 'patterns', name + '.js'); }
 
-function burnUnsoldDestroysInventory(source) {
-    const ast = acorn.parse(source, { ecmaVersion: 2022 });
-    let method;
-    walk.simple(ast, {
-        Property(node) {
-            const name = node.key.type === 'Identifier' ? node.key.name : node.key.value;
-            if (name === 'burnUnsold' && node.value.type === 'FunctionExpression') method = node.value;
-        }
-    });
-    if (!method) return false;
+function loadTemplate(source) {
+    const sandbox = { module: { exports: {} } };
+    vm.runInNewContext(source, sandbox);
+    return sandbox.module.exports;
+}
 
-    let destroys = false;
-    walk.simple(method.body, {
-        CallExpression(node) {
-            const callee = node.callee;
-            if (callee.type !== 'MemberExpression' || callee.computed || callee.property.name !== 'destroy') return;
-            const emitter = callee.object;
-            if (emitter.type === 'MemberExpression' && !emitter.computed &&
-                emitter.object.type === 'Identifier' && emitter.object.name === 'xchain' &&
-                emitter.property.name === 'emit') destroys = true;
-        }
-    });
-    return destroys;
+function runBurnUnsold(contract, status) {
+    const state = new Map([
+        ['status', status],
+        ['unsoldBurned', 'false'],
+        ['hardCap', '10'],
+        ['rate', '3'],
+        ['allocated', '8'],
+        ['saleTick', 'SALE']
+    ]);
+    const destroyed = [];
+    const xchain = {
+        state: {
+            get: (key) => state.get(key),
+            set: (key, value) => state.set(key, value)
+        },
+        require: (condition, message) => {
+            if (!condition) throw new Error(message);
+        },
+        math: {
+            multiply: (a, b) => String(BigInt(a) * BigInt(b)),
+            subtract: (a, b) => String(BigInt(a) - BigInt(b)),
+            isZero: (value) => BigInt(value) === 0n
+        },
+        emit: { destroy: (entry) => destroyed.push(entry) }
+    };
+
+    const result = contract.burnUnsold(xchain);
+    return { result, destroyed };
+}
+
+function assertBurnUnsoldBehavior(source) {
+    const contract = loadTemplate(source);
+    assert.strictEqual(typeof contract.burnUnsold, 'function', 'burnUnsold must be exported');
+    assert.throws(() => runBurnUnsold(contract, 'OPEN'), /sale not finalized/,
+        'burnUnsold must reject an open sale');
+
+    const failed = runBurnUnsold(contract, 'FAILED');
+    assert.strictEqual(failed.result, '30', 'failed sale must burn full issued inventory');
+    assert.strictEqual(failed.destroyed.length, 1);
+    assert.strictEqual(failed.destroyed[0].tick, 'SALE');
+    assert.strictEqual(failed.destroyed[0].quantity, '30');
+
+    const successful = runBurnUnsold(contract, 'SUCCESS');
+    assert.strictEqual(successful.result, '22',
+        'successful sale must burn maxSale minus allocated inventory');
+    assert.strictEqual(successful.destroyed.length, 1);
+    assert.strictEqual(successful.destroyed[0].tick, 'SALE');
+    assert.strictEqual(successful.destroyed[0].quantity, '22');
+}
+
+function replaceRequired(source, before, after) {
+    const changed = source.replace(before, after);
+    assert.notStrictEqual(changed, source, 'mutation target must exist in embedded crowdsale');
+    return changed;
 }
 
 let sdk;
@@ -146,12 +182,22 @@ describe('mint-supply lock guard', function () {
 describe('crowdsale unsold inventory guard', function () {
     it('exposes burnUnsold and destroys finalized inventory', function () {
         const source = Buffer.from(EMBEDDED.templates.crowdsale, 'base64').toString('utf8');
-        assert.strictEqual(burnUnsoldDestroysInventory(source), true);
+        assertBurnUnsoldBehavior(source);
 
-        const misplacedDestroy = source.replace('xchain.emit.destroy', 'xchain.emit.send') +
-            '\nfunction unrelated(xchain) { xchain.emit.destroy({}); }\n';
-        assert.strictEqual(burnUnsoldDestroysInventory(misplacedDestroy), false,
-            'a destroy call outside burnUnsold must not satisfy the guard');
+        const withoutFinalizedGuard = replaceRequired(source,
+            "        xchain.require(status !== 'OPEN', 'sale not finalized');\n", '');
+        assert.throws(() => assertBurnUnsoldBehavior(withoutFinalizedGuard),
+            /burnUnsold must reject an open sale/,
+            'the verifier must reject a template without the finalized-status guard');
+
+        const withoutUnsoldCalculation = replaceRequired(source,
+            "        var unsold = status === 'FAILED'\n" +
+            '            ? maxSale\n' +
+            "            : xchain.math.subtract(maxSale, xchain.state.get('allocated'));",
+            '        var unsold = maxSale;');
+        assert.throws(() => assertBurnUnsoldBehavior(withoutUnsoldCalculation),
+            /successful sale must burn maxSale minus allocated inventory/,
+            'the verifier must reject a template without the unsold-inventory calculation');
     });
 });
 
