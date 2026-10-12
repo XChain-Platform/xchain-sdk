@@ -22,8 +22,9 @@
  * unanswered one emits `resync_required` so the caller can backfill over
  * REST. A completed one whose CATCH_UP_COMPLETE names `not_replayed` types (lifecycle
  * events the replay cannot carry) emits `not_replayed` so the caller can backfill those
- * over REST too. Mirrors the explorer's bundled browser client
- * (src/content/js/xchain_ws_catch_up.js).
+ * over REST too. A completed one whose CATCH_UP_COMPLETE carries `stale: true` (a
+ * replica whose tip is behind) emits `stale_replay`. Mirrors the explorer's bundled
+ * browser client (src/content/js/xchain_ws_catch_up.js), except that one does not read `stale`.
  *
  * Plain functions over the client rather than prototype methods, so the
  * client's public method surface is unchanged.
@@ -174,6 +175,15 @@ function answerCatchUp(client, msg) {
             types:              data.not_replayed.slice(),
             channels:           state.current.sub.channels,
             since_action_index: state.current.since
+        });
+    }
+    // A stale replica's replay ends at a tip that is behind the chain: say so. The cursor
+    // still advances, since it names only rows delivered, and later rows arrive live.
+    if (msg.stale === true) {
+        client.emit('stale_replay', {
+            channels:            state.current.sub.channels,
+            since_action_index:  state.current.since,
+            latest_action_index: data.latest_action_index === undefined ? null : data.latest_action_index
         });
     }
     nextCatchUp(client);

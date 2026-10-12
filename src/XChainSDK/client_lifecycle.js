@@ -24,7 +24,7 @@ const EncoderClient = require('../clients/encoder.js');
 const WebSocketClient = require('../clients/websocket.js');
 const { getLogger } = require('../observability/logger.js');
 const log = getLogger('xchain-sdk');
-const { publicDefaults } = require('../utils/endpoints.js');
+const { publicDefaults, isHttpsUrl, isSecureUrl } = require('../utils/endpoints.js');
 const { SDKConfigError } = require('../utils/errors.js');
 
 // Build the encoder client synchronously so URL resolution and assignment stay adjacent.
@@ -197,8 +197,10 @@ module.exports = {
     // Set option `allowInsecureEndpoints: true` to opt out.)
     isDowngrade(service, client, incomingUrl) {
         if (this.options.allowInsecureEndpoints) return false;
-        let currentSecure  = String(client.baseUrl || '').startsWith('https://');
-        let incomingSecure = String(incomingUrl || '').startsWith('https://');
+        // wss:// counts as secure only for the WebSocket client, the one client that dials it.
+        let secure = service === 'websocket' ? isSecureUrl : isHttpsUrl;
+        let currentSecure  = secure(client.baseUrl);
+        let incomingSecure = secure(incomingUrl);
         if (currentSecure && !incomingSecure) {
             if (!this._downgradeWarned) this._downgradeWarned = {};
             if (!this._downgradeWarned[service]) {

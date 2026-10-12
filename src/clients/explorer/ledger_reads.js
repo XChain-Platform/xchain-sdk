@@ -25,6 +25,11 @@ const { SDKExplorerError } = require('../../utils/errors.js');
 // under an edge limiter, before spending a rate-limit token).
 const BATCH_ADDRESS_LIMIT = 20;
 
+// Above this many query characters a pre-flight goes as POST to the explorer's same
+// /preflight route: a longer GET line is refused by common proxies near 8 KiB and by
+// Node at 16 KiB, before the explorer's own size check ever runs.
+const PREFLIGHT_GET_MAX_QUERY = 6144;
+
 const { seg } = require('./path_segment.js');
 
 module.exports = {
@@ -370,7 +375,11 @@ module.exports = {
         if (params !== undefined && params !== null) q.set('params', Array.isArray(params) ? params.join('|') : String(params));
         if (source !== undefined && source !== null) q.set('source', String(source));
         if (feeMode !== undefined && feeMode !== null) q.set('feeMode', String(feeMode));
-        return this.get('/preflight?' + q.toString(), opts);
+        let query = q.toString();
+        // Send a large action (a long BATCH) as a JSON body; small ones keep the cacheable GET.
+        if (query.length > PREFLIGHT_GET_MAX_QUERY)
+            return this.post('/preflight', Object.fromEntries(q), opts);
+        return this.get('/preflight?' + query, opts);
     },
 
     // Native-coin fee schedule + current oracle prices. Proxies to the indexer's `feeschedule`.

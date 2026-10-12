@@ -19,6 +19,22 @@ const INDEXER = path.join(__dirname, '..', '..', '..', '..', '..', 'xchain-index
 let indexerDir = null;
 const read = (f) => fs.readFileSync(path.join(indexerDir, f), 'utf8');
 
+// Resolve one time-table row of changes_4.js to its six columns, an identifier column through its
+// literal in flag_times_batch_fees.js; a column that cannot be resolved fails rather than matching.
+function batchRowColumns(name) {
+    const rows = read('changes_4.js').split('\n').filter((l) => l.trim().startsWith(`['${name}',`));
+    expect(rows, `the ${name} row appears exactly once in changes_4.js`).to.have.length(1);
+    const cols = rows[0].trim().replace(/^\[|\],?$/g, '').split(',').map((c) => c.trim()).slice(2);
+    expect(cols, `${name} carries mainnet/testnet/regtest time and block columns`).to.have.length(6);
+    const flags = read('flag_times_batch_fees.js');
+    return cols.map((c) => {
+        if (/^\d+$/.test(c)) return Number(c);
+        const literal = new RegExp(`const ${c} = (\\d+);`).exec(flags);
+        expect(literal, `${name} column ${c} resolves to a literal in flag_times_batch_fees.js`).to.not.equal(null);
+        return Number(literal[1]);
+    });
+}
+
 // Fail under XCHAIN_REQUIRE_SIBLINGS=1 and refuse a symlink into a live main checkout, like every sibling guard.
 function indexerRowsSuite() {
     before(function () {
@@ -46,6 +62,15 @@ function indexerRowsSuite() {
         expect(weighting, 'BATCH_COST_WEIGHTING_MAINNET_TIME literal in flag_times_batch_fees.js').to.not.equal(null);
         expect(Number(issuance[1])).to.equal(DISCLOSURE_MIRRORS.BATCH_ISSUANCE_LIMITS.table.mainnet);
         expect(Number(weighting[1])).to.equal(DISCLOSURE_MIRRORS.BATCH_COST_WEIGHTING.table.mainnet);
+    });
+
+    it('batch time-table rows match the pinned tables on every network, with no block gate', function () {
+        for (const name of ['BATCH_ISSUANCE_LIMITS', 'BATCH_COST_WEIGHTING']) {
+            const [mainnet, testnet, regtest, ...blocks] = batchRowColumns(name);
+            expect({ mainnet, testnet, regtest }, `${name} time columns`).to.deep.equal(DISCLOSURE_MIRRORS[name].table);
+            expect(blocks, `${name} block columns (the mirror is time-only and cannot word a block gate)`)
+                .to.deep.equal([0, 0, 0]);
+        }
     });
 }
 

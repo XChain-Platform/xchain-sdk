@@ -90,6 +90,15 @@ describe('ExplorerClient freshness markers', function () {
         c.freshness().stale = true;
         expect(c.freshness().stale).to.equal(false);
     });
+
+    it('records the freshness marker off a search response', async function () {
+        nock(BASE).get('/BTC/explorer/search/abc/token').reply(200,
+            { data: [], freshness: { stale: true, tip_block: 151038, tip_age_seconds: 215254, replica_halted: false } },
+            { 'XChain-Freshness': 'stale', 'XChain-Tip-Block': '151038', 'XChain-Tip-Age-S': '215254' });
+        let c = client();
+        await c.search('abc', 'token');
+        expect(c.freshness()).to.include({ stale: true, tipBlock: 151038, tipAgeSeconds: 215254, replicaHalted: false });
+    });
 });
 
 describe('XChainSDK.assertFresh', function () {

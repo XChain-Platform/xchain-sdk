@@ -17,6 +17,7 @@ const Actions = require('../../../../src/actions/index.js');
 const Utility = require('../../../../src/utils/utility.js');
 const config = require('../../../../src/config.js');
 const feeMethods = require('../../../../src/XChainSDK/fees_and_services.js');
+const coins = require('../../../../src/coins');
 
 const FAKE_WIF = 'L1rkA9mYRjVPVdvMuVbHRMX6SPHM7fNwCEfT3AV2qCGAmJ8wNfp';
 const FEE_DEST = 'Lfees7tszAx5Gqam2fuqf6biaX3LXafM4H';
@@ -49,6 +50,7 @@ function makeSdk(coin, calls, quote) {
 }
 
 const GOOD_QUOTE = { supported: true, valid: true, requiredFeeSats: 123456, feeDestination: FEE_DEST };
+const BTC_FEE_DEST = coins.getCoinConfig('BTC', 'mainnet').addresses.FEE_DESTINATION;
 
 describe('Workflows deployContract() native fee output', function () {
 
@@ -80,7 +82,8 @@ describe('Workflows deployContract() native fee output', function () {
 
     it('honours an explicit payFeeInNativeCoin on BTC', async function () {
         const calls = [];
-        await new Workflows(makeSdk('BTC', calls, GOOD_QUOTE)).deployContract(FAKE_WIF,
+        const btcQuote = Object.assign({}, GOOD_QUOTE, { feeDestination: BTC_FEE_DEST });
+        await new Workflows(makeSdk('BTC', calls, btcQuote)).deployContract(FAKE_WIF,
             { code: 'x', gasLimit: 1 }, undefined, { payFeeInNativeCoin: true });
         assert.strictEqual(calls[0].enc.customOutputs.length, 1);
     });
@@ -102,6 +105,15 @@ describe('Workflows deployContract() native fee refusal and chunks', function ()
         const wf = new Workflows(makeSdk('LTC', calls, { supported: false, error: 'no oracle' }));
         await assert.rejects(() => wf.deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 }),
             (e) => e.code === 'NATIVE_FEE_UNSUPPORTED');
+        assert.strictEqual(calls.length, 0);
+    });
+
+    it('refuses a quote that names a fee destination other than the pinned one, before any DEPLOY', async function () {
+        const calls = [];
+        const hostile = Object.assign({}, GOOD_QUOTE, { feeDestination: 'LhVQUXo7FkwSxpZdh7mPTtLUBKcQyHM5tk' });
+        const wf = new Workflows(makeSdk('LTC', calls, hostile));
+        await assert.rejects(() => wf.deployContract(FAKE_WIF, { code: 'x', gasLimit: 1 }),
+            (e) => e.code === 'NATIVE_FEE_DESTINATION_MISMATCH');
         assert.strictEqual(calls.length, 0);
     });
 

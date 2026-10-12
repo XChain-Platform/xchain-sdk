@@ -52,7 +52,7 @@ describe('x402', () => {
         it('pays via the session and retries with the proof header until 200', async () => {
             const session = { address: 'payerAddr', send: sinon.stub().resolves({ txid: 'txZZ' }) };
             const f = mkFetch([402, 402, 200]);
-            const client = new X402Client({ session, fetch: f, retryDelayMs: 1, maxRetries: 5 });
+            const client = new X402Client({ session, fetch: f, maxAmount: { TOK: '10' }, retryDelayMs: 1, maxRetries: 5 });
             const res = await client.fetchUrl('http://x/r');
             expect(res.status).to.equal(200);
             expect(session.send.firstCall.args[0]).to.deep.equal({ tick: 'TOK', amount: '5', destination: 'gateAddr', memo: NONCE });
@@ -69,14 +69,14 @@ describe('x402', () => {
             catch (e) { expect(e.code).to.equal('X402_PRICE_TOO_HIGH'); }
             expect(session.send.called).to.equal(false);
 
-            const willing = new X402Client({ session, fetch: mkFetch([402]), retryDelayMs: 1 });
+            const willing = new X402Client({ session, fetch: mkFetch([402]), maxAmount: { TOK: '10' }, retryDelayMs: 1 });
             try { await willing.fetchUrl('http://x/r'); throw new Error('nope'); }
             catch (e) { expect(e).to.be.instanceOf(SDKPolicyError); }
         });
 
         it('surfaces X402_PAYMENT_AMBIGUOUS carrying the txid after maxRetries (no silent re-pay)', async () => {
             const session = { address: 'p', send: sinon.stub().resolves({ txid: 't' }) };
-            const client = new X402Client({ session, fetch: mkFetch([402, 402, 402, 402]), retryDelayMs: 1, maxRetries: 2 });
+            const client = new X402Client({ session, fetch: mkFetch([402, 402, 402, 402]), maxAmount: { TOK: '10' }, retryDelayMs: 1, maxRetries: 2 });
             try { await client.fetchUrl('http://x/r'); throw new Error('nope'); }
             catch (e) {
                 expect(e.code).to.equal('X402_PAYMENT_AMBIGUOUS');
@@ -89,7 +89,7 @@ describe('x402', () => {
         it('a post-broadcast send throw (CONFIRMATION_TIMEOUT) becomes X402_PAYMENT_AMBIGUOUS with the txid', async () => {
             const timeout = new SDKActionError('CONFIRMATION_TIMEOUT', 'timed out', { txid: 'txLIMBO' });
             const session = { address: 'p', send: sinon.stub().rejects(timeout) };
-            const client = new X402Client({ session, fetch: mkFetch([402]), retryDelayMs: 1 });
+            const client = new X402Client({ session, fetch: mkFetch([402]), maxAmount: { TOK: '10' }, retryDelayMs: 1 });
             try { await client.fetchUrl('http://x/r'); throw new Error('nope'); }
             catch (e) {
                 expect(e.code).to.equal('X402_PAYMENT_AMBIGUOUS');
@@ -128,7 +128,7 @@ describe('x402', () => {
             const f = sinon.stub().resolves({ status: 402, json: async () => dear, headers: {} });
             const client = new X402Client({ session, fetch: f, retryDelayMs: 1 });
             try { await client.fetchUrl('http://x/r'); throw new Error('nope'); }
-            catch (e) { expect(e.code).to.equal('X402_PRICE_TOO_HIGH'); }
+            catch (e) { expect(e.code).to.equal('X402_TICK_NOT_ALLOWED'); }
             expect(session.send.called).to.equal(false);
         });
 
@@ -186,7 +186,7 @@ describe('x402', () => {
                     const result = await gw.verify(proof, '/r');
                     return { status: result.ok ? 200 : 402, json: async () => body, headers: {} };
                 });
-                const client = new X402Client({ session, fetch, retryDelayMs: 1, maxRetries: 3 });
+                const client = new X402Client({ session, fetch, maxAmount: { TOK: '5' }, retryDelayMs: 1, maxRetries: 3 });
                 const res = await client.fetchUrl('http://x/r');
                 expect(res.status).to.equal(200);
             } finally { fs.rmSync(tmp, { recursive: true, force: true }); }

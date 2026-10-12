@@ -24,12 +24,17 @@ const { WebSocket, WS_CONNECTING, WS_OPEN, WS_SCHEMA_VERSION } = require('./webs
 const { SDKExplorerError } = require('../utils/errors.js');
 const { installMethods } = require('../utils/install_methods.js');
 const { dropCatchUp } = require('./websocket/catch_up.js');
+const { hasHttpScheme, hasWsScheme } = require('../utils/endpoints.js');
 
 function websocketUrl(client) {
+    // A full ws(s) URL is used as given, with any trailing slash stripped and no port added.
+    if (hasWsScheme(client.baseUrl)) {
+        return client.baseUrl.replace(/\/+$/, '') + '/' + client.coin + '/api/websocket';
+    }
     // Tolerate baseUrl already being a full http(s) URL (e.g. derived from
     // explorerUrl when websocketUrl wasn't set). In that case strip any
     // trailing slash and swap http→ws / https→wss for the WebSocket scheme.
-    if (client.baseUrl.startsWith('http://') || client.baseUrl.startsWith('https://')) {
+    if (hasHttpScheme(client.baseUrl)) {
         let wsBase = client.baseUrl.replace(/^http/, 'ws').replace(/\/+$/, '');
         return wsBase + '/' + client.coin + '/api/websocket';
     }

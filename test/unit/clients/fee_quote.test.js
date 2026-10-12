@@ -27,6 +27,8 @@ const { expect } = require('chai');
 const nock = require('nock');
 const ExplorerClient = require('../../../src/clients/explorer.js');
 const { XChainSDK } = require('../../../index.js');
+const coins = require('../../../src/coins');
+const { parseCoinCode } = require('../../../src/utils/endpoints.js');
 
 let makeSdk;
 
@@ -93,6 +95,7 @@ describe('Native-coin fee quote (client)', function () {
         makeSdk = function (quote) {
             let sdk = new XChainSDK({ network: 'bitcoin-regtest' });
             sdk.explorer = {
+                coin: 'RBTC',
                 _seen: null,
                 getFeeQuote: async function (args) { this._seen = args; return Object.assign({ supported: true, valid: true, requiredFeeSats: 2000, feeDestination: 'feeDest' }, quote || {}); }
             };
@@ -291,9 +294,14 @@ describe('Native-coin fee quote (client)', function () {
 const ISSUE = { action: 'ISSUE', params: { tick: 'NEWTICK', description: 'x' } };
 // The stub explorer carries the connected chain the way the real client sets explorer.coin
 function onChain(coin, quote) {
-    let sdk = makeSdk(quote);
+    let sdk = makeSdk(Object.assign({ feeDestination: pinnedFeeDest(coin) }, quote || {}));
     sdk.explorer.coin = coin;
     return sdk;
+}
+// The consensus-pinned fee address an honest node quotes for a route coin
+function pinnedFeeDest(coin) {
+    const plane = parseCoinCode(coin);
+    return coins.getCoinConfig(plane.coin, plane.network).addresses.FEE_DESTINATION;
 }
 async function refusal(p) {
     try { await p; } catch (e) { return e; }
@@ -307,14 +315,14 @@ describe('Native-coin fee quote (client) on a native-fee chain', function () {
         let sdk = onChain('RDOGE');
         let r = await sdk.estimateFees(ISSUE, { pubkey: 'pk', change: 'src1' });
         expect(sdk.explorer._seen, 'the quote must be requested').to.not.equal(null);
-        expect(sdk.encoder._seen.customOutputs).to.deep.equal([{ address: 'feeDest', value: 2000 }]);
+        expect(sdk.encoder._seen.customOutputs).to.deep.equal([{ address: pinnedFeeDest('RDOGE'), value: 2000 }]);
         expect(r.nativeFeeQuote).to.include({ requiredFeeSats: 2000 });
     });
 
     it('estimateFees adds the fee output on LTC when the caller passes no flag', async function () {
         let sdk = onChain('LTC');
         await sdk.estimateFees(ISSUE, { pubkey: 'pk', change: 'src1' });
-        expect(sdk.encoder._seen.customOutputs).to.deep.equal([{ address: 'feeDest', value: 2000 }]);
+        expect(sdk.encoder._seen.customOutputs).to.deep.equal([{ address: pinnedFeeDest('LTC'), value: 2000 }]);
     });
 
     it('estimateFees honours an explicit payFeeInNativeCoin:false on DOGE', async function () {
