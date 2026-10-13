@@ -89,84 +89,89 @@ function escapeRe(s) {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function declaredMethodTests(cls) {
+    for (const [name, type] of Object.entries(SDK_METHODS)) {
+        it(name + ' is declared on XChainSDK and resolves to ' + type, function () {
+            const re = new RegExp('^ {4}' + name + '\\(.*\\): Promise<' + escapeRe(type) + '>;$', 'm');
+            assert.match(cls, re);
+        });
+
+        it(name + ' exists on the runtime XChainSDK prototype', function () {
+            assert.strictEqual(typeof XChainSDK.prototype[name], 'function', name + ' is declared but not implemented');
+        });
+    }
+}
+
+function capabilityThresholdTests(dts) {
+    it('declares exactly the hub row fields, each required, with the pinned type', function () {
+        const props = topLevelProps(interfaceBody(dts, 'CapabilityThreshold'));
+        assert.deepStrictEqual(Object.keys(props).sort(), Object.keys(THRESHOLD_FIELDS).sort());
+        for (const [name, type] of Object.entries(THRESHOLD_FIELDS)) {
+            assert.strictEqual(props[name].optional, false, name + ' must be required');
+            assert.strictEqual(props[name].type, type, name + ' type drifted');
+        }
+    });
+}
+
+function feeQuoteTests(dts) {
+    it('declares every field the SDK fee path reads, with supported required', function () {
+        const props = topLevelProps(interfaceBody(dts, 'FeeQuote'));
+        for (const name of FEE_QUOTE_READS) assert.ok(props[name], name + ' is read by the SDK but undeclared');
+        assert.strictEqual(props.supported.optional, false);
+        assert.strictEqual(props.supported.type, 'boolean');
+    });
+
+    it('NativeFeeQuote extends FeeQuote with the priced action string', function () {
+        assert.match(dts, /export interface NativeFeeQuote extends FeeQuote \{/);
+        assert.strictEqual(topLevelProps(interfaceBody(dts, 'NativeFeeQuote')).actionString.type, 'string');
+    });
+}
+
+function feeScheduleTests(dts) {
+    it('declares OracleFeeQuote, FeeSchedule and ExplorerClient', function () {
+        for (const n of ['OracleFeeQuote', 'FeeSchedule', 'ExplorerClient'])
+            assert.match(dts, new RegExp('export interface ' + n + '\\b'));
+    });
+
+    it('ExplorerClient declares the fee reads the runtime client implements', function () {
+        const ExplorerClient = require('../../../src/clients/explorer.js');
+        const body = interfaceBody(dts, 'ExplorerClient');
+        for (const name of ['getFeeQuote', 'getFeeSchedule']) {
+            assert.match(body, new RegExp('^ {4}' + name + '\\(', 'm'));
+            assert.strictEqual(typeof ExplorerClient.prototype[name], 'function', name + ' is declared but not implemented');
+        }
+    });
+
+    it('PreflightVerdict stays pass | warn | fail', function () {
+        assert.match(dts, /export type PreflightVerdict = 'pass' \| 'warn' \| 'fail';/);
+    });
+}
+
+function producerTests() {
+    for (const p of PRODUCERS) {
+        const rel = p.file.join('/');
+        it(rel + ' still produces the pinned fields', function () {
+            const file = path.join(SIBLINGS, ...p.file);
+            if (!fs.existsSync(file)) {
+                if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1') throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but ' + file + ' is missing');
+                return this.skip();
+            }
+            const src = fs.readFileSync(file, 'utf8');
+            // A field is produced as an object-literal key or as an assignment onto the answer.
+            for (const f of p.fields) assert.match(src, new RegExp('\\b' + f + ':|\\.' + f + '\\s*='), rel + ' no longer produces ' + f);
+        });
+    }
+}
+
 describe('XChainSDK fee and threshold types in index.d.ts', function () {
     const dts = fs.readFileSync(DTS, 'utf8');
     const cls = sdkClassBody(dts);
 
-    describe('declared methods', function () {
-        for (const [name, type] of Object.entries(SDK_METHODS)) {
-            it(name + ' is declared on XChainSDK and resolves to ' + type, function () {
-                const re = new RegExp('^ {4}' + name + '\\(.*\\): Promise<' + escapeRe(type) + '>;$', 'm');
-                assert.match(cls, re);
-            });
-
-            it(name + ' exists on the runtime XChainSDK prototype', function () {
-                assert.strictEqual(typeof XChainSDK.prototype[name], 'function', name + ' is declared but not implemented');
-            });
-        }
-    });
-
-    describe('CapabilityThreshold', function () {
-        it('declares exactly the hub row fields, each required, with the pinned type', function () {
-            const props = topLevelProps(interfaceBody(dts, 'CapabilityThreshold'));
-            assert.deepStrictEqual(Object.keys(props).sort(), Object.keys(THRESHOLD_FIELDS).sort());
-            for (const [name, type] of Object.entries(THRESHOLD_FIELDS)) {
-                assert.strictEqual(props[name].optional, false, name + ' must be required');
-                assert.strictEqual(props[name].type, type, name + ' type drifted');
-            }
-        });
-    });
-
-    describe('FeeQuote', function () {
-        it('declares every field the SDK fee path reads, with supported required', function () {
-            const props = topLevelProps(interfaceBody(dts, 'FeeQuote'));
-            for (const name of FEE_QUOTE_READS) assert.ok(props[name], name + ' is read by the SDK but undeclared');
-            assert.strictEqual(props.supported.optional, false);
-            assert.strictEqual(props.supported.type, 'boolean');
-        });
-
-        it('NativeFeeQuote extends FeeQuote with the priced action string', function () {
-            assert.match(dts, /export interface NativeFeeQuote extends FeeQuote \{/);
-            assert.strictEqual(topLevelProps(interfaceBody(dts, 'NativeFeeQuote')).actionString.type, 'string');
-        });
-    });
-
-    describe('fee schedule declarations', function () {
-        it('declares OracleFeeQuote, FeeSchedule and ExplorerClient', function () {
-            for (const n of ['OracleFeeQuote', 'FeeSchedule', 'ExplorerClient'])
-                assert.match(dts, new RegExp('export interface ' + n + '\\b'));
-        });
-
-        it('ExplorerClient declares the fee reads the runtime client implements', function () {
-            const ExplorerClient = require('../../../src/clients/explorer.js');
-            const props = topLevelProps(interfaceBody(dts, 'ExplorerClient'));
-            for (const name of ['getFeeQuote', 'getFeeSchedule']) {
-                assert.match(interfaceBody(dts, 'ExplorerClient'), new RegExp('^ {4}' + name + '\\(', 'm'));
-                assert.strictEqual(typeof ExplorerClient.prototype[name], 'function', name + ' is declared but not implemented');
-            }
-            assert.ok(props);
-        });
-
-        it('PreflightVerdict stays pass | warn | fail', function () {
-            assert.match(dts, /export type PreflightVerdict = 'pass' \| 'warn' \| 'fail';/);
-        });
-    });
-
-    describe('producers', function () {
-        for (const p of PRODUCERS) {
-            const rel = p.file.join('/');
-            it(rel + ' still produces the pinned fields', function () {
-                const file = path.join(SIBLINGS, ...p.file);
-                if (!fs.existsSync(file)) {
-                    if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1') throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but ' + file + ' is missing');
-                    return this.skip();
-                }
-                const src = fs.readFileSync(file, 'utf8');
-                // A field is produced as an object-literal key or as an assignment onto the answer.
-                for (const f of p.fields) assert.match(src, new RegExp('\\b' + f + ':|\\.' + f + '\\s*='), rel + ' no longer produces ' + f);
-            });
-        }
-    });
+    describe('declared methods', () => declaredMethodTests(cls));
+    describe('CapabilityThreshold', () => capabilityThresholdTests(dts));
+    describe('FeeQuote', () => feeQuoteTests(dts));
+    describe('fee schedule declarations', () => feeScheduleTests(dts));
+    describe('producers', producerTests);
 });
 
 describe('XChainSDK.getFeeQuote', function () {
