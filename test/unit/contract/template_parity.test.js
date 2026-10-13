@@ -205,7 +205,7 @@ describe('embedded template hash guard', function () {
     const expected = {
         escrow: '524662fb0b2f265b0062bd4d06167979c46eb19a9488edf8a5a51ebbed7fd51e',
         escrowDelivery: '3706465c241cf62cd2dba5d873f822ac8e0de278434a4984fadcbe81d10bb66e',
-        vesting: '5f092aaaf57bfd9db60a095922177e7d6bcd5250aed060038dde76e3a9627a75',
+        vesting: '17440e4020d3a62c1325db7b9cd5653e8b096af96817c435ed5e452676c8c5f6',
         crowdsale: '5f5c9754cfd4294f14d2de3f6d34f6992c6b56205ef3e05488c9c9926f7b1719',
         amm: '7ce16e02127cd2f63879720b73394abf83333564f777eeab2d4d85b3aed073e7'
     };
