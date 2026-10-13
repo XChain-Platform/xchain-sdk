@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The raw encoder client `estimateFee` passes the envelope answer through unchecked.
 
 ### Fixed
+- `submitAction` now authorizes the hub `feeQuote` protocol-fee output in its reconcile gate, capped at the quoted address and amount, so a quoted submit no longer fails `UNRECONCILED_OUTPUT`. For P2SH and P2WSH two-phase encodings the output is not authorized on the funding phase.
 - Corrected the 0.23.0 note on encoder -32603 handling: the encoder client retries no encoder JSON-RPC body error, -32603 included, because such errors mix node outages with node rejections and are treated as final.
 
 ## [0.23.0] - 2026-10-11
