@@ -38,6 +38,8 @@ const SDK_METHODS = {
     quoteNativeFee:          'NativeFeeQuote',
     getFeeQuote:             'FeeQuote',
     getCapabilityThresholds: 'CapabilityThreshold[] | null',
+    getFeeSchedule:          'FeeSchedule',
+    nativeFeeOutputs:        'CustomOutput[]',
 };
 
 // CapabilityThreshold: field -> declared type, matching the hub's row exactly.
@@ -126,6 +128,27 @@ describe('XChainSDK fee and threshold types in index.d.ts', function () {
         it('NativeFeeQuote extends FeeQuote with the priced action string', function () {
             assert.match(dts, /export interface NativeFeeQuote extends FeeQuote \{/);
             assert.strictEqual(topLevelProps(interfaceBody(dts, 'NativeFeeQuote')).actionString.type, 'string');
+        });
+    });
+
+    describe('fee schedule declarations', function () {
+        it('declares OracleFeeQuote, FeeSchedule and ExplorerClient', function () {
+            for (const n of ['OracleFeeQuote', 'FeeSchedule', 'ExplorerClient'])
+                assert.match(dts, new RegExp('export interface ' + n + '\\b'));
+        });
+
+        it('ExplorerClient declares the fee reads the runtime client implements', function () {
+            const ExplorerClient = require('../../../src/clients/explorer.js');
+            const props = topLevelProps(interfaceBody(dts, 'ExplorerClient'));
+            for (const name of ['getFeeQuote', 'getFeeSchedule']) {
+                assert.match(interfaceBody(dts, 'ExplorerClient'), new RegExp('^ {4}' + name + '\\(', 'm'));
+                assert.strictEqual(typeof ExplorerClient.prototype[name], 'function', name + ' is declared but not implemented');
+            }
+            assert.ok(props);
+        });
+
+        it('PreflightVerdict stays pass | warn | fail', function () {
+            assert.match(dts, /export type PreflightVerdict = 'pass' \| 'warn' \| 'fail';/);
         });
     });
 
