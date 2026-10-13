@@ -175,14 +175,6 @@
       "XChainSDK \u2013 WebSocket convenience methods onToken removes the SNAPSHOT handler on unsubscribe",
       "XChainSDK \u2013 WebSocket convenience methods onToken subscribes to token and fires on TOKEN_UPDATE"
     ],
-    "05472391a4b64276": [
-      "pre-flight activation splits are mirrored, not hard-coded against the indexer rows amount representability table matches the addGate row",
-      "pre-flight activation splits are mirrored, not hard-coded against the indexer rows batch mainnet constants match the flag-time file",
-      "pre-flight activation splits are mirrored, not hard-coded describes each pinned table by value",
-      "pre-flight activation splits are mirrored, not hard-coded pins the representability and batch gates",
-      "pre-flight activation splits are mirrored, not hard-coded the batch weight finding is worded from the pinned issuance-limits table",
-      "pre-flight activation splits are mirrored, not hard-coded the dispenser representability disclosure is built from the pinned table"
-    ],
     "0703fff6ef6ff5b6": [
       "Actions \u2013 introspection getActionFields(\"ISSUE\") with no version returns a union of all fields across all versions",
       "Actions \u2013 introspection getActionFields(\"SEND\", 0) includes exactly VERSION, TICK, AMOUNT, DESTINATION, MEMO",
@@ -340,17 +332,6 @@
       "Fuzz \u2013 Group 5: Prototype pollution attempts constructor key in params \u2192 must not crash",
       "Fuzz \u2013 Group 5: Prototype pollution attempts hasOwnProperty key in params \u2192 must not crash",
       "Fuzz \u2013 Group 5: Prototype pollution attempts toString key in params \u2192 must not crash"
-    ],
-    "0c6823c64a5b4c70": [
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core.js matches xchain-vm/src/lint-core.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_globals.js matches xchain-vm/src/lint-core/banned_globals.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_syntax.js matches xchain-vm/src/lint-core/banned_syntax.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_with.js matches xchain-vm/src/lint-core/banned_with.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/constants.js matches xchain-vm/src/lint-core/constants.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/contract_analysis.js matches xchain-vm/src/lint-core/contract_analysis.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/nesting_depth.js matches xchain-vm/src/lint-core/nesting_depth.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/result_composition.js matches xchain-vm/src/lint-core/result_composition.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/scope_analysis.js matches xchain-vm/src/lint-core/scope_analysis.js"
     ],
     "0cf4de364aa3d626": [
       "Actions \u2013 createAction result structure encoding and psbt are both null when no encoder option provided",
@@ -1619,14 +1600,6 @@
     "3298906a0629b99d": [
       "pre-flight Tier-2 per-action matrix VOTE (re-vote legal; state unverified) never hard-blocks a cast ballot on re-vote grounds"
     ],
-    "3353bb21af70e9c5": [
-      "XChainSDK estimateFees: chunked carriers and the reconcile gate binds a chunked FILE carrier to the rawData the caller sent",
-      "XChainSDK estimateFees: chunked carriers and the reconcile gate fails closed on a feeQuote output the reconcile gate cannot authorize",
-      "XChainSDK estimateFees: chunked carriers and the reconcile gate refuses a chunked FILE carrier whose rawData push was substituted",
-      "XChainSDK estimateFees: the request matches the one submitAction sends forwards every shared createTx option except the AUTO capability hint",
-      "XChainSDK estimateFees: the request matches the one submitAction sends keeps the native-fee output when the caller also passes customOutputs",
-      "XChainSDK estimateFees: the request matches the one submitAction sends leaves unset options absent rather than sending them as undefined"
-    ],
     "34261b0d7e3e2a65": [
       "XChainSDK encoder methods encodeTx delegates to encoder.createTx",
       "XChainSDK encoder methods estimateFees REFUSES an encoder answer that diverts value to a destination nobody asked for",
@@ -1832,24 +1805,6 @@
       "WalletUtils signEcdsa() should throw INVALID_INPUT for wrong msgHash type (string)",
       "WalletUtils signEcdsa() should throw INVALID_INPUT for wrong secretKey length",
       "WalletUtils signEcdsa() should throw INVALID_INPUT for wrong secretKey type (string)"
-    ],
-    "3c04c51aa1ef09b3": [
-      "vendored deploy-lint: banned-with banned-with is a consensus rule",
-      "vendored deploy-lint: banned-with clean code has no banned-with finding",
-      "vendored deploy-lint: banned-with does not flag the word with in identifiers, properties, strings or comments",
-      "vendored deploy-lint: banned-with flags a with statement with its line",
-      "vendored deploy-lint: banned-with flags every with statement, nested ones included",
-      "vendored deploy-lint: banned-with lintSource emits an error-severity finding carrying the line",
-      "vendored deploy-lint: banned-with yields no hits for unparseable source",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core.js matches xchain-vm/src/lint-core.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_globals.js matches xchain-vm/src/lint-core/banned_globals.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_syntax.js matches xchain-vm/src/lint-core/banned_syntax.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_with.js matches xchain-vm/src/lint-core/banned_with.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/constants.js matches xchain-vm/src/lint-core/constants.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/contract_analysis.js matches xchain-vm/src/lint-core/contract_analysis.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/nesting_depth.js matches xchain-vm/src/lint-core/nesting_depth.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/result_composition.js matches xchain-vm/src/lint-core/result_composition.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/scope_analysis.js matches xchain-vm/src/lint-core/scope_analysis.js"
     ],
     "3c4c0a0a729c93f7": [
       "FormatSelector.serialize(): trailing empty fields are trimmed BROADCAST v0 with only MESSAGE trims empty VALUE",
@@ -2269,6 +2224,17 @@
       "decoder.describe \u00a73.5 adversarial fixtures exponential AMOUNT is flagged, never prettified",
       "decoder.describe \u00a73.5 adversarial fixtures multi-leg amounts are formatted per leg, no false junk flag",
       "decoder.describe \u00a73.5 adversarial fixtures zero-width in TICK-adjacent text is stripped and flagged"
+    ],
+    "4aab71cfb0d09588": [
+      "Workflows deployContract() native fee output attaches it on DOGE regtest",
+      "Workflows deployContract() native fee output attaches nothing on BTC and never asks for a quote",
+      "Workflows deployContract() native fee output attaches the quoted fee output to the DEPLOY on LTC",
+      "Workflows deployContract() native fee output honours an explicit payFeeInNativeCoin on BTC",
+      "Workflows deployContract() native fee output honours payFeeInNativeCoin:false on LTC",
+      "Workflows deployContract() native fee refusal and chunks deploys without a fee output on an LTC node whose native fees are off",
+      "Workflows deployContract() native fee refusal and chunks pays the fee on every chunk carrier and the assembler",
+      "Workflows deployContract() native fee refusal and chunks refuses a quote that names a fee destination other than the pinned one, before any DEPLOY",
+      "Workflows deployContract() native fee refusal and chunks refuses an unsupported quote before any DEPLOY is submitted"
     ],
     "4bb5fd0056d156b5": [
       "CompressionUtils (Part B) constants carries the pinned codes and caps",
@@ -2908,6 +2874,16 @@
       "BATCH_COST_WEIGHTING: batchBuilder enforces the weighted budget builder half reports the budget BEFORE a per-ACTION cap, as the arbiter does",
       "BATCH_COST_WEIGHTING: batchBuilder enforces the weighted budget builder half still refuses an empty batch first of all"
     ],
+    "60fef4183eb776bf": [
+      "SPV \u00a77.3: a rotation-followed checkpoint must match the attested step on every signed field verifyAction refuses a served checkpoint whose block_hash differs from the attested step",
+      "SPV \u00a77.3: a rotation-followed checkpoint must match the attested step on every signed field verifyBalance refuses a served checkpoint whose actions_hash differs from the attested step",
+      "SPV \u00a77.3: a rotation-followed checkpoint must match the attested step on every signed field verifyBalance refuses a served checkpoint whose block_hash differs from the attested step",
+      "SPV \u00a77.3: a rotation-followed checkpoint must match the attested step on every signed field verifyBalance refuses a served checkpoint whose checkpoint_seq differs from the attested step",
+      "SPV \u00a77.3: a rotation-followed checkpoint must match the attested step on every signed field verifyBalance refuses a served checkpoint whose contract_hash differs from the attested step",
+      "SPV \u00a77.3: a rotation-followed checkpoint must match the attested step on every signed field verifyBalance refuses a served checkpoint whose fold_archive differs from the attested step",
+      "SPV \u00a77.3: a rotation-followed checkpoint must match the attested step on every signed field verifyBalance refuses a served checkpoint whose ledger_hash differs from the attested step",
+      "SPV \u00a77.3: followForward never adopts a step whose roots are unsigned followForward stops at a genuinely signed step below the commitment flag day (ROOTS_NOT_SIGNED)"
+    ],
     "612e59010c37e275": [
       "co-signer: the envelope on a 2-of-3 account all three envelope rounds complete on a 2-of-3 cancels under the commit output key, tweaked by the three-leaf root",
       "co-signer: the envelope on a 2-of-3 account all three envelope rounds complete on a 2-of-3 commits under the account key path (the tap-tweaked 2-of-3 output key)",
@@ -2972,18 +2948,6 @@
       "XChainSDK \u2013 WebSocket convenience methods onAddress still scopes those later lifecycle types to the subscribed address",
       "XChainSDK \u2013 WebSocket convenience methods onAddress subscribes to address and fires on ADDRESS_UPDATE",
       "XChainSDK \u2013 WebSocket convenience methods onAddress unsubscribe detaches the later lifecycle handlers too"
-    ],
-    "62762c2e2534db8a": [
-      "WebSocketClient reconnect catch-up: continuation and refusal continues a truncated replay from where the server stopped",
-      "WebSocketClient reconnect catch-up: continuation and refusal emits no not_replayed event when the list is absent or empty",
-      "WebSocketClient reconnect catch-up: continuation and refusal emits not_replayed with the lifecycle types a completed replay could not carry",
-      "WebSocketClient reconnect catch-up: continuation and refusal emits resync_required for a refused catch-up and still replays the next subscription",
-      "WebSocketClient reconnect catch-up: continuation and refusal reports an unanswered catch-up as a gap once its timeout passes",
-      "WebSocketClient reconnect catch-up: sequencing replays two action subscriptions one at a time from the pre-disconnect cursor, with none refused",
-      "WebSocketClient reconnect catch-up: sequencing resubscribes a blocks subscription at once, without since_action_index",
-      "WebSocketClient reconnect catch-up: which frames move the cursor a CATCH_UP_COMPLETE outside a replay still advances the cursor",
-      "WebSocketClient reconnect catch-up: which frames move the cursor a replay notes NEW_ACTION and CATCH_UP_COMPLETE but not entity ids",
-      "WebSocketClient reconnect catch-up: which frames move the cursor an idle client ignores entity ids and still advances on NEW_ACTION"
     ],
     "6302e056650d1159": [
       "DECIMALS boundary accepts DECIMALS = 0",
@@ -3097,6 +3061,15 @@
       "Validator \u2013 VM action rules validates valid DEPOSIT fields",
       "Validator \u2013 VM action rules validates valid EXECUTE fields",
       "Validator \u2013 VM action rules validates valid WITHDRAW fields"
+    ],
+    "6557483e59be3df6": [
+      "x402 X402Client per-tick ceiling matches a ceiling key to the offer tick regardless of case",
+      "x402 X402Client per-tick ceiling pays an offer within the ceiling set for its tick",
+      "x402 X402Client per-tick ceiling refuses a malformed offer amount, tick or payee, without paying",
+      "x402 X402Client per-tick ceiling refuses a server-named tick that has no ceiling, without paying",
+      "x402 X402Client per-tick ceiling refuses an offer above its tick ceiling, without paying",
+      "x402 X402Client per-tick ceiling refuses every offer when no maxAmount is given, without paying",
+      "x402 X402Client per-tick ceiling rejects a malformed ceiling at construction"
     ],
     "65652b14b5833264": [
       "ExplorerClient hooks fires onError hook on failure",
@@ -3959,6 +3932,15 @@
       "ContractUtils validate() returns valid=true with no warnings for integer-only code",
       "ContractUtils validate() warns about float literals when acorn available"
     ],
+    "839e3f9edf6be107": [
+      "drift gate sibling resolution (\u00a78.5) fails, rather than skipping, when no indexer checkout resolves",
+      "drift gate sibling resolution (\u00a78.5) lets XCHAIN_REQUIRE_SIBLINGS=1 override the declaration",
+      "drift gate sibling resolution (\u00a78.5) says a directory that is not an indexer checkout is a different fact from an absent one",
+      "drift gate sibling resolution (\u00a78.5) skips only when the run DECLARES it has no indexer, and says nothing was compared",
+      "drift gate sibling resolution (\u00a78.5) still resolves and COMPARES a checkout that carries the handler directory",
+      "drift gate sibling resolution: lane symlink refusal accepts the same layout when this checkout is not a linked worktree",
+      "drift gate sibling resolution: lane symlink refusal refuses a symlink into a live main checkout from a linked worktree"
+    ],
     "83e1e33c49971b8b": [
       "MessagingUtils @crypto @regression getAllMessages() merges across explorers and sorts by block descending",
       "MessagingUtils @crypto @regression getAllMessages() skips an explorer that throws",
@@ -4010,6 +3992,12 @@
     ],
     "86e209190552c399": [
       "ExplorerClient readyHook awaits readyHook before each GET request"
+    ],
+    "873fef0a741218a4": [
+      "feeQuote authorized output estimateFees accepts the quoted output",
+      "feeQuote authorized output helper maps a quote to an address/value pair and rejects malformed quotes",
+      "feeQuote authorized output refuses an output above the quoted amount",
+      "feeQuote authorized output refuses an output to a different address than the quote"
     ],
     "8746fd5d70e8b944": [
       "light client ANCHOR v3 parser leaves the shipped v0 parser and version boundary unchanged",
@@ -4266,6 +4254,18 @@
       "action-roundtrip golden generator running the generator as a script leaves the committed golden byte-identical",
       "action-roundtrip golden generator the committed golden is exactly what the generator produces"
     ],
+    "8f107f54d55098e0": [
+      "ExplorerClient fee methods getFeeQuote returns result",
+      "ExplorerClient fee methods getFeeQuote with feeOutputSats",
+      "ExplorerClient fee methods getFeeQuote with string params",
+      "ExplorerClient fee methods getFeeSchedule returns result",
+      "ExplorerClient pre-flight transport getPreflight keeps a small action on the GET route",
+      "ExplorerClient pre-flight transport getPreflight posts an action too long for a GET line to the same route as a JSON body",
+      "ExplorerClient price methods getPriceSnapshots with query returns result",
+      "ExplorerClient price methods getPriceSnapshots without query returns result",
+      "ExplorerClient price methods getPrices with query returns result",
+      "ExplorerClient price methods getPrices without query returns result"
+    ],
     "8f658a2569c4c4db": [
       "WalletUtils broadcastTx() should throw on empty txHex",
       "WalletUtils broadcastTx() should throw without encoder"
@@ -4320,6 +4320,25 @@
       "G8: unresolved-tick window accumulation the reserved bucket lies outside the protocol tick charset",
       "wire collapse: a single request/response shape a single-input approval returns a one-element signatures array, not a bare sig",
       "wire collapse: a single request/response shape refuses the legacy single-input request shape"
+    ],
+    "909cd7807a8cef9e": [
+      "vendored deploy-lint: banned-with banned-with is a consensus rule",
+      "vendored deploy-lint: banned-with clean code has no banned-with finding",
+      "vendored deploy-lint: banned-with does not flag the word with in identifiers, properties, strings or comments",
+      "vendored deploy-lint: banned-with flags a with statement with its line",
+      "vendored deploy-lint: banned-with flags every with statement, nested ones included",
+      "vendored deploy-lint: banned-with lintSource emits an error-severity finding carrying the line",
+      "vendored deploy-lint: banned-with yields no hits for unparseable source",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core.js matches xchain-vm/src/lint-core.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_globals.js matches xchain-vm/src/lint-core/banned_globals.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_syntax.js matches xchain-vm/src/lint-core/banned_syntax.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_with.js matches xchain-vm/src/lint-core/banned_with.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/constants.js matches xchain-vm/src/lint-core/constants.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/contract_analysis.js matches xchain-vm/src/lint-core/contract_analysis.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/nesting_depth.js matches xchain-vm/src/lint-core/nesting_depth.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/result_composition.js matches xchain-vm/src/lint-core/result_composition.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/scope_analysis.js matches xchain-vm/src/lint-core/scope_analysis.js",
+      "vendored deploy-lint: sibling location stays with the run no test module assigns an XCHAIN_ sibling directory, path or root variable"
     ],
     "90eae5e9ed3d466d": [
       "BATCH pre-flight (Tier 1 sub-command verdicts) oracle fees are disclosed, not judged a per-oracle total becomes an info finding naming the amount and address",
@@ -4652,6 +4671,30 @@
       "EncoderClient node rejection retry boundary does not retry a deterministic get_utxos tracker rejection",
       "EncoderClient node rejection retry boundary does not retry an ambiguous broadcast_tx connection reset"
     ],
+    "9ad3f6672c5dced4": [
+      "XChainSDK fee and threshold types in index.d.ts CapabilityThreshold declares exactly the hub row fields, each required, with the pinned type",
+      "XChainSDK fee and threshold types in index.d.ts FeeQuote NativeFeeQuote extends FeeQuote with the priced action string",
+      "XChainSDK fee and threshold types in index.d.ts FeeQuote declares every field the SDK fee path reads, with supported required",
+      "XChainSDK fee and threshold types in index.d.ts declared methods getCapabilityThresholds exists on the runtime XChainSDK prototype",
+      "XChainSDK fee and threshold types in index.d.ts declared methods getCapabilityThresholds is declared on XChainSDK and resolves to CapabilityThreshold[] | null",
+      "XChainSDK fee and threshold types in index.d.ts declared methods getFeeQuote exists on the runtime XChainSDK prototype",
+      "XChainSDK fee and threshold types in index.d.ts declared methods getFeeQuote is declared on XChainSDK and resolves to FeeQuote",
+      "XChainSDK fee and threshold types in index.d.ts declared methods getFeeSchedule exists on the runtime XChainSDK prototype",
+      "XChainSDK fee and threshold types in index.d.ts declared methods getFeeSchedule is declared on XChainSDK and resolves to FeeSchedule",
+      "XChainSDK fee and threshold types in index.d.ts declared methods nativeFeeOutputs exists on the runtime XChainSDK prototype",
+      "XChainSDK fee and threshold types in index.d.ts declared methods nativeFeeOutputs is declared on XChainSDK and resolves to CustomOutput[]",
+      "XChainSDK fee and threshold types in index.d.ts declared methods quoteNativeFee exists on the runtime XChainSDK prototype",
+      "XChainSDK fee and threshold types in index.d.ts declared methods quoteNativeFee is declared on XChainSDK and resolves to NativeFeeQuote",
+      "XChainSDK fee and threshold types in index.d.ts fee schedule declarations ExplorerClient declares the fee reads the runtime client implements",
+      "XChainSDK fee and threshold types in index.d.ts fee schedule declarations PreflightVerdict stays pass | warn | fail",
+      "XChainSDK fee and threshold types in index.d.ts fee schedule declarations declares OracleFeeQuote, FeeSchedule and ExplorerClient",
+      "XChainSDK fee and threshold types in index.d.ts producers xchain-hub/src/api/rpc/system.js still produces the pinned fields",
+      "XChainSDK fee and threshold types in index.d.ts producers xchain-indexer/src/actions/actions_class/fee_pricing.js still produces the pinned fields",
+      "XChainSDK fee and threshold types in index.d.ts producers xchain-indexer/src/actions/actions_class/quote_answers.js still produces the pinned fields",
+      "XChainSDK fee and threshold types in index.d.ts producers xchain-indexer/src/actions/actions_class/quote_surfaces.js still produces the pinned fields",
+      "XChainSDK.getFeeQuote refuses an answer that is not a quote",
+      "XChainSDK.getFeeQuote returns the explorer quote for the request it was given"
+    ],
     "9b72f93e4302645d": [
       "LIST ticker item compaction does not compact on an unarmed mainnet",
       "LIST ticker item compaction guards compacts a format 1 edit only when its parent is a ticker list",
@@ -4857,6 +4900,23 @@
       "describe: DISPENSER v0 create fills estimate omits the line when the per-fill amount is zero or a value is not numeric",
       "describe: DISPENSER v0 create fills estimate still renders a whitespace-padded escrow instead of throwing"
     ],
+    "a4310d736d1058ce": [
+      "ExplorerClient freshness markers hands back a copy, so a caller cannot edit the record",
+      "ExplorerClient freshness markers is null before any marked response has been seen",
+      "ExplorerClient freshness markers leaves the record untouched on a response with no marker (an older explorer)",
+      "ExplorerClient freshness markers prefers the body object on a stale response, which also carries the halt signal",
+      "ExplorerClient freshness markers reads the live marker off the headers of an ordinary data response",
+      "ExplorerClient freshness markers records the freshness marker off a search response",
+      "LifecycleManager strictFreshness does not consult freshness at all by default, so a wallet keeps working through a stall",
+      "LifecycleManager strictFreshness proceeds past the gate when the coin is live",
+      "LifecycleManager strictFreshness refuses before anything is resolved or encoded when the coin is stale",
+      "XChainSDK.assertFresh passes a coin the explorer does not measure, flagged as unmeasured",
+      "XChainSDK.assertFresh probes /status when nothing marked has been seen, and passes on a live coin",
+      "XChainSDK.assertFresh re-probes once the last marker is older than maxAgeMs",
+      "XChainSDK.assertFresh reads only its own coin off /status, never a stale sibling",
+      "XChainSDK.assertFresh throws SDKExplorerError COIN_DATA_STALE on a stale coin, carrying the freshness record",
+      "XChainSDK.assertFresh uses a recent per-response marker without a /status round trip"
+    ],
     "a510e9513d1e96a6": [
       "EncoderClient RPC ID increments with each call"
     ],
@@ -4909,6 +4969,21 @@
       "Address (DESTINATION) length boundary accepts a 35-character DESTINATION (maximum P2PKH length)",
       "Address (DESTINATION) length boundary accepts a 42-character DESTINATION (segwit)",
       "Address (DESTINATION) length boundary rejects a 25-character DESTINATION (one below minimum)"
+    ],
+    "a8181a088edcff2f": [
+      "WebSocketClient full-URL bases connects to a local server given as a ws:// URL",
+      "WebSocketClient full-URL bases keeps the port written into a ws:// base and adds none",
+      "WebSocketClient full-URL bases still gives a bare host the protocol and default port",
+      "WebSocketClient full-URL bases still maps an https:// base to wss://",
+      "WebSocketClient full-URL bases strips a trailing slash from a wss:// base",
+      "WebSocketClient full-URL bases treats a bare host that starts with wss as a host, not a URL",
+      "WebSocketClient full-URL bases uses a wss:// base as given, with no port added",
+      "endpoints websocket scheme detection hasWsScheme needs the scheme separator, not just a ws prefix",
+      "endpoints websocket scheme detection isSecureUrl accepts https:// and wss:// only",
+      "isDowngrade with a wss:// websocket base blocks hub discovery replacing a wss:// websocket base with a bare host",
+      "isDowngrade with a wss:// websocket base blocks hub discovery replacing a wss:// websocket base with an http endpoint",
+      "isDowngrade with a wss:// websocket base lets hub discovery move a wss:// websocket base to an https explorer",
+      "isDowngrade with a wss:// websocket base still refuses a wss:// endpoint for an https explorer client"
     ],
     "a84228d650a20881": [
       "Validator: FILE GATE_MIN_AMOUNT (PC-29) shared GATE_MIN_AMOUNT vectors divisibility is not this layer's call: 0.000000000000000001 passes the format check",
@@ -4981,13 +5056,6 @@
       "BATCH limit-scan conformance (SDK mirror vs arbiter) weight conformance (BATCH_COST_WEIGHTING) arbiter half (sibling xchain-indexer checkout) inline DEPLOY (format 0) weighs the VM 30",
       "BATCH limit-scan conformance (SDK mirror vs arbiter) weight conformance (BATCH_COST_WEIGHTING) arbiter half (sibling xchain-indexer checkout) mirrors the arbiter budget and weight table byte-for-byte",
       "BATCH limit-scan conformance (SDK mirror vs arbiter) weight conformance (BATCH_COST_WEIGHTING) arbiter half (sibling xchain-indexer checkout) the carrier discount does not leak to its companions: one EXECUTE among them still counts 30"
-    ],
-    "a99998591825d375": [
-      "drift gate sibling resolution (\u00a78.5) fails, rather than skipping, when no indexer checkout resolves",
-      "drift gate sibling resolution (\u00a78.5) lets XCHAIN_REQUIRE_SIBLINGS=1 override the declaration",
-      "drift gate sibling resolution (\u00a78.5) says a directory that is not an indexer checkout is a different fact from an absent one",
-      "drift gate sibling resolution (\u00a78.5) skips only when the run DECLARES it has no indexer, and says nothing was compared",
-      "drift gate sibling resolution (\u00a78.5) still resolves and COMPARES a checkout that carries the handler directory"
     ],
     "ab04df4ecad84c1c": [
       "decoder.describe multi-destroy a non-positive leg amount is flagged",
@@ -5351,16 +5419,6 @@
       "VM Actions \u2013 WITHDRAW rejects WITHDRAW with non-positive QUANTITY",
       "VM Actions \u2013 WITHDRAW rejects WITHDRAW without required fields"
     ],
-    "b6ac5e87eddd5868": [
-      "ExplorerClient fee methods getFeeQuote returns result",
-      "ExplorerClient fee methods getFeeQuote with feeOutputSats",
-      "ExplorerClient fee methods getFeeQuote with string params",
-      "ExplorerClient fee methods getFeeSchedule returns result",
-      "ExplorerClient price methods getPriceSnapshots with query returns result",
-      "ExplorerClient price methods getPriceSnapshots without query returns result",
-      "ExplorerClient price methods getPrices with query returns result",
-      "ExplorerClient price methods getPrices without query returns result"
-    ],
     "b6b19af080edab98": [
       "pre-flight engine input normalization accepts a ParsedAction directly",
       "pre-flight engine input normalization accepts an {action, params} object",
@@ -5427,6 +5485,14 @@
       "BATCH pre-flight (Tier 1 sub-command verdicts) the door: BATCH reaches the endpoint calls /preflight for BATCH instead of short-circuiting",
       "BATCH pre-flight (Tier 1 sub-command verdicts) the door: BATCH reaches the endpoint does NOT fall back to /feequote for BATCH when /preflight is absent",
       "BATCH pre-flight (Tier 1 sub-command verdicts) the door: BATCH reaches the endpoint the other denylisted actions still never call the endpoint"
+    ],
+    "bae1f8660d59554d": [
+      "Native-coin fee destination pin estimateFees on regtest takes the quoted destination, since the node may carry an env override",
+      "Native-coin fee destination pin estimateFees pays the pinned address when the quote names it",
+      "Native-coin fee destination pin estimateFees refuses a mainnet quote naming a non-pinned destination before the encoder is asked",
+      "Native-coin fee destination pin estimateFees refuses a malformed fee amount before the encoder is asked",
+      "Native-coin fee destination pin estimateFees with an explicit opt-in refuses when the connected chain is unknown",
+      "Native-coin fee destination pin nativeFeeOutputs refuses a testnet quote naming a non-pinned destination"
     ],
     "bbb33c6c0038619d": [
       "pre-flight Tier-2 per-action matrix EXECUTE (no method-existence check in handler) surfaces the runtime-revert-with-fee note as unverified, never a block"
@@ -5628,6 +5694,15 @@
     "bf50e8fa4f7240a2": [
       "BATCH pre-flight (Tier 1 sub-command verdicts) an invalid batch header still reports DRYRUN_INVALID, and no sub-commands ran"
     ],
+    "c021b5c53225333d": [
+      "pre-flight activation splits are mirrored, not hard-coded against the indexer rows amount representability table matches the addGate row",
+      "pre-flight activation splits are mirrored, not hard-coded against the indexer rows batch mainnet constants match the flag-time file",
+      "pre-flight activation splits are mirrored, not hard-coded against the indexer rows batch time-table rows match the pinned tables on every network, with no block gate",
+      "pre-flight activation splits are mirrored, not hard-coded describes each pinned table by value",
+      "pre-flight activation splits are mirrored, not hard-coded pins the representability and batch gates",
+      "pre-flight activation splits are mirrored, not hard-coded the batch weight finding is worded from the pinned issuance-limits table",
+      "pre-flight activation splits are mirrored, not hard-coded the dispenser representability disclosure is built from the pinned table"
+    ],
     "c0577e3b0291d7e6": [
       "contract identity (meta): static read + deploy pre-flight walletSession.deploy() pre-flight deployChunk refuses a nameless inline source and passes a carrier slice through",
       "contract identity (meta): static read + deploy pre-flight walletSession.deploy() pre-flight preflight:'off' and preflight:false submit the same nameless deploy",
@@ -5770,6 +5845,14 @@
       "EncoderClient retryable transport fault retries a connection reset for a read-only RPC and returns the later result",
       "EncoderClient retryable transport fault retries an HTTP 503 for get_utxos and returns the later result",
       "EncoderClient retryable transport fault surfaces ENCODER_NETWORK after connection-reset retries are spent"
+    ],
+    "c492d3c9c3649b94": [
+      "XChainSDK estimateFees: chunked carriers and the reconcile gate authorizes the feeQuote output the caller submitted",
+      "XChainSDK estimateFees: chunked carriers and the reconcile gate binds a chunked FILE carrier to the rawData the caller sent",
+      "XChainSDK estimateFees: chunked carriers and the reconcile gate refuses a chunked FILE carrier whose rawData push was substituted",
+      "XChainSDK estimateFees: the request matches the one submitAction sends forwards every shared createTx option except the AUTO capability hint",
+      "XChainSDK estimateFees: the request matches the one submitAction sends keeps the native-fee output when the caller also passes customOutputs",
+      "XChainSDK estimateFees: the request matches the one submitAction sends leaves unset options absent rather than sending them as undefined"
     ],
     "c519a27fcb01f81e": [
       "MessagingUtils @crypto @regression ECDH/AES (bytes) aesDecrypt (string mode) still decrypts aesEncryptBytes text payloads",
@@ -6552,16 +6635,6 @@
       "prototype method descriptors of split classes installMethods defines methods with the flags a class body gives them",
       "prototype method descriptors of split classes installMethods installs sources in order, a later source winning a shared key"
     ],
-    "e37912476e93135e": [
-      "Workflows deployContract() native fee output attaches it on DOGE regtest",
-      "Workflows deployContract() native fee output attaches nothing on BTC and never asks for a quote",
-      "Workflows deployContract() native fee output attaches the quoted fee output to the DEPLOY on LTC",
-      "Workflows deployContract() native fee output honours an explicit payFeeInNativeCoin on BTC",
-      "Workflows deployContract() native fee output honours payFeeInNativeCoin:false on LTC",
-      "Workflows deployContract() native fee refusal and chunks deploys without a fee output on an LTC node whose native fees are off",
-      "Workflows deployContract() native fee refusal and chunks pays the fee on every chunk carrier and the assembler",
-      "Workflows deployContract() native fee refusal and chunks refuses an unsupported quote before any DEPLOY is submitted"
-    ],
     "e393e309eb532d75": [
       "retry helpers (pure) getDelay caps exponential backoff at maxDelay (jitter is applied after the cap)",
       "retry helpers (pure) getDelay falls back to exponential backoff (+/- jitter) without a Retry-After",
@@ -6573,6 +6646,21 @@
       "retry helpers (pure) parseRetryAfter parses integer seconds to milliseconds",
       "retry helpers (pure) parseRetryAfter returns null for an unparseable value",
       "retry helpers (pure) parseRetryAfter returns null for falsy input"
+    ],
+    "e3ebb9552d1a9476": [
+      "WebSocketClient reconnect catch-up: a stale replica emits no stale_replay for a replay closed fresh",
+      "WebSocketClient reconnect catch-up: a stale replica emits stale_replay for a replay closed stale, and still advances the cursor to the rows delivered",
+      "WebSocketClient reconnect catch-up: a stale replica emits stale_replay once for a stale replay continued past a truncated round",
+      "WebSocketClient reconnect catch-up: continuation and refusal continues a truncated replay from where the server stopped",
+      "WebSocketClient reconnect catch-up: continuation and refusal emits no not_replayed event when the list is absent or empty",
+      "WebSocketClient reconnect catch-up: continuation and refusal emits not_replayed with the lifecycle types a completed replay could not carry",
+      "WebSocketClient reconnect catch-up: continuation and refusal emits resync_required for a refused catch-up and still replays the next subscription",
+      "WebSocketClient reconnect catch-up: continuation and refusal reports an unanswered catch-up as a gap once its timeout passes",
+      "WebSocketClient reconnect catch-up: sequencing replays two action subscriptions one at a time from the pre-disconnect cursor, with none refused",
+      "WebSocketClient reconnect catch-up: sequencing resubscribes a blocks subscription at once, without since_action_index",
+      "WebSocketClient reconnect catch-up: which frames move the cursor a CATCH_UP_COMPLETE outside a replay still advances the cursor",
+      "WebSocketClient reconnect catch-up: which frames move the cursor a replay notes NEW_ACTION and CATCH_UP_COMPLETE but not entity ids",
+      "WebSocketClient reconnect catch-up: which frames move the cursor an idle client ignores entity ids and still advances on NEW_ACTION"
     ],
     "e416290efb6ceb3d": [
       "NftHelpers attachContentParams() maps file/issue action indices to LINK coin1/coin2 fields",
@@ -6733,6 +6821,18 @@
       "FormatSelector.select(): explicit VERSION must be a canonical integer still rejects a well-shaped version the action does not define",
       "FormatSelector.select(): explicit VERSION must be a canonical integer the error names the value it refused, so the caller can see what it sent"
     ],
+    "e76d44ec1ed903fd": [
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core.js matches xchain-vm/src/lint-core.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_globals.js matches xchain-vm/src/lint-core/banned_globals.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_syntax.js matches xchain-vm/src/lint-core/banned_syntax.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_with.js matches xchain-vm/src/lint-core/banned_with.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/constants.js matches xchain-vm/src/lint-core/constants.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/contract_analysis.js matches xchain-vm/src/lint-core/contract_analysis.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/nesting_depth.js matches xchain-vm/src/lint-core/nesting_depth.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/result_composition.js matches xchain-vm/src/lint-core/result_composition.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/scope_analysis.js matches xchain-vm/src/lint-core/scope_analysis.js",
+      "vendored deploy-lint: sibling location stays with the run no test module assigns an XCHAIN_ sibling directory, path or root variable"
+    ],
     "e79b34ecf9c11e4a": [
       "MessagingUtils @crypto @regression send(): validation guards encodes a real MESSAGE v2 action and returns txid on a successful ECIES send",
       "MessagingUtils @crypto @regression send(): validation guards encrypts a binary payload with AES method (round-trips via aesDecryptBytes)",
@@ -6875,6 +6975,12 @@
     "eea85d333892a161": [
       "reconcileEncoded malformed caps fail closed DENIES a malformed maxFeeSats instead of dropping the fee ceiling",
       "reconcileEncoded malformed caps fail closed DENIES a malformed maxPhaseFundingSats instead of dropping the leg ceiling"
+    ],
+    "eebac5455d0d2da4": [
+      "pre-flight Tier-2 per-action matrix DISPENSER sleep and allow/block-list refusals are declared server-side a cancel and a no-top-up edit declare SOURCE sleep state alone",
+      "pre-flight Tier-2 per-action matrix DISPENSER sleep and allow/block-list refusals are declared server-side a refill names the give token rules behind the refill-policy activation",
+      "pre-flight Tier-2 per-action matrix DISPENSER sleep and allow/block-list refusals are declared server-side an open declares SOURCE and GIVE_TICK sleep state and both list checks",
+      "pre-flight Tier-2 per-action matrix DISPENSER sleep and allow/block-list refusals are declared server-side stays declared when the dispenser lookup is unavailable or finds nothing"
     ],
     "eebc30e04409424c": [
       "bridge: SDK wire formats ISSUE gains format 7 and leaves formats 0 to 6 untouched",
@@ -7241,30 +7347,14 @@
       "contract identity (meta): static read + deploy pre-flight getExportedMeta() reports a literal that is not a string in nonStringLiteral",
       "contract identity (meta): static read + deploy pre-flight getExportedMeta() separates a MISSING key (null) from a key present but non-literal (computed)"
     ],
-    "fd84c4df57085bae": [
-      "ExplorerClient freshness markers hands back a copy, so a caller cannot edit the record",
-      "ExplorerClient freshness markers is null before any marked response has been seen",
-      "ExplorerClient freshness markers leaves the record untouched on a response with no marker (an older explorer)",
-      "ExplorerClient freshness markers prefers the body object on a stale response, which also carries the halt signal",
-      "ExplorerClient freshness markers reads the live marker off the headers of an ordinary data response",
-      "LifecycleManager strictFreshness does not consult freshness at all by default, so a wallet keeps working through a stall",
-      "LifecycleManager strictFreshness proceeds past the gate when the coin is live",
-      "LifecycleManager strictFreshness refuses before anything is resolved or encoded when the coin is stale",
-      "XChainSDK.assertFresh passes a coin the explorer does not measure, flagged as unmeasured",
-      "XChainSDK.assertFresh probes /status when nothing marked has been seen, and passes on a live coin",
-      "XChainSDK.assertFresh re-probes once the last marker is older than maxAgeMs",
-      "XChainSDK.assertFresh reads only its own coin off /status, never a stale sibling",
-      "XChainSDK.assertFresh throws SDKExplorerError COIN_DATA_STALE on a stale coin, carrying the freshness record",
-      "XChainSDK.assertFresh uses a recent per-response marker without a /status round trip"
-    ],
     "fd92af277f1b8725": [
       "EncoderClient readyHook awaits readyHook before each RPC call"
     ]
   },
   "scripts": {
     "test": {
-      "fileCount": 551,
-      "titleCount": 5730,
+      "fileCount": 558,
+      "titleCount": 5806,
       "files": {
         "test/unit/actions/action_roundtrip_golden.test.js": "0889dd14dd14af13",
         "test/unit/actions/actions.test.js": "e72dbd6bc6ac1b9a",
@@ -7324,7 +7414,7 @@
         "test/unit/actions/workflows.test/07_resolve_deployed_contract.test.js": "2bed02ef6c6d9ad1",
         "test/unit/actions/workflows.test/08_deploy_contract_chunked_funding_leg.test.js": "5576f4821dc4979e",
         "test/unit/actions/workflows.test/09_action_index_of.test.js": "c814f78b9c8185a2",
-        "test/unit/actions/workflows.test/10_deploy_contract_native_fee.test.js": "e37912476e93135e",
+        "test/unit/actions/workflows.test/10_deploy_contract_native_fee.test.js": "4aab71cfb0d09588",
         "test/unit/api/api_auth_gate.test.js": "63619a72a6a85671",
         "test/unit/api/api_batch_cap.test.js": "6abb57b79a51e287",
         "test/unit/api/api_listener.test.js": "42d0222dd88f5616",
@@ -7377,7 +7467,7 @@
         "test/unit/clients/explorer.test/methods/08_balance_address_methods.test.js": "8d28445edad4718f",
         "test/unit/clients/explorer.test/methods/09_transaction_history_methods.test.js": "48e251906ec456f6",
         "test/unit/clients/explorer.test/methods/10_action_specific_methods.test.js": "ef2a6fc60f4ca071",
-        "test/unit/clients/explorer.test/methods/11_fee_methods.test.js": "b6ac5e87eddd5868",
+        "test/unit/clients/explorer.test/methods/11_fee_methods.test.js": "8f107f54d55098e0",
         "test/unit/clients/explorer.test/methods/12_contract_vm_methods.test.js": "64102ac392c58c92",
         "test/unit/clients/explorer.test/methods/13_attestation_methods.test.js": "7da9e8ec9fa96305",
         "test/unit/clients/explorer.test/methods/14_betting_reads.test.js": "657d49d3ff203543",
@@ -7385,10 +7475,11 @@
         "test/unit/clients/explorer/path_segment.test.js": "44458ab76d5cef25",
         "test/unit/clients/explorer_batch.test.js": "1403e3f96513eee2",
         "test/unit/clients/explorer_contract_row_types.test.js": "f1509539263b7cbd",
-        "test/unit/clients/explorer_freshness.test.js": "fd84c4df57085bae",
+        "test/unit/clients/explorer_freshness.test.js": "a4310d736d1058ce",
         "test/unit/clients/explorer_response_types.test.js": "141df50b6dc0f1fc",
         "test/unit/clients/explorer_route_contract.test.js": "af88a5dab4d4b43f",
         "test/unit/clients/fee_quote.test.js": "bd47cb862843d661",
+        "test/unit/clients/fee_quote_pinned_destination.test.js": "bae1f8660d59554d",
         "test/unit/clients/hub.test.js": "c81a4d1b1b19ae73",
         "test/unit/clients/hub.test/01_get_all_config.test.js": "637e95e9ee69cb49",
         "test/unit/clients/hub.test/02_ping.test.js": "a96f406deb9783aa",
@@ -7423,7 +7514,7 @@
         "test/unit/clients/websocket/websocket.test/03_emit_and_connection_lost.test.js": "c6c38104ad45ec9a",
         "test/unit/clients/websocket/websocket.test/04_latest_action_index_tracking.test.js": "a66187140aa93ab9",
         "test/unit/clients/websocket/websocket_bundler_interop.test.js": "34f473d0e384ae26",
-        "test/unit/clients/websocket/websocket_catch_up.test.js": "62762c2e2534db8a",
+        "test/unit/clients/websocket/websocket_catch_up.test.js": "e3ebb9552d1a9476",
         "test/unit/clients/websocket/websocket_convenience.test.js": "deec5a095c8b2024",
         "test/unit/clients/websocket/websocket_convenience.test/01_on_block.test.js": "2daae22e85db73d7",
         "test/unit/clients/websocket/websocket_convenience.test/02_on_action.test.js": "1624ce0c406b2282",
@@ -7441,6 +7532,7 @@
         "test/unit/clients/websocket/websocket_convenience.test/14_unsubscribe_return_value.test.js": "0b7e25d1390e869c",
         "test/unit/clients/websocket/websocket_convenience.test/15_statuses_filter_is_not_advertised_regression.test.js": "54d6dc19b052776a",
         "test/unit/clients/websocket/websocket_detached_subscribe.test.js": "5ab9d4769345672e",
+        "test/unit/clients/websocket/websocket_full_url.test.js": "a8181a088edcff2f",
         "test/unit/coins/address_parity.test.js": "392b6e06020fd4b3",
         "test/unit/coins/coins_conformance.test.js": "2442df610ebb6911",
         "test/unit/coins/coins_no_filesystem.test.js": "606950257bf479c5",
@@ -7462,7 +7554,7 @@
         "test/unit/contract/chunk_helper/code_size.test.js": "80b9bd007d2ac9ff",
         "test/unit/contract/contract_client.test.js": "30dca91fc67eac4d",
         "test/unit/contract/contract_lint_banned_with.test.js": "f48a98be337a65d6",
-        "test/unit/contract/contract_lint_banned_with_parity.test.js": "0c6823c64a5b4c70",
+        "test/unit/contract/contract_lint_banned_with_parity.test.js": "e76d44ec1ed903fd",
         "test/unit/contract/contract_lint_destructure.test.js": "9481a25a83b3f20c",
         "test/unit/contract/contract_lint_global_alias.test.js": "121815bf45a0311e",
         "test/unit/contract/contract_lint_optional_chain.test.js": "ddd6f2464ac1217e",
@@ -7587,7 +7679,7 @@
         "test/unit/preflight/batch/batch.test/04_pre_flight_batch_cost_weight_budget.test.js": "30fb7c34e6e36aa9",
         "test/unit/preflight/bridge_tick_rules.test.js": "1cd7fdb28fdab0e1",
         "test/unit/preflight/caret_refs.test.js": "e6c849b6eaaa439a",
-        "test/unit/preflight/checks/activation_splits_mirrored.test.js": "05472391a4b64276",
+        "test/unit/preflight/checks/activation_splits_mirrored.test.js": "c021b5c53225333d",
         "test/unit/preflight/checks/checks.test.js": "10a6d1416312f006",
         "test/unit/preflight/checks/checks.test/01_issue_existence_reject_ownership_gate.test.js": "708d08e96b3fa2c3",
         "test/unit/preflight/checks/checks.test/02_mint_two_caps_no_fee.test.js": "632c2919a161558e",
@@ -7605,6 +7697,7 @@
         "test/unit/preflight/checks/checks.test/14_native_fee_forfeiture_disclosure.test.js": "9d3ecf41453ca551",
         "test/unit/preflight/checks/checks.test/15_op_return_carrier_cap_parity_with_compose_time_gate.test.js": "df97ec7283defdfb",
         "test/unit/preflight/checks/checks.test/16_dispenser_settlement_price_gate.test.js": "1469a7dc74069461",
+        "test/unit/preflight/checks/checks.test/17_dispenser_sleep_and_list_restrictions.test.js": "eebac5455d0d2da4",
         "test/unit/preflight/checks/dividend.test.js": "029a2759dd7866d1",
         "test/unit/preflight/constants/constants.test.js": "3e30426312edb6cc",
         "test/unit/preflight/constants/constants.test/01_drift_map.test.js": "ad6ae06c5811177e",
@@ -7616,7 +7709,7 @@
         "test/unit/preflight/custody/custody_map_rows.test.js": "3151828024be21f7",
         "test/unit/preflight/drift_gate/drift_gate_handler_dirs.test.js": "e00c86e682cfea08",
         "test/unit/preflight/drift_gate/drift_gate_modes.test.js": "2f077466c150fa38",
-        "test/unit/preflight/drift_gate/drift_gate_sibling_resolution.test.js": "a99998591825d375",
+        "test/unit/preflight/drift_gate/drift_gate_sibling_resolution.test.js": "839e3f9edf6be107",
         "test/unit/preflight/engine/engine.test.js": "448487a1808bc033",
         "test/unit/preflight/engine/engine.test/01_input_normalization.test.js": "b6b19af080edab98",
         "test/unit/preflight/engine/engine.test/02_report_shape_4_2.test.js": "8290eb0cf8465d4f",
@@ -7686,6 +7779,7 @@
         "test/unit/protocol/light/light.test/08_spv_7_3_rotation_aware_pinned_path_follow_forward.test.js": "a642d1867223aa67",
         "test/unit/protocol/light/light.test/09_spv_phase_4_doge_anchor_cold_start_trust.test.js": "446a816c74c3e1c6",
         "test/unit/protocol/light/light.test/10_anchor_fold_v3_cold_start_trust.test.js": "17d4121b8213b71a",
+        "test/unit/protocol/light/light.test/11_spv_7_3_follow_forward_signed_field_binding.test.js": "60fef4183eb776bf",
         "test/unit/protocol/light/light.test/anchor_bundle_order.test.js": "e082fc71f6438b42",
         "test/unit/protocol/light/light.test/anchor_bundle_order_helpers.test.js": "480d3f9cba3f934c",
         "test/unit/protocol/light/light.test/anchor_v3_bundle_order.test.js": "567b49dd3d5eae61",
@@ -7731,6 +7825,7 @@
         "test/unit/sdk/convenience.test/01_convenience_action_methods.test.js": "19d80e5cb57f6539",
         "test/unit/sdk/convenience.test/02_batch_builder.test.js": "56598ba9c441ec7d",
         "test/unit/sdk/convenience.test/03_batch_builder_child_issue_compaction.test.js": "18463a2ea4b1d31d",
+        "test/unit/sdk/fee_method_types.test.js": "9ad3f6672c5dced4",
         "test/unit/sdk/mempool_surface.test.js": "492e2266f6f99e96",
         "test/unit/sdk/mempool_surface.test/01_the_per_address_guard.test.js": "87dca2ea46c2a540",
         "test/unit/sdk/mempool_surface.test/02_the_shared_refcounted_address_subscription.test.js": "701da992f7a606c3",
@@ -7753,7 +7848,8 @@
         "test/unit/sdk/xchain_sdk.test/07_websocket_methods.test.js": "00bb9b016468d274",
         "test/unit/sdk/xchain_sdk.test/08_apply_endpoints.test.js": "e24aa9972c20c1c5",
         "test/unit/sdk/xchain_sdk.test/09_action_shortcut_methods.test.js": "ee6c1e212efd2771",
-        "test/unit/sdk/xchain_sdk.test/10_estimate_fees_request.test.js": "3353bb21af70e9c5",
+        "test/unit/sdk/xchain_sdk.test/10_estimate_fees_request.test.js": "c492d3c9c3649b94",
+        "test/unit/sdk/xchain_sdk.test/11_fee_quote_authorized_output.test.js": "873fef0a741218a4",
         "test/unit/security/configuration/dependency_advisories.test.js": "0f2abe37f99c5a17",
         "test/unit/tooling/batch_arbiter_loader.test.js": "74408e9ca166ae3b",
         "test/unit/tooling/coverage_thresholds_sync.test.js": "25619da680526453",
@@ -7816,12 +7912,13 @@
         "test/unit/wallet/x402.test/01_x402_gateway.test.js": "a390a388a8cd0d37",
         "test/unit/wallet/x402.test/02_x402_gateway_payer_signature_binding.test.js": "f3d9fadc8597c800",
         "test/unit/wallet/x402.test/03_x402_client.test.js": "0f442213605187b8",
+        "test/unit/wallet/x402.test/04_x402_client_per_tick_ceiling.test.js": "6557483e59be3df6",
         "test/unit/xcall-constants-cross-repo.test.js": "049843dad5d3e7f1"
       }
     },
     "test:all": {
-      "fileCount": 590,
-      "titleCount": 6059,
+      "fileCount": 597,
+      "titleCount": 6135,
       "files": {
         "test/boundary/boundary.test.js": "51c5d77e922af958",
         "test/boundary/boundary.test/01_tick_name_length_boundary.test.js": "2291494717b9aaab",
@@ -7921,7 +8018,7 @@
         "test/unit/actions/workflows.test/07_resolve_deployed_contract.test.js": "2bed02ef6c6d9ad1",
         "test/unit/actions/workflows.test/08_deploy_contract_chunked_funding_leg.test.js": "5576f4821dc4979e",
         "test/unit/actions/workflows.test/09_action_index_of.test.js": "c814f78b9c8185a2",
-        "test/unit/actions/workflows.test/10_deploy_contract_native_fee.test.js": "e37912476e93135e",
+        "test/unit/actions/workflows.test/10_deploy_contract_native_fee.test.js": "4aab71cfb0d09588",
         "test/unit/api/api_auth_gate.test.js": "63619a72a6a85671",
         "test/unit/api/api_batch_cap.test.js": "6abb57b79a51e287",
         "test/unit/api/api_listener.test.js": "42d0222dd88f5616",
@@ -7974,7 +8071,7 @@
         "test/unit/clients/explorer.test/methods/08_balance_address_methods.test.js": "8d28445edad4718f",
         "test/unit/clients/explorer.test/methods/09_transaction_history_methods.test.js": "48e251906ec456f6",
         "test/unit/clients/explorer.test/methods/10_action_specific_methods.test.js": "ef2a6fc60f4ca071",
-        "test/unit/clients/explorer.test/methods/11_fee_methods.test.js": "b6ac5e87eddd5868",
+        "test/unit/clients/explorer.test/methods/11_fee_methods.test.js": "8f107f54d55098e0",
         "test/unit/clients/explorer.test/methods/12_contract_vm_methods.test.js": "64102ac392c58c92",
         "test/unit/clients/explorer.test/methods/13_attestation_methods.test.js": "7da9e8ec9fa96305",
         "test/unit/clients/explorer.test/methods/14_betting_reads.test.js": "657d49d3ff203543",
@@ -7982,10 +8079,11 @@
         "test/unit/clients/explorer/path_segment.test.js": "44458ab76d5cef25",
         "test/unit/clients/explorer_batch.test.js": "1403e3f96513eee2",
         "test/unit/clients/explorer_contract_row_types.test.js": "f1509539263b7cbd",
-        "test/unit/clients/explorer_freshness.test.js": "fd84c4df57085bae",
+        "test/unit/clients/explorer_freshness.test.js": "a4310d736d1058ce",
         "test/unit/clients/explorer_response_types.test.js": "141df50b6dc0f1fc",
         "test/unit/clients/explorer_route_contract.test.js": "af88a5dab4d4b43f",
         "test/unit/clients/fee_quote.test.js": "bd47cb862843d661",
+        "test/unit/clients/fee_quote_pinned_destination.test.js": "bae1f8660d59554d",
         "test/unit/clients/hub.test.js": "c81a4d1b1b19ae73",
         "test/unit/clients/hub.test/01_get_all_config.test.js": "637e95e9ee69cb49",
         "test/unit/clients/hub.test/02_ping.test.js": "a96f406deb9783aa",
@@ -8020,7 +8118,7 @@
         "test/unit/clients/websocket/websocket.test/03_emit_and_connection_lost.test.js": "c6c38104ad45ec9a",
         "test/unit/clients/websocket/websocket.test/04_latest_action_index_tracking.test.js": "a66187140aa93ab9",
         "test/unit/clients/websocket/websocket_bundler_interop.test.js": "34f473d0e384ae26",
-        "test/unit/clients/websocket/websocket_catch_up.test.js": "62762c2e2534db8a",
+        "test/unit/clients/websocket/websocket_catch_up.test.js": "e3ebb9552d1a9476",
         "test/unit/clients/websocket/websocket_convenience.test.js": "deec5a095c8b2024",
         "test/unit/clients/websocket/websocket_convenience.test/01_on_block.test.js": "2daae22e85db73d7",
         "test/unit/clients/websocket/websocket_convenience.test/02_on_action.test.js": "1624ce0c406b2282",
@@ -8038,6 +8136,7 @@
         "test/unit/clients/websocket/websocket_convenience.test/14_unsubscribe_return_value.test.js": "0b7e25d1390e869c",
         "test/unit/clients/websocket/websocket_convenience.test/15_statuses_filter_is_not_advertised_regression.test.js": "54d6dc19b052776a",
         "test/unit/clients/websocket/websocket_detached_subscribe.test.js": "5ab9d4769345672e",
+        "test/unit/clients/websocket/websocket_full_url.test.js": "a8181a088edcff2f",
         "test/unit/coins/address_parity.test.js": "392b6e06020fd4b3",
         "test/unit/coins/coins_conformance.test.js": "2442df610ebb6911",
         "test/unit/coins/coins_no_filesystem.test.js": "606950257bf479c5",
@@ -8058,7 +8157,7 @@
         "test/unit/contract/chunk_helper.test.js": "e22290dc42295659",
         "test/unit/contract/chunk_helper/code_size.test.js": "80b9bd007d2ac9ff",
         "test/unit/contract/contract_client.test.js": "30dca91fc67eac4d",
-        "test/unit/contract/contract_lint_banned_with.test.js": "3c04c51aa1ef09b3",
+        "test/unit/contract/contract_lint_banned_with.test.js": "909cd7807a8cef9e",
         "test/unit/contract/contract_lint_destructure.test.js": "9481a25a83b3f20c",
         "test/unit/contract/contract_lint_global_alias.test.js": "121815bf45a0311e",
         "test/unit/contract/contract_lint_optional_chain.test.js": "ddd6f2464ac1217e",
@@ -8183,7 +8282,7 @@
         "test/unit/preflight/batch/batch.test/04_pre_flight_batch_cost_weight_budget.test.js": "30fb7c34e6e36aa9",
         "test/unit/preflight/bridge_tick_rules.test.js": "1cd7fdb28fdab0e1",
         "test/unit/preflight/caret_refs.test.js": "e6c849b6eaaa439a",
-        "test/unit/preflight/checks/activation_splits_mirrored.test.js": "05472391a4b64276",
+        "test/unit/preflight/checks/activation_splits_mirrored.test.js": "c021b5c53225333d",
         "test/unit/preflight/checks/checks.test.js": "10a6d1416312f006",
         "test/unit/preflight/checks/checks.test/01_issue_existence_reject_ownership_gate.test.js": "708d08e96b3fa2c3",
         "test/unit/preflight/checks/checks.test/02_mint_two_caps_no_fee.test.js": "632c2919a161558e",
@@ -8201,6 +8300,7 @@
         "test/unit/preflight/checks/checks.test/14_native_fee_forfeiture_disclosure.test.js": "9d3ecf41453ca551",
         "test/unit/preflight/checks/checks.test/15_op_return_carrier_cap_parity_with_compose_time_gate.test.js": "df97ec7283defdfb",
         "test/unit/preflight/checks/checks.test/16_dispenser_settlement_price_gate.test.js": "1469a7dc74069461",
+        "test/unit/preflight/checks/checks.test/17_dispenser_sleep_and_list_restrictions.test.js": "eebac5455d0d2da4",
         "test/unit/preflight/checks/dividend.test.js": "029a2759dd7866d1",
         "test/unit/preflight/constants/constants.test.js": "3e30426312edb6cc",
         "test/unit/preflight/constants/constants.test/01_drift_map.test.js": "ad6ae06c5811177e",
@@ -8212,7 +8312,7 @@
         "test/unit/preflight/custody/custody_map_rows.test.js": "3151828024be21f7",
         "test/unit/preflight/drift_gate/drift_gate_handler_dirs.test.js": "e00c86e682cfea08",
         "test/unit/preflight/drift_gate/drift_gate_modes.test.js": "2f077466c150fa38",
-        "test/unit/preflight/drift_gate/drift_gate_sibling_resolution.test.js": "a99998591825d375",
+        "test/unit/preflight/drift_gate/drift_gate_sibling_resolution.test.js": "839e3f9edf6be107",
         "test/unit/preflight/engine/engine.test.js": "448487a1808bc033",
         "test/unit/preflight/engine/engine.test/01_input_normalization.test.js": "b6b19af080edab98",
         "test/unit/preflight/engine/engine.test/02_report_shape_4_2.test.js": "8290eb0cf8465d4f",
@@ -8282,6 +8382,7 @@
         "test/unit/protocol/light/light.test/08_spv_7_3_rotation_aware_pinned_path_follow_forward.test.js": "a642d1867223aa67",
         "test/unit/protocol/light/light.test/09_spv_phase_4_doge_anchor_cold_start_trust.test.js": "446a816c74c3e1c6",
         "test/unit/protocol/light/light.test/10_anchor_fold_v3_cold_start_trust.test.js": "17d4121b8213b71a",
+        "test/unit/protocol/light/light.test/11_spv_7_3_follow_forward_signed_field_binding.test.js": "60fef4183eb776bf",
         "test/unit/protocol/light/light.test/anchor_bundle_order.test.js": "e082fc71f6438b42",
         "test/unit/protocol/light/light.test/anchor_bundle_order_helpers.test.js": "480d3f9cba3f934c",
         "test/unit/protocol/light/light.test/anchor_v3_bundle_order.test.js": "567b49dd3d5eae61",
@@ -8327,6 +8428,7 @@
         "test/unit/sdk/convenience.test/01_convenience_action_methods.test.js": "19d80e5cb57f6539",
         "test/unit/sdk/convenience.test/02_batch_builder.test.js": "56598ba9c441ec7d",
         "test/unit/sdk/convenience.test/03_batch_builder_child_issue_compaction.test.js": "18463a2ea4b1d31d",
+        "test/unit/sdk/fee_method_types.test.js": "9ad3f6672c5dced4",
         "test/unit/sdk/mempool_surface.test.js": "492e2266f6f99e96",
         "test/unit/sdk/mempool_surface.test/01_the_per_address_guard.test.js": "87dca2ea46c2a540",
         "test/unit/sdk/mempool_surface.test/02_the_shared_refcounted_address_subscription.test.js": "701da992f7a606c3",
@@ -8349,7 +8451,8 @@
         "test/unit/sdk/xchain_sdk.test/07_websocket_methods.test.js": "00bb9b016468d274",
         "test/unit/sdk/xchain_sdk.test/08_apply_endpoints.test.js": "e24aa9972c20c1c5",
         "test/unit/sdk/xchain_sdk.test/09_action_shortcut_methods.test.js": "ee6c1e212efd2771",
-        "test/unit/sdk/xchain_sdk.test/10_estimate_fees_request.test.js": "3353bb21af70e9c5",
+        "test/unit/sdk/xchain_sdk.test/10_estimate_fees_request.test.js": "c492d3c9c3649b94",
+        "test/unit/sdk/xchain_sdk.test/11_fee_quote_authorized_output.test.js": "873fef0a741218a4",
         "test/unit/security/configuration/dependency_advisories.test.js": "0f2abe37f99c5a17",
         "test/unit/tooling/batch_arbiter_loader.test.js": "74408e9ca166ae3b",
         "test/unit/tooling/coverage_thresholds_sync.test.js": "25619da680526453",
@@ -8412,6 +8515,7 @@
         "test/unit/wallet/x402.test/01_x402_gateway.test.js": "a390a388a8cd0d37",
         "test/unit/wallet/x402.test/02_x402_gateway_payer_signature_binding.test.js": "f3d9fadc8597c800",
         "test/unit/wallet/x402.test/03_x402_client.test.js": "0f442213605187b8",
+        "test/unit/wallet/x402.test/04_x402_client_per_tick_ceiling.test.js": "6557483e59be3df6",
         "test/unit/xcall-constants-cross-repo.test.js": "049843dad5d3e7f1"
       }
     },
