@@ -189,3 +189,32 @@ describe('LifecycleManager', function () {
         });
     });
 });
+
+describe('LifecycleManager', function () {
+
+    afterEach(() => sinon.restore());
+
+    describe("submitAction(): P2SH two-phase encoding", function () {
+        it('forwards a feeQuote to phase-1 createTx', async function () {
+            const signed = buildSignedTx();
+            const feeQuote = { address: 'mfees5pa2HwNBonk5vG23aDWkN9fuDJib4', amount: 10678 };
+            let createTxParams = null;
+            const sdk = makeSdk({
+                wallet: {
+                    signPsbt:       () => ({ txHex: signed.txHex, txid: 'p1txid', psbtHex: signed.psbtHex }),
+                    signRevealPsbt: () => ({ txHex: signed.txHex, txid: 'p2txid', psbtHex: signed.psbtHex }),
+                }
+            }, {
+                createTx:    async (p) => { createTxParams = p; return { psbt: signed.psbtHex, encoding: 'P2SH' }; },
+                spendP2sh:   async () => ({ psbt: signed.psbtHex }),
+                broadcastTx: async () => ({}),
+            });
+            await new LifecycleManager(sdk).submitAction(
+                { action: 'DEPLOY', params: {} },
+                { pubkey: '03pub', change: 'addr', feeQuote },
+                { wif: FAKE_WIF, waitForIndexer: false }
+            );
+            assert.deepStrictEqual(createTxParams.feeQuote, feeQuote);
+        });
+    });
+});
