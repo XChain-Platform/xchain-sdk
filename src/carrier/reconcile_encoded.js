@@ -316,4 +316,15 @@ function reconcileEncoded(psbtHex, intent) {
     return reconcileFee(intent, inputs, outputs, deny);
 }
 
-module.exports = { reconcileEncoded, psbtPrevouts };
+// The protocol-fee output a hub feeQuote { address, amount } asks the encoder to add.
+// The caller submitted the quote itself, so its output is part of the caller's own
+// intent, capped at the quoted amount like any customOutput. Returns null for an
+// absent or malformed quote, which then authorizes nothing (fail-closed).
+function feeQuoteAuthorizedOutput(feeQuote) {
+    if (!feeQuote || typeof feeQuote !== 'object' || feeQuote.address == null) return null;
+    const value = exactU64(feeQuote.amount);
+    if (value === null) return null;
+    return { address: feeQuote.address, value };
+}
+
+module.exports = { reconcileEncoded, psbtPrevouts, feeQuoteAuthorizedOutput };

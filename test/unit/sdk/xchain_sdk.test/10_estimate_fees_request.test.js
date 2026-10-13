@@ -141,18 +141,15 @@ describe('XChainSDK', function () {
             expect(err.code).to.equal('CARRIER_ACTION_MISMATCH');
         });
 
-        it('fails closed on a feeQuote output the reconcile gate cannot authorize', async function () {
+        it('authorizes the feeQuote output the caller submitted', async function () {
             const sdk = makeSDK();
             const feeQuote = { address: addressFor(0x03), amount: 700 };
             const feeScript = bitcoin.address.toOutputScript(feeQuote.address, NET);
             const estimate = sinon.stub(sdk.encoder, 'estimateFee')
                 .resolves({ psbt: plainPsbt([{ script: feeScript, value: 700 }]), encoding: 'OP_RETURN' });
-            let err = null;
-            try { await sdk.estimateFees(SEND, { pubkey: 'mypub', feeQuote }); }
-            catch (e) { err = e; }
+            const res = await sdk.estimateFees(SEND, { pubkey: 'mypub', feeQuote });
             expect(estimate.firstCall.args[0].feeQuote).to.deep.equal(feeQuote);
-            expect(err, 'no signable PSBT may come back for a protocol fee nothing reconciles').to.be.ok;
-            expect(err.code).to.equal('UNRECONCILED_OUTPUT');
+            expect(res.signable).to.equal(true);
         });
     });
 });

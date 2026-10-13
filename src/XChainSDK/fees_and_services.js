@@ -18,7 +18,7 @@
  *
  ********************************************************************/
 
-const { reconcileEncoded, psbtPrevouts } = require('../carrier/reconcile_encoded.js');
+const { reconcileEncoded, psbtPrevouts, feeQuoteAuthorizedOutput } = require('../carrier/reconcile_encoded.js');
 const { exactU64 } = require('../carrier/reconcile_encoded/script_matching.js');
 const { assertCarrierBinding } = require('../carrier/bind_action_carrier.js');
 const EncoderClient = require('../clients/encoder.js');
@@ -120,9 +120,12 @@ function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs
     // the single PSBT this method returns is one it could account for in full.
     let reconcileNetwork;
     try { reconcileNetwork = sdk.wallet.getBitcoinNetwork(); } catch (e) { reconcileNetwork = undefined; }
+    // The hub feeQuote output is added by the encoder, not listed in customOutputs,
+    // so authorize it from the caller's own quote.
+    const quoteOutput = feeQuoteAuthorizedOutput(encoderOpts.feeQuote);
     reconcileEncoded(feeResult.psbt, {
         network:             reconcileNetwork,
-        customOutputs:       customOutputs,
+        customOutputs:       quoteOutput ? customOutputs.concat([quoteOutput]) : customOutputs,
         changeAddresses:     encoderOpts.change,
         callerIdentities:    encoderOpts.pubkey,
         maxFeeSats:          encoderOpts.maxFeeSats,
