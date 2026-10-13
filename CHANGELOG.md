@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `estimateFees withholds an envelope commit`, returning `psbt: null` and `signable: false` with the reason `ENVELOPE_PAIR_SIGN_VIA_SUBMIT_ACTION`, because the commit is safe to sign only together with its reveal through `submitAction`.
 - The raw encoder client `estimateFee` passes the envelope answer through unchecked.
 
+### Fixed
+- Corrected the 0.23.0 note on encoder -32603 handling: the encoder client retries no encoder JSON-RPC body error, -32603 included, because such errors mix node outages with node rejections and are treated as final.
+
 ## [0.23.0] - 2026-10-11
 
 ### Added
