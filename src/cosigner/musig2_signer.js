@@ -60,9 +60,17 @@ const BITCOIN_BECH32 = new Set(['bc', 'tb', 'bcrt']);
  * `network` (or an explicit maximumFeeRate) to sign ordinary high-rate fees;
  * a musig2AgentSession test twin pins this no-network behavior intentionally.
  */
+// Mirrors ENCODER_MAX_FEE_RATE_SAT_VB (psbt_signing.js) with the same 2x headroom.
+const LITECOIN_BECH32 = new Set(['ltc', 'tltc', 'rltc']);
+const DOGECOIN_PUBKEYHASH = new Set([0x1e, 0x71]);
+const LITECOIN_CEILING = 100000 * 2;
+const DOGECOIN_CEILING = 1000000 * 2;
+
 function resolveMaxFeeRate(network, maximumFeeRate) {
     if (Number.isFinite(maximumFeeRate) && maximumFeeRate > 0) return maximumFeeRate;
     if (!network || BITCOIN_BECH32.has(network.bech32)) return null;
+    if (LITECOIN_BECH32.has(network.bech32)) return LITECOIN_CEILING;
+    if (DOGECOIN_PUBKEYHASH.has(network.pubKeyHash) && !network.bech32) return DOGECOIN_CEILING;
     return 10000000;
 }
 

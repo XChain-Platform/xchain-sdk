@@ -24,8 +24,8 @@ describe('WalletUtils', function() {
         });
 
         it('raises the ceiling on non-bitcoin networks', function() {
-            expect(new WalletUtils('dogecoin-mainnet').resolveMaxFeeRate()).to.equal(10000000);
-            expect(new WalletUtils('litecoin-mainnet').resolveMaxFeeRate()).to.equal(10000000);
+            expect(new WalletUtils('dogecoin-mainnet').resolveMaxFeeRate()).to.equal(2000000);
+            expect(new WalletUtils('litecoin-mainnet').resolveMaxFeeRate()).to.equal(200000);
         });
 
         it('honors an explicit opts.maximumFeeRate on any network', function() {
@@ -35,8 +35,8 @@ describe('WalletUtils', function() {
 
         it('ignores non-finite or non-positive overrides', function() {
             const w = new WalletUtils('dogecoin-mainnet');
-            expect(w.resolveMaxFeeRate({ maximumFeeRate: 0 })).to.equal(10000000);
-            expect(w.resolveMaxFeeRate({ maximumFeeRate: NaN })).to.equal(10000000);
+            expect(w.resolveMaxFeeRate({ maximumFeeRate: 0 })).to.equal(2000000);
+            expect(w.resolveMaxFeeRate({ maximumFeeRate: NaN })).to.equal(2000000);
         });
     });
 });

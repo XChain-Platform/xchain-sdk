@@ -28,6 +28,14 @@ const { assertConsistentPrevouts } = require('./psbt_prevout.js');
 
 bitcoin.initEccLib(ecc);
 
+// Honest maximum fee rate (sat/vB) the encoder will build for each chain, plus
+// 2x headroom for the vsize estimate drifting from the final witness size.
+// Derived from the encoder's per-chain MAX_FEE_RATE_KB cap (sat/kB / 1000):
+// dogecoin 10 DOGE/kB = 1e6 sat/vB, litecoin 1 LTC/kB = 1e5 sat/vB.
+const ENCODER_MAX_FEE_RATE_SAT_VB = { dogecoin: 1000000, litecoin: 100000 };
+const CEILING_HEADROOM = 2;
+const UNKNOWN_CHAIN_CEILING = 10000000;
+
 function createSigningContext(psbtHex, wif, net) {
     let keyPair;
     try {
@@ -54,9 +62,10 @@ module.exports = {
      * bitcoinjs-lib's "absurd fee" guard defaults to 5000 sat/vB, calibrated
      * for BTC's unit value. On chains whose base unit is worth far less, an
      * ordinary fee blows past it (DOGE: a normal ~0.5 DOGE/kB estimator rate
-     * is ~50k sat/vB), rejecting every transaction at signing. Non-bitcoin
-     * networks therefore default to a far higher ceiling; real drain
-     * protection belongs upstream in the encoder's MAX_FEE_RATE_KB cap.
+     * is ~50k sat/vB), rejecting every transaction at signing. Litecoin and
+     * dogecoin therefore get a ceiling derived from the encoder's honest
+     * maximum fee rate (with headroom), so a runaway fee is still refused;
+     * any other non-bitcoin network keeps a flat 10,000,000 ceiling.
      * Callers can override in either direction via opts.maximumFeeRate.
      *
      * @param {{ maximumFeeRate?: number }} [opts]
@@ -65,7 +74,10 @@ module.exports = {
     resolveMaxFeeRate(opts) {
         if (opts && Number.isFinite(opts.maximumFeeRate) && opts.maximumFeeRate > 0)
             return opts.maximumFeeRate;
-        return String(this.network || '').startsWith('bitcoin') ? null : 10000000;
+        const chain = String(this.network || '').split('-')[0];
+        if (chain === 'bitcoin') return null;
+        const honest = ENCODER_MAX_FEE_RATE_SAT_VB[chain];
+        return honest ? honest * CEILING_HEADROOM : UNKNOWN_CHAIN_CEILING;
     },
 
     /**
