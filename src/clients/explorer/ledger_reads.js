@@ -318,7 +318,7 @@ module.exports = {
 
     // Native-coin fee pre-flight for one action. Proxies to the indexer's read-only `feequote`.
     // `params` is the wire param array (without the ACTION name) or a pre-joined pipe string.
-    // Returns { supported, valid, error, requiredFeeNative, requiredFeeSats, feeDestination,
+    // Returns { supported, valid, error, requiredFeeNative, requiredFeeSats, requiredFeeSatsExact, feeDestination,
     //           expectedNative, minAcceptable, maxAcceptable, oracleRound, ... }.
     async getFeeQuote({ action, params, source, feeOutputSats } = {}) {
         let q = new URLSearchParams();

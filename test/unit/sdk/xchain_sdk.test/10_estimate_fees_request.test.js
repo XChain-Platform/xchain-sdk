@@ -98,7 +98,7 @@ describe('XChainSDK', function () {
         it('keeps the native-fee output when the caller also passes customOutputs', async function () {
             const sdk = makeSDK();
             const estimate = sinon.stub(sdk.encoder, 'estimateFee').resolves({ psbt: plainPsbt(), encoding: 'OP_RETURN' });
-            sinon.stub(sdk, 'quoteNativeFee').resolves({ supported: true, valid: true, requiredFeeSats: 500, feeDestination: addressFor(0x02) });
+            sinon.stub(sdk, 'quoteNativeFee').resolves({ supported: true, valid: true, requiredFeeSats: 500, requiredFeeSatsExact: "500", feeDestination: addressFor(0x02) });
             await sdk.estimateFees(SEND, {
                 pubkey: 'mypub', payFeeInNativeCoin: true,
                 customOutputs: [{ address: addressFor(0x01), value: 600 }],
