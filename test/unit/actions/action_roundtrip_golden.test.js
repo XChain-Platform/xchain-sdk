@@ -38,6 +38,7 @@ const path       = require('path');
 const config   = require('../../../src/config.js');
 const Utility   = require('../../../src/utils/utility.js');
 const Actions   = require('../../../src/actions/index.js');
+const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 const FIXTURE_PATH = path.join(__dirname, '../..', 'fixtures', 'action-roundtrip-golden.json');
 const GOLDEN       = JSON.parse(fs.readFileSync(FIXTURE_PATH, 'utf8'));
@@ -49,12 +50,21 @@ function makeActions() {
 // Resolve a sibling xchain-indexer checkout (XCHAIN_INDEXER_PATH first, then
 // the monorepo sibling layout). Returns null when absent so the unit tier,
 // which checks out only this repo, degrades to the encoder-half pin.
+// A candidate the sibling judge refuses (a lane symlink into a live main
+// checkout) is recorded in indexerRefusal and treated as absent.
+let indexerRefusal = null;
 function resolveIndexerRoot() {
     const candidates = [
         process.env.XCHAIN_INDEXER_PATH,
-        path.join(__dirname, '../..', '..', '..', 'xchain-indexer'),
+        path.join('../../../..', 'xchain-indexer'),
     ].filter(Boolean);
-    for (const root of candidates) {
+    for (const cand of candidates) {
+        const verdict = siblingCheckout(__dirname, cand);
+        if (!verdict.usable) {
+            if (fs.existsSync(verdict.path)) indexerRefusal = indexerRefusal || verdict;
+            continue;
+        }
+        const root = verdict.path;
         if (fs.existsSync(path.join(root, 'src', 'utility.js')) &&
             fs.existsSync(path.join(root, 'src', 'actions')))
             return root;
@@ -145,6 +155,7 @@ function loadLiveIndexer() {
     // own the deadline, reported under the load's own test name below.
     this.timeout(0);
     if (!indexerRoot) {
+        if (indexerRefusal) skipOrFail(this, indexerRefusal, 'the golden sibling load');
         this.skip(); // unit tier: no sibling indexer checkout
         return;
     }

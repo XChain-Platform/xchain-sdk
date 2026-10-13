@@ -33,6 +33,7 @@ const { expect }      = require('chai');
 const { spawnSync }   = require('child_process');
 const fs              = require('fs');
 const path            = require('path');
+const { siblingCheckout } = require('../helpers/sibling_checkout.js');
 
 const SDK_ROOT     = path.join(__dirname, '..', '..');
 const GOLDEN_TEST  = path.join(SDK_ROOT, 'test', 'unit', 'actions', 'action_roundtrip_golden.test.js');
@@ -44,9 +45,12 @@ const LOAD_TEST    = 'the sibling xchain-indexer parser loads within its budget'
 function resolveIndexerRoot() {
     const candidates = [
         process.env.XCHAIN_INDEXER_PATH,
-        path.join(SDK_ROOT, '..', 'xchain-indexer'),
+        path.join('..', '..', '..', 'xchain-indexer'),
     ].filter(Boolean);
-    for (const root of candidates) {
+    for (const cand of candidates) {
+        const verdict = siblingCheckout(__dirname, cand);
+        if (!verdict.usable) continue;
+        const root = verdict.path;
         if (fs.existsSync(path.join(root, 'src', 'utility.js')) &&
             fs.existsSync(path.join(root, 'src', 'actions')))
             return root;
