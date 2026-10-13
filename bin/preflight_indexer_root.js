@@ -27,6 +27,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { siblingCheckout } = require('../test/helpers/sibling_checkout.js');
 
 /* What identifies a candidate directory as an xchain-indexer checkout: the handler
  * directory the map's rows name. Without it there is nothing for the gate to hash,
@@ -54,10 +55,16 @@ function indexerRootCandidates() {
 /* Each candidate with the reason it was accepted or rejected. "Not there" and "there but
  * unreadable as an indexer checkout" have different fixes, so they are never collapsed
  * into one line. */
-function describeIndexerCandidates(candidates) {
+function describeIndexerCandidates(candidates, opts = {}) {
     return (candidates || indexerRootCandidates()).map((root) => {
         if (!fs.existsSync(root)) {
             return { root, resolved: false, why: 'no such directory' };
+        }
+        // A lane symlink into a peer's live main checkout is not a commit anyone pinned,
+        // so the gate would compare handlers no commit holds. Same refusal the guards use.
+        const verdict = siblingCheckout(__dirname, root, opts);
+        if (!verdict.usable) {
+            return { root, resolved: false, why: `refused: ${verdict.reason}` };
         }
         if (!fs.existsSync(path.join(root, INDEXER_MARKER))) {
             return {
@@ -71,8 +78,8 @@ function describeIndexerCandidates(candidates) {
     });
 }
 
-function resolveIndexerRoot() {
-    for (const c of describeIndexerCandidates()) {
+function resolveIndexerRoot(opts) {
+    for (const c of describeIndexerCandidates(undefined, opts)) {
         if (c.resolved) return c.root;
     }
     return null;
