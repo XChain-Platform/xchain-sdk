@@ -1850,6 +1850,8 @@ export declare class XChainSDK {
      * Size the fee output to `requiredFeeSats`; refuse to broadcast on `supported: false`
      * or `valid: false`. A busy answer is retried once after `busyRetryDelayMs` (default 1000).
      */
+    /** The native-coin fee outputs to append to a transaction for this action; empty when no native fee applies. Uses `opts.source` to price the action. */
+    nativeFeeOutputs(actionData: { action: string; params: ActionParams } | string, opts?: { source?: string; feeOutputSats?: number; busyRetryDelayMs?: number; payFeeInNativeCoin?: boolean }): Promise<CustomOutput[]>;
     quoteNativeFee(actionData: { action: string; params: ActionParams } | string, opts?: { source?: string; feeOutputSats?: number; busyRetryDelayMs?: number }): Promise<NativeFeeQuote>;
 
     /** Ping the encoder service. Returns the RPC result. */
@@ -2092,8 +2094,8 @@ export declare class XChainSDK {
     getCoinpayObligationsBatch(addresses: string[], opts?: QueryOptions): Promise<Record<string, any>>;
     /** Native-coin fee pre-flight for one action (proxies the indexer feequote); throws EXPLORER_BAD_FEEQUOTE on an answer that is not a quote. */
     getFeeQuote(opts: { action: string; params?: ActionParams; source?: string; feeOutputSats?: number }): Promise<FeeQuote>;
-    /** Native-coin fee schedule plus current oracle prices. */
-    getFeeSchedule(): Promise<any>;
+    /** Native-coin fee schedule plus current oracle prices (proxies the indexer's `feeschedule`). */
+    getFeeSchedule(): Promise<FeeSchedule>;
 
 
     /*
@@ -2812,6 +2814,36 @@ export interface FeeQuote {
     [key: string]: any;
 }
 
+/** The oracle price fields the indexer attaches to a fee quote; others may be present. */
+export interface OracleFeeQuote {
+    /** Oracle price used to convert the USD-equivalent fee into the native coin. */
+    price?: string | number;
+    /** Age of that price, when the indexer reports it. */
+    ageSeconds?: number;
+    /** True when the price is stale or missing, so the fee cannot be priced. */
+    stale?: boolean;
+    [key: string]: any;
+}
+
+/** The native-coin fee schedule plus current oracle prices, as `getFeeSchedule` returns it. */
+export interface FeeSchedule {
+    /** Current oracle prices backing the schedule. */
+    oracle?: OracleFeeQuote | Record<string, OracleFeeQuote>;
+    [key: string]: any;
+}
+
+/**
+ * The SDK's explorer client (`sdk.explorer`): the HTTP client for the explorer API.
+ * Only the fee reads are declared here.
+ */
+export interface ExplorerClient {
+    /** Native-coin fee pre-flight for one action. */
+    getFeeQuote(opts: { action: string; params?: ActionParams; source?: string; feeOutputSats?: number }): Promise<FeeQuote>;
+    /** Native-coin fee schedule plus current oracle prices. */
+    getFeeSchedule(): Promise<FeeSchedule>;
+    [key: string]: any;
+}
+
 /** A `quoteNativeFee` answer: the fee quote plus the action string it priced. */
 export interface NativeFeeQuote extends FeeQuote {
     /** The exact action string the quote priced. */
@@ -3051,7 +3083,7 @@ export interface X402GatewayOptions {
     /** Coin this gateway operates on (BTC / LTC / DOGE) */
     coin: string;
     /** An SDK ExplorerClient (or compatible) for verifying on-chain payments */
-    explorer: any;
+    explorer: ExplorerClient;
     /** xchain-send pay-per-call scheme config */
     send?: X402SendSchemeOpts;
     /** xchain-dispenser hold-to-access scheme config */
