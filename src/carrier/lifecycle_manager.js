@@ -21,6 +21,7 @@
 
 const ActionWaiter = require('../utils/action_waiter.js');
 const { installMethods } = require('../utils/install_methods.js');
+const { assertMainnetLaunched } = require('../protocol/mainnet_launch.js');
 const {
     buildTransactionRequest,
     normalizeSubmission,
@@ -81,6 +82,7 @@ class LifecycleManager {
     // }
     async submitAction(actionData, encoderOpts = {}, opts = {}) {
         const setup = normalizeSubmission(this, actionData, opts);
+        assertMainnetLaunched(this.sdk.network, actionData);
         const { encoder, progress, wif } = setup;
         if (opts.strictFreshness) await this.sdk.assertFresh();
         progress('creating', { action: actionData.action });
