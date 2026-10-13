@@ -273,7 +273,7 @@ describe('XChainSDK', function () {
         it('estimateFees with payFeeInNativeCoin calls quoteNativeFee', async function () {
             const sdk = makeSDK();
             mockEncoder(sdk, { psbt: estimatePsbtHex(), encoding: 'OP_RETURN', fee: 1000 });
-            mockExplorer(sdk, { supported: true, valid: true, requiredFeeSats: 5000, feeDestination: 'feeaddr', actionString: 'SEND|...' });
+            mockExplorer(sdk, { supported: true, valid: true, requiredFeeSats: 5000, requiredFeeSatsExact: "5000", feeDestination: 'feeaddr', actionString: 'SEND|...' });
             const result = await sdk.estimateFees(
                 { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
                 { pubkey: 'mypub', payFeeInNativeCoin: true, source: 'addr1' }
@@ -322,7 +322,7 @@ describe('XChainSDK', function () {
 
         it('calls explorer.getFeeQuote with parsed action parts', async function () {
             const sdk = makeSDK();
-            mockExplorer(sdk, { supported: true, valid: true, requiredFeeSats: 1000 });
+            mockExplorer(sdk, { supported: true, valid: true, requiredFeeSats: 1000, requiredFeeSatsExact: "1000" });
             const result = await sdk.quoteNativeFee(
                 { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
                 { source: 'addr1' }

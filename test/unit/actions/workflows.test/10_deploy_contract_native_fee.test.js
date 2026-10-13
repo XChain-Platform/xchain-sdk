@@ -49,7 +49,7 @@ function makeSdk(coin, calls, quote) {
     return sdk;
 }
 
-const GOOD_QUOTE = { supported: true, valid: true, requiredFeeSats: 123456, feeDestination: FEE_DEST };
+const GOOD_QUOTE = { supported: true, valid: true, requiredFeeSats: 123456, requiredFeeSatsExact: "123456", feeDestination: FEE_DEST };
 const BTC_FEE_DEST = coins.getCoinConfig('BTC', 'mainnet').addresses.FEE_DESTINATION;
 
 describe('Workflows deployContract() native fee output', function () {

@@ -36,11 +36,13 @@ function appendNativeFeeOutput(nativeFeeQuote, customOutputs, hint = '', chain =
     // Offered is not enough: the quote also has to come back with a price we can actually pay.
     if (nativeFeeQuote.valid === false)
         throw new SDKConfigError('NATIVE_FEE_INVALID', 'Native-coin fee cannot be priced: ' + (nativeFeeQuote.error || 'invalid') + hint, { quote: nativeFeeQuote });
-    // An absent amount means no fee output; a present one must be a whole, safe satoshi count.
-    if (nativeFeeQuote.requiredFeeSats == null) return;
-    const sats = exactU64(nativeFeeQuote.requiredFeeSats);
+    // Size from the exact amount only: a priced quote that omits it is an error, never a free action.
+    const exact = nativeFeeQuote.requiredFeeSatsExact;
+    if (exact == null)
+        throw new SDKConfigError('NATIVE_FEE_INVALID', 'Native-coin fee quote is missing requiredFeeSatsExact: refusing to size the fee output' + hint, { quote: nativeFeeQuote });
+    const sats = exactU64(exact);
     if (sats === null || sats > BigInt(Number.MAX_SAFE_INTEGER))
-        throw new SDKConfigError('NATIVE_FEE_INVALID', 'Native-coin fee quote carries a malformed amount: ' + String(nativeFeeQuote.requiredFeeSats) + hint, { quote: nativeFeeQuote });
+        throw new SDKConfigError('NATIVE_FEE_INVALID', 'Native-coin fee quote carries a malformed amount: ' + String(exact) + hint, { quote: nativeFeeQuote });
     if (sats === 0n) return;
     customOutputs.push({ address: pinnedFeeDestination(nativeFeeQuote, chain), value: Number(sats) });
 }
@@ -234,7 +236,7 @@ module.exports = {
     // Native-coin fee pre-flight for an action (without signing/broadcasting). Builds the action
     // string, splits off the ACTION + wire params, and asks the indexer (via the explorer proxy)
     // for the authoritative native fee + accept/reject verdict. A client should size the
-    // FEE_DESTINATION output to `requiredFeeSats` and refuse to broadcast when
+    // FEE_DESTINATION output to `requiredFeeSatsExact` and refuse to broadcast when
     // `supported === false` or `valid === false`.
     //
     // `valid === null` is a third answer, not a failure: the VM actions (DEPLOY/EXECUTE) are

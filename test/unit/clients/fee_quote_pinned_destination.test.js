@@ -76,7 +76,7 @@ async function refusal(p) {
 describe('Native-coin fee destination pin', function () {
 
     it('estimateFees refuses a mainnet quote naming a non-pinned destination before the encoder is asked', async function () {
-        const sdk = onChain('LTC', { supported: true, valid: true, requiredFeeSats: 2000, feeDestination: ATTACKER });
+        const sdk = onChain('LTC', { supported: true, valid: true, requiredFeeSats: 2000, requiredFeeSatsExact: "2000", feeDestination: ATTACKER });
         const err = await refusal(sdk.estimateFees(ISSUE, { pubkey: 'pk', change: 'src1' }));
         expect(err, 'a foreign destination must refuse').to.exist;
         expect(err.code).to.equal('NATIVE_FEE_DESTINATION_MISMATCH');
@@ -85,21 +85,21 @@ describe('Native-coin fee destination pin', function () {
     });
 
     it('nativeFeeOutputs refuses a testnet quote naming a non-pinned destination', async function () {
-        const sdk = onChain('TDOGE', { supported: true, valid: true, requiredFeeSats: 2000, feeDestination: ATTACKER });
+        const sdk = onChain('TDOGE', { supported: true, valid: true, requiredFeeSats: 2000, requiredFeeSatsExact: "2000", feeDestination: ATTACKER });
         const err = await refusal(sdk.nativeFeeOutputs(ISSUE, {}));
         expect(err).to.exist;
         expect(err.code).to.equal('NATIVE_FEE_DESTINATION_MISMATCH');
     });
 
     it('estimateFees pays the pinned address when the quote names it', async function () {
-        const sdk = onChain('DOGE', { supported: true, valid: true, requiredFeeSats: '2000', feeDestination: pinnedFeeDest('DOGE') });
+        const sdk = onChain('DOGE', { supported: true, valid: true, requiredFeeSatsExact: '2000', feeDestination: pinnedFeeDest('DOGE') });
         await sdk.estimateFees(ISSUE, { pubkey: 'pk', change: 'src1' });
         expect(sdk.encoder._seen.customOutputs).to.deep.equal([{ address: pinnedFeeDest('DOGE'), value: 2000 }]);
     });
 
     it('estimateFees refuses a malformed fee amount before the encoder is asked', async function () {
         for (const requiredFeeSats of [1.5, -1, 2 ** 53 + 2, 'abc', '1e3']) {
-            const sdk = onChain('LTC', { supported: true, valid: true, requiredFeeSats, feeDestination: pinnedFeeDest('LTC') });
+            const sdk = onChain('LTC', { supported: true, valid: true, requiredFeeSatsExact: requiredFeeSats, feeDestination: pinnedFeeDest('LTC') });
             const err = await refusal(sdk.estimateFees(ISSUE, { pubkey: 'pk', change: 'src1' }));
             expect(err, String(requiredFeeSats)).to.exist;
             expect(err.code, String(requiredFeeSats)).to.equal('NATIVE_FEE_INVALID');
@@ -108,7 +108,7 @@ describe('Native-coin fee destination pin', function () {
     });
 
     it('estimateFees with an explicit opt-in refuses when the connected chain is unknown', async function () {
-        const sdk = onChain(undefined, { supported: true, valid: true, requiredFeeSats: 2000, feeDestination: ATTACKER });
+        const sdk = onChain(undefined, { supported: true, valid: true, requiredFeeSats: 2000, requiredFeeSatsExact: "2000", feeDestination: ATTACKER });
         const err = await refusal(sdk.estimateFees(ISSUE, { payFeeInNativeCoin: true, pubkey: 'pk', change: 'src1' }));
         expect(err).to.exist;
         expect(err.code).to.equal('NATIVE_FEE_DESTINATION_UNPINNED');
@@ -116,7 +116,7 @@ describe('Native-coin fee destination pin', function () {
     });
 
     it('estimateFees on regtest takes the quoted destination, since the node may carry an env override', async function () {
-        const sdk = onChain('RLTC', { supported: true, valid: true, requiredFeeSats: 2000, feeDestination: 'regtestOverride' });
+        const sdk = onChain('RLTC', { supported: true, valid: true, requiredFeeSats: 2000, requiredFeeSatsExact: "2000", feeDestination: 'regtestOverride' });
         await sdk.estimateFees(ISSUE, { pubkey: 'pk', change: 'src1' });
         expect(sdk.encoder._seen.customOutputs).to.deep.equal([{ address: 'regtestOverride', value: 2000 }]);
     });
