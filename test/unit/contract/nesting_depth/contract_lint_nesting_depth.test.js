@@ -83,6 +83,6 @@ describe('vendored lint core: nesting-depth rule', function () {
     it('is enabled by default and can be disabled for replay', function () {
         const source = parenthesized(65);
         assert.strictEqual(depthErrors(source).length, 1);
-        assert.deepStrictEqual(depthErrors(source, { enforceLintNestingDepth: false }), []);
+        assert.deepStrictEqual(depthErrors(source, { enforceLintNestingDepth: false, enforceLintSyntaxDepth: false }), []);
     });
 });
