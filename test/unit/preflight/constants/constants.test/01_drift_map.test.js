@@ -175,6 +175,21 @@ function registerDispenserRefillPolicyReviewTest() {
     });
 }
 
+function registerDispenseOwnershipBlockFieldsReviewTest() {
+    it('pins and records the DISPENSE ownership-transfer block fields review', function () {
+        const text = fs.readFileSync(REAL_MAP, 'utf8');
+        const dispense = parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/dispense/');
+        expect(dispense, 'dispense directory row').to.exist;
+        expect(dispense.hash).to.equal('99116a2db059516f00dfa6c552bbb4617135dce390cc10e334e0e34895890ff0');
+        const heading = '### 2026-10-14 - DISPENSE ownership-transfer block fields';
+        expect(text).to.include(heading);
+        const start = text.indexOf(heading);
+        const entry = text.slice(start, text.indexOf('\n### ', start + heading.length));
+        expect(entry).to.include('**Direction: SETTLE PATH ONLY.**');
+        expect(entry).to.include('NO CLIENT CHECK MOVES');
+    });
+}
+
 describe('pre-flight constants + registry', function () {
     describe('drift map (§8.5)', function () {
         registerMapParsingTest();
@@ -185,5 +200,6 @@ describe('pre-flight constants + registry', function () {
         registerSendGatedTotalReviewTest();
         registerBatchDispatchAdmissionReviewTest();
         registerDispenserRefillPolicyReviewTest();
+        registerDispenseOwnershipBlockFieldsReviewTest();
     });
 });

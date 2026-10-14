@@ -81,7 +81,15 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `a406de91`
+**Pins taken at indexer commit:** `f9d90376`
+
+(Re-anchored 2026-10-14 on the v0.23.2 hotfix line against the indexer commit `f9d90376`, the
+ownership-transfer block-fields change cherry-picked onto v0.23.1 from develop's `b55d539d`.
+Only the `dispense` directory pin moves, for the change reviewed in the first entry of the review
+log below. The other twelve rows are unchanged and match that tree. `a406de91` is an ancestor of
+this anchor. The hotfix reaches master by a merge commit, so the anchor stays reachable; a
+squashed or rebased landing would orphan it, and the section on an unreachable anchor below is
+then the way back.)
 
 (Re-anchored 2026-10-10 against the committed indexer lane tree `a406de91`, the head of the
 refill token-policy change, which had not landed on develop when this was written. Only the
@@ -406,7 +414,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff a406de91..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff f9d90376..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -484,7 +492,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/mint.js` | `src/actions/mint/` | `0f2b6b0375df803321c1644e24f9fa2b6dcb73119a470832eeb93dfab8530595` |
 | `checks/issue.js` | `src/actions/issue/` | `95dff217aeae8428578cf583b74bdeedf97731fd2c9242be6e8baf6763c816e9` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `6369bdf9bd39490c407c7f447be77bbaf275c081e67abf9d29f075e5d5a3e546` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `0ba2b8e2037de1c86163525776af2d788da7a9b3995999615f60c018280115fa` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `99116a2db059516f00dfa6c552bbb4617135dce390cc10e334e0e34895890ff0` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `79fdae31db05edea980aca9b52b70fd8a2c65bb53e9e785534229bdca0ffd8ec` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `9bb114863e30d2501bb36f6f2d5a541bbaf99320b860466708253555aded19cc` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `0174875cd302106d68a816c7e72a64d53e3f51971881cd9efbea70a78786e7d9` |
@@ -512,6 +520,21 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-14 - DISPENSE ownership-transfer block fields
+
+The `dispense` pin moves from `0ba2b8e2` to `99116a2d`, hashed from the v0.23.2 hotfix indexer
+commit `f9d90376` by `node bin/preflight_handler_dirs.js <indexer> src/actions/dispense/`. The
+mapped diff touches one file, `settle.js`: `applyDispenseLedger` passes the paying transaction's
+data to `transferTokenOwnership`, so the ownership-transfer ledger row takes its block fields
+from the paying transaction. A guard in `src/utility/ledger.js`, outside the mapped directories,
+refuses a transfer whose data lacks `BLOCK_INDEX` or `BLOCK_TIME`.
+
+**Direction: SETTLE PATH ONLY.** The change runs after the dispense has been judged valid, when
+the ledger rows are written, and it alters no validity rule: `validate.js`, `pricing.js` and
+`pricing_paths.js` are byte-identical, and an ownership dispense was already a valid verdict.
+`checkDispense` in `checks/dispenser.js` mirrors validity only, so there is no predicate to move
+and no `ACTIVATION_MIRRORS` row to add. NO CLIENT CHECK MOVES.
 
 ### 2026-10-10 - DISPENSER refill token policy
 
