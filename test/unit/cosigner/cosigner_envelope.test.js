@@ -143,6 +143,28 @@ describe('co-signer: Taproot envelope composition', function () {
 
 describe('co-signer: Taproot envelope composition', function () {
 
+    describe('delta (c): the action is read from the leaf', function () {
+        // Mirrors the shared vector mixed_carrier_envelope_plus_multisign: the
+        // decoder reads a 6-element OP_CHECKMULTISIG output as a MULTISIGN carrier
+        // and then refuses the envelope beside it.
+        it('refuses an envelope mixed with a MULTISIGN (bare-multisig) carrier (no action on chain)', function () {
+            const acct = makeAccount();
+            const { commit } = commitFor(acct);
+            const psbt = buildRevealPsbt(acct, commit);
+            const key = () => Buffer.concat([Buffer.from([0x02]), crypto.randomBytes(32)]);
+            const multisig = bitcoin.script.compile([bitcoin.opcodes.OP_1, key(), key(), key(),
+                bitcoin.opcodes.OP_3, bitcoin.opcodes.OP_CHECKMULTISIG]);
+            psbt.addOutput({ script: multisig, value: 0 });
+            const { decodeActionFromPsbt } = require('../../../src/cosigner/psbt_action_decode.js');
+            const decoded = decodeActionFromPsbt(psbt);
+            expect(decoded.ok).to.equal(false);
+            expect(decoded.reason).to.equal('ENVELOPE_MIXED_CARRIER');
+        });
+    });
+});
+
+describe('co-signer: Taproot envelope composition', function () {
+
     describe('role derivation', function () {
         it('classifies commit, reveal and cancel from the PSBT alone', function () {
             const acct = makeAccount();

@@ -18,20 +18,13 @@ const INDEXER_ROOT = [
 ].filter(Boolean)[0];
 const INDEXER_TWIN = path.join(INDEXER_ROOT, 'src', 'consensus', 'address_ref_fields.js');
 
-// A parity guard must never silently pass by skipping. Absent sibling: skip, so a
-// standalone clone stays green. Absent sibling on the venue that REQUIRES one
-// (XCHAIN_REQUIRE_SIBLINGS=1, set by bin/ci-full.sh's test gate and the drift-guards
-// job): throw, so the guard cannot green-by-skip exactly where it is depended on.
-// Mirrors requireSibling in test/unit/contract_parity.test.js; deliberately not keyed
-// on the generic CI flag, which the shared unit job sets without a sibling checkout.
-function requireSibling(ctx, absPath) {
-    if (fs.existsSync(absPath)) return true;
-    if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-        throw new Error('addressRefFields parity guard cannot run: required sibling missing at '
-            + absPath + ' (the job setting XCHAIN_REQUIRE_SIBLINGS=1 must check out xchain-indexer)');
-    ctx.skip();
-    return false;
-}
+// A parity guard must never silently pass by skipping. The shared sibling_checkout
+// helper skips an absent sibling (a standalone clone stays green), refuses a lane
+// symlink into a live main checkout no commit pins, and throws on either refusal
+// under XCHAIN_REQUIRE_SIBLINGS=1 (bin/ci-full.sh's test gate and the drift-guards
+// job). Deliberately not keyed on the generic CI flag, which the shared unit job
+// sets without a sibling checkout.
+const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 describe('addressRefFields', function () {
     it('maps the core address-bearing actions', function () {
@@ -126,7 +119,8 @@ describe('addressRefFields', function () {
      */
     describe('consensus twin drift guard', function () {
         it('src/addressRefFields.js is byte-identical to the xchain-indexer copy', function () {
-            if (!requireSibling(this, INDEXER_TWIN)) return;
+            if (!skipOrFail(this, siblingCheckout(__dirname, INDEXER_TWIN),
+                'the addressRefFields consensus-twin byte-identity guard')) return;
             assert.strictEqual(
                 fs.readFileSync(SDK_TWIN, 'utf8'),
                 fs.readFileSync(INDEXER_TWIN, 'utf8'),

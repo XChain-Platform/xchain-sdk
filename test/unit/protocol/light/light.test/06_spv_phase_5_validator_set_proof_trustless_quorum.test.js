@@ -129,11 +129,12 @@ function signer() {
     const spki = publicKey.export({ format: 'der', type: 'spki' });
     return { privateKey, pubkey: spki.subarray(spki.length - 32).toString('hex') };
 }
-function signedCheckpoint(signers) {
-    const cp = { chain: CHAIN, network: NET, block_index: 100, block_hash: 'c0'.repeat(32),
+// Overrides merge BEFORE signing, so the signatures stay genuine for the overridden fields.
+function signedCheckpoint(signers, overrides) {
+    const cp = Object.assign({ chain: CHAIN, network: NET, block_index: 100, block_hash: 'c0'.repeat(32),
         ledger_hash: 'a1'.repeat(32), actions_hash: 'b2'.repeat(32), contract_hash: 'c3'.repeat(32),
         checkpoint_seq: 0, snapshot_block: 100, state_root: 'd4'.repeat(32), state_root_version: 1,
-        block_merkle_root: 'e5'.repeat(32), block_merkle_version: 1, validator_signatures: [] };
+        block_merkle_root: 'e5'.repeat(32), block_merkle_version: 1, validator_signatures: [] }, overrides || {});
     const canonical = checkpoint.canonicalCheckpoint(cp);
     cp.validator_signatures = signers.map(s => ({ pubkey: s.pubkey, sig: crypto.sign(null, Buffer.from(canonical, 'utf8'), s.privateKey).toString('hex') }));
     return cp;
@@ -297,5 +298,43 @@ describe('SPV Phase 5: validator-set proof + trustless quorum', function () {
         const proven = { validators: [{ pubkey: s1.pubkey, source: 'S1', weight: '10' },
                                       { pubkey: s2.pubkey, source: 'S2', weight: '30' }], total: '40' };
         assert.strictEqual(light.verifyCheckpointWithProvenSet(signedCheckpoint([s1, s2]), proven).valid, true);
+    });
+});
+
+describe('SPV Phase 5: validator-set proof + trustless quorum', function () {
+
+    // A quorate proven set, so any refusal below comes from the flag-day guard, not the stake math.
+    function verdictAt(network, snapshotBlock) {
+        const s1 = signer(), s2 = signer();
+        const proven = { validators: [{ pubkey: s1.pubkey, source: 'S1', weight: '10' },
+                                      { pubkey: s2.pubkey, source: 'S2', weight: '30' }], total: '40' };
+        const cp = signedCheckpoint([s1, s2], { network, snapshot_block: snapshotBlock });
+        return { cp, r: light.verifyCheckpointWithProvenSet(cp, proven) };
+    }
+
+    // Mainnet arms the commitment and stake-weighted flag days together at 961000.
+    it('verifyCheckpointWithProvenSet: FAILS CLOSED on a mainnet checkpoint below the flag day', function () {
+        const { cp, r } = verdictAt('mainnet', 960999);
+        assert.deepStrictEqual(r, { valid: false, total: '0' });
+        // The reference verifier judges this checkpoint under the count regime, not the stake rule.
+        assert.strictEqual(checkpoint.verifyCheckpoint(cp, []).weighted, false);
+    });
+
+    it('verifyCheckpointWithProvenSet: PASSES on a mainnet checkpoint at the flag day', function () {
+        assert.strictEqual(verdictAt('mainnet', 961000).r.valid, true);
+    });
+
+    // Testnet arms stake weighting from genesis but the commitment only at 146000, so roots below it are unsigned.
+    it('verifyCheckpointWithProvenSet: FAILS CLOSED on a testnet checkpoint below the commitment flag day', function () {
+        assert.deepStrictEqual(verdictAt('testnet', 145999).r, { valid: false, total: '0' });
+    });
+
+    it('verifyCheckpointWithProvenSet: PASSES on a testnet checkpoint at the commitment flag day', function () {
+        assert.strictEqual(verdictAt('testnet', 146000).r.valid, true);
+    });
+
+    it('verifyCheckpointWithProvenSet: FAILS CLOSED on a null checkpoint without throwing', function () {
+        assert.deepStrictEqual(light.verifyCheckpointWithProvenSet(null, { validators: [], total: '0' }),
+            { valid: false, total: '0' });
     });
 });

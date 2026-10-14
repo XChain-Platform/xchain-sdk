@@ -83,6 +83,12 @@ function exactStakeTotal(validators){
 // proven set and must never finalize. Fully trustless: nothing here trusts a
 // server-supplied set.
 function verifyCheckpointWithProvenSet(cp, provenOraclePublish){
+    // Fail closed below the commitment flag day: the roots there are unsigned and the
+    // checkpoint was signed under a regime this verifier does not implement, so a caller
+    // judging one uses checkpoint.verifyCheckpoint, which picks the regime from the row.
+    if (!checkpoint.commitmentActive(cp)) return { valid: false, total: '0' };
+    // This verifier applies only the stake rule, so a reordered gate cannot hand it a count-regime row.
+    if (!swq.isStakeWeightedQuorumActive(cp.snapshot_block, cp.network)) return { valid: false, total: '0' };
     // Post-activation a checkpoint MUST carry all four commitment fields, or
     // canonicalCheckpoint falls back to the legacy ROOTLESS preimage and the whole root
     // suffix drops out of the signed bytes. An explorer could then attach an

@@ -32,24 +32,36 @@
 const bitcoin = require('bitcoinjs-lib');
 const ecc     = require('@bitcoinerlab/secp256k1');
 const { SDKPolicyError } = require('../utils/errors.js');
+const { NETWORKS } = require('../protocol/networks.js');
+const walletSigning = require('../utils/wallet/psbt_signing.js');
 
 // Taproot finalize/extract needs an ECC backend; idempotent, safe on load.
 bitcoin.initEccLib(ecc);
 
 function toBuf(v) { return Buffer.isBuffer(v) ? v : Buffer.from(v); }
 
-// Bech32 HRPs of the bitcoin family (main/test/regtest). Any other network is a
-// lower-unit-value chain where bitcoinjs's 5000 sat/vB "absurd fee" default
-// rejects ordinary fees.
-const BITCOIN_BECH32 = new Set(['bc', 'tb', 'bcrt']);
+// Index every registered network by its address prefix: the bech32 HRP when it
+// has one, else pubKeyHash (only the bech32-less DOGE networks today). A prefix
+// two chains share maps to null, which falls to the unknown-chain ceiling.
+function indexNetworksByPrefix() {
+    const byBech32 = new Map(), byPubKeyHash = new Map();
+    for (const [name, net] of Object.entries(NETWORKS)) {
+        const [index, key] = net.bech32 ? [byBech32, net.bech32] : [byPubKeyHash, net.pubKeyHash];
+        const prior = index.get(key);
+        if (prior === undefined) index.set(key, name);
+        else if (prior !== null && prior.split('-')[0] !== name.split('-')[0]) index.set(key, null);
+    }
+    return { byBech32, byPubKeyHash };
+}
+const PREFIX_INDEX = indexNetworksByPrefix();
 
 /*
- * Fee ceiling (sat/vB) applied before extractTransaction, tracking
- * wallet.js#resolveMaxFeeRate so this signer stays a drop-in for signPsbt on a
- * RESOLVED network: an explicit maximumFeeRate wins; the bitcoin family keeps
- * bitcoinjs's 5000 sat/vB default; every other resolved network gets the
- * raised 10,000,000 ceiling (real drain protection lives upstream in the
- * encoder's MAX_FEE_RATE_KB cap).
+ * Fee ceiling (sat/vB) applied before extractTransaction. The network object is
+ * matched back to its registered name through the coin registry, then the
+ * wallet's own resolveMaxFeeRate answers, so this signer stays a drop-in for
+ * signPsbt on a RESOLVED network: an explicit maximumFeeRate wins; the bitcoin
+ * family keeps bitcoinjs's 5000 sat/vB default; litecoin and dogecoin get the
+ * encoder-derived ceilings; any other network gets the flat unknown-chain one.
  *
  * Deliberate divergence from wallet.js when NO network is supplied: wallet.js
  * treats an unset network as non-bitcoin (raised ceiling), but this signer
@@ -60,18 +72,14 @@ const BITCOIN_BECH32 = new Set(['bc', 'tb', 'bcrt']);
  * `network` (or an explicit maximumFeeRate) to sign ordinary high-rate fees;
  * a musig2AgentSession test twin pins this no-network behavior intentionally.
  */
-// Mirrors ENCODER_MAX_FEE_RATE_SAT_VB (psbt_signing.js) with the same 2x headroom.
-const LITECOIN_BECH32 = new Set(['ltc', 'tltc', 'rltc']);
-const DOGECOIN_PUBKEYHASH = new Set([0x1e, 0x71]);
-const LITECOIN_CEILING = 100000 * 2;
-const DOGECOIN_CEILING = 1000000 * 2;
-
 function resolveMaxFeeRate(network, maximumFeeRate) {
     if (Number.isFinite(maximumFeeRate) && maximumFeeRate > 0) return maximumFeeRate;
-    if (!network || BITCOIN_BECH32.has(network.bech32)) return null;
-    if (LITECOIN_BECH32.has(network.bech32)) return LITECOIN_CEILING;
-    if (DOGECOIN_PUBKEYHASH.has(network.pubKeyHash) && !network.bech32) return DOGECOIN_CEILING;
-    return 10000000;
+    if (!network) return null;
+    const name = network.bech32
+        ? PREFIX_INDEX.byBech32.get(network.bech32)
+        : PREFIX_INDEX.byPubKeyHash.get(network.pubKeyHash);
+    // The wallet resolver reads only the chain part of this.network.
+    return walletSigning.resolveMaxFeeRate.call({ network: name || '' });
 }
 
 /*

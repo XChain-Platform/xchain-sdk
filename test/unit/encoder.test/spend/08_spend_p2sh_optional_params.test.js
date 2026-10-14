@@ -103,3 +103,40 @@ describe('EncoderClient', function () {
         });
     });
 });
+
+describe('EncoderClient', function () {
+    const BASE = 'http://encoder.test:3000';
+    let client;
+
+    beforeEach(function () {
+        client = new EncoderClient({ encoderUrl: 'encoder.test', encoderPort: 3000 });
+    });
+
+    afterEach(function () {
+        nock.cleanAll();
+    });
+
+    // The reveal is the transaction indexed as a chunked action, so the hub quote must reach it.
+    describe('spendP2sh optional params', function () {
+        it('forwards feeQuote into the create_tx params', async function () {
+            const feeQuote = { address: 'mfees5pa2HwNBonk5vG23aDWkN9fuDJib4', amount: 10678 };
+            let seen = null;
+            nock(BASE)
+                .post('/', (body) => { seen = body.params; return true; })
+                .reply(200, { jsonrpc: '2.0', result: { psbt: 'hex', encoding: 'P2SH' }, id: 1 });
+
+            await client.spendP2sh({ pubkey: 'pub', p2shHash: 'h', p2shHex: 'x', data: 'ACTION', feeQuote });
+            expect(seen.feeQuote).to.deep.equal(feeQuote);
+        });
+
+        it('leaves feeQuote off the wire when the caller set none', async function () {
+            let seen = null;
+            nock(BASE)
+                .post('/', (body) => { seen = body.params; return true; })
+                .reply(200, { jsonrpc: '2.0', result: { psbt: 'hex', encoding: 'P2SH' }, id: 1 });
+
+            await client.spendP2sh({ pubkey: 'pub', p2shHash: 'h', p2shHex: 'x', data: 'ACTION' });
+            expect(seen).to.not.have.property('feeQuote');
+        });
+    });
+});

@@ -123,11 +123,13 @@ function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs
     let reconcileNetwork;
     try { reconcileNetwork = sdk.wallet.getBitcoinNetwork(); } catch (e) { reconcileNetwork = undefined; }
     // The hub feeQuote output is added by the encoder, not listed in customOutputs,
-    // so authorize it from the caller's own quote.
+    // so authorize it from the caller's own quote. Phase-aware, as submitAction is: a
+    // chunked P2SH/P2WSH action is indexed from its reveal, so its funding PSBT pays no quote.
     const quoteOutput = feeQuoteAuthorizedOutput(encoderOpts.feeQuote);
+    const twoPhase = feeResult.encoding === 'P2SH' || feeResult.encoding === 'P2WSH';
     reconcileEncoded(feeResult.psbt, {
         network:             reconcileNetwork,
-        customOutputs:       quoteOutput ? customOutputs.concat([quoteOutput]) : customOutputs,
+        customOutputs:       (quoteOutput && !twoPhase) ? customOutputs.concat([quoteOutput]) : customOutputs,
         changeAddresses:     encoderOpts.change,
         callerIdentities:    encoderOpts.pubkey,
         maxFeeSats:          encoderOpts.maxFeeSats,
@@ -135,8 +137,7 @@ function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs
         label:               'fee estimate',
         // Single-phase only: an estimate carries phase 1 (plus an envelope's reveal
         // when the encoder answered as a pair), never a chunked action's phase 2.
-        phaseShapes: (feeResult.encoding === 'P2SH' || feeResult.encoding === 'P2WSH') ? ['p2sh', 'p2wsh']
-            : (revealPsbt ? ['p2tr'] : []),
+        phaseShapes: twoPhase ? ['p2sh', 'p2wsh'] : (revealPsbt ? ['p2tr'] : []),
         phaseSpends: revealPsbt ? (psbtPrevouts(revealPsbt) || []) : null,
     });
 

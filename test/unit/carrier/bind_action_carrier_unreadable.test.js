@@ -82,3 +82,51 @@ describe('carrier binding: an XCHN carrier this SDK cannot read', function () {
         }
     });
 });
+
+// A bare-multisig output in the decoder's MULTISIGN carrier shape: six elements ending OP_CHECKMULTISIG.
+function multisigScript(m) {
+    const slot = (b) => Buffer.concat([Buffer.from([0x02]), Buffer.alloc(32, b)]);
+    return bitcoin.script.compile([m, slot(0x11), slot(0x22), slot(0x33), bitcoin.opcodes.OP_3,
+        bitcoin.opcodes.OP_CHECKMULTISIG]);
+}
+
+function multisigPsbt(m, inline) {
+    const psbt = inline ? rawBodyPsbt(bitcoin.script.compile([Buffer.from(SEND_A, 'utf8')]))
+        : new bitcoin.Psbt({ network: NET });
+    if (!inline) psbt.addInput({ hash: crypto.randomBytes(32), index: 0, witnessUtxo: { script: OWN, value: 100000 } });
+    psbt.addOutput({ script: multisigScript(m), value: 1000 });
+    if (!inline) psbt.addOutput({ script: OWN, value: 90000 });
+    return psbt;
+}
+
+// The decoder reads a bare-multisig output as an action carrier and this SDK has no read-back
+// for it, so the binding refuses one outright rather than leaning on reconcile having run first.
+describe('carrier binding: a bare-multisig carrier this SDK cannot read back', function () {
+
+    it('refuses a 1-of-3 multisig carrier whatever encoding the encoder reports', function () {
+        for (const encoding of ['MULTISIGN', 'OP_RETURN', 'P2SH', 'P2WSH', 'TAPROOT', undefined]) {
+            const e = bindError({ psbt: multisigPsbt(bitcoin.opcodes.OP_1), actionString: SEND_A, encoding });
+            expect(e, `encoding=${encoding}`).to.be.an('error');
+            expect(e.code).to.equal('CARRIER_UNREADABLE');
+            expect(e.details.reason).to.equal('MULTISIG_CARRIER_UNSUPPORTED');
+        }
+    });
+
+    it('refuses a 2-of-3 shape too, since the decoder never checks m or n', function () {
+        const e = bindError({ psbt: multisigPsbt(bitcoin.opcodes.OP_2), actionString: SEND_A, encoding: 'MULTISIGN' });
+        expect(e && e.code).to.equal('CARRIER_UNREADABLE');
+    });
+
+    it('refuses the same PSBT handed over as hex', function () {
+        const e = bindError({ psbt: multisigPsbt(bitcoin.opcodes.OP_1).toHex(), actionString: SEND_A });
+        expect(e && e.code).to.equal('CARRIER_UNREADABLE');
+    });
+
+    it('refuses a multisig carrier riding beside a matching inline carrier', function () {
+        expect(bindError({ psbt: rawBodyPsbt(bitcoin.script.compile([Buffer.from(SEND_A, 'utf8')])),
+            actionString: SEND_A, encoding: 'OP_RETURN' })).to.equal(null);
+        const e = bindError({ psbt: multisigPsbt(bitcoin.opcodes.OP_1, true), actionString: SEND_A, encoding: 'OP_RETURN' });
+        expect(e && e.code).to.equal('CARRIER_UNREADABLE');
+        expect(e.details.reason).to.equal('MULTISIG_CARRIER_UNSUPPORTED');
+    });
+});

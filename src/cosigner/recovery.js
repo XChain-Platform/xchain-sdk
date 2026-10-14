@@ -37,6 +37,9 @@ const ecc     = require('@bitcoinerlab/secp256k1');
 const { secp256k1 } = require('@noble/curves/secp256k1');
 const MuSig2  = require('./musig2.js');
 const { exactU64 } = require('./co_signer.js');
+// BIP341 tapleaf hash: tagged('TapLeaf', leafVersion || compactSize(script) || script).
+// Shared with the envelope leaf so the recovery sighash has one definition (re-exported below).
+const { tapleafHash } = require('./envelope.js');
 // Teach bitcoinjs to serialize satoshi values above 2^53 without narrowing
 // them through Number. The module cache makes the patch idempotent; without
 // it, an exact BigInt output value throws when the transaction is written.
@@ -48,20 +51,6 @@ function toBytes(v, label) {
     if (v instanceof Uint8Array) return Buffer.from(v);
     if (typeof v === 'string') return Buffer.from(v, 'hex');
     throw new Error(label + ' must be a hex string or Uint8Array');
-}
-
-// compactSize for tapleaf serialization (recovery scripts are tiny: 34 bytes).
-function compactSize(n) {
-    if (n < 0xfd) return Buffer.from([n]);
-    if (n <= 0xffff) return Buffer.from([0xfd, n & 0xff, (n >> 8) & 0xff]);
-    throw new Error('recovery leaf script unexpectedly large');
-}
-
-// BIP341 tapleaf hash: tagged('TapLeaf', leafVersion || compactSize(script) || script).
-function tapleafHash(script, leafVersion) {
-    const ver = (leafVersion === undefined) ? 0xc0 : leafVersion;
-    return bitcoin.crypto.taggedHash('TapLeaf',
-        Buffer.concat([Buffer.from([ver]), compactSize(script.length), script]));
 }
 
 // An in-process signer for the operator-holds-both-shares case: a MuSig2 2-of-2

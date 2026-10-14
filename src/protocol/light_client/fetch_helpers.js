@@ -82,6 +82,24 @@ async function fetchJson(f, url){
     if (!r.ok) throw new Error('LightClient: explorer returned HTTP ' + r.status);
     return r.json();
 }
+
+// Fetch a proof route that can refuse with an authoritative answer. The explorer
+// replies to a non-2xx as { error: <prose>, code: <stable code> }, and a 409 that
+// carries a code means "this cannot be proven at this height", so it comes back as
+// { refusal: code }. Every other non-2xx still throws, with status and code attached.
+async function fetchProofReply(f, url){
+    let r = await f(url);
+    if (r.ok) return { body: await r.json() };
+    let body = null;
+    // Read the error body best-effort: an unreadable body must not mask the HTTP status.
+    try { body = await r.json(); } catch (_){ body = null; }
+    const code = body && typeof body.code === 'string' && body.code ? body.code : null;
+    if (r.status === 409 && code) return { refusal: code };
+    const err = new Error('LightClient: explorer returned HTTP ' + r.status + (code ? ' (' + code + ')' : ''));
+    err.status = r.status;
+    if (code) err.code = code;
+    throw err;
+}
 function lowerHex(x){ return String(x == null ? '' : x).toLowerCase(); }
 
 // Bind a proof to the question the CALLER asked, not merely to the one the server
@@ -168,4 +186,4 @@ function unverified(reason){ return { verified: false, amount: null, reason: rea
 
 function scaled(a){ const [i, f] = M.canonicalAmount(String(a)).split('.'); return BigInt(i) * 1000000000000000000n + BigInt(f); }
 
-module.exports = { resolveFetch, networkContextCoin, pinnedEntry, baseUrl, fetchJson, lowerHex, expectedMismatch, unverified, scaled };
+module.exports = { resolveFetch, networkContextCoin, pinnedEntry, baseUrl, fetchJson, fetchProofReply, lowerHex, expectedMismatch, unverified, scaled };

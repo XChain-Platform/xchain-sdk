@@ -42,7 +42,7 @@ const M = require('../../merkle.js');
 // adjacent indices above 2^53 onto one value, so the binding guards below would
 // match the neighbouring action or height they exist to reject.
 const { sameWireIndex } = require('../../utils/wire_index.js');
-const { resolveFetch, baseUrl, fetchJson, lowerHex } = require('./fetch_helpers.js');
+const { resolveFetch, baseUrl, fetchJson, fetchProofReply, lowerHex } = require('./fetch_helpers.js');
 const { verifyBalanceProof, verifyLockedBalanceProof, verifyActionProof } = require('./proof_checks.js');
 const { resolveQuorum } = require('./quorum_resolution.js');
 
@@ -129,6 +129,9 @@ async function resolveBalanceCheckpoint(f, opts, body, proof){
     return { cp, q };
 }
 
+// Return x when it is a non-empty string, otherwise null.
+function nonEmpty(x){ return (typeof x === 'string' && x) ? x : null; }
+
 // verifyLockedBalance({ explorerUrl, coin, address, tick, atHeight?, validators?, trustedCheckpoint?, pinnedResolver?, fetchImpl? })
 //  The XCHAIN_ESC counterpart of verifyBalance, same options and same
 //  -> { verified, amount, height, reason, checkpoint, quorum, weighted }.
@@ -139,10 +142,10 @@ async function resolveBalanceCheckpoint(f, opts, body, proof){
 // had to bind proof.height to their checkpoint by hand, and the pure verifier was
 // left gating arming on the server's own label.
 //
-// A below-arming request is refused by the explorer with an error body rather than
-// a proof (proofServer.lockedBalanceProof). That refusal is a real answer here, not
-// a transport fault, so it is returned as verified:false with the server's reason
-// instead of throwing the way an absent proof does on the spendable path.
+// A below-arming request is refused by the explorer with HTTP 409 and a stable code
+// (ESCROW_LEAF_NOT_COMMITTED) rather than a proof. That refusal is a real answer here,
+// not a transport fault, so it is returned as verified:false with the code as reason;
+// any other non-2xx still throws, with status and code on the error.
 async function verifyLockedBalance(opts){
     opts = opts || {};
     const f = resolveFetch(opts.fetchImpl);
@@ -150,9 +153,12 @@ async function verifyLockedBalance(opts){
     const url = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(opts.coin)) +
                 '/api/proof/locked-balance/' + encodeURIComponent(String(opts.address)) +
                 '/' + encodeURIComponent(String(opts.tick)) + hq;
-    const body = await fetchJson(f, url);
-    if (body && !body.proof && typeof body.error === 'string' && body.error)
-        return { verified: false, amount: null, reason: body.error,
+    const reply = await fetchProofReply(f, url);
+    const body = reply.body;
+    // Prefer the stable code; a bare error string is the legacy shape where it held the code.
+    const refusal = reply.refusal || (body && !body.proof && (nonEmpty(body.code) || nonEmpty(body.error)));
+    if (refusal)
+        return { verified: false, amount: null, reason: refusal,
                  height: null, checkpoint: null, quorum: null, weighted: null };
     if (!body || !body.proof) throw new Error('LightClient: no proof in response');
     const proof = body.proof;

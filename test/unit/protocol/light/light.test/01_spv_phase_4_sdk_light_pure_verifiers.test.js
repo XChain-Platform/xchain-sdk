@@ -318,8 +318,9 @@ describe('SPV Phase 4: sdk.light pure verifiers', function () {
     });
 
     it('verifyLockedBalance returns the server refusal instead of throwing', async function () {
-        const fetchImpl = async () => ({ ok: true, status: 200,
-            json: async () => ({ error: 'ESCROW_LEAF_NOT_COMMITTED' }) });
+        // The explorer's real refusal: HTTP 409, prose in error, the stable value in code.
+        const fetchImpl = async () => ({ ok: false, status: 409,
+            json: async () => ({ error: LEAF_PROSE, code: 'ESCROW_LEAF_NOT_COMMITTED' }) });
         const r = await light.verifyLockedBalance({ explorerUrl: 'https://x', coin: COIN,
             address: ADDR_A, tick: TICK, fetchImpl });
         assert.strictEqual(r.verified, false);
@@ -378,3 +379,6 @@ describe('SPV Phase 4: sdk.light pure verifiers', function () {
         else delete SUBACT.ESCROW_LOCKED_LEAF_ACTIVATION[ESC_KEY];
     });
 });
+
+// The explorer's verbatim prose for the below-arming refusal (state_proofs.js locked-balance map).
+const LEAF_PROSE = 'The locked-balance leaf is not committed at this height (balances_root does not cover the XCHAIN_ESC domain here, so absence cannot be proven)';

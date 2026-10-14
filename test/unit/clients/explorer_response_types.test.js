@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-// Pins the hand-written ExplorerStatus and NetworkSummary declarations in
+// Pins the hand-written ExplorerStatus, NetworkSummary and ListEnvelope declarations in
 // index.d.ts to the explorer's published OpenAPI schemas, field by field.
 //
 // Two layers, the same split as the cross-repo constants gate:
@@ -181,6 +181,49 @@ describe('explorer response types in index.d.ts', function () {
             for (const key of NETWORK_STATE_KEYS) {
                 assert.match(body, new RegExp('^ {8}' + key + '\\??:', 'm'), 'NetworkSummary.network lacks ' + key);
             }
+        });
+    });
+});
+
+// ListEnvelope against ListResponse: the keyset cursor fields a list page carries.
+const LIST_FIELDS = {
+    data:        { optional: false },
+    total:       { optional: false },
+    runtime:     { optional: true  },
+    next_after:  { optional: true  },
+    next_before: { optional: true  },
+};
+
+describe('explorer response types in index.d.ts', function () {
+    const dts = fs.readFileSync(DTS, 'utf8');
+
+    describe('ListEnvelope', function () {
+        const props = topLevelProps(interfaceBody(dts, 'ListEnvelope<T>'));
+
+        it('declares exactly the pinned fields with the pinned optional markers', function () {
+            assert.deepStrictEqual(Object.keys(props).sort(), Object.keys(LIST_FIELDS).sort());
+            for (const [name, want] of Object.entries(LIST_FIELDS)) {
+                assert.strictEqual(props[name].optional, want.optional, name + ' optional marker drifted: ' + props[name].type);
+            }
+            assert.strictEqual(props.next_after.type, 'string');
+            assert.strictEqual(props.next_before.type, 'string');
+        });
+
+        it('lets QueryOptions carry the keyset cursors back', function () {
+            const query = topLevelProps(interfaceBody(dts, 'QueryOptions'));
+            for (const name of ['before', 'after']) {
+                assert.ok(query[name] && query[name].optional, 'QueryOptions lacks optional ' + name);
+            }
+        });
+
+        it('matches the explorer OpenAPI ListResponse schema', function () {
+            const schema = explorerSchema(this, 'ListResponse');
+            assert.deepStrictEqual(Object.keys(schema.properties).sort(), Object.keys(LIST_FIELDS).sort());
+            const required = (schema.required || []).slice().sort();
+            const pinnedRequired = Object.keys(LIST_FIELDS).filter((k) => !LIST_FIELDS[k].optional).sort();
+            assert.deepStrictEqual(required, pinnedRequired, 'required fields disagree with the optional markers');
+            assert.strictEqual(schema.properties.next_after.type, 'string');
+            assert.strictEqual(schema.properties.next_before.type, 'string');
         });
     });
 });

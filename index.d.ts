@@ -403,6 +403,10 @@ export interface QueryOptions {
     from?: number | string;
     /** SPV checkpoint-range upper bound (checkpoints/range) */
     to?: number | string;
+    /** Keyset cursor: rows before this one, from a prior page's `next_before`. Not with `after`; overrides `page`. */
+    before?: number | string;
+    /** Keyset cursor: rows after this one, from a prior page's `next_after`. Not with `before`; overrides `page`. */
+    after?: number | string;
 }
 
 
@@ -646,6 +650,10 @@ export interface ListEnvelope<T> {
     data: T[];
     total: number;
     runtime?: string;
+    /** Cursor for the next page of a descending keyset-paged list; absent on an empty page. */
+    next_before?: string;
+    /** Cursor for the next page of an ascending keyset-paged list; absent on an empty page. */
+    next_after?: string;
 }
 
 /**

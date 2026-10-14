@@ -85,3 +85,69 @@ describe('LifecycleManager', function () {
         });
     });
 });
+
+// A chunked submit: phase 1 funds with change only, and the reveal pays the hub fee output.
+function runChunked(encoding, revealQuoteValue, feeQuote) {
+    const signed = buildSignedTx();
+    const funding = buildQuotePsbt(0);
+    const reveal = buildQuotePsbt(revealQuoteValue);
+    const fundingOnly = bitcoin.Psbt.fromHex(funding.psbtHex, { network: NET });
+    const stripped = new bitcoin.Psbt({ network: NET });
+    stripped.addInput(Object.assign({ hash: fundingOnly.txInputs[0].hash, index: 0 }, fundingOnly.data.inputs[0]));
+    stripped.addOutput({ script: fundingOnly.txOutputs[0].script, value: 80_000 });
+    const spendCalls = [];
+    const sdk = makeSdk({
+        wallet: {
+            signPsbt:       () => ({ txHex: signed.txHex, txid: 'p1', psbtHex: signed.psbtHex }),
+            signRevealPsbt: () => ({ txHex: signed.txHex, txid: 'p2', psbtHex: signed.psbtHex }),
+        }
+    }, {
+        createTx:    async () => ({ psbt: stripped.toHex(), encoding }),
+        spendP2sh:   async (p) => { spendCalls.push(p); return { psbt: reveal.psbtHex }; },
+        broadcastTx: async () => ({}),
+    });
+    const quote = feeQuote ? Object.assign({ address: reveal.feeAddress }, feeQuote) : undefined;
+    const done = new LifecycleManager(sdk).submitAction(
+        { action: 'SEND', params: {} },
+        { pubkey: '03pub', change: 'addr', feeQuote: quote },
+        { wif: FAKE_WIF, waitForIndexer: false }
+    );
+    return { done, spendCalls, quote };
+}
+
+async function chunkedError(encoding, revealQuoteValue, feeQuote) {
+    try { await runChunked(encoding, revealQuoteValue, feeQuote).done; }
+    catch (e) { return e; }
+    return null;
+}
+
+describe('LifecycleManager', function () {
+    afterEach(() => sinon.restore());
+
+    describe('submitAction(): feeQuote on a chunked reveal', function () {
+        for (const encoding of ['P2SH', 'P2WSH']) {
+            it('forwards the quote to the ' + encoding + ' reveal and accepts its fee output', async function () {
+                const run2 = runChunked(encoding, 10_000, { amount: 10_000 });
+                const result = await run2.done;
+                assert.strictEqual(result.txid, 'p2');
+                assert.deepStrictEqual(run2.spendCalls[0].feeQuote, run2.quote);
+            });
+        }
+
+        it('sends no feeQuote to the reveal when the caller quoted none', async function () {
+            const run2 = runChunked('P2SH', 10_000, null);
+            await run2.done.catch(() => null);
+            assert.ok(!('feeQuote' in run2.spendCalls[0]));
+        });
+
+        it('refuses a reveal fee output the caller never quoted', async function () {
+            const err = await chunkedError('P2SH', 10_000, null);
+            assert.strictEqual(err && err.code, 'UNRECONCILED_OUTPUT');
+        });
+
+        it('caps the reveal fee output at the quoted amount', async function () {
+            const err = await chunkedError('P2SH', 10_000, { amount: 5_000 });
+            assert.strictEqual(err && err.code, 'OUTPUT_OVER_REQUESTED_VALUE');
+        });
+    });
+});
