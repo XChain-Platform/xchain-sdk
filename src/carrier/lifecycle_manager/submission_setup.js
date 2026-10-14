@@ -141,7 +141,8 @@ function reconcileTransaction(manager, encoded, createResult, encoderOpts, opts)
         network:        manager.reconcileNetwork(),
         label:          'transaction',
     });
-    return { reconcileIntent, phase1 };
+    // A chunk reveal is the indexed transaction and carries the hub fee output, authorized by the quote.
+    return { reconcileIntent, phase1, revealCustomOutputs: withQuote(encoderOpts.customOutputs) };
 }
 
 // Reject unsupported custom-signer shapes synchronously before any broadcast occurs.

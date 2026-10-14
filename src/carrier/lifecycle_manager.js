@@ -30,14 +30,14 @@ const {
     validateCustomSigner,
 } = require('./lifecycle_manager/submission_setup.js');
 const {
+    buildChunkRevealBroadcastError,
     buildEnvelopeBroadcastError,
-    buildPhase2Request,
     buildWaitOptions,
     finishEnvelope,
     finishPhase2,
     markConfirmationTimeout,
     prepareEnvelope,
-    preparePhase2,
+    prepareChunkReveal,
     shapeResult,
 } = require('./lifecycle_manager/submission_results.js');
 
@@ -72,9 +72,10 @@ class LifecycleManager {
     //   explorerUrl     - explorer URL for constructing that client
     //   onProgress      - callback(step, data) for lifecycle notifications
     //
-    // The reveal for either envelope or chunk encoding is signed before its
-    // corresponding broadcast. This ordering prevents an avoidable stranded
-    // commit, while a reveal broadcast error retains recovery information.
+    // The reveal for either envelope or chunk encoding is built, reconciled and
+    // signed before its commit is broadcast, so no commit goes out unless a reveal
+    // this SDK will sign exists for it; a refusal there costs nothing. A reveal
+    // broadcast error retains recovery information.
     //
     // Returns: {
     //   txid, actionString, encoding, action (from indexer if waited),
@@ -101,6 +102,8 @@ class LifecycleManager {
             signed = await opts.signer(encoded.psbt, { encoding: encoded.encoding });
         } else signed = this.sdk.wallet.signPsbt(encoded.psbt, wif);
         const revealSigned = prepareEnvelope(this, encoded, createResult, wif, progress);
+        const phase2 = await prepareChunkReveal(this, { encoder, signed, encoded, encoderOpts, carriedAction,
+            reconcileState, createResult, wif, progress });
         progress('broadcasting', { txid: signed.txid });
         await encoder.broadcastTx(signed.txHex);
         const broadcastHexes = [signed.txHex];
@@ -114,14 +117,11 @@ class LifecycleManager {
                 this, encoded, revealSigned, spentInputs, broadcastHexes));
         }
         let finalTxid = signed.txid;
-        if (encoded.encoding === 'P2SH' || encoded.encoding === 'P2WSH') {
-            progress('p2sh_spending', { phase1Txid: signed.txid });
-            const spendResult = await encoder.spendP2sh(
-                buildPhase2Request(signed, encoded, encoderOpts, carriedAction));
-            const spendSigned = preparePhase2(this, spendResult, reconcileState, createResult, wif);
-            await encoder.broadcastTx(spendSigned.txHex);
+        if (phase2) {
+            try { await encoder.broadcastTx(phase2.spendSigned.txHex); }
+            catch (error) { throw buildChunkRevealBroadcastError(error, signed, phase2.spendSigned); }
             ({ finalTxid, signed, spentInputs } = finishPhase2(
-                this, spendResult, spendSigned, broadcastHexes, spentInputs));
+                this, phase2.spendResult, phase2.spendSigned, broadcastHexes, spentInputs));
         }
         const result = shapeResult(this, {
             finalTxid, finalTxidEnvelope, revealSigned, signed, spentInputs, broadcastHexes,

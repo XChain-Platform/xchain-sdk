@@ -20,6 +20,7 @@
  ********************************************************************/
 
 const { SDKActionError } = require('../../utils/errors.js');
+const { pickRevealOptions } = require('../../clients/encoder/create_tx_options.js');
 const { reconcileEncoded } = require('../reconcile_encoded.js');
 const { assertCarrierBinding, assertEnvelopeCarrierBinding } = require('../bind_action_carrier.js');
 
@@ -51,6 +52,14 @@ function buildEnvelopeBroadcastError(error, signed, encoded, revealSigned) {
           revealTxHex: revealSigned.txHex, cause: error });
 }
 
+// Preserve the signed chunk reveal when it is rejected after its commit is broadcast.
+function buildChunkRevealBroadcastError(error, signed, spendSigned) {
+    return new SDKActionError('CHUNK_REVEAL_BROADCAST_FAILED',
+        `commit ${signed.txid} is broadcast but the reveal was rejected: ${error && error.message ? error.message : error}. ` +
+        'Retry the reveal broadcast with revealTxHex.',
+        { commitTxid: signed.txid, revealTxid: spendSigned.txid, revealTxHex: spendSigned.txHex, cause: error });
+}
+
 // Record a successful envelope reveal synchronously before choosing the final action txid.
 function finishEnvelope(manager, encoded, revealSigned, spentInputs, broadcastHexes) {
     spentInputs = spentInputs.concat(manager.extractSpentInputs(encoded.revealPsbt));
@@ -60,22 +69,20 @@ function finishEnvelope(manager, encoded, revealSigned, spentInputs, broadcastHe
 
 // Build phase-2 arguments synchronously from the exact bytes committed by phase 1.
 function buildPhase2Request(signed, encoded, encoderOpts, carriedAction) {
+    // Every createTx option the caller set, from the list createTx reads, so the
+    // reveal keeps the hub feeQuote and whatever createTx gains next.
+    const request = pickRevealOptions(encoderOpts);
     // Chunk reveals must reproduce the stored payload exactly. Re-entering the
     // compression pass could produce a carrier that cannot spend the commit.
-    return {
+    if (carriedAction.encoderCompressed) request.compress = false;
+    return Object.assign(request, {
         pubkey:           encoderOpts.pubkey,
         p2shHash:         signed.txid,
         p2shHex:          signed.txHex,
         data:             carriedAction.carriedActionString,
         encoding:         encoded.encoding,
         rawData:          carriedAction.carriedRawData,
-        ...(carriedAction.encoderCompressed ? { compress: false } : {}),
-        compressedPubKey: encoderOpts.compressedPubKey,
-        change:           encoderOpts.change,
-        fee:              encoderOpts.fee,
-        feePerKb:         encoderOpts.feePerKb,
-        customOutputs:    encoderOpts.customOutputs
-    };
+    });
 }
 
 // Reconcile, bind and sign phase 2 synchronously before its broadcast begins.
@@ -84,6 +91,7 @@ function preparePhase2(manager, spendResult, reconcileState, createResult, wif) 
     // leaving undecodable carrier value under encoder control.
     reconcileEncoded(spendResult.psbt, Object.assign({}, reconcileState.reconcileIntent, {
         label: 'phase-2 reveal',
+        customOutputs: reconcileState.revealCustomOutputs,
         requiredSpends: reconcileState.phase1.phaseFunding,
     }));
 
@@ -98,6 +106,16 @@ function preparePhase2(manager, spendResult, reconcileState, createResult, wif) 
 
     // Non-standard P2SH and P2WSH inputs require the reveal-specific finalizer.
     return manager.sdk.wallet.signRevealPsbt(spendResult.psbt, wif);
+}
+
+// Build, reconcile, bind and sign a chunk reveal before its commit is broadcast, from
+// the signed phase 1, whose txid is final already. Null for any other encoding.
+async function prepareChunkReveal(manager, state) {
+    const { encoder, signed, encoded, encoderOpts, carriedAction, reconcileState, createResult, wif, progress } = state;
+    if (encoded.encoding !== 'P2SH' && encoded.encoding !== 'P2WSH') return null;
+    progress('p2sh_spending', { phase1Txid: signed.txid });
+    const spendResult = await encoder.spendP2sh(buildPhase2Request(signed, encoded, encoderOpts, carriedAction));
+    return { spendResult, spendSigned: preparePhase2(manager, spendResult, reconcileState, createResult, wif) };
 }
 
 // Update phase-2 tracking synchronously after its broadcast has succeeded.
@@ -167,12 +185,14 @@ function markConfirmationTimeout(error, finalTxid) {
 }
 
 module.exports = {
+    buildChunkRevealBroadcastError,
     buildEnvelopeBroadcastError,
     buildPhase2Request,
     buildWaitOptions,
     finishEnvelope,
     finishPhase2,
     markConfirmationTimeout,
+    prepareChunkReveal,
     prepareEnvelope,
     preparePhase2,
     shapeResult,

@@ -183,7 +183,24 @@ function callerScripts(identity, network) {
     return out;
 }
 
+// The P2SH-P2WPKH scripts of the caller's pubkey identities, on a segwit network.
+// A funding input paying one is single-key and the caller's own even when the PSBT
+// leaves out its redeemScript, since the redeem script is that key's P2WPKH script.
+function callerNestedScripts(identities, network) {
+    if (network && network.supportsSegwit === false) return [];
+    const out = [];
+    for (const id of (Array.isArray(identities) ? identities : [identities])) {
+        if (typeof id !== 'string' || !/^0[23][0-9a-fA-F]{64}$/.test(id)) continue;
+        try {
+            const redeem = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(id, 'hex'), network: network || undefined });
+            out.push(bitcoin.payments.p2sh({ redeem, network: network || undefined }).output);
+        } catch (e) { /* not a key with a P2WPKH script */ }
+    }
+    return out;
+}
+
 module.exports = {
+    callerNestedScripts,
     toU64,
     exactU64,
     inputScript,

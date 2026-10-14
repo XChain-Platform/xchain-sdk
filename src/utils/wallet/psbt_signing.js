@@ -24,7 +24,7 @@ const psbtutils = require('bitcoinjs-lib/src/psbt/psbtutils');
 const ecc = require('@bitcoinerlab/secp256k1');
 const { SDKWalletError } = require('../errors.js');
 const { ECPair } = require('./key_derivation.js');
-const { assertConsistentPrevouts } = require('./psbt_prevout.js');
+const { assertConsistentPrevouts, findVerifiedPrevout } = require('./psbt_prevout.js');
 
 bitcoin.initEccLib(ecc);
 
@@ -36,7 +36,8 @@ const ENCODER_MAX_FEE_RATE_SAT_VB = { dogecoin: 1000000, litecoin: 100000 };
 const CEILING_HEADROOM = 2;
 const UNKNOWN_CHAIN_CEILING = 10000000;
 
-function createSigningContext(psbtHex, wif, net) {
+// supplyNested fills in the redeem script of this key's own P2SH-P2WPKH inputs.
+function createSigningContext(psbtHex, wif, net, supplyNested) {
     let keyPair;
     try {
         keyPair = ECPair.fromWIF(wif, net);
@@ -52,8 +53,29 @@ function createSigningContext(psbtHex, wif, net) {
     }
     // Refuse disagreeing UTXO fields before signing, so the fee ceiling and any gate read the prevout the key signs
     assertConsistentPrevouts(psbt);
+    if (supplyNested) supplyNestedRedeemScripts(psbt, keyPair, net);
 
     return { keyPair, psbt };
+}
+
+// Supply the redeem script of each P2SH-P2WPKH input this key controls when the PSBT
+// leaves it out: it is the key's own P2WPKH script, and without it no input of that
+// shape can be signed. Inputs paying any other script are left as they are.
+function supplyNestedRedeemScripts(psbt, keyPair, net) {
+    let redeem, wrapped;
+    try {
+        redeem  = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(keyPair.publicKey), network: net }).output;
+        wrapped = bitcoin.payments.p2sh({ redeem: { output: redeem }, network: net }).output;
+    } catch (e) {
+        return; // an uncompressed key has no P2WPKH script
+    }
+    psbt.data.inputs.forEach((input, i) => {
+        if (input.redeemScript || input.finalScriptSig || input.finalScriptWitness) return;
+        let prevout = null;
+        try { prevout = findVerifiedPrevout(psbt, i); } catch (e) { prevout = null; }
+        if (prevout && prevout.script && Buffer.from(prevout.script).equals(wrapped))
+            psbt.updateInput(i, { redeemScript: redeem });
+    });
 }
 
 module.exports = {
@@ -106,7 +128,7 @@ module.exports = {
         }
 
         const net = this.resolveNet();
-        const { keyPair, psbt } = createSigningContext(psbtHex, wif, net);
+        const { keyPair, psbt } = createSigningContext(psbtHex, wif, net, true);
 
         // Scoped signing: when an explicit input set is given, sign/finalize ONLY
         // those inputs. Any other input the key happens to control (e.g. a UTXO a

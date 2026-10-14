@@ -22,6 +22,7 @@ const { SDKEncoderError } = require('../../utils/errors.js');
 require('../../utils/apply_bufferutils_patch');
 const bitcoin = require('bitcoinjs-lib');
 const { toU64, inputValue } = require('../../carrier/reconcile_encoded/script_matching.js');
+const { pickRevealOptions } = require('./create_tx_options.js');
 
 // Report a satoshi total as a Number only when it is exact, so no caller reads a rounded value.
 const safeNumber = (v) => (v !== null && v <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(v) : null);
@@ -215,8 +216,10 @@ module.exports = {
     //   p2shHash - hash of the P2SH output to spend
     //   p2shHex  - full transaction hex containing the P2SH output
     //
-    // Optional:
+    // Optional: every createTx option (create_tx_options.js) except utxos,
+    // sourceAddress and options, which a reveal does not take, among them
     //   change, fee, feePerKb, rbf, dust, unconfirmed, compressedPubKey, encoding, rawData
+    //   feeQuote - the hub protocol fee { address, amount }; the reveal emits it
     //   compress - FILE payload compression, tri-state as on createTx. Pass
     //     `false` with the STORED bytes (create_tx's compression.data /
     //     compression.rawData) to rebuild a reveal over a payload phase 1
@@ -249,21 +252,13 @@ module.exports = {
             data:     params.data !== undefined && params.data !== null ? params.data : ''
         };
 
+        // Every createTx option the caller set rides along, read from the one shared
+        // field list so this request cannot fall behind createTx (feeQuote is the
+        // protocol-fee output the reveal must emit). compress is tri-state and is
+        // forwarded rather than defaulted (see createTx): a caller handing phase 2
+        // already-deflated bytes passes false to keep the encoder off them.
+        Object.assign(rpcParams, pickRevealOptions(params));
         if (params.encoding !== undefined)         rpcParams.encoding = String(params.encoding).toUpperCase();
-        if (params.rawData !== undefined)          rpcParams.rawData = params.rawData;
-        if (params.compressedPubKey !== undefined) rpcParams.compressedPubKey = params.compressedPubKey;
-        if (params.change !== undefined)           rpcParams.change = params.change;
-        if (params.fee !== undefined)              rpcParams.fee = params.fee;
-        if (params.feePerKb !== undefined)         rpcParams.feePerKb = params.feePerKb;
-        if (params.rbf !== undefined)              rpcParams.rbf = params.rbf;
-        if (params.dust !== undefined)             rpcParams.dust = params.dust;
-        if (params.unconfirmed !== undefined)      rpcParams.unconfirmed = params.unconfirmed;
-        if (params.customOutputs !== undefined)    rpcParams.customOutputs = params.customOutputs;
-        // Tri-state, forwarded rather than defaulted (see createTx). It was
-        // silently dropped here while createTx forwarded it, so a caller handing
-        // phase 2 already-deflated bytes could not tell the encoder to leave them
-        // alone and depended on a guard firing by accident.
-        if (params.compress !== undefined)         rpcParams.compress = params.compress;
 
         return this.rpc('create_tx', rpcParams);
     },
