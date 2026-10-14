@@ -111,19 +111,26 @@ describe('WebSocketClient reconnect catch-up: sequencing', function () {
         expect(client.lastActionIndex).to.equal('640');
     });
 
-    it('resubscribes a blocks subscription at once, without since_action_index', async function () {
+    // A blocks subscription goes through the catch-up queue with the cursor, so its
+    // CATCH_UP_COMPLETE can name NEW_BLOCK as not replayed; it is still one at a time.
+    it('resubscribes a blocks subscription through the catch-up queue, so it hears NEW_BLOCK is not replayed', async function () {
         client = createClient(ctx.port);
         await client.connect();
         await client.subscribe(['blocks']);
         await client.subscribe(['actions']);
-        const frames = [];
-        ctx.srv.sock.on('message', (raw) => frames.push(JSON.parse(raw.toString())));
+        const notes = [];
+        client.on('not_replayed', (m) => notes.push(m.data));
         client.resubscribe();
-        await waitFor(() => ctx.srv.catchUps.length === 1 && frames.some(f => f.channels && f.channels[0] === 'blocks'),
-            { message: 'resubscribe did not send both the blocks subscribe and the actions catch-up' });
-        const blocks = frames.find(f => f.channels && f.channels[0] === 'blocks');
-        expect(blocks.params).to.not.have.property('since_action_index');
-        expect(ctx.srv.catchUps).to.have.lengthOf(1);
+        await waitFor(() => ctx.srv.catchUps.length === 1, { message: 'the blocks catch-up never went out' });
+        expect(ctx.srv.catchUps[0].channels).to.deep.equal(['blocks']);
+        expect(ctx.srv.catchUps[0]).to.include({ since: '500' });
+        // Answer it with a NEW_BLOCK note, freeing the mock server's one-catch-up latch.
+        ctx.srv.latched = false;
+        ctx.srv.reply({ type: 'CATCH_UP_COMPLETE', id: ctx.srv.catchUps[0].id,
+            data: { events_replayed: 0, latest_action_index: '500', truncated: false, not_replayed: ['NEW_BLOCK'] } });
+        await waitFor(() => ctx.srv.catchUps.length === 2, { message: 'the actions catch-up never followed' });
+        expect(ctx.srv.catchUps[1].channels).to.deep.equal(['actions']);
+        expect(notes.map(n => [n.types, n.channels])).to.deep.equal([[['NEW_BLOCK'], ['blocks']]]);
     });
 });
 

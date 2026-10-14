@@ -196,8 +196,14 @@ describe('WebSocketClient', function () {
                 received.push(msg);
             });
 
-            // Call resubscribe directly
+            // Call resubscribe directly. With a cursor seeded from WELCOME both go out as
+            // catch-ups one at a time (blocks for its NEW_BLOCK note), so answer the first.
             client.resubscribe();
+            await waitFor(() => received.filter(m => m.action === 'subscribe').length >= 1,
+                { message: 'the server never received the first replayed subscribe' });
+            const first = received.find(m => m.action === 'subscribe');
+            server._lastClient.send(JSON.stringify({ type: 'CATCH_UP_COMPLETE', id: first.id,
+                data: { events_replayed: 0, latest_action_index: '500', truncated: false } }));
             await waitFor(() => received.filter(m => m.action === 'subscribe').length >= 2,
                 { message: 'the server never received both replayed subscribes' });
 

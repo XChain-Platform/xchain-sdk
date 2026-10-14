@@ -18,9 +18,12 @@
  * one with CATCH_UP_IN_PROGRESS, so a reconnect replays each subscription
  * that can carry NEW_ACTION from the reconnect-time cursor ONE AT A TIME,
  * waiting for its CATCH_UP_COMPLETE or refusal before sending the next. A
- * truncated replay is continued from where the server stopped; a refused or
- * unanswered one emits `resync_required` so the caller can backfill over
- * REST. A completed one whose CATCH_UP_COMPLETE names `not_replayed` types (lifecycle
+ * truncated replay is continued from where the server stopped; one dropped
+ * with RATE_LIMITED, or answered CATCH_UP_NOT_READY, is sent again; one refused otherwise or unanswered emits
+ * `resync_required` so the caller can backfill over REST (a CATCH_UP_REORGED
+ * refusal carries the rollback's fork fields). A blocks subscription goes
+ * through the same queue, so its CATCH_UP_COMPLETE names NEW_BLOCK, which no
+ * replay carries. A REORG frame moves the cursor below the rollback. A completed one whose CATCH_UP_COMPLETE names `not_replayed` types (lifecycle
  * events the replay cannot carry) emits `not_replayed` so the caller can backfill those
  * over REST too. A completed one whose CATCH_UP_COMPLETE carries `stale: true` (a
  * replica whose tip is behind) emits `stale_replay`. Mirrors the explorer's bundled
@@ -33,14 +36,34 @@
 
 'use strict';
 
+const pacing = require('./pacing.js');
+
 // Continuations past this many truncated rounds are reported as a gap instead. The
 // server's depth limit means about eleven are ever needed.
 const MAX_ROUNDS = 20;
+
 
 // Only the actions and address channels ever carry NEW_ACTION, so only a subscription
 // naming one of them has anything for a catch-up to replay.
 function carriesActions(channels) {
     return Array.isArray(channels) && channels.some(c => c === 'actions' || c === 'address');
+}
+
+// A subscription a reconnect sends with since_action_index: one that can carry
+// NEW_ACTION (replayed), or one naming blocks, whose CATCH_UP_COMPLETE says the NEW_BLOCK
+// frames it missed are not replayed.
+function needsCatchUp(channels) {
+    return carriesActions(channels) || (Array.isArray(channels) && channels.includes('blocks'));
+}
+
+// The cursor just below a rollback's first invalidated index, or `current` when that is
+// already lower (or either side is not an index). Kept as the wire's decimal string.
+function belowIndex(current, firstInvalid) {
+    if (current === null || firstInvalid === null || firstInvalid === undefined) return current;
+    const val = String(firstInvalid);
+    if (!/^[0-9]+$/.test(val) || BigInt(val) === 0n) return current;
+    const below = BigInt(val) - 1n;
+    return (BigInt(current) > below) ? String(below) : current;
 }
 
 // The larger of two action indexes, compared as BigInt and kept as the wire's decimal
@@ -59,6 +82,14 @@ function trackCursor(client, msg) {
     if (!msg.data) return;
     if (msg.type === 'WELCOME') {
         if (client.lastActionIndex === null) client.advanceCursor(msg.data.latest_action_index);
+        return;
+    }
+    // A rollback voids every row at or above first_invalid_action_index: the cursor drops
+    // below it (and so does what a running catch-up has seen), so the replacement rows
+    // that follow move it forward again and a reconnect before they arrive replays them.
+    if (msg.type === 'REORG') {
+        client.lastActionIndex = belowIndex(client.lastActionIndex, msg.data.first_invalid_action_index);
+        if (client._catchUp) client._catchUp.maxSeen = belowIndex(client._catchUp.maxSeen, msg.data.first_invalid_action_index);
         return;
     }
     // Only NEW_ACTION and CATCH_UP_COMPLETE report a delivered action row. Other frames
@@ -127,22 +158,26 @@ function nextCatchUp(client) {
         finishCatchUp(client);
         return;
     }
-    state.current = { sub, rounds: 0, id: null, since: null };
+    state.current = { sub, rounds: 0, id: null, since: null, rateRetries: 0 };
     sendCatchUp(client, state.cursor);
 }
 
 // The pending catch-up was refused or went unanswered, so its rows were not replayed:
 // emit resync_required (backfill over REST), then move on.
-function refuseCatchUp(client, code, message) {
+function refuseCatchUp(client, code, message, detail) {
     const state = client._catchUp;
     if (!state || !state.current) return;
     clearTimer(state);
-    client.emit('resync_required', {
+    const event = {
         code:               code || null,
         message:            message || null,
         channels:           state.current.sub.channels,
         since_action_index: state.current.since
-    });
+    };
+    // CATCH_UP_REORGED names the rollback, so the caller can reload from its fork.
+    if (detail && detail.fork_block_index !== undefined) event.fork_block_index = detail.fork_block_index;
+    if (detail && detail.first_invalid_action_index !== undefined) event.first_invalid_action_index = detail.first_invalid_action_index;
+    client.emit('resync_required', event);
     nextCatchUp(client);
 }
 
@@ -153,7 +188,21 @@ function answerCatchUp(client, msg) {
     if (!state || !state.current || msg.id === undefined || msg.id !== state.current.id) return;
     if (msg.type === 'error') {
         const err = msg.data || {};
-        refuseCatchUp(client, err.code, err.message);
+        // Dropped over the message rate, or asked to wait for the coin's first live
+        // position, not refused: send the same request again once the server's bucket
+        // has drained a slot (RATE_LIMITED) or after a second (CATCH_UP_NOT_READY).
+        if ((err.code === 'RATE_LIMITED' || err.code === 'CATCH_UP_NOT_READY') &&
+            state.current.rateRetries < pacing.RATE_RETRIES) {
+            state.current.rateRetries++;
+            clearTimer(state);
+            const since = state.current.since;
+            state.timer = setTimeout(() => {
+                if (client._catchUp === state) sendCatchUp(client, since);
+            }, err.code === 'RATE_LIMITED' ? pacing.drainInterval(client) : 1000);
+            if (state.timer.unref) state.timer.unref();
+            return;
+        }
+        refuseCatchUp(client, err.code, err.message, err);
         return;
     }
     if (msg.type !== 'CATCH_UP_COMPLETE') return;
@@ -198,11 +247,13 @@ function resubscribe(client) {
     const cursor = (client.lastActionIndex !== null && BigInt(client.lastActionIndex) > 0n) ? client.lastActionIndex : null;
     const queue  = [];
     for (const sub of client._subscriptions) {
-        if (cursor !== null && carriesActions(sub.channels)) {
+        if (cursor !== null && needsCatchUp(sub.channels)) {
             queue.push(sub);
             continue;
         }
-        client.send({ action: 'subscribe', channels: sub.channels, params: Object.assign({}, sub.params) });
+        // Paced by send() and retried on RATE_LIMITED (message_pump.js), so a long
+        // subscription list cannot outrun the server's message rate.
+        pacing.sendTrackedSubscribe(client, sub.channels, Object.assign({}, sub.params));
     }
     if (queue.length > 0) {
         client._catchUp = { queue, cursor, current: null, maxSeen: null, timer: null };

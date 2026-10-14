@@ -510,6 +510,9 @@
     "test/boundary/boundary.test/04_description_length_boundary.test.js": {
       "DESCRIPTION length boundary accepts DESCRIPTION of exactly 250 characters (maximum valid)": "DESCRIPTION length boundary rejects DESCRIPTION of exactly 250 characters (the chain refuses 250 and above)",
       "DESCRIPTION length boundary accepts DESCRIPTION of exactly 249 characters (one below maximum)": "DESCRIPTION length boundary accepts DESCRIPTION of exactly 249 characters (maximum valid)"
+    },
+    "test/unit/clients/websocket/websocket_catch_up.test.js": {
+      "WebSocketClient reconnect catch-up: sequencing resubscribes a blocks subscription at once, without since_action_index": "WebSocketClient reconnect catch-up: sequencing resubscribes a blocks subscription through the catch-up queue, so it hears NEW_BLOCK is not replayed"
     }
   }
 }
