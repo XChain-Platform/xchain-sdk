@@ -23,7 +23,7 @@ const path = require('path');
 const SDK_CONTRACT_DIR = path.join(__dirname, '..', '..', '..', 'src', 'contract');
 const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(SDK_CONTRACT_DIR, '..', '..', '..');
 const DEFAULT_VM_DIR = process.env.XCHAIN_VM_DIR || path.join(SIBLING_ROOT, 'xchain-vm');
-const VM_COMMIT = 'ecc7296f99a95c488e71dd5ebe9c3872880f18f3';
+const VM_COMMIT = '8aabc4c20b1db58c71e4d6c36d66722bf1a79661';
 const SIBLING_REQUIRED = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 
 const FILES = [
