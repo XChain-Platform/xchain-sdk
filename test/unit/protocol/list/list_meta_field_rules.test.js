@@ -79,6 +79,6 @@ describe('LIST NAME and DESCRIPTION field rules', () => {
     it('leaves the ISSUE DESCRIPTION rule unchanged', () => {
         const errors = check('ISSUE', 'DESCRIPTION', 'a'.repeat(251));
         expect(errors).to.have.length(1);
-        expect(errors[0].message).to.equal('DESCRIPTION must be 250 characters or less');
+        expect(errors[0].message).to.equal('DESCRIPTION must be fewer than 250 characters (UTF-16 code units)');
     });
 });

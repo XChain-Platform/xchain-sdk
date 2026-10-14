@@ -22,7 +22,8 @@ const { FIELD_VALIDATORS: BASIC_FIELD_VALIDATORS } = require('./field_rules_basi
 const { FIELD_VALIDATORS: EXTENDED_FIELD_VALIDATORS } = require('./field_rules_extended.js');
 const { FIELD_VALIDATORS: PROTOCOL_FIELD_VALIDATORS } = require('./field_rules_protocol.js');
 const { FIELD_VALIDATORS: FINAL_FIELD_VALIDATORS } = require('./field_rules_final.js');
-const FIELD_VALIDATORS = BASIC_FIELD_VALIDATORS.concat(EXTENDED_FIELD_VALIDATORS, PROTOCOL_FIELD_VALIDATORS, FINAL_FIELD_VALIDATORS);
+const { FIELD_VALIDATORS: CONSENSUS_FIELD_VALIDATORS } = require('./consensus_field_rules.js');
+const FIELD_VALIDATORS = BASIC_FIELD_VALIDATORS.concat(EXTENDED_FIELD_VALIDATORS, PROTOCOL_FIELD_VALIDATORS, FINAL_FIELD_VALIDATORS, CONSENSUS_FIELD_VALIDATORS);
 
 // Runs each synchronous field group in its original precedence order.
 function validateField(validator, action, field, value, allFields) {

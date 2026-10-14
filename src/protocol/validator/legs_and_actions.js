@@ -99,6 +99,10 @@ module.exports = {
                 errors.push(...this.validateControllerBind(fields));
                 // ISSUE v7 bridge opt-in cross-field rules (no-op for every other format).
                 errors.push(...this.validateBridgeOptIn(fields));
+                errors.push(...this.validateIssueCrossFields(fields));
+                break;
+            case 'XBRIDGE':
+                errors.push(...this.validateXbridgeShape(fields));
                 break;
             case 'BATCH':
                 errors.push(...this.validateBatchFields(fields));
@@ -117,6 +121,10 @@ module.exports = {
                 break;
             case 'DISPENSER':
                 errors.push(...this.validateDispenser(fields));
+                errors.push(...this.validateDispenserFiatPairing(fields));
+                break;
+            case 'FILE':
+                errors.push(...this.validateFileGatePairing(fields));
                 break;
             case 'LIST':
                 errors.push(...this.validateList(fields));
@@ -194,9 +202,15 @@ module.exports = {
 
     validateBroadcast(fields) {
         let errors = [];
-        // Must have either MESSAGE or BROADCAST_ACTION_INDEX
-        if (this.isEmpty(fields.MESSAGE) && this.isEmpty(fields.BROADCAST_ACTION_INDEX))
-            errors.push(this.buildError('MISSING_REQUIRED_FIELD', 'BROADCAST requires MESSAGE or BROADCAST_ACTION_INDEX'));
+        // The chain requires nothing here: xchain-indexer/src/actions/broadcast.js
+        // records a BROADCAST with an empty MESSAGE valid, e.g. a VALUE-only feed
+        // update. Refusing one that carries NO content at all is a deliberate
+        // user-protection guard against paying a miner fee for an empty action,
+        // so it is tagged sdkGuard: compose refuses, the decoder agrees with the chain.
+        let carries = ['MESSAGE', 'VALUE', 'FEE', 'MEMO', 'BROADCAST_ACTION_INDEX'].some(f => !this.isEmpty(fields[f]));
+        if (!carries)
+            errors.push(this.buildError('MISSING_REQUIRED_FIELD',
+                'BROADCAST carries no MESSAGE, VALUE, FEE, MEMO or BROADCAST_ACTION_INDEX', { sdkGuard: true }));
         return errors;
     }
 };

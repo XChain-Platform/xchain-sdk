@@ -323,6 +323,7 @@ module.exports = {
             case 0:
                 // Create poll. Every field after OPTIONS is optional.
                 needs(['TICK', 'END_BLOCK', 'OPTIONS'], 'VOTE v0 (create poll)');
+                errors.push(...this.validateVoteCreate(fields));
                 break;
             case 1:
                 // Cast ballot. MEMO is optional; the indexer rejects an empty BALLOT.

@@ -220,6 +220,11 @@ function checkValidatorSemantics(ctx, parsed) {
             ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'warning', f.message, details);
         }
     }
+    // Compose-time user-protection guards (a zero SEND, an empty BROADCAST) are not
+    // chain refusals, so they ride as warnings: the caller still hears about a
+    // fee spent on a no-op, and the verdict stays the chain's.
+    for (const g of (parsed.validation && parsed.validation.guards) || [])
+        ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'warning', g.message, tagBatchCommand(parsed, g.details));
 }
 
 function checkEncodingFitsCarrier(ctx, parsed, opts) {

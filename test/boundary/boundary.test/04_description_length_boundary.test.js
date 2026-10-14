@@ -27,7 +27,8 @@ function createValidator() {
     return new Validator(new Utility());
 }
 
-// DESCRIPTION length boundary (3 tests)
+// DESCRIPTION length boundary (3 tests). The chain refuses a DESCRIPTION of
+// 250 characters or more, so 249 is the longest valid value.
 
 describe('DESCRIPTION length boundary', function () {
 
@@ -37,11 +38,11 @@ describe('DESCRIPTION length boundary', function () {
         validator = createValidator();
     });
 
-    it('accepts DESCRIPTION of exactly 250 characters (maximum valid)', function () {
+    it('rejects DESCRIPTION of exactly 250 characters (the chain refuses 250 and above)', function () {
         let description = 'D'.repeat(250);
         let errors = validator.validate('ISSUE', { TICK: 'TEST', DESCRIPTION: description });
         let descErrors = errors.filter(function (e) { return e.details && e.details.field === 'DESCRIPTION'; });
-        expect(descErrors).to.have.length(0);
+        expect(descErrors).to.have.length.greaterThan(0);
     });
 
     it('rejects DESCRIPTION of exactly 251 characters (one above maximum)', function () {
@@ -52,7 +53,7 @@ describe('DESCRIPTION length boundary', function () {
         expect(descErrors[0].code).to.equal('INVALID_FIELD_VALUE');
     });
 
-    it('accepts DESCRIPTION of exactly 249 characters (one below maximum)', function () {
+    it('accepts DESCRIPTION of exactly 249 characters (maximum valid)', function () {
         let description = 'D'.repeat(249);
         let errors = validator.validate('ISSUE', { TICK: 'TEST', DESCRIPTION: description });
         let descErrors = errors.filter(function (e) { return e.details && e.details.field === 'DESCRIPTION'; });

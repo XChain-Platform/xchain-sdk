@@ -140,10 +140,12 @@ describe('Actions – pre-flight encoding validation', function () {
         function actionsFor(network) {
             return new Actions({ config: config.getConfig(), util: new Utility(), options: { network } });
         }
-        let big = 'y'.repeat(600); // > ENCODING_LIMITS.P2SH (476) -> default suggestion is P2WSH
+        // MESSAGE and MEMO each sit at their 250-unit cap; together the action
+        // string is > ENCODING_LIMITS.P2SH (476), so the default suggestion is P2WSH.
+        let params = { message: 'y'.repeat(250), value: '1', memo: 'z'.repeat(250) };
         let segwitErr, dogeErr;
-        try { actionsFor('litecoin-mainnet').createAction({ action: 'BROADCAST', params: { message: big, value: '1' }, encoder: { encoding: 'OP_RETURN' } }); } catch (e) { segwitErr = e; }
-        try { actionsFor('dogecoin-mainnet').createAction({ action: 'BROADCAST', params: { message: big, value: '1' }, encoder: { encoding: 'OP_RETURN' } }); } catch (e) { dogeErr = e; }
+        try { actionsFor('litecoin-mainnet').createAction({ action: 'BROADCAST', params, encoder: { encoding: 'OP_RETURN' } }); } catch (e) { segwitErr = e; }
+        try { actionsFor('dogecoin-mainnet').createAction({ action: 'BROADCAST', params, encoder: { encoding: 'OP_RETURN' } }); } catch (e) { dogeErr = e; }
         expect(segwitErr.details.suggestion).to.equal('P2WSH');
         expect(dogeErr.details.suggestion).to.equal('P2SH');
         expect(dogeErr.message).to.not.match(/P2WSH/);

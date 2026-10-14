@@ -228,7 +228,11 @@ function validateCooldownBlocks(validator, action, field, value, allFields, erro
                 errors.push(validator.buildError('INVALID_FIELD_VALUE', 'COOLDOWN_BLOCKS must be numeric', { field, value }));
             } else {
                 let cb = Number(value);
-                if (cb < 1 || cb > 100000)
+                // Integer-only under COOLDOWN_BLOCKS_INTEGER, active on every network
+                // (xchain-indexer/src/actions/deploy/validate.js, 'not an integer').
+                if (!Number.isInteger(cb))
+                    errors.push(validator.buildError('INVALID_FIELD_VALUE', 'COOLDOWN_BLOCKS must be an integer', { field, value }));
+                else if (cb < 1 || cb > 100000)
                     errors.push(validator.buildError('INVALID_FIELD_VALUE', 'COOLDOWN_BLOCKS must be in [1, 100000]', { field, value, constraint: { min: 1, max: 100000 } }));
             }
         }

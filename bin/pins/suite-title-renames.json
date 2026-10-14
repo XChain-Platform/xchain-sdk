@@ -498,6 +498,18 @@
     "test/unit/actions/betting.test.js": {
       "BET formats has no edit format: markets are immutable from creation": "BET formats exposes the list edit format through normal format discovery",
       "BET formats registers all four formats with the field order BET.md declares": "BET formats registers all five formats with the field order BET.md declares"
+    },
+    "test/unit/decoder/parse.test.js": {
+      "decoder.parse rule 1: input-size gate first exactly MAX_ACTION_DATA_LENGTH passes the gate": "decoder.parse rule 1: input-size gate first the largest string whose compiled push fits passes the gate",
+      "decoder.parse rule 5: trailing empty fields trailing empties BEYOND the field count stay FIELD_COUNT_MISMATCH": "decoder.parse rule 5: trailing empty fields trailing empties BEYOND the field count are ignored, as the indexer ignores them",
+      "decoder.parse rule 7: no delimiter escaping / segment-count anomalies too many segments (no rest field) is FIELD_COUNT_MISMATCH": "decoder.parse rule 7: no delimiter escaping / segment-count anomalies too many segments (no rest field) are ignored and reported back",
+      "decoder.parse version gate a token the indexer shifts or reads differently is UNKNOWN_VERSION": "decoder.parse version gate a token the indexer shifts or reads differently is read the indexer's way",
+      "decoder.parse version gate missing version segment is UNKNOWN_VERSION": "decoder.parse version gate a missing version segment reads as VERSION 0, as on the indexer",
+      "decoder.parse version gate non-integer version is UNKNOWN_VERSION": "decoder.parse version gate a non-integer version is UNKNOWN_VERSION where no legacy shift applies"
+    },
+    "test/boundary/boundary.test/04_description_length_boundary.test.js": {
+      "DESCRIPTION length boundary accepts DESCRIPTION of exactly 250 characters (maximum valid)": "DESCRIPTION length boundary rejects DESCRIPTION of exactly 250 characters (the chain refuses 250 and above)",
+      "DESCRIPTION length boundary accepts DESCRIPTION of exactly 249 characters (one below maximum)": "DESCRIPTION length boundary accepts DESCRIPTION of exactly 249 characters (maximum valid)"
     }
   }
 }

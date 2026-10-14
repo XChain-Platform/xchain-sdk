@@ -160,7 +160,7 @@ class Validator {
 
 }
 
-installMethods(Validator.prototype, require('./validator/legs_and_actions.js'), require('./validator/batch_and_bet.js'), require('./validator/market_and_contract.js'), require('./validator/tick_and_text.js'));
+installMethods(Validator.prototype, require('./validator/legs_and_actions.js'), require('./validator/batch_and_bet.js'), require('./validator/market_and_contract.js'), require('./validator/tick_and_text.js'), require('./validator/consensus_action_rules.js'));
 
 module.exports = Object.assign(Validator, {
     // Exported for the cross-service regression suite, which asserts this equals the

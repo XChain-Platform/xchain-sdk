@@ -62,6 +62,17 @@ const SPLIT_ADDED = {
     BettingHelpers: [
         ['editMarketListsParams', false, true, true, 'function', 0],
     ],
+    // Not a split: the cross-field consensus rules (validator/consensus_action_rules.js)
+    // arrived after it, installed by the same installer with the same flags.
+    Validator: [
+        ['validateDispenserFiatPairing', false, true, true, 'function', 1],
+        ['validateFileGatePairing', false, true, true, 'function', 1],
+        ['validateIssueCrossFields', false, true, true, 'function', 1],
+        ['validateVoteCallback', false, true, true, 'function', 1],
+        ['validateVoteCreate', false, true, true, 'function', 1],
+        ['validateVoteThresholds', false, true, true, 'function', 1],
+        ['validateXbridgeShape', false, true, true, 'function', 1],
+    ],
 };
 
 function descriptorRows(proto) {

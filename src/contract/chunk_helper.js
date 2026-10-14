@@ -51,6 +51,38 @@ const MAX_DEPLOY_CHUNKS           = PROTO.MAX_DEPLOY_CHUNKS;
 // there (a sub-256-byte payload trivially fits regardless of prefix class).
 const OP_RETURN_PUSH_OVERHEAD     = PROTO.OP_RETURN_PUSH_OVERHEAD;
 
+// Compiled script-push length for a payload of `n` bytes, the quantity
+// MAX_ACTION_DATA_LENGTH bounds: bitcoin.script.compile([bytes]) adds a 1-byte
+// direct push up to 75 bytes, OP_PUSHDATA1 (2 bytes) up to 255 and OP_PUSHDATA2
+// (3 bytes) above. The decoder stores an action only when this is <= the cap, so
+// an action string of 8190..8192 bytes is over it even though its raw length is not.
+function compiledPushSize(n) {
+    return n <= 75 ? n + 1 : n <= 255 ? n + 2 : n + 3;
+}
+
+// The Taproot envelope's measurand: the reassembled payload, i.e. the action's own
+// compiled push, which takes an OP_PUSHDATA4 (5-byte) prefix above 65,535 bytes.
+function envelopePayloadSize(n) {
+    return n <= 65535 ? compiledPushSize(n) : n + 5;
+}
+
+// Carriers bound by MAX_ACTION_DATA_LENGTH. The Taproot envelope is not: the chain
+// stores its actions up to ENVELOPE_MAX_PAYLOAD (xchain-decoder transaction_parsing.js
+// buildParseResult payloadCeiling).
+const LEGACY_CARRIERS = Object.freeze(['OP_RETURN', 'P2SH', 'P2WSH', 'MULTISIGN']);
+
+// The ceiling that binds an action of `n` bytes on `carrier`. A legacy carrier
+// bounds the compiled push; the envelope, or a carrier not yet decided (null, or an
+// AUTO that may still pick the envelope), is bound only by the envelope ceiling, the
+// widest any carrier stores, so nothing the chain could store is refused.
+function carrierCeiling(n, carrier) {
+    const legacy = carrier !== null && carrier !== undefined
+        && LEGACY_CARRIERS.includes(String(carrier).toUpperCase());
+    return legacy
+        ? { legacy: true, size: compiledPushSize(n), limit: MAX_ACTION_DATA_LENGTH }
+        : { legacy: false, size: envelopePayloadSize(n), limit: PROTO.ENVELOPE_MAX_PAYLOAD };
+}
+
 // sha256 hex of the UTF-8 source: the chunk-group id AND the integrity check.
 // Matches the indexer's crypto.createHash('sha256').update(code) (utf8 default).
 function codeHashOf(code) {
@@ -155,6 +187,10 @@ module.exports = {
     splitCode,
     planDeploy,
     MAX_ACTION_DATA_LENGTH,
+    compiledPushSize,
+    envelopePayloadSize,
+    carrierCeiling,
+    LEGACY_CARRIERS,
     MAX_DEPLOYCHUNK_PART_BYTES,
     MAX_DEPLOY_CHUNKS,
     OP_RETURN_PUSH_OVERHEAD
