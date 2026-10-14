@@ -40,7 +40,7 @@
 
 'use strict';
 
-const { getCoinLabel, str } = require('./value_format.js');
+const { getCoinLabel, str, isNumericAmount, isNotPositive, isLessThan, fractionToPercent } = require('./value_format.js');
 
 /*
  * ORDER / SWAP describer. v0 create, v1 cancel, v2 edit. The two
@@ -121,9 +121,9 @@ function decodeOrderCreate(p, noun, chainSuffix, memo, memoWarnings) {
             ...(memo ? [{ label: 'Memo', value: memo }] : []),
         ],
         warnings: [
-            ...(!giveOwnership && (!giveAmount || Number(giveAmount) <= 0)
+            ...(!giveOwnership && isNotPositive(giveAmount)
                 ? ['Give amount is not positive.'] : []),
-            ...(!getOwnership && (!getAmount || Number(getAmount) <= 0)
+            ...(!getOwnership && isNotPositive(getAmount)
                 ? ['Get amount is not positive.'] : []),
             ...memoWarnings,
         ],
@@ -187,8 +187,8 @@ function decodePrice(p, chainSuffix) {
 
     // FEE is a fraction on the wire (0.01 = 1%); show both so a publisher
     // who typed one and meant the other notices before signing.
-    const feePct = fee && Number.isFinite(Number(fee))
-        ? `${fee} (${(Number(fee) * 100).toFixed(2).replace(/\.?0+$/, '')}% of a dispenser's projected proceeds)`
+    const feePct = fee && isNumericAmount(fee) && fractionToPercent(fee) !== null
+        ? `${fee} (${fractionToPercent(fee)}% of a dispenser's projected proceeds)`
         : fee;
 
     return {
@@ -208,8 +208,8 @@ function decodePrice(p, chainSuffix) {
             'Dispensers that name this address as their oracle will sell at this price once it takes effect.',
             ...(!tick ? ['Token ticker is empty.'] : []),
             ...(!fiat ? ['Currency is empty.'] : []),
-            ...(!value || Number(value) <= 0 ? ['Price is not a positive number.'] : []),
-            ...(fee && Number(fee) > 1
+            ...(isNotPositive(value) ? ['Price is not a positive number.'] : []),
+            ...(fee && isLessThan(1, fee)
                 ? ['Oracle usage fee is above 1 (100%): the protocol will reject this transaction.']
                 : []),
             ...(memo && /[|;]/.test(memo)
@@ -280,7 +280,7 @@ function decodeBetPlacement(chainSuffix, pick, feedRef, outcome, memo, memoWarn)
         warnings: [
             'Bets are final. There is no cancel and no way to change your outcome once this is signed.',
             'This is a parimutuel market, so your share is not fixed now: later bets change what a win pays.',
-            ...(!amount || Number(amount) <= 0 ? ['Stake is not positive.'] : []),
+            ...(isNotPositive(amount) ? ['Stake is not positive.'] : []),
             ...memoWarn,
         ],
     };
