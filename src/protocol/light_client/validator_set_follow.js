@@ -56,6 +56,22 @@ async function verifyValidatorSet(opts){
     return Object.assign({}, v, { height: Number(body.proof.height), checkpoint: body.checkpoint });
 }
 
+// Exact source-deduped stake total, computed the way the producers commit the
+// __total__ leaf (M.sumCanonicalAmounts over the first weight of each source).
+// swq.totalStake returns a bignumber whose String() form switches to exponent
+// notation at 1e21 and above, which canonicalAmount rejects, so a valid set
+// would be refused; totalStake still runs first for its fail-closed guards
+// (blank source, bad or negative weight, truncated snapshot).
+function exactStakeTotal(validators){
+    swq.totalStake(validators);
+    const weightBySource = new Map();
+    for(const v of validators){
+        const src = String(v.source);
+        if(!weightBySource.has(src)) weightBySource.set(src, String(v.weight));
+    }
+    return M.sumCanonicalAmounts(Array.from(weightBySource.values()));
+}
+
 // Pure: verify a checkpoint's quorum using a PROVEN validator set (from
 // verifyValidatorSet). The verdict comes from the SINGLE shared predicate
 // (swq.meetsStakeThreshold), never a local re-implementation: an earlier inline
@@ -104,7 +120,7 @@ function verifyCheckpointWithProvenSet(cp, provenOraclePublish){
         // totalStake throws on the malformed-snapshot cases meetsStakeThreshold
         // already rejects, so a throw here (or a mismatch) fails CLOSED.
         try {
-            total = M.canonicalAmount(String(swq.totalStake(validators)));
+            total = exactStakeTotal(validators);
             const committed = M.canonicalAmount(String((provenOraclePublish && provenOraclePublish.total) || '0'));
             if (scaled(total) !== scaled(committed)) valid = false;
         } catch (e){ valid = false; }
