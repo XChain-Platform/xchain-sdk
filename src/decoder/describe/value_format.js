@@ -143,10 +143,8 @@ function safeJson(v) {
     }
 }
 
-// Exact comparisons for the amount warnings: a double mis-orders decimals past 15 digits
-// and values past 2^53. An unset value reads as not positive; a value that is not a plain
-// number (abc, NaN, Infinity, 1,5) answers false to every comparison, as the old NaN
-// comparisons did, so only the shape warning fires for it.
+// Exact amount comparisons (a double loses digits past 15). Non-numeric input answers
+// false, as the old NaN comparisons did.
 function isNotPositive(value) {
     if (!value) return true;
     return numberFormat.isNumeric(value) && !numberFormat.bcnum(value).gt(0);

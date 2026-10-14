@@ -36,6 +36,9 @@ describe('decoder.describe warnings use exact decimal comparison', function () {
         expect(decoded.warnings.join('|')).to.include('Escrow is smaller than a single fill');
     });
 
+});
+
+describe('decoder.describe warnings on non-numeric and padded values', function () {
     it('non-numeric input answers false to every comparison', function () {
         for (const bad of ['abc', 'NaN', 'Infinity', '1,5']) {
             expect(isNotPositive(bad), bad).to.equal(false);
