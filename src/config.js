@@ -221,6 +221,7 @@ var Config = {
         listsMarketRegtestActivation:     () => process.env.XC_LISTS_MARKET_REGTEST_ACTIVATION,
         listsMarketRegtestTime:           () => process.env.XC_LISTS_MARKET_REGTEST_TIME,
         remoteTokenAdmissionRegtestActivation: () => process.env.XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION,
+        passProgressRetirementRegtestActivation: () => process.env.XC_PASS_PROGRESS_RETIREMENT_REGTEST_ACTIVATION,
     },
 
 }
