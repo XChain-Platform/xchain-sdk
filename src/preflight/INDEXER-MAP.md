@@ -81,7 +81,15 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `6ae5b8c8`
+**Pins taken at indexer commit:** `19f2314d`
+
+(Re-anchored 2026-10-14 against the committed indexer lane tree `19f2314d`, the head of the
+fiat dispenser pricing change, which had not landed on origin develop when this was written.
+Only the `dispenser` and `dispense` directory pins move, for the change reviewed in the first
+entry of the review log below. The other eleven rows are unchanged and match that tree.
+`6ae5b8c8` is an ancestor of this anchor. The commit lands on origin develop as that exact commit
+by fast-forward, so the anchor stays reachable; a squashed or rebased landing would orphan it,
+and the section on an unreachable anchor below is then the way back.)
 
 (Re-anchored 2026-10-14 against the committed indexer lane tree `6ae5b8c8`, the head of the
 token supply representation change, which had not landed on origin develop when this was
@@ -422,7 +430,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 6ae5b8c8..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 19f2314d..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -499,8 +507,8 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `3671cf3e2efefb069d30539814ecc2f1bd65087698f756711c8a1c7b75e9665f` |
 | `checks/mint.js` | `src/actions/mint/` | `f69fdb9192b703a928dc46028a569f0a4725ce136b394304e1ec00bab04629e9` |
 | `checks/issue.js` | `src/actions/issue/` | `8f29219d887e695408a8d9b405a795182550c3ed0e991ab74bd4941efe9d294c` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `6369bdf9bd39490c407c7f447be77bbaf275c081e67abf9d29f075e5d5a3e546` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `99116a2db059516f00dfa6c552bbb4617135dce390cc10e334e0e34895890ff0` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `03c4c858bcd29e6e079a19b34d08d57b35bda93c0ef165ce61e1c28ab89184e6` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `2fded8ad2eb66fdd4ba09a3b66fe101d13707ba7140c04f64b0d6dc3c7adf2fe` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `79fdae31db05edea980aca9b52b70fd8a2c65bb53e9e785534229bdca0ffd8ec` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `9bb114863e30d2501bb36f6f2d5a541bbaf99320b860466708253555aded19cc` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `0174875cd302106d68a816c7e72a64d53e3f51971881cd9efbea70a78786e7d9` |
@@ -528,6 +536,30 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-14 - DISPENSER and DISPENSE fiat pricing behind an activation
+
+The `dispenser` pin moves from `6369bdf9` to `03c4c858` and the `dispense` pin from `99116a2d`
+to `2fded8ad`, hashed from the committed indexer lane tree `19f2314d` by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/dispenser/` and `src/actions/dispense/`.
+Every change sits behind `dispenser_fiat_pricing_activation.DISPENSER_FIAT_PRICING_ACTIVATION`,
+`mainnet: UNARMED, testnet: UNARMED`, with regtest armed only by
+`XC_DISPENSER_FIAT_PRICING_REGTEST_ACTIVATION`. In `dispenser/validate_format.js` the FIAT
+create and refill price check and the settlement price gap read now pass `BLOCK_INDEX`, so from the
+activation they read only validator rounds bound to the including block. In `dispense/` the same
+bound reaches the settlement and oracle-fee reads, a Mode A fill on a non-batch coin payment runs
+at the exact tally scale and is charged `multiplier x FIAT_AMOUNT / price`
+(`dispense_payment_tally_scale_gate.js`, `context.js`, `pricing.js`, `pricing_paths.js`).
+
+**Direction: WIDENS rejection behind an activation row, and SETTLE PATH.** The bounded price
+read can refuse a FIAT open, refill or dispense that a later-anchored round would have priced,
+and that verdict is chain state at the including block: `checks/dispenser.js` already declares
+price availability and the oracle fee unverified because pre-flight has neither a height nor the
+round set. The tally scale and the exact Mode A charge run after a dispense is judged valid and
+change how much of a shared payment a fill drains, not whether it is valid. A hard client block
+would also be wrong on its own terms while the row is unarmed on every public network. No
+`ACTIVATION_MIRRORS` row is added because no client predicate reads this gate.
+NO CLIENT CHECK MOVES.
 
 ### 2026-10-14 - MINT and ISSUE total supply bound behind an activation
 

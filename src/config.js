@@ -225,6 +225,7 @@ var Config = {
         slashHistoricalSetRegtestActivation: () => process.env.XC_SLASH_HISTORICAL_SET_REGTEST_ACTIVATION,
         anchorRewardCopySelectionRegtestActivation: () => process.env.XC_ANCHOR_REWARD_COPY_SELECTION_REGTEST_ACTIVATION,
         tokenSupplyRepresentationRegtestActivation: () => process.env.XC_TOKEN_SUPPLY_REPRESENTATION_REGTEST_ACTIVATION,
+        dispenserFiatPricingRegtestActivation: () => process.env.XC_DISPENSER_FIAT_PRICING_REGTEST_ACTIVATION,
     },
 
 }

@@ -162,11 +162,12 @@ function registerBatchDispatchAdmissionReviewTest() {
 }
 
 function registerDispenserRefillPolicyReviewTest() {
+    // The dispenser hash moves with every later reviewed change to the handler; the 2026-10-14
+    // fiat pricing review pins it now, and the 2026-10-10 entry stays the record of this one.
     it('pins and records the DISPENSER refill token policy review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const dispenser = parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/dispenser/');
         expect(dispenser, 'dispenser directory row').to.exist;
-        expect(dispenser.hash).to.equal('6369bdf9bd39490c407c7f447be77bbaf275c081e67abf9d29f075e5d5a3e546');
         const heading = '### 2026-10-10 - DISPENSER refill token policy';
         expect(text).to.include(heading);
         const start = text.indexOf(heading);
@@ -177,11 +178,12 @@ function registerDispenserRefillPolicyReviewTest() {
 }
 
 function registerDispenseOwnershipBlockFieldsReviewTest() {
+    // The dispense hash moves with every later reviewed change to the handler; the 2026-10-14
+    // fiat pricing review pins it now, and its own entry stays the record of this one.
     it('pins and records the DISPENSE ownership-transfer block fields review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const dispense = parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/dispense/');
         expect(dispense, 'dispense directory row').to.exist;
-        expect(dispense.hash).to.equal('99116a2db059516f00dfa6c552bbb4617135dce390cc10e334e0e34895890ff0');
         const heading = '### 2026-10-14 - DISPENSE ownership-transfer block fields';
         expect(text).to.include(heading);
         const start = text.indexOf(heading);
@@ -210,6 +212,25 @@ function registerSupplyBoundReviewTest() {
     });
 }
 
+function registerFiatPricingReviewTest() {
+    it('pins and records the DISPENSER and DISPENSE fiat pricing review', function () {
+        const text = fs.readFileSync(REAL_MAP, 'utf8');
+        const rows = parseMap(REAL_MAP);
+        const dispenser = rows.find((r) => r.handler === 'src/actions/dispenser/');
+        const dispense = rows.find((r) => r.handler === 'src/actions/dispense/');
+        expect(dispenser, 'dispenser directory row').to.exist;
+        expect(dispense, 'dispense directory row').to.exist;
+        expect(dispenser.hash).to.equal('03c4c858bcd29e6e079a19b34d08d57b35bda93c0ef165ce61e1c28ab89184e6');
+        expect(dispense.hash).to.equal('2fded8ad2eb66fdd4ba09a3b66fe101d13707ba7140c04f64b0d6dc3c7adf2fe');
+        const heading = '### 2026-10-14 - DISPENSER and DISPENSE fiat pricing behind an activation';
+        expect(text).to.include(heading);
+        const start = text.indexOf(heading);
+        const entry = text.slice(start, text.indexOf('\n### ', start + heading.length));
+        expect(entry).to.include('**Direction: WIDENS rejection behind an activation row, and SETTLE PATH.**');
+        expect(entry).to.include('NO CLIENT CHECK MOVES');
+    });
+}
+
 describe('pre-flight constants + registry', function () {
     describe('drift map (§8.5)', function () {
         registerMapParsingTest();
@@ -222,5 +243,6 @@ describe('pre-flight constants + registry', function () {
         registerDispenserRefillPolicyReviewTest();
         registerDispenseOwnershipBlockFieldsReviewTest();
         registerSupplyBoundReviewTest();
+        registerFiatPricingReviewTest();
     });
 });
