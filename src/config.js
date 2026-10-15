@@ -226,6 +226,7 @@ var Config = {
         anchorRewardCopySelectionRegtestActivation: () => process.env.XC_ANCHOR_REWARD_COPY_SELECTION_REGTEST_ACTIVATION,
         tokenSupplyRepresentationRegtestActivation: () => process.env.XC_TOKEN_SUPPLY_REPRESENTATION_REGTEST_ACTIVATION,
         dispenserFiatPricingRegtestActivation: () => process.env.XC_DISPENSER_FIAT_PRICING_REGTEST_ACTIVATION,
+        bridgePolicyApplyOrderRegtestActivation: () => process.env.XC_BRIDGE_POLICY_APPLY_ORDER_REGTEST_ACTIVATION,
     },
 
 }
