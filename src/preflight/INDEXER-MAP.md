@@ -562,6 +562,27 @@ agrees with it.
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
 
+### 2026-10-15 - VOTE v3 refuses an unknown TICK behind an activation
+
+No pin moves, no row is added and the anchor stays. The indexer change in
+`src/actions/vote/index.js` makes a VOTE v3 delegation whose `TICK` has no valid ISSUE row `invalid: TICK (unknown)` at or above
+`VOTE_V3_TICK_EXISTENCE_ACTIVATION`, with no delegation row stored. The legacy check is
+null-only, so the `false` that `getTokenInfo` returns for an unknown ticker passed it and the
+delegation was stored; below the height that predicate still runs unchanged. The row is
+unarmed on mainnet and testnet, and a regtest venue arms it with
+`XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION`, which the SDK's registry copy now reads through
+`src/config.js` and `src/consensus/gate_registry.js`. `vote/` sits outside every mapped row and
+has no mirror.
+
+**Client follow-up.** Pre-flight should refuse an unknown VOTE v3 `TICK` only where this
+activation is armed. `checks/misc.js` carries VOTE as a disclosure with no client validity
+logic, and the refusal needs a token lookup plus an activation read, so it is not a two-line
+mirror of the gate and is left for a follow-up.
+
+**Direction: WIDENS rejection behind an activation row, outside every mapped row.** A VOTE v3
+this SDK builds for an issued TICK is unaffected. No `ACTIVATION_MIRRORS` row is added because no
+client predicate reads this gate. NO CLIENT CHECK MOVES.
+
 ### 2026-10-15 - EXECUTE fee debit capped at held gas and emitted amounts held to the plain decimal form, behind two activations
 
 No pin moves and the anchor stays. Both changes sit in `src/actions/execute/`, which no row here

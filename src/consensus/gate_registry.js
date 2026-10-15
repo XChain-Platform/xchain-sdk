@@ -87,6 +87,7 @@ const registryEnv = {
     get XC_BRIDGE_POLICY_APPLY_ORDER_REGTEST_ACTIVATION() { return sdkEnv.bridgePolicyApplyOrderRegtestActivation(); },
     get XC_VM_EMISSION_AMOUNT_FORMAT_REGTEST_ACTIVATION() { return sdkEnv.vmEmissionAmountFormatRegtestActivation(); },
     get XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION() { return sdkEnv.executeFeeCapRegtestActivation(); },
+    get XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION() { return sdkEnv.voteV3TickExistenceRegtestActivation(); },
 };
 
 const { registry } = core;
