@@ -84,6 +84,7 @@ const registryEnv = {
     get XC_ANCHOR_REWARD_COPY_SELECTION_REGTEST_ACTIVATION() { return sdkEnv.anchorRewardCopySelectionRegtestActivation(); },
     get XC_TOKEN_SUPPLY_REPRESENTATION_REGTEST_ACTIVATION() { return sdkEnv.tokenSupplyRepresentationRegtestActivation(); },
     get XC_DISPENSER_FIAT_PRICING_REGTEST_ACTIVATION() { return sdkEnv.dispenserFiatPricingRegtestActivation(); },
+    get XC_BRIDGE_POLICY_APPLY_ORDER_REGTEST_ACTIVATION() { return sdkEnv.bridgePolicyApplyOrderRegtestActivation(); },
 };
 
 const { registry } = core;
