@@ -80,6 +80,8 @@ const registryEnv = {
     get XC_LISTS_MARKET_REGTEST_TIME() { return sdkEnv.listsMarketRegtestTime(); },
     get XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION() { return sdkEnv.remoteTokenAdmissionRegtestActivation(); },
     get XC_PASS_PROGRESS_RETIREMENT_REGTEST_ACTIVATION() { return sdkEnv.passProgressRetirementRegtestActivation(); },
+    get XC_SLASH_HISTORICAL_SET_REGTEST_ACTIVATION() { return sdkEnv.slashHistoricalSetRegtestActivation(); },
+    get XC_ANCHOR_REWARD_COPY_SELECTION_REGTEST_ACTIVATION() { return sdkEnv.anchorRewardCopySelectionRegtestActivation(); },
 };
 
 const { registry } = core;
