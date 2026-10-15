@@ -279,6 +279,24 @@ function registerNotNullRowKeyReviewTest() {
     });
 }
 
+// VOTE has no row: the gated TICK existence refusal is reviewed and recorded, and the
+// client-side refusal it calls for is a named follow-up rather than a silent gap.
+function registerVoteTickExistenceReviewTest() {
+    it('records the VOTE v3 unknown TICK review with no VOTE row and the client follow-up', function () {
+        const text = fs.readFileSync(REAL_MAP, 'utf8');
+        const vote = parseMap(REAL_MAP).find((r) => r.handler.startsWith('src/actions/vote'));
+        expect(vote, 'no VOTE row').to.equal(undefined);
+        const heading = '### 2026-10-15 - VOTE v3 refuses an unknown TICK behind an activation';
+        expect(text).to.include(heading);
+        const start = text.indexOf(heading);
+        const entry = text.slice(start, text.indexOf('\n### ', start + heading.length));
+        expect(entry).to.include('VOTE_V3_TICK_EXISTENCE_ACTIVATION');
+        expect(entry).to.include('**Client follow-up.**');
+        expect(entry).to.include('**Direction: WIDENS rejection behind an activation row, outside every mapped row.**');
+        expect(entry).to.include('NO CLIENT CHECK MOVES');
+    });
+}
+
 describe('pre-flight constants + registry', function () {
     describe('drift map (§8.5)', function () {
         registerMapParsingTest();
@@ -294,5 +312,6 @@ describe('pre-flight constants + registry', function () {
         registerFiatPricingReviewTest();
         registerTextAmountRefusalReviewTest();
         registerNotNullRowKeyReviewTest();
+        registerVoteTickExistenceReviewTest();
     });
 });
