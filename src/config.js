@@ -224,6 +224,7 @@ var Config = {
         passProgressRetirementRegtestActivation: () => process.env.XC_PASS_PROGRESS_RETIREMENT_REGTEST_ACTIVATION,
         slashHistoricalSetRegtestActivation: () => process.env.XC_SLASH_HISTORICAL_SET_REGTEST_ACTIVATION,
         anchorRewardCopySelectionRegtestActivation: () => process.env.XC_ANCHOR_REWARD_COPY_SELECTION_REGTEST_ACTIVATION,
+        tokenSupplyRepresentationRegtestActivation: () => process.env.XC_TOKEN_SUPPLY_REPRESENTATION_REGTEST_ACTIVATION,
     },
 
 }

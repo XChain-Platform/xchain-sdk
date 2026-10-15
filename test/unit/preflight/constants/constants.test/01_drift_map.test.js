@@ -100,11 +100,12 @@ function registerMapCoverageTest() {
 }
 
 function registerIssueLazyProbeReviewTest() {
+    // The issue hash moves with every later reviewed change to the handler; the 2026-10-14
+    // supply bound review pins it now, and the 2026-10-08 entry stays the record of this one.
     it('pins and records the issue lazy distribution probe review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const issue = parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/issue/');
         expect(issue, 'issue directory row').to.exist;
-        expect(issue.hash).to.equal('95dff217aeae8428578cf583b74bdeedf97731fd2c9242be6e8baf6763c816e9');
         expect(text).to.include('### 2026-10-08 - issue lazy distribution probe');
         expect(text).to.include('**Direction: NEITHER, no admission boundary moves.**');
     });
@@ -190,6 +191,25 @@ function registerDispenseOwnershipBlockFieldsReviewTest() {
     });
 }
 
+function registerSupplyBoundReviewTest() {
+    it('pins and records the MINT and ISSUE total supply bound review', function () {
+        const text = fs.readFileSync(REAL_MAP, 'utf8');
+        const rows = parseMap(REAL_MAP);
+        const mint = rows.find((r) => r.handler === 'src/actions/mint/');
+        const issue = rows.find((r) => r.handler === 'src/actions/issue/');
+        expect(mint, 'mint directory row').to.exist;
+        expect(issue, 'issue directory row').to.exist;
+        expect(mint.hash).to.equal('f69fdb9192b703a928dc46028a569f0a4725ce136b394304e1ec00bab04629e9');
+        expect(issue.hash).to.equal('8f29219d887e695408a8d9b405a795182550c3ed0e991ab74bd4941efe9d294c');
+        const heading = '### 2026-10-14 - MINT and ISSUE total supply bound behind an activation';
+        expect(text).to.include(heading);
+        const start = text.indexOf(heading);
+        const entry = text.slice(start, text.indexOf('\n### ', start + heading.length));
+        expect(entry).to.include('**Direction: WIDENS rejection behind an activation row.**');
+        expect(entry).to.include('NO CLIENT CHECK MOVES');
+    });
+}
+
 describe('pre-flight constants + registry', function () {
     describe('drift map (§8.5)', function () {
         registerMapParsingTest();
@@ -201,5 +221,6 @@ describe('pre-flight constants + registry', function () {
         registerBatchDispatchAdmissionReviewTest();
         registerDispenserRefillPolicyReviewTest();
         registerDispenseOwnershipBlockFieldsReviewTest();
+        registerSupplyBoundReviewTest();
     });
 });

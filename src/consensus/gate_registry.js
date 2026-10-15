@@ -82,6 +82,7 @@ const registryEnv = {
     get XC_PASS_PROGRESS_RETIREMENT_REGTEST_ACTIVATION() { return sdkEnv.passProgressRetirementRegtestActivation(); },
     get XC_SLASH_HISTORICAL_SET_REGTEST_ACTIVATION() { return sdkEnv.slashHistoricalSetRegtestActivation(); },
     get XC_ANCHOR_REWARD_COPY_SELECTION_REGTEST_ACTIVATION() { return sdkEnv.anchorRewardCopySelectionRegtestActivation(); },
+    get XC_TOKEN_SUPPLY_REPRESENTATION_REGTEST_ACTIVATION() { return sdkEnv.tokenSupplyRepresentationRegtestActivation(); },
 };
 
 const { registry } = core;

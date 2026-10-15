@@ -81,7 +81,15 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `b55d539d`
+**Pins taken at indexer commit:** `6ae5b8c8`
+
+(Re-anchored 2026-10-14 against the committed indexer lane tree `6ae5b8c8`, the head of the
+token supply representation change, which had not landed on origin develop when this was
+written. Only the `mint` and `issue` directory pins move, for the change reviewed in the first
+entry of the review log below. The other eleven rows are unchanged and match that tree.
+`b55d539d` is an ancestor of this anchor. The commit lands on origin develop as that exact commit
+by fast-forward, so the anchor stays reachable; a squashed or rebased landing would orphan it,
+and the section on an unreachable anchor below is then the way back.)
 
 (Re-anchored 2026-10-14 against the committed indexer lane tree `b55d539d`, the head of the
 ownership-transfer block-fields change, which had not landed on origin develop when this was
@@ -414,7 +422,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff b55d539d..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 6ae5b8c8..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -489,8 +497,8 @@ behind by a move is a finding instead of the value that happens to be read.
 |---|---|---|
 | `checks/send.js` (SEND) | `src/actions/send/` | `bf2126e339d34154a15fc294a0d07341a01798718ba3a5ea8afdff4d07ea3ab7` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `3671cf3e2efefb069d30539814ecc2f1bd65087698f756711c8a1c7b75e9665f` |
-| `checks/mint.js` | `src/actions/mint/` | `0f2b6b0375df803321c1644e24f9fa2b6dcb73119a470832eeb93dfab8530595` |
-| `checks/issue.js` | `src/actions/issue/` | `95dff217aeae8428578cf583b74bdeedf97731fd2c9242be6e8baf6763c816e9` |
+| `checks/mint.js` | `src/actions/mint/` | `f69fdb9192b703a928dc46028a569f0a4725ce136b394304e1ec00bab04629e9` |
+| `checks/issue.js` | `src/actions/issue/` | `8f29219d887e695408a8d9b405a795182550c3ed0e991ab74bd4941efe9d294c` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `6369bdf9bd39490c407c7f447be77bbaf275c081e67abf9d29f075e5d5a3e546` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `99116a2db059516f00dfa6c552bbb4617135dce390cc10e334e0e34895890ff0` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `79fdae31db05edea980aca9b52b70fd8a2c65bb53e9e785534229bdca0ffd8ec` |
@@ -520,6 +528,30 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-14 - MINT and ISSUE total supply bound behind an activation
+
+The `mint` pin moves from `0f2b6b03` to `f69fdb91` and the `issue` pin from `95dff217` to
+`8f29219d`, hashed from the committed indexer lane tree `6ae5b8c8` by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/mint/` and `src/actions/issue/`. The
+mapped diff touches `mint/validate.js` and `issue/supply_rules.js`. While
+`gateRegistry.activeAt('token_supply_representation_activation.TOKEN_SUPPLY_REPRESENTATION_ACTIVATION',
+NETWORK, COIN, BLOCK_INDEX, null)` is active, `validateSupplyCaps` refuses a MINT whose `SUPPLY`
+plus `AMOUNT` passes `MAX_TOKEN_SUPPLY` (`invalid: mint exceeds MAX_TOKEN_SUPPLY`), and
+`validateMintSupplyCaps` refuses an ISSUE whose `MINT_SUPPLY` would carry the stored total supply
+past it (`invalid: MINT_SUPPLY exceeds MAX_TOKEN_SUPPLY`), reading that supply with
+`getTokenSupply` at the including block. Both apply whether or not the token declares
+`MAX_SUPPLY`. The registry row is `mainnet: UNARMED, testnet: UNARMED`, with regtest armed only
+by `XC_TOKEN_SUPPLY_REPRESENTATION_REGTEST_ACTIVATION`.
+
+**Direction: WIDENS rejection behind an activation row.** On a capped token the new bound adds
+nothing the client does not already check: `MAX_SUPPLY` is itself bounded by `MAX_TOKEN_SUPPLY`,
+so the `SUPPLY_EXCEEDED` headroom check in `checks/mint.js` refuses first. The bound only bites
+on an uncapped token, where `checkSupplyLimit` already declares `SUPPLY_EXCEEDED` unverified
+because pre-flight has no chain height, and on an ISSUE, where the total supply is chain state
+at the including block that pre-flight is not handed. A hard client block would also be wrong
+on its own terms while the row is unarmed on every public network. No `ACTIVATION_MIRRORS` row
+is added because no client predicate reads this gate. NO CLIENT CHECK MOVES.
 
 ### 2026-10-14 - DISPENSE ownership-transfer block fields
 
