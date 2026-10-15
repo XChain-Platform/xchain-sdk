@@ -78,6 +78,7 @@ const registryEnv = {
     get XC_CONTRACTS_REGTEST_ACTIVATION() { return sdkEnv.contractsRegtestActivation(); },
     get XC_LISTS_MARKET_REGTEST_ACTIVATION() { return sdkEnv.listsMarketRegtestActivation(); },
     get XC_LISTS_MARKET_REGTEST_TIME() { return sdkEnv.listsMarketRegtestTime(); },
+    get XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION() { return sdkEnv.remoteTokenAdmissionRegtestActivation(); },
 };
 
 const { registry } = core;

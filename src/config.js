@@ -220,6 +220,7 @@ var Config = {
         contractsRegtestActivation:       () => process.env.XC_CONTRACTS_REGTEST_ACTIVATION,
         listsMarketRegtestActivation:     () => process.env.XC_LISTS_MARKET_REGTEST_ACTIVATION,
         listsMarketRegtestTime:           () => process.env.XC_LISTS_MARKET_REGTEST_TIME,
+        remoteTokenAdmissionRegtestActivation: () => process.env.XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION,
     },
 
 }
