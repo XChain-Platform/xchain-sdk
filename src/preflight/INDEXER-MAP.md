@@ -83,6 +83,10 @@ commit, not a re-pin back.
 
 **Pins taken at indexer commit:** `85f1d334`
 
+(Rows added 2026-10-15 at the same anchor `85f1d334` for the off-rail pre-flight conformance pass
+reviewed under "off-rail conformance" in the review log below: `price`, `stake` and `bet`, because
+Tier 2 now mirrors a rule in each. No existing row moves, and all sixteen rows match that tree.)
+
 (Re-anchored 2026-10-15 against the committed indexer lane tree `85f1d334`, the head of the
 NOT NULL row key refusal change, which had not landed on origin develop when this was written.
 Only the `dispenser`, `order` and `swap` directory pins and the `deposit.js` and `withdraw.js`
@@ -533,9 +537,13 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/batch.js` | `src/actions/batch/` | `7e138a16dc5eff43ac60c4cca83c2b35ccd865eb98df3ce57c8cbc8aebca85a6` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f` |
 | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35` |
+| `universal.js` (PRICE v1 TICK) | `src/actions/price/` | `b76331534fcf3813ed4ab3e9b20479527f057a3e20dd82187be3808a5f8312bd` |
+| `checks/misc.js` (STAKE) | `src/actions/stake/` | `eef1360e9bfa8e5ad2b1e7479cf286669f44b9ac3115701b1ac1a101fd9011a3` |
+| `universal.js` (BET halt field) | `src/actions/bet/` | `59ff86ee4bed61d0ca958c588558b106ced395eb2a9605f6ec2679fe58adac98` |
 
 The mapped custody disclosures are checks/misc.js (DEPOSIT) and
-checks/misc.js (WITHDRAW).
+checks/misc.js (WITHDRAW). The STAKE row covers the capability-stake balance check in
+checks/misc.js, and the PRICE and BET rows cover two rules in universal.js.
 
 Other actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) remain intentionally unmapped: there is nothing to drift from.
@@ -553,6 +561,58 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-15 - off-rail conformance: three new rows and the client checks they cover
+
+No existing pin moves. The off-rail conformance lane ran Tier 2 and the indexer side by side
+over one store and found pre-flight refusing what the indexer accepts and accepting what it
+refuses. Every client change below mirrors a handler line read at `c0924632` and re-read at
+`85f1d334`, the anchor the three new rows are hashed at by
+`node bin/preflight_handler_dirs.js <indexer> <handler>`.
+
+**New rows.** `price/`: universal.js skips the local existence check for PRICE v1 TICK and
+refuses only its length (`v1.js:41-43`), since COIN may name another chain. `stake/`:
+checks/misc.js refuses a capability STAKE (formats 1 and 2) over the gas-token balance
+(`capability_stake.js:69-75`); format 3 (`contract_stake.js`) is not judged. `bet/`: universal.js
+refuses an empty or unstorable FEED_ACTION_INDEX on BET format 2. The halt-class rules lean on
+`src/db/database/normalize.js:46-56, 71-74` and the NOT NULL columns in `src/sql/`, which no
+`src/actions/` row can cover; a change there is found by the conformance harness, not this gate.
+At `85f1d334` the indexer refuses the ORDER, SWAP and DISPENSER cancel and edit indexes and the
+BET format-2 feed index through `storesAsNull` (`utility/validation/value_checks.js`), the same
+empty, non-numeric and out-of-range set pre-flight refuses; a node below that commit still stops
+the block on them, so the refusal stays non-overridable until the fleet runs it. An empty STAKE
+SIGNING_PUBKEY is refused as required by every STAKE format and is refused here too.
+
+**Rows already pinned, read again for the client checks they now drive.** `send/`, `destroy/`,
+`mint/`, `airdrop/`, `dividend/`: a native-coin TICK is `TICK (unknown)` (send `validate.js:33-34`,
+mint `validate.js:92-93`, destroy `validate.js:32-33`, airdrop `validate.js:34-35`, dividend
+`validate.js:31-36`); MINT honours LOCK_MINT (`mint/validate.js:121-123`); AIRDROP and DIVIDEND
+AMOUNT formats (`airdrop/validate.js:41-43`, `dividend/validate.js:41-43`, an empty DIVIDEND
+AMOUNT included). `issue/`: every fieldList['AMOUNT'] field but CALLBACK_AMOUNT
+(`token_state.js:75-84`), MAX_SUPPLY below SUPPLY and both MINT_SUPPLY caps
+(`supply_rules.js:41-42, 126-127, 140-145`). `dispenser/`: GIVE_AMOUNT, GIVE_ESCROW (formats 0
+and 2) and GET_AMOUNT formats (`validate_format.js:37-46, 87-89`), the refill escrow balance
+(`validate.js:213-215`), the native GIVE_TICK and GET_TICK (`validate.js:53-58`) and the
+empty DISPENSER_ACTION_INDEX halt. `dispense/` and `src/db/dispensers/dispense_matching.js:51`:
+a cancelling dispenser settles where `dispense_cancelling_match_activation` is armed. `order/`,
+`swap/`: GIVE_AMOUNT and GET_AMOUNT formats (`order/validate.js:76-87`, `swap/validate.js:70-75`),
+native and cross-chain GET_TICK (`order/validate.js:58-65`, `swap/validate.js:48-58`), the
+expiration fee of a lone create (`order/fees.js:77-78` and its swap and dispenser twins) and the
+empty or unstorable cancel and edit index halts.
+
+**Activation rows.** `AMOUNT_REPRESENTABILITY` moves from `DISCLOSURE_MIRRORS` into
+`ACTIVATION_MIRRORS`, so the drift gate binds it by value: pre-flight now refuses a non-numeral
+amount where it is armed (BTC, LTC and DOGE testnet at time 1791061097, regtest from genesis) and
+declares it on mainnet. `DISPENSE_CANCELLING_MATCH` joins `ACTIVATION_MIRRORS` (`gates_1.js:263`).
+`ISSUE_MINT_SUPPLY_CUMULATIVE_CAP` (`changes_3.js:94`) joins `DISCLOSURE_MIRRORS`, and
+`AMOUNT_MAX_INTEGER_DIGITS` (42) is a constant; both are bound by value in
+`test/unit/preflight/checks/activation_splits_mirrored.test.js`.
+
+**Direction: NARROWS client refusals on four false refuses (caret and case-variant balance
+lookups, a paged balance listing, a cancelling dispenser, a remote PRICE TICK) and WIDENS them on
+rules the indexer already enforces without an unarmed activation.** Rules that depend on state the
+explorer does not serve stay declared: a format-2 expiration fee, CALLBACK_AMOUNT, the subasset
+parent rules and the origin-standing gate.
 
 ### 2026-10-15 - ORDER, SWAP, DISPENSER, DEPOSIT and WITHDRAW refuse values a NOT NULL column stores as NULL
 

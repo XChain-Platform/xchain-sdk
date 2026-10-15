@@ -27,6 +27,23 @@
 const { FINDING_CODES, activationThreshold, describeActivation } = require('../constants.js');
 const numeric = require('../numeric.js');
 const { actionRecord } = require('../resolvers.js');
+const { declareRepresentability, tokenDecimals, checkAmountField } = require('./amount_format.js');
+
+// Each leg's AMOUNT against its TICK's decimals, skipped when AMOUNT is empty
+// (xchain-indexer src/actions/airdrop/validate.js:41-43). A leg whose tick does not
+// exist is left to TOKEN_NOT_FOUND, which the handler refuses first.
+async function checkAirdropAmountFormat(ctx) {
+    const ticks = [].concat(ctx.params.TICK || []);
+    const amounts = [].concat(ctx.params.AMOUNT || []);
+    for (let i = 0; i < Math.max(ticks.length, amounts.length); i++) {
+        const tick = String(ticks[Math.min(i, ticks.length - 1)] || '');
+        const amount = amounts[i] !== undefined ? String(amounts[i]) : '';
+        if (!tick || amount === '') continue;
+        const token = await ctx.token(tick);
+        if (token === undefined) { ctx.addUnverified(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'token lookup unavailable for ' + tick); continue; }
+        if (checkAmountField(ctx, 'AMOUNT', amount, tokenDecimals(token), { tick })) return;
+    }
+}
 
 // Judge an invalid LIST reference from the pinned activation table: an error only where it is active from genesis.
 function noteInvalidListReference(ctx, idx, status) {
@@ -53,6 +70,9 @@ async function checkAirdrop(ctx) {
             'The chain accepts a null/zero airdrop amount as a zero airdrop; the protocol fee is still charged.',
             { amount });
     }
+
+    await checkAirdropAmountFormat(ctx);
+    declareRepresentability(ctx);
 
     for (const idx of listIdxs) {
         // By ACTION INDEX, which means the action-detail route: /lists/ is keyed

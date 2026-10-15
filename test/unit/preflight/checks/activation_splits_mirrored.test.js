@@ -9,7 +9,8 @@
 const { expect } = require('chai');
 const fs = require('fs');
 const path = require('path');
-const { DISCLOSURE_MIRRORS, describeActivation } = require('../../../../src/preflight/activation.js');
+const { ACTIVATION_MIRRORS, DISCLOSURE_MIRRORS, AMOUNT_MAX_INTEGER_DIGITS, describeActivation }
+    = require('../../../../src/preflight/activation.js');
 const { checkCommandCap } = require('../../../../src/preflight/checks/batch.js');
 const { siblingCheckout, skipOrFail } = require('../../../helpers/sibling_checkout.js');
 const { FINDING_CODES } = require('../../../../src/preflight/constants.js');
@@ -51,7 +52,22 @@ function indexerRowsSuite() {
         const got = {};
         for (const m of body.matchAll(/'?([A-Za-z:]+)'?:\s*(\d+|UNARMED)\b/g))
             got[m[1]] = m[2] === 'UNARMED' || Number(m[2]) === 9999999999 ? 'UNARMED' : Number(m[2]);
-        expect(got).to.deep.equal(DISCLOSURE_MIRRORS.AMOUNT_REPRESENTABILITY.table);
+        expect(got).to.deep.equal(ACTIVATION_MIRRORS.AMOUNT_REPRESENTABILITY.table);
+    });
+
+    it('the representability integer-digit cap matches its constant row', function () {
+        const hit = /AMOUNT_MAX_INTEGER_DIGITS', 'constant', (\d+)\)/.exec(read('gates_1.js'));
+        expect(hit, 'AMOUNT_MAX_INTEGER_DIGITS constant row in gates_1.js').to.not.equal(null);
+        expect(Number(hit[1])).to.equal(AMOUNT_MAX_INTEGER_DIGITS);
+    });
+
+    it('the cumulative MINT_SUPPLY cap time row matches the pinned table, with no block gate', function () {
+        const rows = read('changes_3.js').split('\n').filter((l) => l.trim().startsWith("['ISSUE_MINT_SUPPLY_CUMULATIVE_CAP',"));
+        expect(rows, 'the row appears exactly once in changes_3.js').to.have.length(1);
+        const cols = rows[0].trim().replace(/^\[|\],?$/g, '').split(',').map((c) => Number(c.trim())).slice(2);
+        const [mainnet, testnet, regtest, ...blocks] = cols;
+        expect({ mainnet, testnet, regtest }).to.deep.equal(DISCLOSURE_MIRRORS.ISSUE_MINT_SUPPLY_CUMULATIVE_CAP.table);
+        expect(blocks).to.deep.equal([0, 0, 0]);
     });
 
     it('batch mainnet constants match the flag-time file', function () {
@@ -75,9 +91,10 @@ function indexerRowsSuite() {
 }
 
 describe('pre-flight activation splits are mirrored, not hard-coded', function () {
-    it('pins the representability and batch gates', function () {
+    it('pins the cumulative-cap and batch time rows; representability is a drift-gated activation row', function () {
         expect(Object.keys(DISCLOSURE_MIRRORS)).to.have.members(
-            ['AMOUNT_REPRESENTABILITY', 'BATCH_ISSUANCE_LIMITS', 'BATCH_COST_WEIGHTING']);
+            ['ISSUE_MINT_SUPPLY_CUMULATIVE_CAP', 'BATCH_ISSUANCE_LIMITS', 'BATCH_COST_WEIGHTING']);
+        expect(ACTIVATION_MIRRORS).to.have.property('AMOUNT_REPRESENTABILITY');
     });
 
     it('the dispenser representability disclosure is built from the pinned table', function () {

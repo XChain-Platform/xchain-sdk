@@ -84,6 +84,7 @@ const { ALLOWED_COINS } = require('../../coins/index.js');
 const { GAS_TICK } = require('../../protocol/constants.js');
 const { planeFromCoin } = require('./issue.js');
 const { tokenField } = require('./mint.js');
+const { amountFormatOk, declareRepresentability } = require('./amount_format.js');
 
 // Net multi-leg TICK/AMOUNT pairs into per-tick totals. SEND v1
 // repeats AMOUNT under one TICK; v2/v3 repeat TICK too.
@@ -159,7 +160,7 @@ async function checkLegAmountFormat(ctx, verb) {
         if (token === null) continue; // nonexistent tick: TOKEN_NOT_FOUND owns this leg
         const decimals = tokenField(token, ['supply.decimals', 'info.decimals', 'decimals', 'DECIMALS']);
         if (decimals === null || decimals === undefined || decimals === '') continue;
-        if (!numeric.isValidAmountFormat(decimals, amount)) {
+        if (!amountFormatOk(ctx, decimals, amount)) {
             ctx.addFinding(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'error',
                 `${verb} leg amount ${amount} for ${tick} is not a valid amount at ${decimals} decimals; `
                 + 'above the leg-amount-consolidation activation (armed on every network since genesis) '
@@ -183,6 +184,7 @@ function declareLegAmountRule(ctx, verb) {
 async function checkSend(ctx) {
     await checkBalanceCovers(ctx, 'Send');
     await checkLegAmountFormat(ctx, 'Send');
+    declareRepresentability(ctx);
     declareLegAmountRule(ctx, 'Send');
     ctx.addUnverified('SEND_RESTRICTIONS',
         'sleep state, allow/block lists, controller-guard outcome, and the conditional gated-key handoff '
@@ -244,6 +246,7 @@ function checkBridgeSupplyPath(ctx) {
 async function checkDestroy(ctx) {
     await checkBalanceCovers(ctx, 'Destroy');
     await checkLegAmountFormat(ctx, 'Destroy');
+    declareRepresentability(ctx);
     declareLegAmountRule(ctx, 'Destroy');
     checkBridgeSupplyPath(ctx);
     ctx.addUnverified('DESTROY_RESTRICTIONS',

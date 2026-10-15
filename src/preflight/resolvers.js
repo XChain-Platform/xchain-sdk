@@ -70,9 +70,11 @@ function actionRecord(raw) {
  *                        silence as a green light)
  *
  * `state` is passed through verbatim rather than mapped onto a fixed
- * enum. The indexer gates on `status != 'open'` and keeps minting new
- * terminal strings (`empty`, `max_dispenses_reached`), so anything-but-
- * open is the rule that cannot go stale as those are added.
+ * enum. The indexer settles a dispense against a dispenser whose latest
+ * status is 'open' or 'cancelling' (dispense_matching.js findMatchingDispensers)
+ * and keeps minting new terminal strings (`empty`, `max_dispenses_reached`),
+ * so callers name the statuses that settle and treat every other one as not
+ * settling, which cannot go stale as those are added.
  */
 async function resolveDispenserState(ctx, dispenserActionIndex) {
     const idx = String(dispenserActionIndex);

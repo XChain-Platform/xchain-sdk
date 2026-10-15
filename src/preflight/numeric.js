@@ -27,6 +27,7 @@
 
 const mathjs = require('mathjs');
 const Utility = require('../utils/utility.js');
+const { AMOUNT_MAX_INTEGER_DIGITS } = require('./activation.js');
 
 const util = new Utility();
 
@@ -100,26 +101,46 @@ function mulFloor(a, b, decimals) {
 // Wire-amount format validity per the tick's decimals: the vendored
 // consensus rule (negative, over-precision, non-numeric all refuse).
 //
-// DELIBERATELY THE TWO-ARGUMENT (LEGACY) RULE. The indexer's
-// isValidAmountFormat now takes an optional third argument, the including
-// block's consensus timestamp, and a call that supplies it opts into the
-// AMOUNT-REPRESENTABILITY gate: the amount text must be a plain unsigned
-// decimal numeral whose integer part fits the ledger's aggregation width, so
-// exponent notation and radix prefixes are refused rather than validated and
-// then credited as a different number. That gate only ever REJECTS more, and it
-// is flag-day gated per chain with mainnet and testnet both on the unarmed
-// house sentinel. Vendoring it here would make this client reject amounts both
-// public planes still accept, which is the SDK-stricter-than-consensus
-// false-block this module's contract forbids (src/protocol/validator.js records the SDK
-// shipping exactly that regression once already).
-//
-// So the rule is DECLARED, not predicted: the checks modules that judge amount
-// format (checks/mint.js, checks/issue.js, checks/dispenser.js) file an
-// AMOUNT_REPRESENTABILITY unverified aspect naming it. Mirror it as a real
-// rejection only once mainnet is armed, and only alongside an activation source
-// this SDK can actually read. See src/preflight/INDEXER-MAP.md.
+// THE TWO-ARGUMENT (LEGACY) RULE. The indexer's isValidAmountFormat takes an
+// optional third argument, the including block's consensus timestamp, and a
+// call that supplies it also applies the AMOUNT-REPRESENTABILITY rule below.
+// src/utils/utility.js stays on the legacy rule because the indexer's
+// 15-sdk-parity suite pins that two-argument behaviour; pre-flight applies the
+// gate on top of it through isValidAmountFormatWhere.
 function isValidAmountFormat(decimals, amount) {
     return util.isValidAmountFormat(decimals, amount);
 }
 
-module.exports = { gte, gt, isPositive, add, sub, mulFloor, isValidAmountFormat, exceedsUnsignedColumn };
+// The indexer's PLAIN_DECIMAL: digits, optionally one '.' and at least one more
+// digit (xchain-indexer src/utility/validation/amount_representability_gate.js).
+const PLAIN_DECIMAL = /^[0-9]+(\.[0-9]+)?$/;
+
+// Byte-for-byte the indexer's isRepresentableAmount (same file): the amount text
+// must be a plain unsigned decimal numeral whose significant integer digits fit
+// AMOUNT_MAX_INTEGER_DIGITS and whose fraction fits the tick's decimals. Exponent
+// notation, signs, radix prefixes, whitespace and empty halves all fail.
+function isRepresentableAmount(decimals, text) {
+    if (typeof text !== 'string') return false;
+    if (!PLAIN_DECIMAL.test(text)) return false;
+    const [int, sats] = text.split('.');
+    if (int.replace(/^0+/, '').length > AMOUNT_MAX_INTEGER_DIGITS) return false;
+    const d = parseInt(decimals, 10);
+    if (!Number.isFinite(d)) return false;
+    if (sats !== undefined && sats.length > d) return false;
+    return true;
+}
+
+// The indexer's three-argument isValidAmountFormat (amount_validation.js): where the
+// representability rule is armed it is an extra early refusal ahead of the legacy body,
+// so it can only refuse more. `armed` is the caller's reading of the activation table
+// (checks/amount_format.js); anything but true keeps the legacy verdict.
+function isValidAmountFormatWhere(decimals, amount, armed) {
+    if (armed === true && !isRepresentableAmount(decimals, amount === null || amount === undefined ? null : String(amount)))
+        return false;
+    return util.isValidAmountFormat(decimals, amount);
+}
+
+module.exports = {
+    gte, gt, isPositive, add, sub, mulFloor, isValidAmountFormat, isRepresentableAmount, isValidAmountFormatWhere,
+    exceedsUnsignedColumn,
+};

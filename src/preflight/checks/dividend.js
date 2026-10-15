@@ -24,8 +24,30 @@
 
 const { FINDING_CODES } = require('../constants.js');
 const numeric = require('../numeric.js');
+const { declareRepresentability, tokenDecimals, checkAmountField } = require('./amount_format.js');
+
+// AMOUNT is required and judged against DIVIDEND_TICK's decimals, the paying token
+// (xchain-indexer src/actions/dividend/validate.js:41-43): an empty AMOUNT is refused
+// as AMOUNT (format) too. A DIVIDEND_TICK that does not exist is left to TOKEN_NOT_FOUND.
+async function checkDividendAmountFormat(ctx) {
+    const amount = ctx.field('AMOUNT');
+    ctx.markRun(FINDING_CODES.AMOUNT_FORMAT_INVALID);
+    if (amount === '') {
+        ctx.addFinding(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'error',
+            'AMOUNT is empty; the indexer rejects a DIVIDEND without a per-unit amount as invalid: AMOUNT (format).',
+            { field: 'AMOUNT', amount: '' });
+        return;
+    }
+    const divTick = ctx.field('DIVIDEND_TICK');
+    if (!divTick || Array.isArray(amount)) return;
+    const token = await ctx.token(divTick);
+    if (token === undefined) { ctx.addUnverified(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'token lookup unavailable for ' + divTick); return; }
+    checkAmountField(ctx, 'AMOUNT', amount, tokenDecimals(token), { tick: divTick });
+}
 
 async function checkDividend(ctx) {
+    await checkDividendAmountFormat(ctx);
+    declareRepresentability(ctx);
     const amount = ctx.field('AMOUNT');
     if (amount && !numeric.isPositive(amount)) {
         ctx.addFinding(FINDING_CODES.AMOUNT_NOT_POSITIVE, 'warning',

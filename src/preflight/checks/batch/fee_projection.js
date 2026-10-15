@@ -152,7 +152,7 @@ async function projectIssueFee(ctx, cmd, gas) {
  * feeds the batch-total warning honestly, and may never feed the whole-batch
  * collapse error, which only lower-bound-grade prices can justify.
  */
-function projectDurationFee(cmd, gas) {
+function projectDurationFee(cmd, gas, nowMs = Date.now()) {
     if (!gas) return null;
     if (String(cmd.version) !== '0') return null;
     const perDay = gas.schedule.EXPIRATION_PER_DAY;
@@ -162,7 +162,7 @@ function projectDurationFee(cmd, gas) {
     const expiration = exp === undefined || exp === null ? '' : String(exp).trim();
     if (expiration === '') return { amount: '0', chargeable: false, bound: true };
     if (!util.isNumeric(expiration)) return null;
-    const nowSeconds = Math.floor(Date.now() / 1000);
+    const nowSeconds = Math.floor(nowMs / 1000);
     const expireDays = util.bcdiv(util.bcsub(expiration, nowSeconds, 0), 86400, 0);
     const chargeableDays = util.bcsub(expireDays, gas.freeDays, 0);
     if (!numeric.isPositive(chargeableDays))

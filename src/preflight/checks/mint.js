@@ -13,8 +13,8 @@
  **********************************************************************
  *
  * Pre-flight Tier-2: MINT (spec §4.4; mirrors xchain-indexer
- * src/actions/mint.js:81-220). Two caps, no fee: per-tx MAX_MINT and
- * MAX_SUPPLY headroom. Per-address headroom, allow/block lists,
+ * src/actions/mint.js:81-220). The LOCK_MINT lock and two caps, no fee:
+ * per-tx MAX_MINT and MAX_SUPPLY headroom. Per-address headroom, allow/block lists,
  * quotable guard, and the self-mint flag are internal/Tier-1-only.
  *
  ********************************************************************/
@@ -23,6 +23,7 @@
 
 const { FINDING_CODES } = require('../constants.js');
 const numeric = require('../numeric.js');
+const { amountFormatOk, declareRepresentability } = require('./amount_format.js');
 
 /*
  * Read a scalar off a token document, trying each candidate in order.
@@ -79,6 +80,22 @@ function checkMintLimit(ctx, tick, amount, token) {
     }
 }
 
+// A token whose LOCK_MINT is set refuses every MINT, ahead of every amount rule
+// (xchain-indexer src/actions/mint/validate.js:121-123). The explorer serves the lock
+// as a boolean flag at locks.mint. MINT_OVER_MAX is the certified code nearest the
+// verdict: the mint is refused for its token's mint terms, not its format.
+function checkMintLock(ctx, tick, token) {
+    const lock = token && token.locks && typeof token.locks === 'object' ? token.locks.mint : undefined;
+    const flat = token ? (token.lock_mint ?? token.LOCK_MINT) : undefined;
+    const locked = lock === true || lock === 1 || lock === '1' || flat === true || flat === 1 || flat === '1';
+    ctx.markRun(FINDING_CODES.MINT_OVER_MAX);
+    if (locked) {
+        ctx.addFinding(FINDING_CODES.MINT_OVER_MAX, 'error',
+            `${tick} has LOCK_MINT set, so no more can be minted; the indexer refuses this MINT as invalid: LOCK_MINT.`,
+            { tick, lockMint: true });
+    }
+}
+
 function checkSupplyLimit(ctx, tick, amount, token) {
     const maxSupply = tokenField(token, ['supply.max', 'max_supply', 'MAX_SUPPLY', 'maxSupply']);
     const supply = tokenField(token, ['supply.current', 'supply', 'SUPPLY', 'current_supply', 'total_supply']);
@@ -112,7 +129,7 @@ function checkSupplyLimit(ctx, tick, amount, token) {
 function checkMintAmountFormat(ctx, tick, amount, token) {
     // Amount format vs the tick's decimals (vendored consensus rule).
     const decimals = tokenField(token, ['supply.decimals', 'info.decimals', 'decimals', 'DECIMALS']);
-    if (decimals !== null && amount && !numeric.isValidAmountFormat(decimals, amount)) {
+    if (decimals !== null && amount && !amountFormatOk(ctx, decimals, amount)) {
         ctx.addFinding(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'error',
             `Mint amount ${amount} is not a valid amount at ${decimals} decimals.`,
             { tick, amount, decimals });
@@ -137,21 +154,14 @@ async function checkMint(ctx) {
             'Mint amount is not positive.', { amount });
     }
 
+    checkMintLock(ctx, tick, token);
     checkMintLimit(ctx, tick, amount, token);
     checkSupplyLimit(ctx, tick, amount, token);
     checkMintAmountFormat(ctx, tick, amount, token);
 
-    // The amount-format check above is the LEGACY rule (see numeric.js). Above its
-    // flag-day the indexer additionally requires the amount text to denote the number
-    // the ledger credits, which this client cannot predict: it needs the activation
-    // state of the block that will carry the action. Declared, never raised as an
-    // error, because neither mainnet nor testnet is armed and rejecting here would
-    // block a broadcast both planes accept.
-    ctx.addUnverified('AMOUNT_REPRESENTABILITY',
-        'above its flag-day an AMOUNT must be a plain decimal numeral denoting the number the ledger '
-        + 'credits, so exponent notation and an integer too wide for the ledger aggregation are rejected '
-        + 'instead of crediting a different number; the activation state of the including block is '
-        + 'server-side only, and neither mainnet nor testnet is armed for it');
+    // The amount-format check above applies the representability rule where it is
+    // armed; everywhere else the rule is declared.
+    declareRepresentability(ctx);
 
     ctx.addUnverified('MINT_ADDRESS_HEADROOM',
         'per-address minted headroom, allow/block lists, and mint-guard outcome are server-side only');
