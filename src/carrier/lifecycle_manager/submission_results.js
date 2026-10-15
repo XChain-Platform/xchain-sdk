@@ -25,14 +25,16 @@ const { reconcileEncoded } = require('../reconcile_encoded.js');
 const { assertCarrierBinding, assertEnvelopeCarrierBinding } = require('../bind_action_carrier.js');
 
 // Sign an envelope reveal synchronously so it is ready before the commit broadcast.
-function prepareEnvelope(manager, encoded, createResult, wif, progress) {
+function prepareEnvelope(manager, { encoded, createResult, encoderOpts, wif, progress }) {
     let revealSigned = null;
     if (encoded.revealPsbt) {
         // The reveal is the first transaction carrying envelope action bytes, so
-        // bind it while the commit remains unbroadcast and failure costs no funds.
+        // bind it, rawData push included, while the commit remains unbroadcast and
+        // failure costs no funds.
         assertEnvelopeCarrierBinding({
             actionString: createResult.actionString,
             revealPsbt:   encoded.revealPsbt,
+            rawData:      encoderOpts.rawData == null ? null : encoderOpts.rawData,
             network:      manager.reconcileNetwork(),
         });
         revealSigned = manager.sdk.wallet.signEnvelopeRevealPsbt(encoded.revealPsbt, wif);

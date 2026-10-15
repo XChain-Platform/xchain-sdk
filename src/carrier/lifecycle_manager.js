@@ -101,7 +101,7 @@ class LifecycleManager {
             validateCustomSigner(encoded);
             signed = await opts.signer(encoded.psbt, { encoding: encoded.encoding });
         } else signed = this.sdk.wallet.signPsbt(encoded.psbt, wif);
-        const revealSigned = prepareEnvelope(this, encoded, createResult, wif, progress);
+        const revealSigned = prepareEnvelope(this, { encoded, createResult, encoderOpts, wif, progress });
         const phase2 = await prepareChunkReveal(this, { encoder, signed, encoded, encoderOpts, carriedAction,
             reconcileState, createResult, wif, progress });
         progress('broadcasting', { txid: signed.txid });

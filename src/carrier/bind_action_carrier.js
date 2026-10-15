@@ -36,7 +36,7 @@
 const bitcoin = require('bitcoinjs-lib');
 const { SDKActionError } = require('../utils/errors.js');
 const { decodeActionStringFromPsbt, extractEnvelopeActionString } = require('../cosigner/psbt_action_decode.js');
-const { verifyCarrierScripts } = require('./verify_carrier_scripts.js');
+const { verifyCarrierScripts, rawDataMatches } = require('./verify_carrier_scripts.js');
 const CompressionUtils = require('../protocol/compression.js');
 const { COMPRESSION_CODE_DEFLATE_RAW } = require('../protocol/constants.js');
 
@@ -242,8 +242,12 @@ function assertCarrierBinding({ psbt, actionString, encoding, carrierScripts, ra
  * (the commit output is only a hash of the leaf), and the SDK signs it while
  * nothing is on chain yet, so a substituted reveal costs a throw here instead of
  * a stranded commit later.
+ *
+ * The leaf's rawData push binds to the caller's bytes under the chunk lanes' rule:
+ * rawData omitted leaves it unchecked, null demands no push, and a leaf that matched
+ * through the tolerated COMPRESSION rewrite must carry the deflated form of them.
  */
-function assertEnvelopeCarrierBinding({ revealPsbt, actionString, network, label = 'envelope reveal' }) {
+function assertEnvelopeCarrierBinding({ revealPsbt, actionString, rawData, network, label = 'envelope reveal' }) {
     if (typeof actionString !== 'string' || actionString.length === 0)
         throw new SDKActionError('CARRIER_BIND_MISSING_ACTION',
             `${label}: cannot bind a carrier without the caller's action string`);
@@ -260,6 +264,11 @@ function assertEnvelopeCarrierBinding({ revealPsbt, actionString, network, label
     if (!carriedActionMatches(extracted.actionString, actionString))
         throw mismatch('CARRIER_ACTION_MISMATCH', label,
             { submitted: actionString, carried: extracted.actionString });
+    const pushes = bitcoin.script.decompile(extracted.envelope.payload);
+    const rawDataCompressed = extracted.actionString !== actionString;
+    if (!rawDataMatches(pushes, rawData, rawDataCompressed))
+        throw mismatch('CARRIER_ACTION_MISMATCH', label,
+            { submitted: actionString, reason: 'RAW_DATA_MISMATCH' });
 }
 
 module.exports = { assertCarrierBinding, assertEnvelopeCarrierBinding, carriedActionMatches };
