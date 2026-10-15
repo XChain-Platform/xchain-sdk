@@ -81,7 +81,15 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `19f2314d`
+**Pins taken at indexer commit:** `90e92858`
+
+(Re-anchored 2026-10-15 against the committed indexer lane tree `90e92858`, the head of the
+text-amount refusal change, which had not landed on origin develop when this was written.
+Only the `send`, `destroy` and `dividend` directory pins move, for the change reviewed in the
+first entry of the review log below. The other ten rows are unchanged and match that tree.
+`19f2314d` is an ancestor of this anchor. The commit lands on origin develop as that exact commit
+by fast-forward, so the anchor stays reachable; a squashed or rebased landing would orphan it,
+and the section on an unreachable anchor below is then the way back.)
 
 (Re-anchored 2026-10-14 against the committed indexer lane tree `19f2314d`, the head of the
 fiat dispenser pricing change, which had not landed on origin develop when this was written.
@@ -430,7 +438,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 19f2314d..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 90e92858..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -503,8 +511,8 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `bf2126e339d34154a15fc294a0d07341a01798718ba3a5ea8afdff4d07ea3ab7` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `3671cf3e2efefb069d30539814ecc2f1bd65087698f756711c8a1c7b75e9665f` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `f8211a031c9c9b0fd6f4f6f3906dec1d7e4009613b4140750294d6a149ad48d7` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `d7b449ec926f886695fd596f4a9e0d6e305fa8bea8e1ca7281423614f55c0547` |
 | `checks/mint.js` | `src/actions/mint/` | `f69fdb9192b703a928dc46028a569f0a4725ce136b394304e1ec00bab04629e9` |
 | `checks/issue.js` | `src/actions/issue/` | `8f29219d887e695408a8d9b405a795182550c3ed0e991ab74bd4941efe9d294c` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `03c4c858bcd29e6e079a19b34d08d57b35bda93c0ef165ce61e1c28ab89184e6` |
@@ -512,7 +520,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `79fdae31db05edea980aca9b52b70fd8a2c65bb53e9e785534229bdca0ffd8ec` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `9bb114863e30d2501bb36f6f2d5a541bbaf99320b860466708253555aded19cc` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `0174875cd302106d68a816c7e72a64d53e3f51971881cd9efbea70a78786e7d9` |
-| `checks/dividend.js` | `src/actions/dividend/` | `d4f5c14da27903f71c58cb5f56310d2ff0520bb2f8d0646e7e798d1721c28014` |
+| `checks/dividend.js` | `src/actions/dividend/` | `c0afa565418a5df7b35bd463ab51ed580541f2b0b7d32fac0c87cf07df50e5b0` |
 | `checks/batch.js` | `src/actions/batch/` | `7e138a16dc5eff43ac60c4cca83c2b35ccd865eb98df3ce57c8cbc8aebca85a6` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `bbddd777d235e2da7b472d0e4ed993b598886202374f58ae2d46525079cb8f76` |
 | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `b68c873821cbcbe2e72082817f13eecbe87c12c2a99591d5d4b9085358b7fa75` |
@@ -536,6 +544,24 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-15 - SEND, DESTROY and DIVIDEND refuse text amounts and unknown-tick legs
+
+The `send` pin moves from `bf2126e3` to `f8211a03`, the `destroy` pin from `3671cf3e` to
+`d7b449ec` and the `dividend` pin from `d4f5c14d` to `c0afa565`, hashed from the committed indexer
+lane tree `90e92858` by `node bin/preflight_handler_dirs.js <indexer> src/actions/send/`,
+`src/actions/destroy/` and `src/actions/dividend/`. The mapped diff touches `send/legs.js`,
+`destroy/legs.js` and `dividend/index.js`. Each now refuses a text amount, and a leg naming an
+unknown tick, before the arithmetic that halted the block, through a new check in
+`utility/bcmath.js`. The same change adds a refusal in `vote/settle.js`, which sits outside every
+mapped row and has no mirror.
+
+**Direction: WIDENS rejection of malformed wire input, no activation row.** The indexer now
+refuses inputs that the pre-flight already refuses or warns on: a transaction built by this SDK
+never reaches the new refusal, because `checks/send.js` and `checks/dividend.js` already reject a
+non-numeric amount and leave an unknown tick unverified before any arithmetic. The change replaces
+a halt on hostile wire data with a refusal. NO CLIENT CHECK MOVES, and the SDK pre-flight should
+not change.
 
 ### 2026-10-14 - DISPENSER and DISPENSE fiat pricing behind an activation
 

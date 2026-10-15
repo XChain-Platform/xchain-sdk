@@ -131,13 +131,14 @@ function registerOrderSwapRemoteTokenReviewTest() {
     });
 }
 
+// The send hash moves with every later reviewed change to the handler; the 2026-10-15
+// text amount refusal review pins it now, and the 2026-10-09 entry stays the record of this one.
 function registerSendGatedTotalReviewTest() {
     it('pins and records the SEND gated handoff totals by resolved tick id review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const send = parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/send/');
         expect(send, 'send directory row').to.exist;
-        expect(send.hash).to.equal('bf2126e339d34154a15fc294a0d07341a01798718ba3a5ea8afdff4d07ea3ab7');
-        const heading = '### 2026-10-09 - send gated handoff totals by resolved tick id';
+                const heading = '### 2026-10-09 - send gated handoff totals by resolved tick id';
         expect(text).to.include(heading);
         const start = text.indexOf(heading);
         const entry = text.slice(start, text.indexOf('\n### ', start + heading.length));
@@ -231,6 +232,28 @@ function registerFiatPricingReviewTest() {
     });
 }
 
+function registerTextAmountRefusalReviewTest() {
+    it('pins and records the SEND, DESTROY and DIVIDEND text amount refusal review', function () {
+        const text = fs.readFileSync(REAL_MAP, 'utf8');
+        const rows = parseMap(REAL_MAP);
+        const send = rows.find((r) => r.handler === 'src/actions/send/');
+        const destroy = rows.find((r) => r.handler === 'src/actions/destroy/');
+        const dividend = rows.find((r) => r.handler === 'src/actions/dividend/');
+        expect(send, 'send directory row').to.exist;
+        expect(destroy, 'destroy directory row').to.exist;
+        expect(dividend, 'dividend directory row').to.exist;
+        expect(send.hash).to.equal('f8211a031c9c9b0fd6f4f6f3906dec1d7e4009613b4140750294d6a149ad48d7');
+        expect(destroy.hash).to.equal('d7b449ec926f886695fd596f4a9e0d6e305fa8bea8e1ca7281423614f55c0547');
+        expect(dividend.hash).to.equal('c0afa565418a5df7b35bd463ab51ed580541f2b0b7d32fac0c87cf07df50e5b0');
+        const heading = '### 2026-10-15 - SEND, DESTROY and DIVIDEND refuse text amounts and unknown-tick legs';
+        expect(text).to.include(heading);
+        const start = text.indexOf(heading);
+        const entry = text.slice(start, text.indexOf('\n### ', start + heading.length));
+        expect(entry).to.include('**Direction: WIDENS rejection of malformed wire input, no activation row.**');
+        expect(entry).to.include('NO CLIENT CHECK MOVES');
+    });
+}
+
 describe('pre-flight constants + registry', function () {
     describe('drift map (§8.5)', function () {
         registerMapParsingTest();
@@ -244,5 +267,6 @@ describe('pre-flight constants + registry', function () {
         registerDispenseOwnershipBlockFieldsReviewTest();
         registerSupplyBoundReviewTest();
         registerFiatPricingReviewTest();
+        registerTextAmountRefusalReviewTest();
     });
 });
