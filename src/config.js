@@ -227,6 +227,8 @@ var Config = {
         tokenSupplyRepresentationRegtestActivation: () => process.env.XC_TOKEN_SUPPLY_REPRESENTATION_REGTEST_ACTIVATION,
         dispenserFiatPricingRegtestActivation: () => process.env.XC_DISPENSER_FIAT_PRICING_REGTEST_ACTIVATION,
         bridgePolicyApplyOrderRegtestActivation: () => process.env.XC_BRIDGE_POLICY_APPLY_ORDER_REGTEST_ACTIVATION,
+        vmEmissionAmountFormatRegtestActivation: () => process.env.XC_VM_EMISSION_AMOUNT_FORMAT_REGTEST_ACTIVATION,
+        executeFeeCapRegtestActivation: () => process.env.XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION,
     },
 
 }

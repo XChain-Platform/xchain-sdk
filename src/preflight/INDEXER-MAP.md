@@ -562,6 +562,25 @@ agrees with it.
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
 
+### 2026-10-15 - EXECUTE fee debit capped at held gas and emitted amounts held to the plain decimal form, behind two activations
+
+No pin moves and the anchor stays. Both changes sit in `src/actions/execute/`, which no row here
+maps. In `execute/settle.js` the XCHAIN-balance fee debit of an EXECUTE is capped at the gas the
+caller holds when the run settles, floored at zero, behind
+`execute_fee_cap_activation.EXECUTE_FEE_CAP_ACTIVATION`. In `execute/emission.js` (with its
+`execute/index.js` wrapper) an amount a contract emits must be a plain unsigned decimal numeral
+before it is rounded to its tick, or the emission is refused and the EXECUTE rolls back, behind
+`vm_emission_amount_format_activation.VM_EMISSION_AMOUNT_FORMAT_ACTIVATION`. Both rows are
+`mainnet: UNARMED, testnet: UNARMED`, with regtest armed only by
+`XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION` and `XC_VM_EMISSION_AMOUNT_FORMAT_REGTEST_ACTIVATION`.
+Below each activation the handler reads nothing new and debits and rounds as before.
+
+**Direction: SETTLE PATH for the fee cap, and WIDENS rejection of contract emissions behind an
+activation row.** The fee cap changes how much gas a valid or failed run is charged, not whether an
+EXECUTE is valid. The emission format rule judges amounts a contract computes during the run, which
+pre-flight never sees. No `ACTIVATION_MIRRORS` row is added because no client predicate reads
+either gate. NO CLIENT CHECK MOVES.
+
 ### 2026-10-15 - off-rail conformance: three new rows and the client checks they cover
 
 No existing pin moves. The off-rail conformance lane ran Tier 2 and the indexer side by side
