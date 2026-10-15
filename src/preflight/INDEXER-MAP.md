@@ -81,7 +81,16 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `90e92858`
+**Pins taken at indexer commit:** `85f1d334`
+
+(Re-anchored 2026-10-15 against the committed indexer lane tree `85f1d334`, the head of the
+NOT NULL row key refusal change, which had not landed on origin develop when this was written.
+Only the `dispenser`, `order` and `swap` directory pins and the `deposit.js` and `withdraw.js`
+file pins move, for the change reviewed in the first entry of the review log below. The other
+eight rows are unchanged and match that tree. `90e92858` is an ancestor of this anchor. The
+commit lands on origin develop as that exact commit, by fast-forward or as a parent of the
+landing merge, so the anchor stays reachable; a squashed or rebased landing would orphan it,
+and the section on an unreachable anchor below is then the way back.)
 
 (Re-anchored 2026-10-15 against the committed indexer lane tree `90e92858`, the head of the
 text-amount refusal change, which had not landed on origin develop when this was written.
@@ -438,7 +447,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 90e92858..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 85f1d334..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -515,15 +524,15 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `d7b449ec926f886695fd596f4a9e0d6e305fa8bea8e1ca7281423614f55c0547` |
 | `checks/mint.js` | `src/actions/mint/` | `f69fdb9192b703a928dc46028a569f0a4725ce136b394304e1ec00bab04629e9` |
 | `checks/issue.js` | `src/actions/issue/` | `8f29219d887e695408a8d9b405a795182550c3ed0e991ab74bd4941efe9d294c` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `03c4c858bcd29e6e079a19b34d08d57b35bda93c0ef165ce61e1c28ab89184e6` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `fde5c3852dc30601b5d710119e62c61711c26dca8eedfbb5cd60ad2c4ffe5d88` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `2fded8ad2eb66fdd4ba09a3b66fe101d13707ba7140c04f64b0d6dc3c7adf2fe` |
-| `checks/trading.js` (ORDER) | `src/actions/order/` | `79fdae31db05edea980aca9b52b70fd8a2c65bb53e9e785534229bdca0ffd8ec` |
-| `checks/trading.js` (SWAP) | `src/actions/swap/` | `9bb114863e30d2501bb36f6f2d5a541bbaf99320b860466708253555aded19cc` |
+| `checks/trading.js` (ORDER) | `src/actions/order/` | `25dd0ed707ae1283a825803b34da44560eb05f5002ff661cf0984b4f6af99f05` |
+| `checks/trading.js` (SWAP) | `src/actions/swap/` | `466350e43b9d2046db432c7b0a21bd1021373ff23b6d05f4538f033d355a501f` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `0174875cd302106d68a816c7e72a64d53e3f51971881cd9efbea70a78786e7d9` |
 | `checks/dividend.js` | `src/actions/dividend/` | `c0afa565418a5df7b35bd463ab51ed580541f2b0b7d32fac0c87cf07df50e5b0` |
 | `checks/batch.js` | `src/actions/batch/` | `7e138a16dc5eff43ac60c4cca83c2b35ccd865eb98df3ce57c8cbc8aebca85a6` |
-| `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `bbddd777d235e2da7b472d0e4ed993b598886202374f58ae2d46525079cb8f76` |
-| `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `b68c873821cbcbe2e72082817f13eecbe87c12c2a99591d5d4b9085358b7fa75` |
+| `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f` |
+| `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35` |
 
 The mapped custody disclosures are checks/misc.js (DEPOSIT) and
 checks/misc.js (WITHDRAW).
@@ -544,6 +553,35 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-15 - ORDER, SWAP, DISPENSER, DEPOSIT and WITHDRAW refuse values a NOT NULL column stores as NULL
+
+The `dispenser` pin moves from `03c4c858` to `fde5c385`, the `order` pin from `79fdae31` to
+`25dd0ed7`, the `swap` pin from `9bb11486` to `466350e4`, the `deposit.js` pin from `bbddd777` to
+`3e1dd191` and the `withdraw.js` pin from `b68c8738` to `99cae8fa`, hashed from the committed
+indexer lane tree `85f1d334` by `node bin/preflight_handler_dirs.js <indexer> <handler>`. The
+mapped diff touches `dispenser/index.js`, `order/validate.js`, `order/settle.js`,
+`swap/validate.js`, `swap/settle.js`, `deposit.js` and `withdraw.js`. A cancel or edit whose
+ORDER_ACTION_INDEX, SWAP_ACTION_INDEX or DISPENSER_ACTION_INDEX is empty, not numeric or outside
+its unsigned column, and a DEPOSIT or WITHDRAW whose AMOUNT is empty or not numeric, is now refused
+with a `(format)` error, and its row is stored under the placeholder 0 (`'0'` for an amount),
+through a new `storesAsNull` check in `utility/validation/value_checks.js`. Before the change each
+of these values reached a NOT NULL column as NULL and the INSERT stopped the block, so no committed
+outcome changes. The same change refuses a format-2 BET with such a FEED_ACTION_INDEX and stores a
+DEPLOY v4 carrier's non-finite CHUNK_INDEX or TOTAL_CHUNKS under 0; `bet/` and `deploy/` sit
+outside every mapped row and have no mirror.
+
+**Direction: WIDENS rejection of malformed wire input, no activation row.** The client validator
+already refuses a non-numeric value in each of these fields (INVALID_FIELD_VALUE, which
+`universal.js` raises as AMOUNT_FORMAT_INVALID for the QUANTITY of a DEPOSIT or WITHDRAW) and an
+empty one (an empty QUANTITY is MISSING_REQUIRED_FIELD, and an empty action index reads as a
+format-0 create that lacks its create fields). A negative or past-u64 action index passes the field validator and names no
+order, swap or dispenser: `checks/trading.js` leaves the cancel or edit reference unverified as
+server-side, and `checks/dispenser.js` looks the dispenser up. The indexer refused such a
+reference before as well, as an unknown one, at the cost of the halt this change removes. The
+change replaces a halt on malformed wire data with a refusal. NO CLIENT CHECK MOVES, and the SDK
+pre-flight should not change; a local range check on these index fields would only move an
+existing server-side refusal earlier.
 
 ### 2026-10-15 - SEND, DESTROY and DIVIDEND refuse text amounts and unknown-tick legs
 

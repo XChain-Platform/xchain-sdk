@@ -112,8 +112,9 @@ function registerIssueLazyProbeReviewTest() {
 }
 
 function registerOrderSwapRemoteTokenReviewTest() {
-    // The hashes move with every later reviewed change to these handlers; the 2026-10-09
-    // entry below stays the record of the remote token accept review.
+    // The hashes move with every later reviewed change to these handlers; the 2026-10-15
+    // NOT NULL row key review pins them now, and the 2026-10-09 entry below stays the record of
+    // the remote token accept review.
     it('pins and records the ORDER and SWAP remote token accept review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const rows = parseMap(REAL_MAP);
@@ -121,8 +122,6 @@ function registerOrderSwapRemoteTokenReviewTest() {
         const swap = rows.find((r) => r.handler === 'src/actions/swap/');
         expect(order, 'order directory row').to.exist;
         expect(swap, 'swap directory row').to.exist;
-        expect(order.hash).to.equal('79fdae31db05edea980aca9b52b70fd8a2c65bb53e9e785534229bdca0ffd8ec');
-        expect(swap.hash).to.equal('9bb114863e30d2501bb36f6f2d5a541bbaf99320b860466708253555aded19cc');
         const heading = '### 2026-10-09 - ORDER and SWAP remote token accept check';
         expect(text).to.include(heading);
         const start = text.indexOf(heading);
@@ -213,6 +212,8 @@ function registerSupplyBoundReviewTest() {
     });
 }
 
+// The dispenser hash moves with every later reviewed change to the handler; the 2026-10-15
+// NOT NULL row key review pins it now, and the 2026-10-14 entry stays the record of this one.
 function registerFiatPricingReviewTest() {
     it('pins and records the DISPENSER and DISPENSE fiat pricing review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
@@ -221,7 +222,6 @@ function registerFiatPricingReviewTest() {
         const dispense = rows.find((r) => r.handler === 'src/actions/dispense/');
         expect(dispenser, 'dispenser directory row').to.exist;
         expect(dispense, 'dispense directory row').to.exist;
-        expect(dispenser.hash).to.equal('03c4c858bcd29e6e079a19b34d08d57b35bda93c0ef165ce61e1c28ab89184e6');
         expect(dispense.hash).to.equal('2fded8ad2eb66fdd4ba09a3b66fe101d13707ba7140c04f64b0d6dc3c7adf2fe');
         const heading = '### 2026-10-14 - DISPENSER and DISPENSE fiat pricing behind an activation';
         expect(text).to.include(heading);
@@ -254,6 +254,31 @@ function registerTextAmountRefusalReviewTest() {
     });
 }
 
+function registerNotNullRowKeyReviewTest() {
+    it('pins and records the ORDER, SWAP, DISPENSER, DEPOSIT and WITHDRAW NOT NULL row key review', function () {
+        const text = fs.readFileSync(REAL_MAP, 'utf8');
+        const rows = parseMap(REAL_MAP);
+        const expected = {
+            'src/actions/dispenser/': 'fde5c3852dc30601b5d710119e62c61711c26dca8eedfbb5cd60ad2c4ffe5d88',
+            'src/actions/order/': '25dd0ed707ae1283a825803b34da44560eb05f5002ff661cf0984b4f6af99f05',
+            'src/actions/swap/': '466350e43b9d2046db432c7b0a21bd1021373ff23b6d05f4538f033d355a501f',
+            'src/actions/deposit.js': '3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f',
+            'src/actions/withdraw.js': '99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35',
+        };
+        for (const [handler, hash] of Object.entries(expected)) {
+            const row = rows.find((r) => r.handler === handler);
+            expect(row, handler + ' row').to.exist;
+            expect(row.hash, handler).to.equal(hash);
+        }
+        const heading = '### 2026-10-15 - ORDER, SWAP, DISPENSER, DEPOSIT and WITHDRAW refuse values a NOT NULL column stores as NULL';
+        expect(text).to.include(heading);
+        const start = text.indexOf(heading);
+        const entry = text.slice(start, text.indexOf('\n### ', start + heading.length));
+        expect(entry).to.include('**Direction: WIDENS rejection of malformed wire input, no activation row.**');
+        expect(entry).to.include('NO CLIENT CHECK MOVES');
+    });
+}
+
 describe('pre-flight constants + registry', function () {
     describe('drift map (§8.5)', function () {
         registerMapParsingTest();
@@ -268,5 +293,6 @@ describe('pre-flight constants + registry', function () {
         registerSupplyBoundReviewTest();
         registerFiatPricingReviewTest();
         registerTextAmountRefusalReviewTest();
+        registerNotNullRowKeyReviewTest();
     });
 });
