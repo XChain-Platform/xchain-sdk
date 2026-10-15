@@ -297,6 +297,25 @@ function registerVoteTickExistenceReviewTest() {
     });
 }
 
+// ORDER_MATCH and SWAP_MATCH have no row: the gated open-origin requirement is reviewed and
+// recorded, and the mapped ORDER and SWAP rows stay where they were.
+function registerMatchOriginOpenReviewTest() {
+    it('records the open match origin review with no ORDER_MATCH or SWAP_MATCH row', function () {
+        const text = fs.readFileSync(REAL_MAP, 'utf8');
+        const rows = parseMap(REAL_MAP);
+        expect(rows.find((r) => r.handler.startsWith('src/actions/order_match')), 'no ORDER_MATCH row').to.equal(undefined);
+        expect(rows.find((r) => r.handler.startsWith('src/actions/swap_match')), 'no SWAP_MATCH row').to.equal(undefined);
+        const heading = '### 2026-10-15 - ORDER_MATCH and SWAP_MATCH require an open origin behind an activation';
+        expect(text).to.include(heading);
+        const start = text.indexOf(heading);
+        const entry = text.slice(start, text.indexOf('\n### ', start + heading.length));
+        expect(entry).to.include('MATCH_ORIGIN_OPEN_ACTIVATION');
+        expect(entry).to.include('**Client follow-up.**');
+        expect(entry).to.include('**Direction: NARROWS matching behind an activation row, outside every mapped row.**');
+        expect(entry).to.include('NO CLIENT CHECK MOVES');
+    });
+}
+
 describe('pre-flight constants + registry', function () {
     describe('drift map (§8.5)', function () {
         registerMapParsingTest();
@@ -313,5 +332,6 @@ describe('pre-flight constants + registry', function () {
         registerTextAmountRefusalReviewTest();
         registerNotNullRowKeyReviewTest();
         registerVoteTickExistenceReviewTest();
+        registerMatchOriginOpenReviewTest();
     });
 });

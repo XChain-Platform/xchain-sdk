@@ -230,6 +230,7 @@ var Config = {
         vmEmissionAmountFormatRegtestActivation: () => process.env.XC_VM_EMISSION_AMOUNT_FORMAT_REGTEST_ACTIVATION,
         executeFeeCapRegtestActivation: () => process.env.XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION,
         voteV3TickExistenceRegtestActivation: () => process.env.XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION,
+        matchOriginOpenRegtestActivation: () => process.env.XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION,
     },
 
 }

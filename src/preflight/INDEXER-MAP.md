@@ -562,6 +562,26 @@ agrees with it.
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
 
+### 2026-10-15 - ORDER_MATCH and SWAP_MATCH require an open origin behind an activation
+
+No pin moves, no row is added and the anchor stays. The indexer change in
+`src/actions/order_match/index.js` and `src/actions/swap_match/index.js` returns before
+candidate lookup at or above `MATCH_ORIGIN_OPEN_ACTIVATION` unless the latest status of the
+originating order or swap is `open`. That stops order and swap matching when a LIST rematch
+plan reaches an origin its earlier step completed, and when an ORDER or SWAP cancel dispatches
+a match from the offer it has just cancelled; below the height both handlers replay unchanged.
+The row is unarmed on mainnet and testnet, and a regtest venue arms it with
+`XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION`, which the SDK's registry copy now reads through
+`src/config.js` and `src/consensus/gate_registry.js`. `order_match/` and `swap_match/` sit
+outside every mapped row; the mapped `order/` and `swap/` directories do not change.
+
+**Client follow-up.** None. Matching is a protocol step the indexer runs after an ORDER, SWAP
+or LIST action, not a field a client builds, so pre-flight has no check to mirror.
+
+**Direction: NARROWS matching behind an activation row, outside every mapped row.** An ORDER
+or SWAP this SDK builds is admitted exactly as before. No `ACTIVATION_MIRRORS` row is added
+because no client predicate reads this gate. NO CLIENT CHECK MOVES.
+
 ### 2026-10-15 - VOTE v3 refuses an unknown TICK behind an activation
 
 No pin moves, no row is added and the anchor stays. The indexer change in
