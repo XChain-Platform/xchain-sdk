@@ -687,7 +687,7 @@ export interface TokenRecord {
 export interface ContractInfo {
     action: string | null;
     /** The DEPLOY's ACTION_INDEX, which is the contract's id */
-    action_index: number | string | null;
+    action_index: number | string;
     action_format: number | null;
     /** The deployer's address */
     source: string | null;
@@ -695,9 +695,9 @@ export interface ContractInfo {
     api_version: number;
     cooldown_blocks: number | null;
     slash_destination: string | null;
-    block_index: number | string;
+    block_index: number | string | null;
     /** DEPLOY block time, unix seconds */
-    timestamp: number | string;
+    timestamp: number | string | null;
     tx_hash: string | null;
     tx_index: number | string;
     status: string | null;
@@ -900,11 +900,11 @@ export interface ExecutionInfo {
     gas_used: number | string;
     gas_limit: number | string;
     emitted_count: number;
-    block_index: number | string;
+    block_index: number | string | null;
     /** Block time, unix seconds */
-    timestamp: number | string;
+    timestamp: number | string | null;
     tx_hash: string | null;
-    tx_index: number | string;
+    tx_index: number | string | null;
     status: string | null;
     /** Detail-only: the raw method params */
     input_params?: string | null;
