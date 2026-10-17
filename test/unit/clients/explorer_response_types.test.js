@@ -174,6 +174,15 @@ function schemaNullable(t) {
     return Array.isArray(t) && t.includes('null');
 }
 
+function assertSchemaNullability(schema, fields, exact = true) {
+    const names = Object.keys(schema.properties).sort();
+    if (exact) assert.deepStrictEqual(names, Object.keys(fields).sort());
+    for (const name of names) {
+        assert.ok(Object.hasOwn(fields, name), name + ': absent from the pinned fields');
+        assert.strictEqual(schemaNullable(schema.properties[name].type), fields[name], name + ': nullability disagrees with the explorer schema');
+    }
+}
+
 describe('explorer response types in index.d.ts', function () {
     const dts = fs.readFileSync(DTS, 'utf8');
 
@@ -235,6 +244,10 @@ describe('contract explorer response types in index.d.ts', function () {
         it('declares exactly the reader fields with their SQL nullability', function () {
             assertPinnedNullability(props, CONTRACT_FIELDS);
         });
+
+        it('matches the explorer OpenAPI ContractRow schema', function () {
+            assertSchemaNullability(explorerSchema(this, 'ContractRow'), CONTRACT_FIELDS, false);
+        });
     });
 
     describe('ExecutionInfo', function () {
@@ -247,6 +260,10 @@ describe('contract explorer response types in index.d.ts', function () {
         it('declares exactly the reader fields with their SQL nullability', function () {
             assertPinnedNullability(props, EXECUTION_FIELDS);
         });
+
+        it('matches the explorer OpenAPI ExecutionDetail schema', function () {
+            assertSchemaNullability(explorerSchema(this, 'ExecutionDetail'), EXECUTION_FIELDS);
+        });
     });
 
     describe('ContractStateEntry', function () {
@@ -258,6 +275,10 @@ describe('contract explorer response types in index.d.ts', function () {
 
         it('declares exactly the reader fields with their SQL nullability', function () {
             assertPinnedNullability(props, STATE_FIELDS);
+        });
+
+        it('matches the explorer OpenAPI ContractStateEntry schema', function () {
+            assertSchemaNullability(explorerSchema(this, 'ContractStateEntry'), STATE_FIELDS);
         });
     });
 });
