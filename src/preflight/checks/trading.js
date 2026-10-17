@@ -26,6 +26,51 @@
 
 const { FINDING_CODES, EXPIRATION_MAX } = require('../constants.js');
 const numeric = require('../numeric.js');
+const { declareRepresentability, tokenDecimals, checkAmountField } = require('./amount_format.js');
+const { checkDurationFee } = require('./duration_fee.js');
+const { getCoinConfig } = require('../../coins/index.js');
+const { parseCoinCode } = require('../../utils/endpoints.js');
+
+// Decimal places of a chain coin code (the indexer's COIN_DECIMALS), or null.
+function coinDecimals(coin) {
+    const plane = parseCoinCode(coin);
+    if (!plane) return null;
+    try { return getCoinConfig(plane.coin, 'mainnet').decimals; } catch (e) { return null; }
+}
+
+/*
+ * GIVE_AMOUNT and GET_AMOUNT of a create against their decimals, in the handler's
+ * order. ORDER (xchain-indexer src/actions/order/validate.js:76-87): a native side
+ * (empty TICK) is judged at COIN_DECIMALS, a token side at its token's DECIMALS, and
+ * GET_AMOUNT is skipped on a cross-chain order (GET_COIN another chain). SWAP
+ * (src/actions/swap/validate.js:70-75): each side only when its token row exists.
+ * A token side whose row is absent is left to TOKEN_NOT_FOUND, which the handler
+ * refuses first.
+ */
+async function checkTradeAmountFormats(ctx, noun) {
+    if (String(ctx.parsed.version) !== '0') return;
+    const plane = parseCoinCode(ctx.sdk && ctx.sdk.explorer && ctx.sdk.explorer.coin);
+    const sides = [['GIVE', 'GIVE_AMOUNT'], ['GET', 'GET_AMOUNT']];
+    for (const [side, field] of sides) {
+        const amount = ctx.field(field);
+        if (amount === '' || Array.isArray(amount)) continue;
+        const tick = ctx.field(side + '_TICK');
+        const coin = ctx.field(side + '_COIN');
+        let decimals = null;
+        if (side === 'GET' && noun === 'ORDER') {
+            if (!plane) { ctx.addUnverified(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'no chain coin is configured, so a cross-chain GET cannot be told apart'); continue; }
+            if (coin && coin !== plane.coin) continue;
+        }
+        if (tick) {
+            const token = await ctx.token(tick);
+            if (token === undefined) { ctx.addUnverified(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'token lookup unavailable for ' + tick); continue; }
+            decimals = tokenDecimals(token);
+        } else if (noun === 'ORDER') {
+            decimals = coinDecimals(coin);
+        }
+        if (checkAmountField(ctx, field, amount, decimals, tick ? { tick } : { coin })) return;
+    }
+}
 
 /*
  * The EXPIRATION representability bound, mirrored from the handlers that carry
@@ -118,7 +163,15 @@ async function checkGiveBalance(ctx, noun) {
         'allow/block lists and list-for-sale veto are server-side only');
 }
 
-async function checkOrder(ctx) { checkExpirationRange(ctx); await checkGiveBalance(ctx, 'ORDER'); }
-async function checkSwap(ctx)  { checkExpirationRange(ctx); await checkGiveBalance(ctx, 'SWAP'); }
+async function checkTrade(ctx, noun) {
+    checkExpirationRange(ctx);
+    await checkGiveBalance(ctx, noun);
+    await checkTradeAmountFormats(ctx, noun);
+    if (String(ctx.parsed.version) === '0') declareRepresentability(ctx);
+    await checkDurationFee(ctx);
+}
+
+async function checkOrder(ctx) { await checkTrade(ctx, 'ORDER'); }
+async function checkSwap(ctx)  { await checkTrade(ctx, 'SWAP'); }
 
 module.exports = { checkOrder, checkSwap };

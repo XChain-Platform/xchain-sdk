@@ -50,14 +50,6 @@ const bn   = (v) => math.bignumber(String(v));
 // Exact decimal comparisons via BigNumber methods. mathjs larger()/equal()
 // apply an epsilon tolerance (see agent_session.js).
 const gte  = (a, b) => bn(a).gte(bn(b));
-// Conservative default per-payment ceiling for X402Client. The client is an
-// autonomous on-chain spend effector whose amount/tick/payTo are all named by
-// the remote server, so it must be fail-closed by default: absent an explicit
-// maxAmount, spending is capped here and truly-unbounded spending is an explicit
-// opt-in (maxAmount: 'unbounded' / Infinity, or allowUnbounded: true). The value
-// is in base token units; real deployments set an explicit maxAmount for the
-// ticks they buy.
-const DEFAULT_MAX_AMOUNT = '100';
 // Protocol amounts are plain decimal strings; reject exponents, signs,
 // unicode digits, anything bignumber would "helpfully" accept.
 const isPosNum = (v) => {
@@ -134,6 +126,6 @@ function parseActionString(text) {
 }
 
 module.exports = {
-    math, bn, gte, DEFAULT_MAX_AMOUNT, isPosNum, X402_VERSION,
+    math, bn, gte, isPosNum, X402_VERSION,
     signForAddress, SEND_LAYOUTS, parseActionString,
 };

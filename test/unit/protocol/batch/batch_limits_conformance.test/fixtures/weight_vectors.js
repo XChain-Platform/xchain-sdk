@@ -89,15 +89,11 @@ const WEIGHT_VECTORS = [
  * compared, not just the arithmetic.
  */
 /*
- * `decoderVerdict` on a vector below records that the SHIPPED decoder answers
- * this tail before the weight rule is ever reached: a batch carrying 220-odd
- * DEPLOY/SEND companions is longer than the wire payload `parse` will accept,
- * so it refuses with TOO_LONG. The weight arithmetic those vectors exist for
- * is still asserted directly (`batchWeight` above), and the finding SHAPE a
- * weight overflow produces is pinned by its own case below on a tail short
- * enough to parse. Stating the parse failure is the point: it is what a
- * consumer really sees, where the deleted scanBatch helper answered
- * a verdict no shipped code path would have reached.
+ * A batch carrying 220-odd DEPLOY/SEND companions is longer than any legacy
+ * carrier holds, but the Taproot envelope stores it, so the SHIPPED decoder,
+ * given no carrier, reads the whole tail and reaches the weight rule: its
+ * verdict is the arbiter's own. Named on a legacy carrier, the same tail is a
+ * TOO_LONG parse failure before any limit rule runs.
  */
 const WEIGHT_BATCH_VECTORS = [
     {
@@ -113,25 +109,24 @@ const WEIGHT_BATCH_VECTORS = [
     {
         name: 'an inline DEPLOY may carry 220 companions',
         tail: [DEPLOY_V0].concat(repeat(220, () => SEND_CMD)).join(';'),
-        weight: 250, verdict: 'valid', decoderVerdict: 'parse failure: TOO_LONG',
+        weight: 250, verdict: 'valid',
     },
     {
         name: 'an inline DEPLOY with 221 companions weighs 251 and rejects whole',
         tail: [DEPLOY_V0].concat(repeat(221, () => SEND_CMD)).join(';'),
-        weight: 251, verdict: 'invalid: COMMAND (limit)', decoderVerdict: 'parse failure: TOO_LONG',
+        weight: 251, verdict: 'invalid: COMMAND (limit)',
     },
     {
         // The ruling's whole point: a carrier is a row write, so it shares its
         // batch with 249 companions instead of the 220 an inline DEPLOY buys.
         name: 'a chunk-carrier DEPLOY shares its batch with 249 companions',
         tail: [DEPLOY_V4].concat(repeat(249, () => SEND_CMD)).join(';'),
-        weight: 250, verdict: 'valid', decoderVerdict: 'parse failure: TOO_LONG',
+        weight: 250, verdict: 'valid',
     },
     {
         name: 'the carrier discount does not leak to its companions: one EXECUTE among them still counts 30',
         tail: [DEPLOY_V4].concat(repeat(248, () => SEND_CMD)).concat([EXEC_CMD]).join(';'),
         weight: 279, verdict: 'invalid: COMMAND (limit)',
-        decoderVerdict: 'parse failure: TOO_LONG',
     },
 ];
 

@@ -97,9 +97,12 @@ describe('decoder.parse - BATCH sub-grammar', function () {
     });
 
     it('counts entries that did NOT parse, the way the arbiter counts every command', function () {
-        // The mirror used to count only the sub-entries it accepted, so a
-        // malformed second ISSUE was free here and chargeable on-chain.
-        const r = parse('BATCH|0|ISSUE|0|JDOG|1000;ISSUE|0|OTHER|1|||||||||||||||||||||||||||||||');
+        // The mirror counts every sub-entry, accepted or not, as the arbiter
+        // does; counting only accepted ones would make a malformed second ISSUE
+        // free here while it is chargeable on-chain.
+        // (VERSION 99 is no ISSUE format; surplus trailing fields no longer fail a
+        // parse, since the indexer ignores them.)
+        const r = parse('BATCH|0|ISSUE|0|JDOG|1000;ISSUE|99|OTHER|1');
         expect(r.commands[1].ok).to.equal(false);
         const limit = r.validation.findings.find(f => f.code === 'BATCH_LIMIT_EXCEEDED');
         expect(limit).to.exist;

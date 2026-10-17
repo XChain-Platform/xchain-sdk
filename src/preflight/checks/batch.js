@@ -29,6 +29,7 @@
 'use strict';
 
 const { FINDING_CODES } = require('../constants.js');
+const { checkHaltFields } = require('../universal/halt_fields.js');
 const numeric = require('../numeric.js');
 const { describeActivation } = require('../activation.js');
 const { GAS_TICK } = require('../../protocol/constants.js');
@@ -207,6 +208,8 @@ async function runCommandChecks(ctx, cmd, i, baseDeltas, projected, unprojectabl
     child.commandIndex = i;
     child.localDeltas = baseDeltas.concat(projected);
     const findingsBefore = ctx.findings.length;
+    // A halt-class field halts the indexer inside a batch exactly as it does alone.
+    checkHaltFields(child, cmd);
     await runActionChecks(child);
 
     // §4.4: where an earlier command's effect could not be

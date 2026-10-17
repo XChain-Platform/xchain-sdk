@@ -81,15 +81,52 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `f9d90376`
+**Pins taken at indexer commit:** `85f1d334`
 
-(Re-anchored 2026-10-14 on the v0.23.2 hotfix line against the indexer commit `f9d90376`, the
-ownership-transfer block-fields change cherry-picked onto v0.23.1 from develop's `b55d539d`.
-Only the `dispense` directory pin moves, for the change reviewed in the first entry of the review
-log below. The other twelve rows are unchanged and match that tree. `a406de91` is an ancestor of
-this anchor. The hotfix reaches master by a merge commit, so the anchor stays reachable; a
-squashed or rebased landing would orphan it, and the section on an unreachable anchor below is
-then the way back.)
+(Rows added 2026-10-15 at the same anchor `85f1d334` for the off-rail pre-flight conformance pass
+reviewed under "off-rail conformance" in the review log below: `price`, `stake` and `bet`, because
+Tier 2 now mirrors a rule in each. No existing row moves, and all sixteen rows match that tree.)
+
+(Re-anchored 2026-10-15 against the committed indexer lane tree `85f1d334`, the head of the
+NOT NULL row key refusal change, which had not landed on origin develop when this was written.
+Only the `dispenser`, `order` and `swap` directory pins and the `deposit.js` and `withdraw.js`
+file pins move, for the change reviewed in the first entry of the review log below. The other
+eight rows are unchanged and match that tree. `90e92858` is an ancestor of this anchor. The
+commit lands on origin develop as that exact commit, by fast-forward or as a parent of the
+landing merge, so the anchor stays reachable; a squashed or rebased landing would orphan it,
+and the section on an unreachable anchor below is then the way back.)
+
+(Re-anchored 2026-10-15 against the committed indexer lane tree `90e92858`, the head of the
+text-amount refusal change, which had not landed on origin develop when this was written.
+Only the `send`, `destroy` and `dividend` directory pins move, for the change reviewed in the
+first entry of the review log below. The other ten rows are unchanged and match that tree.
+`19f2314d` is an ancestor of this anchor. The commit lands on origin develop as that exact commit
+by fast-forward, so the anchor stays reachable; a squashed or rebased landing would orphan it,
+and the section on an unreachable anchor below is then the way back.)
+
+(Re-anchored 2026-10-14 against the committed indexer lane tree `19f2314d`, the head of the
+fiat dispenser pricing change, which had not landed on origin develop when this was written.
+Only the `dispenser` and `dispense` directory pins move, for the change reviewed in the first
+entry of the review log below. The other eleven rows are unchanged and match that tree.
+`6ae5b8c8` is an ancestor of this anchor. The commit lands on origin develop as that exact commit
+by fast-forward, so the anchor stays reachable; a squashed or rebased landing would orphan it,
+and the section on an unreachable anchor below is then the way back.)
+
+(Re-anchored 2026-10-14 against the committed indexer lane tree `6ae5b8c8`, the head of the
+token supply representation change, which had not landed on origin develop when this was
+written. Only the `mint` and `issue` directory pins move, for the change reviewed in the first
+entry of the review log below. The other eleven rows are unchanged and match that tree.
+`b55d539d` is an ancestor of this anchor. The commit lands on origin develop as that exact commit
+by fast-forward, so the anchor stays reachable; a squashed or rebased landing would orphan it,
+and the section on an unreachable anchor below is then the way back.)
+
+(Re-anchored 2026-10-14 against the committed indexer lane tree `b55d539d`, the head of the
+ownership-transfer block-fields change, which had not landed on origin develop when this was
+written. Only the `dispense` directory pin moves, for the change reviewed in the first entry of
+the review log below. The other twelve rows are unchanged and match that tree. `a406de91` is an
+ancestor of this anchor. The commit lands on origin develop as that exact commit by fast-forward,
+so the anchor stays reachable; a squashed or rebased landing would orphan it, and the section on
+an unreachable anchor below is then the way back.)
 
 (Re-anchored 2026-10-10 against the committed indexer lane tree `a406de91`, the head of the
 refill token-policy change, which had not landed on develop when this was written. Only the
@@ -414,7 +451,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff f9d90376..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 85f1d334..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -487,22 +524,26 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `bf2126e339d34154a15fc294a0d07341a01798718ba3a5ea8afdff4d07ea3ab7` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `3671cf3e2efefb069d30539814ecc2f1bd65087698f756711c8a1c7b75e9665f` |
-| `checks/mint.js` | `src/actions/mint/` | `0f2b6b0375df803321c1644e24f9fa2b6dcb73119a470832eeb93dfab8530595` |
-| `checks/issue.js` | `src/actions/issue/` | `95dff217aeae8428578cf583b74bdeedf97731fd2c9242be6e8baf6763c816e9` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `6369bdf9bd39490c407c7f447be77bbaf275c081e67abf9d29f075e5d5a3e546` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `99116a2db059516f00dfa6c552bbb4617135dce390cc10e334e0e34895890ff0` |
-| `checks/trading.js` (ORDER) | `src/actions/order/` | `79fdae31db05edea980aca9b52b70fd8a2c65bb53e9e785534229bdca0ffd8ec` |
-| `checks/trading.js` (SWAP) | `src/actions/swap/` | `9bb114863e30d2501bb36f6f2d5a541bbaf99320b860466708253555aded19cc` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `f8211a031c9c9b0fd6f4f6f3906dec1d7e4009613b4140750294d6a149ad48d7` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `d7b449ec926f886695fd596f4a9e0d6e305fa8bea8e1ca7281423614f55c0547` |
+| `checks/mint.js` | `src/actions/mint/` | `f69fdb9192b703a928dc46028a569f0a4725ce136b394304e1ec00bab04629e9` |
+| `checks/issue.js` | `src/actions/issue/` | `8f29219d887e695408a8d9b405a795182550c3ed0e991ab74bd4941efe9d294c` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `fde5c3852dc30601b5d710119e62c61711c26dca8eedfbb5cd60ad2c4ffe5d88` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `2fded8ad2eb66fdd4ba09a3b66fe101d13707ba7140c04f64b0d6dc3c7adf2fe` |
+| `checks/trading.js` (ORDER) | `src/actions/order/` | `25dd0ed707ae1283a825803b34da44560eb05f5002ff661cf0984b4f6af99f05` |
+| `checks/trading.js` (SWAP) | `src/actions/swap/` | `466350e43b9d2046db432c7b0a21bd1021373ff23b6d05f4538f033d355a501f` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `0174875cd302106d68a816c7e72a64d53e3f51971881cd9efbea70a78786e7d9` |
-| `checks/dividend.js` | `src/actions/dividend/` | `d4f5c14da27903f71c58cb5f56310d2ff0520bb2f8d0646e7e798d1721c28014` |
+| `checks/dividend.js` | `src/actions/dividend/` | `c0afa565418a5df7b35bd463ab51ed580541f2b0b7d32fac0c87cf07df50e5b0` |
 | `checks/batch.js` | `src/actions/batch/` | `7e138a16dc5eff43ac60c4cca83c2b35ccd865eb98df3ce57c8cbc8aebca85a6` |
-| `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `bbddd777d235e2da7b472d0e4ed993b598886202374f58ae2d46525079cb8f76` |
-| `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `b68c873821cbcbe2e72082817f13eecbe87c12c2a99591d5d4b9085358b7fa75` |
+| `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f` |
+| `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35` |
+| `universal.js` (PRICE v1 TICK) | `src/actions/price/` | `b76331534fcf3813ed4ab3e9b20479527f057a3e20dd82187be3808a5f8312bd` |
+| `checks/misc.js` (STAKE) | `src/actions/stake/` | `eef1360e9bfa8e5ad2b1e7479cf286669f44b9ac3115701b1ac1a101fd9011a3` |
+| `universal.js` (BET halt field) | `src/actions/bet/` | `59ff86ee4bed61d0ca958c588558b106ced395eb2a9605f6ec2679fe58adac98` |
 
 The mapped custody disclosures are checks/misc.js (DEPOSIT) and
-checks/misc.js (WITHDRAW).
+checks/misc.js (WITHDRAW). The STAKE row covers the capability-stake balance check in
+checks/misc.js, and the PRICE and BET rows cover two rules in universal.js.
 
 Other actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) remain intentionally unmapped: there is nothing to drift from.
@@ -521,10 +562,217 @@ agrees with it.
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
 
+### 2026-10-15 - ORDER_MATCH and SWAP_MATCH require an open origin behind an activation
+
+No pin moves, no row is added and the anchor stays. The indexer change in
+`src/actions/order_match/index.js` and `src/actions/swap_match/index.js` returns before
+candidate lookup at or above `MATCH_ORIGIN_OPEN_ACTIVATION` unless the latest status of the
+originating order or swap is `open`. That stops order and swap matching when a LIST rematch
+plan reaches an origin its earlier step completed, and when an ORDER or SWAP cancel dispatches
+a match from the offer it has just cancelled; below the height both handlers replay unchanged.
+The row is unarmed on mainnet and testnet, and a regtest venue arms it with
+`XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION`, which the SDK's registry copy now reads through
+`src/config.js` and `src/consensus/gate_registry.js`. `order_match/` and `swap_match/` sit
+outside every mapped row; the mapped `order/` and `swap/` directories do not change.
+
+**Client follow-up.** None. Matching is a protocol step the indexer runs after an ORDER, SWAP
+or LIST action, not a field a client builds, so pre-flight has no check to mirror.
+
+**Direction: NARROWS matching behind an activation row, outside every mapped row.** An ORDER
+or SWAP this SDK builds is admitted exactly as before. No `ACTIVATION_MIRRORS` row is added
+because no client predicate reads this gate. NO CLIENT CHECK MOVES.
+
+### 2026-10-15 - VOTE v3 refuses an unknown TICK behind an activation
+
+No pin moves, no row is added and the anchor stays. The indexer change in
+`src/actions/vote/index.js` makes a VOTE v3 delegation whose `TICK` has no valid ISSUE row `invalid: TICK (unknown)` at or above
+`VOTE_V3_TICK_EXISTENCE_ACTIVATION`, with no delegation row stored. The legacy check is
+null-only, so the `false` that `getTokenInfo` returns for an unknown ticker passed it and the
+delegation was stored; below the height that predicate still runs unchanged. The row is
+unarmed on mainnet and testnet, and a regtest venue arms it with
+`XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION`, which the SDK's registry copy now reads through
+`src/config.js` and `src/consensus/gate_registry.js`. `vote/` sits outside every mapped row and
+has no mirror.
+
+**Client follow-up.** Pre-flight should refuse an unknown VOTE v3 `TICK` only where this
+activation is armed. `checks/misc.js` carries VOTE as a disclosure with no client validity
+logic, and the refusal needs a token lookup plus an activation read, so it is not a two-line
+mirror of the gate and is left for a follow-up.
+
+**Direction: WIDENS rejection behind an activation row, outside every mapped row.** A VOTE v3
+this SDK builds for an issued TICK is unaffected. No `ACTIVATION_MIRRORS` row is added because no
+client predicate reads this gate. NO CLIENT CHECK MOVES.
+
+### 2026-10-15 - EXECUTE fee debit capped at held gas and emitted amounts held to the plain decimal form, behind two activations
+
+No pin moves and the anchor stays. Both changes sit in `src/actions/execute/`, which no row here
+maps. In `execute/settle.js` the XCHAIN-balance fee debit of an EXECUTE is capped at the gas the
+caller holds when the run settles, floored at zero, behind
+`execute_fee_cap_activation.EXECUTE_FEE_CAP_ACTIVATION`. In `execute/emission.js` (with its
+`execute/index.js` wrapper) an amount a contract emits must be a plain unsigned decimal numeral
+before it is rounded to its tick, or the emission is refused and the EXECUTE rolls back, behind
+`vm_emission_amount_format_activation.VM_EMISSION_AMOUNT_FORMAT_ACTIVATION`. Both rows are
+`mainnet: UNARMED, testnet: UNARMED`, with regtest armed only by
+`XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION` and `XC_VM_EMISSION_AMOUNT_FORMAT_REGTEST_ACTIVATION`.
+Below each activation the handler reads nothing new and debits and rounds as before.
+
+**Direction: SETTLE PATH for the fee cap, and WIDENS rejection of contract emissions behind an
+activation row.** The fee cap changes how much gas a valid or failed run is charged, not whether an
+EXECUTE is valid. The emission format rule judges amounts a contract computes during the run, which
+pre-flight never sees. No `ACTIVATION_MIRRORS` row is added because no client predicate reads
+either gate. NO CLIENT CHECK MOVES.
+
+### 2026-10-15 - off-rail conformance: three new rows and the client checks they cover
+
+No existing pin moves. The off-rail conformance lane ran Tier 2 and the indexer side by side
+over one store and found pre-flight refusing what the indexer accepts and accepting what it
+refuses. Every client change below mirrors a handler line read at `c0924632` and re-read at
+`85f1d334`, the anchor the three new rows are hashed at by
+`node bin/preflight_handler_dirs.js <indexer> <handler>`.
+
+**New rows.** `price/`: universal.js skips the local existence check for PRICE v1 TICK and
+refuses only its length (`v1.js:41-43`), since COIN may name another chain. `stake/`:
+checks/misc.js refuses a capability STAKE (formats 1 and 2) over the gas-token balance
+(`capability_stake.js:69-75`); format 3 (`contract_stake.js`) is not judged. `bet/`: universal.js
+refuses an empty or unstorable FEED_ACTION_INDEX on BET format 2. The halt-class rules lean on
+`src/db/database/normalize.js:46-56, 71-74` and the NOT NULL columns in `src/sql/`, which no
+`src/actions/` row can cover; a change there is found by the conformance harness, not this gate.
+At `85f1d334` the indexer refuses the ORDER, SWAP and DISPENSER cancel and edit indexes and the
+BET format-2 feed index through `storesAsNull` (`utility/validation/value_checks.js`), the same
+empty, non-numeric and out-of-range set pre-flight refuses; a node below that commit still stops
+the block on them, so the refusal stays non-overridable until the fleet runs it. An empty STAKE
+SIGNING_PUBKEY is refused as required by every STAKE format and is refused here too.
+
+**Rows already pinned, read again for the client checks they now drive.** `send/`, `destroy/`,
+`mint/`, `airdrop/`, `dividend/`: a native-coin TICK is `TICK (unknown)` (send `validate.js:33-34`,
+mint `validate.js:92-93`, destroy `validate.js:32-33`, airdrop `validate.js:34-35`, dividend
+`validate.js:31-36`); MINT honours LOCK_MINT (`mint/validate.js:121-123`); AIRDROP and DIVIDEND
+AMOUNT formats (`airdrop/validate.js:41-43`, `dividend/validate.js:41-43`, an empty DIVIDEND
+AMOUNT included). `issue/`: every fieldList['AMOUNT'] field but CALLBACK_AMOUNT
+(`token_state.js:75-84`), MAX_SUPPLY below SUPPLY and both MINT_SUPPLY caps
+(`supply_rules.js:41-42, 126-127, 140-145`). `dispenser/`: GIVE_AMOUNT, GIVE_ESCROW (formats 0
+and 2) and GET_AMOUNT formats (`validate_format.js:37-46, 87-89`), the refill escrow balance
+(`validate.js:213-215`), the native GIVE_TICK and GET_TICK (`validate.js:53-58`) and the
+empty DISPENSER_ACTION_INDEX halt. `dispense/` and `src/db/dispensers/dispense_matching.js:51`:
+a cancelling dispenser settles where `dispense_cancelling_match_activation` is armed. `order/`,
+`swap/`: GIVE_AMOUNT and GET_AMOUNT formats (`order/validate.js:76-87`, `swap/validate.js:70-75`),
+native and cross-chain GET_TICK (`order/validate.js:58-65`, `swap/validate.js:48-58`), the
+expiration fee of a lone create (`order/fees.js:77-78` and its swap and dispenser twins) and the
+empty or unstorable cancel and edit index halts.
+
+**Activation rows.** `AMOUNT_REPRESENTABILITY` moves from `DISCLOSURE_MIRRORS` into
+`ACTIVATION_MIRRORS`, so the drift gate binds it by value: pre-flight now refuses a non-numeral
+amount where it is armed (BTC, LTC and DOGE testnet at time 1791061097, regtest from genesis) and
+declares it on mainnet. `DISPENSE_CANCELLING_MATCH` joins `ACTIVATION_MIRRORS` (`gates_1.js:263`).
+`ISSUE_MINT_SUPPLY_CUMULATIVE_CAP` (`changes_3.js:94`) joins `DISCLOSURE_MIRRORS`, and
+`AMOUNT_MAX_INTEGER_DIGITS` (42) is a constant; both are bound by value in
+`test/unit/preflight/checks/activation_splits_mirrored.test.js`.
+
+**Direction: NARROWS client refusals on four false refuses (caret and case-variant balance
+lookups, a paged balance listing, a cancelling dispenser, a remote PRICE TICK) and WIDENS them on
+rules the indexer already enforces without an unarmed activation.** Rules that depend on state the
+explorer does not serve stay declared: a format-2 expiration fee, CALLBACK_AMOUNT, the subasset
+parent rules and the origin-standing gate.
+
+### 2026-10-15 - ORDER, SWAP, DISPENSER, DEPOSIT and WITHDRAW refuse values a NOT NULL column stores as NULL
+
+The `dispenser` pin moves from `03c4c858` to `fde5c385`, the `order` pin from `79fdae31` to
+`25dd0ed7`, the `swap` pin from `9bb11486` to `466350e4`, the `deposit.js` pin from `bbddd777` to
+`3e1dd191` and the `withdraw.js` pin from `b68c8738` to `99cae8fa`, hashed from the committed
+indexer lane tree `85f1d334` by `node bin/preflight_handler_dirs.js <indexer> <handler>`. The
+mapped diff touches `dispenser/index.js`, `order/validate.js`, `order/settle.js`,
+`swap/validate.js`, `swap/settle.js`, `deposit.js` and `withdraw.js`. A cancel or edit whose
+ORDER_ACTION_INDEX, SWAP_ACTION_INDEX or DISPENSER_ACTION_INDEX is empty, not numeric or outside
+its unsigned column, and a DEPOSIT or WITHDRAW whose AMOUNT is empty or not numeric, is now refused
+with a `(format)` error, and its row is stored under the placeholder 0 (`'0'` for an amount),
+through a new `storesAsNull` check in `utility/validation/value_checks.js`. Before the change each
+of these values reached a NOT NULL column as NULL and the INSERT stopped the block, so no committed
+outcome changes. The same change refuses a format-2 BET with such a FEED_ACTION_INDEX and stores a
+DEPLOY v4 carrier's non-finite CHUNK_INDEX or TOTAL_CHUNKS under 0; `bet/` and `deploy/` sit
+outside every mapped row and have no mirror.
+
+**Direction: WIDENS rejection of malformed wire input, no activation row.** The client validator
+already refuses a non-numeric value in each of these fields (INVALID_FIELD_VALUE, which
+`universal.js` raises as AMOUNT_FORMAT_INVALID for the QUANTITY of a DEPOSIT or WITHDRAW) and an
+empty one (an empty QUANTITY is MISSING_REQUIRED_FIELD, and an empty action index reads as a
+format-0 create that lacks its create fields). A negative or past-u64 action index passes the field validator and names no
+order, swap or dispenser: `checks/trading.js` leaves the cancel or edit reference unverified as
+server-side, and `checks/dispenser.js` looks the dispenser up. The indexer refused such a
+reference before as well, as an unknown one, at the cost of the halt this change removes. The
+change replaces a halt on malformed wire data with a refusal. NO CLIENT CHECK MOVES, and the SDK
+pre-flight should not change; a local range check on these index fields would only move an
+existing server-side refusal earlier.
+
+### 2026-10-15 - SEND, DESTROY and DIVIDEND refuse text amounts and unknown-tick legs
+
+The `send` pin moves from `bf2126e3` to `f8211a03`, the `destroy` pin from `3671cf3e` to
+`d7b449ec` and the `dividend` pin from `d4f5c14d` to `c0afa565`, hashed from the committed indexer
+lane tree `90e92858` by `node bin/preflight_handler_dirs.js <indexer> src/actions/send/`,
+`src/actions/destroy/` and `src/actions/dividend/`. The mapped diff touches `send/legs.js`,
+`destroy/legs.js` and `dividend/index.js`. Each now refuses a text amount, and a leg naming an
+unknown tick, before the arithmetic that halted the block, through a new check in
+`utility/bcmath.js`. The same change adds a refusal in `vote/settle.js`, which sits outside every
+mapped row and has no mirror.
+
+**Direction: WIDENS rejection of malformed wire input, no activation row.** The indexer now
+refuses inputs that the pre-flight already refuses or warns on: a transaction built by this SDK
+never reaches the new refusal, because `checks/send.js` and `checks/dividend.js` already reject a
+non-numeric amount and leave an unknown tick unverified before any arithmetic. The change replaces
+a halt on hostile wire data with a refusal. NO CLIENT CHECK MOVES, and the SDK pre-flight should
+not change.
+
+### 2026-10-14 - DISPENSER and DISPENSE fiat pricing behind an activation
+
+The `dispenser` pin moves from `6369bdf9` to `03c4c858` and the `dispense` pin from `99116a2d`
+to `2fded8ad`, hashed from the committed indexer lane tree `19f2314d` by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/dispenser/` and `src/actions/dispense/`.
+Every change sits behind `dispenser_fiat_pricing_activation.DISPENSER_FIAT_PRICING_ACTIVATION`,
+`mainnet: UNARMED, testnet: UNARMED`, with regtest armed only by
+`XC_DISPENSER_FIAT_PRICING_REGTEST_ACTIVATION`. In `dispenser/validate_format.js` the FIAT
+create and refill price check and the settlement price gap read now pass `BLOCK_INDEX`, so from the
+activation they read only validator rounds bound to the including block. In `dispense/` the same
+bound reaches the settlement and oracle-fee reads, a Mode A fill on a non-batch coin payment runs
+at the exact tally scale and is charged `multiplier x FIAT_AMOUNT / price`
+(`dispense_payment_tally_scale_gate.js`, `context.js`, `pricing.js`, `pricing_paths.js`).
+
+**Direction: WIDENS rejection behind an activation row, and SETTLE PATH.** The bounded price
+read can refuse a FIAT open, refill or dispense that a later-anchored round would have priced,
+and that verdict is chain state at the including block: `checks/dispenser.js` already declares
+price availability and the oracle fee unverified because pre-flight has neither a height nor the
+round set. The tally scale and the exact Mode A charge run after a dispense is judged valid and
+change how much of a shared payment a fill drains, not whether it is valid. A hard client block
+would also be wrong on its own terms while the row is unarmed on every public network. No
+`ACTIVATION_MIRRORS` row is added because no client predicate reads this gate.
+NO CLIENT CHECK MOVES.
+
+### 2026-10-14 - MINT and ISSUE total supply bound behind an activation
+
+The `mint` pin moves from `0f2b6b03` to `f69fdb91` and the `issue` pin from `95dff217` to
+`8f29219d`, hashed from the committed indexer lane tree `6ae5b8c8` by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/mint/` and `src/actions/issue/`. The
+mapped diff touches `mint/validate.js` and `issue/supply_rules.js`. While
+`gateRegistry.activeAt('token_supply_representation_activation.TOKEN_SUPPLY_REPRESENTATION_ACTIVATION',
+NETWORK, COIN, BLOCK_INDEX, null)` is active, `validateSupplyCaps` refuses a MINT whose `SUPPLY`
+plus `AMOUNT` passes `MAX_TOKEN_SUPPLY` (`invalid: mint exceeds MAX_TOKEN_SUPPLY`), and
+`validateMintSupplyCaps` refuses an ISSUE whose `MINT_SUPPLY` would carry the stored total supply
+past it (`invalid: MINT_SUPPLY exceeds MAX_TOKEN_SUPPLY`), reading that supply with
+`getTokenSupply` at the including block. Both apply whether or not the token declares
+`MAX_SUPPLY`. The registry row is `mainnet: UNARMED, testnet: UNARMED`, with regtest armed only
+by `XC_TOKEN_SUPPLY_REPRESENTATION_REGTEST_ACTIVATION`.
+
+**Direction: WIDENS rejection behind an activation row.** On a capped token the new bound adds
+nothing the client does not already check: `MAX_SUPPLY` is itself bounded by `MAX_TOKEN_SUPPLY`,
+so the `SUPPLY_EXCEEDED` headroom check in `checks/mint.js` refuses first. The bound only bites
+on an uncapped token, where `checkSupplyLimit` already declares `SUPPLY_EXCEEDED` unverified
+because pre-flight has no chain height, and on an ISSUE, where the total supply is chain state
+at the including block that pre-flight is not handed. A hard client block would also be wrong
+on its own terms while the row is unarmed on every public network. No `ACTIVATION_MIRRORS` row
+is added because no client predicate reads this gate. NO CLIENT CHECK MOVES.
+
 ### 2026-10-14 - DISPENSE ownership-transfer block fields
 
-The `dispense` pin moves from `0ba2b8e2` to `99116a2d`, hashed from the v0.23.2 hotfix indexer
-commit `f9d90376` by `node bin/preflight_handler_dirs.js <indexer> src/actions/dispense/`. The
+The `dispense` pin moves from `0ba2b8e2` to `99116a2d`, hashed from the committed indexer lane
+tree `b55d539d` by `node bin/preflight_handler_dirs.js <indexer> src/actions/dispense/`. The
 mapped diff touches one file, `settle.js`: `applyDispenseLedger` passes the paying transaction's
 data to `transferTokenOwnership`, so the ownership-transfer ledger row takes its block fields
 from the paying transaction. A guard in `src/utility/ledger.js`, outside the mapped directories,

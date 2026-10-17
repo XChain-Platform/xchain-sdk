@@ -173,3 +173,42 @@ describe('MuSig2 signer adapter (buildMuSig2Signer)', function () {
         });
     });
 });
+
+describe('MuSig2 signer adapter (buildMuSig2Signer)', function () {
+    describe('extraction fee ceiling (signPsbt parity)', function () {
+        const { getNetwork, getSupportedNetworks } = require('../../../../src/protocol/networks.js');
+        const WalletUtils = require('../../../../src/utils/wallet.js');
+
+        // Two fee bands far from every ceiling: ~66k sat/vB and ~6.6M sat/vB.
+        const BANDS = [{ value: 10000000, fee: 9990000 }, { value: 1000000000, fee: 990000000 }];
+
+        function makeSigner(s, extra = {}) {
+            const co = new CoSigner({ secretKey: s.coSk, publicKeys: s.keys, tweaks: s.acct.tweaks,
+                policy: { allowedActions: new Set(['SEND']) } });
+            const client = new CoSignerClient({ transport: inProcessTransport(co), publicKeys: s.keys, tweaks: s.acct.tweaks });
+            return buildMuSig2Signer(Object.assign({ coSignerClient: client, secretKey: s.agentSk }, extra));
+        }
+
+        // Measure a band's real fee rate by signing once with the guard lifted (bitcoinjs caps it at 32 bits).
+        async function bandRate(band) {
+            const s = buildAccountAndPsbt(`SEND|0|TOK|5|${DEST}|m`, band);
+            const out = await makeSigner(s, { maximumFeeRate: 4e9 })(s.psbtHex);
+            return band.fee / bitcoin.Transaction.fromHex(out.txHex).virtualSize();
+        }
+
+        for (const name of getSupportedNetworks()) {
+            it('applies the same ceiling as wallet resolveMaxFeeRate on ' + name, async function () {
+                // A null wallet ceiling keeps bitcoinjs's 5000 sat/vB default.
+                const ceiling = new WalletUtils(name).resolveMaxFeeRate() || 5000;
+                for (const band of BANDS) {
+                    const rate = await bandRate(band);
+                    const s = buildAccountAndPsbt(`SEND|0|TOK|5|${DEST}|m`, band);
+                    let err = null;
+                    try { await makeSigner(s, { network: getNetwork(name) })(s.psbtHex); } catch (e) { err = e; }
+                    if (rate < ceiling) expect(err, name + ' at ~' + Math.round(rate) + ' sat/vB').to.equal(null);
+                    else expect(err && err.message, name + ' at ~' + Math.round(rate) + ' sat/vB').to.match(/paying around/i);
+                }
+            });
+        }
+    });
+});

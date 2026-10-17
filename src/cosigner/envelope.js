@@ -146,14 +146,22 @@ function parseEnvelopeScript(script) {
     }
 }
 
-// BIP341 tapleaf hash for a single-leaf envelope tree. Pinned by test against
-// bitcoinjs's own p2tr merkle root, which is what deriveEnvelopeCommit uses.
-function envelopeLeafHash(script) {
+// BIP341 tapleaf hash: tagged('TapLeaf', leafVersion || compactSize(script) || script).
+// The ONE copy on the co-signer signing paths: the envelope leaf and the 2-of-3
+// recovery leaves (recovery.js) both hash here, since a duplicated sighash input drifts.
+function tapleafHash(script, leafVersion) {
+    const ver = (leafVersion === undefined) ? TAPROOT_LEAF_VERSION : leafVersion;
     return bitcoin.crypto.taggedHash('TapLeaf', Buffer.concat([
-        Buffer.from([TAPROOT_LEAF_VERSION]),
+        Buffer.from([ver]),
         compactSizePrefix(script),
         script,
     ]));
+}
+
+// BIP341 tapleaf hash for a single-leaf envelope tree. Pinned by test against
+// bitcoinjs's own p2tr merkle root, which is what deriveEnvelopeCommit uses.
+function envelopeLeafHash(script) {
+    return tapleafHash(script);
 }
 
 // Minimal compact-size encoder for the tapleaf serialization above. bitcoinjs
@@ -377,6 +385,7 @@ module.exports = {
     TAPROOT_LEAF_VERSION,
     TAPROOT_ANNEX_MARKER,
     parseEnvelopeScript,
+    tapleafHash,
     envelopeLeafHash,
     deriveEnvelopeCommit,
     envelopeScriptPathSighash,

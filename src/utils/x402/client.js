@@ -45,9 +45,32 @@
 
 const { SDKX402Error } = require('../errors.js');
 const AuthUtils = require('../auth.js');
-const { gte, DEFAULT_MAX_AMOUNT, X402_VERSION, signForAddress } = require('./amounts.js');
+const { gte, isPosNum, X402_VERSION, signForAddress } = require('./amounts.js');
 
 // Client side.
+
+// Read the maxAmount option into a spend ceiling: null (unbounded, explicit opt-in only),
+// { any } (one explicit ceiling for whatever tick the server names) or { perTick } (a
+// ceiling per tick; a tick with none is refused, and omitting maxAmount means an empty map).
+function parseCeiling(options) {
+    const m = options.maxAmount;
+    if (options.allowUnbounded === true || m === 'unbounded' || m === Infinity) return null;
+    if (m === undefined || m === null) return { perTick: Object.create(null) };
+    if (typeof m === 'object' && !Array.isArray(m)) {
+        const perTick = Object.create(null);
+        for (const [tick, amount] of Object.entries(m)) {
+            // Reject a per-tick ceiling that is not a plain positive decimal amount
+            if (!isPosNum(amount))
+                throw new SDKX402Error('X402_CONFIG', `maxAmount for ${tick} must be a positive decimal amount`, { tick, amount });
+            perTick[String(tick).toUpperCase()] = String(amount);
+        }
+        return { perTick };
+    }
+    // Reject a scalar ceiling that is not a plain positive decimal amount
+    if (!isPosNum(m))
+        throw new SDKX402Error('X402_CONFIG', "maxAmount must be a per-tick map, a positive decimal amount or 'unbounded'", { maxAmount: m });
+    return { any: String(m) };
+}
 
 class X402Client {
 
@@ -55,24 +78,16 @@ class X402Client {
     // The client enforces `maxAmount` ITSELF before calling session.send: the
     // remote server names the amount, tick and destination, so the ceiling must
     // not depend on the caller happening to pass a policy-bearing AgentSession
-    // (a plain WalletSession carries no ceiling). Omitting maxAmount applies a
-    // conservative default (DEFAULT_MAX_AMOUNT); unbounded spending is an
-    // explicit opt-in via maxAmount: 'unbounded' / Infinity or allowUnbounded.
+    // (a plain WalletSession carries no ceiling). The ceiling is per tick
+    // (maxAmount: { TICK: '5' }), so a server cannot swap in a dearer token; with
+    // no maxAmount nothing is paid. Running totals across calls belong in an
+    // AgentSession budget policy, not here.
     constructor(options = {}) {
         if (!options.session) throw new SDKX402Error('X402_CONFIG', 'session (WalletSession/AgentSession) is required');
         this.session  = options.session;
         this.fetch    = options.fetch || (typeof fetch === 'function' ? fetch : null);
         if (!this.fetch) throw new SDKX402Error('X402_CONFIG', 'no fetch implementation available');
-        // Fail-closed default ceiling. null means "unbounded" and is reachable
-        // only by an explicit opt-in, never by omission.
-        if (options.allowUnbounded === true
-            || options.maxAmount === 'unbounded' || options.maxAmount === Infinity) {
-            this.maxAmount = null;
-        } else if (options.maxAmount === undefined || options.maxAmount === null) {
-            this.maxAmount = DEFAULT_MAX_AMOUNT;
-        } else {
-            this.maxAmount = String(options.maxAmount);
-        }
+        this.ceiling  = parseCeiling(options);
         this.retryDelayMs = options.retryDelayMs || 1500;
         this.maxRetries   = options.maxRetries || 40;
         // Network for the payer message signature. Falls back to the SDK the
@@ -105,6 +120,24 @@ class X402Client {
             proof.payerSignature = signForAddress(auth, offer.challenge, session.wif, session.address, network);
         }
         return Buffer.from(JSON.stringify(proof)).toString('base64url');
+    }
+
+    // Refuse a server-named offer before any payment: it must be well formed, and its
+    // amount must fit the ceiling set for that exact tick.
+    checkOffer(offer) {
+        // Require a plain positive amount, a tick and a payee, the same shape the gateway parses
+        if (!isPosNum(offer.amount) || typeof offer.tick !== 'string' || !offer.tick
+            || typeof offer.payTo !== 'string' || !offer.payTo)
+            throw new SDKX402Error('X402_BAD_OFFER', 'malformed xchain-send offer (amount, tick or payTo)', { offer });
+        if (this.ceiling === null) return;
+        const ceiling = this.ceiling.perTick ? this.ceiling.perTick[offer.tick.toUpperCase()] : this.ceiling.any;
+        // Refuse a tick the caller set no ceiling for
+        if (ceiling === undefined)
+            throw new SDKX402Error('X402_TICK_NOT_ALLOWED',
+                `offer names ${offer.tick}, which has no maxAmount ceiling; pass maxAmount: { ${offer.tick}: '<amount>' } to pay in it`, { offer });
+        // Refuse an amount above that tick's ceiling
+        if (!gte(ceiling, offer.amount))
+            throw new SDKX402Error('X402_PRICE_TOO_HIGH', `offer ${offer.amount} ${offer.tick} exceeds maxAmount ${ceiling}`, { offer });
     }
 
     pickScheme(accepts) {
@@ -176,8 +209,7 @@ class X402Client {
         const accepts = (challenge && challenge.accepts) || [];
         const offer = this.pickScheme(accepts);
         if (!offer) throw new SDKX402Error('X402_NO_USABLE_SCHEME', 'no xchain-send offer in challenge', { accepts });
-        if (this.maxAmount !== null && !gte(this.maxAmount, offer.amount))
-            throw new SDKX402Error('X402_PRICE_TOO_HIGH', `offer ${offer.amount} ${offer.tick} exceeds maxAmount ${this.maxAmount}`, { offer });
+        this.checkOffer(offer);
 
         // Pay. A refusal BEFORE broadcast (policy denial, bad config) carries no
         // txid and propagates unchanged (SDKPolicyError stays instanceof). A throw

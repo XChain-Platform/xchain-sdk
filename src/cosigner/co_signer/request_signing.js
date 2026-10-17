@@ -93,6 +93,8 @@ function checkTransaction(self, psbt, inputs, seenIdx, env, req) {
     // 8. Reject any sighash type that does not commit to every output. A
     //    NONE/SINGLE/ANYONECANPAY partial would let the agent reassemble a
     //    drain tx that still verifies, bypassing the output gate above.
+    //    Only the request's type is checked: every input is signed SIGHASH_DEFAULT,
+    //    and a per-input sighashType in the PSBT is not read.
     if (!sighashAllowed(req.sighashType))
         return self.deny('SIGHASH_TYPE_NOT_ALLOWED', { sighashType: req.sighashType });
     return null;

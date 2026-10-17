@@ -18,7 +18,8 @@
  *
  ********************************************************************/
 
-const { reconcileEncoded, psbtPrevouts } = require('../carrier/reconcile_encoded.js');
+const { reconcileEncoded, psbtPrevouts, feeQuoteAuthorizedOutput } = require('../carrier/reconcile_encoded.js');
+const { exactU64 } = require('../carrier/reconcile_encoded/script_matching.js');
 const { assertCarrierBinding } = require('../carrier/bind_action_carrier.js');
 const EncoderClient = require('../clients/encoder.js');
 const { SDKConfigError, SDKExplorerError } = require('../utils/errors.js');
@@ -26,15 +27,40 @@ const coins = require('../coins');
 const { parseCoinCode } = require('../utils/endpoints.js');
 
 // Validate and append a quoted native fee so refused quotes cannot reach the encoder.
-function appendNativeFeeOutput(nativeFeeQuote, customOutputs, hint = '') {
+// `chain` is the connected chain's coin config (null when unknown): the output it adds is
+// later authorized as caller intent, so its address comes from the pinned bundle, never the quote.
+function appendNativeFeeOutput(nativeFeeQuote, customOutputs, hint = '', chain = null) {
     // Paying the fee in the native coin only works where the network offers it for this action.
     if (!nativeFeeQuote || nativeFeeQuote.supported === false)
         throw new SDKConfigError('NATIVE_FEE_UNSUPPORTED', 'Native-coin fee not available for this action: ' + ((nativeFeeQuote && nativeFeeQuote.error) || 'unsupported') + hint, { quote: nativeFeeQuote });
     // Offered is not enough: the quote also has to come back with a price we can actually pay.
     if (nativeFeeQuote.valid === false)
         throw new SDKConfigError('NATIVE_FEE_INVALID', 'Native-coin fee cannot be priced: ' + (nativeFeeQuote.error || 'invalid') + hint, { quote: nativeFeeQuote });
-    if (Number(nativeFeeQuote.requiredFeeSats) > 0)
-        customOutputs.push({ address: nativeFeeQuote.feeDestination, value: Number(nativeFeeQuote.requiredFeeSats) });
+    // Size from the exact amount only: a priced quote that omits it is an error, never a free action.
+    const exact = nativeFeeQuote.requiredFeeSatsExact;
+    if (exact == null)
+        throw new SDKConfigError('NATIVE_FEE_INVALID', 'Native-coin fee quote is missing requiredFeeSatsExact: refusing to size the fee output' + hint, { quote: nativeFeeQuote });
+    const sats = exactU64(exact);
+    if (sats === null || sats > BigInt(Number.MAX_SAFE_INTEGER))
+        throw new SDKConfigError('NATIVE_FEE_INVALID', 'Native-coin fee quote carries a malformed amount: ' + String(exact) + hint, { quote: nativeFeeQuote });
+    if (sats === 0n) return;
+    customOutputs.push({ address: pinnedFeeDestination(nativeFeeQuote, chain), value: Number(sats) });
+}
+
+// Pick the fee output's address: the consensus-pinned FEE_DESTINATION, which the quote must name too.
+// Regtest takes the quote's address, since its FEE_DESTINATION env override lives in the node's process, not this one.
+function pinnedFeeDestination(quote, chain) {
+    if (!chain)
+        throw new SDKConfigError('NATIVE_FEE_DESTINATION_UNPINNED', 'Cannot check the native-fee destination: the connected chain is unknown, so its pinned FEE_DESTINATION cannot be read', { quote });
+    if (chain.network === 'regtest') return quote.feeDestination;
+    const pinned = chain.addresses && chain.addresses.FEE_DESTINATION;
+    // Refuse a missing pin rather than fall back to an address a remote service named.
+    if (!pinned)
+        throw new SDKConfigError('NATIVE_FEE_DESTINATION_UNPINNED', 'No pinned FEE_DESTINATION for ' + chain.tick + ' ' + chain.network, { quote });
+    // Refuse a quote that would send the fee anywhere but the pinned address.
+    if (quote.feeDestination !== pinned)
+        throw new SDKConfigError('NATIVE_FEE_DESTINATION_MISMATCH', 'Native-fee quote names ' + String(quote.feeDestination) + ' but the pinned FEE_DESTINATION for ' + chain.tick + ' ' + chain.network + ' is ' + pinned, { quote, pinned });
+    return pinned;
 }
 
 // Detect a node with native fees switched off (no real FEE_DESTINATION), where the indexer takes the fee from the XCHAIN balance instead
@@ -55,7 +81,8 @@ async function resolveNativeFeeOutputs(sdk, actionData, opts, source) {
     const chainDefault = typeof opts.payFeeInNativeCoin !== 'boolean';
     if (chainDefault && nativeFeeDisabled(quote)) return { quote, outputs };
     appendNativeFeeOutput(quote, outputs,
-        chainDefault ? ' (this chain requires a native-coin fee output by default; pass payFeeInNativeCoin:false to build without one)' : '');
+        chainDefault ? ' (this chain requires a native-coin fee output by default; pass payFeeInNativeCoin:false to build without one)' : '',
+        feePaymentConfig(sdk.explorer && sdk.explorer.coin));
     return { quote, outputs };
 }
 
@@ -95,9 +122,14 @@ function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs
     // the single PSBT this method returns is one it could account for in full.
     let reconcileNetwork;
     try { reconcileNetwork = sdk.wallet.getBitcoinNetwork(); } catch (e) { reconcileNetwork = undefined; }
+    // The hub feeQuote output is added by the encoder, not listed in customOutputs,
+    // so authorize it from the caller's own quote. Phase-aware, as submitAction is: a
+    // chunked P2SH/P2WSH action is indexed from its reveal, so its funding PSBT pays no quote.
+    const quoteOutput = feeQuoteAuthorizedOutput(encoderOpts.feeQuote);
+    const twoPhase = feeResult.encoding === 'P2SH' || feeResult.encoding === 'P2WSH';
     reconcileEncoded(feeResult.psbt, {
         network:             reconcileNetwork,
-        customOutputs:       customOutputs,
+        customOutputs:       (quoteOutput && !twoPhase) ? customOutputs.concat([quoteOutput]) : customOutputs,
         changeAddresses:     encoderOpts.change,
         callerIdentities:    encoderOpts.pubkey,
         maxFeeSats:          encoderOpts.maxFeeSats,
@@ -105,8 +137,7 @@ function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs
         label:               'fee estimate',
         // Single-phase only: an estimate carries phase 1 (plus an envelope's reveal
         // when the encoder answered as a pair), never a chunked action's phase 2.
-        phaseShapes: (feeResult.encoding === 'P2SH' || feeResult.encoding === 'P2WSH') ? ['p2sh', 'p2wsh']
-            : (revealPsbt ? ['p2tr'] : []),
+        phaseShapes: twoPhase ? ['p2sh', 'p2wsh'] : (revealPsbt ? ['p2tr'] : []),
         phaseSpends: revealPsbt ? (psbtPrevouts(revealPsbt) || []) : null,
     });
 
@@ -206,7 +237,7 @@ module.exports = {
     // Native-coin fee pre-flight for an action (without signing/broadcasting). Builds the action
     // string, splits off the ACTION + wire params, and asks the indexer (via the explorer proxy)
     // for the authoritative native fee + accept/reject verdict. A client should size the
-    // FEE_DESTINATION output to `requiredFeeSats` and refuse to broadcast when
+    // FEE_DESTINATION output to `requiredFeeSatsExact` and refuse to broadcast when
     // `supported === false` or `valid === false`.
     //
     // `valid === null` is a third answer, not a failure: the VM actions (DEPLOY/EXECUTE) are
@@ -258,6 +289,12 @@ module.exports = {
             throw new SDKExplorerError('EXPLORER_BAD_FEEQUOTE', 'Explorer returned a malformed native-fee quote (' + detail + '): refusing to size the fee output', { quote: typeof quote === 'string' ? quote.slice(0, 200) : quote });
         }
         return quote;
+    },
+
+    // The indexer's native-fee quote for one already-split request ({ action, params, source,
+    // feeOutputSats }), refused like quoteNativeFee's when it is not a quote; no busy retry.
+    async getFeeQuote(request) {
+        return this.fetchFeeQuote(request);
     },
 
     async getFeeSchedule() {

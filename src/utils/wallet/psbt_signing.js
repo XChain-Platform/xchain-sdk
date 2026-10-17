@@ -24,11 +24,20 @@ const psbtutils = require('bitcoinjs-lib/src/psbt/psbtutils');
 const ecc = require('@bitcoinerlab/secp256k1');
 const { SDKWalletError } = require('../errors.js');
 const { ECPair } = require('./key_derivation.js');
-const { assertConsistentPrevouts } = require('./psbt_prevout.js');
+const { assertConsistentPrevouts, findVerifiedPrevout } = require('./psbt_prevout.js');
 
 bitcoin.initEccLib(ecc);
 
-function createSigningContext(psbtHex, wif, net) {
+// Honest maximum fee rate (sat/vB) the encoder will build for each chain, plus
+// 2x headroom for the vsize estimate drifting from the final witness size.
+// Derived from the encoder's per-chain MAX_FEE_RATE_KB cap (sat/kB / 1000):
+// dogecoin 10 DOGE/kB = 1e6 sat/vB, litecoin 1 LTC/kB = 1e5 sat/vB.
+const ENCODER_MAX_FEE_RATE_SAT_VB = { dogecoin: 1000000, litecoin: 100000 };
+const CEILING_HEADROOM = 2;
+const UNKNOWN_CHAIN_CEILING = 10000000;
+
+// supplyNested fills in the redeem script of this key's own P2SH-P2WPKH inputs.
+function createSigningContext(psbtHex, wif, net, supplyNested) {
     let keyPair;
     try {
         keyPair = ECPair.fromWIF(wif, net);
@@ -44,8 +53,29 @@ function createSigningContext(psbtHex, wif, net) {
     }
     // Refuse disagreeing UTXO fields before signing, so the fee ceiling and any gate read the prevout the key signs
     assertConsistentPrevouts(psbt);
+    if (supplyNested) supplyNestedRedeemScripts(psbt, keyPair, net);
 
     return { keyPair, psbt };
+}
+
+// Supply the redeem script of each P2SH-P2WPKH input this key controls when the PSBT
+// leaves it out: it is the key's own P2WPKH script, and without it no input of that
+// shape can be signed. Inputs paying any other script are left as they are.
+function supplyNestedRedeemScripts(psbt, keyPair, net) {
+    let redeem, wrapped;
+    try {
+        redeem  = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(keyPair.publicKey), network: net }).output;
+        wrapped = bitcoin.payments.p2sh({ redeem: { output: redeem }, network: net }).output;
+    } catch (e) {
+        return; // an uncompressed key has no P2WPKH script
+    }
+    psbt.data.inputs.forEach((input, i) => {
+        if (input.redeemScript || input.finalScriptSig || input.finalScriptWitness) return;
+        let prevout = null;
+        try { prevout = findVerifiedPrevout(psbt, i); } catch (e) { prevout = null; }
+        if (prevout && prevout.script && Buffer.from(prevout.script).equals(wrapped))
+            psbt.updateInput(i, { redeemScript: redeem });
+    });
 }
 
 module.exports = {
@@ -54,9 +84,10 @@ module.exports = {
      * bitcoinjs-lib's "absurd fee" guard defaults to 5000 sat/vB, calibrated
      * for BTC's unit value. On chains whose base unit is worth far less, an
      * ordinary fee blows past it (DOGE: a normal ~0.5 DOGE/kB estimator rate
-     * is ~50k sat/vB), rejecting every transaction at signing. Non-bitcoin
-     * networks therefore default to a far higher ceiling; real drain
-     * protection belongs upstream in the encoder's MAX_FEE_RATE_KB cap.
+     * is ~50k sat/vB), rejecting every transaction at signing. Litecoin and
+     * dogecoin therefore get a ceiling derived from the encoder's honest
+     * maximum fee rate (with headroom), so a runaway fee is still refused;
+     * any other non-bitcoin network keeps a flat 10,000,000 ceiling.
      * Callers can override in either direction via opts.maximumFeeRate.
      *
      * @param {{ maximumFeeRate?: number }} [opts]
@@ -65,7 +96,10 @@ module.exports = {
     resolveMaxFeeRate(opts) {
         if (opts && Number.isFinite(opts.maximumFeeRate) && opts.maximumFeeRate > 0)
             return opts.maximumFeeRate;
-        return String(this.network || '').startsWith('bitcoin') ? null : 10000000;
+        const chain = String(this.network || '').split('-')[0];
+        if (chain === 'bitcoin') return null;
+        const honest = ENCODER_MAX_FEE_RATE_SAT_VB[chain];
+        return honest ? honest * CEILING_HEADROOM : UNKNOWN_CHAIN_CEILING;
     },
 
     /**
@@ -94,7 +128,7 @@ module.exports = {
         }
 
         const net = this.resolveNet();
-        const { keyPair, psbt } = createSigningContext(psbtHex, wif, net);
+        const { keyPair, psbt } = createSigningContext(psbtHex, wif, net, true);
 
         // Scoped signing: when an explicit input set is given, sign/finalize ONLY
         // those inputs. Any other input the key happens to control (e.g. a UTXO a

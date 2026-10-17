@@ -73,6 +73,35 @@ describe('ExplorerClient', function () {
     beforeEach(resetClient);
     afterEach(cleanNock);
 
+    describe('pre-flight transport', function () {
+        it('getPreflight keeps a small action on the GET route', async function () {
+            const get = nock(BASE)
+                .get('/BTC/api/preflight')
+                .query({ action: 'SEND', params: '0|TOKEN|100', feeMode: 'native' })
+                .reply(200, { supported: true, valid: true });
+            const r = await client.getPreflight({ action: 'SEND', params: ['0', 'TOKEN', '100'], feeMode: 'native' });
+            expect(r.valid).to.be.true;
+            expect(get.isDone()).to.be.true;
+        });
+
+        it('getPreflight posts an action too long for a GET line to the same route as a JSON body', async function () {
+            const params = 'x'.repeat(17500);
+            let sent = null;
+            const post = nock(BASE)
+                .post('/BTC/api/preflight', (body) => { sent = body; return true; })
+                .reply(200, { supported: true, valid: false });
+            const r = await client.getPreflight({ action: 'BATCH', params, source: 'addr1' }, { noRetry: true });
+            expect(post.isDone()).to.be.true;
+            expect(sent).to.deep.equal({ action: 'BATCH', params, source: 'addr1' });
+            expect(r.valid).to.equal(false);
+        });
+    });
+});
+
+describe('ExplorerClient', function () {
+    beforeEach(resetClient);
+    afterEach(cleanNock);
+
     describe('price methods', function () {
         it('getPrices with query returns result', async function () {
             nock(BASE).get('/BTC/api/prices/addr1/address').reply(200, { total: 1, data: [] });

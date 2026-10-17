@@ -23,7 +23,7 @@
 
 const { FINDING_CODES } = require('../../constants.js');
 const numeric = require('../../numeric.js');
-const { describeActivation } = require('../../activation.js');
+const { amountFormatOk, declareRepresentability, tokenDecimals, checkAmountField } = require('../amount_format.js');
 const { getCoinConfig } = require('../../../coins/index.js');
 const { parseCoinCode } = require('../../../utils/endpoints.js');
 
@@ -97,7 +97,7 @@ function checkSelfPrice(ctx) {
     const getAmount = ctx.field('GET_AMOUNT');
     if (isSelfPriced(ctx.field('FIAT_CODE'), ctx.field('ORACLE_ADDRESS'))) {
         const decimals = ctx.field('GET_TICK') ? null : nativeCoinDecimals(ctx.field('GET_COIN'));
-        if (getAmount && decimals !== null && !numeric.isValidAmountFormat(decimals, getAmount)) {
+        if (getAmount && decimals !== null && !amountFormatOk(ctx, decimals, getAmount)) {
             ctx.addFinding(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'warning',
                 `GET_AMOUNT (${getAmount}) is not a valid ${ctx.field('GET_COIN')} amount at ${decimals} decimals; `
                     + 'at or above the activation the indexer rejects this create.',
@@ -112,15 +112,44 @@ function checkSelfPrice(ctx) {
     }
 }
 
-// Declare, never reject, the post-flag-day representability rule: it needs the
-// activation state of the including block, which pre-flight has no way to know.
-// Amounts are judged above against the legacy format rule (numeric.js).
+// The representability rule is applied where it is armed (../amount_format.js) and
+// declared everywhere else.
 function declareAmountRepresentability(ctx) {
-    ctx.addUnverified('AMOUNT_REPRESENTABILITY',
-        'above its flag-day every amount on this create must be a plain decimal numeral denoting the '
-        + 'number the ledger credits, so exponent notation and an integer too wide for the ledger '
-        + 'aggregation are rejected instead of crediting a different number; the activation state of '
-        + 'the including block is server-side only; the activation is ' + describeActivation('AMOUNT_REPRESENTABILITY'));
+    declareRepresentability(ctx);
+}
+
+// The token-priced amount formats of a create, in the indexer's order
+// (xchain-indexer src/actions/dispenser/validate_format.js:37-46 and :87-89):
+// GIVE_AMOUNT and GIVE_ESCROW against GIVE_TICK's decimals, GET_AMOUNT against
+// GET_TICK's. Each runs only when its token row is found, as the handler's own
+// `giveTokenInfo &&` / `getTokenInfo &&` conjuncts do.
+async function checkCreateAmountFormats(ctx) {
+    const giveTick = ctx.field('GIVE_TICK');
+    if (giveTick) {
+        const token = await ctx.token(giveTick);
+        const decimals = tokenDecimals(token);
+        if (token === undefined) ctx.addUnverified(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'token lookup unavailable for ' + giveTick);
+        if (!checkAmountField(ctx, 'GIVE_AMOUNT', ctx.field('GIVE_AMOUNT'), decimals, { tick: giveTick }))
+            checkAmountField(ctx, 'GIVE_ESCROW', ctx.field('GIVE_ESCROW'), decimals, { tick: giveTick });
+    }
+    const getTick = ctx.field('GET_TICK');
+    if (getTick) {
+        const token = await ctx.token(getTick);
+        if (token === undefined) ctx.addUnverified(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'token lookup unavailable for ' + getTick);
+        checkAmountField(ctx, 'GET_AMOUNT', ctx.field('GET_AMOUNT'), tokenDecimals(token), { tick: getTick });
+    }
+}
+
+// A refill's GIVE_ESCROW against the dispenser's own give tick, the handler's
+// format-2 arm of the same rule (validate_format.js:41-46).
+async function checkRefillEscrowFormat(ctx, dispenser) {
+    const escrow = ctx.field('GIVE_ESCROW');
+    const giveTick = String(dispenser?.give_tick ?? dispenser?.GIVE_TICK ?? '');
+    if (!escrow || !giveTick) return;
+    const token = await ctx.token(giveTick);
+    if (token === undefined) ctx.addUnverified(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'token lookup unavailable for ' + giveTick);
+    checkAmountField(ctx, 'GIVE_ESCROW', escrow, tokenDecimals(token), { tick: giveTick });
+    declareRepresentability(ctx);
 }
 
 // The settlement half of the dispenser_amount_positivity_activation row
@@ -148,4 +177,7 @@ function checkDispensePrice(ctx, idx, dispenser) {
     }
 }
 
-module.exports = { checkGiveAmount, checkSelfPrice, declareAmountRepresentability, checkDispensePrice };
+module.exports = {
+    checkGiveAmount, checkSelfPrice, declareAmountRepresentability, checkDispensePrice, checkCreateAmountFormats,
+    checkRefillEscrowFormat,
+};

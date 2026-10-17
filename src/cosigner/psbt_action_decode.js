@@ -234,7 +234,7 @@ function parseActionParams(actionString, action, version, bounded) {
     // flat single-leg dict the policy evaluator expects. The returned
     // actionString stays the RAW decoded string (contract frozen: aliases
     // are NOT rewritten in it), while action is the canonical name.
-    const parsed = parseActionString(actionString, { validate: false });
+    const parsed = parseActionString(actionString, { validate: false, strictWire: true });
     if (!parsed.ok) {
         if (parsed.code === 'FIELD_COUNT_MISMATCH') return fail('FIELD_COUNT_MISMATCH', parsed.detail);
         return fail('UNKNOWN_ACTION', `${action} v${version}`);

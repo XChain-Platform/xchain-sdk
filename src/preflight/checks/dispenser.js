@@ -26,11 +26,12 @@
 
 'use strict';
 
-const { FINDING_CODES, MAX_REFILLS, EXPIRATION_MAX, describeActivation } = require('../constants.js');
+const { FINDING_CODES, MAX_REFILLS, EXPIRATION_MAX, describeActivation, activeByWallClock } = require('../constants.js');
 const numeric = require('../numeric.js');
 const { resolveDispenserState, resolveGiveRemaining } = require('../resolvers.js');
-const { checkGiveAmount, checkSelfPrice, declareAmountRepresentability, checkDispensePrice }
-    = require('./dispenser/amount_rules.js');
+const { checkGiveAmount, checkSelfPrice, declareAmountRepresentability, checkDispensePrice, checkCreateAmountFormats,
+    checkRefillEscrowFormat } = require('./dispenser/amount_rules.js');
+const { checkDurationFee } = require('./duration_fee.js');
 
 /*
  * PRICE v1 oracle usage fee. A Mode B dispenser - one naming an
@@ -143,9 +144,27 @@ function reportEditStanding(ctx, idx, state, dispenser) {
     }
 }
 
+// A refill debits GIVE_ESCROW from SOURCE exactly as a create does: the indexer runs the
+// same hasBalance(GIVE_ESCROW) on format 2 against the dispenser's own give tick
+// (xchain-indexer src/actions/dispenser/validate.js:213-215, isOwnershipGive is false off
+// format 0 per dispenser/context.js:76). The give tick comes from the dispenser record.
+async function checkRefillBalance(ctx, dispenser, topUp) {
+    const giveTick = String(dispenser?.give_tick ?? dispenser?.GIVE_TICK ?? '');
+    if (!giveTick) {
+        ctx.addUnverified(FINDING_CODES.BALANCE_INSUFFICIENT, 'the dispenser record names no give tick');
+        return;
+    }
+    if (!ctx.source) {
+        ctx.addUnverified(FINDING_CODES.BALANCE_INSUFFICIENT, 'no source address supplied');
+        return;
+    }
+    const balance = await ctx.balance(ctx.source, giveTick);
+    reportEscrowBalance(ctx, giveTick, topUp, balance);
+}
+
 // The GIVE_ESCROW half of a v2 edit: the ownership-escrow rule first, then
 // the refill rules when the edit actually tops the escrow up.
-function checkEditEscrow(ctx, idx, dispenser) {
+async function checkEditEscrow(ctx, idx, dispenser) {
     const topUp = ctx.field('GIVE_ESCROW');
 
     // An ownership dispenser never holds balance escrow, on edit as on create.
@@ -174,6 +193,8 @@ function checkEditEscrow(ctx, idx, dispenser) {
 
     if (!topUp || !numeric.isPositive(topUp)) return;
 
+    await checkRefillBalance(ctx, dispenser, topUp);
+
     noteSettlementPrice(ctx, String(dispenser?.fiat_code ?? dispenser?.FIAT_CODE ?? ''));
 
     // The refill's oracle address is the DISPENSER's, not the edit's: a
@@ -192,9 +213,26 @@ function checkEditEscrow(ctx, idx, dispenser) {
         `the ${MAX_REFILLS}-refill cap is not derivable client-side: /dispenser_edits/ exposes no give_escrow`);
 }
 
+// Declare the sleep and allow/block-list refusals of xchain-indexer src/actions/dispenser/ (chain
+// state at the including block, so declared like SEND and ORDER, never predicted).
+function declareRestrictions(ctx, version) {
+    const topUp = ctx.field('GIVE_ESCROW');
+    let reason = 'SOURCE sleep state is server-side only';
+    if (version === '0') {
+        reason = 'sleep state of SOURCE and GIVE_TICK, and the GIVE_TICK allow/block lists for SOURCE and '
+            + 'GET_ADDRESS, are server-side only';
+    } else if (version === '2' && topUp && numeric.isPositive(topUp)) {
+        reason += '; at or above the refill-policy activation, so are the dispenser give token\'s sleep state '
+            + 'and its allow/block lists for SOURCE';
+    }
+    ctx.addUnverified('DISPENSER_RESTRICTIONS', reason);
+}
+
 async function checkDispenser(ctx) {
     checkExpirationRange(ctx);
+    await checkDurationFee(ctx);
     const version = String(ctx.parsed.version);
+    declareRestrictions(ctx, version);
     if (version === '0') {
         // Open: flat hasBalance(GIVE_ESCROW), skipped when
         // GIVE_OWNERSHIP=1 (dispenser.js). EXPIRATION is block TIME,
@@ -208,6 +246,7 @@ async function checkDispenser(ctx) {
         }
         if (!giveOwnership) checkGiveAmount(ctx);
         checkSelfPrice(ctx);
+        await checkCreateAmountFormats(ctx);
         declareAmountRepresentability(ctx);
         ctx.addUnverified('DISPENSER_ORIGIN_STANDING',
             'origin-standing / UTXO-freshness gate is server-side (and unreliable even on the quote path)');
@@ -238,7 +277,8 @@ async function checkDispenser(ctx) {
     // rules a plain edit does not: the MAX_REFILLS cap and, on a Mode
     // B dispenser, the oracle usage fee on the amount being added.
     if (version !== '2') return;
-    checkEditEscrow(ctx, idx, dispenser);
+    await checkRefillEscrowFormat(ctx, dispenser);
+    await checkEditEscrow(ctx, idx, dispenser);
 }
 
 // Settlement PRICING sits underneath this declaration without changing what
@@ -287,9 +327,18 @@ async function checkDispense(ctx) {
     // An unknown status is NOT an open one, but it is not grounds for an error
     // either: this finding is the hard "your coin moves and then it fails"
     // block, so it fires only on a status the route actually stated.
+    //
+    // A 'cancelling' dispenser still settles: the indexer matches a payment to every
+    // dispenser whose latest status is IN ('open', 'cancelling')
+    // (xchain-indexer src/db/dispensers/dispense_matching.js:51), and that latest-status
+    // read is correct only at/after dispense_cancelling_match_activation
+    // (dispense_matching.js:160-161, src/protocol_changes/gates_1.js:263). Below it a
+    // dispenser with a second status row matches nothing, so 'cancelling' is refused there.
+    const cancellingSettles = state === 'cancelling'
+        && activeByWallClock('DISPENSE_CANCELLING_MATCH', ctx.sdk) === true;
     if (state === null) {
         ctx.addUnverified(FINDING_CODES.DISPENSER_NOT_OPEN, 'the lookup carried no dispenser status');
-    } else if (state !== 'open') {
+    } else if (state !== 'open' && !cancellingSettles) {
         ctx.addFinding(FINDING_CODES.DISPENSER_NOT_OPEN, 'error',
             `Dispenser #${idx} is ${state}, not open. A dispense against it will fail AFTER your native coin moves.`,
             { dispenserActionIndex: idx, state });

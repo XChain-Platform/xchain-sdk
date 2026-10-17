@@ -70,16 +70,36 @@ const ACTIVATION_MIRRORS = Object.freeze({
         table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 154567, 'LTC:testnet': 4903068,
             'DOGE:testnet': 67951140, testnet: 'UNARMED', regtest: 0 }),
     }),
-});
-
-// Pin the activations pre-flight words into disclosures that no drift-gated row covers: the
-// representability gate is an addGate row, the two batch gates are time-table rows.
-const DISCLOSURE_MIRRORS = Object.freeze({
+    // Pre-flight refuses a non-numeral amount where this is armed (numeric.js), so the
+    // table decides error versus unverified and the drift gate binds it by value.
     AMOUNT_REPRESENTABILITY: Object.freeze({
         key: 'amount_representability_activation.AMOUNT_REPRESENTABILITY_ACTIVATION',
         unit: 'time',
         table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 1791061097, 'LTC:testnet': 1791061097,
             'DOGE:testnet': 1791061097, testnet: 'UNARMED', regtest: 0 }),
+    }),
+    // A DISPENSE matches a 'cancelling' dispenser where this is armed
+    // (xchain-indexer src/db/dispensers/dispense_matching.js findMatchingDispensers).
+    DISPENSE_CANCELLING_MATCH: Object.freeze({
+        key: 'dispense_cancelling_match_activation.DISPENSE_CANCELLING_MATCH_ACTIVATION',
+        unit: 'time',
+        table: Object.freeze({ mainnet: 1786060800, testnet: 0, regtest: 0 }),
+    }),
+});
+
+// The integer-digit cap the representability rule applies (xchain-indexer
+// src/protocol_changes/gates_1.js addGate('...AMOUNT_MAX_INTEGER_DIGITS', 'constant', 42)).
+const AMOUNT_MAX_INTEGER_DIGITS = 42;
+
+// Pin the activations pre-flight reads that no drift-gated row covers: protocol_changes time
+// rows, each bound by value in test/unit/preflight/checks/activation_splits_mirrored.test.js.
+const DISCLOSURE_MIRRORS = Object.freeze({
+    // A protocol_changes time row (xchain-indexer src/protocol_changes/changes_3.js:94), not an
+    // addGate row, so a unit test binds it by value. checks/issue.js reads it.
+    ISSUE_MINT_SUPPLY_CUMULATIVE_CAP: Object.freeze({
+        key: 'ISSUE_MINT_SUPPLY_CUMULATIVE_CAP',
+        unit: 'time',
+        table: Object.freeze({ mainnet: 1786060800, testnet: 0, regtest: 0 }),
     }),
     BATCH_ISSUANCE_LIMITS: Object.freeze({
         key: 'BATCH_ISSUANCE_LIMITS',
@@ -130,6 +150,18 @@ function activationThreshold(name, sdk) {
     return own(at.network) ? table[at.network] : undefined;
 }
 
+// Whether a TIME-unit mirror is active for a block confirmed now: true or false, or undefined
+// when this SDK's plane is unknown. The wall clock stands in for the including block's
+// timestamp, which tracks it to within hours; every armed threshold this is asked about is
+// already past by far more than that, so the two readings agree.
+function activeByWallClock(name, sdk, nowMs = Date.now()) {
+    if (mirrorFor(name).unit !== 'time') throw new Error(name + ' is not a time-unit activation');
+    const at = activationThreshold(name, sdk);
+    if (at === undefined) return undefined;
+    if (at === 'UNARMED') return false;
+    return Math.floor(nowMs / 1000) >= at;
+}
+
 // Describe a mirrored table for disclosure text, so the wording moves with the pinned values.
 function describeActivation(name) {
     const { unit } = mirrorFor(name);
@@ -151,4 +183,7 @@ function describeActivationHere(name, sdk) {
     return here + 'the activation is ' + describeActivation(name);
 }
 
-module.exports = { ACTIVATION_MIRRORS, DISCLOSURE_MIRRORS, activationThreshold, describeActivation, describeActivationHere };
+module.exports = {
+    ACTIVATION_MIRRORS, DISCLOSURE_MIRRORS, AMOUNT_MAX_INTEGER_DIGITS,
+    activationThreshold, activeByWallClock, describeActivation, describeActivationHere,
+};

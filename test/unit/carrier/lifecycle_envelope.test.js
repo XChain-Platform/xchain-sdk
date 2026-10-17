@@ -307,3 +307,48 @@ describe('Taproot envelope pair through the lifecycle', function () {
         });
     });
 });
+
+// The reveal's rawData push binds to the caller's rawData before the commit is broadcast.
+function leafWithRawData(actionString, rawData) {
+    const bitcoin = require('bitcoinjs-lib');
+    const crypto = require('crypto');
+    const payload = bitcoin.script.compile([Buffer.from(actionString, 'utf8'), rawData]);
+    const pushes = [];
+    for (let i = 0; i < payload.length; i += 520) pushes.push(payload.subarray(i, i + 520));
+    return bitcoin.script.compile([
+        bitcoin.opcodes.OP_FALSE, bitcoin.opcodes.OP_IF,
+        Buffer.from('XCHN', 'utf8'), Buffer.from([0x00]), ...pushes,
+        bitcoin.opcodes.OP_ENDIF, crypto.randomBytes(32), bitcoin.opcodes.OP_CHECKSIG,
+    ]);
+}
+
+function submitWithRevealRawData(carried, sent) {
+    const bitcoin = require('bitcoinjs-lib');
+    const crypto = require('crypto');
+    const { sdk, trace, signed } = makeEnvelopeSdk();
+    const reveal = bitcoin.Psbt.fromHex(signed.psbtHex, { network: bitcoin.networks.regtest });
+    reveal.updateInput(0, { tapLeafScript: [{ leafVersion: 0xc0, script: leafWithRawData(ACTION_STRING, carried),
+        controlBlock: Buffer.concat([Buffer.from([0xc0]), crypto.randomBytes(32)]) }] });
+    sdk.requireEncoder().createTx = async () => ({
+        psbt: signed.psbtHex, revealPsbt: reveal.toHex(), envelope: RECOVERY, encoding: 'TAPROOT' });
+    const run = new LifecycleManager(sdk).submitAction({ action: 'FILE', params: {} },
+        { pubkey: '03abc', rawData: sent.toString('binary') }, { wif: FAKE_WIF, waitForIndexer: false });
+    return { run, trace };
+}
+
+describe('Taproot envelope pair through the lifecycle: the rawData push', function () {
+    const BYTES = Buffer.from('envelope file bytes,'.repeat(20), 'utf8');
+
+    it('refuses a reveal carrying rawData other than the caller sent, broadcasting nothing', async function () {
+        const swapped = Buffer.from(BYTES); swapped[5] ^= 0x01;
+        const { run, trace } = submitWithRevealRawData(swapped, BYTES);
+        await assert.rejects(run, (e) => e.code === 'CARRIER_ACTION_MISMATCH');
+        assert.ok(!trace.some((t) => t.startsWith('broadcast')), 'trace: ' + trace.join(' -> '));
+    });
+
+    it('signs and broadcasts a reveal carrying exactly the caller\'s rawData', async function () {
+        const { run, trace } = submitWithRevealRawData(BYTES, BYTES);
+        await run;
+        assert.strictEqual(trace.filter((t) => t.startsWith('broadcast')).length, 2);
+    });
+});

@@ -65,10 +65,17 @@ describe('pre-flight Tier-2 per-action matrix', function () {
             expect(has(r, 'AMOUNT_FORMAT_INVALID', 'error')).to.equal(true);
         });
 
-        // Consensus resolves NaN decimals when neither side names one, and caps nothing.
-        it('no decimals on either side asserts nothing', async function () {
-            const r = await reportFor('ISSUE|0|NEWTOK|1.5', { getToken: () => notFound() });
+        // Consensus resolves NaN decimals when neither side names one. The legacy rule
+        // caps nothing there, but the representability rule refuses every amount (its
+        // decimals must parse), so the verdict follows the plane's arming.
+        it('no decimals on either side asserts nothing where representability is unarmed', async function () {
+            const r = await reportFor('ISSUE|0|NEWTOK|1.5', { getToken: () => notFound() }, { network: 'bitcoin-mainnet' });
             expect(has(r, 'AMOUNT_FORMAT_INVALID')).to.equal(false);
+        });
+
+        it('no decimals on either side is refused where representability is armed', async function () {
+            const r = await reportFor('ISSUE|0|NEWTOK|1.5', { getToken: () => notFound() });
+            expect(has(r, 'AMOUNT_FORMAT_INVALID', 'error')).to.equal(true);
         });
     });
 });

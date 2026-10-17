@@ -220,6 +220,17 @@ var Config = {
         contractsRegtestActivation:       () => process.env.XC_CONTRACTS_REGTEST_ACTIVATION,
         listsMarketRegtestActivation:     () => process.env.XC_LISTS_MARKET_REGTEST_ACTIVATION,
         listsMarketRegtestTime:           () => process.env.XC_LISTS_MARKET_REGTEST_TIME,
+        remoteTokenAdmissionRegtestActivation: () => process.env.XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION,
+        passProgressRetirementRegtestActivation: () => process.env.XC_PASS_PROGRESS_RETIREMENT_REGTEST_ACTIVATION,
+        slashHistoricalSetRegtestActivation: () => process.env.XC_SLASH_HISTORICAL_SET_REGTEST_ACTIVATION,
+        anchorRewardCopySelectionRegtestActivation: () => process.env.XC_ANCHOR_REWARD_COPY_SELECTION_REGTEST_ACTIVATION,
+        tokenSupplyRepresentationRegtestActivation: () => process.env.XC_TOKEN_SUPPLY_REPRESENTATION_REGTEST_ACTIVATION,
+        dispenserFiatPricingRegtestActivation: () => process.env.XC_DISPENSER_FIAT_PRICING_REGTEST_ACTIVATION,
+        bridgePolicyApplyOrderRegtestActivation: () => process.env.XC_BRIDGE_POLICY_APPLY_ORDER_REGTEST_ACTIVATION,
+        vmEmissionAmountFormatRegtestActivation: () => process.env.XC_VM_EMISSION_AMOUNT_FORMAT_REGTEST_ACTIVATION,
+        executeFeeCapRegtestActivation: () => process.env.XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION,
+        voteV3TickExistenceRegtestActivation: () => process.env.XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION,
+        matchOriginOpenRegtestActivation: () => process.env.XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION,
     },
 
 }

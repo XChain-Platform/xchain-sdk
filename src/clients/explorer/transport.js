@@ -93,6 +93,10 @@ module.exports = {
         if (opts.from !== undefined)        params.from = opts.from;
         if (opts.to !== undefined)          params.to = opts.to;
         if (opts.height !== undefined)      params.height = opts.height;
+        // Keyset cursors from a prior page's next_before/next_after. Pass one, not both:
+        // the explorer refuses both (or a cursor on a list without keyset paging) with a 400.
+        if (opts.before !== undefined)      params.before = opts.before;
+        if (opts.after !== undefined)       params.after = opts.after;
         return params;
     },
 

@@ -56,7 +56,10 @@ module.exports = {
                 { index, command: cmd, code: (res && res.code) || 'PARSE_FAILED' })];
         // Carry the child's own findings up, tagged with its position so the
         // caller can point at the offending command rather than the whole batch.
-        const findings = (res.validation && res.validation.findings) || [];
+        // Guards ride along (their details keep the sdkGuard tag), so compose still
+        // refuses a guarded child while the decoder's verdict ignores it.
+        const findings = ((res.validation && res.validation.findings) || [])
+            .concat((res.validation && res.validation.guards) || []);
         return findings.map(f => this.buildError(f.code,
             'BATCH command ' + index + ' (' + res.action + '): ' + f.message,
             Object.assign({ index, command: cmd }, f.details || {})));

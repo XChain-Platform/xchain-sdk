@@ -29,6 +29,9 @@ const { ADDRESS_REF_FIELDS } = require('../addressRefFields.js');
 const { TICK_EXISTENCE_FIELDS } = require('../protocol/tick_ref_fields.js');
 const numeric = require('./numeric.js');
 const { parseCoinCode } = require('../utils/endpoints.js');
+const { AMOUNT_FORMAT_FIELDS, isAmountFormatField, isChainValidZeroEscrow } = require('./universal/amount_fields.js');
+const { HALT_INDEX_FIELDS, HALT_REQUIRED_FIELDS, checkHaltFields } = require('./universal/halt_fields.js');
+const { NATIVE_TICK_REFUSED, checkPriceV1Tick, isCrossChainGet, nativeTickRefused } = require('./universal/tick_rules.js');
 
 // Wire fields that reference a TICK whose existence is checkable.
 // ISSUE is excluded at the loop below (existence is legal there: format 0
@@ -209,7 +212,8 @@ function checkValidatorSemantics(ctx, parsed) {
             continue;
         }
         const isDest = f.details && f.details.field === 'DESTINATION';
-        const isAmount = f.details && /AMOUNT|QUANTITY|SUPPLY|VALUE/.test(String(f.details.field || ''));
+        const isAmount = f.details && isAmountFormatField(String(f.details.field || ''))
+            && !isChainValidZeroEscrow(f.details);
         if (isDest) {
             ctx.addFinding(FINDING_CODES.DEST_ADDRESS_INVALID, 'error', f.message, details);
         } else if (isAmount && f.code === 'INVALID_FIELD_VALUE') {
@@ -220,6 +224,11 @@ function checkValidatorSemantics(ctx, parsed) {
             ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'warning', f.message, details);
         }
     }
+    // Compose-time user-protection guards (a zero SEND, an empty BROADCAST) are not
+    // chain refusals, so they ride as warnings: the caller still hears about a
+    // fee spent on a no-op, and the verdict stays the chain's.
+    for (const g of (parsed.validation && parsed.validation.guards) || [])
+        ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'warning', g.message, tagBatchCommand(parsed, g.details));
 }
 
 function checkEncodingFitsCarrier(ctx, parsed, opts) {
@@ -243,14 +252,47 @@ async function checkTokenExistence(ctx, parsed) {
     // 3. Token exists, per referenced TICK (network-sourced: a hostile
     // explorer could fabricate a 404, so the error is overridable).
     const nativeTicker = nativeTickerFromCoin(ctx.sdk && ctx.sdk.explorer && ctx.sdk.explorer.coin);
+    if (parsed.action === 'DISPENSER' && String(parsed.version) === '0' && ctx.field('GIVE_TICK') === '') {
+        ctx.addFinding(FINDING_CODES.TOKEN_NOT_FOUND, 'error',
+            'GIVE_TICK is empty; a dispenser has no native-coin give side, so the indexer refuses it as '
+            + 'GIVE_TICK (unknown).', { field: 'GIVE_TICK', tick: '' });
+    }
+    if (parsed.action === 'PRICE' && String(parsed.version) === '1') checkPriceV1Tick(ctx);
     for (const fieldName of TICK_FIELDS) {
+        // PRICE v1 names the priced asset and only format-checks it (xchain-indexer
+        // src/actions/price/v1.js:41-43); its COIN may be another chain, so it need not exist
+        // here. The format check is the whole rule, so it is a refusal.
+        if (parsed.action === 'PRICE' && String(parsed.version) === '1' && fieldName === 'TICK') continue;
+        // A cross-chain ORDER or SWAP names a GET_TICK on another chain, which the indexer
+        // leaves to the hub federation (order/validate.js:64-65, swap/validate.js:57-58).
+        if (isCrossChainGet(ctx, parsed, fieldName, nativeTicker)) continue;
         const v = ctx.params[fieldName];
         const ticks = Array.isArray(v) ? v : (v ? [v] : []);
         for (const tick of ticks) {
             if (!tick || parsed.action === 'ISSUE') continue;
-            // D-9: the native coin is not a token; don't flag it as non-existent.
-            if (nativeTicker && String(tick).trim().toUpperCase() === nativeTicker) continue;
-            const token = await ctx.token(String(tick));
+            const wire = String(tick);
+            if (nativeTicker && wire.trim().toUpperCase() === nativeTicker) {
+                // D-9: the native coin is not a token. Where the handler expresses a native
+                // side with an empty tick, naming it is refused; elsewhere it is not flagged.
+                if (nativeTickRefused(ctx, parsed, fieldName, nativeTicker)) {
+                    ctx.addFinding(FINDING_CODES.TOKEN_NOT_FOUND, 'error',
+                        `${fieldName} ${wire} names the native coin, which is not a token; the indexer refuses this as `
+                        + `${fieldName} (unknown).`, { field: fieldName, tick: wire, native: true });
+                }
+                continue;
+            }
+            // A non-canonical ^<id> (leading zero, ^0, non-digits) resolves to no token on any
+            // node: getTickerId takes the caret path only for a canonical id and otherwise looks
+            // the literal up as a name, which no ticker carries (xchain-indexer
+            // src/db/index_tables/tickers.js:106-125). The explorer may still answer it by
+            // number, so it is refused here before any lookup.
+            if (wire.charAt(0) === '^' && !CANONICAL_CARET_ID.test(wire.substring(1))) {
+                ctx.addFinding(FINDING_CODES.TOKEN_NOT_FOUND, 'error',
+                    `${fieldName} ${wire} is not a canonical ^<id>, so it resolves to no token; the indexer refuses `
+                    + `this as ${fieldName} (unknown).`, { field: fieldName, tick: wire, nonCanonicalCaret: true });
+                continue;
+            }
+            const token = await ctx.token(wire);
             if (token === null) {
                 ctx.addFinding(FINDING_CODES.TOKEN_NOT_FOUND, 'error',
                     `Token ${tick} does not exist on this chain.`, { field: fieldName, tick });
@@ -275,6 +317,7 @@ async function runUniversal(ctx, opts = {}) {
     const { parsed } = ctx;
 
     checkValidatorSemantics(ctx, parsed);
+    checkHaltFields(ctx, parsed);
     checkEncodingFitsCarrier(ctx, parsed, opts);
     await checkTokenExistence(ctx, parsed);
 
@@ -286,4 +329,7 @@ async function runUniversal(ctx, opts = {}) {
     return ctx;
 }
 
-module.exports = { runUniversal, TICK_FIELDS, HARD_VALIDATOR_CODES, CARET_RESOLVED_FIELDS, numeric };
+module.exports = {
+    runUniversal, checkHaltFields, TICK_FIELDS, HARD_VALIDATOR_CODES, CARET_RESOLVED_FIELDS, AMOUNT_FORMAT_FIELDS, HALT_INDEX_FIELDS,
+    HALT_REQUIRED_FIELDS, NATIVE_TICK_REFUSED, numeric,
+};

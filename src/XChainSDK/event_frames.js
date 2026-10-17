@@ -36,8 +36,8 @@
  * / DISPENSER_UPDATE) always carry their entity id, but the lifecycle frames
  * (ORDER_MATCH, SWAP_MATCH, COINPAY_*, DISPENSE, DISPENSER_CLOSED/EXPIRED) carry
  * whatever field that event has and the server routes them by exactly that:
- * Broadcaster._extractAddresses reads source / destination / payer_address /
- * payee_address / address, and an ORDER_MATCH naming none of them is routed to
+ * Broadcaster._extractAddresses reads source / payer_address / payee_address /
+ * address, and an ORDER_MATCH naming none of them is routed to
  * nobody's address channel. So filter on positive evidence the frame belongs to
  * SOMEONE ELSE, never on the absence of a field: a strict equality test against a
  * field the frame does not carry drops every one of these events, which trades a
@@ -53,13 +53,11 @@
 // The SINGULAR address fields an explorer frame can name its party in, mirroring
 // Broadcaster._extractAddresses on the server side.
 //
-// `destination` stays on this list even though the confirmed-side NEW_ACTION
-// retired it in favour of the `destinations` array below. Two reasons, both
-// about what the SERVER still does: _extractAddresses reads `destination` to
-// this day and routes every lifecycle frame by it, and this guard filters on
-// positive evidence a frame belongs to SOMEONE ELSE. Dropping the field could
-// therefore only ADD deliveries, handing a subscriber a frame whose only named
-// party is a different address; keeping it costs nothing, because a frame that
+// `destination` stays on this list although the server does not route on
+// it: NEW_ACTION names its recipients in the `destinations` array
+// below, and _extractAddresses ignores the singular field. This guard filters
+// on positive evidence a frame belongs to SOMEONE ELSE, so dropping the field
+// could only ADD deliveries; keeping it costs nothing, because a frame that
 // does not carry the field is unaffected by a rule about the field.
 const FRAME_ADDRESS_FIELDS = ['address', 'source', 'destination', 'payer_address', 'payee_address'];
 

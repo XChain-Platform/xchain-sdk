@@ -24,6 +24,7 @@ const { getNetwork }    = require('../protocol/networks.js');
 const { SDKValidationError, SDKContractError } = require('../utils/errors.js');
 const Config            = require('../config.js');
 const { fillMarketCoinFields } = require('./market_coin_fields.js');
+const { compiledPushSize, carrierCeiling } = require('../contract/chunk_helper.js');
 
 // Encoding byte limits for pre-flight validation. Only P2SH is read from this
 // table today (the oversize suggestion below); the OP_RETURN gate is
@@ -37,15 +38,10 @@ const ENCODING_LIMITS = {
     P2WSH:      476   // 520 - 44 byte script overhead per chunk (MAX_SCRIPT_ELEMENT_SIZE bound)
 };
 
-// Compiled script-push length for a payload of `n` bytes. The on-chain
-// OP_RETURN payload is `bitcoin.script.compile([bytes])`, whose push prefix
-// grows with size: direct push (<=75B) adds 1, OP_PUSHDATA1 (76..255) adds 2,
-// OP_PUSHDATA2 (>255) adds 3. The encoder gates on THIS compiled length, so
-// the pre-flight must too: a bare byte-length check under-rejects at the
-// boundary and accepts action strings the encoder then throws RangeError on.
-function compiledPushSize(n) {
-    return n <= 75 ? n + 1 : n <= 255 ? n + 2 : n + 3;
-}
+// compiledPushSize (contract/chunk_helper.js) is the on-chain OP_RETURN payload
+// length: the encoder gates on that compiled length, so the pre-flight must too,
+// since a bare byte-length check under-rejects at the boundary and accepts action
+// strings the encoder then throws RangeError on.
 
 function resolveActionInput(context, data) {
     // [1] Validate request structure
@@ -125,7 +121,19 @@ function applyActionVersion(context, data, fields) {
     return context.util.setNumberFormats(fields);
 }
 
-function serializeAction(context, actionName, fields, validate) {
+// The carrier an action will ride, as far as compose can know it: an explicit
+// encoding; a legacy lane when AUTO has no affirmed tapscript signer (it then never
+// picks the envelope) or the chain has no segwit (no Taproot at all); otherwise null,
+// still undecided, since the encoder may yet carry it in the Taproot envelope.
+function composeCarrier(context, encoder) {
+    let encoding = encoder && encoder.encoding ? String(encoder.encoding).toUpperCase() : null;
+    if (encoding && encoding !== 'AUTO') return encoding;
+    if (!context.networkSupportsSegwit()) return 'P2SH';
+    if (encoding === 'AUTO' && !(encoder.options && encoder.options.signerSupportsTapscript)) return 'P2WSH';
+    return null;
+}
+
+function serializeAction(context, actionName, fields, validate, carrier) {
     // [5] Validate fields against action-specific rules.
     // Skipped for pre-flight: see the `validate` note on this method.
     if (validate) context.validator.validateOrThrow(actionName, fields);
@@ -163,6 +171,20 @@ function serializeAction(context, actionName, fields, validate) {
 
     // [7] Serialize to pipe-delimited string
     let actionString = FormatSelector.serialize(actionName, selected.version, fields);
+
+    // [7b] The size ceiling of the carrier, measured as the decoder measures it. A
+    // legacy carrier bounds the COMPILED push at MAX_ACTION_DATA_LENGTH, so a string
+    // whose raw bytes fit but whose push prefix does not is dropped by every decoder.
+    // The Taproot envelope, and a carrier not yet decided, are bound only by
+    // ENVELOPE_MAX_PAYLOAD. Pre-flight composes with validate off and reports size itself.
+    if (validate) {
+        let ceiling = carrierCeiling(Buffer.byteLength(actionString, 'utf8'), carrier);
+        if (ceiling.size > ceiling.limit)
+            throw new SDKValidationError('ACTION_TOO_LARGE',
+                'ACTION string measures ' + ceiling.size + ' bytes on the ' + (ceiling.legacy ? carrier + ' carrier' : 'Taproot envelope')
+                + '; its ceiling is ' + ceiling.limit + (ceiling.legacy ? ' compiled bytes. Use the TAPROOT envelope where the network and signer support it.' : ' bytes.'),
+                { action: actionName, carrier: carrier || null, measuredBytes: ceiling.size, maxBytes: ceiling.limit });
+    }
 
     return { action: actionName, version: selected.version, actionString, fields };
 }
@@ -217,7 +239,7 @@ class Actions {
         let fields = normalizeActionFields(this, actionName, params);
         fields = applyActionVersion(this, data, fields);
         fields = fillMarketCoinFields(fields, actionName, this.network);
-        return serializeAction(this, actionName, fields, validate);
+        return serializeAction(this, actionName, fields, validate, composeCarrier(this, data.encoder));
     }
 
     // Main entry point: create an action string from user input

@@ -122,3 +122,35 @@ describe('drift gate sibling resolution (§8.5)', function () {
         expect(out, 'resolution did not fail').to.not.include('no xchain-indexer checkout resolved');
     });
 });
+
+describe('drift gate sibling resolution: lane symlink refusal', function () {
+    const { describeIndexerCandidates, resolveIndexerRoot } = require('../../../../bin/preflight_indexer_root.js');
+    let base, own, link;
+    before(function () {
+        base = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-gate-lane-'));
+        const main = path.join(base, 'main', 'xchain-indexer');
+        fs.mkdirSync(path.join(main, '.git'), { recursive: true });
+        fs.mkdirSync(path.join(main, 'src', 'actions'), { recursive: true });
+        own = path.join(base, 'lane', 'xchain-sdk');
+        fs.mkdirSync(own, { recursive: true });
+        fs.writeFileSync(path.join(own, '.git'), 'gitdir: /nowhere\n');
+        link = path.join(base, 'lane', 'xchain-indexer');
+        fs.symlinkSync(main, link);
+    });
+    after(function () { if (base) fs.rmSync(base, { recursive: true, force: true }); });
+
+    it('refuses a symlink into a live main checkout from a linked worktree', function () {
+        const opts = { ownRoot: own, env: {} };
+        const [c] = describeIndexerCandidates([link], opts);
+        expect(c.resolved).to.equal(false);
+        expect(c.why).to.include('live main checkout');
+        expect(resolveIndexerRoot(opts)).to.not.equal(link);
+    });
+
+    it('accepts the same layout when this checkout is not a linked worktree', function () {
+        fs.rmSync(path.join(own, '.git'));
+        fs.mkdirSync(path.join(own, '.git'));
+        const [c] = describeIndexerCandidates([link], { ownRoot: own, env: {} });
+        expect(c.resolved).to.equal(true);
+    });
+});

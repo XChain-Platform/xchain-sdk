@@ -32,6 +32,8 @@
 const FormatSelector = require('../../protocol/format_selector.js');
 const Validator      = require('../../protocol/validator.js');
 const Utility        = require('../../utils/utility.js');
+const { formatVersion } = require('../../protocol/batch_limits/command_classification.js');
+const { LEGACY_FORMAT_ACTIONS, isLegacyActionFormat } = require('../../protocol/batch_limits/limit_tables.js');
 
 // One shared validator instance for semantic findings (opts.validate).
 // Validator only needs the utility helpers; no per-parse state.
@@ -54,11 +56,55 @@ function toText(input) {
     return { error: failure('EMPTY', 'input must be a string or Buffer') };
 }
 
-// Accept only 1-2 plain digits, the tokens the indexer reads as this same VERSION
-// (its parseInt) and never as a legacy TICK (its length>2 rule shifts ISSUE/MINT/SEND).
+// The strict, fail-closed VERSION reader: only 1-2 plain digits, tokens the indexer
+// reads as this same VERSION (its parseInt) and never as a legacy TICK (its length>2
+// rule shifts ISSUE/MINT/SEND). The co-signer signs only canonical strings and uses
+// this through parse's strictWire mode; the general decoder reads as the indexer does
+// (readVersion below).
 function parseVersion(segment) {
     if (typeof segment !== 'string' || !/^\d{1,2}$/.test(segment)) return null;
     return Number(segment);
+}
+
+/*
+ * Read VERSION the way the indexer's dispatcher does (its getFormatVersion, which
+ * formatVersion mirrors branch for branch: quotes stripped, any numeric spelling
+ * that is not a float and is <= 255 parsed with parseInt, so '00', '+0', '-0' and
+ * '0x0' all read 0, an absent or empty token reads 0, anything else is null), after its whitespace trim
+ * (xchain-indexer/src/actions/actions_class/transaction.js normalizeTransactionAction):
+ * a legacy ISSUE/MINT/SEND with no VERSION token, i.e. one whose first value is
+ * longer than two characters or non-numeric, has VERSION 0 injected in front of
+ * it, which that file calls permanent consensus behaviour. Returns the version (or
+ * null) and the value segments with any injected VERSION in place.
+ */
+function readVersion(action, valueSegs) {
+    const segs = valueSegs.slice();
+    let legacy = false;
+    if (LEGACY_FORMAT_ACTIONS.includes(action) && isLegacyActionFormat(segs)) {
+        segs.unshift('0');
+        legacy = true;
+    }
+    return { version: formatVersion(segs[0]), valueSegs: segs, legacy };
+}
+
+// The indexer trims every wire segment before any rule reads it, so a padded value
+// is the same value on chain. Compose never emits padding; this is read-side only.
+function trimSegments(segments) {
+    return segments.map(seg => String(seg).trim());
+}
+
+// Version and value segments as the chosen reader sees them (see opts.strictWire).
+function readSegments(action, segments, strictWire) {
+    if (strictWire)
+        return { version: parseVersion(segments[1]), valueSegs: segments.slice(1), legacy: false };
+    // VERSION and every value are read as the indexer reads them: trimmed, with
+    // the legacy VERSION 0 injected for a versionless ISSUE/MINT/SEND.
+    const read = readVersion(action, trimSegments(segments.slice(1)));
+    if (read.version === null) return read;
+    read.version += 0;   // parseInt('-0') is -0; the format it selects is 0
+    // The canonical spelling of the version the indexer read ('+0', '00', an
+    // injected legacy 0 all become '0'), so actionString is the canonical action.
+    return Object.assign(read, { valueSegs: [String(read.version)].concat(read.valueSegs.slice(1)) });
 }
 
 /*
@@ -76,7 +122,7 @@ function parseVersion(segment) {
  *
  * Returns { params, rest } or { error }.
  */
-function mapFields(fieldNames, valueSegs, group) {
+function mapFields(fieldNames, valueSegs, group, strictWire) {
     const params = {};
     let rest = null;
 
@@ -88,9 +134,17 @@ function mapFields(fieldNames, valueSegs, group) {
     if (group && restIndex === -1)
         return mapRepeatedFields(group, valueSegs);
 
-    if (restIndex === -1 && valueSegs.length > fieldNames.length) {
+    // Segments past a fixed format's last field are ignored on chain: setActionParams
+    // walks the format's fields only, so the action reads exactly as if they were
+    // absent. They are reported back rather than silently dropped.
+    // strictWire (the co-signer) refuses them instead, signing canonical strings only.
+    let ignored = null;
+    if (restIndex === -1 && valueSegs.length > fieldNames.length && strictWire)
         return { error: failure('FIELD_COUNT_MISMATCH',
             valueSegs.length + ' values vs ' + fieldNames.length + ' fields') };
+    if (restIndex === -1 && valueSegs.length > fieldNames.length) {
+        ignored = valueSegs.slice(fieldNames.length);
+        valueSegs = valueSegs.slice(0, fieldNames.length);
     }
     if (restIndex !== -1 && restIndex !== fieldNames.length - 1) {
         // No such format exists today; fail closed if one ever does.
@@ -123,7 +177,7 @@ function mapFields(fieldNames, valueSegs, group) {
         params[baseName] = rest;
     }
 
-    return { params, rest };
+    return ignored ? { params, rest, ignored } : { params, rest };
 }
 
 /*
@@ -199,15 +253,29 @@ function validatorFields(params, fieldNames) {
     return projected;
 }
 
-function runValidation(action, params, fieldNames, extraFindings) {
-    let findings = [];
+/*
+ * Validate decoded params. VERSION is handed over with them because several rules
+ * are version-dependent (LIST v2/v3, DEPLOY v4, VOTE, DELEGATE) and, without it,
+ * judge a string against an auto-selected format the wire did not name.
+ *
+ * Findings tagged details.sdkGuard are compose-time user-protection guards, not
+ * consensus rules (a zero SEND, an empty BROADCAST): the chain accepts what they
+ * refuse, so they are returned apart as `guards` and never flip `ok`, which keeps
+ * this verdict equal to the indexer's on everything the chain can carry.
+ */
+function runValidation(action, params, fieldNames, extraFindings, version) {
+    let all = [];
+    const fields = validatorFields(params, fieldNames);
+    if (version !== undefined && version !== null) fields.VERSION = String(version);
     try {
-        findings = validator.validate(action, validatorFields(params, fieldNames)) || [];
+        all = validator.validate(action, fields) || [];
     } catch (e) {
-        findings = [{ code: 'VALIDATOR_ERROR', message: e.message, details: {} }];
+        all = [{ code: 'VALIDATOR_ERROR', message: e.message, details: {} }];
     }
-    findings = findings.concat(extraFindings || []);
-    return { ok: findings.length === 0, findings };
+    all = all.concat(extraFindings || []);
+    const isGuard = (f) => !!(f && f.details && f.details.sdkGuard === true);
+    const findings = all.filter(f => !isGuard(f));
+    return { ok: findings.length === 0, findings, guards: all.filter(isGuard) };
 }
 
 module.exports = {
@@ -215,6 +283,9 @@ module.exports = {
     failure,
     toText,
     parseVersion,
+    readVersion,
+    trimSegments,
+    readSegments,
     mapFields,
     mapRepeatedFields,
     canonicalize,

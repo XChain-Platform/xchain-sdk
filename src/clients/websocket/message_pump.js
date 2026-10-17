@@ -24,6 +24,7 @@ const { SDKExplorerError } = require('../../utils/errors.js');
 const { coinPrefix } = require('../../utils/endpoints.js');
 const { WS_OPEN, WS_SCHEMA_VERSION, COIN_PREFIX_MAP } = require('./socket_constants.js');
 const catchUp = require('./catch_up.js');
+const pacing  = require('./pacing.js');
 
 // Envelope schema gate: the server stamps every frame with schema_version.
 // If it speaks a NEWER envelope schema than this SDK build understands,
@@ -72,8 +73,12 @@ module.exports = {
             catchUp.answerCatchUp(this, msg);
         }
 
-        // Resolve pending request-response
-        if (msg.id && this._pending[msg.id]) {
+        // A frame dropped over the message rate is sent again, a pending request under its
+        // own id so its promise settles on the real answer (pacing.js answerRateLimited).
+        const retried = pacing.answerRateLimited(this, msg);
+
+        // Resolve pending request-response (unless it was just sent again above)
+        if (!retried && msg.id && Object.prototype.hasOwnProperty.call(this._pending, msg.id)) {
             const pending = this._pending[msg.id];
             clearTimeout(pending.timeout);
             delete this._pending[msg.id];
@@ -105,9 +110,11 @@ module.exports = {
         }
     },
 
+    // Queue a message for the server, paced under the server's message rate
+    // (websocket/pacing.js); under the rate it still goes out synchronously.
     send(data) {
         if (this.ws && this.ws.readyState === WS_OPEN) {
-            this.ws.send(JSON.stringify(data));
+            pacing.sendPaced(this, data);
         }
     },
 
@@ -119,7 +126,8 @@ module.exports = {
                 reject(new SDKExplorerError('WS_TIMEOUT', 'No response for request id: ' + id));
             }, timeoutMs);
 
-            this._pending[id] = { resolve, reject, timeout: timer };
+            // The message is kept so a RATE_LIMITED refusal can send it again (onMessage).
+            this._pending[id] = { resolve, reject, timeout: timer, msg, retries: 0 };
             this.send(msg);
         });
     },

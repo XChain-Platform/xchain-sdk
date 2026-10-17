@@ -28,9 +28,11 @@ describe('pre-flight custody guard notes', function () {
         });
     }
 
+    // The hashes follow the latest reviewed re-pin of each handler row (the 2026-10-15 NOT NULL
+    // row key review); the custody note itself is unchanged by that review.
     const mapCases = [
-        ['DEPOSIT', 'deposit', 'bbddd777d235e2da7b472d0e4ed993b598886202374f58ae2d46525079cb8f76'],
-        ['WITHDRAW', 'withdraw', 'b68c873821cbcbe2e72082817f13eecbe87c12c2a99591d5d4b9085358b7fa75'],
+        ['DEPOSIT', 'deposit', '3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f'],
+        ['WITHDRAW', 'withdraw', '99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35'],
     ];
 
     for (const [action, handler, hash] of mapCases) {

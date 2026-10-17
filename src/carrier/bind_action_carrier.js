@@ -36,7 +36,7 @@
 const bitcoin = require('bitcoinjs-lib');
 const { SDKActionError } = require('../utils/errors.js');
 const { decodeActionStringFromPsbt, extractEnvelopeActionString } = require('../cosigner/psbt_action_decode.js');
-const { verifyCarrierScripts } = require('./verify_carrier_scripts.js');
+const { verifyCarrierScripts, rawDataMatches } = require('./verify_carrier_scripts.js');
 const CompressionUtils = require('../protocol/compression.js');
 const { COMPRESSION_CODE_DEFLATE_RAW } = require('../protocol/constants.js');
 
@@ -77,6 +77,20 @@ function hasChunkOutput(psbt, encoding) {
                 && decomp[2] === bitcoin.opcodes.OP_EQUAL;
         return decomp.length === 2 && decomp[0] === bitcoin.opcodes.OP_0
             && Buffer.isBuffer(decomp[1]) && decomp[1].length === 32;
+    });
+}
+
+// Does this transaction contain an output the decoder reads as a MULTISIGN carrier? Same
+// test as the decoder's: six elements ending OP_CHECKMULTISIG with data pushes in both data
+// slots, whatever the m-of-n opcodes say. Read off the PSBT itself, never the reported encoding.
+function hasMultisigCarrierOutput(psbt) {
+    if (!psbt || !Array.isArray(psbt.txOutputs)) return false;
+    return psbt.txOutputs.some((out) => {
+        let decomp;
+        try { decomp = bitcoin.script.decompile(out.script); } catch (e) { return false; }
+        return Array.isArray(decomp) && decomp.length === 6
+            && decomp[5] === bitcoin.opcodes.OP_CHECKMULTISIG
+            && Buffer.isBuffer(decomp[1]) && Buffer.isBuffer(decomp[2]);
     });
 }
 
@@ -138,7 +152,9 @@ function mismatch(code, label, details) {
  * P2SH/P2WSH reveal's tag marker, which carries "XCHNp2sh"/"XCHNp2wsh" and no
  * params. MULTISIGN, the chunk funding transaction and the envelope commit emit
  * no OP_RETURN whatsoever. So a decode that recovers an action string must
- * match, the tag is skipped, and everything else fails closed.
+ * match, the tag is skipped, and everything else fails closed. MULTISIGN does
+ * emit bare-multisig carrier outputs the decoder reads; with no read-back for
+ * them here, assertCarrierBinding refuses any such output before this rule runs.
  */
 function assertInlineCarrier({ psbt, actionString, encoding, network, label }) {
     const decoded = decodeActionStringFromPsbt(psbt, network ? { network } : {});
@@ -169,12 +185,19 @@ function assertInlineCarrier({ psbt, actionString, encoding, network, label }) {
  * @param {string|Buffer|null} [args.rawData] the rawData sent to the encoder (null: none sent)
  * @param {object}   [args.network]       bitcoinjs network
  * @param {string}   [args.label]         which transaction this is, for the error
- * @throws {SDKActionError} CARRIER_ACTION_MISMATCH / CARRIER_UNREADABLE
+ * @throws {SDKActionError} CARRIER_ACTION_MISMATCH / CARRIER_UNREADABLE (a bare-multisig
+ *   carrier output is always CARRIER_UNREADABLE, reason MULTISIG_CARRIER_UNSUPPORTED)
  */
 function assertCarrierBinding({ psbt, actionString, encoding, carrierScripts, rawData, network, label = 'transaction' }) {
     if (typeof actionString !== 'string' || actionString.length === 0)
         throw new SDKActionError('CARRIER_BIND_MISSING_ACTION',
             `${label}: cannot bind a carrier without the caller's action string`);
+
+    // Refuse a MULTISIGN carrier this module cannot read back, so a substituted command
+    // there fails here on its own instead of only because reconcile refused it first.
+    if (hasMultisigCarrierOutput(asPsbt(psbt, network)))
+        throw mismatch('CARRIER_UNREADABLE', label,
+            { submitted: actionString, reason: 'MULTISIG_CARRIER_UNSUPPORTED' });
 
     assertInlineCarrier({ psbt, actionString, encoding, network, label });
 
@@ -219,8 +242,12 @@ function assertCarrierBinding({ psbt, actionString, encoding, carrierScripts, ra
  * (the commit output is only a hash of the leaf), and the SDK signs it while
  * nothing is on chain yet, so a substituted reveal costs a throw here instead of
  * a stranded commit later.
+ *
+ * The leaf's rawData push binds to the caller's bytes under the chunk lanes' rule:
+ * rawData omitted leaves it unchecked, null demands no push, and a leaf that matched
+ * through the tolerated COMPRESSION rewrite must carry the deflated form of them.
  */
-function assertEnvelopeCarrierBinding({ revealPsbt, actionString, network, label = 'envelope reveal' }) {
+function assertEnvelopeCarrierBinding({ revealPsbt, actionString, rawData, network, label = 'envelope reveal' }) {
     if (typeof actionString !== 'string' || actionString.length === 0)
         throw new SDKActionError('CARRIER_BIND_MISSING_ACTION',
             `${label}: cannot bind a carrier without the caller's action string`);
@@ -237,6 +264,11 @@ function assertEnvelopeCarrierBinding({ revealPsbt, actionString, network, label
     if (!carriedActionMatches(extracted.actionString, actionString))
         throw mismatch('CARRIER_ACTION_MISMATCH', label,
             { submitted: actionString, carried: extracted.actionString });
+    const pushes = bitcoin.script.decompile(extracted.envelope.payload);
+    const rawDataCompressed = extracted.actionString !== actionString;
+    if (!rawDataMatches(pushes, rawData, rawDataCompressed))
+        throw mismatch('CARRIER_ACTION_MISMATCH', label,
+            { submitted: actionString, reason: 'RAW_DATA_MISMATCH' });
 }
 
 module.exports = { assertCarrierBinding, assertEnvelopeCarrierBinding, carriedActionMatches };

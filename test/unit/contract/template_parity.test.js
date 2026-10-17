@@ -21,6 +21,7 @@ const assert = require('assert');
 const crypto = require('crypto');
 const fs     = require('fs');
 const path   = require('path');
+const vm     = require('vm');
 
 const XChainSDK = require('../../../src/XChainSDK.js');
 const EMBEDDED  = require('../../../src/contract/templates.js');
@@ -43,6 +44,68 @@ function requireContracts(ctx) {
 function sha256(buf) { return crypto.createHash('sha256').update(buf).digest('hex'); }
 function canonicalTemplatePath(name) { return path.join(CONTRACTS_DIR, name, name + '.js'); }
 function canonicalPatternPath(name)  { return path.join(CONTRACTS_DIR, 'patterns', name + '.js'); }
+
+function loadTemplate(source) {
+    const sandbox = { module: { exports: {} } };
+    vm.runInNewContext(source, sandbox);
+    return sandbox.module.exports;
+}
+
+function runBurnUnsold(contract, status) {
+    const state = new Map([
+        ['status', status],
+        ['unsoldBurned', 'false'],
+        ['hardCap', '10'],
+        ['rate', '3'],
+        ['allocated', '8'],
+        ['saleTick', 'SALE']
+    ]);
+    const destroyed = [];
+    const xchain = {
+        state: {
+            get: (key) => state.get(key),
+            set: (key, value) => state.set(key, value)
+        },
+        require: (condition, message) => {
+            if (!condition) throw new Error(message);
+        },
+        math: {
+            multiply: (a, b) => String(BigInt(a) * BigInt(b)),
+            subtract: (a, b) => String(BigInt(a) - BigInt(b)),
+            isZero: (value) => BigInt(value) === 0n
+        },
+        emit: { destroy: (entry) => destroyed.push(entry) }
+    };
+
+    const result = contract.burnUnsold(xchain);
+    return { result, destroyed };
+}
+
+function assertBurnUnsoldBehavior(source) {
+    const contract = loadTemplate(source);
+    assert.strictEqual(typeof contract.burnUnsold, 'function', 'burnUnsold must be exported');
+    assert.throws(() => runBurnUnsold(contract, 'OPEN'), /sale not finalized/,
+        'burnUnsold must reject an open sale');
+
+    const failed = runBurnUnsold(contract, 'FAILED');
+    assert.strictEqual(failed.result, '30', 'failed sale must burn full issued inventory');
+    assert.strictEqual(failed.destroyed.length, 1);
+    assert.strictEqual(failed.destroyed[0].tick, 'SALE');
+    assert.strictEqual(failed.destroyed[0].quantity, '30');
+
+    const successful = runBurnUnsold(contract, 'SUCCESS');
+    assert.strictEqual(successful.result, '22',
+        'successful sale must burn maxSale minus allocated inventory');
+    assert.strictEqual(successful.destroyed.length, 1);
+    assert.strictEqual(successful.destroyed[0].tick, 'SALE');
+    assert.strictEqual(successful.destroyed[0].quantity, '22');
+}
+
+function replaceRequired(source, before, after) {
+    const changed = source.replace(before, after);
+    assert.notStrictEqual(changed, source, 'mutation target must exist in embedded crowdsale');
+    return changed;
+}
 
 let sdk;
 
@@ -116,12 +179,34 @@ describe('mint-supply lock guard', function () {
     }
 });
 
+describe('crowdsale unsold inventory guard', function () {
+    it('exposes burnUnsold and destroys finalized inventory', function () {
+        const source = Buffer.from(EMBEDDED.templates.crowdsale, 'base64').toString('utf8');
+        assertBurnUnsoldBehavior(source);
+
+        const withoutFinalizedGuard = replaceRequired(source,
+            "        xchain.require(status !== 'OPEN', 'sale not finalized');\n", '');
+        assert.throws(() => assertBurnUnsoldBehavior(withoutFinalizedGuard),
+            /burnUnsold must reject an open sale/,
+            'the verifier must reject a template without the finalized-status guard');
+
+        const withoutUnsoldCalculation = replaceRequired(source,
+            "        var unsold = status === 'FAILED'\n" +
+            '            ? maxSale\n' +
+            "            : xchain.math.subtract(maxSale, xchain.state.get('allocated'));",
+            '        var unsold = maxSale;');
+        assert.throws(() => assertBurnUnsoldBehavior(withoutUnsoldCalculation),
+            /successful sale must burn maxSale minus allocated inventory/,
+            'the verifier must reject a template without the unsold-inventory calculation');
+    });
+});
+
 describe('embedded template hash guard', function () {
     const expected = {
         escrow: '524662fb0b2f265b0062bd4d06167979c46eb19a9488edf8a5a51ebbed7fd51e',
         escrowDelivery: '3706465c241cf62cd2dba5d873f822ac8e0de278434a4984fadcbe81d10bb66e',
-        vesting: '9e0961a2c4648f8b263bd975079490a904308cd5950bb90ead3549925b9969fb',
-        crowdsale: '0f5fa40782bbe90759a2a74daed223f692a81e104b21689ad147178882bcacd3',
+        vesting: '17440e4020d3a62c1325db7b9cd5653e8b096af96817c435ed5e452676c8c5f6',
+        crowdsale: '869d391bd01363eca3503c11fb1b73f70e73be2bbd15d52c827e4bcdea64412f',
         amm: '7ce16e02127cd2f63879720b73394abf83333564f777eeab2d4d85b3aed073e7'
     };
 

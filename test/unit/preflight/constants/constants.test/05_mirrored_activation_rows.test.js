@@ -19,7 +19,9 @@ const {
     LIST_REFERENCE_VALIDITY: LIST,
     DISPENSER_SETTLEMENT_PRICE: DISP,
     TICK_NAMESPACE: TICK_NS,
-    TOKEN_BRIDGE: BRIDGE
+    TOKEN_BRIDGE: BRIDGE,
+    AMOUNT_REPRESENTABILITY: REPR,
+    DISPENSE_CANCELLING_MATCH: CANCEL
 } = constants.ACTIVATION_MIRRORS;
 
 function row(mirror, over = {}, unit = mirror.unit) {
@@ -39,7 +41,8 @@ function indexerRoot(files) {
 
 const unarmed = (mirror, over = {}) => row(mirror, Object.assign({ mainnet: 'UNARMED', testnet: 'UNARMED' }, over));
 
-const allRows = (listOver, unit, nsOver = {}, bridgeOver = {}) => ({
+const allRows = (listOver, unit, nsOver = {}, bridgeOver = {}, gates1 = row(REPR) + row(CANCEL)) => ({
+    'gates_1.js': gates1,
     'gates_4.js': row(LIST, listOver, unit) + row(DISP) + row(LIST_ADDR) + row(LIST_TICK_COIN) + row(LIST_META),
     'gates_3.js': unarmed(TICK_NS, nsOver),
     'shared_rows_4.js': unarmed(BRIDGE, bridgeOver)
@@ -54,7 +57,15 @@ describe('pre-flight drift gate: mirrored activation rows', function () {
         expect(checkActivationMirrors(indexerRoot({
             'gates_9.js': row(LIST) + row(LIST_ADDR),
             'shared_rows_7.js': row(DISP) + row(LIST_TICK_COIN) + row(LIST_META) + unarmed(TICK_NS) + unarmed(BRIDGE)
+                + row(REPR) + row(CANCEL)
         }))).to.equal(0);
+    });
+
+    it('fails when the representability or cancelling-match row moves', function () {
+        expect(checkActivationMirrors(indexerRoot(allRows({}, undefined, {}, {},
+            row(REPR, { 'LTC:testnet': 1791061098 }) + row(CANCEL))))).to.equal(1);
+        expect(checkActivationMirrors(indexerRoot(allRows({}, undefined, {}, {},
+            row(REPR) + row(CANCEL, { mainnet: 'UNARMED' }))))).to.equal(1);
     });
 
     it('fails when a per-coin testnet key is armed', function () {

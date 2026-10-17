@@ -23,7 +23,7 @@ const path = require('path');
 const SDK_CONTRACT_DIR = path.join(__dirname, '..', '..', '..', 'src', 'contract');
 const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(SDK_CONTRACT_DIR, '..', '..', '..');
 const DEFAULT_VM_DIR = process.env.XCHAIN_VM_DIR || path.join(SIBLING_ROOT, 'xchain-vm');
-const VM_COMMIT = 'b9768df225b789ae8389afc22347660d6461753b';
+const VM_COMMIT = '8aabc4c20b1db58c71e4d6c36d66722bf1a79661';
 const SIBLING_REQUIRED = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 
 const FILES = [
@@ -38,42 +38,9 @@ const FILES = [
     'lint-core/scope_analysis.js'
 ];
 
-const VENDOR_PATHS = [
-    'src/lint-core.js',
-    'src/metering.js',
-    'src/stripped-globals.js',
-    'src/lint-core',
-    'src/metering'
-];
-
-function canonicalWorktree() {
-    if (!fs.existsSync(DEFAULT_VM_DIR)) return DEFAULT_VM_DIR;
-    try {
-        const records = childProcess.execFileSync(
-            'git',
-            ['-C', DEFAULT_VM_DIR, 'worktree', 'list', '--porcelain'],
-            { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
-        ).trim().split(/\n\n+/);
-        for (const record of records) {
-            const lines = record.split('\n');
-            const worktree = lines.find((line) => line.startsWith('worktree '));
-            if (!worktree) continue;
-            const worktreeDir = worktree.slice('worktree '.length);
-            const unchanged = childProcess.spawnSync(
-                'git',
-                ['-C', worktreeDir, 'diff', '--quiet', VM_COMMIT, '--'].concat(VENDOR_PATHS),
-                { stdio: 'ignore' }
-            );
-            if (unchanged.status !== 0) continue;
-            return worktreeDir;
-        }
-    } catch (_) {
-    }
-    return DEFAULT_VM_DIR;
-}
-
-const VM_DIR = canonicalWorktree();
-if (VM_DIR !== DEFAULT_VM_DIR) process.env.XCHAIN_VM_DIR = VM_DIR;
+// Read the pinned blobs through the sibling itself (every worktree shares its object store), and
+// never write XCHAIN_VM_DIR: the other parity guards read it at load and must see the sibling.
+const VM_DIR = DEFAULT_VM_DIR;
 
 function hasCanonicalCommit() {
     return childProcess.spawnSync(
@@ -143,4 +110,28 @@ describe('vendored deploy-lint: pinned lint-core byte parity', function () {
             );
         });
     }
+});
+
+// Find every test-module assignment to a sibling location variable (one file's write moves
+// every guard that reads the variable at load onto a tree the run never named).
+function siblingEnvWrites(root, dir = root) {
+    const hits = [];
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) { hits.push(...siblingEnvWrites(root, full)); continue; }
+        if (!entry.name.endsWith('.js')) continue;
+        const pattern = /process\.env(?:\.XCHAIN_\w*(?:DIR|PATH|ROOT)|\[\s*['"]XCHAIN_\w*(?:DIR|PATH|ROOT)['"]\s*\])\s*=(?!=)/;
+        fs.readFileSync(full, 'utf8').split('\n').forEach((line, i) => {
+            if (pattern.test(line)) hits.push(path.relative(root, full) + ':' + (i + 1));
+        });
+    }
+    return hits;
+}
+
+describe('vendored deploy-lint: sibling location stays with the run', function () {
+    it('no test module assigns an XCHAIN_ sibling directory, path or root variable', function () {
+        const testRoot = path.join(__dirname, '..', '..');
+        assert.deepStrictEqual(siblingEnvWrites(testRoot), [],
+            'a test module rewrites a sibling location variable that other guards read at load');
+    });
 });

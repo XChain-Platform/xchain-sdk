@@ -20,9 +20,11 @@
  * applied it to subtly different quantities), which produced a class of
  * silent-failure bugs where one service accepted data another rejected.
  *
- * Plain CommonJS, zero dependencies; require()-able from any service,
- * tool, or test. Each service keeps its own local copy of these values
- * so it stays self-contained for deployment (the services ship as
+ * Plain CommonJS whose one dependency is the sdk's own dependency-free
+ * src/consensus/gate_registry/core.js (the UNARMED sentinel); require()-able
+ * from any service, tool, or test with an sdk checkout. Each service
+ * keeps its own local copy of these values so it stays self-contained
+ * for deployment (the services ship as
  * independent containers and do not share a node_modules tree); the
  * cross-service regression suite asserts every local copy equals the
  * value declared here, so the limits can never silently diverge again.
@@ -306,7 +308,8 @@ const ANCHOR_ACTIVATION = {
     regtest: 0,
 };
 
-const UNARMED = 9999999999;
+// Use the registry core's sentinel for an unarmed height, so the sdk keeps one definition.
+const { UNARMED } = require('../consensus/gate_registry/core.js');
 
 const ARCHIVE_MATCH_COUNT_ACTIVATION = {
     mainnet: UNARMED,

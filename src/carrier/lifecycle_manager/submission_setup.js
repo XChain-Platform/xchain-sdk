@@ -21,7 +21,7 @@
 
 const EncoderClient = require('../../clients/encoder.js');
 const { SDKActionError, SDKConfigError } = require('../../utils/errors.js');
-const { reconcileEncoded, psbtPrevouts } = require('../reconcile_encoded.js');
+const { reconcileEncoded, psbtPrevouts, feeQuoteAuthorizedOutput } = require('../reconcile_encoded.js');
 const { assertCarrierBinding } = require('../bind_action_carrier.js');
 
 const CONTRACT_ACTIONS = new Set(['DEPOSIT', 'EXECUTE', 'WITHDRAW']);
@@ -88,6 +88,12 @@ function readCarriedAction(encoded, createResult, encoderOpts) {
 function reconcileTransaction(manager, encoded, createResult, encoderOpts, opts) {
     // createTx is a remote response that chooses inputs, outputs and fees. The
     // structural gate validates that response against the submitted spend intent.
+    // The hub feeQuote output is added by the encoder and is not listed in
+    // customOutputs, so authorize it from the caller's own quote, as the fee
+    // estimate gate does.
+    const quoteOutput = feeQuoteAuthorizedOutput(encoderOpts.feeQuote);
+    const withQuote = (outputs) => quoteOutput ? (outputs || []).concat([quoteOutput]) : outputs;
+    const twoPhase = encoded.encoding === 'P2SH' || encoded.encoding === 'P2WSH';
     const reconcileIntent = {
         network:       manager.reconcileNetwork(),
         customOutputs: encoderOpts.customOutputs,
@@ -106,7 +112,11 @@ function reconcileTransaction(manager, encoded, createResult, encoderOpts, opts)
     };
     const phase1 = reconcileEncoded(encoded.psbt, Object.assign({}, reconcileIntent, {
         label: 'transaction',
-        phaseShapes: (encoded.encoding === 'P2SH' || encoded.encoding === 'P2WSH') ? ['p2sh', 'p2wsh']
+        // Phase-aware: a chunked P2SH/P2WSH action is indexed from its reveal, so
+        // phase 1 only funds and emits no protocol-fee output; authorizing one
+        // there would excuse an output the encoder must not add.
+        customOutputs: twoPhase ? encoderOpts.customOutputs : withQuote(encoderOpts.customOutputs),
+        phaseShapes: twoPhase ? ['p2sh', 'p2wsh']
             : (encoded.revealPsbt ? ['p2tr'] : []),
         // Pin envelope funding to the prevouts consumed by the reveal. A reveal
         // without readable prevouts authorizes no funding output.
@@ -115,6 +125,7 @@ function reconcileTransaction(manager, encoded, createResult, encoderOpts, opts)
     if (encoded.revealPsbt)
         reconcileEncoded(encoded.revealPsbt, Object.assign({}, reconcileIntent, {
             label: 'envelope reveal',
+            customOutputs: withQuote(encoderOpts.customOutputs),
             requiredSpends: phase1.phaseFunding,
         }));
 
@@ -130,7 +141,8 @@ function reconcileTransaction(manager, encoded, createResult, encoderOpts, opts)
         network:        manager.reconcileNetwork(),
         label:          'transaction',
     });
-    return { reconcileIntent, phase1 };
+    // A chunk reveal is the indexed transaction and carries the hub fee output, authorized by the quote.
+    return { reconcileIntent, phase1, revealCustomOutputs: withQuote(encoderOpts.customOutputs) };
 }
 
 // Reject unsupported custom-signer shapes synchronously before any broadcast occurs.

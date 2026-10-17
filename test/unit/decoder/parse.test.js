@@ -50,19 +50,27 @@ describe('decoder.parse', function () {
 
     describe('rule 1: input-size gate first', function () {
         it('TOO_LONG on oversized input before any split', function () {
-            const r = parse('X'.repeat(MAX_ACTION_DATA_LENGTH + 1));
+            const r = parse('X'.repeat(MAX_ACTION_DATA_LENGTH + 1), { carrier: 'P2SH' });
             expect(r).to.deep.include({ ok: false, code: 'TOO_LONG' });
         });
 
-        it('exactly MAX_ACTION_DATA_LENGTH passes the gate', function () {
-            const r = parse('B'.repeat(MAX_ACTION_DATA_LENGTH));
+        it('the largest string whose compiled push fits passes the gate', function () {
+            // The cap bounds the COMPILED push (payload plus a 3-byte OP_PUSHDATA2
+            // prefix at this size), exactly as the on-chain decoder measures it.
+            const r = parse('B'.repeat(MAX_ACTION_DATA_LENGTH - 3), { carrier: 'P2SH' });
             // Gate passed; fails later as UNKNOWN_ACTION, not TOO_LONG.
             expect(r.code).to.equal('UNKNOWN_ACTION');
         });
 
+        it('raw bytes under the cap whose compiled push is over it are TOO_LONG', function () {
+            for (const carrier of ['OP_RETURN', 'P2SH', 'P2WSH', 'MULTISIGN'])
+                for (const n of [MAX_ACTION_DATA_LENGTH - 2, MAX_ACTION_DATA_LENGTH])
+                    expect(parse('B'.repeat(n), { carrier }).code, carrier + ' ' + n).to.equal('TOO_LONG');
+        });
+
         it('gate measures bytes, not characters', function () {
             // 3-byte UTF-8 chars: char count under the cap, byte count over.
-            const r = parse('€'.repeat(Math.floor(MAX_ACTION_DATA_LENGTH / 3) + 10));
+            const r = parse('€'.repeat(Math.floor(MAX_ACTION_DATA_LENGTH / 3) + 10), { carrier: 'P2SH' });
             expect(r.code).to.equal('TOO_LONG');
         });
     });
@@ -73,6 +81,35 @@ describe('decoder.parse', function () {
         });
         it('"transfer" (lowercase alias) is UNKNOWN_ACTION', function () {
             expect(parse('transfer|0|JDOG|1|a').code).to.equal('UNKNOWN_ACTION');
+        });
+    });
+});
+
+describe('decoder.parse', function () {
+
+    describe('rule 1: input-size gate first', function () {
+        it('the Taproot envelope, or no named carrier, is bound only by the envelope ceiling', function () {
+            const { ENVELOPE_MAX_PAYLOAD } = require('../../../src/protocol/constants.js');
+            for (const carrier of ['TAPROOT', undefined]) {
+                expect(parse('B'.repeat(20000), { carrier }).code, String(carrier)).to.equal('UNKNOWN_ACTION');
+                // 390,000 bytes compile with a 5-byte OP_PUSHDATA4 prefix, so the
+                // largest that fits is 389,995.
+                expect(parse('B'.repeat(ENVELOPE_MAX_PAYLOAD - 5), { carrier }).code).to.equal('UNKNOWN_ACTION');
+                expect(parse('B'.repeat(ENVELOPE_MAX_PAYLOAD - 4), { carrier }).code).to.equal('TOO_LONG');
+            }
+        });
+
+        it('flags a result no legacy carrier could hold when no carrier is named', function () {
+            const r = parse('BROADCAST|0|' + 'm'.repeat(MAX_ACTION_DATA_LENGTH));
+            expect([r.ok, r.legacyCarrierFits]).to.deep.equal([true, false]);
+            expect(parse('BROADCAST|0|m').legacyCarrierFits).to.equal(undefined);
+        });
+
+        it('strictWire keeps the raw-length gate', function () {
+            const head = 'BROADCAST|0|';
+            const at = (n) => parse(head + 'm'.repeat(n - head.length), { strictWire: true, validate: false });
+            expect(at(MAX_ACTION_DATA_LENGTH).ok).to.equal(true);
+            expect(at(MAX_ACTION_DATA_LENGTH + 1).code).to.equal('TOO_LONG');
         });
     });
 });
@@ -116,8 +153,15 @@ describe('decoder.parse', function () {
             expect(parse('SEND|0|JDOG|1|addr|').actionString).to.equal('SEND|0|JDOG|1|addr');
         });
 
-        it('trailing empties BEYOND the field count stay FIELD_COUNT_MISMATCH', function () {
-            expect(parse('SEND|0|JDOG|1|addr||').code).to.equal('FIELD_COUNT_MISMATCH');
+        it('trailing empties BEYOND the field count are ignored, as the indexer ignores them', function () {
+            const r = parse('SEND|0|JDOG|1|addr||');
+            expect(r.ok).to.equal(true);
+            expect(r.ignoredSegments).to.deep.equal(['']);
+            expect(r.actionString).to.equal('SEND|0|JDOG|1|addr');
+        });
+
+        it('strictWire keeps trailing empties beyond the field count a FIELD_COUNT_MISMATCH', function () {
+            expect(parse('SEND|0|JDOG|1|addr||', { strictWire: true }).code).to.equal('FIELD_COUNT_MISMATCH');
         });
     });
 });
@@ -160,8 +204,15 @@ describe('decoder.parse', function () {
     });
 
     describe('rule 7: no delimiter escaping / segment-count anomalies', function () {
-        it('too many segments (no rest field) is FIELD_COUNT_MISMATCH', function () {
+        it('too many segments (no rest field) are ignored and reported back', function () {
             const r = parse('MINT|0|JDOG|1|dest|memo|surplus');
+            expect(r.ok).to.equal(true);
+            expect(r.ignoredSegments).to.deep.equal(['surplus']);
+            expect(r.actionString).to.equal('MINT|0|JDOG|1|dest|memo');
+        });
+
+        it('strictWire refuses too many segments as FIELD_COUNT_MISMATCH', function () {
+            const r = parse('MINT|0|JDOG|1|dest|memo|surplus', { strictWire: true });
             expect(r).to.deep.include({ ok: false, code: 'FIELD_COUNT_MISMATCH' });
         });
     });
@@ -187,20 +238,36 @@ describe('decoder.parse', function () {
         it('unknown version is UNKNOWN_VERSION', function () {
             expect(parse('SEND|9|JDOG|1|a').code).to.equal('UNKNOWN_VERSION');
         });
-        it('missing version segment is UNKNOWN_VERSION', function () {
-            expect(parse('SEND').code).to.equal('UNKNOWN_VERSION');
+        it('a missing version segment reads as VERSION 0, as on the indexer', function () {
+            const r = parse('SEND');
+            expect(r.ok).to.equal(true);
+            expect(r.version).to.equal(0);
+            expect(r.legacyVersion).to.equal(true);
+            expect(parse('SEND', { strictWire: true }).code).to.equal('UNKNOWN_VERSION');
         });
-        it('non-integer version is UNKNOWN_VERSION', function () {
-            expect(parse('SEND|1.5|JDOG|1|a').code).to.equal('UNKNOWN_VERSION');
-            expect(parse('SEND|x|JDOG|1|a').code).to.equal('UNKNOWN_VERSION');
+        it('a non-integer version is UNKNOWN_VERSION where no legacy shift applies', function () {
+            expect(parse('ORDER|1.5|1|m').code).to.equal('UNKNOWN_VERSION');
+            expect(parse('BROADCAST|x|hi').code).to.equal('UNKNOWN_VERSION');
+            expect(parse('SEND|1.5|JDOG|1|a', { strictWire: true }).code).to.equal('UNKNOWN_VERSION');
+            expect(parse('SEND|x|JDOG|1|a', { strictWire: true }).code).to.equal('UNKNOWN_VERSION');
         });
         it('PRICE v0 (validator-only, not in formats) refuses', function () {
             expect(parse('PRICE|0|BTC|JDOG|USD|1').code).to.equal('UNKNOWN_VERSION');
         });
-        it('a token the indexer shifts or reads differently is UNKNOWN_VERSION', function () {
-            for (const s of ['SEND|000|A|1|x', 'SEND||A|1|x', 'SEND|0e0|A|1|x', 'ORDER|0o2|1|m', 'ORDER|1e1|1|m'])
-                expect(parse(s).code, s).to.equal('UNKNOWN_VERSION');
+        it('a token the indexer shifts or reads differently is read the indexer\'s way', function () {
+            // ISSUE/MINT/SEND: a token longer than two characters, or non-numeric,
+            // is a legacy TICK with VERSION 0 injected in front of it.
+            for (const s of ['SEND|000|A|1|x', 'SEND||A|1|x', 'SEND|0e0|A|1|x']) {
+                const r = parse(s);
+                expect([r.version, r.legacyVersion, r.params.TICK], s).to.deep.equal([0, true, s.split('|')[1]]);
+            }
+            // Elsewhere the token goes through getFormatVersion's parseInt.
+            expect(parse('ORDER|0o2|1|m').version).to.equal(0);
+            expect(parse('ORDER|1e1|1|m').version).to.equal(1);
             expect(parse('SEND|01|JDOG|1|a|b|c').version).to.equal(1);
+            // The co-signer's strict reading still refuses every one of them.
+            for (const s of ['SEND|000|A|1|x', 'SEND||A|1|x', 'SEND|0e0|A|1|x', 'ORDER|0o2|1|m', 'ORDER|1e1|1|m'])
+                expect(parse(s, { strictWire: true }).code, s).to.equal('UNKNOWN_VERSION');
         });
         it('every accepted VERSION token reads the same on the indexer', function () {
             const { isLegacyActionFormat } = require('../../../src/protocol/batch_limits/limit_tables.js');

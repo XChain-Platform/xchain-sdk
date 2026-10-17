@@ -258,6 +258,15 @@ function validateNumericAmounts(validator, action, field, value, allFields, erro
     }
 }
 
+// ACTION.FIELD pairs whose zero amount the indexer accepts (it checks the amount's
+// format, never its sign). Every other pair the positive rule covers is refused at
+// zero on chain too, e.g. ORDER GET_AMOUNT ('must be positive') and STAKE AMOUNT
+// ('must be greater than 0'), so those stay consensus findings.
+const ZERO_AMOUNT_CHAIN_VALID = new Set([
+    'SEND.AMOUNT', 'MINT.AMOUNT', 'DESTROY.AMOUNT', 'DIVIDEND.AMOUNT', 'AIRDROP.AMOUNT',
+    'ORDER.GIVE_AMOUNT', 'SWAP.GIVE_AMOUNT', 'SWAP.GET_AMOUNT', 'ISSUE.CALLBACK_AMOUNT',
+]);
+
 // Applies one contiguous field-rule group while preserving finding order.
 function validatePositiveAmounts(validator, action, field, value, allFields, errors) {
     // Spend/transfer amounts must additionally be positive: zero or negative
@@ -287,10 +296,21 @@ function validatePositiveAmounts(validator, action, field, value, allFields, err
         && (!validator.isEmpty(allFields?.FIAT_CODE) || !validator.isEmpty(allFields?.ORACLE_ADDRESS));
     if (field === 'AMOUNT' || field === 'GIVE_AMOUNT' || field === 'GET_AMOUNT' ||
         field === 'GIVE_ESCROW' || field === 'CALLBACK_AMOUNT') {
-        if (!fiatPricedDispenser && validator.util.isNumeric(value) && Number(value) <= 0)
-            errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must be a positive number', { field, value }));
+        if (!fiatPricedDispenser && validator.util.isNumeric(value) && Number(value) <= 0) {
+            const finding = validator.buildError('INVALID_FIELD_VALUE', field + ' must be a positive number', { field, value });
+            // A deliberate user-protection guard, not a consensus rule, for the
+            // pairs listed in ZERO_AMOUNT_CHAIN_VALID: the chain records a zero
+            // there as a valid action that moves nothing (a SEND of 0 writes a 0
+            // credit and a 0 debit), so composing one only spends a miner fee.
+            // Compose still refuses it; the decoder drops guard findings so its
+            // verdict on a zero amount read off the chain matches the indexer's.
+            if (Number(value) === 0 && ZERO_AMOUNT_CHAIN_VALID.has(action + '.' + field))
+                finding.details.sdkGuard = true;
+            errors.push(finding);
+        }
     }
 }
+
 
 // Applies one contiguous field-rule group while preserving finding order.
 function validateBroadcastFee(validator, action, field, value, allFields, errors) {

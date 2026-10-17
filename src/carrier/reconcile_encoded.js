@@ -51,6 +51,7 @@ const {
     takeMatch,
     scriptForAddress,
     callerScripts,
+    callerNestedScripts,
 } = require('./reconcile_encoded/script_matching.js');
 const { findVerifiedPrevout } = require('../utils/wallet/psbt_prevout.js');
 
@@ -65,7 +66,9 @@ function createDeny(psbtHex, label) {
 }
 
 // Read signer-owned funding state once so output authorization uses proven scripts.
-function readInputs(psbt, deny) {
+// A P2SH input paying the caller key's P2SH-P2WPKH script is single-key as well.
+function readInputs(psbt, deny, intent) {
+    const nestedOwn = callerNestedScripts(intent.callerIdentities, intent.network);
     // Funding scripts authorize change only when unsigned AND single-key: the WIF must
     // finalize every input, so it alone controls them; a shared-key script (1-of-2) never qualifies.
     const fundingScripts = [];
@@ -81,7 +84,7 @@ function readInputs(psbt, deny) {
         if (!script) return deny('UNRECONCILABLE_PSBT', 'input ' + i + ' carries no witnessUtxo or nonWitnessUtxo, so its funding script cannot be established');
         if (!inputPresigned(psbt, i)) {
             unsignedInputs++;
-            if (singleKeyInput(psbt, i, script)) fundingScripts.push(script);
+            if (singleKeyInput(psbt, i, script) || nestedOwn.some((s) => s.equals(script))) fundingScripts.push(script);
         }
         const value = inputValue(psbt, i);
         if (value === null) feeComputable = false; else totalIn += value;
@@ -214,9 +217,10 @@ function reconcileOutputs(psbt, intent, inputs, deny) {
 
 // Enforce the funding ceiling after all shaped legs have been totaled.
 function checkPhaseFundingCap(intent, outputs, deny) {
-    // Phase-1 of a chunked action has no companion PSBT yet (spendP2sh is only
-    // callable once phase 1 is on chain), so the recovery pin above is detection after
-    // the fact. This opt-in ceiling is the caller's prevention for that window. It is
+    // Phase 1 of a chunked action is reconciled before its reveal exists (the reveal
+    // is built from the signed phase 1), so no companion PSBT pins its legs here; the
+    // submit path checks the reveal spends them back before broadcasting phase 1. This
+    // opt-in ceiling bounds them for a caller that signs phase 1 on its own. It is
     // separate from maxFeeSats because a parked output is not fee: the legs prefund
     // the next phase and are dust-scale, so a cap here is a small number.
     const maxPhaseFunding = exactU64(intent.maxPhaseFundingSats);
@@ -307,7 +311,7 @@ function reconcileEncoded(psbtHex, intent) {
     try { psbt = bitcoin.Psbt.fromHex(psbtHex); }
     catch (e) { return deny('UNRECONCILABLE_PSBT', 'the encoder response is not a decodable PSBT: ' + (e && e.message)); }
 
-    const inputs = readInputs(psbt, deny);
+    const inputs = readInputs(psbt, deny, intent);
     checkRequiredSpends(intent, inputs.spent, deny);
     inputs.authorized = readAuthorizedOutputs(intent);
     inputs.changeScripts = readChangeScripts(intent);
@@ -316,4 +320,15 @@ function reconcileEncoded(psbtHex, intent) {
     return reconcileFee(intent, inputs, outputs, deny);
 }
 
-module.exports = { reconcileEncoded, psbtPrevouts };
+// The protocol-fee output a hub feeQuote { address, amount } asks the encoder to add.
+// The caller submitted the quote itself, so its output is part of the caller's own
+// intent, capped at the quoted amount like any customOutput. Returns null for an
+// absent or malformed quote, which then authorizes nothing (fail-closed).
+function feeQuoteAuthorizedOutput(feeQuote) {
+    if (!feeQuote || typeof feeQuote !== 'object' || feeQuote.address == null) return null;
+    const value = exactU64(feeQuote.amount);
+    if (value === null) return null;
+    return { address: feeQuote.address, value };
+}
+
+module.exports = { reconcileEncoded, psbtPrevouts, feeQuoteAuthorizedOutput };

@@ -220,4 +220,4 @@ function verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString, ra
     return { ok: true, reason: null, checked: chunks.length };
 }
 
-module.exports = { verifyCarrierScripts, REASONS, CHUNK_ENCODINGS };
+module.exports = { verifyCarrierScripts, rawDataMatches, REASONS, CHUNK_ENCODINGS };

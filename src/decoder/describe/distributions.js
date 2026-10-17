@@ -40,7 +40,7 @@
 
 'use strict';
 
-const { str, toArray } = require('./value_format.js');
+const { str, toArray, isNotPositive, isLessThan } = require('./value_format.js');
 const { decodeUnionListCreate, decodeListShare, decodeListTransfer, decodeListSetMeta } = require('./list_share.js');
 const numberFormat = require('../../utils/utility/number_format.js');
 
@@ -175,7 +175,7 @@ function decodeAirdrop(p, chainSuffix) {
             ],
             warnings: [
                 ...(!tick ? ['Token ticker is empty.'] : []),
-                ...(!amount || Number(amount) <= 0
+                ...(isNotPositive(amount)
                     ? ['Per-recipient amount is not positive.']
                     : []),
                 ...(!listIdx ? ['List action index is empty.'] : []),
@@ -199,7 +199,7 @@ function decodeAirdrop(p, chainSuffix) {
 
     const warnings = [
         ...(drops.some((d) => !d.tick) ? ['One or more token tickers are empty.'] : []),
-        ...(drops.some((d) => !d.amount || Number(d.amount) <= 0)
+        ...(drops.some((d) => isNotPositive(d.amount))
             ? ['One or more per-recipient amounts are not positive.']
             : []),
         ...(drops.some((d) => !d.list) ? ['One or more list action indexes are empty.'] : []),
@@ -230,7 +230,7 @@ function decodeDividend(p, chainSuffix) {
         warnings: [
             ...(!tick ? ['Holder ticker is empty.'] : []),
             ...(!dividendTick ? ['Dividend ticker is empty.'] : []),
-            ...(!amount || Number(amount) <= 0
+            ...(isNotPositive(amount)
                 ? ['Per-unit amount is not positive.']
                 : []),
             ...(memo && /[|;]/.test(memo)
@@ -311,13 +311,13 @@ function dispenserCreateDetails(v, memo) {
 function dispenserCreateWarnings(v, baseWarnings) {
     return [
         ...(!v.giveTick ? ['Give-token ticker is empty.'] : []),
-        ...(!v.giveAmount || Number(v.giveAmount) <= 0
+        ...(isNotPositive(v.giveAmount)
             ? ['Per-fill amount is not positive.']
             : []),
-        ...(!v.giveEscrow || Number(v.giveEscrow) <= 0
+        ...(isNotPositive(v.giveEscrow)
             ? ['Escrow amount is not positive.']
             : []),
-        ...(v.giveAmount && v.giveEscrow && Number(v.giveEscrow) < Number(v.giveAmount)
+        ...(v.giveAmount && v.giveEscrow && isLessThan(v.giveEscrow, v.giveAmount)
             ? ['Escrow is smaller than a single fill, so the dispenser will never dispense.']
             : []),
         ...(!v.getAmount ? ['Trigger amount is empty.'] : []),

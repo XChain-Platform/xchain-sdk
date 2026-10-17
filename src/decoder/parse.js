@@ -32,11 +32,11 @@
 const formats        = require('../protocol/formats.js');
 const FormatSelector = require('../protocol/format_selector.js');
 const { ACTION_ALIASES } = require('./aliases.js');
-const { MAX_ACTION_DATA_LENGTH } = require('../contract/chunk_helper.js');
+const { MAX_ACTION_DATA_LENGTH, compiledPushSize, carrierCeiling } = require('../contract/chunk_helper.js');
 const {
     failure,
     toText,
-    parseVersion,
+    readSegments,
     mapFields,
     canonicalize,
     runValidation,
@@ -85,34 +85,52 @@ const BATCH_ACTION_LIMITS = BATCH_ACTION_LIMITS_ACTIVE;
  * @param {object} [opts]
  * @param {boolean} [opts.validate=true]  attach validator.js semantic
  *                  findings; they never flip ok=false
+ * @param {boolean} [opts.strictWire=false]  read only the canonical wire
+ *                  form: 1-2 digit VERSION, no legacy VERSION injection, no
+ *                  trim, extra segments a FIELD_COUNT_MISMATCH failure. For
+ *                  callers that must refuse anything non-canonical (the
+ *                  co-signer), with its unchanged raw-length size gate.
+ * @param {string} [opts.carrier]  OP_RETURN, P2SH, P2WSH or MULTISIGN bound the
+ *                  compiled push at MAX_ACTION_DATA_LENGTH; TAPROOT or no carrier
+ *                  only at ENVELOPE_MAX_PAYLOAD, so nothing the chain stores is
+ *                  refused (legacyCarrierFits:false flags one no legacy lane holds).
  * @returns {object} ParsedAction { ok:true, action, rawAction, version,
  *                   params, rest, commands, actionString, validation }
  *                   or ParseFailure { ok:false, code, detail }
  */
 function parse(input, opts = {}) {
     const doValidate = opts.validate !== false;
+    const strictWire = opts.strictWire === true;
 
     if (input === undefined || input === null || input === '' ||
         (Buffer.isBuffer(input) && input.length === 0))
         return failure('EMPTY');
 
     // Rule 1: input-size gate FIRST, on the raw input, before any
-    // split, alias lookup, regex, or UTF-8 work.
+    // split, alias lookup, regex, or UTF-8 work. Measured per carrier as the
+    // on-chain decoder measures it (see opts.carrier); strictWire keeps the
+    // raw-length gate.
     const rawLength = Buffer.isBuffer(input)
         ? input.length
         : Buffer.byteLength(String(input), 'utf8');
-    if (rawLength > MAX_ACTION_DATA_LENGTH)
+    if (strictWire && rawLength > MAX_ACTION_DATA_LENGTH)
         return failure('TOO_LONG', rawLength + ' bytes > ' + MAX_ACTION_DATA_LENGTH);
+    const ceiling = carrierCeiling(rawLength, opts.carrier);
+    if (!strictWire && ceiling.size > ceiling.limit)
+        return failure('TOO_LONG', rawLength + ' bytes measure ' + ceiling.size + ' > ' + ceiling.limit);
 
     const decoded = toText(input);
     if (decoded.error) return decoded.error;
     const text = decoded.text;
     if (text === '') return failure('EMPTY');
 
-    return parseTopLevel(text, doValidate, false);
+    const result = parseTopLevel(text, doValidate, false, strictWire);
+    if (result.ok && !strictWire && !opts.carrier && compiledPushSize(rawLength) > MAX_ACTION_DATA_LENGTH)
+        result.legacyCarrierFits = false;
+    return result;
 }
 
-function parseTopLevel(text, doValidate, insideBatch) {
+function parseTopLevel(text, doValidate, insideBatch, strictWire) {
     const segments = text.split('|');
 
     // Rule 3: case-sensitive action names, alias table included -
@@ -123,9 +141,11 @@ function parseTopLevel(text, doValidate, insideBatch) {
     if (!Object.prototype.hasOwnProperty.call(formats, action))
         return failure('UNKNOWN_ACTION', rawAction);
 
-    const version = parseVersion(segments[1]);
-    if (version === null || !formats[action][version])
+    const read = readSegments(action, segments, strictWire);
+    const version = read.version;
+    if (version === null || !Object.prototype.hasOwnProperty.call(formats[action], version))
         return failure('UNKNOWN_VERSION', action + ' v' + String(segments[1]));
+    const valueSegs = read.valueSegs;
 
     // Rule 8: BATCH sub-grammar. COMMAND is a SINGULAR terminal
     // delimiter-exempt catch-all: the entire remaining tail, verbatim.
@@ -133,16 +153,16 @@ function parseTopLevel(text, doValidate, insideBatch) {
     // so BATCH branches before field mapping.
     if (action === 'BATCH') {
         if (insideBatch) return failure('NESTED_BATCH_FORBIDDEN');
-        return parseBatch(rawAction, version, segments, doValidate);
+        return parseBatch(rawAction, version, segments, valueSegs, doValidate);
     }
 
     const fieldNames = FormatSelector.getFormatFields(action, version);
     let group = null;
     try { group = FormatSelector.getRepeatedGroup(action, version); }
     catch (e) { return failure('UNSUPPORTED_REPEATED_FORMAT', e.message); }
-    const valueSegs = segments.slice(1);
-    const mapped = mapFields(fieldNames, valueSegs, group);
+    const mapped = mapFields(fieldNames, valueSegs, group, strictWire);
     if (mapped.error) return mapped.error;
+    const kept = mapped.ignored ? valueSegs.slice(0, valueSegs.length - mapped.ignored.length) : valueSegs;
 
     const result = {
         ok: true,
@@ -152,40 +172,37 @@ function parseTopLevel(text, doValidate, insideBatch) {
         params: mapped.params,
         rest: mapped.rest,
         commands: null,
-        actionString: canonicalize(action, valueSegs),
+        actionString: canonicalize(action, kept),
         validation: null,
     };
     if (result.rawAction === undefined) delete result.rawAction;
+    if (read.legacy) result.legacyVersion = true;
+    if (mapped.ignored) result.ignoredSegments = mapped.ignored;
     // Multi-leg formats additionally expose the legs in the shape
     // FormatSelector.serialize accepts, so parse -> edit -> re-serialize
     // round-trips without the caller re-deriving the group layout.
     if (mapped.legs) result.legs = mapped.legs;
 
     if (doValidate)
-        result.validation = runValidation(action, mapped.params, fieldNames, []);
+        result.validation = runValidation(action, mapped.params, fieldNames, [], version);
 
     return result;
 }
 
-function parseBatch(rawAction, version, segments, doValidate) {
-    // 3-way top-level split: ACTION, VERSION, verbatim tail.
+function parseBatch(rawAction, version, segments, valueSegs, doValidate) {
+    // 3-way top-level split: ACTION, VERSION, verbatim tail. Each sub-command is
+    // trimmed by its own parse, as the indexer reads each one.
     const tail = segments.slice(2).join('|');
 
     // COMMAND absent entirely (BATCH|0) => validator finding, ok stays
-    // true; present-but-empty (BATCH|0|) => parse failure.
+    // true; present-but-empty (BATCH|0|) => parse failure. Both are refused on
+    // chain: the first as 'invalid: BATCH (limit)', the second because its one
+    // empty command names no enabled ACTION ('invalid: ACTION (unknown)', the
+    // activation scan in xchain-indexer/src/actions/batch/validate.js).
     if (segments.length <= 2) {
-        const result = {
-            ok: true,
-            action: 'BATCH',
-            version,
-            params: { COMMAND: '' },
-            rest: null,
-            commands: [],
-            actionString: canonicalize('BATCH', segments.slice(1)),
-            validation: null,
-        };
+        const result = emptyBatchResult(version, canonicalize('BATCH', valueSegs));
         if (doValidate)
-            result.validation = runValidation('BATCH', { COMMAND: '' }, ['VERSION', 'COMMAND'], []);
+            result.validation = runValidation('BATCH', { COMMAND: '' }, ['VERSION', 'COMMAND'], [], version);
         return result;
     }
     if (tail === '') return failure('EMPTY_BATCH');
@@ -212,12 +229,25 @@ function parseBatch(rawAction, version, segments, doValidate) {
         params: { COMMAND: tail },
         rest: null,
         commands,
-        actionString: canonicalize('BATCH', segments.slice(1)),
+        actionString: canonicalize('BATCH', [String(version)].concat(segments.slice(2))),
         validation: null,
     };
     if (doValidate)
-        result.validation = runValidation('BATCH', { COMMAND: tail }, ['VERSION', 'COMMAND'], extraFindings);
+        result.validation = runValidation('BATCH', { COMMAND: tail }, ['VERSION', 'COMMAND'], extraFindings, version);
     return result;
+}
+
+function emptyBatchResult(version, actionString) {
+    return {
+        ok: true,
+        action: 'BATCH',
+        version,
+        params: { COMMAND: '' },
+        rest: null,
+        commands: [],
+        actionString,
+        validation: null,
+    };
 }
 
 // Decode entries in one synchronous pass so command results and counts cannot diverge.

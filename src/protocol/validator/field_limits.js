@@ -49,7 +49,22 @@ const ADDRESS_REF_FIELD_SET = (() => {
 const MAX_SUPPLY_CEILING = '1000000000000000000000'; // 1 sextillion, the indexer's MAX_TOKEN_SUPPLY string
 const MAX_DECIMALS       = 18;
 const MAX_TICK_LENGTH    = 250;
+// The indexer refuses an ISSUE DESCRIPTION whose length is >= this value
+// (xchain-indexer/src/actions/issue/edit_rules.js), so 249 is the longest it keeps.
 const MAX_DESC_LENGTH    = 250;
+
+// Free-text caps from xchain-indexer/src/config/token_limits.js and message_limits.js.
+// Each is compared with String.length, i.e. in UTF-16 code units, exactly as the
+// indexer measures it: an astral character counts 2, a two-byte BMP character 1.
+const MAX_MEMO_LENGTH              = 250;
+const MAX_BROADCAST_MESSAGE_LENGTH = 250;
+const MAX_BROADCAST_VALUE_LENGTH   = 25;
+const MAX_FILE_NAME_LENGTH         = 250;
+const MAX_FILE_TYPE_LENGTH         = 255;
+const MAX_FILE_TITLE_LENGTH        = 250;
+// VOTE v0 binding callbacks replay CALLBACK_METHOD into an EXECUTE, whose method
+// field it must fit (xchain-indexer/src/actions/vote/binding_callback.js).
+const MAX_CALLBACK_METHOD_LENGTH   = 64;
 // LIST metadata matches contract metadata and is measured in UTF-8 bytes.
 const LIST_META_NAME_MAX_BYTES = 64;
 const LIST_META_DESCRIPTION_MAX_BYTES = 512;
@@ -139,7 +154,9 @@ const ACTION_REQUIRED_FIELDS = {
     DISPENSER:          [],
     DIVIDEND:           ['TICK', 'DIVIDEND_TICK', 'AMOUNT'],
     EXECUTE:            ['CONTRACT_ACTION_INDEX', 'METHOD'],
-    FILE:               ['NAME', 'TYPE'],
+    // NAME is optional on the chain: xchain-indexer/src/actions/file.js bounds its
+    // length and nothing else, and records a nameless FILE valid.
+    FILE:               ['TYPE'],
     ISSUE:              ['TICK'],
     LINK:               ['COIN1', 'COIN1_ACTION_INDEX', 'COIN2', 'COIN2_ACTION_INDEX'],
     LIST:               ['ITEM'],
@@ -177,6 +194,13 @@ module.exports = {
     MAX_DECIMALS,
     MAX_TICK_LENGTH,
     MAX_DESC_LENGTH,
+    MAX_MEMO_LENGTH,
+    MAX_BROADCAST_MESSAGE_LENGTH,
+    MAX_BROADCAST_VALUE_LENGTH,
+    MAX_FILE_NAME_LENGTH,
+    MAX_FILE_TYPE_LENGTH,
+    MAX_FILE_TITLE_LENGTH,
+    MAX_CALLBACK_METHOD_LENGTH,
     LIST_META_NAME_MAX_BYTES,
     LIST_META_DESCRIPTION_MAX_BYTES,
     MAX_MESSAGE_LENGTH,

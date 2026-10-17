@@ -63,6 +63,9 @@ function validateQuantity(validator, action, field, value, allFields, errors) {
     }
 }
 
+// Decimal places the indexer settles a VOTE poll escrow at (actions/vote ESCROW_DECIMALS).
+const VOTE_ESCROW_DECIMALS = 8;
+
 // Applies one contiguous field-rule group while preserving finding order.
 function validateVoteAmounts(validator, action, field, value, allFields, errors) {
     // VOTE v0 binding-poll numeric fields. Consensus (indexer actions/vote/)
@@ -73,6 +76,12 @@ function validateVoteAmounts(validator, action, field, value, allFields, errors)
     if (field === 'DEPOSIT' || field === 'GAS_ESCROW') {
         if (!validator.util.isNumeric(value) || Number(value) < 0)
             errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must be a non-negative number', { field, value, constraint: { min: 0 } }));
+        // The poll escrow locks and releases at 8 decimal places, so a nonzero digit past
+        // the eighth is refused by value on a chain that arms VOTE_SETTLEMENT_EXACT_ACTIVATION
+        // ('1e-9' refused, '1.500000000' kept). A chain that has not armed it settles such an
+        // amount inexactly, so the check applies on every network.
+        else if (validator.util.bcnum(value).decimalPlaces() > VOTE_ESCROW_DECIMALS)
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must have at most ' + VOTE_ESCROW_DECIMALS + ' decimal places (a nonzero digit past place ' + VOTE_ESCROW_DECIMALS + ' is refused)', { field, value, constraint: { maxDecimals: VOTE_ESCROW_DECIMALS } }));
     }
 }
 
@@ -228,7 +237,11 @@ function validateCooldownBlocks(validator, action, field, value, allFields, erro
                 errors.push(validator.buildError('INVALID_FIELD_VALUE', 'COOLDOWN_BLOCKS must be numeric', { field, value }));
             } else {
                 let cb = Number(value);
-                if (cb < 1 || cb > 100000)
+                // Integer-only under COOLDOWN_BLOCKS_INTEGER, active on every network
+                // (xchain-indexer/src/actions/deploy/validate.js, 'not an integer').
+                if (!Number.isInteger(cb))
+                    errors.push(validator.buildError('INVALID_FIELD_VALUE', 'COOLDOWN_BLOCKS must be an integer', { field, value }));
+                else if (cb < 1 || cb > 100000)
                     errors.push(validator.buildError('INVALID_FIELD_VALUE', 'COOLDOWN_BLOCKS must be in [1, 100000]', { field, value, constraint: { min: 1, max: 100000 } }));
             }
         }

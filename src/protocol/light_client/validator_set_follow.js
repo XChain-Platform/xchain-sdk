@@ -56,6 +56,22 @@ async function verifyValidatorSet(opts){
     return Object.assign({}, v, { height: Number(body.proof.height), checkpoint: body.checkpoint });
 }
 
+// Exact source-deduped stake total, computed the way the producers commit the
+// __total__ leaf (M.sumCanonicalAmounts over the first weight of each source).
+// swq.totalStake returns a bignumber whose String() form switches to exponent
+// notation at 1e21 and above, which canonicalAmount rejects, so a valid set
+// would be refused; totalStake still runs first for its fail-closed guards
+// (blank source, bad or negative weight, truncated snapshot).
+function exactStakeTotal(validators){
+    swq.totalStake(validators);
+    const weightBySource = new Map();
+    for(const v of validators){
+        const src = String(v.source);
+        if(!weightBySource.has(src)) weightBySource.set(src, String(v.weight));
+    }
+    return M.sumCanonicalAmounts(Array.from(weightBySource.values()));
+}
+
 // Pure: verify a checkpoint's quorum using a PROVEN validator set (from
 // verifyValidatorSet). The verdict comes from the SINGLE shared predicate
 // (swq.meetsStakeThreshold), never a local re-implementation: an earlier inline
@@ -67,6 +83,12 @@ async function verifyValidatorSet(opts){
 // proven set and must never finalize. Fully trustless: nothing here trusts a
 // server-supplied set.
 function verifyCheckpointWithProvenSet(cp, provenOraclePublish){
+    // Fail closed below the commitment flag day: the roots there are unsigned and the
+    // checkpoint was signed under a regime this verifier does not implement, so a caller
+    // judging one uses checkpoint.verifyCheckpoint, which picks the regime from the row.
+    if (!checkpoint.commitmentActive(cp)) return { valid: false, total: '0' };
+    // This verifier applies only the stake rule, so a reordered gate cannot hand it a count-regime row.
+    if (!swq.isStakeWeightedQuorumActive(cp.snapshot_block, cp.network)) return { valid: false, total: '0' };
     // Post-activation a checkpoint MUST carry all four commitment fields, or
     // canonicalCheckpoint falls back to the legacy ROOTLESS preimage and the whole root
     // suffix drops out of the signed bytes. An explorer could then attach an
@@ -104,7 +126,7 @@ function verifyCheckpointWithProvenSet(cp, provenOraclePublish){
         // totalStake throws on the malformed-snapshot cases meetsStakeThreshold
         // already rejects, so a throw here (or a mismatch) fails CLOSED.
         try {
-            total = M.canonicalAmount(String(swq.totalStake(validators)));
+            total = exactStakeTotal(validators);
             const committed = M.canonicalAmount(String((provenOraclePublish && provenOraclePublish.total) || '0'));
             if (scaled(total) !== scaled(committed)) valid = false;
         } catch (e){ valid = false; }
@@ -131,6 +153,10 @@ async function followForward(opts){
         const rangeBody = await fetchJson(f, rangeUrl);
         const steps = (rangeBody && rangeBody.checkpoints) || [];
         for (const next of steps){
+            // Below the commitment flag day a step's roots are unsigned, and adopting one would
+            // let the explorer choose the root the NEXT step's signer set is proven against.
+            if (!checkpoint.commitmentActive(next))
+                return { trusted, adopted, reason: 'ROOTS_NOT_SIGNED@' + next.block_index, stoppedAt: next.block_index };
             // Prove the signer set at next.snapshot_block against the current trusted state_root.
             //
             // The checkpoint DECLARES the raw height the signing hub was handed, but
@@ -140,8 +166,8 @@ async function followForward(opts){
             // one that signed whenever a validator's stake activated or deactivated inside
             // (snapshot_block - 6, snapshot_block], and a light client on that boundary either
             // rejects a valid checkpoint or counts a signer the hub never had. Bury by the same
-            // shared constant. Flag-day gated (INERT on mainnet/testnet), so below the gate the
-            // declared height is used verbatim and already-anchored checkpoints read as before.
+            // shared constant. Flag-day gated and armed from genesis on mainnet, testnet, and
+            // regtest; below any future nonzero gate, the declared height remains verbatim.
             const setBlock = srb.buriedSnapshotBlock(next.snapshot_block, next.network);
             const vs = await verifyValidatorSet({ explorerUrl: opts.explorerUrl, btcCoin,
                 snapshotBlock: setBlock, trustedStateRoot: lowerHex(trusted.state_root), fetchImpl: f });

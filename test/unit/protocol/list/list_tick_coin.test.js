@@ -11,9 +11,8 @@
 'use strict';
 
 const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
 const sdkParser = require('../../../../src/protocol/list_tick_coin.js');
+const { siblingCheckout, skipOrFail } = require('../../../helpers/sibling_checkout.js');
 
 const INDEXER_LIST_TICK_COIN =
     '../../../../../xchain-indexer/src/consensus/list_tick_coin.js';
@@ -76,14 +75,10 @@ describe('coin-qualified LIST ticker items', function(){
 
 describe('coin-qualified LIST ticker integration', function(){
     it('matches the sibling indexer parser over a fixed item set', function(){
-        const siblingPath = path.resolve(__dirname, INDEXER_LIST_TICK_COIN);
-        if(!fs.existsSync(siblingPath)){
-            if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but sibling parser is absent: ' + siblingPath);
-            this.skip();
-            return;
-        }
-        const indexerParser = require(siblingPath);
+        // Refuse an absent sibling and a lane symlink into a live main checkout alike.
+        const verdict = siblingCheckout(__dirname, INDEXER_LIST_TICK_COIN);
+        if(!skipOrFail(this, verdict, 'the list tick coin sibling-parser integration guard')) return;
+        const indexerParser = require(verdict.path);
         const items = [
             'DOGE:PEPE', 'doge:^12', 'btc:foo', 'LTC:^9', 'Doge:Pepe',
             'ETH:FOO', 'eth:x', 'XCHAIN:FOO', ':PEPE', 'FOO:BAR', 'PEPE',

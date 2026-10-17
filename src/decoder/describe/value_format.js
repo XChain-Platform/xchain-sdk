@@ -41,6 +41,7 @@
 'use strict';
 
 const { actionDisplayLabel } = require('../action_display_label.js');
+const numberFormat = require('../../utils/utility/number_format.js');
 
 // Scale the multi-send per-token totals are summed at: 18 dp, the finest precision any
 // tick can be issued with (MAX_TOKEN_DECIMALS), so no legal leg loses digits.
@@ -142,4 +143,27 @@ function safeJson(v) {
     }
 }
 
-module.exports = { TOTAL_SCALE, toScaledUnits, fromScaledUnits, getCoinLabel, collectLockFlags, genericFallback, str, firstStr, toArray, safeJson };
+// Exact amount comparisons (a double loses digits past 15). Non-numeric input answers
+// false, as the old NaN comparisons did.
+function isNotPositive(value) {
+    if (!value) return true;
+    return numberFormat.isNumeric(value) && !numberFormat.bcnum(value).gt(0);
+}
+
+function isLessThan(a, b) {
+    if (!numberFormat.isNumeric(a) || !numberFormat.isNumeric(b)) return false;
+    return numberFormat.bcnum(a).lt(numberFormat.bcnum(b));
+}
+
+// A fraction shown as a percentage: 2 decimals at least, more when the fraction has more
+// than 2 decimals of its own so a nonzero fraction never reads 0%; trailing zeros trimmed.
+// Input is trimmed first, and a non-numeric value yields null instead of throwing.
+function fractionToPercent(fraction) {
+    const text = String(fraction).trim();
+    if (!numberFormat.isNumeric(text)) return null;
+    const plain = numberFormat.bcnum(text).toFixed();
+    const own = plain.includes('.') ? plain.split('.')[1].length : 0;
+    return numberFormat.bcmul(text, 100, Math.max(2, own - 2)).replace(/\.?0+$/, '');
+}
+
+module.exports = { isNumericAmount: numberFormat.isNumeric, isNotPositive, isLessThan, fractionToPercent, TOTAL_SCALE, toScaledUnits, fromScaledUnits, getCoinLabel, collectLockFlags, genericFallback, str, firstStr, toArray, safeJson };

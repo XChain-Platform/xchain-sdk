@@ -355,6 +355,8 @@ module.exports = {
                     let response = await self.client.get(url);
                     if (self.hooks.onResponse)
                         self.hooks.onResponse({ service: 'explorer', method: 'GET', url, status: response.status });
+                    // Record the freshness marker the explorer stamps on /explorer responses too.
+                    self.recordFreshness(response);
                     return response.data;
                 } catch (err) {
                     if (self.hooks.onError)

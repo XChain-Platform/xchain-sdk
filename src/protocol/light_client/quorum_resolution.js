@@ -94,9 +94,11 @@ async function explorerValidators(f, explorerUrl, coin, cp){
 //      FORWARD across validator rotation (spec §7.3): followForward proves each
 //      successor oracle_publish set against the committed BTC stakes_root (the
 //      only chain that commits stakes, §4.1) and adopts it, and we accept iff
-//      the walk reaches exactly `cp` (same height + state_root + block-merkle
-//      root). The explorer /verify set is NEVER consulted on the pinned path
-//      (no silent downgrade); a rotation that cannot be followed fails quorum.
+//      the walk reaches exactly `cp`: the same height, the same canonical (every
+//      signed field), and the same state_root and block-merkle root, which a
+//      pre-commitment canonical omits. The explorer /verify set is NEVER consulted
+//      on the pinned path (no silent downgrade); a rotation that cannot be
+//      followed fails quorum.
 //   3. nothing pinned -> the explorer /verify convenience path (weakest).
 // Returns a checkpoint.verifyCheckpoint-shaped { valid, quorum, weighted }.
 // Transport failures propagate (throw), exactly like the convenience path.
@@ -115,9 +117,12 @@ async function resolveQuorum(f, opts, cp){
         const ff = await followForward({ explorerUrl: opts.explorerUrl, btcCoin: opts.coin,
             trustedCheckpoint: pcp, toHeight: Number(cp.block_index), fetchImpl: f });
         const t = ff && ff.trusted;
+        // The served cp failed the pinned set, so nothing signs it: it must equal the
+        // attested step `t` on every signed field, or callers get forged fields back.
         if (t && sameWireIndex(t.block_index, cp.block_index)
             && lowerHex(t.state_root) === lowerHex(cp.state_root)
-            && lowerHex(t.block_merkle_root) === lowerHex(cp.block_merkle_root))
+            && lowerHex(t.block_merkle_root) === lowerHex(cp.block_merkle_root)
+            && checkpoint.canonicalCheckpoint(t) === checkpoint.canonicalCheckpoint(cp))
             return { valid: true, quorum: null, weighted: null };
     }
     return { valid: false, quorum: null, weighted: null };

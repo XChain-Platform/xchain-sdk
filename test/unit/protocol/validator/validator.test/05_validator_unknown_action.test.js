@@ -260,7 +260,9 @@ describe('Validator: FILE GATE_MIN_AMOUNT (PC-29)', function () {
     let v;
     beforeEach(function () { v = createValidator(); });
 
-    const bad = (value) => v.validate('FILE', { NAME: 'f.txt', TYPE: 'text/plain', GATE_MIN_AMOUNT: value });
+    // A threshold is only meaningful on a gated FILE: without GATE_TICKER the chain
+    // refuses any GATE_MIN_AMOUNT outright, so the format rules are judged gated.
+    const bad = (value) => v.validate('FILE', { NAME: 'f.txt', TYPE: 'text/plain', GATE_TICKER: 'GATE', GATE_MIN_AMOUNT: value });
     const isRejected = (value) => !hasNoErrorCode(bad(value), 'INVALID_FIELD_VALUE');
 
     it('accepts an absent or empty threshold (= no threshold)', function () {
@@ -309,7 +311,7 @@ describe('Validator: FILE GATE_MIN_AMOUNT (PC-29)', function () {
     let v;
     beforeEach(function () { v = createValidator(); });
 
-    const bad = (value) => v.validate('FILE', { NAME: 'f.txt', TYPE: 'text/plain', GATE_MIN_AMOUNT: value });
+    const bad = (value) => v.validate('FILE', { NAME: 'f.txt', TYPE: 'text/plain', GATE_TICKER: 'GATE', GATE_MIN_AMOUNT: value });
     const isRejected = (value) => !hasNoErrorCode(bad(value), 'INVALID_FIELD_VALUE');
 
 
@@ -342,7 +344,7 @@ describe('Validator: FILE GATE_MIN_AMOUNT (PC-29)', function () {
     let v;
     beforeEach(function () { v = createValidator(); });
 
-    const bad = (value) => v.validate('FILE', { NAME: 'f.txt', TYPE: 'text/plain', GATE_MIN_AMOUNT: value });
+    const bad = (value) => v.validate('FILE', { NAME: 'f.txt', TYPE: 'text/plain', GATE_TICKER: 'GATE', GATE_MIN_AMOUNT: value });
     const isRejected = (value) => !hasNoErrorCode(bad(value), 'INVALID_FIELD_VALUE');
 
 

@@ -11,8 +11,16 @@ const { ACTIVATION_MIRRORS, activationThreshold } = require('../../../../src/pre
 const sdkFor = (network, coin) => ({ config: { network }, explorer: { coin } });
 
 describe('pre-flight activation lookup is coin-first', function () {
-    it('every mirrored table pins the bare testnet row to UNARMED beside armed coin rows', function () {
-        for (const name of Object.keys(ACTIVATION_MIRRORS)) {
+    // DISPENSE_CANCELLING_MATCH is the one mirrored row keyed by network alone
+    // (xchain-indexer src/protocol_changes/gates_1.js:263), so it has no coin rows to prefer.
+    const COIN_KEYED = Object.keys(ACTIVATION_MIRRORS).filter((n) => 'BTC:testnet' in ACTIVATION_MIRRORS[n].table);
+
+    it('every network-only mirrored row is the cancelling-match row', function () {
+        expect(Object.keys(ACTIVATION_MIRRORS).filter((n) => !COIN_KEYED.includes(n))).to.deep.equal(['DISPENSE_CANCELLING_MATCH']);
+    });
+
+    it('every coin-keyed mirrored table pins the bare testnet row to UNARMED beside armed coin rows', function () {
+        for (const name of COIN_KEYED) {
             const t = ACTIVATION_MIRRORS[name].table;
             expect(t.testnet, name).to.equal('UNARMED');
             expect(t['BTC:testnet'], name).to.be.a('number');
@@ -20,7 +28,7 @@ describe('pre-flight activation lookup is coin-first', function () {
     });
 
     it('resolves the coin row over the network row on testnet', function () {
-        for (const name of Object.keys(ACTIVATION_MIRRORS)) {
+        for (const name of COIN_KEYED) {
             const t = ACTIVATION_MIRRORS[name].table;
             expect(activationThreshold(name, sdkFor('bitcoin-testnet', 'TBTC')), name).to.equal(t['BTC:testnet']);
             expect(activationThreshold(name, sdkFor('litecoin-testnet', 'TLTC')), name).to.equal(t['LTC:testnet']);

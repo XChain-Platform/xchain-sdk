@@ -360,5 +360,36 @@ describe('carrier binding: the transaction must carry the action that was submit
                 .to.throw(/does not carry the action/);
         });
     });
+});
+
+describe('carrier binding: the transaction must carry the action that was submitted', function () {
+
+    // The envelope's rawData push binds to the caller's bytes exactly as the chunk lanes' does.
+    describe('the Taproot envelope reveal: the rawData push', function () {
+        const zlib = require('zlib');
+        const raw = 'FILE|0|report.bin|application/octet-stream';
+        const compressed = 'FILE|0|report.bin|application/octet-stream|||||||1';
+        const BYTES = Buffer.from('report row,'.repeat(40), 'utf8');
+        const envBind = (leaf, rawData) => () => assertEnvelopeCarrierBinding(
+            { revealPsbt: revealPsbt(leaf), actionString: raw, rawData, network: NET });
+
+        it('passes the rawData the caller sent and refuses a substituted one', function () {
+            expect(envBind(envelopeLeaf(raw, BYTES), BYTES.toString('binary'))).to.not.throw();
+            const swapped = Buffer.from(BYTES); swapped[3] ^= 0x20;
+            expect(envBind(envelopeLeaf(raw, swapped), BYTES)).to.throw(/does not carry the action/);
+        });
+
+        it('passes a compressed FILE whose push inflates to the rawData and refuses one that does not', function () {
+            expect(envBind(envelopeLeaf(compressed, zlib.deflateRawSync(BYTES)), BYTES)).to.not.throw();
+            const other = envelopeLeaf(compressed, zlib.deflateRawSync(Buffer.from('x'.repeat(BYTES.length))));
+            expect(envBind(other, BYTES)).to.throw(/does not carry the action/);
+        });
+
+        it('refuses a rawData push the caller never sent, and a missing one the caller did send', function () {
+            expect(envBind(envelopeLeaf(raw, BYTES), null)).to.throw(/does not carry the action/);
+            expect(envBind(envelopeLeaf(raw, null), BYTES)).to.throw(/does not carry the action/);
+            expect(envBind(envelopeLeaf(raw, null), null)).to.not.throw();
+        });
+    });
 
 });

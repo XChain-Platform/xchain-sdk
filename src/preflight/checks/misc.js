@@ -20,11 +20,54 @@
  * state aspects surface as `unverified` - degraded but honest, and
  * incapable of a false hard-block by construction. Tier 1 covers the
  * quotable subset authoritatively. Dedicated modules land as their
- * matrix rows harden (§4.4 remains the roadmap).
+ * matrix rows harden (§4.4 remains the roadmap). One rule is judged here
+ * rather than declared: a capability STAKE's gas-token balance, which the
+ * explorer serves and the handler refuses on without any activation.
  *
  ********************************************************************/
 
 'use strict';
+
+const { FINDING_CODES } = require('../constants.js');
+const numeric = require('../numeric.js');
+const { GAS_TICK } = require('../../protocol/constants.js');
+
+// A capability STAKE (formats 1 and 2) escrows AMOUNT of the gas token, and the indexer
+// refuses one the source's balance does not cover, once the gas token exists
+// (xchain-indexer src/actions/stake/capability_stake.js:69-75, 'insufficient funds (STAKE)').
+// Format 3 stakes another token through contract_stake.js and is not judged here.
+async function checkCapabilityStakeBalance(ctx) {
+    const version = String(ctx.parsed.version);
+    if (version !== '1' && version !== '2') return;
+    const amount = ctx.field('AMOUNT');
+    if (amount === '' || Array.isArray(amount)) return;
+    let positive;
+    try { positive = numeric.isPositive(amount); } catch (e) { return; }
+    if (!positive) return;
+    if (!ctx.source) {
+        ctx.addUnverified(FINDING_CODES.BALANCE_INSUFFICIENT, 'no source address supplied');
+        return;
+    }
+    const token = await ctx.token(GAS_TICK);
+    if (token === undefined) {
+        ctx.addUnverified(FINDING_CODES.BALANCE_INSUFFICIENT, 'token lookup unavailable for ' + GAS_TICK);
+        return;
+    }
+    if (token === null) return;
+    const balance = await ctx.balance(ctx.source, GAS_TICK);
+    if (balance === null) {
+        ctx.addUnverified(FINDING_CODES.BALANCE_INSUFFICIENT, 'balance lookup unavailable for ' + GAS_TICK);
+        return;
+    }
+    ctx.markRun(FINDING_CODES.BALANCE_INSUFFICIENT);
+    if (numeric.gte(balance, amount)) return;
+    const inFlight = ctx.deltaApplied(GAS_TICK);
+    const netted = numeric.isPositive(inFlight);
+    ctx.addFinding(FINDING_CODES.BALANCE_INSUFFICIENT, 'error',
+        `Balance of ${GAS_TICK} (${balance}${netted ? ` after ${inFlight} already committed from this wallet` : ''}) `
+        + `does not cover the stake (${amount}); the indexer rejects it as insufficient funds (STAKE).`,
+        { tick: GAS_TICK, balance, amount, ...(netted ? { localDeltaApplied: inFlight } : {}) });
+}
 
 // Per-action note: which aspect the server alone can judge (keeps the
 // unverified entries specific rather than a generic shrug).
@@ -60,6 +103,7 @@ const LIST_SET_META_NOTE = 'A LIST SET META (format 5) on a shared list is charg
 
 async function checkMisc(ctx) {
     const action = ctx.parsed.action;
+    if (action === 'STAKE') await checkCapabilityStakeBalance(ctx);
     if (Object.prototype.hasOwnProperty.call(ASPECT_NOTES, action) && ASPECT_NOTES[action] === null) return;
     const note = ASPECT_NOTES[action];
     if (note) ctx.addUnverified(action + '_STATE', note);

@@ -46,3 +46,29 @@ describe('ExplorerClient', function () {
         });
     });
 });
+
+describe('ExplorerClient', function () {
+    beforeEach(resetClient);
+    afterEach(cleanNock);
+
+    describe('buildParams keyset cursors', function () {
+        it('forwards a before cursor to the wire instead of dropping it', async function () {
+            const scope = nock(BASE)
+                .get('/BTC/api/orders/addr1/address')
+                .query({ before: '123', limit: '10' })
+                .reply(200, { data: [], total: 0, next_before: '100' });
+            const r = await client.getOrders('addr1', 'address', { before: '123', limit: 10 });
+            expect(scope.isDone()).to.equal(true);
+            expect(r).to.have.property('next_before', '100');
+        });
+
+        it('forwards an after cursor to the wire instead of dropping it', async function () {
+            const scope = nock(BASE)
+                .get('/BTC/api/orders/addr1/address')
+                .query({ after: '7' })
+                .reply(200, { data: [], total: 0 });
+            await client.getOrders('addr1', 'address', { after: 7 });
+            expect(scope.isDone()).to.equal(true);
+        });
+    });
+});

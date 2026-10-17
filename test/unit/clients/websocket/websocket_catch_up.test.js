@@ -43,11 +43,11 @@ function createCatchUpServer() {
         });
         srv.reply = (frame) => srv.sock.send(JSON.stringify(frame));
         // Close catch-up `n` the way the explorer does, releasing the latch.
-        srv.complete = (n, latest, truncated, notReplayed) => {
+        srv.complete = (n, latest, truncated, notReplayed, stale) => {
             srv.latched = false;
             const data = { events_replayed: 1, latest_action_index: latest, truncated: !!truncated };
             if (notReplayed) data.not_replayed = notReplayed;
-            srv.reply({ type: 'CATCH_UP_COMPLETE', id: srv.catchUps[n].id, data });
+            srv.reply({ type: 'CATCH_UP_COMPLETE', id: srv.catchUps[n].id, ...(stale ? { stale: true } : {}), data });
         };
         srv.refuse = (n, code) => {
             srv.latched = false;
@@ -111,19 +111,26 @@ describe('WebSocketClient reconnect catch-up: sequencing', function () {
         expect(client.lastActionIndex).to.equal('640');
     });
 
-    it('resubscribes a blocks subscription at once, without since_action_index', async function () {
+    // A blocks subscription goes through the catch-up queue with the cursor, so its
+    // CATCH_UP_COMPLETE can name NEW_BLOCK as not replayed; it is still one at a time.
+    it('resubscribes a blocks subscription through the catch-up queue, so it hears NEW_BLOCK is not replayed', async function () {
         client = createClient(ctx.port);
         await client.connect();
         await client.subscribe(['blocks']);
         await client.subscribe(['actions']);
-        const frames = [];
-        ctx.srv.sock.on('message', (raw) => frames.push(JSON.parse(raw.toString())));
+        const notes = [];
+        client.on('not_replayed', (m) => notes.push(m.data));
         client.resubscribe();
-        await waitFor(() => ctx.srv.catchUps.length === 1 && frames.some(f => f.channels && f.channels[0] === 'blocks'),
-            { message: 'resubscribe did not send both the blocks subscribe and the actions catch-up' });
-        const blocks = frames.find(f => f.channels && f.channels[0] === 'blocks');
-        expect(blocks.params).to.not.have.property('since_action_index');
-        expect(ctx.srv.catchUps).to.have.lengthOf(1);
+        await waitFor(() => ctx.srv.catchUps.length === 1, { message: 'the blocks catch-up never went out' });
+        expect(ctx.srv.catchUps[0].channels).to.deep.equal(['blocks']);
+        expect(ctx.srv.catchUps[0]).to.include({ since: '500' });
+        // Answer it with a NEW_BLOCK note, freeing the mock server's one-catch-up latch.
+        ctx.srv.latched = false;
+        ctx.srv.reply({ type: 'CATCH_UP_COMPLETE', id: ctx.srv.catchUps[0].id,
+            data: { events_replayed: 0, latest_action_index: '500', truncated: false, not_replayed: ['NEW_BLOCK'] } });
+        await waitFor(() => ctx.srv.catchUps.length === 2, { message: 'the actions catch-up never followed' });
+        expect(ctx.srv.catchUps[1].channels).to.deep.equal(['actions']);
+        expect(notes.map(n => [n.types, n.channels])).to.deep.equal([[['NEW_BLOCK'], ['blocks']]]);
     });
 });
 
@@ -185,6 +192,46 @@ describe('WebSocketClient reconnect catch-up: continuation and refusal', functio
         expect(events[0].code).to.equal('CATCH_UP_TIMEOUT');
         expect(events[0].since_action_index, 'the gap starts where the truncated replay stopped').to.equal('600');
         expect(events[0].channels).to.deep.equal(['actions']);
+    });
+});
+
+describe('WebSocketClient reconnect catch-up: a stale replica', function () {
+    beforeEach(async function () { ctx = await createCatchUpServer(); });
+    afterEach(function (done) { if (client) { client.disconnect(); client = null; } ctx.wss.close(done); });
+
+    it('emits stale_replay for a replay closed stale, and still advances the cursor to the rows delivered', async function () {
+        const events = [];
+        await reconnectWithTwoActionSubscriptions();
+        client.on('stale_replay', (m) => events.push(m.data));
+        ctx.srv.complete(0, '640', false, null, true);
+        await waitFor(() => ctx.srv.catchUps.length === 2, { message: 'the second catch-up never went out' });
+        ctx.srv.complete(1, '610');
+        await waitFor(() => client._catchUp === null, { message: 'the catch-up never closed' });
+        expect(events).to.deep.equal([{ channels: ['actions'], since_action_index: '500', latest_action_index: '640' }]);
+        expect(client.lastActionIndex).to.equal('640');
+    });
+
+    it('emits stale_replay once for a stale replay continued past a truncated round', async function () {
+        const events = [];
+        await reconnectWithTwoActionSubscriptions();
+        client.on('stale_replay', (m) => events.push(m.data));
+        ctx.srv.complete(0, '600', true, null, true);
+        await waitFor(() => ctx.srv.catchUps.length === 2, { message: 'the truncated replay was not continued' });
+        ctx.srv.complete(1, '650', false, null, true);
+        await waitFor(() => ctx.srv.catchUps.length === 3, { message: 'the address catch-up never went out' });
+        expect(events).to.have.lengthOf(1);
+        expect(events[0]).to.include({ since_action_index: '600', latest_action_index: '650' });
+    });
+
+    it('emits no stale_replay for a replay closed fresh', async function () {
+        const events = [];
+        await reconnectWithTwoActionSubscriptions();
+        client.on('stale_replay', (m) => events.push(m.data));
+        ctx.srv.complete(0, '640');
+        await waitFor(() => ctx.srv.catchUps.length === 2, { message: 'the second catch-up never went out' });
+        ctx.srv.complete(1, '650');
+        await waitFor(() => client._catchUp === null, { message: 'the catch-up never closed' });
+        expect(events).to.have.lengthOf(0);
     });
 });
 

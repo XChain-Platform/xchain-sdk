@@ -26,6 +26,9 @@ const { expect } = require('chai');
 const { XChainSDK } = require('../../../index.js');
 
 const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
+// XBRIDGE v1 and v4 burn a foreign chain's copy, which the BTC chain refuses, so
+// those two are built where they are valid.
+const ltcSdk = new XChainSDK({ network: 'litecoin-regtest' });
 
 function assertAction(result, expectedVersion) {
     expect(result).to.be.an('object');
@@ -49,7 +52,7 @@ describe('XChainSDK.xbridge()', () => {
     });
 
     it('v1 (burn XCHAIN, release on BTC)', async () => {
-        const result = await sdk.xbridge({
+        const result = await ltcSdk.xbridge({
             version: 1,
             btcAddress: '1ExampleAddressXXXXXXXXXXXXXXXXXXX',
             amount: '200',
@@ -75,7 +78,7 @@ describe('XChainSDK.xbridge()', () => {
     });
 
     it('v4 (burn a bridged token back to its origin chain)', async () => {
-        const result = await sdk.xbridge({
+        const result = await ltcSdk.xbridge({
             version: 4,
             tick: 'BTC.PEPECASH',
             originAddress: '1ExampleAddressXXXXXXXXXXXXXXXXXXX',

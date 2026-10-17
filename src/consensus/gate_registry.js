@@ -78,6 +78,17 @@ const registryEnv = {
     get XC_CONTRACTS_REGTEST_ACTIVATION() { return sdkEnv.contractsRegtestActivation(); },
     get XC_LISTS_MARKET_REGTEST_ACTIVATION() { return sdkEnv.listsMarketRegtestActivation(); },
     get XC_LISTS_MARKET_REGTEST_TIME() { return sdkEnv.listsMarketRegtestTime(); },
+    get XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION() { return sdkEnv.remoteTokenAdmissionRegtestActivation(); },
+    get XC_PASS_PROGRESS_RETIREMENT_REGTEST_ACTIVATION() { return sdkEnv.passProgressRetirementRegtestActivation(); },
+    get XC_SLASH_HISTORICAL_SET_REGTEST_ACTIVATION() { return sdkEnv.slashHistoricalSetRegtestActivation(); },
+    get XC_ANCHOR_REWARD_COPY_SELECTION_REGTEST_ACTIVATION() { return sdkEnv.anchorRewardCopySelectionRegtestActivation(); },
+    get XC_TOKEN_SUPPLY_REPRESENTATION_REGTEST_ACTIVATION() { return sdkEnv.tokenSupplyRepresentationRegtestActivation(); },
+    get XC_DISPENSER_FIAT_PRICING_REGTEST_ACTIVATION() { return sdkEnv.dispenserFiatPricingRegtestActivation(); },
+    get XC_BRIDGE_POLICY_APPLY_ORDER_REGTEST_ACTIVATION() { return sdkEnv.bridgePolicyApplyOrderRegtestActivation(); },
+    get XC_VM_EMISSION_AMOUNT_FORMAT_REGTEST_ACTIVATION() { return sdkEnv.vmEmissionAmountFormatRegtestActivation(); },
+    get XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION() { return sdkEnv.executeFeeCapRegtestActivation(); },
+    get XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION() { return sdkEnv.voteV3TickExistenceRegtestActivation(); },
+    get XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION() { return sdkEnv.matchOriginOpenRegtestActivation(); },
 };
 
 const { registry } = core;

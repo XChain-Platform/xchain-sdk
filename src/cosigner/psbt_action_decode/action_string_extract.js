@@ -136,11 +136,12 @@ function extractInlineActionString(psbtOrHex, opts = {}) {
  * deobfuscation step for the envelope, and none is possible - the key would be
  * the commit txid, which the commit output's own contents determine).
  *
- * The refusals below mirror the authoritative decoder's §3.8 arbitration
- * exactly, because a co-signer that read an action the chain will not execute
- * (or missed one it will) is the whole failure mode this decoder exists to
- * avoid: an envelope anywhere other than input 0, more than one envelope
- * input, or an envelope mixed with any OP_RETURN carrier is NOT an action.
+ * The refusals below cover the authoritative decoder's §3.8 arbitration,
+ * refusing at least everything it refuses, because a co-signer that read an
+ * action the chain will not execute is the whole failure mode this decoder
+ * exists to avoid: an envelope anywhere other than input 0, more than one
+ * envelope input, or an envelope mixed with any OP_RETURN or bare-multisig
+ * (MULTISIGN) output is NOT an action.
  *
  * @returns { ok:true, actionString } | { ok:false, reason, detail }
  */
@@ -165,6 +166,9 @@ function extractEnvelopeActionString(psbt) {
         let decomp;
         try { decomp = bitcoin.script.decompile(out.script); } catch (e) { continue; }
         if (decomp && decomp.length >= 1 && decomp[0] === bitcoin.opcodes.OP_RETURN)
+            return fail('ENVELOPE_MIXED_CARRIER');
+        // Refuse any bare-multisig output too: the decoder reads one as a MULTISIGN carrier.
+        if (decomp && decomp.length >= 1 && decomp[decomp.length - 1] === bitcoin.opcodes.OP_CHECKMULTISIG)
             return fail('ENVELOPE_MIXED_CARRIER');
     }
 

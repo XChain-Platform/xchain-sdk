@@ -98,10 +98,12 @@ function validateDescriptionField(validator, action, field, value, allFields, er
     if (action === 'ISSUE' && field === 'DESCRIPTION')
         errors.push(...validator.scanDelimiters(field, value));
 
-    // DESCRIPTION validation (delimiter safety via checkDelimiters)
+    // DESCRIPTION validation (delimiter safety via checkDelimiters). The indexer
+    // refuses at >= MAX_DESC_LENGTH, not above it (issue/edit_rules.js), and a
+    // boundary test there pins that, so 249 UTF-16 code units is the real ceiling.
     if (field === 'DESCRIPTION' && action !== 'LIST') {
-        if (String(value).length > MAX_DESC_LENGTH)
-            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'DESCRIPTION must be ' + MAX_DESC_LENGTH + ' characters or less', { field, value: String(value).length, constraint: { max: MAX_DESC_LENGTH } }));
+        if (String(value).length >= MAX_DESC_LENGTH)
+            errors.push(validator.buildError('INVALID_FIELD_VALUE', 'DESCRIPTION must be fewer than ' + MAX_DESC_LENGTH + ' characters (UTF-16 code units)', { field, value: String(value).length, constraint: { max: MAX_DESC_LENGTH - 1 } }));
     }
 }
 
@@ -150,8 +152,11 @@ function validateMaxSupplyField(validator, action, field, value, allFields, erro
         // What holds without the row: once DECIMALS is supplied at all, the effective
         // tick_decimals is either the row's or the wire's and both are capped at
         // MAX_DECIMALS, so a fraction longer than MAX_DECIMALS is invalid at ANY decimals.
-        // With DECIMALS absent, consensus resolves NaN decimals and imposes no cap, so
-        // nothing is asserted rather than a 0 being invented.
+        // With DECIMALS absent, a new tick resolves NaN decimals: below the amount
+        // representability gate consensus imposes no cap, and at or above it (armed on
+        // regtest and testnet) the amount is refused outright, so ISSUE|NEWTOK|1000 is
+        // 'invalid: MAX_SUPPLY (format)'. Whether the tick is new is chain state, so
+        // nothing is asserted here rather than a 0 being invented.
         let declaredDecimals = allFields ? allFields['DECIMALS'] : undefined;
         let fraction = String(value).split('.')[1];
         if (!validator.isEmpty(declaredDecimals) && fraction && fraction.length > MAX_DECIMALS)

@@ -45,15 +45,9 @@ const WALLET_DESCRIPTORS_DIR = path.join(
 );
 const DESCRIPTOR_FILE = { BTC: 'bitcoin.js', LTC: 'litecoin.js', DOGE: 'dogecoin.js' };
 
-const SIBLING_REQUIRED = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
-function requireSibling(ctx, absPath) {
-    if (fs.existsSync(absPath)) return true;
-    if (SIBLING_REQUIRED)
-        throw new Error('derivation parity guard cannot run: required sibling missing at ' +
-            absPath + ' (the job setting XCHAIN_REQUIRE_SIBLINGS=1 must check out xchain-wallet)');
-    ctx.skip();
-    return false;
-}
+// Refuse an absent sibling and a lane symlink into a live main checkout alike;
+// skipOrFail skips, or throws under XCHAIN_REQUIRE_SIBLINGS=1.
+const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 // Pull the SLIP-44 coin type out of the p2pkh derivation path (m/44'/N'/...).
 function coinTypeFromDescriptor(fileText) {
@@ -108,7 +102,8 @@ describe('derivation FAMILY_SLIP44', function () {
                 assert.ok(DESCRIPTOR_FILE[family],
                     family + ' is in coins.ALLOWED_COINS but has no wallet descriptor mapped in DESCRIPTOR_FILE');
                 const file = path.join(WALLET_DESCRIPTORS_DIR, DESCRIPTOR_FILE[family]);
-                if (!requireSibling(this, file)) return;
+                if (!skipOrFail(this, siblingCheckout(__dirname, file),
+                    'the derivation SLIP-44 parity guard against xchain-wallet ' + DESCRIPTOR_FILE[family])) return;
                 const coinType = coinTypeFromDescriptor(fs.readFileSync(file, 'utf8'));
                 assert.notStrictEqual(coinType, null,
                     'could not extract m/44 coin type from ' + DESCRIPTOR_FILE[family] +
