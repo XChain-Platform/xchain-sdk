@@ -89,6 +89,7 @@ const registryEnv = {
     get XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION() { return sdkEnv.executeFeeCapRegtestActivation(); },
     get XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION() { return sdkEnv.voteV3TickExistenceRegtestActivation(); },
     get XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION() { return sdkEnv.matchOriginOpenRegtestActivation(); },
+    get XC_REASSEMBLE_CHUNK_PARENT_STATUS_REGTEST_ACTIVATION() { return sdkEnv.reassembleChunkParentStatusRegtestActivation(); },
 };
 
 const { registry } = core;
