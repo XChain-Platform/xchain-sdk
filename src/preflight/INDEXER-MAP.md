@@ -565,7 +565,7 @@ read, and what it changed on the client side, goes here.
 ### 2026-10-17 - SEND prefetch skips unused supply queries
 
 The `send` pin moves from `f8211a03` to `769c0736`, hashed from indexer
-`origin/develop` with the committed `lane/XC-5092-p2` tree merged by
+`origin/develop` with the committed companion send-handler tree merged by
 `node bin/preflight_handler_dirs.js <indexer> src/actions/send/`. The mapped diff is only
 the two `getTokenInfo` calls in `src/actions/send/prefetch.js`, for the sent tick and the
 gas tick, gaining the `{ supply: false }` option. No file in `src/actions/send/` reads
