@@ -529,7 +529,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/mint.js` | `src/actions/mint/` | `f69fdb9192b703a928dc46028a569f0a4725ce136b394304e1ec00bab04629e9` |
 | `checks/issue.js` | `src/actions/issue/` | `8f29219d887e695408a8d9b405a795182550c3ed0e991ab74bd4941efe9d294c` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `fde5c3852dc30601b5d710119e62c61711c26dca8eedfbb5cd60ad2c4ffe5d88` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `2fded8ad2eb66fdd4ba09a3b66fe101d13707ba7140c04f64b0d6dc3c7adf2fe` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `eb8ecc4c87770f2a15e588cd9303e1e8f3cca81eedea6bc0cc9bc60d227a1271` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `25dd0ed707ae1283a825803b34da44560eb05f5002ff661cf0984b4f6af99f05` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `466350e43b9d2046db432c7b0a21bd1021373ff23b6d05f4538f033d355a501f` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `0174875cd302106d68a816c7e72a64d53e3f51971881cd9efbea70a78786e7d9` |
@@ -561,6 +561,20 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-17 - DISPENSE token-payment tally scale is unconditional
+
+The `dispense` pin moves from `2fded8ad` to `eb8ecc4c`, hashed from indexer
+`origin/develop` by `node bin/preflight_handler_dirs.js <indexer> src/actions/dispense/`. The
+mapped diff is the retired flag day in `context.js` and `dispense_payment_tally_scale_gate.js`:
+a token-denominated payment now always nets its tally at the exact scale, with no block-time
+activation. The batch pool and native-coin paths keep the legacy scale as before.
+
+The tally is keyed on `COIN_AMOUNT` and on the set of open dispensers behind the paid address,
+which pre-flight cannot read before a transaction exists, so `checks/dispenser.js` already
+declares settlement unverified and needs no change.
+
+**Direction: NEUTRAL.** No validity verdict, error text or fee moves. The anchor stays unchanged.
 
 ### 2026-10-17 - SEND prefetch skips unused supply queries
 

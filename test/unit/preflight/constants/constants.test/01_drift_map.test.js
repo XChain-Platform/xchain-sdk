@@ -213,7 +213,7 @@ function registerSupplyBoundReviewTest() {
 }
 
 // The dispenser hash moves with every later reviewed change to the handler; the 2026-10-15
-// NOT NULL row key review pins it now, and the 2026-10-14 entry stays the record of this one.
+// token tally scale review pins it now, and the 2026-10-14 entry stays the record of this one.
 function registerFiatPricingReviewTest() {
     it('pins and records the DISPENSER and DISPENSE fiat pricing review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
@@ -222,7 +222,7 @@ function registerFiatPricingReviewTest() {
         const dispense = rows.find((r) => r.handler === 'src/actions/dispense/');
         expect(dispenser, 'dispenser directory row').to.exist;
         expect(dispense, 'dispense directory row').to.exist;
-        expect(dispense.hash).to.equal('2fded8ad2eb66fdd4ba09a3b66fe101d13707ba7140c04f64b0d6dc3c7adf2fe');
+        expect(dispense.hash).to.equal('eb8ecc4c87770f2a15e588cd9303e1e8f3cca81eedea6bc0cc9bc60d227a1271');
         const heading = '### 2026-10-14 - DISPENSER and DISPENSE fiat pricing behind an activation';
         expect(text).to.include(heading);
         const start = text.indexOf(heading);
