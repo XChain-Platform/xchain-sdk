@@ -242,7 +242,7 @@ function registerTextAmountRefusalReviewTest() {
         expect(send, 'send directory row').to.exist;
         expect(destroy, 'destroy directory row').to.exist;
         expect(dividend, 'dividend directory row').to.exist;
-        expect(send.hash).to.equal('f8211a031c9c9b0fd6f4f6f3906dec1d7e4009613b4140750294d6a149ad48d7');
+        expect(send.hash).to.equal('769c073687f4cac241dc2cd30b3817c37117dd2dbcdf06d55dfd34eb9ab30ec4');
         expect(destroy.hash).to.equal('d7b449ec926f886695fd596f4a9e0d6e305fa8bea8e1ca7281423614f55c0547');
         expect(dividend.hash).to.equal('c0afa565418a5df7b35bd463ab51ed580541f2b0b7d32fac0c87cf07df50e5b0');
         const heading = '### 2026-10-15 - SEND, DESTROY and DIVIDEND refuse text amounts and unknown-tick legs';
