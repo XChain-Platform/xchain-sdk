@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- Stopped exporting patternDeclares from the vendored contract lint-core scope analysis.
+
 ## [0.24.0] - 2026-10-17
 
 ### Added
