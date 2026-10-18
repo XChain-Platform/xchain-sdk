@@ -162,8 +162,8 @@ function registerBatchDispatchAdmissionReviewTest() {
 }
 
 function registerDispenserRefillPolicyReviewTest() {
-    // The dispenser hash moves with every later reviewed change to the handler; the 2026-10-14
-    // fiat pricing review pins it now, and the 2026-10-10 entry stays the record of this one.
+    // The pin-chain case in 06 guards the dispenser pin; the 2026-10-10 entry stays the
+    // record of this review.
     it('pins and records the DISPENSER refill token policy review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const dispenser = parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/dispenser/');
@@ -212,8 +212,8 @@ function registerSupplyBoundReviewTest() {
     });
 }
 
-// The dispenser hash moves with every later reviewed change to the handler; the 2026-10-15
-// token tally scale review pins it now, and the 2026-10-14 entry stays the record of this one.
+// The pin-chain case in 06 guards the dispenser pin; the 2026-10-14 entry stays the record
+// of this review.
 function registerFiatPricingReviewTest() {
     it('pins and records the DISPENSER and DISPENSE fiat pricing review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
@@ -254,14 +254,14 @@ function registerTextAmountRefusalReviewTest() {
     });
 }
 
-// The dispenser, order and swap hashes move with every later reviewed change; the 2026-10-17
-// supply prefetch review pins them now, and the 2026-10-15 NOT NULL entry stays its own record.
+// The pin-chain case in 06 guards the dispenser pin; the 2026-10-17 supply prefetch review
+// pins order and swap now, and the 2026-10-15 NOT NULL entry stays its own record.
 function registerSupplyPrefetchReviewTest() {
     it('pins and records the DISPENSER, ORDER and SWAP supply prefetch review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const rows = parseMap(REAL_MAP);
+        expect(rows.find((r) => r.handler === 'src/actions/dispenser/'), 'dispenser directory row').to.exist;
         const expected = {
-            'src/actions/dispenser/': 'c99f7897a62954276b440a1ec6f090aeab87368704c27b6ea8a0e534ca3b3db8',
             'src/actions/order/': '139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc',
             'src/actions/swap/': '470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf',
         };
@@ -285,7 +285,7 @@ function registerGiveAmountGateReviewTest() {
     it('pins and records the DISPENSER give amount gate retirement review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const row = parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/dispenser/');
-        expect(row.hash).to.equal('c99f7897a62954276b440a1ec6f090aeab87368704c27b6ea8a0e534ca3b3db8');
+        expect(row, 'dispenser directory row').to.exist;
         const heading = '### 2026-10-18 - DISPENSER give amount gate is retired';
         expect(text).to.include(heading);
         const start = text.indexOf(heading);
@@ -312,8 +312,8 @@ function registerNotNullRowKeyReviewTest() {
     it('pins and records the ORDER, SWAP, DISPENSER, DEPOSIT and WITHDRAW NOT NULL row key review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const rows = parseMap(REAL_MAP);
+        expect(rows.find((r) => r.handler === 'src/actions/dispenser/'), 'dispenser directory row').to.exist;
         const expected = {
-            'src/actions/dispenser/': 'c99f7897a62954276b440a1ec6f090aeab87368704c27b6ea8a0e534ca3b3db8',
             'src/actions/order/': '139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc',
             'src/actions/swap/': '470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf',
             'src/actions/deposit.js': '3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f',

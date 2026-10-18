@@ -24,12 +24,21 @@ describe('pre-flight constants + registry drift map (§8.5) gate retirement revi
     it('pins and records the DISPENSER and DISPENSE amount positivity gate retirement review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const rows = parseMap(REAL_MAP);
-        expect(rows.find((r) => r.handler === 'src/actions/dispenser/').hash)
-            .to.equal('c99f7897a62954276b440a1ec6f090aeab87368704c27b6ea8a0e534ca3b3db8');
+        expect(rows.find((r) => r.handler === 'src/actions/dispenser/'), 'dispenser directory row').to.exist;
         expect(rows.find((r) => r.handler === 'src/actions/dispense/').hash)
             .to.equal('302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc');
         const heading = '### 2026-10-18 - DISPENSER_AMOUNT_POSITIVITY gate is retired';
         expect(text).to.include(heading);
         expect(entryOf(text, heading)).to.include('**Direction: NEUTRAL.**');
+    });
+
+    it('the live dispenser pin is the end of the review-log pin chain', function () {
+        const text = fs.readFileSync(REAL_MAP, 'utf8').replace(/\s+/g, ' ');
+        const dispenser = parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/dispenser/');
+        expect(dispenser, 'dispenser directory row').to.exist;
+        const moves = [...text.matchAll(/the `dispenser` pin moves from `([0-9a-f]{8})` to `([0-9a-f]{8})`/gi)];
+        const live = dispenser.hash.slice(0, 8);
+        expect(moves.map((move) => move[2]), 'review-log destination pins').to.include(live);
+        expect(moves.map((move) => move[1]), 'superseded review-log pins').to.not.include(live);
     });
 });
