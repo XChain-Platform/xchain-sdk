@@ -524,14 +524,14 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `f8211a031c9c9b0fd6f4f6f3906dec1d7e4009613b4140750294d6a149ad48d7` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `769c073687f4cac241dc2cd30b3817c37117dd2dbcdf06d55dfd34eb9ab30ec4` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `d7b449ec926f886695fd596f4a9e0d6e305fa8bea8e1ca7281423614f55c0547` |
 | `checks/mint.js` | `src/actions/mint/` | `f69fdb9192b703a928dc46028a569f0a4725ce136b394304e1ec00bab04629e9` |
 | `checks/issue.js` | `src/actions/issue/` | `8f29219d887e695408a8d9b405a795182550c3ed0e991ab74bd4941efe9d294c` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `fde5c3852dc30601b5d710119e62c61711c26dca8eedfbb5cd60ad2c4ffe5d88` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `2fded8ad2eb66fdd4ba09a3b66fe101d13707ba7140c04f64b0d6dc3c7adf2fe` |
-| `checks/trading.js` (ORDER) | `src/actions/order/` | `25dd0ed707ae1283a825803b34da44560eb05f5002ff661cf0984b4f6af99f05` |
-| `checks/trading.js` (SWAP) | `src/actions/swap/` | `466350e43b9d2046db432c7b0a21bd1021373ff23b6d05f4538f033d355a501f` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `30f35536e022c2ae057dbc4c6968aee1f1f29e5bfa98aeb2ad5a32bf3b06da9d` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `eb8ecc4c87770f2a15e588cd9303e1e8f3cca81eedea6bc0cc9bc60d227a1271` |
+| `checks/trading.js` (ORDER) | `src/actions/order/` | `139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc` |
+| `checks/trading.js` (SWAP) | `src/actions/swap/` | `470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `0174875cd302106d68a816c7e72a64d53e3f51971881cd9efbea70a78786e7d9` |
 | `checks/dividend.js` | `src/actions/dividend/` | `c0afa565418a5df7b35bd463ab51ed580541f2b0b7d32fac0c87cf07df50e5b0` |
 | `checks/batch.js` | `src/actions/batch/` | `7e138a16dc5eff43ac60c4cca83c2b35ccd865eb98df3ce57c8cbc8aebca85a6` |
@@ -561,6 +561,82 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-17 - DISPENSER prefetch skips unused supply queries
+
+The `dispenser` pin moves from `fde5c385` to `5727252f`, hashed from indexer
+`origin/develop` with the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/dispenser/`. The mapped diff is only
+the `getTokenInfo` calls in `context.js` (GIVE and GET ticks) and `controller_guard.js` (gas
+tick, refill and create), each gaining the `{ supply: false }` option. No file in
+`src/actions/dispenser/` reads `SUPPLY`, so the omitted query result is unused.
+
+**Direction: NEUTRAL.** No validity verdict, error text or fee moves, and no `checks/`
+module changes. The anchor stays unchanged.
+
+### 2026-10-17 - ORDER prefetch skips unused supply queries
+
+The `order` pin moves from `25dd0ed7` to `139612e7`, hashed from indexer
+`origin/develop` with the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/order/`. The mapped diff is only
+the `getTokenInfo` calls in `context.js` (GIVE and GET ticks) and `controller_guard.js` (gas
+tick), each gaining the `{ supply: false }` option. No file in `src/actions/order/` reads
+`SUPPLY`, so the omitted query result is unused.
+
+**Direction: NEUTRAL.** No validity verdict, error text or fee moves, and no `checks/`
+module changes. The anchor stays unchanged.
+
+### 2026-10-17 - SWAP prefetch skips unused supply queries
+
+The `swap` pin moves from `466350e4` to `470d4c11`, hashed from indexer
+`origin/develop` with the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/swap/`. The mapped diff is only
+the `getTokenInfo` calls in `context.js` (GIVE and GET ticks) and `controller_guard.js` (gas
+tick), each gaining the `{ supply: false }` option. No file in `src/actions/swap/` reads
+`SUPPLY`, so the omitted query result is unused.
+
+**Direction: NEUTRAL.** No validity verdict, error text or fee moves, and no `checks/`
+module changes. The anchor stays unchanged.
+
+### 2026-10-18 - DISPENSER give amount gate is retired
+
+The `dispenser` pin moves from `5727252f` to `30f35536`, hashed from indexer
+`origin/develop` (merge `216aec4f`) by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/dispenser/`. The mapped diff is
+only `validate_format.js`: the `dispenser_give_amount_activation` gate check is removed, so
+the GIVE_AMOUNT greater-than-zero rule for GIVE_OWNERSHIP=0 creates now runs unconditionally. The
+gate was armed at 0 on mainnet, testnet and regtest, so behaviour at every current height is
+unchanged. `checks/dispenser.js` reads no gate for this rule and no `checks/` module reads the
+retired gate.
+
+**Direction: NEUTRAL.** No validity verdict, error text or fee moves, and no `checks/`
+module changes. The anchor stays unchanged.
+
+### 2026-10-17 - DISPENSE token-payment tally scale is unconditional
+
+The `dispense` pin moves from `2fded8ad` to `eb8ecc4c`, hashed from indexer
+`origin/develop` by `node bin/preflight_handler_dirs.js <indexer> src/actions/dispense/`. The
+mapped diff is the retired flag day in `context.js` and `dispense_payment_tally_scale_gate.js`:
+a token-denominated payment now always nets its tally at the exact scale, with no block-time
+activation. The batch pool and native-coin paths keep the legacy scale as before.
+
+The tally is keyed on `COIN_AMOUNT` and on the set of open dispensers behind the paid address,
+which pre-flight cannot read before a transaction exists, so `checks/dispenser.js` already
+declares settlement unverified and needs no change.
+
+**Direction: NEUTRAL.** No validity verdict, error text or fee moves. The anchor stays unchanged.
+
+### 2026-10-17 - SEND prefetch skips unused supply queries
+
+The `send` pin moves from `f8211a03` to `769c0736`, hashed from indexer
+`origin/develop` with the committed companion send-handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/send/`. The mapped diff is only
+the two `getTokenInfo` calls in `src/actions/send/prefetch.js`, for the sent tick and the
+gas tick, gaining the `{ supply: false }` option. No file in `src/actions/send/` reads
+`SUPPLY`, so the omitted query result is unused.
+
+**Direction: NEUTRAL.** No validity verdict, error text or fee moves, and no `checks/`
+module changes. The anchor stays unchanged.
 
 ### 2026-10-15 - ORDER_MATCH and SWAP_MATCH require an open origin behind an activation
 
