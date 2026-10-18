@@ -242,7 +242,7 @@ function registerTextAmountRefusalReviewTest() {
         expect(send, 'send directory row').to.exist;
         expect(destroy, 'destroy directory row').to.exist;
         expect(dividend, 'dividend directory row').to.exist;
-        expect(send.hash).to.equal('4d458bc1a86bd3e80a8c947ce50218b87654df825ed6a5ac21b6398243670116');
+        expect(send.hash).to.equal('ee30f9038d6ea9d78cac4ebca511275ca11e62aea2c0ac4c4ac1ed3f765dbca9');
         expect(destroy.hash).to.equal('597c2728d6254fb2c7860f12d1e9a4a1746c30bb08bad283223490ff8847a17a');
         expect(dividend.hash).to.equal('c0afa565418a5df7b35bd463ab51ed580541f2b0b7d32fac0c87cf07df50e5b0');
         const heading = '### 2026-10-15 - SEND, DESTROY and DIVIDEND refuse text amounts and unknown-tick legs';
@@ -298,7 +298,7 @@ function registerConsolidationLegGateReviewTest() {
     it('pins and records the SEND and DESTROY consolidation leg gate retirement review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const rows = parseMap(REAL_MAP);
-        expect(rows.find((r) => r.handler === 'src/actions/send/').hash).to.equal('4d458bc1a86bd3e80a8c947ce50218b87654df825ed6a5ac21b6398243670116');
+        expect(rows.find((r) => r.handler === 'src/actions/send/').hash).to.equal('ee30f9038d6ea9d78cac4ebca511275ca11e62aea2c0ac4c4ac1ed3f765dbca9');
         expect(rows.find((r) => r.handler === 'src/actions/destroy/').hash).to.equal('597c2728d6254fb2c7860f12d1e9a4a1746c30bb08bad283223490ff8847a17a');
         const heading = '### 2026-10-18 - CONSOLIDATION_LEG_AMOUNT gate is retired';
         expect(text).to.include(heading);

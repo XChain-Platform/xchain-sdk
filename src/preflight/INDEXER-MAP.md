@@ -524,7 +524,7 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `4d458bc1a86bd3e80a8c947ce50218b87654df825ed6a5ac21b6398243670116` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `ee30f9038d6ea9d78cac4ebca511275ca11e62aea2c0ac4c4ac1ed3f765dbca9` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `597c2728d6254fb2c7860f12d1e9a4a1746c30bb08bad283223490ff8847a17a` |
 | `checks/mint.js` | `src/actions/mint/` | `f69fdb9192b703a928dc46028a569f0a4725ce136b394304e1ec00bab04629e9` |
 | `checks/issue.js` | `src/actions/issue/` | `8f29219d887e695408a8d9b405a795182550c3ed0e991ab74bd4941efe9d294c` |
@@ -561,6 +561,17 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-18 - GATED_HANDOFF_REF gate is retired
+
+The `send` pin moves from `4d458bc1` to `ee30f903`, hashed from indexer `origin/develop` with the
+committed companion handler tree merged by `node bin/preflight_handler_dirs.js <indexer> src/actions/send/`.
+The mapped diff is the GATED_HANDOFF_REF retirement making the caret-reference resolution of a
+gated SEND handoff destination unconditional in `gated_handoff.js`. The gate was armed at height 0
+on every network, so no reachable validity verdict, error text or fee moves and no `checks/` module
+changes.
+
+**Direction: NEUTRAL.** The anchor stays unchanged.
 
 ### 2026-10-18 - AIRDROP_NATIVE_FEE_TALLY gate is added
 

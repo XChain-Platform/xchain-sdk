@@ -50,4 +50,13 @@ describe('pre-flight constants + registry drift map (§8.5) gate retirement revi
         expect(text).to.include(heading);
         expect(entryOf(text, heading)).to.include('**Direction: TIGHTENING at the gate height only.**');
     });
+
+    it('pins and records the SEND gated handoff reference gate retirement review', function () {
+        const text = fs.readFileSync(REAL_MAP, 'utf8');
+        expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/send/').hash)
+            .to.equal('ee30f9038d6ea9d78cac4ebca511275ca11e62aea2c0ac4c4ac1ed3f765dbca9');
+        const heading = '### 2026-10-18 - GATED_HANDOFF_REF gate is retired';
+        expect(text).to.include(heading);
+        expect(entryOf(text, heading)).to.include('**Direction: NEUTRAL.**');
+    });
 });
