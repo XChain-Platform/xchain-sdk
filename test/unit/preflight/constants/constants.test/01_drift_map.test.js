@@ -222,7 +222,7 @@ function registerFiatPricingReviewTest() {
         const dispense = rows.find((r) => r.handler === 'src/actions/dispense/');
         expect(dispenser, 'dispenser directory row').to.exist;
         expect(dispense, 'dispense directory row').to.exist;
-        expect(dispense.hash).to.equal('eb8ecc4c87770f2a15e588cd9303e1e8f3cca81eedea6bc0cc9bc60d227a1271');
+        expect(dispense.hash).to.equal('302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc');
         const heading = '### 2026-10-14 - DISPENSER and DISPENSE fiat pricing behind an activation';
         expect(text).to.include(heading);
         const start = text.indexOf(heading);
@@ -261,7 +261,7 @@ function registerSupplyPrefetchReviewTest() {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const rows = parseMap(REAL_MAP);
         const expected = {
-            'src/actions/dispenser/': '30f35536e022c2ae057dbc4c6968aee1f1f29e5bfa98aeb2ad5a32bf3b06da9d',
+            'src/actions/dispenser/': 'c99f7897a62954276b440a1ec6f090aeab87368704c27b6ea8a0e534ca3b3db8',
             'src/actions/order/': '139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc',
             'src/actions/swap/': '470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf',
         };
@@ -285,7 +285,7 @@ function registerGiveAmountGateReviewTest() {
     it('pins and records the DISPENSER give amount gate retirement review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const row = parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/dispenser/');
-        expect(row.hash).to.equal('30f35536e022c2ae057dbc4c6968aee1f1f29e5bfa98aeb2ad5a32bf3b06da9d');
+        expect(row.hash).to.equal('c99f7897a62954276b440a1ec6f090aeab87368704c27b6ea8a0e534ca3b3db8');
         const heading = '### 2026-10-18 - DISPENSER give amount gate is retired';
         expect(text).to.include(heading);
         const start = text.indexOf(heading);
@@ -313,7 +313,7 @@ function registerNotNullRowKeyReviewTest() {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const rows = parseMap(REAL_MAP);
         const expected = {
-            'src/actions/dispenser/': '30f35536e022c2ae057dbc4c6968aee1f1f29e5bfa98aeb2ad5a32bf3b06da9d',
+            'src/actions/dispenser/': 'c99f7897a62954276b440a1ec6f090aeab87368704c27b6ea8a0e534ca3b3db8',
             'src/actions/order/': '139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc',
             'src/actions/swap/': '470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf',
             'src/actions/deposit.js': '3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f',

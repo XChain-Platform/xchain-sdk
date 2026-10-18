@@ -528,8 +528,8 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `597c2728d6254fb2c7860f12d1e9a4a1746c30bb08bad283223490ff8847a17a` |
 | `checks/mint.js` | `src/actions/mint/` | `f69fdb9192b703a928dc46028a569f0a4725ce136b394304e1ec00bab04629e9` |
 | `checks/issue.js` | `src/actions/issue/` | `8f29219d887e695408a8d9b405a795182550c3ed0e991ab74bd4941efe9d294c` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `30f35536e022c2ae057dbc4c6968aee1f1f29e5bfa98aeb2ad5a32bf3b06da9d` |
-| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `eb8ecc4c87770f2a15e588cd9303e1e8f3cca81eedea6bc0cc9bc60d227a1271` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `c99f7897a62954276b440a1ec6f090aeab87368704c27b6ea8a0e534ca3b3db8` |
+| `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `0174875cd302106d68a816c7e72a64d53e3f51971881cd9efbea70a78786e7d9` |
@@ -561,6 +561,19 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-18 - DISPENSER_AMOUNT_POSITIVITY gate is retired
+
+The `dispenser` pin moves from `30f35536` to `c99f7897` and the `dispense` pin moves from
+`eb8ecc4c` to `302ff0ba`, hashed from indexer `origin/develop` with the committed companion
+handler tree merged by `node bin/preflight_handler_dirs.js <indexer> src/actions/dispenser/` and
+`node bin/preflight_handler_dirs.js <indexer> src/actions/dispense/`. The mapped diff is
+`dispense/pricing.js`, `dispense/pricing_paths.js` and `dispenser/validate_format.js` applying the
+native GET_AMOUNT format and positivity rules unconditionally once the
+`dispenser_amount_positivity` gate is retired. The gate was armed at height 0 on every network,
+so no reachable validity verdict, error text or fee moves and no `checks/` module changes.
+
+**Direction: NEUTRAL.** The anchor stays unchanged.
 
 ### 2026-10-18 - CONSOLIDATION_LEG_AMOUNT gate is retired
 
