@@ -20,6 +20,9 @@ jobs:
         with:
           ref: master
 
+      - name: Pin xchain-contracts to the tested commit
+        run: bin/pin-contracts-sibling.sh
+
       - name: Use Node.js 22
         uses: actions/setup-node@v6
         with:
