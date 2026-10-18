@@ -528,7 +528,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `597c2728d6254fb2c7860f12d1e9a4a1746c30bb08bad283223490ff8847a17a` |
 | `checks/mint.js` | `src/actions/mint/` | `f69fdb9192b703a928dc46028a569f0a4725ce136b394304e1ec00bab04629e9` |
 | `checks/issue.js` | `src/actions/issue/` | `8f29219d887e695408a8d9b405a795182550c3ed0e991ab74bd4941efe9d294c` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `c99f7897a62954276b440a1ec6f090aeab87368704c27b6ea8a0e534ca3b3db8` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `3c0163d61230bbc249606f41d92786eb2016b43664dba71b55e78e8ef2ad4907` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf` |
@@ -561,6 +561,18 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-18 - DISPENSER_ORACLE_PRICE gate is retired
+
+The `dispenser` pin moves from `c99f7897` to `3c0163d6`, hashed from indexer
+`origin/develop` with the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/dispenser/`. The mapped diff is
+`dispenser/validate_format.js` requiring an effective oracle price on a format-0 create with an
+`ORACLE_ADDRESS` unconditionally, still behind `FIAT_DISPENSER_PRICING`, once the
+`dispenser_oracle_price` gate is retired. The gate was armed at height 0 on every network, so no
+reachable validity verdict, error text or fee moves and no `checks/` module changes.
+
+**Direction: NEUTRAL.** The anchor stays unchanged.
 
 ### 2026-10-18 - DISPENSER_AMOUNT_POSITIVITY gate is retired
 
