@@ -261,7 +261,7 @@ function registerSupplyPrefetchReviewTest() {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const rows = parseMap(REAL_MAP);
         const expected = {
-            'src/actions/dispenser/': '5727252fbfb97006af79b06741ae32970dd491fb60ce00d303fbde0ca8a2db2a',
+            'src/actions/dispenser/': '30f35536e022c2ae057dbc4c6968aee1f1f29e5bfa98aeb2ad5a32bf3b06da9d',
             'src/actions/order/': '139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc',
             'src/actions/swap/': '470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf',
         };
@@ -281,12 +281,25 @@ function registerSupplyPrefetchReviewTest() {
     });
 }
 
+function registerGiveAmountGateReviewTest() {
+    it('pins and records the DISPENSER give amount gate retirement review', function () {
+        const text = fs.readFileSync(REAL_MAP, 'utf8');
+        const row = parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/dispenser/');
+        expect(row.hash).to.equal('30f35536e022c2ae057dbc4c6968aee1f1f29e5bfa98aeb2ad5a32bf3b06da9d');
+        const heading = '### 2026-10-18 - DISPENSER give amount gate is retired';
+        expect(text).to.include(heading);
+        const start = text.indexOf(heading);
+        const entry = text.slice(start, text.indexOf('\n### ', start + heading.length));
+        expect(entry).to.include('**Direction: NEUTRAL.**');
+    });
+}
+
 function registerNotNullRowKeyReviewTest() {
     it('pins and records the ORDER, SWAP, DISPENSER, DEPOSIT and WITHDRAW NOT NULL row key review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const rows = parseMap(REAL_MAP);
         const expected = {
-            'src/actions/dispenser/': '5727252fbfb97006af79b06741ae32970dd491fb60ce00d303fbde0ca8a2db2a',
+            'src/actions/dispenser/': '30f35536e022c2ae057dbc4c6968aee1f1f29e5bfa98aeb2ad5a32bf3b06da9d',
             'src/actions/order/': '139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc',
             'src/actions/swap/': '470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf',
             'src/actions/deposit.js': '3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f',
@@ -359,6 +372,7 @@ describe('pre-flight constants + registry', function () {
         registerTextAmountRefusalReviewTest();
         registerNotNullRowKeyReviewTest();
         registerSupplyPrefetchReviewTest();
+        registerGiveAmountGateReviewTest();
         registerVoteTickExistenceReviewTest();
         registerMatchOriginOpenReviewTest();
     });

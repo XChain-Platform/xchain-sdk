@@ -528,7 +528,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `d7b449ec926f886695fd596f4a9e0d6e305fa8bea8e1ca7281423614f55c0547` |
 | `checks/mint.js` | `src/actions/mint/` | `f69fdb9192b703a928dc46028a569f0a4725ce136b394304e1ec00bab04629e9` |
 | `checks/issue.js` | `src/actions/issue/` | `8f29219d887e695408a8d9b405a795182550c3ed0e991ab74bd4941efe9d294c` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `5727252fbfb97006af79b06741ae32970dd491fb60ce00d303fbde0ca8a2db2a` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `30f35536e022c2ae057dbc4c6968aee1f1f29e5bfa98aeb2ad5a32bf3b06da9d` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `eb8ecc4c87770f2a15e588cd9303e1e8f3cca81eedea6bc0cc9bc60d227a1271` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf` |
@@ -594,6 +594,20 @@ The `swap` pin moves from `466350e4` to `470d4c11`, hashed from indexer
 the `getTokenInfo` calls in `context.js` (GIVE and GET ticks) and `controller_guard.js` (gas
 tick), each gaining the `{ supply: false }` option. No file in `src/actions/swap/` reads
 `SUPPLY`, so the omitted query result is unused.
+
+**Direction: NEUTRAL.** No validity verdict, error text or fee moves, and no `checks/`
+module changes. The anchor stays unchanged.
+
+### 2026-10-18 - DISPENSER give amount gate is retired
+
+The `dispenser` pin moves from `5727252f` to `30f35536`, hashed from indexer
+`origin/develop` (merge `216aec4f`) by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/dispenser/`. The mapped diff is
+only `validate_format.js`: the `dispenser_give_amount_activation` gate check is removed, so
+the GIVE_AMOUNT greater-than-zero rule for GIVE_OWNERSHIP=0 creates now runs unconditionally. The
+gate was armed at 0 on mainnet, testnet and regtest, so behaviour at every current height is
+unchanged. `checks/dispenser.js` reads no gate for this rule and no `checks/` module reads the
+retired gate.
 
 **Direction: NEUTRAL.** No validity verdict, error text or fee moves, and no `checks/`
 module changes. The anchor stays unchanged.
