@@ -524,8 +524,8 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `769c073687f4cac241dc2cd30b3817c37117dd2dbcdf06d55dfd34eb9ab30ec4` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `d7b449ec926f886695fd596f4a9e0d6e305fa8bea8e1ca7281423614f55c0547` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `4d458bc1a86bd3e80a8c947ce50218b87654df825ed6a5ac21b6398243670116` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `597c2728d6254fb2c7860f12d1e9a4a1746c30bb08bad283223490ff8847a17a` |
 | `checks/mint.js` | `src/actions/mint/` | `f69fdb9192b703a928dc46028a569f0a4725ce136b394304e1ec00bab04629e9` |
 | `checks/issue.js` | `src/actions/issue/` | `8f29219d887e695408a8d9b405a795182550c3ed0e991ab74bd4941efe9d294c` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `30f35536e022c2ae057dbc4c6968aee1f1f29e5bfa98aeb2ad5a32bf3b06da9d` |
@@ -561,6 +561,19 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-18 - CONSOLIDATION_LEG_AMOUNT gate is retired
+
+The `send` pin moves from `769c0736` to `4d458bc1` and the `destroy` pin moves from
+`d7b449ec` to `597c2728`, hashed from indexer `origin/develop` with the committed companion
+handler tree merged by `node bin/preflight_handler_dirs.js <indexer> src/actions/send/` and
+`node bin/preflight_handler_dirs.js <indexer> src/actions/destroy/`. The mapped diff is
+`send/legs.js` and `destroy/legs.js` applying the per-leg amount format check unconditionally
+once the `consolidation_leg_amount` gate is retired. The gate was armed at height 0 on every
+network, so no reachable validity verdict, error text or fee moves and no `checks/` module
+changes.
+
+**Direction: NEUTRAL.** The anchor stays unchanged.
 
 ### 2026-10-17 - DISPENSER prefetch skips unused supply queries
 
