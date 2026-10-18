@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-17
+
+### Added
+- Carried the remote token pin, bridged policy, fiat dispenser, token supply and execute fee cap rules, each behind a gate.
+- Matched pre-flight to the indexer on resolved tick balances, cancelling dispensers and armed amount rules.
+
+### Changed
+- Built and checked the phase-two reveal before broadcasting phase one, and bound TAPROOT raw data before broadcast.
+- Computed describe warnings, fee percentages and the light-client stake total with exact decimals.
+- Paced websocket client sends under the server rate and retried dropped subscribes and catch-ups.
+- Armed ORDER_MATCH_PRICE_CROSS_ACTIVATION on BTC:testnet at 156908.
+- Armed ORDER_MATCH_PRICE_CROSS_ACTIVATION on LTC:testnet at 4927400.
+- Armed ORDER_MATCH_PRICE_CROSS_ACTIVATION on DOGE:testnet at 68005165.
+- Armed REMOTE_TOKEN_ADMISSION_ACTIVATION on BTC:testnet at 156908.
+- Armed REMOTE_TOKEN_ADMISSION_ACTIVATION on LTC:testnet at 4927400.
+- Armed REMOTE_TOKEN_ADMISSION_ACTIVATION on DOGE:testnet at 68005165.
+
+### Fixed
+- Refused mainnet submissions before launch and VOTE amounts with a nonzero digit past eight decimal places.
+
+### Security
+- Bumped fast-uri, ip-address, proxy-addr, shell-quote and brace-expansion to resolve security advisories.
+
 ### Changed
 - Re-embedded the vesting template and safe-transfer pattern with exact positive-payout guards.
 - Re-embedded the crowdsale 1.4.0 template with `burnUnsold` support for finalized inventory.
