@@ -41,4 +41,13 @@ describe('pre-flight constants + registry drift map (§8.5) gate retirement revi
         expect(moves.map((move) => move[2]), 'review-log destination pins').to.include(live);
         expect(moves.map((move) => move[1]), 'superseded review-log pins').to.not.include(live);
     });
+
+    it('pins and records the AIRDROP native fee tally gate review', function () {
+        const text = fs.readFileSync(REAL_MAP, 'utf8');
+        expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/airdrop/').hash)
+            .to.equal('b04e9b5e3b02e0a1f548c29bdf39fcba90ab21366336cf84011c448f8248dd9c');
+        const heading = '### 2026-10-18 - AIRDROP_NATIVE_FEE_TALLY gate is added';
+        expect(text).to.include(heading);
+        expect(entryOf(text, heading)).to.include('**Direction: TIGHTENING at the gate height only.**');
+    });
 });

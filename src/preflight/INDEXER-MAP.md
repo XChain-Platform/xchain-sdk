@@ -532,7 +532,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf` |
-| `checks/airdrop.js` | `src/actions/airdrop/` | `0174875cd302106d68a816c7e72a64d53e3f51971881cd9efbea70a78786e7d9` |
+| `checks/airdrop.js` | `src/actions/airdrop/` | `b04e9b5e3b02e0a1f548c29bdf39fcba90ab21366336cf84011c448f8248dd9c` |
 | `checks/dividend.js` | `src/actions/dividend/` | `c0afa565418a5df7b35bd463ab51ed580541f2b0b7d32fac0c87cf07df50e5b0` |
 | `checks/batch.js` | `src/actions/batch/` | `7e138a16dc5eff43ac60c4cca83c2b35ccd865eb98df3ce57c8cbc8aebca85a6` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f` |
@@ -561,6 +561,19 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-18 - AIRDROP_NATIVE_FEE_TALLY gate is added
+
+The `airdrop` pin moves from `0174875c` to `b04e9b5e`, hashed from indexer `origin/develop` with
+the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/airdrop/`. The mapped diff is the
+`AIRDROP_NATIVE_FEE_TALLY_ACTIVATION` gate (unarmed off regtest) adding one native-fee tally over
+non-BATCH AIRDROP legs in `fees.js`, `legs.js` and `index.js`. Below the gate the airdrop path is
+byte for byte the old one; at the gate the FEE_PROBE quote is the summed tally. `checks/airdrop.js`
+computes no native fee quote of its own, so nothing in it must follow at activation: the quote it
+shows comes from the indexer fee probe.
+
+**Direction: TIGHTENING at the gate height only.** The anchor stays unchanged.
 
 ### 2026-10-18 - DISPENSER_ORACLE_PRICE gate is retired
 
