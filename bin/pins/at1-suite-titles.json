@@ -2062,6 +2062,14 @@
       "parent list type returns null for a null answer or a throwing read",
       "parent list type returns null when the cap rejects"
     ],
+    "41a70f324b529a62": [
+      "SPV D4: pinned launch trust root a checkpoint NOT signed by the pinned set fails quorum (no silent fallback to the explorer)",
+      "SPV D4: pinned launch trust root sdk.light re-exports the registry accessors, and they ARE the registry",
+      "SPV D4: pinned launch trust root the shipped registry is inert for mainnet and regtest, populated for the three testnets",
+      "SPV D4: pinned launch trust root verifyAction also uses the pinned set and skips /verify",
+      "SPV D4: pinned launch trust root verifyBalance uses the PINNED set and never fetches the explorer /verify endpoint",
+      "SPV D4: pinned launch trust root with NO pinned entry, verifyBalance falls back to the explorer /verify set (convenience path)"
+    ],
     "41b5126fc1607646": [
       "LifecycleManager constructor stores the sdk reference",
       "LifecycleManager submitAction(): missing WIF throws MISSING_WIF when wif is null",
@@ -3606,14 +3614,6 @@
       "G5: window-store single-writer lock refuses to reclaim a lock whose holder record is empty",
       "G5: window-store single-writer lock refuses to record once its lock has been taken by another store",
       "G5: window-store single-writer lock takes over a lock whose holder is dead, so a crash is not operator-only recovery"
-    ],
-    "720592b683056f8f": [
-      "SPV D4: pinned launch trust root a checkpoint NOT signed by the pinned set fails quorum (no silent fallback to the explorer)",
-      "SPV D4: pinned launch trust root sdk.light re-exports the registry accessors, and they ARE the registry",
-      "SPV D4: pinned launch trust root the shipped registry is INERT: every real coin pins null (convenience path stands)",
-      "SPV D4: pinned launch trust root verifyAction also uses the pinned set and skips /verify",
-      "SPV D4: pinned launch trust root verifyBalance uses the PINNED set and never fetches the explorer /verify endpoint",
-      "SPV D4: pinned launch trust root with NO pinned entry, verifyBalance falls back to the explorer /verify set (convenience path)"
     ],
     "7264e3019757e41b": [
       "co-signer: Taproot envelope composition budget: one action, two transactions, one charge charges the commit and neither the reveal nor the cancel",
@@ -8086,7 +8086,7 @@
         "test/unit/protocol/light/light.test/04_spv_phase_4_doge_anchor_cold_start_trust.test.js": "68caeca73c7d9ce3",
         "test/unit/protocol/light/light.test/05_spv_phase_4_doge_anchor_cold_start_trust.test.js": "0749479b344d2eb6",
         "test/unit/protocol/light/light.test/06_spv_phase_5_validator_set_proof_trustless_quorum.test.js": "f404eb95acf4b632",
-        "test/unit/protocol/light/light.test/07_spv_d4_pinned_launch_trust_root.test.js": "720592b683056f8f",
+        "test/unit/protocol/light/light.test/07_spv_d4_pinned_launch_trust_root.test.js": "41a70f324b529a62",
         "test/unit/protocol/light/light.test/08_spv_7_3_rotation_aware_pinned_path_follow_forward.test.js": "a642d1867223aa67",
         "test/unit/protocol/light/light.test/09_spv_phase_4_doge_anchor_cold_start_trust.test.js": "446a816c74c3e1c6",
         "test/unit/protocol/light/light.test/10_anchor_fold_v3_cold_start_trust.test.js": "17d4121b8213b71a",
@@ -8707,7 +8707,7 @@
         "test/unit/protocol/light/light.test/04_spv_phase_4_doge_anchor_cold_start_trust.test.js": "68caeca73c7d9ce3",
         "test/unit/protocol/light/light.test/05_spv_phase_4_doge_anchor_cold_start_trust.test.js": "0749479b344d2eb6",
         "test/unit/protocol/light/light.test/06_spv_phase_5_validator_set_proof_trustless_quorum.test.js": "f404eb95acf4b632",
-        "test/unit/protocol/light/light.test/07_spv_d4_pinned_launch_trust_root.test.js": "720592b683056f8f",
+        "test/unit/protocol/light/light.test/07_spv_d4_pinned_launch_trust_root.test.js": "41a70f324b529a62",
         "test/unit/protocol/light/light.test/08_spv_7_3_rotation_aware_pinned_path_follow_forward.test.js": "a642d1867223aa67",
         "test/unit/protocol/light/light.test/09_spv_phase_4_doge_anchor_cold_start_trust.test.js": "446a816c74c3e1c6",
         "test/unit/protocol/light/light.test/10_anchor_fold_v3_cold_start_trust.test.js": "17d4121b8213b71a",

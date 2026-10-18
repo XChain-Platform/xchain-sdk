@@ -270,9 +270,9 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
             return { ok: false, status: 404, json: async () => ({}) };
         };
         const r = await light.fetchAnchoredCheckpoint({ explorerUrl: 'https://x', dogeCoin: 'TDOGE',
-            targetChain: 'LTC', targetCoin: 'TLTC', dogeTipHeight: 1200, minDepth: 60, fetchImpl });
+            targetChain: 'LTC', targetCoin: 'RLTC', dogeTipHeight: 1200, minDepth: 60, fetchImpl });
         assert.strictEqual(r.verified, true, r.reason);
-        assert.deepStrictEqual(verifyUrls, ['https://x/TLTC/api/checkpoint/100/verify']);
+        assert.deepStrictEqual(verifyUrls, ['https://x/RLTC/api/checkpoint/100/verify']);
     });
 
     it('fetchAnchoredCheckpoint tier 1: an explicit set wins and never calls /verify', async function () {

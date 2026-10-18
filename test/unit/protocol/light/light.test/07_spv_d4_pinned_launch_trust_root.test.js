@@ -184,10 +184,16 @@ describe('SPV D4: pinned launch trust root', function () {
         light.clearValidatorSetCache();
     });
 
-    it('the shipped registry is INERT: every real coin pins null (convenience path stands)', function () {
-        for (const coin of ['BTC', 'TBTC', 'RBTC', 'LTC', 'TLTC', 'RLTC', 'DOGE', 'TDOGE', 'RDOGE']) {
+    it('the shipped registry is inert for mainnet and regtest, populated for the three testnets', function () {
+        for (const coin of ['BTC', 'RBTC', 'LTC', 'RLTC', 'DOGE', 'RDOGE']) {
             assert.strictEqual(pinned.getPinnedCheckpoint(coin), null, coin);
             assert.strictEqual(pinned.getPinnedValidators(coin), null, coin);
+        }
+        for (const coin of ['TBTC', 'TLTC', 'TDOGE']) {
+            const e = pinned.getPinnedCheckpoint(coin);
+            assert.strictEqual(e.checkpoint.network, 'testnet', coin);
+            assert.ok(Array.isArray(e.validators) && e.validators.length > 0, coin);
+            assert.strictEqual(pinned.getPinnedValidators(coin), e.validators, coin);
         }
         assert.strictEqual(pinned.getPinnedCheckpoint(null), null);
     });
