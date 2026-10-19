@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-18
+
+### Added
+- Pinned the TBTC, TLTC and TDOGE testnet launch trust roots from the live explorer.
+- Added regtest arming for the chunk reassembly parent status rule and read the unstake journal arming lever through the sdk env view.
+
+### Changed
+- Carried the anchor checkpoint sequence and unstake row journal gate rows and retired the copied price, archive, index map and relay gates.
+- Repinned the send, airdrop, dispenser, order and swap handlers after the gate retirements and the native fee tally change.
+
+### Fixed
+- Resynced the vendored lint-core scope analysis with xchain-vm and the embedded crowdsale template.
+
 ### Removed
 - Stopped exporting patternDeclares from the vendored contract lint-core scope analysis.
 
