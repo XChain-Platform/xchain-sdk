@@ -62,6 +62,64 @@ const ASSERT_FRESH_READS = ['stale', 'last_block', 'tip_age_seconds', 'replica_h
 const NETWORK_FIELDS     = ['network', 'totals', 'fee', 'coin', 'xchain', 'finality'];
 const NETWORK_STATE_KEYS = ['block', 'time', 'unconfirmed', 'unconfirmed_node'];
 
+const CONTRACT_FIELDS = {
+    action:             true,
+    action_index:       false,
+    action_format:      true,
+    source:             true,
+    code_hash:          false,
+    api_version:        false,
+    cooldown_blocks:    true,
+    slash_destination:  true,
+    block_index:        true,
+    timestamp:          true,
+    tx_hash:            true,
+    tx_index:           false,
+    status:             true,
+    owner_withdraw:     true,
+    code:               false,
+    code_hash_ok:       false,
+    methods:            true,
+    abi:                true,
+    constructor_params: true,
+    vm_query_enabled:   false,
+    wallet_url:         false,
+    permissions_error:  false,
+    permissions:        true,
+    max_take_bps:       true,
+    meta_name:          true,
+    meta_description:   true,
+    meta_version:       true,
+    meta:               true,
+};
+
+const EXECUTION_FIELDS = {
+    action:         true,
+    action_index:   false,
+    action_format:  true,
+    contract_index: true,
+    caller:         true,
+    method_name:    true,
+    gas_used:       false,
+    gas_limit:      false,
+    emitted_count:  false,
+    block_index:    true,
+    timestamp:      true,
+    tx_hash:        true,
+    tx_index:       true,
+    status:         true,
+    input_params:   true,
+    error_message:  true,
+};
+
+const STATE_FIELDS = {
+    id:             false,
+    contract_index: false,
+    state_key:      false,
+    state_value:    true,
+    block_index:    false,
+};
+
 // The body of `export interface <name> { ... }`, up to its closing brace at column 0.
 function interfaceBody(dts, name) {
     const start = dts.indexOf('export interface ' + name + ' {');
@@ -89,6 +147,14 @@ function topLevelProps(body) {
     return out;
 }
 
+function assertPinnedNullability(props, fields) {
+    const declared = Object.keys(props).filter((k) => !ENVELOPE.includes(k)).sort();
+    assert.deepStrictEqual(declared, Object.keys(fields).sort());
+    for (const [name, nullable] of Object.entries(fields)) {
+        assert.strictEqual(props[name].nullable, nullable, name + ' nullability drifted: ' + props[name].type);
+    }
+}
+
 // Read the sibling's schema, or skip (or fail under XCHAIN_REQUIRE_SIBLINGS=1).
 function explorerSchema(ctx, name) {
     if (!fs.existsSync(EXPLORER_SPEC)) {
@@ -106,6 +172,15 @@ function explorerSchema(ctx, name) {
 // An OpenAPI type is nullable when its type list includes "null".
 function schemaNullable(t) {
     return Array.isArray(t) && t.includes('null');
+}
+
+function assertSchemaNullability(schema, fields, exact = true) {
+    const names = Object.keys(schema.properties).sort();
+    if (exact) assert.deepStrictEqual(names, Object.keys(fields).sort());
+    for (const name of names) {
+        assert.ok(Object.hasOwn(fields, name), name + ': absent from the pinned fields');
+        assert.strictEqual(schemaNullable(schema.properties[name].type), fields[name], name + ': nullability disagrees with the explorer schema');
+    }
 }
 
 describe('explorer response types in index.d.ts', function () {
@@ -152,6 +227,58 @@ describe('explorer response types in index.d.ts', function () {
             }
             // Every field is optional here because the schema requires none; revisit if that changes.
             assert.strictEqual(schema.required, undefined, 'ExplorerStatus gained a required list; revisit the optional markers');
+        });
+    });
+});
+
+describe('contract explorer response types in index.d.ts', function () {
+    const dts = fs.readFileSync(DTS, 'utf8');
+
+    describe('ContractInfo', function () {
+        const props = topLevelProps(interfaceBody(dts, 'ContractInfo'));
+
+        it('getContracts() resolves to ContractInfo', function () {
+            assert.match(dts, /getContracts\(query\?: string, type\?: string, opts\?: QueryOptions\): Promise<ListEnvelope<ContractInfo>>;/);
+        });
+
+        it('declares exactly the reader fields with their SQL nullability', function () {
+            assertPinnedNullability(props, CONTRACT_FIELDS);
+        });
+
+        it('matches the explorer OpenAPI ContractRow schema', function () {
+            assertSchemaNullability(explorerSchema(this, 'ContractRow'), CONTRACT_FIELDS, false);
+        });
+    });
+
+    describe('ExecutionInfo', function () {
+        const props = topLevelProps(interfaceBody(dts, 'ExecutionInfo'));
+
+        it('getExecution() resolves to ExecutionInfo', function () {
+            assert.match(dts, /getExecution\(executionActionIndex: number \| string\): Promise<ListEnvelope<ExecutionInfo>>;/);
+        });
+
+        it('declares exactly the reader fields with their SQL nullability', function () {
+            assertPinnedNullability(props, EXECUTION_FIELDS);
+        });
+
+        it('matches the explorer OpenAPI ExecutionDetail schema', function () {
+            assertSchemaNullability(explorerSchema(this, 'ExecutionDetail'), EXECUTION_FIELDS);
+        });
+    });
+
+    describe('ContractStateEntry', function () {
+        const props = topLevelProps(interfaceBody(dts, 'ContractStateEntry'));
+
+        it('getContractState() resolves to ContractStateEntry', function () {
+            assert.match(dts, /getContractState\(contractActionIndex: number \| string, key\?: string\): Promise<ListEnvelope<ContractStateEntry>>;/);
+        });
+
+        it('declares exactly the reader fields with their SQL nullability', function () {
+            assertPinnedNullability(props, STATE_FIELDS);
+        });
+
+        it('matches the explorer OpenAPI ContractStateEntry schema', function () {
+            assertSchemaNullability(explorerSchema(this, 'ContractStateEntry'), STATE_FIELDS);
         });
     });
 });

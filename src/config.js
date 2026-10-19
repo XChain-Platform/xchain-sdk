@@ -231,6 +231,9 @@ var Config = {
         executeFeeCapRegtestActivation: () => process.env.XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION,
         voteV3TickExistenceRegtestActivation: () => process.env.XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION,
         matchOriginOpenRegtestActivation: () => process.env.XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION,
+        reassembleChunkParentStatusRegtestActivation: () => process.env.XC_REASSEMBLE_CHUNK_PARENT_STATUS_REGTEST_ACTIVATION,
+        unstakeDelegatedRowJournalRegtestActivation: () => process.env.XC_UNSTAKE_DELEGATED_ROW_JOURNAL_REGTEST_ACTIVATION,
+        anchorCheckpointSeqBindRegtestActivation: () => process.env.XC_ANCHOR_CHECKPOINT_SEQ_BIND_REGTEST_ACTIVATION,
     },
 
 }

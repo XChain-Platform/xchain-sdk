@@ -160,6 +160,11 @@ jobs:
         with:
           ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || github.base_ref || '' }}
 
+      # master trails contracts develop, so a master run tests the pinned commit; develop keeps tracking develop.
+      - name: Pin xchain-contracts to the tested commit
+        if: github.ref == 'refs/heads/master' || github.base_ref == 'master'
+        run: bin/pin-contracts-sibling.sh
+
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:

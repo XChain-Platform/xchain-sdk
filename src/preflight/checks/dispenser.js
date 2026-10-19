@@ -297,9 +297,9 @@ async function checkDispenser(ctx) {
 // before any transaction (and therefore any payment value) exists. Nothing this
 // check reads changes either - give-remaining is the GIVE-token side and the
 // record correction has no client consumer here.
-// The tally's SCALE is conditional too, on its own flag-day: a token-denominated
-// payment nets at the paying tick's decimals rather than at 8, which moves the
-// fill count only where a sub-satoshi price rounds. Same unreadable inputs.
+// The tally's SCALE is exact for a token-denominated payment (no flag day any more): it
+// nets at the paying tick's decimals rather than at 8, which moves the fill count only
+// where a sub-satoshi price rounds. Same unreadable inputs.
 function declareSettlementMatch(ctx) {
     ctx.addUnverified('DISPENSE_SETTLEMENT_MATCH',
         'exact settlement-output matching is structural and unknowable before the transaction exists');
