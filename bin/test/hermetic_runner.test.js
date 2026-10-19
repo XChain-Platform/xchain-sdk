@@ -8,7 +8,7 @@
 'use strict';
 
 const assert = require('node:assert');
-const { FAMILIES, runHermeticTests } = require('../../scripts/run-hermetic-tests.js');
+const { FAMILIES, runHermeticTests } = require('../run-hermetic-tests.js');
 
 describe('hermetic test runner', function () {
     it('runs every hermetic family in order', function () {
@@ -28,7 +28,7 @@ describe('hermetic test runner', function () {
             'test:fuzz',
             'test:chaos',
             'bin/test',
-            'scripts',
+            'bin',
         ]);
         assert.deepStrictEqual(calls.map((call) => call.args), FAMILIES.map((family) => family.args));
         assert(calls.every((call) => call.options.stdio === 'inherit'));

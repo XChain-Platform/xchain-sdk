@@ -23,9 +23,9 @@ TOOL SUMMARY
 ------------
 src/*.js tracked:                    116
 runtime entry points:                bin/check-preflight-drift.js, index.js,
-                                     scripts/cosigner-init-window.js,
-                                     scripts/npm-sync-check.js,
-                                     scripts/sync-templates.js,
+                                     bin/cosigner-init-window.js,
+                                     bin/npm-sync-check.js,
+                                     bin/sync-templates.js,
                                      src/api.js, src/repl.js
 tooling entry points:                5
 test entry points:                   161

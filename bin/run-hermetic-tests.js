@@ -23,9 +23,9 @@ const FAMILIES = Object.freeze([
         args: [mocha, '--no-config', '--timeout', '30000', '--exit', 'bin/test/*.test.js'],
     },
     {
-        name: 'scripts',
+        name: 'bin',
         command: process.execPath,
-        args: [mocha, '--no-config', '--timeout', '30000', '--exit', 'scripts/*.test.js'],
+        args: [mocha, '--no-config', '--timeout', '30000', '--exit', 'bin/*.test.js'],
     },
 ]);
 

@@ -267,9 +267,9 @@
       "BATCH limit-scan conformance (SDK mirror vs arbiter) weight conformance (BATCH_COST_WEIGHTING) SDK half the carrier discount does not leak to its companions: one EXECUTE among them still counts 30"
     ],
     "082323fc997edc0e": [
-      "scripts/sync-templates (static contract) is syntactically valid JavaScript (compiles without executing)",
-      "scripts/sync-templates (static contract) performs no network I/O (template sync is offline)",
-      "scripts/sync-templates (static contract) reads template sources and writes a rendered module"
+      "bin/sync-templates (static contract) is syntactically valid JavaScript (compiles without executing)",
+      "bin/sync-templates (static contract) performs no network I/O (template sync is offline)",
+      "bin/sync-templates (static contract) reads template sources and writes a rendered module"
     ],
     "0889dd14dd14af13": [
       "Action round-trip golden \u2013 SDK encoder byte-layout contract SDK encoder serializes each input to the exact golden wire string ADDRESS v0: createAction() -> canonical wire",

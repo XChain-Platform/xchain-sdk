@@ -1,12 +1,12 @@
 // Copyright © 2025–2026 Dankest, LLC
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// Covers scripts/cosigner-init-window.js. The script does its work at module
+// Covers bin/cosigner-init-window.js. The script does its work at module
 // load and calls process.exit directly, so it is run as a child process from a
 // throwaway directory.
 //
 // Not wired into `npm test`; run directly with:
-//   npx mocha --timeout 10000 scripts/cosigner-init-window.check.test.js
+//   npx mocha --timeout 10000 bin/cosigner-init-window.check.test.js
 
 'use strict';
 
