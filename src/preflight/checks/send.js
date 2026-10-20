@@ -44,26 +44,22 @@
  * wire compare as an error would false-block wherever it is armed,
  * and it is declared rather than predicted.
  *
- * LEG-AMOUNT CONSOLIDATION is the second conditional, and it WIDENS
- * rejection rather than narrowing it. Above its flag-day both handlers
+ * LEG-AMOUNT CONSOLIDATION WIDENS rejection rather than narrowing it.
+ * At every height on every network both handlers
  * hold a leg whose RAW amount fails its tick's format out of the merge,
  * so it lands on the handler's per-leg check instead of being summed
  * into a total that passes: two 0.5 legs of a 0-decimals token used to
  * merge to '1' and settle.
  *
- * It is now MIRRORED, not merely declared. Predicting it needs the
- * tick's DECIMALS and the activation state at the block that will carry
- * this action; pre-flight can read the former (the token row) and, for
- * this one gate, does not need the latter at all. The 2026-09-09 ruling
- * armed consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION
- * (xchain-indexer/src/protocol_changes/gates_1.js) at genesis - height 0 -
- * on EVERY network, mainnet included, so any including block, whose
- * height is never negative, always satisfies it. The old reason this
- * stayed declared, that an unconditional error would reject on mainnet
- * what mainnet still accepts, no longer holds, so checkLegAmountFormat
- * below raises AMOUNT_FORMAT_INVALID per leg once the tick's decimals
- * are known, and the declaration that follows narrows to the residual
- * case: a leg whose tick lookup fails.
+ * It is MIRRORED, not merely declared. The indexer applies the per-leg
+ * format rule unconditionally, mainnet included, with no activation
+ * lookup (xchain-indexer src/actions/send/legs.js and
+ * src/actions/destroy/legs.js key a badly formatted leg apart from the
+ * merge), so predicting it needs only the tick's DECIMALS, which
+ * pre-flight reads from the token row. checkLegAmountFormat below
+ * raises AMOUNT_FORMAT_INVALID per leg once those decimals are known,
+ * and the declaration that follows narrows to the residual case: a leg
+ * whose tick lookup fails.
  *
  * DESTROY has two BRIDGE supply-path refusals (the base bridge spec),
  * both UNCONDITIONAL on every plane and every height: the gas tick
@@ -136,11 +132,11 @@ async function checkBalanceCovers(ctx, verb) {
     }
 }
 
-// LEG_AMOUNT_CONSOLIDATION mirror (see the header): consolidation_leg_amount_activation
-// .CONSOLIDATION_LEG_AMOUNT_ACTIVATION is armed at genesis on every network, so a leg
-// whose RAW amount does not fit its tick's DECIMALS is judged here per LEG, not on the
-// perTickTotals() merge above, which is exactly the grouping the flag-day takes out of
-// play for a badly-formatted leg. AMOUNT_FORMAT_INVALID is 'local' in TIER2_ERROR_CAPABLE
+// LEG_AMOUNT_CONSOLIDATION mirror (see the header): the indexer applies the per-leg
+// format rule unconditionally (send/legs.js, destroy/legs.js), so a leg whose RAW amount
+// does not fit its tick's DECIMALS is judged here per LEG, not on the perTickTotals()
+// merge above, which is exactly the grouping the indexer takes out of play for a
+// badly-formatted leg. AMOUNT_FORMAT_INVALID is 'local' in TIER2_ERROR_CAPABLE
 // (mint.js and issue.js already certify the same vendored rule the same way), so a
 // resolvable decimals mismatch is a non-overridable error, never a warning.
 async function checkLegAmountFormat(ctx, verb) {

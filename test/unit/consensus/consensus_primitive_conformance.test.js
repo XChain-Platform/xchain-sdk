@@ -39,12 +39,12 @@ const equiv = require('../../../src/consensus/equivocation_header.js');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 const LOCAL_DIR = path.join(__dirname, '../..', '..', 'src');
-// Resolve the canonical xchain-documentation repo. Prefer an explicit path: GitHub CI
-// sets XCHAIN_DOCS_DIR to wherever it checked the sibling out, because actions/checkout
-// cannot write a path above the job workspace (the dev/bin/ci-all.sh sibling layout is
-// one level above each repo). Fall back to that sibling layout for local + dev runs.
-// When neither resolves (standalone deploy), the guards below skip rather than fail.
-const DOCS_DIR  = process.env.XCHAIN_DOCS_DIR || path.join(__dirname, '../..', '..', '..', 'xchain-documentation');
+// Resolve the canonical xchain-documentation repo: an explicit XCHAIN_DOCS_DIR, then
+// XCHAIN_DOCUMENTATION_DIR (the order tooling/sibling_coverage reports), then the
+// ../xchain-documentation sibling layout that CI and local runs check out.
+// When none resolves (standalone deploy), the guards below skip rather than fail.
+const DOCS_DIR  = process.env.XCHAIN_DOCS_DIR || process.env.XCHAIN_DOCUMENTATION_DIR
+    || path.join(__dirname, '../..', '..', '..', 'xchain-documentation');
 const CANON_DIR = path.join(DOCS_DIR, 'protocol', 'reference-impl');
 const VEC_DIR   = path.join(DOCS_DIR, 'protocol', 'test-vectors');
 const VEC_CHECKOUT   = siblingCheckout(__dirname, VEC_DIR);

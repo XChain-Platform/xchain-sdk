@@ -31,7 +31,9 @@
  *
  * All pure: no network, no consensus. Submit-flow recipes live on
  * sdk.workflows (openMarket / placeBet / resolveMarket / cancelMarket); the raw
- * action wrapper is sdk.bet().
+ * action wrapper is sdk.bet(). A v4 list edit has no recipe: pass
+ * editMarketListsParams() to sdk.bet() or a wallet session's bet(), on networks
+ * where list edits are active.
  *
  ********************************************************************/
 

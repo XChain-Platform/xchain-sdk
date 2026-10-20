@@ -146,12 +146,13 @@ function registerSendGatedTotalReviewTest() {
     });
 }
 
+// The 2026-10-19 probe sub-verdict review (06_drift_map_gate_retirement_reviews.test.js) pins the
+// batch hash now; this entry stays the record of this review.
 function registerBatchDispatchAdmissionReviewTest() {
     it('pins and records the BATCH sub-command admission by dispatch coverage review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const batch = parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/batch/');
         expect(batch, 'batch directory row').to.exist;
-        expect(batch.hash).to.equal('7e138a16dc5eff43ac60c4cca83c2b35ccd865eb98df3ce57c8cbc8aebca85a6');
         const heading = '### 2026-10-10 - BATCH sub-command admission by dispatch coverage';
         expect(text).to.include(heading);
         const start = text.indexOf(heading);
@@ -201,7 +202,7 @@ function registerSupplyBoundReviewTest() {
         const issue = rows.find((r) => r.handler === 'src/actions/issue/');
         expect(mint, 'mint directory row').to.exist;
         expect(issue, 'issue directory row').to.exist;
-        expect(mint.hash).to.equal('f69fdb9192b703a928dc46028a569f0a4725ce136b394304e1ec00bab04629e9');
+        expect(mint.hash).to.equal('998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48');
         expect(issue.hash).to.equal('8f29219d887e695408a8d9b405a795182550c3ed0e991ab74bd4941efe9d294c');
         const heading = '### 2026-10-14 - MINT and ISSUE total supply bound behind an activation';
         expect(text).to.include(heading);
@@ -242,8 +243,8 @@ function registerTextAmountRefusalReviewTest() {
         expect(send, 'send directory row').to.exist;
         expect(destroy, 'destroy directory row').to.exist;
         expect(dividend, 'dividend directory row').to.exist;
-        expect(send.hash).to.equal('ee30f9038d6ea9d78cac4ebca511275ca11e62aea2c0ac4c4ac1ed3f765dbca9');
-        expect(destroy.hash).to.equal('597c2728d6254fb2c7860f12d1e9a4a1746c30bb08bad283223490ff8847a17a');
+        expect(send.hash).to.equal('0cbeede95913d7190555ba30949986e028d1fdec96486bca04d36a6c401a4925');
+        expect(destroy.hash).to.equal('b172b6cc34d4c9ab095c438c6de5a5aeb07ea06404e895134dc90c2ca317545a');
         expect(dividend.hash).to.equal('c0afa565418a5df7b35bd463ab51ed580541f2b0b7d32fac0c87cf07df50e5b0');
         const heading = '### 2026-10-15 - SEND, DESTROY and DIVIDEND refuse text amounts and unknown-tick legs';
         expect(text).to.include(heading);
@@ -298,8 +299,8 @@ function registerConsolidationLegGateReviewTest() {
     it('pins and records the SEND and DESTROY consolidation leg gate retirement review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const rows = parseMap(REAL_MAP);
-        expect(rows.find((r) => r.handler === 'src/actions/send/').hash).to.equal('ee30f9038d6ea9d78cac4ebca511275ca11e62aea2c0ac4c4ac1ed3f765dbca9');
-        expect(rows.find((r) => r.handler === 'src/actions/destroy/').hash).to.equal('597c2728d6254fb2c7860f12d1e9a4a1746c30bb08bad283223490ff8847a17a');
+        expect(rows.find((r) => r.handler === 'src/actions/send/').hash).to.equal('0cbeede95913d7190555ba30949986e028d1fdec96486bca04d36a6c401a4925');
+        expect(rows.find((r) => r.handler === 'src/actions/destroy/').hash).to.equal('b172b6cc34d4c9ab095c438c6de5a5aeb07ea06404e895134dc90c2ca317545a');
         const heading = '### 2026-10-18 - CONSOLIDATION_LEG_AMOUNT gate is retired';
         expect(text).to.include(heading);
         const start = text.indexOf(heading);

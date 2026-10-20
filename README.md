@@ -94,7 +94,10 @@ const { XChainSDK } = require('@dankest-llc/xchain-sdk');
 // Zero-config: a network alone targets the public XChain Platform.
 // Mainnet/testnet default to the public hosts (hub.xchain.io discovers
 // explorer/encoder, falling back to explorer.xchain.io / encoder.xchain.io);
-// any *-regtest network defaults to localhost.
+// on any *-regtest network only the explorer defaults to localhost:8080. The
+// encoder (needed for writes) needs ENCODER_URL or ENCODER_PORT, and the
+// WebSocket needs a WEBSOCKET_* or EXPLORER_* URL or port (or the matching
+// constructor options).
 const sdk = new XChainSDK({ network: 'bitcoin-mainnet' });
 
 // To point at your own services, pass full URLs (include the scheme; a

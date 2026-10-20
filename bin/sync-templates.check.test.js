@@ -13,7 +13,7 @@
 //
 // Not wired into `npm test` (the unit glob and any new npm script live in
 // package.json, outside this fix's surface jail); run directly with:
-//   npx mocha scripts/sync-templates.check.test.js
+//   npx mocha bin/sync-templates.check.test.js
 
 'use strict';
 
@@ -27,17 +27,17 @@ const SCRIPT_SRC = path.join(__dirname, 'sync-templates.js');
 
 function buildSandbox() {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sync-templates-check-'));
-    const sdkScripts = path.join(root, 'sdk', 'scripts');
+    const sdkBin = path.join(root, 'sdk', 'bin');
     const sdkContract = path.join(root, 'sdk', 'src', 'contract');
     const contracts = path.join(root, 'xchain-contracts');
-    fs.mkdirSync(sdkScripts, { recursive: true });
+    fs.mkdirSync(sdkBin, { recursive: true });
     fs.mkdirSync(sdkContract, { recursive: true });
     fs.mkdirSync(path.join(contracts, 'patterns'), { recursive: true });
 
     // The script resolves paths relative to its own location, so copying it
     // unmodified into the sandbox is what makes the sandbox real: the same
     // code under test, pointed at fixture siblings instead of the real ones.
-    fs.copyFileSync(SCRIPT_SRC, path.join(sdkScripts, 'sync-templates.js'));
+    fs.copyFileSync(SCRIPT_SRC, path.join(sdkBin, 'sync-templates.js'));
 
     for (const name of ['escrow', 'escrowDelivery', 'vesting', 'crowdsale', 'amm']) {
         fs.mkdirSync(path.join(contracts, name), { recursive: true });
@@ -47,11 +47,11 @@ function buildSandbox() {
     fs.writeFileSync(path.join(contracts, 'patterns', 'guard.js'),
         '// fixture pattern\nmodule.exports = {};\n');
 
-    return { root, sdkScripts, contracts };
+    return { root, sdkBin, contracts };
 }
 
-function run(sdkScripts, args, env = {}) {
-    return spawnSync(process.execPath, [path.join(sdkScripts, 'sync-templates.js'), ...args],
+function run(sdkBin, args, env = {}) {
+    return spawnSync(process.execPath, [path.join(sdkBin, 'sync-templates.js'), ...args],
         { encoding: 'utf8', env: { ...process.env, XCHAIN_CONTRACTS_DIR: '', ...env } });
 }
 
@@ -64,37 +64,37 @@ describe('sync-templates.js --check', function () {
 
     it('exits 0 with a skip message when no sibling xchain-contracts checkout exists', function () {
         fs.rmSync(sandbox.contracts, { recursive: true, force: true });
-        const res = run(sandbox.sdkScripts, ['--check']);
+        const res = run(sandbox.sdkBin, ['--check']);
         assert.strictEqual(res.status, 0, res.stdout + res.stderr);
         assert.ok(/skipping/.test(res.stdout), 'expected a skip message, got: ' + res.stdout);
     });
 
     it('exits 1 when the embed does not exist yet', function () {
-        const res = run(sandbox.sdkScripts, ['--check']);
+        const res = run(sandbox.sdkBin, ['--check']);
         assert.strictEqual(res.status, 1, res.stdout + res.stderr);
         assert.ok(/TEMPLATE DRIFT/.test(res.stderr), 'expected a drift error, got: ' + res.stderr);
     });
 
     it('honors XCHAIN_CONTRACTS_DIR for a pinned canonical checkout', function () {
-        const gen = run(sandbox.sdkScripts, []);
+        const gen = run(sandbox.sdkBin, []);
         assert.strictEqual(gen.status, 0, gen.stdout + gen.stderr);
 
         const pinned = path.join(sandbox.root, 'pinned-contracts');
         fs.cpSync(sandbox.contracts, pinned, { recursive: true });
         fs.appendFileSync(path.join(sandbox.contracts, 'escrow', 'escrow.js'), '// later edit\n');
 
-        const current = run(sandbox.sdkScripts, ['--check']);
+        const current = run(sandbox.sdkBin, ['--check']);
         assert.strictEqual(current.status, 1, current.stdout + current.stderr);
 
-        const pinnedResult = run(sandbox.sdkScripts, ['--check'], { XCHAIN_CONTRACTS_DIR: pinned });
+        const pinnedResult = run(sandbox.sdkBin, ['--check'], { XCHAIN_CONTRACTS_DIR: pinned });
         assert.strictEqual(pinnedResult.status, 0, pinnedResult.stdout + pinnedResult.stderr);
     });
 
     it('exits 0 right after a real sync, and 1 once the canonical source drifts (falsified and restored)', function () {
-        const gen = run(sandbox.sdkScripts, []);
+        const gen = run(sandbox.sdkBin, []);
         assert.strictEqual(gen.status, 0, gen.stdout + gen.stderr);
 
-        const clean = run(sandbox.sdkScripts, ['--check']);
+        const clean = run(sandbox.sdkBin, ['--check']);
         assert.strictEqual(clean.status, 0, clean.stdout + clean.stderr);
 
         // Falsify: edit the canonical template without regenerating, exactly
@@ -103,13 +103,13 @@ describe('sync-templates.js --check', function () {
         const before = fs.readFileSync(escrowFile, 'utf8');
         fs.writeFileSync(escrowFile, before + '// drifted edit, sync not re-run\n');
 
-        const drifted = run(sandbox.sdkScripts, ['--check']);
+        const drifted = run(sandbox.sdkBin, ['--check']);
         assert.strictEqual(drifted.status, 1, 'expected --check to catch the drift: ' + drifted.stdout + drifted.stderr);
         assert.ok(/TEMPLATE DRIFT/.test(drifted.stderr));
 
         // Restore byte-exact and confirm the guard clears again.
         fs.writeFileSync(escrowFile, before);
-        const restored = run(sandbox.sdkScripts, ['--check']);
+        const restored = run(sandbox.sdkBin, ['--check']);
         assert.strictEqual(restored.status, 0, restored.stdout + restored.stderr);
     });
 

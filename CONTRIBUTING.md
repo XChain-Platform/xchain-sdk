@@ -83,7 +83,7 @@ Run the no-external-services tiers before every commit. New action-generation or
 
 ## Editing a canonical template (xchain-contracts)
 
-`src/contract/templates.js` is generated, not hand-written: `scripts/sync-templates.js`
+`src/contract/templates.js` is generated, not hand-written: `bin/sync-templates.js`
 embeds the canonical `xchain-contracts` template sources (`escrow`, `vesting`,
 `crowdsale`, `amm`, plus everything under `patterns/`) as base64 so
 `sdk.scaffold()` can return them from a browser bundle with no `fs` at
@@ -126,7 +126,7 @@ pushed there, never from your local edit. So:
 a test runner or a full mocha run:
 
 ```bash
-node scripts/sync-templates.js --check
+node bin/sync-templates.js --check
 ```
 
 Exits `0` and prints a skip note when no sibling `xchain-contracts` checkout

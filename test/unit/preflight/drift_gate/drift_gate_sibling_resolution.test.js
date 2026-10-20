@@ -46,6 +46,7 @@ function makeRoots() {
 function runGate(env) {
     const clean = { ...process.env };
     delete clean.XCHAIN_INDEXER_PATH;
+    delete clean.XCHAIN_INDEXER_DIR;
     delete clean.XCHAIN_REQUIRE_SIBLINGS;
     delete clean.XCHAIN_ALLOW_NO_INDEXER;
     const r = spawnSync(process.execPath, [GATE], {

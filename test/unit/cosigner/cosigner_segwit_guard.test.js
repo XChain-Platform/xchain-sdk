@@ -11,7 +11,7 @@
 const { expect } = require('chai');
 const crypto  = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
-const { secp256k1 } = require('@noble/curves/secp256k1');
+const { secp256k1 } = require('@noble/curves/secp256k1.js');
 const CoSigner = require('../../../src/cosigner/co_signer.js');
 const { deriveMuSig2P2TR, deriveMuSig2P2TR2of3 } = require('../../../src/cosigner/account.js');
 const { deriveEnvelopeCommit } = require('../../../src/cosigner/envelope.js');

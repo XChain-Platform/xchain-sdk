@@ -258,7 +258,9 @@ function gtDecimal(a, b) { return math.bignumber(String(a)).gt(math.bignumber(St
 // ' 5', '5.', '', so a magnitude/sum gate can never be bypassed by a malformed
 // amount decoded off the wire.
 function isNonNegativeDecimal(a) { return /^\d+(\.\d+)?$/.test(String(a)); }
-function addDecimal(a, b) { return math.bignumber(String(a)).plus(math.bignumber(String(b))).toString(); }
+// Emit the sum in plain notation: a summed VOTE amount reaches the gate above,
+// and toString() would turn 0.00000005 into '5e-8', which that gate refuses.
+function addDecimal(a, b) { return math.bignumber(String(a)).plus(math.bignumber(String(b))).toFixed(); }
 
 module.exports = {
     pick,

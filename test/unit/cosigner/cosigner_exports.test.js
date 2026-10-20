@@ -41,7 +41,7 @@ describe('co-signer public exports', function () {
 
     it('the public exports are actually wired (a derive round-trips)', function () {
         const crypto = require('crypto');
-        const { secp256k1 } = require('@noble/curves/secp256k1');
+        const { secp256k1 } = require('@noble/curves/secp256k1.js');
         const daemonSk = crypto.randomBytes(32);
         const a = Buffer.from(secp256k1.getPublicKey(crypto.randomBytes(32), true));
         const b = Buffer.from(secp256k1.getPublicKey(daemonSk, true));

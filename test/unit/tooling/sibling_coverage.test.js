@@ -116,6 +116,38 @@ function scanForEnvReaders() {
     return { scanned, pending };
 }
 
+// List every guard source that reads some names of a multi-name roster entry but
+// not all of them, or reads them out of roster order: such a file resolves a
+// different checkout than the summary above reports for the same run.
+function scanForPartialReaders() {
+    const multi = SIBLINGS.filter(e => e.envs.length > 1)
+        .map(e => ({ repo: e.repo, envs: e.envs, res: e.envs.map(k => new RegExp(`process\\.env\\.${k}\\b`)) }));
+    const offenders = [];
+    let readers = 0;
+    function walk(dir) {
+        if (!fs.existsSync(dir)) return;
+        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+            const p = path.join(dir, e.name);
+            if (e.isDirectory()) {
+                if (!['node_modules', 'fixtures', 'pins'].includes(e.name)) walk(p);
+                continue;
+            }
+            if (!/\.(js|sh)$/.test(e.name) || p === __filename) continue;
+            const text = fs.readFileSync(p, 'utf8');
+            for (const m of multi) {
+                const at = m.res.map(re => { const hit = re.exec(text); return hit ? hit.index : -1; });
+                if (at.every(i => i < 0)) continue;
+                readers++;
+                const inOrder = at.every((i, n) => i >= 0 && (n === 0 || i > at[n - 1]));
+                if (!inOrder) offenders.push(`${path.relative(REPO_ROOT, p)} (${m.repo}: reads ${m.envs.filter((k, n) => at[n] >= 0).join(', ')})`);
+            }
+        }
+    }
+    walk(path.join(REPO_ROOT, 'test'));
+    walk(path.join(REPO_ROOT, 'bin'));
+    return { readers, offenders };
+}
+
 // Present means "a real checkout", not merely "a directory exists": an empty
 // placeholder would resolve and then every guard inside it would still skip,
 // which is the exact silence this file exists to break.
@@ -158,6 +190,15 @@ describe('cross-repo sibling coverage (what this run could NOT verify)', functio
         expect(scanned, 'no guard sources found to scan').to.be.greaterThan(0);
         expect([...pending.values()], 'roster env overrides with no process.env reader outside this file')
             .to.deep.equal([]);
+    });
+
+    it('makes every reader of a multi-name override read all its names in roster order', function () {
+        // A guard reading only one name skips under the other while this roster
+        // reports the sibling resolvable, so its skip prints no NOT VERIFIED line.
+        this.timeout(60000);
+        const { readers, offenders } = scanForPartialReaders();
+        expect(readers, 'no reader of a multi-name override found to check').to.be.greaterThan(0);
+        expect(offenders, 'guards that resolve a multi-name sibling differently from this roster').to.deep.equal([]);
     });
 
     it('resolves every sibling checkout the cross-repo guards depend on', function () {

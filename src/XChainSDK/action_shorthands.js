@@ -181,12 +181,13 @@ module.exports = {
     async vote(params, encoder)             { return this.createAction({ action: 'VOTE', params, encoder }); },
 
     // BET (parimutuel betting). Raw wrapper: the version is taken from
-    // params.version (0 create / 1 cancel / 2 place / 3 resolve). Build the
-    // params with sdk.betting.* so OUTCOMES and DETAILS are composed together
-    // and the version is pinned; auto-selection would otherwise read a resolve
-    // with no AMOUNT and a place-bet as neighbouring shapes. For a
+    // params.version (0 create / 1 cancel / 2 place / 3 resolve / 4 edit lists).
+    // Build the params with sdk.betting.* so OUTCOMES and DETAILS are composed
+    // together and the version is pinned; auto-selection would otherwise read a
+    // resolve with no AMOUNT and a place-bet as neighbouring shapes. For a
     // signed+broadcast round-trip use sdk.workflows.openMarket / placeBet /
-    // resolveMarket / cancelMarket.
+    // resolveMarket / cancelMarket; a v4 list edit has no recipe, so submit
+    // sdk.betting.editMarketListsParams() through this wrapper or session.bet().
     async bet(params, encoder)              { return this.createAction({ action: 'BET', params, encoder }); },
 
     // XBRIDGE (cross-chain lock/burn/settle, xchain-bridge.md / xchain-token-bridge.md).

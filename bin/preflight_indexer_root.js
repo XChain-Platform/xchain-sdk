@@ -43,12 +43,14 @@ const ALLOW_NO_INDEXER_ENV = 'XCHAIN_ALLOW_NO_INDEXER';
 
 /* Where the gate looks for the handlers, in order.
  *
- * An explicit XCHAIN_INDEXER_PATH is AUTHORITATIVE: falling back to the sibling when the
+ * An explicit XCHAIN_INDEXER_PATH (or, when it is unset, XCHAIN_INDEXER_DIR, the same
+ * order every indexer guard reads) is AUTHORITATIVE: falling back to the sibling when the
  * named path does not resolve would check a different tree than the run declared, and
  * report in-sync about handlers nobody asked about.
  */
 function indexerRootCandidates() {
-    if (process.env.XCHAIN_INDEXER_PATH) return [process.env.XCHAIN_INDEXER_PATH];
+    const named = process.env.XCHAIN_INDEXER_PATH || process.env.XCHAIN_INDEXER_DIR;
+    if (named) return [named];
     return [path.join(__dirname, '..', '..', 'xchain-indexer')];
 }
 
@@ -108,9 +110,9 @@ function unresolvedReport() {
         lines.push(`      ${c.why}`);
     }
     lines.push('');
-    lines.push('Check the sibling out, or point XCHAIN_INDEXER_PATH at it. A run that has no');
-    lines.push(`indexer checkout ON PURPOSE (a standalone SDK clone) sets ${ALLOW_NO_INDEXER_ENV}=1,`);
-    lines.push('which is a choice a reader can see, unlike a silent skip.');
+    lines.push('Check the sibling out, or point XCHAIN_INDEXER_PATH (or XCHAIN_INDEXER_DIR) at it.');
+    lines.push('A run that has no indexer checkout ON PURPOSE (a standalone SDK clone) sets');
+    lines.push(`${ALLOW_NO_INDEXER_ENV}=1, which is a choice a reader can see, unlike a silent skip.`);
     return lines.join('\n');
 }
 

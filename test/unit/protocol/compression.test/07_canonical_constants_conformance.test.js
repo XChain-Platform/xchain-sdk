@@ -35,7 +35,7 @@ const assert = require('assert');
 const crypto = require('crypto');
 const zlib = require('zlib');
 const path = require('path');
-const fs = require('fs');
+const { siblingCheckout, skipOrFail } = require('../../../helpers/sibling_checkout.js');
 
 const CompressionUtils = require('../../../../src/protocol/compression.js');
 const GatedFileUtils = require('../../../../src/actions/gated_file.js');
@@ -54,15 +54,12 @@ describe('CompressionUtils (Part B)', function () {
     });
 
     describe('canonical constants conformance', function () {
-        const DOCS = process.env.XCHAIN_DOCUMENTATION_DIR ||
+        const DOCS = process.env.XCHAIN_DOCS_DIR || process.env.XCHAIN_DOCUMENTATION_DIR ||
             path.join(__dirname, '../..', '..', '..', '..', 'xchain-documentation');
         const DOCS_CONSTANTS = path.join(DOCS, 'protocol', 'constants.js');
+        // Skip on an absent or refused docs sibling; fail instead under XCHAIN_REQUIRE_SIBLINGS=1.
         before(function () {
-            if (!fs.existsSync(DOCS_CONSTANTS)) {
-                if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                    throw new Error('xchain-documentation sibling not found but XCHAIN_REQUIRE_SIBLINGS=1');
-                this.skip();
-            }
+            if (!skipOrFail(this, siblingCheckout(__dirname, DOCS_CONSTANTS), 'the canonical compression constants check')) return;
         });
 
         it('the vendored copy equals the canonical declaration', function () {

@@ -219,10 +219,11 @@ module.exports = {
     },
 
     // Open a parimutuel betting market (BET v0). Returns the submit result plus
-    // the market's action index, which is the FEED_ACTION_INDEX every later bet,
-    // resolve, and cancel references. Markets are immutable from creation, so
-    // this index is a complete commitment to the market's terms: there is no
-    // edit path and nothing about the market can change under a bettor.
+    // the market's action index, the FEED_ACTION_INDEX every later bet, resolve,
+    // cancel and list edit references. The terms are fixed at creation except the
+    // ALLOW_LIST/BLOCK_LIST references, which the owner may replace or detach with
+    // BET v4 while the market is open, on networks where list edits are active.
+    // An edit only gates bets placed after it; a bet already placed never changes.
     async openMarket(wif, params, opts = {}) {
         let session = this.sdk.session(wif, opts);
         let result  = await session.bet(this.sdk.betting.createMarketParams(params), {}, opts);

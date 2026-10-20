@@ -17,12 +17,12 @@
  ********************************************************************/
 
 const baseCrypto       = require('@brandonblack/musig/base_crypto');
-const { secp256k1, schnorr } = require('@noble/curves/secp256k1');
-const { sha256 }       = require('@noble/hashes/sha2');
+const { secp256k1, schnorr } = require('@noble/curves/secp256k1.js');
+const { sha256 }       = require('@noble/hashes/sha2.js');
 const { SDKMuSigError } = require('../../utils/errors.js');
 
 
-const Point      = secp256k1.ProjectivePoint;
+const Point      = secp256k1.Point;
 const schnorrUtl = schnorr.utils;
 
 
@@ -64,10 +64,10 @@ const ecc = {
     // P + t*G, tweaked public key addition
     pointAddTweak(p, t, compressed) {
         try {
-            let P = Point.fromHex(p);
+            let P = Point.fromBytes(p);
             let tG = Point.BASE.multiply(baseCrypto.readSecret(t));
             let R = P.add(tG);
-            return R.toRawBytes(compressed);
+            return R.toBytes(compressed);
         } catch (e) {
             return null;
         }
@@ -76,10 +76,10 @@ const ecc = {
     // a + b (point addition)
     pointAdd(a, b, compressed) {
         try {
-            let A = Point.fromHex(a);
-            let B = Point.fromHex(b);
+            let A = Point.fromBytes(a);
+            let B = Point.fromBytes(b);
             let R = A.add(B);
-            return R.toRawBytes(compressed);
+            return R.toBytes(compressed);
         } catch (e) {
             return null;
         }
@@ -91,9 +91,9 @@ const ecc = {
         try {
             let scalar = baseCrypto.readScalar(a);
             if (scalar === 0n) return null;
-            let P = Point.fromHex(p);
+            let P = Point.fromBytes(p);
             let R = P.multiplyUnsafe(scalar);
-            return R.toRawBytes(compressed);
+            return R.toBytes(compressed);
         } catch (e) {
             return null;
         }
@@ -103,11 +103,11 @@ const ecc = {
     pointMultiplyAndAddUnsafe(p1, a, p2, compressed) {
         try {
             let scalar = baseCrypto.readScalar(a);
-            let P1 = Point.fromHex(p1);
-            let P2 = Point.fromHex(p2);
+            let P1 = Point.fromBytes(p1);
+            let P2 = Point.fromBytes(p2);
             let aP1 = scalar === 0n ? Point.ZERO : P1.multiplyUnsafe(scalar);
             let R = aP1.add(P2);
-            return R.toRawBytes(compressed);
+            return R.toBytes(compressed);
         } catch (e) {
             return null;
         }
@@ -115,8 +115,8 @@ const ecc = {
 
     // compress/decompress a point
     pointCompress(p, compress = true) {
-        let P = Point.fromHex(p);
-        return P.toRawBytes(compress);
+        let P = Point.fromBytes(p);
+        return P.toBytes(compress);
     },
 
     // BIP340 lift_x: convert a 32-byte x-only pubkey to a compressed pubkey
@@ -124,7 +124,7 @@ const ecc = {
         try {
             let xBig = baseCrypto.readSecret(x);
             let P = schnorrUtl.lift_x(xBig);
-            let raw = P.toRawBytes(true);
+            let raw = P.toBytes(true);
             return raw;
         } catch (e) {
             return null;

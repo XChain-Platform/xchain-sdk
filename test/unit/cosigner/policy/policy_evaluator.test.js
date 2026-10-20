@@ -202,6 +202,15 @@ describe('policyEvaluator.evaluatePolicy', function () {
             expect(evaluatePolicy(policy, { action: 'VOTE', params: { DEPOSIT: '60', GAS_ESCROW: '30' } }).ok).to.equal(true);
             // A single present leg still binds (DEPOSIT only, no GAS_ESCROW): 150 > 100 -> denied.
             expect(evaluatePolicy(policy, { action: 'VOTE', params: { DEPOSIT: '150' } }).ok).to.equal(false);
+            // A sum below 1e-7 or at 1e21 stays in plain decimal, so the canonical-amount gate admits it.
+            const tiny = evaluatePolicy(policy,
+                { action: 'VOTE', params: { DEPOSIT: '0.00000002', GAS_ESCROW: '0.00000003' } });
+            expect(tiny.ok).to.equal(true);
+            expect(tiny.evaluation.amount).to.equal('0.00000005');
+            const big = evaluatePolicy({ allowedActions: new Set(['VOTE']) },
+                { action: 'VOTE', params: { DEPOSIT: '999999999999999999999', GAS_ESCROW: '1' } });
+            expect(big.ok).to.equal(true);
+            expect(big.evaluation.amount).to.equal('1000000000000000000000');
         });
     });
 });

@@ -33,7 +33,7 @@
 
 const crypto = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
-const { secp256k1 } = require('@noble/curves/secp256k1');
+const { secp256k1 } = require('@noble/curves/secp256k1.js');
 const MuSig2 = require('./musig2.js');
 const {
     deriveEnvelopeCommit, classifyEnvelopeRole, envelopeScriptPathSighash, envelopeRoundTweaks,

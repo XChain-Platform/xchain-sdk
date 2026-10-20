@@ -459,6 +459,10 @@
     "test/unit/cosigner/musig2_agent_session.test/01_agent_session.test.js": "test/unit/cosigner/musig2/musig2_agent_session.test/01_agent_session.test.js"
   },
   "titles": {
+    "test/unit/preflight/checks/checks.test/07_dispenser_create_pricing_amount_positivity_mirror.test.js": {
+      "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a negative native-coin GET_AMOUNT is a format warning": "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a negative native-coin GET_AMOUNT is a format error",
+      "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a native-coin GET_AMOUNT past the coin decimals is a format warning": "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a native-coin GET_AMOUNT past the coin decimals is a format error"
+    },
     "test/unit/contract/contract_state_wait.test.js": {
       "ActionWaiter contract state gate state normalization drops envelope fields when the response is already a key map": "ActionWaiter contract state gate state normalization ignores a plain key map outside the explorer list shape"
     },
@@ -513,6 +517,12 @@
     },
     "test/unit/clients/websocket/websocket_catch_up.test.js": {
       "WebSocketClient reconnect catch-up: sequencing resubscribes a blocks subscription at once, without since_action_index": "WebSocketClient reconnect catch-up: sequencing resubscribes a blocks subscription through the catch-up queue, so it hears NEW_BLOCK is not replayed"
+    },
+    "test/unit/consensus/checkpoint_commitment_twin_parity.test.js": {
+      "checkpoint_commitment_activation twin parity @regression xchain-explorer copy matches the sdk copy in value and in bytes": "checkpoint_commitment_activation twin parity @regression xchain-explorer copy matches the sdk copy in value and at the boundary heights",
+      "checkpoint_commitment_activation twin parity @regression xchain-hub copy matches the sdk copy in value and in bytes": "checkpoint_commitment_activation twin parity @regression xchain-hub copy matches the sdk copy in value and at the boundary heights",
+      "checkpoint_commitment_activation twin parity @regression xchain-indexer copy matches the sdk copy in value and in bytes": "checkpoint_commitment_activation twin parity @regression xchain-indexer copy matches the sdk copy in value and at the boundary heights",
+      "checkpoint_commitment_activation twin parity @regression xchain-sync copy matches the sdk copy in value and in bytes": "checkpoint_commitment_activation twin parity @regression xchain-sync copy matches the sdk copy in value and at the boundary heights"
     }
   }
 }

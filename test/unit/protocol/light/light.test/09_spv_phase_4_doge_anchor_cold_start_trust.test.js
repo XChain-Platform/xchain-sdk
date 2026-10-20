@@ -90,4 +90,24 @@ describe('SPV Phase 4: DOGE-anchor cold-start trust', function () {
         const at = light.verifyAnchoredCheckpoint({ checkpoint: cp, validators, confirmations: 300, minDepth: 60 });
         assert.notStrictEqual(at.reason, 'ROOTS_NOT_SIGNED');
     });
+
+    it('verifyAnchoredCheckpoint decides ROOTS_NOT_SIGNED through checkpoint.commitmentActive, not a copy', function () {
+        // Flip the exported predicate both ways: a verifier that reads the gate on its
+        // own keeps the registry's answer and fails one of the two assertions.
+        const real = checkpoint.commitmentActive;
+        const { cp, validators } = makeSignedSection({ network: 'regtest' });
+        const run = () => light.verifyAnchoredCheckpoint({ checkpoint: cp, validators, confirmations: 300, minDepth: 60 });
+        try {
+            assert.strictEqual(real(cp), true, 'regtest commits the roots from height 0');
+            checkpoint.commitmentActive = () => false;
+            assert.strictEqual(run().reason, 'ROOTS_NOT_SIGNED');
+            const { cp: below } = makeSignedSection({ network: 'mainnet' });
+            assert.strictEqual(real(below), false, 'the mainnet fixture sits below the flag day');
+            checkpoint.commitmentActive = () => true;
+            const r = light.verifyAnchoredCheckpoint({ checkpoint: below, validators, confirmations: 300, minDepth: 60 });
+            assert.notStrictEqual(r.reason, 'ROOTS_NOT_SIGNED');
+        } finally {
+            checkpoint.commitmentActive = real;
+        }
+    });
 });

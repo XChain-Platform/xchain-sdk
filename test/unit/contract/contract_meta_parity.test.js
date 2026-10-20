@@ -22,7 +22,7 @@ const path = require('path');
 const sdk = require('../../../src/contract/utils/meta_literals.js');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
-const INDEXER_ROOT = process.env.XCHAIN_INDEXER_PATH
+const INDEXER_ROOT = process.env.XCHAIN_INDEXER_PATH || process.env.XCHAIN_INDEXER_DIR
     || path.join(__dirname, '..', '..', '..', '..', 'xchain-indexer');
 const INDEXER_CONTRACT_META = path.join(INDEXER_ROOT, 'src', 'actions', 'deploy', 'contract_meta.js');
 

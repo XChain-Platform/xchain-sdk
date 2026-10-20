@@ -15,7 +15,7 @@ const path    = require('path');
 const crypto  = require('crypto');
 require('../../../../../src/utils/apply_bufferutils_patch.js');
 const bitcoin = require('bitcoinjs-lib');
-const { secp256k1, schnorr } = require('@noble/curves/secp256k1');
+const { secp256k1, schnorr } = require('@noble/curves/secp256k1.js');
 const MuSig2      = require('../../../../../src/cosigner/musig2.js');
 const CoSigner    = require('../../../../../src/cosigner/co_signer.js');
 const WindowStore = require('../../../../../src/cosigner/window_store.js');

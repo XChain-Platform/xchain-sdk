@@ -51,13 +51,13 @@ function initializeEncoderClient(sdk, resolved, hooks, retry, pool, readyHook, p
 // Keep client setup and lifecycle behavior together so construction stays readable.
 module.exports = {
 
-    // Config resolution: constructor options > env vars > public defaults > localhost.
+    // Config resolution: constructor options > env vars > public defaults > localhost (explorer only).
     initClients(resolved) {
         let network = resolved.network || config.env.network();
         let hooks   = this.options.hooks || {};
         let retry   = this.options.retry !== undefined ? this.options.retry : {};
         let pool    = this.options.pool || {};
-        // Empty for regtest, so those clients keep their localhost fallback.
+        // Empty for regtest: the explorer falls back to localhost, encoder and ws need a configured URL or port.
         let pub       = publicDefaults(network);
         let readyHook = () => this.ensureReady();
 
@@ -245,7 +245,7 @@ module.exports = {
     requireEncoder() {
         // Refuse to go further without an encoder: it is what turns an action into a transaction.
         if (!this.encoder)
-            throw new SDKConfigError('ENCODER_NOT_CONFIGURED', 'Encoder not configured. Provide encoderUrl, or use hub discovery via init().');
+            throw new SDKConfigError('ENCODER_NOT_CONFIGURED', 'Encoder not configured. Provide encoderUrl or encoderPort (or ENCODER_URL / ENCODER_PORT), or a hubUrl whose discovery via init() supplies one; regtest has no default encoder.');
         return this.encoder;
     },
 };

@@ -50,8 +50,9 @@ same day against the now-pushed `97e7ae1f`, which confirmed the pin and moved no
 hash but did move a client rule (the caret TICK, see the second 2026-09-12 entry in
 the review log). Hashes
 are of the indexer handler source files, resolved via
-`XCHAIN_INDEXER_PATH` when it is set (authoritative: there is no fallback
-to the sibling) or else the sibling `../xchain-indexer` checkout. The
+`XCHAIN_INDEXER_PATH` when it is set, else `XCHAIN_INDEXER_DIR` when that
+is set (either one is authoritative: there is no fallback to the sibling),
+or else the sibling `../xchain-indexer` checkout. The
 gate FAILS (exit 1) when no indexer checkout resolves, naming every path
 it tried and why each was rejected, because a skip there would compare
 nothing and still read as a clean run. A clone with no indexer checkout
@@ -81,7 +82,22 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `85f1d334`
+**Pins taken at indexer commit:** `52a82367`
+
+(Re-anchored 2026-10-20 against indexer `52a82367`, the origin develop head at which all sixteen
+rows hash as pinned. The four re-pins logged on 2026-10-20 moved the `send`, `destroy`, `mint`
+and `batch` pins past `e903e370` as paired working-tree changes; those changes landed in
+`17a2c486` and `e49fc3e3`, and the rows match the landed tree with no pin moving here.
+`e903e370` is an ancestor of `52a82367`.)
+
+(Re-anchored 2026-10-19 against indexer `e903e370`, the origin develop merge that landed the
+GATED_HANDOFF_REF retirement and the first develop commit at which all sixteen rows hash as
+pinned. The eleven re-pins logged on 2026-10-17 and 2026-10-18 moved the `send`, `destroy`,
+`dispenser`, `dispense`, `order`, `swap` and `airdrop` pins off `85f1d334` without moving this
+line, so those seven rows no longer matched it. No pin moves here, and `85f1d334` is an
+ancestor of `e903e370`. The `batch` row was then re-pinned the same day ahead of its indexer
+commit (review log, "BATCH probe sub-verdicts"), so fifteen rows match `e903e370` and `batch`
+matches the paired indexer change that lands with it.)
 
 (Rows added 2026-10-15 at the same anchor `85f1d334` for the off-rail pre-flight conformance pass
 reviewed under "off-rail conformance" in the review log below: `price`, `stake` and `bet`, because
@@ -451,7 +467,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 85f1d334..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 52a82367..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -524,9 +540,9 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `ee30f9038d6ea9d78cac4ebca511275ca11e62aea2c0ac4c4ac1ed3f765dbca9` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `597c2728d6254fb2c7860f12d1e9a4a1746c30bb08bad283223490ff8847a17a` |
-| `checks/mint.js` | `src/actions/mint/` | `f69fdb9192b703a928dc46028a569f0a4725ce136b394304e1ec00bab04629e9` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `0cbeede95913d7190555ba30949986e028d1fdec96486bca04d36a6c401a4925` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `b172b6cc34d4c9ab095c438c6de5a5aeb07ea06404e895134dc90c2ca317545a` |
+| `checks/mint.js` | `src/actions/mint/` | `998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48` |
 | `checks/issue.js` | `src/actions/issue/` | `8f29219d887e695408a8d9b405a795182550c3ed0e991ab74bd4941efe9d294c` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `3c0163d61230bbc249606f41d92786eb2016b43664dba71b55e78e8ef2ad4907` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
@@ -534,7 +550,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `b04e9b5e3b02e0a1f548c29bdf39fcba90ab21366336cf84011c448f8248dd9c` |
 | `checks/dividend.js` | `src/actions/dividend/` | `c0afa565418a5df7b35bd463ab51ed580541f2b0b7d32fac0c87cf07df50e5b0` |
-| `checks/batch.js` | `src/actions/batch/` | `7e138a16dc5eff43ac60c4cca83c2b35ccd865eb98df3ce57c8cbc8aebca85a6` |
+| `checks/batch.js` | `src/actions/batch/` | `9f1e45a3ad92831601178f3636c7428dca73b18298173159792aaa5323bf0a76` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f` |
 | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35` |
 | `universal.js` (PRICE v1 TICK) | `src/actions/price/` | `b76331534fcf3813ed4ab3e9b20479527f057a3e20dd82187be3808a5f8312bd` |
@@ -561,6 +577,75 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-20 - the anchor moves to the landed SEND, DESTROY, MINT and BATCH changes
+
+No pin moves. The four 2026-10-20 re-pins below were taken from paired working-tree changes,
+which landed on indexer develop as `17a2c486` and `e49fc3e3` (`batch/` in both; `send/prefetch.js`,
+`destroy/controller_guard.js` and `mint/controller_guard.js` in `e49fc3e3`). The landed diff from `e903e370` is
+exactly what those entries describe: the gas balance read narrowed to the gas `TICK_ID`, and
+the BATCH status restore. The drift gate run against indexer `52a82367` reports all sixteen rows
+in sync, so the anchor line and the review command move to `52a82367` together.
+
+**Direction: NEUTRAL.** No validity verdict, error text or fee moves, and no `checks/` module
+changes.
+
+### 2026-10-20 - SEND, DESTROY and MINT read only the gas token's balance
+
+Three pins move: `send` from `ee30f903` to `0cbeede9`, `destroy` from `597c2728` to
+`b172b6cc` and `mint` from `f69fdb91` to `998c2d88`, each hashed by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/<name>/` from the paired indexer
+working-tree change, which has no commit id yet. The cross-repo pairing exception above the
+anchor applies: the lander re-hashes the three directories at the landed indexer commit before
+moving the anchor to it.
+
+- **What moved:** `send/prefetch.js`, `destroy/controller_guard.js` and `mint/controller_guard.js` pass the gas token's `TICK_ID` (or `null` when the gas token is unknown) to `getAddressBalances`, where they passed the gas ticker name. That function ignored its tick argument before and now narrows the credit and debit reads to a whole-number `TICK_ID`; a ticker name or `null` still returns every token.
+- **What did not move:** the controller guard reads and debits only the gas token's `TICK_ID` key of `gasBalances`, and that key's balance is the same whether the read is narrowed or not. No verdict, error text or fee moves.
+- **Client side:** no `checks/` module mirrors the indexer's balance query. NO CLIENT CHECK MOVES.
+
+**Direction: NEUTRAL** for validity.
+
+### 2026-10-20 - a BATCH's own status is restored off the probe path too
+
+The `batch` pin moves from `e7d7825d` to `9f1e45a3`, hashed by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/batch/` from the paired indexer
+working-tree change, which has no commit id yet. The cross-repo pairing exception above the
+anchor applies: the lander re-hashes `src/actions/batch/` at the landed indexer commit before
+moving the anchor to it.
+
+- **What moved:** `index.js` `parse` restores `data['STATUS']` to the BATCH's own verdict after the dispatch loop on every run, where it did so only under FEE_PROBE. The non-probe dry-run (`feequotedryrun`) therefore reports the BATCH's verdict rather than its last sub-command's. On a decoded block nothing reads that field after the parse except the in-memory action counter: the batch row and every sub-command row are written before it, and no consensus caller of `processTransaction` injects a BATCH.
+- **What did not move:** the probe-only `_primaryVerdict` snapshot, the per-sub-command STATUS reset and the VM refusal keep their FEE_PROBE gate. The `fees.js` edit is comment-only and hashes as before. No verdict, error text or fee written to a block moves.
+- **Client side:** no `checks/` module reads the post-parse STATUS of a decoded BATCH, and `feequotedryrun` is not a surface the pre-flight calls. NO CLIENT CHECK MOVES.
+
+**Direction: NEUTRAL** for validity.
+
+### 2026-10-19 - BATCH probe sub-verdicts carry their own match snapshot
+
+The `batch` pin moves from `7e138a16` to `e7d7825d`, hashed by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/batch/` from the paired indexer
+working-tree change, which has no commit id yet. This is the cross-repo pairing exception
+described above the anchor: the gate is green only once both sides land, and the lander
+re-hashes `src/actions/batch/` at the landed indexer commit before moving the anchor to it.
+
+- **What moved:** `index.js` gives each FEE_PROBE sub-command its own `_primaryVerdict` snapshot and restores the outer one after it, and `probe.js` `recordSubVerdict` reads that snapshot's status when the sub-command set off a match. Before, a filling ORDER's sub-verdict was its match's status (such as `pending_coinpay`), and that ORDER's snapshot answered for the whole BATCH.
+- **What did not move:** the edits to `limits.js` and `sub_command.js` are comment-only and hash as before. Nothing outside the FEE_PROBE path changes, so no decoded transaction's verdict, error text or fee moves.
+- **Client side:** `tier1.js` `normalizeSubCommands` reads each sub-command's `status` as the arbiter reports it and keeps no rule of its own about matches. NO CLIENT CHECK MOVES.
+
+**Direction: NEUTRAL** for validity. The pre-flight report for a filling ORDER or SWAP inside a
+BATCH now shows that command's own verdict, and the BATCH's own verdict is no longer a
+sub-command's.
+
+### 2026-10-19 - the anchor catches up with the 2026-10-17 and 2026-10-18 re-pins
+
+No pin moves. Hashing every mapped row with `node bin/preflight_handler_dirs.js` against
+indexer trees extracted by `git archive` shows the `send`, `destroy`, `dispenser`, `dispense`,
+`order`, `swap` and `airdrop` rows differing at `85f1d334` and all sixteen rows matching at
+`e903e370` and at the develop head after it, with no first-parent develop commit between them
+touching `src/actions/`. The anchor line and the review command move to `e903e370` together,
+so the next drift review on those seven rows diffs from the tree they were pinned at.
+
+**Direction: NEUTRAL.** No validity verdict, error text or fee moves, and no `checks/` module
+changes.
 
 ### 2026-10-18 - GATED_HANDOFF_REF gate is retired
 

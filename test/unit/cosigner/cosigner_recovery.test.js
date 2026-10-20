@@ -17,7 +17,7 @@
 const { expect } = require('chai');
 const crypto  = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
-const { secp256k1, schnorr } = require('@noble/curves/secp256k1');
+const { secp256k1, schnorr } = require('@noble/curves/secp256k1.js');
 const { deriveMuSig2P2TR2of3 } = require('../../../src/cosigner/account.js');
 const { buildRecoverySpend, localPairSigner, tapleafHash } = require('../../../src/cosigner/recovery.js');
 

@@ -35,7 +35,7 @@ module.exports = {
     requireWs() {
         // Live updates need a WebSocket connection; without one configured, refuse.
         if (!this.ws)
-            throw new SDKConfigError('WEBSOCKET_NOT_CONFIGURED', 'WebSocket not configured. Provide network + websocketUrl or explorerUrl, or use hub discovery via init().');
+            throw new SDKConfigError('WEBSOCKET_NOT_CONFIGURED', 'WebSocket not configured. Provide network + websocketUrl or explorerUrl (or a port, or the WEBSOCKET_* / EXPLORER_* env vars), or a hubUrl whose discovery via init() supplies one; regtest has no default WebSocket.');
         return this.ws;
     },
 

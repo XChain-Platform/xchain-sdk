@@ -1,5 +1,5 @@
 // Coverage for the scripts component
-// (scripts/sync-templates.js). It self-executes main() on load (reads the
+// (bin/sync-templates.js). It self-executes main() on load (reads the
 // contract template sources, base64-encodes them, and writes a generated
 // module), so running it here would mutate the tree. This pins its structural
 // contract by compiling and inspecting the source: it must read the template
@@ -11,10 +11,10 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const SRC = path.join(__dirname, '../..', '..', 'scripts', 'sync-templates.js');
+const SRC = path.join(__dirname, '../..', '..', 'bin', 'sync-templates.js');
 const source = fs.readFileSync(SRC, 'utf8').replace(/^#!.*\n/, '');
 
-describe('scripts/sync-templates (static contract)', function () {
+describe('bin/sync-templates (static contract)', function () {
     it('is syntactically valid JavaScript (compiles without executing)', function () {
         assert.doesNotThrow(() => new vm.Script(source, { filename: 'sync-templates.js' }));
     });
