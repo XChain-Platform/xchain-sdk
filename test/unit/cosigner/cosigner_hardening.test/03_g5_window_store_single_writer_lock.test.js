@@ -18,7 +18,13 @@ const {
 
 // G5: single writer is a safety property.
 
+// Every test here is synchronous file I/O that finishes in milliseconds, but the
+// suite's 5s default budget is blown when the host is saturated by a full sdk ci
+// run (fs and process stalls, cold module load). Generous so load is not a failure.
+const LOCK_TEST_TIMEOUT_MS = 60000;
+
 describe('G5: window-store single-writer lock', function () {
+    this.timeout(LOCK_TEST_TIMEOUT_MS);
 
     it('refuses a second store on the same state file', function () {
         // Two daemons sharing one store do not merely race a counter: each caches
@@ -55,6 +61,7 @@ describe('G5: window-store single-writer lock', function () {
 });
 
 describe('G5: window-store single-writer lock', function () {
+    this.timeout(LOCK_TEST_TIMEOUT_MS);
 
     // The startup race this closes: create-then-write left the lockfile EXISTING
     // and EMPTY between openSync('wx') and the writeSync that filled it. A second
@@ -97,6 +104,7 @@ describe('G5: window-store single-writer lock', function () {
 });
 
 describe('G5: window-store single-writer lock', function () {
+    this.timeout(LOCK_TEST_TIMEOUT_MS);
 
     // The other half: the lockfile is never observable empty in the first place,
     // because the record is written to a tmp file and hardlinked into place.
@@ -132,6 +140,7 @@ describe('G5: window-store single-writer lock', function () {
 });
 
 describe('G5: window-store single-writer lock', function () {
+    this.timeout(LOCK_TEST_TIMEOUT_MS);
 
     // The reclamation race. A stale takeover that deletes the lock BY NAME lets two
     // starters that both observed the same dead holder both delete: the second
@@ -184,6 +193,7 @@ describe('G5: window-store single-writer lock', function () {
 });
 
 describe('G5: window-store single-writer lock', function () {
+    this.timeout(LOCK_TEST_TIMEOUT_MS);
 
     it('leaves no carried-away lock behind after a successful stale takeover', function () {
         const stateFile = tmpStateFile('lock-stale-clean');
@@ -228,6 +238,7 @@ describe('G5: window-store single-writer lock', function () {
 });
 
 describe('G5: window-store single-writer lock', function () {
+    this.timeout(LOCK_TEST_TIMEOUT_MS);
 
     it('does not delete a lock that now belongs to a successor', function () {
         const stateFile = tmpStateFile('lock-release-fence');
