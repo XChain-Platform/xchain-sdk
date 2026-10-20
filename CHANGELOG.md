@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-10-20
+
+### Changed
+- Upgraded the Noble signing dependencies to version 2.
+- Registered the dispenser and bet edit events on the address channel.
+- Corrected the regtest defaults and re-synced the contract templates.
+
+### Fixed
+- Fixed VOTE decimal sums and the BET format docs.
+
 ## [0.25.0] - 2026-10-18
 
 ### Added
