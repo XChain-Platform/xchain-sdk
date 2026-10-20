@@ -14,13 +14,14 @@
  *
  * XChain Platform SDK - BET (parimutuel betting) Helpers
  *
- * Pure builders for the four BET formats (see
+ * Pure builders for the five BET lifecycle formats (see
  * xchain-documentation/protocol/actions/BET.md): v0 create a market, v1 cancel,
- * v2 place a bet, v3 resolve. Every rule mirrored here is a CONSENSUS rule the
- * indexer enforces; the point of duplicating them is that a malformed market
- * should fail in the caller's hands rather than after paying a fee to be
- * rejected on-chain. The SDK must never be stricter than consensus (that
- * refuses actions the protocol accepts) nor looser (that lets fees burn).
+ * v2 place a bet, v3 resolve, v4 edit membership lists. Every rule mirrored
+ * here is a CONSENSUS rule the indexer enforces; the point of duplicating them
+ * is that a malformed market should fail in the caller's hands rather than
+ * after paying a fee to be rejected on-chain. The SDK must never be stricter
+ * than consensus (that refuses actions the protocol accepts) nor looser (that
+ * lets fees burn).
  *
  * The DETAILS schema lives here and is the single source of truth for it:
  * BET.md documents it, the wallet's create form is generated from it, and the
@@ -31,7 +32,9 @@
  *
  * All pure: no network, no consensus. Submit-flow recipes live on
  * sdk.workflows (openMarket / placeBet / resolveMarket / cancelMarket); the raw
- * action wrapper is sdk.bet().
+ * action wrapper is sdk.bet(). A v4 list edit has no recipe: pass
+ * editMarketListsParams() to sdk.bet() or a wallet session's bet(), on networks
+ * where list edits are active.
  *
  ********************************************************************/
 

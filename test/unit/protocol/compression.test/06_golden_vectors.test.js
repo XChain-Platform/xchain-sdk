@@ -46,7 +46,7 @@ const sha256 = (b) => crypto.createHash('sha256').update(b).digest('hex');
 
     // Golden vectors (sibling-gated on the documentation checkout, matching
     // the cross-repo skip convention used by the conformance suites).
-const DOCS = process.env.XCHAIN_DOCUMENTATION_DIR ||
+const DOCS = process.env.XCHAIN_DOCS_DIR || process.env.XCHAIN_DOCUMENTATION_DIR ||
     path.join(__dirname, '../..', '..', '..', '..', 'xchain-documentation');
 const VECTORS = path.join(DOCS, 'protocol', 'test-vectors', 'taproot_envelope.json');
 let vectors;

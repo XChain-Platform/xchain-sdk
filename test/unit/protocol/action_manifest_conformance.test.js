@@ -135,7 +135,8 @@ function registerSettlementAnchorTests() {
 
 function registerCanonicalManifestIdentityTests() {
     describe('byte-identity to canonical manifest', function () {
-        const DOCS = process.env.XCHAIN_DOCS_DIR || path.join(__dirname, '../..', '..', '..', 'xchain-documentation');
+        const DOCS = process.env.XCHAIN_DOCS_DIR || process.env.XCHAIN_DOCUMENTATION_DIR
+            || path.join(__dirname, '../..', '..', '..', 'xchain-documentation');
         const CANON = path.join(DOCS, 'protocol', 'action-manifest.json');
         // Refuses an absent docs checkout and a lane symlink into a live main checkout alike.
         before(function () { const docs = siblingCheckout(__dirname, CANON); if (!docs.usable) skipOrFail(this, docs, 'the canonical action-manifest.json byte-identity guard'); });
@@ -241,7 +242,7 @@ function registerIndexerHandlerAuditTests() {
     });
 
     describe('audit against the indexer handlers', function () {
-        const INDEXER = process.env.XCHAIN_INDEXER_DIR ||
+        const INDEXER = process.env.XCHAIN_INDEXER_PATH || process.env.XCHAIN_INDEXER_DIR ||
                         path.join(__dirname, '../..', '..', '..', 'xchain-indexer');
         const ACTIONS_DIR = path.join(INDEXER, 'src', 'actions');
         // Refuses an absent indexer checkout and a lane symlink into a live main checkout alike.

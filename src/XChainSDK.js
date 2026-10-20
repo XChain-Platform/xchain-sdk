@@ -118,12 +118,13 @@ function initializeActionHelpers(sdk) {
     // delegateVote). Spec: protocol/actions/VOTE.md.
     sdk.voting     = new VoteHelpers();
     // Betting (parimutuel markets) helpers: pure builders for BET v0
-    // (create market), v1 (cancel), v2 (place bet), v3 (resolve), plus the
-    // DETAILS market-definition schema, its base64 builder/parser, and a
-    // display-only payout projection. Composing OUTCOMES and DETAILS through
-    // createMarketParams is what keeps the two from disagreeing, which is a
-    // consensus rejection. No network. Submit-flow recipes live on
-    // sdk.workflows (openMarket, placeBet, resolveMarket, cancelMarket).
+    // (create market), v1 (cancel), v2 (place bet), v3 (resolve), v4 (edit
+    // membership lists), plus the DETAILS market-definition schema, its base64
+    // builder/parser, and a display-only payout projection. Composing OUTCOMES
+    // and DETAILS through createMarketParams is what keeps the two from
+    // disagreeing, which is a consensus rejection. No network. Submit-flow
+    // recipes live on sdk.workflows (openMarket, placeBet, resolveMarket,
+    // cancelMarket); v4 has none and goes through sdk.bet(editMarketListsParams()).
     // Spec: protocol/actions/BET.md.
     sdk.betting    = new BettingHelpers();
 }

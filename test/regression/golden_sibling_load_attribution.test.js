@@ -45,6 +45,7 @@ const LOAD_TEST    = 'the sibling xchain-indexer parser loads within its budget'
 function resolveIndexerRoot() {
     const candidates = [
         process.env.XCHAIN_INDEXER_PATH,
+        process.env.XCHAIN_INDEXER_DIR,
         path.join('..', '..', '..', 'xchain-indexer'),
     ].filter(Boolean);
     for (const cand of candidates) {

@@ -14,12 +14,13 @@ describe('pre-flight Tier-2 per-action matrix', function () {
         // ORACLE_ADDRESS makes the dispenser self-priced.
         // Rule order follows the handler: the native-coin decimals check runs
         // first, and isValidAmountFormat is what rejects a leading '-', so a
-        // negative native-coin price surfaces as the FORMAT warning. (The
-        // universal wire-format rule already hard-blocks a negative amount on its
-        // own; the mirror's job is the zero, empty and precision cases it misses.)
-        it('a negative native-coin GET_AMOUNT is a format warning', async function () {
+        // negative native-coin price surfaces as the FORMAT error. The indexer
+        // applies both rules at every height, so the format refusal is an error
+        // like the token-priced one; positivity stays an uncertified warning.
+        it('a negative native-coin GET_AMOUNT is a format error', async function () {
             const r = await reportFor('DISPENSER|0|BTC|JDOG|1|0|100|BTC||-1', {});
-            expect(has(r, 'AMOUNT_FORMAT_INVALID', 'warning')).to.equal(true);
+            expect(has(r, 'AMOUNT_FORMAT_INVALID', 'error')).to.equal(true);
+            expect(has(r, 'AMOUNT_FORMAT_INVALID', 'warning')).to.equal(false);
         });
 
         it('a negative token-priced GET_AMOUNT reaches the positivity rule', async function () {
@@ -37,9 +38,10 @@ describe('pre-flight Tier-2 per-action matrix', function () {
             expect(has(r, 'AMOUNT_NOT_POSITIVE', 'warning')).to.equal(true);
         });
 
-        it('a native-coin GET_AMOUNT past the coin decimals is a format warning', async function () {
+        it('a native-coin GET_AMOUNT past the coin decimals is a format error', async function () {
             const r = await reportFor('DISPENSER|0|BTC|JDOG|1|0|100|BTC||0.123456789', {});
-            expect(has(r, 'AMOUNT_FORMAT_INVALID', 'warning')).to.equal(true);
+            expect(has(r, 'AMOUNT_FORMAT_INVALID', 'error')).to.equal(true);
+            expect(has(r, 'AMOUNT_FORMAT_INVALID', 'warning')).to.equal(false);
         });
 
         it('a well-formed positive self-priced GET_AMOUNT raises neither', async function () {

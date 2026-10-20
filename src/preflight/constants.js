@@ -53,7 +53,8 @@ const ENCODING_LIMITS = Object.freeze({
 // `verdict`, `findings[].severity`, `findings[].code`, `findings[].message`,
 // `findings[].overridable`, `findings[]._downgradedBy`,
 // `findings[].data.commandIndex`, `findings[].data.subCommandCount`,
-// `findings[].data.accepted`, `restricted`, `stateHeight`, and
+// `findings[].data.accepted`, `findings[].data.status`,
+// `findings[].data.error`, `restricted`, `stateHeight`, and
 // `unverified[].check` / `unverified[].reason`, and never reads
 // schemaVersion at runtime. The enforcement point is build-time on the
 // wallet side: PreflightPanel exports SUPPORTED_SCHEMA_VERSION and
@@ -64,8 +65,8 @@ const ENCODING_LIMITS = Object.freeze({
 // field the panel reads.
 //
 // The list is element-by-element on purpose. A bare "findings" reads as
-// covered while the two entries inside it that actually carry safety go
-// unreviewed, and both look droppable:
+// covered while the entries inside it that actually carry safety go
+// unreviewed, and each looks droppable:
 //   - `_downgradedBy` is underscore-led and so reads as private, but the
 //     panel's notice filter is `severity === 'info' && !f._downgradedBy`.
 //     Removing or renaming it resurrects the Tier-2 errors index.js demoted
@@ -76,6 +77,16 @@ const ENCODING_LIMITS = Object.freeze({
 //     preflightFindingKey.js), which makes (code, commandIndex) the override
 //     identity for batch sub-command errors. Without it one "Sign anyway"
 //     clears every sub-command error sharing a code.
+//   - `data.status` / `data.error` on DRYRUN_INVALID and
+//     DRYRUN_SUBCOMMAND_INVALID are read the same indirect way, by
+//     consensusRefusalReason() in that file: its `invalid:` text becomes the
+//     signer copy on every error row and the hard-block fallback when
+//     `overridable` is absent. Renaming either drops every refusal row back to
+//     this file's report-reader sentence.
+//   - The `_downgradedBy` VALUE 'dryrun-valid-local-delta' is matched as a
+//     literal by the panel's warningText() (packages/core/src/shared/utils/
+//     preflightFindingCopy.js) for the local balance warning headline, so the
+//     value is contract as well as the field.
 // This SDK-side list is the NORMATIVE copy, and it is not the only one that
 // ships: src/ and index.d.ts are both in the publish allowlist, and index.d.ts
 // declares the engine's return as `PreflightReport` for a third-party consumer

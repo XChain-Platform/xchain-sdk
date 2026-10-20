@@ -47,8 +47,8 @@ function makeActions() {
     return new Actions({ config: config.getConfig(), util: new Utility() });
 }
 
-// Resolve a sibling xchain-indexer checkout (XCHAIN_INDEXER_PATH first, then
-// the monorepo sibling layout). Returns null when absent so the unit tier,
+// Resolve a sibling xchain-indexer checkout (XCHAIN_INDEXER_PATH, then XCHAIN_INDEXER_DIR,
+// then the monorepo sibling layout). Returns null when absent so the unit tier,
 // which checks out only this repo, degrades to the encoder-half pin.
 // A candidate the sibling judge refuses (a lane symlink into a live main
 // checkout) is recorded in indexerRefusal and treated as absent.
@@ -56,6 +56,7 @@ let indexerRefusal = null;
 function resolveIndexerRoot() {
     const candidates = [
         process.env.XCHAIN_INDEXER_PATH,
+        process.env.XCHAIN_INDEXER_DIR,
         path.join('../../../..', 'xchain-indexer'),
     ].filter(Boolean);
     for (const cand of candidates) {

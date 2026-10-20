@@ -324,6 +324,10 @@ export interface PreflightFinding {
         subCommandCount?: number;
         /** How many of those it accepted; `accepted < subCommandCount` means a partial approval. */
         accepted?: number;
+        /** Network status text on a refusal, e.g. `'invalid: insufficient funds'`; null when the network sent none. */
+        status?: string | null;
+        /** Network error text on a refusal; null when the network sent none. */
+        error?: string | null;
         [key: string]: unknown;
     };
     /** Present only on errors: whether a signer may override this one. Absent on warnings and info. */
@@ -333,6 +337,8 @@ export interface PreflightFinding {
      * Underscore-led but load-bearing: the wallet panel's notice filter is
      * `severity === 'info' && !f._downgradedBy`, so dropping or renaming it
      * resurrects demoted errors as user-facing notices under a passing chip.
+     * The value is read too: `'dryrun-valid-local-delta'` (demoted to a warning,
+     * not info) selects the panel's local balance headline; `'dryrun-valid'` is the other.
      */
     _downgradedBy?: string;
 }
@@ -803,7 +809,11 @@ export type ExplorerIndexerState = 'live' | 'future_block_wait' | 'behind';
 export interface ExplorerStatus {
     /** Coins this instance knows about at all (ticker -> name) */
     supported?: { [coin: string]: string };
-    /** Coins served as CURRENT data right now; a stale coin drops out of this map */
+    /**
+     * Coins this instance serves right now. A stale coin stays listed by default, so
+     * read `stale[coin]` for freshness; only an EXPLORER_STALE_FAIL_CLOSED=1 explorer
+     * drops it from this map.
+     */
     available?: { [coin: string]: string };
     /** ISO-8601 time of the last successful hub-config fetch; null before the first */
     hub_config_fetched_at?: string | null;

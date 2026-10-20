@@ -38,6 +38,9 @@ describe('BET action-level validation', function () {
         expect(codes({ refundWindow: '60' })).to.include('INVALID_FIELD_VALUE');
         expect(codes({ minAmount: '0' })).to.include('INVALID_FIELD_VALUE');
         expect(codes({ allowList: '5', blockList: '5' })).to.include('INVALID_FIELD_VALUE');
+        // Normalization strips zero padding first, so a pair consensus reads as one list is refused.
+        const padded = s.validateAction('BET', Object.assign({}, base, { allowList: '05', blockList: '5' }));
+        expect(padded.errors.map(e => e.message).join('\n')).to.include('must differ from ALLOW_LIST');
         expect(codes({ details: 'not base64!' })).to.include('INVALID_FIELD_VALUE');
     });
 

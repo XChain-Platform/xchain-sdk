@@ -12,8 +12,8 @@
  *
  **********************************************************************
  *
- * Pre-flight Tier-2 DISPENSER amount rules: the activation-gated GIVE_AMOUNT
- * and GET_AMOUNT checks on a create, the amount-representability declaration,
+ * Pre-flight Tier-2 DISPENSER amount rules: the GIVE_AMOUNT and GET_AMOUNT
+ * checks on a create, the amount-representability declaration,
  * and the stored-price check on a DISPENSE. Required by checks/dispenser.js;
  * mirrors xchain-indexer src/actions/dispenser/ and src/actions/dispense.js.
  *
@@ -58,55 +58,41 @@ function isSelfPriced(fiatCode, oracleAddress) {
 // dispenser" and skips, while the auto-close threshold is that same
 // non-positive value, so it never closes and keeps absorbing payments.
 //
-// Warning rather than error, and deliberately so: the handler gates the
-// rejection behind the registry row dispenser_give_amount_activation.DISPENSER_GIVE_AMOUNT_ACTIVATION
-// (xchain-indexer src/protocol_changes/gates_1.js), and preflight runs at
-// AUTHORING time with no block time to test the flag-day against. Below
-// the activation the chain still accepts this create, so calling it an
-// error would refuse a transaction the network takes. Above it, the
-// warning is the only notice a client gets before spending the fee. Same
-// treatment, and the same reasoning, as the `^id` caret-ref activation.
+// The handler rejects this create at every height (validate_format.js), so the
+// fee is always lost. It stays a warning only because AMOUNT_NOT_POSITIVE is not
+// in the certified error-capable list (constants.js TIER2_ERROR_CAPABLE, spec §4.4).
 function checkGiveAmount(ctx) {
     const giveAmount = ctx.field('GIVE_AMOUNT');
     if (!giveAmount || !numeric.isPositive(giveAmount)) {
         ctx.addFinding(FINDING_CODES.AMOUNT_NOT_POSITIVE, 'warning',
             'GIVE_AMOUNT is required and must be greater than 0 for a balance dispenser '
-                + '(GIVE_OWNERSHIP=0); at or above the activation the indexer rejects this create, '
-                + 'and below it the dispenser opens but credits nothing while absorbing payments.',
+                + '(GIVE_OWNERSHIP=0); the indexer rejects this create.',
             { giveAmount: giveAmount ?? null, giveOwnership: '0' });
     }
 }
 
 // A dispenser that names its own price must name a positive, well-formed
 // one. Mirrors the two Format-0 rules xchain-indexer/src/actions/dispenser/
-// enforces behind the registry row dispenser_amount_positivity_activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION
-// (xchain-indexer src/protocol_changes/gates_1.js): a native-coin-priced
-// GET_AMOUNT (empty GET_TICK) is checked against COIN_DECIMALS, which the
-// token-priced path always did and this path never had, and a GET_AMOUNT on
-// a dispenser with neither FIAT_CODE nor ORACLE_ADDRESS must be strictly
-// positive (the ORDER-AMT-1 shape). A negative price that reaches storage
-// settles dust payments as valid fills and manufactures escrow on close.
+// validate_format.js applies at every height: a native-coin-priced
+// GET_AMOUNT (empty GET_TICK) is checked against COIN_DECIMALS, as the
+// token-priced path is, and a GET_AMOUNT on a dispenser with neither
+// FIAT_CODE nor ORACLE_ADDRESS must be strictly positive (the ORDER-AMT-1
+// shape). A negative price that reaches storage settles dust payments as
+// valid fills and manufactures escrow on close.
 //
-// Warning rather than error, for exactly the GIVE_AMOUNT reasoning above:
-// the handler gates both on the block's consensus time and pre-flight has
-// no block time, so it cannot certify which side of the flag-day this
-// create lands on. The 2026-09-09 ruling armed the gate at genesis on
-// every network (the dispenser_amount_positivity_activation row reads `mainnet: 0`),
-// so the unarmed-mainnet half of this reasoning no longer applies.
+// The format refusal is an error through checkAmountField, the same verdict the
+// token-priced GET_AMOUNT gets. The positivity refusal stays a warning only
+// because AMOUNT_NOT_POSITIVE is not in the certified error-capable list.
 function checkSelfPrice(ctx) {
     const getAmount = ctx.field('GET_AMOUNT');
     if (isSelfPriced(ctx.field('FIAT_CODE'), ctx.field('ORACLE_ADDRESS'))) {
         const decimals = ctx.field('GET_TICK') ? null : nativeCoinDecimals(ctx.field('GET_COIN'));
         if (getAmount && decimals !== null && !amountFormatOk(ctx, decimals, getAmount)) {
-            ctx.addFinding(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'warning',
-                `GET_AMOUNT (${getAmount}) is not a valid ${ctx.field('GET_COIN')} amount at ${decimals} decimals; `
-                    + 'at or above the activation the indexer rejects this create.',
-                { getAmount, getCoin: ctx.field('GET_COIN'), decimals });
+            checkAmountField(ctx, 'GET_AMOUNT', getAmount, decimals, { getCoin: ctx.field('GET_COIN') });
         } else if (!getAmount || !isStrictlyPositive(getAmount)) {
             ctx.addFinding(FINDING_CODES.AMOUNT_NOT_POSITIVE, 'warning',
                 'GET_AMOUNT is required and must be greater than 0 on a dispenser that names its own price '
-                    + '(no FIAT_CODE, no ORACLE_ADDRESS); at or above the activation the indexer rejects this create, '
-                    + 'and below it a non-positive price settles dust payments as valid fills.',
+                    + '(no FIAT_CODE, no ORACLE_ADDRESS); the indexer rejects this create.',
                 { getAmount: getAmount ?? null });
         }
     }
@@ -152,17 +138,16 @@ async function checkRefillEscrowFormat(ctx, dispenser) {
     declareRepresentability(ctx);
 }
 
-// The settlement half of the dispenser_amount_positivity_activation row
-// (xchain-indexer src/actions/dispense.js): the fill count must be strictly
-// positive, not merely non-zero, and a GET_AMOUNT the divide cannot parse is
-// rejected at the divide. Against a SELF-PRICED dispenser the count is
-// floor(payment / GET_AMOUNT), so a stored price that is non-numeric or not
-// positive fails every dispense, whatever the payment. The FIAT and oracle
+// The settlement half of the same positivity rule (xchain-indexer
+// src/actions/dispense/pricing.js checkDispenseFillCount, at every height): the
+// fill count must be strictly positive, not merely non-zero, and a GET_AMOUNT the
+// divide cannot parse is rejected at the divide. Against a SELF-PRICED dispenser
+// the count is floor(payment / GET_AMOUNT), so a stored price that is non-numeric
+// or not positive fails every dispense, whatever the payment. The FIAT and oracle
 // paths price from elsewhere and are not predictable here.
 //
-// Warning, not error: the count rule is time-gated and pre-flight has no block
-// time, while a create that stored such a price predates the activation by
-// construction.
+// Warning, not error: AMOUNT_NOT_POSITIVE is not in the certified error-capable
+// list, and the stored price is network state this check reads, not local input.
 function checkDispensePrice(ctx, idx, dispenser) {
     const getAmount = dispenser.get_amount ?? dispenser.GET_AMOUNT;
     const selfPriced = isSelfPriced(dispenser.fiat_code ?? dispenser.FIAT_CODE,
@@ -171,8 +156,7 @@ function checkDispensePrice(ctx, idx, dispenser) {
         && !isStrictlyPositive(String(getAmount))) {
         ctx.addFinding(FINDING_CODES.AMOUNT_NOT_POSITIVE, 'warning',
             `Dispenser #${idx} prices at GET_AMOUNT ${getAmount}, which is not a positive amount; `
-                + 'at or above the activation every dispense against it is rejected at settlement, '
-                + 'AFTER your native coin moves.',
+                + 'every dispense against it is rejected at settlement, AFTER your native coin moves.',
             { dispenserActionIndex: idx, getAmount: String(getAmount) });
     }
 }

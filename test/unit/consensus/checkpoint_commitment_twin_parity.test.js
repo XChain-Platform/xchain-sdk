@@ -37,7 +37,8 @@ const local = require('../../../src/consensus/gate_registry');
 
 // GitHub CI checks siblings out beside the repo; fall back to the dev sibling layout.
 const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(__dirname, '../..', '..', '..');
-const DOCS_DIR     = process.env.XCHAIN_DOCS_DIR || path.join(SIBLING_ROOT, 'xchain-documentation');
+const DOCS_DIR     = process.env.XCHAIN_DOCS_DIR || process.env.XCHAIN_DOCUMENTATION_DIR
+                     || path.join(SIBLING_ROOT, 'xchain-documentation');
 const CONSTANTS    = path.join(DOCS_DIR, 'protocol', 'constants.js');
 
 const TWINS = ['xchain-hub', 'xchain-indexer', 'xchain-explorer', 'xchain-sync'];
@@ -68,7 +69,7 @@ describe('checkpoint_commitment_activation twin parity @regression', function ()
     });
 
     TWINS.forEach(function (repo) {
-        it(repo + ' copy matches the sdk copy in value and in bytes', function () {
+        it(repo + ' copy matches the sdk copy in value and at the boundary heights', function () {
             // Each twin eagerly loads its config and dependency graph; leave headroom for CPU-contended CI.
             this.timeout(15000);
             const twinPath = path.join(SIBLING_ROOT, repo, REGISTRY_ENTRY);

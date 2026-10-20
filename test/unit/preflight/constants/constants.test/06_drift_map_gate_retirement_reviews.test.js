@@ -54,21 +54,47 @@ describe('pre-flight constants + registry drift map (§8.5) gate retirement revi
     it('pins and records the SEND gated handoff reference gate retirement review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/send/').hash)
-            .to.equal('ee30f9038d6ea9d78cac4ebca511275ca11e62aea2c0ac4c4ac1ed3f765dbca9');
+            .to.equal('0cbeede95913d7190555ba30949986e028d1fdec96486bca04d36a6c401a4925');
         const heading = '### 2026-10-18 - GATED_HANDOFF_REF gate is retired';
         expect(text).to.include(heading);
         expect(entryOf(text, heading)).to.include('**Direction: NEUTRAL.**');
     });
 
-    // The batch pin moves ahead of its indexer commit, so the entry must name the pairing.
+    // The batch pin moves ahead of its indexer commit, so each entry must name the pairing.
     it('pins and records the BATCH probe sub-verdict match snapshot review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/batch/').hash)
-            .to.equal('e7d7825ddbecd04b04e7fd0c3d4a22da075d8c3d5e671d1a19efdddec9de7af1');
-        const heading = '### 2026-10-19 - BATCH probe sub-verdicts carry their own match snapshot';
+            .to.equal('9f1e45a3ad92831601178f3636c7428dca73b18298173159792aaa5323bf0a76');
+        const reviews = [
+            ['### 2026-10-19 - BATCH probe sub-verdicts carry their own match snapshot', '`7e138a16` to `e7d7825d`'],
+            ['### 2026-10-20 - a BATCH\'s own status is restored off the probe path too', '`e7d7825d` to `9f1e45a3`']
+        ];
+        for (const [heading, move] of reviews) {
+            expect(text).to.include(heading);
+            const entry = entryOf(text, heading).replace(/\s+/g, ' ');
+            expect(entry).to.include('The `batch` pin moves from ' + move);
+            expect(entry).to.include('cross-repo pairing exception');
+            expect(entry).to.include('**Direction: NEUTRAL** for validity.');
+            expect(entry).to.include('NO CLIENT CHECK MOVES');
+        }
+    });
+
+    // The send, destroy and mint pins move ahead of their indexer commit, so the entry names the pairing.
+    it('pins and records the SEND, DESTROY and MINT gas balance read review', function () {
+        const text = fs.readFileSync(REAL_MAP, 'utf8');
+        const rows = parseMap(REAL_MAP);
+        const moves = [
+            ['send', '`ee30f903` to `0cbeede9`', '0cbeede95913d7190555ba30949986e028d1fdec96486bca04d36a6c401a4925'],
+            ['destroy', '`597c2728` to `b172b6cc`', 'b172b6cc34d4c9ab095c438c6de5a5aeb07ea06404e895134dc90c2ca317545a'],
+            ['mint', '`f69fdb91` to `998c2d88`', '998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48']
+        ];
+        const heading = '### 2026-10-20 - SEND, DESTROY and MINT read only the gas token\'s balance';
         expect(text).to.include(heading);
-        const entry = entryOf(text, heading);
-        expect(entry).to.include('The `batch` pin moves from `7e138a16` to `e7d7825d`');
+        const entry = entryOf(text, heading).replace(/\s+/g, ' ');
+        for (const [name, move, hash] of moves) {
+            expect(rows.find((r) => r.handler === 'src/actions/' + name + '/').hash).to.equal(hash);
+            expect(entry).to.include('`' + name + '` from ' + move);
+        }
         expect(entry).to.include('cross-repo pairing exception');
         expect(entry).to.include('**Direction: NEUTRAL** for validity.');
         expect(entry).to.include('NO CLIENT CHECK MOVES');

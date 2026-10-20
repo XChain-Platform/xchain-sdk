@@ -28,7 +28,7 @@ const KNOWN_ACTIVATION_MAPS = [
 // Find every exported activation map by name, so a newly added map is compared automatically.
 const SDK_ACTIVATION_MAPS = Object.keys(sdkConstants).filter((name) => /_ACTIVATION$/.test(name));
 
-const docsDir = process.env.XCHAIN_DOCS_DIR
+const docsDir = process.env.XCHAIN_DOCS_DIR || process.env.XCHAIN_DOCUMENTATION_DIR
     || path.join(__dirname, '..', '..', '..', '..', 'xchain-documentation');
 const canonicalConstants = path.join(docsDir, 'protocol', 'constants.js');
 

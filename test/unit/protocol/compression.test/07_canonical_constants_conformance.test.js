@@ -54,7 +54,7 @@ describe('CompressionUtils (Part B)', function () {
     });
 
     describe('canonical constants conformance', function () {
-        const DOCS = process.env.XCHAIN_DOCUMENTATION_DIR ||
+        const DOCS = process.env.XCHAIN_DOCS_DIR || process.env.XCHAIN_DOCUMENTATION_DIR ||
             path.join(__dirname, '../..', '..', '..', '..', 'xchain-documentation');
         const DOCS_CONSTANTS = path.join(DOCS, 'protocol', 'constants.js');
         // Skip on an absent or refused docs sibling; fail instead under XCHAIN_REQUIRE_SIBLINGS=1.
