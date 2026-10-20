@@ -2308,7 +2308,7 @@ export declare class XChainSDK {
     /** Subscribe to new actions with optional type/status/tick filters. */
     onAction(callback: (msg: any) => void, opts?: { types?: string[]; ticks?: string[] }): () => void;
 
-    /** Subscribe to all events touching an address: NEW_ACTION, ADDRESS_UPDATE, MEMPOOL_ACTION, MEMPOOL_REMOVED, ORDER_MATCH, ORDER_EXPIRED, COINPAY_REQUIRED/FULFILLED/EXPIRED, SWAP_MATCH, SWAP_EXPIRED, DISPENSE, DISPENSER_CLOSED, DISPENSER_EXPIRED, BET, BET_EXPIRED, BET_CLOSED, XCALL_COMPLETED, XCALL_EXPIRED, ATTESTATION_REQUEST, ATTESTATION_RESPONSE. */
+    /** Subscribe to all events touching an address: NEW_ACTION, ADDRESS_UPDATE, MEMPOOL_ACTION, MEMPOOL_REMOVED, ORDER_MATCH, ORDER_EXPIRED, COINPAY_REQUIRED/FULFILLED/EXPIRED, SWAP_MATCH, SWAP_EXPIRED, DISPENSE, DISPENSER_CLOSED, DISPENSER_EXPIRED, DISPENSER_EDIT, DISPENSER_CANCEL, BET, BET_EXPIRED, BET_CLOSED, BET_EDIT, XCALL_COMPLETED, XCALL_EXPIRED, ATTESTATION_REQUEST, ATTESTATION_RESPONSE. */
     onAddress(address: string, callback: (msg: any) => void, opts?: { types?: string[]; snapshot?: boolean }): () => void;
 
     /**

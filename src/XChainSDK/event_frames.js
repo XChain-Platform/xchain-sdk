@@ -103,7 +103,8 @@ const ADDRESS_EVENT_TYPES = Object.freeze([
     'COINPAY_REQUIRED', 'COINPAY_FULFILLED', 'COINPAY_EXPIRED',
     'SWAP_MATCH', 'SWAP_EXPIRED',
     'DISPENSE', 'DISPENSER_CLOSED', 'DISPENSER_EXPIRED',
-    'BET', 'BET_EXPIRED', 'BET_CLOSED',
+    'DISPENSER_EDIT', 'DISPENSER_CANCEL',
+    'BET', 'BET_EXPIRED', 'BET_CLOSED', 'BET_EDIT',
     'ATTESTATION_REQUEST', 'ATTESTATION_RESPONSE',
     // Cross-chain call resolution. The Broadcaster routes every lifecycle event
     // to the address channel of each address it names, so these arrive on an
