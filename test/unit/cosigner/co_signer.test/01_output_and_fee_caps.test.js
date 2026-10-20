@@ -19,7 +19,7 @@ const crypto  = require('crypto');
 // when the SDK's wallet.js is required in production.
 require('../../../../src/utils/apply_bufferutils_patch.js');
 const bitcoin = require('bitcoinjs-lib');
-const { secp256k1, schnorr } = require('@noble/curves/secp256k1');
+const { secp256k1, schnorr } = require('@noble/curves/secp256k1.js');
 const MuSig2     = require('../../../../src/cosigner/musig2.js');
 const CoSigner   = require('../../../../src/cosigner/co_signer.js');
 const WindowStore = require('../../../../src/cosigner/window_store.js');
@@ -172,6 +172,7 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
     });
 });
 
+
 describe('CoSigner (MuSig2 hard-enforcement service)', function () {
     // Fund-key-safety fix: checkFee must accept BigInt witnessUtxo/output values
     // (the SDK's own applyBufferutilsPatch narrowU64 legitimately produces them
@@ -305,4 +306,3 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
         expect(res.approved).to.equal(true);
     });
 });
-

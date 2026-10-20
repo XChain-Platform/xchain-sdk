@@ -16,7 +16,7 @@ const fs      = require('fs');
 const os      = require('os');
 const path    = require('path');
 const bitcoin = require('bitcoinjs-lib');
-const { secp256k1, schnorr } = require('@noble/curves/secp256k1');
+const { secp256k1, schnorr } = require('@noble/curves/secp256k1.js');
 
 const CoSigner = require('../../../../../src/cosigner/co_signer.js');
 const { inProcessTransport } = require('../../../../../src/cosigner/client.js');
