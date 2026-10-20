@@ -146,12 +146,13 @@ function registerSendGatedTotalReviewTest() {
     });
 }
 
+// The 2026-10-19 probe sub-verdict review (06_drift_map_gate_retirement_reviews.test.js) pins the
+// batch hash now; this entry stays the record of this review.
 function registerBatchDispatchAdmissionReviewTest() {
     it('pins and records the BATCH sub-command admission by dispatch coverage review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const batch = parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/batch/');
         expect(batch, 'batch directory row').to.exist;
-        expect(batch.hash).to.equal('7e138a16dc5eff43ac60c4cca83c2b35ccd865eb98df3ce57c8cbc8aebca85a6');
         const heading = '### 2026-10-10 - BATCH sub-command admission by dispatch coverage';
         expect(text).to.include(heading);
         const start = text.indexOf(heading);

@@ -59,8 +59,8 @@ try {
 }
 
 // Explorer-style coin prefixes → SDK network strings. Mainnet/testnet default
-// to the public *.xchain.io hosts (SDK zero-config); R* regtest prefixes
-// default to localhost services, overridable via the usual SDK env vars.
+// to the public *.xchain.io hosts (SDK zero-config); R* regtest prefixes get
+// only a localhost explorer, so writes need ENCODER_URL (usual SDK env vars).
 const COIN_NETWORKS = {
     BTC: 'bitcoin-mainnet', TBTC: 'bitcoin-testnet', RBTC: 'bitcoin-regtest',
     LTC: 'litecoin-mainnet', TLTC: 'litecoin-testnet', RLTC: 'litecoin-regtest',

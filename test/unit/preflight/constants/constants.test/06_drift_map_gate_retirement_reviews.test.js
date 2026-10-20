@@ -59,4 +59,18 @@ describe('pre-flight constants + registry drift map (§8.5) gate retirement revi
         expect(text).to.include(heading);
         expect(entryOf(text, heading)).to.include('**Direction: NEUTRAL.**');
     });
+
+    // The batch pin moves ahead of its indexer commit, so the entry must name the pairing.
+    it('pins and records the BATCH probe sub-verdict match snapshot review', function () {
+        const text = fs.readFileSync(REAL_MAP, 'utf8');
+        expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/batch/').hash)
+            .to.equal('e7d7825ddbecd04b04e7fd0c3d4a22da075d8c3d5e671d1a19efdddec9de7af1');
+        const heading = '### 2026-10-19 - BATCH probe sub-verdicts carry their own match snapshot';
+        expect(text).to.include(heading);
+        const entry = entryOf(text, heading);
+        expect(entry).to.include('The `batch` pin moves from `7e138a16` to `e7d7825d`');
+        expect(entry).to.include('cross-repo pairing exception');
+        expect(entry).to.include('**Direction: NEUTRAL** for validity.');
+        expect(entry).to.include('NO CLIENT CHECK MOVES');
+    });
 });

@@ -16,8 +16,9 @@
  * xchain-mcp: stdio entry point for the XChain MCP server.
  *
  * Zero-config: tools default to the public *.xchain.io hosts per network
- * (R*-prefixed regtest coins default to localhost services; the standard
- * SDK env vars EXPLORER_URL / ENCODER_URL / HUB_API_HOST etc. override).
+ * (R*-prefixed regtest coins default only the explorer to localhost; writes
+ * also need ENCODER_URL; the standard SDK env vars EXPLORER_URL / ENCODER_URL /
+ * HUB_API_HOST etc. override).
  *
  * Claude Code:    claude mcp add xchain -- npx -y xchain-mcp
  * Claude Desktop: { "mcpServers": { "xchain": { "command": "xchain-mcp" } } }

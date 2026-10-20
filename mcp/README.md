@@ -14,7 +14,7 @@ claude mcp add xchain -- npx -y xchain-mcp
 { "mcpServers": { "xchain": { "command": "npx", "args": ["-y", "xchain-mcp"] } } }
 ```
 
-Zero-config: tools default to the public `*.xchain.io` hosts per network. `R*`-prefixed regtest coins default to localhost services; the standard SDK env vars (`EXPLORER_URL`, `ENCODER_URL`, `HUB_API_HOST`, ...) override.
+Zero-config: tools default to the public `*.xchain.io` hosts per network. `R*`-prefixed regtest coins default only the explorer to `localhost:8080`, so read tools work against a local stack but write tools also need `ENCODER_URL` (or `ENCODER_PORT`); the standard SDK env vars (`EXPLORER_URL`, `ENCODER_URL`, `HUB_API_HOST`, ...) override.
 
 ## Write tools are opt-in
 

@@ -339,3 +339,58 @@ describe('SPV §7.3: rotation-aware pinned path (followForward)', function () {
         assert.strictEqual(f.saw('/api/proof/validator-set'), false);
     });
 });
+
+describe('SPV §7.3: followForward refuses range steps that roll back or leave the chain', function () {
+
+    beforeEach(function () {
+        light.clearValidatorSetCache();
+    });
+
+    // A step at `block_index`, signed by `signers`, with any field overridden.
+    function stepAt(block_index, signers, fields) {
+        return signCp(Object.assign({ chain: CHAIN, network: NET, block_index, snapshot_block: block_index, checkpoint_seq: 1,
+            state_root: 'dd'.repeat(32), state_root_version: 1, block_merkle_root: 'bb'.repeat(32),
+            block_merkle_version: 1, validator_signatures: [] }, fields || {}), signers);
+    }
+
+    it('skips a genuinely signed step at or below the trusted height and adopts the next one', async function () {
+        const s1 = rsigner();
+        const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 110);
+        const cp0 = pinnedCp(vs.stateRoot);
+        const older = stepAt(90, [s1]);
+        const same = stepAt(100, [s1]);
+        const f = spyFetch([['/api/checkpoints/range', { checkpoints: [older, same, stepAt(110, [s1])] }],
+            ['/api/proof/validator-set', { proof: vs.proof }]]);
+        const r = await light.followForward({ explorerUrl: 'https://x', btcCoin: COIN, trustedCheckpoint: cp0, toHeight: 110, fetchImpl: f });
+        assert.strictEqual(r.reason, null, r.reason);
+        assert.strictEqual(r.adopted.length, 1);
+        assert.strictEqual(r.trusted.block_index, 110);
+    });
+
+    it('never rolls the trust root backwards when the range holds only older signed steps', async function () {
+        const s1 = rsigner();
+        const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 110);
+        const cp0 = pinnedCp(vs.stateRoot);
+        const f = spyFetch([['/api/checkpoints/range', { checkpoints: [stepAt(90, [s1])] }],
+            ['/api/proof/validator-set', { proof: vs.proof }]]);
+        const r = await light.followForward({ explorerUrl: 'https://x', btcCoin: COIN, trustedCheckpoint: cp0, toHeight: 110, fetchImpl: f });
+        assert.strictEqual(r.reason, null, r.reason);
+        assert.strictEqual(r.adopted.length, 0);
+        assert.strictEqual(r.trusted.block_index, 100);
+    });
+
+    for (const [label, fields] of [['another network', { network: 'testnet' }], ['another chain', { chain: 'DOGE' }]]) {
+        it(`stops at a step signed by the proven set for ${label}, before proving any signer set`, async function () {
+            const s1 = rsigner();
+            const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 110);
+            const cp0 = pinnedCp(vs.stateRoot);
+            const f = spyFetch([['/api/checkpoints/range', { checkpoints: [stepAt(110, [s1], fields)] }],
+                ['/api/proof/validator-set', { proof: vs.proof }]]);
+            const r = await light.followForward({ explorerUrl: 'https://x', btcCoin: COIN, trustedCheckpoint: cp0, toHeight: 110, fetchImpl: f });
+            assert.strictEqual(r.reason, 'CHECKPOINT_BINDING_MISMATCH@110');
+            assert.strictEqual(r.adopted.length, 0);
+            assert.strictEqual(r.trusted.block_index, 100);
+            assert.strictEqual(f.saw('/api/proof/validator-set'), false);
+        });
+    }
+});

@@ -49,11 +49,16 @@
  * 2-of-3 account is configured by naming recoveryPublicKey.
  * COINPAY/native-fee output legs are supported only when the
  * operator allow-lists them via config.allowedOutputs (default: none, so
- * plain token SEND - OP_RETURN + change only - passes). EXECUTE, DEPLOY
- * v0/v2, and LIST use rest-field formats (`...PARAMS`) that
- * decodeActionFromPsbt refuses outright (REST_FIELD_UNSUPPORTED) before any
- * params are built; they are currently outside this co-signer's decodable
- * scope and are denied at decode regardless of allowedActions.
+ * plain token SEND - OP_RETURN + change only - passes). Rest-field formats
+ * (a variadic `...X` tail) are refused at decode (REST_FIELD_UNSUPPORTED)
+ * before any params are built, whatever allowedActions says: today DEPLOY
+ * v0/v2 and LIST v0/v1. The exceptions are the formats admitted in
+ * psbt_action_decode.js BOUNDED_REST_FORMATS, currently EXECUTE v0 and
+ * LIST v4: they decode with at most MAX_REST_PARAMS rest entries and are then
+ * judged by policy like any other action. EXECUTE v0 is UNBOUNDED in
+ * policy/value_derivability.js, so any amount limit refuses it; LIST v4 is
+ * NONE. Keep EXECUTE and LIST out of allowedActions unless this co-signer is
+ * meant to sign them.
  *
  ********************************************************************/
 

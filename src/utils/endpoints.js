@@ -17,8 +17,9 @@
  * Zero-config service hosts. When the SDK is constructed with only a
  * `network` (no explicit explorer/encoder/hub URLs and no env overrides),
  * non-regtest networks default to the public XChain Platform hosts below.
- * Regtest is inherently local, so it falls through to each client's own
- * `localhost` fallback (these helpers return nothing for regtest).
+ * Regtest is inherently local, so these helpers return nothing for it: the
+ * explorer then falls back to localhost:8080, while the encoder and WebSocket
+ * clients are not built until a URL or port for them is configured.
  *
  * The constants are FULL URLs (with scheme). The service clients build
  * their axios baseURL as `hasHttpScheme(url) ? url : 'http://'+url+':'+port`,
@@ -107,7 +108,7 @@ function isSecureUrl(url) {
 
 // Network-derived public defaults. Returns {} for regtest (or a missing
 // network), so the caller's `options || env || publicDefaults().X` chain
-// resolves to undefined there and each client keeps its localhost fallback.
+// resolves to undefined there: only the explorer is still built (on localhost).
 //
 // The platform routes every shared service host by coin path (/{COIN}); see the
 // wallet chain descriptors. The encoder and hub clients send to that URL

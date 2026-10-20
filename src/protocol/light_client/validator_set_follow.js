@@ -134,10 +134,21 @@ function verifyCheckpointWithProvenSet(cp, provenOraclePublish){
     return { valid, total };
 }
 
+// True when range step `next` names a chain or network other than the trusted checkpoint's.
+// The walk is BTC-only, so a trusted checkpoint without a chain is read as BTC.
+function bindingMismatch(next, trusted){
+    const want = String(trusted.chain != null ? trusted.chain : 'BTC').toUpperCase();
+    if (next.chain != null && String(next.chain).toUpperCase() !== want) return true;
+    return next.network != null && trusted.network != null
+        && String(next.network).toLowerCase() !== String(trusted.network).toLowerCase();
+}
+
 // Forward-following (spec §7.3): from a trusted BTC checkpoint, walk /checkpoints/range
 // and adopt each next checkpoint whose quorum verifies against a validator set proven at
 // its snapshot_block (against the current trusted BTC state_root). Returns the new rolling
 // trust root + the chain of adopted checkpoints. Stops at the first step that fails to verify.
+// Range steps are explorer-supplied, so a step at or below the trusted height is skipped
+// (no rollback), and a step naming another chain or network stops the walk.
 async function followForward(opts){
     opts = opts || {};
     let trusted = opts.trustedCheckpoint;
@@ -153,6 +164,15 @@ async function followForward(opts){
         const rangeBody = await fetchJson(f, rangeUrl);
         const steps = (rangeBody && rangeBody.checkpoints) || [];
         for (const next of steps){
+            // Skip a step that does not advance the trust root: a genuinely signed older
+            // checkpoint must never roll `trusted` backwards.
+            const height = Number(next && next.block_index);
+            if (!Number.isFinite(height) || height <= Number(trusted.block_index)) continue;
+            // One federation set signs every chain and network, so a genuine checkpoint for
+            // another one passes the quorum: refuse it here. An absent field is left to the
+            // quorum check, since the canonical signs both.
+            if (bindingMismatch(next, trusted))
+                return { trusted, adopted, reason: 'CHECKPOINT_BINDING_MISMATCH@' + next.block_index, stoppedAt: next.block_index };
             // Below the commitment flag day a step's roots are unsigned, and adopting one would
             // let the explorer choose the root the NEXT step's signer set is proven against.
             if (!checkpoint.commitmentActive(next))

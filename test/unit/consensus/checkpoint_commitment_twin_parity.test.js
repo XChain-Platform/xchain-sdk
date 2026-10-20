@@ -25,12 +25,12 @@
 //   1. VALUE     - the sdk row equals the canonical map in xchain-documentation.
 //   2. PARITY    - every sibling's registry row equals the sdk row, and its activeAt
 //                  agrees with the sdk's at the boundary heights.
-// Skips green when the siblings are absent (standalone deploy), unless
-// XCHAIN_REQUIRE_SIBLINGS=1.
+// Skips green when a sibling is absent (standalone deploy) or refused by siblingCheckout()
+// (a lane symlink into a live main checkout), unless XCHAIN_REQUIRE_SIBLINGS=1.
 
 const assert = require('assert');
-const fs     = require('fs');
 const path   = require('path');
+const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 const KEY   = 'checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION';
 const local = require('../../../src/consensus/gate_registry');
@@ -49,12 +49,6 @@ const REGISTRY_ENTRY = path.join('src', 'consensus', 'gate_registry.js');
 // mainnet and testnet flag days, regtest genesis, and an unknown network.
 const BOUNDARIES = [[960999,'mainnet'],[961000,'mainnet'],[145999,'testnet'],[146000,'testnet'],[0,'regtest'],[5,'bogusnet']];
 
-function missingSibling(what){
-    if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-        throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but ' + what + ' was not found');
-    return null;
-}
-
 describe('checkpoint_commitment_activation twin parity @regression', function () {
 
     it('sdk copy pins the armed flag-days', function () {
@@ -65,10 +59,7 @@ describe('checkpoint_commitment_activation twin parity @regression', function ()
     });
 
     it('sdk map is value-identical to the canonical xchain-documentation map', function () {
-        if(!fs.existsSync(CONSTANTS)){
-            missingSibling('canonical constants at ' + CONSTANTS);
-            return this.skip();
-        }
+        if(!skipOrFail(this, siblingCheckout(__dirname, CONSTANTS), 'the canonical checkpoint-commitment map check')) return;
         const canon = require(CONSTANTS);
         assert.ok(canon.CHECKPOINT_COMMITMENT_ACTIVATION,
             'constants.js must export CHECKPOINT_COMMITMENT_ACTIVATION (the canonical authority)');
@@ -81,10 +72,7 @@ describe('checkpoint_commitment_activation twin parity @regression', function ()
             // Each twin eagerly loads its config and dependency graph; leave headroom for CPU-contended CI.
             this.timeout(15000);
             const twinPath = path.join(SIBLING_ROOT, repo, REGISTRY_ENTRY);
-            if(!fs.existsSync(twinPath)){
-                missingSibling(repo + ' sibling registry at ' + twinPath);
-                return this.skip();
-            }
+            if(!skipOrFail(this, siblingCheckout(__dirname, twinPath), 'the ' + repo + ' checkpoint-commitment twin check')) return;
             const twin = require(twinPath);
             assert.deepStrictEqual(twin.copy(KEY), local.copy(KEY),
                 repo + ' activation row diverged from the sdk row');

@@ -49,6 +49,19 @@ describe('ContractUtils.parseAbi()', function () {
         assert.deepStrictEqual(Object.keys(abi.methods), ['good']);
     });
 
+    it('drops a method entry whose summary or view is not a literal of its type', function () {
+        const abi = utils.parseAbi(`module.exports = {
+            abi: { version: 1, methods: {
+                good:     { summary: 'Read it', view: true, params: [] },
+                dynSum:   { summary: SUMMARY_CONST, params: [ { name: 'x', type: 'string' } ] },
+                yesView:  { view: 'yes' },
+                oneView:  { view: 1 }
+            } },
+            good: function(xchain){}, dynSum: function(xchain){}, yesView: function(xchain){}, oneView: function(xchain){}
+        };`);
+        assert.deepStrictEqual(Object.keys(abi.methods), ['good']);
+    });
+
     it('returns null when version is not a numeric literal', function () {
         assert.strictEqual(utils.parseAbi(`module.exports = { abi: { version: '1', methods: {} }, run: function(x){} };`), null);
     });
