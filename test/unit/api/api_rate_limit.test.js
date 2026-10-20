@@ -348,8 +348,12 @@ describe('API request-rate limit under a many-address flood', function () {
         stubCall(mw, { ip: '10.0.0.1' });
         stubCall(mw, { ip: '10.0.0.2' });
         assert.strictEqual(stubCall(mw, { ip: '10.0.0.3' }).passed, false);
-        await waitFor(() => stubCall(mw, { ip: '10.0.0.3' }).passed,
-            { message: 'a new address must be admitted once the earlier buckets expire' });
+        // The two buckets can be stamped a millisecond apart, so probe only after BOTH expire;
+        // a probe between the two expiries is admitted with the later bucket still live
+        const expiredAt = Math.max(...[...mw.buckets.values()].map((b) => b.resetAt));
+        await waitFor(() => Date.now() > expiredAt, { message: 'the earlier buckets must expire' });
+        assert.strictEqual(stubCall(mw, { ip: '10.0.0.3' }).passed, true,
+            'a new address must be admitted once the earlier buckets expire');
         assert.strictEqual(mw.buckets.size, 1, 'the expired buckets must be pruned, leaving only the fresh one');
     });
 
