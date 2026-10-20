@@ -172,7 +172,6 @@ describe('CoSigner (MuSig2 hard-enforcement service)', function () {
     });
 });
 
-
 describe('CoSigner (MuSig2 hard-enforcement service)', function () {
     // Fund-key-safety fix: checkFee must accept BigInt witnessUtxo/output values
     // (the SDK's own applyBufferutilsPatch narrowU64 legitimately produces them
