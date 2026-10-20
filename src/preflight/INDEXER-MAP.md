@@ -82,7 +82,13 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `e903e370`
+**Pins taken at indexer commit:** `52a82367`
+
+(Re-anchored 2026-10-20 against indexer `52a82367`, the origin develop head at which all sixteen
+rows hash as pinned. The four re-pins logged on 2026-10-20 moved the `send`, `destroy`, `mint`
+and `batch` pins past `e903e370` as paired working-tree changes; those changes landed in
+`17a2c486` and `e49fc3e3`, and the rows match the landed tree with no pin moving here.
+`e903e370` is an ancestor of `52a82367`.)
 
 (Re-anchored 2026-10-19 against indexer `e903e370`, the origin develop merge that landed the
 GATED_HANDOFF_REF retirement and the first develop commit at which all sixteen rows hash as
@@ -461,7 +467,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff e903e370..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 52a82367..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -571,6 +577,18 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-20 - the anchor moves to the landed SEND, DESTROY, MINT and BATCH changes
+
+No pin moves. The four 2026-10-20 re-pins below were taken from paired working-tree changes,
+which landed on indexer develop as `17a2c486` and `e49fc3e3` (`batch/` in both; `send/prefetch.js`,
+`destroy/controller_guard.js` and `mint/controller_guard.js` in `e49fc3e3`). The landed diff from `e903e370` is
+exactly what those entries describe: the gas balance read narrowed to the gas `TICK_ID`, and
+the BATCH status restore. The drift gate run against indexer `52a82367` reports all sixteen rows
+in sync, so the anchor line and the review command move to `52a82367` together.
+
+**Direction: NEUTRAL.** No validity verdict, error text or fee moves, and no `checks/` module
+changes.
 
 ### 2026-10-20 - SEND, DESTROY and MINT read only the gas token's balance
 
