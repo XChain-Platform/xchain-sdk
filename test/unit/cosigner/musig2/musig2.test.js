@@ -11,7 +11,7 @@
 const { expect } = require('chai');
 const crypto = require('crypto');
 const MuSig2 = require('../../../../src/cosigner/musig2.js');
-const { secp256k1, schnorr } = require('@noble/curves/secp256k1');
+const { secp256k1, schnorr } = require('@noble/curves/secp256k1.js');
 
 // Convert hex helper
 const h = (s) => Buffer.from(s, 'hex');
