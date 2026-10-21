@@ -553,7 +553,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/batch.js` | `src/actions/batch/` | `9f1e45a3ad92831601178f3636c7428dca73b18298173159792aaa5323bf0a76` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f` |
 | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35` |
-| `universal.js` (PRICE v1 TICK) | `src/actions/price/` | `67c631c8084e53b32fdabc323b3c6e52f44b1b5592750b19448fbb9b1831d6bd` |
+| `universal.js` (PRICE v1 TICK) | `src/actions/price/` | `9028c8c24931681e005828b46a76faa7e6688c1875dfd11e554fcc79b50d2781` |
 | `checks/misc.js` (STAKE) | `src/actions/stake/` | `eef1360e9bfa8e5ad2b1e7479cf286669f44b9ac3115701b1ac1a101fd9011a3` |
 | `universal.js` (BET halt field) | `src/actions/bet/` | `59ff86ee4bed61d0ca958c588558b106ced395eb2a9605f6ec2679fe58adac98` |
 
@@ -577,6 +577,20 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-20 - `price/v0.js` stops exporting three internal helpers (price_v0_unexport)
+
+The `price` pin moves from `67c631c8` to `9028c8c2`, hashed from indexer `origin/develop` with
+the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/price/`, on the tree that already
+carries the `batch_signatures.js` unexport above. The pin is a paired working-tree change: it
+matches the indexer change that lands with it, not the anchor below. The whole mapped diff is the
+`module.exports` line of `price/v0.js`, which drops `readWindowHeader`, `checkWindowHeader` and
+`resolveRoundBounds`; they were never imported elsewhere and stay module-local. No function body,
+verdict, error text or fee moves, and the PRICE v1 TICK rule `universal.js` mirrors is untouched.
+NO CLIENT CHECK MOVES.
+
+**Direction: NEUTRAL.** The anchor stays unchanged.
 
 ### 2026-10-20 - `price/batch_signatures.js` stops exporting three internal helpers (price_batch_signatures_unexport)
 
