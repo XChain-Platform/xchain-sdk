@@ -6,10 +6,12 @@
 const { expect } = require('chai');
 const fs = require('fs');
 const path = require('path');
-const { parseMap } = require('../../../bin/check-preflight-drift.js');
+const { parseMap, resolveIndexerRoot } = require('../../../bin/check-preflight-drift.js');
+const { hashMappedRow } = require('../../../bin/preflight_handler_dirs.js');
 const { mockSdk, notFound } = require('./helpers/mock.js');
 
 const DRIFT_MAP = path.join(__dirname, '..', '..', '..', 'src', 'preflight', 'INDEXER-MAP.md');
+const ISSUE_CHECK = path.join(__dirname, '..', '..', '..', 'src', 'preflight', 'checks', 'issue.js');
 
 async function reportFor(network, coin, getToken) {
     const sdk = mockSdk({
@@ -70,9 +72,12 @@ describe('pre-flight ISSUE caret TICK create warning', function () {
             reason: 'token lookup unavailable',
         });
     });
+});
 
-    it('keeps the caret rule covered by the issue handler drift map', function () {
+describe('pre-flight ISSUE caret TICK drift coverage', function () {
+    it('binds the caret rule implementation to the issue handler drift-map row', function () {
         const issue = parseMap(DRIFT_MAP).find((row) => row.handler === 'src/actions/issue/');
+        const check = fs.readFileSync(ISSUE_CHECK, 'utf8');
         const map = fs.readFileSync(DRIFT_MAP, 'utf8');
         const heading = '### 2026-10-20 - ISSUE_CARET_TICK_NO_CREATE gate is added';
         const start = map.indexOf(heading);
@@ -81,9 +86,20 @@ describe('pre-flight ISSUE caret TICK create warning', function () {
 
         expect(issue, 'checks/issue.js must map the complete issue handler').to.exist;
         expect(issue.hash).to.match(/^[0-9a-f]{64}$/);
+        expect(check).to.include("{ tick, rule: 'ISSUE_CARET_TICK_NO_CREATE' }");
         expect(start, 'caret rule drift-map review entry').to.be.greaterThan(-1);
         expect(entry).to.include('issue/tick_rules.js');
         expect(entry).to.include('ISSUE_CARET_TICK_NO_CREATE');
         expect(entry).to.include('checks/issue.js');
+    });
+
+    it('matches the recorded issue pin to the indexer handler bytes', function () {
+        const indexer = resolveIndexerRoot();
+        if (!indexer) this.skip();
+        const issue = parseMap(DRIFT_MAP).find((row) => row.handler === 'src/actions/issue/');
+        const hashed = hashMappedRow(indexer, issue);
+
+        expect(hashed.problem, 'the mapped issue handler must be hashable').to.equal(undefined);
+        expect(hashed.actual, 'INDEXER-MAP.md issue pin').to.equal(issue.hash);
     });
 });

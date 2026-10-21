@@ -135,6 +135,23 @@ function planeFromCoin(coin) {
     return parseCoinCode(coin);
 }
 
+function checkCaretTickRule(ctx, tick, token, plane) {
+    if (tick.charAt(0) !== '^') return false;
+    const caretRuleNetwork = plane && (plane.network === 'regtest' || plane.network === 'testnet');
+    if (caretRuleNetwork) {
+        if (token === undefined) {
+            ctx.addUnverified('ISSUE_CARET_TICK_NO_CREATE', 'token lookup unavailable');
+        } else if (token === null) {
+            ctx.addFinding(FINDING_CODES.TICK_FORMAT, 'warning',
+                `${tick} does not resolve to an existing token; the indexer's `
+                + 'ISSUE_CARET_TICK_NO_CREATE rule refuses a caret TICK from creating a token where armed '
+                + '(from genesis on regtest), and this warning is returned before activation on testnet.',
+                { tick, rule: 'ISSUE_CARET_TICK_NO_CREATE' });
+        }
+    }
+    return true;
+}
+
 // Mirror the handler's tick refusals in the handler's order, so the warning names
 // the verdict the chain would give first. `token` is the row lookup: null for a
 // fresh create, undefined when the lookup failed, an object for an existing row.
@@ -142,24 +159,9 @@ function checkTickRules(ctx, tick, token) {
     const plane = planeFromCoin(ctx.sdk && ctx.sdk.explorer && ctx.sdk.explorer.coin);
     const tickUpper = tick.toUpperCase();
     const isGasTick = tickUpper === GAS_TICK;
-    const caretRef = tick.charAt(0) === '^';
     ctx.markRun(FINDING_CODES.TICK_FORMAT);
 
-    if (caretRef) {
-        const caretRuleNetwork = plane && (plane.network === 'regtest' || plane.network === 'testnet');
-        if (caretRuleNetwork) {
-            if (token === undefined) {
-                ctx.addUnverified('ISSUE_CARET_TICK_NO_CREATE', 'token lookup unavailable');
-            } else if (token === null) {
-                ctx.addFinding(FINDING_CODES.TICK_FORMAT, 'warning',
-                    `${tick} does not resolve to an existing token; the indexer's `
-                    + 'ISSUE_CARET_TICK_NO_CREATE rule refuses a caret TICK from creating a token where armed '
-                    + '(from genesis on regtest), and this warning is returned before activation on testnet.',
-                    { tick, rule: 'ISSUE_CARET_TICK_NO_CREATE' });
-            }
-        }
-        return;
-    }
+    if (checkCaretTickRule(ctx, tick, token, plane)) return;
 
     if (RESERVED_TICKS.includes(tickUpper)) {
         // The gas tick's exemption turns on the plane (regtest) or the source (the GAS
