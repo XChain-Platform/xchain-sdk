@@ -543,7 +543,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (SEND) | `src/actions/send/` | `0cbeede95913d7190555ba30949986e028d1fdec96486bca04d36a6c401a4925` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `b172b6cc34d4c9ab095c438c6de5a5aeb07ea06404e895134dc90c2ca317545a` |
 | `checks/mint.js` | `src/actions/mint/` | `998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48` |
-| `checks/issue.js` | `src/actions/issue/` | `02cc05ee209b5f7e4012b31fc34bb846c1b33304c51b45cc06f5f5faa694c85f` |
+| `checks/issue.js` | `src/actions/issue/` | `22c8cdb0611bd4a7c0b74b45453504c55e5086bb228cc9005619468c9b5ebcb9` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `3c0163d61230bbc249606f41d92786eb2016b43664dba71b55e78e8ef2ad4907` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc` |
@@ -577,6 +577,25 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-20 - ISSUE v6 controller binds refuse a COOLDOWN_BLOCKS above the column range (cooldown_blocks_range_refusal)
+
+The `issue` pin moves from `02cc05ee` to `22c8cdb0`, hashed from indexer `origin/develop` with
+the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/issue/`. The pin is a paired
+working-tree change: it matches the indexer change that lands with it, not the anchor below.
+The mapped diff is one condition in `issue/controller_binding.js`: a bind's COOLDOWN_BLOCKS must
+now also be at most 4294967295, the INT UNSIGNED column range, or the ISSUE is
+`invalid: COOLDOWN_BLOCKS (format)`. The same rule lands in `src/actions/address.js` for ADDRESS v1
+binds, which no row here maps. The rule is not gated: a larger value made the row insert throw
+under the pinned strict SQL mode and the block retry forever, so no such ISSUE ever landed and no
+past verdict moves.
+
+No `checks/` module judges COOLDOWN_BLOCKS; the SDK bind builder in `src/actions/controller.js` is
+separate code from pre-flight. NO CLIENT CHECK MOVES.
+
+**Direction: TIGHTENING, ungated.** The refused values halted the chain before. The anchor stays
+unchanged.
 
 ### 2026-10-20 - ISSUE_CARET_TICK_NO_CREATE gate is added (caret_tick_issue_refusal)
 
