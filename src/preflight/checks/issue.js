@@ -146,14 +146,17 @@ function checkTickRules(ctx, tick, token) {
     ctx.markRun(FINDING_CODES.TICK_FORMAT);
 
     if (caretRef) {
-        if (token === undefined) {
-            ctx.addUnverified('ISSUE_CARET_TICK_NO_CREATE', 'token lookup unavailable');
-        } else if (token === null) {
-            ctx.addFinding(FINDING_CODES.TICK_FORMAT, 'warning',
-                `${tick} does not resolve to an existing token; the indexer's `
-                + 'ISSUE_CARET_TICK_NO_CREATE rule refuses a caret TICK from creating a token where armed '
-                + '(from genesis on regtest), and this warning is returned before activation elsewhere.',
-                { tick, rule: 'ISSUE_CARET_TICK_NO_CREATE' });
+        const caretRuleNetwork = plane && (plane.network === 'regtest' || plane.network === 'testnet');
+        if (caretRuleNetwork) {
+            if (token === undefined) {
+                ctx.addUnverified('ISSUE_CARET_TICK_NO_CREATE', 'token lookup unavailable');
+            } else if (token === null) {
+                ctx.addFinding(FINDING_CODES.TICK_FORMAT, 'warning',
+                    `${tick} does not resolve to an existing token; the indexer's `
+                    + 'ISSUE_CARET_TICK_NO_CREATE rule refuses a caret TICK from creating a token where armed '
+                    + '(from genesis on regtest), and this warning is returned before activation on testnet.',
+                    { tick, rule: 'ISSUE_CARET_TICK_NO_CREATE' });
+            }
         }
         return;
     }

@@ -4,7 +4,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 const { expect } = require('chai');
+const fs = require('fs');
+const path = require('path');
+const { parseMap } = require('../../../bin/check-preflight-drift.js');
 const { mockSdk, notFound } = require('./helpers/mock.js');
+
+const DRIFT_MAP = path.join(__dirname, '..', '..', '..', 'src', 'preflight', 'INDEXER-MAP.md');
 
 async function reportFor(network, coin, getToken) {
     const sdk = mockSdk({
@@ -37,6 +42,15 @@ describe('pre-flight ISSUE caret TICK create warning', function () {
         expect(finding(result)).to.include({ severity: 'warning' });
     });
 
+    it('does not warn on mainnet where proactive warning is out of scope', async function () {
+        const result = await reportFor('bitcoin-mainnet', 'BTC', () => notFound());
+
+        expect(finding(result)).to.equal(undefined);
+        expect(result.unverified.some(
+            (item) => item.check === 'ISSUE_CARET_TICK_NO_CREATE'
+        )).to.equal(false);
+    });
+
     it('does not warn when the caret resolves to an existing token', async function () {
         const result = await reportFor('bitcoin-regtest', 'RBTC', () => ({
             tick: 'EXISTING', owner: 'me', decimals: 0,
@@ -55,5 +69,21 @@ describe('pre-flight ISSUE caret TICK create warning', function () {
             check: 'ISSUE_CARET_TICK_NO_CREATE',
             reason: 'token lookup unavailable',
         });
+    });
+
+    it('keeps the caret rule covered by the issue handler drift map', function () {
+        const issue = parseMap(DRIFT_MAP).find((row) => row.handler === 'src/actions/issue/');
+        const map = fs.readFileSync(DRIFT_MAP, 'utf8');
+        const heading = '### 2026-10-20 - ISSUE_CARET_TICK_NO_CREATE gate is added';
+        const start = map.indexOf(heading);
+        const end = map.indexOf('\n### ', start + heading.length);
+        const entry = map.slice(start, end);
+
+        expect(issue, 'checks/issue.js must map the complete issue handler').to.exist;
+        expect(issue.hash).to.match(/^[0-9a-f]{64}$/);
+        expect(start, 'caret rule drift-map review entry').to.be.greaterThan(-1);
+        expect(entry).to.include('issue/tick_rules.js');
+        expect(entry).to.include('ISSUE_CARET_TICK_NO_CREATE');
+        expect(entry).to.include('checks/issue.js');
     });
 });
