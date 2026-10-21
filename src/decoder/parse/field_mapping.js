@@ -34,6 +34,7 @@ const Validator      = require('../../protocol/validator.js');
 const Utility        = require('../../utils/utility.js');
 const { formatVersion } = require('../../protocol/batch_limits/command_classification.js');
 const { LEGACY_FORMAT_ACTIONS, isLegacyActionFormat } = require('../../protocol/batch_limits/limit_tables.js');
+const { isBytes } = require('../../utils/bytes');
 
 // One shared validator instance for semantic findings (opts.validate).
 // Validator only needs the utility helpers; no per-parse state.
@@ -46,7 +47,7 @@ function failure(code, detail) {
 // Decode Buffer input as strict UTF-8; strings pass through.
 function toText(input) {
     if (typeof input === 'string') return { text: input };
-    if (Buffer.isBuffer(input)) {
+    if (isBytes(input)) {
         try {
             return { text: new TextDecoder('utf-8', { fatal: true }).decode(input) };
         } catch (e) {

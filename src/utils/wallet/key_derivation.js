@@ -24,6 +24,7 @@ const { ECPairFactory } = require('ecpair');
 const ecc = require('@bitcoinerlab/secp256k1');
 const { getNetwork, getSupportedNetworks, NETWORKS } = require('../../protocol/networks.js');
 const { SDKWalletError } = require('../errors.js');
+const { isBytes, toBuffer } = require('../bytes');
 
 const ECPair = ECPairFactory(ecc);
 
@@ -162,8 +163,8 @@ module.exports = {
         let pubKeyBuf;
         if (typeof publicKey === 'string') {
             pubKeyBuf = Buffer.from(publicKey, 'hex');
-        } else if (Buffer.isBuffer(publicKey)) {
-            pubKeyBuf = publicKey;
+        } else if (isBytes(publicKey)) {
+            pubKeyBuf = toBuffer(publicKey);
         } else {
             throw new SDKWalletError('INVALID_PUBLIC_KEY', 'Public key must be a Buffer or hex string.');
         }

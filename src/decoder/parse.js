@@ -33,6 +33,7 @@ const formats        = require('../protocol/formats.js');
 const FormatSelector = require('../protocol/format_selector.js');
 const { ACTION_ALIASES } = require('./aliases.js');
 const { MAX_ACTION_DATA_LENGTH, compiledPushSize, carrierCeiling } = require('../contract/chunk_helper.js');
+const { isBytes } = require('../utils/bytes');
 const {
     failure,
     toText,
@@ -103,14 +104,14 @@ function parse(input, opts = {}) {
     const strictWire = opts.strictWire === true;
 
     if (input === undefined || input === null || input === '' ||
-        (Buffer.isBuffer(input) && input.length === 0))
+        (isBytes(input) && input.length === 0))
         return failure('EMPTY');
 
     // Rule 1: input-size gate FIRST, on the raw input, before any
     // split, alias lookup, regex, or UTF-8 work. Measured per carrier as the
     // on-chain decoder measures it (see opts.carrier); strictWire keeps the
     // raw-length gate.
-    const rawLength = Buffer.isBuffer(input)
+    const rawLength = isBytes(input)
         ? input.length
         : Buffer.byteLength(String(input), 'utf8');
     if (strictWire && rawLength > MAX_ACTION_DATA_LENGTH)

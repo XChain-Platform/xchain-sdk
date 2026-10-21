@@ -540,20 +540,20 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `0cbeede95913d7190555ba30949986e028d1fdec96486bca04d36a6c401a4925` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `b172b6cc34d4c9ab095c438c6de5a5aeb07ea06404e895134dc90c2ca317545a` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `6bd08ac469d8a2ae2981e830a5278d5859786e86e5dd0a00113aee38f6a36302` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `56a05750c8fc2eed6162b67a9202c54b9274effa46665bdea8bf702fe1d6f0e3` |
 | `checks/mint.js` | `src/actions/mint/` | `998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48` |
-| `checks/issue.js` | `src/actions/issue/` | `8f29219d887e695408a8d9b405a795182550c3ed0e991ab74bd4941efe9d294c` |
+| `checks/issue.js` | `src/actions/issue/` | `be5cd48c5d4aef365358cc296fa56b8621f8a627a09e0623d3c79e259e210762` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `3c0163d61230bbc249606f41d92786eb2016b43664dba71b55e78e8ef2ad4907` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf` |
-| `checks/airdrop.js` | `src/actions/airdrop/` | `b04e9b5e3b02e0a1f548c29bdf39fcba90ab21366336cf84011c448f8248dd9c` |
+| `checks/airdrop.js` | `src/actions/airdrop/` | `3fe395e025f8ab86fe60f5a31800860c9548eee33a69141fc13b916d13277a3f` |
 | `checks/dividend.js` | `src/actions/dividend/` | `c0afa565418a5df7b35bd463ab51ed580541f2b0b7d32fac0c87cf07df50e5b0` |
-| `checks/batch.js` | `src/actions/batch/` | `9f1e45a3ad92831601178f3636c7428dca73b18298173159792aaa5323bf0a76` |
+| `checks/batch.js` | `src/actions/batch/` | `9a5147d0a4e121f10d9dd23a6d2f9602f8359ec5eca8f555111aea973a6321ad` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f` |
 | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35` |
-| `universal.js` (PRICE v1 TICK) | `src/actions/price/` | `b76331534fcf3813ed4ab3e9b20479527f057a3e20dd82187be3808a5f8312bd` |
+| `universal.js` (PRICE v1 TICK) | `src/actions/price/` | `9028c8c24931681e005828b46a76faa7e6688c1875dfd11e554fcc79b50d2781` |
 | `checks/misc.js` (STAKE) | `src/actions/stake/` | `eef1360e9bfa8e5ad2b1e7479cf286669f44b9ac3115701b1ac1a101fd9011a3` |
 | `universal.js` (BET halt field) | `src/actions/bet/` | `59ff86ee4bed61d0ca958c588558b106ced395eb2a9605f6ec2679fe58adac98` |
 
@@ -577,6 +577,154 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-21 - AIRDROP_NATIVE_FEE_TALLY_ROLLBACK gate is wired into the AIRDROP fee tally (airdrop_native_fee_tally_rollback)
+
+The `airdrop` pin moves from `8bc4bac2` to `3fe395e0`, hashed from indexer `origin/develop` with
+the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/airdrop/`. The pin is a paired
+working-tree change: it matches the indexer change that lands with it, not the anchor below. The
+whole mapped diff is in `airdrop/fees.js`: `validateAirdropFeePayment` copies the non-BATCH native
+fee tally before a leg adds to it and, when that leg then fails `validateNativeCoinFee` at or above
+the `airdrop_native_fee_tally_rollback_activation.AIRDROP_NATIVE_FEE_TALLY_ROLLBACK_ACTIVATION`
+height gate (unarmed on mainnet and testnet, active from genesis on regtest), restores the tally in
+place, so later legs record only the fee and gas the valid legs owe. Below the gate the failed
+leg's fee and gas stay in the tally as before, which keeps fees-row replay identical where the
+tally gate is already armed. No error text moves. At the gate the summed AMOUNT and GAS_COST
+written for later legs drop the failed leg's share, and a later leg's native fee check is judged
+against that smaller total, so a later leg can pass at the gate where it failed below it. `checks/airdrop.js` computes no native fee quote of its own (the quote
+it shows comes from the indexer fee probe), so nothing in it must follow at activation.
+NO CLIENT CHECK MOVES.
+
+**Direction: NARROWS rejection at the gate height only.** The anchor stays unchanged.
+
+### 2026-10-21 - BATCH_AIRDROP_LEG_WEIGHT gate is wired into the BATCH weight (batch_airdrop_leg_weight)
+
+The `batch` pin moves from `9f1e45a3` to `9a5147d0`, hashed from indexer `origin/develop` with the
+committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/batch/`. The pin is a paired
+working-tree change: it matches the indexer change that lands with it, not the anchor below. The
+mapped diff is in `batch/sub_command.js`: `subCommandWeight` reads the
+`batch_airdrop_leg_weight_activation.BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION` height gate (unarmed on
+mainnet and testnet, active from genesis on regtest) and, at the gate, multiplies an AIRDROP
+sub-command's table weight of 25 by its leg count from `readAirdropLegs` (at least 1, no database
+read); DIVIDEND stays flat 25 and below the gate every weight is unchanged. `batch/limits.js`
+changes only its header comment.
+
+`checks/batch.js` weighs a BATCH through `batchWeight` in `src/protocol/batch_limits.js`, which
+keeps AIRDROP flat at 25. On mainnet and testnet, where the gate is unarmed, that is the chain's
+weight, so the client verdict matches. Before the gate arms on a public chain, `batchWeight` needs
+the per-leg AIRDROP weight keyed to the activation, or the client would pass a multi-leg AIRDROP
+batch the chain refuses on weight; on regtest the client already reads looser than the chain.
+NO CLIENT CHECK MOVES.
+
+**Direction: TIGHTENING at the gate height only.** The anchor stays unchanged.
+
+### 2026-10-21 - TICK_CACHE_NULL_PROTOTYPE gate is wired into AIRDROP, SEND and DESTROY (tick_cache_null_prototype)
+
+The `send` pin moves from `0cbeede9` to `6bd08ac4`, `destroy` from `b172b6cc` to `56a05750` and
+`airdrop` from `b04e9b5e` to `8bc4bac2`, hashed from indexer `origin/develop` with the committed
+companion handler tree merged by `node bin/preflight_handler_dirs.js <indexer> <handler dir>`. The
+pins are a paired working-tree change: they match the indexer change that lands with them, not the
+anchor below. The whole mapped diff is one small `createTickCache` helper in `send/prefetch.js`,
+`destroy/legs.js` and `airdrop/legs.js`, each reading the
+`tick_cache_null_prototype_activation.TICK_CACHE_NULL_PROTOTYPE_ACTIVATION` height gate
+(unarmed on mainnet and testnet, active from genesis on regtest). At the gate the per-action TICK
+cache is `Object.create(null)`, so a TICK spelled like an `Object.prototype` member
+(`constructor`, `toString`, `__proto__`) is fetched like any other name and reads
+`invalid: TICK (unknown)` when no token row exists; below the gate the cache is the old `{}`.
+No other verdict, error text or fee moves. The client checks in `checks/send.js` and
+`checks/airdrop.js` look each TICK up on its own through `ctx.token` (SEND nets its totals in a
+`Map`), so no plain-object cache a prototype name could hit exists on the client, and a TICK with
+no token row is left to `TOKEN_NOT_FOUND`, the same verdict the gate brings. NO CLIENT CHECK MOVES.
+
+**Direction: TIGHTENING at the gate height only.** The anchor stays unchanged.
+
+### 2026-10-20 - `price/v0.js` stops exporting three internal helpers (price_v0_unexport)
+
+The `price` pin moves from `67c631c8` to `9028c8c2`, hashed from indexer `origin/develop` with
+the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/price/`, on the tree that already
+carries the `batch_signatures.js` unexport above. The pin is a paired working-tree change: it
+matches the indexer change that lands with it, not the anchor below. The whole mapped diff is the
+`module.exports` line of `price/v0.js`, which drops `readWindowHeader`, `checkWindowHeader` and
+`resolveRoundBounds`; they were never imported elsewhere and stay module-local. No function body,
+verdict, error text or fee moves, and the PRICE v1 TICK rule `universal.js` mirrors is untouched.
+NO CLIENT CHECK MOVES.
+
+**Direction: NEUTRAL.** The anchor stays unchanged.
+
+### 2026-10-20 - `price/batch_signatures.js` stops exporting three internal helpers (price_batch_signatures_unexport)
+
+The `price` pin moves from `b7633153` to `67c631c8`, hashed from indexer `origin/develop` with
+the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/price/`. The pin is a paired
+working-tree change: it matches the indexer change that lands with it, not the anchor below.
+The whole mapped diff is the `module.exports` line of `price/batch_signatures.js`, which now
+exports only `verifyBatchSignatures`; `resolveCapableSet`, `tallyQualifiedSigners` and
+`checkBatchQuorum` were never imported elsewhere and stay module-local. No function body, verdict,
+error text or fee moves, and the PRICE v1 TICK rule `universal.js` mirrors is untouched.
+NO CLIENT CHECK MOVES.
+
+**Direction: NEUTRAL.** The anchor stays unchanged.
+
+### 2026-10-20 - CHILD_TOKEN_INDEPENDENT_EDITS gate is added (child_token_independent_edits)
+
+The `issue` pin moves from `22c8cdb0` to `be5cd48c`, hashed from indexer `origin/develop` with
+the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/issue/`. The pin is a paired
+working-tree change: it matches the indexer change that lands with it, not the anchor below.
+The mapped diff is in `issue/tick_rules.js`: a new `CHILD_TOKEN_INDEPENDENT_EDITS_ACTIVATION`
+height gate (unarmed on mainnet, armed at BTC:testnet 157235, LTC:testnet 4930600 and
+DOGE:testnet 68012800, active from genesis on regtest). At the gate, an ISSUE naming a dotted
+child that already exists skips the parent-owner and parent-escrow refusals, so the child's own
+owner can edit, transfer and unbind it; a first creation of a child still needs the parent owner
+and an unescrowed parent. Below the gate the path is the old one.
+
+`checks/issue.js` never judged parent ownership or parent escrow for a dotted child (the existing
+child's owner check is the only owner rule it mirrors), so it raises no refusal the gate removes.
+NO CLIENT CHECK MOVES.
+
+**Direction: LOOSENING at the gate height only.** The anchor stays unchanged.
+
+### 2026-10-20 - ISSUE v6 controller binds refuse a COOLDOWN_BLOCKS above the column range (cooldown_blocks_range_refusal)
+
+The `issue` pin moves from `02cc05ee` to `22c8cdb0`, hashed from indexer `origin/develop` with
+the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/issue/`. The pin is a paired
+working-tree change: it matches the indexer change that lands with it, not the anchor below.
+The mapped diff is one condition in `issue/controller_binding.js`: a bind's COOLDOWN_BLOCKS must
+now also be at most 4294967295, the INT UNSIGNED column range, or the ISSUE is
+`invalid: COOLDOWN_BLOCKS (format)`. The same rule lands in `src/actions/address.js` for ADDRESS v1
+binds, which no row here maps. The rule is not gated: a larger value made the row insert throw
+under the pinned strict SQL mode and the block retry forever, so no such ISSUE ever landed and no
+past verdict moves.
+
+No `checks/` module judges COOLDOWN_BLOCKS; the SDK bind builder in `src/actions/controller.js` is
+separate code from pre-flight. NO CLIENT CHECK MOVES.
+
+**Direction: TIGHTENING, ungated.** The refused values halted the chain before. The anchor stays
+unchanged.
+
+### 2026-10-20 - ISSUE_CARET_TICK_NO_CREATE gate is added (caret_tick_issue_refusal)
+
+The `issue` pin moves from `8f29219d` to `02cc05ee`, hashed from indexer `origin/develop` with
+the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/issue/`. The pin is a paired
+working-tree change: it matches the indexer change that lands with it, not the anchor below.
+The mapped diff adds `validateCaretTickExists` to `issue/tick_rules.js` and calls it from
+`issue/index.js` right after the token row is read. At or above the `ISSUE_CARET_TICK_NO_CREATE`
+protocol change a caret `^<id>` TICK that resolves to no existing token row is
+`invalid: TICK (unknown)`; genesis is exempt and an owner's caret edit of an existing token is
+untouched. The row is a `changes_5.js` time row, unarmed on mainnet and testnet and active from
+genesis on regtest, so no public chain changes verdict today.
+
+`checks/issue.js` reads the row for a caret TICK through the explorer, which resolves the id, and
+treats a missing row as a fresh create. Before the protocol change arms on a public chain, the
+caret create case needs a client warning keyed to a mirrored table; until then the client verdict
+matches the indexer on mainnet and testnet. NO CLIENT CHECK MOVES.
+
+**Direction: TIGHTENING at the gate height only.** The anchor stays unchanged.
 
 ### 2026-10-20 - the anchor moves to the landed SEND, DESTROY, MINT and BATCH changes
 

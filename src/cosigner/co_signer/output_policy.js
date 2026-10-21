@@ -19,6 +19,7 @@
 'use strict';
 
 const bitcoin = require('bitcoinjs-lib');
+const { isBytes, toBuffer, bytesEqual, toHex } = require('../../utils/bytes');
 
 // Gate outputs only; which sighash types may be signed lives in ../policy/sighash_policy.js.
 
@@ -43,24 +44,24 @@ function exactU64(v) {
 // normalizeAllowedOutputs, G7). Matching is structural, on the decompiled
 // script, so it cannot be fooled by an address encoding.
 function isStandardPaymentScript(script) {
-    if (!Buffer.isBuffer(script)) return false;
+    if (!isBytes(script)) return false;
     let d;
     try { d = bitcoin.script.decompile(script); } catch (e) { return false; }
     if (!d) return false;
     const op = bitcoin.opcodes;
     // P2PKH: OP_DUP OP_HASH160 <20> OP_EQUALVERIFY OP_CHECKSIG
     if (d.length === 5 && d[0] === op.OP_DUP && d[1] === op.OP_HASH160 &&
-        Buffer.isBuffer(d[2]) && d[2].length === 20 &&
+        isBytes(d[2]) && d[2].length === 20 &&
         d[3] === op.OP_EQUALVERIFY && d[4] === op.OP_CHECKSIG) return true;
     // P2SH: OP_HASH160 <20> OP_EQUAL
     if (d.length === 3 && d[0] === op.OP_HASH160 &&
-        Buffer.isBuffer(d[1]) && d[1].length === 20 && d[2] === op.OP_EQUAL) return true;
+        isBytes(d[1]) && d[1].length === 20 && d[2] === op.OP_EQUAL) return true;
     // P2WPKH / P2WSH: OP_0 <20|32>
     if (d.length === 2 && d[0] === op.OP_0 &&
-        Buffer.isBuffer(d[1]) && (d[1].length === 20 || d[1].length === 32)) return true;
+        isBytes(d[1]) && (d[1].length === 20 || d[1].length === 32)) return true;
     // P2TR: OP_1 <32>
     if (d.length === 2 && d[0] === op.OP_1 &&
-        Buffer.isBuffer(d[1]) && d[1].length === 32) return true;
+        isBytes(d[1]) && d[1].length === 32) return true;
     return false;
 }
 
@@ -143,9 +144,9 @@ module.exports = {
         return list.map((o, i) => {
             let script;
             if (o.script) {
-                script = Buffer.isBuffer(o.script) ? o.script : Buffer.from(o.script, 'hex');
+                script = isBytes(o.script) ? toBuffer(o.script) : Buffer.from(o.script, 'hex');
             } else if (o.address) {
-                try { script = bitcoin.address.toOutputScript(o.address, this.network || undefined); }
+                try { script = toBuffer(bitcoin.address.toOutputScript(o.address, this.network || undefined)); }
                 catch (e) { throw new Error(`allowedOutputs[${i}]: invalid address (${e.message})`); }
             } else {
                 throw new Error(`allowedOutputs[${i}] needs an address or script`);
@@ -219,13 +220,13 @@ module.exports = {
                 continue;
             }
             // (b) Change back to the account we spend from stays under co-signer control.
-            if (out.script.equals(accountScript)) continue;
-            if (env && env.role === 'commit' && out.script.equals(env.commit.output)) {
+            if (bytesEqual(out.script, accountScript)) continue;
+            if (env && env.role === 'commit' && bytesEqual(out.script, env.commit.output)) {
                 const denial = checkEnvelopeCommitOutput(this, out, i, commitOutputsSeen++);
                 if (denial) return denial;
                 continue;
             }
-            const match = this.allowedOutputs.find((a) => out.script.equals(a.script));
+            const match = this.allowedOutputs.find((a) => bytesEqual(out.script, a.script));
             if (match) {
                 const denial = checkAllowedOutput(this, out, i, match, spent);
                 if (denial) return denial;
@@ -312,11 +313,11 @@ module.exports = {
             if (!inp || !inp.witnessUtxo || !inp.witnessUtxo.script)
                 return this.deny('CANNOT_CHECK_OUTPUTS', 'signed input has no witnessUtxo');
             const got = inp.witnessUtxo.script;
-            if (!got.equals(expected))
+            if (!bytesEqual(got, expected))
                 return this.deny('PREVOUT_NOT_OUR_ACCOUNT', {
                     index:    idx,
-                    expected: expected.toString('hex'),
-                    got:      got.toString('hex'),
+                    expected: toHex(expected),
+                    got:      toHex(got),
                 });
         }
         return null;

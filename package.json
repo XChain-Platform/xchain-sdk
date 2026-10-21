@@ -1,7 +1,7 @@
 {
   "name": "@dankest-llc/xchain-sdk",
   "description": "xchain-sdk generates XChain Platform ACTION commands and encodes them into unsigned blockchain transactions as well as pulls data from the XChain APIs such as balances and transaction history.",
-  "version": "0.26.0",
+  "version": "0.26.1",
   "comment:homepage": "The npm package page links wherever this points, and it points at the platform site (xchain.io's deep-link backlinks 301 away to tokenscan.io, so operator-controlled touchpoints are what still build its authority).",
   "homepage": "https://xchain.io/",
   "publishConfig": {
@@ -38,7 +38,7 @@
     "astring": "1.9.0",
     "axios": "^1.20.0",
     "bip174": "2.1.1",
-    "bitcoinjs-lib": "6.1.7",
+    "bitcoinjs-lib": "7.0.4",
     "bitcoinjs-message": "^2.2.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -65,6 +65,7 @@
     "uglify-js": "^3.19.3"
   },
   "overrides": {
+    "follow-redirects": "^1.16.1",
     "brace-expansion": "^5.0.9",
     "minimatch": "^10.2.5",
     "fast-uri": "^3.1.7",

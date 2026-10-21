@@ -22,6 +22,7 @@
 const ActionWaiter = require('../../utils/action_waiter.js');
 const bitcoin = require('bitcoinjs-lib');
 const { SDKConfigError } = require('../../utils/errors.js');
+const { toHex } = require('../../utils/bytes');
 
 module.exports = {
     // Gate on the contract's own state before handing the result back.
@@ -116,9 +117,8 @@ module.exports = {
             // neither problem, and it silently ignores an address the network
             // cannot parse (a hex pubkey passed as `pubkey`), which is the
             // fail-closed answer: no change tracked, same as before.
-            let changeScript = bitcoin.address
-                .toOutputScript(changeAddress, this.reconcileNetwork())
-                .toString('hex');
+            let changeScript = toHex(bitcoin.address
+                .toOutputScript(changeAddress, this.reconcileNetwork()));
             let tx   = bitcoin.Transaction.fromHex(txHex);
             let txid = tx.getId();
             let outs = [];

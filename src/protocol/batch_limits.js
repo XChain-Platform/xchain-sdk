@@ -121,8 +121,7 @@ const {
     BATCH_ACTION_LIMITS,
     BATCH_GATED_ACTION_LIMITS,
     BATCH_ACTION_LIMITS_ACTIVE,
-    UNRESOLVED_TICK_KEY,
-    CHILD_ISSUE_KEY,
+    UNRESOLVED_TICK_KEY, CHILD_ISSUE_KEY,
     LEGACY_FORMAT_ACTIONS,
     isLegacyActionFormat,
     expandAlias,
@@ -130,6 +129,7 @@ const {
 const { classifyIssueTick, formatVersion, classifyCommand } = require('./batch_limits/command_classification.js');
 const { commandTick, limitKeysInListOrder, paramsTick } = require('./batch_limits/tick_limits.js');
 const { planCoinpayOutputs, checkCoinpayOutputPlan } = require('./batch_limits/coinpay_output_plan.js');
+const { airdropLegFactor } = require('./batch_limits/airdrop_legs.js');   // `at`: see that file
 
 // Global per-BATCH command cap (indexer batch/limits.js `commandLimit`).
 const BATCH_COMMAND_LIMIT = 250;
@@ -194,12 +194,12 @@ const BATCH_COMMAND_WEIGHTS = Object.freeze({
  * pre-flag behaviour for a sub-command, so an unreadable entry is charged as
  * an ordinary one rather than being made free.
  */
-function subCommandWeight(command) {
+function subCommandWeight(command, at) {
     try {
         const action = expandAlias(String(command).split('|')[0]);
         if (action === 'DEPLOY' && formatVersion(String(command).split('|')[1]) === 4)
             return 1;
-        return actionWeight(action);
+        return actionWeight(action) * airdropLegFactor(action, command, at);
     } catch (e) {
         return 1;
     }
@@ -240,9 +240,9 @@ function actionWeight(action) {
  * Plain integer arithmetic, matching the arbiter: these are small counts, not
  * token amounts, so the bc* helpers this module uses for balances do not apply.
  */
-function batchWeight(commands) {
+function batchWeight(commands, at) {
     let total = 0;
-    for (const command of commands) total += subCommandWeight(command);
+    for (const command of commands) total += subCommandWeight(command, at);
     return total;
 }
 

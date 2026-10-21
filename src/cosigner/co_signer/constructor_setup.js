@@ -24,6 +24,7 @@ const { deriveMuSig2P2TR2of3, assertSegwitNetwork } = require('../account.js');
 const { isCapInert } = require('../policy/value_derivability.js');
 const { exactU64 } = require('./output_policy.js');
 const { toBytes } = require('./sign_request.js');
+const { toBuffer } = require('../../utils/bytes');
 
 // Set identity and policy fields together to preserve constructor validation order.
 function setIdentity(self, config) {
@@ -191,7 +192,7 @@ function setAccount(self) {
             pubkey:  Buffer.from(agg.xOnlyPubkey),
             network: self.network || undefined,
         });
-        self.accountScript = p2tr.output;
+        self.accountScript = toBuffer(p2tr.output);
         // The account's OUTPUT key: the bare aggregate on a 2-of-2, the
         // tap-tweaked key on a 2-of-3. What a key-path signature verifies under.
         self.aggregateXOnly = Buffer.from(agg.xOnlyPubkey);

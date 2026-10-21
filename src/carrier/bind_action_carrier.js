@@ -39,6 +39,7 @@ const { decodeActionStringFromPsbt, extractEnvelopeActionString } = require('../
 const { verifyCarrierScripts, rawDataMatches } = require('./verify_carrier_scripts.js');
 const CompressionUtils = require('../protocol/compression.js');
 const { COMPRESSION_CODE_DEFLATE_RAW } = require('../protocol/constants.js');
+const { isBytes } = require('../utils/bytes');
 
 const compressionUtils = new CompressionUtils();
 
@@ -73,10 +74,10 @@ function hasChunkOutput(psbt, encoding) {
         if (!Array.isArray(decomp)) return false;
         if (encoding === 'P2SH')
             return decomp.length === 3 && decomp[0] === bitcoin.opcodes.OP_HASH160
-                && Buffer.isBuffer(decomp[1]) && decomp[1].length === 20
+                && isBytes(decomp[1]) && decomp[1].length === 20
                 && decomp[2] === bitcoin.opcodes.OP_EQUAL;
         return decomp.length === 2 && decomp[0] === bitcoin.opcodes.OP_0
-            && Buffer.isBuffer(decomp[1]) && decomp[1].length === 32;
+            && isBytes(decomp[1]) && decomp[1].length === 32;
     });
 }
 
@@ -90,7 +91,7 @@ function hasMultisigCarrierOutput(psbt) {
         try { decomp = bitcoin.script.decompile(out.script); } catch (e) { return false; }
         return Array.isArray(decomp) && decomp.length === 6
             && decomp[5] === bitcoin.opcodes.OP_CHECKMULTISIG
-            && Buffer.isBuffer(decomp[1]) && Buffer.isBuffer(decomp[2]);
+            && isBytes(decomp[1]) && isBytes(decomp[2]);
     });
 }
 

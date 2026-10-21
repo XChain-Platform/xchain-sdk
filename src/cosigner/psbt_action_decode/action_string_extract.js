@@ -19,6 +19,7 @@ const bitcoin = require('bitcoinjs-lib');
 const { envelopeLeafFromPsbtInput } = require('../envelope.js');
 const { ENVELOPE_MAX_PAYLOAD } = require('../../protocol/constants.js');
 const { MAX_ACTION_DATA_LENGTH } = require('../../contract/chunk_helper.js');
+const { isBytes } = require('../../utils/bytes');
 
 function fail(reason, detail) { return { ok: false, reason, detail: detail || null }; }
 
@@ -93,7 +94,7 @@ function extractInlineActionString(psbtOrHex, opts = {}) {
         let decomp;
         try { decomp = bitcoin.script.decompile(out.script); } catch (e) { continue; }
         if (decomp && decomp.length === 2 &&
-            decomp[0] === bitcoin.opcodes.OP_RETURN && Buffer.isBuffer(decomp[1])) {
+            decomp[0] === bitcoin.opcodes.OP_RETURN && isBytes(decomp[1])) {
             opReturnCount++;
             payload = decomp[1];
         }
@@ -119,7 +120,7 @@ function extractInlineActionString(psbtOrHex, opts = {}) {
     let decompiled;
     try { decompiled = bitcoin.script.decompile(body); }
     catch (e) { return fail('INNER_DECOMPILE_FAILED', e.message); }
-    if (!decompiled || decompiled.length === 0 || !Buffer.isBuffer(decompiled[0]))
+    if (!decompiled || decompiled.length === 0 || !isBytes(decompiled[0]))
         return fail('INNER_DECOMPILE_FAILED');
 
     let actionString;
@@ -181,7 +182,7 @@ function extractEnvelopeActionString(psbt) {
     let decompiled;
     try { decompiled = bitcoin.script.decompile(leaf.payload); }
     catch (e) { return fail('INNER_DECOMPILE_FAILED', e.message); }
-    if (!decompiled || decompiled.length === 0 || !Buffer.isBuffer(decompiled[0]))
+    if (!decompiled || decompiled.length === 0 || !isBytes(decompiled[0]))
         return fail('INNER_DECOMPILE_FAILED');
 
     let actionString;

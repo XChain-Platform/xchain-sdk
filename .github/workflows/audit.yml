@@ -5,10 +5,11 @@
 # already shipped, with no commit here, so the audit needs its own cadence rather
 # than riding on push.
 #
-# Deliberately --omit=dev + --audit-level=high: only advisories in code that
-# actually ships, and only high/critical. Dev-toolchain advisories never reach a
-# user, and failing on low/moderate trains people to ignore the gate. A red run
-# means a high/critical advisory now affects a production dependency.
+# The gate runs npm audit with --omit=dev, then evaluates only high/critical
+# records after applying documented exceptions. Dev-toolchain advisories never
+# reach a user, and failing on low/moderate trains people to ignore the gate. A
+# red run means an unaccepted high/critical advisory affects a production
+# dependency.
 #
 # Triage convention when this goes red: bump / override / replace, or a
 # documented accept-with-justification. Pre-launch, no high/critical prod
@@ -31,12 +32,15 @@ on:
     - cron: "0 7 * * 1"
   # Re-run on demand, e.g. the moment a CVE lands in the news.
   workflow_dispatch:
-  # Also audit when the locked dependency set changes, so a newly pulled-in
-  # vulnerable transitive dep is caught at review time, not only next Monday.
+  # Also audit when the locked dependency set or gate configuration changes, so
+  # a new vulnerability or a broken exception rule is caught at review time.
   pull_request:
     paths:
       - package.json
       - package-lock.json
+      - AUDIT-EXCEPTIONS.md
+      - bin/audit_gate.js
+      - .github/workflows/audit.yml
 
 jobs:
   audit:
@@ -53,7 +57,7 @@ jobs:
       # registry advisory endpoint; it needs no install, so skip `npm ci` for
       # speed and so private deps never need registry auth here.
       - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=high
+        run: node bin/audit_gate.js
 
   # Post-flip both-branch sweep.
   #
@@ -69,10 +73,10 @@ jobs:
   # the default branch's cache privileges, and a checkout whose ref comes from an
   # expression reads as untrusted code in that privileged context (a cache
   # poisoning surface). Two jobs with hardcoded refs keep the checkout provably
-  # static. Same reason there is no setup-node here: `npm audit` only reads
-  # package-lock.json and queries the registry advisory endpoint, so the
-  # runner's preinstalled npm suffices and no cache-capable action runs after
-  # the non-default checkout.
+  # static. Same reason there is no setup-node here: the gate and `npm audit`
+  # only read repository files and query the registry advisory endpoint, so the
+  # runner's preinstalled Node.js and npm suffice and no cache-capable action
+  # runs after the non-default checkout.
   audit-master:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -81,7 +85,7 @@ jobs:
         with:
           ref: master
       - name: Audit production dependencies (master)
-        run: npm audit --omit=dev --audit-level=high
+        run: node bin/audit_gate.js
 
   audit-develop:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -91,4 +95,4 @@ jobs:
         with:
           ref: develop
       - name: Audit production dependencies (develop)
-        run: npm audit --omit=dev --audit-level=high
+        run: node bin/audit_gate.js

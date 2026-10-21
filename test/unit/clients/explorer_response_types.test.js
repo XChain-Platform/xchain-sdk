@@ -41,6 +41,7 @@ const STATUS_FIELDS = {
     hub_consensus_hash_mismatch_details: { map: false, nullable: false },
     last_block:                { map: true,  nullable: true  },
     last_block_time:           { map: true,  nullable: true  },
+    list_any_coin_items:       { map: true,  nullable: false },
     decoder_tip:               { map: true,  nullable: true  },
     decoder_lag_blocks:        { map: true,  nullable: true  },
     tip_age_seconds:           { map: true,  nullable: true  },
