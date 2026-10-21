@@ -1,0 +1,77 @@
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+    "bitcoinjs-message": {
+      "name": "bitcoinjs-message",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "secp256k1"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/bitcoinjs-message"
+      ],
+      "fixAvailable": false
+    },
+    "elliptic": {
+      "name": "elliptic",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1112030,
+          "name": "elliptic",
+          "dependency": "elliptic",
+          "title": "Elliptic Uses a Cryptographic Primitive with a Risky Implementation",
+          "url": "https://github.com/advisories/GHSA-848j-6mx2-7j84",
+          "severity": "high",
+          "range": "<=6.6.1"
+        }
+      ],
+      "effects": [
+        "secp256k1"
+      ],
+      "range": "<=6.6.1",
+      "nodes": [
+        "node_modules/elliptic"
+      ],
+      "fixAvailable": false
+    },
+    "secp256k1": {
+      "name": "secp256k1",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "elliptic"
+      ],
+      "effects": [
+        "bitcoinjs-message"
+      ],
+      "range": "<=3.8.1",
+      "nodes": [
+        "node_modules/secp256k1"
+      ],
+      "fixAvailable": false
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 3,
+      "critical": 0,
+      "total": 3
+    },
+    "dependencies": {
+      "prod": 205,
+      "dev": 425,
+      "optional": 1,
+      "peer": 0,
+      "peerOptional": 0,
+      "total": 629
+    }
+  }
+}
