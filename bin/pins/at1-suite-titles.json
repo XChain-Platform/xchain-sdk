@@ -6307,6 +6307,13 @@
       "HubConnector \u2013 network chaos e) hub timeout \u2013 throws SDKHubError",
       "HubConnector \u2013 network chaos f) ping \u2013 returns false on failure, does not throw"
     ],
+    "cd07ed7dc1a04ad1": [
+      "getFeeQuote POST switch POSTs a JSON body once the query passes 6144 characters",
+      "getFeeQuote POST switch does not fall back on other statuses",
+      "getFeeQuote POST switch keeps GET for a short query",
+      "getFeeQuote POST switch retries GET once on a 404 from POST",
+      "getFeeQuote POST switch retries GET once on a 405 from POST"
+    ],
     "cd3cafef8972fc68": [
       "endpoints parseCoinCode decodes a coin added to the registry through the preflight plane",
       "endpoints parseCoinCode decodes every registry coin code built from TIER_PREFIX",
@@ -7653,8 +7660,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 576,
-      "titleCount": 6070,
+      "fileCount": 577,
+      "titleCount": 6075,
       "files": {
         "test/unit/actions/action_roundtrip_golden.test.js": "0889dd14dd14af13",
         "test/unit/actions/actions.test.js": "e72dbd6bc6ac1b9a",
@@ -7784,6 +7791,7 @@
         "test/unit/clients/explorer_route_contract.test.js": "af88a5dab4d4b43f",
         "test/unit/clients/fee_quote.test.js": "bd47cb862843d661",
         "test/unit/clients/fee_quote_pinned_destination.test.js": "bae1f8660d59554d",
+        "test/unit/clients/fee_quote_post_switch.test.js": "cd07ed7dc1a04ad1",
         "test/unit/clients/hub.test.js": "c81a4d1b1b19ae73",
         "test/unit/clients/hub.test/01_get_all_config.test.js": "637e95e9ee69cb49",
         "test/unit/clients/hub.test/02_ping.test.js": "a96f406deb9783aa",
@@ -8235,8 +8243,8 @@
       }
     },
     "test:all": {
-      "fileCount": 615,
-      "titleCount": 6399,
+      "fileCount": 616,
+      "titleCount": 6404,
       "files": {
         "test/boundary/boundary.test.js": "51c5d77e922af958",
         "test/boundary/boundary.test/01_tick_name_length_boundary.test.js": "2291494717b9aaab",
@@ -8406,6 +8414,7 @@
         "test/unit/clients/explorer_route_contract.test.js": "af88a5dab4d4b43f",
         "test/unit/clients/fee_quote.test.js": "bd47cb862843d661",
         "test/unit/clients/fee_quote_pinned_destination.test.js": "bae1f8660d59554d",
+        "test/unit/clients/fee_quote_post_switch.test.js": "cd07ed7dc1a04ad1",
         "test/unit/clients/hub.test.js": "c81a4d1b1b19ae73",
         "test/unit/clients/hub.test/01_get_all_config.test.js": "637e95e9ee69cb49",
         "test/unit/clients/hub.test/02_ping.test.js": "a96f406deb9783aa",
