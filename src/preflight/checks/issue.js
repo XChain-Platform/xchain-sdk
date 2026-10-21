@@ -142,7 +142,21 @@ function checkTickRules(ctx, tick, token) {
     const plane = planeFromCoin(ctx.sdk && ctx.sdk.explorer && ctx.sdk.explorer.coin);
     const tickUpper = tick.toUpperCase();
     const isGasTick = tickUpper === GAS_TICK;
+    const caretRef = tick.charAt(0) === '^';
     ctx.markRun(FINDING_CODES.TICK_FORMAT);
+
+    if (caretRef) {
+        if (token === undefined) {
+            ctx.addUnverified('ISSUE_CARET_TICK_NO_CREATE', 'token lookup unavailable');
+        } else if (token === null) {
+            ctx.addFinding(FINDING_CODES.TICK_FORMAT, 'warning',
+                `${tick} does not resolve to an existing token; the indexer's `
+                + 'ISSUE_CARET_TICK_NO_CREATE rule refuses a caret TICK from creating a token where armed '
+                + '(from genesis on regtest), and this warning is returned before activation elsewhere.',
+                { tick, rule: 'ISSUE_CARET_TICK_NO_CREATE' });
+        }
+        return;
+    }
 
     if (RESERVED_TICKS.includes(tickUpper)) {
         // The gas tick's exemption turns on the plane (regtest) or the source (the GAS
@@ -173,10 +187,9 @@ function checkTickRules(ctx, tick, token) {
     // Creation-only namespace rules at/above the tick-namespace flag-day. A `^id`
     // reference names an existing row, so the floor never applies to it, and a
     // dotted child is measured on its own full length by the handler too.
-    const caretRef = tick.charAt(0) === '^';
-    const topLevel = caretRef || !tick.includes('.');
+    const topLevel = !tick.includes('.');
     const isFuture = RESERVED_FUTURE_ROOTS.includes(tickUpper);
-    const tooShort = !caretRef && topLevel && tick.length < MIN_NEW_TOP_LEVEL_TICK_LENGTH;
+    const tooShort = topLevel && tick.length < MIN_NEW_TOP_LEVEL_TICK_LENGTH;
     if (!isFuture && !tooShort) return;
     if (token === undefined) {
         ctx.addUnverified('ISSUE_TICK_NAMESPACE', 'token lookup unavailable');
