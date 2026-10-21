@@ -30,6 +30,9 @@ const BATCH_ADDRESS_LIMIT = 20;
 // Node at 16 KiB, before the explorer's own size check ever runs.
 const PREFLIGHT_GET_MAX_QUERY = 6144;
 
+// Same switch for /feequote: past this many query characters getFeeQuote sends POST.
+const FEE_QUOTE_POST_THRESHOLD = 6144;
+
 const { seg } = require('./path_segment.js');
 
 module.exports = {
@@ -326,7 +329,19 @@ module.exports = {
         if (params !== undefined && params !== null)        q.set('params', Array.isArray(params) ? params.join('|') : String(params));
         if (source !== undefined && source !== null)        q.set('source', String(source));
         if (feeOutputSats !== undefined && feeOutputSats !== null) q.set('feeOutputSats', String(feeOutputSats));
-        return this.get('/feequote?' + q.toString());
+        let query = q.toString();
+        // Send a long query (a big BATCH) as a JSON body; small ones keep the cacheable GET.
+        if (query.length > FEE_QUOTE_POST_THRESHOLD) {
+            try {
+                return await this.post('/feequote', Object.fromEntries(q));
+            } catch (err) {
+                // An explorer that predates POST /feequote answers 404 or 405; retry GET once.
+                let status = err && err.details && err.details.status;
+                if (status !== 404 && status !== 405) throw err;
+                return this.get('/feequote?' + query);
+            }
+        }
+        return this.get('/feequote?' + query);
     },
 
     // Oracle usage fee quote for a Mode B dispenser. Proxies to the indexer's
