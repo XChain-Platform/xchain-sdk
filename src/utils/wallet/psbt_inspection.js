@@ -23,6 +23,11 @@ const bitcoin = require('bitcoinjs-lib');
 const { SDKWalletError } = require('../errors.js');
 const { findInputPrevout } = require('./psbt_prevout.js');
 
+function publicSatoshi(value) {
+    if (typeof value !== 'bigint') return value;
+    return value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : String(value);
+}
+
 /**
  * Serialize a bitcoinjs-lib Transaction into a plain-JSON shape
  * compatible with Trezor Connect's `refTxs` argument (and usable by
@@ -48,13 +53,13 @@ function serializePrevTx(tx) {
         inputs: tx.ins.map((inp) => ({
             prev_hash: Buffer.from(inp.hash).reverse().toString('hex'),
             prev_index: inp.index,
-            script_sig: inp.script.toString('hex'),
+            script_sig: Buffer.from(inp.script).toString('hex'),
             sequence: inp.sequence >>> 0,
         })),
         bin_outputs: tx.outs.map((out) => ({
             // String(bigint) is exact; the Number() hop rounds above 2^53.
             amount: String(out.value),
-            script_pubkey: out.script.toString('hex'),
+            script_pubkey: Buffer.from(out.script).toString('hex'),
         })),
     };
 }
@@ -117,17 +122,16 @@ function readPrimaryUtxo(psbtInput, txInput, i) {
         // Widen ONLY above 2^53, matching applyBufferutilsPatch's own contract:
         // a Number stays a Number, a BigInt becomes an exact decimal string
         // rather than a rounded double.
-        value = typeof psbtInput.witnessUtxo.value === 'bigint'
-            ? String(psbtInput.witnessUtxo.value) : psbtInput.witnessUtxo.value;
+        value = publicSatoshi(psbtInput.witnessUtxo.value);
         scriptPubKeyBuf = psbtInput.witnessUtxo.script;
-        witnessUtxoScriptHex = scriptPubKeyBuf.toString('hex');
+        witnessUtxoScriptHex = Buffer.from(scriptPubKeyBuf).toString('hex');
     } else if (psbtInput.nonWitnessUtxo) {
-        nonWitnessUtxoHex = psbtInput.nonWitnessUtxo.toString('hex');
+        nonWitnessUtxoHex = Buffer.from(psbtInput.nonWitnessUtxo).toString('hex');
         try {
             const prevTx = bitcoin.Transaction.fromBuffer(psbtInput.nonWitnessUtxo);
             const out = prevTx.outs[txInput.index];
             if (out) {
-                value = typeof out.value === 'bigint' ? String(out.value) : out.value;
+                value = publicSatoshi(out.value);
                 scriptPubKeyBuf = out.script;
             }
             prevTxInfo = serializePrevTx(prevTx);
@@ -154,7 +158,7 @@ function readSupplementalPrevTx(psbtInput, utxo) {
     // when present, so nothing that already worked changes; this only
     // stops information the PSBT contains from being dropped.
     if (utxo.nonWitnessUtxoHex === null && psbtInput.nonWitnessUtxo) {
-        utxo.nonWitnessUtxoHex = psbtInput.nonWitnessUtxo.toString('hex');
+        utxo.nonWitnessUtxoHex = Buffer.from(psbtInput.nonWitnessUtxo).toString('hex');
         try {
             utxo.prevTxInfo = serializePrevTx(bitcoin.Transaction.fromBuffer(psbtInput.nonWitnessUtxo));
         } catch { /* the witnessUtxo already gave us value + script */ }
@@ -181,13 +185,13 @@ function decomposeInput(psbtInput, txInput, i, net) {
     readSupplementalPrevTx(psbtInput, utxo);
 
     const scriptPubKeyHex = utxo.scriptPubKeyBuf
-        ? utxo.scriptPubKeyBuf.toString('hex')
+        ? Buffer.from(utxo.scriptPubKeyBuf).toString('hex')
         : '';
     const redeemScriptHex = psbtInput.redeemScript
-        ? psbtInput.redeemScript.toString('hex')
+        ? Buffer.from(psbtInput.redeemScript).toString('hex')
         : null;
     const witnessScriptHex = psbtInput.witnessScript
-        ? psbtInput.witnessScript.toString('hex')
+        ? Buffer.from(psbtInput.witnessScript).toString('hex')
         : null;
 
     const scriptType = classifyScript(utxo.scriptPubKeyBuf, psbtInput.redeemScript);
@@ -224,7 +228,7 @@ function decomposeInputs(psbt, net) {
 // Shape one transaction output with the same value widening and address fallback.
 function decomposeOutput(txOut, net) {
     const scriptBuf = txOut.script;
-    const scriptPubKeyHex = scriptBuf.toString('hex');
+    const scriptPubKeyHex = Buffer.from(scriptBuf).toString('hex');
     const scriptType = classifyScript(scriptBuf, null);
     const address = addressFromScript(scriptBuf, net);
 
@@ -232,7 +236,7 @@ function decomposeOutput(txOut, net) {
         address,
         scriptPubKeyHex,
         scriptType,
-        value: typeof txOut.value === 'bigint' ? String(txOut.value) : txOut.value,
+        value: publicSatoshi(txOut.value),
     };
 }
 
