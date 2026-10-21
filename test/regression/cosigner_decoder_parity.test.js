@@ -50,9 +50,13 @@ const DECODER_DIR = process.env.XCHAIN_DECODER_DIR
 const DECODER_ENTRY = path.join(DECODER_DIR, 'src', 'XChainDecoder.js');
 
 let XChainDecoder = null;
+let decoderBitcoin = null;
 try {
-    if (fs.existsSync(DECODER_ENTRY)) XChainDecoder = require(DECODER_ENTRY);
-} catch (e) { /* sibling present but unloadable; treated as absent below */ }
+    if (fs.existsSync(DECODER_ENTRY)) {
+        XChainDecoder = require(DECODER_ENTRY);
+        decoderBitcoin = require(require.resolve('bitcoinjs-lib', { paths: [DECODER_DIR] }));
+    }
+} catch (e) { XChainDecoder = null; /* sibling present but unloadable; treated as absent below */ }
 
 const MAGIC = Buffer.from('XCHN');
 
@@ -93,7 +97,10 @@ function loadDecoder() {
 // updateBlocks), built from the arbiter's OWN exports so a change to its
 // alias table or size cap shows up here as a failure rather than as drift.
 async function authoritative(tx) {
-    const parsed = await decoder.parseTransaction(tx, new Set(), { getAddressId: async () => null });
+    // Re-parse the raw bytes with the decoder's own bitcoinjs-lib, as it parses a
+    // node's raw tx in production: an SDK Transaction object carries Uint8Array
+    // scripts that an older bitcoinjs-lib in the decoder refuses as non-Buffers.
+    const parsed = await decoder.parseTransaction(decoderBitcoin.Transaction.fromHex(tx.toHex()), new Set(), { getAddressId: async () => null });
     if (!parsed || !Buffer.isBuffer(parsed.data) || parsed.data.length === 0)
         return { ok: false, reason: 'NO_ACTION' };
     if (parsed.compiledDataLength > XChainDecoder.MAX_ACTION_DATA_LENGTH)
