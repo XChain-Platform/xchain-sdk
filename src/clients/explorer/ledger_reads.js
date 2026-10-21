@@ -29,9 +29,8 @@ const BATCH_ADDRESS_LIMIT = 20;
 // /preflight route: a longer GET line is refused by common proxies near 8 KiB and by
 // Node at 16 KiB, before the explorer's own size check ever runs.
 const PREFLIGHT_GET_MAX_QUERY = 6144;
-
 // Same switch for /feequote: past this many query characters getFeeQuote sends POST.
-const FEE_QUOTE_POST_THRESHOLD = 6144;
+const FEE_QUOTE_POST_THRESHOLD = PREFLIGHT_GET_MAX_QUERY;
 
 const { seg } = require('./path_segment.js');
 
@@ -111,7 +110,6 @@ module.exports = {
         return this.get('/escrows/' + seg(query) + '/' + seg(type), opts);
     },
 
-
     /*
      *  Token Methods
      */
@@ -168,7 +166,6 @@ module.exports = {
     async getIssues(query, type, opts = {}) {
         return this.get('/issues/' + seg(query) + '/' + seg(type), opts);
     },
-
 
     /*
      *  Transaction & History Methods
@@ -330,7 +327,7 @@ module.exports = {
         if (source !== undefined && source !== null)        q.set('source', String(source));
         if (feeOutputSats !== undefined && feeOutputSats !== null) q.set('feeOutputSats', String(feeOutputSats));
         let query = q.toString();
-        // Send a long query (a big BATCH) as a JSON body; small ones keep the cacheable GET.
+        // A long query (a big BATCH) goes as a JSON body; small ones keep the cacheable GET.
         if (query.length > FEE_QUOTE_POST_THRESHOLD) {
             try {
                 return await this.post('/feequote', Object.fromEntries(q));
@@ -338,7 +335,6 @@ module.exports = {
                 // An explorer that predates POST /feequote answers 404 or 405; retry GET once.
                 let status = err && err.details && err.details.status;
                 if (status !== 404 && status !== 405) throw err;
-                return this.get('/feequote?' + query);
             }
         }
         return this.get('/feequote?' + query);
