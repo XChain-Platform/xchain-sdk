@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Declared the explorer status list_any_coin_items map.
 
 ### Fixed
+- Accepted plain Uint8Array bytes from bitcoinjs-lib 7 in the co-signer, carrier and decoder checks.
 - Raised follow-redirects to its patched release for two new advisories.
 
 ## [0.26.0] - 2026-10-20
