@@ -243,9 +243,9 @@ function deriveEnvelopeCommit(args = {}) {
             internalPubkey: internalXOnly, scriptTree,
             redeem: { output, redeemVersion: TAPROOT_LEAF_VERSION }, network: net,
         });
-        return r.witness[r.witness.length - 1];
+        return Buffer.from(r.witness[r.witness.length - 1]);
     };
-    const merkleRoot = p2tr.hash;
+    const merkleRoot = Buffer.from(p2tr.hash);
     let recovery = null;
     if (recoveryLeaves) {
         recovery = {};
@@ -262,8 +262,8 @@ function deriveEnvelopeCommit(args = {}) {
         leafHash:     envelopeLeafHash(envelopeScript),
         merkleRoot,
         tweak:        bitcoin.crypto.taggedHash('TapTweak', Buffer.concat([internalXOnly, merkleRoot])),
-        output:       p2tr.output,
-        outputXOnly:  p2tr.output.subarray(2),
+        output:       Buffer.from(p2tr.output),
+        outputXOnly:  Buffer.from(p2tr.output.subarray(2)),
         address:      p2tr.address,
         controlBlock: pathTo(envelopeScript),
         payload:      parsed.payload,

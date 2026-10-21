@@ -150,22 +150,23 @@ function readChangeScripts(intent) {
 // Grade one output at a time so transaction accounting preserves first-error order.
 function reconcileOutput(out, i, inputs, outputs, deny) {
     const value = toU64(out.value);
+    const script = Buffer.from(out.script);
     if (value === null) return deny('UNRECONCILABLE_PSBT', 'output ' + i + ' has a non-integer value');
     outputs.totalOut += value;
 
     // (a) The OP_RETURN data carrier holds the action, not value. It is provably
     //     unspendable, so any satoshis on it are burned - a drain by destruction
     //     rather than diversion, which the value guard closes.
-    if (isOpReturn(out.script)) {
+    if (isOpReturn(script)) {
         if (value > 0n) return deny('OP_RETURN_CARRIES_VALUE', { index: i, value: String(value) });
         return;
     }
     // (b) Change to a single-key unsigned funding script, a submitted change address or a caller-identity
     //     script, checked BEFORE the shape rule since a submitted P2SH change address matches a chunk leg shape.
-    if (inputs.fundingScripts.some((s) => out.script.equals(s))) return;
-    if (inputs.changeScripts.some((s) => out.script.equals(s))) return;
+    if (inputs.fundingScripts.some((s) => script.equals(s))) return;
+    if (inputs.changeScripts.some((s) => script.equals(s))) return;
     // (c) An output the caller itself asked for, capped at what it asked for.
-    const match = inputs.authorized.find((a) => a.script.equals(out.script));
+    const match = inputs.authorized.find((a) => a.script.equals(script));
     if (match) {
         match.spent += value;
         if (match.spent > match.maxValue)
@@ -178,21 +179,21 @@ function reconcileOutput(out, i, inputs, outputs, deny) {
     //     as many of them as it needs, so neither address nor count can pin it.
     //     Value is pinned separately, by whichever of the two mechanisms this
     //     phase has, and a leg that clears neither is a park.
-    if (matchesPhaseShape(out.script, outputs.phaseShapes)) {
+    if (matchesPhaseShape(script, outputs.phaseShapes)) {
         // Where a companion PSBT already exists (the envelope pair comes back
         // from one createTx call), the leg must be exactly what that companion
         // spends. Value parked in a shaped script the reveal never touches fails
         // here, before the commit is signed.
-        if (outputs.phaseSpends && !takeMatch(outputs.phaseSpends, out.script, value))
+        if (outputs.phaseSpends && !takeMatch(outputs.phaseSpends, script, value))
             return deny('PHASE_FUNDING_UNSPENT',
-                { index: i, value: String(value), script: out.script.toString('hex'),
+                { index: i, value: String(value), script: script.toString('hex'),
                   detail: 'the companion transaction for this phase does not spend this funding leg' });
-        outputs.phaseFunding.push({ script: out.script, value });
+        outputs.phaseFunding.push({ script, value });
         outputs.phaseFundingTotal += value;
         return;
     }
     // Anything else is value leaving for a destination nobody asked for.
-    return deny('UNRECONCILED_OUTPUT', { index: i, value: String(value), script: out.script.toString('hex') });
+    return deny('UNRECONCILED_OUTPUT', { index: i, value: String(value), script: script.toString('hex') });
 }
 
 // Scan outputs in transaction order so accounting and refusal order remain stable.

@@ -53,9 +53,251 @@
 const bufferutils = require('bitcoinjs-lib/src/bufferutils')
 const bitcoinTypes = require('bitcoinjs-lib/src/types')
 const bip174Tools = require('bip174/src/lib/converter/tools')
+const bitcoin = require('bitcoinjs-lib')
+const { Psbt, Transaction } = bitcoin
 
 const MAX_U64 = 0xffffffffffffffffn
 const MAX_SAFE_BIG = BigInt(Number.MAX_SAFE_INTEGER)
+const IS_BITCOINJS_V7 = !!bitcoinTypes.SatoshiSchema
+
+function withBigIntValue(data) {
+    if (!data || typeof data.value !== 'number') return data
+    return Object.assign({}, data, { value: verifyU64(data.value) })
+}
+
+function withBigIntWitnessUtxo(data) {
+    if (!data || !data.witnessUtxo || typeof data.witnessUtxo.value !== 'number') return data
+    return Object.assign({}, data, { witnessUtxo: withBigIntValue(data.witnessUtxo) })
+}
+
+function compatibleValue(value) {
+    if (value instanceof Uint8Array && !Buffer.isBuffer(value)) return Buffer.from(value)
+    if (Array.isArray(value)) return value.map(compatibleValue)
+    return value
+}
+
+function compatiblePayment(payment) {
+    if (!payment || typeof payment !== 'object') return payment
+    for (const name of Object.getOwnPropertyNames(payment)) {
+        const descriptor = Object.getOwnPropertyDescriptor(payment, name)
+        if (descriptor.get) {
+            Object.defineProperty(payment, name, Object.assign({}, descriptor, {
+                get() { return compatibleValue(descriptor.get.call(this)) }
+            }))
+        } else if ('value' in descriptor) {
+            payment[name] = compatibleValue(descriptor.value)
+        }
+    }
+    return payment
+}
+
+function compatibleTransaction(tx, narrowValues) {
+    for (const input of tx.ins) {
+        input.hash = compatibleValue(input.hash)
+        input.script = compatibleValue(input.script)
+        input.witness = compatibleValue(input.witness)
+    }
+    for (const output of tx.outs) {
+        output.script = compatibleValue(output.script)
+        if (narrowValues && typeof output.value === 'bigint' && output.value <= MAX_SAFE_BIG) {
+            output.value = Number(output.value)
+        }
+    }
+    return tx
+}
+
+function bufferize(value) {
+    if (value instanceof Uint8Array && !Buffer.isBuffer(value)) return Buffer.from(value)
+    if (Array.isArray(value)) {
+        for (let i = 0; i < value.length; i++) value[i] = bufferize(value[i])
+        return value
+    }
+    if (value && typeof value === 'object') {
+        for (const name of Object.keys(value)) value[name] = bufferize(value[name])
+    }
+    return value
+}
+
+function compatiblePsbt(psbt) {
+    bufferize(psbt.data.globalMap)
+    bufferize(psbt.data.inputs)
+    bufferize(psbt.data.outputs)
+    return psbt
+}
+
+if (IS_BITCOINJS_V7 && !Transaction.prototype.__xchainNumberValues) {
+    const valibot = require('valibot')
+    bitcoinTypes.SatoshiSchema = valibot.pipe(
+        valibot.bigint(), valibot.minValue(0n), valibot.maxValue(MAX_U64)
+    )
+    const uint8Tools = require('uint8array-tools')
+    uint8Tools.writeInt64 = uint8Tools.writeUInt64
+    uint8Tools.readInt64 = uint8Tools.readUInt64
+    bufferutils.readUInt64LE = function (buffer, offset) {
+        return narrowU64(uint8Tools.readUInt64(buffer, offset, 'LE'))
+    }
+    bufferutils.writeUInt64LE = function (buffer, value, offset) {
+        uint8Tools.writeUInt64(buffer, offset, verifyU64(value), 'LE')
+        return offset + 8
+    }
+    bufferutils.BufferWriter.prototype.writeInt64 = function (value) {
+        this.offset = uint8Tools.writeUInt64(this.buffer, this.offset, verifyU64(value), 'LE')
+    }
+    bufferutils.BufferWriter.prototype.writeUInt64 = bufferutils.BufferWriter.prototype.writeInt64
+    bufferutils.BufferReader.prototype.readInt64 = function () {
+        const value = uint8Tools.readUInt64(this.buffer, this.offset, 'LE')
+        this.offset += 8
+        return value
+    }
+    bufferutils.BufferReader.prototype.readUInt64 = function () {
+        const value = narrowU64(uint8Tools.readUInt64(this.buffer, this.offset, 'LE'))
+        this.offset += 8
+        return value
+    }
+
+    const varuint = bufferutils.varuint
+    const encodeVarInt = function (value, buffer, offset) {
+        const result = varuint.encode(value, buffer, offset)
+        encodeVarInt.bytes = result.bytes
+        return compatibleValue(result.buffer)
+    }
+    const decodeVarInt = function (buffer, offset) {
+        const result = varuint.decode(buffer, offset)
+        decodeVarInt.bytes = result.bytes
+        return result.numberValue === null ? result.bigintValue : result.numberValue
+    }
+    bufferutils.varuint = {
+        encode: encodeVarInt,
+        decode: decodeVarInt,
+        encodingLength: varuint.encodingLength,
+    }
+
+    const addOutput = Transaction.prototype.addOutput
+    Transaction.prototype.addOutput = function (script, value) {
+        return addOutput.call(this, script, typeof value === 'number' ? BigInt(value) : value)
+    }
+    Transaction.prototype.__xchainNumberValues = true
+
+    const fromBuffer = Transaction.fromBuffer
+    Transaction.fromBuffer = function (...args) {
+        return compatibleTransaction(fromBuffer.apply(this, args), false)
+    }
+    const fromHex = Transaction.fromHex
+    Transaction.fromHex = function (...args) {
+        return compatibleTransaction(fromHex.apply(this, args), true)
+    }
+    const getHash = Transaction.prototype.getHash
+    Transaction.prototype.getHash = function (...args) {
+        return compatibleValue(getHash.apply(this, args))
+    }
+    const toBuffer = Transaction.prototype.toBuffer
+    Transaction.prototype.toBuffer = function (...args) {
+        return compatibleValue(toBuffer.apply(this, args))
+    }
+    const hashForWitnessV0 = Transaction.prototype.hashForWitnessV0
+    Transaction.prototype.hashForWitnessV0 = function (index, script, value, hashType) {
+        return compatibleValue(hashForWitnessV0.call(
+            this, index, script, typeof value === 'number' ? BigInt(value) : value, hashType
+        ))
+    }
+    const hashForWitnessV1 = Transaction.prototype.hashForWitnessV1
+    Transaction.prototype.hashForWitnessV1 = function (index, scripts, values, ...args) {
+        return compatibleValue(hashForWitnessV1.call(
+            this, index, scripts, values.map((value) => typeof value === 'number' ? BigInt(value) : value), ...args
+        ))
+    }
+
+    const addInput = Psbt.prototype.addInput
+    Psbt.prototype.addInput = function (data) {
+        const result = addInput.call(this, withBigIntWitnessUtxo(data))
+        bufferize(this.data.inputs[this.data.inputs.length - 1])
+        return result
+    }
+    const updateInput = Psbt.prototype.updateInput
+    Psbt.prototype.updateInput = function (index, data) {
+        const result = updateInput.call(this, index, withBigIntWitnessUtxo(data))
+        bufferize(this.data.inputs[index])
+        return result
+    }
+    const addPsbtOutput = Psbt.prototype.addOutput
+    Psbt.prototype.addOutput = function (data) {
+        const result = addPsbtOutput.call(this, withBigIntValue(data))
+        bufferize(this.data.outputs[this.data.outputs.length - 1])
+        return result
+    }
+
+    const psbtFromBuffer = Psbt.fromBuffer
+    Psbt.fromBuffer = function (...args) {
+        return compatiblePsbt(psbtFromBuffer.apply(this, args))
+    }
+
+    for (const name of ['signInput', 'signAllInputs', 'finalizeInput', 'finalizeAllInputs']) {
+        const method = Psbt.prototype[name]
+        Psbt.prototype[name] = function (...args) {
+            const result = method.apply(this, args)
+            compatiblePsbt(this)
+            return result
+        }
+    }
+
+    for (const name of ['txInputs', 'txOutputs']) {
+        const descriptor = Object.getOwnPropertyDescriptor(Psbt.prototype, name)
+        Object.defineProperty(Psbt.prototype, name, Object.assign({}, descriptor, {
+            get() {
+                return bufferize(descriptor.get.call(this))
+            }
+        }))
+    }
+
+    const extractTransaction = Psbt.prototype.extractTransaction
+    Psbt.prototype.extractTransaction = function (...args) {
+        return compatibleTransaction(extractTransaction.apply(this, args), true)
+    }
+    const getFee = Psbt.prototype.getFee
+    Psbt.prototype.getFee = function (...args) {
+        const fee = getFee.apply(this, args)
+        return typeof fee === 'bigint' && fee <= MAX_SAFE_BIG ? Number(fee) : fee
+    }
+    const psbtToBuffer = Psbt.prototype.toBuffer
+    Psbt.prototype.toBuffer = function (...args) {
+        return compatibleValue(psbtToBuffer.apply(this, args))
+    }
+
+    for (const name of Object.keys(bitcoin.payments)) {
+        const payment = bitcoin.payments[name]
+        if (typeof payment !== 'function') continue
+        Object.defineProperty(bitcoin.payments, name, {
+            configurable: true,
+            enumerable: true,
+            writable: true,
+            value: function (...args) {
+                return compatiblePayment(payment.apply(this, args))
+            },
+        })
+    }
+    for (const group of [bitcoin.script, bitcoin.crypto]) {
+        for (const name of Object.keys(group)) {
+            const fn = group[name]
+            if (typeof fn !== 'function') continue
+            Object.defineProperty(group, name, {
+                configurable: true,
+                enumerable: true,
+                writable: true,
+                value: function (...args) {
+                    return compatibleValue(fn.apply(this, args))
+                },
+            })
+        }
+    }
+    const psbtutils = require('bitcoinjs-lib/src/psbt/psbtutils')
+    for (const name of Object.keys(psbtutils)) {
+        const fn = psbtutils[name]
+        if (typeof fn !== 'function') continue
+        psbtutils[name] = function (...args) {
+            return compatibleValue(fn.apply(this, args))
+        }
+    }
+}
 
 // Bounds-check a satoshi value that may be a Number or a BigInt, mirroring
 // stock verifuint's error strings so callers relying on them keep working.
@@ -103,7 +345,7 @@ function bigIntReaderActive(bu) {
     }
 }
 
-if (!bigIntReaderActive(bufferutils)) {
+if (!IS_BITCOINJS_V7 && !bigIntReaderActive(bufferutils)) {
     bufferutils.readUInt64LE = function readUInt64LE(buffer, offset) {
         return narrowU64(buffer.readBigUInt64LE(offset))
     }
@@ -131,7 +373,7 @@ if (!bigIntReaderActive(bufferutils)) {
 // simply wrong for Dogecoin (no cap). Accept any exact u64: Number up to
 // 2^53-1, BigInt up to 2^64-1. Upstream validators (validator.js
 // parseSatoshiAmount) remain the semantic bound for caller input.
-if (!bitcoinTypes.Satoshi(MAX_U64)) {
+if (!IS_BITCOINJS_V7 && !bitcoinTypes.Satoshi(MAX_U64)) {
     bitcoinTypes.Satoshi = function Satoshi(value) {
         if (typeof value === 'bigint') return value >= 0n && value <= MAX_U64
         return bitcoinTypes.typeforce.UInt53(value)
@@ -141,7 +383,7 @@ if (!bitcoinTypes.Satoshi(MAX_U64)) {
 // bip174 carries its own 64-bit serializer copy for the PSBT witnessUtxo
 // value field; patch it the same way or a >2^53 segwit input value would
 // still throw at PSBT serialization time.
-if (!(() => { try { bip174Tools.readUInt64LE(Buffer.from([0, 0, 0, 0, 0, 0, 0x20, 0]), 0); return true } catch (_) { return false } })()) {
+if (!IS_BITCOINJS_V7 && !(() => { try { bip174Tools.readUInt64LE(Buffer.from([0, 0, 0, 0, 0, 0, 0x20, 0]), 0); return true } catch (_) { return false } })()) {
     bip174Tools.readUInt64LE = function readUInt64LE(buffer, offset) {
         return narrowU64(buffer.readBigUInt64LE(offset))
     }
@@ -156,7 +398,7 @@ if (!(() => { try { bip174Tools.readUInt64LE(Buffer.from([0, 0, 0, 0, 0, 0, 0x20
 // `typeof data.value === 'number'`, so a BigInt input value is rejected at
 // Psbt.addInput before serialization. Widen it to accept BigInt too.
 const witnessUtxoConverter = require('bip174/src/lib/converter/input/witnessUtxo')
-if (!witnessUtxoConverter.check({ script: Buffer.alloc(1), value: 1n })) {
+if (!IS_BITCOINJS_V7 && !witnessUtxoConverter.check({ script: Buffer.alloc(1), value: 1n })) {
     witnessUtxoConverter.check = function check(data) {
         return Buffer.isBuffer(data.script) &&
             (typeof data.value === 'number' || typeof data.value === 'bigint')
@@ -168,9 +410,8 @@ if (!witnessUtxoConverter.check({ script: Buffer.alloc(1), value: 1n })) {
 // `typeof output.value !== 'number'` in addOutput, so a BigInt value throws
 // 'Error adding output.' before it ever reaches the patched serializers.
 // Reach its prototype through a throwaway Psbt instance and widen the check.
-const { Psbt, Transaction } = require('bitcoinjs-lib')
 const psbtTxProto = Object.getPrototypeOf(new Psbt().data.globalMap.unsignedTx)
-if (!psbtTxProto.__xchainBigIntValues) {
+if (!IS_BITCOINJS_V7 && !psbtTxProto.__xchainBigIntValues) {
     psbtTxProto.addOutput = function addOutput(output) {
         if (
             output.script === undefined ||
@@ -271,7 +512,7 @@ function amountTotalsOverSafe(psbt) {
 // Stock's own finalized test; an unfinalized PSBT always goes to stock for its error.
 const isFinalizedInput = (input) => !!input.finalScriptSig || !!input.finalScriptWitness
 
-if (!Psbt.prototype.__xchainBigIntAmts) {
+if (!IS_BITCOINJS_V7 && !Psbt.prototype.__xchainBigIntAmts) {
     for (const method of ['extractTransaction', 'getFee', 'getFeeRate']) {
         const stock = Psbt.prototype[method]
         Psbt.prototype[method] = function (...args) {
