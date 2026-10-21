@@ -44,7 +44,7 @@ function dispenserPinChainEnd() {
 function airdropFeeTallyReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/airdrop/').hash)
-        .to.equal('8bc4bac23e914935a93247ceb88521b81b40b6be7b06df189aa5f4a487dab9e2');
+        .to.equal('3fe395e025f8ab86fe60f5a31800860c9548eee33a69141fc13b916d13277a3f');
     const heading = '### 2026-10-18 - AIRDROP_NATIVE_FEE_TALLY gate is added';
     expect(text).to.include(heading);
     expect(entryOf(text, heading)).to.include('**Direction: TIGHTENING at the gate height only.**');
@@ -63,7 +63,7 @@ function sendHandoffRetirementReview() {
 function batchSnapshotReviews() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/batch/').hash)
-        .to.equal('9f1e45a3ad92831601178f3636c7428dca73b18298173159792aaa5323bf0a76');
+        .to.equal('9a5147d0a4e121f10d9dd23a6d2f9602f8359ec5eca8f555111aea973a6321ad');
     const reviews = [
         ['### 2026-10-19 - BATCH probe sub-verdicts carry their own match snapshot', '`7e138a16` to `e7d7825d`'],
         ['### 2026-10-20 - a BATCH\'s own status is restored off the probe path too', '`e7d7825d` to `9f1e45a3`']

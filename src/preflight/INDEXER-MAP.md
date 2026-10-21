@@ -548,9 +548,9 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf` |
-| `checks/airdrop.js` | `src/actions/airdrop/` | `8bc4bac23e914935a93247ceb88521b81b40b6be7b06df189aa5f4a487dab9e2` |
+| `checks/airdrop.js` | `src/actions/airdrop/` | `3fe395e025f8ab86fe60f5a31800860c9548eee33a69141fc13b916d13277a3f` |
 | `checks/dividend.js` | `src/actions/dividend/` | `c0afa565418a5df7b35bd463ab51ed580541f2b0b7d32fac0c87cf07df50e5b0` |
-| `checks/batch.js` | `src/actions/batch/` | `9f1e45a3ad92831601178f3636c7428dca73b18298173159792aaa5323bf0a76` |
+| `checks/batch.js` | `src/actions/batch/` | `9a5147d0a4e121f10d9dd23a6d2f9602f8359ec5eca8f555111aea973a6321ad` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f` |
 | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35` |
 | `universal.js` (PRICE v1 TICK) | `src/actions/price/` | `9028c8c24931681e005828b46a76faa7e6688c1875dfd11e554fcc79b50d2781` |
@@ -577,6 +577,48 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-21 - AIRDROP_NATIVE_FEE_TALLY_ROLLBACK gate is wired into the AIRDROP fee tally (airdrop_native_fee_tally_rollback)
+
+The `airdrop` pin moves from `8bc4bac2` to `3fe395e0`, hashed from indexer `origin/develop` with
+the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/airdrop/`. The pin is a paired
+working-tree change: it matches the indexer change that lands with it, not the anchor below. The
+whole mapped diff is in `airdrop/fees.js`: `validateAirdropFeePayment` copies the non-BATCH native
+fee tally before a leg adds to it and, when that leg then fails `validateNativeCoinFee` at or above
+the `airdrop_native_fee_tally_rollback_activation.AIRDROP_NATIVE_FEE_TALLY_ROLLBACK_ACTIVATION`
+height gate (unarmed on mainnet and testnet, active from genesis on regtest), restores the tally in
+place, so later legs record only the fee and gas the valid legs owe. Below the gate the failed
+leg's fee and gas stay in the tally as before, which keeps fees-row replay identical where the
+tally gate is already armed. No error text moves. At the gate the summed AMOUNT and GAS_COST
+written for later legs drop the failed leg's share, and a later leg's native fee check is judged
+against that smaller total, so a later leg can pass at the gate where it failed below it. `checks/airdrop.js` computes no native fee quote of its own (the quote
+it shows comes from the indexer fee probe), so nothing in it must follow at activation.
+NO CLIENT CHECK MOVES.
+
+**Direction: NARROWS rejection at the gate height only.** The anchor stays unchanged.
+
+### 2026-10-21 - BATCH_AIRDROP_LEG_WEIGHT gate is wired into the BATCH weight (batch_airdrop_leg_weight)
+
+The `batch` pin moves from `9f1e45a3` to `9a5147d0`, hashed from indexer `origin/develop` with the
+committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/batch/`. The pin is a paired
+working-tree change: it matches the indexer change that lands with it, not the anchor below. The
+mapped diff is in `batch/sub_command.js`: `subCommandWeight` reads the
+`batch_airdrop_leg_weight_activation.BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION` height gate (unarmed on
+mainnet and testnet, active from genesis on regtest) and, at the gate, multiplies an AIRDROP
+sub-command's table weight of 25 by its leg count from `readAirdropLegs` (at least 1, no database
+read); DIVIDEND stays flat 25 and below the gate every weight is unchanged. `batch/limits.js`
+changes only its header comment.
+
+`checks/batch.js` weighs a BATCH through `batchWeight` in `src/protocol/batch_limits.js`, which
+keeps AIRDROP flat at 25. On mainnet and testnet, where the gate is unarmed, that is the chain's
+weight, so the client verdict matches. Before the gate arms on a public chain, `batchWeight` needs
+the per-leg AIRDROP weight keyed to the activation, or the client would pass a multi-leg AIRDROP
+batch the chain refuses on weight; on regtest the client already reads looser than the chain.
+NO CLIENT CHECK MOVES.
+
+**Direction: TIGHTENING at the gate height only.** The anchor stays unchanged.
 
 ### 2026-10-21 - TICK_CACHE_NULL_PROTOTYPE gate is wired into AIRDROP, SEND and DESTROY (tick_cache_null_prototype)
 
