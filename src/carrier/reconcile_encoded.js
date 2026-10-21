@@ -54,6 +54,7 @@ const {
     callerNestedScripts,
 } = require('./reconcile_encoded/script_matching.js');
 const { findVerifiedPrevout } = require('../utils/wallet/psbt_prevout.js');
+const { bytesEqual, toHex } = require('../utils/bytes');
 
 // Bind refusal details once so every check throws the same SDK error shape.
 function createDeny(psbtHex, label) {
@@ -84,7 +85,7 @@ function readInputs(psbt, deny, intent) {
         if (!script) return deny('UNRECONCILABLE_PSBT', 'input ' + i + ' carries no witnessUtxo or nonWitnessUtxo, so its funding script cannot be established');
         if (!inputPresigned(psbt, i)) {
             unsignedInputs++;
-            if (singleKeyInput(psbt, i, script) || nestedOwn.some((s) => s.equals(script))) fundingScripts.push(script);
+            if (singleKeyInput(psbt, i, script) || nestedOwn.some((s) => bytesEqual(s, script))) fundingScripts.push(script);
         }
         const value = inputValue(psbt, i);
         if (value === null) feeComputable = false; else totalIn += value;
@@ -111,7 +112,7 @@ function checkRequiredSpends(intent, spent, deny) {
     for (const leg of (Array.isArray(intent.requiredSpends) ? intent.requiredSpends : [])) {
         if (!takeMatch(spent, leg.script, leg.value))
             return deny('PHASE_FUNDING_UNSPENT',
-                { script: leg.script.toString('hex'), value: String(leg.value),
+                { script: toHex(leg.script), value: String(leg.value),
                   detail: 'an earlier phase funded this shaped output and this transaction does not spend it back' });
     }
 }
@@ -126,7 +127,7 @@ function readAuthorizedOutputs(intent) {
         const script = scriptForAddress(out.address, intent.network);
         if (!script) continue;
         const value = exactU64(out.value);
-        const existing = authorized.find((a) => a.script.equals(script));
+        const existing = authorized.find((a) => bytesEqual(a.script, script));
         if (existing) existing.maxValue += (value === null ? 0n : value);
         else authorized.push({ script, maxValue: (value === null ? 0n : value), spent: 0n });
     }
@@ -163,10 +164,10 @@ function reconcileOutput(out, i, inputs, outputs, deny) {
     }
     // (b) Change to a single-key unsigned funding script, a submitted change address or a caller-identity
     //     script, checked BEFORE the shape rule since a submitted P2SH change address matches a chunk leg shape.
-    if (inputs.fundingScripts.some((s) => script.equals(s))) return;
-    if (inputs.changeScripts.some((s) => script.equals(s))) return;
+    if (inputs.fundingScripts.some((s) => bytesEqual(script, s))) return;
+    if (inputs.changeScripts.some((s) => bytesEqual(script, s))) return;
     // (c) An output the caller itself asked for, capped at what it asked for.
-    const match = inputs.authorized.find((a) => a.script.equals(script));
+    const match = inputs.authorized.find((a) => bytesEqual(a.script, script));
     if (match) {
         match.spent += value;
         if (match.spent > match.maxValue)
@@ -186,14 +187,14 @@ function reconcileOutput(out, i, inputs, outputs, deny) {
         // here, before the commit is signed.
         if (outputs.phaseSpends && !takeMatch(outputs.phaseSpends, script, value))
             return deny('PHASE_FUNDING_UNSPENT',
-                { index: i, value: String(value), script: script.toString('hex'),
+                { index: i, value: String(value), script: toHex(script),
                   detail: 'the companion transaction for this phase does not spend this funding leg' });
         outputs.phaseFunding.push({ script, value });
         outputs.phaseFundingTotal += value;
         return;
     }
     // Anything else is value leaving for a destination nobody asked for.
-    return deny('UNRECONCILED_OUTPUT', { index: i, value: String(value), script: script.toString('hex') });
+    return deny('UNRECONCILED_OUTPUT', { index: i, value: String(value), script: toHex(script) });
 }
 
 // Scan outputs in transaction order so accounting and refusal order remain stable.

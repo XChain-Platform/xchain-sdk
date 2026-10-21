@@ -16,6 +16,7 @@
 
 const bitcoin = require('bitcoinjs-lib');
 const { findVerifiedPrevout } = require('../../utils/wallet/psbt_prevout.js');
+const { isBytes, toBuffer, bytesEqual } = require('../../utils/bytes');
 
 // Satoshi values arrive as Number OR BigInt: applyBufferutilsPatch teaches
 // bip174/bitcoinjs to carry values above 2^53-1 (large DOGE UTXOs) as BigInt.
@@ -109,11 +110,11 @@ function isOpReturn(script) {
 // (`requiredSpends`), or the caller's `maxPhaseFundingSats` ceiling.
 const PHASE_SHAPES = {
     // OP_HASH160 <20> OP_EQUAL
-    p2sh:  (d) => d.length === 3 && d[0] === bitcoin.opcodes.OP_HASH160 && Buffer.isBuffer(d[1]) && d[1].length === 20 && d[2] === bitcoin.opcodes.OP_EQUAL,
+    p2sh:  (d) => d.length === 3 && d[0] === bitcoin.opcodes.OP_HASH160 && isBytes(d[1]) && d[1].length === 20 && d[2] === bitcoin.opcodes.OP_EQUAL,
     // OP_0 <32>
-    p2wsh: (d) => d.length === 2 && d[0] === bitcoin.opcodes.OP_0 && Buffer.isBuffer(d[1]) && d[1].length === 32,
+    p2wsh: (d) => d.length === 2 && d[0] === bitcoin.opcodes.OP_0 && isBytes(d[1]) && d[1].length === 32,
     // OP_1 <32>
-    p2tr:  (d) => d.length === 2 && d[0] === bitcoin.opcodes.OP_1 && Buffer.isBuffer(d[1]) && d[1].length === 32,
+    p2tr:  (d) => d.length === 2 && d[0] === bitcoin.opcodes.OP_1 && isBytes(d[1]) && d[1].length === 32,
 };
 
 function matchesPhaseShape(script, shapes) {
@@ -146,7 +147,7 @@ function psbtPrevouts(psbtHex) {
 // need N distinct spends rather than being satisfied by the same one N times.
 function takeMatch(pool, script, value) {
     if (!pool) return false;
-    const i = pool.findIndex((p) => !p.taken && p.script.equals(script) && p.value === value);
+    const i = pool.findIndex((p) => !p.taken && bytesEqual(p.script, script) && p.value === value);
     if (i < 0) return false;
     pool[i].taken = true;
     return true;
@@ -156,7 +157,7 @@ function takeMatch(pool, script, value) {
 // network cannot parse authorizes nothing (it is not silently trusted): the output
 // it was meant to authorize then falls through to UNRECONCILED_OUTPUT.
 function scriptForAddress(address, network) {
-    try { return bitcoin.address.toOutputScript(String(address), network || undefined); }
+    try { return toBuffer(bitcoin.address.toOutputScript(String(address), network || undefined)); }
     catch (e) { return null; }
 }
 
