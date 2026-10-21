@@ -44,7 +44,7 @@ function dispenserPinChainEnd() {
 function airdropFeeTallyReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/airdrop/').hash)
-        .to.equal('b04e9b5e3b02e0a1f548c29bdf39fcba90ab21366336cf84011c448f8248dd9c');
+        .to.equal('8bc4bac23e914935a93247ceb88521b81b40b6be7b06df189aa5f4a487dab9e2');
     const heading = '### 2026-10-18 - AIRDROP_NATIVE_FEE_TALLY gate is added';
     expect(text).to.include(heading);
     expect(entryOf(text, heading)).to.include('**Direction: TIGHTENING at the gate height only.**');
@@ -53,7 +53,7 @@ function airdropFeeTallyReview() {
 function sendHandoffRetirementReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/send/').hash)
-        .to.equal('0cbeede95913d7190555ba30949986e028d1fdec96486bca04d36a6c401a4925');
+        .to.equal('6bd08ac469d8a2ae2981e830a5278d5859786e86e5dd0a00113aee38f6a36302');
     const heading = '### 2026-10-18 - GATED_HANDOFF_REF gate is retired';
     expect(text).to.include(heading);
     expect(entryOf(text, heading)).to.include('**Direction: NEUTRAL.**');
@@ -83,8 +83,8 @@ function gasBalanceReadReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     const rows = parseMap(REAL_MAP);
     const moves = [
-        ['send', '`ee30f903` to `0cbeede9`', '0cbeede95913d7190555ba30949986e028d1fdec96486bca04d36a6c401a4925'],
-        ['destroy', '`597c2728` to `b172b6cc`', 'b172b6cc34d4c9ab095c438c6de5a5aeb07ea06404e895134dc90c2ca317545a'],
+        ['send', '`ee30f903` to `0cbeede9`', '6bd08ac469d8a2ae2981e830a5278d5859786e86e5dd0a00113aee38f6a36302'],
+        ['destroy', '`597c2728` to `b172b6cc`', '56a05750c8fc2eed6162b67a9202c54b9274effa46665bdea8bf702fe1d6f0e3'],
         ['mint', '`f69fdb91` to `998c2d88`', '998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48']
     ];
     const heading = '### 2026-10-20 - SEND, DESTROY and MINT read only the gas token\'s balance';

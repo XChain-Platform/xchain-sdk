@@ -540,15 +540,15 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `0cbeede95913d7190555ba30949986e028d1fdec96486bca04d36a6c401a4925` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `b172b6cc34d4c9ab095c438c6de5a5aeb07ea06404e895134dc90c2ca317545a` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `6bd08ac469d8a2ae2981e830a5278d5859786e86e5dd0a00113aee38f6a36302` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `56a05750c8fc2eed6162b67a9202c54b9274effa46665bdea8bf702fe1d6f0e3` |
 | `checks/mint.js` | `src/actions/mint/` | `998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48` |
 | `checks/issue.js` | `src/actions/issue/` | `be5cd48c5d4aef365358cc296fa56b8621f8a627a09e0623d3c79e259e210762` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `3c0163d61230bbc249606f41d92786eb2016b43664dba71b55e78e8ef2ad4907` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf` |
-| `checks/airdrop.js` | `src/actions/airdrop/` | `b04e9b5e3b02e0a1f548c29bdf39fcba90ab21366336cf84011c448f8248dd9c` |
+| `checks/airdrop.js` | `src/actions/airdrop/` | `8bc4bac23e914935a93247ceb88521b81b40b6be7b06df189aa5f4a487dab9e2` |
 | `checks/dividend.js` | `src/actions/dividend/` | `c0afa565418a5df7b35bd463ab51ed580541f2b0b7d32fac0c87cf07df50e5b0` |
 | `checks/batch.js` | `src/actions/batch/` | `9f1e45a3ad92831601178f3636c7428dca73b18298173159792aaa5323bf0a76` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f` |
@@ -577,6 +577,26 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-21 - TICK_CACHE_NULL_PROTOTYPE gate is wired into AIRDROP, SEND and DESTROY (tick_cache_null_prototype)
+
+The `send` pin moves from `0cbeede9` to `6bd08ac4`, `destroy` from `b172b6cc` to `56a05750` and
+`airdrop` from `b04e9b5e` to `8bc4bac2`, hashed from indexer `origin/develop` with the committed
+companion handler tree merged by `node bin/preflight_handler_dirs.js <indexer> <handler dir>`. The
+pins are a paired working-tree change: they match the indexer change that lands with them, not the
+anchor below. The whole mapped diff is one small `createTickCache` helper in `send/prefetch.js`,
+`destroy/legs.js` and `airdrop/legs.js`, each reading the
+`tick_cache_null_prototype_activation.TICK_CACHE_NULL_PROTOTYPE_ACTIVATION` height gate
+(unarmed on mainnet and testnet, active from genesis on regtest). At the gate the per-action TICK
+cache is `Object.create(null)`, so a TICK spelled like an `Object.prototype` member
+(`constructor`, `toString`, `__proto__`) is fetched like any other name and reads
+`invalid: TICK (unknown)` when no token row exists; below the gate the cache is the old `{}`.
+No other verdict, error text or fee moves. The client checks in `checks/send.js` and
+`checks/airdrop.js` look each TICK up on its own through `ctx.token` (SEND nets its totals in a
+`Map`), so no plain-object cache a prototype name could hit exists on the client, and a TICK with
+no token row is left to `TOKEN_NOT_FOUND`, the same verdict the gate brings. NO CLIENT CHECK MOVES.
+
+**Direction: TIGHTENING at the gate height only.** The anchor stays unchanged.
 
 ### 2026-10-20 - `price/v0.js` stops exporting three internal helpers (price_v0_unexport)
 
