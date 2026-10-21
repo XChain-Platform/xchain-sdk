@@ -47,6 +47,7 @@ const bitcoin = require('bitcoinjs-lib');
 const ecc     = require('@bitcoinerlab/secp256k1');
 const MuSig2  = require('./musig2.js');
 const { SDKPolicyError } = require('../utils/errors.js');
+const { toBuffer } = require('../utils/bytes');
 
 bitcoin.initEccLib(ecc);
 
@@ -82,7 +83,7 @@ function deriveMuSig2P2TR(publicKeys, network) {
     const p2tr = bitcoin.payments.p2tr({ pubkey: aggregateXOnly, network: network || undefined });
     return {
         aggregateXOnly,
-        output:  p2tr.output,
+        output:  toBuffer(p2tr.output),
         address: p2tr.address,
         tweaks:  [],
     };
@@ -122,14 +123,14 @@ function deriveMuSig2P2TR2of3(parties, network) {
     const arAgg    = Buffer.from(m.aggregateKeys([agent, recovery]).xOnlyPubkey);
     const drAgg    = Buffer.from(m.aggregateKeys([daemon, recovery]).xOnlyPubkey);
 
-    const leafAR = bitcoin.script.compile([arAgg, bitcoin.opcodes.OP_CHECKSIG]);
-    const leafDR = bitcoin.script.compile([drAgg, bitcoin.opcodes.OP_CHECKSIG]);
+    const leafAR = toBuffer(bitcoin.script.compile([arAgg, bitcoin.opcodes.OP_CHECKSIG]));
+    const leafDR = toBuffer(bitcoin.script.compile([drAgg, bitcoin.opcodes.OP_CHECKSIG]));
     const scriptTree = [{ output: leafAR }, { output: leafDR }];
     const net = network || undefined;
 
     const p2tr = bitcoin.payments.p2tr({ internalPubkey: internal, scriptTree, network: net });
-    const merkleRoot = p2tr.hash;   // 32-byte tap merkle root
-    const tweak = bitcoin.crypto.taggedHash('TapTweak', Buffer.concat([internal, merkleRoot]));
+    const merkleRoot = toBuffer(p2tr.hash);   // 32-byte tap merkle root
+    const tweak = toBuffer(bitcoin.crypto.taggedHash('TapTweak', Buffer.concat([internal, merkleRoot])));
 
     // Per-leaf control block (1 + 32 internal + 32 sibling = 65 bytes for a 2-leaf tree).
     const leaf = (output, agg, pair) => {
@@ -141,7 +142,7 @@ function deriveMuSig2P2TR2of3(parties, network) {
             publicKeys:     pair,
             aggregateXOnly: agg,
             script:         output,
-            controlBlock:   r.witness[r.witness.length - 1],
+            controlBlock:   toBuffer(r.witness[r.witness.length - 1]),
             leafVersion:    LEAF_VERSION,
         };
     };
@@ -149,8 +150,8 @@ function deriveMuSig2P2TR2of3(parties, network) {
     return {
         internalXOnly: internal,
         address:       p2tr.address,
-        output:        p2tr.output,
-        outputXOnly:   p2tr.output.subarray(2),
+        output:        toBuffer(p2tr.output),
+        outputXOnly:   toBuffer(p2tr.output).subarray(2),
         merkleRoot,
         keyPath: { publicKeys: [agent, daemon], tweaks: [{ tweak, xOnly: true }] },
         recovery: {

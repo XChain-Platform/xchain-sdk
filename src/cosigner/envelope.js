@@ -87,6 +87,7 @@ const ecc     = require('@bitcoinerlab/secp256k1');
 // sighash types this signer will produce a message for.
 const { sighashAllowed, disallowedSighashError } = require('./policy/sighash_policy.js');
 const { assertSegwitNetwork } = require('./account.js');
+const { isBytes, toBuffer, bytesEqual } = require('../utils/bytes');
 
 bitcoin.initEccLib(ecc);
 
@@ -115,26 +116,26 @@ const TAPROOT_ANNEX_MARKER = 0x50;
  */
 function parseEnvelopeScript(script) {
     try {
-        if (!Buffer.isBuffer(script) || script.length < 8) return null;
+        if (!isBytes(script) || script.length < 8) return null;
         const decompiled = bitcoin.script.decompile(script);
         if (!decompiled || decompiled.length < 8) return null;
         let i = 0;
         if (decompiled[i++] !== bitcoin.opcodes.OP_0) return null;
         if (decompiled[i++] !== bitcoin.opcodes.OP_IF) return null;
-        if (!Buffer.isBuffer(decompiled[i]) || !decompiled[i].equals(ENVELOPE_MAGIC)) return null;
+        if (!isBytes(decompiled[i]) || !bytesEqual(decompiled[i], ENVELOPE_MAGIC)) return null;
         i++;
         const formatByte = decompiled[i++];
-        if (!Buffer.isBuffer(formatByte) || formatByte.length !== 1) return null;
+        if (!isBytes(formatByte) || formatByte.length !== 1) return null;
         if (formatByte[0] !== ENVELOPE_FORMAT_V0) return null;
         const payloadPushes = [];
-        while (i < decompiled.length && Buffer.isBuffer(decompiled[i])) {
+        while (i < decompiled.length && isBytes(decompiled[i])) {
             payloadPushes.push(decompiled[i]);
             i++;
         }
         if (payloadPushes.length === 0) return null;
         if (decompiled[i++] !== bitcoin.opcodes.OP_ENDIF) return null;
-        if (!Buffer.isBuffer(decompiled[i]) || decompiled[i].length !== 32) return null;
-        const checksigKey = decompiled[i];
+        if (!isBytes(decompiled[i]) || decompiled[i].length !== 32) return null;
+        const checksigKey = toBuffer(decompiled[i]);
         i++;
         if (decompiled[i++] !== bitcoin.opcodes.OP_CHECKSIG) return null;
         if (i !== decompiled.length) return null;
@@ -151,11 +152,11 @@ function parseEnvelopeScript(script) {
 // recovery leaves (recovery.js) both hash here, since a duplicated sighash input drifts.
 function tapleafHash(script, leafVersion) {
     const ver = (leafVersion === undefined) ? TAPROOT_LEAF_VERSION : leafVersion;
-    return bitcoin.crypto.taggedHash('TapLeaf', Buffer.concat([
+    return toBuffer(bitcoin.crypto.taggedHash('TapLeaf', Buffer.concat([
         Buffer.from([ver]),
         compactSizePrefix(script),
         script,
-    ]));
+    ])));
 }
 
 // BIP341 tapleaf hash for a single-leaf envelope tree. Pinned by test against
@@ -183,13 +184,13 @@ function normalizeRecoveryLeaves(recovery) {
     const names = ['agentRecovery', 'daemonRecovery'];
     const out = names.map((name) => {
         const leaf = recovery[name];
-        if (!leaf || !Buffer.isBuffer(leaf.script) || leaf.script.length === 0)
+        if (!leaf || !isBytes(leaf.script) || leaf.script.length === 0)
             throw new Error(`recoveryLeaves.${name} must carry a leaf script Buffer`);
         return { name, leaf };
     });
     // Two identical leaves would hash to one branch and quietly halve the tree,
     // leaving one named recovery path with a control block that cannot verify.
-    if (out[0].leaf.script.equals(out[1].leaf.script))
+    if (bytesEqual(out[0].leaf.script, out[1].leaf.script))
         throw new Error('the two recovery leaves must be distinct scripts');
     return out;
 }
@@ -218,14 +219,14 @@ function normalizeRecoveryLeaves(recovery) {
 function deriveEnvelopeCommit(args = {}) {
     const { internalXOnly, envelopeScript, network } = args;
     assertSegwitNetwork(network, 'deriveEnvelopeCommit');
-    if (!Buffer.isBuffer(internalXOnly) || internalXOnly.length !== 32)
+    if (!isBytes(internalXOnly) || internalXOnly.length !== 32)
         throw new Error('deriveEnvelopeCommit requires a 32-byte x-only internal key');
     const parsed = parseEnvelopeScript(envelopeScript);
     if (!parsed) throw new Error('envelope script does not match the §3.2 grammar');
     // The leaf spends under OP_CHECKSIG against this key, so an envelope whose
     // checksig key is not our aggregate is somebody else's envelope: signing it
     // would be signing under a key we do not control the other half of.
-    if (!parsed.checksigKey.equals(internalXOnly))
+    if (!bytesEqual(parsed.checksigKey, internalXOnly))
         throw new Error('envelope leaf commits to a different key than this account aggregate');
     const recoveryLeaves = normalizeRecoveryLeaves(args.recoveryLeaves);
 
@@ -261,13 +262,13 @@ function deriveEnvelopeCommit(args = {}) {
         // in the single-leaf (2-of-2) tree, and a composed tree has three leaves.
         leafHash:     envelopeLeafHash(envelopeScript),
         merkleRoot,
-        tweak:        bitcoin.crypto.taggedHash('TapTweak', Buffer.concat([internalXOnly, merkleRoot])),
+        tweak:        toBuffer(bitcoin.crypto.taggedHash('TapTweak', Buffer.concat([internalXOnly, merkleRoot]))),
         output:       Buffer.from(p2tr.output),
         outputXOnly:  Buffer.from(p2tr.output.subarray(2)),
         address:      p2tr.address,
         controlBlock: pathTo(envelopeScript),
         payload:      parsed.payload,
-        script:       envelopeScript,
+        script:       toBuffer(envelopeScript),
         recovery,
     };
 }
@@ -289,7 +290,7 @@ function envelopeScriptPathSighash(psbt, inputIndex, hashType, leafHash) {
     const ins = psbt.txInputs;
     if (inputIndex < 0 || inputIndex >= ins.length)
         throw new Error('inputIndex ' + inputIndex + ' out of range');
-    if (!Buffer.isBuffer(leafHash) || leafHash.length !== 32)
+    if (!isBytes(leafHash) || leafHash.length !== 32)
         throw new Error('script-path sighash requires a 32-byte leaf hash');
     const scripts = [], values = [];
     for (let i = 0; i < ins.length; i++) {
@@ -319,7 +320,7 @@ function envelopeLeafFromPsbtInput(psbtInput) {
     if (!psbtInput || !Array.isArray(psbtInput.tapLeafScript) || psbtInput.tapLeafScript.length !== 1)
         return null;
     const leaf = psbtInput.tapLeafScript[0];
-    if (!leaf || leaf.leafVersion !== TAPROOT_LEAF_VERSION || !Buffer.isBuffer(leaf.script)) return null;
+    if (!leaf || leaf.leafVersion !== TAPROOT_LEAF_VERSION || !isBytes(leaf.script)) return null;
     const parsed = parseEnvelopeScript(leaf.script);
     if (!parsed) return null;
     return { script: leaf.script, payload: parsed.payload, checksigKey: parsed.checksigKey };
@@ -341,16 +342,16 @@ function envelopeLeafFromPsbtInput(psbtInput) {
 function classifyEnvelopeRole(psbt, commit) {
     const input0 = psbt.data.inputs[0];
     const wu0 = input0 && input0.witnessUtxo;
-    if (wu0 && wu0.script && wu0.script.equals(commit.output)) {
+    if (wu0 && wu0.script && bytesEqual(wu0.script, commit.output)) {
         const leaf = envelopeLeafFromPsbtInput(input0);
         if (!leaf) return 'cancel';
         // A leaf that is not the one this commit committed to cannot spend the
         // output anyway (the control block would not verify), but classifying it
         // as a reveal would derive a signing message for the wrong leaf.
-        return leaf.script.equals(commit.script) ? 'reveal' : null;
+        return bytesEqual(leaf.script, commit.script) ? 'reveal' : null;
     }
     for (const out of psbt.txOutputs) {
-        if (out.script.equals(commit.output)) return 'commit';
+        if (bytesEqual(out.script, commit.output)) return 'commit';
     }
     return null;
 }

@@ -25,6 +25,7 @@ const {
 const {
     checkTransaction, signInputs, toBytes, taprootKeyPathSighash,
 } = require('./request_signing.js');
+const { bytesEqual, toHex } = require('../../utils/bytes');
 
 module.exports = {
     /*
@@ -105,10 +106,10 @@ module.exports = {
         const inp = psbt.data.inputs[0];
         if (!inp || !inp.witnessUtxo || !inp.witnessUtxo.script)
             return this.deny('SOURCE_NOT_OUR_ACCOUNT', { detail: 'input 0 has no witnessUtxo' });
-        if (!inp.witnessUtxo.script.equals(expected))
+        if (!bytesEqual(inp.witnessUtxo.script, expected))
             return this.deny('SOURCE_NOT_OUR_ACCOUNT', {
-                expected: expected.toString('hex'),
-                got:      inp.witnessUtxo.script.toString('hex'),
+                expected: toHex(expected),
+                got:      toHex(inp.witnessUtxo.script),
             });
         return null;
     },

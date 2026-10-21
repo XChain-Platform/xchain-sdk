@@ -22,6 +22,7 @@ const bitcoin = require('bitcoinjs-lib');
 const { evaluatePolicy } = require('../policy_evaluator.js');
 const { decodeActionFromPsbt, decodeEnvelopeAction } = require('../psbt_action_decode.js');
 const { deriveEnvelopeCommit, classifyEnvelopeRole } = require('../envelope.js');
+const { isBytes, toBuffer, bytesEqual } = require('../../utils/bytes');
 
 // Parse and bound the request before any input-specific work begins.
 function readRequest(self, req) {
@@ -67,7 +68,7 @@ function validateInputs(self, psbt, inputs) {
         if (!wu || !wu.script)
             return { denial: self.deny('CANNOT_CHECK_OUTPUTS', 'missing witnessUtxo for input ' + i) };
         if (accountScript === null) accountScript = wu.script;
-        else if (!wu.script.equals(accountScript))
+        else if (!bytesEqual(wu.script, accountScript))
             return { denial: self.deny('MIXED_INPUT_SCRIPTS', { index: i }) };
     }
     return { seenIdx };
@@ -93,8 +94,8 @@ function deriveEnvelope(self, req, psbt) {
     if (req.envelope) {
         let script;
         try {
-            script = Buffer.isBuffer(req.envelope.script)
-                ? req.envelope.script : Buffer.from(String(req.envelope.script), 'hex');
+            script = isBytes(req.envelope.script)
+                ? toBuffer(req.envelope.script) : Buffer.from(String(req.envelope.script), 'hex');
         } catch (e) {
             return { denial: self.deny('ENVELOPE_SCRIPT_INVALID', 'envelope.script is not hex') };
         }
@@ -127,7 +128,7 @@ function deriveEnvelope(self, req, psbt) {
 function revealCommitTxid(psbt) {
     try {
         const hash = psbt.txInputs[0].hash;
-        if (!Buffer.isBuffer(hash) || hash.length !== 32) return null;
+        if (!isBytes(hash) || hash.length !== 32) return null;
         return Buffer.from(hash).reverse().toString('hex');
     } catch (e) {
         return null;

@@ -44,6 +44,7 @@
 
 const bitcoin = require('bitcoinjs-lib');
 const zlib = require('zlib');
+const { isBytes, toBuffer, bytesEqual } = require('../utils/bytes');
 
 const CHUNK_ENCODINGS = ['P2SH', 'P2WSH'];
 
@@ -78,7 +79,7 @@ function outputScriptsOf(psbt) {
     const outs = Array.isArray(p.outputs) ? p.outputs : [];
     return outs.map(o => {
         const s = o && o.script;
-        if (Buffer.isBuffer(s)) return s;
+        if (isBytes(s)) return s;
         if (typeof s === 'string') { try { return Buffer.from(s, 'hex'); } catch (e) { return null; } }
         return null;
     }).filter(Boolean);
@@ -101,7 +102,7 @@ function chunkOf(redeem) {
     let decompiled;
     try { decompiled = bitcoin.script.decompile(redeem); } catch (e) { return null; }
     if (!Array.isArray(decompiled) || !decompiled.length) return null;
-    return Buffer.isBuffer(decompiled[0]) ? decompiled[0] : null;
+    return isBytes(decompiled[0]) ? toBuffer(decompiled[0]) : null;
 }
 
 function verifiedChunks(carrierScripts, enc, net, present) {
@@ -116,7 +117,7 @@ function verifiedChunks(carrierScripts, enc, net, present) {
         let committed;
         try { committed = committedScriptFor(enc, redeem, net); }
         catch (e) { return { ok: false, reason: REASONS.SCRIPT_UNPARSEABLE, checked: chunks.length }; }
-        if (!present.some(s => Buffer.isBuffer(s) && s.equals(committed)))
+        if (!present.some(s => bytesEqual(s, committed)))
             return { ok: false, reason: REASONS.OUTPUT_NOT_FOUND, checked: chunks.length };
 
         const chunk = chunkOf(redeem);
@@ -129,7 +130,7 @@ function verifiedChunks(carrierScripts, enc, net, present) {
 
 // A push the compiler minimized to an opcode carries bytes too; OP_0 is the empty payload.
 function pushBytes(el) {
-    if (Buffer.isBuffer(el)) return el;
+    if (isBytes(el)) return toBuffer(el);
     return el === bitcoin.opcodes.OP_0 ? Buffer.alloc(0) : null;
 }
 
@@ -140,8 +141,7 @@ function rawDataMatches(pushes, rawData, rawDataCompressed) {
     if (rawData === null) return pushes.length === 1;
     const carried = pushes.length === 2 ? pushBytes(pushes[1]) : null;
     if (!carried) return false;
-    const expected = Buffer.isBuffer(rawData) ? rawData
-        : (rawData instanceof Uint8Array ? Buffer.from(rawData) : Buffer.from(String(rawData), 'binary'));
+    const expected = isBytes(rawData) ? toBuffer(rawData) : Buffer.from(String(rawData), 'binary');
     if (rawDataCompressed !== true) return carried.equals(expected);
     if (!expected.length || carried.length >= expected.length) return false;
     try { return zlib.inflateRawSync(carried, { maxOutputLength: expected.length }).equals(expected); }
@@ -206,7 +206,7 @@ function verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString, ra
     let payload, pushes;
     try {
         pushes = bitcoin.script.decompile(carried);
-        payload = Array.isArray(pushes) && Buffer.isBuffer(pushes[0]) ? pushes[0] : null;
+        payload = Array.isArray(pushes) && isBytes(pushes[0]) ? toBuffer(pushes[0]) : null;
     } catch (e) { payload = null; }
     // Not a decodable push: the chain would read no action out of these bytes
     // at all, so this is a mismatch rather than a pass.

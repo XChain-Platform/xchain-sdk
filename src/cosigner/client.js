@@ -41,6 +41,7 @@ const {
 const { deriveMuSig2P2TR2of3 } = require('./account.js');
 const { SDKPolicyError } = require('../utils/errors.js');
 const { taprootKeyPathSighash } = require('./co_signer.js');
+const { isBytes, toBuffer, toHex } = require('../utils/bytes');
 
 function toBytes(v, label) {
     if (v instanceof Uint8Array) return v;
@@ -88,7 +89,7 @@ function assertMsgMatchesPsbt(psbtHex, inputIndex, msg, envelope) {
     if (expected.length !== got.length || !crypto.timingSafeEqual(expected, got))
         throw new SDKPolicyError('COSIGNER_MSG_MISMATCH',
             'co-signer msg is not the sighash of the submitted PSBT (input ' + inputIndex +
-            ': expected ' + expected.toString('hex') + ', got ' + got.toString('hex') + ')');
+            ': expected ' + toHex(expected) + ', got ' + got.toString('hex') + ')');
 }
 
 // Drive a CoSigner instance directly (no network). Useful for tests and
@@ -207,7 +208,7 @@ class CoSignerClient {
     // module). Returns null when the round is not an envelope round.
     envelopeContext(psbtHex, envelopeScript, network) {
         if (!envelopeScript) return null;
-        const script = Buffer.isBuffer(envelopeScript) ? envelopeScript : Buffer.from(String(envelopeScript), 'hex');
+        const script = isBytes(envelopeScript) ? toBuffer(envelopeScript) : Buffer.from(String(envelopeScript), 'hex');
         const commit = deriveEnvelopeCommit({
             internalXOnly:  this.internalXOnly,
             envelopeScript: script,

@@ -51,6 +51,7 @@ const FormatSelector = require('../protocol/format_selector.js');
 const { envelopeLeafFromPsbtInput, parseEnvelopeScript } = require('./envelope.js');
 const { ENVELOPE_MAX_PAYLOAD } = require('../protocol/constants.js');
 const { MAX_ACTION_DATA_LENGTH } = require('../contract/chunk_helper.js');
+const { isBytes } = require('../utils/bytes');
 const {
     fail, MAGIC_WORD, P2SH_TAG, P2WSH_TAG, OBFUSCATION,
     extractInlineActionString, extractEnvelopeActionString,
@@ -150,7 +151,7 @@ function decodeEnvelopeAction(script) {
     let decompiled;
     try { decompiled = bitcoin.script.decompile(parsed.payload); }
     catch (e) { return fail('INNER_DECOMPILE_FAILED', e.message); }
-    if (!decompiled || decompiled.length === 0 || !Buffer.isBuffer(decompiled[0]))
+    if (!decompiled || decompiled.length === 0 || !isBytes(decompiled[0]))
         return fail('INNER_DECOMPILE_FAILED');
     let actionString;
     try { actionString = new TextDecoder('utf-8', { fatal: true }).decode(decompiled[0]); }
