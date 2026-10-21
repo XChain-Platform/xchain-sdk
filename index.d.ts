@@ -839,6 +839,12 @@ export interface ExplorerStatus {
     indexer_state?: { [coin: string]: ExplorerIndexerState | null };
     /** block_time of the next block the indexer must commit; null when unknown */
     next_block_time?: { [coin: string]: number | null };
+    /**
+     * Whether an address LIST create or edit accepts any configured coin's address: true once
+     * TOKEN_POLICY_INHERITANCE_ACTIVATION is active at that coin's indexed tip, false below it
+     * or when the tip is unreadable, so keep other-coin addresses out unless this reads true
+     */
+    list_any_coin_items?: { [coin: string]: boolean };
     /** Seconds that next block is dated ahead of the host clock: the real consensus-wait measure */
     next_block_future_seconds?: { [coin: string]: number | null };
     /** ISO-8601 instant the current indexer wait may first clear; null when unknown */
