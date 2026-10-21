@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.1] - 2026-10-21
+
+### Changed
+- Upgraded the bitcoin signing stack to bitcoinjs-lib 7.
+- Sent long getFeeQuote queries as POST.
+- Weighed a BATCH AIRDROP per leg at the leg-weight gate height.
+
+### Added
+- Warned on unresolved caret ISSUE ticks before the rule arms.
+- Declared the explorer status list_any_coin_items map.
+
+### Fixed
+- Raised follow-redirects to its patched release for two new advisories.
+
 ## [0.26.0] - 2026-10-20
 
 ### Changed
