@@ -543,7 +543,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (SEND) | `src/actions/send/` | `0cbeede95913d7190555ba30949986e028d1fdec96486bca04d36a6c401a4925` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `b172b6cc34d4c9ab095c438c6de5a5aeb07ea06404e895134dc90c2ca317545a` |
 | `checks/mint.js` | `src/actions/mint/` | `998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48` |
-| `checks/issue.js` | `src/actions/issue/` | `8f29219d887e695408a8d9b405a795182550c3ed0e991ab74bd4941efe9d294c` |
+| `checks/issue.js` | `src/actions/issue/` | `02cc05ee209b5f7e4012b31fc34bb846c1b33304c51b45cc06f5f5faa694c85f` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `3c0163d61230bbc249606f41d92786eb2016b43664dba71b55e78e8ef2ad4907` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc` |
@@ -577,6 +577,26 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-20 - ISSUE_CARET_TICK_NO_CREATE gate is added (caret_tick_issue_refusal)
+
+The `issue` pin moves from `8f29219d` to `02cc05ee`, hashed from indexer `origin/develop` with
+the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/issue/`. The pin is a paired
+working-tree change: it matches the indexer change that lands with it, not the anchor below.
+The mapped diff adds `validateCaretTickExists` to `issue/tick_rules.js` and calls it from
+`issue/index.js` right after the token row is read. At or above the `ISSUE_CARET_TICK_NO_CREATE`
+protocol change a caret `^<id>` TICK that resolves to no existing token row is
+`invalid: TICK (unknown)`; genesis is exempt and an owner's caret edit of an existing token is
+untouched. The row is a `changes_5.js` time row, unarmed on mainnet and testnet and active from
+genesis on regtest, so no public chain changes verdict today.
+
+`checks/issue.js` reads the row for a caret TICK through the explorer, which resolves the id, and
+treats a missing row as a fresh create. Before the protocol change arms on a public chain, the
+caret create case needs a client warning keyed to a mirrored table; until then the client verdict
+matches the indexer on mainnet and testnet. NO CLIENT CHECK MOVES.
+
+**Direction: TIGHTENING at the gate height only.** The anchor stays unchanged.
 
 ### 2026-10-20 - the anchor moves to the landed SEND, DESTROY, MINT and BATCH changes
 
