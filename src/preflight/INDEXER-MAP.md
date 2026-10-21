@@ -543,7 +543,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (SEND) | `src/actions/send/` | `0cbeede95913d7190555ba30949986e028d1fdec96486bca04d36a6c401a4925` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `b172b6cc34d4c9ab095c438c6de5a5aeb07ea06404e895134dc90c2ca317545a` |
 | `checks/mint.js` | `src/actions/mint/` | `998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48` |
-| `checks/issue.js` | `src/actions/issue/` | `22c8cdb0611bd4a7c0b74b45453504c55e5086bb228cc9005619468c9b5ebcb9` |
+| `checks/issue.js` | `src/actions/issue/` | `be5cd48c5d4aef365358cc296fa56b8621f8a627a09e0623d3c79e259e210762` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `3c0163d61230bbc249606f41d92786eb2016b43664dba71b55e78e8ef2ad4907` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc` |
@@ -577,6 +577,25 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-20 - CHILD_TOKEN_INDEPENDENT_EDITS gate is added (child_token_independent_edits)
+
+The `issue` pin moves from `22c8cdb0` to `be5cd48c`, hashed from indexer `origin/develop` with
+the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/issue/`. The pin is a paired
+working-tree change: it matches the indexer change that lands with it, not the anchor below.
+The mapped diff is in `issue/tick_rules.js`: a new `CHILD_TOKEN_INDEPENDENT_EDITS_ACTIVATION`
+height gate (unarmed on mainnet, armed at BTC:testnet 157235, LTC:testnet 4930600 and
+DOGE:testnet 68012800, active from genesis on regtest). At the gate, an ISSUE naming a dotted
+child that already exists skips the parent-owner and parent-escrow refusals, so the child's own
+owner can edit, transfer and unbind it; a first creation of a child still needs the parent owner
+and an unescrowed parent. Below the gate the path is the old one.
+
+`checks/issue.js` never judged parent ownership or parent escrow for a dotted child (the existing
+child's owner check is the only owner rule it mirrors), so it raises no refusal the gate removes.
+NO CLIENT CHECK MOVES.
+
+**Direction: LOOSENING at the gate height only.** The anchor stays unchanged.
 
 ### 2026-10-20 - ISSUE v6 controller binds refuse a COOLDOWN_BLOCKS above the column range (cooldown_blocks_range_refusal)
 
