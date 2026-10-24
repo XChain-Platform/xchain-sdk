@@ -68,6 +68,8 @@ const validatorSetCache = new Map();
 // without restarting the process.
 function clearValidatorSetCache(){ validatorSetCache.clear(); }
 
+// A fold wrapper is judged on the archive set only above both the archive presence
+// gate and stake-weighted quorum at its snapshot_block; everything else keeps validators.
 function usesArchiveSet(cp){
     return cp != null && cp.fold_archive != null
         && gateRegistry.activeAt(ARCHIVE_ROLLCALL_PRESENCE_KEY,
@@ -81,16 +83,20 @@ function usesArchiveSet(cp){
 //
 // Cached by PROMISE so concurrent callers at one key (the wallet fans proof
 // jobs through a pool of 6) share one in-flight read instead of each firing a
-// request; a rejected fetch is evicted immediately so a blip is not pinned.
+// request; a rejected fetch is evicted immediately so a blip is not pinned. A fold
+// wrapper uses the archive_publish snapshot the explorer returns as
+// archive_validators once the archive presence gate is active at snapshot_block.
+// Plain sections and pre-gate wrappers keep the oracle_publish validators field.
 async function explorerValidators(f, explorerUrl, coin, cp){
     const archive = usesArchiveSet(cp);
+    const field = archive ? 'archive_validators' : 'validators';
     const key = baseUrl(explorerUrl) + '|' + String(coin) + '|' + String(cp.block_index)
         + (archive ? '|archive' : '');
     const cached = validatorSetCache.get(key);
     if (cached) return cached;
     const url = baseUrl(explorerUrl) + '/' + encodeURIComponent(String(coin)) +
                 '/api/checkpoint/' + encodeURIComponent(String(cp.block_index)) + '/verify';
-    const p = fetchJson(f, url).then((vb) => (vb && vb.validators) || []);
+    const p = fetchJson(f, url).then((vb) => (vb && vb[field]) || []);
     p.catch(() => { validatorSetCache.delete(key); });
     if (validatorSetCache.size >= VALIDATOR_SET_CACHE_MAX){
         const oldestKey = validatorSetCache.keys().next().value;
