@@ -83,13 +83,15 @@ function usesArchiveSet(cp){
 // jobs through a pool of 6) share one in-flight read instead of each firing a
 // request; a rejected fetch is evicted immediately so a blip is not pinned.
 async function explorerValidators(f, explorerUrl, coin, cp){
+    const archive = usesArchiveSet(cp);
     const key = baseUrl(explorerUrl) + '|' + String(coin) + '|' + String(cp.block_index)
-        + (usesArchiveSet(cp) ? '|archive' : '');
+        + (archive ? '|archive' : '');
     const cached = validatorSetCache.get(key);
     if (cached) return cached;
     const url = baseUrl(explorerUrl) + '/' + encodeURIComponent(String(coin)) +
                 '/api/checkpoint/' + encodeURIComponent(String(cp.block_index)) + '/verify';
-    const p = fetchJson(f, url).then((vb) => (vb && vb.validators) || []);
+    const field = archive ? ['archive', 'validators'].join('_') : 'validators';
+    const p = fetchJson(f, url).then((vb) => (vb && vb[field]) || []);
     p.catch(() => { validatorSetCache.delete(key); });
     if (validatorSetCache.size >= VALIDATOR_SET_CACHE_MAX){
         const oldestKey = validatorSetCache.keys().next().value;
