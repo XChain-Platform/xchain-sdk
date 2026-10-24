@@ -99,6 +99,34 @@ function gasBalanceReadReview() {
     expect(entry).to.include('NO CLIENT CHECK MOVES');
 }
 
+// The three 2026-10-23 activations: AIRDROP and DIVIDEND move their pins for the reviewed
+// settlement changes, while the equal-price ORDER ranking sits outside every mapped row.
+function october23GatesReview() {
+    const text = fs.readFileSync(REAL_MAP, 'utf8');
+    const rows = parseMap(REAL_MAP);
+    expect(rows.find((r) => r.handler === 'src/actions/airdrop/').hash)
+        .to.equal('4d7279d0707eb4c1719b0e4777dbf78bb3eef563ace5cd4006772d0691f200f7');
+    expect(rows.find((r) => r.handler === 'src/actions/dividend/').hash)
+        .to.equal('7d66516b2584dcce47eecac80f62f90cabf98844ecc862195c03c65a7ff31065');
+    expect(rows.find((r) => r.handler.startsWith('src/actions/order_match')), 'no ORDER_MATCH row').to.equal(undefined);
+    const expected = [
+        ['### 2026-10-23 - AIRDROP_ZERO_LEGS_OMITTED gate is wired into the AIRDROP settlement',
+            'AIRDROP_ZERO_LEGS_OMITTED_ACTIVATION', '**Direction: NEUTRAL for validity; ledger rows change at the gate height only.**'],
+        ['### 2026-10-23 - DIVIDEND_EMPTY_ALLOW_LIST_DENIES gate is wired into the DIVIDEND recipient set',
+            'DIVIDEND_EMPTY_ALLOW_LIST_DENIES_ACTIVATION', '**Direction: NARROWS the recipient set at the gate height only.**'],
+        ['### 2026-10-23 - ORDER matching takes equal-price makers oldest first behind an activation',
+            'MATCH_EQUAL_PRICE_OLDEST_FIRST', '**Direction: NEUTRAL for validity, outside every mapped row.**'],
+    ];
+    for (const [heading, gate, direction] of expected) {
+        expect(text).to.include(heading);
+        const start = text.indexOf(heading);
+        const entry = text.slice(start, text.indexOf('\n### ', start + heading.length));
+        expect(entry, heading).to.include(gate);
+        expect(entry, heading).to.include(direction);
+        expect(entry, heading).to.include('NO CLIENT CHECK MOVES');
+    }
+}
+
 describe('pre-flight constants + registry drift map (§8.5) gate retirement reviews', function () {
     it('pins and records the DISPENSER and DISPENSE amount positivity gate retirement review', dispenserPositivityReview);
     it('the live dispenser pin is the end of the review-log pin chain', dispenserPinChainEnd);
@@ -106,4 +134,5 @@ describe('pre-flight constants + registry drift map (§8.5) gate retirement revi
     it('pins and records the SEND gated handoff reference gate retirement review', sendHandoffRetirementReview);
     it('pins and records the BATCH probe sub-verdict match snapshot review', batchSnapshotReviews);
     it('pins and records the SEND, DESTROY and MINT gas balance read review', gasBalanceReadReview);
+    it('pins and records the AIRDROP zero leg, DIVIDEND empty allow list and equal-price ORDER reviews', october23GatesReview);
 });
