@@ -548,8 +548,8 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf` |
-| `checks/airdrop.js` | `src/actions/airdrop/` | `3fe395e025f8ab86fe60f5a31800860c9548eee33a69141fc13b916d13277a3f` |
-| `checks/dividend.js` | `src/actions/dividend/` | `c0afa565418a5df7b35bd463ab51ed580541f2b0b7d32fac0c87cf07df50e5b0` |
+| `checks/airdrop.js` | `src/actions/airdrop/` | `4d7279d0707eb4c1719b0e4777dbf78bb3eef563ace5cd4006772d0691f200f7` |
+| `checks/dividend.js` | `src/actions/dividend/` | `7d66516b2584dcce47eecac80f62f90cabf98844ecc862195c03c65a7ff31065` |
 | `checks/batch.js` | `src/actions/batch/` | `9a5147d0a4e121f10d9dd23a6d2f9602f8359ec5eca8f555111aea973a6321ad` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f` |
 | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35` |
@@ -577,6 +577,61 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-23 - AIRDROP_ZERO_LEGS_OMITTED gate is wired into the AIRDROP settlement (airdrop_zero_legs_omitted)
+
+The `airdrop` pin moves from `3fe395e0` to `4d7279d0`, hashed from indexer `origin/develop` with
+the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/airdrop/`. The pin is a paired
+working-tree change: it matches the indexer change that lands with it (`951a1f844`), not the
+anchor below. The whole mapped diff is in `airdrop/settle.js`: for a valid AIRDROP leg it reads
+the `airdrop_zero_legs_omitted_activation.AIRDROP_ZERO_LEGS_OMITTED_ACTIVATION` height gate
+(unarmed on mainnet and testnet, armed on a regtest venue by
+`XC_AIRDROP_ZERO_LEGS_OMITTED_REGTEST_ACTIVATION`) and, at the gate, pushes the SOURCE debit and
+each recipient credit only when its amount is above zero, so a zero-amount leg writes no
+zero-value ledger rows and they stay out of the ledger hash and the block-content Merkle root.
+Below the gate the rows are written as before. No verdict, error text or fee moves.
+`checks/airdrop.js` already warns that the chain accepts a null or zero AMOUNT as a zero airdrop
+with the fee still charged, which holds on both sides of the gate, and the client computes no
+ledger rows. NO CLIENT CHECK MOVES.
+
+**Direction: NEUTRAL for validity; ledger rows change at the gate height only.** The anchor stays
+unchanged.
+
+### 2026-10-23 - DIVIDEND_EMPTY_ALLOW_LIST_DENIES gate is wired into the DIVIDEND recipient set (dividend_empty_allow_list_denies)
+
+The `dividend` pin moves from `c0afa565` to `7d66516b`, hashed from indexer `origin/develop` with
+the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/dividend/`. The pin is a paired
+working-tree change: it matches the indexer change that lands with it (`951a1f844`), not the
+anchor below. The whole mapped diff is in `dividend/index.js`: when `DIVIDEND_TICK` carries an
+attached `ALLOW_LIST` that resolves to no members, the
+`dividend_empty_allow_list_denies_activation.DIVIDEND_EMPTY_ALLOW_LIST_DENIES_ACTIVATION` height
+gate (unarmed on mainnet and testnet, armed on a regtest venue by
+`XC_DIVIDEND_EMPTY_ALLOW_LIST_DENIES_REGTEST_ACTIVATION`) makes every holder ineligible, so the
+DIVIDEND pays no one. A reference the list validity gate rejects, for which `getList` answers
+null, still reads as no attached list, and below the gate an empty list keeps admitting every holder.
+No error text moves. `checks/dividend.js` reads no allow or block list and leaves the effective
+recipient set and total debit to the server as `DIVIDEND_DEBIT_TOTAL` (unverified), so nothing in
+it must follow at activation. NO CLIENT CHECK MOVES.
+
+**Direction: NARROWS the recipient set at the gate height only.** The anchor stays unchanged.
+
+### 2026-10-23 - ORDER matching takes equal-price makers oldest first behind an activation
+
+No pin moves, no row is added and the anchor stays. The indexer change (`1716d1c90`) is in
+`src/actions/order_match/index.js`, `src/db/orders/order_info.js` and
+`src/utility/validation/value_checks.js`, none of which a row here maps: at or above
+`match_equal_price_oldest_first_activation.MATCH_EQUAL_PRICE_OLDEST_FIRST` (unarmed on mainnet and
+testnet, armed on a regtest venue by `XC_MATCH_EQUAL_PRICE_OLDEST_FIRST_REGTEST_ACTIVATION`),
+candidate makers at an equal price are taken by lowest `ACTION_INDEX` first; below it the highest
+`ACTION_INDEX` stays first. The `order/` row hashes unchanged.
+
+**Client follow-up.** None. `checks/trading.js` judges an ORDER's own fields and never ranks
+candidate makers, so which resting order fills first is not a client verdict.
+
+**Direction: NEUTRAL for validity, outside every mapped row.** No `ACTIVATION_MIRRORS` row is added
+because no client predicate reads this gate. NO CLIENT CHECK MOVES.
 
 ### 2026-10-21 - AIRDROP_NATIVE_FEE_TALLY_ROLLBACK gate is wired into the AIRDROP fee tally (airdrop_native_fee_tally_rollback)
 

@@ -89,9 +89,12 @@ const registryEnv = {
     get XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION() { return sdkEnv.executeFeeCapRegtestActivation(); },
     get XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION() { return sdkEnv.voteV3TickExistenceRegtestActivation(); },
     get XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION() { return sdkEnv.matchOriginOpenRegtestActivation(); },
+    get XC_MATCH_EQUAL_PRICE_OLDEST_FIRST_REGTEST_ACTIVATION() { return sdkEnv.matchEqualPriceOldestFirstRegtestActivation(); },
     get XC_REASSEMBLE_CHUNK_PARENT_STATUS_REGTEST_ACTIVATION() { return sdkEnv.reassembleChunkParentStatusRegtestActivation(); },
     get XC_UNSTAKE_DELEGATED_ROW_JOURNAL_REGTEST_ACTIVATION() { return sdkEnv.unstakeDelegatedRowJournalRegtestActivation(); },
     get XC_ANCHOR_CHECKPOINT_SEQ_BIND_REGTEST_ACTIVATION() { return sdkEnv.anchorCheckpointSeqBindRegtestActivation(); },
+    get XC_DIVIDEND_EMPTY_ALLOW_LIST_DENIES_REGTEST_ACTIVATION() { return sdkEnv.dividendEmptyAllowListDeniesRegtestActivation(); },
+    get XC_AIRDROP_ZERO_LEGS_OMITTED_REGTEST_ACTIVATION() { return sdkEnv.airdropZeroLegsOmittedRegtestActivation(); },
 };
 
 const { registry } = core;
