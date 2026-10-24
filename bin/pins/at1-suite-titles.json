@@ -4499,6 +4499,12 @@
       "WalletUtils broadcastTx() should throw on empty txHex",
       "WalletUtils broadcastTx() should throw without encoder"
     ],
+    "8feff99698ef1ade": [
+      "fold wrapper explorer validator set does not fall back to validators when archive_validators is absent above the gate",
+      "fold wrapper explorer validator set keeps plain sections and pre-gate fold wrappers on validators",
+      "fold wrapper explorer validator set keeps the full pinned set and returns CHECKPOINT_QUORUM_FAILED instead of downgrading",
+      "fold wrapper explorer validator set uses archive_validators above the gate and keeps its cache entry distinct from a plain section"
+    ],
     "8f91f74f32bdd668": [
       "LIST TYPE=3 union item validation accepts exactly LIST_UNION_MAX_MEMBERS items",
       "LIST TYPE=3 union item validation accepts one or more positive action indexes",
@@ -7663,8 +7669,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 577,
-      "titleCount": 6076,
+      "fileCount": 578,
+      "titleCount": 6080,
       "files": {
         "test/unit/actions/action_roundtrip_golden.test.js": "0889dd14dd14af13",
         "test/unit/actions/actions.test.js": "e72dbd6bc6ac1b9a",
@@ -8111,6 +8117,7 @@
         "test/unit/protocol/light/light_anchor_v3.test.js": "8746fd5d70e8b944",
         "test/unit/protocol/light/light_client/fetch_helpers_basics.test.js": "7527234cd9171eda",
         "test/unit/protocol/light/light_client/fetch_helpers_io_and_identity.test.js": "9812b383ddfda228",
+        "test/unit/protocol/light/light_client/fold_wrapper_archive_set.test.js": "8feff99698ef1ade",
         "test/unit/protocol/list/list_item_validation.test.js": "dd791993a35153b4",
         "test/unit/protocol/list/list_meta_field_rules.test.js": "8927a0f21d80f57e",
         "test/unit/protocol/list/list_meta_rules.test.js": "e1ce1e45e8ef9dab",
@@ -8246,8 +8253,8 @@
       }
     },
     "test:all": {
-      "fileCount": 616,
-      "titleCount": 6405,
+      "fileCount": 617,
+      "titleCount": 6409,
       "files": {
         "test/boundary/boundary.test.js": "51c5d77e922af958",
         "test/boundary/boundary.test/01_tick_name_length_boundary.test.js": "2291494717b9aaab",
@@ -8733,6 +8740,7 @@
         "test/unit/protocol/light/light_anchor_v3.test.js": "8746fd5d70e8b944",
         "test/unit/protocol/light/light_client/fetch_helpers_basics.test.js": "7527234cd9171eda",
         "test/unit/protocol/light/light_client/fetch_helpers_io_and_identity.test.js": "9812b383ddfda228",
+        "test/unit/protocol/light/light_client/fold_wrapper_archive_set.test.js": "8feff99698ef1ade",
         "test/unit/protocol/list/list_item_validation.test.js": "dd791993a35153b4",
         "test/unit/protocol/list/list_meta_field_rules.test.js": "8927a0f21d80f57e",
         "test/unit/protocol/list/list_meta_rules.test.js": "e1ce1e45e8ef9dab",
