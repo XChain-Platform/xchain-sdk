@@ -237,6 +237,7 @@ var Config = {
         anchorCheckpointSeqBindRegtestActivation: () => process.env.XC_ANCHOR_CHECKPOINT_SEQ_BIND_REGTEST_ACTIVATION,
         dividendEmptyAllowListDeniesRegtestActivation: () => process.env.XC_DIVIDEND_EMPTY_ALLOW_LIST_DENIES_REGTEST_ACTIVATION,
         airdropZeroLegsOmittedRegtestActivation: () => process.env.XC_AIRDROP_ZERO_LEGS_OMITTED_REGTEST_ACTIVATION,
+        tickNormalizeRegtestActivation: () => process.env.XC_TICK_NORMALIZE_REGTEST_ACTIVATION,
     },
 
 }

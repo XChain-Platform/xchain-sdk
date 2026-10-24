@@ -95,6 +95,7 @@ const registryEnv = {
     get XC_ANCHOR_CHECKPOINT_SEQ_BIND_REGTEST_ACTIVATION() { return sdkEnv.anchorCheckpointSeqBindRegtestActivation(); },
     get XC_DIVIDEND_EMPTY_ALLOW_LIST_DENIES_REGTEST_ACTIVATION() { return sdkEnv.dividendEmptyAllowListDeniesRegtestActivation(); },
     get XC_AIRDROP_ZERO_LEGS_OMITTED_REGTEST_ACTIVATION() { return sdkEnv.airdropZeroLegsOmittedRegtestActivation(); },
+    get XC_TICK_NORMALIZE_REGTEST_ACTIVATION() { return sdkEnv.tickNormalizeRegtestActivation(); },
 };
 
 const { registry } = core;

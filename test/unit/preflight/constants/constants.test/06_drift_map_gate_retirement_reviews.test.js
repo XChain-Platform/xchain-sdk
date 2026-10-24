@@ -152,6 +152,26 @@ function notNullAmountWidthReview() {
     expect(entry).to.include('The anchor stays at `52a82367`.');
 }
 
+// The TICK_NORMALIZE gate re-pins issue ahead of indexer 32b4fa8f0; one ISSUE pre-flight warning
+// moves, and the ticker key widening stays outside every mapped row.
+function tickNormalizeReview() {
+    const text = fs.readFileSync(REAL_MAP, 'utf8');
+    expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/issue/').hash)
+        .to.equal('c7d81c143f4f1ad242c9266487ff726102b7e6444a8cea4b374214ebf4d7deed');
+    const heading = '### 2026-10-23 - ISSUE caret TICK ids must be canonical behind TICK_NORMALIZE';
+    expect(text).to.include(heading);
+    const entry = entryOf(text, heading).replace(/\s+/g, ' ');
+    expect(entry).to.include('The `issue` pin moves from `be5cd48c` to `c7d81c14`');
+    expect(entry).to.include('committed indexer lane tree `32b4fa8f0`');
+    expect(entry).to.include('cross-repo pairing exception');
+    expect(entry).to.include('tick_normalize_activation.TICK_NORMALIZE_ACTIVATION');
+    expect(entry).to.include('XC_TICK_NORMALIZE_REGTEST_ACTIVATION');
+    expect(entry).to.include('One client check moves.');
+    expect(entry).to.include('checks.test/19_issue_caret_tick_normalize.test.js');
+    expect(entry).to.include('**Direction: TIGHTENING at the gate height only.**');
+    expect(entry).to.include('The anchor stays at `52a82367`.');
+}
+
 describe('pre-flight constants + registry drift map (§8.5) gate retirement reviews', function () {
     it('pins and records the DISPENSER and DISPENSE amount positivity gate retirement review', dispenserPositivityReview);
     it('the live dispenser pin is the end of the review-log pin chain', dispenserPinChainEnd);
@@ -161,4 +181,5 @@ describe('pre-flight constants + registry drift map (§8.5) gate retirement revi
     it('pins and records the SEND, DESTROY and MINT gas balance read review', gasBalanceReadReview);
     it('pins and records the AIRDROP zero leg, DIVIDEND empty allow list and equal-price ORDER reviews', october23GatesReview);
     it('pins and records the SEND, DESTROY and STAKE NOT NULL amount width review', notNullAmountWidthReview);
+    it('pins and records the ISSUE caret TICK canonical id review', tickNormalizeReview);
 });
