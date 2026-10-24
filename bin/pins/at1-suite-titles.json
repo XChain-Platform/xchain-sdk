@@ -5371,22 +5371,6 @@
       "SPV Phase 4: sdk.light pure verifiers verifyContractStateProof REJECTS a proof for a different CONTRACT, and compares index as a string",
       "SPV Phase 4: sdk.light pure verifiers verifyContractStateProof REJECTS a valid proof for the key the double-decode would have produced"
     ],
-    "ad8057cc2b568464": [
-      "gate registry env view covers the regtest arming grammar arms anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION from XC_ANCHOR_STAKE_REGTEST_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar arms anchor_fold_activation.ANCHOR_FOLD_ACTIVATION from XC_ANCHOR_FOLD_REGTEST_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar arms anchor_reward_activation.ANCHOR_ATTEST_BARRIER_ACTIVATION from XC_MIRROR_ADMISSION_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar arms archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION from XC_ANCHOR_FOLD_REGTEST_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar arms mirror_admission_activation.MIRROR_ADMISSION_ACTIVATION from XC_MIRROR_ADMISSION_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar arms mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION from XC_MIRROR_ADMISSION_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar arms remote_token_admission_activation.REMOTE_TOKEN_ADMISSION_ACTIVATION from XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar arms rollcall_activation.ROLLCALL_ACTIVATION from XC_ROLLCALL_REGTEST_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar arms rollcall_gates_activation.ROLLCALL_GATES_ACTIVATION from XC_ROLLCALL_GATES_REGTEST_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar arms stake_weight_collation_activation.STAKE_WEIGHT_COLLATION_ACTIVATION from XC_ANCHOR_STAKE_REGTEST_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar enforces bundle order from the venue height on an armed regtest venue",
-      "gate registry env view covers the regtest arming grammar holds at least one armable row, so the sweep below checks something",
-      "gate registry env view covers the regtest arming grammar keeps the canonical shared row files byte-identical",
-      "gate registry env view covers the regtest arming grammar names a getter for every variable the arming grammar reads"
-    ],
     "ad9c0eb0a0cc2f29": [
       "Fuzz \u2013 Group 4: Unicode and special characters in MEMO Arabic '\u0645\u0631\u062d\u0628\u0627' \u2192 must not crash",
       "Fuzz \u2013 Group 4: Unicode and special characters in MEMO BOM character '\\uFEFFtest' \u2192 must not crash",
@@ -5662,6 +5646,23 @@
       "WalletUtils deriveMultisigAddress() should throw for unknown scheme",
       "WalletUtils deriveMultisigAddress() should throw with empty scriptTemplate",
       "WalletUtils deriveMultisigAddress() should throw without params"
+    ],
+    "b5cafa9661a5c2b3": [
+      "gate registry env view covers the regtest arming grammar arms anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION from XC_ANCHOR_STAKE_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms anchor_fold_activation.ANCHOR_FOLD_ACTIVATION from XC_ANCHOR_FOLD_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms anchor_reward_activation.ANCHOR_ATTEST_BARRIER_ACTIVATION from XC_MIRROR_ADMISSION_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION from XC_ANCHOR_FOLD_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms mirror_admission_activation.MIRROR_ADMISSION_ACTIVATION from XC_MIRROR_ADMISSION_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION from XC_MIRROR_ADMISSION_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms remote_token_admission_activation.REMOTE_TOKEN_ADMISSION_ACTIVATION from XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms rollcall_activation.ROLLCALL_ACTIVATION from XC_ROLLCALL_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms rollcall_gates_activation.ROLLCALL_GATES_ACTIVATION from XC_ROLLCALL_GATES_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms stake_weight_collation_activation.STAKE_WEIGHT_COLLATION_ACTIVATION from XC_ANCHOR_STAKE_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar enforces bundle order from the venue height on an armed regtest venue",
+      "gate registry env view covers the regtest arming grammar holds at least one armable row, so the sweep below checks something",
+      "gate registry env view covers the regtest arming grammar keeps the canonical shared row files byte-identical",
+      "gate registry env view covers the regtest arming grammar names a getter for every variable the arming grammar reads",
+      "gate registry env view covers the regtest arming grammar resolves the archive roll-call presence gate at the BTC snapshot block"
     ],
     "b6597e6fd59dcaba": [
       "VM Actions \u2013 DEPLOY creates DEPLOY with constructor params",
@@ -7663,7 +7664,7 @@
   "scripts": {
     "test": {
       "fileCount": 577,
-      "titleCount": 6075,
+      "titleCount": 6076,
       "files": {
         "test/unit/actions/action_roundtrip_golden.test.js": "0889dd14dd14af13",
         "test/unit/actions/actions.test.js": "e72dbd6bc6ac1b9a",
@@ -7861,7 +7862,7 @@
         "test/unit/consensus/checkpoint_commitment_twin_parity.test.js": "21a1db9c64f4b487",
         "test/unit/consensus/checkpoint_forged_set.test.js": "eec351b69296258e",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "f43abb21b1821af1",
-        "test/unit/consensus/gate_registry_env_coverage.test.js": "ad8057cc2b568464",
+        "test/unit/consensus/gate_registry_env_coverage.test.js": "b5cafa9661a5c2b3",
         "test/unit/consensus/merkle_twin_parity.test.js": "2699736e26aa9505",
         "test/unit/consensus/regtest_env_twin.test.js": "cbad35bf1daff99f",
         "test/unit/consensus/state_subtree_constants.test.js": "e596539159de9a25",
@@ -8246,7 +8247,7 @@
     },
     "test:all": {
       "fileCount": 616,
-      "titleCount": 6404,
+      "titleCount": 6405,
       "files": {
         "test/boundary/boundary.test.js": "51c5d77e922af958",
         "test/boundary/boundary.test/01_tick_name_length_boundary.test.js": "2291494717b9aaab",
@@ -8484,7 +8485,7 @@
         "test/unit/consensus/checkpoint_commitment_twin_parity.test.js": "21a1db9c64f4b487",
         "test/unit/consensus/checkpoint_forged_set.test.js": "eec351b69296258e",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "f43abb21b1821af1",
-        "test/unit/consensus/gate_registry_env_coverage.test.js": "ad8057cc2b568464",
+        "test/unit/consensus/gate_registry_env_coverage.test.js": "b5cafa9661a5c2b3",
         "test/unit/consensus/merkle_twin_parity.test.js": "2699736e26aa9505",
         "test/unit/consensus/regtest_env_twin.test.js": "cbad35bf1daff99f",
         "test/unit/consensus/state_subtree_constants.test.js": "e596539159de9a25",

@@ -81,4 +81,11 @@ describe('gate registry env view covers the regtest arming grammar', function ()
         });
         withEnv(STAKE_ENV, undefined, () => assert.strictEqual(gates.get(BUNDLE_ORDER).regtest, 0));
     });
+
+    it('resolves the archive roll-call presence gate at the BTC snapshot block', function () {
+        const key = 'archive_rollcall_presence_activation.ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION';
+        assert.strictEqual(gates.activeAt(key, 'regtest', 'BTC', 0, null), true);
+        assert.strictEqual(gates.activeAt(key, 'testnet', 'BTC', 9999999998, null), false);
+        assert.strictEqual(gates.activeAt(key, 'mainnet', 'BTC', 9999999999, null), false);
+    });
 });
