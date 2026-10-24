@@ -382,6 +382,11 @@
       "derivation FAMILY_SLIP44 shape and values has exactly the BTC/LTC/DOGE coin families",
       "derivation FAMILY_SLIP44 shape and values pins the registered mainnet SLIP-44 coin types"
     ],
+    "0a88424ec2697c4d": [
+      "fold wrapper archive predicate @regression @tier1 keeps folded and plain checkpoints at one height in separate cache entries",
+      "fold wrapper archive predicate @regression @tier1 reuses one cache entry for two plain checkpoints at one height",
+      "fold wrapper archive predicate @regression @tier1 uses the archive set only for a fold wrapper above both gates"
+    ],
     "0a90643634e1c034": [
       "EncoderClient HTTPS base URL builds client with https agent when url starts with https"
     ],
@@ -7669,8 +7674,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 578,
-      "titleCount": 6080,
+      "fileCount": 579,
+      "titleCount": 6083,
       "files": {
         "test/unit/actions/action_roundtrip_golden.test.js": "0889dd14dd14af13",
         "test/unit/actions/actions.test.js": "e72dbd6bc6ac1b9a",
@@ -8117,6 +8122,7 @@
         "test/unit/protocol/light/light_anchor_v3.test.js": "8746fd5d70e8b944",
         "test/unit/protocol/light/light_client/fetch_helpers_basics.test.js": "7527234cd9171eda",
         "test/unit/protocol/light/light_client/fetch_helpers_io_and_identity.test.js": "9812b383ddfda228",
+        "test/unit/protocol/light/light_client/fold_wrapper_archive_predicate.test.js": "0a88424ec2697c4d",
         "test/unit/protocol/light/light_client/fold_wrapper_archive_set.test.js": "8feff99698ef1ade",
         "test/unit/protocol/list/list_item_validation.test.js": "dd791993a35153b4",
         "test/unit/protocol/list/list_meta_field_rules.test.js": "8927a0f21d80f57e",
@@ -8253,8 +8259,8 @@
       }
     },
     "test:all": {
-      "fileCount": 617,
-      "titleCount": 6409,
+      "fileCount": 618,
+      "titleCount": 6412,
       "files": {
         "test/boundary/boundary.test.js": "51c5d77e922af958",
         "test/boundary/boundary.test/01_tick_name_length_boundary.test.js": "2291494717b9aaab",
@@ -8740,6 +8746,7 @@
         "test/unit/protocol/light/light_anchor_v3.test.js": "8746fd5d70e8b944",
         "test/unit/protocol/light/light_client/fetch_helpers_basics.test.js": "7527234cd9171eda",
         "test/unit/protocol/light/light_client/fetch_helpers_io_and_identity.test.js": "9812b383ddfda228",
+        "test/unit/protocol/light/light_client/fold_wrapper_archive_predicate.test.js": "0a88424ec2697c4d",
         "test/unit/protocol/light/light_client/fold_wrapper_archive_set.test.js": "8feff99698ef1ade",
         "test/unit/protocol/list/list_item_validation.test.js": "dd791993a35153b4",
         "test/unit/protocol/list/list_meta_field_rules.test.js": "8927a0f21d80f57e",

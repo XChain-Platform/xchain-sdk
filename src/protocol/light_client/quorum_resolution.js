@@ -38,6 +38,7 @@
 
 const checkpoint = require('../../checkpoint.js');
 const gateRegistry = require('../../consensus/gate_registry');
+const { isStakeWeightedQuorumActive } = require('../../consensus/stake_weighted_quorum.js');
 const { sameWireIndex } = require('../../utils/wire_index.js');
 const { baseUrl, fetchJson, pinnedEntry, lowerHex } = require('./fetch_helpers.js');
 const { followForward } = require('./validator_set_follow.js');
@@ -67,26 +68,28 @@ const validatorSetCache = new Map();
 // without restarting the process.
 function clearValidatorSetCache(){ validatorSetCache.clear(); }
 
+function usesArchiveSet(cp){
+    return cp != null && cp.fold_archive != null
+        && gateRegistry.activeAt(ARCHIVE_ROLLCALL_PRESENCE_KEY,
+            String(cp.network), 'BTC', Number(cp.snapshot_block), null)
+        && isStakeWeightedQuorumActive(Number(cp.snapshot_block), String(cp.network));
+}
+
 // Tier 3 of the ladder on its own: ask the explorer which set qualifies for `cp`
 // under the coin prefix `coin`. Trusts the explorer for the SET only; the caller
 // still checks signatures and quorum locally. Transport failures throw.
 //
 // Cached by PROMISE so concurrent callers at one key (the wallet fans proof
 // jobs through a pool of 6) share one in-flight read instead of each firing a
-// request; a rejected fetch is evicted immediately so a blip is not pinned. A fold
-// wrapper uses the archive_publish snapshot the explorer returns as
-// archive_validators once the archive presence gate is active at snapshot_block.
-// Plain sections and pre-gate wrappers keep the oracle_publish validators field.
+// request; a rejected fetch is evicted immediately so a blip is not pinned.
 async function explorerValidators(f, explorerUrl, coin, cp){
-    const archive = cp.fold_archive != null && gateRegistry.activeAt(ARCHIVE_ROLLCALL_PRESENCE_KEY,
-        String(cp.network), 'BTC', Number(cp.snapshot_block), null);
-    const field = archive ? 'archive_validators' : 'validators';
-    const key = baseUrl(explorerUrl) + '|' + String(coin) + '|' + String(cp.block_index) + '|' + field;
+    const key = baseUrl(explorerUrl) + '|' + String(coin) + '|' + String(cp.block_index)
+        + (usesArchiveSet(cp) ? '|archive' : '');
     const cached = validatorSetCache.get(key);
     if (cached) return cached;
     const url = baseUrl(explorerUrl) + '/' + encodeURIComponent(String(coin)) +
                 '/api/checkpoint/' + encodeURIComponent(String(cp.block_index)) + '/verify';
-    const p = fetchJson(f, url).then((vb) => (vb && vb[field]) || []);
+    const p = fetchJson(f, url).then((vb) => (vb && vb.validators) || []);
     p.catch(() => { validatorSetCache.delete(key); });
     if (validatorSetCache.size >= VALIDATOR_SET_CACHE_MAX){
         const oldestKey = validatorSetCache.keys().next().value;
@@ -163,4 +166,5 @@ async function resolveValidatorSet(f, opts, cp, coin){
     return explorerValidators(f, opts.explorerUrl, coin, cp);
 }
 
-module.exports = { verifyQuorum, VALIDATOR_SET_CACHE_MAX, validatorSetCache, clearValidatorSetCache, explorerValidators, resolveQuorum, resolveValidatorSet };
+module.exports = { verifyQuorum, VALIDATOR_SET_CACHE_MAX, validatorSetCache, clearValidatorSetCache,
+    usesArchiveSet, explorerValidators, resolveQuorum, resolveValidatorSet };
