@@ -540,8 +540,8 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `6bd08ac469d8a2ae2981e830a5278d5859786e86e5dd0a00113aee38f6a36302` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `56a05750c8fc2eed6162b67a9202c54b9274effa46665bdea8bf702fe1d6f0e3` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `82c771685496157da6cd9beae176df3e7cd50fd25fa4dcbe0ad05c5e34579eb6` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40` |
 | `checks/mint.js` | `src/actions/mint/` | `998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48` |
 | `checks/issue.js` | `src/actions/issue/` | `be5cd48c5d4aef365358cc296fa56b8621f8a627a09e0623d3c79e259e210762` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `3c0163d61230bbc249606f41d92786eb2016b43664dba71b55e78e8ef2ad4907` |
@@ -554,7 +554,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f` |
 | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35` |
 | `universal.js` (PRICE v1 TICK) | `src/actions/price/` | `9028c8c24931681e005828b46a76faa7e6688c1875dfd11e554fcc79b50d2781` |
-| `checks/misc.js` (STAKE) | `src/actions/stake/` | `eef1360e9bfa8e5ad2b1e7479cf286669f44b9ac3115701b1ac1a101fd9011a3` |
+| `checks/misc.js` (STAKE) | `src/actions/stake/` | `b38ea784128e91c87c0df0200696d2b0bac25105477c9111d929a420f30e6afc` |
 | `universal.js` (BET halt field) | `src/actions/bet/` | `59ff86ee4bed61d0ca958c588558b106ced395eb2a9605f6ec2679fe58adac98` |
 
 The mapped custody disclosures are checks/misc.js (DEPOSIT) and
@@ -577,6 +577,50 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-23 - SEND, DESTROY and STAKE refuse amounts their NOT NULL row columns cannot store
+
+The `send` pin moves from `6bd08ac4` to `82c77168`, the `destroy` pin from `56a05750` to
+`f6423fc8` and the `stake` pin from `eef1360e` to `b38ea784`, hashed from the committed indexer
+lane tree `dc4e4544f`, one commit ahead of indexer `origin/develop`, by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/<name>/`. The cross-repo pairing
+exception above the anchor applies: the pins match the indexer change that lands with them, not
+the anchor below, and the lander re-hashes the three directories at the landed commit. No gate:
+every refusal holds at every height on every network. The mapped diff is seven changed lines.
+
+- **SEND and DESTROY:** `send/legs.js` (the leg merge and the gated totals) and `destroy/legs.js` (the leg merge) call the new `isValidAmountMergeFormat`, which is the previous `isValidAmountFormat` body. `isValidAmountFormat` itself, which `send/validate.js` and `destroy/validate.js` apply to each consolidated leg, now first refuses an amount wider than 250 characters (`utility/validation/amount_validation.js`). A leg therefore merges exactly as before: a leg that shares its `destination|tick` (SEND) or `tick|memo` (DESTROY) key with a sibling is summed by `bcadd` to tick-precision text and stays valid even when its own text was wider than 250 characters, and only a leg alone on its key reaches the validator with its raw text and is refused `invalid: AMOUNT (format)`. Before the change that leg stopped the block at the row write on a strict server.
+- **STAKE:** `stake/capability_stake.js` (formats 1 and 2) and `stake/contract_stake.js` (format 3) refuse an AMOUNT for which `storesAsNull` answers true, which now includes text wider than the VARCHAR(250) amount column, as `invalid: AMOUNT (format)` ahead of the shape check. An empty SIGNING_PUBKEY was already refused `invalid: SIGNING_PUBKEY (required)`; its row now stores the placeholder pubkey id 0 (`db/stakes/stake_records.js`, `db/contracts/stakes.js`) where it bound NULL, so the stored row changes and the verdict does not. The `capability_stake.js` comment says so.
+
+The same commit refuses an overlong poll DEPOSIT or GAS_ESCROW in `vote/index.js`, bounds a DEPLOY
+v4 CHUNK_INDEX and TOTAL_CHUNKS to the INT UNSIGNED range in `deploy/deploy_chunk/settle.js`, and
+writes `'0'` for an invalid row's overlong decimal text in `db/database/normalize.js`; `vote/`,
+`deploy/`, `db/` and `utility/` sit outside every mapped row. Two of its `utility/` changes reach
+mapped rows whose hashes do not move, so the gate cannot see them: `storesAsNull` now refuses a
+`0x`, `0b` or `0o` index spelling and an amount wider than 250 characters, and
+`exceedsUnsignedColumn` now refuses a non-literal value at or past the u64 ceiling plus one half.
+`order/`, `swap/`, `dispenser/`, `bet/`, `deposit.js` and `withdraw.js` read them. Today the SDK
+pre-flight raises no error on `ORDER|1|0x10|m`, `SWAP|1|0o7|m`, `BET|2|0x1|0|5|m` or
+`ORDER|1|18446744073709551615.6|m`, nor on a DEPOSIT or WITHDRAW AMOUNT wider than 250 characters,
+and the "byte-for-byte the indexer's exceedsUnsignedColumn" claim in `numeric.js` no longer holds
+against `dc4e4544f`. These are a follow-up for those rows, not a move made here.
+
+**Client follow-up.** For STAKE, one client check moves: `checks/misc.js` now refuses, on every
+STAKE format, an AMOUNT wider than 250 characters (counted as the indexer counts it) as a
+non-overridable AMOUNT_FORMAT_INVALID error naming `invalid: AMOUNT (format)`, and skips the
+capability balance check for that amount (`checks.test/18_stake_amount_column_width.test.js`). The
+pre-flight accepted such an amount before, and a node without this commit halts on it. The empty
+SIGNING_PUBKEY needs nothing new: `universal/halt_fields.js` already refuses it on formats 1, 2
+and 3 as a non-overridable halt-class finding, which stays until every node runs this commit. For
+SEND and DESTROY, NO CLIENT CHECK MOVES: `checkLegAmountFormat` in `checks/send.js` already judges
+each raw leg with the two-argument rule `isValidAmountMergeFormat` keeps, and a per-leg width
+refusal would false-block a wide leg that merges with a sibling, which the indexer settles valid
+(its tests `merges a storable SEND total formed from an overlong leading-zero leg` and the DESTROY
+twin). An exact mirror needs the indexer's merge keys and `bcadd` formatting, so a lone leg padded
+with leading zeros past 250 characters stays a server-side refusal; a leg with more than 250
+significant digits already fails the balance check wherever the balance is readable.
+
+**Direction: WIDENS rejection of malformed wire input, no activation row.** Each new refusal
+replaces a halt at the row write, so no committed outcome changes. The anchor stays at `52a82367`.
 
 ### 2026-10-23 - AIRDROP_ZERO_LEGS_OMITTED gate is wired into the AIRDROP settlement (airdrop_zero_legs_omitted)
 

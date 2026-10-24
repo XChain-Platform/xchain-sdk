@@ -53,7 +53,7 @@ function airdropFeeTallyReview() {
 function sendHandoffRetirementReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/send/').hash)
-        .to.equal('6bd08ac469d8a2ae2981e830a5278d5859786e86e5dd0a00113aee38f6a36302');
+        .to.equal('82c771685496157da6cd9beae176df3e7cd50fd25fa4dcbe0ad05c5e34579eb6');
     const heading = '### 2026-10-18 - GATED_HANDOFF_REF gate is retired';
     expect(text).to.include(heading);
     expect(entryOf(text, heading)).to.include('**Direction: NEUTRAL.**');
@@ -83,8 +83,8 @@ function gasBalanceReadReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     const rows = parseMap(REAL_MAP);
     const moves = [
-        ['send', '`ee30f903` to `0cbeede9`', '6bd08ac469d8a2ae2981e830a5278d5859786e86e5dd0a00113aee38f6a36302'],
-        ['destroy', '`597c2728` to `b172b6cc`', '56a05750c8fc2eed6162b67a9202c54b9274effa46665bdea8bf702fe1d6f0e3'],
+        ['send', '`ee30f903` to `0cbeede9`', '82c771685496157da6cd9beae176df3e7cd50fd25fa4dcbe0ad05c5e34579eb6'],
+        ['destroy', '`597c2728` to `b172b6cc`', 'f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40'],
         ['mint', '`f69fdb91` to `998c2d88`', '998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48']
     ];
     const heading = '### 2026-10-20 - SEND, DESTROY and MINT read only the gas token\'s balance';
@@ -127,6 +127,31 @@ function october23GatesReview() {
     }
 }
 
+// The NOT NULL follow-up re-pins send, destroy and stake ahead of indexer dc4e4544f; one STAKE
+// check moves, and the SEND and DESTROY legs stay with the server.
+function notNullAmountWidthReview() {
+    const text = fs.readFileSync(REAL_MAP, 'utf8');
+    const rows = parseMap(REAL_MAP);
+    const moves = [
+        ['send', '`6bd08ac4` to `82c77168`', '82c771685496157da6cd9beae176df3e7cd50fd25fa4dcbe0ad05c5e34579eb6'],
+        ['destroy', '`56a05750` to `f6423fc8`', 'f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40'],
+        ['stake', '`eef1360e` to `b38ea784`', 'b38ea784128e91c87c0df0200696d2b0bac25105477c9111d929a420f30e6afc'],
+    ];
+    const heading = '### 2026-10-23 - SEND, DESTROY and STAKE refuse amounts their NOT NULL row columns cannot store';
+    expect(text).to.include(heading);
+    const entry = entryOf(text, heading).replace(/\s+/g, ' ');
+    for (const [name, move, hash] of moves) {
+        expect(rows.find((r) => r.handler === 'src/actions/' + name + '/').hash, name).to.equal(hash);
+        expect(entry).to.match(new RegExp('`' + name + '` pin (moves )?from ' + move));
+    }
+    expect(entry).to.include('committed indexer lane tree `dc4e4544f`');
+    expect(entry).to.include('cross-repo pairing exception');
+    expect(entry).to.include('**Direction: WIDENS rejection of malformed wire input, no activation row.**');
+    expect(entry).to.include('For SEND and DESTROY, NO CLIENT CHECK MOVES');
+    expect(entry).to.include('checks.test/18_stake_amount_column_width.test.js');
+    expect(entry).to.include('The anchor stays at `52a82367`.');
+}
+
 describe('pre-flight constants + registry drift map (§8.5) gate retirement reviews', function () {
     it('pins and records the DISPENSER and DISPENSE amount positivity gate retirement review', dispenserPositivityReview);
     it('the live dispenser pin is the end of the review-log pin chain', dispenserPinChainEnd);
@@ -135,4 +160,5 @@ describe('pre-flight constants + registry drift map (§8.5) gate retirement revi
     it('pins and records the BATCH probe sub-verdict match snapshot review', batchSnapshotReviews);
     it('pins and records the SEND, DESTROY and MINT gas balance read review', gasBalanceReadReview);
     it('pins and records the AIRDROP zero leg, DIVIDEND empty allow list and equal-price ORDER reviews', october23GatesReview);
+    it('pins and records the SEND, DESTROY and STAKE NOT NULL amount width review', notNullAmountWidthReview);
 });

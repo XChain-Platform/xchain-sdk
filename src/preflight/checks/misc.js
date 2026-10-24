@@ -20,9 +20,10 @@
  * state aspects surface as `unverified` - degraded but honest, and
  * incapable of a false hard-block by construction. Tier 1 covers the
  * quotable subset authoritatively. Dedicated modules land as their
- * matrix rows harden (§4.4 remains the roadmap). One rule is judged here
- * rather than declared: a capability STAKE's gas-token balance, which the
- * explorer serves and the handler refuses on without any activation.
+ * matrix rows harden (§4.4 remains the roadmap). Two STAKE rules are judged
+ * here rather than declared: the AMOUNT width every format's row column holds,
+ * and a capability STAKE's gas-token balance, which the explorer serves; the
+ * handler refuses on each without any activation.
  *
  ********************************************************************/
 
@@ -31,6 +32,28 @@
 const { FINDING_CODES } = require('../constants.js');
 const numeric = require('../numeric.js');
 const { GAS_TICK } = require('../../protocol/constants.js');
+
+// stakes.amount and contract_stakes.amount are VARCHAR(250). Every STAKE format refuses an
+// AMOUNT wider than that as 'invalid: AMOUNT (format)' through storesAsNull, ahead of its
+// shape check and with no activation (xchain-indexer src/actions/stake/capability_stake.js
+// validateCapabilityWire, contract_stake.js validateStakeAmount); a node without that
+// refusal stops at the row write on a strict server. Counted in characters, as the indexer
+// counts it, so a leading-zero padded amount is refused even though its value is small.
+const STAKE_AMOUNT_MAX_CHARS = 250;
+
+// Returns true when it raised, so the balance check does not judge an amount already refused.
+function checkStakeAmountWidth(ctx) {
+    ctx.markRun(FINDING_CODES.AMOUNT_FORMAT_INVALID);
+    const amount = ctx.field('AMOUNT');
+    if (amount === '' || Array.isArray(amount)) return false;
+    const width = Array.from(amount).length;
+    if (width <= STAKE_AMOUNT_MAX_CHARS) return false;
+    ctx.addFinding(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'error',
+        `AMOUNT is ${width} characters, wider than the ${STAKE_AMOUNT_MAX_CHARS}-character stake amount `
+        + 'column; the indexer rejects this STAKE as invalid: AMOUNT (format).',
+        { field: 'AMOUNT', width, limit: STAKE_AMOUNT_MAX_CHARS });
+    return true;
+}
 
 // A capability STAKE (formats 1 and 2) escrows AMOUNT of the gas token, and the indexer
 // refuses one the source's balance does not cover, once the gas token exists
@@ -103,7 +126,7 @@ const LIST_SET_META_NOTE = 'A LIST SET META (format 5) on a shared list is charg
 
 async function checkMisc(ctx) {
     const action = ctx.parsed.action;
-    if (action === 'STAKE') await checkCapabilityStakeBalance(ctx);
+    if (action === 'STAKE' && !checkStakeAmountWidth(ctx)) await checkCapabilityStakeBalance(ctx);
     if (Object.prototype.hasOwnProperty.call(ASPECT_NOTES, action) && ASPECT_NOTES[action] === null) return;
     const note = ASPECT_NOTES[action];
     if (note) ctx.addUnverified(action + '_STATE', note);
@@ -113,4 +136,4 @@ async function checkMisc(ctx) {
     }
 }
 
-module.exports = { checkMisc, ASPECT_NOTES, LIST_SET_META_NOTE };
+module.exports = { checkMisc, ASPECT_NOTES, LIST_SET_META_NOTE, STAKE_AMOUNT_MAX_CHARS };
