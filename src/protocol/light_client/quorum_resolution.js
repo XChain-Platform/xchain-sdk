@@ -90,8 +90,7 @@ async function explorerValidators(f, explorerUrl, coin, cp){
     if (cached) return cached;
     const url = baseUrl(explorerUrl) + '/' + encodeURIComponent(String(coin)) +
                 '/api/checkpoint/' + encodeURIComponent(String(cp.block_index)) + '/verify';
-    const field = archive ? ['archive', 'validators'].join('_') : 'validators';
-    const p = fetchJson(f, url).then((vb) => (vb && vb[field]) || []);
+    const p = fetchJson(f, url).then((vb) => (vb && vb.validators) || []);
     p.catch(() => { validatorSetCache.delete(key); });
     if (validatorSetCache.size >= VALIDATOR_SET_CACHE_MAX){
         const oldestKey = validatorSetCache.keys().next().value;

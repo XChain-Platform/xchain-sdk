@@ -68,7 +68,7 @@ describe('fold wrapper archive predicate @regression @tier1', function () {
         const foldedValidators = [{ pubkey: 'folded' }];
         const plainValidators = [{ pubkey: 'plain' }];
         const fetchImpl = countingFetch([
-            { archive_validators: foldedValidators },
+            { validators: foldedValidators },
             { validators: plainValidators }
         ], calls);
         const folded = checkpoint();
