@@ -10,11 +10,9 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-// The explorer verify endpoint says whether a checkpointed height sits inside an
-// open retroactive replay window (`final`). The SDK must carry that answer through
-// to its caller rather than drop it, so a light client can tell a checkpoint that
-// may still be superseded from one that is settled. Signature validity and finality
-// are independent: a well-signed checkpoint inside the window is valid and not final.
+// The SDK passes the verify endpoint's `final` through, so a light client can tell a
+// checkpoint inside an open retroactive replay window from a settled one. Finality is
+// independent of signatures: a well-signed checkpoint inside the window is not final.
 
 const assert = require('assert');
 const crypto = require('crypto');

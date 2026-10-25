@@ -230,17 +230,12 @@ function suppliedValidators(opts){
 // Judge a verify-endpoint body against the supplied set, else the served one.
 // Only a supplied set anchors the verdict: the served set comes from the same
 // response as the checkpoint, so it proves only that the served signers signed.
-//
-// `final` is the explorer's word on whether the height sits inside an open
-// retroactive replay window: false while a replay at or below it is pending or
-// running (the row may still be superseded), true once replayed or when none is
-// open. The field is absent only from an explorer that predates it and so cannot
-// report a window; absent keeps the meaning every checkpoint had before the field
-// existed and reads as true. Any other value that is not true is not final.
 function verifyServedCheckpoint(body, supplied){
     let set = supplied !== null ? supplied : (body.validators || []);
     let result = verifyCheckpoint(body.checkpoint, set);
     return Object.assign({ checkpoint: body.checkpoint, snapshotAvailable: !!body.snapshot_available,
+        // False inside an open retroactive replay window, true once replayed. Only an
+        // explorer that predates the field omits it, so absent reads as true.
         final: body.final === undefined ? true : body.final === true,
         validatorSource: supplied !== null ? 'supplied' : 'explorer' }, result);
 }
