@@ -88,4 +88,11 @@ describe('gate registry env view covers the regtest arming grammar', function ()
         assert.strictEqual(gates.activeAt(key, 'testnet', 'BTC', 9999999998, null), false);
         assert.strictEqual(gates.activeAt(key, 'mainnet', 'BTC', 9999999999, null), false);
     });
+
+    it('resolves the checkpoint supersede gate at the BTC snapshot block', function () {
+        const key = 'checkpoint_supersede_activation.CHECKPOINT_SUPERSEDE_ACTIVATION';
+        assert.strictEqual(gates.activeAt(key, 'regtest', 'BTC', 0, null), true);
+        assert.strictEqual(gates.activeAt(key, 'testnet', 'BTC', 9999999998, null), false);
+        assert.strictEqual(gates.activeAt(key, 'mainnet', 'BTC', 9999999999, null), false);
+    });
 });
