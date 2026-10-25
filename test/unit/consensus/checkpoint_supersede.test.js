@@ -115,7 +115,9 @@ describe('checkpoint supersede integration @regression @tier1', function () {
         assert.strictEqual(allowed.verified, true);
         assert.strictEqual(allowed.superseded_by_seq, 130);
     });
+});
 
+describe('checkpoint supersede compatibility @regression @tier1', function () {
     it('keeps plain checkpoint canonical bytes and verification unchanged', async function () {
         const key = makeKeypair();
         const cp = {

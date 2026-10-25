@@ -291,6 +291,14 @@ function verifyAnchoredCheckpoint(opts){
     return Object.assign({ verified: true, reason: null }, base);
 }
 
+function anchoredCheckpointRows(body, targetChain){
+    const rows = Array.isArray(body) ? body : ((body && (body.data || body.results || body.rows)) || []);
+    const matching = rows.filter(r => r && isCheckpointSectionRow(r, r.block_index_doge) && r.state_root &&
+        String(r.chain).toUpperCase() === String(targetChain).toUpperCase());
+    matching.sort((a, b) => Number(b.checkpoint_seq) - Number(a.checkpoint_seq));
+    return matching;
+}
+
 // Convenience: fetch the latest root-bearing ANCHOR section for `targetChain` from the
 // DOGE explorer, confirm its DOGE depth (caller supplies the tip via dogeTipHeight or
 // getDogeTipHeight), and verify it. Anchors are DOGE-only, so the list is served by the
@@ -323,15 +331,12 @@ async function fetchAnchoredCheckpoint(opts){
     const url = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(dogeCoin)) +
                 '/api/anchors/' + encodeURIComponent(String(opts.targetChain)) + '/chain';
     const body = await fetchJson(f, url);
-    let rows = Array.isArray(body) ? body : ((body && (body.data || body.results || body.rows)) || []);
     // Checkpoint section rows only: v0, and fold v3 at/above ANCHOR_FOLD at the row's DOGE
     // height. v1 (archive head) and v2 (chunk) carry no SPV checkpoint and are skipped,
     // as is any pre-launch retired per-chain shape, by version rather than by root
     // presence, so a replayed pre-launch anchor cannot serve as a trust root; the
     // state_root check still guards a malformed section.
-    rows = rows.filter(r => r && isCheckpointSectionRow(r, r.block_index_doge) && r.state_root &&
-                            String(r.chain).toUpperCase() === String(opts.targetChain).toUpperCase());
-    rows.sort((a, b) => Number(b.checkpoint_seq) - Number(a.checkpoint_seq));   // newest checkpoint first
+    const rows = anchoredCheckpointRows(body, opts.targetChain);
     if (!rows.length)
         return { verified: false, reason: 'NO_ROOT_ANCHOR', checkpoint: null, anchor: null, dogeTxid: null, confirmations: 0, minDepth, quorum: null, weighted: null };
     const rec = rows[0];
@@ -364,17 +369,6 @@ async function fetchAnchoredCheckpoint(opts){
     // A v3 list row never carries its wrapper fold; it lives on the action's archive row.
     if (Number(rec.version) === ANCHOR_FOLD_VERSION && !cp.fold_archive)
         await attachFoldArchiveFromExplorer(f, opts, dogeCoin, rec, cp);
-    // Resolve the signer set through the SAME ladder every other network entry
-    // point uses. Handing verifyAnchoredCheckpoint `opts.validators` raw meant a
-    // caller that supplied none was verified against an empty set, which reads as
-    // quorum 1 and fails a checkpoint the explorer's own set clears 4-of-5.
-    //
-    // The ladder keys on `targetCoin`, not the DOGE coin above: the anchor is read
-    // off DOGE, but the checkpoint inside it belongs to the target chain, so the
-    // pinned lookup and the /verify URL must both name the TARGET chain's explorer
-    // coin prefix. Nothing maps a chain plus network back to a coin, so with no
-    // explicit set, nothing pinned and no targetCoin, the set stays null and the
-    // call fails closed on quorum rather than guessing a prefix from the chain name.
     const targetCoin = (opts.targetCoin == null || String(opts.targetCoin) === '') ? null : opts.targetCoin;
     const validators = await resolveValidatorSet(f, opts, cp, targetCoin);
     const res = verifyAnchoredCheckpoint({ checkpoint: cp, validators, confirmations, minDepth });
