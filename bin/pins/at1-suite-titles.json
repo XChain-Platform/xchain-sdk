@@ -1622,6 +1622,13 @@
       "LIST union and legacy validation through createAction refuses non-positive, non-integer, referenced, and duplicate TYPE 3 members",
       "LIST union and legacy validation through createAction requires one through sixteen ITEM values for TYPE 3 creates"
     ],
+    "3142329f13f44982": [
+      "checkpoint supersession @regression @tier1 allows superseded rows only when requested and accepts current rows",
+      "checkpoint supersession @regression @tier1 exports the stable refusal reason",
+      "checkpoint supersession @regression @tier1 maps absent and null supersession fields to null",
+      "checkpoint supersession @regression @tier1 normalizes string fields from explorer JSON without mutating the row",
+      "checkpoint supersession @regression @tier1 refuses a superseded row when opts is missing without mutating it"
+    ],
     "3151828024be21f7": [
       "custody handler map rows accepts pins matching the bytes of both flat handlers",
       "custody handler map rows keeps the exact custody labels in the first table cell",
@@ -7669,8 +7676,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 578,
-      "titleCount": 6080,
+      "fileCount": 579,
+      "titleCount": 6085,
       "files": {
         "test/unit/actions/action_roundtrip_golden.test.js": "0889dd14dd14af13",
         "test/unit/actions/actions.test.js": "e72dbd6bc6ac1b9a",
@@ -8115,6 +8122,7 @@
         "test/unit/protocol/light/light.test/anchor_v3_bundle_order.test.js": "567b49dd3d5eae61",
         "test/unit/protocol/light/light.test/chain_qualified_anchor_gates.test.js": "c2f27b76bd90ffcd",
         "test/unit/protocol/light/light_anchor_v3.test.js": "8746fd5d70e8b944",
+        "test/unit/protocol/light/light_client/checkpoint_supersession.test.js": "3142329f13f44982",
         "test/unit/protocol/light/light_client/fetch_helpers_basics.test.js": "7527234cd9171eda",
         "test/unit/protocol/light/light_client/fetch_helpers_io_and_identity.test.js": "9812b383ddfda228",
         "test/unit/protocol/light/light_client/fold_wrapper_archive_set.test.js": "8feff99698ef1ade",
@@ -8253,8 +8261,8 @@
       }
     },
     "test:all": {
-      "fileCount": 617,
-      "titleCount": 6409,
+      "fileCount": 618,
+      "titleCount": 6414,
       "files": {
         "test/boundary/boundary.test.js": "51c5d77e922af958",
         "test/boundary/boundary.test/01_tick_name_length_boundary.test.js": "2291494717b9aaab",
@@ -8738,6 +8746,7 @@
         "test/unit/protocol/light/light.test/anchor_v3_bundle_order.test.js": "567b49dd3d5eae61",
         "test/unit/protocol/light/light.test/chain_qualified_anchor_gates.test.js": "c2f27b76bd90ffcd",
         "test/unit/protocol/light/light_anchor_v3.test.js": "8746fd5d70e8b944",
+        "test/unit/protocol/light/light_client/checkpoint_supersession.test.js": "3142329f13f44982",
         "test/unit/protocol/light/light_client/fetch_helpers_basics.test.js": "7527234cd9171eda",
         "test/unit/protocol/light/light_client/fetch_helpers_io_and_identity.test.js": "9812b383ddfda228",
         "test/unit/protocol/light/light_client/fold_wrapper_archive_set.test.js": "8feff99698ef1ade",
