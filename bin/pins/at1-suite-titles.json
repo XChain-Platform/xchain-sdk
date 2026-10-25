@@ -266,11 +266,6 @@
       "BATCH limit-scan conformance (SDK mirror vs arbiter) weight conformance (BATCH_COST_WEIGHTING) SDK half reports a weight overflow as a whole-batch COMMAND limit that names its flag",
       "BATCH limit-scan conformance (SDK mirror vs arbiter) weight conformance (BATCH_COST_WEIGHTING) SDK half the carrier discount does not leak to its companions: one EXECUTE among them still counts 30"
     ],
-    "082323fc997edc0e": [
-      "bin/sync-templates (static contract) is syntactically valid JavaScript (compiles without executing)",
-      "bin/sync-templates (static contract) performs no network I/O (template sync is offline)",
-      "bin/sync-templates (static contract) reads template sources and writes a rendered module"
-    ],
     "0889dd14dd14af13": [
       "Action round-trip golden \u2013 SDK encoder byte-layout contract SDK encoder serializes each input to the exact golden wire string ADDRESS v0: createAction() -> canonical wire",
       "Action round-trip golden \u2013 SDK encoder byte-layout contract SDK encoder serializes each input to the exact golden wire string BROADCAST v0: createAction() -> canonical wire",
@@ -487,6 +482,15 @@
       "x402 X402Client resume re-presents the existing payment without calling session.send again (no double-pay)",
       "x402 X402Client signs the invoice for a requireSignature send offer and the gateway accepts it end-to-end",
       "x402 X402Client surfaces X402_PAYMENT_AMBIGUOUS carrying the txid after maxRetries (no silent re-pay)"
+    ],
+    "0ff4b03077a6b5c4": [
+      "pre-flight ISSUE caret TICK create warning declares an unavailable lookup instead of treating it as a missing token",
+      "pre-flight ISSUE caret TICK create warning does not warn on mainnet where proactive warning is out of scope",
+      "pre-flight ISSUE caret TICK create warning does not warn when the caret resolves to an existing token",
+      "pre-flight ISSUE caret TICK create warning warns on regtest and names the armed indexer rule",
+      "pre-flight ISSUE caret TICK create warning warns on testnet before the rule is armed",
+      "pre-flight ISSUE caret TICK drift coverage binds the caret rule implementation to the issue handler drift-map row",
+      "pre-flight ISSUE caret TICK drift coverage matches the recorded issue pin to the indexer handler bytes"
     ],
     "105e6d81a7f36810": [
       "pre-flight Tier-2 per-action matrix COINPAY (fee-exempt; Tier 1 gives no verdict) does not false-PASS on the feeExempt response"
@@ -1158,6 +1162,14 @@
       "BET compose rejects an outcome index past the end of the market",
       "BET compose resolves an outcome label to its wire index when the outcomes are known"
     ],
+    "1eb5512a05113ad7": [
+      "bitcoinjs-lib 7 raw Uint8Array values (no Buffer patch loaded) carrier binding checks a raw chunk lane instead of skipping it",
+      "bitcoinjs-lib 7 raw Uint8Array values (no Buffer patch loaded) co-signer allow-list accepts every standard address template",
+      "bitcoinjs-lib 7 raw Uint8Array values (no Buffer patch loaded) co-signer allow-list still refuses bare multisig and OP_RETURN",
+      "bitcoinjs-lib 7 raw Uint8Array values (no Buffer patch loaded) co-signer signs an allow-listed leg and refuses a drain",
+      "bitcoinjs-lib 7 raw Uint8Array values (no Buffer patch loaded) envelope commit derivation and role classification read raw library bytes",
+      "bitcoinjs-lib 7 raw Uint8Array values (no Buffer patch loaded) psbt action decode and the decoder parse read raw library bytes"
+    ],
     "1edad6fef32ca5a2": [
       "decoder.parse - BATCH sub-grammar COMMAND absent entirely: ok stays true with a validator finding",
       "decoder.parse - BATCH sub-grammar COMMAND is verbatim: pipes inside sub-actions never mis-slice the top level",
@@ -1201,6 +1213,17 @@
       "LifecycleManager submitAction(): rejected actions rejects with the indexer-recorded reason when the action is invalid",
       "LifecycleManager submitAction(): rejected actions reports whether the resolved status was read from the indexer or assumed"
     ],
+    "1fd8a320421b498d": [
+      "ContractUtils.parseAbi() defaults omitted params to an empty array and omitted view to absent",
+      "ContractUtils.parseAbi() drops a method entry whose summary or view is not a literal of its type",
+      "ContractUtils.parseAbi() drops only the malformed method entry, keeping the rest",
+      "ContractUtils.parseAbi() parses a well-formed abi block with typed params, summary, and view",
+      "ContractUtils.parseAbi() returns null for a dynamic (non-literal) abi value",
+      "ContractUtils.parseAbi() returns null for function-export contracts",
+      "ContractUtils.parseAbi() returns null on unparseable source and non-string input",
+      "ContractUtils.parseAbi() returns null when version is not a numeric literal",
+      "ContractUtils.parseAbi() treats an abi-named FUNCTION as an ordinary method, not metadata"
+    ],
     "205edf0c10928063": [
       "contract quantity and amount helpers compareAmount compares exact decimals",
       "contract quantity and amount helpers readContractQuantity reads the explorer balance columns only",
@@ -1217,13 +1240,18 @@
       "contract value parsing parseStateValue parses JSON and passes other values through",
       "contract value parsing rowsOf unwraps arrays and data envelopes"
     ],
-    "21a1db9c64f4b487": [
-      "checkpoint_commitment_activation twin parity @regression sdk copy pins the armed flag-days",
-      "checkpoint_commitment_activation twin parity @regression sdk map is value-identical to the canonical xchain-documentation map",
-      "checkpoint_commitment_activation twin parity @regression xchain-explorer copy matches the sdk copy in value and in bytes",
-      "checkpoint_commitment_activation twin parity @regression xchain-hub copy matches the sdk copy in value and in bytes",
-      "checkpoint_commitment_activation twin parity @regression xchain-indexer copy matches the sdk copy in value and in bytes",
-      "checkpoint_commitment_activation twin parity @regression xchain-sync copy matches the sdk copy in value and in bytes"
+    "2193b1ac40603d80": [
+      "SPV \u00a77.3: followForward refuses range steps that roll back or leave the chain never rolls the trust root backwards when the range holds only older signed steps",
+      "SPV \u00a77.3: followForward refuses range steps that roll back or leave the chain skips a genuinely signed step at or below the trusted height and adopts the next one",
+      "SPV \u00a77.3: followForward refuses range steps that roll back or leave the chain stops at a step signed by the proven set for another chain, before proving any signer set",
+      "SPV \u00a77.3: followForward refuses range steps that roll back or leave the chain stops at a step signed by the proven set for another network, before proving any signer set",
+      "SPV \u00a77.3: rotation-aware pinned path (followForward) a pinned set that STILL signs a later checkpoint verifies directly, with no forward walk",
+      "SPV \u00a77.3: rotation-aware pinned path (followForward) followForward STOPS at a checkpoint the proven set does not sign (QUORUM_FAILED)",
+      "SPV \u00a77.3: rotation-aware pinned path (followForward) followForward STOPS when the validator-set proof does not bind to the trusted root",
+      "SPV \u00a77.3: rotation-aware pinned path (followForward) followForward adopts a rotated checkpoint proven against the trusted stakes_root",
+      "SPV \u00a77.3: rotation-aware pinned path (followForward) verifyAction also follows the pinned root forward across rotation",
+      "SPV \u00a77.3: rotation-aware pinned path (followForward) verifyBalance follows the pinned root forward to a rotated checkpoint and verifies (no /verify)",
+      "SPV \u00a77.3: rotation-aware pinned path (followForward) verifyBalance rotation fails closed (CHECKPOINT_QUORUM_FAILED, no /verify) when the walk cannot reach the served checkpoint"
     ],
     "22857356eaf9f41c": [
       "Validator: BROADCAST FEE length accepts an 11-character FEE",
@@ -1643,6 +1671,17 @@
     ],
     "3298906a0629b99d": [
       "pre-flight Tier-2 per-action matrix VOTE (re-vote legal; state unverified) never hard-blocks a cast ballot on re-vote grounds"
+    ],
+    "339f24cbf1192203": [
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the AIRDROP native fee tally gate review",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the AIRDROP zero leg, DIVIDEND empty allow list and equal-price ORDER reviews",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the BATCH probe sub-verdict match snapshot review",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the DISPENSER and DISPENSE amount positivity gate retirement review",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the ISSUE caret TICK canonical id review",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the SEND gated handoff reference gate retirement review",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the SEND, DESTROY and MINT gas balance read review",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the SEND, DESTROY and STAKE NOT NULL amount width review",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews the live dispenser pin is the end of the review-log pin chain"
     ],
     "34261b0d7e3e2a65": [
       "XChainSDK encoder methods encodeTx delegates to encoder.createTx",
@@ -3373,23 +3412,12 @@
       "config_envelope agentOptsFor returns only proxy:false for a null pool",
       "config_envelope agentOptsFor returns only proxy:false when the matching agent is missing"
     ],
-    "67be37e6ccde6d01": [
-      "pre-flight constants + registry drift map (\u00a78.5) INDEXER-MAP.md parses into well-formed rows",
-      "pre-flight constants + registry drift map (\u00a78.5) anchor / review-command consistency fails CLOSED when the map records no anchor at all",
-      "pre-flight constants + registry drift map (\u00a78.5) anchor / review-command consistency fails CLOSED when the review command is missing or unreadable",
-      "pre-flight constants + registry drift map (\u00a78.5) anchor / review-command consistency fails when the review command names a different commit than the anchor line",
-      "pre-flight constants + registry drift map (\u00a78.5) anchor / review-command consistency the shipped INDEXER-MAP.md anchors its review command on its own pin",
-      "pre-flight constants + registry drift map (\u00a78.5) every checks/ action module is mapped (or intentionally misc-only)",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the BATCH sub-command admission by dispatch coverage review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the DISPENSE ownership-transfer block fields review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the DISPENSER and DISPENSE fiat pricing review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the DISPENSER refill token policy review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the MINT and ISSUE total supply bound review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the ORDER and SWAP remote token accept review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the ORDER, SWAP, DISPENSER, DEPOSIT and WITHDRAW NOT NULL row key review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the SEND gated handoff totals by resolved tick id review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the SEND, DESTROY and DIVIDEND text amount refusal review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the issue lazy distribution probe review"
+    "67a32a6f2e6b1a0a": [
+      "xchain-contracts pin for master and tag runs keeps a 40-hex commit in the pin file",
+      "xchain-contracts pin for master and tag runs limits the ci.yml pin to master so develop keeps testing contracts develop",
+      "xchain-contracts pin for master and tag runs runs the pin step after the siblings step in ci.yml",
+      "xchain-contracts pin for master and tag runs runs the pin step after the siblings step in publish.yml",
+      "xchain-contracts pin for master and tag runs ships an executable pin script that reads the pin file and fails loudly"
     ],
     "67f8bb4e02994230": [
       "pre-flight Tier-2 per-action matrix DISPENSER ownership-escrow edit fires on a supplied GIVE_ESCROW of 0, which the refill path ignores",
@@ -3465,6 +3493,29 @@
       "Performance: SDK hot-path throughput formats 10000 full-precision amounts well under the regression ceiling",
       "Performance: SDK hot-path throughput validate() throughput does not degrade with repeated reuse of one Validator",
       "Performance: SDK hot-path throughput validates 10000 ISSUE actions well under the regression ceiling"
+    ],
+    "6a5a4bfa81cfc484": [
+      "pre-flight constants + registry drift map (\u00a78.5) INDEXER-MAP.md parses into well-formed rows",
+      "pre-flight constants + registry drift map (\u00a78.5) anchor / review-command consistency fails CLOSED when the map records no anchor at all",
+      "pre-flight constants + registry drift map (\u00a78.5) anchor / review-command consistency fails CLOSED when the review command is missing or unreadable",
+      "pre-flight constants + registry drift map (\u00a78.5) anchor / review-command consistency fails when the review command names a different commit than the anchor line",
+      "pre-flight constants + registry drift map (\u00a78.5) anchor / review-command consistency the shipped INDEXER-MAP.md anchors its review command on its own pin",
+      "pre-flight constants + registry drift map (\u00a78.5) every checks/ action module is mapped (or intentionally misc-only)",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the BATCH sub-command admission by dispatch coverage review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the DISPENSE ownership-transfer block fields review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the DISPENSER and DISPENSE fiat pricing review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the DISPENSER give amount gate retirement review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the DISPENSER refill token policy review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the DISPENSER, ORDER and SWAP supply prefetch review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the MINT and ISSUE total supply bound review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the ORDER and SWAP remote token accept review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the ORDER, SWAP, DISPENSER, DEPOSIT and WITHDRAW NOT NULL row key review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the SEND and DESTROY consolidation leg gate retirement review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the SEND gated handoff totals by resolved tick id review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the SEND, DESTROY and DIVIDEND text amount refusal review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the issue lazy distribution probe review",
+      "pre-flight constants + registry drift map (\u00a78.5) records the VOTE v3 unknown TICK review with no VOTE row and the client follow-up",
+      "pre-flight constants + registry drift map (\u00a78.5) records the open match origin review with no ORDER_MATCH or SWAP_MATCH row"
     ],
     "6abb57b79a51e287": [
       "API JSON-RPC batch cap setting validation a truncatable junk cap falls back to the default instead of a truncated prefix",
@@ -3769,6 +3820,18 @@
       "EncoderClient setBase rebuilds client when port changes",
       "EncoderClient setBase rebuilds client when url changes"
     ],
+    "76771788dfca20c3": [
+      "batch_limits: AIRDROP weighs per leg at the BATCH_AIRDROP_LEG_WEIGHT gate keeps a multi-leg AIRDROP flat at 25 below the gate, on testnet and mainnet",
+      "batch_limits: AIRDROP weighs per leg at the BATCH_AIRDROP_LEG_WEIGHT gate keeps a multi-leg AIRDROP flat when neither the call nor NETWORK names a network",
+      "batch_limits: AIRDROP weighs per leg at the BATCH_AIRDROP_LEG_WEIGHT gate mirrors the gate row: unarmed on mainnet and testnet, genesis on regtest",
+      "batch_limits: AIRDROP weighs per leg at the BATCH_AIRDROP_LEG_WEIGHT gate reads a <coin>-<network> NETWORK setting when the call names no network",
+      "batch_limits: AIRDROP weighs per leg at the BATCH_AIRDROP_LEG_WEIGHT gate weighs a multi-leg AIRDROP as 25 per leg above the gate, in every multi-leg format",
+      "batch_limits: AIRDROP weighs per leg at the BATCH_AIRDROP_LEG_WEIGHT gate weighs a one-leg AIRDROP as 25 above the gate",
+      "batch_limits: AIRDROP weighs per leg at the BATCH_AIRDROP_LEG_WEIGHT gate weighs the DROP alias as the AIRDROP it is",
+      "batch_limits: what the per-leg AIRDROP weight leaves alone charges an unreadable AIRDROP one leg, never less",
+      "batch_limits: what the per-leg AIRDROP weight leaves alone leaves DIVIDEND flat at 25 above the gate",
+      "batch_limits: what the per-leg AIRDROP weight leaves alone sums a mixed batch above the gate"
+    ],
     "769a01a07529353f": [
       "pre-flight intra-BATCH projection DESTROY stays debit-only: a following self-send is not rescued",
       "pre-flight intra-BATCH projection ISSUE with MINT_SUPPLY is projectable: the SEND of that supply does not false-error",
@@ -4020,6 +4083,15 @@
       "decoder.describe LIST metadata create warnings warns that a description clear sentinel is invalid in a create",
       "decoder.describe LIST metadata create warnings warns that a name clear sentinel is invalid in a create",
       "decoder.describe LIST metadata create warnings warns when the list has no items"
+    ],
+    "7e6aa6d12fac30e4": [
+      "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a FIAT-priced dispenser is exempt from the GET_AMOUNT rules, as in the handler",
+      "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a native-coin GET_AMOUNT past the coin decimals is a format error",
+      "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a negative native-coin GET_AMOUNT is a format error",
+      "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a negative token-priced GET_AMOUNT reaches the positivity rule",
+      "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a self-priced dispenser with no GET_AMOUNT at all is warned",
+      "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a well-formed positive self-priced GET_AMOUNT raises neither",
+      "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a zero self-priced GET_AMOUNT reaches the positivity rule"
     ],
     "7f4c85dadc6049c6": [
       "pre-flight engine tier precedence (\u00a74.2) Tier-1 invalid adds an overridable dryrun error",
@@ -4449,6 +4521,10 @@
       "Validator: default-deny delimiter guard rejects a pipe in CALLBACK_CONTRACT (previously unguarded)",
       "Validator: default-deny delimiter guard rejects a pipe in a field that has no field-specific validation (GAS_ESCROW)"
     ],
+    "8c53649221a5fed3": [
+      "co_signer.js header names the decoder scope names every bounded rest-field format the decoder admits",
+      "co_signer.js header names the decoder scope points readers at BOUNDED_REST_FORMATS and drops the old refused-at-decode claim"
+    ],
     "8c88d0bafb9c3ad2": [
       "CompressionUtils (Part B) canonical constants conformance the vendored copy equals the canonical declaration"
     ],
@@ -4504,12 +4580,6 @@
       "WalletUtils broadcastTx() should throw on empty txHex",
       "WalletUtils broadcastTx() should throw without encoder"
     ],
-    "8feff99698ef1ade": [
-      "fold wrapper explorer validator set does not fall back to validators when archive_validators is absent above the gate",
-      "fold wrapper explorer validator set keeps plain sections and pre-gate fold wrappers on validators",
-      "fold wrapper explorer validator set keeps the full pinned set and returns CHECKPOINT_QUORUM_FAILED instead of downgrading",
-      "fold wrapper explorer validator set uses archive_validators above the gate and keeps its cache entry distinct from a plain section"
-    ],
     "8f91f74f32bdd668": [
       "LIST TYPE=3 union item validation accepts exactly LIST_UNION_MAX_MEMBERS items",
       "LIST TYPE=3 union item validation accepts one or more positive action indexes",
@@ -4527,6 +4597,12 @@
       "LIST TYPE=3 union item validation rejects non-action-index ITEM \"^12\"",
       "LIST TYPE=3 union item validation requires ITEM when none is supplied",
       "LIST TYPE=3 union item validation treats numeric and string forms of an index as duplicates"
+    ],
+    "8feff99698ef1ade": [
+      "fold wrapper explorer validator set does not fall back to validators when archive_validators is absent above the gate",
+      "fold wrapper explorer validator set keeps plain sections and pre-gate fold wrappers on validators",
+      "fold wrapper explorer validator set keeps the full pinned set and returns CHECKPOINT_QUORUM_FAILED instead of downgrading",
+      "fold wrapper explorer validator set uses archive_validators above the gate and keeps its cache entry distinct from a plain section"
     ],
     "904629a771c783a8": [
       "wire number canonicalization contract NUMBER_FIELDS covers the VOTE escrow amounts DEPOSIT and GAS_ESCROW",
@@ -4735,6 +4811,28 @@
       "wireIndex: exact identity for BIGINT-as-string wire indices keeps the string/number coercion callers relied on Number() for",
       "wireIndex: exact identity for BIGINT-as-string wire indices sameWireIndex separates them",
       "wireIndex: exact identity for BIGINT-as-string wire indices the premise: Number() cannot separate two adjacent indices above 2^53"
+    ],
+    "95d8754b5b642adc": [
+      "contract explorer response types in index.d.ts ContractInfo declares exactly the reader fields with their SQL nullability",
+      "contract explorer response types in index.d.ts ContractInfo getContracts() resolves to ContractInfo",
+      "contract explorer response types in index.d.ts ContractInfo matches the explorer OpenAPI ContractRow schema",
+      "contract explorer response types in index.d.ts ContractStateEntry declares exactly the reader fields with their SQL nullability",
+      "contract explorer response types in index.d.ts ContractStateEntry getContractState() resolves to ContractStateEntry",
+      "contract explorer response types in index.d.ts ContractStateEntry matches the explorer OpenAPI ContractStateEntry schema",
+      "contract explorer response types in index.d.ts ExecutionInfo declares exactly the reader fields with their SQL nullability",
+      "contract explorer response types in index.d.ts ExecutionInfo getExecution() resolves to ExecutionInfo",
+      "contract explorer response types in index.d.ts ExecutionInfo matches the explorer OpenAPI ExecutionDetail schema",
+      "explorer response types in index.d.ts ExplorerStatus declares every field assertFresh() reads",
+      "explorer response types in index.d.ts ExplorerStatus declares exactly the pinned fields, each optional, with the pinned shape",
+      "explorer response types in index.d.ts ExplorerStatus getStatus() resolves to ExplorerStatus",
+      "explorer response types in index.d.ts ExplorerStatus keeps replica_halted nullable and stale non-nullable",
+      "explorer response types in index.d.ts ExplorerStatus matches the explorer OpenAPI ExplorerStatus schema",
+      "explorer response types in index.d.ts ListEnvelope declares exactly the pinned fields with the pinned optional markers",
+      "explorer response types in index.d.ts ListEnvelope lets QueryOptions carry the keyset cursors back",
+      "explorer response types in index.d.ts ListEnvelope matches the explorer OpenAPI ListResponse schema",
+      "explorer response types in index.d.ts NetworkSummary declares exactly the pinned fields and no peer data",
+      "explorer response types in index.d.ts NetworkSummary getNetwork() resolves to NetworkSummary",
+      "explorer response types in index.d.ts NetworkSummary matches the explorer OpenAPI NetworkResponse schema"
     ],
     "95dc7d50624b5995": [
       "SPV Phase 4: verifyLockedBalance proof-route error envelope verifyLockedBalance reads the stable code, not the prose, from a 2xx refusal body",
@@ -5078,19 +5176,6 @@
     "9f8bf7a383946aa2": [
       "WalletUtils deriveAddress() - extended should throw INVALID_ADDRESS_TYPE for unknown type"
     ],
-    "9fd1b874376ae0b8": [
-      "explorer response types in index.d.ts ExplorerStatus declares every field assertFresh() reads",
-      "explorer response types in index.d.ts ExplorerStatus declares exactly the pinned fields, each optional, with the pinned shape",
-      "explorer response types in index.d.ts ExplorerStatus getStatus() resolves to ExplorerStatus",
-      "explorer response types in index.d.ts ExplorerStatus keeps replica_halted nullable and stale non-nullable",
-      "explorer response types in index.d.ts ExplorerStatus matches the explorer OpenAPI ExplorerStatus schema",
-      "explorer response types in index.d.ts ListEnvelope declares exactly the pinned fields with the pinned optional markers",
-      "explorer response types in index.d.ts ListEnvelope lets QueryOptions carry the keyset cursors back",
-      "explorer response types in index.d.ts ListEnvelope matches the explorer OpenAPI ListResponse schema",
-      "explorer response types in index.d.ts NetworkSummary declares exactly the pinned fields and no peer data",
-      "explorer response types in index.d.ts NetworkSummary getNetwork() resolves to NetworkSummary",
-      "explorer response types in index.d.ts NetworkSummary matches the explorer OpenAPI NetworkResponse schema"
-    ],
     "a119099cfeb183c6": [
       "API request-rate limit a zero-prefixed junk value is junk, not the off switch",
       "API request-rate limit adds no runtime dependency for the limiter",
@@ -5187,6 +5272,19 @@
       "XChainSDK.assertFresh throws SDKExplorerError COIN_DATA_STALE on a stale coin, carrying the freshness record",
       "XChainSDK.assertFresh uses a recent per-response marker without a /status round trip"
     ],
+    "a4f1b3f60d13ae87": [
+      "pre-flight Tier-2 per-action matrix ISSUE (caret TICK in the canonical form behind TICK_NORMALIZE) does not warn on mainnet, where the gate is unarmed",
+      "pre-flight Tier-2 per-action matrix ISSUE (caret TICK in the canonical form behind TICK_NORMALIZE) keeps a canonical caret TICK clear of the warning",
+      "pre-flight Tier-2 per-action matrix ISSUE (caret TICK in the canonical form behind TICK_NORMALIZE) names the id refusal first, as the indexer does, instead of the caret create rule",
+      "pre-flight Tier-2 per-action matrix ISSUE (caret TICK in the canonical form behind TICK_NORMALIZE) never raises the canonical-form rule as an error",
+      "pre-flight Tier-2 per-action matrix ISSUE (caret TICK in the canonical form behind TICK_NORMALIZE) warns even when the explorer answers the id by number with an existing token",
+      "pre-flight Tier-2 per-action matrix ISSUE (caret TICK in the canonical form behind TICK_NORMALIZE) warns on regtest for the non-canonical caret TICK ^+7",
+      "pre-flight Tier-2 per-action matrix ISSUE (caret TICK in the canonical form behind TICK_NORMALIZE) warns on regtest for the non-canonical caret TICK ^-7",
+      "pre-flight Tier-2 per-action matrix ISSUE (caret TICK in the canonical form behind TICK_NORMALIZE) warns on regtest for the non-canonical caret TICK ^0",
+      "pre-flight Tier-2 per-action matrix ISSUE (caret TICK in the canonical form behind TICK_NORMALIZE) warns on regtest for the non-canonical caret TICK ^007",
+      "pre-flight Tier-2 per-action matrix ISSUE (caret TICK in the canonical form behind TICK_NORMALIZE) warns on regtest for the non-canonical caret TICK ^0x10",
+      "pre-flight Tier-2 per-action matrix ISSUE (caret TICK in the canonical form behind TICK_NORMALIZE) warns on regtest for the non-canonical caret TICK ^1e3"
+    ],
     "a510e9513d1e96a6": [
       "EncoderClient RPC ID increments with each call"
     ],
@@ -5194,15 +5292,6 @@
       "MessagingUtils @crypto @regression ECIES (bytes) preserves bytes that are not valid UTF-8",
       "MessagingUtils @crypto @regression ECIES (bytes) rejects a non-Buffer plaintext",
       "MessagingUtils @crypto @regression ECIES (bytes) round-trips a 33-byte binary key handoff intact"
-    ],
-    "a642d1867223aa67": [
-      "SPV \u00a77.3: rotation-aware pinned path (followForward) a pinned set that STILL signs a later checkpoint verifies directly, with no forward walk",
-      "SPV \u00a77.3: rotation-aware pinned path (followForward) followForward STOPS at a checkpoint the proven set does not sign (QUORUM_FAILED)",
-      "SPV \u00a77.3: rotation-aware pinned path (followForward) followForward STOPS when the validator-set proof does not bind to the trusted root",
-      "SPV \u00a77.3: rotation-aware pinned path (followForward) followForward adopts a rotated checkpoint proven against the trusted stakes_root",
-      "SPV \u00a77.3: rotation-aware pinned path (followForward) verifyAction also follows the pinned root forward across rotation",
-      "SPV \u00a77.3: rotation-aware pinned path (followForward) verifyBalance follows the pinned root forward to a rotated checkpoint and verifies (no /verify)",
-      "SPV \u00a77.3: rotation-aware pinned path (followForward) verifyBalance rotation fails closed (CHECKPOINT_QUORUM_FAILED, no /verify) when the walk cannot reach the served checkpoint"
     ],
     "a66187140aa93ab9": [
       "WebSocketClient WebSocket constructor sync throw rejects connect() with WS_CONNECTION_FAILED when URL is invalid",
@@ -5330,6 +5419,91 @@
       "BATCH limit-scan conformance (SDK mirror vs arbiter) weight conformance (BATCH_COST_WEIGHTING) arbiter half (sibling xchain-indexer checkout) inline DEPLOY (format 0) weighs the VM 30",
       "BATCH limit-scan conformance (SDK mirror vs arbiter) weight conformance (BATCH_COST_WEIGHTING) arbiter half (sibling xchain-indexer checkout) mirrors the arbiter budget and weight table byte-for-byte",
       "BATCH limit-scan conformance (SDK mirror vs arbiter) weight conformance (BATCH_COST_WEIGHTING) arbiter half (sibling xchain-indexer checkout) the carrier discount does not leak to its companions: one EXECUTE among them still counts 30"
+    ],
+    "a992e00386bec5d1": [
+      "consensus-primitive conformance: activation predicate vectors @regression every group this repo runs is a non-empty list",
+      "consensus-primitive conformance: activation predicate vectors @regression isEquivHeaderActive: a NaN snapshot block fails closed",
+      "consensus-primitive conformance: activation predicate vectors @regression isEquivHeaderActive: an unknown network fails closed",
+      "consensus-primitive conformance: activation predicate vectors @regression isEquivHeaderActive: mainnet activates at the flag day",
+      "consensus-primitive conformance: activation predicate vectors @regression isEquivHeaderActive: mainnet is inactive one block below the flag day",
+      "consensus-primitive conformance: activation predicate vectors @regression isEquivHeaderActive: regtest is active from genesis",
+      "consensus-primitive conformance: activation predicate vectors @regression isStakeWeightedQuorumActive: a NaN snapshot block fails closed",
+      "consensus-primitive conformance: activation predicate vectors @regression isStakeWeightedQuorumActive: an unknown network fails closed",
+      "consensus-primitive conformance: activation predicate vectors @regression isStakeWeightedQuorumActive: mainnet activates at the flag day",
+      "consensus-primitive conformance: activation predicate vectors @regression isStakeWeightedQuorumActive: mainnet is inactive one block below the flag day",
+      "consensus-primitive conformance: activation predicate vectors @regression isStakeWeightedQuorumActive: testnet is active from genesis",
+      "consensus-primitive conformance: activation predicate vectors @regression snapshotBurial: a NaN snapshot block fails closed and is returned verbatim",
+      "consensus-primitive conformance: activation predicate vectors @regression snapshotBurial: a boolean fails closed and is returned verbatim",
+      "consensus-primitive conformance: activation predicate vectors @regression snapshotBurial: an active height above the buffer subtracts the canonical depth",
+      "consensus-primitive conformance: activation predicate vectors @regression snapshotBurial: an active height inside the buffer clamps to zero",
+      "consensus-primitive conformance: activation predicate vectors @regression snapshotBurial: an empty string fails closed and is returned verbatim",
+      "consensus-primitive conformance: activation predicate vectors @regression snapshotBurial: an unknown network fails closed and returns the declared height",
+      "consensus-primitive conformance: activation predicate vectors @regression snapshotBurial: mainnet is active at its genesis boundary and clamps the buried height to zero",
+      "consensus-primitive conformance: activation predicate vectors @regression snapshotBurial: null fails closed and is returned verbatim",
+      "consensus-primitive conformance: activation predicate vectors @regression snapshotBurial: undefined fails closed and is returned verbatim",
+      "consensus-primitive conformance: byte-identity to canonical source @regression equivocation_header.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/ file set equals xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/ holds the vendored parts",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/core.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/regtest_env.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_1.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_2.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_3.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_4.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_5.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression snapshot_reorg_buffer.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: byte-identity to canonical source @regression stake_weighted_quorum.js is byte-identical to xchain-documentation/protocol/reference-impl",
+      "consensus-primitive conformance: canonical vectors @regression equivocation_header builder ENGINE_TAGS matches the canonical map",
+      "consensus-primitive conformance: canonical vectors @regression equivocation_header builder buildEquivCanonical: BRIDGE: transfer_id is the round id, the finalizing view is the view, and the pipe-separated transfer canonical survives the || boundary",
+      "consensus-primitive conformance: canonical vectors @regression equivocation_header builder buildEquivCanonical: LIST_SHARE: snapshot_id is the round id, snapshot_block is content field 2, and the shared-list canonical survives the || boundary",
+      "consensus-primitive conformance: canonical vectors @regression equivocation_header builder buildEquivCanonical: POLICY: snapshot_id is the round id, and a policy snapshot under its own tag never collides with a transfer at the same view",
+      "consensus-primitive conformance: canonical vectors @regression equivocation_header builder buildEquivCanonical: PRICE batch: a different split at the same anchor is a DIFFERENT key, not equivocation",
+      "consensus-primitive conformance: canonical vectors @regression equivocation_header builder buildEquivCanonical: PRICE batch: composite anchor|first|last round id survives verbatim",
+      "consensus-primitive conformance: canonical vectors @regression equivocation_header builder buildEquivCanonical: ROLLCALL: regtest epoch 0 is a real epoch, not a falsy skip",
+      "consensus-primitive conformance: canonical vectors @regression equivocation_header builder buildEquivCanonical: ROLLCALL: the epoch height is the round id, view is always 0",
+      "consensus-primitive conformance: canonical vectors @regression equivocation_header builder buildEquivCanonical: basic, pipe-containing content preserved",
+      "consensus-primitive conformance: canonical vectors @regression equivocation_header builder buildEquivCanonical: empty content still carries the full header and boundary",
+      "consensus-primitive conformance: canonical vectors @regression equivocation_header builder buildEquivCanonical: pipe-heavy checkpoint round and content",
+      "consensus-primitive conformance: canonical vectors @regression equivocation_header builder equivKey: LIST_SHARE: snapshot_id is the round id",
+      "consensus-primitive conformance: canonical vectors @regression equivocation_header builder equivKey: a pipe-containing round id is preserved verbatim",
+      "consensus-primitive conformance: canonical vectors @regression equivocation_header builder equivKey: basic",
+      "consensus-primitive conformance: canonical vectors @regression equivocation_header builder equivPrefix: basic",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold a TRUNCATED snapshot fails closed even when the un-truncated set would be quorate (stake-eviction / silent-drift guard)",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold a duplicate signer pubkey is counted once",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold a missing weight fails closed: it must not shrink S and lower the 2/3 bar",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold a nonnumeric weight fails closed (bcnum would silently zero it)",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold a null weight fails closed for the same reason",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold all three equal sources pass (90 > 60)",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold all-zero weights: S is not positive, nothing is quorate even with every source signing",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold an explicit zero weight is still legitimate and does not fail closed",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold an unknown signer pubkey is ignored, not counted",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold blank source fails closed even though it would otherwise pass",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold decimal weights: fractional stake math is exact (4.5 > 3.0)",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold empty signer set fails (0 > 0 is false)",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold negative weight fails closed even when the remaining positive stake alone would pass",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold negative weight fails closed: a corrupt row cannot buy quorum for an otherwise-passing signer",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold negative weight fails closed: an EMPTY signer set must not finalize against negative S (0 > 2*S regression)",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold pubkey match is case-insensitive",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold single source meets the threshold (3S > 2S)",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold source dedup: two keys of one source count that source once (insufficient)",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold three of four equal sources pass (>2/3)",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold two of four equal sources fail",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold two of three equal sources fail the strict 2/3 boundary (60 > 60 is false)",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.meetsStakeThreshold weighted: one heavy source alone exceeds 2/3 of total (300 > 240)",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.totalStake a TRUNCATED snapshot throws (dropped sources make the sum meaningless)",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.totalStake a blank source throws (a collapsed bucket is meaningless)",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.totalStake a missing weight throws (zeroing it would silently lower S)",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.totalStake a negative weight throws (S over a corrupt snapshot is meaningless)",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.totalStake a nonnumeric weight throws (bcnum would silently zero it)",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.totalStake an explicit zero weight is legitimate and sums normally",
+      "consensus-primitive conformance: canonical vectors @regression stake_weighted_quorum.totalStake sums weight over distinct sources (first weight per source wins)",
+      "gate_registry entry loads every local shared-rows part @regression finds numbered shared-rows parts to check",
+      "gate_registry entry loads every local shared-rows part @regression the entry requires gate_registry/shared_rows_1.js",
+      "gate_registry entry loads every local shared-rows part @regression the entry requires gate_registry/shared_rows_2.js",
+      "gate_registry entry loads every local shared-rows part @regression the entry requires gate_registry/shared_rows_3.js",
+      "gate_registry entry loads every local shared-rows part @regression the entry requires gate_registry/shared_rows_4.js",
+      "gate_registry entry loads every local shared-rows part @regression the entry requires gate_registry/shared_rows_5.js"
     ],
     "ab04df4ecad84c1c": [
       "decoder.describe multi-destroy a non-positive leg amount is flagged",
@@ -5614,16 +5788,6 @@
       "EncoderClient exact fee totals refuses a negative fee",
       "EncoderClient exact fee totals sums past 2^53 exactly and leaves no rounded Number behind"
     ],
-    "b536490bbf987431": [
-      "ContractUtils.parseAbi() defaults omitted params to an empty array and omitted view to absent",
-      "ContractUtils.parseAbi() drops only the malformed method entry, keeping the rest",
-      "ContractUtils.parseAbi() parses a well-formed abi block with typed params, summary, and view",
-      "ContractUtils.parseAbi() returns null for a dynamic (non-literal) abi value",
-      "ContractUtils.parseAbi() returns null for function-export contracts",
-      "ContractUtils.parseAbi() returns null on unparseable source and non-string input",
-      "ContractUtils.parseAbi() returns null when version is not a numeric literal",
-      "ContractUtils.parseAbi() treats an abi-named FUNCTION as an ordinary method, not metadata"
-    ],
     "b54621b172a17eb2": [
       "ExplorerClient getContractManifest() carries permissionsError when the explorer reports permissions_error",
       "ExplorerClient getContractManifest() carries permissionsError when the permissions value is unreadable",
@@ -5657,23 +5821,6 @@
       "WalletUtils deriveMultisigAddress() should throw for unknown scheme",
       "WalletUtils deriveMultisigAddress() should throw with empty scriptTemplate",
       "WalletUtils deriveMultisigAddress() should throw without params"
-    ],
-    "b5cafa9661a5c2b3": [
-      "gate registry env view covers the regtest arming grammar arms anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION from XC_ANCHOR_STAKE_REGTEST_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar arms anchor_fold_activation.ANCHOR_FOLD_ACTIVATION from XC_ANCHOR_FOLD_REGTEST_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar arms anchor_reward_activation.ANCHOR_ATTEST_BARRIER_ACTIVATION from XC_MIRROR_ADMISSION_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar arms archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION from XC_ANCHOR_FOLD_REGTEST_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar arms mirror_admission_activation.MIRROR_ADMISSION_ACTIVATION from XC_MIRROR_ADMISSION_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar arms mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION from XC_MIRROR_ADMISSION_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar arms remote_token_admission_activation.REMOTE_TOKEN_ADMISSION_ACTIVATION from XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar arms rollcall_activation.ROLLCALL_ACTIVATION from XC_ROLLCALL_REGTEST_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar arms rollcall_gates_activation.ROLLCALL_GATES_ACTIVATION from XC_ROLLCALL_GATES_REGTEST_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar arms stake_weight_collation_activation.STAKE_WEIGHT_COLLATION_ACTIVATION from XC_ANCHOR_STAKE_REGTEST_ACTIVATION",
-      "gate registry env view covers the regtest arming grammar enforces bundle order from the venue height on an armed regtest venue",
-      "gate registry env view covers the regtest arming grammar holds at least one armable row, so the sweep below checks something",
-      "gate registry env view covers the regtest arming grammar keeps the canonical shared row files byte-identical",
-      "gate registry env view covers the regtest arming grammar names a getter for every variable the arming grammar reads",
-      "gate registry env view covers the regtest arming grammar resolves the archive roll-call presence gate at the BTC snapshot block"
     ],
     "b6597e6fd59dcaba": [
       "VM Actions \u2013 DEPLOY creates DEPLOY with constructor params",
@@ -6243,6 +6390,14 @@
       "Actions \u2013 fiat-priced DISPENSER pipeline (round prices) rejects a three-decimal price ('1.999')",
       "Actions \u2013 fiat-priced DISPENSER pipeline (round prices) still accepts a non-round price ('19.99')"
     ],
+    "c8085a349f536188": [
+      "checkpoint_commitment_activation twin parity @regression sdk copy pins the armed flag-days",
+      "checkpoint_commitment_activation twin parity @regression sdk map is value-identical to the canonical xchain-documentation map",
+      "checkpoint_commitment_activation twin parity @regression xchain-explorer copy matches the sdk copy in value and at the boundary heights",
+      "checkpoint_commitment_activation twin parity @regression xchain-hub copy matches the sdk copy in value and at the boundary heights",
+      "checkpoint_commitment_activation twin parity @regression xchain-indexer copy matches the sdk copy in value and at the boundary heights",
+      "checkpoint_commitment_activation twin parity @regression xchain-sync copy matches the sdk copy in value and at the boundary heights"
+    ],
     "c814f78b9c8185a2": [
       "Workflows actionIndexOf resolves both waiter shapes and reports nothing when neither is present"
     ],
@@ -6301,6 +6456,24 @@
       "networks getNetwork() should throw on unknown network",
       "networks getSupportedNetworks() should return all 9 supported networks"
     ],
+    "ca75acadee5cd15c": [
+      "gate registry env view covers the regtest arming grammar arms anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION from XC_ANCHOR_STAKE_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms anchor_fold_activation.ANCHOR_FOLD_ACTIVATION from XC_ANCHOR_FOLD_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms anchor_reward_activation.ANCHOR_ATTEST_BARRIER_ACTIVATION from XC_MIRROR_ADMISSION_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION from XC_ANCHOR_FOLD_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms mirror_admission_activation.MIRROR_ADMISSION_ACTIVATION from XC_MIRROR_ADMISSION_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION from XC_MIRROR_ADMISSION_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms remote_token_admission_activation.REMOTE_TOKEN_ADMISSION_ACTIVATION from XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms rollcall_activation.ROLLCALL_ACTIVATION from XC_ROLLCALL_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms rollcall_gates_activation.ROLLCALL_GATES_ACTIVATION from XC_ROLLCALL_GATES_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar arms stake_weight_collation_activation.STAKE_WEIGHT_COLLATION_ACTIVATION from XC_ANCHOR_STAKE_REGTEST_ACTIVATION",
+      "gate registry env view covers the regtest arming grammar enforces bundle order from the venue height on an armed regtest venue",
+      "gate registry env view covers the regtest arming grammar holds at least one armable row, so the sweep below checks something",
+      "gate registry env view covers the regtest arming grammar keeps the canonical shared row files byte-identical",
+      "gate registry env view covers the regtest arming grammar names a getter for every variable the arming grammar reads",
+      "gate registry env view covers the regtest arming grammar resolves the archive roll-call presence gate at the BTC snapshot block",
+      "gate registry env view covers the regtest arming grammar resolves the checkpoint supersede gate at the BTC snapshot block"
+    ],
     "ca7adc8ec93c6212": [
       "EncoderClient health calls the health RPC and returns tracker status fields",
       "EncoderClient health returns unreachable state when tracker is down"
@@ -6309,6 +6482,15 @@
       "vendored regtest_env twin exports regtestTimeOverride",
       "vendored regtest_env twin reads the scratch variable when set and 0 when unset",
       "vendored regtest_env twin still exports regtestHeight"
+    ],
+    "cc7aeac5f7e1bbac": [
+      "pre-flight Tier-2 per-action matrix STAKE (AMOUNT wider than the stake amount column) does not also judge the balance of an AMOUNT already refused on width",
+      "pre-flight Tier-2 per-action matrix STAKE (AMOUNT wider than the stake amount column) keeps a 250-character AMOUNT on STAKE|1 clear of the width refusal",
+      "pre-flight Tier-2 per-action matrix STAKE (AMOUNT wider than the stake amount column) keeps a 250-character AMOUNT on STAKE|2 clear of the width refusal",
+      "pre-flight Tier-2 per-action matrix STAKE (AMOUNT wider than the stake amount column) keeps a 250-character AMOUNT on STAKE|3 clear of the width refusal",
+      "pre-flight Tier-2 per-action matrix STAKE (AMOUNT wider than the stake amount column) refuses a 251-character AMOUNT on STAKE|1 as a non-overridable error",
+      "pre-flight Tier-2 per-action matrix STAKE (AMOUNT wider than the stake amount column) refuses a 251-character AMOUNT on STAKE|2 as a non-overridable error",
+      "pre-flight Tier-2 per-action matrix STAKE (AMOUNT wider than the stake amount column) refuses a 251-character AMOUNT on STAKE|3 as a non-overridable error"
     ],
     "cc8056cdfb571aba": [
       "Fuzz \u2013 Group 8: Rapid-fire random actions 100 random createAction calls \u2192 all errors are SDKError subclasses"
@@ -6562,14 +6744,10 @@
       "BATCH pre-flight (Tier 1 sub-command verdicts) the trap: a valid BATCH does NOT mean its commands succeed an invalid sub-command under valid:true is an ERROR, so the verdict fails",
       "BATCH pre-flight (Tier 1 sub-command verdicts) the trap: a valid BATCH does NOT mean its commands succeed the DRYRUN_VALID headline says the batch was accepted but not every command"
     ],
-    "da34ed218caf53b0": [
-      "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a FIAT-priced dispenser is exempt from the GET_AMOUNT rules, as in the handler",
-      "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a native-coin GET_AMOUNT past the coin decimals is a format warning",
-      "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a negative native-coin GET_AMOUNT is a format warning",
-      "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a negative token-priced GET_AMOUNT reaches the positivity rule",
-      "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a self-priced dispenser with no GET_AMOUNT at all is warned",
-      "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a well-formed positive self-priced GET_AMOUNT raises neither",
-      "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a zero self-priced GET_AMOUNT reaches the positivity rule"
+    "da3a6cdfc5f1fe1f": [
+      "bin/sync-templates (static contract) is syntactically valid JavaScript (compiles without executing)",
+      "bin/sync-templates (static contract) performs no network I/O (template sync is offline)",
+      "bin/sync-templates (static contract) reads template sources and writes a rendered module"
     ],
     "dacbb347cbaebfea": [
       "XChainSDK \u2013 VM convenience methods deploy() creates DEPLOY action",
@@ -6766,6 +6944,19 @@
       "FormatSelector.getFormatFields() returns correct ordered array for SEND v0",
       "FormatSelector.getFormatFields() returns correct ordered array for SLEEP v0",
       "FormatSelector.getFormatFields() returns correct ordered array for SLEEP v1"
+    ],
+    "e1095040964363ff": [
+      "BATCH limit-scan conformance (SDK mirror vs arbiter) per-leg AIRDROP weight (BATCH_AIRDROP_LEG_WEIGHT), arbiter half sees a multi-leg weight on the arbiter side, so the parity cases are not all flat",
+      "BATCH limit-scan conformance (SDK mirror vs arbiter) per-leg AIRDROP weight (BATCH_AIRDROP_LEG_WEIGHT), arbiter half weighs AIRDROP|0|JDOG|1|5 as the arbiter does on regtest",
+      "BATCH limit-scan conformance (SDK mirror vs arbiter) per-leg AIRDROP weight (BATCH_AIRDROP_LEG_WEIGHT), arbiter half weighs AIRDROP|0|JDOG|1|5|memo as the arbiter does on regtest",
+      "BATCH limit-scan conformance (SDK mirror vs arbiter) per-leg AIRDROP weight (BATCH_AIRDROP_LEG_WEIGHT), arbiter half weighs AIRDROP|1|5|JDOG|1 as the arbiter does on regtest",
+      "BATCH limit-scan conformance (SDK mirror vs arbiter) per-leg AIRDROP weight (BATCH_AIRDROP_LEG_WEIGHT), arbiter half weighs AIRDROP|1|5|JDOG|1|XCP|2 as the arbiter does on regtest",
+      "BATCH limit-scan conformance (SDK mirror vs arbiter) per-leg AIRDROP weight (BATCH_AIRDROP_LEG_WEIGHT), arbiter half weighs AIRDROP|1|5|JDOG|1|XCP|2|memo as the arbiter does on regtest",
+      "BATCH limit-scan conformance (SDK mirror vs arbiter) per-leg AIRDROP weight (BATCH_AIRDROP_LEG_WEIGHT), arbiter half weighs AIRDROP|2|JDOG|1|5|XCP|2|6|SAT|3|7 as the arbiter does on regtest",
+      "BATCH limit-scan conformance (SDK mirror vs arbiter) per-leg AIRDROP weight (BATCH_AIRDROP_LEG_WEIGHT), arbiter half weighs AIRDROP|2|JDOG|1|5|XCP|2|6|memo as the arbiter does on regtest",
+      "BATCH limit-scan conformance (SDK mirror vs arbiter) per-leg AIRDROP weight (BATCH_AIRDROP_LEG_WEIGHT), arbiter half weighs AIRDROP|3|JDOG|1|5|m1|XCP|2|6|m2 as the arbiter does on regtest",
+      "BATCH limit-scan conformance (SDK mirror vs arbiter) per-leg AIRDROP weight (BATCH_AIRDROP_LEG_WEIGHT), arbiter half weighs AIRDROP|zz as the arbiter does on regtest",
+      "BATCH limit-scan conformance (SDK mirror vs arbiter) per-leg AIRDROP weight (BATCH_AIRDROP_LEG_WEIGHT), arbiter half weighs DROP|1|5|JDOG|1|XCP|2 as the arbiter does on regtest"
     ],
     "e10f508f3ba4f721": [
       "pre-flight activation lookup resolves the network and per-coin keys with registry precedence",
@@ -7499,29 +7690,6 @@
       "scaffold sources: drift + verdict sdk.scaffold() + listTemplates() every scaffolded template is a non-empty string that passes validateContract",
       "scaffold sources: drift + verdict sdk.scaffold() + listTemplates() lists the five templates and the patterns"
     ],
-    "f43abb21b1821af1": [
-      "consensus-primitive conformance: activation predicate vectors @regression every group this repo runs is a non-empty list",
-      "consensus-primitive conformance: byte-identity to canonical source @regression equivocation_header.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/ file set equals xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/ holds the vendored parts",
-      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/core.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/regtest_env.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_1.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_2.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_3.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_4.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression gate_registry/shared_rows_5.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression snapshot_reorg_buffer.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: byte-identity to canonical source @regression stake_weighted_quorum.js is byte-identical to xchain-documentation/protocol/reference-impl",
-      "consensus-primitive conformance: canonical vectors @regression equivocation_header builder ENGINE_TAGS matches the canonical map",
-      "gate_registry entry loads every local shared-rows part @regression finds numbered shared-rows parts to check",
-      "gate_registry entry loads every local shared-rows part @regression the entry requires gate_registry/shared_rows_1.js",
-      "gate_registry entry loads every local shared-rows part @regression the entry requires gate_registry/shared_rows_2.js",
-      "gate_registry entry loads every local shared-rows part @regression the entry requires gate_registry/shared_rows_3.js",
-      "gate_registry entry loads every local shared-rows part @regression the entry requires gate_registry/shared_rows_4.js",
-      "gate_registry entry loads every local shared-rows part @regression the entry requires gate_registry/shared_rows_5.js"
-    ],
     "f4432ea3f895cbc6": [
       "G6: window-store durability a refused start releases its lock, so the operator can retry after restoring",
       "G6: window-store durability an init on an existing window does not wipe it",
@@ -7674,8 +7842,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 579,
-      "titleCount": 6083,
+      "fileCount": 588,
+      "titleCount": 6235,
       "files": {
         "test/unit/actions/action_roundtrip_golden.test.js": "0889dd14dd14af13",
         "test/unit/actions/actions.test.js": "e72dbd6bc6ac1b9a",
@@ -7801,7 +7969,7 @@
         "test/unit/clients/explorer_batch.test.js": "1403e3f96513eee2",
         "test/unit/clients/explorer_contract_row_types.test.js": "f1509539263b7cbd",
         "test/unit/clients/explorer_freshness.test.js": "a4310d736d1058ce",
-        "test/unit/clients/explorer_response_types.test.js": "9fd1b874376ae0b8",
+        "test/unit/clients/explorer_response_types.test.js": "95d8754b5b642adc",
         "test/unit/clients/explorer_route_contract.test.js": "af88a5dab4d4b43f",
         "test/unit/clients/fee_quote.test.js": "bd47cb862843d661",
         "test/unit/clients/fee_quote_pinned_destination.test.js": "bae1f8660d59554d",
@@ -7870,10 +8038,10 @@
         "test/unit/consensus/anchor_fold_registry_rows.test.js": "39858f72b81694ad",
         "test/unit/consensus/archive_match_count_mirror.test.js": "966436d371b81563",
         "test/unit/consensus/checkpoint.test.js": "f9fd3e0e8a60cde7",
-        "test/unit/consensus/checkpoint_commitment_twin_parity.test.js": "21a1db9c64f4b487",
+        "test/unit/consensus/checkpoint_commitment_twin_parity.test.js": "c8085a349f536188",
         "test/unit/consensus/checkpoint_forged_set.test.js": "eec351b69296258e",
-        "test/unit/consensus/consensus_primitive_conformance.test.js": "f43abb21b1821af1",
-        "test/unit/consensus/gate_registry_env_coverage.test.js": "b5cafa9661a5c2b3",
+        "test/unit/consensus/consensus_primitive_conformance.test.js": "a992e00386bec5d1",
+        "test/unit/consensus/gate_registry_env_coverage.test.js": "ca75acadee5cd15c",
         "test/unit/consensus/merkle_twin_parity.test.js": "2699736e26aa9505",
         "test/unit/consensus/regtest_env_twin.test.js": "cbad35bf1daff99f",
         "test/unit/consensus/state_subtree_constants.test.js": "e596539159de9a25",
@@ -7896,7 +8064,7 @@
         "test/unit/contract/contract_parity.test.js": "089bdf24d59c748e",
         "test/unit/contract/contract_state_wait.test.js": "28c02816aa994aac",
         "test/unit/contract/contracts.test.js": "831f56d7b10985fe",
-        "test/unit/contract/contracts_parse_abi.test.js": "b536490bbf987431",
+        "test/unit/contract/contracts_parse_abi.test.js": "1fd8a320421b498d",
         "test/unit/contract/escrow_variants_scaffold.test.js": "98ee26a659d8646e",
         "test/unit/contract/manifest_permissions_error.test.js": "e03046bb6ae8069c",
         "test/unit/contract/nesting_depth/contract_lint_nesting_depth.test.js": "f5f9d21c1dc8c88e",
@@ -7910,6 +8078,7 @@
         "test/unit/cosigner/co_signer.test/01_output_and_fee_caps.test.js": "cdb51ad64b53bff1",
         "test/unit/cosigner/co_signer.test/02_multi_input_prevouts_and_exact_fee_cap.test.js": "009976a3263b836f",
         "test/unit/cosigner/co_signer.test/03_window_store_fail_closed_budget.test.js": "4429332cb0676388",
+        "test/unit/cosigner/co_signer_header_scope.test.js": "8c53649221a5fed3",
         "test/unit/cosigner/co_signer_server.test.js": "1cb2c14d5b1df11b",
         "test/unit/cosigner/cosigner2of3.test.js": "5e6445f6782e94b0",
         "test/unit/cosigner/cosigner_account.test.js": "84adf78b2410f807",
@@ -8019,7 +8188,7 @@
         "test/unit/preflight/checks/checks.test/04_sweep_empty_valid_no_op.test.js": "d2db593088c80667",
         "test/unit/preflight/checks/checks.test/05_airdrop_null_amount_warning_never_error.test.js": "2ba6d5dbf15032c1",
         "test/unit/preflight/checks/checks.test/06_dispense_tier_1_cannot_validate_moves_native_coin.test.js": "c1064132e29d999a",
-        "test/unit/preflight/checks/checks.test/07_dispenser_create_pricing_amount_positivity_mirror.test.js": "da34ed218caf53b0",
+        "test/unit/preflight/checks/checks.test/07_dispenser_create_pricing_amount_positivity_mirror.test.js": "7e6aa6d12fac30e4",
         "test/unit/preflight/checks/checks.test/08_dispenser_refill_refill_cap_oracle_fee.test.js": "f44b74c19651b94c",
         "test/unit/preflight/checks/checks.test/09_dispenser_ownership_escrow_edit.test.js": "67f8bb4e02994230",
         "test/unit/preflight/checks/checks.test/10_vote_re_vote_legal_state_unverified.test.js": "3298906a0629b99d",
@@ -8030,14 +8199,17 @@
         "test/unit/preflight/checks/checks.test/15_op_return_carrier_cap_parity_with_compose_time_gate.test.js": "df97ec7283defdfb",
         "test/unit/preflight/checks/checks.test/16_dispenser_settlement_price_gate.test.js": "1469a7dc74069461",
         "test/unit/preflight/checks/checks.test/17_dispenser_sleep_and_list_restrictions.test.js": "eebac5455d0d2da4",
+        "test/unit/preflight/checks/checks.test/18_stake_amount_column_width.test.js": "cc7aeac5f7e1bbac",
+        "test/unit/preflight/checks/checks.test/19_issue_caret_tick_normalize.test.js": "a4f1b3f60d13ae87",
         "test/unit/preflight/checks/dividend.test.js": "0ce9655dbccee3a6",
         "test/unit/preflight/conformance/offrail_conformance.test.js": "50763c8b34df1c5f",
         "test/unit/preflight/constants/constants.test.js": "3e30426312edb6cc",
-        "test/unit/preflight/constants/constants.test/01_drift_map.test.js": "67be37e6ccde6d01",
+        "test/unit/preflight/constants/constants.test/01_drift_map.test.js": "6a5a4bfa81cfc484",
         "test/unit/preflight/constants/constants.test/02_by_value_seams.test.js": "c058fba27bbee2a5",
         "test/unit/preflight/constants/constants.test/03_mirrored_regex_rules.test.js": "7700fa0166072669",
         "test/unit/preflight/constants/constants.test/04_mirrored_indexer_lists.test.js": "2bd0dbe3142ca315",
         "test/unit/preflight/constants/constants.test/05_mirrored_activation_rows.test.js": "e10f508f3ba4f721",
+        "test/unit/preflight/constants/constants.test/06_drift_map_gate_retirement_reviews.test.js": "339f24cbf1192203",
         "test/unit/preflight/custody/custody_guard_notes.test.js": "24e5aec18c560612",
         "test/unit/preflight/custody/custody_map_rows.test.js": "3151828024be21f7",
         "test/unit/preflight/drift_gate/drift_gate_handler_dirs.test.js": "e00c86e682cfea08",
@@ -8050,6 +8222,7 @@
         "test/unit/preflight/engine/engine.test/04_severity_trust_model_4_2.test.js": "4e313fdc96be7c4f",
         "test/unit/preflight/issue/issue_tick_coin_prefix.test.js": "3a8e71051ad5f836",
         "test/unit/preflight/issue/tick_coin_prefix_verdict.test.js": "3ae5f32ea7d65053",
+        "test/unit/preflight/issue_caret_tick.test.js": "0ff4b03077a6b5c4",
         "test/unit/preflight/lifecycle.test.js": "6496075e070ad57c",
         "test/unit/preflight/list/list_note_refusals.test.js": "287b43aeb58106c1",
         "test/unit/preflight/list/list_set_meta_note.test.js": "1866e9c807f637eb",
@@ -8080,6 +8253,8 @@
         "test/unit/protocol/batch/batch_limits_conformance.test/02_arbiter_half_sibling_xchain_indexer_checkout.test.js": "7385ad8cc90463bb",
         "test/unit/protocol/batch/batch_limits_conformance.test/03_weight_conformance_sdk_half.test.js": "07684b1d6aea6c3c",
         "test/unit/protocol/batch/batch_limits_conformance.test/04_weight_conformance_arbiter_half.test.js": "a974d3b9396d53cb",
+        "test/unit/protocol/batch/batch_limits_conformance.test/05_airdrop_leg_weight_arbiter_half.test.js": "e1095040964363ff",
+        "test/unit/protocol/batch_limits.test.js": "76771788dfca20c3",
         "test/unit/protocol/broadcast_fee_length.test.js": "22857356eaf9f41c",
         "test/unit/protocol/compression.test.js": "4bb5fd0056d156b5",
         "test/unit/protocol/compression.test/01_round_trip.test.js": "1dccf0c13b8e3ef7",
@@ -8109,7 +8284,7 @@
         "test/unit/protocol/light/light.test/05_spv_phase_4_doge_anchor_cold_start_trust.test.js": "0749479b344d2eb6",
         "test/unit/protocol/light/light.test/06_spv_phase_5_validator_set_proof_trustless_quorum.test.js": "f404eb95acf4b632",
         "test/unit/protocol/light/light.test/07_spv_d4_pinned_launch_trust_root.test.js": "41a70f324b529a62",
-        "test/unit/protocol/light/light.test/08_spv_7_3_rotation_aware_pinned_path_follow_forward.test.js": "a642d1867223aa67",
+        "test/unit/protocol/light/light.test/08_spv_7_3_rotation_aware_pinned_path_follow_forward.test.js": "2193b1ac40603d80",
         "test/unit/protocol/light/light.test/09_spv_phase_4_doge_anchor_cold_start_trust.test.js": "40a83a2607fb2c50",
         "test/unit/protocol/light/light.test/10_anchor_fold_v3_cold_start_trust.test.js": "17d4121b8213b71a",
         "test/unit/protocol/light/light.test/11_spv_7_3_follow_forward_signed_field_binding.test.js": "60fef4183eb776bf",
@@ -8192,11 +8367,12 @@
         "test/unit/sdk/xchain_sdk.test/11_fee_quote_authorized_output.test.js": "0f2b3ab2799f3d46",
         "test/unit/security/configuration/dependency_advisories.test.js": "0f2abe37f99c5a17",
         "test/unit/tooling/batch_arbiter_loader.test.js": "74408e9ca166ae3b",
+        "test/unit/tooling/contracts_pin_workflow.test.js": "67a32a6f2e6b1a0a",
         "test/unit/tooling/coverage_thresholds_sync.test.js": "25619da680526453",
         "test/unit/tooling/docs_openrpc.test.js": "9e993b9a150c4591",
         "test/unit/tooling/openrpc_coverage.test.js": "1d41e3f226896333",
         "test/unit/tooling/published_package_version_parity.test.js": "58ce38f3570f9ed3",
-        "test/unit/tooling/scripts_sync_templates.test.js": "082323fc997edc0e",
+        "test/unit/tooling/scripts_sync_templates.test.js": "da3a6cdfc5f1fe1f",
         "test/unit/tooling/sibling_coverage.test.js": "4864408b0963a568",
         "test/unit/utils/action_waiter.test.js": "980564a59bb4fc5d",
         "test/unit/utils/action_waiter/contract_values.test.js": "205edf0c10928063",
@@ -8207,6 +8383,7 @@
         "test/unit/utils/address_resolver.test.js": "d64f3362d8c563b2",
         "test/unit/utils/address_resolver_list_items.test.js": "1e2c7eeb52afe12f",
         "test/unit/utils/apply_bufferutils_patch.test.js": "c75c6660349c9bb6",
+        "test/unit/utils/bitcoinjs7_raw_bytes.test.js": "1eb5512a05113ad7",
         "test/unit/utils/errors.test.js": "7b006436dbd431b4",
         "test/unit/utils/list/address_ref_gate.test.js": "b9b45f55f1e7ec87",
         "test/unit/utils/list/coin_explorers.test.js": "4a2f034d8f6ede73",
@@ -8259,8 +8436,8 @@
       }
     },
     "test:all": {
-      "fileCount": 618,
-      "titleCount": 6412,
+      "fileCount": 627,
+      "titleCount": 6564,
       "files": {
         "test/boundary/boundary.test.js": "51c5d77e922af958",
         "test/boundary/boundary.test/01_tick_name_length_boundary.test.js": "2291494717b9aaab",
@@ -8426,7 +8603,7 @@
         "test/unit/clients/explorer_batch.test.js": "1403e3f96513eee2",
         "test/unit/clients/explorer_contract_row_types.test.js": "f1509539263b7cbd",
         "test/unit/clients/explorer_freshness.test.js": "a4310d736d1058ce",
-        "test/unit/clients/explorer_response_types.test.js": "9fd1b874376ae0b8",
+        "test/unit/clients/explorer_response_types.test.js": "95d8754b5b642adc",
         "test/unit/clients/explorer_route_contract.test.js": "af88a5dab4d4b43f",
         "test/unit/clients/fee_quote.test.js": "bd47cb862843d661",
         "test/unit/clients/fee_quote_pinned_destination.test.js": "bae1f8660d59554d",
@@ -8495,10 +8672,10 @@
         "test/unit/consensus/anchor_fold_registry_rows.test.js": "39858f72b81694ad",
         "test/unit/consensus/archive_match_count_mirror.test.js": "966436d371b81563",
         "test/unit/consensus/checkpoint.test.js": "f9fd3e0e8a60cde7",
-        "test/unit/consensus/checkpoint_commitment_twin_parity.test.js": "21a1db9c64f4b487",
+        "test/unit/consensus/checkpoint_commitment_twin_parity.test.js": "c8085a349f536188",
         "test/unit/consensus/checkpoint_forged_set.test.js": "eec351b69296258e",
-        "test/unit/consensus/consensus_primitive_conformance.test.js": "f43abb21b1821af1",
-        "test/unit/consensus/gate_registry_env_coverage.test.js": "b5cafa9661a5c2b3",
+        "test/unit/consensus/consensus_primitive_conformance.test.js": "a992e00386bec5d1",
+        "test/unit/consensus/gate_registry_env_coverage.test.js": "ca75acadee5cd15c",
         "test/unit/consensus/merkle_twin_parity.test.js": "2699736e26aa9505",
         "test/unit/consensus/regtest_env_twin.test.js": "cbad35bf1daff99f",
         "test/unit/consensus/state_subtree_constants.test.js": "e596539159de9a25",
@@ -8520,7 +8697,7 @@
         "test/unit/contract/contract_parity.test.js": "089bdf24d59c748e",
         "test/unit/contract/contract_state_wait.test.js": "28c02816aa994aac",
         "test/unit/contract/contracts.test.js": "831f56d7b10985fe",
-        "test/unit/contract/contracts_parse_abi.test.js": "b536490bbf987431",
+        "test/unit/contract/contracts_parse_abi.test.js": "1fd8a320421b498d",
         "test/unit/contract/escrow_variants_scaffold.test.js": "98ee26a659d8646e",
         "test/unit/contract/manifest_permissions_error.test.js": "e03046bb6ae8069c",
         "test/unit/contract/nesting_depth/contract_lint_nesting_depth.test.js": "f5f9d21c1dc8c88e",
@@ -8534,6 +8711,7 @@
         "test/unit/cosigner/co_signer.test/01_output_and_fee_caps.test.js": "cdb51ad64b53bff1",
         "test/unit/cosigner/co_signer.test/02_multi_input_prevouts_and_exact_fee_cap.test.js": "009976a3263b836f",
         "test/unit/cosigner/co_signer.test/03_window_store_fail_closed_budget.test.js": "4429332cb0676388",
+        "test/unit/cosigner/co_signer_header_scope.test.js": "8c53649221a5fed3",
         "test/unit/cosigner/co_signer_server.test.js": "1cb2c14d5b1df11b",
         "test/unit/cosigner/cosigner2of3.test.js": "5e6445f6782e94b0",
         "test/unit/cosigner/cosigner_account.test.js": "84adf78b2410f807",
@@ -8643,7 +8821,7 @@
         "test/unit/preflight/checks/checks.test/04_sweep_empty_valid_no_op.test.js": "d2db593088c80667",
         "test/unit/preflight/checks/checks.test/05_airdrop_null_amount_warning_never_error.test.js": "2ba6d5dbf15032c1",
         "test/unit/preflight/checks/checks.test/06_dispense_tier_1_cannot_validate_moves_native_coin.test.js": "c1064132e29d999a",
-        "test/unit/preflight/checks/checks.test/07_dispenser_create_pricing_amount_positivity_mirror.test.js": "da34ed218caf53b0",
+        "test/unit/preflight/checks/checks.test/07_dispenser_create_pricing_amount_positivity_mirror.test.js": "7e6aa6d12fac30e4",
         "test/unit/preflight/checks/checks.test/08_dispenser_refill_refill_cap_oracle_fee.test.js": "f44b74c19651b94c",
         "test/unit/preflight/checks/checks.test/09_dispenser_ownership_escrow_edit.test.js": "67f8bb4e02994230",
         "test/unit/preflight/checks/checks.test/10_vote_re_vote_legal_state_unverified.test.js": "3298906a0629b99d",
@@ -8654,14 +8832,17 @@
         "test/unit/preflight/checks/checks.test/15_op_return_carrier_cap_parity_with_compose_time_gate.test.js": "df97ec7283defdfb",
         "test/unit/preflight/checks/checks.test/16_dispenser_settlement_price_gate.test.js": "1469a7dc74069461",
         "test/unit/preflight/checks/checks.test/17_dispenser_sleep_and_list_restrictions.test.js": "eebac5455d0d2da4",
+        "test/unit/preflight/checks/checks.test/18_stake_amount_column_width.test.js": "cc7aeac5f7e1bbac",
+        "test/unit/preflight/checks/checks.test/19_issue_caret_tick_normalize.test.js": "a4f1b3f60d13ae87",
         "test/unit/preflight/checks/dividend.test.js": "0ce9655dbccee3a6",
         "test/unit/preflight/conformance/offrail_conformance.test.js": "50763c8b34df1c5f",
         "test/unit/preflight/constants/constants.test.js": "3e30426312edb6cc",
-        "test/unit/preflight/constants/constants.test/01_drift_map.test.js": "67be37e6ccde6d01",
+        "test/unit/preflight/constants/constants.test/01_drift_map.test.js": "6a5a4bfa81cfc484",
         "test/unit/preflight/constants/constants.test/02_by_value_seams.test.js": "c058fba27bbee2a5",
         "test/unit/preflight/constants/constants.test/03_mirrored_regex_rules.test.js": "7700fa0166072669",
         "test/unit/preflight/constants/constants.test/04_mirrored_indexer_lists.test.js": "2bd0dbe3142ca315",
         "test/unit/preflight/constants/constants.test/05_mirrored_activation_rows.test.js": "e10f508f3ba4f721",
+        "test/unit/preflight/constants/constants.test/06_drift_map_gate_retirement_reviews.test.js": "339f24cbf1192203",
         "test/unit/preflight/custody/custody_guard_notes.test.js": "24e5aec18c560612",
         "test/unit/preflight/custody/custody_map_rows.test.js": "3151828024be21f7",
         "test/unit/preflight/drift_gate/drift_gate_handler_dirs.test.js": "e00c86e682cfea08",
@@ -8674,6 +8855,7 @@
         "test/unit/preflight/engine/engine.test/04_severity_trust_model_4_2.test.js": "4e313fdc96be7c4f",
         "test/unit/preflight/issue/issue_tick_coin_prefix.test.js": "3a8e71051ad5f836",
         "test/unit/preflight/issue/tick_coin_prefix_verdict.test.js": "3ae5f32ea7d65053",
+        "test/unit/preflight/issue_caret_tick.test.js": "0ff4b03077a6b5c4",
         "test/unit/preflight/lifecycle.test.js": "6496075e070ad57c",
         "test/unit/preflight/list/list_note_refusals.test.js": "287b43aeb58106c1",
         "test/unit/preflight/list/list_set_meta_note.test.js": "1866e9c807f637eb",
@@ -8704,6 +8886,8 @@
         "test/unit/protocol/batch/batch_limits_conformance.test/02_arbiter_half_sibling_xchain_indexer_checkout.test.js": "7385ad8cc90463bb",
         "test/unit/protocol/batch/batch_limits_conformance.test/03_weight_conformance_sdk_half.test.js": "07684b1d6aea6c3c",
         "test/unit/protocol/batch/batch_limits_conformance.test/04_weight_conformance_arbiter_half.test.js": "a974d3b9396d53cb",
+        "test/unit/protocol/batch/batch_limits_conformance.test/05_airdrop_leg_weight_arbiter_half.test.js": "e1095040964363ff",
+        "test/unit/protocol/batch_limits.test.js": "76771788dfca20c3",
         "test/unit/protocol/broadcast_fee_length.test.js": "22857356eaf9f41c",
         "test/unit/protocol/compression.test.js": "4bb5fd0056d156b5",
         "test/unit/protocol/compression.test/01_round_trip.test.js": "1dccf0c13b8e3ef7",
@@ -8733,7 +8917,7 @@
         "test/unit/protocol/light/light.test/05_spv_phase_4_doge_anchor_cold_start_trust.test.js": "0749479b344d2eb6",
         "test/unit/protocol/light/light.test/06_spv_phase_5_validator_set_proof_trustless_quorum.test.js": "f404eb95acf4b632",
         "test/unit/protocol/light/light.test/07_spv_d4_pinned_launch_trust_root.test.js": "41a70f324b529a62",
-        "test/unit/protocol/light/light.test/08_spv_7_3_rotation_aware_pinned_path_follow_forward.test.js": "a642d1867223aa67",
+        "test/unit/protocol/light/light.test/08_spv_7_3_rotation_aware_pinned_path_follow_forward.test.js": "2193b1ac40603d80",
         "test/unit/protocol/light/light.test/09_spv_phase_4_doge_anchor_cold_start_trust.test.js": "40a83a2607fb2c50",
         "test/unit/protocol/light/light.test/10_anchor_fold_v3_cold_start_trust.test.js": "17d4121b8213b71a",
         "test/unit/protocol/light/light.test/11_spv_7_3_follow_forward_signed_field_binding.test.js": "60fef4183eb776bf",
@@ -8816,11 +9000,12 @@
         "test/unit/sdk/xchain_sdk.test/11_fee_quote_authorized_output.test.js": "0f2b3ab2799f3d46",
         "test/unit/security/configuration/dependency_advisories.test.js": "0f2abe37f99c5a17",
         "test/unit/tooling/batch_arbiter_loader.test.js": "74408e9ca166ae3b",
+        "test/unit/tooling/contracts_pin_workflow.test.js": "67a32a6f2e6b1a0a",
         "test/unit/tooling/coverage_thresholds_sync.test.js": "25619da680526453",
         "test/unit/tooling/docs_openrpc.test.js": "9e993b9a150c4591",
         "test/unit/tooling/openrpc_coverage.test.js": "1d41e3f226896333",
         "test/unit/tooling/published_package_version_parity.test.js": "58ce38f3570f9ed3",
-        "test/unit/tooling/scripts_sync_templates.test.js": "082323fc997edc0e",
+        "test/unit/tooling/scripts_sync_templates.test.js": "da3a6cdfc5f1fe1f",
         "test/unit/tooling/sibling_coverage.test.js": "4864408b0963a568",
         "test/unit/utils/action_waiter.test.js": "980564a59bb4fc5d",
         "test/unit/utils/action_waiter/contract_values.test.js": "205edf0c10928063",
@@ -8831,6 +9016,7 @@
         "test/unit/utils/address_resolver.test.js": "d64f3362d8c563b2",
         "test/unit/utils/address_resolver_list_items.test.js": "1e2c7eeb52afe12f",
         "test/unit/utils/apply_bufferutils_patch.test.js": "c75c6660349c9bb6",
+        "test/unit/utils/bitcoinjs7_raw_bytes.test.js": "1eb5512a05113ad7",
         "test/unit/utils/errors.test.js": "7b006436dbd431b4",
         "test/unit/utils/list/address_ref_gate.test.js": "b9b45f55f1e7ec87",
         "test/unit/utils/list/coin_explorers.test.js": "4a2f034d8f6ede73",
