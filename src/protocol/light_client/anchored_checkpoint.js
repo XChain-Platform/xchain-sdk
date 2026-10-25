@@ -45,6 +45,7 @@ const ANCHOR_FOLD_KEY = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
 const { lowerHex, resolveFetch, networkContextCoin, baseUrl, fetchJson } = require('./fetch_helpers.js');
 const { resolveValidatorSet } = require('./quorum_resolution.js');
 const { attachFoldArchiveFromExplorer } = require('./fold_archive_attach.js');
+const { supersessionFields, refuseSuperseded } = require('./checkpoint_supersession.js');
 
 // Default DOGE confirmation depth a cold-start anchor must be buried under before
 // it is trusted. DOGE blocks ~1 min and ANCHORs land ~daily, so a recent valid
@@ -221,12 +222,14 @@ function anchorToCheckpoint(a){
     let sigs = a.validator_signatures;
     if (typeof sigs === 'string'){ try { sigs = JSON.parse(sigs); } catch (e){ sigs = []; } }
     if (!Array.isArray(sigs)) sigs = [];
+    const supersession = supersessionFields(a);
     const cp = {
         chain: a.chain, network: a.network, block_index: Number(a.block_index),
         block_hash: a.block_hash, ledger_hash: a.ledger_hash, actions_hash: a.actions_hash, contract_hash: a.contract_hash,
         checkpoint_seq: Number(a.checkpoint_seq), snapshot_block: Number(a.snapshot_block),
         state_root: a.state_root, state_root_version: a.state_root_version,
         block_merkle_root: a.block_merkle_root, block_merkle_version: a.block_merkle_version,
+        supersedes_from: supersession.supersedes_from, rules_digest: supersession.rules_digest,
         validator_signatures: sigs
     };
     const foldFields = ['match_batch_seq', 'match_count', 'batch_crc32', 'total_chunks'];
@@ -332,6 +335,14 @@ async function fetchAnchoredCheckpoint(opts){
     if (!rows.length)
         return { verified: false, reason: 'NO_ROOT_ANCHOR', checkpoint: null, anchor: null, dogeTxid: null, confirmations: 0, minDepth, quorum: null, weighted: null };
     const rec = rows[0];
+    const cp = anchorToCheckpoint(rec);
+    const supersession = supersessionFields(rec);
+    const superseded = refuseSuperseded(rec, opts);
+    if (superseded)
+        return Object.assign({}, superseded, {
+            checkpoint: cp, anchor: rec, dogeTxid: rec.tx_hash || null,
+            confirmations: 0, minDepth, quorum: null, weighted: null
+        }, supersession);
     let tip = opts.dogeTipHeight;
     if (tip == null && typeof opts.getDogeTipHeight === 'function') tip = await opts.getDogeTipHeight();
     // Inclusion height: caller's own DOGE source first, explorer claim only as fallback.
@@ -344,13 +355,12 @@ async function fetchAnchoredCheckpoint(opts){
     const refusal = (opts.requireTrustedDepth && depthSource !== 'caller') ? 'UNTRUSTED_DOGE_DEPTH'
         : (depthSource === 'caller' && !isCheckpointSectionRow(rec, txHeight)) ? 'ANCHOR_FOLD_NOT_ACTIVE' : null;
     if (refusal)
-        return { verified: false, reason: refusal, checkpoint: anchorToCheckpoint(rec),
+        return Object.assign({ verified: false, reason: refusal, checkpoint: cp,
                  anchor: rec, dogeTxid: rec.tx_hash || null, confirmations: 0, minDepth,
-                 quorum: null, weighted: null, depthSource };
+                 quorum: null, weighted: null, depthSource }, supersession);
     const anchorHeight = (txHeight != null) ? txHeight : rec.block_index_doge;
     const confirmations = (tip != null && anchorHeight != null)
         ? (Number(tip) - Number(anchorHeight) + 1) : NaN;
-    const cp = anchorToCheckpoint(rec);
     // A v3 list row never carries its wrapper fold; it lives on the action's archive row.
     if (Number(rec.version) === ANCHOR_FOLD_VERSION && !cp.fold_archive)
         await attachFoldArchiveFromExplorer(f, opts, dogeCoin, rec, cp);
@@ -368,7 +378,8 @@ async function fetchAnchoredCheckpoint(opts){
     const targetCoin = (opts.targetCoin == null || String(opts.targetCoin) === '') ? null : opts.targetCoin;
     const validators = await resolveValidatorSet(f, opts, cp, targetCoin);
     const res = verifyAnchoredCheckpoint({ checkpoint: cp, validators, confirmations, minDepth });
-    return Object.assign({}, res, { anchor: rec, dogeTxid: rec.tx_hash || null, depthSource });
+    return Object.assign({}, res, supersession,
+        { anchor: rec, dogeTxid: rec.tx_hash || null, depthSource });
 }
 
 module.exports = { DEFAULT_ANCHOR_MIN_DEPTH, ANCHOR_BUNDLE_VERSION, ANCHOR_FOLD_VERSION, sectionsChainOrderReason, sigsPubkeyOrderReason, enforceAnchorBundleOrder, parseAnchorV0, anchorBundleSection, anchorToCheckpoint, ANCHOR_ROOT_RE, ANCHOR_VERSION_RE, verifyAnchoredCheckpoint, fetchAnchoredCheckpoint };
