@@ -1891,6 +1891,16 @@
       "decoder.parse version gate every accepted VERSION token reads the same on the indexer",
       "decoder.parse version gate unknown version is UNKNOWN_VERSION"
     ],
+    "392672795fe7ad34": [
+      "light-client supersede suffix @regression @tier1 detects either non-null supersession field",
+      "light-client supersede suffix @regression @tier1 does not add SUPERSEDE text to a plain canonicalCheckpoint fixture",
+      "light-client supersede suffix @regression @tier1 returns an empty suffix for a plain checkpoint",
+      "light-client supersede suffix @regression @tier1 serializes the exact SUPERSEDE bytes and normalizes field representations",
+      "light-client supersede suffix @regression @tier1 throws when rules_digest is missing",
+      "light-client supersede suffix @regression @tier1 throws when rules_digest is not 64 hexadecimal characters",
+      "light-client supersede suffix @regression @tier1 throws when supersedes_from is missing",
+      "light-client supersede suffix @regression @tier1 throws when supersedes_from is not a non-negative safe integer"
+    ],
     "392b6e06020fd4b3": [
       "bridge: SDK/indexer address-parameter parity both validators answer identically over the address corpus, on every coin and network pair",
       "bridge: SDK/indexer address-parameter parity covers every coin the SDK registry knows, on every network",
@@ -8307,6 +8317,7 @@
         "test/unit/protocol/light/light_client/fetch_helpers_io_and_identity.test.js": "9812b383ddfda228",
         "test/unit/protocol/light/light_client/fold_wrapper_archive_predicate.test.js": "0a88424ec2697c4d",
         "test/unit/protocol/light/light_client/fold_wrapper_archive_set.test.js": "8feff99698ef1ade",
+        "test/unit/protocol/light/light_client/supersede_suffix.test.js": "392672795fe7ad34",
         "test/unit/protocol/list/list_item_validation.test.js": "dd791993a35153b4",
         "test/unit/protocol/list/list_meta_field_rules.test.js": "8927a0f21d80f57e",
         "test/unit/protocol/list/list_meta_rules.test.js": "e1ce1e45e8ef9dab",
@@ -8941,6 +8952,7 @@
         "test/unit/protocol/light/light_client/fetch_helpers_io_and_identity.test.js": "9812b383ddfda228",
         "test/unit/protocol/light/light_client/fold_wrapper_archive_predicate.test.js": "0a88424ec2697c4d",
         "test/unit/protocol/light/light_client/fold_wrapper_archive_set.test.js": "8feff99698ef1ade",
+        "test/unit/protocol/light/light_client/supersede_suffix.test.js": "392672795fe7ad34",
         "test/unit/protocol/list/list_item_validation.test.js": "dd791993a35153b4",
         "test/unit/protocol/list/list_meta_field_rules.test.js": "8927a0f21d80f57e",
         "test/unit/protocol/list/list_meta_rules.test.js": "e1ce1e45e8ef9dab",
