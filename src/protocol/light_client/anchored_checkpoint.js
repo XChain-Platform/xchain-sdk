@@ -45,6 +45,7 @@ const ANCHOR_FOLD_KEY = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
 const { lowerHex, resolveFetch, networkContextCoin, baseUrl, fetchJson } = require('./fetch_helpers.js');
 const { resolveValidatorSet } = require('./quorum_resolution.js');
 const { attachFoldArchiveFromExplorer } = require('./fold_archive_attach.js');
+const { supersessionFields, refuseSuperseded } = require('./checkpoint_supersession.js');
 
 // Default DOGE confirmation depth a cold-start anchor must be buried under before
 // it is trusted. DOGE blocks ~1 min and ANCHORs land ~daily, so a recent valid
@@ -221,12 +222,14 @@ function anchorToCheckpoint(a){
     let sigs = a.validator_signatures;
     if (typeof sigs === 'string'){ try { sigs = JSON.parse(sigs); } catch (e){ sigs = []; } }
     if (!Array.isArray(sigs)) sigs = [];
+    const supersession = supersessionFields(a);
     const cp = {
         chain: a.chain, network: a.network, block_index: Number(a.block_index),
         block_hash: a.block_hash, ledger_hash: a.ledger_hash, actions_hash: a.actions_hash, contract_hash: a.contract_hash,
         checkpoint_seq: Number(a.checkpoint_seq), snapshot_block: Number(a.snapshot_block),
         state_root: a.state_root, state_root_version: a.state_root_version,
         block_merkle_root: a.block_merkle_root, block_merkle_version: a.block_merkle_version,
+        supersedes_from: supersession.supersedes_from, rules_digest: supersession.rules_digest,
         validator_signatures: sigs
     };
     const foldFields = ['match_batch_seq', 'match_count', 'batch_crc32', 'total_chunks'];
@@ -288,6 +291,14 @@ function verifyAnchoredCheckpoint(opts){
     return Object.assign({ verified: true, reason: null }, base);
 }
 
+function anchoredCheckpointRows(body, targetChain){
+    const rows = Array.isArray(body) ? body : ((body && (body.data || body.results || body.rows)) || []);
+    const matching = rows.filter(r => r && isCheckpointSectionRow(r, r.block_index_doge) && r.state_root &&
+        String(r.chain).toUpperCase() === String(targetChain).toUpperCase());
+    matching.sort((a, b) => Number(b.checkpoint_seq) - Number(a.checkpoint_seq));
+    return matching;
+}
+
 // Convenience: fetch the latest root-bearing ANCHOR section for `targetChain` from the
 // DOGE explorer, confirm its DOGE depth (caller supplies the tip via dogeTipHeight or
 // getDogeTipHeight), and verify it. Anchors are DOGE-only, so the list is served by the
@@ -320,18 +331,23 @@ async function fetchAnchoredCheckpoint(opts){
     const url = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(dogeCoin)) +
                 '/api/anchors/' + encodeURIComponent(String(opts.targetChain)) + '/chain';
     const body = await fetchJson(f, url);
-    let rows = Array.isArray(body) ? body : ((body && (body.data || body.results || body.rows)) || []);
     // Checkpoint section rows only: v0, and fold v3 at/above ANCHOR_FOLD at the row's DOGE
     // height. v1 (archive head) and v2 (chunk) carry no SPV checkpoint and are skipped,
     // as is any pre-launch retired per-chain shape, by version rather than by root
     // presence, so a replayed pre-launch anchor cannot serve as a trust root; the
     // state_root check still guards a malformed section.
-    rows = rows.filter(r => r && isCheckpointSectionRow(r, r.block_index_doge) && r.state_root &&
-                            String(r.chain).toUpperCase() === String(opts.targetChain).toUpperCase());
-    rows.sort((a, b) => Number(b.checkpoint_seq) - Number(a.checkpoint_seq));   // newest checkpoint first
+    const rows = anchoredCheckpointRows(body, opts.targetChain);
     if (!rows.length)
         return { verified: false, reason: 'NO_ROOT_ANCHOR', checkpoint: null, anchor: null, dogeTxid: null, confirmations: 0, minDepth, quorum: null, weighted: null };
     const rec = rows[0];
+    const cp = anchorToCheckpoint(rec);
+    const supersession = supersessionFields(rec);
+    const superseded = refuseSuperseded(rec, opts);
+    if (superseded)
+        return Object.assign({}, superseded, {
+            checkpoint: cp, anchor: rec, dogeTxid: rec.tx_hash || null,
+            confirmations: 0, minDepth, quorum: null, weighted: null
+        }, supersession);
     let tip = opts.dogeTipHeight;
     if (tip == null && typeof opts.getDogeTipHeight === 'function') tip = await opts.getDogeTipHeight();
     // Inclusion height: caller's own DOGE source first, explorer claim only as fallback.
@@ -344,31 +360,20 @@ async function fetchAnchoredCheckpoint(opts){
     const refusal = (opts.requireTrustedDepth && depthSource !== 'caller') ? 'UNTRUSTED_DOGE_DEPTH'
         : (depthSource === 'caller' && !isCheckpointSectionRow(rec, txHeight)) ? 'ANCHOR_FOLD_NOT_ACTIVE' : null;
     if (refusal)
-        return { verified: false, reason: refusal, checkpoint: anchorToCheckpoint(rec),
+        return Object.assign({ verified: false, reason: refusal, checkpoint: cp,
                  anchor: rec, dogeTxid: rec.tx_hash || null, confirmations: 0, minDepth,
-                 quorum: null, weighted: null, depthSource };
+                 quorum: null, weighted: null, depthSource }, supersession);
     const anchorHeight = (txHeight != null) ? txHeight : rec.block_index_doge;
     const confirmations = (tip != null && anchorHeight != null)
         ? (Number(tip) - Number(anchorHeight) + 1) : NaN;
-    const cp = anchorToCheckpoint(rec);
     // A v3 list row never carries its wrapper fold; it lives on the action's archive row.
     if (Number(rec.version) === ANCHOR_FOLD_VERSION && !cp.fold_archive)
         await attachFoldArchiveFromExplorer(f, opts, dogeCoin, rec, cp);
-    // Resolve the signer set through the SAME ladder every other network entry
-    // point uses. Handing verifyAnchoredCheckpoint `opts.validators` raw meant a
-    // caller that supplied none was verified against an empty set, which reads as
-    // quorum 1 and fails a checkpoint the explorer's own set clears 4-of-5.
-    //
-    // The ladder keys on `targetCoin`, not the DOGE coin above: the anchor is read
-    // off DOGE, but the checkpoint inside it belongs to the target chain, so the
-    // pinned lookup and the /verify URL must both name the TARGET chain's explorer
-    // coin prefix. Nothing maps a chain plus network back to a coin, so with no
-    // explicit set, nothing pinned and no targetCoin, the set stays null and the
-    // call fails closed on quorum rather than guessing a prefix from the chain name.
     const targetCoin = (opts.targetCoin == null || String(opts.targetCoin) === '') ? null : opts.targetCoin;
     const validators = await resolveValidatorSet(f, opts, cp, targetCoin);
     const res = verifyAnchoredCheckpoint({ checkpoint: cp, validators, confirmations, minDepth });
-    return Object.assign({}, res, { anchor: rec, dogeTxid: rec.tx_hash || null, depthSource });
+    return Object.assign({}, res, supersession,
+        { anchor: rec, dogeTxid: rec.tx_hash || null, depthSource });
 }
 
 module.exports = { DEFAULT_ANCHOR_MIN_DEPTH, ANCHOR_BUNDLE_VERSION, ANCHOR_FOLD_VERSION, sectionsChainOrderReason, sigsPubkeyOrderReason, enforceAnchorBundleOrder, parseAnchorV0, anchorBundleSection, anchorToCheckpoint, ANCHOR_ROOT_RE, ANCHOR_VERSION_RE, verifyAnchoredCheckpoint, fetchAnchoredCheckpoint };
