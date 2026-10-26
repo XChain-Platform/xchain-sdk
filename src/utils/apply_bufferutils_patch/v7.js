@@ -34,13 +34,38 @@ const {
     compatiblePsbt,
 } = require('./compat')
 const { Psbt, Transaction } = bitcoin
+const U64_MODULUS = MAX_U64 + 1n
+const MAX_I64 = MAX_U64 >> 1n
+
+function normalizeWitnessUtxoValues(psbt) {
+    for (const input of psbt.data.inputs) {
+        if (input.witnessUtxo && input.witnessUtxo.value < 0n) {
+            input.witnessUtxo.value += U64_MODULUS
+        }
+    }
+    return psbt
+}
+
+function serializePsbt(psbt, serialize) {
+    const changed = []
+    for (const input of psbt.data.inputs) {
+        if (!input.witnessUtxo) continue
+        const value = verifyU64(input.witnessUtxo.value)
+        if (value <= MAX_I64) continue
+        changed.push([input.witnessUtxo, input.witnessUtxo.value])
+        input.witnessUtxo.value = value - U64_MODULUS
+    }
+    try {
+        return serialize()
+    } finally {
+        for (const [witnessUtxo, value] of changed) witnessUtxo.value = value
+    }
+}
 
 if (IS_BITCOINJS_V7 && !Transaction.prototype.__xchainNumberValues) {
     bitcoinTypes.SatoshiSchema = valibot.pipe(
         valibot.bigint(), valibot.minValue(0n), valibot.maxValue(MAX_U64)
     )
-    uint8Tools.writeInt64 = uint8Tools.writeUInt64
-    uint8Tools.readInt64 = uint8Tools.readUInt64
     bufferutils.readUInt64LE = function (buffer, offset) {
         return narrowU64(uint8Tools.readUInt64(buffer, offset, 'LE'))
     }
@@ -136,7 +161,7 @@ if (IS_BITCOINJS_V7 && !Transaction.prototype.__xchainNumberValues) {
 
     const psbtFromBuffer = Psbt.fromBuffer
     Psbt.fromBuffer = function (...args) {
-        return compatiblePsbt(psbtFromBuffer.apply(this, args))
+        return normalizeWitnessUtxoValues(compatiblePsbt(psbtFromBuffer.apply(this, args)))
     }
 
     for (const name of ['signInput', 'signAllInputs', 'finalizeInput', 'finalizeAllInputs']) {
@@ -166,9 +191,11 @@ if (IS_BITCOINJS_V7 && !Transaction.prototype.__xchainNumberValues) {
         const fee = getFee.apply(this, args)
         return typeof fee === 'bigint' && fee <= MAX_SAFE_BIG ? Number(fee) : fee
     }
-    const psbtToBuffer = Psbt.prototype.toBuffer
-    Psbt.prototype.toBuffer = function (...args) {
-        return compatibleValue(psbtToBuffer.apply(this, args))
+    for (const name of ['toBuffer', 'toHex', 'toBase64']) {
+        const serialize = Psbt.prototype[name]
+        Psbt.prototype[name] = function (...args) {
+            return compatibleValue(serializePsbt(this, () => serialize.apply(this, args)))
+        }
     }
 
     for (const name of Object.keys(bitcoin.payments)) {

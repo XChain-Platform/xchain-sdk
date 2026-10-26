@@ -47,6 +47,8 @@
     "express-json-rpc-router": "^1.4.0",
     "helmet": "^8.2.0",
     "mathjs": "15.2.0",
+    "uint8array-tools": "^0.0.10",
+    "valibot": "^1.2.0",
     "ws": "^8.21.0",
     "zod": "^4.4.3"
   },
