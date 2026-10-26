@@ -4,6 +4,8 @@
 // wire). Exercises the patched read/write and varint helpers.
 
 const assert = require('assert');
+const { spawnSync } = require('child_process');
+const path = require('path');
 const bufferutils = require('../../../src/utils/apply_bufferutils_patch.js');
 
 describe('applyBufferutilsPatch', function () {
@@ -11,6 +13,19 @@ describe('applyBufferutilsPatch', function () {
         assert.strictEqual(typeof bufferutils.readUInt64LE, 'function');
         assert.strictEqual(typeof bufferutils.writeUInt64LE, 'function');
         assert.ok(bufferutils.varuint && typeof bufferutils.varuint.encode === 'function');
+    });
+
+    it('loads when the uint8array-tools exports are frozen', function () {
+        const result = spawnSync(process.execPath, ['-e', [
+            "const path = require.resolve('uint8array-tools')",
+            "const frozen = Object.freeze(require(path))",
+            "require.cache[path].exports = new Proxy(frozen, { set() { throw new TypeError('read-only export') } })",
+            "require('./src/utils/apply_bufferutils_patch/v7')",
+        ].join(';')], {
+            cwd: path.resolve(__dirname, '../../..'),
+            encoding: 'utf8',
+        });
+        assert.strictEqual(result.status, 0, result.stderr || result.stdout);
     });
 
     it('round-trips a value above 2^53 without precision loss', function () {
