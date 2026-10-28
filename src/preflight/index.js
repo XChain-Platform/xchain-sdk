@@ -200,12 +200,6 @@ async function runPreflight(sdk, actionData, opts = {}) {
 // The shared report the coalescer hands every joiner: both tiers run, Tier-1
 // precedence folds into the findings, and the verdict is taken from the result.
 async function produceReport({ sdk, parsed, opts, mode, timeoutMs, started }) {
-    const ctx = new CheckContext({
-        sdk, parsed, source: opts.source, mode,
-        signal: opts.signal, timeoutMs, localDeltas: opts.localDeltas,
-        feeMode: opts.feeMode,
-    });
-
     // Tier 1 (skipped entirely in 'local' mode) and Tier 2 run
     // concurrently against the shared timeout budget.
     const tier1Promise = mode === 'local'
@@ -217,6 +211,20 @@ async function produceReport({ sdk, parsed, opts, mode, timeoutMs, started }) {
         : runTier1({ sdk, parsed, source: opts.source, feeMode: opts.feeMode,
             signal: opts.signal, timeoutMs })
             .catch(e => ({ kind: 'unavailable', reason: e && e.message ? e.message : String(e) }));
+
+    // A no-verdict response may still identify the block it evaluated. Tier 2 may use that
+    // height for gated checks without treating the response as an authoritative verdict.
+    const targetHeight = tier1Promise.then((tier1) => {
+        if (tier1 && Number.isSafeInteger(tier1.blockIndex)) return tier1.blockIndex;
+        const quoted = tier1 && tier1.quote && tier1.quote.blockIndex;
+        return Number.isSafeInteger(quoted) ? quoted : null;
+    });
+    const ctx = new CheckContext({
+        sdk, parsed, source: opts.source, mode,
+        signal: opts.signal, timeoutMs, localDeltas: opts.localDeltas,
+        feeMode: opts.feeMode,
+    });
+    ctx.targetHeight = targetHeight;
 
     const tier2Promise = (async () => {
         await runUniversal(ctx, { encoding: opts.encoding });

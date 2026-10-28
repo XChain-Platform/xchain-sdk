@@ -546,8 +546,8 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/issue.js` | `src/actions/issue/` | `c7d81c143f4f1ad242c9266487ff726102b7e6444a8cea4b374214ebf4d7deed` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `3c0163d61230bbc249606f41d92786eb2016b43664dba71b55e78e8ef2ad4907` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
-| `checks/trading.js` (ORDER) | `src/actions/order/` | `139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc` |
-| `checks/trading.js` (SWAP) | `src/actions/swap/` | `470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf` |
+| `checks/trading.js` (ORDER) | `src/actions/order/` | `294bc04fdb4e48a0d59beccfc2800826acdb4da77643b6709d1e009dfc4b04e6` |
+| `checks/trading.js` (SWAP) | `src/actions/swap/` | `1f77aa820a0d5ac2afffebc38ad456389b72e58eb9e67001529a14e60899a0d8` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `4d7279d0707eb4c1719b0e4777dbf78bb3eef563ace5cd4006772d0691f200f7` |
 | `checks/dividend.js` | `src/actions/dividend/` | `7d66516b2584dcce47eecac80f62f90cabf98844ecc862195c03c65a7ff31065` |
 | `checks/batch.js` | `src/actions/batch/` | `9a5147d0a4e121f10d9dd23a6d2f9602f8359ec5eca8f555111aea973a6321ad` |
@@ -577,6 +577,29 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-27 - same-chain ORDER and SWAP refuse offers of one resolved token
+
+The `order` pin moves from `139612e7` to `294bc04f` and the `swap` pin from
+`470d4c11` to `1f77aa82`, hashed from indexer commit `900de7df6` by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/<name>/`. The cross-repo pairing
+exception above the anchor applies: these pins match the indexer change that lands with this
+SDK change. Within
+the two mapped directories only `validate.js` changes. Each handler adds the same format-0,
+same-chain check after both token rows resolve: equal `TICK_ID` values become
+`invalid: cannot trade a token for itself` when
+`same_token_offer_refusal_activation.SAME_TOKEN_OFFER_REFUSAL_ACTIVATION` is active. The new
+height row is unarmed on mainnet and testnet, has no per-chain testnet keys, and is active from
+genesis on regtest.
+
+**Direction: WIDENS rejection behind an activation row.** `checks/trading.js` now compares the
+resolved token ids for ORDER and SWAP creates. It raises non-overridable
+`VALIDATOR_SEMANTICS` only when the mirrored height gate is definitely active at the Tier-1
+target height. A missing target height or failed token lookup is disclosed as unverified, and
+an unarmed network, cross-chain GET, different id, or non-create remains accepted by this rule.
+The explorer looks token names up exactly, so a case-variant spelling of one token is not
+caught on the client; the indexer still refuses it. The Tier-1 quote height feeds only this
+gate: `stateHeight` stays tied to a Tier-1 verdict.
 
 ### 2026-10-23 - ISSUE caret TICK ids must be canonical behind TICK_NORMALIZE (tick_normalize)
 

@@ -15,8 +15,8 @@
  * Pre-flight Tier-2: ORDER + SWAP (spec §4.4; mirrors xchain-indexer
  * src/actions/order.js + swap.js:143-392). Balance-mode give checks
  * only: native-GIVE and GIVE_OWNERSHIP skip the balance check (info).
- * No self-trade / same-tick / min-max rules exist in the handlers -
- * do not invent them. SWAP lacks GET_AMOUNT>0 hardening, so ≤0
+ * Same-chain creates refuse resolved GIVE and GET tick ids that match
+ * once SAME_TOKEN_OFFER_REFUSAL is active. SWAP lacks GET_AMOUNT>0 hardening, so ≤0
  * renders as warning there (ORDER-side it is also warning: the
  * handler check is server-side).
  *
@@ -24,7 +24,7 @@
 
 'use strict';
 
-const { FINDING_CODES, EXPIRATION_MAX } = require('../constants.js');
+const { FINDING_CODES, EXPIRATION_MAX, activeAtHeight, describeActivationHere } = require('../constants.js');
 const numeric = require('../numeric.js');
 const { declareRepresentability, tokenDecimals, checkAmountField } = require('./amount_format.js');
 const { checkDurationFee } = require('./duration_fee.js');
@@ -36,6 +36,55 @@ function coinDecimals(coin) {
     const plane = parseCoinCode(coin);
     if (!plane) return null;
     try { return getCoinConfig(plane.coin, 'mainnet').decimals; } catch (e) { return null; }
+}
+
+// Read the resolved ticker id from the explorer's nested or legacy flat token shape.
+function tokenTickId(token) {
+    const info = token && token.info;
+    const id = (info && (info.tick_id ?? info.TICK_ID)) ?? (token && (token.tick_id ?? token.TICK_ID));
+    return id === undefined || id === null || id === '' ? null : String(id);
+}
+
+/*
+ * Refuse a same-chain create whose two wire spellings resolve to one token id, matching
+ * order/validate.js and swap/validate.js. A cross-chain GET resolves on another indexer,
+ * so this SDK cannot compare it locally. The height comes from the same Tier-1 response
+ * the report exposes as stateHeight; without that height or either token lookup, disclose
+ * the gap rather than applying a gate whose state is unknown.
+ */
+async function checkSameTokenOffer(ctx, noun) {
+    if (String(ctx.parsed.version) !== '0') return;
+    const plane = parseCoinCode(ctx.sdk && ctx.sdk.explorer && ctx.sdk.explorer.coin);
+    const getCoin = ctx.field('GET_COIN');
+    if (!plane || (getCoin && getCoin !== plane.coin)) return;
+
+    const giveTick = ctx.field('GIVE_TICK');
+    const getTick = ctx.field('GET_TICK');
+    if (!giveTick || !getTick) return;
+    const [giveToken, getToken] = await Promise.all([ctx.token(giveTick), ctx.token(getTick)]);
+    if (giveToken === undefined || getToken === undefined) {
+        ctx.addUnverified(FINDING_CODES.VALIDATOR_SEMANTICS,
+            'same-token offer check needs both token lookups');
+        return;
+    }
+    const giveId = tokenTickId(giveToken);
+    const getId = tokenTickId(getToken);
+    if (giveId === null || getId === null) return;
+
+    const targetHeight = await ctx.targetHeight;
+    const active = activeAtHeight('SAME_TOKEN_OFFER_REFUSAL', ctx.sdk, targetHeight);
+    if (active === undefined) {
+        ctx.addUnverified(FINDING_CODES.VALIDATOR_SEMANTICS,
+            'same-token offer check needs the indexer target height; '
+            + describeActivationHere('SAME_TOKEN_OFFER_REFUSAL', ctx.sdk));
+        return;
+    }
+    ctx.markRun(FINDING_CODES.VALIDATOR_SEMANTICS);
+    if (!active || giveId !== getId) return;
+    ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'error',
+        `${noun} resolves GIVE_TICK and GET_TICK to token id ${giveId}; `
+        + 'the indexer rejects this action as invalid: cannot trade a token for itself.',
+        { giveTick, getTick, tickId: giveId, targetHeight });
 }
 
 /*
@@ -169,6 +218,8 @@ async function checkTrade(ctx, noun) {
     await checkTradeAmountFormats(ctx, noun);
     if (String(ctx.parsed.version) === '0') declareRepresentability(ctx);
     await checkDurationFee(ctx);
+    // Last, because it waits on the Tier-1 height and the checks above need not.
+    await checkSameTokenOffer(ctx, noun);
 }
 
 async function checkOrder(ctx) { await checkTrade(ctx, 'ORDER'); }

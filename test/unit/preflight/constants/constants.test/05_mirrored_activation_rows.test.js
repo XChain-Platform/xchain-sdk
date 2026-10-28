@@ -21,6 +21,7 @@ const {
     TICK_NAMESPACE: TICK_NS,
     TOKEN_BRIDGE: BRIDGE,
     AMOUNT_REPRESENTABILITY: REPR,
+    SAME_TOKEN_OFFER_REFUSAL: SAME_TOKEN,
     DISPENSE_CANCELLING_MATCH: CANCEL
 } = constants.ACTIVATION_MIRRORS;
 
@@ -41,7 +42,7 @@ function indexerRoot(files) {
 
 const unarmed = (mirror, over = {}) => row(mirror, Object.assign({ mainnet: 'UNARMED', testnet: 'UNARMED' }, over));
 
-const allRows = (listOver, unit, nsOver = {}, bridgeOver = {}, gates1 = row(REPR) + row(CANCEL)) => ({
+const allRows = (listOver, unit, nsOver = {}, bridgeOver = {}, gates1 = row(REPR) + row(CANCEL) + row(SAME_TOKEN)) => ({
     'gates_1.js': gates1,
     'gates_4.js': row(LIST, listOver, unit) + row(DISP) + row(LIST_ADDR) + row(LIST_TICK_COIN) + row(LIST_META),
     'gates_3.js': unarmed(TICK_NS, nsOver),
@@ -57,15 +58,17 @@ describe('pre-flight drift gate: mirrored activation rows', function () {
         expect(checkActivationMirrors(indexerRoot({
             'gates_9.js': row(LIST) + row(LIST_ADDR),
             'shared_rows_7.js': row(DISP) + row(LIST_TICK_COIN) + row(LIST_META) + unarmed(TICK_NS) + unarmed(BRIDGE)
-                + row(REPR) + row(CANCEL)
+                + row(REPR) + row(CANCEL) + row(SAME_TOKEN)
         }))).to.equal(0);
     });
 
     it('fails when the representability or cancelling-match row moves', function () {
-        expect(checkActivationMirrors(indexerRoot(allRows({}, undefined, {}, {},
-            row(REPR, { 'LTC:testnet': 1791061098 }) + row(CANCEL))))).to.equal(1);
-        expect(checkActivationMirrors(indexerRoot(allRows({}, undefined, {}, {},
-            row(REPR) + row(CANCEL, { mainnet: 'UNARMED' }))))).to.equal(1);
+        const reprMoved = allRows({}, undefined, {}, {},
+            row(REPR, { 'LTC:testnet': 1791061098 }) + row(CANCEL) + row(SAME_TOKEN));
+        const cancelMoved = allRows({}, undefined, {}, {},
+            row(REPR) + row(CANCEL, { mainnet: 'UNARMED' }) + row(SAME_TOKEN));
+        expect(checkActivationMirrors(indexerRoot(reprMoved))).to.equal(1);
+        expect(checkActivationMirrors(indexerRoot(cancelMoved))).to.equal(1);
     });
 
     it('fails when a per-coin testnet key is armed', function () {
@@ -148,5 +151,15 @@ describe('pre-flight activation lookup', function () {
         expect(constants.activationThreshold('TOKEN_BRIDGE', sdk('bitcoin-mainnet'))).to.equal('UNARMED');
         expect(constants.activationThreshold('TICK_NAMESPACE', sdk('bitcoin-regtest'))).to.equal(0);
         expect(constants.activationThreshold('TOKEN_BRIDGE', sdk('bitcoin-regtest'))).to.equal(0);
+    });
+
+    it('resolves the same-token refusal row and evaluates height gates', function () {
+        expect(constants.activationThreshold('SAME_TOKEN_OFFER_REFUSAL', sdk('bitcoin-mainnet'))).to.equal('UNARMED');
+        expect(constants.activationThreshold('SAME_TOKEN_OFFER_REFUSAL', sdk('bitcoin-testnet'))).to.equal('UNARMED');
+        expect(constants.activationThreshold('SAME_TOKEN_OFFER_REFUSAL', sdk('bitcoin-regtest'))).to.equal(0);
+        expect(constants.activeAtHeight('SAME_TOKEN_OFFER_REFUSAL', sdk('bitcoin-regtest'), 0)).to.equal(true);
+        expect(constants.activeAtHeight('SAME_TOKEN_OFFER_REFUSAL', sdk('bitcoin-regtest'), null)).to.equal(undefined);
+        expect(constants.activeAtHeight('SAME_TOKEN_OFFER_REFUSAL', sdk('bitcoin-mainnet'), null)).to.equal(false);
+        expect(constants.activeAtHeight('LIST_ADDRESS_REF', sdk('bitcoin-testnet'), 154776)).to.equal(false);
     });
 });

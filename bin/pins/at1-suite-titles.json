@@ -412,6 +412,25 @@
       "Fuzz \u2013 Group 5: Prototype pollution attempts hasOwnProperty key in params \u2192 must not crash",
       "Fuzz \u2013 Group 5: Prototype pollution attempts toString key in params \u2192 must not crash"
     ],
+    "0ca1b00c01b003b6": [
+      "pre-flight activation lookup resolves the network and per-coin keys with registry precedence",
+      "pre-flight activation lookup resolves the same-token refusal row and evaluates height gates",
+      "pre-flight activation lookup resolves the tick-namespace and token-bridge rows per testnet chain",
+      "pre-flight drift gate: mirrored activation rows fails when a key is added or removed",
+      "pre-flight drift gate: mirrored activation rows fails when a per-coin testnet key is armed",
+      "pre-flight drift gate: mirrored activation rows fails when mainnet is armed from genesis",
+      "pre-flight drift gate: mirrored activation rows fails when the protocol_changes directory is missing",
+      "pre-flight drift gate: mirrored activation rows fails when the representability or cancelling-match row moves",
+      "pre-flight drift gate: mirrored activation rows fails when the unit changes",
+      "pre-flight drift gate: mirrored activation rows passes when a row moves to a differently named part file",
+      "pre-flight drift gate: mirrored activation rows passes when every pinned table matches the indexer row",
+      "pre-flight drift gate: mirrored activation rows throws on a value it does not understand",
+      "pre-flight drift gate: mirrored activation rows throws when a key is absent or declared twice",
+      "pre-flight drift gate: tick-namespace and token-bridge rows fails when a TICK_NAMESPACE or TOKEN_BRIDGE testnet height moves",
+      "pre-flight drift gate: tick-namespace and token-bridge rows fails when the indexer arms mainnet for either row",
+      "pre-flight drift gate: tick-namespace and token-bridge rows passes when the indexer writes UNARMED where the SDK pins UNARMED",
+      "pre-flight drift gate: tick-namespace and token-bridge rows still recognizes the legacy numeric UNARMED spelling"
+    ],
     "0ce9655dbccee3a6": [
       "pre-flight DIVIDEND check does not warn when AMOUNT is positive",
       "pre-flight DIVIDEND check refuses an AMOUNT finer than DIVIDEND_TICK decimals",
@@ -1813,13 +1832,6 @@
       "XChainSDK \u2013 WebSocket convenience methods onDispenser matches action_index across number/string wire representations",
       "XChainSDK \u2013 WebSocket convenience methods onDispenser removes the SNAPSHOT handler on unsubscribe"
     ],
-    "386f3865bd78be9d": [
-      "pre-flight activation lookup is coin-first every coin-keyed mirrored table pins the bare testnet row to UNARMED beside armed coin rows",
-      "pre-flight activation lookup is coin-first every network-only mirrored row is the cancelling-match row",
-      "pre-flight activation lookup is coin-first falls back to the bare network row when no coin row exists",
-      "pre-flight activation lookup is coin-first resolves the coin from the explorer prefix when the config names only the plane",
-      "pre-flight activation lookup is coin-first resolves the coin row over the network row on testnet"
-    ],
     "389fc2df7041b8bc": [
       "G13: client-visible error codes collapses a 2xx non-JSON body to COSIGNER_TRANSPORT_ERROR",
       "G13: client-visible error codes passes a normal 200 body straight through",
@@ -2699,6 +2711,17 @@
       "OP_RETURN pre-flight encoding boundary rejects a SEND action string of 77 bytes with OP_RETURN encoding (ENCODING_DATA_TOO_LARGE)",
       "OP_RETURN pre-flight encoding boundary rejects a SEND action string of exactly 76 bytes with OP_RETURN encoding"
     ],
+    "530e4fdce7ecacd9": [
+      "pre-flight ORDER and SWAP same-token offer refusal ORDER refuses the same token name on both sides when the height gate is active",
+      "pre-flight ORDER and SWAP same-token offer refusal SWAP refuses the same token name on both sides when the height gate is active",
+      "pre-flight ORDER and SWAP same-token offer refusal accepts equal token ids while the network is unarmed",
+      "pre-flight ORDER and SWAP same-token offer refusal accepts two distinct resolved token ids",
+      "pre-flight ORDER and SWAP same-token offer refusal discloses a failed token lookup without refusing",
+      "pre-flight ORDER and SWAP same-token offer refusal discloses an unknown target height without refusing",
+      "pre-flight ORDER and SWAP same-token offer refusal does not compare a cross-chain SWAP GET token locally",
+      "pre-flight ORDER and SWAP same-token offer refusal leaves a case-variant name to the indexer, since the explorer lookup is exact",
+      "pre-flight ORDER and SWAP same-token offer refusal refuses a caret alias that resolves to the named token id"
+    ],
     "54332806e7d49b0b": [
       "config_envelope mergeConfigDelta hostile keys copies nothing out of a non-object delta level and does not throw",
       "config_envelope mergeConfigDelta hostile keys gives an inherited name such as toString its own plain level",
@@ -3518,29 +3541,6 @@
       "Performance: SDK hot-path throughput formats 10000 full-precision amounts well under the regression ceiling",
       "Performance: SDK hot-path throughput validate() throughput does not degrade with repeated reuse of one Validator",
       "Performance: SDK hot-path throughput validates 10000 ISSUE actions well under the regression ceiling"
-    ],
-    "6a5a4bfa81cfc484": [
-      "pre-flight constants + registry drift map (\u00a78.5) INDEXER-MAP.md parses into well-formed rows",
-      "pre-flight constants + registry drift map (\u00a78.5) anchor / review-command consistency fails CLOSED when the map records no anchor at all",
-      "pre-flight constants + registry drift map (\u00a78.5) anchor / review-command consistency fails CLOSED when the review command is missing or unreadable",
-      "pre-flight constants + registry drift map (\u00a78.5) anchor / review-command consistency fails when the review command names a different commit than the anchor line",
-      "pre-flight constants + registry drift map (\u00a78.5) anchor / review-command consistency the shipped INDEXER-MAP.md anchors its review command on its own pin",
-      "pre-flight constants + registry drift map (\u00a78.5) every checks/ action module is mapped (or intentionally misc-only)",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the BATCH sub-command admission by dispatch coverage review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the DISPENSE ownership-transfer block fields review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the DISPENSER and DISPENSE fiat pricing review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the DISPENSER give amount gate retirement review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the DISPENSER refill token policy review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the DISPENSER, ORDER and SWAP supply prefetch review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the MINT and ISSUE total supply bound review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the ORDER and SWAP remote token accept review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the ORDER, SWAP, DISPENSER, DEPOSIT and WITHDRAW NOT NULL row key review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the SEND and DESTROY consolidation leg gate retirement review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the SEND gated handoff totals by resolved tick id review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the SEND, DESTROY and DIVIDEND text amount refusal review",
-      "pre-flight constants + registry drift map (\u00a78.5) pins and records the issue lazy distribution probe review",
-      "pre-flight constants + registry drift map (\u00a78.5) records the VOTE v3 unknown TICK review with no VOTE row and the client follow-up",
-      "pre-flight constants + registry drift map (\u00a78.5) records the open match origin review with no ORDER_MATCH or SWAP_MATCH row"
     ],
     "6abb57b79a51e287": [
       "API JSON-RPC batch cap setting validation a truncatable junk cap falls back to the default instead of a truncated prefix",
@@ -6701,6 +6701,13 @@
       "MessagingUtils @crypto @regression KDF v1 (HKDF-SHA256) versioning and domain separation round-trips a legacy v0 binary (bytes) ECIES blob",
       "MessagingUtils @crypto @regression KDF v1 (HKDF-SHA256) versioning and domain separation still decrypts a legacy (v0, no version byte, bare-SHA256) ECIES blob"
     ],
+    "d3d817cc6426564c": [
+      "pre-flight activation lookup is coin-first every coin-keyed mirrored table pins the bare testnet row to UNARMED beside armed coin rows",
+      "pre-flight activation lookup is coin-first falls back to the bare network row when no coin row exists",
+      "pre-flight activation lookup is coin-first identifies every network-only mirrored row",
+      "pre-flight activation lookup is coin-first resolves the coin from the explorer prefix when the config names only the plane",
+      "pre-flight activation lookup is coin-first resolves the coin row over the network row on testnet"
+    ],
     "d54576fa6708d56d": [
       "Actions \u2013 pre-flight encoding validation ENCODING_DATA_TOO_LARGE error includes suggestion in details",
       "Actions \u2013 pre-flight encoding validation MULTISIGN with compressedPubKey does NOT throw",
@@ -6715,6 +6722,30 @@
       "public hub discovery fails over between hub origins and reports HUB_UNAVAILABLE when all public origins fail",
       "public hub discovery retains keyed getallconfigs JSON-RPC discovery",
       "public hub discovery uses public GET discovery, updates clients and getHubConfig(), then polls the same public route"
+    ],
+    "d63ff36290f5bdb2": [
+      "pre-flight constants + registry drift map (\u00a78.5) INDEXER-MAP.md parses into well-formed rows",
+      "pre-flight constants + registry drift map (\u00a78.5) anchor / review-command consistency fails CLOSED when the map records no anchor at all",
+      "pre-flight constants + registry drift map (\u00a78.5) anchor / review-command consistency fails CLOSED when the review command is missing or unreadable",
+      "pre-flight constants + registry drift map (\u00a78.5) anchor / review-command consistency fails when the review command names a different commit than the anchor line",
+      "pre-flight constants + registry drift map (\u00a78.5) anchor / review-command consistency the shipped INDEXER-MAP.md anchors its review command on its own pin",
+      "pre-flight constants + registry drift map (\u00a78.5) every checks/ action module is mapped (or intentionally misc-only)",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the BATCH sub-command admission by dispatch coverage review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the DISPENSE ownership-transfer block fields review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the DISPENSER and DISPENSE fiat pricing review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the DISPENSER give amount gate retirement review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the DISPENSER refill token policy review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the DISPENSER, ORDER and SWAP supply prefetch review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the MINT and ISSUE total supply bound review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the ORDER and SWAP remote token accept review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the ORDER and SWAP same-token offer refusal review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the ORDER, SWAP, DISPENSER, DEPOSIT and WITHDRAW NOT NULL row key review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the SEND and DESTROY consolidation leg gate retirement review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the SEND gated handoff totals by resolved tick id review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the SEND, DESTROY and DIVIDEND text amount refusal review",
+      "pre-flight constants + registry drift map (\u00a78.5) pins and records the issue lazy distribution probe review",
+      "pre-flight constants + registry drift map (\u00a78.5) records the VOTE v3 unknown TICK review with no VOTE row and the client follow-up",
+      "pre-flight constants + registry drift map (\u00a78.5) records the open match origin review with no ORDER_MATCH or SWAP_MATCH row"
     ],
     "d64f3362d8c563b2": [
       "AddressResolver resolve() caches a resolved id (one lookup for repeated resolves)",
@@ -6982,24 +7013,6 @@
       "BATCH limit-scan conformance (SDK mirror vs arbiter) per-leg AIRDROP weight (BATCH_AIRDROP_LEG_WEIGHT), arbiter half weighs AIRDROP|3|JDOG|1|5|m1|XCP|2|6|m2 as the arbiter does on regtest",
       "BATCH limit-scan conformance (SDK mirror vs arbiter) per-leg AIRDROP weight (BATCH_AIRDROP_LEG_WEIGHT), arbiter half weighs AIRDROP|zz as the arbiter does on regtest",
       "BATCH limit-scan conformance (SDK mirror vs arbiter) per-leg AIRDROP weight (BATCH_AIRDROP_LEG_WEIGHT), arbiter half weighs DROP|1|5|JDOG|1|XCP|2 as the arbiter does on regtest"
-    ],
-    "e10f508f3ba4f721": [
-      "pre-flight activation lookup resolves the network and per-coin keys with registry precedence",
-      "pre-flight activation lookup resolves the tick-namespace and token-bridge rows per testnet chain",
-      "pre-flight drift gate: mirrored activation rows fails when a key is added or removed",
-      "pre-flight drift gate: mirrored activation rows fails when a per-coin testnet key is armed",
-      "pre-flight drift gate: mirrored activation rows fails when mainnet is armed from genesis",
-      "pre-flight drift gate: mirrored activation rows fails when the protocol_changes directory is missing",
-      "pre-flight drift gate: mirrored activation rows fails when the representability or cancelling-match row moves",
-      "pre-flight drift gate: mirrored activation rows fails when the unit changes",
-      "pre-flight drift gate: mirrored activation rows passes when a row moves to a differently named part file",
-      "pre-flight drift gate: mirrored activation rows passes when every pinned table matches the indexer row",
-      "pre-flight drift gate: mirrored activation rows throws on a value it does not understand",
-      "pre-flight drift gate: mirrored activation rows throws when a key is absent or declared twice",
-      "pre-flight drift gate: tick-namespace and token-bridge rows fails when a TICK_NAMESPACE or TOKEN_BRIDGE testnet height moves",
-      "pre-flight drift gate: tick-namespace and token-bridge rows fails when the indexer arms mainnet for either row",
-      "pre-flight drift gate: tick-namespace and token-bridge rows passes when the indexer writes UNARMED where the SDK pins UNARMED",
-      "pre-flight drift gate: tick-namespace and token-bridge rows still recognizes the legacy numeric UNARMED spelling"
     ],
     "e1343dadb690c22c": [
       "XChainSDK.xbridge() accepts a third opts argument without changing the result (symmetry with deploy())",
@@ -7867,8 +7880,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 590,
-      "titleCount": 6246,
+      "fileCount": 591,
+      "titleCount": 6257,
       "files": {
         "test/unit/actions/action_roundtrip_golden.test.js": "0889dd14dd14af13",
         "test/unit/actions/actions.test.js": "e72dbd6bc6ac1b9a",
@@ -8196,7 +8209,7 @@
         "test/unit/mcp/mcp.test.js": "e1e70155025b6fba",
         "test/unit/mcp/mcp.test/01_mcp_server_write_tools.test.js": "2ff922f4242ecbe8",
         "test/unit/observability/logger.test.js": "036b3389dcc3412c",
-        "test/unit/preflight/activation/activation_coin_first_precedence.test.js": "386f3865bd78be9d",
+        "test/unit/preflight/activation/activation_coin_first_precedence.test.js": "d3d817cc6426564c",
         "test/unit/preflight/activation/activation_disclosures.test.js": "2cec8afa17027767",
         "test/unit/preflight/activation/activation_regtest_arming.test.js": "4e4bc66101b257dd",
         "test/unit/preflight/batch/batch.test.js": "769a01a07529353f",
@@ -8228,13 +8241,14 @@
         "test/unit/preflight/checks/checks.test/18_stake_amount_column_width.test.js": "cc7aeac5f7e1bbac",
         "test/unit/preflight/checks/checks.test/19_issue_caret_tick_normalize.test.js": "a4f1b3f60d13ae87",
         "test/unit/preflight/checks/dividend.test.js": "0ce9655dbccee3a6",
+        "test/unit/preflight/checks/trading_same_token_offer.test.js": "530e4fdce7ecacd9",
         "test/unit/preflight/conformance/offrail_conformance.test.js": "50763c8b34df1c5f",
         "test/unit/preflight/constants/constants.test.js": "3e30426312edb6cc",
-        "test/unit/preflight/constants/constants.test/01_drift_map.test.js": "6a5a4bfa81cfc484",
+        "test/unit/preflight/constants/constants.test/01_drift_map.test.js": "d63ff36290f5bdb2",
         "test/unit/preflight/constants/constants.test/02_by_value_seams.test.js": "c058fba27bbee2a5",
         "test/unit/preflight/constants/constants.test/03_mirrored_regex_rules.test.js": "7700fa0166072669",
         "test/unit/preflight/constants/constants.test/04_mirrored_indexer_lists.test.js": "2bd0dbe3142ca315",
-        "test/unit/preflight/constants/constants.test/05_mirrored_activation_rows.test.js": "e10f508f3ba4f721",
+        "test/unit/preflight/constants/constants.test/05_mirrored_activation_rows.test.js": "0ca1b00c01b003b6",
         "test/unit/preflight/constants/constants.test/06_drift_map_gate_retirement_reviews.test.js": "339f24cbf1192203",
         "test/unit/preflight/custody/custody_guard_notes.test.js": "24e5aec18c560612",
         "test/unit/preflight/custody/custody_map_rows.test.js": "3151828024be21f7",
@@ -8464,8 +8478,8 @@
       }
     },
     "test:all": {
-      "fileCount": 629,
-      "titleCount": 6575,
+      "fileCount": 630,
+      "titleCount": 6586,
       "files": {
         "test/boundary/boundary.test.js": "51c5d77e922af958",
         "test/boundary/boundary.test/01_tick_name_length_boundary.test.js": "2291494717b9aaab",
@@ -8832,7 +8846,7 @@
         "test/unit/mcp/mcp.test.js": "e1e70155025b6fba",
         "test/unit/mcp/mcp.test/01_mcp_server_write_tools.test.js": "2ff922f4242ecbe8",
         "test/unit/observability/logger.test.js": "036b3389dcc3412c",
-        "test/unit/preflight/activation/activation_coin_first_precedence.test.js": "386f3865bd78be9d",
+        "test/unit/preflight/activation/activation_coin_first_precedence.test.js": "d3d817cc6426564c",
         "test/unit/preflight/activation/activation_disclosures.test.js": "2cec8afa17027767",
         "test/unit/preflight/activation/activation_regtest_arming.test.js": "4e4bc66101b257dd",
         "test/unit/preflight/batch/batch.test.js": "769a01a07529353f",
@@ -8864,13 +8878,14 @@
         "test/unit/preflight/checks/checks.test/18_stake_amount_column_width.test.js": "cc7aeac5f7e1bbac",
         "test/unit/preflight/checks/checks.test/19_issue_caret_tick_normalize.test.js": "a4f1b3f60d13ae87",
         "test/unit/preflight/checks/dividend.test.js": "0ce9655dbccee3a6",
+        "test/unit/preflight/checks/trading_same_token_offer.test.js": "530e4fdce7ecacd9",
         "test/unit/preflight/conformance/offrail_conformance.test.js": "50763c8b34df1c5f",
         "test/unit/preflight/constants/constants.test.js": "3e30426312edb6cc",
-        "test/unit/preflight/constants/constants.test/01_drift_map.test.js": "6a5a4bfa81cfc484",
+        "test/unit/preflight/constants/constants.test/01_drift_map.test.js": "d63ff36290f5bdb2",
         "test/unit/preflight/constants/constants.test/02_by_value_seams.test.js": "c058fba27bbee2a5",
         "test/unit/preflight/constants/constants.test/03_mirrored_regex_rules.test.js": "7700fa0166072669",
         "test/unit/preflight/constants/constants.test/04_mirrored_indexer_lists.test.js": "2bd0dbe3142ca315",
-        "test/unit/preflight/constants/constants.test/05_mirrored_activation_rows.test.js": "e10f508f3ba4f721",
+        "test/unit/preflight/constants/constants.test/05_mirrored_activation_rows.test.js": "0ca1b00c01b003b6",
         "test/unit/preflight/constants/constants.test/06_drift_map_gate_retirement_reviews.test.js": "339f24cbf1192203",
         "test/unit/preflight/custody/custody_guard_notes.test.js": "24e5aec18c560612",
         "test/unit/preflight/custody/custody_map_rows.test.js": "3151828024be21f7",

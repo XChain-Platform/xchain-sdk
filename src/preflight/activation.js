@@ -78,6 +78,11 @@ const ACTIVATION_MIRRORS = Object.freeze({
         table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 1791061097, 'LTC:testnet': 1791061097,
             'DOGE:testnet': 1791061097, testnet: 'UNARMED', regtest: 0 }),
     }),
+    SAME_TOKEN_OFFER_REFUSAL: Object.freeze({
+        key: 'same_token_offer_refusal_activation.SAME_TOKEN_OFFER_REFUSAL_ACTIVATION',
+        unit: 'height',
+        table: Object.freeze({ mainnet: 'UNARMED', testnet: 'UNARMED', regtest: 0 }),
+    }),
     // A DISPENSE matches a 'cancelling' dispenser where this is armed
     // (xchain-indexer src/db/dispensers/dispense_matching.js findMatchingDispensers).
     DISPENSE_CANCELLING_MATCH: Object.freeze({
@@ -150,6 +155,17 @@ function activationThreshold(name, sdk) {
     return own(at.network) ? table[at.network] : undefined;
 }
 
+// Whether a HEIGHT-unit mirror is active at the height the indexer evaluated:
+// true or false, or undefined when either the SDK plane or target height is unknown.
+function activeAtHeight(name, sdk, targetHeight) {
+    if (mirrorFor(name).unit !== 'height') throw new Error(name + ' is not a height-unit activation');
+    const at = activationThreshold(name, sdk);
+    if (at === undefined) return undefined;
+    if (at === 'UNARMED') return false;
+    if (!Number.isSafeInteger(targetHeight) || targetHeight < 0) return undefined;
+    return targetHeight >= at;
+}
+
 // Whether a TIME-unit mirror is active for a block confirmed now: true or false, or undefined
 // when this SDK's plane is unknown. The wall clock stands in for the including block's
 // timestamp, which tracks it to within hours; every armed threshold this is asked about is
@@ -185,5 +201,5 @@ function describeActivationHere(name, sdk) {
 
 module.exports = {
     ACTIVATION_MIRRORS, DISCLOSURE_MIRRORS, AMOUNT_MAX_INTEGER_DIGITS,
-    activationThreshold, activeByWallClock, describeActivation, describeActivationHere,
+    activationThreshold, activeAtHeight, activeByWallClock, describeActivation, describeActivationHere,
 };

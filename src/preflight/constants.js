@@ -346,13 +346,14 @@ const RESERVED_FUTURE_ROOTS = Object.freeze([
 ]);
 
 const {
-    ACTIVATION_MIRRORS, AMOUNT_MAX_INTEGER_DIGITS, activationThreshold, activeByWallClock, describeActivation, describeActivationHere,
+    ACTIVATION_MIRRORS, AMOUNT_MAX_INTEGER_DIGITS, activationThreshold, activeAtHeight, activeByWallClock, describeActivation, describeActivationHere,
 } = require('./activation.js');
 
 module.exports = {
     ACTIVATION_MIRRORS,
     AMOUNT_MAX_INTEGER_DIGITS,
     activationThreshold,
+    activeAtHeight,
     activeByWallClock,
     describeActivation,
     describeActivationHere,
