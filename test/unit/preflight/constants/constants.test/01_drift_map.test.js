@@ -130,25 +130,6 @@ function registerOrderSwapRemoteTokenReviewTest() {
     });
 }
 
-function registerOrderSwapSameTokenReviewTest() {
-    it('pins and records the ORDER and SWAP same-token offer refusal review', function () {
-        const text = fs.readFileSync(REAL_MAP, 'utf8');
-        const rows = parseMap(REAL_MAP);
-        const expected = {
-            'src/actions/order/': '294bc04fdb4e48a0d59beccfc2800826acdb4da77643b6709d1e009dfc4b04e6',
-            'src/actions/swap/': '1f77aa820a0d5ac2afffebc38ad456389b72e58eb9e67001529a14e60899a0d8',
-        };
-        for (const [handler, hash] of Object.entries(expected))
-            expect(rows.find((row) => row.handler === handler).hash, handler).to.equal(hash);
-        const heading = '### 2026-10-27 - same-chain ORDER and SWAP refuse offers of one resolved token';
-        expect(text).to.include(heading);
-        const start = text.indexOf(heading);
-        const entry = text.slice(start, text.indexOf('\n### ', start + heading.length));
-        expect(entry).to.include('invalid: cannot trade a token for itself');
-        expect(entry).to.include('**Direction: WIDENS rejection behind an activation row.**');
-    });
-}
-
 // The send hash moves with every later reviewed change to the handler; the 2026-10-15
 // text amount refusal review pins it now, and the 2026-10-09 entry stays the record of this one.
 function registerSendGatedTotalReviewTest() {
@@ -397,7 +378,6 @@ describe('pre-flight constants + registry', function () {
         registerMapCoverageTest();
         registerIssueLazyProbeReviewTest();
         registerOrderSwapRemoteTokenReviewTest();
-        registerOrderSwapSameTokenReviewTest();
         registerSendGatedTotalReviewTest();
         registerBatchDispatchAdmissionReviewTest();
         registerDispenserRefillPolicyReviewTest();

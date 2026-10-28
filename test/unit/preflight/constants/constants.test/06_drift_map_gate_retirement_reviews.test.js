@@ -172,6 +172,22 @@ function tickNormalizeReview() {
     expect(entry).to.include('The anchor stays at `52a82367`.');
 }
 
+function sameTokenOfferReview() {
+    const text = fs.readFileSync(REAL_MAP, 'utf8');
+    const rows = parseMap(REAL_MAP);
+    const expected = {
+        'src/actions/order/': '294bc04fdb4e48a0d59beccfc2800826acdb4da77643b6709d1e009dfc4b04e6',
+        'src/actions/swap/': '1f77aa820a0d5ac2afffebc38ad456389b72e58eb9e67001529a14e60899a0d8',
+    };
+    for (const [handler, hash] of Object.entries(expected))
+        expect(rows.find((row) => row.handler === handler).hash, handler).to.equal(hash);
+    const heading = '### 2026-10-27 - same-chain ORDER and SWAP refuse offers of one resolved token';
+    expect(text).to.include(heading);
+    const entry = entryOf(text, heading);
+    expect(entry).to.include('invalid: cannot trade a token for itself');
+    expect(entry).to.include('**Direction: WIDENS rejection behind an activation row.**');
+}
+
 describe('pre-flight constants + registry drift map (§8.5) gate retirement reviews', function () {
     it('pins and records the DISPENSER and DISPENSE amount positivity gate retirement review', dispenserPositivityReview);
     it('the live dispenser pin is the end of the review-log pin chain', dispenserPinChainEnd);
@@ -182,4 +198,5 @@ describe('pre-flight constants + registry drift map (§8.5) gate retirement revi
     it('pins and records the AIRDROP zero leg, DIVIDEND empty allow list and equal-price ORDER reviews', october23GatesReview);
     it('pins and records the SEND, DESTROY and STAKE NOT NULL amount width review', notNullAmountWidthReview);
     it('pins and records the ISSUE caret TICK canonical id review', tickNormalizeReview);
+    it('pins and records the ORDER and SWAP same-token offer refusal review', sameTokenOfferReview);
 });
