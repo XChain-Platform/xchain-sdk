@@ -735,8 +735,8 @@ it must follow at activation. NO CLIENT CHECK MOVES.
 No pin moves, no row is added and the anchor stays. The indexer change (`1716d1c90`) is in
 `src/actions/order_match/index.js`, `src/db/orders/order_info.js` and
 `src/utility/validation/value_checks.js`, none of which a row here maps: at or above
-`match_equal_price_oldest_first_activation.MATCH_EQUAL_PRICE_OLDEST_FIRST` (unarmed on mainnet and
-testnet, armed on a regtest venue by `XC_MATCH_EQUAL_PRICE_OLDEST_FIRST_REGTEST_ACTIVATION`),
+`match_equal_price_oldest_first_activation.MATCH_EQUAL_PRICE_OLDEST_FIRST` (armed on testnet at each
+chain's own height, unarmed on mainnet, armed on a regtest venue by `XC_MATCH_EQUAL_PRICE_OLDEST_FIRST_REGTEST_ACTIVATION`),
 candidate makers at an equal price are taken by lowest `ACTION_INDEX` first; below it the highest
 `ACTION_INDEX` stays first. The `order/` row hashes unchanged.
 
