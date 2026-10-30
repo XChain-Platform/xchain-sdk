@@ -207,7 +207,7 @@ describe('embedded template hash guard', function () {
         escrowDelivery: '8cfdfd753ec063a3145cc166368b162ff01d4864cd3b959aa243d0ad2b7526ea',
         vesting: '17440e4020d3a62c1325db7b9cd5653e8b096af96817c435ed5e452676c8c5f6',
         crowdsale: '475999d5d7b783d6e0054e1ca006b64be5b6287b03fe2282828d64720c4324b3',
-        amm: '895a0a321a428928e36a45b0d9c6cc9b7183493f620e3f58c8cb5407cc1cc18d'
+        amm: '70c32282d51096dabed9eabe25694081ff7205182bcbdc5f986e5c576aba840a'
     };
 
     it('covers every embedded template', function () {

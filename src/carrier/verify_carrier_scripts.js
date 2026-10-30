@@ -45,6 +45,7 @@
 const bitcoin = require('bitcoinjs-lib');
 const zlib = require('zlib');
 const { isBytes, toBuffer, bytesEqual } = require('../utils/bytes');
+const { getNetwork } = require('../protocol/networks.js');
 
 const CHUNK_ENCODINGS = ['P2SH', 'P2WSH'];
 
@@ -57,7 +58,19 @@ const REASONS = {
     SCRIPT_UNPARSEABLE: 'SCRIPT_UNPARSEABLE',
     OUTPUT_NOT_FOUND:   'OUTPUT_NOT_FOUND',
     PAYLOAD_MISMATCH:   'PAYLOAD_MISMATCH',
+    SEGWIT_UNSUPPORTED: 'SEGWIT_UNSUPPORTED',
 };
+
+// Resolve the caller's network: a bitcoinjs network object as given, a known name
+// through the coin registry, and anything else as bitcoin. Callers pass sdk.config.network,
+// a NAME such as 'litecoin-regtest', as readily as an object, and payments only ever see an object.
+function resolveNetwork(network) {
+    if (network && typeof network === 'object' && network.pubKeyHash !== undefined) return network;
+    if (typeof network === 'string' && network.length) {
+        try { return getNetwork(network); } catch (e) { /* unknown name: bitcoin below */ }
+    }
+    return bitcoin.networks.bitcoin;
+}
 
 // Accepts a PSBT as hex/base64 (the shape that survives the wallet's host
 // messaging boundary) or as an already-parsed bitcoinjs Psbt. Reads the
@@ -167,6 +180,13 @@ function verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString, ra
     if (!CHUNK_ENCODINGS.includes(enc))
         return { ok: true, reason: REASONS.NOT_CHUNKED, checked: 0 };
 
+    // Refuse P2WSH on a chain without segwit, as the encoder and decoder do (`=== false`:
+    // native bitcoinjs networks lack the field). The committed output SCRIPT is a bare hash
+    // push, identical on every network, so legality of the lane is all the network decides.
+    const net = resolveNetwork(network);
+    if (enc === 'P2WSH' && net.supportsSegwit === false)
+        return { ok: false, reason: REASONS.SEGWIT_UNSUPPORTED, checked: 0 };
+
     // A chunked encoding with no scripts is an encoder that predates
     // carrier-script support, or a stripped response. Fail closed: this is
     // exactly the case that used to be silently trusted, so treating
@@ -174,15 +194,6 @@ function verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString, ra
     if (!Array.isArray(carrierScripts) || !carrierScripts.length)
         return { ok: false, reason: REASONS.SCRIPTS_MISSING, checked: 0 };
 
-    // Callers reasonably pass sdk.config.network, which is a NAME ('bitcoin',
-    // 'litecoin-regtest'), not a bitcoinjs network object. Only a real network
-    // object is forwarded to payments. This affects nothing either way - the
-    // P2SH/P2WSH output SCRIPT is a bare hash push, identical on every network
-    // (only the derived ADDRESS is network-specific, and it is not used here) -
-    // but a string reaching payments is a trap waiting for a future change.
-    const net = (network && typeof network === 'object' && network.pubKeyHash !== undefined)
-        ? network
-        : bitcoin.networks.bitcoin;
     const present = outputScriptsOf(psbt);
     const chunks = verifiedChunks(carrierScripts, enc, net, present);
     if (!Array.isArray(chunks)) return chunks;

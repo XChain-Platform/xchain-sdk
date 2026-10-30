@@ -12,15 +12,17 @@
  *
  **********************************************************************
  *
- * In-process BigInt-safe 64-bit value patch for bitcoinjs-lib + bip174.
+ * In-process BigInt-safe 64-bit value patch for bitcoinjs-lib.
  *
- * Stock bitcoinjs-lib 6.x holds transaction output values as Number and
- * bounds them twice: the 64-bit serializers (bufferutils verifuint, and
- * bip174's own copy for the PSBT witnessUtxo field) throw 'RangeError:
- * value out of range' above 2^53-1, and types.Satoshi additionally caps
- * addOutput at 21M BTC in sats (2.1e15). Dogecoin has no supply cap, so a
- * single output can legitimately exceed both ceilings (>~90.07M DOGE for
- * 2^53); without this patch the encoder cannot build such a PSBT at all.
+ * package.json pins bitcoinjs-lib 7, which uses BigInt satoshi values and
+ * Uint8Array byte values. The v7 part preserves the Number and
+ * Buffer-facing API while retaining exact unsigned 64-bit values above
+ * 2^53-1. Dogecoin has no supply cap, so a single output can legitimately
+ * exceed 2^53 sats (>~90.07M DOGE). The v6 part is an SDK-only fallback for
+ * a forced bitcoinjs-lib 6 install, where the stock serializers (and
+ * bip174's copy for the PSBT witnessUtxo field) throw above 2^53-1 and
+ * types.Satoshi caps addOutput at 21M BTC; every block in it is gated off
+ * under bitcoinjs-lib 7.
  *
  * This is the WRITE-SIDE contract, shared with
  * xchain-encoder/src/build/apply_bufferutils_patch.js: the patch teaches the loaded
@@ -36,13 +38,14 @@
  * the module-level readUInt64LE/writeUInt64LE helpers keep the stock 2^53-1
  * ceiling. Only the 2^53 probe and the error strings are common to both.
  *
- * Re-sync seam (uuid:311476c7). Everything below this banner is pinned
- * byte-identical to the encoder copy's body by
- * xchain-encoder/test/unit/build/apply_bufferutils_patch.test.js. Only the two
- * headers differ, because each names the other and its own read-side
- * relationship.
- * Convergence runs SDK-ward: change this copy first, then copy its body to the
- * encoder, or the twin guard goes red.
+ * Re-sync seam (uuid:311476c7).
+ * xchain-encoder/test/unit/build/apply_bufferutils_patch.test.js pins
+ * compat.js, u64.js, v7.js and version.js byte-identical to the encoder's,
+ * and pins the code below this banner identical to the encoder entry body
+ * except for the one SDK-only require of the v6 part. v6.js has no encoder
+ * twin and no guard.
+ * Convergence runs SDK-ward: change this copy first, then copy the shared
+ * parts to the encoder, or the twin guard goes red.
  *
  * All bitcoinjs-lib/bip174 consumers hold the patched modules' exports
  * objects and class prototypes rather than destructured copies, so

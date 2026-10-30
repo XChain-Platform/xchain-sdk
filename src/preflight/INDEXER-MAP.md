@@ -82,7 +82,15 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `52a82367`
+**Pins taken at indexer commit:** `630a136d`
+
+(Re-anchored 2026-10-30 against indexer `630a136d`, the origin develop head at which all sixteen
+rows hash as pinned. The review-log entries from 2026-10-20 to 2026-10-27 moved the `send`,
+`destroy`, `issue`, `order`, `swap`, `airdrop`, `dividend`, `batch`, `price` and `stake` pins past
+`52a82367` without moving this line, so those ten rows no longer matched it. The paired indexer
+changes behind them have landed (`900de7df6`, `32b4fa8f0`, `dc4e4544f` and `951a1f844` are
+ancestors of `630a136d`, and the `batch` and `price` companion trees hash as pinned there). No pin
+moves here, and `52a82367` is an ancestor of `630a136d`.)
 
 (Re-anchored 2026-10-20 against indexer `52a82367`, the origin develop head at which all sixteen
 rows hash as pinned. The four re-pins logged on 2026-10-20 moved the `send`, `destroy`, `mint`
@@ -467,7 +475,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 52a82367..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 630a136d..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -548,7 +556,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `294bc04fdb4e48a0d59beccfc2800826acdb4da77643b6709d1e009dfc4b04e6` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `1f77aa820a0d5ac2afffebc38ad456389b72e58eb9e67001529a14e60899a0d8` |
-| `checks/airdrop.js` | `src/actions/airdrop/` | `4d7279d0707eb4c1719b0e4777dbf78bb3eef563ace5cd4006772d0691f200f7` |
+| `checks/airdrop.js` | `src/actions/airdrop/` | `9b3ade3b59922532bf3f7296cd2232e52a8055c86532e9ad00bba106206105e7` |
 | `checks/dividend.js` | `src/actions/dividend/` | `7d66516b2584dcce47eecac80f62f90cabf98844ecc862195c03c65a7ff31065` |
 | `checks/batch.js` | `src/actions/batch/` | `9a5147d0a4e121f10d9dd23a6d2f9602f8359ec5eca8f555111aea973a6321ad` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f` |
@@ -577,6 +585,38 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-30 - AIRDROP records the total XCHAIN-balance fee across its legs
+
+The `airdrop` pin moves from `4d7279d0` to `9b3ade3b`, hashed from indexer commit
+`9fce088305eb5e10d1752abd45a5dfefca2eed9e` by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/airdrop/`. The mapped diff changes
+`legs.js` and `settle.js`. The `legs.js` edit is comment-only and normalizes out of the hash; it
+documents the existing behavior that an unknown FORMAT or short parameter list produces no legs.
+For each valid leg whose fee is paid from the XCHAIN balance, `settle.js` now accumulates the fee
+amount and gas cost after the existing `processTransactionFees` call. Once all legs settle, it
+rewrites the action's single fee row with that total when at least two legs contributed. Each
+leg's debit remains staged by the existing fee processing, and neither the per-leg fee object nor
+the recipient, amount, list, token, format or controller checks change.
+
+**Direction: NEUTRAL for validity and fee charging; stored fee bookkeeping changes only.**
+NO CLIENT CHECK MOVES: `checks/airdrop.js` stays unchanged because the action admits and rejects
+the same wire inputs, and the client-visible protocol fee is unchanged.
+
+### 2026-10-30 - the anchor moves to the landed paired changes behind ten re-pinned rows
+
+No pin moves. The re-pins logged from 2026-10-20 to 2026-10-27 were taken from paired indexer
+trees, and those changes have landed on indexer develop: `900de7df6` (`order/`, `swap/`),
+`32b4fa8f0` (`issue/`), `dc4e4544f` (`send/`, `destroy/`, `stake/`) and `951a1f844` (`airdrop/`,
+`dividend/`), each an ancestor of `630a136d`; the `batch` and `price` companion trees landed with
+them. The drift gate run
+against a clean export of indexer `630a136d` reports all sixteen rows in sync, and the same run
+against `52a82367` reports ten rows drifted (`send`, `destroy`, `issue`, `order`, `swap`,
+`airdrop`, `dividend`, `batch`, `price` and `stake`). So the anchor line and the review command
+move to `630a136d` together.
+
+**Direction: NEUTRAL.** No validity verdict, error text or fee moves, and no `checks/` module
+changes.
 
 ### 2026-10-27 - same-chain ORDER and SWAP refuse offers of one resolved token
 

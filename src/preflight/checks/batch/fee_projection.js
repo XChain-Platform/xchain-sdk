@@ -28,7 +28,7 @@ const Utility = require('../../../utils/utility.js');
 const util = new Utility();
 
 // Price gas the way the arbiter CHARGES it: bcmul at 8 decimals, whose
-// fixed-precision format rounds half-up (xchain-indexer/src/utility.js
+// fixed-precision format rounds half-up (xchain-indexer/src/utility/fees.js
 // getUnifiedTransactionFee / getOwnershipEscrowFee / the expiration-fee paths
 // all bill through it). numeric.mulFloor is the DISTRIBUTION rule and floors, so
 // pricing a fee with it under-quoted the charge by 1e-8 wherever the product
@@ -79,7 +79,7 @@ function gasConfig(sdk) {
  * Whether the issuance fee is settled by DEBITING the source's gas-token
  * balance, which is the only mode a client can check a balance against.
  *
- * The chain's own rule (indexer utility.js detectFeePaymentMode): a fee OUTPUT
+ * The chain's own rule (indexer src/utility/fees.js detectFeePaymentMode): a fee OUTPUT
  * makes it native; with no output, BTC falls back to the XCHAIN debit and
  * LTC/DOGE reject outright. A caller who stated feeMode is believed. Where
  * nothing is stated and the coin is LTC/DOGE the fee is a coin output, so a
@@ -151,6 +151,9 @@ async function projectIssueFee(ctx, cmd, gas) {
  * later-confirming create is billed. bound:false records that: the quote
  * feeds the batch-total warning honestly, and may never feed the whole-batch
  * collapse error, which only lower-bound-grade prices can justify.
+ *
+ * The chain side is getUnifiedDurationFee in xchain-indexer src/utility/fees.js;
+ * test/unit/preflight/conformance/duration_fee_indexer_parity.test.js runs both.
  */
 function projectDurationFee(cmd, gas, nowMs = Date.now()) {
     if (!gas) return null;

@@ -69,15 +69,15 @@ function publicSdkDiscoveryTests() {
 
         try {
             await sdk.discover();
-            assert.strictEqual(sdk.explorer.baseUrl, 'https://discovered-explorer.test');
+            assert.strictEqual(sdk.explorer.baseUrl, 'https://discovered-explorer.test:8443');
             assert.strictEqual(sdk.explorer.port, 8443);
-            assert.strictEqual(sdk.encoder.baseUrl, 'https://discovered-encoder.test/BTC');
+            assert.strictEqual(sdk.encoder.baseUrl, 'https://discovered-encoder.test:9443/BTC');
             assert.strictEqual(sdk.encoder.port, 9443);
             assert.deepStrictEqual(sdk.getHubConfig(), {
                 bitcoin: {
                     mainnet: {
-                        'xchain-explorer': { host: 'https://discovered-explorer.test', port: 8443 },
-                        'xchain-encoder': { host: 'https://discovered-encoder.test/BTC', port: 9443 }
+                        'xchain-explorer': { host: 'https://discovered-explorer.test:8443', port: 8443 },
+                        'xchain-encoder': { host: 'https://discovered-encoder.test:9443/BTC', port: 9443 }
                     }
                 }
             });
@@ -92,6 +92,47 @@ function publicSdkDiscoveryTests() {
         } finally {
             sdk.stop();
         }
+    });
+}
+
+function registryPortTests() {
+    isolateHubApiKey();
+    it('keeps a registry defaultPort on a scheme URL so regtest discovery reaches the published ports', async function () {
+        nock(HUB_BASE).get(REGISTRY_PATH).reply(200, {
+            descriptors: [descriptor({
+                id: 'bitcoin-regtest',
+                networkKind: 'regtest',
+                explorer: { defaultUrl: 'http://localhost', defaultPort: 18080 },
+                encoder: { defaultUrl: 'http://localhost', defaultPort: 3023 }
+            })]
+        });
+
+        let sdk = new XChainSDK({ network: 'bitcoin-regtest', hubUrl: HUB_BASE + '/RBTC', retry: false });
+        sdk.hub.startPolling = () => {};
+        try {
+            await sdk.discover();
+            assert.strictEqual(sdk.explorer.client.defaults.baseURL, 'http://localhost:18080');
+            assert.strictEqual(sdk.encoder.client.defaults.baseURL, 'http://localhost:3023');
+            assert.strictEqual(sdk.ws.baseUrl, 'http://localhost:18080');
+        } finally {
+            sdk.stop();
+        }
+    });
+
+    it('leaves a scheme-default or already-written registry port as the exact registry string', async function () {
+        nock(HUB_BASE).get(REGISTRY_PATH).reply(200, {
+            descriptors: [descriptor({
+                explorer: { defaultUrl: 'https://explorer.xchain.io', defaultPort: 443 },
+                encoder: { defaultUrl: 'http://localhost:9000', defaultPort: 3023 }
+            })]
+        });
+
+        let hub = new HubConnector({ hubUrl: HUB_BASE });
+        let configs = await hub.getDiscoveryConfig();
+        assert.deepStrictEqual(configs.bitcoin.mainnet, {
+            'xchain-explorer': { host: 'https://explorer.xchain.io', port: 443 },
+            'xchain-encoder': { host: 'http://localhost:9000', port: 3023 }
+        });
     });
 }
 
@@ -143,5 +184,6 @@ function keyedHubDiscoveryTests() {
 }
 
 describe('public hub discovery', publicSdkDiscoveryTests);
+describe('public hub discovery', registryPortTests);
 describe('public hub discovery', publicHubFailoverTests);
 describe('public hub discovery', keyedHubDiscoveryTests);

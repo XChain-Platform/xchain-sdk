@@ -29,7 +29,8 @@ const { SDKConfigError } = require('../utils/errors.js');
 
 // Build the encoder client synchronously so URL resolution and assignment stay adjacent.
 function initializeEncoderClient(sdk, resolved, hooks, retry, pool, readyHook, pub) {
-    let encoderUrl  = resolved.encoderUrl  || config.env.encoderUrl() || pub.encoderUrl;
+    // Skip the public host when only a port option is given (the client drops a port once the URL has a scheme).
+    let encoderUrl  = resolved.encoderUrl  || config.env.encoderUrl() || (resolved.encoderPort ? undefined : pub.encoderUrl);
     let encoderPort = resolved.encoderPort || config.env.encoderPort();
     if (encoderUrl || encoderPort) {
         sdk.encoder = new EncoderClient({
@@ -61,7 +62,8 @@ module.exports = {
         let pub       = publicDefaults(network);
         let readyHook = () => this.ensureReady();
 
-        let explorerUrl  = resolved.explorerUrl  || config.env.explorerUrl() || pub.explorerUrl;
+        // Skip the public host when only a port option is given, as the encoder does.
+        let explorerUrl  = resolved.explorerUrl  || config.env.explorerUrl() || (resolved.explorerPort ? undefined : pub.explorerUrl);
         let explorerPort = resolved.explorerPort || config.env.explorerPort();
         if (network && (explorerUrl || explorerPort)) {
             this.explorer = new ExplorerClient({
@@ -146,8 +148,8 @@ module.exports = {
 
     // Overlay hub-discovered endpoints onto the live clients (mutating, not
     // rebuilding, so in-flight callers see the new target). Skips any endpoint
-    // the caller pinned via constructor options. Creates a client if one does
-    // not yet exist (e.g. hub-only configuration).
+    // the caller pinned with a URL or port constructor option. Creates a client
+    // if one does not yet exist (e.g. hub-only configuration).
     applyEndpoints() {
         if (!this.hub) return;
         let network   = this.options.network || config.env.network();
@@ -158,7 +160,7 @@ module.exports = {
         let readyHook = () => this.ensureReady();
 
         // Explorer
-        if (!this.options.explorerUrl && endpoints.explorerUrl) {
+        if (!this.options.explorerUrl && !this.options.explorerPort && endpoints.explorerUrl) {
             if (this.explorer) {
                 if (!this.isDowngrade('explorer', this.explorer, endpoints.explorerUrl))
                     this.explorer.setBase(endpoints.explorerUrl, endpoints.explorerPort);
@@ -168,7 +170,7 @@ module.exports = {
         }
 
         // Encoder
-        if (!this.options.encoderUrl && endpoints.encoderUrl) {
+        if (!this.options.encoderUrl && !this.options.encoderPort && endpoints.encoderUrl) {
             if (this.encoder) {
                 if (!this.isDowngrade('encoder', this.encoder, endpoints.encoderUrl))
                     this.encoder.setBase(endpoints.encoderUrl, endpoints.encoderPort);
@@ -177,8 +179,8 @@ module.exports = {
             }
         }
 
-        // WebSocket follows the explorer endpoint unless a websocket/explorer URL was pinned
-        if (!this.options.websocketUrl && !this.options.explorerUrl && endpoints.explorerUrl) {
+        // Follow the explorer endpoint with the WebSocket unless a websocket URL or the explorer was pinned
+        if (!this.options.websocketUrl && !this.options.explorerUrl && !this.options.explorerPort && endpoints.explorerUrl) {
             if (this.ws) {
                 if (!this.isDowngrade('websocket', this.ws, endpoints.explorerUrl))
                     this.ws.setBase(endpoints.explorerUrl, endpoints.explorerPort);

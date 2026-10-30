@@ -16,7 +16,8 @@
  * create, checked against the source's gas-token balance.
  *
  * The indexer prices a format-0 create from its own EXPIRATION
- * (getUnifiedExpirationFee, xchain-indexer src/utility/fees.js:286-300) and,
+ * (getUnifiedDurationFee in xchain-indexer src/utility/fees.js, reached through
+ * getUnifiedExpirationFee's format-0 branch) and,
  * when the fee is debited rather than paid as a native output, refuses the
  * create as `invalid: insufficient funds (FEE)` (src/actions/order/fees.js:77-78,
  * src/actions/swap/fees.js and src/actions/dispenser/fees.js the same way).

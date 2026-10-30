@@ -44,7 +44,7 @@ function dispenserPinChainEnd() {
 function airdropFeeTallyReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/airdrop/').hash)
-        .to.equal('4d7279d0707eb4c1719b0e4777dbf78bb3eef563ace5cd4006772d0691f200f7');
+        .to.equal('9b3ade3b59922532bf3f7296cd2232e52a8055c86532e9ad00bba106206105e7');
     const heading = '### 2026-10-18 - AIRDROP_NATIVE_FEE_TALLY gate is added';
     expect(text).to.include(heading);
     expect(entryOf(text, heading)).to.include('**Direction: TIGHTENING at the gate height only.**');
@@ -105,7 +105,7 @@ function october23GatesReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     const rows = parseMap(REAL_MAP);
     expect(rows.find((r) => r.handler === 'src/actions/airdrop/').hash)
-        .to.equal('4d7279d0707eb4c1719b0e4777dbf78bb3eef563ace5cd4006772d0691f200f7');
+        .to.equal('9b3ade3b59922532bf3f7296cd2232e52a8055c86532e9ad00bba106206105e7');
     expect(rows.find((r) => r.handler === 'src/actions/dividend/').hash)
         .to.equal('7d66516b2584dcce47eecac80f62f90cabf98844ecc862195c03c65a7ff31065');
     expect(rows.find((r) => r.handler.startsWith('src/actions/order_match')), 'no ORDER_MATCH row').to.equal(undefined);

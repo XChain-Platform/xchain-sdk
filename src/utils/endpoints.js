@@ -15,7 +15,7 @@
  * XChain Platform SDK - Public Service Endpoint Defaults
  *
  * Zero-config service hosts. When the SDK is constructed with only a
- * `network` (no explicit explorer/encoder/hub URLs and no env overrides),
+ * `network` (no explorer/encoder/hub URL or port options and no env overrides),
  * non-regtest networks default to the public XChain Platform hosts below.
  * Regtest is inherently local, so these helpers return nothing for it: the
  * explorer then falls back to localhost:8080, while the encoder and WebSocket

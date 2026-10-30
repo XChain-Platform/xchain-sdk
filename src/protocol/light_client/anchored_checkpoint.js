@@ -180,9 +180,10 @@ function parseAnchorV0(wire, { blockIndex } = {}){
         sections.push(sec);
     }
     enforceAnchorBundleOrder(network, blockIndex, sections);
-    // Tail: one publisher attestation for the whole bundle. It is a reward
-    // artifact, not part of SPV trust, and a degraded round legitimately lands
-    // ATTEST_SIG_COUNT 0, so an absent or empty tail is not an error.
+    // Tail: one publisher attestation, a reward artifact outside SPV trust, so this
+    // reader returns an absent or count-0 tail as parsed. The indexer is stricter and
+    // stores a v0/v3 bundle with ATTEST_SIG_COUNT below 1 as invalid (only a v1 head
+    // may carry 0), so a successful parse here is not a validity verdict.
     const publisher = lowerHex(p[i]) || null;
     const attestCount = parseInt(p[i + 1], 10);
     const attestations = [];
