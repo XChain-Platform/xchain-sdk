@@ -341,8 +341,9 @@ module.exports = {
     },
 
     async search(query, type) {
+        if (this._readyHook) await this._readyHook();
         // Search uses the /explorer/ path instead of /api/
-        let url = '/' + this.coin + '/explorer/search/' + query + '/' + type;
+        const url = '/' + this.coin + '/explorer/search/' + seg(query) + '/' + seg(type);
         let self = this;
 
         let retryConfig = this.retry === false ? { maxRetries: 0 } : this.retry;

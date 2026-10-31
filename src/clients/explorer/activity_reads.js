@@ -62,6 +62,7 @@ module.exports = {
     // the symmetric key from the corresponding MESSAGE handoff.
     // See xchain-documentation/protocol/token-gated-content.md.
     async getGatedFileRaw(actionIndex, coin = null) {
+        if (this._readyHook) await this._readyHook();
         let url = '/' + this.siblingCoin(coin) + '/api/file/' + actionIndex + '/raw';
         let self = this;
         try {

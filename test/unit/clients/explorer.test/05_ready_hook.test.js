@@ -51,5 +51,41 @@ describe('ExplorerClient', function () {
             await hooked.getStatus();
             expect(hookCalled).to.be.true;
         });
+
+        it('search uses the base selected by readyHook', async function () {
+            let hooked;
+            hooked = new ExplorerClient({
+                network: 'bitcoin-mainnet',
+                explorerUrl: '127.0.0.1',
+                explorerPort: 18080,
+                retry: false,
+                readyHook: async () => { hooked.setBase('127.0.0.1', 19090); }
+            });
+            nock('http://127.0.0.1:18080')
+                .get('/BTC/explorer/search/abc/tx').reply(200, { host: 'provisional' });
+            const discovered = nock('http://127.0.0.1:19090')
+                .get('/BTC/explorer/search/abc/tx').reply(200, { host: 'discovered' });
+
+            expect(await hooked.search('abc', 'tx')).to.deep.equal({ host: 'discovered' });
+            expect(discovered.isDone()).to.be.true;
+        });
+
+        it('getGatedFileRaw uses the base selected by readyHook', async function () {
+            let hooked;
+            hooked = new ExplorerClient({
+                network: 'bitcoin-mainnet',
+                explorerUrl: '127.0.0.1',
+                explorerPort: 18080,
+                retry: false,
+                readyHook: async () => { hooked.setBase('127.0.0.1', 19090); }
+            });
+            nock('http://127.0.0.1:18080')
+                .get('/BTC/api/file/7/raw').reply(200, Buffer.from([9]));
+            const discovered = nock('http://127.0.0.1:19090')
+                .get('/BTC/api/file/7/raw').reply(200, Buffer.from([1, 2, 3]));
+
+            expect(await hooked.getGatedFileRaw(7)).to.deep.equal(Buffer.from([1, 2, 3]));
+            expect(discovered.isDone()).to.be.true;
+        });
     });
 });

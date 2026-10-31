@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Awaited hub discovery before explorer search and gated-file fetch requests.
+- Ignored empty or invalid hub validator lists when deciding whether regtest needs a hub.
+
 ## [0.26.2] - 2026-10-21
 
 ### Changed

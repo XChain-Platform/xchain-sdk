@@ -117,6 +117,36 @@ describe('applyBufferutilsPatch', function () {
         assert.throws(() => bip174Tools.writeUInt64LE(Buffer.alloc(8), 2 ** 53, 0), /value out of range/);
     });
 
+    it('applies the u64 Number guard to raw Transaction value entry points', function () {
+        const { Transaction } = require('bitcoinjs-lib');
+        const script = Buffer.from('0014' + '22'.repeat(20), 'hex');
+        const callers = [
+            (tx, value) => tx.addOutput(script, value),
+            (tx, value) => tx.hashForWitnessV0(0, script, value, Transaction.SIGHASH_ALL),
+            (tx, value) => tx.hashForWitnessV1(0, [script], [value], Transaction.SIGHASH_DEFAULT),
+        ];
+        const invalid = [
+            [2 ** 53, /value out of range/],
+            [-1, /specified a negative value for writing an unsigned value/],
+            [0.5, /value has a fractional component/],
+            [NaN, /value has a fractional component/],
+        ];
+        for (const call of callers) {
+            for (const [value, expected] of invalid) {
+                const tx = new Transaction();
+                tx.addInput(Buffer.alloc(32, 1), 0);
+                tx.addOutput(script, 1000n);
+                assert.throws(() => call(tx, value), expected);
+                assert.throws(() => call(tx, value), err => !/cannot be converted to a BigInt/.test(err.message));
+            }
+            const tx = new Transaction();
+            tx.addInput(Buffer.alloc(32, 1), 0);
+            tx.addOutput(script, 1000n);
+            assert.doesNotThrow(() => call(tx, 9007199254740991));
+            assert.doesNotThrow(() => call(tx, 9007199254740993n));
+        }
+    });
+
     it('refuses a PSBT witnessUtxo Number value past 2^53-1 and serializes its BigInt form', function () {
         const { Psbt } = require('bitcoinjs-lib');
         const input = (value) => ({ hash: Buffer.alloc(32, 1), index: 0,
