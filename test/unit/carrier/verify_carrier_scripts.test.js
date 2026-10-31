@@ -10,11 +10,16 @@
 
 const { expect } = require('chai');
 const bitcoin = require('bitcoinjs-lib');
-const { verifyCarrierScripts, REASONS } = require('../../../src/carrier/verify_carrier_scripts.js');
+const { verifyCarrierScripts: verifyCarrierScriptsRaw, REASONS } = require('../../../src/carrier/verify_carrier_scripts.js');
 
 const NET = bitcoin.networks.bitcoin;
 const H160 = Buffer.alloc(20, 0xab); // stand-in for the caller HASH160
+const CALLER = bitcoin.payments.p2wpkh({ hash: H160, network: NET }).address;
 const ACTION = 'ISSUE|0|LONGTICK|1000000|1000000|8|a description long enough to need chunking across several outputs';
+
+function verifyCarrierScripts(args) {
+    return verifyCarrierScriptsRaw(Object.assign({ callerIdentities: CALLER }, args));
+}
 
 // Mirrors XChainEncoder's compile: <chunk> OP_DROP OP_DUP OP_HASH160
 // <hash160> OP_EQUALVERIFY OP_CHECKSIG.
@@ -140,60 +145,92 @@ describe('carrier-script verification (§5.3.2)', function () {
     });
 });
 
-describe('carrier-script verification (§5.3.2)', function () {
-
-    ['P2SH', 'P2WSH'].forEach(encoding => {
-
-        describe(encoding, function () {
-
-            it('accepts scripts that are committed AND carry the intended action', function () {
-                const { carrierScripts, psbt } = build(ACTION, encoding, 20);
-                const r = verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString: ACTION, network: NET });
-                expect(r.ok).to.equal(true);
-                expect(r.checked).to.be.greaterThan(1); // genuinely multi-chunk
-            });
-
-            // Check 2 with check 1 held valid: the script IS committed in the
-            // PSBT, but carries a different payload than the caller asked for.
-            // This is the substitution the whole section exists to catch.
-            it('REJECTS a committed script whose payload is not what was asked for', function () {
-                const evil = 'SEND|0|XCHAIN|9999999|bc1qattackeraddressgoeshere00000000000000';
-                const { carrierScripts, psbt } = build(evil, encoding, 20);
-                const r = verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString: ACTION, network: NET });
-                expect(r.ok).to.equal(false);
-                expect(r.reason).to.equal(REASONS.PAYLOAD_MISMATCH);
-            });
-
-            // Check 1 with check 2 held valid: the payload is exactly right,
-            // but the script is not one the PSBT commits to, so signing it
-            // would put different bytes on chain than were verified.
-            it('REJECTS a correct payload in a script the PSBT does not commit to', function () {
-                const { carrierScripts } = build(ACTION, encoding, 20);
-                const { psbt } = build(ACTION, encoding, 25); // same action, different chunking
-                const r = verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString: ACTION, network: NET });
-                expect(r.ok).to.equal(false);
-                expect(r.reason).to.equal(REASONS.OUTPUT_NOT_FOUND);
-            });
-
-            // Fail closed. An encoder that does not return scripts is the
-            // exact pre-§5.3.2 situation, and treating "cannot verify" as a
-            // pass would silently restore the residual trust.
-            it('FAILS CLOSED when the encoder returned no scripts', function () {
-                const { psbt } = build(ACTION, encoding, 20);
-                const r = verifyCarrierScripts({ psbt, carrierScripts: [], encoding, actionString: ACTION, network: NET });
-                expect(r.ok).to.equal(false);
-                expect(r.reason).to.equal(REASONS.SCRIPTS_MISSING);
-            });
-
-            it('rejects a malformed script rather than skipping it', function () {
-                const { psbt } = build(ACTION, encoding, 20);
-                const r = verifyCarrierScripts({ psbt, carrierScripts: ['not-hex-at-all'], encoding, actionString: ACTION, network: NET });
-                expect(r.ok).to.equal(false);
-                expect(r.reason).to.be.oneOf([REASONS.SCRIPT_UNPARSEABLE, REASONS.OUTPUT_NOT_FOUND]);
-            });
-        });
+function registerCarrierContentTests(encoding) {
+    it('accepts scripts that are committed AND carry the intended action', function () {
+        const { carrierScripts, psbt } = build(ACTION, encoding, 20);
+        const r = verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString: ACTION, network: NET });
+        expect(r.ok).to.equal(true);
+        expect(r.checked).to.be.greaterThan(1); // genuinely multi-chunk
     });
 
+    // Check 2 with check 1 held valid: the script IS committed in the
+    // PSBT, but carries a different payload than the caller asked for.
+    // This is the substitution the whole section exists to catch.
+    it('REJECTS a committed script whose payload is not what was asked for', function () {
+        const evil = 'SEND|0|XCHAIN|9999999|bc1qattackeraddressgoeshere00000000000000';
+        const { carrierScripts, psbt } = build(evil, encoding, 20);
+        const r = verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString: ACTION, network: NET });
+        expect(r.ok).to.equal(false);
+        expect(r.reason).to.equal(REASONS.PAYLOAD_MISMATCH);
+    });
+
+    // Check 1 with check 2 held valid: the payload is exactly right,
+    // but the script is not one the PSBT commits to, so signing it
+    // would put different bytes on chain than were verified.
+    it('REJECTS a correct payload in a script the PSBT does not commit to', function () {
+        const { carrierScripts } = build(ACTION, encoding, 20);
+        const { psbt } = build(ACTION, encoding, 25); // same action, different chunking
+        const r = verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString: ACTION, network: NET });
+        expect(r.ok).to.equal(false);
+        expect(r.reason).to.equal(REASONS.OUTPUT_NOT_FOUND);
+    });
+
+    // Fail closed. An encoder that does not return scripts is the
+    // exact pre-§5.3.2 situation, and treating "cannot verify" as a
+    // pass would silently restore the residual trust.
+    it('FAILS CLOSED when the encoder returned no scripts', function () {
+        const { psbt } = build(ACTION, encoding, 20);
+        const r = verifyCarrierScripts({ psbt, carrierScripts: [], encoding, actionString: ACTION, network: NET });
+        expect(r.ok).to.equal(false);
+        expect(r.reason).to.equal(REASONS.SCRIPTS_MISSING);
+    });
+
+    it('rejects a malformed script rather than skipping it', function () {
+        const { psbt } = build(ACTION, encoding, 20);
+        const r = verifyCarrierScripts({ psbt, carrierScripts: ['not-hex-at-all'], encoding, actionString: ACTION, network: NET });
+        expect(r.ok).to.equal(false);
+        expect(r.reason).to.be.oneOf([REASONS.SCRIPT_UNPARSEABLE, REASONS.OUTPUT_NOT_FOUND]);
+    });
+}
+
+function registerCarrierSpendGateTests(encoding) {
+    it('rejects an exact payload whose spend gate has an extra branch', function () {
+        const data = compiledPayload(ACTION);
+        const redeem = bitcoin.script.compile([
+            data, bitcoin.opcodes.OP_DROP, bitcoin.opcodes.OP_DUP,
+            bitcoin.opcodes.OP_HASH160, H160, bitcoin.opcodes.OP_EQUALVERIFY,
+            bitcoin.opcodes.OP_CHECKSIG, bitcoin.opcodes.OP_TRUE,
+        ]);
+        const psbt = psbtWith([committed(encoding, redeem)]);
+        const r = verifyCarrierScripts({ psbt, carrierScripts: [redeem.toString('hex')],
+            encoding, actionString: ACTION, network: NET });
+        expect(r.reason).to.equal(REASONS.SPEND_GATE_MISMATCH);
+    });
+
+    it('rejects a gate for another key and fails closed without caller identity', function () {
+        const data = compiledPayload(ACTION);
+        const foreign = bitcoin.script.compile([
+            data, bitcoin.opcodes.OP_DROP, bitcoin.opcodes.OP_DUP,
+            bitcoin.opcodes.OP_HASH160, Buffer.alloc(20, 0xcd),
+            bitcoin.opcodes.OP_EQUALVERIFY, bitcoin.opcodes.OP_CHECKSIG,
+        ]);
+        const psbt = psbtWith([committed(encoding, foreign)]);
+        expect(verifyCarrierScripts({ psbt, carrierScripts: [foreign.toString('hex')],
+            encoding, actionString: ACTION }).reason).to.equal(REASONS.SPEND_GATE_MISMATCH);
+        const honest = redeemFor(data);
+        const honestPsbt = psbtWith([committed(encoding, honest)]);
+        expect(verifyCarrierScriptsRaw({ psbt: honestPsbt, carrierScripts: [honest.toString('hex')],
+            encoding, actionString: ACTION }).reason).to.equal(REASONS.CALLER_IDENTITY_MISSING);
+    });
+}
+
+describe('carrier-script verification (§5.3.2)', function () {
+    ['P2SH', 'P2WSH'].forEach(encoding => {
+        describe(encoding, function () {
+            registerCarrierContentTests(encoding);
+            registerCarrierSpendGateTests(encoding);
+        });
+    });
 });
 
 // The rawData push: the encoder chunks `script.compile([action, rawData])`, so a FILE,

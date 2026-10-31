@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Bound chunk spend gates and Taproot envelope commits to the caller key before signing.
 - Awaited hub discovery before explorer search and gated-file fetch requests.
 - Ignored empty or invalid hub validator lists when deciding whether regtest needs a hub.
 

@@ -175,6 +175,7 @@ const SCENARIOS = {
         const { verifyCarrierScripts } = require(path.join(SRC, 'carrier/verify_carrier_scripts.js'));
         const net = bitcoin.networks.bitcoin;
         const h160 = Buffer.alloc(20, 0xab);
+        const caller = bitcoin.payments.p2pkh({ hash: h160, network: net }).address;
         const own = bitcoin.payments.p2wpkh({ hash: h160, network: net }).output;
         const lane = (actionString, encoding) => {
             const data = bitcoin.script.compile([Buffer.from(actionString, 'utf8')]);
@@ -200,12 +201,14 @@ const SCENARIOS = {
             const forged = lane(B, encoding);
             // First, because a raw chunk output once read as "no chunk output" and the binding was skipped.
             assert.throws(() => assertCarrierBinding({ psbt: good.psbt, carrierScripts: forged.carrierScripts,
-                actionString: A, encoding }), /does not carry the action/, `${encoding}: a forged script is refused`);
+                actionString: A, encoding, callerIdentities: caller }), /does not carry the action/,
+                `${encoding}: a forged script is refused`);
             const verified = verifyCarrierScripts({ psbt: good.psbt, carrierScripts: good.carrierScripts,
-                encoding, actionString: A, network: net });
+                encoding, actionString: A, network: net, callerIdentities: caller });
             assert.deepStrictEqual(verified, { ok: true, reason: null, checked: good.carrierScripts.length },
                 `${encoding}: raw chunk scripts verify`);
-            assertCarrierBinding({ psbt: good.psbt, carrierScripts: good.carrierScripts, actionString: A, encoding });
+            assertCarrierBinding({ psbt: good.psbt, carrierScripts: good.carrierScripts,
+                actionString: A, encoding, callerIdentities: caller });
         }
         const k = Buffer.from('0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798', 'hex');
         const multisig = bitcoin.script.compile([bitcoin.opcodes.OP_1, Buffer.alloc(33, 2), Buffer.alloc(33, 3), k,

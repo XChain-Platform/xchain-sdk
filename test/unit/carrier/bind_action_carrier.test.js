@@ -22,6 +22,7 @@ const { assertCarrierBinding, assertEnvelopeCarrierBinding } = require('../../..
 
 const NET = bitcoin.networks.bitcoin;
 const H160 = Buffer.alloc(20, 0xab);
+const CALLER = bitcoin.payments.p2wpkh({ hash: H160, network: NET }).address;
 const OWN = bitcoin.payments.p2wpkh({ hash: H160, network: NET }).output;
 
 // The action the caller submits throughout: 1 token to recipient A.
@@ -114,7 +115,8 @@ function revealPsbt(leafScript) {
 }
 
 function bind(args) {
-    return () => assertCarrierBinding(Object.assign({ network: NET, label: 'transaction' }, args));
+    return () => assertCarrierBinding(Object.assign({ network: NET, label: 'transaction',
+        callerIdentities: CALLER }, args));
 }
 
 function chunkDescription(encoding) {

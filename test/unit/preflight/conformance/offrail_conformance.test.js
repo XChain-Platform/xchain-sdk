@@ -146,7 +146,7 @@ describe('pre-flight conformance A1 amount fields', function () {
 });
 
 describe('pre-flight conformance A3 halt-class fields', function () {
-    // A3: the indexer halts on these (normalize.js nulls the field into a NOT NULL row).
+    // A3: current indexers refuse these; older nodes can halt on the NOT NULL row write.
     const HALTS = ['DISPENSER|1||m', 'DISPENSER|2||1||||m', 'STAKE|1|10|', 'STAKE|2|10|', 'STAKE|3|10||5|JDOG',
         'ORDER|1|-1|m', 'ORDER|2||1800000000|||m', 'SWAP|1|-1|m', 'SWAP|1||m', 'BET|2|-1|0|5|m', 'BET|2|abc|0|5|m',
         'ORDER|1|18446744073709551616|m', 'ORDER|1|18446744073709551615.6|m', 'ORDER|1|0x10|m',
@@ -158,6 +158,8 @@ describe('pre-flight conformance A3 halt-class fields', function () {
             const halt = errors(r, 'VALIDATOR_SEMANTICS').filter((f) => f.data && f.data.haltClass);
             expect(halt, wire).to.have.length(1);
             expect(halt[0].overridable).to.equal(false);
+            expect(halt[0].message, wire).to.include('current indexers refuse this action');
+            expect(halt[0].message, wire).to.include('older indexers can halt');
         });
     }
 
