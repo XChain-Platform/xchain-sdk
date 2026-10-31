@@ -84,6 +84,11 @@ function canonicalCheckpoint(cp){
     return raw;
 }
 
+function tryCanonicalCheckpoint(cp){
+    try { return canonicalCheckpoint(cp); }
+    catch (e) { return null; }
+}
+
 // Verify one Ed25519 signature over a UTF-8 payload (never throws).
 function verifySignature(payload, sigHex, pubkeyHex){
     if (!payload || !sigHex || !pubkeyHex) return false;
@@ -151,7 +156,6 @@ function isWeightedEntry(v){
 // server's `verified` flag nor any server-supplied `is_weighted`); only the stake
 // WEIGHTS themselves come from the supplied set, exactly as the pubkeys always have.
 function verifyCheckpoint(checkpoint, validators){
-    let canonical = canonicalCheckpoint(checkpoint);
     let vset      = validators || [];
     let qualified = new Set(vset.map(p => String(p && p.pubkey !== undefined ? p.pubkey : p).toLowerCase()));
     let quorum    = (qualified.size <= 1) ? 1 : Math.max(2 * Math.floor((qualified.size - 1) / 3) + 1, Math.ceil((qualified.size + 1) / 2));
@@ -160,6 +164,7 @@ function verifyCheckpoint(checkpoint, validators){
     // network, byte-for-byte the same flag-day the hub/indexer flip on, and the
     // same gating the canonical signing string already applies for the equiv header.
     let weighted = swq.isStakeWeightedQuorumActive(checkpoint && checkpoint.snapshot_block, checkpoint && checkpoint.network);
+    let canonical = tryCanonicalCheckpoint(checkpoint);
 
     // Post-activation a checkpoint MUST carry the commitment fields. canonicalCheckpoint
     // appends the suffix only when all four are present, and that guard is correct there
@@ -167,7 +172,7 @@ function verifyCheckpoint(checkpoint, validators){
     // means a ROOTLESS post-flag-day row silently falls back to the legacy preimage and
     // its signatures then verify against it. Structural rejection therefore lives here,
     // in the verifier, where failing closed masks nothing.
-    if (commitmentMissing(checkpoint) || supersessionDisallowed(checkpoint))
+    if (canonical === null || commitmentMissing(checkpoint) || supersessionDisallowed(checkpoint))
         return { valid: false, validSigs: 0, quorum: quorum, weighted: weighted, canonical: canonical };
 
     let sigs = checkpoint.validator_signatures;
@@ -268,11 +273,13 @@ async function fetchAndVerifyCheckpoint(explorerUrl, coin, blockIndex, fetchImpl
 
 module.exports = {
     canonicalCheckpoint,
+    tryCanonicalCheckpoint,
     verifySignature,
     // Exported so verifyCheckpointWithProvenSet (protocol/light_client/validator_set_follow.js,
     // re-exported through protocol/light_client.js and the src/light.js shim) enforces
     // THIS predicate rather than a second copy that can drift from it.
     commitmentMissing,
+    supersessionDisallowed,
     // Exported so callers that trust a served root gate on THIS predicate, not a copy.
     commitmentActive,
     verifyCheckpoint,

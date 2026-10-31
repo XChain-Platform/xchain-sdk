@@ -137,12 +137,15 @@ async function resolveQuorum(f, opts, cp){
         const ff = await followForward({ explorerUrl: opts.explorerUrl, btcCoin: opts.coin,
             trustedCheckpoint: pcp, toHeight: Number(cp.block_index), fetchImpl: f });
         const t = ff && ff.trusted;
+        const trustedCanonical = checkpoint.tryCanonicalCheckpoint(t);
+        const servedCanonical = checkpoint.tryCanonicalCheckpoint(cp);
         // The served cp failed the pinned set, so nothing signs it: it must equal the
         // attested step `t` on every signed field, or callers get forged fields back.
         if (t && sameWireIndex(t.block_index, cp.block_index)
             && lowerHex(t.state_root) === lowerHex(cp.state_root)
             && lowerHex(t.block_merkle_root) === lowerHex(cp.block_merkle_root)
-            && checkpoint.canonicalCheckpoint(t) === checkpoint.canonicalCheckpoint(cp))
+            && trustedCanonical !== null && servedCanonical !== null
+            && trustedCanonical === servedCanonical)
             return { valid: true, quorum: null, weighted: null };
     }
     return { valid: false, quorum: null, weighted: null };
