@@ -1555,7 +1555,7 @@ export interface MuSig2GenerateNonceParams {
 export interface MuSig2PartialSignParams {
     /** 32-byte secret key */
     secretKey: Uint8Array;
-    /** 66-byte public nonce from generateNonce (must be from this instance) */
+    /** The exact 66-byte array generateNonce returned; a byte-equal copy does not find the cached secret nonce */
     publicNonce: Uint8Array;
     /** Session key from startSession */
     sessionKey: object;
@@ -1606,6 +1606,8 @@ export declare class MuSig2 {
 
     /**
      * Produce a 32-byte partial signature using the secret nonce cached by generateNonce.
+     * The cache is keyed by the identity of the returned publicNonce array, not its bytes,
+     * and the first call that finds the entry deletes it.
      */
     partialSign(params: MuSig2PartialSignParams): Uint8Array;
 

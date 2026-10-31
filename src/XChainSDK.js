@@ -221,10 +221,12 @@ class XChainSDK {
         // non-regtest networks this defaults to https://hub.xchain.io so a
         // network-only construction discovers endpoints with zero config;
         // regtest gets no hub unless one is explicitly supplied.
+        // Skip the public hub when only a hubPort option is given, building a
+        // localhost hub instead; regtest still builds no hub from a port alone.
         let pub     = publicDefaults(network);
-        let hubUrl  = options.hubUrl  || config.env.hubApiHost() || pub.hubUrl;
+        let hubUrl  = options.hubUrl  || config.env.hubApiHost() || (options.hubPort ? undefined : pub.hubUrl);
         let hubPort = options.hubPort || (config.env.hubPort() ? parseInt(config.env.hubPort()) : undefined);
-        if (options.hubValidators || hubUrl) {
+        if (options.hubValidators || hubUrl || (options.hubPort && pub.hubUrl)) {
             this.hub = new HubConnector(Object.assign({}, options, { hubUrl, hubPort }));
         }
 
