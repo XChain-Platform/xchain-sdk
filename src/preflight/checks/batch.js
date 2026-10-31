@@ -166,7 +166,7 @@ function projectDeltas(cmd, source, opts) {
  * universal.js passes validator findings through, so emit here only when that
  * path did not already carry it - one report, one cap line.
  */
-function checkCommandCap(ctx, commands) {
+function checkCommandCap(ctx, commands, targetHeight) {
     const count = ctx.parsed.params && ctx.parsed.params.COMMAND !== undefined
         ? String(ctx.parsed.params.COMMAND).split(';').length
         : commands.length;
@@ -176,7 +176,14 @@ function checkCommandCap(ctx, commands) {
     const raw = ctx.parsed.params && ctx.parsed.params.COMMAND !== undefined
         ? String(ctx.parsed.params.COMMAND).split(';')
         : commands;
-    const weight = count > BATCH_COMMAND_LIMIT ? null : batchWeight(raw);
+    const sdk = ctx.sdk || {};
+    const at = {
+        network: (sdk.options && sdk.options.network) || (sdk.actions && sdk.actions.network)
+            || (sdk.config && sdk.config.network),
+        coin: sdk.explorer && sdk.explorer.coin,
+        height: targetHeight,
+    };
+    const weight = count > BATCH_COMMAND_LIMIT ? null : batchWeight(raw, at);
     if (count <= BATCH_COMMAND_LIMIT && weight <= BATCH_WEIGHT_BUDGET) return;
     ctx.markRun(FINDING_CODES.BATCH_LIMIT_EXCEEDED);
     const already = ctx.findings.some(f => f.code === FINDING_CODES.BATCH_LIMIT_EXCEEDED
@@ -291,7 +298,7 @@ async function checkBatch(ctx) {
     ctx.addFinding(FINDING_CODES.BATCH_NOT_ATOMIC, 'warning',
         'Batch commands execute sequentially and are NOT atomic: if one fails, earlier commands still apply.',
         { commandCount: commands.length });
-    checkCommandCap(ctx, commands);
+    checkCommandCap(ctx, commands, await ctx.targetHeight);
 
     const baseDeltas = ctx.localDeltas.slice();
     let projected = [];   // [{tick, amount}] to subtract

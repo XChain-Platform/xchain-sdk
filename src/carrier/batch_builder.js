@@ -73,12 +73,39 @@ const LIMIT_MESSAGES = {
 // preflight/checks/batch.js) report the same overflow as a finding
 // instead, because they describe a batch someone else already composed
 // and cannot refuse anything.
-function weightAt(sdk) {
+function weightAt(sdk, height) {
     return {
         network: (sdk.options && sdk.options.network) || (sdk.actions && sdk.actions.network)
             || (sdk.config && sdk.config.network),
         coin: sdk.explorer && sdk.explorer.coin,
+        height,
     };
+}
+
+function safeHeight(value) {
+    if (value === undefined || value === null || value === '') return null;
+    const height = Number(value);
+    return Number.isSafeInteger(height) && height >= 0 ? height : null;
+}
+
+async function targetWeightAt(sdk, encoderOpts, commands) {
+    const explicit = safeHeight(encoderOpts && encoderOpts.targetHeight);
+    if (explicit !== null) return weightAt(sdk, explicit);
+    const at = weightAt(sdk);
+    const afterEveryGate = Object.assign({}, at, { height: Number.MAX_SAFE_INTEGER });
+    if (batchWeight(commands, at) === batchWeight(commands, afterEveryGate)) return at;
+    const explorer = sdk.explorer;
+    if (!explorer || typeof explorer.getStatus !== 'function' || !at.coin) return at;
+    try {
+        const status = await explorer.getStatus();
+        const maps = ['chain_tip', 'decoder_tip', 'last_block'];
+        const tips = maps.map((key) => safeHeight(status && status[key] && status[key][at.coin]))
+            .filter((height) => height !== null);
+        if (tips.length) at.height = Math.max(...tips) + 1;
+    } catch (e) {
+        // Offline composition retains the non-refusing unknown-height rule.
+    }
+    return at;
 }
 
 function queuedActionWeight(entry, sdk, at) {
@@ -316,7 +343,8 @@ class BatchBuilder {
             commandParts.push(result.actionString);
         }
 
-        assertComputedWeight(batchWeight(commandParts, weightAt(this.sdk)), commandParts.length);
+        const at = await targetWeightAt(this.sdk, encoderOpts, commandParts);
+        assertComputedWeight(batchWeight(commandParts, at), commandParts.length);
 
         // Join with semicolons
         let command = commandParts.join(';');

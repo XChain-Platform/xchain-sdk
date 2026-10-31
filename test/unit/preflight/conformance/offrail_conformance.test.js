@@ -149,7 +149,9 @@ describe('pre-flight conformance A3 halt-class fields', function () {
     // A3: the indexer halts on these (normalize.js nulls the field into a NOT NULL row).
     const HALTS = ['DISPENSER|1||m', 'DISPENSER|2||1||||m', 'STAKE|1|10|', 'STAKE|2|10|', 'STAKE|3|10||5|JDOG',
         'ORDER|1|-1|m', 'ORDER|2||1800000000|||m', 'SWAP|1|-1|m', 'SWAP|1||m', 'BET|2|-1|0|5|m', 'BET|2|abc|0|5|m',
-        'ORDER|1|18446744073709551616|m', 'BATCH|0|DISPENSER|1||m', 'BATCH|0|STAKE|1|10|'];
+        'ORDER|1|18446744073709551616|m', 'ORDER|1|18446744073709551615.6|m', 'ORDER|1|0x10|m',
+        'SWAP|1|0o7|m', 'BET|2|0x1|0|5|m', 'DISPENSER|1|0b1|m', 'BATCH|0|DISPENSER|1|0x10|m',
+        'BATCH|0|DISPENSER|1||m', 'BATCH|0|STAKE|1|10|'];
     for (const wire of HALTS) {
         it(`A3 ${wire} is a non-overridable refusal`, async function () {
             const r = await reportFor(wire, { getToken, getAction: () => notFound(), getBalances: balances([]) });
@@ -158,6 +160,15 @@ describe('pre-flight conformance A3 halt-class fields', function () {
             expect(halt[0].overridable).to.equal(false);
         });
     }
+
+    it('A3 plain decimal action indexes stay clear of halt-class findings', async function () {
+        const wires = ['ORDER|1|16|m', 'SWAP|1|7|m', 'BET|2|1|0|5|m', 'DISPENSER|1|1|m'];
+        for (const wire of wires) {
+            const r = await reportFor(wire, { getToken, getAction: () => notFound(), getBalances: balances([]) });
+            const halt = errors(r, 'VALIDATOR_SEMANTICS').filter((f) => f.data && f.data.haltClass);
+            expect(halt, wire).to.deep.equal([]);
+        }
+    });
 });
 
 describe('pre-flight conformance A3 ordinary missing fields', function () {

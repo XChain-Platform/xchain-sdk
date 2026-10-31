@@ -82,7 +82,12 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `630a136d`
+**Pins taken at indexer commit:** `3387e7bd`
+
+(Re-anchored 2026-10-31 against indexer `3387e7bd`, the committed landing tree for the
+SEND destination-policy cache review below. Only the `send` directory pin moves. The other
+fifteen rows are unchanged from `630a136d` and match this tree, and `630a136d` is an ancestor
+of this anchor.)
 
 (Re-anchored 2026-10-30 against indexer `630a136d`, the origin develop head at which all sixteen
 rows hash as pinned. The review-log entries from 2026-10-20 to 2026-10-27 moved the `send`,
@@ -475,7 +480,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 630a136d..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 3387e7bd..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -548,7 +553,7 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `82c771685496157da6cd9beae176df3e7cd50fd25fa4dcbe0ad05c5e34579eb6` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `bb0ad3880732d882731cbee51df98cc229cc3ebcf030f5e3be1584d1010ec4dc` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40` |
 | `checks/mint.js` | `src/actions/mint/` | `998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48` |
 | `checks/issue.js` | `src/actions/issue/` | `c7d81c143f4f1ad242c9266487ff726102b7e6444a8cea4b374214ebf4d7deed` |
@@ -585,6 +590,50 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-31 - SEND reuses destination token-list policy across legs
+
+The `send` pin moves from `82c77168` to `bb0ad388`, hashed from indexer commit
+`3387e7bdc60639d74013fa0cd93d9caef9e00506` by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/send/`. The mapped diff changes
+`prefetch.js` and `validate.js`. The source context now holds one policy cache per SEND, and a
+non-null destination reads each tick's token row and allow/block lists once before applying the
+same membership predicate separately to every destination. The former `isActionAllowed` call
+already skipped sleeping checks when both address and tick were non-null and delegated to the
+same `readTickListPolicy` and `isAddressAllowedByTickPolicy` helpers at the same block index. A
+null destination still calls `isActionAllowed`, preserving that path exactly. SEND cannot edit a
+token policy or list membership between legs, so reusing the read cannot move a verdict.
+
+The same indexer commit changes `src/actions/index.js` only for VOTE fee-quote dispatch. It does
+not change SEND routing, context construction, validation order, fee policy or error text.
+
+**Direction: NEUTRAL, read deduplication only.** NO CLIENT CHECK MOVES: `checks/send.js` already
+declares allow/block-list authorization server-side only, and every SEND admission predicate is
+unchanged.
+
+### 2026-10-31 - the anchor includes the landed AIRDROP fee-record change
+
+No pin moves. The prior `630a136d` anchor matches fifteen rows, but AIRDROP hashes there to
+`4d7279d0` rather than the pinned `9b3ade3b`. That pin was taken from `9fce0883`, and the same
+mapped AIRDROP content landed on origin develop in `18caa12e`. A clean export of `18caa12e`
+matches all sixteen rows, so the anchor line and review command move to `18caa12e` together.
+
+**Direction: NEUTRAL.** This corrects the review baseline only. No pin, validity verdict, error
+text, fee or `checks/` module changes.
+
+### 2026-10-30 - shared integer-storage refusals are mirrored in pre-flight
+
+The client copy of `exceedsUnsignedColumn` now matches
+`src/utility/validation/value_checks.js` at the exact `max + 0.5` rounding boundary. The halt-field
+check also mirrors `storesAsNull` refusing `0x`, `0b` and `0o` action-index spellings, and the
+miscellaneous-action check applies the shared 250-character amount-column limit to DEPOSIT and
+WITHDRAW as well as STAKE. `indexer_value_checks_parity.test.js` runs the SDK and indexer range
+predicates over the same boundary corpus and pins the authority's width and radix refusals, while
+the action tests exercise every affected client path.
+
+**Direction: TIGHTENING.** Pre-flight refuses only the storage spellings the indexer already
+refuses; decimal action indexes, 250-character amounts and values below the half-unit boundary
+retain their prior verdicts. No handler hash or anchor moves.
 
 ### 2026-10-30 - AIRDROP records the total XCHAIN-balance fee across its legs
 
@@ -827,6 +876,18 @@ batch the chain refuses on weight; on regtest the client already reads looser th
 NO CLIENT CHECK MOVES.
 
 **Direction: TIGHTENING at the gate height only.** The anchor stays unchanged.
+
+### 2026-10-30 - BATCH AIRDROP leg weight follows the armed testnet rows
+
+The client mirror now carries the indexer's coin-specific testnet heights for
+`BATCH_AIRDROP_LEG_WEIGHT` and the drift gate compares that table by value. Known heights are
+evaluated exactly; an unknown height stays flat so historical decoding and offline composition do
+not reject a batch that is valid below activation. The builder checks serialized command strings
+at an explicit target height or the explorer's projected next height, while decoder and pre-flight
+pass their available network and confirmed or quoted height into the shared weight scan.
+
+**Direction: TIGHTENING on BTC, LTC and DOGE testnet at their activation heights.** Mainnet stays
+flat until its row is armed.
 
 ### 2026-10-21 - TICK_CACHE_NULL_PROTOTYPE gate is wired into AIRDROP, SEND and DESTROY (tick_cache_null_prototype)
 

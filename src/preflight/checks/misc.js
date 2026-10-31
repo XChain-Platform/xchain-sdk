@@ -33,25 +33,23 @@ const { FINDING_CODES } = require('../constants.js');
 const numeric = require('../numeric.js');
 const { GAS_TICK } = require('../../protocol/constants.js');
 
-// stakes.amount and contract_stakes.amount are VARCHAR(250). Every STAKE format refuses an
-// AMOUNT wider than that as 'invalid: AMOUNT (format)' through storesAsNull, ahead of its
-// shape check and with no activation (xchain-indexer src/actions/stake/capability_stake.js
-// validateCapabilityWire, contract_stake.js validateStakeAmount); a node without that
-// refusal stops at the row write on a strict server. Counted in characters, as the indexer
-// counts it, so a leading-zero padded amount is refused even though its value is small.
+// Amount columns reached through storesAsNull are VARCHAR(250). STAKE uses AMOUNT on the
+// wire; DEPOSIT and WITHDRAW use QUANTITY and store it as AMOUNT. Each action refuses a
+// wider value as invalid: AMOUNT (format). Count characters exactly as the indexer does,
+// so a leading-zero padded amount is refused even though its value is small.
 const STAKE_AMOUNT_MAX_CHARS = 250;
 
 // Returns true when it raised, so the balance check does not judge an amount already refused.
-function checkStakeAmountWidth(ctx) {
+function checkAmountWidth(ctx, field, action) {
     ctx.markRun(FINDING_CODES.AMOUNT_FORMAT_INVALID);
-    const amount = ctx.field('AMOUNT');
+    const amount = ctx.field(field);
     if (amount === '' || Array.isArray(amount)) return false;
     const width = Array.from(amount).length;
     if (width <= STAKE_AMOUNT_MAX_CHARS) return false;
     ctx.addFinding(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'error',
-        `AMOUNT is ${width} characters, wider than the ${STAKE_AMOUNT_MAX_CHARS}-character stake amount `
-        + 'column; the indexer rejects this STAKE as invalid: AMOUNT (format).',
-        { field: 'AMOUNT', width, limit: STAKE_AMOUNT_MAX_CHARS });
+        `${field} is ${width} characters, wider than the ${STAKE_AMOUNT_MAX_CHARS}-character amount `
+        + `column; the indexer rejects this ${action} as invalid: AMOUNT (format).`,
+        { field, width, limit: STAKE_AMOUNT_MAX_CHARS });
     return true;
 }
 
@@ -126,7 +124,8 @@ const LIST_SET_META_NOTE = 'A LIST SET META (format 5) on a shared list is charg
 
 async function checkMisc(ctx) {
     const action = ctx.parsed.action;
-    if (action === 'STAKE' && !checkStakeAmountWidth(ctx)) await checkCapabilityStakeBalance(ctx);
+    if (action === 'STAKE' && !checkAmountWidth(ctx, 'AMOUNT', action)) await checkCapabilityStakeBalance(ctx);
+    if (action === 'DEPOSIT' || action === 'WITHDRAW') checkAmountWidth(ctx, 'QUANTITY', action);
     if (Object.prototype.hasOwnProperty.call(ASPECT_NOTES, action) && ASPECT_NOTES[action] === null) return;
     const note = ASPECT_NOTES[action];
     if (note) ctx.addUnverified(action + '_STATE', note);

@@ -18,6 +18,7 @@ const { subCommandWeight, batchWeight, BATCH_COMMAND_WEIGHTS } = require('../../
 const { BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION, airdropLegCount }
     = require('../../../src/protocol/batch_limits/airdrop_legs.js');
 const { UNARMED } = require('../../../src/consensus/gate_registry/core.js');
+const { parse } = require('../../../src/decoder/index.js');
 
 const wire = (...parts) => parts.join('|');
 const REGTEST = Object.freeze({ network: 'regtest', height: 200 });
@@ -28,17 +29,32 @@ const ONE_LEG = wire('AIRDROP', '0', 'JDOG', '1', '5');
 const TWO_LEG_BRIEF = wire('AIRDROP', '1', '5', 'JDOG', '1', 'XCP', '2');
 const THREE_LEG_FULL = wire('AIRDROP', '2', 'JDOG', '1', '5', 'XCP', '2', '6', 'SAT', '3', '7');
 
+let savedNetwork;
+const saveNetwork = () => { savedNetwork = process.env.NETWORK; delete process.env.NETWORK; };
+const restoreNetwork = () => {
+    if (savedNetwork === undefined) delete process.env.NETWORK;
+    else process.env.NETWORK = savedNetwork;
+};
+
 describe('batch_limits: AIRDROP weighs per leg at the BATCH_AIRDROP_LEG_WEIGHT gate', function () {
-    let savedNetwork;
-    beforeEach(function () { savedNetwork = process.env.NETWORK; delete process.env.NETWORK; });
-    afterEach(function () {
-        if (savedNetwork === undefined) delete process.env.NETWORK;
-        else process.env.NETWORK = savedNetwork;
-    });
+    beforeEach(saveNetwork);
+    afterEach(restoreNetwork);
 
     it('mirrors the gate row: unarmed on mainnet and testnet, genesis on regtest', function () {
-        expect(BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION).to.deep.equal({ mainnet: UNARMED, testnet: UNARMED, regtest: 0 });
+        const { mainnet, testnet, regtest } = BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION;
+        expect({ mainnet, testnet, regtest }).to.deep.equal({ mainnet: UNARMED, testnet: UNARMED, regtest: 0 });
         expect(BATCH_COMMAND_WEIGHTS.AIRDROP).to.equal(25);
+    });
+
+    it('mirrors each coin-specific testnet activation height', function () {
+        expect(BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION).to.include({
+            mainnet: UNARMED,
+            'BTC:testnet': 157295,
+            'LTC:testnet': 4930117,
+            'DOGE:testnet': 68015000,
+            testnet: UNARMED,
+            regtest: 0,
+        });
     });
 
     it('weighs a one-leg AIRDROP as 25 above the gate', function () {
@@ -68,12 +84,51 @@ describe('batch_limits: AIRDROP weighs per leg at the BATCH_AIRDROP_LEG_WEIGHT g
         expect(subCommandWeight(TWO_LEG_BRIEF)).to.equal(25);
         expect(batchWeight([TWO_LEG_BRIEF])).to.equal(25);
     });
+});
+
+describe('batch_limits: AIRDROP weighs per leg at the BATCH_AIRDROP_LEG_WEIGHT gate', function () {
+    beforeEach(saveNetwork);
+    afterEach(restoreNetwork);
 
     it('reads a <coin>-<network> NETWORK setting when the call names no network', function () {
         process.env.NETWORK = 'bitcoin-regtest';
         expect(subCommandWeight(TWO_LEG_BRIEF)).to.equal(50);
         process.env.NETWORK = 'bitcoin-testnet';
         expect(subCommandWeight(TWO_LEG_BRIEF)).to.equal(25);
+    });
+
+    it('does not guess that a mid-chain gate is active when height is unknown', function () {
+        const commands = Array(4).fill(THREE_LEG_FULL);
+        expect(batchWeight(commands, { network: 'bitcoin-testnet' })).to.equal(100);
+        expect(batchWeight(commands, { network: 'bitcoin-testnet', height: 157294 })).to.equal(100);
+        expect(batchWeight(commands, { network: 'bitcoin-testnet', height: 157295 })).to.equal(300);
+    });
+
+    it('uses each coin testnet height exactly when the height is known', function () {
+        const cases = [
+            ['bitcoin-testnet', 157295],
+            ['litecoin-testnet', 4930117],
+            ['dogecoin-testnet', 68015000],
+        ];
+        for (const [network, height] of cases) {
+            expect(subCommandWeight(TWO_LEG_BRIEF, { network, height: height - 1 }), network).to.equal(25);
+            expect(subCommandWeight(TWO_LEG_BRIEF, { network, height }), network).to.equal(50);
+        }
+    });
+
+    it('uses coin-first lookup and stays flat for a bare or unarmed network', function () {
+        expect(subCommandWeight(TWO_LEG_BRIEF, { network: 'testnet', coin: 'BTC', height: 157295 })).to.equal(50);
+        expect(subCommandWeight(TWO_LEG_BRIEF, { network: 'testnet', height: 157295 })).to.equal(25);
+        expect(subCommandWeight(TWO_LEG_BRIEF, { network: 'bitcoin-mainnet' })).to.equal(25);
+    });
+
+    it('lets decoder callers supply the confirmed network and height', function () {
+        const wireBatch = 'BATCH|0|' + Array(6).fill(TWO_LEG_BRIEF).join(';');
+        const weightFinding = (height) => parse(wireBatch, {
+            network: 'bitcoin-testnet', height,
+        }).validation.findings.find(f => f.code === 'BATCH_LIMIT_EXCEEDED');
+        expect(weightFinding(157294)).to.equal(undefined);
+        expect(weightFinding(157295).details.weight).to.equal(300);
     });
 
 });

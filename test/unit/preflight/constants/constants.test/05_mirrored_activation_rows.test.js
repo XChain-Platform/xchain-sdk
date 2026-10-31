@@ -21,6 +21,7 @@ const {
     TICK_NAMESPACE: TICK_NS,
     TOKEN_BRIDGE: BRIDGE,
     AMOUNT_REPRESENTABILITY: REPR,
+    BATCH_AIRDROP_LEG_WEIGHT: AIRDROP_WEIGHT,
     SAME_TOKEN_OFFER_REFUSAL: SAME_TOKEN,
     DISPENSE_CANCELLING_MATCH: CANCEL
 } = constants.ACTIVATION_MIRRORS;
@@ -45,6 +46,7 @@ const unarmed = (mirror, over = {}) => row(mirror, Object.assign({ mainnet: 'UNA
 const allRows = (listOver, unit, nsOver = {}, bridgeOver = {}, gates1 = row(REPR) + row(CANCEL) + row(SAME_TOKEN)) => ({
     'gates_1.js': gates1,
     'gates_4.js': row(LIST, listOver, unit) + row(DISP) + row(LIST_ADDR) + row(LIST_TICK_COIN) + row(LIST_META),
+    'gates_6.js': row(AIRDROP_WEIGHT),
     'gates_3.js': unarmed(TICK_NS, nsOver),
     'shared_rows_4.js': unarmed(BRIDGE, bridgeOver)
 });
@@ -58,7 +60,7 @@ describe('pre-flight drift gate: mirrored activation rows', function () {
         expect(checkActivationMirrors(indexerRoot({
             'gates_9.js': row(LIST) + row(LIST_ADDR),
             'shared_rows_7.js': row(DISP) + row(LIST_TICK_COIN) + row(LIST_META) + unarmed(TICK_NS) + unarmed(BRIDGE)
-                + row(REPR) + row(CANCEL) + row(SAME_TOKEN)
+                + row(REPR) + row(AIRDROP_WEIGHT) + row(CANCEL) + row(SAME_TOKEN)
         }))).to.equal(0);
     });
 
@@ -75,6 +77,12 @@ describe('pre-flight drift gate: mirrored activation rows', function () {
         expect(checkActivationMirrors(indexerRoot(allRows({ 'BTC:testnet': 812345 })))).to.equal(1);
     });
 
+    it('fails when an AIRDROP leg-weight height moves', function () {
+        const rows = allRows();
+        rows['gates_6.js'] = row(AIRDROP_WEIGHT, { 'BTC:testnet': 157296 });
+        expect(checkActivationMirrors(indexerRoot(rows))).to.equal(1);
+    });
+
     it('fails when mainnet is armed from genesis', function () {
         expect(checkActivationMirrors(indexerRoot(allRows({ mainnet: 0 })))).to.equal(1);
     });
@@ -83,7 +91,9 @@ describe('pre-flight drift gate: mirrored activation rows', function () {
         expect(checkActivationMirrors(indexerRoot(allRows({ 'XYZ:testnet': 'UNARMED' })))).to.equal(1);
         expect(checkActivationMirrors(indexerRoot(allRows({ 'DOGE:testnet': undefined })))).to.equal(1);
     });
+});
 
+describe('pre-flight drift gate: mirrored activation rows', function () {
     it('fails when the unit changes', function () {
         expect(checkActivationMirrors(indexerRoot(allRows({}, 'time')))).to.equal(1);
     });
