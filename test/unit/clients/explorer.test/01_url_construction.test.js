@@ -101,6 +101,18 @@ describe('ExplorerClient, one segment per key', function () {
         let result = await client.getTokens('A/B', 'token');
         expect(result.total).to.equal(0);
     });
+
+    it('search percent-encodes URL characters in a free-text query', async function () {
+        nock(BASE).get('/BTC/explorer/search/%24%25%40%23%3F%2F/token').reply(200, { data: [] });
+        const result = await client.search('$%@#?/', 'token');
+        expect(result.data).to.deep.equal([]);
+    });
+
+    it('search encodes the query and type as separate segments', async function () {
+        nock(BASE).get('/BTC/explorer/search/A%2FB/token%2Falias').reply(200, { data: [] });
+        const result = await client.search('A/B', 'token/alias');
+        expect(result.data).to.deep.equal([]);
+    });
 });
 
 describe('ExplorerClient', function () {

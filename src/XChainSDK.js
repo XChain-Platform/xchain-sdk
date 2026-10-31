@@ -226,7 +226,8 @@ class XChainSDK {
         let pub     = publicDefaults(network);
         let hubUrl  = options.hubUrl  || config.env.hubApiHost() || (options.hubPort ? undefined : pub.hubUrl);
         let hubPort = options.hubPort || (config.env.hubPort() ? parseInt(config.env.hubPort()) : undefined);
-        if (options.hubValidators || hubUrl || (options.hubPort && pub.hubUrl)) {
+        let hasHubValidators = Array.isArray(options.hubValidators) && options.hubValidators.length > 0;
+        if (hasHubValidators || hubUrl || (options.hubPort && pub.hubUrl)) {
             this.hub = new HubConnector(Object.assign({}, options, { hubUrl, hubPort }));
         }
 

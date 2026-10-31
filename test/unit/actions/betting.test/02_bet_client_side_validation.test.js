@@ -131,7 +131,16 @@ describe('BET client-side validation mirrors the consensus rules', function () {
         // just burns pass rows until it expires.
         expect(() => b.createMarketParams(createParams({ allowList: 42, blockList: 42 })))
             .to.throw(/Nobody could ever bet/);
+        expect(() => b.createMarketParams(createParams({ allowList: '7', blockList: '07' })))
+            .to.throw(/Nobody could ever bet/);
+        expect(() => b.createMarketParams(createParams({ allowList: '0', blockList: '00' })))
+            .to.throw(/Nobody could ever bet/);
+        expect(() => b.createMarketParams(createParams({
+            allowList: '9007199254740992', blockList: '9007199254740993'
+        }))).to.throw(/Nobody could ever bet/);
         expect(() => b.createMarketParams(createParams({ allowList: 42, blockList: 43 }))).to.not.throw();
+        const distinct = b.createMarketParams(createParams({ allowList: '07', blockList: '8' }));
+        expect(distinct.allowList).to.equal('07');
     });
 
     it('rejects non-positive stakes and minimums', function () {

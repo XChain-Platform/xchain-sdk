@@ -25,9 +25,12 @@ const {
     BATCH_WEIGHT_BUDGET,
     CHILD_ISSUE_KEY,
     actionWeight,
+    batchWeight,
     classifyIssueTick,
+    expandAlias,
     maxMintsPerDistinctTick,
     paramsTick,
+    subCommandWeight,
 } = require('../protocol/batch_limits.js');
 
 // Wording for the per-ACTION caps this builder enforces, keyed the same way
@@ -55,10 +58,9 @@ const LIMIT_MESSAGES = {
 // both are nowhere near 250 commands. Until this ran, the builder
 // composed those batches happily and the chain rejected them whole.
 //
-// Weighed off the QUEUED action name rather than the serialized string,
-// which does not exist yet; that is the same name build() serializes as
-// the leading token, and actionWeight expands aliases exactly as the
-// arbiter does, so `DROP` costs an AIRDROP's 25 here too.
+// AIRDROP is dry-serialized so validate() can count its legs; an invalid
+// entry falls back to the flat lower bound and its normal validator error.
+// build() weighs the final wire strings again after resolution.
 //
 // A REFUSAL, not a warning, matching the count cap beside it and the
 // "WHICH SIDE OF THE FLAG" note in batch_limits.js: this mirror speaks
@@ -71,14 +73,37 @@ const LIMIT_MESSAGES = {
 // preflight/checks/batch.js) report the same overflow as a finding
 // instead, because they describe a batch someone else already composed
 // and cannot refuse anything.
-function assertWeightBudget(actions) {
+function weightAt(sdk) {
+    return {
+        network: (sdk.options && sdk.options.network) || (sdk.actions && sdk.actions.network)
+            || (sdk.config && sdk.config.network),
+        coin: sdk.explorer && sdk.explorer.coin,
+    };
+}
+
+function queuedActionWeight(entry, sdk, at) {
+    if (expandAlias(entry.action) !== 'AIRDROP') return actionWeight(entry.action);
+    try {
+        const result = sdk.actions.createAction({ action: entry.action, params: entry.params });
+        return subCommandWeight(result.actionString, at);
+    } catch (e) {
+        return actionWeight(entry.action);
+    }
+}
+
+function assertComputedWeight(weight, count) {
+    if (weight <= BATCH_WEIGHT_BUDGET) return;
+    throw new SDKValidationError('BATCH_CONSTRAINT',
+        'BATCH commands weigh ' + weight + ' (VM and fan-out actions cost more than 1 each); '
+        + 'the chain rejects the whole batch above a total weight of ' + BATCH_WEIGHT_BUDGET,
+        { count, weight, limit: BATCH_WEIGHT_BUDGET });
+}
+
+function assertWeightBudget(actions, sdk) {
     let weight = 0;
-    for (let entry of actions) weight += actionWeight(entry.action);
-    if (weight > BATCH_WEIGHT_BUDGET)
-        throw new SDKValidationError('BATCH_CONSTRAINT',
-            'BATCH commands weigh ' + weight + ' (VM and fan-out actions cost more than 1 each); '
-            + 'the chain rejects the whole batch above a total weight of ' + BATCH_WEIGHT_BUDGET,
-            { count: actions.length, weight, limit: BATCH_WEIGHT_BUDGET });
+    const at = weightAt(sdk);
+    for (let entry of actions) weight += queuedActionWeight(entry, sdk, at);
+    assertComputedWeight(weight, actions.length);
 }
 
 // Occurrences per counting key, and the MINT TICKs, collected in ONE
@@ -233,7 +258,7 @@ class BatchBuilder {
                 'BATCH can contain at most ' + BATCH_COMMAND_LIMIT + ' commands',
                 { count: this._actions.length, limit: BATCH_COMMAND_LIMIT });
 
-        assertWeightBudget(this._actions);
+        assertWeightBudget(this._actions, this.sdk);
 
         let { counts, mintTicks, fileCount, keyOrder } = tallyActionKeys(this._actions);
 
@@ -290,6 +315,8 @@ class BatchBuilder {
             });
             commandParts.push(result.actionString);
         }
+
+        assertComputedWeight(batchWeight(commandParts, weightAt(this.sdk)), commandParts.length);
 
         // Join with semicolons
         let command = commandParts.join(';');

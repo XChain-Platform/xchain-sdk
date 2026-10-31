@@ -52,6 +52,29 @@ describe('XChainSDK config resolution', function () {
             expect(sdk.encoder).to.equal(null);
             expect(sdk.hub).to.equal(null);
         });
+
+        it('regtest ignores an empty hub validator list', function () {
+            const sdk = new XChainSDK({ network: 'bitcoin-regtest', hubValidators: [] });
+            expect(sdk.hub).to.equal(null);
+        });
+
+        it('regtest ignores hub validators that are not an array', function () {
+            const sdk = new XChainSDK({ network: 'bitcoin-regtest', hubValidators: {} });
+            expect(sdk.hub).to.equal(null);
+        });
+
+        it('regtest accepts a non-empty hub validator list', function () {
+            const sdk = new XChainSDK({
+                network: 'bitcoin-regtest',
+                hubValidators: ['127.0.0.1:10000']
+            });
+            expect(sdk.hub.urls).to.deep.equal(['http://127.0.0.1:10000']);
+        });
+
+        it('mainnet keeps its public hub with an empty validator list', function () {
+            const sdk = new XChainSDK({ network: 'bitcoin-mainnet', hubValidators: [] });
+            expect(sdk.hub.url).to.equal('https://hub.xchain.io/BTC');
+        });
     });
 });
 
