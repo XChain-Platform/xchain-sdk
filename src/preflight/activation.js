@@ -78,6 +78,13 @@ const ACTIVATION_MIRRORS = Object.freeze({
         table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 1791061097, 'LTC:testnet': 1791061097,
             'DOGE:testnet': 1791061097, testnet: 'UNARMED', regtest: 0 }),
     }),
+    // batch_limits/airdrop_legs.js reads this row when weighing AIRDROP sub-commands.
+    BATCH_AIRDROP_LEG_WEIGHT: Object.freeze({
+        key: 'batch_airdrop_leg_weight_activation.BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION',
+        unit: 'height',
+        table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 157295, 'LTC:testnet': 4930117,
+            'DOGE:testnet': 68015000, testnet: 'UNARMED', regtest: 0 }),
+    }),
     SAME_TOKEN_OFFER_REFUSAL: Object.freeze({
         key: 'same_token_offer_refusal_activation.SAME_TOKEN_OFFER_REFUSAL_ACTIVATION',
         unit: 'height',

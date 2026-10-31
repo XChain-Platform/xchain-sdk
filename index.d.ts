@@ -206,6 +206,8 @@ export interface EncoderOptions {
     customOutputs?: CustomOutput[];
     /** Raw binary data appended after the ACTION string (used by the FILE action) */
     rawData?: string | Buffer;
+    /** Projected inclusion height used by BatchBuilder for height-gated weight rules */
+    targetHeight?: number;
 }
 
 /** Parameters for the P2SH spend phase (phase 2 of the two-transaction pattern) */

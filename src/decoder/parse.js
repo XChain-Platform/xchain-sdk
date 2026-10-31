@@ -125,13 +125,14 @@ function parse(input, opts = {}) {
     const text = decoded.text;
     if (text === '') return failure('EMPTY');
 
-    const result = parseTopLevel(text, doValidate, false, strictWire);
+    const at = opts.at || { network: opts.network, coin: opts.coin, height: opts.height };
+    const result = parseTopLevel(text, doValidate, false, strictWire, at);
     if (result.ok && !strictWire && !opts.carrier && compiledPushSize(rawLength) > MAX_ACTION_DATA_LENGTH)
         result.legacyCarrierFits = false;
     return result;
 }
 
-function parseTopLevel(text, doValidate, insideBatch, strictWire) {
+function parseTopLevel(text, doValidate, insideBatch, strictWire, at) {
     const segments = text.split('|');
 
     // Rule 3: case-sensitive action names, alias table included -
@@ -154,7 +155,7 @@ function parseTopLevel(text, doValidate, insideBatch, strictWire) {
     // so BATCH branches before field mapping.
     if (action === 'BATCH') {
         if (insideBatch) return failure('NESTED_BATCH_FORBIDDEN');
-        return parseBatch(rawAction, version, segments, valueSegs, doValidate);
+        return parseBatch(rawAction, version, segments, valueSegs, doValidate, at);
     }
 
     const fieldNames = FormatSelector.getFormatFields(action, version);
@@ -190,7 +191,7 @@ function parseTopLevel(text, doValidate, insideBatch, strictWire) {
     return result;
 }
 
-function parseBatch(rawAction, version, segments, valueSegs, doValidate) {
+function parseBatch(rawAction, version, segments, valueSegs, doValidate, at) {
     // 3-way top-level split: ACTION, VERSION, verbatim tail. Each sub-command is
     // trimmed by its own parse, as the indexer reads each one.
     const tail = segments.slice(2).join('|');
@@ -220,7 +221,7 @@ function parseBatch(rawAction, version, segments, valueSegs, doValidate) {
 
     // Caps -> validation findings, not parse failures.
     const extraFindings = [];
-    if (!appendGlobalBatchFinding(entries, extraFindings))
+    if (!appendGlobalBatchFinding(entries, extraFindings, at))
         appendPerActionFindings(entries, counts, mintTicks, extraFindings);
 
     const result = {
@@ -288,7 +289,7 @@ function decodeBatchEntries(entries, doValidate, commands, counts, mintTicks) {
 }
 
 // Apply count and weight checks together because either one suppresses per-action caps.
-function appendGlobalBatchFinding(entries, extraFindings) {
+function appendGlobalBatchFinding(entries, extraFindings, at) {
     // The global command cap runs FIRST and alone: on-chain it rejects the whole
     // batch before any per-action count is taken, so emitting a per-action
     // finding alongside it would describe a rule the chain never reached.
@@ -296,7 +297,7 @@ function appendGlobalBatchFinding(entries, extraFindings) {
     // Weighed only when the count already fits, which is the arbiter's own
     // ordering: the count check is a sound pre-filter because every weight is an
     // integer >= 1, so an oversized batch is refused without weighing anything.
-    const weight = entries.length > BATCH_COMMAND_LIMIT ? null : batchWeight(entries);
+    const weight = entries.length > BATCH_COMMAND_LIMIT ? null : batchWeight(entries, at);
     if (entries.length > BATCH_COMMAND_LIMIT) {
         extraFindings.push({
             code: 'BATCH_LIMIT_EXCEEDED',

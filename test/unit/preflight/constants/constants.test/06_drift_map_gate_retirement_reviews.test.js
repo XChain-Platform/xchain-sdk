@@ -53,7 +53,7 @@ function airdropFeeTallyReview() {
 function sendHandoffRetirementReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/send/').hash)
-        .to.equal('82c771685496157da6cd9beae176df3e7cd50fd25fa4dcbe0ad05c5e34579eb6');
+        .to.equal('bb0ad3880732d882731cbee51df98cc229cc3ebcf030f5e3be1584d1010ec4dc');
     const heading = '### 2026-10-18 - GATED_HANDOFF_REF gate is retired';
     expect(text).to.include(heading);
     expect(entryOf(text, heading)).to.include('**Direction: NEUTRAL.**');
@@ -83,7 +83,7 @@ function gasBalanceReadReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     const rows = parseMap(REAL_MAP);
     const moves = [
-        ['send', '`ee30f903` to `0cbeede9`', '82c771685496157da6cd9beae176df3e7cd50fd25fa4dcbe0ad05c5e34579eb6'],
+        ['send', '`ee30f903` to `0cbeede9`', 'bb0ad3880732d882731cbee51df98cc229cc3ebcf030f5e3be1584d1010ec4dc'],
         ['destroy', '`597c2728` to `b172b6cc`', 'f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40'],
         ['mint', '`f69fdb91` to `998c2d88`', '998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48']
     ];
@@ -133,7 +133,7 @@ function notNullAmountWidthReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     const rows = parseMap(REAL_MAP);
     const moves = [
-        ['send', '`6bd08ac4` to `82c77168`', '82c771685496157da6cd9beae176df3e7cd50fd25fa4dcbe0ad05c5e34579eb6'],
+        ['send', '`6bd08ac4` to `82c77168`', 'bb0ad3880732d882731cbee51df98cc229cc3ebcf030f5e3be1584d1010ec4dc'],
         ['destroy', '`56a05750` to `f6423fc8`', 'f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40'],
         ['stake', '`eef1360e` to `b38ea784`', 'b38ea784128e91c87c0df0200696d2b0bac25105477c9111d929a420f30e6afc'],
     ];

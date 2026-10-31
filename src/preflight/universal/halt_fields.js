@@ -45,6 +45,7 @@ const HALT_INDEX_FIELDS = Object.freeze({
 const HALT_REQUIRED_FIELDS = Object.freeze({
     STAKE: { 1: 'SIGNING_PUBKEY', 2: 'SIGNING_PUBKEY', 3: 'SIGNING_PUBKEY' },
 });
+const UNSIGNED_COLUMN_RADIX_PREFIX = /^[-+]?0[xbo]/i;
 const util = new Utility();
 
 // Also run per BATCH sub-command (checks/batch.js), where `parsed` is the command.
@@ -58,7 +59,10 @@ function checkHaltFields(ctx, parsed) {
         const raw = ctx.params[indexField];
         const value = raw === undefined || raw === null || Array.isArray(raw) ? '' : String(raw);
         // EXPIRATION_MAX is the U64_MAX string, the INTEGER_FIELDS bound of every index field here.
-        const storable = value !== '' && util.isNumeric(value) && !numeric.exceedsUnsignedColumn(value, EXPIRATION_MAX);
+        // The prefix refusal mirrors storesAsNull: MariaDB does not accept JavaScript's
+        // hexadecimal, binary or octal spellings when bound as strings to an integer column.
+        const storable = value !== '' && !UNSIGNED_COLUMN_RADIX_PREFIX.test(value.trim())
+            && util.isNumeric(value) && !numeric.exceedsUnsignedColumn(value, EXPIRATION_MAX);
         if (!storable) {
             ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'error',
                 `${indexField} ${value === '' ? 'is missing' : '(' + value + ') is not an action index the chain can store'}; `

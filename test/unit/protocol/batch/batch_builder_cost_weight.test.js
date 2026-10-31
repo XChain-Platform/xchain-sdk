@@ -149,6 +149,36 @@ describe('BATCH_COST_WEIGHTING: batchBuilder enforces the weighted budget', func
             expect(error.message).to.match(/weigh 300\b/);
         });
 
+        it('uses a known target height without refusing a valid pre-activation AIRDROP batch', async function () {
+            const legs = [
+                { tick: 'JDOG', amount: '1', listActionIndex: '5' },
+                { tick: 'XCP', amount: '2', listActionIndex: '6' },
+                { tick: 'SAT', amount: '3', listActionIndex: '7' },
+            ];
+            const makeBatch = (tip) => {
+                const sdk = new XChainSDK({ network: 'bitcoin-testnet', compactTickers: false });
+                sdk.explorer = { coin: 'BTC', getStatus: async () => ({ chain_tip: { BTC: tip } }) };
+                const batch = sdk.batch();
+                for (let i = 0; i < 4; i++) batch.airdrop({ version: 2, legs });
+                return batch;
+            };
+            expect(() => makeBatch(157293).validate()).to.not.throw();
+            expect((await makeBatch(157293).build()).actionString).to.match(/^BATCH\|/);
+            expect((await makeBatch(157294).build({ targetHeight: 157294 })).actionString).to.match(/^BATCH\|/);
+            let error = null;
+            try { await makeBatch(157294).build(); } catch (e) { error = e; }
+            expect(error).to.be.instanceOf(Error);
+            expect(error.message).to.match(/weigh 300\b/);
+        });
+
+    });
+
+});
+
+describe('BATCH_COST_WEIGHTING: batchBuilder enforces the weighted budget', function () {
+
+    describe('builder half', function () {
+
         it('pins the budget and the weights the builder composes against', function () {
             expect(BATCH_WEIGHT_BUDGET).to.equal(250);
             expect(BATCH_COMMAND_WEIGHTS).to.deep.equal({

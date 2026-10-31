@@ -81,6 +81,15 @@ describe('EXPIRATION representability: the client refuses what the chain refuses
             expect(numeric.exceedsUnsignedColumn('1e5', EXPIRATION_MAX)).to.equal(false);
         });
 
+        it('matches the exact half-unit boundary where the rounded u64 ceiling cannot', function () {
+            expect(Number('18446744073709551615.6')).to.equal(Number(EXPIRATION_MAX));
+            expect(numeric.exceedsUnsignedColumn('18446744073709551615.4', EXPIRATION_MAX)).to.equal(false);
+            expect(numeric.exceedsUnsignedColumn('18446744073709551615.5', EXPIRATION_MAX)).to.equal(true);
+            expect(numeric.exceedsUnsignedColumn('18446744073709551615.6', EXPIRATION_MAX)).to.equal(true);
+            expect(numeric.exceedsUnsignedColumn('1.8446744073709551615e19', EXPIRATION_MAX)).to.equal(false);
+            expect(numeric.exceedsUnsignedColumn('1.84467440737095516155e19', EXPIRATION_MAX)).to.equal(true);
+        });
+
         it('answers false for anything it cannot prove out of range', function () {
             for (const v of ['abc', '', 'NaN', 'Infinity', null, undefined]) {
                 expect(numeric.exceedsUnsignedColumn(v, EXPIRATION_MAX),
@@ -107,6 +116,11 @@ describe('EXPIRATION representability: the client refuses what the chain refuses
                 expect(found[0].overridable).to.equal(false);
                 expect(found[0].data.value).to.equal(SMALLEST_REJECTED);
                 expect(found[0].data.constraint).to.deep.equal({ min: '0', max: EXPIRATION_MAX });
+            });
+
+            it(`${name}: a fractional expiration at the half-unit ceiling is refused`, async function () {
+                const r = await reportFor(wire('18446744073709551615.6'));
+                expect(expiryRangeFindings(r), JSON.stringify(r.findings)).to.have.length(1);
             });
 
             it(`${name}: the largest storable expiration raises nothing`, async function () {
