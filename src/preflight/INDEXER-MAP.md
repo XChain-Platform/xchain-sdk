@@ -82,7 +82,13 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `3387e7bd`
+**Pins taken at indexer commit:** `e1befbb1`
+
+(Re-anchored 2026-11-01 against indexer `e1befbb1`, the committed landing tree for the
+SEND per-leg probe verdict review below. Only the `send` directory pin moves. The other
+fifteen rows are unchanged and match this tree. `3387e7bd` is not an ancestor: the v0.27.0
+release merge left it unreachable, and origin develop `7e699207` hashes `send` to the prior
+`bb0ad388` pin, so this landing is the only mapped change since that anchor.)
 
 (Re-anchored 2026-10-31 against indexer `3387e7bd`, the committed landing tree for the
 SEND destination-policy cache review below. Only the `send` directory pin moves. The other
@@ -480,7 +486,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 3387e7bd..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff e1befbb1..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -553,7 +559,7 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `bb0ad3880732d882731cbee51df98cc229cc3ebcf030f5e3be1584d1010ec4dc` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `1591aa81bb189edbbdb088d5a75de8fab817e1669209ff4eff67d8150cb703ac` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40` |
 | `checks/mint.js` | `src/actions/mint/` | `998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48` |
 | `checks/issue.js` | `src/actions/issue/` | `c7d81c143f4f1ad242c9266487ff726102b7e6444a8cea4b374214ebf4d7deed` |
@@ -590,6 +596,23 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-11-01 - SEND keeps each leg's verdict on fee-probe runs
+
+The `send` pin moves from `bb0ad388` to `1591aa81`, hashed from indexer commit
+`e1befbb18e05906cb3e3f8024e05980ab9707421` by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/send/`. The mapped diff changes only
+`settle.js`: after each leg's status is set, `recordProbeLegVerdict` appends
+`{ tick, amount, destination, status }` to `PROBE_LEG_VERDICTS` when `FEE_PROBE` is true. That
+key exists only on the synthetic transaction the public quote surfaces build, never on a
+decoded transaction, so the per-leg status, the action STATUS, the sends rows and every
+balance write are unchanged on chain. The indexer's dry-run reader (outside this map) now
+answers a multi-leg SEND with the first refused leg's status instead of the last leg's, and
+adds a `legs` list.
+
+**Direction: NEUTRAL for validity.** NO CLIENT CHECK MOVES: no SEND admission predicate,
+error text or validation order changed. A client reading the indexer pre-flight answer for a
+multi-leg SEND now sees a refusal it was previously told was valid.
 
 ### 2026-10-31 - SEND reuses destination token-list policy across legs
 
