@@ -16,7 +16,7 @@ describe('pre-flight activation lookup is coin-first', function () {
 
     it('identifies every network-only mirrored row', function () {
         expect(Object.keys(ACTIVATION_MIRRORS).filter((n) => !COIN_KEYED.includes(n)))
-            .to.deep.equal(['SAME_TOKEN_OFFER_REFUSAL', 'DISPENSE_CANCELLING_MATCH']);
+            .to.deep.equal(['DISPENSE_CANCELLING_MATCH']);
     });
 
     it('every coin-keyed mirrored table pins the bare testnet row to UNARMED beside armed coin rows', function () {

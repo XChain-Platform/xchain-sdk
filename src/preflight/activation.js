@@ -88,7 +88,8 @@ const ACTIVATION_MIRRORS = Object.freeze({
     SAME_TOKEN_OFFER_REFUSAL: Object.freeze({
         key: 'same_token_offer_refusal_activation.SAME_TOKEN_OFFER_REFUSAL_ACTIVATION',
         unit: 'height',
-        table: Object.freeze({ mainnet: 'UNARMED', testnet: 'UNARMED', regtest: 0 }),
+        table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 158557, 'LTC:testnet': 4949697,
+            'DOGE:testnet': 68035864, testnet: 'UNARMED', regtest: 0 }),
     }),
     // A DISPENSE matches a 'cancelling' dispenser where this is armed
     // (xchain-indexer src/db/dispensers/dispense_matching.js findMatchingDispensers).

@@ -20,6 +20,8 @@
 
 const assert = require('assert');
 const gateRegistry = require('../../../../../src/consensus/gate_registry.js');
+// The BTC:testnet height the cut armed for the archive roll-call presence gate.
+const ARCHIVE_TESTNET_HEIGHT = gateRegistry.get('archive_rollcall_presence_activation.ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION')['BTC:testnet'];
 const { usesArchiveSet, clearValidatorSetCache, explorerValidators } =
     require('../../../../../src/protocol/light_client/quorum_resolution.js');
 
@@ -48,8 +50,11 @@ describe('fold wrapper archive predicate @regression @tier1', function () {
             assert.strictEqual(usesArchiveSet(checkpoint({ network: 'mainnet', snapshot_block })), false);
         }
         assert.strictEqual(usesArchiveSet(checkpoint({
-            network: 'testnet', snapshot_block: gateRegistry.UNARMED - 1
+            network: 'testnet', snapshot_block: ARCHIVE_TESTNET_HEIGHT - 1
         })), false);
+        assert.strictEqual(usesArchiveSet(checkpoint({
+            network: 'testnet', snapshot_block: ARCHIVE_TESTNET_HEIGHT
+        })), true);
     });
 
     it('reuses one cache entry for two plain checkpoints at one height', async function () {

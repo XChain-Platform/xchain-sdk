@@ -76,7 +76,7 @@ describe('pre-flight ORDER and SWAP same-token offer refusal', function () {
 
     it('accepts equal token ids while the network is unarmed', async function () {
         const result = await report('SWAP', 'ALPHA', '^7', {
-            height: 200000, network: 'bitcoin-testnet', coin: 'TBTC',
+            height: 200000, network: 'bitcoin-mainnet', coin: 'BTC',
         });
         expect(errors(result)).to.deep.equal([]);
         expect(sameTokenDisclosure(result)).to.equal(false);

@@ -165,7 +165,8 @@ describe('pre-flight activation lookup', function () {
 
     it('resolves the same-token refusal row and evaluates height gates', function () {
         expect(constants.activationThreshold('SAME_TOKEN_OFFER_REFUSAL', sdk('bitcoin-mainnet'))).to.equal('UNARMED');
-        expect(constants.activationThreshold('SAME_TOKEN_OFFER_REFUSAL', sdk('bitcoin-testnet'))).to.equal('UNARMED');
+        // v0.27.0 arms the same-token row per testnet chain; the bare testnet key stays dark.
+        expect(constants.activationThreshold('SAME_TOKEN_OFFER_REFUSAL', sdk('bitcoin-testnet'))).to.equal(158557);
         expect(constants.activationThreshold('SAME_TOKEN_OFFER_REFUSAL', sdk('bitcoin-regtest'))).to.equal(0);
         expect(constants.activeAtHeight('SAME_TOKEN_OFFER_REFUSAL', sdk('bitcoin-regtest'), 0)).to.equal(true);
         expect(constants.activeAtHeight('SAME_TOKEN_OFFER_REFUSAL', sdk('bitcoin-regtest'), null)).to.equal(undefined);
