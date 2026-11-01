@@ -101,6 +101,20 @@ function buildFeeEstimateRequest(result, encoderOpts, customOutputs) {
     return req;
 }
 
+// Bind the returned carrier to the action the caller asked the encoder to price.
+function assertFeeEstimateCarrier(feeResult, result, encoderOpts, reconcileNetwork) {
+    assertCarrierBinding({
+        psbt:           feeResult.psbt,
+        actionString:   result.actionString,
+        encoding:       feeResult.encoding,
+        carrierScripts: feeResult.carrierScripts,
+        callerIdentities: encoderOpts.pubkey,
+        rawData:        encoderOpts.rawData == null ? null : encoderOpts.rawData,
+        network:        reconcileNetwork,
+        label:          'fee estimate',
+    });
+}
+
 // Reconcile and annotate the fee result synchronously before it becomes signable.
 function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs, nativeFeeQuote) {
     // An envelope answers as a PAIR, and the reveal is what pins the commit's
@@ -146,15 +160,7 @@ function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs
     // so a PSBT that reconciles perfectly can still carry a different command
     // than the one this method was asked to price. A signable PSBT handed back
     // unbound is the identical exposure to signing it here.
-    assertCarrierBinding({
-        psbt:           feeResult.psbt,
-        actionString:   result.actionString,
-        encoding:       feeResult.encoding,
-        carrierScripts: feeResult.carrierScripts,
-        rawData:        encoderOpts.rawData == null ? null : encoderOpts.rawData,
-        network:        reconcileNetwork,
-        label:          'fee estimate',
-    });
+    assertFeeEstimateCarrier(feeResult, result, encoderOpts, reconcileNetwork);
 
     feeResult.actionString = result.actionString;
     feeResult.action       = result.action;

@@ -21,6 +21,7 @@ const EncoderClient = require('../../../../src/clients/encoder.js');
 bitcoin.initEccLib(ecc);
 const NET = bitcoin.networks.regtest;
 const H160 = Buffer.alloc(20, 0xab);
+const CHUNK_CALLER = bitcoin.payments.p2wpkh({ hash: H160, network: NET }).address;
 const OWN = bitcoin.payments.p2wpkh({ hash: H160, network: NET }).output;
 const SEND = { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } };
 
@@ -122,7 +123,7 @@ describe('XChainSDK', function () {
             const actionString = sdk.actions.createAction(file).actionString;
             const bytes = Buffer.from('report row,'.repeat(40), 'utf8');
             const estimate = sinon.stub(sdk.encoder, 'estimateFee').resolves(chunkLane(actionString, bytes));
-            const result = await sdk.estimateFees(file, { pubkey: 'mypub', rawData: bytes.toString('binary') });
+            const result = await sdk.estimateFees(file, { pubkey: CHUNK_CALLER, rawData: bytes.toString('binary') });
             expect(estimate.firstCall.args[0].rawData).to.equal(bytes.toString('binary'));
             expect(result.psbt).to.be.a('string');
         });
@@ -135,7 +136,7 @@ describe('XChainSDK', function () {
             const swapped = Buffer.from(bytes); swapped[3] ^= 0x20;
             sinon.stub(sdk.encoder, 'estimateFee').resolves(chunkLane(actionString, swapped));
             let err = null;
-            try { await sdk.estimateFees(file, { pubkey: 'mypub', rawData: bytes.toString('binary') }); }
+            try { await sdk.estimateFees(file, { pubkey: CHUNK_CALLER, rawData: bytes.toString('binary') }); }
             catch (e) { err = e; }
             expect(err, 'a substituted payload must fail closed').to.be.ok;
             expect(err.code).to.equal('CARRIER_ACTION_MISMATCH');

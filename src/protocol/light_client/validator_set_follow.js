@@ -95,9 +95,12 @@ function verifyCheckpointWithProvenSet(cp, provenOraclePublish){
     // attacker-chosen state_root, omit a sibling field, and have rootless signatures
     // still verify - a root no validator ever signed, which followForward would adopt
     // and verifyBalance would trust. checkpoint.verifyCheckpoint already rejects this;
-    // the same predicate, not a copy of it, has to hold here.
-    if (checkpoint.commitmentMissing(cp)) return { valid: false, total: '0' };
-    const canonical  = cp && checkpoint.canonicalCheckpoint(cp);
+    // the same predicates, not copies of them, have to hold here. Supersession fields
+    // below their gate are also outside the signed bytes and must be refused.
+    if (checkpoint.commitmentMissing(cp) || checkpoint.supersessionDisallowed(cp))
+        return { valid: false, total: '0' };
+    const canonical = checkpoint.tryCanonicalCheckpoint(cp);
+    if (canonical === null) return { valid: false, total: '0' };
     const validators = (provenOraclePublish && provenOraclePublish.validators) || [];
     const provenPks  = new Set();
     for (const v of validators){

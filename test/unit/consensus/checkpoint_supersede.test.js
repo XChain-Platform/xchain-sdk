@@ -154,4 +154,23 @@ describe('checkpoint supersede compatibility @regression @tier1', function () {
         cp.validator_signatures = [{ pubkey: key.pubkey, sig: sign(key.privateKey, canonical) }];
         assert.strictEqual(Checkpoint.verifyCheckpoint(cp, [key.pubkey]).valid, false);
     });
+
+    it('fails closed when active supersession fields are malformed', function () {
+        const key = makeKeypair();
+        const base = checkpointRow(key, { supersedes_from: null, rules_digest: null });
+        const malformed = [
+            { supersedes_from: 5 },
+            { rules_digest: RULES_DIGEST },
+            { supersedes_from: -1, rules_digest: RULES_DIGEST },
+            { supersedes_from: 5, rules_digest: 'zz' }
+        ];
+        for (const fields of malformed) {
+            const cp = Object.assign({}, Anchored.anchorToCheckpoint(base), fields);
+            assert.strictEqual(Checkpoint.tryCanonicalCheckpoint(cp), null);
+            const result = Checkpoint.verifyCheckpoint(cp, validators(key));
+            assert.strictEqual(result.valid, false);
+            assert.strictEqual(result.validSigs, 0);
+            assert.strictEqual(result.canonical, null);
+        }
+    });
 });

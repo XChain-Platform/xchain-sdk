@@ -18,6 +18,7 @@ const { getNetwork } = require('../../../src/protocol/networks.js');
 const BTC = bitcoin.networks.bitcoin;
 const DOGE = getNetwork('dogecoin-regtest');
 const H160 = Buffer.alloc(20, 0xab);
+const CALLER = bitcoin.payments.p2pkh({ hash: H160, network: BTC }).address;
 const ACTION = 'SEND|0|TOK|1|1RecipientAAAAAAAAAAAAAAAAAAAAAAAA|m';
 
 function redeemFor(chunk) {
@@ -45,7 +46,8 @@ function chunkLane(encoding) {
 
 function verify(encoding, network, overrides) {
     const { psbt, carrierScripts } = chunkLane(encoding);
-    return verifyCarrierScripts(Object.assign({ psbt, carrierScripts, encoding, actionString: ACTION, network }, overrides));
+    return verifyCarrierScripts(Object.assign({ psbt, carrierScripts, encoding, actionString: ACTION,
+        network, callerIdentities: CALLER }, overrides));
 }
 
 describe('carrier-script verification on a network without segwit', function () {
@@ -82,7 +84,8 @@ describe('carrier binding on a network without segwit', function () {
 
     function bind(encoding, network) {
         const { psbt, carrierScripts } = chunkLane(encoding);
-        return () => assertCarrierBinding({ psbt, carrierScripts, actionString: ACTION, encoding, network, label: 'transaction' });
+        return () => assertCarrierBinding({ psbt, carrierScripts, actionString: ACTION, encoding,
+            network, callerIdentities: CALLER, label: 'transaction' });
     }
 
     it('refuses a DOGE P2WSH carrier as a mismatch naming the segwit reason', function () {
