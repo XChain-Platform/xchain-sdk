@@ -54,7 +54,7 @@ function validateBatchEnvelope(validator, commands, errors) {
     // early return mirrors the cap's precedence too: on-chain the budget
     // rejects the batch before any per-action scan runs, so per-command
     // findings here would describe rules the chain never reads.
-    let weight = batchWeight(commands);
+    let weight = batchWeight(commands, { network: validator.network });
     if (weight > BATCH_WEIGHT_BUDGET) {
         errors.push(validator.buildError('BATCH_CONSTRAINT',
             'BATCH commands weigh ' + weight + ' (VM and fan-out actions cost more than 1 each); '

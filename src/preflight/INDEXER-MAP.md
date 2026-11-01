@@ -82,7 +82,20 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `52a82367`
+**Pins taken at indexer commit:** `3387e7bd`
+
+(Re-anchored 2026-10-31 against indexer `3387e7bd`, the committed landing tree for the
+SEND destination-policy cache review below. Only the `send` directory pin moves. The other
+fifteen rows are unchanged from `630a136d` and match this tree, and `630a136d` is an ancestor
+of this anchor.)
+
+(Re-anchored 2026-10-30 against indexer `630a136d`, the origin develop head at which all sixteen
+rows hash as pinned. The review-log entries from 2026-10-20 to 2026-10-27 moved the `send`,
+`destroy`, `issue`, `order`, `swap`, `airdrop`, `dividend`, `batch`, `price` and `stake` pins past
+`52a82367` without moving this line, so those ten rows no longer matched it. The paired indexer
+changes behind them have landed (`900de7df6`, `32b4fa8f0`, `dc4e4544f` and `951a1f844` are
+ancestors of `630a136d`, and the `batch` and `price` companion trees hash as pinned there). No pin
+moves here, and `52a82367` is an ancestor of `630a136d`.)
 
 (Re-anchored 2026-10-20 against indexer `52a82367`, the origin develop head at which all sixteen
 rows hash as pinned. The four re-pins logged on 2026-10-20 moved the `send`, `destroy`, `mint`
@@ -467,7 +480,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 52a82367..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 3387e7bd..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -540,21 +553,21 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `6bd08ac469d8a2ae2981e830a5278d5859786e86e5dd0a00113aee38f6a36302` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `56a05750c8fc2eed6162b67a9202c54b9274effa46665bdea8bf702fe1d6f0e3` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `bb0ad3880732d882731cbee51df98cc229cc3ebcf030f5e3be1584d1010ec4dc` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40` |
 | `checks/mint.js` | `src/actions/mint/` | `998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48` |
-| `checks/issue.js` | `src/actions/issue/` | `be5cd48c5d4aef365358cc296fa56b8621f8a627a09e0623d3c79e259e210762` |
+| `checks/issue.js` | `src/actions/issue/` | `c7d81c143f4f1ad242c9266487ff726102b7e6444a8cea4b374214ebf4d7deed` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `3c0163d61230bbc249606f41d92786eb2016b43664dba71b55e78e8ef2ad4907` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
-| `checks/trading.js` (ORDER) | `src/actions/order/` | `139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc` |
-| `checks/trading.js` (SWAP) | `src/actions/swap/` | `470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf` |
-| `checks/airdrop.js` | `src/actions/airdrop/` | `3fe395e025f8ab86fe60f5a31800860c9548eee33a69141fc13b916d13277a3f` |
-| `checks/dividend.js` | `src/actions/dividend/` | `c0afa565418a5df7b35bd463ab51ed580541f2b0b7d32fac0c87cf07df50e5b0` |
+| `checks/trading.js` (ORDER) | `src/actions/order/` | `294bc04fdb4e48a0d59beccfc2800826acdb4da77643b6709d1e009dfc4b04e6` |
+| `checks/trading.js` (SWAP) | `src/actions/swap/` | `1f77aa820a0d5ac2afffebc38ad456389b72e58eb9e67001529a14e60899a0d8` |
+| `checks/airdrop.js` | `src/actions/airdrop/` | `9b3ade3b59922532bf3f7296cd2232e52a8055c86532e9ad00bba106206105e7` |
+| `checks/dividend.js` | `src/actions/dividend/` | `7d66516b2584dcce47eecac80f62f90cabf98844ecc862195c03c65a7ff31065` |
 | `checks/batch.js` | `src/actions/batch/` | `9a5147d0a4e121f10d9dd23a6d2f9602f8359ec5eca8f555111aea973a6321ad` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f` |
 | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35` |
 | `universal.js` (PRICE v1 TICK) | `src/actions/price/` | `9028c8c24931681e005828b46a76faa7e6688c1875dfd11e554fcc79b50d2781` |
-| `checks/misc.js` (STAKE) | `src/actions/stake/` | `eef1360e9bfa8e5ad2b1e7479cf286669f44b9ac3115701b1ac1a101fd9011a3` |
+| `checks/misc.js` (STAKE) | `src/actions/stake/` | `b38ea784128e91c87c0df0200696d2b0bac25105477c9111d929a420f30e6afc` |
 | `universal.js` (BET halt field) | `src/actions/bet/` | `59ff86ee4bed61d0ca958c588558b106ced395eb2a9605f6ec2679fe58adac98` |
 
 The mapped custody disclosures are checks/misc.js (DEPOSIT) and
@@ -577,6 +590,250 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-10-31 - SEND reuses destination token-list policy across legs
+
+The `send` pin moves from `82c77168` to `bb0ad388`, hashed from indexer commit
+`3387e7bdc60639d74013fa0cd93d9caef9e00506` by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/send/`. The mapped diff changes
+`prefetch.js` and `validate.js`. The source context now holds one policy cache per SEND, and a
+non-null destination reads each tick's token row and allow/block lists once before applying the
+same membership predicate separately to every destination. The former `isActionAllowed` call
+already skipped sleeping checks when both address and tick were non-null and delegated to the
+same `readTickListPolicy` and `isAddressAllowedByTickPolicy` helpers at the same block index. A
+null destination still calls `isActionAllowed`, preserving that path exactly. SEND cannot edit a
+token policy or list membership between legs, so reusing the read cannot move a verdict.
+
+The same indexer commit changes `src/actions/index.js` only for VOTE fee-quote dispatch. It does
+not change SEND routing, context construction, validation order, fee policy or error text.
+
+**Direction: NEUTRAL, read deduplication only.** NO CLIENT CHECK MOVES: `checks/send.js` already
+declares allow/block-list authorization server-side only, and every SEND admission predicate is
+unchanged.
+
+### 2026-10-31 - the anchor includes the landed AIRDROP fee-record change
+
+No pin moves. The prior `630a136d` anchor matches fifteen rows, but AIRDROP hashes there to
+`4d7279d0` rather than the pinned `9b3ade3b`. That pin was taken from `9fce0883`, and the same
+mapped AIRDROP content landed on origin develop in `18caa12e`. A clean export of `18caa12e`
+matches all sixteen rows, so the anchor line and review command move to `18caa12e` together.
+
+**Direction: NEUTRAL.** This corrects the review baseline only. No pin, validity verdict, error
+text, fee or `checks/` module changes.
+
+### 2026-10-30 - shared integer-storage refusals are mirrored in pre-flight
+
+The client copy of `exceedsUnsignedColumn` now matches
+`src/utility/validation/value_checks.js` at the exact `max + 0.5` rounding boundary. The halt-field
+check also mirrors `storesAsNull` refusing `0x`, `0b` and `0o` action-index spellings, and the
+miscellaneous-action check applies the shared 250-character amount-column limit to DEPOSIT and
+WITHDRAW as well as STAKE. `indexer_value_checks_parity.test.js` runs the SDK and indexer range
+predicates over the same boundary corpus and pins the authority's width and radix refusals, while
+the action tests exercise every affected client path.
+
+**Direction: TIGHTENING.** Pre-flight refuses only the storage spellings the indexer already
+refuses; decimal action indexes, 250-character amounts and values below the half-unit boundary
+retain their prior verdicts. No handler hash or anchor moves.
+
+### 2026-10-30 - AIRDROP records the total XCHAIN-balance fee across its legs
+
+The `airdrop` pin moves from `4d7279d0` to `9b3ade3b`, hashed from indexer commit
+`9fce088305eb5e10d1752abd45a5dfefca2eed9e` by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/airdrop/`. The mapped diff changes
+`legs.js` and `settle.js`. The `legs.js` edit is comment-only and normalizes out of the hash; it
+documents the existing behavior that an unknown FORMAT or short parameter list produces no legs.
+For each valid leg whose fee is paid from the XCHAIN balance, `settle.js` now accumulates the fee
+amount and gas cost after the existing `processTransactionFees` call. Once all legs settle, it
+rewrites the action's single fee row with that total when at least two legs contributed. Each
+leg's debit remains staged by the existing fee processing, and neither the per-leg fee object nor
+the recipient, amount, list, token, format or controller checks change.
+
+**Direction: NEUTRAL for validity and fee charging; stored fee bookkeeping changes only.**
+NO CLIENT CHECK MOVES: `checks/airdrop.js` stays unchanged because the action admits and rejects
+the same wire inputs, and the client-visible protocol fee is unchanged.
+
+### 2026-10-30 - the anchor moves to the landed paired changes behind ten re-pinned rows
+
+No pin moves. The re-pins logged from 2026-10-20 to 2026-10-27 were taken from paired indexer
+trees, and those changes have landed on indexer develop: `900de7df6` (`order/`, `swap/`),
+`32b4fa8f0` (`issue/`), `dc4e4544f` (`send/`, `destroy/`, `stake/`) and `951a1f844` (`airdrop/`,
+`dividend/`), each an ancestor of `630a136d`; the `batch` and `price` companion trees landed with
+them. The drift gate run
+against a clean export of indexer `630a136d` reports all sixteen rows in sync, and the same run
+against `52a82367` reports ten rows drifted (`send`, `destroy`, `issue`, `order`, `swap`,
+`airdrop`, `dividend`, `batch`, `price` and `stake`). So the anchor line and the review command
+move to `630a136d` together.
+
+**Direction: NEUTRAL.** No validity verdict, error text or fee moves, and no `checks/` module
+changes.
+
+### 2026-10-27 - same-chain ORDER and SWAP refuse offers of one resolved token
+
+The `order` pin moves from `139612e7` to `294bc04f` and the `swap` pin from
+`470d4c11` to `1f77aa82`, hashed from indexer commit `900de7df6` by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/<name>/`. The cross-repo pairing
+exception above the anchor applies: these pins match the indexer change that lands with this
+SDK change. Within
+the two mapped directories only `validate.js` changes. Each handler adds the same format-0,
+same-chain check after both token rows resolve: equal `TICK_ID` values become
+`invalid: cannot trade a token for itself` when
+`same_token_offer_refusal_activation.SAME_TOKEN_OFFER_REFUSAL_ACTIVATION` is active. The new
+height row is unarmed on mainnet and testnet, has no per-chain testnet keys, and is active from
+genesis on regtest.
+
+**Direction: WIDENS rejection behind an activation row.** `checks/trading.js` now compares the
+resolved token ids for ORDER and SWAP creates. It raises non-overridable
+`VALIDATOR_SEMANTICS` only when the mirrored height gate is definitely active at the Tier-1
+target height. A missing target height or failed token lookup is disclosed as unverified, and
+an unarmed network, cross-chain GET, different id, or non-create remains accepted by this rule.
+The explorer looks token names up exactly, so a case-variant spelling of one token is not
+caught on the client; the indexer still refuses it. The Tier-1 quote height feeds only this
+gate: `stateHeight` stays tied to a Tier-1 verdict.
+
+### 2026-10-23 - ISSUE caret TICK ids must be canonical behind TICK_NORMALIZE (tick_normalize)
+
+The `issue` pin moves from `be5cd48c` to `c7d81c14`, hashed from the committed indexer lane tree
+`32b4fa8f0`, one commit ahead of indexer `origin/develop` (`1a1b0fe95`), by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/issue/`. The cross-repo pairing
+exception above the anchor applies: the pin matches the indexer change that lands with it, not
+the anchor below, and the lander re-hashes the directory at the landed commit. The tree at
+`32b4fa8f0~1` hashes to `be5cd48c`, so the whole mapped diff is in `issue/tick_rules.js`:
+`validateTickForm` reads the `tick_normalize_activation.TICK_NORMALIZE_ACTIVATION` height gate
+(unarmed on mainnet and testnet, armed on a regtest venue by
+`XC_TICK_NORMALIZE_REGTEST_ACTIVATION`) for a caret TICK. At the gate the id after `^` must match
+`/^[1-9]\d*$/`, so `^0`, `^007`, `^+7`, `^-7`, `^0x10` and `^1e3` are `invalid: TICK (id)`; below
+it the parseFloat-based `isNumeric` check stays, and a format 0 to 5 ISSUE of `^007` lands valid
+as before. The rule runs ahead of the token row read, so for such a TICK it is the first verdict,
+ahead of `ISSUE_CARET_TICK_NO_CREATE`. The regex is written inline in `tick_rules.js`, not taken
+from the shared `CANONICAL_CARET_ID` in `db/shared.js`, so `checkRegexMirrors` cannot see it;
+only this pin does.
+
+The same commit widens the `index_tickers` unique key from `tick(200)` to `tick(250)`
+(`sql/index_tickers.sql` and an automatic migration) and, in `db/index_tables/tickers.js`, keeps
+the 200-character prefix collision, trailing-space comparison included, below the gate, so from
+the gate two TICK names that differ only after character 200 get their own ticker ids. `db/` and
+`sql/` sit outside every mapped row. The client looks a TICK up by its full name through the
+explorer and reads no ticker id table, so a prefix collision stays a server-side outcome on both
+sides of the gate.
+
+**Client follow-up.** One client check moves. The SDK mirrors `CANONICAL_CARET_ID` in
+`constants.js`, but no ISSUE pre-flight path applied it: the `universal.js` token-exists loop
+skips ISSUE, `checks/issue.js` judged a caret TICK only through the explorer lookup, which may
+answer a non-canonical id by number and name a different token, and the builder validator
+(`protocol/validator/tick_and_text.js`) refuses a non-canonical id on formats 6 and 7 only,
+where it resolves on no node at any height. `checks/issue.js` now raises a TICK_FORMAT warning
+(rule `TICK_NORMALIZE`) on regtest and testnet for a caret TICK that fails `CANONICAL_CARET_ID`,
+naming `invalid: TICK (id)` and `XC_TICK_NORMALIZE_REGTEST_ACTIVATION`. It is judged before the
+lookup result and in place of the `ISSUE_CARET_TICK_NO_CREATE` warning, which the chain would
+reach second (`checks.test/19_issue_caret_tick_normalize.test.js`). It is a warning, never an
+error: pre-flight cannot read the venue's arming variable or the including block's height, and
+below the gate the ISSUE is valid, so an error would false-block it (spec §4.2). Mainnet gets no
+warning, as with `ISSUE_CARET_TICK_NO_CREATE`. No `ACTIVATION_MIRRORS` row is added: the warning
+is keyed to the plane, and the gate has no height on a public chain to mirror. A non-canonical
+caret TICK that the explorer answers by number is still judged as an edit of that token
+(`NOT_OWNER` when the owner differs), while the chain below the gate treats it as a name; that
+predates this change and is a follow-up for `checks/issue.js`, not a move made here.
+
+**Direction: TIGHTENING at the gate height only.** The anchor stays at `52a82367`.
+
+### 2026-10-23 - SEND, DESTROY and STAKE refuse amounts their NOT NULL row columns cannot store
+
+The `send` pin moves from `6bd08ac4` to `82c77168`, the `destroy` pin from `56a05750` to
+`f6423fc8` and the `stake` pin from `eef1360e` to `b38ea784`, hashed from the committed indexer
+lane tree `dc4e4544f`, one commit ahead of indexer `origin/develop`, by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/<name>/`. The cross-repo pairing
+exception above the anchor applies: the pins match the indexer change that lands with them, not
+the anchor below, and the lander re-hashes the three directories at the landed commit. No gate:
+every refusal holds at every height on every network. The mapped diff is seven changed lines.
+
+- **SEND and DESTROY:** `send/legs.js` (the leg merge and the gated totals) and `destroy/legs.js` (the leg merge) call the new `isValidAmountMergeFormat`, which is the previous `isValidAmountFormat` body. `isValidAmountFormat` itself, which `send/validate.js` and `destroy/validate.js` apply to each consolidated leg, now first refuses an amount wider than 250 characters (`utility/validation/amount_validation.js`). A leg therefore merges exactly as before: a leg that shares its `destination|tick` (SEND) or `tick|memo` (DESTROY) key with a sibling is summed by `bcadd` to tick-precision text and stays valid even when its own text was wider than 250 characters, and only a leg alone on its key reaches the validator with its raw text and is refused `invalid: AMOUNT (format)`. Before the change that leg stopped the block at the row write on a strict server.
+- **STAKE:** `stake/capability_stake.js` (formats 1 and 2) and `stake/contract_stake.js` (format 3) refuse an AMOUNT for which `storesAsNull` answers true, which now includes text wider than the VARCHAR(250) amount column, as `invalid: AMOUNT (format)` ahead of the shape check. An empty SIGNING_PUBKEY was already refused `invalid: SIGNING_PUBKEY (required)`; its row now stores the placeholder pubkey id 0 (`db/stakes/stake_records.js`, `db/contracts/stakes.js`) where it bound NULL, so the stored row changes and the verdict does not. The `capability_stake.js` comment says so.
+
+The same commit refuses an overlong poll DEPOSIT or GAS_ESCROW in `vote/index.js`, bounds a DEPLOY
+v4 CHUNK_INDEX and TOTAL_CHUNKS to the INT UNSIGNED range in `deploy/deploy_chunk/settle.js`, and
+writes `'0'` for an invalid row's overlong decimal text in `db/database/normalize.js`; `vote/`,
+`deploy/`, `db/` and `utility/` sit outside every mapped row. Two of its `utility/` changes reach
+mapped rows whose hashes do not move, so the gate cannot see them: `storesAsNull` now refuses a
+`0x`, `0b` or `0o` index spelling and an amount wider than 250 characters, and
+`exceedsUnsignedColumn` now refuses a non-literal value at or past the u64 ceiling plus one half.
+`order/`, `swap/`, `dispenser/`, `bet/`, `deposit.js` and `withdraw.js` read them. Today the SDK
+pre-flight raises no error on `ORDER|1|0x10|m`, `SWAP|1|0o7|m`, `BET|2|0x1|0|5|m` or
+`ORDER|1|18446744073709551615.6|m`, nor on a DEPOSIT or WITHDRAW AMOUNT wider than 250 characters,
+and the "byte-for-byte the indexer's exceedsUnsignedColumn" claim in `numeric.js` no longer holds
+against `dc4e4544f`. These are a follow-up for those rows, not a move made here.
+
+**Client follow-up.** For STAKE, one client check moves: `checks/misc.js` now refuses, on every
+STAKE format, an AMOUNT wider than 250 characters (counted as the indexer counts it) as a
+non-overridable AMOUNT_FORMAT_INVALID error naming `invalid: AMOUNT (format)`, and skips the
+capability balance check for that amount (`checks.test/18_stake_amount_column_width.test.js`). The
+pre-flight accepted such an amount before, and a node without this commit halts on it. The empty
+SIGNING_PUBKEY needs nothing new: `universal/halt_fields.js` already refuses it on formats 1, 2
+and 3 as a non-overridable halt-class finding, which stays until every node runs this commit. For
+SEND and DESTROY, NO CLIENT CHECK MOVES: `checkLegAmountFormat` in `checks/send.js` already judges
+each raw leg with the two-argument rule `isValidAmountMergeFormat` keeps, and a per-leg width
+refusal would false-block a wide leg that merges with a sibling, which the indexer settles valid
+(its tests `merges a storable SEND total formed from an overlong leading-zero leg` and the DESTROY
+twin). An exact mirror needs the indexer's merge keys and `bcadd` formatting, so a lone leg padded
+with leading zeros past 250 characters stays a server-side refusal; a leg with more than 250
+significant digits already fails the balance check wherever the balance is readable.
+
+**Direction: WIDENS rejection of malformed wire input, no activation row.** Each new refusal
+replaces a halt at the row write, so no committed outcome changes. The anchor stays at `52a82367`.
+
+### 2026-10-23 - AIRDROP_ZERO_LEGS_OMITTED gate is wired into the AIRDROP settlement (airdrop_zero_legs_omitted)
+
+The `airdrop` pin moves from `3fe395e0` to `4d7279d0`, hashed from indexer `origin/develop` with
+the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/airdrop/`. The pin is a paired
+working-tree change: it matches the indexer change that lands with it (`951a1f844`), not the
+anchor below. The whole mapped diff is in `airdrop/settle.js`: for a valid AIRDROP leg it reads
+the `airdrop_zero_legs_omitted_activation.AIRDROP_ZERO_LEGS_OMITTED_ACTIVATION` height gate
+(unarmed on mainnet and testnet, armed on a regtest venue by
+`XC_AIRDROP_ZERO_LEGS_OMITTED_REGTEST_ACTIVATION`) and, at the gate, pushes the SOURCE debit and
+each recipient credit only when its amount is above zero, so a zero-amount leg writes no
+zero-value ledger rows and they stay out of the ledger hash and the block-content Merkle root.
+Below the gate the rows are written as before. No verdict, error text or fee moves.
+`checks/airdrop.js` already warns that the chain accepts a null or zero AMOUNT as a zero airdrop
+with the fee still charged, which holds on both sides of the gate, and the client computes no
+ledger rows. NO CLIENT CHECK MOVES.
+
+**Direction: NEUTRAL for validity; ledger rows change at the gate height only.** The anchor stays
+unchanged.
+
+### 2026-10-23 - DIVIDEND_EMPTY_ALLOW_LIST_DENIES gate is wired into the DIVIDEND recipient set (dividend_empty_allow_list_denies)
+
+The `dividend` pin moves from `c0afa565` to `7d66516b`, hashed from indexer `origin/develop` with
+the committed companion handler tree merged by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/dividend/`. The pin is a paired
+working-tree change: it matches the indexer change that lands with it (`951a1f844`), not the
+anchor below. The whole mapped diff is in `dividend/index.js`: when `DIVIDEND_TICK` carries an
+attached `ALLOW_LIST` that resolves to no members, the
+`dividend_empty_allow_list_denies_activation.DIVIDEND_EMPTY_ALLOW_LIST_DENIES_ACTIVATION` height
+gate (unarmed on mainnet and testnet, armed on a regtest venue by
+`XC_DIVIDEND_EMPTY_ALLOW_LIST_DENIES_REGTEST_ACTIVATION`) makes every holder ineligible, so the
+DIVIDEND pays no one. A reference the list validity gate rejects, for which `getList` answers
+null, still reads as no attached list, and below the gate an empty list keeps admitting every holder.
+No error text moves. `checks/dividend.js` reads no allow or block list and leaves the effective
+recipient set and total debit to the server as `DIVIDEND_DEBIT_TOTAL` (unverified), so nothing in
+it must follow at activation. NO CLIENT CHECK MOVES.
+
+**Direction: NARROWS the recipient set at the gate height only.** The anchor stays unchanged.
+
+### 2026-10-23 - ORDER matching takes equal-price makers oldest first behind an activation
+
+No pin moves, no row is added and the anchor stays. The indexer change (`1716d1c90`) is in
+`src/actions/order_match/index.js`, `src/db/orders/order_info.js` and
+`src/utility/validation/value_checks.js`, none of which a row here maps: at or above
+`match_equal_price_oldest_first_activation.MATCH_EQUAL_PRICE_OLDEST_FIRST` (armed on testnet at each
+chain's own height, unarmed on mainnet, armed on a regtest venue by `XC_MATCH_EQUAL_PRICE_OLDEST_FIRST_REGTEST_ACTIVATION`),
+candidate makers at an equal price are taken by lowest `ACTION_INDEX` first; below it the highest
+`ACTION_INDEX` stays first. The `order/` row hashes unchanged.
+
+**Client follow-up.** None. `checks/trading.js` judges an ORDER's own fields and never ranks
+candidate makers, so which resting order fills first is not a client verdict.
+
+**Direction: NEUTRAL for validity, outside every mapped row.** No `ACTIVATION_MIRRORS` row is added
+because no client predicate reads this gate. NO CLIENT CHECK MOVES.
 
 ### 2026-10-21 - AIRDROP_NATIVE_FEE_TALLY_ROLLBACK gate is wired into the AIRDROP fee tally (airdrop_native_fee_tally_rollback)
 
@@ -619,6 +876,18 @@ batch the chain refuses on weight; on regtest the client already reads looser th
 NO CLIENT CHECK MOVES.
 
 **Direction: TIGHTENING at the gate height only.** The anchor stays unchanged.
+
+### 2026-10-30 - BATCH AIRDROP leg weight follows the armed testnet rows
+
+The client mirror now carries the indexer's coin-specific testnet heights for
+`BATCH_AIRDROP_LEG_WEIGHT` and the drift gate compares that table by value. Known heights are
+evaluated exactly; an unknown height stays flat so historical decoding and offline composition do
+not reject a batch that is valid below activation. The builder checks serialized command strings
+at an explicit target height or the explorer's projected next height, while decoder and pre-flight
+pass their available network and confirmed or quoted height into the shared weight scan.
+
+**Direction: TIGHTENING on BTC, LTC and DOGE testnet at their activation heights.** Mainnet stays
+flat until its row is armed.
 
 ### 2026-10-21 - TICK_CACHE_NULL_PROTOTYPE gate is wired into AIRDROP, SEND and DESTROY (tick_cache_null_prototype)
 

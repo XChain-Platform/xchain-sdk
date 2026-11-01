@@ -52,6 +52,29 @@ describe('XChainSDK config resolution', function () {
             expect(sdk.encoder).to.equal(null);
             expect(sdk.hub).to.equal(null);
         });
+
+        it('regtest ignores an empty hub validator list', function () {
+            const sdk = new XChainSDK({ network: 'bitcoin-regtest', hubValidators: [] });
+            expect(sdk.hub).to.equal(null);
+        });
+
+        it('regtest ignores hub validators that are not an array', function () {
+            const sdk = new XChainSDK({ network: 'bitcoin-regtest', hubValidators: {} });
+            expect(sdk.hub).to.equal(null);
+        });
+
+        it('regtest accepts a non-empty hub validator list', function () {
+            const sdk = new XChainSDK({
+                network: 'bitcoin-regtest',
+                hubValidators: ['127.0.0.1:10000']
+            });
+            expect(sdk.hub.urls).to.deep.equal(['http://127.0.0.1:10000']);
+        });
+
+        it('mainnet keeps its public hub with an empty validator list', function () {
+            const sdk = new XChainSDK({ network: 'bitcoin-mainnet', hubValidators: [] });
+            expect(sdk.hub.url).to.equal('https://hub.xchain.io/BTC');
+        });
     });
 });
 
@@ -173,6 +196,61 @@ describe('XChainSDK config resolution', function () {
         it('allowInsecureEndpoints:true opts out of the guard', async function () {
             const sdk = await applyHub({ allowInsecureEndpoints: true }, { explorerUrl: 'explorer.internal', explorerPort: 18080 });
             expect(exBase(sdk)).to.equal('http://explorer.internal:18080');
+        });
+    });
+});
+
+describe('XChainSDK config resolution', function () {
+    beforeEach(function () {
+        saved = {};
+        for (const k of ENV_KEYS) { saved[k] = process.env[k]; delete process.env[k]; }
+    });
+    afterEach(function () {
+        for (const k of ENV_KEYS) {
+            if (saved[k] === undefined) delete process.env[k];
+            else process.env[k] = saved[k];
+        }
+    });
+
+    describe('port option without a URL', function () {
+        it('points the explorer and its WebSocket at localhost on mainnet', function () {
+            const sdk = new XChainSDK({ network: 'bitcoin-mainnet', explorerPort: 18080 });
+            expect(exBase(sdk)).to.equal('http://localhost:18080');
+            expect(sdk.ws.baseUrl).to.equal('localhost');
+            expect(sdk.ws.port).to.equal(18080);
+            expect(enBase(sdk)).to.equal('https://encoder.xchain.io/BTC');
+        });
+
+        it('points the encoder at localhost on testnet', function () {
+            const sdk = new XChainSDK({ network: 'bitcoin-testnet', encoderPort: 13003 });
+            expect(enBase(sdk)).to.equal('http://localhost:13003');
+            expect(exBase(sdk)).to.equal('https://explorer.xchain.io');
+        });
+
+        it('builds a localhost hub on mainnet and still builds none on regtest', function () {
+            const main = new XChainSDK({ network: 'bitcoin-mainnet', hubPort: 10001 });
+            expect(main.hub.url).to.equal('http://localhost:10001');
+            const reg = new XChainSDK({ network: 'bitcoin-regtest', hubPort: 10001 });
+            expect(reg.hub).to.equal(null);
+        });
+
+        it('keeps a URL option ahead of a port option', function () {
+            const sdk = new XChainSDK({ network: 'bitcoin-mainnet', encoderUrl: 'https://enc.opt.example', encoderPort: 13003 });
+            expect(enBase(sdk)).to.equal('https://enc.opt.example');
+        });
+
+        it('keeps the port-only clients on localhost after hub discovery', async function () {
+            const sdk = new XChainSDK({ network: 'bitcoin-mainnet', explorerPort: 18080, encoderPort: 13003 });
+            sdk.hub.getDiscoveryConfig = async () => ({});
+            sdk.hub.extractServiceEndpoints = () => ({
+                explorerUrl: 'https://explorer.xchain.io',
+                encoderUrl: 'https://encoder.xchain.io/BTC'
+            });
+            sdk.hub.startPolling = () => {};
+            await sdk.ensureReady();
+            expect(exBase(sdk)).to.equal('http://localhost:18080');
+            expect(enBase(sdk)).to.equal('http://localhost:13003');
+            expect(sdk.ws.baseUrl).to.equal('localhost');
         });
     });
 });

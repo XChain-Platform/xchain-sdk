@@ -62,6 +62,8 @@ function createSigningContext(psbtHex, wif, net, supplyNested) {
 // leaves it out: it is the key's own P2WPKH script, and without it no input of that
 // shape can be signed. Inputs paying any other script are left as they are.
 function supplyNestedRedeemScripts(psbt, keyPair, net) {
+    // Skip a network without segwit (`=== false`: native bitcoinjs networks lack the field)
+    if (net && net.supportsSegwit === false) return;
     let redeem, wrapped;
     try {
         redeem  = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(keyPair.publicKey), network: net }).output;
@@ -76,6 +78,47 @@ function supplyNestedRedeemScripts(psbt, keyPair, net) {
         if (prevout && prevout.script && Buffer.from(prevout.script).equals(wrapped))
             psbt.updateInput(i, { redeemScript: redeem });
     });
+}
+
+// Match a BIP141 witness program: OP_0 or OP_1..OP_16, then one push of 2 to 40 bytes.
+function isWitnessProgram(script) {
+    if (!script || script.length < 4 || script.length > 42) return false;
+    const b = Buffer.from(script);
+    return (b[0] === 0x00 || (b[0] >= 0x51 && b[0] <= 0x60)) && b[1] === b.length - 2;
+}
+
+// Name the PSBT fields that mark a taproot input.
+const TAPROOT_INPUT_FIELDS = ['tapInternalKey', 'tapKeySig', 'tapScriptSig', 'tapLeafScript', 'tapMerkleRoot'];
+
+// Detect an input bitcoinjs would sign with a witness (segwit v0 or taproot).
+function isWitnessSpend(psbt, i) {
+    const input = psbt.data.inputs[i];
+    if (!input) return false;
+    if (input.witnessScript || input.finalScriptWitness) return true;
+    if (TAPROOT_INPUT_FIELDS.some((k) => input[k] !== undefined)) return true;
+    if (isWitnessProgram(input.redeemScript)) return true;
+    const prevout = findVerifiedPrevout(psbt, i);
+    return !!(prevout && isWitnessProgram(prevout.script));
+}
+
+// Return the explicit input set of a scoped sign, or null to sign every input; refuse an empty set.
+function scopedInputIndices(opts) {
+    const scoped = (opts && Array.isArray(opts.inputIndices)) ? opts.inputIndices : null;
+    if (scoped && scoped.length === 0) {
+        throw new SDKWalletError('SIGN_FAILED', 'PSBT signing failed: inputIndices is empty');
+    }
+    return scoped;
+}
+
+// Refuse a witness spend among the inputs about to be signed on a network without
+// segwit, where the program is anyone-can-spend and a witness transaction does not relay.
+function assertNoWitnessSpends(psbt, net, indices, networkName) {
+    if (!net || net.supportsSegwit !== false) return;
+    for (const i of indices) {
+        if (isWitnessSpend(psbt, i))
+            throw new SDKWalletError('SEGWIT_NOT_SUPPORTED',
+                `SegWit inputs are not supported on ${networkName} (input #${i}).`);
+    }
 }
 
 module.exports = {
@@ -133,10 +176,8 @@ module.exports = {
         // Scoped signing: when an explicit input set is given, sign/finalize ONLY
         // those inputs. Any other input the key happens to control (e.g. a UTXO a
         // crafted PSBT mixed in that the user never approved) is left untouched.
-        const scoped = (opts && Array.isArray(opts.inputIndices)) ? opts.inputIndices : null;
-        if (scoped && scoped.length === 0) {
-            throw new SDKWalletError('SIGN_FAILED', 'PSBT signing failed: inputIndices is empty');
-        }
+        const scoped = scopedInputIndices(opts);
+        assertNoWitnessSpends(psbt, net, scoped || psbt.data.inputs.map((_, i) => i), this.network);
 
         try {
             if (scoped) {

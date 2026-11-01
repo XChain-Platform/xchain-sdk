@@ -37,9 +37,14 @@
 'use strict';
 
 const checkpoint = require('../../checkpoint.js');
+const gateRegistry = require('../../consensus/gate_registry');
+const { isStakeWeightedQuorumActive } = require('../../consensus/stake_weighted_quorum.js');
 const { sameWireIndex } = require('../../utils/wire_index.js');
 const { baseUrl, fetchJson, pinnedEntry, lowerHex } = require('./fetch_helpers.js');
 const { followForward } = require('./validator_set_follow.js');
+
+const ARCHIVE_ROLLCALL_PRESENCE_KEY =
+    'archive_rollcall_presence_activation.ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION';
 
 // ── Trust: turn a server-served checkpoint into a quorum-verified one ──────────
 
@@ -54,8 +59,8 @@ async function verifyQuorum(f, explorerUrl, coin, cp, suppliedValidators){
 }
 
 // Cache the explorer's /verify validator set per (explorer, coin, checkpoint
-// height): a CLOSED checkpoint's signer set never changes, so repeat proofs at
-// one height ask the same question; bounded so a long session can't grow it.
+// height, signer role): a CLOSED checkpoint's signer sets never change, so repeat
+// proofs at one height ask the same question; bounded so a long session can't grow it.
 const VALIDATOR_SET_CACHE_MAX = 64;
 const validatorSetCache = new Map();
 
@@ -63,20 +68,35 @@ const validatorSetCache = new Map();
 // without restarting the process.
 function clearValidatorSetCache(){ validatorSetCache.clear(); }
 
+// A fold wrapper is judged on the archive set only above both the archive presence
+// gate and stake-weighted quorum at its snapshot_block; everything else keeps validators.
+function usesArchiveSet(cp){
+    return cp != null && cp.fold_archive != null
+        && gateRegistry.activeAt(ARCHIVE_ROLLCALL_PRESENCE_KEY,
+            String(cp.network), 'BTC', Number(cp.snapshot_block), null)
+        && isStakeWeightedQuorumActive(Number(cp.snapshot_block), String(cp.network));
+}
+
 // Tier 3 of the ladder on its own: ask the explorer which set qualifies for `cp`
 // under the coin prefix `coin`. Trusts the explorer for the SET only; the caller
 // still checks signatures and quorum locally. Transport failures throw.
 //
 // Cached by PROMISE so concurrent callers at one key (the wallet fans proof
 // jobs through a pool of 6) share one in-flight read instead of each firing a
-// request; a rejected fetch is evicted immediately so a blip is not pinned.
+// request; a rejected fetch is evicted immediately so a blip is not pinned. A fold
+// wrapper uses the archive_publish snapshot the explorer returns as
+// archive_validators once the archive presence gate is active at snapshot_block.
+// Plain sections and pre-gate wrappers keep the oracle_publish validators field.
 async function explorerValidators(f, explorerUrl, coin, cp){
-    const key = baseUrl(explorerUrl) + '|' + String(coin) + '|' + String(cp.block_index);
+    const archive = usesArchiveSet(cp);
+    const field = archive ? 'archive_validators' : 'validators';
+    const key = baseUrl(explorerUrl) + '|' + String(coin) + '|' + String(cp.block_index)
+        + (archive ? '|archive' : '');
     const cached = validatorSetCache.get(key);
     if (cached) return cached;
     const url = baseUrl(explorerUrl) + '/' + encodeURIComponent(String(coin)) +
                 '/api/checkpoint/' + encodeURIComponent(String(cp.block_index)) + '/verify';
-    const p = fetchJson(f, url).then((vb) => (vb && vb.validators) || []);
+    const p = fetchJson(f, url).then((vb) => (vb && vb[field]) || []);
     p.catch(() => { validatorSetCache.delete(key); });
     if (validatorSetCache.size >= VALIDATOR_SET_CACHE_MAX){
         const oldestKey = validatorSetCache.keys().next().value;
@@ -117,12 +137,15 @@ async function resolveQuorum(f, opts, cp){
         const ff = await followForward({ explorerUrl: opts.explorerUrl, btcCoin: opts.coin,
             trustedCheckpoint: pcp, toHeight: Number(cp.block_index), fetchImpl: f });
         const t = ff && ff.trusted;
+        const trustedCanonical = checkpoint.tryCanonicalCheckpoint(t);
+        const servedCanonical = checkpoint.tryCanonicalCheckpoint(cp);
         // The served cp failed the pinned set, so nothing signs it: it must equal the
         // attested step `t` on every signed field, or callers get forged fields back.
         if (t && sameWireIndex(t.block_index, cp.block_index)
             && lowerHex(t.state_root) === lowerHex(cp.state_root)
             && lowerHex(t.block_merkle_root) === lowerHex(cp.block_merkle_root)
-            && checkpoint.canonicalCheckpoint(t) === checkpoint.canonicalCheckpoint(cp))
+            && trustedCanonical !== null && servedCanonical !== null
+            && trustedCanonical === servedCanonical)
             return { valid: true, quorum: null, weighted: null };
     }
     return { valid: false, quorum: null, weighted: null };
@@ -153,4 +176,5 @@ async function resolveValidatorSet(f, opts, cp, coin){
     return explorerValidators(f, opts.explorerUrl, coin, cp);
 }
 
-module.exports = { verifyQuorum, VALIDATOR_SET_CACHE_MAX, validatorSetCache, clearValidatorSetCache, explorerValidators, resolveQuorum, resolveValidatorSet };
+module.exports = { verifyQuorum, VALIDATOR_SET_CACHE_MAX, validatorSetCache, clearValidatorSetCache,
+    usesArchiveSet, explorerValidators, resolveQuorum, resolveValidatorSet };

@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * XChain Platform SDK - pre-flight universal checks: wire fields that halt the indexer
+ * XChain Platform SDK - pre-flight universal checks: unsafe action-row wire fields
  *
  ********************************************************************/
 
@@ -23,18 +23,14 @@ const numeric = require('../numeric.js');
 const Utility = require('../../utils/utility.js');
 
 /*
- * Wire fields whose empty or unstorable value HALTS the indexer rather than refusing
- * the action. The normalize pass nulls a non-numeric NUMBER field and an INTEGER field
- * outside [0, U64_MAX] (xchain-indexer src/db/database/normalize.js:46-56, 71-74), the
- * handler then writes its row with that null in a NOT NULL column (dispenser_cancels /
- * dispenser_edits.dispenser_action_index, order_cancels / order_edits.order_action_index,
- * swap_cancels / swap_edits.swap_action_index, bets.feed_action_index,
- * stakes.signing_pubkey_id), and the block transaction throws and retries forever.
- * Measured on the off-rail conformance harness 2026-10-15 for every spelling below:
- * empty, negative, past U64_MAX and non-numeric. STAKE format 3 refuses a missing key
- * (src/actions/stake/contract_stake.js:95-96) and still halts on the same row write. The indexer fix that turns these
- * into refusals is separate; until every node runs it no wallet may broadcast one,
- * so each is a non-overridable refusal here, not a warning.
+ * Wire fields whose empty or unstorable value is refused by current indexer handlers.
+ * Older nodes can instead normalize an invalid value to null and then halt while writing
+ * a NOT NULL action-row column (dispenser_cancels / dispenser_edits.dispenser_action_index,
+ * order_cancels / order_edits.order_action_index, swap_cancels / swap_edits.swap_action_index,
+ * bets.feed_action_index, stakes.signing_pubkey_id). Current handlers refuse empty,
+ * non-numeric, negative, past-U64_MAX and radix-prefixed index spellings before that write;
+ * STAKE handlers likewise refuse a missing signing key. Until every node runs those
+ * refusals no wallet may broadcast one, so each remains a non-overridable error here.
  */
 const HALT_INDEX_FIELDS = Object.freeze({
     DISPENSER: { 1: 'DISPENSER_ACTION_INDEX', 2: 'DISPENSER_ACTION_INDEX' },
@@ -45,6 +41,7 @@ const HALT_INDEX_FIELDS = Object.freeze({
 const HALT_REQUIRED_FIELDS = Object.freeze({
     STAKE: { 1: 'SIGNING_PUBKEY', 2: 'SIGNING_PUBKEY', 3: 'SIGNING_PUBKEY' },
 });
+const UNSIGNED_COLUMN_RADIX_PREFIX = /^[-+]?0[xbo]/i;
 const util = new Utility();
 
 // Also run per BATCH sub-command (checks/batch.js), where `parsed` is the command.
@@ -58,11 +55,15 @@ function checkHaltFields(ctx, parsed) {
         const raw = ctx.params[indexField];
         const value = raw === undefined || raw === null || Array.isArray(raw) ? '' : String(raw);
         // EXPIRATION_MAX is the U64_MAX string, the INTEGER_FIELDS bound of every index field here.
-        const storable = value !== '' && util.isNumeric(value) && !numeric.exceedsUnsignedColumn(value, EXPIRATION_MAX);
+        // The prefix refusal mirrors storesAsNull: MariaDB does not accept JavaScript's
+        // hexadecimal, binary or octal spellings when bound as strings to an integer column.
+        const storable = value !== '' && !UNSIGNED_COLUMN_RADIX_PREFIX.test(value.trim())
+            && util.isNumeric(value) && !numeric.exceedsUnsignedColumn(value, EXPIRATION_MAX);
         if (!storable) {
             ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'error',
                 `${indexField} ${value === '' ? 'is missing' : '(' + value + ') is not an action index the chain can store'}; `
-                + 'the indexer nulls it and then halts writing this action\'s row, so it must never be broadcast.',
+                + 'current indexers refuse this action, and older indexers can halt while writing its row, '
+                + 'so it must never be broadcast.',
                 { field: indexField, value, haltClass: true });
         }
     }
@@ -70,8 +71,8 @@ function checkHaltFields(ctx, parsed) {
         const raw = ctx.params[requiredField];
         if (raw === undefined || raw === null || String(raw) === '') {
             ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'error',
-                `${requiredField} is missing; the indexer halts writing this action's row with no key, so it must `
-                + 'never be broadcast.',
+                `${requiredField} is missing; current indexers refuse this action, and older indexers can halt `
+                + 'while writing its row with no key, so it must never be broadcast.',
                 { field: requiredField, value: '', haltClass: true });
         }
     }

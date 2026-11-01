@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-11-01
+
+### Added
+- Added checkpoint supersession verification and reporting for light clients, and archive validator set checks on fold wrappers.
+
+### Changed
+- Armed this release's testnet gates and mirrored the same-token offer refusal in pre-flight.
+- Moved the Node pin to the pinned Node 22 patch.
+- Armed ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION on BTC:testnet at 158557.
+- Armed ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION on LTC:testnet at 4949697.
+- Armed ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION on DOGE:testnet at 68035864.
+- Armed CHECKPOINT_SUPERSEDE_ACTIVATION on BTC:testnet at 158557.
+- Armed CHECKPOINT_SUPERSEDE_ACTIVATION on LTC:testnet at 4949697.
+- Armed CHECKPOINT_SUPERSEDE_ACTIVATION on DOGE:testnet at 68035864.
+- Armed ADMIT_CHAIN_MARGIN_ACTIVATION on LTC:testnet at 4949697.
+
+### Fixed
+- Stopped mutating uint8array-tools exports and guarded their aliases.
+- Pre-flight checks for batches, fees, numeric fields and halted chains were tightened to match the validators.
+- Airdrop leg limits and PSBT signing checks were corrected, and MuSig2 co-signing validates its inputs more strictly.
+- Light-client checkpoint, quorum and validator-set following were hardened, and hub config sync and decoder parsing handle bad data safely.
+
+### Fixed
+- Bound chunk spend gates and Taproot envelope commits to the caller key before signing.
+- Awaited hub discovery before explorer search and gated-file fetch requests.
+- Ignored empty or invalid hub validator lists when deciding whether regtest needs a hub.
+
 ## [0.26.2] - 2026-10-21
 
 ### Changed

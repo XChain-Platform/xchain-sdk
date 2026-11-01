@@ -225,14 +225,16 @@ function validateUnbind(validator, action, field, value, allFields, errors) {
 function validateCooldownBlocks(validator, action, field, value, allFields, errors) {
     // COOLDOWN_BLOCKS validation. Two callers with different ranges:
     //  - DEPLOY v1 (stakeable contract): integer in [1, 100000].
-    //  - ISSUE v6 / ADDRESS v1 (controller bind): non-negative integer (>= 0),
+    //  - ISSUE v6 / ADDRESS v1 (controller bind): integer in [0, 4294967295],
     //    committed at bind as the friction on a later unbind (the indexer
-    //    accepts /^\d+$/, so 0 is valid).
+    //    accepts /^\d+$/ up to the INT UNSIGNED column limit, so 0 is valid).
     if (field === 'COOLDOWN_BLOCKS') {
         if (value !== '' && value !== null && value !== undefined) {
             if (action === 'ISSUE' || action === 'ADDRESS') {
                 if (!/^[0-9]+$/.test(String(value)))
                     errors.push(validator.buildError('INVALID_FIELD_VALUE', 'COOLDOWN_BLOCKS must be a non-negative integer', { field, value, constraint: { min: 0 } }));
+                else if (Number(value) > 4294967295)
+                    errors.push(validator.buildError('INVALID_FIELD_VALUE', 'COOLDOWN_BLOCKS must be at most 4294967295', { field, value, constraint: { min: 0, max: 4294967295 } }));
             } else if (!validator.util.isNumeric(value)) {
                 errors.push(validator.buildError('INVALID_FIELD_VALUE', 'COOLDOWN_BLOCKS must be numeric', { field, value }));
             } else {

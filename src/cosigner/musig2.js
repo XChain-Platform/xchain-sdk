@@ -26,8 +26,12 @@
  * @noble/hashes + @brandonblack/musig/base_crypto.
  *
  * IMPORTANT: the two-round flow (generateNonce + partialSign) must
- * happen on the same module instance. The underlying library uses an
- * internal nonce cache keyed by publicNonce; a publicNonce generated on
+ * happen on the same module instance. The underlying library keeps each
+ * secret nonce in an internal WeakMap keyed by the identity of the exact
+ * publicNonce array generateNonce returned, not by its bytes: partialSign
+ * must receive that same object, and the first lookup deletes the entry.
+ * A byte-equal copy (Buffer.from, slice, a hex round-trip, bytes off the
+ * wire) does not find it. A publicNonce generated on
  * one process cannot be partially-signed on another without also
  * transferring the secret nonce, which intentionally is not exposed by
  * this module. Cross-process signing (e.g. a remote co-signer) uses
@@ -41,8 +45,8 @@ const { MuSigFactory } = require('@brandonblack/musig');
 const { SDKMuSigError } = require('../utils/errors.js');
 const { ecc, requireBytes, normalizePubkeys, concat } = require('./musig2/curve_adapter.js');
 
-// Single instance: required because the underlying library stashes
-// secret nonces in an internal Map keyed by publicNonce. See module
+// Single instance: required because the underlying library stashes secret nonces in an
+// internal WeakMap keyed by the identity of the publicNonce array it returned. See module
 // header. Module-private, so the reuse guard below is its only door.
 const musigLib = MuSigFactory(ecc);
 
@@ -135,7 +139,8 @@ class MuSig2 {
      * @param {Uint8Array} [params.xOnlyPublicKey] aggregated x-only pubkey (binds nonce to the key-agg ctx)
      * @param {Uint8Array} [params.msg]            32-byte message to be signed
      * @param {Uint8Array} [params.extraInput]     additional entropy
-     * @returns {Uint8Array} 66-byte publicNonce (secretNonce is stashed internally by the library)
+     * @returns {Uint8Array} 66-byte publicNonce; this exact array is the handle partialSign
+     *          needs (secretNonce is stashed internally by the library, keyed by its identity)
      */
     generateNonce(params) {
         if (!params || typeof params !== 'object')
@@ -193,11 +198,14 @@ class MuSig2 {
 
     /*
      * Produce a 32-byte partial signature using the secret nonce
-     * cached from the corresponding generateNonce call.
+     * cached from the corresponding generateNonce call, looked up by
+     * the identity of the publicNonce array, not its bytes.
      *
      * @param {object} params
      * @param {Uint8Array} params.secretKey    32 bytes
-     * @param {Uint8Array} params.publicNonce  66 bytes, must originate from generateNonce on this instance
+     * @param {Uint8Array} params.publicNonce  66 bytes, the exact array object generateNonce returned
+     *        (a byte-equal copy, re-encoded or deserialized value does not find the cached secret
+     *        nonce); the first call that finds it deletes it, so it signs once
      * @param {object} params.sessionKey       from startSession
      * @param {boolean} [params.verify=true]   self-verify the partial sig
      */

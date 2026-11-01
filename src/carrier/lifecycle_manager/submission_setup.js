@@ -21,8 +21,9 @@
 
 const EncoderClient = require('../../clients/encoder.js');
 const { SDKActionError, SDKConfigError } = require('../../utils/errors.js');
-const { reconcileEncoded, psbtPrevouts, feeQuoteAuthorizedOutput } = require('../reconcile_encoded.js');
-const { assertCarrierBinding } = require('../bind_action_carrier.js');
+const { reconcileEncoded, feeQuoteAuthorizedOutput } = require('../reconcile_encoded.js');
+const { assertCarrierBinding, assertEnvelopeCommitBinding } = require('../bind_action_carrier.js');
+const { ECPair } = require('../../utils/wallet/key_derivation.js');
 
 const CONTRACT_ACTIONS = new Set(['DEPOSIT', 'EXECUTE', 'WITHDRAW']);
 
@@ -84,6 +85,31 @@ function readCarriedAction(encoded, createResult, encoderOpts) {
     return { carriedActionString, carriedRawData, encoderCompressed };
 }
 
+// Re-derive the one caller-keyed commit output that the envelope reveal may spend.
+function envelopeFundingFor(encoded, opts, network) {
+    if (!encoded.revealPsbt) return null;
+    let callerXOnly;
+    try { callerXOnly = Buffer.from(ECPair.fromWIF(opts.wif, network).publicKey).subarray(1, 33); }
+    catch (e) { throw new SDKActionError('ENVELOPE_COMMIT_MISMATCH', 'cannot derive the envelope caller key'); }
+    return assertEnvelopeCommitBinding({
+        commitPsbt: encoded.psbt, revealPsbt: encoded.revealPsbt, callerXOnly, network,
+    });
+}
+
+// Bind the unsigned carrier to the caller-submitted bytes before signing begins.
+function assertTransactionCarrier(manager, encoded, createResult, encoderOpts) {
+    assertCarrierBinding({
+        psbt:           encoded.psbt,
+        actionString:   createResult.actionString,
+        encoding:       encoded.encoding,
+        carrierScripts: encoded.carrierScripts,
+        callerIdentities: encoderOpts.pubkey,
+        rawData:        encoderOpts.rawData == null ? null : encoderOpts.rawData,
+        network:        manager.reconcileNetwork(),
+        label:          'transaction',
+    });
+}
+
 // Reconcile and bind the unsigned transaction before any signer can observe it.
 function reconcileTransaction(manager, encoded, createResult, encoderOpts, opts) {
     // createTx is a remote response that chooses inputs, outputs and fees. The
@@ -94,8 +120,9 @@ function reconcileTransaction(manager, encoded, createResult, encoderOpts, opts)
     const quoteOutput = feeQuoteAuthorizedOutput(encoderOpts.feeQuote);
     const withQuote = (outputs) => quoteOutput ? (outputs || []).concat([quoteOutput]) : outputs;
     const twoPhase = encoded.encoding === 'P2SH' || encoded.encoding === 'P2WSH';
+    const network = manager.reconcileNetwork();
     const reconcileIntent = {
-        network:       manager.reconcileNetwork(),
+        network,
         customOutputs: encoderOpts.customOutputs,
         // A caller-provided change destination is submitted intent and must not
         // be mistaken for a shaped phase-funding output.
@@ -110,6 +137,7 @@ function reconcileTransaction(manager, encoded, createResult, encoderOpts, opts)
         // their own optional ceiling.
         maxPhaseFundingSats: opts.maxPhaseFundingSats,
     };
+    const envelopeFunding = envelopeFundingFor(encoded, opts, network);
     const phase1 = reconcileEncoded(encoded.psbt, Object.assign({}, reconcileIntent, {
         label: 'transaction',
         // Phase-aware: a chunked P2SH/P2WSH action is indexed from its reveal, so
@@ -118,9 +146,8 @@ function reconcileTransaction(manager, encoded, createResult, encoderOpts, opts)
         customOutputs: twoPhase ? encoderOpts.customOutputs : withQuote(encoderOpts.customOutputs),
         phaseShapes: twoPhase ? ['p2sh', 'p2wsh']
             : (encoded.revealPsbt ? ['p2tr'] : []),
-        // Pin envelope funding to the prevouts consumed by the reveal. A reveal
-        // without readable prevouts authorizes no funding output.
-        phaseSpends: encoded.revealPsbt ? (psbtPrevouts(encoded.revealPsbt) || []) : null,
+        // Only the caller-keyed output re-derived from the reveal may fund it.
+        phaseSpends: envelopeFunding ? [envelopeFunding] : null,
     }));
     if (encoded.revealPsbt)
         reconcileEncoded(encoded.revealPsbt, Object.assign({}, reconcileIntent, {
@@ -132,15 +159,7 @@ function reconcileTransaction(manager, encoded, createResult, encoderOpts, opts)
     // The structural gate deliberately does not interpret action bytes. Bind the
     // carrier to the caller-submitted string before either signing branch begins.
     // Reported compression bytes remain useful only for the reveal and result.
-    assertCarrierBinding({
-        psbt:           encoded.psbt,
-        actionString:   createResult.actionString,
-        encoding:       encoded.encoding,
-        carrierScripts: encoded.carrierScripts,
-        rawData:        encoderOpts.rawData == null ? null : encoderOpts.rawData,
-        network:        manager.reconcileNetwork(),
-        label:          'transaction',
-    });
+    assertTransactionCarrier(manager, encoded, createResult, encoderOpts);
     // A chunk reveal is the indexed transaction and carries the hub fee output, authorized by the quote.
     return { reconcileIntent, phase1, revealCustomOutputs: withQuote(encoderOpts.customOutputs) };
 }

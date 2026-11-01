@@ -44,7 +44,7 @@ function dispenserPinChainEnd() {
 function airdropFeeTallyReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/airdrop/').hash)
-        .to.equal('3fe395e025f8ab86fe60f5a31800860c9548eee33a69141fc13b916d13277a3f');
+        .to.equal('9b3ade3b59922532bf3f7296cd2232e52a8055c86532e9ad00bba106206105e7');
     const heading = '### 2026-10-18 - AIRDROP_NATIVE_FEE_TALLY gate is added';
     expect(text).to.include(heading);
     expect(entryOf(text, heading)).to.include('**Direction: TIGHTENING at the gate height only.**');
@@ -53,7 +53,7 @@ function airdropFeeTallyReview() {
 function sendHandoffRetirementReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/send/').hash)
-        .to.equal('6bd08ac469d8a2ae2981e830a5278d5859786e86e5dd0a00113aee38f6a36302');
+        .to.equal('bb0ad3880732d882731cbee51df98cc229cc3ebcf030f5e3be1584d1010ec4dc');
     const heading = '### 2026-10-18 - GATED_HANDOFF_REF gate is retired';
     expect(text).to.include(heading);
     expect(entryOf(text, heading)).to.include('**Direction: NEUTRAL.**');
@@ -83,8 +83,8 @@ function gasBalanceReadReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     const rows = parseMap(REAL_MAP);
     const moves = [
-        ['send', '`ee30f903` to `0cbeede9`', '6bd08ac469d8a2ae2981e830a5278d5859786e86e5dd0a00113aee38f6a36302'],
-        ['destroy', '`597c2728` to `b172b6cc`', '56a05750c8fc2eed6162b67a9202c54b9274effa46665bdea8bf702fe1d6f0e3'],
+        ['send', '`ee30f903` to `0cbeede9`', 'bb0ad3880732d882731cbee51df98cc229cc3ebcf030f5e3be1584d1010ec4dc'],
+        ['destroy', '`597c2728` to `b172b6cc`', 'f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40'],
         ['mint', '`f69fdb91` to `998c2d88`', '998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48']
     ];
     const heading = '### 2026-10-20 - SEND, DESTROY and MINT read only the gas token\'s balance';
@@ -99,6 +99,95 @@ function gasBalanceReadReview() {
     expect(entry).to.include('NO CLIENT CHECK MOVES');
 }
 
+// The three 2026-10-23 activations: AIRDROP and DIVIDEND move their pins for the reviewed
+// settlement changes, while the equal-price ORDER ranking sits outside every mapped row.
+function october23GatesReview() {
+    const text = fs.readFileSync(REAL_MAP, 'utf8');
+    const rows = parseMap(REAL_MAP);
+    expect(rows.find((r) => r.handler === 'src/actions/airdrop/').hash)
+        .to.equal('9b3ade3b59922532bf3f7296cd2232e52a8055c86532e9ad00bba106206105e7');
+    expect(rows.find((r) => r.handler === 'src/actions/dividend/').hash)
+        .to.equal('7d66516b2584dcce47eecac80f62f90cabf98844ecc862195c03c65a7ff31065');
+    expect(rows.find((r) => r.handler.startsWith('src/actions/order_match')), 'no ORDER_MATCH row').to.equal(undefined);
+    const expected = [
+        ['### 2026-10-23 - AIRDROP_ZERO_LEGS_OMITTED gate is wired into the AIRDROP settlement',
+            'AIRDROP_ZERO_LEGS_OMITTED_ACTIVATION', '**Direction: NEUTRAL for validity; ledger rows change at the gate height only.**'],
+        ['### 2026-10-23 - DIVIDEND_EMPTY_ALLOW_LIST_DENIES gate is wired into the DIVIDEND recipient set',
+            'DIVIDEND_EMPTY_ALLOW_LIST_DENIES_ACTIVATION', '**Direction: NARROWS the recipient set at the gate height only.**'],
+        ['### 2026-10-23 - ORDER matching takes equal-price makers oldest first behind an activation',
+            'MATCH_EQUAL_PRICE_OLDEST_FIRST', '**Direction: NEUTRAL for validity, outside every mapped row.**'],
+    ];
+    for (const [heading, gate, direction] of expected) {
+        expect(text).to.include(heading);
+        const start = text.indexOf(heading);
+        const entry = text.slice(start, text.indexOf('\n### ', start + heading.length));
+        expect(entry, heading).to.include(gate);
+        expect(entry, heading).to.include(direction);
+        expect(entry, heading).to.include('NO CLIENT CHECK MOVES');
+    }
+}
+
+// The NOT NULL follow-up re-pins send, destroy and stake ahead of indexer dc4e4544f; one STAKE
+// check moves, and the SEND and DESTROY legs stay with the server.
+function notNullAmountWidthReview() {
+    const text = fs.readFileSync(REAL_MAP, 'utf8');
+    const rows = parseMap(REAL_MAP);
+    const moves = [
+        ['send', '`6bd08ac4` to `82c77168`', 'bb0ad3880732d882731cbee51df98cc229cc3ebcf030f5e3be1584d1010ec4dc'],
+        ['destroy', '`56a05750` to `f6423fc8`', 'f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40'],
+        ['stake', '`eef1360e` to `b38ea784`', 'b38ea784128e91c87c0df0200696d2b0bac25105477c9111d929a420f30e6afc'],
+    ];
+    const heading = '### 2026-10-23 - SEND, DESTROY and STAKE refuse amounts their NOT NULL row columns cannot store';
+    expect(text).to.include(heading);
+    const entry = entryOf(text, heading).replace(/\s+/g, ' ');
+    for (const [name, move, hash] of moves) {
+        expect(rows.find((r) => r.handler === 'src/actions/' + name + '/').hash, name).to.equal(hash);
+        expect(entry).to.match(new RegExp('`' + name + '` pin (moves )?from ' + move));
+    }
+    expect(entry).to.include('committed indexer lane tree `dc4e4544f`');
+    expect(entry).to.include('cross-repo pairing exception');
+    expect(entry).to.include('**Direction: WIDENS rejection of malformed wire input, no activation row.**');
+    expect(entry).to.include('For SEND and DESTROY, NO CLIENT CHECK MOVES');
+    expect(entry).to.include('checks.test/18_stake_amount_column_width.test.js');
+    expect(entry).to.include('The anchor stays at `52a82367`.');
+}
+
+// The TICK_NORMALIZE gate re-pins issue ahead of indexer 32b4fa8f0; one ISSUE pre-flight warning
+// moves, and the ticker key widening stays outside every mapped row.
+function tickNormalizeReview() {
+    const text = fs.readFileSync(REAL_MAP, 'utf8');
+    expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/issue/').hash)
+        .to.equal('c7d81c143f4f1ad242c9266487ff726102b7e6444a8cea4b374214ebf4d7deed');
+    const heading = '### 2026-10-23 - ISSUE caret TICK ids must be canonical behind TICK_NORMALIZE';
+    expect(text).to.include(heading);
+    const entry = entryOf(text, heading).replace(/\s+/g, ' ');
+    expect(entry).to.include('The `issue` pin moves from `be5cd48c` to `c7d81c14`');
+    expect(entry).to.include('committed indexer lane tree `32b4fa8f0`');
+    expect(entry).to.include('cross-repo pairing exception');
+    expect(entry).to.include('tick_normalize_activation.TICK_NORMALIZE_ACTIVATION');
+    expect(entry).to.include('XC_TICK_NORMALIZE_REGTEST_ACTIVATION');
+    expect(entry).to.include('One client check moves.');
+    expect(entry).to.include('checks.test/19_issue_caret_tick_normalize.test.js');
+    expect(entry).to.include('**Direction: TIGHTENING at the gate height only.**');
+    expect(entry).to.include('The anchor stays at `52a82367`.');
+}
+
+function sameTokenOfferReview() {
+    const text = fs.readFileSync(REAL_MAP, 'utf8');
+    const rows = parseMap(REAL_MAP);
+    const expected = {
+        'src/actions/order/': '294bc04fdb4e48a0d59beccfc2800826acdb4da77643b6709d1e009dfc4b04e6',
+        'src/actions/swap/': '1f77aa820a0d5ac2afffebc38ad456389b72e58eb9e67001529a14e60899a0d8',
+    };
+    for (const [handler, hash] of Object.entries(expected))
+        expect(rows.find((row) => row.handler === handler).hash, handler).to.equal(hash);
+    const heading = '### 2026-10-27 - same-chain ORDER and SWAP refuse offers of one resolved token';
+    expect(text).to.include(heading);
+    const entry = entryOf(text, heading);
+    expect(entry).to.include('invalid: cannot trade a token for itself');
+    expect(entry).to.include('**Direction: WIDENS rejection behind an activation row.**');
+}
+
 describe('pre-flight constants + registry drift map (§8.5) gate retirement reviews', function () {
     it('pins and records the DISPENSER and DISPENSE amount positivity gate retirement review', dispenserPositivityReview);
     it('the live dispenser pin is the end of the review-log pin chain', dispenserPinChainEnd);
@@ -106,4 +195,8 @@ describe('pre-flight constants + registry drift map (§8.5) gate retirement revi
     it('pins and records the SEND gated handoff reference gate retirement review', sendHandoffRetirementReview);
     it('pins and records the BATCH probe sub-verdict match snapshot review', batchSnapshotReviews);
     it('pins and records the SEND, DESTROY and MINT gas balance read review', gasBalanceReadReview);
+    it('pins and records the AIRDROP zero leg, DIVIDEND empty allow list and equal-price ORDER reviews', october23GatesReview);
+    it('pins and records the SEND, DESTROY and STAKE NOT NULL amount width review', notNullAmountWidthReview);
+    it('pins and records the ISSUE caret TICK canonical id review', tickNormalizeReview);
+    it('pins and records the ORDER and SWAP same-token offer refusal review', sameTokenOfferReview);
 });

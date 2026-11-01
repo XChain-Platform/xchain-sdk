@@ -45,8 +45,8 @@ function gt(a, b) { return bn(a).gt(bn(b)); }
 function isPositive(v) { return bn(v).gt(bn(0)); }
 
 // Whether an integer wire value is PROVABLY outside the unsigned range [0, max]
-// the column storing it can hold. Byte-for-byte the indexer's
-// exceedsUnsignedColumn (xchain-indexer/src/utility.js), including the part that
+// the column storing it can hold. Mirrors the indexer's exceedsUnsignedColumn
+// (xchain-indexer/src/utility/validation/value_checks.js), including the part that
 // looks like a defect and is not: it answers FALSE for anything it cannot prove
 // (a spelling neither BigInt nor Number can read), so a value the chain accepts
 // today keeps its current verdict and this can never be stricter than consensus.
@@ -56,10 +56,10 @@ function isPositive(v) { return bn(v).gt(bn(0)); }
 // first unstorable value would read as storable. `max` is therefore a decimal
 // digit STRING (constants.js), never a number.
 //
-// The non-literal branch is the one that catches '1e30': isInteger accepts it
-// (it IS an integer-valued double) and the digits regex does not, so the
-// comparison falls through to the double, which is exact enough three orders of
-// magnitude past the ceiling.
+// The non-literal branch catches '1e30' and also compares exact decimals against
+// max + 0.5. Number(max) rounds the u64 ceiling up to 2^64, so the exact check
+// refuses fractional spellings at the database's rounding boundary that would
+// otherwise compare equal to the rounded ceiling.
 function exceedsUnsignedColumn(value, max) {
     if (value === null || value === undefined) return false;
     const raw = String(value).trim();
@@ -68,7 +68,14 @@ function exceedsUnsignedColumn(value, max) {
         return (n < 0n || n > BigInt(max));
     }
     const approx = Number(raw);
-    return (Number.isFinite(approx) && (approx < 0 || approx > Number(max)));
+    if (!Number.isFinite(approx)) return false;
+    try {
+        const exact = mathjs.bignumber(raw);
+        const upperRoundingBoundary = mathjs.bignumber(max).plus(0.5);
+        return approx < 0 || approx > Number(max) || exact.gte(upperRoundingBoundary);
+    } catch (e) {
+        return false;
+    }
 }
 
 function add(a, b) { return mathjs.format(mathjs.add(bn(a), bn(b)), { notation: 'fixed' }); }

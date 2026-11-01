@@ -78,6 +78,19 @@ const ACTIVATION_MIRRORS = Object.freeze({
         table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 1791061097, 'LTC:testnet': 1791061097,
             'DOGE:testnet': 1791061097, testnet: 'UNARMED', regtest: 0 }),
     }),
+    // batch_limits/airdrop_legs.js reads this row when weighing AIRDROP sub-commands.
+    BATCH_AIRDROP_LEG_WEIGHT: Object.freeze({
+        key: 'batch_airdrop_leg_weight_activation.BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION',
+        unit: 'height',
+        table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 157295, 'LTC:testnet': 4930117,
+            'DOGE:testnet': 68015000, testnet: 'UNARMED', regtest: 0 }),
+    }),
+    SAME_TOKEN_OFFER_REFUSAL: Object.freeze({
+        key: 'same_token_offer_refusal_activation.SAME_TOKEN_OFFER_REFUSAL_ACTIVATION',
+        unit: 'height',
+        table: Object.freeze({ mainnet: 'UNARMED', 'BTC:testnet': 158557, 'LTC:testnet': 4949697,
+            'DOGE:testnet': 68035864, testnet: 'UNARMED', regtest: 0 }),
+    }),
     // A DISPENSE matches a 'cancelling' dispenser where this is armed
     // (xchain-indexer src/db/dispensers/dispense_matching.js findMatchingDispensers).
     DISPENSE_CANCELLING_MATCH: Object.freeze({
@@ -150,6 +163,17 @@ function activationThreshold(name, sdk) {
     return own(at.network) ? table[at.network] : undefined;
 }
 
+// Whether a HEIGHT-unit mirror is active at the height the indexer evaluated:
+// true or false, or undefined when either the SDK plane or target height is unknown.
+function activeAtHeight(name, sdk, targetHeight) {
+    if (mirrorFor(name).unit !== 'height') throw new Error(name + ' is not a height-unit activation');
+    const at = activationThreshold(name, sdk);
+    if (at === undefined) return undefined;
+    if (at === 'UNARMED') return false;
+    if (!Number.isSafeInteger(targetHeight) || targetHeight < 0) return undefined;
+    return targetHeight >= at;
+}
+
 // Whether a TIME-unit mirror is active for a block confirmed now: true or false, or undefined
 // when this SDK's plane is unknown. The wall clock stands in for the including block's
 // timestamp, which tracks it to within hours; every armed threshold this is asked about is
@@ -185,5 +209,5 @@ function describeActivationHere(name, sdk) {
 
 module.exports = {
     ACTIVATION_MIRRORS, DISCLOSURE_MIRRORS, AMOUNT_MAX_INTEGER_DIGITS,
-    activationThreshold, activeByWallClock, describeActivation, describeActivationHere,
+    activationThreshold, activeAtHeight, activeByWallClock, describeActivation, describeActivationHere,
 };

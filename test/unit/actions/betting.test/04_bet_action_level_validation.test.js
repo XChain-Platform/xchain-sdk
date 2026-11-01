@@ -10,6 +10,7 @@
 
 const { expect } = require('chai');
 const { XChainSDK } = require('../../../../index.js');
+const { parse } = require('../../../../src/decoder/index.js');
 
 const DEADLINE = 1770000000;
 
@@ -42,6 +43,15 @@ describe('BET action-level validation', function () {
         const padded = s.validateAction('BET', Object.assign({}, base, { allowList: '05', blockList: '5' }));
         expect(padded.errors.map(e => e.message).join('\n')).to.include('must differ from ALLOW_LIST');
         expect(codes({ details: 'not base64!' })).to.include('INVALID_FIELD_VALUE');
+    });
+
+    it('rejects numerically identical list references on the raw wire', function () {
+        const errors = (allow, block) => parse(
+            `BET|0|Market|Yes,No|JDOG|1|2000000000|||${allow}|${block}||`
+        ).validation.findings.map(e => e.message).join('\n');
+        expect(errors('07', '7')).to.include('must differ from ALLOW_LIST');
+        expect(errors('9007199254740992', '9007199254740993')).to.include('must differ from ALLOW_LIST');
+        expect(errors('07', '8')).to.not.include('must differ from ALLOW_LIST');
     });
 
     it('does not demand create fields on the lifecycle formats', function () {

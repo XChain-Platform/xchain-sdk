@@ -39,8 +39,15 @@ if (IS_BITCOINJS_V7 && !Transaction.prototype.__xchainNumberValues) {
     bitcoinTypes.SatoshiSchema = valibot.pipe(
         valibot.bigint(), valibot.minValue(0n), valibot.maxValue(MAX_U64)
     )
-    uint8Tools.writeInt64 = uint8Tools.writeUInt64
-    uint8Tools.readInt64 = uint8Tools.readUInt64
+    const canPatchUint8Tools = Object.isExtensible(uint8Tools)
+        && ['writeInt64', 'readInt64'].every((name) => {
+            const descriptor = Object.getOwnPropertyDescriptor(uint8Tools, name)
+            return !descriptor || descriptor.writable || typeof descriptor.set === 'function'
+        })
+    if (canPatchUint8Tools) {
+        uint8Tools.writeInt64 = uint8Tools.writeUInt64
+        uint8Tools.readInt64 = uint8Tools.readUInt64
+    }
     bufferutils.readUInt64LE = function (buffer, offset) {
         return narrowU64(uint8Tools.readUInt64(buffer, offset, 'LE'))
     }
@@ -82,7 +89,7 @@ if (IS_BITCOINJS_V7 && !Transaction.prototype.__xchainNumberValues) {
 
     const addOutput = Transaction.prototype.addOutput
     Transaction.prototype.addOutput = function (script, value) {
-        return addOutput.call(this, script, typeof value === 'number' ? BigInt(value) : value)
+        return addOutput.call(this, script, typeof value === 'number' ? verifyU64(value) : value)
     }
     Transaction.prototype.__xchainNumberValues = true
 
@@ -105,13 +112,13 @@ if (IS_BITCOINJS_V7 && !Transaction.prototype.__xchainNumberValues) {
     const hashForWitnessV0 = Transaction.prototype.hashForWitnessV0
     Transaction.prototype.hashForWitnessV0 = function (index, script, value, hashType) {
         return compatibleValue(hashForWitnessV0.call(
-            this, index, script, typeof value === 'number' ? BigInt(value) : value, hashType
+            this, index, script, typeof value === 'number' ? verifyU64(value) : value, hashType
         ))
     }
     const hashForWitnessV1 = Transaction.prototype.hashForWitnessV1
     Transaction.prototype.hashForWitnessV1 = function (index, scripts, values, ...args) {
         return compatibleValue(hashForWitnessV1.call(
-            this, index, scripts, values.map((value) => typeof value === 'number' ? BigInt(value) : value), ...args
+            this, index, scripts, values.map((value) => typeof value === 'number' ? verifyU64(value) : value), ...args
         ))
     }
 

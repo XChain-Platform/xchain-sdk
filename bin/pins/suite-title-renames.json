@@ -523,6 +523,9 @@
       "checkpoint_commitment_activation twin parity @regression xchain-hub copy matches the sdk copy in value and in bytes": "checkpoint_commitment_activation twin parity @regression xchain-hub copy matches the sdk copy in value and at the boundary heights",
       "checkpoint_commitment_activation twin parity @regression xchain-indexer copy matches the sdk copy in value and in bytes": "checkpoint_commitment_activation twin parity @regression xchain-indexer copy matches the sdk copy in value and at the boundary heights",
       "checkpoint_commitment_activation twin parity @regression xchain-sync copy matches the sdk copy in value and in bytes": "checkpoint_commitment_activation twin parity @regression xchain-sync copy matches the sdk copy in value and at the boundary heights"
+    },
+    "test/unit/preflight/activation/activation_coin_first_precedence.test.js": {
+      "pre-flight activation lookup is coin-first every network-only mirrored row is the cancelling-match row": "pre-flight activation lookup is coin-first identifies every network-only mirrored row"
     }
   }
 }

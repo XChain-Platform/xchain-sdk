@@ -26,7 +26,7 @@
 // copy of the encoder's script construction would need a byte-parity gate
 // forever and would drift the moment the encoder changed.
 //
-// Two checks, and a forged script has to survive BOTH:
+// Three checks, and a forged script has to survive all three:
 //
 //   1. BINDING - each script hashes to a P2SH/P2WSH output actually present
 //      in the PSBT. A script the encoder invented but did not commit to
@@ -36,15 +36,19 @@
 //      artwork or label bytes, or gated ciphertext) is the caller's rawData
 //      when the caller passes it. A script that IS committed but carries a
 //      different payload fails here.
+//   3. SPEND GATE - every script ends in the exact P2PKH gate for a caller
+//      identity. Matching payload bytes say nothing about who can spend the
+//      funded output, so an extra branch or foreign key fails here.
 //
-// Check 1 alone would accept a faithful hash of the wrong payload; check 2
-// alone would accept the right payload in a script that is not the one being
-// signed. Neither is sufficient, which is why both are mandatory and why
-// this refuses rather than warns when it cannot run.
+// Binding alone accepts a faithful hash of the wrong payload, content alone
+// accepts bytes outside the signed transaction, and both together still say
+// nothing about who can spend the output. All three are mandatory.
 
 const bitcoin = require('bitcoinjs-lib');
 const zlib = require('zlib');
 const { isBytes, toBuffer, bytesEqual } = require('../utils/bytes');
+const { getNetwork } = require('../protocol/networks.js');
+const { callerHash160s } = require('./caller_hash160.js');
 
 const CHUNK_ENCODINGS = ['P2SH', 'P2WSH'];
 
@@ -57,7 +61,21 @@ const REASONS = {
     SCRIPT_UNPARSEABLE: 'SCRIPT_UNPARSEABLE',
     OUTPUT_NOT_FOUND:   'OUTPUT_NOT_FOUND',
     PAYLOAD_MISMATCH:   'PAYLOAD_MISMATCH',
+    SPEND_GATE_MISMATCH:'SPEND_GATE_MISMATCH',
+    CALLER_IDENTITY_MISSING: 'CALLER_IDENTITY_MISSING',
+    SEGWIT_UNSUPPORTED: 'SEGWIT_UNSUPPORTED',
 };
+
+// Resolve the caller's network: a bitcoinjs network object as given, a known name
+// through the coin registry, and anything else as bitcoin. Callers pass sdk.config.network,
+// a NAME such as 'litecoin-regtest', as readily as an object, and payments only ever see an object.
+function resolveNetwork(network) {
+    if (network && typeof network === 'object' && network.pubKeyHash !== undefined) return network;
+    if (typeof network === 'string' && network.length) {
+        try { return getNetwork(network); } catch (e) { /* unknown name: bitcoin below */ }
+    }
+    return bitcoin.networks.bitcoin;
+}
 
 // Accepts a PSBT as hex/base64 (the shape that survives the wallet's host
 // messaging boundary) or as an already-parsed bitcoinjs Psbt. Reads the
@@ -98,14 +116,26 @@ function committedScriptFor(encoding, redeem, network) {
 // it is the P2PKH spend gate (OP_DROP OP_DUP OP_HASH160 <h160> OP_EQUALVERIFY
 // OP_CHECKSIG). A script whose first element is not a Buffer carries no data
 // chunk, which is the same condition the decoder skips on.
-function chunkOf(redeem) {
+function decompileRedeem(redeem) {
     let decompiled;
     try { decompiled = bitcoin.script.decompile(redeem); } catch (e) { return null; }
     if (!Array.isArray(decompiled) || !decompiled.length) return null;
-    return isBytes(decompiled[0]) ? toBuffer(decompiled[0]) : null;
+    return decompiled;
 }
 
-function verifiedChunks(carrierScripts, enc, net, present) {
+function hasCallerSpendGate(decompiled, callerHashes) {
+    return decompiled.length === 7
+        && isBytes(decompiled[0])
+        && decompiled[1] === bitcoin.opcodes.OP_DROP
+        && decompiled[2] === bitcoin.opcodes.OP_DUP
+        && decompiled[3] === bitcoin.opcodes.OP_HASH160
+        && isBytes(decompiled[4]) && decompiled[4].length === 20
+        && callerHashes.some((hash) => bytesEqual(hash, decompiled[4]))
+        && decompiled[5] === bitcoin.opcodes.OP_EQUALVERIFY
+        && decompiled[6] === bitcoin.opcodes.OP_CHECKSIG;
+}
+
+function verifiedChunks(carrierScripts, enc, net, present, callerHashes) {
     const chunks = [];
     for (const hex of carrierScripts) {
         let redeem;
@@ -120,10 +150,12 @@ function verifiedChunks(carrierScripts, enc, net, present) {
         if (!present.some(s => bytesEqual(s, committed)))
             return { ok: false, reason: REASONS.OUTPUT_NOT_FOUND, checked: chunks.length };
 
-        const chunk = chunkOf(redeem);
-        if (!chunk)
+        const decompiled = decompileRedeem(redeem);
+        if (!decompiled || !isBytes(decompiled[0]))
             return { ok: false, reason: REASONS.SCRIPT_UNPARSEABLE, checked: chunks.length };
-        chunks.push(chunk);
+        if (!hasCallerSpendGate(decompiled, callerHashes))
+            return { ok: false, reason: REASONS.SPEND_GATE_MISMATCH, checked: chunks.length };
+        chunks.push(toBuffer(decompiled[0]));
     }
     return chunks;
 }
@@ -148,6 +180,23 @@ function rawDataMatches(pushes, rawData, rawDataCompressed) {
     catch (e) { return false; }
 }
 
+// Decode and compare the reassembled carrier payload after its outputs and spend gates pass.
+function verifyPayload(chunks, actionString, rawData, rawDataCompressed) {
+    const carried = Buffer.concat(chunks);
+    let payload, pushes;
+    try {
+        pushes = bitcoin.script.decompile(carried);
+        payload = Array.isArray(pushes) && isBytes(pushes[0]) ? toBuffer(pushes[0]) : null;
+    } catch (e) { payload = null; }
+    if (!payload)
+        return { ok: false, reason: REASONS.PAYLOAD_MISMATCH, checked: chunks.length };
+
+    const intended = Buffer.from(String(actionString == null ? '' : actionString), 'utf8');
+    if (!payload.equals(intended) || !rawDataMatches(pushes, rawData, rawDataCompressed))
+        return { ok: false, reason: REASONS.PAYLOAD_MISMATCH, checked: chunks.length };
+    return { ok: true, reason: null, checked: chunks.length };
+}
+
 /**
  * @param {object}   args
  * @param {object}   args.psbt            a bitcoinjs Psbt (the one about to be signed)
@@ -158,14 +207,23 @@ function rawDataMatches(pushes, rawData, rawDataCompressed) {
  *                                        demands no rawData push, omitted leaves it unchecked
  * @param {boolean}  [args.rawDataCompressed] the push is the deflate-raw form of rawData
  * @param {object}   [args.network]       bitcoinjs network (defaults to bitcoin)
+ * @param {string|string[]} args.callerIdentities caller pubkey or address identities
  * @returns {{ok: boolean, reason: string|null, checked: number}}
  */
-function verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString, rawData, rawDataCompressed, network } = {}) {
+function verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString, rawData, rawDataCompressed,
+                                network, callerIdentities } = {}) {
     const enc = String(encoding || '').toUpperCase();
     // Not a chunk lane: nothing here to verify, and saying so is not a pass.
     // The caller keeps using decodeActionFromPsbt for inline OP_RETURN.
     if (!CHUNK_ENCODINGS.includes(enc))
         return { ok: true, reason: REASONS.NOT_CHUNKED, checked: 0 };
+
+    // Refuse P2WSH on a chain without segwit, as the encoder and decoder do (`=== false`:
+    // native bitcoinjs networks lack the field). The committed output SCRIPT is a bare hash
+    // push, identical on every network, so legality of the lane is all the network decides.
+    const net = resolveNetwork(network);
+    if (enc === 'P2WSH' && net.supportsSegwit === false)
+        return { ok: false, reason: REASONS.SEGWIT_UNSUPPORTED, checked: 0 };
 
     // A chunked encoding with no scripts is an encoder that predates
     // carrier-script support, or a stripped response. Fail closed: this is
@@ -174,17 +232,12 @@ function verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString, ra
     if (!Array.isArray(carrierScripts) || !carrierScripts.length)
         return { ok: false, reason: REASONS.SCRIPTS_MISSING, checked: 0 };
 
-    // Callers reasonably pass sdk.config.network, which is a NAME ('bitcoin',
-    // 'litecoin-regtest'), not a bitcoinjs network object. Only a real network
-    // object is forwarded to payments. This affects nothing either way - the
-    // P2SH/P2WSH output SCRIPT is a bare hash push, identical on every network
-    // (only the derived ADDRESS is network-specific, and it is not used here) -
-    // but a string reaching payments is a trap waiting for a future change.
-    const net = (network && typeof network === 'object' && network.pubKeyHash !== undefined)
-        ? network
-        : bitcoin.networks.bitcoin;
+    const callerHashes = callerHash160s(callerIdentities);
+    if (!callerHashes.length)
+        return { ok: false, reason: REASONS.CALLER_IDENTITY_MISSING, checked: 0 };
+
     const present = outputScriptsOf(psbt);
-    const chunks = verifiedChunks(carrierScripts, enc, net, present);
+    const chunks = verifiedChunks(carrierScripts, enc, net, present, callerHashes);
     if (!Array.isArray(chunks)) return chunks;
 
     // [2] CONTENT. Chunks concatenate in the order the encoder emitted them,
@@ -202,22 +255,7 @@ function verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString, ra
     // The fixtures here had the same gap in mirror image, which is why no test
     // caught it - they compiled the chunks from the bare action bytes, a shape
     // the encoder never emits.
-    const carried = Buffer.concat(chunks);
-    let payload, pushes;
-    try {
-        pushes = bitcoin.script.decompile(carried);
-        payload = Array.isArray(pushes) && isBytes(pushes[0]) ? toBuffer(pushes[0]) : null;
-    } catch (e) { payload = null; }
-    // Not a decodable push: the chain would read no action out of these bytes
-    // at all, so this is a mismatch rather than a pass.
-    if (!payload)
-        return { ok: false, reason: REASONS.PAYLOAD_MISMATCH, checked: chunks.length };
-
-    const intended = Buffer.from(String(actionString == null ? '' : actionString), 'utf8');
-    if (!payload.equals(intended) || !rawDataMatches(pushes, rawData, rawDataCompressed))
-        return { ok: false, reason: REASONS.PAYLOAD_MISMATCH, checked: chunks.length };
-
-    return { ok: true, reason: null, checked: chunks.length };
+    return verifyPayload(chunks, actionString, rawData, rawDataCompressed);
 }
 
 module.exports = { verifyCarrierScripts, rawDataMatches, REASONS, CHUNK_ENCODINGS };

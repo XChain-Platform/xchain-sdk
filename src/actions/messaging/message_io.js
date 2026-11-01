@@ -205,6 +205,7 @@ module.exports = {
             actionString:   actionResult.actionString,
             encoding:       actionResult.encoding,
             carrierScripts: actionResult.carrierScripts,
+            callerIdentities: params.encoder.pubkey,
             rawData:        null,
             network:        network,
             label:          'message'

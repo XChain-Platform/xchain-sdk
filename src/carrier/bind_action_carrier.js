@@ -36,10 +36,11 @@
 const bitcoin = require('bitcoinjs-lib');
 const { SDKActionError } = require('../utils/errors.js');
 const { decodeActionStringFromPsbt, extractEnvelopeActionString } = require('../cosigner/psbt_action_decode.js');
+const { deriveEnvelopeCommit, envelopeLeafFromPsbtInput } = require('../cosigner/envelope.js');
 const { verifyCarrierScripts, rawDataMatches } = require('./verify_carrier_scripts.js');
 const CompressionUtils = require('../protocol/compression.js');
 const { COMPRESSION_CODE_DEFLATE_RAW } = require('../protocol/constants.js');
-const { isBytes } = require('../utils/bytes');
+const { isBytes, bytesEqual } = require('../utils/bytes');
 
 const compressionUtils = new CompressionUtils();
 
@@ -189,7 +190,8 @@ function assertInlineCarrier({ psbt, actionString, encoding, network, label }) {
  * @throws {SDKActionError} CARRIER_ACTION_MISMATCH / CARRIER_UNREADABLE (a bare-multisig
  *   carrier output is always CARRIER_UNREADABLE, reason MULTISIG_CARRIER_UNSUPPORTED)
  */
-function assertCarrierBinding({ psbt, actionString, encoding, carrierScripts, rawData, network, label = 'transaction' }) {
+function assertCarrierBinding({ psbt, actionString, encoding, carrierScripts, rawData, network,
+                                callerIdentities, label = 'transaction' }) {
     if (typeof actionString !== 'string' || actionString.length === 0)
         throw new SDKActionError('CARRIER_BIND_MISSING_ACTION',
             `${label}: cannot bind a carrier without the caller's action string`);
@@ -218,12 +220,13 @@ function assertCarrierBinding({ psbt, actionString, encoding, carrierScripts, ra
     // substituted SEND still has nowhere to hide, and a real compressed FILE
     // stops being refused by its own gate. The rawData push binds to the caller's
     // own bytes on both attempts: verbatim, or inflating to them under COMPRESSION.
-    let verified = verifyCarrierScripts({ psbt, carrierScripts, encoding: enc, actionString, rawData, network });
+    let verified = verifyCarrierScripts({ psbt, carrierScripts, encoding: enc, actionString, rawData,
+        network, callerIdentities });
     if (verified && verified.ok === true) return;
     const compressedForm = toleratedCompressedForm(actionString);
     if (compressedForm) {
         const retried = verifyCarrierScripts({ psbt, carrierScripts, encoding: enc, actionString: compressedForm,
-            rawData, rawDataCompressed: true, network });
+            rawData, rawDataCompressed: true, network, callerIdentities });
         if (retried && retried.ok === true) return;
         // Report the compressed attempt's reason: on a FILE lane it is the one
         // that describes what the transaction actually carries.
@@ -272,4 +275,53 @@ function assertEnvelopeCarrierBinding({ revealPsbt, actionString, rawData, netwo
             { submitted: actionString, reason: 'RAW_DATA_MISMATCH' });
 }
 
-module.exports = { assertCarrierBinding, assertEnvelopeCarrierBinding, carriedActionMatches };
+function envelopeCommitMismatch(label, reason, detail) {
+    return new SDKActionError('ENVELOPE_COMMIT_MISMATCH',
+        `${label}: the reveal is not bound to the caller-owned commit output`, { reason, detail });
+}
+
+function equalValue(a, b) {
+    try { return BigInt(a) === BigInt(b); } catch (e) { return false; }
+}
+
+// Re-derive the single-leaf output from the caller key and bind it to both
+// halves of the encoder response before either transaction can be signed.
+function assertEnvelopeCommitBinding({ commitPsbt, revealPsbt, callerXOnly, network,
+                                       label = 'envelope commit' }) {
+    const commit = asPsbt(commitPsbt, network);
+    const reveal = asPsbt(revealPsbt, network);
+    if (!commit || !reveal) throw envelopeCommitMismatch(label, 'PSBT_PARSE_FAILED');
+    const input0 = reveal.data.inputs[0];
+    const leaf = envelopeLeafFromPsbtInput(input0);
+    if (!leaf) throw envelopeCommitMismatch(label, 'ENVELOPE_LEAF_INVALID');
+    let derived;
+    try { derived = deriveEnvelopeCommit({ internalXOnly: callerXOnly, envelopeScript: leaf.script, network }); }
+    catch (e) { throw envelopeCommitMismatch(label, 'CALLER_KEY_MISMATCH', e.message); }
+    const witness = input0 && input0.witnessUtxo;
+    if (!witness || !bytesEqual(witness.script, derived.output))
+        throw envelopeCommitMismatch(label, 'WITNESS_OUTPUT_MISMATCH');
+    const controlBlock = input0.tapLeafScript[0].controlBlock;
+    if (!isBytes(controlBlock) || !bytesEqual(controlBlock, derived.controlBlock))
+        throw envelopeCommitMismatch(label, 'CONTROL_BLOCK_MISMATCH');
+    if (input0.tapInternalKey && !bytesEqual(input0.tapInternalKey, callerXOnly))
+        throw envelopeCommitMismatch(label, 'INTERNAL_KEY_MISMATCH');
+    const tx = commit.__CACHE && commit.__CACHE.__TX;
+    const prevout = reveal.txInputs[0];
+    if (!tx || !prevout || !bytesEqual(prevout.hash, tx.getHash()))
+        throw envelopeCommitMismatch(label, 'COMMIT_TXID_MISMATCH');
+    const output = commit.txOutputs[prevout.index];
+    if (!output || !bytesEqual(output.script, derived.output) || !equalValue(output.value, witness.value))
+        throw envelopeCommitMismatch(label, 'COMMIT_OUTPUT_MISMATCH');
+    for (let i = 1; i < reveal.txInputs.length; i++) {
+        if (bytesEqual(reveal.txInputs[i].hash, tx.getHash()))
+            throw envelopeCommitMismatch(label, 'EXTRA_COMMIT_SPEND', i);
+    }
+    return { script: derived.output, value: witness.value };
+}
+
+module.exports = {
+    assertCarrierBinding,
+    assertEnvelopeCarrierBinding,
+    assertEnvelopeCommitBinding,
+    carriedActionMatches,
+};

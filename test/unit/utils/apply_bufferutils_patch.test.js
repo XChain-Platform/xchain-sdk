@@ -4,6 +4,8 @@
 // wire). Exercises the patched read/write and varint helpers.
 
 const assert = require('assert');
+const { spawnSync } = require('child_process');
+const path = require('path');
 const bufferutils = require('../../../src/utils/apply_bufferutils_patch.js');
 
 describe('applyBufferutilsPatch', function () {
@@ -11,6 +13,19 @@ describe('applyBufferutilsPatch', function () {
         assert.strictEqual(typeof bufferutils.readUInt64LE, 'function');
         assert.strictEqual(typeof bufferutils.writeUInt64LE, 'function');
         assert.ok(bufferutils.varuint && typeof bufferutils.varuint.encode === 'function');
+    });
+
+    it('loads when the uint8array-tools exports are frozen', function () {
+        const result = spawnSync(process.execPath, ['-e', [
+            "const path = require.resolve('uint8array-tools')",
+            "const frozen = Object.freeze(require(path))",
+            "require.cache[path].exports = new Proxy(frozen, { set() { throw new TypeError('read-only export') } })",
+            "require('./src/utils/apply_bufferutils_patch/v7')",
+        ].join(';')], {
+            cwd: path.resolve(__dirname, '../../..'),
+            encoding: 'utf8',
+        });
+        assert.strictEqual(result.status, 0, result.stderr || result.stdout);
     });
 
     it('round-trips a value above 2^53 without precision loss', function () {
@@ -100,6 +115,36 @@ describe('applyBufferutilsPatch', function () {
         assert.throws(() => new bufferutils.BufferWriter(Buffer.alloc(8)).writeUInt64(2 ** 53), /value out of range/);
         const bip174Tools = require('bip174/src/lib/converter/tools');
         assert.throws(() => bip174Tools.writeUInt64LE(Buffer.alloc(8), 2 ** 53, 0), /value out of range/);
+    });
+
+    it('applies the u64 Number guard to raw Transaction value entry points', function () {
+        const { Transaction } = require('bitcoinjs-lib');
+        const script = Buffer.from('0014' + '22'.repeat(20), 'hex');
+        const callers = [
+            (tx, value) => tx.addOutput(script, value),
+            (tx, value) => tx.hashForWitnessV0(0, script, value, Transaction.SIGHASH_ALL),
+            (tx, value) => tx.hashForWitnessV1(0, [script], [value], Transaction.SIGHASH_DEFAULT),
+        ];
+        const invalid = [
+            [2 ** 53, /value out of range/],
+            [-1, /specified a negative value for writing an unsigned value/],
+            [0.5, /value has a fractional component/],
+            [NaN, /value has a fractional component/],
+        ];
+        for (const call of callers) {
+            for (const [value, expected] of invalid) {
+                const tx = new Transaction();
+                tx.addInput(Buffer.alloc(32, 1), 0);
+                tx.addOutput(script, 1000n);
+                assert.throws(() => call(tx, value), expected);
+                assert.throws(() => call(tx, value), err => !/cannot be converted to a BigInt/.test(err.message));
+            }
+            const tx = new Transaction();
+            tx.addInput(Buffer.alloc(32, 1), 0);
+            tx.addOutput(script, 1000n);
+            assert.doesNotThrow(() => call(tx, 9007199254740991));
+            assert.doesNotThrow(() => call(tx, 9007199254740993n));
+        }
     });
 
     it('refuses a PSBT witnessUtxo Number value past 2^53-1 and serializes its BigInt form', function () {

@@ -110,7 +110,7 @@ function normalizeMarketAmounts(fee, refundWindow, minAmount, ctx) {
 function normalizeMarketLists(owner, allowList, blockList, ctx) {
     const allowOut = isSet(allowList) ? owner.actionIndex(allowList, 'ALLOW_LIST', ctx) : '';
     const blockOut = isSet(blockList) ? owner.actionIndex(blockList, 'BLOCK_LIST', ctx) : '';
-    if (allowOut !== '' && blockOut !== '' && allowOut === blockOut)
+    if (allowOut !== '' && blockOut !== '' && Number(allowOut) === Number(blockOut))
         fail('INVALID_FIELD_VALUE',
             `${ctx}: allowList and blockList are the same list (${allowOut}). Nobody could ever bet on that market`,
             { field: 'BLOCK_LIST', value: blockOut });

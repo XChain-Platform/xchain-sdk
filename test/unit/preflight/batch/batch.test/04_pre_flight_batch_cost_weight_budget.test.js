@@ -3,7 +3,7 @@
 // Copyright © 2025–2026 Dankest, LLC
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-const { expect, reportFor } = require('./helpers/setup.js');
+const { expect, mockSdk, reportFor } = require('./helpers/setup.js');
 
 /*
  * INDEXER-MAP's cost-weight budget entry, mirrored from the arbiter
@@ -66,6 +66,23 @@ describe('pre-flight BATCH cost-weight budget', function () {
     it('surfaces the cap once, not once per weighted command', async function () {
         const r = await reportFor(batchOf('AIRDROP|0|1', 20), money);
         expect(capFinding(r)).to.have.length(1);
+    });
+});
+
+describe('pre-flight BATCH cost-weight budget', function () {
+    it('uses the target height for multi-leg AIRDROP weight on testnet', async function () {
+        const command = 'AIRDROP|1|5|JDOG|1|XCP|2';
+        const reportAt = (blockIndex) => {
+            const sdk = mockSdk({ network: 'bitcoin-testnet', explorerSpec: {
+                getPreflight: () => ({ feeExempt: true, blockIndex }),
+                ...money,
+            } });
+            return sdk.preflight(batchOf(command, 6), { source: 'me', preflight: 'report' });
+        };
+        expect(capFinding(await reportAt(157294))).to.have.length(0);
+        const caps = capFinding(await reportAt(157295));
+        expect(caps).to.have.length(1);
+        expect(caps[0].data.weight).to.equal(300);
     });
 
     it('reports the COUNT, not the weight, when the count is what overflowed', async function () {

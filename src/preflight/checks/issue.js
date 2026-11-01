@@ -61,7 +61,8 @@
 'use strict';
 
 const {
-    FINDING_CODES, MIN_NEW_TOP_LEVEL_TICK_LENGTH, RESERVED_FUTURE_ROOTS, describeActivation, describeActivationHere,
+    FINDING_CODES, MIN_NEW_TOP_LEVEL_TICK_LENGTH, RESERVED_FUTURE_ROOTS, CANONICAL_CARET_ID, describeActivation,
+    describeActivationHere,
 } = require('../constants.js');
 const { tokenField } = require('./mint.js');
 const { ALLOWED_COINS, getCoinConfig } = require('../../coins/index.js');
@@ -135,9 +136,28 @@ function planeFromCoin(coin) {
     return parseCoinCode(coin);
 }
 
+// TICK_NORMALIZE_ACTIVATION (xchain-indexer issue/tick_rules.js validateTickForm) refuses a caret
+// TICK that is not ^<positive decimal id> without leading zeroes as 'invalid: TICK (id)', ahead of
+// the token row read. Unarmed on mainnet and testnet and armed on a regtest venue by
+// XC_TICK_NORMALIZE_REGTEST_ACTIVATION, which pre-flight cannot read, so it is a warning: below the
+// gate a format 0 to 5 ISSUE of '^007' is valid. It is judged before the lookup result because the
+// explorer may answer a non-canonical id by number and name a different token.
+function checkCaretTickNormalize(ctx, tick, caretRuleNetwork) {
+    if (CANONICAL_CARET_ID.test(tick.substring(1))) return false;
+    if (caretRuleNetwork) {
+        ctx.addFinding(FINDING_CODES.TICK_FORMAT, 'warning',
+            `${tick} is not a canonical ^<id> (no leading zero, id >= 1); the indexer's TICK_NORMALIZE `
+            + 'activation refuses it as invalid: TICK (id) where armed (a regtest venue arms it with '
+            + 'XC_TICK_NORMALIZE_REGTEST_ACTIVATION), and this warning is returned before activation on testnet.',
+            { tick, rule: 'TICK_NORMALIZE' });
+    }
+    return true;
+}
+
 function checkCaretTickRule(ctx, tick, token, plane) {
     if (tick.charAt(0) !== '^') return false;
     const caretRuleNetwork = plane && (plane.network === 'regtest' || plane.network === 'testnet');
+    if (checkCaretTickNormalize(ctx, tick, caretRuleNetwork)) return true;
     if (caretRuleNetwork) {
         if (token === undefined) {
             ctx.addUnverified('ISSUE_CARET_TICK_NO_CREATE', 'token lookup unavailable');

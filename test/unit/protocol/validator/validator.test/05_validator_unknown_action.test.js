@@ -188,6 +188,16 @@ describe('Validator: controller bind/unbind (ISSUE v6 / ADDRESS v1)', function (
         const errors = v.validate('ISSUE', { TICK: 'X', CONTROLLER: '1', ACTION_CLASS: 'mint', COOLDOWN_BLOCKS: '-5', UNBIND: '0' });
         expect(errors.some(e => /COOLDOWN_BLOCKS must be a non-negative integer/.test(e.message))).to.be.true;
     });
+    it('accepts COOLDOWN_BLOCKS=4294967295, the column limit, on a controller bind', function () {
+        const errors = v.validate('ADDRESS', { CONTROLLER: '1', ACTION_CLASS: 'trade', COOLDOWN_BLOCKS: '4294967295', UNBIND: '0' });
+        expect(errors.some(e => /COOLDOWN_BLOCKS/.test(e.message))).to.be.false;
+    });
+    it('rejects COOLDOWN_BLOCKS above 4294967295 on ISSUE and ADDRESS controller binds', function () {
+        const issue = v.validate('ISSUE', { TICK: 'X', CONTROLLER: '1', ACTION_CLASS: 'mint', COOLDOWN_BLOCKS: '4294967296', UNBIND: '0' });
+        const address = v.validate('ADDRESS', { CONTROLLER: '1', ACTION_CLASS: 'trade', COOLDOWN_BLOCKS: '4294967296', UNBIND: '0' });
+        expect(issue.some(e => /COOLDOWN_BLOCKS must be at most 4294967295/.test(e.message))).to.be.true;
+        expect(address.some(e => /COOLDOWN_BLOCKS must be at most 4294967295/.test(e.message))).to.be.true;
+    });
     it('still enforces the DEPLOY COOLDOWN_BLOCKS [1,100000] range', function () {
         const errors = v.validate('DEPLOY', { CODE_ENCODING: 'ab', GAS_LIMIT: '1', COOLDOWN_BLOCKS: '0' });
         expect(errors.some(e => /COOLDOWN_BLOCKS must be in \[1, 100000\]/.test(e.message))).to.be.true;

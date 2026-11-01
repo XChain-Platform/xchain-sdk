@@ -34,6 +34,19 @@ const { getLogger } = require('../../observability/logger.js');
 const log = getLogger('xchain-sdk:hub');
 
 const CHAIN_REGISTRY_PATH = '/api/v1/chain-registry';
+const SCHEME_DEFAULT_PORT = { 'http:': 80, 'https:': 443 };
+
+// Write a registry defaultPort into a scheme URL that names no port (clients drop the port once a scheme is present).
+// Returns the input string untouched otherwise, so a scheme-default port never re-serializes the URL.
+function withDefaultPort(url, port) {
+    let p = Number(port);
+    if (!Number.isInteger(p) || p < 1 || p > 65535) return url;
+    if (!/^https?:\/\//i.test(url)) return url;
+    let parsed;
+    try { parsed = new URL(url); } catch (e) { return url; }
+    if (parsed.port !== '' || SCHEME_DEFAULT_PORT[parsed.protocol] === p) return url;
+    return url.replace(/^(https?:\/\/[^/?#]+)/i, '$1:' + p);
+}
 
 function normalizeServiceDefaults(descriptor, service) {
     let defaults = descriptor[service];
@@ -41,7 +54,7 @@ function normalizeServiceDefaults(descriptor, service) {
         typeof defaults.defaultUrl !== 'string' || !defaults.defaultUrl)
         throw new Error('chain registry descriptor ' + descriptor.id + ' has no ' + service + ' default URL');
 
-    let normalized = { host: defaults.defaultUrl };
+    let normalized = { host: withDefaultPort(defaults.defaultUrl, defaults.defaultPort) };
     if (defaults.defaultPort !== undefined && defaults.defaultPort !== null)
         normalized.port = defaults.defaultPort;
     return normalized;

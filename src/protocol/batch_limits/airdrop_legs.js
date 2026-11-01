@@ -19,13 +19,14 @@
  * AIRDROP sub-command PER LEG, its table weight (25) times the legs it pays
  * out, because every leg of a multi-leg AIRDROP (FORMATs 1 to 3) expands its
  * own list. Below it, and for DIVIDEND at every height, the weight is flat.
- * The table mirrors the arbiter's gate row: unarmed on mainnet and testnet,
- * active from genesis on regtest.
+ * The drift-checked table mirrors the arbiter's gate row: unarmed on mainnet,
+ * armed per coin on testnet, and active from genesis on regtest.
  *
- * `at` is an optional { network, height }. Without a network the SDK's
+ * `at` is an optional { network, coin, height }. Without a network the SDK's
  * NETWORK setting is used (a `<coin>-<network>` name or a bare network);
- * without a height the gate counts as active only where it is armed at 0, so
- * a client that cannot say where its batch lands never refuses legal work.
+ * a known height is evaluated exactly. Without a height, only a genesis row is
+ * active, because a mid-chain row cannot be decided without rejecting valid
+ * historical or pre-activation batches.
  *
  ********************************************************************/
 
@@ -34,14 +35,37 @@
 const { formatVersion } = require('./command_classification.js');
 const { UNARMED } = require('../../consensus/gate_registry/core.js');
 const { env: sdkEnv } = require('../../config.js');
+const { FULL_NAME_TO_TICK } = require('../../coins/index.js');
+const { parseCoinCode } = require('../../utils/endpoints.js');
+const { ACTIVATION_MIRRORS } = require('../../preflight/activation.js');
 
-const BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION = Object.freeze({ mainnet: UNARMED, testnet: UNARMED, regtest: 0 });
+const MIRRORED_ACTIVATION = ACTIVATION_MIRRORS.BATCH_AIRDROP_LEG_WEIGHT.table;
+const BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION = Object.freeze(Object.fromEntries(
+    Object.entries(MIRRORED_ACTIVATION).map(([key, value]) => [key, value === 'UNARMED' ? UNARMED : value])
+));
+
+function activationPlane(at) {
+    const named = (at && at.network !== undefined && at.network !== null) ? at.network : sdkEnv.network();
+    const parts = String(named || '').toLowerCase().split('-');
+    let network = parts.length === 2 && ['mainnet', 'testnet', 'regtest'].includes(parts[1])
+        ? parts[1] : parts.length === 1 && ['mainnet', 'testnet', 'regtest'].includes(parts[0]) ? parts[0] : null;
+    let coin = null;
+    const explicit = parseCoinCode(at && at.coin);
+    if (explicit) coin = explicit.coin;
+    else if (at && at.coin) coin = String(at.coin).toUpperCase();
+    else if (parts.length === 2) coin = FULL_NAME_TO_TICK[parts[0]] || null;
+    return network ? { coin, network } : null;
+}
 
 function airdropLegWeightActive(at) {
-    const named = (at && at.network !== undefined && at.network !== null) ? at.network : sdkEnv.network();
-    const network = String(named || '').toLowerCase().split('-').pop();
-    const activation = BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION[network];
-    if (!Number.isInteger(activation)) return false;
+    const plane = activationPlane(at);
+    if (!plane) return false;
+    const own = (key) => Object.prototype.hasOwnProperty.call(BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION, key);
+    const coinKey = plane.coin && plane.coin + ':' + plane.network;
+    const activation = coinKey && own(coinKey)
+        ? BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION[coinKey]
+        : BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION[plane.network];
+    if (!Number.isInteger(activation) || activation === UNARMED) return false;
     const height = (at && at.height !== undefined && at.height !== null) ? Number(at.height) : NaN;
     return Number.isFinite(height) ? height >= activation : activation === 0;
 }

@@ -203,7 +203,7 @@ function registerSupplyBoundReviewTest() {
         expect(mint, 'mint directory row').to.exist;
         expect(issue, 'issue directory row').to.exist;
         expect(mint.hash).to.equal('998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48');
-        expect(issue.hash).to.equal('be5cd48c5d4aef365358cc296fa56b8621f8a627a09e0623d3c79e259e210762');
+        expect(issue.hash).to.equal('c7d81c143f4f1ad242c9266487ff726102b7e6444a8cea4b374214ebf4d7deed');
         const heading = '### 2026-10-14 - MINT and ISSUE total supply bound behind an activation';
         expect(text).to.include(heading);
         const start = text.indexOf(heading);
@@ -243,9 +243,9 @@ function registerTextAmountRefusalReviewTest() {
         expect(send, 'send directory row').to.exist;
         expect(destroy, 'destroy directory row').to.exist;
         expect(dividend, 'dividend directory row').to.exist;
-        expect(send.hash).to.equal('6bd08ac469d8a2ae2981e830a5278d5859786e86e5dd0a00113aee38f6a36302');
-        expect(destroy.hash).to.equal('56a05750c8fc2eed6162b67a9202c54b9274effa46665bdea8bf702fe1d6f0e3');
-        expect(dividend.hash).to.equal('c0afa565418a5df7b35bd463ab51ed580541f2b0b7d32fac0c87cf07df50e5b0');
+        expect(send.hash).to.equal('bb0ad3880732d882731cbee51df98cc229cc3ebcf030f5e3be1584d1010ec4dc');
+        expect(destroy.hash).to.equal('f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40');
+        expect(dividend.hash).to.equal('7d66516b2584dcce47eecac80f62f90cabf98844ecc862195c03c65a7ff31065');
         const heading = '### 2026-10-15 - SEND, DESTROY and DIVIDEND refuse text amounts and unknown-tick legs';
         expect(text).to.include(heading);
         const start = text.indexOf(heading);
@@ -263,8 +263,8 @@ function registerSupplyPrefetchReviewTest() {
         const rows = parseMap(REAL_MAP);
         expect(rows.find((r) => r.handler === 'src/actions/dispenser/'), 'dispenser directory row').to.exist;
         const expected = {
-            'src/actions/order/': '139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc',
-            'src/actions/swap/': '470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf',
+            'src/actions/order/': '294bc04fdb4e48a0d59beccfc2800826acdb4da77643b6709d1e009dfc4b04e6',
+            'src/actions/swap/': '1f77aa820a0d5ac2afffebc38ad456389b72e58eb9e67001529a14e60899a0d8',
         };
         for (const [handler, hash] of Object.entries(expected)) {
             const row = rows.find((r) => r.handler === handler);
@@ -299,8 +299,8 @@ function registerConsolidationLegGateReviewTest() {
     it('pins and records the SEND and DESTROY consolidation leg gate retirement review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const rows = parseMap(REAL_MAP);
-        expect(rows.find((r) => r.handler === 'src/actions/send/').hash).to.equal('6bd08ac469d8a2ae2981e830a5278d5859786e86e5dd0a00113aee38f6a36302');
-        expect(rows.find((r) => r.handler === 'src/actions/destroy/').hash).to.equal('56a05750c8fc2eed6162b67a9202c54b9274effa46665bdea8bf702fe1d6f0e3');
+        expect(rows.find((r) => r.handler === 'src/actions/send/').hash).to.equal('bb0ad3880732d882731cbee51df98cc229cc3ebcf030f5e3be1584d1010ec4dc');
+        expect(rows.find((r) => r.handler === 'src/actions/destroy/').hash).to.equal('f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40');
         const heading = '### 2026-10-18 - CONSOLIDATION_LEG_AMOUNT gate is retired';
         expect(text).to.include(heading);
         const start = text.indexOf(heading);
@@ -315,8 +315,8 @@ function registerNotNullRowKeyReviewTest() {
         const rows = parseMap(REAL_MAP);
         expect(rows.find((r) => r.handler === 'src/actions/dispenser/'), 'dispenser directory row').to.exist;
         const expected = {
-            'src/actions/order/': '139612e79de1284ba40e9e428cb74bd9aea169413ed9664510738a887d02b7fc',
-            'src/actions/swap/': '470d4c11820a52b6041f51015fba5247d6ddbec9d965d5f27f1331542fa104bf',
+            'src/actions/order/': '294bc04fdb4e48a0d59beccfc2800826acdb4da77643b6709d1e009dfc4b04e6',
+            'src/actions/swap/': '1f77aa820a0d5ac2afffebc38ad456389b72e58eb9e67001529a14e60899a0d8',
             'src/actions/deposit.js': '3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f',
             'src/actions/withdraw.js': '99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35',
         };

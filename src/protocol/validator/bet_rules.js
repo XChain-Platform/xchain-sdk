@@ -101,7 +101,7 @@ function validateBetTerms(validator, fields, limits, errors) {
 function validateBetPolicy(validator, fields, limits, errors) {
     // The same list in both slots builds a market nobody can ever bet on.
     if (!validator.isEmpty(fields.ALLOW_LIST) && !validator.isEmpty(fields.BLOCK_LIST) &&
-        String(fields.ALLOW_LIST).trim() === String(fields.BLOCK_LIST).trim())
+        Number(String(fields.ALLOW_LIST).trim()) === Number(String(fields.BLOCK_LIST).trim()))
         errors.push(validator.buildError('INVALID_FIELD_VALUE',
             'BLOCK_LIST must differ from ALLOW_LIST: the same list in both slots bars every address',
             { field: 'BLOCK_LIST', value: fields.BLOCK_LIST }));
