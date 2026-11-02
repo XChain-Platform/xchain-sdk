@@ -158,11 +158,14 @@ module.exports = {
             try { this.hooks.onWsReconnect({ attempt: attempt + 1, delay }); } catch (e) {}
         }
 
-        setTimeout(async () => {
-            // disconnect() while the delay ran: connect() would clear the flag and revive the client.
+        // Kept so disconnect() can cancel it (clearReconnectTimer).
+        this._reconnectTimer = setTimeout(async () => {
+            this._reconnectTimer = null;
+            // Backstop when the timer was not cleared: connect() would clear the flag and revive the client.
             if (this.intentionalClose) return;
             try {
                 await this.connect();
+                if (this.intentionalClose) return;
                 this.resubscribe();
             } catch (e) {
                 // A refused or closed-before-WELCOME attempt rejects connect() once and the

@@ -135,6 +135,9 @@ class WebSocketClient {
         this.connected          = false;
         this.intentionalClose   = false;
         this.reconnectAttempts  = 0;
+        this._reconnectTimer    = null;
+        // Bumped by disconnect() so a connect() parked on the readiness hook can tell it was cancelled.
+        this._closeEpoch        = 0;
         this.serverInfo         = null;
         this._schemaWarned      = false;
         // The catch-up cursor is the exact decimal STRING the v2 wire carries, or null
@@ -182,7 +185,11 @@ class WebSocketClient {
 
         // Await lazy readiness (hub-discovery overlay) before deriving the URL,
         // so a hub-refined explorer host is reflected here on first connect.
+        const epoch = this._closeEpoch;
         if (this._readyHook) await this._readyHook();
+        if (epoch !== this._closeEpoch) {
+            throw new SDKExplorerError('WS_CONNECTION_CLOSED', 'Disconnected while connecting');
+        }
 
         this.intentionalClose = false;
         const url = websocketUrl(this);
@@ -192,6 +199,11 @@ class WebSocketClient {
     // Disconnect intentionally
     disconnect() {
         this.intentionalClose = true;
+        this._closeEpoch++;
+        if (this._reconnectTimer) {
+            clearTimeout(this._reconnectTimer);
+            this._reconnectTimer = null;
+        }
         this.stopPing();
         dropCatchUp(this);
         this.rejectAllPending('Connection closed');
