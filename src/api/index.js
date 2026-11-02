@@ -29,6 +29,7 @@ const XChainSDK  = require('../XChainSDK');
 const { safeTokenEqual } = require('../utils/safe_compare.js');
 const { parseCorsOrigin } = require('../utils/cors_origin.js');
 const Config = require('../config.js');
+const { SDKError } = require('../utils/errors.js');
 // Request guards live in their own module so the shipped middleware has exactly
 // one implementation: the guard tests mount src/utils/api_guards.js directly and
 // pin, from the router stack of the app createApp builds, that it wires the same
@@ -166,7 +167,74 @@ function createController(sdk) {
         async get_status() { return sdk.getStatus(); },
         async search(params) { return sdk.search(params.query, params.type); }
     };
+    // Every handler runs inside rpcMethod: params are shape-checked before the handler reads them,
+    // and whatever it throws leaves as an integer JSON-RPC code with a fixed or SDK-authored message.
+    for (const name of Object.keys(controller))
+        controller[name] = rpcMethod(name, controller[name]);
     return Object.setPrototypeOf(controller, null);
+}
+
+// JSON-RPC error codes this server answers with (spec section 5.1; -32000 is the
+// implementation-defined server-error range).
+const RPC_INVALID_PARAMS = -32602;
+const RPC_INTERNAL_ERROR = -32603;
+const RPC_SERVER_ERROR   = -32000;
+// Methods whose params may be omitted or null (get_markets lists every market then).
+const OPTIONAL_PARAMS = new Set(['get_markets']);
+// Upstream client errors carry the upstream URL and socket text in their message,
+// so they answer a fixed message per service instead.
+const UPSTREAM_MESSAGES = {
+    SDKExplorerError: 'Explorer request failed',
+    SDKEncoderError: 'Encoder request failed',
+    SDKHubError: 'Hub request failed',
+    SDKRateLimitedError: 'Upstream service rate limited'
+};
+
+// The router answers Number(err.code || err.status || -32603) and err.message, so
+// an SDKError (string code) went out as code null, and a TypeError from a bad
+// params shape went out with its internal text. This builds the error the router
+// sees: always an integer code, the SDK's string code in data.
+function toRpcError(err) {
+    if (err && Number.isInteger(err.code))
+        return err;
+    if (err instanceof SDKError) {
+        const data = { code: err.code };
+        if (err.name === 'SDKValidationError' || err.name === 'SDKFormatError')
+            return rpcError(RPC_INVALID_PARAMS, err.message, data);
+        if (Object.prototype.hasOwnProperty.call(UPSTREAM_MESSAGES, err.name)) {
+            log.warn('SDK API: upstream error %s: %s', err.code, err.message);
+            if (err.name === 'SDKRateLimitedError') data.retryAfterSeconds = err.retryAfterSeconds;
+            return rpcError(RPC_SERVER_ERROR, UPSTREAM_MESSAGES[err.name], data);
+        }
+        return rpcError(RPC_SERVER_ERROR, err.message, data);
+    }
+    log.warn('SDK API: unhandled method error: %s', err && err.message);
+    return rpcError(RPC_INTERNAL_ERROR, 'Internal error');
+}
+
+function rpcError(code, message, data) {
+    const e = new Error(message);
+    e.code = code;
+    if (data) e.data = data;
+    return e;
+}
+
+// Wraps one controller handler. The handlers take named params, so a handler that
+// declares a params argument gets a plain object or a -32602 answer: null, an
+// array, a string or a number never reaches a params.x dereference.
+function rpcMethod(name, handler) {
+    const takesParams = handler.length > 0;
+    const optional = OPTIONAL_PARAMS.has(name);
+    return async function (params) {
+        if (takesParams && !(optional && params == null) &&
+            (params === null || typeof params !== 'object' || Array.isArray(params)))
+            throw rpcError(RPC_INVALID_PARAMS, 'Invalid params: ' + name + ' takes a params object');
+        try {
+            return await handler(params);
+        } catch (err) {
+            throw toRpcError(err);
+        }
+    };
 }
 
 // Loads documentation during startup so requests never perform filesystem access.
