@@ -152,13 +152,13 @@ function notNullAmountWidthReview() {
     expect(entry).to.include('The anchor stays at `52a82367`.');
 }
 
-// The TICK_NORMALIZE gate re-pinned issue ahead of indexer 32b4fa8f0, and the 2026-11-02 column-width
-// review pins it now; one ISSUE pre-flight warning
+// The TICK_NORMALIZE gate re-pinned issue ahead of indexer 32b4fa8f0, and the 2026-11-02 prefixed
+// integer review pins it now; one ISSUE pre-flight warning
 // moves, and the ticker key widening stays outside every mapped row.
 function tickNormalizeReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/issue/').hash)
-        .to.equal('37ac32600e6a7e9c7756165aba1cc847945a56d9ace456ca2e3f2e28a284e33f');
+        .to.equal('48e96f754714f079aea9c608ecce3ff1ca706f9f5c168224468f9e0bd6fad670');
     const heading = '### 2026-10-23 - ISSUE caret TICK ids must be canonical behind TICK_NORMALIZE';
     expect(text).to.include(heading);
     const entry = entryOf(text, heading).replace(/\s+/g, ' ');
@@ -177,8 +177,8 @@ function sameTokenOfferReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     const rows = parseMap(REAL_MAP);
     const expected = {
-        'src/actions/order/': '294bc04fdb4e48a0d59beccfc2800826acdb4da77643b6709d1e009dfc4b04e6',
-        'src/actions/swap/': '1f77aa820a0d5ac2afffebc38ad456389b72e58eb9e67001529a14e60899a0d8',
+        'src/actions/order/': '86b0a7c3d7badbfb6001527fe3597628233cf8a5b72018b97e8725309d450d5e',
+        'src/actions/swap/': '2ee469e1572ed56e78074597577f246c188277016873ea6b9b8bf36eb1ba6bb8',
     };
     for (const [handler, hash] of Object.entries(expected))
         expect(rows.find((row) => row.handler === handler).hash, handler).to.equal(hash);
@@ -189,29 +189,57 @@ function sameTokenOfferReview() {
     expect(entry).to.include('**Direction: WIDENS rejection behind an activation row.**');
 }
 
-// The column-width refusals re-pin issue, price and bet and move the anchor to the lane tree.
+// The column-width refusals re-pinned issue, price and bet; the prefixed integer review below
+// pins issue and bet now, and holds the anchor.
 function columnWidthReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     const rows = parseMap(REAL_MAP);
     const moves = [
-        ['issue', '`c7d81c14` to `37ac3260`', '37ac32600e6a7e9c7756165aba1cc847945a56d9ace456ca2e3f2e28a284e33f'],
-        ['price', '`9028c8c2` to `0b7385b1`', '0b7385b14af8430c951e586eb2ec7955eee24d6189a15a25830cb133548aec62'],
-        ['bet', '`59ff86ee` to `1afee772`', '1afee7726b5ce7b4eaf7215965be02a78847cd0483902783aec3c0fe42a1b06e'],
+        ['issue', '`c7d81c14` to `37ac3260`'],
+        ['price', '`9028c8c2` to `0b7385b1`'],
+        ['bet', '`59ff86ee` to `1afee772`'],
     ];
     const heading = '### 2026-11-02 - ISSUE, PRICE v1 and BET refuse valid wire text wider than its column';
+    expect(text).to.include(heading);
+    const entry = entryOf(text, heading).replace(/\s+/g, ' ');
+    for (const [name, move] of moves)
+        expect(entry).to.match(new RegExp('`' + name + '` pin (moves )?from ' + move));
+    expect(rows.find((r) => r.handler === 'src/actions/price/').hash)
+        .to.equal('0b7385b14af8430c951e586eb2ec7955eee24d6189a15a25830cb133548aec62');
+    expect(entry).to.include('issue/stored_widths.js');
+    expect(entry).to.include('universal/column_widths.js');
+    expect(entry).to.include('**Direction: TIGHTENING, ungated.**');
+}
+
+// The hexadecimal, binary and octal integer refusals re-pin issue, dispenser, order, swap and
+// bet and move the anchor to the lane tree.
+function prefixedIntegerReview() {
+    const text = fs.readFileSync(REAL_MAP, 'utf8');
+    const rows = parseMap(REAL_MAP);
+    const moves = [
+        ['issue', '`37ac3260` to `48e96f75`', '48e96f754714f079aea9c608ecce3ff1ca706f9f5c168224468f9e0bd6fad670'],
+        ['dispenser', '`3c0163d6` to `8130c1a2`', '8130c1a24aa0e3af97b773fdfdfb6ab6362b28cc5a5a9a55093db47e2736ffef'],
+        ['order', '`294bc04f` to `86b0a7c3`', '86b0a7c3d7badbfb6001527fe3597628233cf8a5b72018b97e8725309d450d5e'],
+        ['swap', '`1f77aa82` to `2ee469e1`', '2ee469e1572ed56e78074597577f246c188277016873ea6b9b8bf36eb1ba6bb8'],
+        ['bet', '`1afee772` to `d1d5a599`', 'd1d5a599a1f9031c54d4c5f163b78007eb983090f406e241a0a7480e730eb8ad'],
+    ];
+    const heading = '### 2026-11-02 - ISSUE, DISPENSER, ORDER, SWAP and BET refuse hexadecimal, binary and octal '
+        + 'integer fields';
     expect(text).to.include(heading);
     const entry = entryOf(text, heading).replace(/\s+/g, ' ');
     for (const [name, move, hash] of moves) {
         expect(rows.find((r) => r.handler === 'src/actions/' + name + '/').hash, name).to.equal(hash);
         expect(entry).to.match(new RegExp('`' + name + '` pin (moves )?from ' + move));
     }
-    expect(text).to.include('**Pins taken at indexer commit:** `8185158fa`');
-    expect(entry).to.include('issue/stored_widths.js');
-    expect(entry).to.include('universal/column_widths.js');
+    expect(text).to.include('**Pins taken at indexer commit:** `0d08f2d77`');
+    expect(entry).to.include('util.keepsPrefixedSpelling');
+    expect(entry).to.include('universal/prefixed_integers.js');
+    expect(entry).to.include('indexer_value_checks_parity.test.js');
     expect(entry).to.include('**Direction: TIGHTENING, ungated.**');
 }
 
 describe('pre-flight constants + registry drift map (§8.5) gate retirement reviews', function () {
+    it('pins and records the ISSUE, DISPENSER, ORDER, SWAP and BET prefixed integer review', prefixedIntegerReview);
     it('pins and records the ISSUE, PRICE v1 and BET column-width review', columnWidthReview);
     it('pins and records the DISPENSER and DISPENSE amount positivity gate retirement review', dispenserPositivityReview);
     it('the live dispenser pin is the end of the review-log pin chain', dispenserPinChainEnd);
