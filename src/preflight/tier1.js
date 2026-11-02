@@ -253,7 +253,9 @@ function paramsToWire(parsed) {
 
 // Abort/timeout race: the underlying HTTP call may continue, but a
 // timed-out or aborted check must never land in the report later.
-function withAbort(promise, signal, timeoutMs) {
+// `timeoutMessage` names the timer that fired; the default is Tier 1's, and
+// Tier 2 reads pass their own so a stalled lookup is not blamed on the dry run.
+function withAbort(promise, signal, timeoutMs, timeoutMessage) {
     return new Promise((resolve, reject) => {
         let settled = false;
         let onAbort = null;
@@ -264,7 +266,7 @@ function withAbort(promise, signal, timeoutMs) {
             if (signal && onAbort) signal.removeEventListener('abort', onAbort);
         };
         const timer = timeoutMs ? setTimeout(() => {
-            if (!settled) { settled = true; cleanup(); reject(new Error('tier1 timeout after ' + timeoutMs + 'ms')); }
+            if (!settled) { settled = true; cleanup(); reject(new Error(timeoutMessage || ('tier1 timeout after ' + timeoutMs + 'ms'))); }
         }, timeoutMs) : null;
         onAbort = () => {
             if (!settled) { settled = true; cleanup(); reject(new Error('aborted')); }

@@ -201,7 +201,11 @@ async function runPreflight(sdk, actionData, opts = {}) {
 // precedence folds into the findings, and the verdict is taken from the result.
 async function produceReport({ sdk, parsed, opts, mode, timeoutMs, started }) {
     // Tier 1 (skipped entirely in 'local' mode) and Tier 2 run
-    // concurrently against the shared timeout budget.
+    // concurrently against the shared timeout budget. timeoutMs is the budget
+    // for the WHOLE run, so both tiers work to one deadline: Tier 2's reads are
+    // sequential, and a per-read timer let a stalled explorer hold the run for
+    // a multiple of the budget.
+    const deadlineAt = started + timeoutMs;
     const tier1Promise = mode === 'local'
         ? Promise.resolve({ kind: 'no-verdict', reason: 'local-only mode' })
         // `feeMode` rides through to the network dry run: the verdict differs
@@ -209,7 +213,7 @@ async function produceReport({ sdk, parsed, opts, mode, timeoutMs, started }) {
         // as a coin output, and a caller that has already chosen must not be
         // judged against the chain default (see runTier1).
         : runTier1({ sdk, parsed, source: opts.source, feeMode: opts.feeMode,
-            signal: opts.signal, timeoutMs })
+            signal: opts.signal, timeoutMs: Math.max(1, deadlineAt - nowMs()) })
             .catch(e => ({ kind: 'unavailable', reason: e && e.message ? e.message : String(e) }));
 
     // A no-verdict response may still identify the block it evaluated. Tier 2 may use that
@@ -221,7 +225,7 @@ async function produceReport({ sdk, parsed, opts, mode, timeoutMs, started }) {
     });
     const ctx = new CheckContext({
         sdk, parsed, source: opts.source, mode,
-        signal: opts.signal, timeoutMs, localDeltas: opts.localDeltas,
+        signal: opts.signal, timeoutMs, deadlineAt, localDeltas: opts.localDeltas,
         feeMode: opts.feeMode,
     });
     ctx.targetHeight = targetHeight;
