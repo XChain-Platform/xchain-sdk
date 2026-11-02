@@ -39,6 +39,7 @@ const {
     resolveRateLimit,
     resolveRateWindowMs,
     batchCapMiddleware,
+    batchShapeMiddleware,
     rateLimitMiddleware,
     authGateMiddleware
 } = require('../utils/api_guards.js');
@@ -222,6 +223,8 @@ function createApp(sdk) {
     // Enforce the API key for all methods except ping and fail closed when unset: every non-ping method is rejected, never left open.
     // Keep batch-smuggling and non-string-method rules in the shared guard so tests exercise this exact middleware.
     app.use(authGateMiddleware({ apiKey: SDK_API_KEY }));
+    // Reject non-object batch elements ([null], [1]) before the router: it would orphan a rejected promise on them and crash the process.
+    app.use(batchShapeMiddleware());
     const controller = createController(sdk);
     const openrpcSpec = loadOpenRpcSpec();
     app.get('/openrpc.json', (req, res) => {
