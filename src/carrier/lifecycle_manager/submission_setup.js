@@ -132,10 +132,14 @@ function reconcileTransaction(manager, encoded, createResult, encoderOpts, opts)
         callerIdentities: encoderOpts.pubkey,
         // Requested fees may be rounded to relay minimums, so only an explicit
         // maximum acts as a ceiling. The always-on burn guards still apply.
-        maxFeeSats:    opts.maxFeeSats,
+        // estimateFees and the message path read the ceiling from the encoder
+        // options, so honor it here too instead of failing open; the submit
+        // option wins when both are set.
+        maxFeeSats:    opts.maxFeeSats != null ? opts.maxFeeSats : encoderOpts.maxFeeSats,
         // Phase-funding outputs count as output value rather than fees and need
         // their own optional ceiling.
-        maxPhaseFundingSats: opts.maxPhaseFundingSats,
+        maxPhaseFundingSats: opts.maxPhaseFundingSats != null
+            ? opts.maxPhaseFundingSats : encoderOpts.maxPhaseFundingSats,
     };
     const envelopeFunding = envelopeFundingFor(encoded, opts, network);
     const phase1 = reconcileEncoded(encoded.psbt, Object.assign({}, reconcileIntent, {
