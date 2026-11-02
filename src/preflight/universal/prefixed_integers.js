@@ -27,7 +27,8 @@ const numeric = require('../numeric.js');
 const OUTCOME_MAX = '4294967295';
 const FIELD_MAX = Object.freeze({
     EXPIRATION: EXPIRATION_MAX, DEADLINE: EXPIRATION_MAX, REFUND_WINDOW: EXPIRATION_MAX,
-    CALLBACK_BLOCK: EXPIRATION_MAX, OUTCOME: OUTCOME_MAX,
+    CALLBACK_BLOCK: EXPIRATION_MAX, MINT_START_BLOCK: EXPIRATION_MAX, MINT_STOP_BLOCK: EXPIRATION_MAX,
+    OUTCOME: OUTCOME_MAX,
 });
 
 /*
@@ -43,15 +44,28 @@ const FIELD_MAX = Object.freeze({
  *   ISSUE 0 and 4                           CALLBACK_BLOCK, only when it reads above
  *                                           zero, the case the tokens row binds as
  *                                           carried (issue/edit_rules.js)
+ *   ISSUE 0 and 2                           MINT_START_BLOCK, MINT_STOP_BLOCK, at any value,
+ *                                           since the tokens row binds them as carried
+ *                                           (issue/edit_rules.js)
  * A literal past the field's column range is normalized to NULL, which stores, so it
  * keeps its other verdicts; decimal spellings are never refused here.
+ *
+ * The mint window is also judged as an amount: where the amount-representability rule is
+ * armed (../checks/amount_format.js) the indexer refuses these spellings earlier with this
+ * same verdict, and its last-place rule decides only where that rule is not armed. The
+ * verdict is the same on every plane, so this check reads the wire alone and does not
+ * consult the activation table.
  */
 const PREFIXED_INTEGER_FIELDS = Object.freeze({
     DISPENSER: { 0: ['EXPIRATION'], 2: ['EXPIRATION'] },
     ORDER:     { 0: ['EXPIRATION'], 2: ['EXPIRATION'] },
     SWAP:      { 0: ['EXPIRATION'], 2: ['EXPIRATION'] },
     BET:       { 0: ['DEADLINE', 'REFUND_WINDOW'], 2: ['OUTCOME'], 3: ['OUTCOME'] },
-    ISSUE:     { 0: ['CALLBACK_BLOCK'], 4: ['CALLBACK_BLOCK'] },
+    ISSUE:     {
+        0: ['CALLBACK_BLOCK', 'MINT_START_BLOCK', 'MINT_STOP_BLOCK'],
+        2: ['MINT_START_BLOCK', 'MINT_STOP_BLOCK'],
+        4: ['CALLBACK_BLOCK'],
+    },
 });
 // A CALLBACK_BLOCK reading zero or below binds 0 in the tokens row, so the ISSUE stays valid.
 const BOUND_ONLY_ABOVE_ZERO = new Set(['CALLBACK_BLOCK']);

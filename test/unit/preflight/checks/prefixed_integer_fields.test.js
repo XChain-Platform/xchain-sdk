@@ -29,10 +29,10 @@ function wireFor(action, version, over) {
     return [action, version].concat(values).join('|');
 }
 
-async function reportFor(wire) {
-    const sdk = mockSdk({ explorerSpec: { getFeeQuote: () => ({ feeExempt: true }), getToken: notFound,
+async function reportFor(wire, network = 'bitcoin-regtest', coin = 'RBTC') {
+    const sdk = mockSdk({ network, explorerSpec: { getFeeQuote: () => ({ feeExempt: true }), getToken: notFound,
         getAction: notFound } });
-    sdk.explorer.coin = 'RBTC';
+    sdk.explorer.coin = coin;
     return sdk.preflight(wire, { source: 'me', preflight: 'report' });
 }
 const prefixedFindings = (r, field) => r.findings.filter((f) => f.code === 'VALIDATOR_SEMANTICS'
@@ -58,9 +58,10 @@ function registerPredicate() {
     it('pins the fields and column bounds the indexer refuses prefixed literals in', function () {
         expect(CASES.map((c) => c.join(' '))).to.deep.equal(['DISPENSER 0 EXPIRATION', 'DISPENSER 2 EXPIRATION',
             'ORDER 0 EXPIRATION', 'ORDER 2 EXPIRATION', 'SWAP 0 EXPIRATION', 'SWAP 2 EXPIRATION', 'BET 0 DEADLINE',
-            'BET 0 REFUND_WINDOW', 'BET 2 OUTCOME', 'BET 3 OUTCOME', 'ISSUE 0 CALLBACK_BLOCK', 'ISSUE 4 CALLBACK_BLOCK']);
+            'BET 0 REFUND_WINDOW', 'BET 2 OUTCOME', 'BET 3 OUTCOME', 'ISSUE 0 CALLBACK_BLOCK', 'ISSUE 0 MINT_START_BLOCK',
+            'ISSUE 0 MINT_STOP_BLOCK', 'ISSUE 2 MINT_START_BLOCK', 'ISSUE 2 MINT_STOP_BLOCK', 'ISSUE 4 CALLBACK_BLOCK']);
         expect(FIELD_MAX).to.deep.equal({ EXPIRATION: U64_MAX, DEADLINE: U64_MAX, REFUND_WINDOW: U64_MAX,
-            CALLBACK_BLOCK: U64_MAX, OUTCOME: '4294967295' });
+            CALLBACK_BLOCK: U64_MAX, MINT_START_BLOCK: U64_MAX, MINT_STOP_BLOCK: U64_MAX, OUTCOME: '4294967295' });
     });
 
     it('keepsPrefixedSpelling answers true only for an unsigned radix literal inside the column', function () {
@@ -103,7 +104,7 @@ function registerBoundaries() {
     });
 
     it('refuses nothing in a field or format the indexer does not judge this way', async function () {
-        await expectClear(wireFor('ISSUE', '2', { TICK: 'JDOGX', MINT_START_BLOCK: '0x10' }), 'MINT_START_BLOCK');
+        await expectClear(wireFor('ISSUE', '2', { TICK: 'JDOGX', MAX_MINT: '0x10' }), 'MAX_MINT');
         await expectClear(wireFor('BET', '0', { MIN_AMOUNT: '0x10' }), 'MIN_AMOUNT');
     });
 
@@ -113,8 +114,47 @@ function registerBoundaries() {
     });
 }
 
+// The indexer refuses a prefixed mint window last on a valid ISSUE where the
+// amount-representability rule is unarmed (mainnet), and with the same verdict through
+// that rule where it is armed (regtest), so pre-flight refuses it on both planes.
+const fieldFindings = (r, code, field) => r.findings.filter((f) => f.code === code && f.severity === 'error'
+    && f.data && f.data.field === field);
+
+function registerMintWindow() {
+    it('refuses a mint window literal reading zero, which the tokens row binds as carried', async function () {
+        for (const field of ['MINT_START_BLOCK', 'MINT_STOP_BLOCK']) {
+            await expectRefused(wireFor('ISSUE', '2', { TICK: 'JDOGX', [field]: '0x0' }), 'ISSUE', field, '0x0');
+            await expectClear(wireFor('ISSUE', '2', { TICK: 'JDOGX', [field]: '0x10000000000000000' }), field);
+        }
+    });
+
+    it('refuses it on mainnet, where the amount-representability rule does not', async function () {
+        for (const field of ['MINT_START_BLOCK', 'MINT_STOP_BLOCK']) {
+            const r = await reportFor(wireFor('ISSUE', '2', { TICK: 'JDOGX', [field]: '0x7fffffff' }),
+                'bitcoin-mainnet', 'BTC');
+            expect(prefixedFindings(r, field), field).to.have.length(1);
+            expect(fieldFindings(r, 'AMOUNT_FORMAT_INVALID', field), field).to.deep.equal([]);
+            expect(prefixedFindings(await reportFor(wireFor('ISSUE', '2', { TICK: 'JDOGX', [field]: '1000' }),
+                'bitcoin-mainnet', 'BTC'), field)).to.deep.equal([]);
+        }
+        const batch = wireFor('ISSUE', '2', { TICK: 'JDOGX', MINT_STOP_BLOCK: '0o7777' }).replace(/\|+$/, '');
+        expect(prefixedFindings(await reportFor(`BATCH|0|${batch}`, 'bitcoin-mainnet', 'BTC'), 'MINT_STOP_BLOCK'))
+            .to.have.length(1);
+    });
+
+    it('agrees with the amount-format verdict where the representability rule is armed', async function () {
+        const r = await reportFor(wireFor('ISSUE', '2', { TICK: 'JDOGX', MAX_MINT: '',
+            MINT_START_BLOCK: '0b1111111111' }));
+        expect(prefixedFindings(r, 'MINT_START_BLOCK')).to.have.length(1);
+        const amount = fieldFindings(r, 'AMOUNT_FORMAT_INVALID', 'MINT_START_BLOCK');
+        expect(amount).to.have.length(1);
+        expect(amount[0].message).to.include('invalid: MINT_START_BLOCK (format)');
+    });
+}
+
 describe('pre-flight universal: hexadecimal, binary and octal integer wire fields', function () {
     registerPredicate();
     registerMirroredRefusals();
     registerBoundaries();
+    registerMintWindow();
 });
