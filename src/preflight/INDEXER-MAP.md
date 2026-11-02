@@ -82,7 +82,15 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `e1befbb1`
+**Pins taken at indexer commit:** `8185158fa`
+
+(Re-anchored 2026-11-02 against the committed indexer lane tree `8185158fa`, the head of the
+column-width refusals reviewed in the first entry of the review log below, which had not landed
+on origin develop when this was written. Only the `issue`, `price` and `bet` directory pins move.
+The other thirteen rows are unchanged and match this tree, and `e1befbb1` is an ancestor of this
+anchor. The commits land on origin develop as these exact commits, by fast-forward or as parents
+of the landing merge, so the anchor stays reachable; a squashed or rebased landing would orphan
+it, and the section on an unreachable anchor below is then the way back.)
 
 (Re-anchored 2026-11-01 against indexer `e1befbb1`, the committed landing tree for the
 SEND per-leg probe verdict review below. Only the `send` directory pin moves. The other
@@ -486,7 +494,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff e1befbb1..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 8185158fa..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -562,7 +570,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (SEND) | `src/actions/send/` | `1591aa81bb189edbbdb088d5a75de8fab817e1669209ff4eff67d8150cb703ac` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40` |
 | `checks/mint.js` | `src/actions/mint/` | `998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48` |
-| `checks/issue.js` | `src/actions/issue/` | `c7d81c143f4f1ad242c9266487ff726102b7e6444a8cea4b374214ebf4d7deed` |
+| `checks/issue.js` | `src/actions/issue/` | `37ac32600e6a7e9c7756165aba1cc847945a56d9ace456ca2e3f2e28a284e33f` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `3c0163d61230bbc249606f41d92786eb2016b43664dba71b55e78e8ef2ad4907` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `294bc04fdb4e48a0d59beccfc2800826acdb4da77643b6709d1e009dfc4b04e6` |
@@ -572,13 +580,14 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/batch.js` | `src/actions/batch/` | `9a5147d0a4e121f10d9dd23a6d2f9602f8359ec5eca8f555111aea973a6321ad` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f` |
 | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35` |
-| `universal.js` (PRICE v1 TICK) | `src/actions/price/` | `9028c8c24931681e005828b46a76faa7e6688c1875dfd11e554fcc79b50d2781` |
+| `universal.js` (PRICE v1 TICK, VALUE and FEE width) | `src/actions/price/` | `0b7385b14af8430c951e586eb2ec7955eee24d6189a15a25830cb133548aec62` |
 | `checks/misc.js` (STAKE) | `src/actions/stake/` | `b38ea784128e91c87c0df0200696d2b0bac25105477c9111d929a420f30e6afc` |
-| `universal.js` (BET halt field) | `src/actions/bet/` | `59ff86ee4bed61d0ca958c588558b106ced395eb2a9605f6ec2679fe58adac98` |
+| `universal.js` (BET halt field, feed FEE width) | `src/actions/bet/` | `1afee7726b5ce7b4eaf7215965be02a78847cd0483902783aec3c0fe42a1b06e` |
 
 The mapped custody disclosures are checks/misc.js (DEPOSIT) and
 checks/misc.js (WITHDRAW). The STAKE row covers the capability-stake balance check in
-checks/misc.js, and the PRICE and BET rows cover two rules in universal.js.
+checks/misc.js, and the PRICE and BET rows cover the universal.js rules in
+universal/tick_rules.js, universal/halt_fields.js and universal/column_widths.js.
 
 Other actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) remain intentionally unmapped: there is nothing to drift from.
@@ -596,6 +605,47 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-11-02 - ISSUE, PRICE v1 and BET refuse valid wire text wider than its column
+
+The `issue` pin moves from `c7d81c14` to `37ac3260`, the `price` pin from `9028c8c2` to
+`0b7385b1` and the `bet` pin from `59ff86ee` to `1afee772`, hashed from the committed indexer
+lane tree at the anchor above by `node bin/preflight_handler_dirs.js <indexer> src/actions/<name>/`.
+The tree is two indexer commits ahead of origin develop, "Mark integer fields their columns
+cannot store as invalid from genesis" and "Fit wire text to its column and refuse valid actions
+that overflow it", plus a suite-title pin commit. No gate: each refusal replaces a block that
+failed its row INSERT under the strict SQL mode and retried forever, so no indexed history holds
+one and no recorded verdict moves. The mapped diff is four files.
+
+- **ISSUE, `issue/token_state.js`:** `validateFieldFormats` ends with `storedWidthError`, which runs `normalizeDataValues` on a copy of the wire snapshot and refuses `invalid: <FIELD> (length)` when the value the writer would bind is wider than its `issues` column: DECIMALS 2, CALLBACK_BLOCK, MINT_START_BLOCK and MINT_STOP_BLOCK 15, BRIDGE_CHAINS 250, LOCK_BRIDGE 1 (`STORED_TEXT_WIDTHS`). Normalization stores NULL for a non-numeric or out-of-range DECIMALS and for a non-numeric block field or one past the u64 ceiling, so those never reach the width rule; LOCK_BRIDGE is in no normalized LOCK list, so `01` passes the 0/1 rule and stores as two characters.
+- **ISSUE, `issue/bridge_opt_in.js`:** a format 7 MIN_DEPTH longer than 15 characters (`issues.min_depth`, VARCHAR(15)) is `invalid: MIN_DEPTH (format)`, the same verdict as the digits rule.
+- **PRICE v1, `price/v1.js`:** after every other rule, a VALUE or a present FEE wider than 250 code points is `invalid: VALUE (length)` or `invalid: FEE (length)`. Below the canonical gate both patterns admit any number of leading zeros.
+- **BET format 0, `bet/create_feed.js`:** after the format and range rules, a FEE wider than 11 code points (`bet_feeds.fee`, VARCHAR(11)) is `invalid: FEE (length)`.
+
+The same commits refuse an overlong LIST TYPE or EDIT, MESSAGE ENCRYPTION_METHOD and SLASH
+EQUIV_KEY, bound VOTE create integer fields to their columns through the new
+`storesInIntegerColumn` helper, and clip refused rows' text in `db/`; `list.js`, `message.js`,
+`slash/`, `vote/`, `db/` and `utility/` sit outside every mapped row, and no shared helper a
+mapped row reads changes.
+
+**Client follow-up.** Every refusal moves into pre-flight as a non-overridable
+VALIDATOR_SEMANTICS error naming the indexer verdict, with `haltClass` set, because an indexer
+without these commits can halt on the action. ISSUE: `checks/issue/stored_widths.js`
+`checkIssueStoredWidths` mirrors `storedWidthError` field for field, including the
+normalization that stores NULL (a scratch parity run of the indexer's own `normalizeDataValues`
+and `exceedsCodePoints` against it agreed on 222 cases, 66 refused), and `checkMinDepthWidth`
+adds the MIN_DEPTH bound beside the existing digits rule in `checkBridgeOptIn`. Both read the
+wire alone, so they run before the token lookup gate. PRICE v1 and BET: `universal/column_widths.js`
+`checkColumnTextWidths` measures the wire VALUE and FEE, or the format 0 FEE, in code points, and
+`checkHaltFields` calls it, so it also runs per BATCH sub-command. Each pre-flight refusal stands
+on its own rather than behind the indexer's earlier rules: where an earlier rule also fails, the
+indexer names that verdict instead and the action is refused either way. The compose-time
+validator (`src/protocol/validator`) is unchanged; its PRICE v1 length caps bind only behind the
+canonical gate. Tests: `test/unit/preflight/issue/issue_stored_widths.test.js` and
+`test/unit/preflight/checks/column_text_widths.test.js`, each at the limit and one past it.
+
+**Direction: TIGHTENING, ungated.** The refused values halted the chain before. The anchor moves
+to the committed lane tree, and the other thirteen rows are unchanged.
 
 ### 2026-11-01 - SEND keeps each leg's verdict on fee-probe runs
 
