@@ -21,6 +21,7 @@
 const { FINDING_CODES, EXPIRATION_MAX } = require('../constants.js');
 const numeric = require('../numeric.js');
 const Utility = require('../../utils/utility.js');
+const { checkColumnTextWidths } = require('./column_widths.js');
 
 /*
  * Wire fields whose empty or unstorable value is refused by current indexer handlers.
@@ -46,6 +47,8 @@ const util = new Utility();
 
 // Also run per BATCH sub-command (checks/batch.js), where `parsed` is the command.
 function checkHaltFields(ctx, parsed) {
+    // Valid wire text wider than its column halted the indexer the same way (column_widths.js).
+    checkColumnTextWidths(ctx, parsed);
     const version = String(parsed.version);
     const indexField = (HALT_INDEX_FIELDS[parsed.action] || {})[version];
     const requiredField = (HALT_REQUIRED_FIELDS[parsed.action] || {})[version];

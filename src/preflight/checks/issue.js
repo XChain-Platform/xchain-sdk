@@ -56,6 +56,9 @@
  * bindings, allow/block lists, the bridged bit) need row state the
  * explorer does not serve, so they are declared.
  *
+ * A value wider than the issues column storing it (DECIMALS, the three block fields,
+ * BRIDGE_CHAINS, LOCK_BRIDGE, MIN_DEPTH) is refused from genesis; see issue/stored_widths.js.
+ *
  ********************************************************************/
 
 'use strict';
@@ -72,6 +75,7 @@ const Utility = require('../../utils/utility.js');
 const { parseCoinCode } = require('../../utils/endpoints.js');
 const { tickCoinPrefixVerdict } = require('./issue/tick_coin_prefix.js');
 const { checkMaxSupplyFormat, checkSupplyRules } = require('./issue/supply_rules.js');
+const { checkIssueStoredWidths, checkMinDepthWidth } = require('./issue/stored_widths.js');
 
 const util = new Utility();
 const LIST_TICK_COIN_ACTIVATION_TIMEOUT_MS = 2000;
@@ -312,6 +316,7 @@ function checkBridgeOptIn(ctx, tick, token) {
             'MIN_DEPTH must be a whole number of confirmations (digits only).',
             { field: 'MIN_DEPTH', value: minDepth });
     }
+    checkMinDepthWidth(ctx);
 
     // LOCK_BRIDGE takes the lock discipline every other LOCK field has: 0 or 1.
     const lockBridge = ctx.field('LOCK_BRIDGE');
@@ -343,6 +348,8 @@ async function checkIssue(ctx) {
     await checkTickCoinPrefix(ctx, tick, token);
     // The format-7 field rules need no row, so they run before the lookup gate below.
     checkBridgeOptIn(ctx, tick, token);
+    // Stored-width refusals (issue/stored_widths.js) read the wire alone, so they run here too.
+    checkIssueStoredWidths(ctx);
     ctx.markRun(FINDING_CODES.NOT_OWNER);
     if (token === undefined) {
         ctx.addUnverified(FINDING_CODES.NOT_OWNER, 'token lookup unavailable');
