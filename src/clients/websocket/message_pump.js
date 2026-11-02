@@ -159,11 +159,17 @@ module.exports = {
         }
 
         setTimeout(async () => {
+            // disconnect() while the delay ran: connect() would clear the flag and revive the client.
+            if (this.intentionalClose) return;
             try {
                 await this.connect();
                 this.resubscribe();
             } catch (e) {
-                // connect() failed; will trigger another reconnect via close handler
+                // A refused or closed-before-WELCOME attempt rejects connect() once and the
+                // socket's close handler does not reconnect before WELCOME, so this is the
+                // only place that schedules the next attempt (exactly one per failure). It
+                // ends in 'connection_lost' once maxReconnectAttempts is reached.
+                this.reconnect();
             }
         }, delay);
     },
