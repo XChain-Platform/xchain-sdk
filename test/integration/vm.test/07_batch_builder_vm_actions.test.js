@@ -26,7 +26,7 @@ const { expect } = require('chai');
 const { XChainSDK } = require('../../../index.js');
 const { SDKValidationError } = require('../../../src/utils/errors.js');
 
-const ADDR = 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh';
+const ADDR = 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC';
 
 // BatchBuilder – VM action integration
 

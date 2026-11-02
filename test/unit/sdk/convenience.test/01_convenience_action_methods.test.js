@@ -14,7 +14,7 @@
 
 const { expect } = require('chai');
 
-const ADDR = 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh';
+const ADDR = 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC';
 
 const { XChainSDK } = require('../../../../index.js');
 const sdk = new XChainSDK({ network: 'bitcoin-regtest', timeout: 25 });

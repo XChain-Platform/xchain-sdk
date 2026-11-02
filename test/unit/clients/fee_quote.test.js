@@ -191,7 +191,7 @@ describe('Native-coin fee quote (client)', function () {
         it('estimateFees refuses (throws) when the quote is unsupported', async function () {
             let sdk = makeSdk({ supported: false, valid: false, error: 'not supported' });
             let threw = false;
-            try { await sdk.estimateFees({ action: 'SEND', params: { tick: 'T', amount: '1', destination: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh' } }, { payFeeInNativeCoin: true, pubkey: 'pk', change: 'src1' }); }
+            try { await sdk.estimateFees({ action: 'SEND', params: { tick: 'T', amount: '1', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } }, { payFeeInNativeCoin: true, pubkey: 'pk', change: 'src1' }); }
             catch (e) { threw = true; expect(e.code).to.equal('NATIVE_FEE_UNSUPPORTED'); }
             expect(threw, 'expected estimateFees to throw').to.equal(true);
         });
@@ -266,7 +266,7 @@ describe('Native-coin fee quote (client)', function () {
             let sdk = makeSdk();
             let calls = 0;
             sdk.explorer.getFeeQuote = async () => { calls++; return { supported: true, valid: false, error: 'insufficient funds' }; };
-            let q = await sdk.quoteNativeFee({ action: 'SEND', params: { tick: 'T', amount: '1', destination: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh' } }, { source: 'src1', busyRetryDelayMs: 1 });
+            let q = await sdk.quoteNativeFee({ action: 'SEND', params: { tick: 'T', amount: '1', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } }, { source: 'src1', busyRetryDelayMs: 1 });
             expect(calls).to.equal(1);
             expect(q.valid).to.equal(false);
         });

@@ -57,7 +57,7 @@ describe('market creates fill GIVE_COIN and GET_COIN', function () {
     });
 
     it('keeps an explicit cross-chain GET_COIN', function () {
-        let r = build(doge, 'ORDER', { give_tick: '^2', give_amount: '1', get_coin: 'BTC', get_tick: 'FOO', get_amount: '1', get_address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh' });
+        let r = build(doge, 'ORDER', { give_tick: '^2', give_amount: '1', get_coin: 'BTC', get_tick: 'FOO', get_amount: '1', get_address: 'tb1qqyqszqgpqyqszqgpqyqszqgpqyqszqgpw0yxjz' });
         expect(r.fields.GIVE_COIN).to.equal('DOGE');
         expect(r.fields.GET_COIN).to.equal('BTC');
         expect(r.fields.GET_TICK).to.equal('FOO');
@@ -114,7 +114,7 @@ describe('market creates with no network to default from', function () {
     });
 
     it('reads a cross-chain TICK naming the GET_COIN as that chain\'s native coin', function () {
-        let r = build(actionsOn('dogecoin-testnet'), 'ORDER', { give_tick: '^2', give_amount: '1', get_coin: 'BTC', get_tick: 'BTC', get_amount: '1', get_address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh' });
+        let r = build(actionsOn('dogecoin-testnet'), 'ORDER', { give_tick: '^2', give_amount: '1', get_coin: 'BTC', get_tick: 'BTC', get_amount: '1', get_address: 'tb1qqyqszqgpqyqszqgpqyqszqgpqyqszqgpw0yxjz' });
         expect(r.fields.GIVE_COIN).to.equal('DOGE');
         expect(r.fields.GET_COIN).to.equal('BTC');
         expect(r.fields).to.not.have.property('GET_TICK');

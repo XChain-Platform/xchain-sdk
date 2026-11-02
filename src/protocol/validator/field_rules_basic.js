@@ -244,9 +244,16 @@ function validateAddressFields(validator, action, field, value, allFields, error
     // address-ref field. It was additionally listed as an AMOUNT field below,
     // which rejected every address client-side and made owner issue-and-transfer
     // uncomposable through the SDK.
+    //
+    // The check is isValidListAddress, the same network-aware one LIST address
+    // items use: when the validator knows its network it runs the full
+    // base58check / bech32 checksum and version-byte rules for that network,
+    // so a case-flipped or wrong-network address is refused here instead of
+    // being built, signed and refused on chain after the fee is paid. With no
+    // known network it falls back to the one-argument length heuristic.
     if (field === 'DESTINATION' || field === 'GET_ADDRESS' || field === 'TRANSFER' ||
         field === 'TRANSFER_SUPPLY') {
-        if (String(value).charAt(0) !== '^' && !validator.util.isCryptoAddress(value))
+        if (String(value).charAt(0) !== '^' && !validator.isValidListAddress(value))
             errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must be a valid crypto address', { field, value }));
     }
 }

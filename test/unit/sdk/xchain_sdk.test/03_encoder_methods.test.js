@@ -124,7 +124,7 @@ describe('XChainSDK', function () {
             const sdk = makeSDK();
             mockEncoder(sdk, { psbt: estimatePsbtHex(), encoding: 'OP_RETURN', fee: 1000 });
             const result = await sdk.estimateFees(
-                { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
+                { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } },
                 { pubkey: 'mypub' }
             );
             expect(sdk.encoder.estimateFee.calledOnce).to.be.true;
@@ -162,7 +162,7 @@ describe('XChainSDK', function () {
             let err = null;
             try {
                 await sdk.estimateFees(
-                    { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
+                    { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } },
                     { pubkey: 'mypub' }
                 );
             } catch (e) { err = e; }
@@ -208,7 +208,7 @@ describe('XChainSDK', function () {
             mockEncoder(sdk, { psbt: commit.toHex(), encoding: 'TAPROOT', revealPsbt: reveal.toHex(),
                 envelope: { tapleafHash: 'cd'.repeat(32) }, fee: 1000 });
             const result = await sdk.estimateFees(
-                { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
+                { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } },
                 { pubkey: 'mypub' }
             );
             // The commit is checked but withheld: signed without its reveal and its
@@ -255,7 +255,7 @@ describe('XChainSDK', function () {
             let err = null;
             try {
                 await sdk.estimateFees(
-                    { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
+                    { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } },
                     { pubkey: 'mypub' }
                 );
             } catch (e) { err = e; }
@@ -275,7 +275,7 @@ describe('XChainSDK', function () {
             mockEncoder(sdk, { psbt: estimatePsbtHex(), encoding: 'OP_RETURN', fee: 1000 });
             mockExplorer(sdk, { supported: true, valid: true, requiredFeeSats: 5000, requiredFeeSatsExact: "5000", feeDestination: 'feeaddr', actionString: 'SEND|...' });
             const result = await sdk.estimateFees(
-                { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
+                { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } },
                 { pubkey: 'mypub', payFeeInNativeCoin: true, source: 'addr1' }
             );
             expect(result.nativeFeeQuote).to.be.ok;
@@ -287,7 +287,7 @@ describe('XChainSDK', function () {
             mockExplorer(sdk, { supported: false, valid: false, error: 'unsupported' });
             try {
                 await sdk.estimateFees(
-                    { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
+                    { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } },
                     { pubkey: 'mypub', payFeeInNativeCoin: true }
                 );
                 expect.fail('should throw');
@@ -302,7 +302,7 @@ describe('XChainSDK', function () {
             mockExplorer(sdk, { supported: true, valid: false, error: 'stale price' });
             try {
                 await sdk.estimateFees(
-                    { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
+                    { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } },
                     { pubkey: 'mypub', payFeeInNativeCoin: true }
                 );
                 expect.fail('should throw');
@@ -324,7 +324,7 @@ describe('XChainSDK', function () {
             const sdk = makeSDK();
             mockExplorer(sdk, { supported: true, valid: true, requiredFeeSats: 1000, requiredFeeSatsExact: "1000" });
             const result = await sdk.quoteNativeFee(
-                { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
+                { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } },
                 { source: 'addr1' }
             );
             expect(sdk.explorer.getFeeQuote.calledOnce).to.be.true;
