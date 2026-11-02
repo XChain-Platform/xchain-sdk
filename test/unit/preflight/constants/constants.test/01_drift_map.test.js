@@ -203,7 +203,7 @@ function registerSupplyBoundReviewTest() {
         expect(mint, 'mint directory row').to.exist;
         expect(issue, 'issue directory row').to.exist;
         expect(mint.hash).to.equal('998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48');
-        expect(issue.hash).to.equal('37ac32600e6a7e9c7756165aba1cc847945a56d9ace456ca2e3f2e28a284e33f');
+        expect(issue.hash).to.equal('48e96f754714f079aea9c608ecce3ff1ca706f9f5c168224468f9e0bd6fad670');
         const heading = '### 2026-10-14 - MINT and ISSUE total supply bound behind an activation';
         expect(text).to.include(heading);
         const start = text.indexOf(heading);
@@ -255,16 +255,16 @@ function registerTextAmountRefusalReviewTest() {
     });
 }
 
-// The pin-chain case in 06 guards the dispenser pin; the 2026-10-17 supply prefetch review
-// pins order and swap now, and the 2026-10-15 NOT NULL entry stays its own record.
+// The pin-chain case in 06 guards the dispenser pin; the 2026-11-02 prefixed integer review
+// pins order and swap now, and the 2026-10-17 and 2026-10-15 entries stay their own records.
 function registerSupplyPrefetchReviewTest() {
     it('pins and records the DISPENSER, ORDER and SWAP supply prefetch review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const rows = parseMap(REAL_MAP);
         expect(rows.find((r) => r.handler === 'src/actions/dispenser/'), 'dispenser directory row').to.exist;
         const expected = {
-            'src/actions/order/': '294bc04fdb4e48a0d59beccfc2800826acdb4da77643b6709d1e009dfc4b04e6',
-            'src/actions/swap/': '1f77aa820a0d5ac2afffebc38ad456389b72e58eb9e67001529a14e60899a0d8',
+            'src/actions/order/': '86b0a7c3d7badbfb6001527fe3597628233cf8a5b72018b97e8725309d450d5e',
+            'src/actions/swap/': '2ee469e1572ed56e78074597577f246c188277016873ea6b9b8bf36eb1ba6bb8',
         };
         for (const [handler, hash] of Object.entries(expected)) {
             const row = rows.find((r) => r.handler === handler);
@@ -315,8 +315,8 @@ function registerNotNullRowKeyReviewTest() {
         const rows = parseMap(REAL_MAP);
         expect(rows.find((r) => r.handler === 'src/actions/dispenser/'), 'dispenser directory row').to.exist;
         const expected = {
-            'src/actions/order/': '294bc04fdb4e48a0d59beccfc2800826acdb4da77643b6709d1e009dfc4b04e6',
-            'src/actions/swap/': '1f77aa820a0d5ac2afffebc38ad456389b72e58eb9e67001529a14e60899a0d8',
+            'src/actions/order/': '86b0a7c3d7badbfb6001527fe3597628233cf8a5b72018b97e8725309d450d5e',
+            'src/actions/swap/': '2ee469e1572ed56e78074597577f246c188277016873ea6b9b8bf36eb1ba6bb8',
             'src/actions/deposit.js': '3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f',
             'src/actions/withdraw.js': '99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35',
         };

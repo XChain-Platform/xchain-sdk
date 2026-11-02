@@ -82,7 +82,14 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `c3f900d2d`
+**Pins taken at indexer commit:** `985327003`
+
+(Re-anchored 2026-11-02 a second time, against indexer `985327003`, the head of the indexer
+v0.27.6 hotfix that carries the prefixed integer refusals reviewed in the first entry of the
+review log below. Only the `issue`, `dispenser`, `order`, `swap` and `bet` directory pins move.
+The other eleven rows are unchanged and match this tree, and `c3f900d2d` is an ancestor of this
+anchor. The hotfix merges into indexer master as these exact commits, so the anchor stays
+reachable from master.)
 
 (Re-anchored 2026-11-02 against indexer `c3f900d2d`, the head of the indexer v0.27.4 hotfix that
 carries the column-width refusals reviewed in the first entry of the review log below. Only the
@@ -486,7 +493,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff c3f900d2d..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 985327003..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -562,11 +569,11 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (SEND) | `src/actions/send/` | `bb0ad3880732d882731cbee51df98cc229cc3ebcf030f5e3be1584d1010ec4dc` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40` |
 | `checks/mint.js` | `src/actions/mint/` | `998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48` |
-| `checks/issue.js` | `src/actions/issue/` | `37ac32600e6a7e9c7756165aba1cc847945a56d9ace456ca2e3f2e28a284e33f` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `3c0163d61230bbc249606f41d92786eb2016b43664dba71b55e78e8ef2ad4907` |
+| `checks/issue.js` | `src/actions/issue/` | `48e96f754714f079aea9c608ecce3ff1ca706f9f5c168224468f9e0bd6fad670` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `8130c1a24aa0e3af97b773fdfdfb6ab6362b28cc5a5a9a55093db47e2736ffef` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
-| `checks/trading.js` (ORDER) | `src/actions/order/` | `294bc04fdb4e48a0d59beccfc2800826acdb4da77643b6709d1e009dfc4b04e6` |
-| `checks/trading.js` (SWAP) | `src/actions/swap/` | `1f77aa820a0d5ac2afffebc38ad456389b72e58eb9e67001529a14e60899a0d8` |
+| `checks/trading.js` (ORDER) | `src/actions/order/` | `86b0a7c3d7badbfb6001527fe3597628233cf8a5b72018b97e8725309d450d5e` |
+| `checks/trading.js` (SWAP) | `src/actions/swap/` | `2ee469e1572ed56e78074597577f246c188277016873ea6b9b8bf36eb1ba6bb8` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `9b3ade3b59922532bf3f7296cd2232e52a8055c86532e9ad00bba106206105e7` |
 | `checks/dividend.js` | `src/actions/dividend/` | `7d66516b2584dcce47eecac80f62f90cabf98844ecc862195c03c65a7ff31065` |
 | `checks/batch.js` | `src/actions/batch/` | `9a5147d0a4e121f10d9dd23a6d2f9602f8359ec5eca8f555111aea973a6321ad` |
@@ -574,12 +581,15 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35` |
 | `universal.js` (PRICE v1 TICK, VALUE and FEE width) | `src/actions/price/` | `0b7385b14af8430c951e586eb2ec7955eee24d6189a15a25830cb133548aec62` |
 | `checks/misc.js` (STAKE) | `src/actions/stake/` | `b38ea784128e91c87c0df0200696d2b0bac25105477c9111d929a420f30e6afc` |
-| `universal.js` (BET halt field, feed FEE width) | `src/actions/bet/` | `1afee7726b5ce7b4eaf7215965be02a78847cd0483902783aec3c0fe42a1b06e` |
+| `universal.js` (BET halt field, feed FEE width, prefixed integers) | `src/actions/bet/` | `d1d5a599a1f9031c54d4c5f163b78007eb983090f406e241a0a7480e730eb8ad` |
 
 The mapped custody disclosures are checks/misc.js (DEPOSIT) and
 checks/misc.js (WITHDRAW). The STAKE row covers the capability-stake balance check in
 checks/misc.js, and the PRICE and BET rows cover the universal.js rules in
-universal/tick_rules.js, universal/halt_fields.js and universal/column_widths.js.
+universal/tick_rules.js, universal/halt_fields.js and universal/column_widths.js. The
+hexadecimal, binary and octal integer refusals of the ISSUE, DISPENSER, ORDER, SWAP and BET
+rows live in universal/prefixed_integers.js, which halt_fields.js runs for every action and
+every BATCH sub-command.
 
 Other actions covered by `checks/misc.js` (unverified-only, no client validity
 logic) remain intentionally unmapped: there is nothing to drift from.
@@ -597,6 +607,51 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-11-02 - ISSUE, DISPENSER, ORDER, SWAP and BET refuse hexadecimal, binary and octal integer fields
+
+The `issue` pin moves from `37ac3260` to `48e96f75`, the `dispenser` pin moves from `3c0163d6`
+to `8130c1a2`, the `order` pin moves from `294bc04f` to `86b0a7c3`, the `swap` pin moves from
+`1f77aa82` to `2ee469e1` and the `bet` pin moves from `1afee772` to `d1d5a599`, each hashed from
+a `git archive` export of the committed indexer lane tree at the anchor above by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/<name>/`. That tree is origin develop
+`f87970cee` plus "Keep hexadecimal, binary and octal integer fields out of integer columns"
+(`d558034d2`) and "Store NULL for a refused literal naming a contract or a list" (`0d08f2d77`);
+the second touches only `db/`, so both commits hash every row alike. Between `8185158fa` and
+`f87970cee` no mapped row moves. No gate: `isNumeric` and `isInteger` accept `0x10`, `0b101` and
+`0o17`, normalization keeps them, and the row writers bound the wire text into an integer column,
+which a strict session refuses (errno 1265), so every such action halted its block whatever its
+verdict and no indexed history holds one. The mapped diff is seven files, each calling the new
+`util.keepsPrefixedSpelling(value, config['INTEGER_FIELDS'][field])` in `utility/value_checks.js`:
+true for an unsigned radix literal (any letter case, trimmed) that `exceedsUnsignedColumn` does
+not place past the column, false for every decimal spelling (`1e12`, `+100`, `00100`) and for a
+literal past the range, which normalization stores as NULL.
+
+- **DISPENSER, `dispenser/validate_format.js`; ORDER, `order/validate.js`; SWAP, `swap/validate.js`:** after the integer and range rules, a prefixed EXPIRATION is `invalid: EXPIRATION (format)`. No format test, so it binds the create (format 0) and the edit (format 2), the formats that carry the field.
+- **BET format 0, `bet/create_feed.js`:** a prefixed DEADLINE, after its integer rule and before the past rule, and a prefixed REFUND_WINDOW, after its integer rule and before the range rule, are `invalid: <FIELD> (format)`.
+- **BET formats 2 and 3, `bet/validate.js`:** after the OUTCOME range rule in `validatePlaceBet` and `validateResolve`, a prefixed OUTCOME (bound INT UNSIGNED, `4294967295`) is `invalid: OUTCOME (format)`.
+- **ISSUE, `issue/edit_rules.js` and `issue/index.js`:** `validateStoredCallbackBlock` runs after the fee verdict, as the last rule, and refuses `invalid: CALLBACK_BLOCK (format)` when no earlier rule failed, CALLBACK_BLOCK reads above zero (the case `db/tokens/token_writer.js` binds as carried) and it keeps its prefixed spelling. `ctx.data` carries the stored token value for a field the wire omits, so only a wire CALLBACK_BLOCK (formats 0 and 4) can be prefixed.
+
+The same commits refuse a prefixed LINK COIN1_ACTION_INDEX or COIN2_ACTION_INDEX and XCALL
+TARGET_CONTRACT_INDEX (`link.js`, `xcall/request.js`), and fit or null refused rows' integer
+columns in `db/`; those handlers sit outside every mapped row, and pre-flight has no LINK or XCALL
+check to align.
+
+**Client follow-up.** `numeric.keepsPrefixedSpelling` mirrors the indexer helper, and
+`indexer_value_checks_parity.test.js` runs both over one corpus (radix, case, sign, whitespace and
+both column bounds). `universal/prefixed_integers.js` `checkPrefixedIntegers` refuses each field
+above, per action and format, as a non-overridable VALIDATOR_SEMANTICS error naming the indexer
+verdict with `haltClass` set, because an indexer without these commits can halt on the action, and
+keeps the ISSUE rule's above-zero condition. `checkHaltFields` calls it, so it also runs per BATCH
+sub-command. As with the column widths, each refusal stands on its own rather than behind the
+indexer's earlier rules; where an earlier rule also fails, the indexer names that verdict and the
+action is refused either way. The compose-time validator (`src/protocol/validator`) is unchanged.
+Tests: `test/unit/preflight/checks/prefixed_integer_fields.test.js`, every field and format in
+every radix and case, the decimal spellings kept, both column bounds, a zero CALLBACK_BLOCK, an
+unjudged field, and a BATCH sub-command.
+
+**Direction: TIGHTENING, ungated.** The refused values halted the chain before. The anchor moves
+to the committed lane tree, and the other eleven rows are unchanged.
 
 ### 2026-11-02 - ISSUE, PRICE v1 and BET refuse valid wire text wider than its column
 
