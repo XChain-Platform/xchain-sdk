@@ -184,6 +184,25 @@ function loadOpenRpcSpec() {
     }
 }
 
+// Maps a body-parser or router failure to a JSON-RPC error with a fixed
+// message: the error's own text, stack and paths never reach the client.
+// Four parameters are what make Express treat this as an error handler.
+function jsonRpcErrorHandler(err, req, res, next) {
+    if (res.headersSent) return next(err);
+    const raw = err && (err.status || err.statusCode);
+    const status = Number.isInteger(raw) && raw >= 400 && raw < 600 ? raw : 500;
+    let code = -32603, message = 'Internal error', out = 500;
+    if (status === 413) {
+        code = -32600; message = 'Request body too large'; out = 413;
+    } else if (status < 500) {
+        out = status;
+        code = err.type === 'entity.parse.failed' ? -32700 : -32600;
+        message = code === -32700 ? 'Parse error' : 'Invalid request';
+    }
+    if (out === 500) log.warn('SDK API: unhandled request error: %s', err && err.message);
+    res.status(out).json({ jsonrpc: '2.0', id: null, error: { code, message } });
+}
+
 // Builds the express app around an initialised SDK: every guard, the controller
 // and the routes, in the security order the guard tests pin. Synchronous and
 // listener-free, so a consumer can mount the result under its own server.
@@ -220,6 +239,10 @@ function createApp(sdk) {
     app.use((req, res, next) => { if (req.body === undefined) req.body = {}; next(); });
     // Allow JSON-RPC requests
     app.use(jsonRouter({ methods: controller }));
+    // Last in the chain: anything the parsers or the router raise answers a
+    // JSON-RPC envelope, never Express's default HTML page (which carries the
+    // stack and absolute paths outside production).
+    app.use(jsonRpcErrorHandler);
     return app;
 }
 
