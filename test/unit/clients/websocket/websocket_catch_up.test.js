@@ -280,3 +280,121 @@ describe('WebSocketClient reconnect catch-up: which frames move the cursor', fun
         expect(fake.lastActionIndex).to.equal('640');
     });
 });
+
+const ROWS = ['151', '152'];
+
+// Send the replayed rows of catch-up `n` the way the explorer does: every row above the
+// request's since_action_index (or every row, for a server that ignores it), each with
+// catch_up: true, then the CATCH_UP_COMPLETE.
+function replay(n, rows, ignoreSince) {
+    const since = BigInt(ctx.srv.catchUps[n].since);
+    const sent  = rows.filter(r => ignoreSince || BigInt(r) > since);
+    for (const r of sent) ctx.srv.reply({ type: 'NEW_ACTION', catch_up: true, data: { action_index: r } });
+    ctx.srv.complete(n, sent.length > 0 ? sent[sent.length - 1] : ctx.srv.catchUps[n].since);
+}
+
+// Connect at cursor 150 with one subscription and a NEW_ACTION handler (what onAction and
+// onAddress register), then drop so the first catch-up goes out from 150.
+async function connectAndDrop(channels, params) {
+    ctx.srv.tip = '150';
+    client = createClient(ctx.port);
+    const seen = [];
+    const gaps = [];
+    client.on('NEW_ACTION', (m) => seen.push(m.data.action_index));
+    client.on('resync_required', (m) => gaps.push(m.data));
+    await client.connect();
+    await client.subscribe(channels, params);
+    ctx.srv.tip = '152';
+    ctx.srv.sock.close();
+    await waitFor(() => ctx.srv.catchUps.length === 1, { timeout: 4000, message: 'no catch-up after the first drop' });
+    expect(ctx.srv.catchUps[0]).to.include({ since: '150' });
+    return { seen, gaps };
+}
+
+// Deliver row 151 of the first replay, then drop again while that replay is still open.
+async function dropAfterFirstRow(seen) {
+    ctx.srv.reply({ type: 'NEW_ACTION', catch_up: true, data: { action_index: '151' } });
+    await waitFor(() => seen.length === 1, { message: 'the first replayed row never arrived' });
+    expect(client._catchUp, 'the replay is still open at the drop').to.not.equal(null);
+    ctx.srv.sock.close();
+    await waitFor(() => ctx.srv.catchUps.length === 2, { timeout: 4000, message: 'no catch-up after the second drop' });
+}
+
+describe('WebSocketClient reconnect catch-up: a drop in the middle of a replay', function () {
+    beforeEach(async function () { ctx = await createCatchUpServer(); });
+    afterEach(function (done) { if (client) { client.disconnect(); client = null; } ctx.wss.close(done); });
+
+    for (const [label, channels, params] of [['actions', ['actions'], undefined], ['address', ['address'], { address: 'X' }]]) {
+        it('delivers every row once on the ' + label + ' channel, resuming after the row already dispatched', async function () {
+            const { seen, gaps } = await connectAndDrop(channels, params);
+            await dropAfterFirstRow(seen);
+            expect(ctx.srv.catchUps[1].channels).to.deep.equal(channels);
+            expect(ctx.srv.catchUps[1]).to.include({ since: '151' });
+            replay(1, ROWS);
+            await waitFor(() => client._catchUp === null, { message: 'the second catch-up never closed' });
+            expect(seen).to.deep.equal(['151', '152']);
+            expect(new Set(seen).size).to.equal(seen.length);
+            expect(client.lastActionIndex).to.equal('152');
+            expect(client._subscriptions[0], 'the closed catch-up clears its mark').to.not.have.property('replayedTo');
+            expect(gaps).to.have.lengthOf(0);
+        });
+    }
+
+    it('drops a replayed row the subscription already dispatched when the server sends it again', async function () {
+        const { seen, gaps } = await connectAndDrop(['actions']);
+        await dropAfterFirstRow(seen);
+        replay(1, ROWS, true);
+        await waitFor(() => client._catchUp === null, { message: 'the second catch-up never closed' });
+        expect(seen).to.deep.equal(['151', '152']);
+        expect(client.lastActionIndex).to.equal('152');
+        expect(gaps).to.have.lengthOf(0);
+    });
+});
+
+describe('WebSocketClient reconnect catch-up: rows a replay mark must not hide', function () {
+    beforeEach(async function () { ctx = await createCatchUpServer(); });
+    afterEach(function (done) { if (client) { client.disconnect(); client = null; } ctx.wss.close(done); });
+
+    it('still delivers rows never dispatched before the drop', async function () {
+        const { seen, gaps } = await connectAndDrop(['actions']);
+        ctx.srv.sock.close();
+        await waitFor(() => ctx.srv.catchUps.length === 2, { timeout: 4000, message: 'no catch-up after the second drop' });
+        expect(ctx.srv.catchUps[1]).to.include({ since: '150' });
+        replay(1, ROWS);
+        await waitFor(() => client._catchUp === null, { message: 'the second catch-up never closed' });
+        expect(seen).to.deep.equal(['151', '152']);
+        expect(client.lastActionIndex).to.equal('152');
+        expect(gaps).to.have.lengthOf(0);
+    });
+
+    it('delivers a replacement row again after a REORG voids a row the replay dispatched', async function () {
+        const { seen } = await connectAndDrop(['actions']);
+        ctx.srv.reply({ type: 'NEW_ACTION', catch_up: true, data: { action_index: '151' } });
+        await waitFor(() => seen.length === 1, { message: 'the first replayed row never arrived' });
+        ctx.srv.reply({ type: 'REORG', data: { first_invalid_action_index: '151' } });
+        await waitFor(() => client._subscriptions[0].replayedTo === '150', { message: 'the REORG did not lower the mark' });
+        ctx.srv.sock.close();
+        await waitFor(() => ctx.srv.catchUps.length === 2, { timeout: 4000, message: 'no catch-up after the second drop' });
+        expect(ctx.srv.catchUps[1]).to.include({ since: '150' });
+        replay(1, ROWS);
+        await waitFor(() => client._catchUp === null, { message: 'the second catch-up never closed' });
+        expect(seen).to.deep.equal(['151', '151', '152']);
+        expect(client.lastActionIndex).to.equal('152');
+    });
+
+    // A late row from a timed-out replay cannot be pinned to a subscription, so it raises no
+    // replay mark that could skip rows on the next reconnect.
+    it('raises no replay mark from a row arriving after a catch-up timed out', async function () {
+        const seen = [];
+        await reconnectWithTwoActionSubscriptions();
+        client.on('NEW_ACTION', (m) => seen.push(m.data.action_index));
+        client.catchUpTimeoutMs = 300;
+        ctx.srv.complete(0, '600', true);
+        await waitFor(() => ctx.srv.catchUps.length === 2, { message: 'the truncated replay was not continued' });
+        ctx.srv.latched = false;
+        await waitFor(() => ctx.srv.catchUps.length === 3, { message: 'the timeout never moved the queue on' });
+        ctx.srv.reply({ type: 'NEW_ACTION', catch_up: true, data: { action_index: '601' } });
+        await waitFor(() => seen.length === 1, { message: 'the late replayed row never arrived' });
+        expect(client._subscriptions.map(s => s.replayedTo)).to.deep.equal([undefined, undefined]);
+    });
+});

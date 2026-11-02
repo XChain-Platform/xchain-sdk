@@ -27,7 +27,8 @@
  * events the replay cannot carry) emits `not_replayed` so the caller can backfill those
  * over REST too. A completed one whose CATCH_UP_COMPLETE carries `stale: true` (a
  * replica whose tip is behind) emits `stale_replay`. Mirrors the explorer's bundled
- * browser client (src/content/js/xchain_ws_catch_up.js), except that one does not read `stale`.
+ * browser client (src/content/js/xchain_ws_catch_up.js), except that one does not read `stale`
+ * and keeps no per-subscription replay mark (replayedTo, below).
  *
  * Plain functions over the client rather than prototype methods, so the
  * client's public method surface is unchanged.
@@ -75,6 +76,44 @@ function maxIndex(current, raw) {
     return (current === null || BigInt(val) > BigInt(current)) ? val : current;
 }
 
+// Each tracked subscription keeps `replayedTo`, the highest action index its own replay
+// has dispatched since the shared cursor last moved. The cursor holds still until every
+// queued replay closes, so without this mark a drop mid catch-up sent the subscription's
+// replay again from the old cursor and handed rows already dispatched to the handlers a
+// second time. The mark lives on the subscription entry, which a close keeps, and is
+// cleared once the cursor itself moves past it.
+function replayMark(sub) {
+    return (sub && sub.replayedTo !== undefined) ? sub.replayedTo : null;
+}
+
+// A rollback voids the rows at or above first_invalid_action_index, so every mark drops
+// below it and the replacement rows are replayed and delivered.
+function lowerReplayMarks(subs, firstInvalid) {
+    if (!Array.isArray(subs)) return;
+    for (const sub of subs) {
+        if (replayMark(sub) !== null) sub.replayedTo = belowIndex(sub.replayedTo, firstInvalid);
+    }
+}
+
+// Whether a replayed NEW_ACTION frame repeats a row the pending subscription's replay
+// already dispatched before a drop. A replay runs one subscription at a time, so a
+// catch_up frame belongs to the current one. A fresh row raises its mark instead. Called
+// before the frame reaches the handlers, so a repeated row is dropped whole.
+function replayedAlready(client, msg) {
+    if (!msg || msg.type !== 'NEW_ACTION' || msg.catch_up !== true || !msg.data) return false;
+    const state = client._catchUp;
+    if (!state || !state.current) return false;
+    const sub = state.current.sub;
+    const raw = msg.data.action_index;
+    if (raw === null || raw === undefined || !/^[0-9]+$/.test(String(raw))) return false;
+    const mark = replayMark(sub);
+    if (mark !== null && BigInt(String(raw)) <= BigInt(mark)) return true;
+    // After a timed-out replay the server may still be sending the previous subscription's
+    // rows, so a frame can no longer be pinned to the current one and raises no mark.
+    if (!state.lateFrames) sub.replayedTo = maxIndex(mark, raw);
+    return false;
+}
+
 // Track the cursor from one frame. WELCOME only seeds an unset cursor: its tip runs
 // ahead of rows a reconnect replay has yet to deliver. While that replay runs, frames
 // are noted in the catch-up state and applied once it closes.
@@ -90,6 +129,7 @@ function trackCursor(client, msg) {
     if (msg.type === 'REORG') {
         client.lastActionIndex = belowIndex(client.lastActionIndex, msg.data.first_invalid_action_index);
         if (client._catchUp) client._catchUp.maxSeen = belowIndex(client._catchUp.maxSeen, msg.data.first_invalid_action_index);
+        lowerReplayMarks(client._subscriptions, msg.data.first_invalid_action_index);
         return;
     }
     // Only NEW_ACTION and CATCH_UP_COMPLETE report a delivered action row. Other frames
@@ -116,18 +156,23 @@ function clearTimer(state) {
 }
 
 // Abandon a catch-up WITHOUT applying what it saw (a close or a fresh resubscribe): the
-// cursor still points before the gap, so the next reconnect replays it again.
+// cursor still points before the gap, so the next reconnect replays it again, each
+// subscription from after the rows its own replay already dispatched (replayedTo).
 function dropCatchUp(client) {
     clearTimer(client._catchUp);
     client._catchUp = null;
 }
 
-// Every queued replay has closed: apply the highest index seen while they ran.
+// Every queued replay has closed: apply the highest index seen while they ran. The cursor
+// now covers every replay mark, so the marks are cleared.
 function finishCatchUp(client) {
     const state = client._catchUp;
     dropCatchUp(client);
     client.catchingUp = false;
-    if (state) client.advanceCursor(state.maxSeen);
+    if (state) {
+        client.advanceCursor(state.maxSeen);
+        for (const sub of client._subscriptions || []) delete sub.replayedTo;
+    }
 }
 
 // (Re)send the current subscription with since_action_index and a fresh request id,
@@ -159,7 +204,9 @@ function nextCatchUp(client) {
         return;
     }
     state.current = { sub, rounds: 0, id: null, since: null, rateRetries: 0 };
-    sendCatchUp(client, state.cursor);
+    // Resume after what this subscription's replay dispatched before a drop, so a server
+    // keeping the contract never sends those rows again.
+    sendCatchUp(client, maxIndex(state.cursor, replayMark(sub)));
 }
 
 // The pending catch-up was refused or went unanswered, so its rows were not replayed:
@@ -168,6 +215,7 @@ function refuseCatchUp(client, code, message, detail) {
     const state = client._catchUp;
     if (!state || !state.current) return;
     clearTimer(state);
+    if (code === 'CATCH_UP_TIMEOUT') state.lateFrames = true;
     const event = {
         code:               code || null,
         message:            message || null,
@@ -176,7 +224,10 @@ function refuseCatchUp(client, code, message, detail) {
     };
     // CATCH_UP_REORGED names the rollback, so the caller can reload from its fork.
     if (detail && detail.fork_block_index !== undefined) event.fork_block_index = detail.fork_block_index;
-    if (detail && detail.first_invalid_action_index !== undefined) event.first_invalid_action_index = detail.first_invalid_action_index;
+    if (detail && detail.first_invalid_action_index !== undefined) {
+        event.first_invalid_action_index = detail.first_invalid_action_index;
+        lowerReplayMarks([state.current.sub], detail.first_invalid_action_index);
+    }
     client.emit('resync_required', event);
     nextCatchUp(client);
 }
@@ -261,4 +312,4 @@ function resubscribe(client) {
     }
 }
 
-module.exports = { MAX_ROUNDS, trackCursor, answerCatchUp, resubscribe, dropCatchUp };
+module.exports = { MAX_ROUNDS, trackCursor, answerCatchUp, resubscribe, dropCatchUp, replayedAlready };

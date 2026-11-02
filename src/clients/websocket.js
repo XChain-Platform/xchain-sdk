@@ -23,7 +23,7 @@
 const { WebSocket, WS_CONNECTING, WS_OPEN, WS_SCHEMA_VERSION } = require('./websocket/socket_constants.js');
 const { SDKExplorerError } = require('../utils/errors.js');
 const { installMethods } = require('../utils/install_methods.js');
-const { dropCatchUp } = require('./websocket/catch_up.js');
+const { dropCatchUp, replayedAlready } = require('./websocket/catch_up.js');
 const { resetOut } = require('./websocket/pacing.js');
 const { hasHttpScheme, hasWsScheme } = require('../utils/endpoints.js');
 
@@ -65,7 +65,8 @@ function attachSocketListeners(client, url, resolve, reject) {
             return;
         }
 
-        client.onMessage(msg);
+        // A replayed row already dispatched before a drop is not dispatched again (catch_up.js).
+        if (!replayedAlready(client, msg)) client.onMessage(msg);
 
         if (!welcomed && msg.type === 'WELCOME') {
             welcomed = true;
@@ -76,7 +77,7 @@ function attachSocketListeners(client, url, resolve, reject) {
     client.ws.on('close', (code) => {
         client.connected = false;
         client.stopPing();
-        // An unfinished catch-up is abandoned, not applied, so the next one resumes before the gap.
+        // An unfinished catch-up is abandoned, not applied; each subscription resumes after its replayedTo.
         dropCatchUp(client);
         resetOut(client);
 
