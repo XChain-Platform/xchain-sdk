@@ -122,3 +122,91 @@ describe('pre-flight lifecycle', function () {
         });
     });
 });
+
+describe('pre-flight lifecycle', function () {
+    describe('coalescing across caller options', function () {
+        const { mockSdk } = require('./helpers/mock.js');
+        const A = 'SEND|0|JDOG|1|1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2';
+        const SRC = '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2';
+        const base = { chainId: 'btc', actionString: 'S', source: 's' };
+
+        it('Coalescer.key differs when only mode, feeMode or encoding differs', function () {
+            const c = new Coalescer();
+            const k = (v) => c.key('btc', 'S', 's', [], v);
+            const same = k({ mode: 'report', feeMode: 'native', encoding: 'OP_RETURN' });
+            expect(k({ mode: 'report', feeMode: 'native', encoding: 'OP_RETURN' })).to.equal(same);
+            expect(k({ mode: 'local', feeMode: 'native', encoding: 'OP_RETURN' })).to.not.equal(same);
+            expect(k({ mode: 'report', feeMode: 'xchain', encoding: 'OP_RETURN' })).to.not.equal(same);
+            expect(k({ mode: 'report', feeMode: 'native', encoding: 'P2SH' })).to.not.equal(same);
+            expect(k({ mode: 'report', encoding: 'OP_RETURN' })).to.not.equal(same);
+        });
+
+        it('Coalescer.run keeps callers that differ in mode, feeMode or encoding apart', async function () {
+            for (const diff of [{ mode: 'local' }, { feeMode: 'xchain' }, { encoding: 'P2SH' }]) {
+                const c = new Coalescer();
+                let runs = 0;
+                const producer = () => { runs++; return Promise.resolve({}); };
+                const opts = { mode: 'report', feeMode: 'native', encoding: 'OP_RETURN' };
+                const [a, b] = await Promise.all([
+                    c.run(Object.assign({}, base, opts), producer),
+                    c.run(Object.assign({}, base, opts, diff), producer),
+                ]);
+                expect(runs, JSON.stringify(diff)).to.equal(2);
+                expect(a).to.not.equal(b);
+            }
+        });
+
+        function countingSdk() {
+            const calls = [];
+            const sdk = mockSdk({ preflight: 'report', explorerSpec: { getPreflight: async (args) => {
+                calls.push(args);
+                await new Promise(r => setTimeout(r, 10));
+                return { supported: true, valid: true, status: 'valid', blockIndex: 7,
+                    quote: { feeMode: args.feeMode || 'default' } };
+            } } });
+            return { sdk, calls };
+        }
+
+        it('a local caller and a report caller get separate reports; only the report caller reaches Tier 1', async function () {
+            for (const order of [['local', 'report'], ['report', 'local']]) {
+                const { sdk, calls } = countingSdk();
+                const [x, y] = await Promise.all(order.map(m => sdk.preflight(A, { source: SRC, preflight: m })));
+                expect(x).to.not.equal(y);
+                expect(calls).to.have.length(1);
+                const rep = order[0] === 'report' ? x : y;
+                const loc = order[0] === 'report' ? y : x;
+                expect(rep.quote, order.join()).to.not.equal(null);
+                expect(loc.quote).to.equal(null);
+            }
+        });
+
+        it('feeMode native and xchain callers each get their own verdict', async function () {
+            const { sdk, calls } = countingSdk();
+            const [n, x] = await Promise.all([
+                sdk.preflight(A, { source: SRC, feeMode: 'native' }),
+                sdk.preflight(A, { source: SRC, feeMode: 'xchain' }),
+            ]);
+            expect(n).to.not.equal(x);
+            expect(calls).to.have.length(2);
+            expect(calls.map(c => c.feeMode).sort()).to.deep.equal(['native', 'xchain']);
+        });
+
+        it('encoding OP_RETURN and P2SH callers do not share a report', async function () {
+            const { sdk, calls } = countingSdk();
+            const [o, p] = await Promise.all([
+                sdk.preflight(A, { source: SRC, encoding: 'OP_RETURN' }),
+                sdk.preflight(A, { source: SRC, encoding: 'P2SH' }),
+            ]);
+            expect(o).to.not.equal(p);
+            expect(calls).to.have.length(2);
+        });
+
+        it('identical options still coalesce onto one producer run', async function () {
+            const { sdk, calls } = countingSdk();
+            const o = { source: SRC, preflight: 'report', feeMode: 'native', encoding: 'P2SH' };
+            const [a, b] = await Promise.all([sdk.preflight(A, o), sdk.preflight(A, Object.assign({}, o))]);
+            expect(a).to.equal(b);
+            expect(calls).to.have.length(1);
+        });
+    });
+});
