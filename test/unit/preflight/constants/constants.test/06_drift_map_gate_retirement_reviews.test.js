@@ -152,12 +152,13 @@ function notNullAmountWidthReview() {
     expect(entry).to.include('The anchor stays at `52a82367`.');
 }
 
-// The TICK_NORMALIZE gate re-pins issue ahead of indexer 32b4fa8f0; one ISSUE pre-flight warning
+// The TICK_NORMALIZE gate re-pinned issue ahead of indexer 32b4fa8f0, and the 2026-11-02 column-width
+// review pins it now; one ISSUE pre-flight warning
 // moves, and the ticker key widening stays outside every mapped row.
 function tickNormalizeReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/issue/').hash)
-        .to.equal('c7d81c143f4f1ad242c9266487ff726102b7e6444a8cea4b374214ebf4d7deed');
+        .to.equal('37ac32600e6a7e9c7756165aba1cc847945a56d9ace456ca2e3f2e28a284e33f');
     const heading = '### 2026-10-23 - ISSUE caret TICK ids must be canonical behind TICK_NORMALIZE';
     expect(text).to.include(heading);
     const entry = entryOf(text, heading).replace(/\s+/g, ' ');
@@ -188,7 +189,30 @@ function sameTokenOfferReview() {
     expect(entry).to.include('**Direction: WIDENS rejection behind an activation row.**');
 }
 
+// The column-width refusals re-pin issue, price and bet and move the anchor to the lane tree.
+function columnWidthReview() {
+    const text = fs.readFileSync(REAL_MAP, 'utf8');
+    const rows = parseMap(REAL_MAP);
+    const moves = [
+        ['issue', '`c7d81c14` to `37ac3260`', '37ac32600e6a7e9c7756165aba1cc847945a56d9ace456ca2e3f2e28a284e33f'],
+        ['price', '`9028c8c2` to `0b7385b1`', '0b7385b14af8430c951e586eb2ec7955eee24d6189a15a25830cb133548aec62'],
+        ['bet', '`59ff86ee` to `1afee772`', '1afee7726b5ce7b4eaf7215965be02a78847cd0483902783aec3c0fe42a1b06e'],
+    ];
+    const heading = '### 2026-11-02 - ISSUE, PRICE v1 and BET refuse valid wire text wider than its column';
+    expect(text).to.include(heading);
+    const entry = entryOf(text, heading).replace(/\s+/g, ' ');
+    for (const [name, move, hash] of moves) {
+        expect(rows.find((r) => r.handler === 'src/actions/' + name + '/').hash, name).to.equal(hash);
+        expect(entry).to.match(new RegExp('`' + name + '` pin (moves )?from ' + move));
+    }
+    expect(text).to.include('**Pins taken at indexer commit:** `c3f900d2d`');
+    expect(entry).to.include('issue/stored_widths.js');
+    expect(entry).to.include('universal/column_widths.js');
+    expect(entry).to.include('**Direction: TIGHTENING, ungated.**');
+}
+
 describe('pre-flight constants + registry drift map (§8.5) gate retirement reviews', function () {
+    it('pins and records the ISSUE, PRICE v1 and BET column-width review', columnWidthReview);
     it('pins and records the DISPENSER and DISPENSE amount positivity gate retirement review', dispenserPositivityReview);
     it('the live dispenser pin is the end of the review-log pin chain', dispenserPinChainEnd);
     it('pins and records the AIRDROP native fee tally gate review', airdropFeeTallyReview);
