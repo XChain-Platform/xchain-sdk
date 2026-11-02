@@ -109,6 +109,7 @@ function configureBaseMiddleware(app) {
     app.use(batchCapMiddleware(SDK_API_MAX_BATCH));
 }
 
+// The controller has a null prototype: the router validates a method with `method in controller`, true for inherited Object.prototype names (constructor, toString, __proto__), so only the own methods dispatch and the rest answer -32601.
 // Builds System, Action Methods, Encoder Methods, Hub Methods, Explorer Balance and Address, Tokens, Transactions and History, ACTION-Specific Queries, Markets, and Utility groups synchronously so startup introduces no extra yield points.
 function createController(sdk) {
     const controller = {
@@ -164,7 +165,7 @@ function createController(sdk) {
         async get_status() { return sdk.getStatus(); },
         async search(params) { return sdk.search(params.query, params.type); }
     };
-    return controller;
+    return Object.setPrototypeOf(controller, null);
 }
 
 // Loads documentation during startup so requests never perform filesystem access.
